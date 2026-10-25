@@ -13,26 +13,42 @@ import { create } from "zustand";
 import { cornerPanel } from "@/shell/ui/corner-card.ts";
 import { alpha, color } from "@/shell/ui/theme.ts";
 import { gauge } from "./profiler/gauge.tsx";
+import type { PanelName } from "./panels.tsx";
 
-export type FoldName = "view" | "profiler" | "world_gizmo" | "camera_gizmo";
+/** The fold open, by its panel's name (panels.tsx `PANEL`). */
+export const useOpenFold = create<{ open: PanelName | null }>(() => ({
+  open: null,
+}));
 
-export const useOpenFold = create<{ open: FoldName | null }>(() => ({ open: null }));
-
-const toggle = (name: FoldName) => useOpenFold.setState(({ open }) => ({ open: open === name ? null : name }));
+const toggle = (name: PanelName) =>
+  useOpenFold.setState(({ open }) => ({ open: open === name ? null : name }));
 
 export const HINT_INK = alpha(color.white, 0.55);
 
 /** A panel whose title opens and closes it; `end` sits by the caret. */
-export function Fold({ name, title, end, children }: { name: FoldName; title: string; end?: ReactNode; children?: ReactNode }) {
+export function Fold(
+  { name, title, end, children }: {
+    name: PanelName;
+    title: string;
+    end?: ReactNode;
+    children?: ReactNode;
+  },
+) {
   const open = useOpenFold((s) => s.open === name);
   return (
     <View style={styles.panel}>
-      <Pressable onPress={() => toggle(name)} accessibilityRole="button" aria-expanded={open}>
+      <Pressable
+        onPress={() => toggle(name)}
+        accessibilityRole="button"
+        aria-expanded={open}
+      >
         <View style={styles.title}>
           <Text style={[gauge.text, styles.titleText]}>{title}</Text>
           <View style={styles.end}>
             {open && end}
-            {open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />}
+            {open
+              ? <CaretUp size={12} color={HINT_INK} />
+              : <CaretDown size={12} color={HINT_INK} />}
           </View>
         </View>
       </Pressable>
@@ -42,8 +58,23 @@ export function Fold({ name, title, end, children }: { name: FoldName; title: st
 }
 
 const styles = StyleSheet.create({
-  panel: { ...cornerPanel, flexShrink: 1, overflow: "hidden", pointerEvents: "box-none" },
-  title: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  titleText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: alpha(color.white, 0.75) },
+  panel: {
+    ...cornerPanel,
+    flexShrink: 1,
+    overflow: "hidden",
+    pointerEvents: "box-none",
+  },
+  title: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  titleText: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: alpha(color.white, 0.75),
+  },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },
 });

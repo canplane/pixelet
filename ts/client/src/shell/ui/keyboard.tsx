@@ -11,7 +11,14 @@ let kept = false;
  * capture and takes nothing; position is never asked, since a view may be
  * lifted by a transform no measure sees.
  */
-export const KEEPS_KEYBOARD: ViewProps = { onStartShouldSetResponderCapture: () => keepKeyboard() };
+export const KEEPS_KEYBOARD: ViewProps = {
+  onStartShouldSetResponderCapture: () => keepKeyboard(),
+};
+
+/** Puts the keyboard away, wherever it is up. */
+export function putKeyboardAway(): void {
+  Keyboard.dismiss();
+}
 
 /** For a view whose capture handler is already a PanResponder's. */
 export function keepKeyboard(): false {
@@ -20,17 +27,23 @@ export function keepKeyboard(): false {
 }
 
 /** A touch starting anywhere but a kept view puts the keyboard away, and `onAway` is told. */
-export function KeyboardAway({ children, onAway }: { children: ReactNode; onAway?: () => void }) {
+export function KeyboardAway(
+  { children, onAway }: { children: ReactNode; onAway?: () => void },
+) {
   const onTouch = () => {
     kept = false;
     queueMicrotask(() => {
       if (kept) return;
-      Keyboard.dismiss();
+      putKeyboardAway();
       onAway?.();
     });
     return false;
   };
-  return <View onStartShouldSetResponderCapture={onTouch} style={styles.fill}>{children}</View>;
+  return (
+    <View onStartShouldSetResponderCapture={onTouch} style={styles.fill}>
+      {children}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

@@ -1,5 +1,5 @@
-// Tone, vignette, encode, in that order: nothing grades the picture past the
-// tone curve, so a color is the light it was lit by.
+// Tone, vignette, encode and dither, in that order: nothing grades the
+// picture past the tone curve, so a color is the light it was lit by.
 
 // ACES's reference rendering and sRGB output transforms, as Stephen Hill fit
 // them (BakingLab): the filmic curve Unreal draws with by default, whose
@@ -27,6 +27,15 @@ fn vignette(frag: vec2f) -> f32 {
   return vignette_of(frag, frame_viewport(), frame_vignette());
 }
 
+fn dither(q: vec2f) -> f32 {
+  var p = fract(q * vec2f(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+
+// The encoded color, half a step of noise added: the screen keeps 8 bits, and
+// a gentle gradient left whole, the sea's toward its horizon, broke into
+// steps one apart, drawn out along it into lines.
 fn finish(color: vec3f, frag: vec2f) -> vec3f {
-  return to_srgb(tone(color) * vignette(frag));
+  return to_srgb(tone(color) * vignette(frag)) + (dither(frag) - 0.5) / 255.0;
 }

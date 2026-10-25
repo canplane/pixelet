@@ -114,7 +114,13 @@ fn open() -> bool {
     if device().is_some() {
         return true;
     }
-    let Ok(Opened { instance, adapter, device, queue }) = xpute_gpu::host::open(&ASK) else {
+    let Ok(Opened {
+        instance,
+        adapter,
+        device,
+        queue,
+    }) = xpute_gpu::host::open(&ASK)
+    else {
         return false;
     };
     let host = GpuHost::new(adapter, device, queue, PLAN, wake);
@@ -141,12 +147,12 @@ pub fn before_turn(memory: &mut Memory<'_>) {
     }
 }
 
-/// The bracket's answer (pxl_kernel::door::Bracket::admit_frame): a frame
-/// while the host admits one (xpute-gpu host `GpuHost::admit`), so taking a
-/// layer's drawable never blocks the JavaScript thread, which waits for the
-/// turn (lib.rs `on_kernel`).
-pub fn admit_frame() -> bool {
-    device().is_some_and(|d| d.host.admit())
+/// The host's answer (xpute_gpu::admit), handed the kernel with its entry: a
+/// frame while the host admits one (xpute-gpu host `GpuHost::admit`), so
+/// taking a layer's drawable never blocks the JavaScript thread, which waits
+/// for the turn (lib.rs `on_kernel`); every frame before the device opens.
+pub fn admit() -> bool {
+    device().is_none_or(|d| d.host.admit())
 }
 
 /// The turn's calls run on the device, and its frames shown.
@@ -166,11 +172,16 @@ pub fn after_turn(memory: &mut Memory<'_>) {
 /// # Safety
 /// What `made` makes is live, and its view keeps it until it has unbound the
 /// surface.
-pub(crate) unsafe fn bind(handle: u32, made: impl FnOnce() -> wgpu::SurfaceTargetUnsafe + Send) -> i32 {
+pub(crate) unsafe fn bind(
+    handle: u32,
+    made: impl FnOnce() -> wgpu::SurfaceTargetUnsafe + Send,
+) -> i32 {
     on_kernel(move || {
         let Some(d) = device() else { return -2 };
         // SAFETY: the caller's target, kept until the surface is unbound.
-        let Ok(surface) = (unsafe { d.instance.create_surface_unsafe(made()) }) else { return -3 };
+        let Ok(surface) = (unsafe { d.instance.create_surface_unsafe(made()) }) else {
+            return -3;
+        };
         if !d.host.bind(handle, surface) {
             return -4;
         }
@@ -190,7 +201,13 @@ pub(crate) unsafe fn bind(handle: u32, made: impl FnOnce() -> wgpu::SurfaceTarge
 pub unsafe extern "C" fn pxl_surface_bind(handle: u32, layer: *mut c_void) -> i32 {
     let layer = layer.expose_provenance();
     // SAFETY: the caller's layer, kept until the surface is unbound.
-    unsafe { bind(handle, move || wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(core::ptr::with_exposed_provenance_mut(layer))) }
+    unsafe {
+        bind(handle, move || {
+            wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(core::ptr::with_exposed_provenance_mut(
+                layer,
+            ))
+        })
+    }
 }
 
 /// Lets `handle`'s layer go, if it is still the one bound under its slot

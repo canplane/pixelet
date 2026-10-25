@@ -36,9 +36,12 @@ export default (config) =>
     const podfile = config.modResults.contents;
     if (!podfile.includes(MARK)) {
       const at = podfile.indexOf("post_install do |installer|");
-      if (at < 0) throw new Error("prebuilt-flavor: the Podfile has no post_install");
+      if (at < 0) {
+        throw new Error("prebuilt-flavor: the Podfile has no post_install");
+      }
       const end = podfile.indexOf("\n", at) + 1;
-      config.modResults.contents = podfile.slice(0, end) + STEP.slice(1) + podfile.slice(end);
+      config.modResults.contents = podfile.slice(0, end) + STEP.slice(1) +
+        podfile.slice(end);
     }
     return config;
   });

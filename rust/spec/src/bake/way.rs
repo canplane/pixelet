@@ -22,7 +22,10 @@ pub fn lay(sep: &Separation, frame: Frame, looks: &mut [GroundId]) {
     let mut laid: FnvHashMap<usize, (f32, u8)> = FnvHashMap::default();
     sep.crossing_grid(frame, [0.0, 0.0], 1.0, [n, n], |x, y, _, o| {
         let col = (y * n + x) as usize;
-        if o.form != u32::from(Form::Approach.byte()) || looks[col] == sentinel::unknown || !Ground::grounds(o.kind) {
+        if o.form != u32::from(Form::Approach.byte())
+            || looks[col] == sentinel::unknown
+            || !Ground::grounds(o.kind)
+        {
             return;
         }
         let e = laid.entry(col).or_insert((f32::MIN, o.kind as u8));

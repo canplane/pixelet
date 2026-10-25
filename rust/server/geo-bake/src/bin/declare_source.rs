@@ -11,8 +11,11 @@ use pxl_geo_bake::source::recorded;
 
 fn run() -> Result<(), String> {
     let mut text = String::new();
-    std::io::stdin().read_to_string(&mut text).map_err(|e| format!("stdin: {e}"))?;
-    let record: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("stdin: {e}"))?;
+    std::io::stdin()
+        .read_to_string(&mut text)
+        .map_err(|e| format!("stdin: {e}"))?;
+    let record: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("stdin: {e}"))?;
     println!("{}", recorded(&record)?);
     Ok(())
 }

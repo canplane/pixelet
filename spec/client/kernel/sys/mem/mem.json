@@ -41,11 +41,11 @@
     ]
   },
 
-  "SUBMISSION_CAPACITY": {
+  "SQ_CAP": {
     "$value": 512,
     "$type": "u32",
     "$doc": [
-      "Messages the submission ring holds, and so payloads: one a slot",
+      "Frames the submission ring holds, and so payloads: one a slot",
       "(doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which",
       "the ring checks, since a position is taken modulo it by masking.",
       "",
@@ -57,11 +57,11 @@
     ]
   },
 
-  "COMPLETION_CAPACITY": {
+  "CQ_CAP": {
     "$value": 1024,
     "$type": "u32",
     "$doc": [
-      "Messages the completion ring holds: everything one turn leaves, since the",
+      "Frames the completion ring holds: everything one turn leaves, since the",
       "shell reads it dry before it rings again. A turn leaves at most a reply to",
       "each command it applies and its own signals after the drain (door.rs",
       "`SIGNALS`), so a ring of the submission ring's capacity plus the door's",

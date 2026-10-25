@@ -55,8 +55,15 @@ fn read(path: &str) -> Result<Grid, String> {
     let mut at = 0;
     // Header: "P5", comments, width, height, maxval, then one whitespace byte.
     while fields.len() < 4 {
-        let end = at + bytes[at..].iter().position(|&b| b == b'\n').ok_or("a header past the file's end")?;
-        let line = std::str::from_utf8(&bytes[at..end]).map_err(|e| e.to_string())?.trim().to_string();
+        let end = at
+            + bytes[at..]
+                .iter()
+                .position(|&b| b == b'\n')
+                .ok_or("a header past the file's end")?;
+        let line = std::str::from_utf8(&bytes[at..end])
+            .map_err(|e| e.to_string())?
+            .trim()
+            .to_string();
         at = end + 1;
         if let Some(c) = line.strip_prefix('#') {
             let mut words = c.split_whitespace();
@@ -68,7 +75,11 @@ fn read(path: &str) -> Result<Grid, String> {
             continue;
         }
         for w in line.split_whitespace() {
-            fields.push(if w == "P5" { 5 } else { w.parse().map_err(|e| format!("{w:?}: {e}"))? });
+            fields.push(if w == "P5" {
+                5
+            } else {
+                w.parse().map_err(|e| format!("{w:?}: {e}"))?
+            });
         }
     }
     let (offset, scale) = (offset.ok_or("no Offset")?, scale.ok_or("no Scale")?);
@@ -76,8 +87,15 @@ fn read(path: &str) -> Result<Grid, String> {
     if maxval != 65535 {
         return Err(format!("maxval {maxval}: two bytes a sample expected"));
     }
-    let body = bytes.get(at..at + width * height * 2).ok_or("samples past the file's end")?;
-    let m = body.as_chunks::<2>().0.iter().map(|&b| offset + scale * f64::from(u16::from_be_bytes(b))).collect();
+    let body = bytes
+        .get(at..at + width * height * 2)
+        .ok_or("samples past the file's end")?;
+    let m = body
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&b| offset + scale * f64::from(u16::from_be_bytes(b)))
+        .collect();
     Ok(Grid { width, height, m })
 }
 
@@ -89,7 +107,9 @@ fn round(x: f64) -> f64 {
 fn run() -> Result<(), String> {
     // the grid's path is the checkout's, as a bake's paths are (pxl-geo-bake cli.rs `enter`)
     std::env::set_current_dir(root()).map_err(|e| format!("{}: {e}", root().display()))?;
-    let path = std::env::args().nth(1).ok_or("usage: bake_geoid <egm2008-5.pgm>")?;
+    let path = std::env::args()
+        .nth(1)
+        .ok_or("usage: bake_geoid <egm2008-5.pgm>")?;
     let fine = read(&path)?;
     let per = (fine.height - 1) / 180;
     let (rows, cols) = (180 / STEP_DEG + 1, 360 / STEP_DEG);

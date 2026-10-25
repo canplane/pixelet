@@ -10,7 +10,10 @@ export function* dedupe<T>(it: Iterable<T>): IterableIterator<T> {
   }
 }
 
-export function* except<T>(universe: Iterable<T>, excluded: Iterable<T>): IterableIterator<T> {
+export function* except<T>(
+  universe: Iterable<T>,
+  excluded: Iterable<T>,
+): IterableIterator<T> {
   const ban = new Set<T>();
   for (const e of excluded) ban.add(e);
 
@@ -29,6 +32,9 @@ export function* take<T>(it: Iterable<T>, k: u32): IterableIterator<T> {
   }
 }
 
-export function* filter<T>(it: Iterable<T>, pred: (e: T) => boolean): IterableIterator<T> {
+export function* filter<T>(
+  it: Iterable<T>,
+  pred: (e: T) => boolean,
+): IterableIterator<T> {
   for (const e of it) if (pred(e)) yield e;
 }

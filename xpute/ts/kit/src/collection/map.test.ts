@@ -24,7 +24,10 @@ Deno.test("IndexedMap - removal moves the last entry into the hole and says wher
   assertEquals(m.remove_at(1), 1, "removing the last moves nothing");
 });
 
-function agrees_with_map<K extends number | bigint>(traits: KeyTraits<K>, make: (n: number) => K): void {
+function agrees_with_map<K extends number | bigint>(
+  traits: KeyTraits<K>,
+  make: (n: number) => K,
+): void {
   const m = new IndexedMap(traits, 2);
   const ref = new Map<K, number>();
   const live: K[] = [];

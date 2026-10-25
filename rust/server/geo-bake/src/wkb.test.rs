@@ -53,7 +53,10 @@ fn a_linestring_keeps_its_order_and_stays_open() {
     let bytes = Wkb::new(2).ring(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]).0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 1);
-    assert_eq!(g[0].points, vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0]]);
+    assert_eq!(
+        g[0].points,
+        vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0]]
+    );
     assert!(!g[0].is_polygon_source);
 }
 
@@ -85,8 +88,12 @@ fn a_polygon_with_no_rings_is_still_a_polygon() {
 
 #[test]
 fn a_multipolygon_is_flattened_to_one_polygon_each() {
-    let one = Wkb::new(3).u32(1).ring(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]);
-    let two = Wkb::new(3).u32(1).ring(&[(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 5.0)]);
+    let one = Wkb::new(3)
+        .u32(1)
+        .ring(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]);
+    let two = Wkb::new(3)
+        .u32(1)
+        .ring(&[(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 5.0)]);
     let bytes = Wkb::new(6).u32(2).raw(one).raw(two).0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 2);

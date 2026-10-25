@@ -18,12 +18,10 @@ mod surface;
 mod unpack;
 
 use pxl_kernel::door::layout::heap_at;
-use pxl_kernel::door::Bracket;
-use pxl_kernel::sys::io::host::Stop;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
-use xpute_guest::mem::heap::HeapStat;
+use pxl_kernel::sys::stop::Stop;
 use xpute_host::mem::Memory;
-use xpute_host::native::{self, Alloc, Plan};
+use xpute_host::native::{self, Alloc, BootInfo, Plan};
 
 /// The library's one allocator: the kernel's blocks in its memory, so a
 /// `Vec` the kernel hands the shell lies in the memory the shell reads.
@@ -31,15 +29,16 @@ use xpute_host::native::{self, Alloc, Plan};
 static ALLOC: Alloc = Alloc;
 
 // The kernel, booted on the first call — a phone's reservation (mem.json's),
-// as a page on a phone reserves, its heap past the rings' front (GLOBAL_BASE,
-// door/layout.rs) and `.fixed`, as the module's is — and the doorbell and the
-// memory the shell reads the directory and the rings through, exported as
-// `pxl_interrupt` and `pxl_memory` (include/pxl_native.h): `guest()`,
-// `interrupt` and `memory` here.
+// as a page on a phone reserves, its own ranges past the rings' front
+// (GLOBAL_BASE, door/layout.rs: a device's library keeps its statics where
+// the linker put them) and its heap past `.fixed`, as the module's is — and
+// the doorbell and the memory the shell reads the directory and the rings
+// through, exported under xpute's names as `xpute_intr` and `xpute_mem`
+// (include/pxl_native.h), and `guest()` here.
 xpute_host::native_abi!(
-    "pxl",
     Plan {
         memory_bytes: PHONE_BYTES,
+        data_end: GLOBAL_BASE,
         heap_at: heap_at(GLOBAL_BASE),
         stack_bytes: THREAD_STACK_BYTES as usize,
         thread_name: "pxl-kernel",
@@ -53,36 +52,23 @@ fn on_kernel<R: Send>(f: impl FnOnce() -> R + Send) -> R {
     guest().run(f)
 }
 
-fn heap_stat() -> HeapStat {
-    guest().heap_stat()
-}
-
 /// The process's error stream, or Android's log where that stream goes
 /// nowhere: the kernel stops with the app, before the shell could run the
 /// report's record.
 fn last_words(stop: Stop<'_>) {
     let line = match stop {
-        Stop::Bug { errno, at, a, b } => format!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()),
+        Stop::Bug { errnum, at, a, b } => format!(
+            "[pxl] {errnum:?} at {}:{}:{} ({a}, {b})",
+            at.file(),
+            at.line(),
+            at.column()
+        ),
         Stop::Panic(info) => format!("[pxl] {info}"),
     };
     #[cfg(target_os = "android")]
     android::say(&line);
     #[cfg(not(target_os = "android"))]
     eprintln!("{line}");
-}
-
-/// What a device gives the kernel: the memory, its data's end at the rings'
-/// front (a device's library keeps its statics where the linker put them),
-/// the clock, the allocator and the frames its surfaces admit (surface.rs).
-fn bracket() -> Bracket {
-    Bracket {
-        given: guest().memory().1 as u32,
-        data_end: GLOBAL_BASE,
-        clock: native::now,
-        heap_stat,
-        admit_frame: surface::admit_frame,
-        last_words: Some(last_words),
-    }
 }
 
 /// The memory as the GPU's host reads and writes it between turns.
@@ -94,13 +80,14 @@ fn view() -> Memory<'static> {
     unsafe { Memory::from_raw(base, bytes) }
 }
 
-/// The doorbell's turn (pxl_kernel::door::interrupt), on the kernel's thread:
-/// a turn of `quota_ms`, and when the kernel wants the next. The first lays
-/// the memory out. Around it, the GPU's host: what the device answered
-/// written in before, the turn's calls run on it after (surface.rs).
-fn turn(quota_ms: f64) -> f64 {
+/// The doorbell's turn (pxl_kernel::door::intr), on the kernel's thread: a
+/// turn of `quota_ms`, and when the kernel wants the next. The first lays
+/// the memory out, on what the host hands it and with the last words.
+/// Around it, the GPU's host: what the device answered written in before,
+/// the turn's calls run on it after (surface.rs), and the frames it admits.
+fn turn(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     surface::before_turn(&mut view());
-    let wake = pxl_kernel::door::interrupt(quota_ms, bracket);
+    let wake = pxl_kernel::door::intr(quota_ms, boot_info, Some(last_words), surface::admit);
     surface::after_turn(&mut view());
     wake
 }

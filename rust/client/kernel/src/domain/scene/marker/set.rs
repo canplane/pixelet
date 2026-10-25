@@ -19,7 +19,13 @@ pub const INSTANCE_FLOATS: usize = 11;
 /// region it keeps, as tall as it and centered on it: a marker is one
 /// thing, hidden whole where a nearer one's region is in front of its anchor
 /// (marker.wgsl).
-pub fn instance(at: V3, size: [f64; 2], slot: u32, down: f64, region: f64) -> [f32; INSTANCE_FLOATS] {
+pub fn instance(
+    at: V3,
+    size: [f64; 2],
+    slot: u32,
+    down: f64,
+    region: f64,
+) -> [f32; INSTANCE_FLOATS] {
     let sheet = sheet();
     [
         at[0],
@@ -50,7 +56,11 @@ impl Set {
     /// `lane` holds INSTANCE_FLOATS floats an instance, relative to `origin`.
     pub fn write(&mut self, draw: &mut DrawList, origin: V3, lane: &[f32]) {
         let written = self.held.write(draw, bytes(lane));
-        self.count = if written { (lane.len() / INSTANCE_FLOATS) as u32 } else { 0 };
+        self.count = if written {
+            (lane.len() / INSTANCE_FLOATS) as u32
+        } else {
+            0
+        };
         self.origin = origin;
     }
 
@@ -64,7 +74,15 @@ impl Set {
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         if self.count > 0 && self.held.handle != 0 {
-            draw.draw_as(PIPELINE_MARKER, self.held.handle, self.count, 0, DrawList::translation(self.origin, eye), 0.0, 1.0);
+            draw.draw_as(
+                PIPELINE_MARKER,
+                self.held.handle,
+                self.count,
+                0,
+                DrawList::translation(self.origin, eye),
+                0.0,
+                1.0,
+            );
         }
     }
 }

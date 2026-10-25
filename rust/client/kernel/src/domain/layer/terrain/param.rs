@@ -12,7 +12,7 @@
 /// (door/layout.rs `HEAP_FLOWS_BYTES`).
 ///
 /// A known gap: the GPU's pool at it binds within WebGPU's floor, asserted
-/// (pxl-render gpu/renderer.rs `pool_bytes`), so no device's limits refuse
+/// (pxl-render gpu/ray/ground.rs `pool_bytes`), so no device's limits refuse
 /// it, but a device out of memory may fail to make the doubled buffer, and
 /// nothing hears it: the host keeps no error scope, so the renderer reads
 /// on with a buffer the device holds as an error. The last doubling holds

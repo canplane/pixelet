@@ -1,7 +1,10 @@
 // pxl-render/gpu/pass.rs
 
-//! Passes other than the world: markers, decor and impostors, the puck and actors.
+//! Passes other than the world: markers, decor and impostors, the puck and
+//! actors, the gizmos and the display case.
 
+pub mod case;
+pub mod debug;
 pub mod decor;
 pub mod impostor;
 pub mod marker;

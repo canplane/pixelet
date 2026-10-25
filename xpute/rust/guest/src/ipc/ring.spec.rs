@@ -3,26 +3,22 @@
 // GENERATED from spec/ipc/ring.json — do not edit.
 //
 // A single-producer, single-consumer ring of frames (frame.json) in memory both sides
-// see, named by its offset so it means the same to either. A header, then a frame a
-// message; the payloads lie apart in slots, as in virtio and AF_XDP. Message n owns
-// frame and slot n modulo the capacity, so a slot is free exactly when its frame is.
+// see, named by its offset so it means the same to either. A header, then the frames;
+// their payloads lie apart in slots, as in virtio and AF_XDP. Position n owns frame
+// and slot n modulo CAP, so a slot is free exactly when its frame is.
 // Positions only grow, and each side writes only its own word, so no lock is needed.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// How many frames, a power of two.
-pub const CAPACITY: u32 = 0;
+pub const CAP: u32 = 0;
 
-/// The consumer's position: the next message it reads.
+/// The consumer's position: the next frame it reads.
 pub const HEAD: u32 = 1;
 
-/// The producer's position: where the next message goes.
+/// The producer's position: where the next frame goes.
 pub const TAIL: u32 = 2;
 
 /// A payload slot's size, a power of two and a multiple of 8.

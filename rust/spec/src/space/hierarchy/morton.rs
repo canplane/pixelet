@@ -33,7 +33,9 @@ pub const fn bits<const D: usize>(zoom: Zoom) -> u32 {
 
 /// The axes with a digit at `zoom`, the order they are read in.
 fn axes<const D: usize>(zoom: Zoom) -> impl Iterator<Item = usize> {
-    (0..D).rev().filter(move |&i| digits(i, zoom) > digits(i, zoom - 1))
+    (0..D)
+        .rev()
+        .filter(move |&i| digits(i, zoom) > digits(i, zoom - 1))
 }
 
 /// The key of the node at `zoom` whose index is `at`.
@@ -53,7 +55,10 @@ fn digits_of<const D: usize>(zoom: Zoom, at: &[i32; D]) -> u128 {
     let mut key = 0u128;
     let mut z = 1;
     while z <= zoom {
-        let next = (0..D).map(first_zoom).filter(|&s| s > z).fold(zoom + 1, Zoom::min);
+        let next = (0..D)
+            .map(first_zoom)
+            .filter(|&s| s > z)
+            .fold(zoom + 1, Zoom::min);
         let (len, k) = ((next - z), axes::<D>(z).count() as u32);
         let mut run = 0u128;
         for (p, i) in axes::<D>(z).enumerate() {
@@ -102,7 +107,10 @@ pub fn node_of<const D: usize>(key: u128) -> Node<D> {
             at[i] = (at[i] << 1) | ((key >> (127 - read)) & 1) as i32;
         }
     }
-    (zoom, std::array::from_fn(|i| signed(at[i], digits(i, zoom))))
+    (
+        zoom,
+        std::array::from_fn(|i| signed(at[i], digits(i, zoom))),
+    )
 }
 
 /// A key written a character a zoom, coarsest first: the digits that zoom
@@ -157,7 +165,10 @@ fn signed(v: i32, width: u32) -> i32 {
     }
 }
 
-const _: () = assert!(EXTENT[0] == UNIT_ZOOM && EXTENT[1] == EXTENT[0], "X and Y digit from z1");
+const _: () = assert!(
+    EXTENT[0] == UNIT_ZOOM && EXTENT[1] == EXTENT[0],
+    "X and Y digit from z1"
+);
 
 #[cfg(test)]
 #[path = "morton.test.rs"]

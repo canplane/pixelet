@@ -46,6 +46,10 @@ impl Frame {
     /// A point about the anchor, its X on the anchor's lap.
     pub fn world_of(&self, at: V3) -> V3 {
         let x = pxl_spec::space::coord::world::nearest(at[0], self.anchor[0]);
-        [x - self.anchor[0], at[1] - self.anchor[1], at[2] - self.anchor[2]]
+        [
+            x - self.anchor[0],
+            at[1] - self.anchor[1],
+            at[2] - self.anchor[2],
+        ]
     }
 }

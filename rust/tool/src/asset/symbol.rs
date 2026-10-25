@@ -31,7 +31,8 @@ pub fn symbols(dir: &Path) -> Result<Vec<Symbol>, String> {
         .into_iter()
         .map(|rel| {
             let svg = std::fs::read(dir.join(&rel)).map_err(|e| format!("{rel}: {e}"))?;
-            let tree = resvg::usvg::Tree::from_data(&svg, &resvg::usvg::Options::default()).map_err(|e| format!("{rel}: {e}"))?;
+            let tree = resvg::usvg::Tree::from_data(&svg, &resvg::usvg::Options::default())
+                .map_err(|e| format!("{rel}: {e}"))?;
             let mut shapes = Vec::new();
             outline(tree.root(), &mut shapes);
             Ok(Symbol {
@@ -52,15 +53,27 @@ fn outline(group: &resvg::usvg::Group, out: &mut Vec<(String, bool)>) {
             resvg::usvg::Node::Group(g) => outline(g, out),
             resvg::usvg::Node::Path(p) => {
                 let Some(fill) = p.fill() else { continue };
-                let Some(data) = p.data().clone().transform(p.abs_transform()) else { continue };
+                let Some(data) = p.data().clone().transform(p.abs_transform()) else {
+                    continue;
+                };
                 let n = |v: f32| format!("{}", (v * 1000.0).round_ties_even() / 1000.0);
                 let d: Vec<String> = data
                     .segments()
                     .map(|s| match s {
                         PathSegment::MoveTo(a) => format!("M{} {}", n(a.x), n(a.y)),
                         PathSegment::LineTo(a) => format!("L{} {}", n(a.x), n(a.y)),
-                        PathSegment::QuadTo(a, b) => format!("Q{} {} {} {}", n(a.x), n(a.y), n(b.x), n(b.y)),
-                        PathSegment::CubicTo(a, b, c) => format!("C{} {} {} {} {} {}", n(a.x), n(a.y), n(b.x), n(b.y), n(c.x), n(c.y)),
+                        PathSegment::QuadTo(a, b) => {
+                            format!("Q{} {} {} {}", n(a.x), n(a.y), n(b.x), n(b.y))
+                        }
+                        PathSegment::CubicTo(a, b, c) => format!(
+                            "C{} {} {} {} {} {}",
+                            n(a.x),
+                            n(a.y),
+                            n(b.x),
+                            n(b.y),
+                            n(c.x),
+                            n(c.y)
+                        ),
                         PathSegment::Close => "Z".into(),
                     })
                     .collect();
@@ -72,12 +85,20 @@ fn outline(group: &resvg::usvg::Group, out: &mut Vec<(String, bool)>) {
 }
 
 fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), String> {
-    for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?.flatten() {
+    for entry in std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .flatten()
+    {
         let path = entry.path();
         if path.is_dir() {
             walk(&path, base, out)?;
         } else if path.extension().is_some_and(|e| e == "svg") {
-            out.push(path.strip_prefix(base).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/"));
+            out.push(
+                path.strip_prefix(base)
+                    .map_err(|e| e.to_string())?
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
         }
     }
     Ok(())
@@ -86,9 +107,13 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), String> {
 /// The symbol's coverage, scaled from its own box to fill the square.
 fn mask(tree: &resvg::usvg::Tree) -> Result<Vec<u8>, String> {
     let size = tree.size();
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(SYMBOL_PX, SYMBOL_PX).ok_or("an empty square")?;
+    let mut pixmap =
+        resvg::tiny_skia::Pixmap::new(SYMBOL_PX, SYMBOL_PX).ok_or("an empty square")?;
     let scale = SYMBOL_PX as f32 / size.width().max(size.height());
-    let transform = resvg::tiny_skia::Transform::from_scale(scale, scale).post_translate((SYMBOL_PX as f32 - size.width() * scale) / 2.0, (SYMBOL_PX as f32 - size.height() * scale) / 2.0);
+    let transform = resvg::tiny_skia::Transform::from_scale(scale, scale).post_translate(
+        (SYMBOL_PX as f32 - size.width() * scale) / 2.0,
+        (SYMBOL_PX as f32 - size.height() * scale) / 2.0,
+    );
     resvg::render(tree, transform, &mut pixmap.as_mut());
     Ok(pixmap.pixels().iter().map(|p| p.alpha()).collect())
 }
@@ -115,8 +140,18 @@ pub fn render_ts(symbols: &[Symbol]) -> String {
         "// @pxl/client/shell/search/place-symbol.ts\n//\n// Written by `make ingest-asset` from asset/raw/place/symbol/ — do not edit.\n//\n// Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,\n// by the path Carto gives each: its box, and each shape's path data and\n// whether it fills even-odd.\n\nexport interface PlaceSymbol {\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}\n\nexport const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {\n",
     );
     for s in symbols {
-        let shapes: Vec<String> = s.shapes.iter().map(|(d, even)| format!("[{d:?}, {even}]")).collect();
-        ts.push_str(&format!("  {:?}: {{ box: [{}, {}], shapes: [{}] }},\n", s.path, s.size[0], s.size[1], shapes.join(", ")));
+        let shapes: Vec<String> = s
+            .shapes
+            .iter()
+            .map(|(d, even)| format!("[{d:?}, {even}]"))
+            .collect();
+        ts.push_str(&format!(
+            "  {:?}: {{ box: [{}, {}], shapes: [{}] }},\n",
+            s.path,
+            s.size[0],
+            s.size[1],
+            shapes.join(", ")
+        ));
     }
     ts.push_str("};\n");
     ts

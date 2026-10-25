@@ -24,7 +24,11 @@ const WINDOW_MS: f64 = 60_000.0;
 const TASK_LIMIT: usize = 2_048;
 const FRAME_LIMIT: usize = 4_096;
 const WORST_CAP: usize = 12;
-pub const SPREAD_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT { FRAME_LIMIT } else { TASK_LIMIT };
+pub const SPREAD_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT {
+    FRAME_LIMIT
+} else {
+    TASK_LIMIT
+};
 
 /// Advances `head` past records older than `cutoff`; returns how many to drop
 /// now, only once the dropped part is the larger half, so most trims are a
@@ -45,7 +49,11 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
 fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
     let full = *len == ring.len() && *head == 0;
     if *len == ring.len() {
-        let n = if full { ring.len() / 4 } else { core::mem::take(head) };
+        let n = if full {
+            ring.len() / 4
+        } else {
+            core::mem::take(head)
+        };
         drop_front(ring, len, n);
     }
     ring[*len] = rec;
@@ -155,7 +163,12 @@ pub fn profiler_recording_state() -> RecSection {
 pub fn profiler_recording_start() -> bool {
     let l = profiler();
     if l.task_ring.is_empty() {
-        let (Some(tasks), Some(frames), Some(worst), Some(scratch)) = (heap_lane(TASK_LIMIT), heap_lane(FRAME_LIMIT), heap_lane(WORST_CAP), heap_lane(SPREAD_LIMIT)) else {
+        let (Some(tasks), Some(frames), Some(worst), Some(scratch)) = (
+            heap_lane(TASK_LIMIT),
+            heap_lane(FRAME_LIMIT),
+            heap_lane(WORST_CAP),
+            heap_lane(SPREAD_LIMIT),
+        ) else {
             return false;
         };
         (l.task_ring, l.frame_ring, l.worst, l.scratch) = (tasks, frames, worst, scratch);
@@ -184,8 +197,19 @@ pub fn profiler_recording_stop() {
 pub fn profiler_release() {
     profiler_recording_stop();
     let l = profiler();
-    (l.task_len, l.frame_len, l.worst_len, l.task_head, l.frame_head) = (0, 0, 0, 0, 0);
-    (l.task_ring, l.frame_ring, l.worst, l.scratch) = (Box::default(), Box::default(), Box::default(), Box::default());
+    (
+        l.task_len,
+        l.frame_len,
+        l.worst_len,
+        l.task_head,
+        l.frame_head,
+    ) = (0, 0, 0, 0, 0);
+    (l.task_ring, l.frame_ring, l.worst, l.scratch) = (
+        Box::default(),
+        Box::default(),
+        Box::default(),
+        Box::default(),
+    );
 }
 
 /// The summary's scratch, empty while the lanes are not held.
@@ -200,7 +224,12 @@ pub fn profiler_record(row: impl FnOnce() -> TaskRow) {
         return;
     }
     let row = row();
-    let dropped = trim(&l.task_ring[..l.task_len], &mut l.task_head, row.end_ms - WINDOW_MS, |r| r.end_ms);
+    let dropped = trim(
+        &l.task_ring[..l.task_len],
+        &mut l.task_head,
+        row.end_ms - WINDOW_MS,
+        |r| r.end_ms,
+    );
     drop_front(&mut l.task_ring, &mut l.task_len, dropped);
     if !land_lane(&mut l.task_ring, &mut l.task_len, &mut l.task_head, row) {
         l.truncated = true;
@@ -217,7 +246,9 @@ pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, settled: bool, fr
         return;
     }
     l.frame_task_ms = frame_task_ms;
-    let Some(mut f) = l.open.replace(s) else { return };
+    let Some(mut f) = l.open.replace(s) else {
+        return;
+    };
     (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
     land(l, f);
 }
@@ -227,7 +258,9 @@ pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, settled: bool, fr
 pub fn profiler_record_turn(turn_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f64) {
     let l = profiler();
     let frame_task_ms = core::mem::take(&mut l.frame_task_ms);
-    let Some(f) = l.open.as_mut().filter(|_| l.recording) else { return };
+    let Some(f) = l.open.as_mut().filter(|_| l.recording) else {
+        return;
+    };
     f.turns += 1.0;
     f.busy_ms += turn_ms;
     // The frame task runs inside the poll, so this is never negative.
@@ -249,7 +282,12 @@ fn land(l: &mut Profiler, s: FrameSample) {
         l.worst_len = kept + 1;
     }
 
-    let dropped = trim(&l.frame_ring[..l.frame_len], &mut l.frame_head, s.t - WINDOW_MS, |f| f.t);
+    let dropped = trim(
+        &l.frame_ring[..l.frame_len],
+        &mut l.frame_head,
+        s.t - WINDOW_MS,
+        |f| f.t,
+    );
     drop_front(&mut l.frame_ring, &mut l.frame_len, dropped);
     if !land_lane(&mut l.frame_ring, &mut l.frame_len, &mut l.frame_head, s) {
         l.truncated = true;

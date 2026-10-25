@@ -86,7 +86,9 @@ impl<'w, 'a> Upright<'w, 'a> {
             min: [corner[0], corner[1], REACH.min[2]],
             max: [corner[0] + side, corner[1] + side, REACH.max[2]],
         };
-        let finer = world.finest_in(&column).map_or(0, |z| z.saturating_sub(cell));
+        let finer = world
+            .finest_in(&column)
+            .map_or(0, |z| z.saturating_sub(cell));
         Upright {
             world,
             corner,
@@ -100,8 +102,14 @@ impl<'w, 'a> Upright<'w, 'a> {
 
     /// The box of the first block each column's ray from the height `z` to
     /// the height `to`, up or down, stops at (`until`).
-    fn rays(&mut self, z: f64, to: f64, until: Until) -> impl Iterator<Item = Aabb> + use<'_, 'w, 'a> {
-        (0..self.across * self.across).filter_map(move |k| self.met(k, z, to, until).value().flatten())
+    fn rays(
+        &mut self,
+        z: f64,
+        to: f64,
+        until: Until,
+    ) -> impl Iterator<Item = Aabb> + use<'_, 'w, 'a> {
+        (0..self.across * self.across)
+            .filter_map(move |k| self.met(k, z, to, until).value().flatten())
     }
 
     /// Column `k`'s ray, with what the world held of the way: a ray that
@@ -109,7 +117,11 @@ impl<'w, 'a> Upright<'w, 'a> {
     fn met(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
         let middle = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
         let ray = Ray {
-            origin: [middle(k % self.across, self.corner[0]), middle(k / self.across, self.corner[1]), z],
+            origin: [
+                middle(k % self.across, self.corner[0]),
+                middle(k / self.across, self.corner[1]),
+                z,
+            ],
             direction: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             reach: (to - z).abs(),
         };
@@ -146,26 +158,38 @@ impl<'w, 'a> Upright<'w, 'a> {
     /// reach's floor: the rays down from `z`, which start in the block over
     /// it.
     fn below(&mut self, z: f64) -> Option<f64> {
-        self.rays(z, REACH.min[2], Until::Fills).map(|b| b.max[2]).filter(|&t| t > REACH.min[2]).reduce(f64::max)
+        self.rays(z, REACH.min[2], Until::Fills)
+            .map(|b| b.max[2])
+            .filter(|&t| t > REACH.min[2])
+            .reduce(f64::max)
     }
 
     /// The bottom of the lowest solid over `z` and under `to` in any column:
     /// the rays up from `z`, which start in the block at `z` and so meet
     /// none at it.
     fn above(&mut self, z: f64, to: f64) -> Option<f64> {
-        self.rays(z, to, Until::Fills).map(|b| b.min[2]).filter(|&b| b < to).reduce(f64::min)
+        self.rays(z, to, Until::Fills)
+            .map(|b| b.min[2])
+            .filter(|&b| b < to)
+            .reduce(f64::min)
     }
 
     /// The top of the highest solid in any column, within the reach.
     fn highest(&mut self) -> Option<f64> {
-        self.rays(REACH.max[2], REACH.min[2], Until::Fills).map(|b| b.max[2].min(REACH.max[2])).reduce(f64::max)
+        self.rays(REACH.max[2], REACH.min[2], Until::Fills)
+            .map(|b| b.max[2].min(REACH.max[2]))
+            .reduce(f64::max)
     }
 
     /// The cell's ground's top, in units.
     fn surface(&mut self) -> Option<f64> {
         let cell = GROUND.cell_zoom(self.zoom);
         let side = units(cell);
-        let answer = self.world.surface_of(cell, self.corner.map(|v| libm::floor((v + side / 2.0) / side) as i32));
+        let answer = self.world.surface_of(
+            cell,
+            self.corner
+                .map(|v| libm::floor((v + side / 2.0) / side) as i32),
+        );
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -238,7 +262,10 @@ impl<'a> World<'a> {
             t => c.below(t),
         };
         let up = c.above(z, REACH.max[2]).map(|a| c.lift(a));
-        let nearest = [down, up, c.surface()].into_iter().flatten().min_by(|a, b| (a - z).abs().total_cmp(&(b - z).abs()));
+        let nearest = [down, up, c.surface()]
+            .into_iter()
+            .flatten()
+            .min_by(|a, b| (a - z).abs().total_cmp(&(b - z).abs()));
         c.done(nearest)
     }
 
@@ -260,9 +287,16 @@ impl<'a> World<'a> {
     /// held, when its caller goes on with the height unknown. `from` is a
     /// center whose height is known.
     pub fn step_slide(&self, from: &Q3, to: &Q3, eye: &Q3, falls: bool) -> Option<Q3> {
-        let [sx, sy, sz] = [i64::from(from[0]), i64::from(from[1]), i64::from(from[2])].map(q3::to_real);
+        let [sx, sy, sz] =
+            [i64::from(from[0]), i64::from(from[1]), i64::from(from[2])].map(q3::to_real);
         let mut floor = under(sz);
-        let gather = |x: f64, y: f64, floor: f64| world::at(q3::from_real(x), q3::from_real(y), q3::from_real(over(floor)));
+        let gather = |x: f64, y: f64, floor: f64| {
+            world::at(
+                q3::from_real(x),
+                q3::from_real(y),
+                q3::from_real(over(floor)),
+            )
+        };
         let [tx, ty] = [i64::from(to[0]), i64::from(to[1])].map(q3::to_real);
         if !walks(from, eye) {
             let at = world::at(i64::from(to[0]), i64::from(to[1]), i64::from(from[2]));
@@ -272,7 +306,10 @@ impl<'a> World<'a> {
             let stands = if falls {
                 self.surface_support(&at).exact()?.unwrap_or(floor)
             } else {
-                self.floor_under(&at, LEAF_ZOOM).exact()?.filter(|&z| z > floor).unwrap_or(floor)
+                self.floor_under(&at, LEAF_ZOOM)
+                    .exact()?
+                    .filter(|&z| z > floor)
+                    .unwrap_or(floor)
             };
             return Some(gather(tx, ty, stands));
         }
@@ -283,7 +320,15 @@ impl<'a> World<'a> {
         let mut end = [sx + way[0], sy + way[1]];
         let mut blocked = [false; 2];
         // Where the walker is at the share `t` of the way, a slid axis held where it stopped.
-        let point = |t: f64, end: [f64; 2], blocked: [bool; 2]| [0, 1].map(|k| if blocked[k] { end[k] } else { [sx, sy][k] + way[k] * t });
+        let point = |t: f64, end: [f64; 2], blocked: [bool; 2]| {
+            [0, 1].map(|k| {
+                if blocked[k] {
+                    end[k]
+                } else {
+                    [sx, sy][k] + way[k] * t
+                }
+            })
+        };
         let mut at = [sx, sy].map(|v| libm::floor(v / s));
         // Out of what fills its own cell first: only what is over that is a ceiling.
         floor = {
@@ -293,8 +338,20 @@ impl<'a> World<'a> {
         };
         // Amanatides and Woo's traversal: the share of `way` at each axis's next edge.
         loop {
-            let edge = |k: usize| if way[k] > 0.0 { (at[k] + 1.0) * s } else { at[k] * s };
-            let share = |k: usize| if blocked[k] || way[k] == 0.0 { f64::INFINITY } else { (edge(k) - [sx, sy][k]) / way[k] };
+            let edge = |k: usize| {
+                if way[k] > 0.0 {
+                    (at[k] + 1.0) * s
+                } else {
+                    at[k] * s
+                }
+            };
+            let share = |k: usize| {
+                if blocked[k] || way[k] == 0.0 {
+                    f64::INFINITY
+                } else {
+                    (edge(k) - [sx, sy][k]) / way[k]
+                }
+            };
             let k = if share(0) <= share(1) { 0 } else { 1 };
             let t = share(k);
             if t > 1.0 {

@@ -22,19 +22,19 @@ enum class ErrorClass : std::uint8_t {
 };
 
 struct Error {
-    Errno code;
+    Errno errnum;
     ErrorClass cls;
     std::source_location at;
 
     constexpr bool is_fault() const noexcept { return cls != ErrorClass::invariant; }
 };
 
-constexpr Error make_error(ErrorClass cls, Errno code, std::source_location at = std::source_location::current()) noexcept {
-    return Error{code, cls, at};
+constexpr Error make_error(ErrorClass cls, Errno errnum, std::source_location at = std::source_location::current()) noexcept {
+    return Error{errnum, cls, at};
 }
 
-constexpr Error marshal_error(Errno code, std::source_location at = std::source_location::current()) noexcept {
-    return Error{code, ErrorClass::marshal, at};
+constexpr Error marshal_error(Errno errnum, std::source_location at = std::source_location::current()) noexcept {
+    return Error{errnum, ErrorClass::marshal, at};
 }
 
 template <class T> class [[nodiscard]] Result {

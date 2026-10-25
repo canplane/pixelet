@@ -24,13 +24,28 @@
 
     // Server routes answered by the published deployment: no local server,
     // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.
-    "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm", "build:brand"] },
+    "dev": {
+      "command": "deno run -A --node-modules-dir=auto npm:vite",
+      "dependencies": ["build:wasm", "build:brand"]
+    },
     // The same client against the servers on this machine.
-    "dev:oven": { "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm", "build:brand"] },
-    "dev:shelf": { "command": "VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm", "build:brand"] },
+    "dev:oven": {
+      "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite",
+      "dependencies": ["build:wasm", "build:brand"]
+    },
+    "dev:shelf": {
+      "command": "VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite",
+      "dependencies": ["build:wasm", "build:brand"]
+    },
 
-    "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm:published", "build:brand"] },
-    "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
+    "build": {
+      "command": "deno run -A --node-modules-dir=auto npm:vite build",
+      "dependencies": ["build:wasm:published", "build:brand"]
+    },
+    "preview": {
+      "command": "deno run -A --node-modules-dir=auto npm:vite preview",
+      "dependencies": ["build"]
+    },
     // A bundle names where its tiles come from when it is built, so each is its own build.
     "preview:oven": {
       "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite build && VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite preview",

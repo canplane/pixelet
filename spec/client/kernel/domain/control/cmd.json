@@ -19,7 +19,11 @@
     "or a packed array where the item is a number. A record crosses as a branch",
     "of its own fields, and is how a block past a slot is laid out. An enum's",
     "`unknown` is the member a number it does not give out reads as; an enum",
-    "without one refuses the packet."
+    "without one refuses the packet.",
+    "",
+    "A command taken out leaves its number in the Command table's `$retired`, with",
+    "the name it had, and the generator refuses a number given twice or one",
+    "retired, so a number an older side still sends never comes to mean another."
   ],
   "base": "xpute/spec/abi/cmd.json",
   "extern": [
@@ -122,6 +126,10 @@
         {
           "name": "KEPT_EMPTIED",
           "value": 6
+        },
+        {
+          "name": "VIEW",
+          "value": 7
         }
       ]
     },
@@ -187,6 +195,10 @@
         {
           "name": "MARKER_PUT",
           "value": 14
+        },
+        {
+          "name": "LOCATE",
+          "value": 15
         }
       ]
     },
@@ -210,10 +222,6 @@
           "value": 3
         },
         {
-          "name": "ERROR",
-          "value": 4
-        },
-        {
           "name": "ORIENTATION",
           "value": 5
         },
@@ -222,20 +230,8 @@
           "value": 6
         },
         {
-          "name": "ENABLE_LOCATION",
-          "value": 7
-        },
-        {
-          "name": "OPEN",
-          "value": 8
-        },
-        {
-          "name": "CLOSE",
-          "value": 9
-        },
-        {
-          "name": "ORIENTATION_LOST",
-          "value": 10
+          "name": "FAILED",
+          "value": 11
         }
       ]
     },
@@ -661,6 +657,28 @@
     {
       "name": "Command",
       "format": "hex4",
+      "$retired": [
+        {
+          "name": "SENSOR_ERROR",
+          "value": 4612
+        },
+        {
+          "name": "SENSOR_ENABLE_LOCATION",
+          "value": 4615
+        },
+        {
+          "name": "SENSOR_OPEN",
+          "value": 4616
+        },
+        {
+          "name": "SENSOR_CLOSE",
+          "value": 4617
+        },
+        {
+          "name": "SENSOR_ORIENTATION_LOST",
+          "value": 4618
+        }
+      ],
       "entries": [
         {
           "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
@@ -756,23 +774,26 @@
           ]
         },
         {
-          "name": "SENSOR_ERROR",
-          "value": 4612,
+          "name": "SENSOR_FAILED",
+          "value": 4619,
           "$doc": [
-            "The watch failed and was stopped."
+            "A watch that ended in failure and was stopped, refused from the start (PermissionDenied)",
+            "or cut off; the compass's, where the platform says so (WORLD_BOOT's",
+            "orientation_silence_is_loss)."
           ],
           "packet": [
             {
+              "name": "sensor",
+              "type": "Sensor"
+            },
+            {
               "name": "code",
-              "type": "GeolocationErrorCode"
+              "type": "GeolocationErrorCode",
+              "optional": true,
+              "$doc": [
+                "Geolocation's; orientation gives none today."
+              ]
             }
-          ]
-        },
-        {
-          "name": "SENSOR_ORIENTATION_LOST",
-          "value": 4618,
-          "$doc": [
-            "The compass failed and its listener was removed, where the platform says so."
           ]
         },
         {
@@ -813,7 +834,7 @@
               "$doc": [
                 "A browser's compass talks while the device is still and cannot say it stopped, so",
                 "silence is the only sign of loss; a device's speaks only when the heading turns and",
-                "reports a failure itself (SENSOR_ORIENTATION_LOST)."
+                "reports a failure itself (SENSOR_FAILED)."
               ]
             }
           ]
@@ -1244,6 +1265,15 @@
           ]
         },
         {
+          "name": "INPUT_LOCATE",
+          "value": 4367,
+          "$doc": [
+            "The search panel's location card's press: the location asked for. The compass is",
+            "asked for where it is used, entering follow mode (TRACKING), and never alone: nothing",
+            "reads it without the location."
+          ]
+        },
+        {
           "name": "INPUT_GO_TO",
           "value": 4360,
           "$doc": [
@@ -1308,26 +1338,18 @@
           ]
         },
         {
-          "name": "SENSOR_OPEN",
-          "value": 4616,
+          "name": "WORLD_VIEW",
+          "value": 4103,
           "$doc": [
-            "The world is on screen and wants the sensors."
-          ]
-        },
-        {
-          "name": "SENSOR_CLOSE",
-          "value": 4617,
-          "$doc": [
-            "The world is gone, and the sensors are let go."
-          ]
-        },
-        {
-          "name": "SENSOR_ENABLE_LOCATION",
-          "value": 4615,
-          "$doc": [
-            "The search panel's location card: the location asked for. The compass is asked for",
-            "where it is used, entering follow mode (TRACKING), and never alone: nothing reads it",
-            "without the location."
+            "The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.",
+            "The kernel watches a sensor only while both hold, the page visible and the world view",
+            "shown; which sensors it watches then is its own (SENSOR_START)."
+          ],
+          "packet": [
+            {
+              "name": "shown",
+              "type": "bool"
+            }
           ]
         },
         {
@@ -1457,7 +1479,7 @@
           "name": "m_per_px",
           "type": "f64",
           "$doc": [
-            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it."
+            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
           ]
         },
         {
@@ -1655,11 +1677,11 @@
           "list": true
         },
         {
-          "name": "prominence",
-          "type": "u8",
+          "name": "shown",
+          "type": "bool",
           "$doc": [
-            "Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the",
-            "subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java)."
+            "The view is in far enough for its name to show: as far as Overture's own tiles",
+            "show it from (pxl-spec bake/tile/division.rs `Division::shown_from`)."
           ]
         },
         {

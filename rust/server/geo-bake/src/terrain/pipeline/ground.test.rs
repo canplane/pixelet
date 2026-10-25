@@ -49,10 +49,25 @@ fn at(g: &Ground, x: i64, y: i64) -> GroundId {
 #[test]
 fn the_sea_is_the_coast_s_not_a_color_painted_over_land() {
     let features = [
-        area([0.0, 0.0, 100.0, 100.0], 10_000.0, ground::water, Layer::Landcover, "pond"),
-        area([40.0, 40.0, 60.0, 60.0], 400.0, ground::grass, Layer::Landcover, "grass"),
+        area(
+            [0.0, 0.0, 100.0, 100.0],
+            10_000.0,
+            ground::water,
+            Layer::Landcover,
+            "pond",
+        ),
+        area(
+            [40.0, 40.0, 60.0, 60.0],
+            400.0,
+            ground::grass,
+            Layer::Landcover,
+            "grass",
+        ),
     ];
-    let shore = Coast::Shore(vec![(vec![[0.0, 0.0], [200.0, 0.0], [200.0, 200.0], [0.0, 200.0]], Vec::new())]);
+    let shore = Coast::Shore(vec![(
+        vec![[0.0, 0.0], [200.0, 0.0], [200.0, 200.0], [0.0, 200.0]],
+        Vec::new(),
+    )]);
     for coast in [Coast::Land, shore] {
         let g = bake_ground(&features, &coast);
         assert_eq!(at(&g, 50, 50), ground::grass);
@@ -64,19 +79,58 @@ fn the_sea_is_the_coast_s_not_a_color_painted_over_land() {
 fn a_source_ranks_alike_on_every_tile_it_is_clipped_to() {
     // A pond's sliver on this tile is smaller than the grass over it; the pond's whole is not.
     let features = [
-        area([0.0, 0.0, 10.0, 100.0], 10_000.0, ground::water, Layer::Landcover, "pond"),
-        area([0.0, 40.0, 30.0, 60.0], 1_200.0, ground::grass, Layer::Landcover, "grass"),
+        area(
+            [0.0, 0.0, 10.0, 100.0],
+            10_000.0,
+            ground::water,
+            Layer::Landcover,
+            "pond",
+        ),
+        area(
+            [0.0, 40.0, 30.0, 60.0],
+            1_200.0,
+            ground::grass,
+            Layer::Landcover,
+            "grass",
+        ),
     ];
-    assert_eq!(at(&bake_ground(&features, &Coast::Land), 5, 50), ground::grass);
+    assert_eq!(
+        at(&bake_ground(&features, &Coast::Land), 5, 50),
+        ground::grass
+    );
 }
 
 #[test]
 fn a_tile_s_ground_does_not_depend_on_its_rows_order() {
     let mut features = vec![
-        area([10.0, 10.0, 30.0, 30.0], 400.0, ground::park, Layer::Landcover, "a"),
-        area([10.0, 10.0, 30.0, 30.0], 400.0, ground::grass, Layer::Landcover, "b"),
-        area([20.0, 20.0, 40.0, 40.0], 400.0, ground::building, Layer::Building, "c"),
-        area([20.0, 20.0, 40.0, 40.0], 400.0, ground::building_major, Layer::Building, "d"),
+        area(
+            [10.0, 10.0, 30.0, 30.0],
+            400.0,
+            ground::park,
+            Layer::Landcover,
+            "a",
+        ),
+        area(
+            [10.0, 10.0, 30.0, 30.0],
+            400.0,
+            ground::grass,
+            Layer::Landcover,
+            "b",
+        ),
+        area(
+            [20.0, 20.0, 40.0, 40.0],
+            400.0,
+            ground::building,
+            Layer::Building,
+            "c",
+        ),
+        area(
+            [20.0, 20.0, 40.0, 40.0],
+            400.0,
+            ground::building_major,
+            Layer::Building,
+            "d",
+        ),
         // Two ways of one rank over one cell: which shows is no row's choice.
         way(70.0, 4.0, ground::residential_road, "south"),
         way(71.0, 4.0, ground::secondary, "north"),

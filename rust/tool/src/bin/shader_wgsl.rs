@@ -24,12 +24,18 @@ use pxl_tool::root;
 use pxl_tool::shader::{header, inputs_digest, DIR, ENTRIES};
 
 const IMAGE: &str = "rust:1-bookworm";
-const BUILT: &str = "rust/client/shader/target-linux/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
+const BUILT: &str =
+    "rust/target/shader/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
 
 /// Each entry's module as it is checked in, under its header: the toolchain
 /// comes from rust/client/shader/rust-toolchain.toml, which rustup's cargo
-/// installs in the container on first use.
-fn generate(root: &Path, digest: &str) -> Result<Vec<(&'static str, &'static str, String)>, String> {
+/// installs on first use. The container is let go after each run, so the
+/// toolchain and the crates it fetched are kept in the build's own target,
+/// as `RUSTUP_HOME` and `CARGO_HOME` under their default names.
+fn generate(
+    root: &Path,
+    digest: &str,
+) -> Result<Vec<(&'static str, &'static str, String)>, String> {
     let status = Command::new("docker")
         .args(["run", "--rm", "--platform", "linux/arm64", "-v"])
         .arg(format!("{}:/w", root.display()))
@@ -37,9 +43,11 @@ fn generate(root: &Path, digest: &str) -> Result<Vec<(&'static str, &'static str
             "-w",
             "/w/rust/client/shader",
             "-e",
-            "CARGO_TARGET_DIR=/w/rust/client/shader/target-linux",
+            "CARGO_TARGET_DIR=/w/rust/target/shader",
             "-e",
-            "CARGO_HOME=/w/rust/client/shader/cargo-home",
+            "CARGO_HOME=/w/rust/target/shader/.cargo",
+            "-e",
+            "RUSTUP_HOME=/w/rust/target/shader/.rustup",
             IMAGE,
             "bash",
             "-c",
@@ -54,7 +62,8 @@ fn generate(root: &Path, digest: &str) -> Result<Vec<(&'static str, &'static str
         .iter()
         .map(|&(entry, file)| {
             let path = root.join(BUILT).join(format!("{entry}.wgsl"));
-            let wgsl = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let wgsl =
+                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
             Ok((entry, file, header(digest) + &wgsl))
         })
         .collect()
@@ -71,7 +80,10 @@ fn run() -> Result<bool, String> {
             if std::fs::read_to_string(&target).ok().as_deref() == Some(text.as_str()) {
                 println!("current: {}", target.display());
             } else {
-                eprintln!("stale: {} is not what the source makes now; run `cargo shader-wgsl`", target.display());
+                eprintln!(
+                    "stale: {} is not what the source makes now; run `cargo shader-wgsl`",
+                    target.display()
+                );
                 current = false;
             }
         } else {

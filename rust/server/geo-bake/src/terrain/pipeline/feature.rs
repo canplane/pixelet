@@ -48,7 +48,12 @@ pub struct Rank {
 
 impl Rank {
     pub fn new(layer: Layer, order: i64, feature: &'static str, id: &str) -> Rank {
-        Rank { layer, order, feature, id: id.into() }
+        Rank {
+            layer,
+            order,
+            feature,
+            id: id.into(),
+        }
     }
 
     /// Carto sorts an area layer by `way_area`, larger first: the whole
@@ -73,13 +78,19 @@ pub struct Feature {
 
 /// In the tile's cells from its corner.
 pub fn local(p: G3857, tile_min: G3857) -> P {
-    [u_from_mer(p[0] - tile_min[0]) / CELL_U, u_from_mer(p[1] - tile_min[1]) / CELL_U]
+    [
+        u_from_mer(p[0] - tile_min[0]) / CELL_U,
+        u_from_mer(p[1] - tile_min[1]) / CELL_U,
+    ]
 }
 
 /// A polygon, or a ring whose ends meet within a tenth of the DB's unit, is an area.
 pub fn closes(g: &WkbGeometry) -> bool {
     let p = &g.points;
-    g.is_polygon_source || (p.len() >= 3 && (p[0][0] - p[p.len() - 1][0]).abs() < 0.1 && (p[0][1] - p[p.len() - 1][1]).abs() < 0.1)
+    g.is_polygon_source
+        || (p.len() >= 3
+            && (p[0][0] - p[p.len() - 1][0]).abs() < 0.1
+            && (p[0][1] - p[p.len() - 1][1]).abs() < 0.1)
 }
 
 impl Feature {
@@ -100,7 +111,11 @@ impl Feature {
     pub fn of(g: &WkbGeometry, tile_min: G3857, cell: GroundId, rank: Rank) -> Option<Feature> {
         (!g.points.is_empty()).then(|| Feature {
             points: g.points.iter().map(|&p| local(p, tile_min)).collect(),
-            holes: g.holes.iter().map(|ring| ring.iter().map(|&p| local(p, tile_min)).collect()).collect(),
+            holes: g
+                .holes
+                .iter()
+                .map(|ring| ring.iter().map(|&p| local(p, tile_min)).collect())
+                .collect(),
             closed: closes(g),
             width: 0.0,
             cut: [false; 2],

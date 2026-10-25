@@ -36,6 +36,10 @@ export class Directory {
 
   quantum(): QuantumPolicy {
     const at = (k: u32) => this.get(k) / QUANTUM_SCALE;
-    return { margin_share: at(key.MARGIN_SHARE), batch_frames: at(key.BATCH_FRAMES), settle_ms: at(key.SETTLE_MS) };
+    return {
+      margin_share: at(key.MARGIN_SHARE),
+      batch_frames: at(key.BATCH_FRAMES),
+      settle_ms: at(key.SETTLE_MS),
+    };
   }
 }

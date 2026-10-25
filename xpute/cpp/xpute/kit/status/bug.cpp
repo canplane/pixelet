@@ -16,8 +16,8 @@ void set_report(Report report) noexcept {
     installed_report.compare_exchange_strong(none, report);
 }
 
-void bug(Errno code, std::uint64_t a, std::uint64_t b, std::source_location at) noexcept {
-    if (Report report = installed_report.load()) report(code, at, a, b);
+void bug(Errno errnum, std::uint64_t a, std::uint64_t b, std::source_location at) noexcept {
+    if (Report report = installed_report.load()) report(errnum, at, a, b);
     std::abort();
 }
 

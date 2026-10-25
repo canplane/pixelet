@@ -62,7 +62,11 @@ pub const ASSET_PREFIX: &str = "/asset/";
 
 /// A kind's tile under `TILE_PREFIX` and the kind, `{version}/{name}`.
 /// Written into `w`, so a key is made where it is wanted, not allocated.
-pub fn tile_object(w: &mut impl core::fmt::Write, version: &str, name: impl core::fmt::Display) -> core::fmt::Result {
+pub fn tile_object(
+    w: &mut impl core::fmt::Write,
+    version: &str,
+    name: impl core::fmt::Display,
+) -> core::fmt::Result {
     write!(w, "{version}/{name}")
 }
 

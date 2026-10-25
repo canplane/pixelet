@@ -16,7 +16,9 @@ impl Aabb {
     pub fn meet(self, other: Aabb) -> Option<Aabb> {
         let min: V3 = std::array::from_fn(|k| self.min[k].max(other.min[k]));
         let max: V3 = std::array::from_fn(|k| self.max[k].min(other.max[k]));
-        (0..3).all(|k| min[k] <= max[k]).then_some(Aabb { min, max })
+        (0..3)
+            .all(|k| min[k] <= max[k])
+            .then_some(Aabb { min, max })
     }
 
     /// Whether the two share room, not only a face.

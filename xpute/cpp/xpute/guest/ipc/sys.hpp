@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "xpute/kit/status/errno.spec.hpp"
-#include "xpute/guest/mem/memory.hpp"
+#include "xpute/guest/mem.hpp"
 #include "stream.hpp"
 #include "sys.spec.hpp"
 
@@ -31,17 +31,15 @@ inline constexpr std::size_t CLOSE_ARGS = 1;
 
 // The most one descriptor records in a turn, its name `path` bytes long: its
 // open, a read or a write, and its close, twice where it is stopped.
-constexpr std::uint64_t descriptor_turn_bytes(std::uint64_t path) noexcept {
+constexpr std::uint64_t fd_turn_bytes(std::uint64_t path) noexcept {
     std::uint64_t moved = READ_ARGS > WRITE_ARGS ? READ_ARGS : WRITE_ARGS;
     return record_bytes(OPENAT_ARGS, path) + record_bytes(moved, std::nullopt) + 2 * record_bytes(CLOSE_ARGS, std::nullopt);
 }
 
 class Sys {
   public:
-    // `at` is a range nothing else writes, named under SYS in the directory.
     Sys(Memory mem, std::uint32_t at, std::uint32_t words) noexcept : mem_(mem), stream_(mem, at, words, sys::HEAD) {}
 
-    // What the host ran after the last turn is done, so what was kept for it goes.
     void rise() noexcept { held_.clear(); }
 
     void fall() noexcept { stream_.publish(); }
@@ -66,7 +64,7 @@ class Sys {
 
     // The one call of the turn, published at once; what was recorded before it is
     // dropped.
-    void abort(Errno code, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept;
+    void abort(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept;
 
   private:
     Memory mem_;

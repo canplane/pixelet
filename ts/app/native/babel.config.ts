@@ -24,7 +24,11 @@ import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
  * and all. The table refuses an enum it cannot inline; `inlineEnums` below
  * does the rest.
  */
-const TABLE = readEnums([path.join(WORKSPACE, "client/src"), path.join(REPO, "xpute/ts"), path.join(WORKSPACE, "app/native/src")]);
+const TABLE = readEnums([
+  path.join(WORKSPACE, "client/src"),
+  path.join(REPO, "xpute/ts"),
+  path.join(WORKSPACE, "app/native/src"),
+]);
 const { exported: EXPORTED, local: LOCAL } = TABLE;
 
 /** The table is read once, when Metro loads this file, so an enum or a member
@@ -43,7 +47,9 @@ const inlineEnums = ({ types: t }) => ({
   visitor: {
     MemberExpression(p, state) {
       const { object, property, computed } = p.node;
-      if (computed || !t.isIdentifier(object) || !t.isIdentifier(property)) return;
+      if (computed || !t.isIdentifier(object) || !t.isIdentifier(property)) {
+        return;
+      }
       // A struck declaration takes its binding with it, so a use below one
       // of the file's own is found by its name.
       const binding = p.scope.getBinding(object.name);
@@ -55,13 +61,21 @@ const inlineEnums = ({ types: t }) => ({
         ? state.imports.get(object.name)
         : undefined;
       if (!members) return;
-      if (!members.has(property.name)) throw p.buildCodeFrameError(stale(`${object.name}.${property.name}`));
+      if (!members.has(property.name)) {
+        throw p.buildCodeFrameError(stale(`${object.name}.${property.name}`));
+      }
       p.replaceWith(t.valueToNode(members.get(property.name)));
     },
     TSEnumDeclaration(p, state) {
       const name = p.node.id.name;
-      if (!p.node.const) throw p.buildCodeFrameError(`const-enum: enum ${name} is not const, so a bundle would carry its members' names; declare it \`const enum\``);
-      if (!state.declared.has(p.node.id)) throw p.buildCodeFrameError(stale(`const enum ${name}`));
+      if (!p.node.const) {
+        throw p.buildCodeFrameError(
+          `const-enum: enum ${name} is not const, so a bundle would carry its members' names; declare it \`const enum\``,
+        );
+      }
+      if (!state.declared.has(p.node.id)) {
+        throw p.buildCodeFrameError(stale(`const enum ${name}`));
+      }
       // The declaration itself first: a path struck only through its parent
       // still reads as live to the plugins after this one on the same node,
       // and the TypeScript transform turns it into a declaration with no
@@ -81,16 +95,26 @@ const inlineEnums = ({ types: t }) => ({
         p.traverse({
           TSEnumDeclaration(d) {
             if (!d.node.const) return;
-            const members = (d.parentPath.isExportNamedDeclaration() ? exported : local).get(d.node.id.name);
+            const members =
+              (d.parentPath.isExportNamedDeclaration() ? exported : local).get(
+                d.node.id.name,
+              );
             if (members) state.declared.set(d.node.id, members);
           },
         });
-        state.own = new Map([...state.declared].map(([id, members]) => [id.name, members]));
+        state.own = new Map(
+          [...state.declared].map(([id, members]) => [id.name, members]),
+        );
         // Every import that names a const enum, by its local name.
         state.imports = new Map();
         p.traverse({
           ImportSpecifier(s) {
-            const members = enumAt(TABLE, state.filename, s.parentPath.node.source.value, s.node.imported.name ?? s.node.imported.value);
+            const members = enumAt(
+              TABLE,
+              state.filename,
+              s.parentPath.node.source.value,
+              s.node.imported.name ?? s.node.imported.value,
+            );
             if (members) state.imports.set(s.node.local.name, members);
           },
         });
@@ -99,11 +123,22 @@ const inlineEnums = ({ types: t }) => ({
       exit(p, state) {
         p.traverse({
           ReferencedIdentifier(r) {
-            if (!state.names.has(r.node.name) || r.parentPath.isTSTypeReference() || r.parentPath.isTSQualifiedName()) return;
-            if (r.findParent((a) => a.isTSType() || a.isTSTypeAnnotation() || a.isTSTypeParameterInstantiation())) return;
+            if (
+              !state.names.has(r.node.name) ||
+              r.parentPath.isTSTypeReference() ||
+              r.parentPath.isTSQualifiedName()
+            ) return;
+            if (
+              r.findParent((a) =>
+                a.isTSType() || a.isTSTypeAnnotation() ||
+                a.isTSTypeParameterInstantiation()
+              )
+            ) return;
             const binding = r.scope.getBinding(r.node.name);
             if (binding && !binding.path.isImportSpecifier()) return;
-            throw r.buildCodeFrameError(`const enum ${r.node.name} is used as a value in ${state.filename}; it cannot be inlined`);
+            throw r.buildCodeFrameError(
+              `const enum ${r.node.name} is used as a value in ${state.filename}; it cannot be inlined`,
+            );
           },
         });
       },
@@ -127,7 +162,10 @@ export default (api) => {
     visitor: {
       Identifier(p) {
         const name = p.node.name;
-        if (!Object.hasOwn(DEFINE, name) || !p.isReferencedIdentifier() || p.scope.hasBinding(name)) return;
+        if (
+          !Object.hasOwn(DEFINE, name) || !p.isReferencedIdentifier() ||
+          p.scope.hasBinding(name)
+        ) return;
         p.replaceWith(t.valueToNode(DEFINE[name]));
       },
     },
@@ -135,11 +173,19 @@ export default (api) => {
 
   // Expo's own copy of the preset, beside Expo, which is what the app
   // depends on.
-  const preset = fileURLToPath(new URL("../babel-preset-expo", import.meta.resolve("expo/package.json")));
+  const preset = fileURLToPath(
+    new URL("../babel-preset-expo", import.meta.resolve("expo/package.json")),
+  );
   // The defines and the enums are this tree's: a package's own sources are
   // left as they are, where a name of theirs could be one of ours — @expo/ui
   // has a `Slot` of its own, which the enum pass took for the mode bar's.
   // A function and not a RegExp: Metro reads the config with no file for its
   // cache key, and Babel refuses a RegExp it has nothing to test against.
-  return { presets: [preset], overrides: [{ exclude: (file) => /[\\/]node_modules[\\/]/.test(file ?? ""), plugins: [define, inlineEnums] }] };
+  return {
+    presets: [preset],
+    overrides: [{
+      exclude: (file) => /[\\/]node_modules[\\/]/.test(file ?? ""),
+      plugins: [define, inlineEnums],
+    }],
+  };
 };

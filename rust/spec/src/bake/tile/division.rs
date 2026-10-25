@@ -18,6 +18,7 @@ use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
+use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec_core::ground::majority;
@@ -62,11 +63,35 @@ pub struct DivisionTile {
     pub occupancy: Occupancy,
 }
 
+impl Division {
+    /// The zoom its name shows from, as Overture's own tiles place it
+    /// (overture-tiles `profiles/Divisions.java`): a web map's zoom by its
+    /// prominence where it has one, else by its subtype, whose pixel is the
+    /// cell at the zoom returned (`epsg3857::cell_zoom_of`).
+    pub fn shown_from(&self) -> Zoom {
+        let web = match (self.prominence, self.subtype) {
+            (1.., _) => (100u8.saturating_sub(self.prominence) / 5 + 1).min(10),
+            (0, Subtype::Country | Subtype::Dependency) => 0,
+            (0, Subtype::Region) => 4,
+            (0, Subtype::County) => 8,
+            (0, _) => 10,
+        };
+        cell_zoom_of(i32::from(web))
+    }
+}
+
 impl DivisionTile {
     /// The cell's division, then each ancestor, narrow to broad.
     fn up(&self, cell: u32) -> impl Iterator<Item = &Division> {
-        let first = self.cells.get(cell as usize).copied().filter(|&c| c != NONE);
-        core::iter::successors(first, |&i| Some(self.divisions[i as usize].parent).filter(|&p| p != NONE)).map(|i| &self.divisions[i as usize])
+        let first = self
+            .cells
+            .get(cell as usize)
+            .copied()
+            .filter(|&c| c != NONE);
+        core::iter::successors(first, |&i| {
+            Some(self.divisions[i as usize].parent).filter(|&p| p != NONE)
+        })
+        .map(|i| &self.divisions[i as usize])
     }
 
     /// The cell's division and each ancestor, broad to narrow; none in none.
@@ -98,18 +123,30 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     let subtypes: Vec<u8> = d.iter().map(|d| d.subtype as u8).collect();
     let prominence: Vec<u8> = d.iter().map(|d| d.prominence).collect();
     let area: Vec<u8> = d.iter().map(|d| d.area as u8).collect();
-    let names = NameLanes::of(d.iter().map(|d| (d.name.as_str(), d.names.iter().map(|(tag, name)| (tag.as_str(), name.as_str())))));
+    let names = NameLanes::of(d.iter().map(|d| {
+        (
+            d.name.as_str(),
+            d.names
+                .iter()
+                .map(|(tag, name)| (tag.as_str(), name.as_str())),
+        )
+    }));
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.u32_array(Some(&tile.cells)).u8(Some(tile.occupancy.bits()));
-        b.strs(Some(&ids)).u8_array(Some(&subtypes)).u32_array(Some(&parents)).u8_array(Some(&prominence)).u8_array(Some(&area));
+        b.u32_array(Some(&tile.cells))
+            .u8(Some(tile.occupancy.bits()));
+        b.strs(Some(&ids))
+            .u8_array(Some(&subtypes))
+            .u32_array(Some(&parents))
+            .u8_array(Some(&prominence))
+            .u8_array(Some(&area));
         names.write(b);
     }));
     encoder().encode(
         &t,
         TreeEncoderOptions {
+            init_cap: super::ENCODE_FROM,
             max_cap: Some(MAX_PACKET_BYTES as u32),
-            ..TreeEncoderOptions::default()
         },
     )
 }
@@ -122,7 +159,8 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
         return Err(malformed());
     }
     let fits = |i: u32| i == NONE || (i as usize) < n;
-    if cells.len() != CELLS || !cells.iter().all(|&c| fits(c)) || !parents.iter().all(|&p| fits(p)) {
+    if cells.len() != CELLS || !cells.iter().all(|&c| fits(c)) || !parents.iter().all(|&p| fits(p))
+    {
         return Err(malformed());
     }
     for start in 0..n {
@@ -165,7 +203,12 @@ fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {
         root.at(6)?.get_array::<u8>()?,
     );
     let n = subtypes.len();
-    if ids.len() as usize != n || parents.len() != n || prominence.len() != n || area.len() != n || subtypes.iter().any(|&s| Subtype::of(s).is_none()) {
+    if ids.len() as usize != n
+        || parents.len() != n
+        || prominence.len() != n
+        || area.len() != n
+        || subtypes.iter().any(|&s| Subtype::of(s).is_none())
+    {
         return Err(malformed());
     }
     check(cells, parents)?;
@@ -234,7 +277,10 @@ pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile,
     }
     let tile = of(&v)?;
     room.copy_from_slice(v.cells);
-    Ok(DivisionTile { cells: Cow::Borrowed(room), ..tile })
+    Ok(DivisionTile {
+        cells: Cow::Borrowed(room),
+        ..tile
+    })
 }
 
 /// The divisions and the occupancy, the cells left empty.
@@ -247,7 +293,10 @@ fn of(v: &DivisionTileView<'_>) -> Result<DivisionTile, MarshalError> {
                 id: v.id(i).ok_or_else(malformed)?.to_string(),
                 subtype: d.subtype,
                 name: d.name.to_string(),
-                names: d.languages().map(|(t, n)| (t.to_string(), n.to_string())).collect(),
+                names: d
+                    .languages()
+                    .map(|(t, n)| (t.to_string(), n.to_string()))
+                    .collect(),
                 parent: v.parents[k],
                 prominence: d.prominence,
                 area: !d.approx,
@@ -284,20 +333,36 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     for (q, child) in children.iter().enumerate() {
         for (k, d) in child.divisions.iter().enumerate() {
             let at = local[q][k] as usize;
-            all[at].parent = if d.parent == NONE { NONE } else { local[q][d.parent as usize] };
+            all[at].parent = if d.parent == NONE {
+                NONE
+            } else {
+                local[q][d.parent as usize]
+            };
         }
     }
-    let global = |q: usize, c: u32| if c == NONE { NONE } else { local[q][c as usize] };
+    let global = |q: usize, c: u32| {
+        if c == NONE {
+            NONE
+        } else {
+            local[q][c as usize]
+        }
+    };
 
     let cells: Vec<u32> = (0..CELLS as u32)
         .map(|index| {
             let (q, block) = GROUND.child_cells(index);
-            majority(block.map(|i| global(q, children[q].cells[i as usize])), GROUND.cell_zoom(zoom))
+            majority(
+                block.map(|i| global(q, children[q].cells[i as usize])),
+                GROUND.cell_zoom(zoom),
+            )
         })
         .collect();
     let kept: [bool; 4] = std::array::from_fn(|q| {
         let child = children[q];
-        child.occupancy.bits() != 0 || (0..CELLS as u32).any(|c| global(q, child.cells[c as usize]) != cells[GROUND.parent_cell(q, c) as usize])
+        child.occupancy.bits() != 0
+            || (0..CELLS as u32).any(|c| {
+                global(q, child.cells[c as usize]) != cells[GROUND.parent_cell(q, c) as usize]
+            })
     });
 
     // only the divisions a cell names, and their ancestors, renumbered
@@ -316,11 +381,29 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
         divisions.push(d.clone());
     }
     for d in &mut divisions {
-        d.parent = if d.parent == NONE { NONE } else { renumber[d.parent as usize] };
+        d.parent = if d.parent == NONE {
+            NONE
+        } else {
+            renumber[d.parent as usize]
+        };
     }
     DivisionTile {
-        cells: cells.into_iter().map(|c| if c == NONE { NONE } else { renumber[c as usize] }).collect::<Vec<_>>().into(),
+        cells: cells
+            .into_iter()
+            .map(|c| {
+                if c == NONE {
+                    NONE
+                } else {
+                    renumber[c as usize]
+                }
+            })
+            .collect::<Vec<_>>()
+            .into(),
         divisions,
         occupancy: Occupancy::of_slots(kept),
     }
 }
+
+#[cfg(test)]
+#[path = "division.test.rs"]
+mod test;

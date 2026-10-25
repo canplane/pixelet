@@ -98,7 +98,7 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
         for (;;) {
             Result<std::optional<tlv::Value>> got = r.next();
             if (!got) {
-                stop = "errno:" + std::to_string(static_cast<int>(got.error().code));
+                stop = "errno:" + std::to_string(static_cast<int>(got.error().errnum));
                 break;
             }
             if (!*got) {
@@ -115,7 +115,7 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
     XPUTE_CHECK(hex_decode(huge_hex, huge).ok());
     std::vector<tlv::Value> none;
     Result<void> r = tlv::Reader(huge).read_all(none);
-    std::string got = r.ok() ? "ok" : "errno:" + std::to_string(static_cast<int>(r.error().code));
+    std::string got = r.ok() ? "ok" : "errno:" + std::to_string(static_cast<int>(r.error().errnum));
     XPUTE_CHECK_EQ(got, v.s("huge.read"), "a length past the buffer");
 }
 

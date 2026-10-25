@@ -138,13 +138,27 @@ impl Around {
         let p = c.map(|v| v >> 1);
         let stepped = zoom > 0 && self.at[z - 1] == p;
         for k in 0..27 {
-            let n = [c[0] + (k % 3) as i32 - 1, c[1] + (k / 3 % 3) as i32 - 1, c[2] + (k / 9) as i32 - 1];
+            let n = [
+                c[0] + (k % 3) as i32 - 1,
+                c[1] + (k / 3 % 3) as i32 - 1,
+                c[2] + (k / 9) as i32 - 1,
+            ];
             self.held[z][k] = if stepped {
-                let q = [(n[0] >> 1) - p[0] + 1, (n[1] >> 1) - p[1] + 1, (n[2] >> 1) - p[2] + 1];
-                overwrite::child(lanes, self.held[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize], zoom, n)
+                let q = [
+                    (n[0] >> 1) - p[0] + 1,
+                    (n[1] >> 1) - p[1] + 1,
+                    (n[2] >> 1) - p[2] + 1,
+                ];
+                overwrite::child(
+                    lanes,
+                    self.held[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize],
+                    zoom,
+                    n,
+                )
             } else {
                 // Y and Z run over the two roots of zoom 0 alone; X round them.
-                let inside = (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
+                let inside =
+                    (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
                 if inside {
                     overwrite::cursor(lanes, overwrite::PLACED, zoom, n)
                 } else {
@@ -172,13 +186,20 @@ impl Around {
         for k in 0..9 {
             let n = [c[0] + (k % 3) as i32 - 1, c[1] + (k / 3) as i32 - 1];
             let over = if stepped {
-                self.columns[z - 1][((n[0] >> 1) - p[0] + 1 + 3 * ((n[1] >> 1) - p[1] + 1)) as usize]
+                self.columns[z - 1]
+                    [((n[0] >> 1) - p[0] + 1 + 3 * ((n[1] >> 1) - p[1] + 1)) as usize]
             } else {
                 None
             };
-            let line = world.terrain.line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell);
+            let line = world
+                .terrain
+                .line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell);
             let mut found = over.map_or(Found::NONE, |o| o.found);
-            let hi = world.terrain.relief(&line, &mut found, (zoom, n), [cell, cell]).value().map(|[[_, hi], _]| hi);
+            let hi = world
+                .terrain
+                .relief(&line, &mut found, (zoom, n), [cell, cell])
+                .value()
+                .map(|[[_, hi], _]| hi);
             self.columns[z][k] = Some(Column { line, found, hi });
         }
         self.columns_at[z] = c;
@@ -189,7 +210,10 @@ impl Around {
     /// (`read_columns`), the last it entered at `zoom`.
     fn reliefs(&self, (zoom, a): (Zoom, [i32; 2])) -> [Option<i32>; 9] {
         let z = zoom as usize;
-        debug_assert!(self.columns_at[z] == a, "the walk entered the node it reads about");
+        debug_assert!(
+            self.columns_at[z] == a,
+            "the walk entered the node it reads about"
+        );
         self.columns[z].map(|c| c.and_then(|c| c.hi))
     }
 
@@ -208,7 +232,11 @@ impl Around {
             if !held.holds() {
                 continue;
             }
-            let c = [a[0] + (k % 3) as i32 - 1, a[1] + (k / 3 % 3) as i32 - 1, a[2] + (k / 9) as i32 - 1];
+            let c = [
+                a[0] + (k % 3) as i32 - 1,
+                a[1] + (k / 3 % 3) as i32 - 1,
+                a[2] + (k / 9) as i32 - 1,
+            ];
             let h = held.zoom();
             let node = (h, overwrite::path(h, c.map(|v| v >> (zoom - h))));
             if !out[..n].iter().any(|&(o, _)| o == node) {
@@ -236,7 +264,9 @@ impl<'a> World<'a> {
     /// `grows`): its box void, what is under it a look it grows on, and no
     /// placed decor claiming its room.
     pub fn grows(&self, decor: &Decor, i: &Instance) -> bool {
-        grown_of(i).is_some_and(|g| pxl_spec_core::scatter::grows(&mut Asked::new(self), decor.row, GROUND.cell(), &g))
+        grown_of(i).is_some_and(|g| {
+            pxl_spec_core::scatter::grows(&mut Asked::new(self), decor.row, GROUND.cell(), &g)
+        })
     }
 
     /// What the ground stands on the leaf `cell`, each decor's, handed to
@@ -244,7 +274,9 @@ impl<'a> World<'a> {
     /// footing (`World::footing`). Nothing where the world does not hold
     /// the column.
     fn grown_in(&self, cell: [i32; 2], mut each: impl FnMut(&Decor, Instance) -> bool) -> bool {
-        DECORS.iter().any(|decor| grown_at(&mut Asked::new(self), decor, cell).is_some_and(|i| each(decor, i)))
+        DECORS.iter().any(|decor| {
+            grown_at(&mut Asked::new(self), decor, cell).is_some_and(|i| each(decor, i))
+        })
     }
 
     /// A decor the ground grows on the leaves whose box shares room with `space`.
@@ -272,10 +304,14 @@ impl<'a> World<'a> {
     /// Until `each` says it has what it wants.
     fn each_grown_over(&self, space: &Aabb, mut each: impl FnMut(&Decor, Instance) -> bool) {
         let (r, unit) = (reach(), units(GROUND.cell()));
-        let cells = |k: usize| libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32;
+        let cells = |k: usize| {
+            libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32
+        };
         for y in cells(1) {
             for x in cells(0) {
-                if self.grown_in([x, y], |decor, i| claim(&i).is_some_and(|c| c.shares(*space)) && each(decor, i)) {
+                if self.grown_in([x, y], |decor, i| {
+                    claim(&i).is_some_and(|c| c.shares(*space)) && each(decor, i)
+                }) {
                     return;
                 }
             }
@@ -288,7 +324,8 @@ impl<'a> World<'a> {
         let [x, y, z] = index_of(GROUND.cell(), at);
         let mut met = None;
         self.grown_in([x, y], |d, i| {
-            met = Some(i).filter(|i| d.value() == decor.value() && i.grown_in().is_some_and(|c| c[2] == z));
+            met = Some(i)
+                .filter(|i| d.value() == decor.value() && i.grown_in().is_some_and(|c| c[2] == z));
             met.is_some()
         });
         met
@@ -386,7 +423,9 @@ impl<'a> World<'a> {
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 // Past the area no ground stands.
-                if z >= SHARD_ZOOM && shard.past_leaf(node, area::tile_at(z, [a[0] + dx, a[1] + dy])) {
+                if z >= SHARD_ZOOM
+                    && shard.past_leaf(node, area::tile_at(z, [a[0] + dx, a[1] + dy]))
+                {
                     return false;
                 }
                 read[(dx + 1 + 3 * (dy + 1)) as usize].is_none_or(|hi| f64::from(hi) * leaf > low)
@@ -411,7 +450,13 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 }
 
 fn meet(s: &mut Strike, ray: &Ray, i: Instance) {
-    if let Some(t) = strike(s.models, &i, ray.origin, ray.direction, s.best.map_or(s.held, |b| b.0)) {
+    if let Some(t) = strike(
+        s.models,
+        &i,
+        ray.origin,
+        ray.direction,
+        s.best.map_or(s.held, |b| b.0),
+    ) {
         s.best = Some((t, i));
     }
 }

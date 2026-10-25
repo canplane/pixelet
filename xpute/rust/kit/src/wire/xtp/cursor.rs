@@ -8,7 +8,10 @@
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
-use super::spec::{AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, GET_DESC, GET_LEN, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ};
+use super::spec::{
+    AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ,
+    GET_DESC, GET_LEN, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ,
+};
 
 pub type ShallowNodeValue<'a> = NodeValue<'a, BranchCursor<'a>>;
 
@@ -305,7 +308,12 @@ impl<'a> NodeCursor<'a> {
                 bytes: self.bitset()?.into(),
             }),
             t if t == SequenceType::STR as u8 => NodeValue::Str(self.str_ref()?.to_string()),
-            t if t == SequenceType::STRS as u8 => NodeValue::List(self.strs()?.iter().map(|s| NodeValue::Str(s.to_string())).collect()),
+            t if t == SequenceType::STRS as u8 => NodeValue::List(
+                self.strs()?
+                    .iter()
+                    .map(|s| NodeValue::Str(s.to_string()))
+                    .collect(),
+            ),
 
             _ => return Err(MarshalError::new(Errno::EBADMSG)),
         })
@@ -315,7 +323,9 @@ impl<'a> NodeCursor<'a> {
         if self.base as usize + N > self.pkt.len() {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        Ok(self.pkt[self.base as usize..self.base as usize + N].try_into().unwrap())
+        Ok(self.pkt[self.base as usize..self.base as usize + N]
+            .try_into()
+            .unwrap())
     }
 
     fn u8_of(&self) -> Result<u8, MarshalError> {
@@ -377,7 +387,9 @@ impl<'a> NodeCursor<'a> {
         let at = payload_start as usize;
         // SAFETY: the payload is WORD_SZ-aligned, enough for every element
         // type (8 bytes at most), and the bounds above keep it in the packet.
-        Ok(unsafe { core::slice::from_raw_parts(self.pkt[at..].as_ptr() as *const T, len as usize) })
+        Ok(unsafe {
+            core::slice::from_raw_parts(self.pkt[at..].as_ptr() as *const T, len as usize)
+        })
     }
 
     fn u8_array(&self) -> Result<&'a [u8], MarshalError> {
@@ -442,14 +454,17 @@ impl<'a> NodeCursor<'a> {
         }
         let nbyte = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
-        if payload_start > self.pkt.len() as u32 || nbyte as u64 + 1 > (self.pkt.len() as u32 - payload_start) as u64 {
+        if payload_start > self.pkt.len() as u32
+            || nbyte as u64 + 1 > (self.pkt.len() as u32 - payload_start) as u64
+        {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
         let bytes = self.pkt;
         if bytes[(payload_start + nbyte) as usize] != 0 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG))
+        core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize])
+            .map_err(|_| MarshalError::new(Errno::EBADMSG))
     }
 
     /// `len` + 1 non-decreasing offsets into the UTF-8 after them; every
@@ -468,11 +483,17 @@ impl<'a> NodeCursor<'a> {
             return Err(bad());
         }
         let offs = &pkt[start..start + lane as usize];
-        let strs = Strs { offs, blob: &[], len: n };
+        let strs = Strs {
+            offs,
+            blob: &[],
+            len: n,
+        };
         let blob = start + offs.len();
         let total = strs.off(n as usize);
         let strs = Strs {
-            blob: pkt.get(blob..blob.checked_add(total).ok_or_else(bad)?).ok_or_else(bad)?,
+            blob: pkt
+                .get(blob..blob.checked_add(total).ok_or_else(bad)?)
+                .ok_or_else(bad)?,
             ..strs
         };
         for i in 0..n as usize {
@@ -540,7 +561,11 @@ impl<'a> BranchCursor<'a> {
         }
 
         let child_start = ENTRY_OFF(base, len);
-        Ok(BranchCursor { cursor, len, child_start })
+        Ok(BranchCursor {
+            cursor,
+            len,
+            child_start,
+        })
     }
 
     pub fn base(&self) -> u32 {
@@ -657,7 +682,12 @@ pub struct Strs<'a> {
 
 impl<'a> Strs<'a> {
     fn off(&self, i: usize) -> usize {
-        u32::from_le_bytes([self.offs[4 * i], self.offs[4 * i + 1], self.offs[4 * i + 2], self.offs[4 * i + 3]]) as usize
+        u32::from_le_bytes([
+            self.offs[4 * i],
+            self.offs[4 * i + 1],
+            self.offs[4 * i + 2],
+            self.offs[4 * i + 3],
+        ]) as usize
     }
 
     pub fn len(&self) -> u32 {
@@ -672,7 +702,11 @@ impl<'a> Strs<'a> {
         (i < self.len).then(|| {
             let blob: &'a [u8] = self.blob;
             // SAFETY: every span was checked as UTF-8 when the sequence was read.
-            unsafe { core::str::from_utf8_unchecked(&blob[self.off(i as usize)..self.off(i as usize + 1)]) }
+            unsafe {
+                core::str::from_utf8_unchecked(
+                    &blob[self.off(i as usize)..self.off(i as usize + 1)],
+                )
+            }
         })
     }
 

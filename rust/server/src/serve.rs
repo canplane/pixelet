@@ -22,8 +22,14 @@ pub fn shell(cfg: &config::Config, internal: &'static str, routes: Router) -> Ro
     // through to the outer 404 ungated.
     let gated = Router::new()
         .fallback(|| async { StatusCode::NOT_FOUND })
-        .layer(axum::middleware::from_fn_with_state(cfg.admin_token.clone(), admin_auth::admin_auth));
-    routes.nest(internal, gated).layer(CompressionLayer::new().gzip(true)).layer(DefaultBodyLimit::max(cfg.max_body_sz))
+        .layer(axum::middleware::from_fn_with_state(
+            cfg.admin_token.clone(),
+            admin_auth::admin_auth,
+        ));
+    routes
+        .nest(internal, gated)
+        .layer(CompressionLayer::new().gzip(true))
+        .layer(DefaultBodyLimit::max(cfg.max_body_sz))
 }
 
 pub async fn serve(server: Server<'_>, routes: impl FnOnce(Pool) -> Router) -> ExitCode {

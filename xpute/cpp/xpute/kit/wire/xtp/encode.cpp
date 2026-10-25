@@ -19,8 +19,8 @@ PacketWriter::PacketWriter(std::span<std::uint8_t> buf) noexcept : buf_(buf.firs
     else std::memset(buf_.data(), 0, HDR_SZ);
 }
 
-std::optional<std::uint32_t> PacketWriter::spoil(Errno code) noexcept {
-    if (!error_) error_ = marshal_error(code);
+std::optional<std::uint32_t> PacketWriter::spoil(Errno errnum) noexcept {
+    if (!error_) error_ = marshal_error(errnum);
     return std::nullopt;
 }
 

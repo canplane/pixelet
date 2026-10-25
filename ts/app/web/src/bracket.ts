@@ -7,6 +7,7 @@ import * as device from "./device.ts";
 import * as gpu from "./gpu.ts";
 import * as guest from "./guest.ts";
 import * as locale from "./locale.ts";
+import * as longFrame from "./long-frame.ts";
 import * as online from "./online.ts";
 import * as origin from "./origin.ts";
 import * as sensor from "./sensor.ts";
@@ -15,7 +16,11 @@ import * as storage from "./storage.ts";
 import * as surface from "./surface.tsx";
 import * as text from "./text.ts";
 import { useSafeArea } from "./safe-area.ts";
-import { useViewportTop, useVisualViewport, useWindowSize } from "./viewport.ts";
+import {
+  useViewportTop,
+  useVisualViewport,
+  useWindowSize,
+} from "./viewport.ts";
 
 export const page: Bracket = {
   device,
@@ -28,6 +33,7 @@ export const page: Bracket = {
   sensor,
   share,
   locale,
+  longFrame,
   view: { useSafeArea, useWindowSize, useVisualViewport, useViewportTop },
   surface,
 };

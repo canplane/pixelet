@@ -45,11 +45,19 @@ struct Orientation {
 static ORIENTATION: Global<Orientation> = Global::new();
 
 fn orientation() -> &'static mut Orientation {
-    ORIENTATION.get(|| Orientation { last_event_at: 0.0, command: None })
+    ORIENTATION.get(|| Orientation {
+        last_event_at: 0.0,
+        command: None,
+    })
 }
 
 /// iOS's compass heading preferred, the alpha-derived one otherwise.
-pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
+pub fn orientation_event(
+    webkit_compass_heading: Option<f64>,
+    alpha: Option<f64>,
+    beta: Option<f64>,
+    gamma: Option<f64>,
+) {
     // An API with no sensor answers once, empty, and never again.
     if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
         orientation().command = Some(OrientationCommand::Remove);

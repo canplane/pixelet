@@ -130,11 +130,22 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_PUCK_ZONE
     &["frame", "encode", "finish", "puck", "puck_zone"],
     // SHADER_PUCK_BEACON
-    &["frame", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "place", "puck", "puck_beacon"],
+    &[
+        "frame",
+        "encode",
+        "finish",
+        "atmos_medium",
+        "atmos_bind",
+        "atmos_lut",
+        "atmos_eye_unit",
+        "place",
+        "puck",
+        "puck_beacon",
+    ],
     // SHADER_MARKER
     &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
-    air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_word", "sky"],
+    air!["frame", "encode", "finish"; "atmos_air", "atmos_ground", "sky_word", "sky"],
     // SHADER_DEBUG
     &["frame", "encode", "debug"],
     // SHADER_MIP
@@ -150,7 +161,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_ATMOS_TRANSMITTANCE
     &["atmos_medium", "atmos_pass", "atmos_transmittance"],
     // SHADER_ATMOS_MULTISCATTER
-    &["atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"],
+    &[
+        "atmos_medium",
+        "atmos_bind",
+        "atmos_lut",
+        "atmos_pass",
+        "atmos_multiscatter",
+    ],
     // SHADER_ATMOS_SKY_VIEW
     &[
         "frame",
@@ -182,11 +199,24 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_exposure",
     ],
     // SHADER_STAR
-    &["frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "star"],
+    &[
+        "frame",
+        "encode",
+        "atmos_medium",
+        "atmos_bind",
+        "atmos_lut",
+        "star",
+    ],
     // SHADER_CLOUD
     air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_word", "cloud"],
     // SHADER_CLOUD_FIELD
-    &["cloud_hash", "noise", "cloud_tile", "atmos_pass", "cloud_bake"],
+    &[
+        "cloud_hash",
+        "noise",
+        "cloud_tile",
+        "atmos_pass",
+        "cloud_bake",
+    ],
     // SHADER_SHEET
     &["sheet"],
     // SHADER_IMPOSTOR
@@ -194,7 +224,15 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_IMPOSTOR_BAKE
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
-    &["atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "atmos_pass", "atmos_march", "atmos_irradiance"],
+    &[
+        "atmos_medium",
+        "atmos_bind",
+        "atmos_lut",
+        "atmos_eye_unit",
+        "atmos_pass",
+        "atmos_march",
+        "atmos_irradiance",
+    ],
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAY
@@ -256,7 +294,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SUN_MARK
     &["sun_mark.gen"],
     // SHADER_SCREEN_DEPTH
-    lit!["lattice", "ray", "eye", "paint", "screen_ray", "screen_depth"],
+    lit![
+        "lattice",
+        "ray",
+        "eye",
+        "paint",
+        "screen_ray",
+        "screen_depth"
+    ],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "camera_grid"],
 ];

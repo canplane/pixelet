@@ -29,8 +29,15 @@ fn moon_equatorial(d: f64, obliquity: f64) -> (f64, f64) {
     let lon = norm360(mean_long + 6.289 * libm::sin(mean_anomaly * DEG)) * DEG;
     let lat = 5.128 * libm::sin(arg_latitude * DEG) * DEG;
     let e = obliquity * DEG;
-    let ra = norm360(libm::atan2(libm::sin(lon) * libm::cos(e) - libm::tan(lat) * libm::sin(e), libm::cos(lon)) / DEG);
-    let dec = libm::asin(libm::sin(lat) * libm::cos(e) + libm::cos(lat) * libm::sin(e) * libm::sin(lon)) / DEG;
+    let ra = norm360(
+        libm::atan2(
+            libm::sin(lon) * libm::cos(e) - libm::tan(lat) * libm::sin(e),
+            libm::cos(lon),
+        ) / DEG,
+    );
+    let dec =
+        libm::asin(libm::sin(lat) * libm::cos(e) + libm::cos(lat) * libm::sin(e) * libm::sin(lon))
+            / DEG;
     (ra, dec)
 }
 
@@ -66,7 +73,11 @@ pub fn sun_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
 pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
     let (sl, cl) = libm::sincos(local_sidereal(d, lon) * DEG);
     let (sp, cp) = libm::sincos(lat * DEG);
-    [[-sl, cl, 0.0], [-sp * cl, -sp * sl, cp], [cp * cl, cp * sl, sp]]
+    [
+        [-sl, cl, 0.0],
+        [-sp * cl, -sp * sl, cp],
+        [cp * cl, cp * sl, sp],
+    ]
 }
 
 pub fn moon_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {

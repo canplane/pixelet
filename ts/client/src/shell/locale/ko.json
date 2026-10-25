@@ -160,7 +160,7 @@
         "nature": "자연",
         "vehicle": "탈것"
       },
-      "marker": "마커"
+      "pin": "핀"
     },
     "character": {
       "person_label": "캐릭터",
@@ -198,9 +198,9 @@
       "pointer": "포인터",
       "eraser": "지우개",
       "message_placeholder": "메시지 입력…",
-      "marker_placeholder": "이 마커에 쓸 말…",
+      "pin_placeholder": "이 핀에 쓸 말…",
       "send": "전송",
-      "marker_done": "마커 세우기",
+      "pin_done": "핀 세우기",
       "drawer_tooltip": "서랍 열기",
       "object_size": "크기 {{n}}"
     },

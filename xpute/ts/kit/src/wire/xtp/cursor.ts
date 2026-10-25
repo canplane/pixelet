@@ -1,13 +1,51 @@
 // @xpute/kit/wire/xtp/cursor.ts
 
-import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "@xpute/kit/abi/word.ts";
+import type {
+  f32,
+  f64,
+  i16,
+  i32,
+  i64,
+  i8,
+  u16,
+  u32,
+  u64,
+  u8,
+} from "@xpute/kit/abi/word.ts";
 import { BOOL } from "@xpute/kit/abi/word.ts";
-import type { AnyTypedArray, AnyTypedArrayCtor, F32Array, F64Array, I16Array, I32Array, I64Array, I8Array, U16Array, U32Array, U64Array, U8Array } from "@xpute/kit/abi/array.ts";
+import type {
+  AnyTypedArray,
+  AnyTypedArrayCtor,
+  F32Array,
+  F64Array,
+  I16Array,
+  I32Array,
+  I64Array,
+  I8Array,
+  U16Array,
+  U32Array,
+  U64Array,
+  U8Array,
+} from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
 import type { AlignUnit, NodeType, NodeValue } from "./spec.ts";
-import { ALIGN_SZ, GET_DESC, GET_LEN, GET_WORD, HDR_SZ, LE, MAGIC, NONE, ScalarType, SequenceType, SpecialType, TYPE_IS_LEAF, WORD_SZ } from "./spec.ts";
+import {
+  ALIGN_SZ,
+  GET_DESC,
+  GET_LEN,
+  GET_WORD,
+  HDR_SZ,
+  LE,
+  MAGIC,
+  NONE,
+  ScalarType,
+  SequenceType,
+  SpecialType,
+  TYPE_IS_LEAF,
+  WORD_SZ,
+} from "./spec.ts";
 
 type ShallowNodeValue = NodeValue | BranchCursor;
 
@@ -51,9 +89,13 @@ export class TreeReader {
     if (GET_LEN(hdr_view, 0) !== MAGIC) throw new MarshalError(Errno.EBADMSG);
 
     const [payload_sz, type] = GET_DESC(hdr_view, WORD_SZ, DESC_REG);
-    if (payload_sz > pkt.byteLength - HDR_SZ) throw new MarshalError(Errno.EBADMSG);
+    if (payload_sz > pkt.byteLength - HDR_SZ) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
 
-    this.root = payload_sz ? CURSOR(this.pkt.subarray(0, HDR_SZ + payload_sz), HDR_SZ, type) : new NullCursorImpl(this.pkt, type);
+    this.root = payload_sz
+      ? CURSOR(this.pkt.subarray(0, HDR_SZ + payload_sz), HDR_SZ, type)
+      : new NullCursorImpl(this.pkt, type);
   }
 
   read(): NodeCursor {
@@ -74,7 +116,11 @@ export abstract class NodeCursor {
 
   constructor(pkt: U8Array, base: u32, type: NodeType) {
     this.pkt = pkt;
-    this.pkt_view = new DataView(this.pkt.buffer, this.pkt.byteOffset, this.pkt.byteLength);
+    this.pkt_view = new DataView(
+      this.pkt.buffer,
+      this.pkt.byteOffset,
+      this.pkt.byteLength,
+    );
     this.base = base;
 
     this.type = type;
@@ -151,63 +197,95 @@ export abstract class NodeCursor {
   }
 
   protected _u8(): u8 {
-    if (this.base + 1 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 1 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getUint8(this.base);
   }
   protected _i8(): i8 {
-    if (this.base + 1 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 1 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getInt8(this.base);
   }
   protected _u16(): u16 {
-    if (this.base + 2 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 2 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getUint16(this.base, LE);
   }
   protected _i16(): i16 {
-    if (this.base + 2 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 2 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getInt16(this.base, LE);
   }
   protected _u32(): u32 {
-    if (this.base + 4 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 4 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getUint32(this.base, LE);
   }
   protected _i32(): i32 {
-    if (this.base + 4 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 4 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getInt32(this.base, LE);
   }
   protected _u64(): u64 {
-    if (this.base + 8 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 8 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getBigUint64(this.base, LE);
   }
   protected _i64(): i64 {
-    if (this.base + 8 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 8 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getBigInt64(this.base, LE);
   }
   protected _f32(): f32 {
-    if (this.base + 4 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 4 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getFloat32(this.base, LE);
   }
   protected _f64(): f64 {
-    if (this.base + 8 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 8 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getFloat64(this.base, LE);
   }
   protected _bool(): boolean {
-    if (this.base + 1 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + 1 > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return this.pkt_view.getUint8(this.base) !== 0;
   }
 
   /** A zero-copy view: a sequence's base is WORD_SZ-aligned, so its payload is aligned for any element size. */
   protected _array<T extends AnyTypedArray>(ctor: AnyTypedArrayCtor<T>): T {
-    if (this.base + WORD_SZ > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + WORD_SZ > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     const len = GET_LEN(this.pkt_view, this.base);
     const payload_start: u32 = this.base + WORD_SZ;
 
     const elem_sz: AlignUnit = ctor.BYTES_PER_ELEMENT as AlignUnit;
     const payload_sz: u32 = len * elem_sz;
 
-    if (payload_start > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
-    if (payload_sz > this.pkt.byteLength - payload_start) throw new MarshalError(Errno.EBADMSG);
+    if (payload_start > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
+    if (payload_sz > this.pkt.byteLength - payload_start) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
 
-    return new ctor(this.pkt_view.buffer, this.pkt_view.byteOffset + payload_start, len);
+    return new ctor(
+      this.pkt_view.buffer,
+      this.pkt_view.byteOffset + payload_start,
+      len,
+    );
   }
 
   protected _u8_array(): U8Array {
@@ -242,15 +320,21 @@ export abstract class NodeCursor {
   }
 
   protected _bitset(): U8Array {
-    if (this.base + WORD_SZ > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + WORD_SZ > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     const len = GET_LEN(this.pkt_view, this.base);
     const payload_start: u32 = this.base + WORD_SZ;
 
     // In doubles: `>>>` wraps len + 7 past 2^32 to a size of 0, and a
     // 2^32 - 1 count then passes the bounds check.
     const payload_sz: u32 = Math.floor((len + 7) / 8);
-    if (payload_start > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
-    if (payload_sz > this.pkt.byteLength - payload_start) throw new MarshalError(Errno.EBADMSG);
+    if (payload_start > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
+    if (payload_sz > this.pkt.byteLength - payload_start) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
 
     const arr: U8Array = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
@@ -263,14 +347,18 @@ export abstract class NodeCursor {
   /** A STRS payload: `len` + 1 offsets, each no less than the one before,
    * into the UTF-8 after them. */
   protected _strs(): string[] {
-    if (this.base + WORD_SZ > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + WORD_SZ > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     const n = GET_LEN(this.pkt_view, this.base);
     const start: u32 = this.base + WORD_SZ;
     const blob: u32 = start + 4 * (n + 1);
     if (blob > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
     const off = (i: u32): u32 => this.pkt_view.getUint32(start + 4 * i, true);
     const total = off(n);
-    if (total > this.pkt.byteLength - blob) throw new MarshalError(Errno.EBADMSG);
+    if (total > this.pkt.byteLength - blob) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     const out: string[] = [];
     for (let i = 0; i < n; i++) {
       const [a, b] = [off(i), off(i + 1)];
@@ -282,13 +370,21 @@ export abstract class NodeCursor {
 
   // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
   protected _str(): string {
-    if (this.base + WORD_SZ > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (this.base + WORD_SZ > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     const nbyte = GET_LEN(this.pkt_view, this.base);
     const payload_start: u32 = this.base + WORD_SZ;
 
-    if (payload_start > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
-    if (nbyte + 1 > this.pkt.byteLength - payload_start) throw new MarshalError(Errno.EBADMSG);
-    if (this.pkt[payload_start + nbyte] !== 0) throw new MarshalError(Errno.EBADMSG);
+    if (payload_start > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
+    if (nbyte + 1 > this.pkt.byteLength - payload_start) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
+    if (this.pkt[payload_start + nbyte] !== 0) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
 
     return utf8(this.pkt.subarray(payload_start, payload_start + nbyte));
   }
@@ -327,11 +423,15 @@ export abstract class BranchCursor extends NodeCursor {
   constructor(pkt: U8Array, base: u32) {
     super(pkt, base, SpecialType.BRANCH);
 
-    if (base + WORD_SZ > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (base + WORD_SZ > this.pkt.byteLength) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     const len = GET_LEN(this.pkt_view, this.base);
 
     const table_off = base + WORD_SZ;
-    if (len > (pkt.byteLength - table_off) / WORD_SZ) throw new MarshalError(Errno.EBADMSG);
+    if (len > (pkt.byteLength - table_off) / WORD_SZ) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
 
     this.len = len;
     this.child_start = ENTRY_OFF(this.base, len);
@@ -368,17 +468,25 @@ export abstract class BranchCursor extends NodeCursor {
     const [rel_off, type] = GET_DESC(this.pkt_view, entry_off, DESC_REG);
 
     if (rel_off === 0) return new NullCursorImpl(this.pkt, type);
-    if (rel_off > this.pkt.byteLength - this.base) throw new MarshalError(Errno.EBADMSG);
+    if (rel_off > this.pkt.byteLength - this.base) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     const base: u32 = this.base + rel_off;
     const end: u32 = this.end_of(idx);
-    if (base < this.child_start || base >= end) throw new MarshalError(Errno.EBADMSG);
+    if (base < this.child_start || base >= end) {
+      throw new MarshalError(Errno.EBADMSG);
+    }
     return CURSOR(this.pkt.subarray(0, end), base, type);
   }
 
   /** Where child `idx`'s extent ends: the next present sibling's base, or this branch's end. */
   private end_of(idx: u32): u32 {
     for (let j = idx + 1; j < this.len; j++) {
-      const [rel_off] = GET_WORD(this.pkt_view, ENTRY_OFF(this.base, j), WORD_REG);
+      const [rel_off] = GET_WORD(
+        this.pkt_view,
+        ENTRY_OFF(this.base, j),
+        WORD_REG,
+      );
       if (rel_off) return Math.min(this.base + rel_off, this.pkt.byteLength);
     }
     return this.pkt.byteLength;

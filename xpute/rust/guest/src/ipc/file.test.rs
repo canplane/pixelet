@@ -3,7 +3,15 @@
 use super::*;
 
 fn sys() -> Sys {
-    Sys::new(Box::leak(vec![0u32; 256].into_boxed_slice()))
+    let range = Box::leak(vec![0u32; 256].into_boxed_slice());
+    // SAFETY: leaked, so the range outlives the calls.
+    unsafe {
+        Sys::new(
+            crate::mem::Memory::new(range.as_mut_ptr().expose_provenance(), 256 * 4),
+            0,
+            256,
+        )
+    }
 }
 
 #[test]

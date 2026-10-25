@@ -15,12 +15,8 @@
 //   ts/client/src/abi/boot.ts                    the reservation a tab makes, handed to the page
 //   rust/client-bracket/native/src/lib.rs        the memory a device is given
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// The stack, at the bottom of the memory. build.rs hands this number to wasm-ld
@@ -40,7 +36,7 @@ pub const STACK_BYTES: u32 = 1048576;
 /// Native's JavaScript thread has 1 MiB and wgpu's depth has no bound to state.
 pub const THREAD_STACK_BYTES: u32 = 8388608;
 
-/// Messages the submission ring holds, and so payloads: one a slot
+/// Frames the submission ring holds, and so payloads: one a slot
 /// (doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
 /// the ring checks, since a position is taken modulo it by masking.
 ///
@@ -49,9 +45,9 @@ pub const THREAD_STACK_BYTES: u32 = 8388608;
 /// `writer`, `submit`). And small because every slot ends up resident: a
 /// position only grows, so each slot is written in turn, and a slot is a page
 /// since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one.
-pub const SUBMISSION_CAPACITY: u32 = 512;
+pub const SQ_CAP: u32 = 512;
 
-/// Messages the completion ring holds: everything one turn leaves, since the
+/// Frames the completion ring holds: everything one turn leaves, since the
 /// shell reads it dry before it rings again. A turn leaves at most a reply to
 /// each command it applies and its own signals after the drain (door.rs
 /// `SIGNALS`), so a ring of the submission ring's capacity plus the door's
@@ -59,7 +55,7 @@ pub const SUBMISSION_CAPACITY: u32 = 512;
 /// sizing, a power of two past that. Nothing is overrun if it is short: a
 /// command whose signals and reply would not fit waits for the next turn
 /// (xpute-guest ipc/door.rs). A power of two, as the submission ring's.
-pub const COMPLETION_CAPACITY: u32 = 1024;
+pub const CQ_CAP: u32 = 1024;
 
 /// Where the rings' descriptors begin: the first page past the stack.
 pub const RING_DESC_AT: u32 = 1048576;

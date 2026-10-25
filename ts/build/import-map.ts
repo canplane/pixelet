@@ -23,7 +23,9 @@ function jsonc(text: string): unknown {
     const c = text[i];
     if (c === '"') {
       const start = i;
-      for (i++; i < text.length && text[i] !== '"'; i++) if (text[i] === "\\") i++;
+      for (i++; i < text.length && text[i] !== '"'; i++) {
+        if (text[i] === "\\") i++;
+      }
       out += text.slice(start, i + 1);
     } else if (c === "/" && text[i + 1] === "/") {
       while (i < text.length && text[i] !== "\n") i++;
@@ -52,8 +54,14 @@ function read(file: string): Config {
 export const WORKSPACE: string = (() => {
   for (let dir = import.meta.dirname!;; dir = path.dirname(dir)) {
     const file = path.join(dir, "deno.jsonc");
-    if (fs.existsSync(file) && (read(file).workspace ?? []).length > 0) return dir;
-    if (path.dirname(dir) === dir) throw new Error(`import-map: no workspace's deno.jsonc over ${import.meta.dirname}`);
+    if (fs.existsSync(file) && (read(file).workspace ?? []).length > 0) {
+      return dir;
+    }
+    if (path.dirname(dir) === dir) {
+      throw new Error(
+        `import-map: no workspace's deno.jsonc over ${import.meta.dirname}`,
+      );
+    }
   }
 })();
 
@@ -63,8 +71,12 @@ export const REPO: string = path.dirname(WORKSPACE);
 /** A config's directory prefixes, each its absolute directory with a trailing separator. */
 function prefixesOf(file: string): [string, string][] {
   return Object.entries(read(file).imports ?? {})
-    .filter(([prefix, target]) => prefix.endsWith("/") && /^\.\.?\//.test(target))
-    .map(([prefix, target]) => [prefix, path.resolve(path.dirname(file), target) + path.sep]);
+    .filter(([prefix, target]) =>
+      prefix.endsWith("/") && /^\.\.?\//.test(target)
+    )
+    .map((
+      [prefix, target],
+    ) => [prefix, path.resolve(path.dirname(file), target) + path.sep]);
 }
 
 /** Longest first, as an import map takes the longest prefix that matches. */
@@ -73,7 +85,9 @@ function longestFirst(prefixes: [string, string][]): [string, string][] {
 }
 
 const ROOT_CONFIG = path.join(WORKSPACE, "deno.jsonc");
-const MEMBERS = (read(ROOT_CONFIG).workspace ?? []).map((member) => path.join(WORKSPACE, member) + path.sep);
+const MEMBERS = (read(ROOT_CONFIG).workspace ?? []).map((member) =>
+  path.join(WORKSPACE, member) + path.sep
+);
 const ROOT_PREFIXES = longestFirst(prefixesOf(ROOT_CONFIG));
 const BY_MEMBER = new Map<string, [string, string][]>();
 
@@ -87,7 +101,10 @@ export function prefixesFor(file: string): [string, string][] {
   if (all === undefined) {
     const own = prefixesOf(path.join(member, "deno.jsonc"));
     const named = new Set(own.map(([prefix]) => prefix));
-    all = longestFirst([...own, ...ROOT_PREFIXES.filter(([prefix]) => !named.has(prefix))]);
+    all = longestFirst([
+      ...own,
+      ...ROOT_PREFIXES.filter(([prefix]) => !named.has(prefix)),
+    ]);
     BY_MEMBER.set(member, all);
   }
   return all;
@@ -96,7 +113,12 @@ export function prefixesFor(file: string): [string, string][] {
 /** Where `spec`, imported from `file`, names a directory of the tree through
  * the import maps: the path past its prefix, and the prefix; none for a
  * relative or a package specifier. */
-export function mapped(file: string, spec: string): { path: string; prefix: string } | null {
+export function mapped(
+  file: string,
+  spec: string,
+): { path: string; prefix: string } | null {
   const hit = prefixesFor(file).find(([prefix]) => spec.startsWith(prefix));
-  return hit ? { path: hit[1] + spec.slice(hit[0].length), prefix: hit[0] } : null;
+  return hit
+    ? { path: hit[1] + spec.slice(hit[0].length), prefix: hit[0] }
+    : null;
 }

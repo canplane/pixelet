@@ -8,5 +8,9 @@ import { PLATFORM } from "./module.ts";
 
 export function useSafeArea(): SafeArea {
   const { top, bottom } = useSafeAreaInsets();
-  return { top, bottom, tappable: Platform.OS === "android" ? PLATFORM.tappableBottom() : 0 };
+  return {
+    top,
+    bottom,
+    tappable: Platform.OS === "android" ? PLATFORM.tappableBottom() : 0,
+  };
 }

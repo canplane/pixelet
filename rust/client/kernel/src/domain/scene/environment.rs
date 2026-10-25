@@ -14,8 +14,8 @@ use pxl_spec::space::coord::v3;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
-use crate::sys::io::host::wall_now;
 use crate::sys::sched::edge::wake_at;
+use crate::turn::wall_now;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use xpute_guest::clock::now;
 
@@ -36,7 +36,10 @@ const EASE_RATE: f64 = 1.5;
 /// distance.
 fn heights(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
     let mu = |p: [f64; 3]| p[2] / v3::len(&p);
-    [mu(sun_position(days, lat, lon)), mu(moon_position(days, lat, lon))]
+    [
+        mu(sun_position(days, lat, lon)),
+        mu(moon_position(days, lat, lon)),
+    ]
 }
 
 /// Each light's height a display level of the sky moves over (pxl-render
@@ -108,7 +111,11 @@ impl EnvironmentDraw {
         if !self.started {
             return live;
         }
-        let (was, is, step) = (heights(self.days, self.anchor), heights(self.days, live), steps());
+        let (was, is, step) = (
+            heights(self.days, self.anchor),
+            heights(self.days, live),
+            steps(),
+        );
         if (0..2).any(|k| (is[k] - was[k]).abs() >= step[k]) {
             live
         } else {
@@ -143,7 +150,9 @@ impl EnvironmentDraw {
         let sky_next = |at: f64| {
             let days = j2000_days(at);
             let (now, then) = (heights(days), heights(days + MINUTE_MS / 86_400_000.0));
-            at + (0..2).map(|k| step[k] * MINUTE_MS / (then[k] - now[k]).abs()).fold(f64::INFINITY, f64::min)
+            at + (0..2)
+                .map(|k| step[k] * MINUTE_MS / (then[k] - now[k]).abs())
+                .fold(f64::INFINITY, f64::min)
         };
         let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;
         let mut next = sky_next(self.sky_at);
@@ -161,7 +170,10 @@ impl EnvironmentDraw {
     /// The sun and moon and the stars' turn at the sky's days and anchor.
     fn aim(&mut self) {
         let [lon, lat] = self.anchor;
-        self.aimed = [sun_position(self.days, lat, lon), moon_position(self.days, lat, lon)];
+        self.aimed = [
+            sun_position(self.days, lat, lon),
+            moon_position(self.days, lat, lon),
+        ];
         self.star_frame = equatorial_to_local(self.days, lat, lon);
     }
 

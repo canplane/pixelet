@@ -18,8 +18,11 @@ export function alpha(hex: string, a: number): string {
 function tint(hex: string, a: number, over = "#ffffff"): string {
   const n = parseInt(hex.slice(1), 16);
   const g = parseInt(over.slice(1), 16);
-  const mix = (c: number, b: number) => round(b + (c - b) * a).toString(16).padStart(2, "0");
-  return `#${[16, 8, 0].map((s) => mix((n >> s) & 255, (g >> s) & 255)).join("")}`;
+  const mix = (c: number, b: number) =>
+    round(b + (c - b) * a).toString(16).padStart(2, "0");
+  return `#${
+    [16, 8, 0].map((s) => mix((n >> s) & 255, (g >> s) & 255)).join("")
+  }`;
 }
 
 /** iOS's secondary label: the label's color at this opacity, in either mode. */
@@ -87,8 +90,17 @@ export const color = {
 /** Colors an iPhone draws on its system glass and other platforms as a
  * solid surface: `glass` is the tint, `fill` and the rest the solid look. */
 export const surface = {
-  chosen: { glass: alpha(CORAL.base, 0.25), fill: tint(CORAL.base, 0.1), edge: alpha(CORAL.base, 0.6) },
-  alarm: { glass: alpha(SYSTEM.red, 0.15), fill: tint(SYSTEM.red, 0.06), edge: tint(SYSTEM.red, 0.3), shadow: alpha(SYSTEM.red, 0.15) },
+  chosen: {
+    glass: alpha(CORAL.base, 0.25),
+    fill: tint(CORAL.base, 0.1),
+    edge: alpha(CORAL.base, 0.6),
+  },
+  alarm: {
+    glass: alpha(SYSTEM.red, 0.15),
+    fill: tint(SYSTEM.red, 0.06),
+    edge: tint(SYSTEM.red, 0.3),
+    shadow: alpha(SYSTEM.red, 0.15),
+  },
 } as const;
 
 export interface Material {
@@ -113,35 +125,89 @@ export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
  * `reach` px a side, each at opacity `ring`. */
 export const halo = { reach: 2, ring: 0.3 } as const;
 
-export const haloRings: readonly number[] = Array.from({ length: halo.reach }, (_, i) => halo.reach - i);
+export const haloRings: readonly number[] = Array.from(
+  { length: halo.reach },
+  (_, i) => halo.reach - i,
+);
 
 export const hairline = alpha(color.labelGray, 0.1);
 
 /** Apple's text styles, a step smaller, since the chrome floats over a map. */
-export const weight = { regular: "400", medium: "500", semibold: "600" } as const;
+export const weight = {
+  regular: "400",
+  medium: "500",
+  semibold: "600",
+} as const;
 
 export const textStyle = {
-  title2: { fontFamily: FAMILY, fontSize: 20, lineHeight: 25, fontWeight: weight.semibold },
-  title: { fontFamily: FAMILY, fontSize: 15, lineHeight: 20, fontWeight: weight.semibold },
-  body: { fontFamily: FAMILY, fontSize: 15, lineHeight: 20, fontWeight: weight.regular },
+  title2: {
+    fontFamily: FAMILY,
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: weight.semibold,
+  },
+  title: {
+    fontFamily: FAMILY,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: weight.semibold,
+  },
+  body: {
+    fontFamily: FAMILY,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: weight.regular,
+  },
   /** 16, not 15: iOS Safari zooms into a focused field set smaller. */
   input: { fontFamily: FAMILY, fontSize: 16, fontWeight: weight.regular },
-  footnote: { fontFamily: FAMILY, fontSize: 13, lineHeight: 18, fontWeight: weight.regular },
+  footnote: {
+    fontFamily: FAMILY,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: weight.regular,
+  },
   /** A notice's words: a toast, an item's name. */
-  notice: { fontFamily: FAMILY, fontSize: 13, lineHeight: 18, fontWeight: weight.semibold, letterSpacing: -0.3 },
-  caption: { fontFamily: FAMILY, fontSize: 12, lineHeight: 16, fontWeight: weight.regular },
+  notice: {
+    fontFamily: FAMILY,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: weight.semibold,
+    letterSpacing: -0.3,
+  },
+  caption: {
+    fontFamily: FAMILY,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: weight.regular,
+  },
   /** 11 is iOS's floor. */
-  caption2: { fontFamily: FAMILY, fontSize: 11, lineHeight: 13, fontWeight: weight.medium },
+  caption2: {
+    fontFamily: FAMILY,
+    fontSize: 11,
+    lineHeight: 13,
+    fontWeight: weight.medium,
+  },
 } as const;
 
 /** How far a text follows the system's text size: a control's to 1.2×, a mark
  * not at all, since its size is its shape; running text follows it whole. */
 export const textScale = { chrome: 1.2, mark: 1 } as const;
 
-export const sectionTitle = { ...textStyle.caption, fontWeight: weight.medium, letterSpacing: 0.6, textTransform: "uppercase" } as const;
+export const sectionTitle = {
+  ...textStyle.caption,
+  fontWeight: weight.medium,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+} as const;
 
 /** The map screen's layers, back to front: the dock and toasts, the scrim, the top chrome, the debug panels, a sheet. */
-export const layer = { bottom: 40, scrim: 49, chrome: 50, debug: 51, sheet: 70 } as const;
+export const layer = {
+  bottom: 40,
+  scrim: 49,
+  chrome: 50,
+  debug: 51,
+  sheet: 70,
+} as const;
 
 export const chrome = {
   inset: 16,

@@ -53,7 +53,9 @@ pub const CASES_MAX: usize = pxl_render::gpu::surface::SURFACES;
 /// On a live surface; false for a variant there is none of.
 pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
     preview_close(id);
-    let Some(variant) = character_variant(group, number) else { return false };
+    let Some(variant) = character_variant(group, number) else {
+        return false;
+    };
     cases().cases.push(Case {
         id,
         variant,
@@ -69,7 +71,9 @@ pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
 /// Whether a case was open there.
 pub fn preview_close(id: u32) -> bool {
     let c = cases();
-    let Some(pos) = c.cases.iter().position(|case| case.id == id) else { return false };
+    let Some(pos) = c.cases.iter().position(|case| case.id == id) else {
+        return false;
+    };
     let case = c.cases.remove(pos);
     if let Some(actor) = case.actor {
         if section::map().is_some() {
@@ -97,15 +101,21 @@ pub fn preview_step(ctx: &mut TickContext) {
             case.model = model_of(case.variant.model, Some(case.variant.height_u));
         }
         if case.actor.is_none() {
-            if let (Some(model), Some(_)) = (&case.model, load_of(case.variant.skin).and_then(load_image)) {
+            if let (Some(model), Some(_)) =
+                (&case.model, load_of(case.variant.skin).and_then(load_image))
+            {
                 let id = model.model;
-                case.actor = section::map().and_then(|_| Actor::new(draw_list(), crate::domain::query::model::models(), id));
+                case.actor = section::map().and_then(|_| {
+                    Actor::new(draw_list(), crate::domain::query::model::models(), id)
+                });
                 if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_count) {
                     actor.play(IDLE_CLIP, 0.0);
                 }
             }
         }
-        let (Some(_), Some(model)) = (&case.actor, &case.model) else { continue };
+        let (Some(_), Some(model)) = (&case.actor, &case.model) else {
+            continue;
+        };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
         // The model as registered, the variant's height tall, at one unit.
         let scale = model.scale / case.variant.height_u as f32;
@@ -147,7 +157,11 @@ pub fn preview_draw(draw: &mut DrawList, models: &Models, eye: V3) {
 /// companion's too.
 pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> {
     let c: &'static _ = cases();
-    c.cases
-        .iter()
-        .filter_map(|case| Some((case.id, case.actor.as_ref()?.palette(), load_of(case.variant.skin).and_then(load_image)?)))
+    c.cases.iter().filter_map(|case| {
+        Some((
+            case.id,
+            case.actor.as_ref()?.palette(),
+            load_of(case.variant.skin).and_then(load_image)?,
+        ))
+    })
 }

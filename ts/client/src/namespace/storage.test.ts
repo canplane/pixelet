@@ -4,11 +4,25 @@ import { assertEquals } from "@std/assert";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/kit/codec/encoding.ts";
 
 import { format, kept } from "@/abi/host.spec.ts";
-import { follow_refused, formatted, kept_key, migrate, set_aside, type Storage } from "./storage.ts";
+import {
+  follow_refused,
+  formatted,
+  kept_key,
+  migrate,
+  set_aside,
+  type Storage,
+} from "./storage.ts";
 
-function storage(entries: Record<string, string> = {}, refuses = false): Storage & { map: Map<string, string> } {
+function storage(
+  entries: Record<string, string> = {},
+  refuses = false,
+): Storage & { map: Map<string, string> } {
   const map = new Map(Object.entries(entries));
-  return { map, get: (k) => map.get(k) ?? null, set: (k, v) => void (refuses || map.set(k, v)) };
+  return {
+    map,
+    get: (k) => map.get(k) ?? null,
+    set: (k, v) => void (refuses || map.set(k, v)),
+  };
 }
 
 const PACKET = bytes_to_b64url(new Uint8Array([0x58, 0x54, 0x50, 0, 1, 2, 3]));
@@ -23,7 +37,12 @@ Deno.test("migrate - the objects carry over with their format before them, and s
 });
 
 Deno.test("migrate - once: a slot that holds anything is not written", () => {
-  const s = storage({ "pxl:object:v15": PACKET, "pxl:kept:objects": "", "pxl:settings": "AQ", "pxl:kept:settings": "AQIB" });
+  const s = storage({
+    "pxl:object:v15": PACKET,
+    "pxl:kept:objects": "",
+    "pxl:settings": "AQ",
+    "pxl:kept:settings": "AQIB",
+  });
   migrate(s);
   assertEquals(s.map.get("pxl:kept:objects"), "");
   assertEquals(s.map.get("pxl:kept:settings"), "AQIB");
@@ -44,7 +63,10 @@ Deno.test("formatted - what is not base64url stays as it is", () => {
 });
 
 Deno.test("set_aside - a refused file is copied, read back, then its slot emptied", () => {
-  const s = storage({ "pxl:kept:objects": "AAAA", "pxl:kept:objects:aside:7": "older" });
+  const s = storage({
+    "pxl:kept:objects": "AAAA",
+    "pxl:kept:objects:aside:7": "older",
+  });
   assertEquals(set_aside(s, kept.OBJECTS, 7), true);
   assertEquals(s.map.get("pxl:kept:objects"), "");
   assertEquals(s.map.get("pxl:kept:objects:aside:7"), "older");
@@ -61,10 +83,10 @@ Deno.test("set_aside - storage that refuses the copy keeps the slot as it was", 
 Deno.test("follow_refused - each refused slot is set aside and emptied once", () => {
   const s = storage({ "pxl:kept:settings": '{"ao":"screen"}' });
   const told: number[] = [];
-  follow_refused([kept.SETTINGS], s, (slot) => told.push(slot));
-  follow_refused([kept.SETTINGS], s, (slot) => told.push(slot));
+  follow_refused([kept.SETTINGS], (slot) => told.push(slot), s);
+  follow_refused([kept.SETTINGS], (slot) => told.push(slot), s);
   assertEquals(told, [kept.SETTINGS]);
   assertEquals(s.map.get("pxl:kept:settings"), "");
-  follow_refused([], s, (slot) => told.push(slot));
+  follow_refused([], (slot) => told.push(slot), s);
   assertEquals(told, [kept.SETTINGS]);
 });

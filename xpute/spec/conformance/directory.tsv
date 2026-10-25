@@ -6,5 +6,5 @@
 scenarios	C0.boot
 #
 # xpute's keys for the two rings, and the program's own for its stream, past xpute's PROGRAM bit.
-C0.boot.directory.keys	SUBMISSION COMPLETION STREAM
+C0.boot.directory.keys	SQ CQ STREAM
 C0.boot.directory.reserved	0

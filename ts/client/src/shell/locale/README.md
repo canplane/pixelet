@@ -1,11 +1,11 @@
 # What the strings call things
 
-The words a user reads, one meaning each, in every locale. The code has its
-own names — `cube`, `layer/object`, the pyramid's pages — and they are
-not these; a string is written for someone who has never seen the code.
+The words a user reads, one meaning each, in every locale. The code has its own
+names — `cube`, `layer/object`, the pyramid's pages — and they are not these; a
+string is written for someone who has never seen the code.
 
-What the world holds is named on two axes: where a thing came from, and what
-it is drawn as.
+What the world holds is named on two axes: where a thing came from, and what it
+is drawn as.
 
 |             | **cube** — a box                | **decor** — a model         | **marker** — a flat design |
 | ----------- | ------------------------------- | --------------------------- | -------------------------- |
@@ -24,7 +24,11 @@ it is drawn as.
 | character | 캐릭터   | the person and the pet                                           |
 | ground    | 땅       | the surface something stands on, as a plain word                 |
 
-Not used: map, voxel, pixel, and world for anything but the world above or
-the real one ("현실 세계"). A setting's cost is said in words a user has —
-light on performance, the most demanding option — not in operations per
-pixel.
+Not used: map, voxel, pixel, and world for anything but the world above or the
+real one ("현실 세계"). A setting's cost is said in words a user has — light on
+performance, the most demanding option — not in operations per pixel.
+
+An item — each cube, decor, marker and pet, the `blocks.*` and `pets.*` keys —
+has one name, the English one, in every locale: only en.json holds it, and every
+other locale falls back to it. A section's header is written in the reader's
+language.

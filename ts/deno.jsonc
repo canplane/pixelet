@@ -1,8 +1,9 @@
 {
   // pixelet's TypeScript, one workspace as rust/ is one Cargo workspace: the
   // client, the shell and the host the same files on a page and on a device,
-  // and each app, a bracket, that bundles it (app/web, app/native). A
-  // package's own scripts sit beside its src/ (build/, app/web/script/).
+  // and each app, which bundles it with the guest and hands it its bracket
+  // (app/web, app/native). A package's own scripts sit beside its src/
+  // (build/, app/web/script/).
   // What runs across the languages is the repository root's (../Makefile).
   "workspace": [
     "client",
@@ -21,7 +22,7 @@
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check build/*.ts",
+    "check": "deno fmt --check && deno lint && deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check client/src build/*.ts",
     "test": "deno task --cwd client test && deno task --cwd app/web test",
     "fmt": "deno fmt",
     "lint": "deno lint"
@@ -50,8 +51,6 @@
   },
 
   "fmt": {
-    "lineWidth": 200,
-    "proseWrap": "preserve",
     "exclude": ["node_modules/", "dist/"]
   },
 

@@ -11,30 +11,56 @@ fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_la
     let _g = crate::sys::serial();
     let before = runs();
     let longest = longest(Stream::terrain);
-    let mut out: Vec<Block> = (0..SLOTS).map(|k| take(Some(if k % 2 == 0 { Stream::terrain } else { Stream::earth }), longest).unwrap()).collect();
+    let mut out: Vec<Block> = (0..SLOTS)
+        .map(|k| {
+            take(
+                Some(if k % 2 == 0 {
+                    Stream::terrain
+                } else {
+                    Stream::earth
+                }),
+                longest,
+            )
+            .unwrap()
+        })
+        .collect();
     assert_eq!(runs(), before + 1, "{SLOTS} bodies fill one run");
     let mut at: Vec<usize> = out.iter().map(|b| b.0).collect();
     at.sort();
-    assert!(at.windows(2).all(|w| w[1] - w[0] >= SLOT_BYTES as usize), "no two slots overlap");
+    assert!(
+        at.windows(2).all(|w| w[1] - w[0] >= SLOT_BYTES as usize),
+        "no two slots overlap"
+    );
     out.push(take(Some(Stream::terrain), longest).unwrap());
     assert_eq!(runs(), before + 2, "and the next borrows another");
 
     for (k, &(at, n)) in out.iter().enumerate() {
         // SAFETY: `n` bytes of a slot just taken.
-        unsafe { core::ptr::write_bytes(xpute_guest::mem::base::ptr_at::<u8>(at), k as u8, n as usize) };
+        unsafe { core::ptr::write_bytes(xpute_guest::mem::at::<u8>(at), k as u8, n as usize) };
     }
     let released = releases();
     let freed = out.remove(1);
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(freed) };
-    assert_eq!(releases(), released.wrapping_add(1), "a slot given back is a release");
+    assert_eq!(
+        releases(),
+        released.wrapping_add(1),
+        "a slot given back is a release"
+    );
     let again = take(Some(Stream::earth), longest).unwrap();
-    assert_eq!(again.0, freed.0, "a slot given back is taken again before a run is borrowed");
+    assert_eq!(
+        again.0, freed.0,
+        "a slot given back is taken again before a run is borrowed"
+    );
     assert_eq!(runs(), before + 2);
     for (k, &(at, n)) in out.iter().enumerate().skip(1) {
         // SAFETY: still out, `n` bytes long.
-        let bytes = unsafe { core::slice::from_raw_parts(xpute_guest::mem::base::ptr_at::<u8>(at), n as usize) };
-        assert!(bytes.iter().all(|&b| b == (k + 1) as u8), "a body was written over by its neighbors");
+        let bytes =
+            unsafe { core::slice::from_raw_parts(xpute_guest::mem::at::<u8>(at), n as usize) };
+        assert!(
+            bytes.iter().all(|&b| b == (k + 1) as u8),
+            "a body was written over by its neighbors"
+        );
     }
 
     out.push(again);
@@ -62,7 +88,9 @@ fn every_other_body_is_a_heap_block_of_its_own() {
 fn no_more_than_body_slots_are_out_and_one_given_back_ends_the_wait() {
     let _g = crate::sys::serial();
     let longest = longest(Stream::terrain);
-    let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
+    let mut out: Vec<Block> = (0..BODY_SLOTS)
+        .map(|_| take(Some(Stream::terrain), longest).unwrap())
+        .collect();
     let refused = take(Some(Stream::earth), longest).unwrap_err();
     assert!(!refused.over(), "every slot out: the body waits");
     // SAFETY: from `take`, given back once, here and below.
@@ -90,13 +118,16 @@ fn the_peak_is_the_most_slots_out_since_it_was_last_taken() {
 fn a_slot_costs_less_than_the_buddy_block_it_replaces() {
     assert_eq!(SLOTS, 7, "at today's packets, as sys/io/body.rs says");
     for stream in SLOTTED {
-        assert!(SLOT_BYTES >= longest(stream) && (BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two());
+        assert!(
+            SLOT_BYTES >= longest(stream)
+                && (BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two()
+        );
     }
 }
 
 #[test]
 fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
-    use crate::sys::io::host::set_heap_stat;
+    use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
@@ -106,7 +137,9 @@ fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
         ..HeapStat::default()
     });
     let longest = longest(Stream::terrain);
-    let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
+    let mut out: Vec<Block> = (0..BODY_SLOTS)
+        .map(|_| take(Some(Stream::terrain), longest).unwrap())
+        .collect();
     let refused = take(Some(Stream::terrain), longest).unwrap_err();
     RELEASES.fetch_add(1, Ordering::Relaxed);
     assert!(!refused.over(), "the heap's pages given back give no slot");
@@ -122,7 +155,7 @@ fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
 #[test]
 fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
     let _g = crate::sys::serial();
-    let refused = crate::sys::io::host::Refused::run();
+    let refused = crate::sys::io::room::Refused::run();
     assert!(!refused.over());
     let block = take(Some(Stream::terrain), 1).unwrap();
     // SAFETY: from `take`, given back once.
@@ -134,7 +167,9 @@ fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
 fn a_slot_given_back_after_a_refusal_asks_a_turn() {
     let _g = crate::sys::serial();
     let longest = longest(Stream::terrain);
-    let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
+    let mut out: Vec<Block> = (0..BODY_SLOTS)
+        .map(|_| take(Some(Stream::terrain), longest).unwrap())
+        .collect();
     assert!(take(Some(Stream::terrain), longest).is_err());
     assert!(held().waited, "refused for want of a slot");
     // SAFETY: from `take`, given back once, here and below.

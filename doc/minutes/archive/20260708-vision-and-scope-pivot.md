@@ -37,8 +37,8 @@ every downstream system doesn't survive contact with the platform.
 **WASM obfuscation doesn't defend anything.** As long as the client holds the
 whole binary, it is not real protection. Worse, it _contradicts_ the BFT premise
 sitting next to it: BFT says "do not trust the client", obfuscation says "hide
-the client's code and you're fine". Those are opposite postures, and holding both
-at once meant neither was being taken seriously.
+the client's code and you're fine". Those are opposite postures, and holding
+both at once meant neither was being taken seriously.
 
 **BFT consensus costs more than the project could carry**, on top of the above.
 
@@ -53,8 +53,8 @@ The differentiating value of this project is the **OSM → terrain/voxel baking
 pipeline** — which is a self-contained pure transformation that needed almost no
 generalization. Yet the most design energy went into the runtime and network
 layers, **the place where generalization was least needed.** The root cause was
-trying to imitate systems-level architecture (real processes, real shared memory)
-to route around constraints the web simply imposes.
+trying to imitate systems-level architecture (real processes, real shared
+memory) to route around constraints the web simply imposes.
 
 The layered structure that produced (spec/bake/render/engine split, an `xpute`
 runtime orchestration layer) was assessed as "ideal but scoped far too large".
@@ -69,37 +69,38 @@ tier and per-package `rust/` subtrees.
 **BigInt/PVF3 was not over-engineering.** An earlier assessment called PVF3's
 bit-exact BigInt determinism excessive. That was wrong. Governing a whole planet
 at fixed precision in one coordinate system exceeds JS `number`'s 53-bit safe
-integer range, so BigInt was necessary. Its slowness was known and accounted for:
-**the plan was always to move that arithmetic to Rust** (which handles 64-bit
-integers natively). TypeScript/BigInt was the spec and reference implementation;
-Rust was to be the performant one — the same "core lives inside WASM" posture
-Figma has.
+integer range, so BigInt was necessary. Its slowness was known and accounted
+for: **the plan was always to move that arithmetic to Rust** (which handles
+64-bit integers natively). TypeScript/BigInt was the spec and reference
+implementation; Rust was to be the performant one — the same "core lives inside
+WASM" posture Figma has.
 
 _Implication of the no-WASM pivot:_ the problem Rust was going to solve reopens.
 Either keep BigInt in plain JS and accept the cost, or replace it with
 floating-origin rebasing onto float64 (52-bit mantissa gives sub-millimeter
-precision over a wide region near the origin). The latter is this field's standard
-answer — Cesium, Unreal World Composition — and fits the no-WASM direction better.
-See [20260811-coordinate-system.md](./20260811-coordinate-system.md) for what was
+precision over a wide region near the origin). The latter is this field's
+standard answer — Cesium, Unreal World Composition — and fits the no-WASM
+direction better. See
+[20260811-coordinate-system.md](./20260811-coordinate-system.md) for what was
 actually built.
 
-**XTP may be worth more outside this project than in it.** It describes itself as
-"schemaless FlatBuffers-feeling, C-memory-layout friendly, relocatable across
+**XTP may be worth more outside this project than in it.** It describes itself
+as "schemaless FlatBuffers-feeling, C-memory-layout friendly, relocatable across
 languages". FlatBuffers and Cap'n Proto need a schema plus codegen; msgpack and
-CBOR are schemaless but give no zero-copy lazy access. XTP offers relative-offset
-lazy/random access _and_ relocation (subtree splice) without a schema — a real
-gap. It already has both TypeScript and Rust implementations, so it is
-cross-language validated. Plausible spin-out asset.
+CBOR are schemaless but give no zero-copy lazy access. XTP offers
+relative-offset lazy/random access _and_ relocation (subtree splice) without a
+schema — a real gap. It already has both TypeScript and Rust implementations, so
+it is cross-language validated. Plausible spin-out asset.
 
 That comparison left out Apache Arrow, the one format whose whole premise is
-typed buffers read in place across languages. It is weighed against how XTP
-is actually used in the section at the end of this document (2026-09-17).
+typed buffers read in place across languages. It is weighed against how XTP is
+actually used in the section at the end of this document (2026-09-17).
 
 ## Why `xpute` and `pxl` are separate packages
 
-The intent was to grow `xpute` into a general-purpose
-runtime — a "spatial OS" — not tied to pixelet, with the worker/IPC/transferable
-design and XTP's cross-language format both serving that ambition.
+The intent was to grow `xpute` into a general-purpose runtime — a "spatial OS" —
+not tied to pixelet, with the worker/IPC/transferable design and XTP's
+cross-language format both serving that ambition.
 
 **PVF3 was deliberately left in `pxl`, not moved to `xpute`**, because the
 coordinate system is domain-specific, while execution and transport are general.
@@ -134,8 +135,8 @@ ever considered — and moderation explicitly out of scope. See
 
 **None of the parked code should be proactively deleted.** The
 spatial-computing/metaverse niche is not considered dead, and the option to
-resume is being kept open. When cleanup does happen, it goes to an archive branch
-rather than `git rm`.
+resume is being kept open. When cleanup does happen, it goes to an archive
+branch rather than `git rm`.
 
 ## 2026-09-17: XTP against Apache Arrow, by what XTP actually carries
 
@@ -159,10 +160,10 @@ What XTP carries today, read from the code:
 | Ring commands and signals        | a message is a positional tuple of a few scalars and strings, written straight into a ring slot                                                         | `crates/pxl/wasm/src/lib.rs`, `apps/web/src/wasm/kernel.ts` |
 
 Of what the comparison above named as XTP's own: GRAFT (splicing an encoded
-subtree) has no use outside the codec — the last, the object store's
-per-page Placement record, went on 2026-09-17; no writer outside the codec
-records a typed null; and "any tree" is at most two branches deep in
-practice, every shape fixed in code.
+subtree) has no use outside the codec — the last, the object store's per-page
+Placement record, went on 2026-09-17; no writer outside the codec records a
+typed null; and "any tree" is at most two branches deep in practice, every shape
+fixed in code.
 
 The same uses as Arrow:
 
@@ -176,10 +177,11 @@ The same uses as Arrow:
 
 Two principles it sits against:
 
-- **A specification is not sent** ([20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md),
-  undone 2026-09-17). An Arrow IPC stream or file carries its schema. XTP is
-  not specification-free either — every node carries a type code — so the
-  difference is type tags against a named schema, not none against some.
+- **A specification is not sent**
+  ([20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md),
+  undone 2026-09-17). An Arrow IPC stream or file carries its schema. XTP is not
+  specification-free either — every node carries a type code — so the difference
+  is type tags against a named schema, not none against some.
 - **Immutable arrays.** Fine for what is published; not the representation of
   what the kernel mutates.
 
@@ -193,7 +195,7 @@ Not checked, and each bears on a decision:
 - **The bucket path.** Whether a published page as an Arrow file (Feather v2)
   changes anything on the Worker's route or its cache was not looked at.
 
-In short: none of XTP's recorded distinctions — GRAFT, any tree, typed
-nulls — is in use. The tabular things it carries (the POI page, the saved
-store, the bake input) fit Arrow well; the terrain page's lanes of different
-lengths and the ring's messages do not.
+In short: none of XTP's recorded distinctions — GRAFT, any tree, typed nulls —
+is in use. The tabular things it carries (the POI page, the saved store, the
+bake input) fit Arrow well; the terrain page's lanes of different lengths and
+the ring's messages do not.

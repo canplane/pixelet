@@ -52,7 +52,10 @@ pub fn forget() {
 pub fn turn(moved: bool) {
     let stands = !moved
         && match *OBSERVED.get(|| None) {
-            Some(Some(o)) => Some(o.reach) == eye_reach() && !crate::domain::query::changed::within([[o.eye[0], o.eye[1]]; 2], &[]),
+            Some(Some(o)) => {
+                Some(o.reach) == eye_reach()
+                    && !crate::domain::query::changed::within([[o.eye[0], o.eye[1]]; 2], &[])
+            }
             Some(None) => eye().is_none() || eye_reach().is_none(),
             None => false,
         };
@@ -88,13 +91,21 @@ pub fn observation() -> Option<Observation> {
 /// a ray met; a column it knows nothing of yet is handed none, as nothing
 /// there is to stand in.
 pub fn squares(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
-    let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else { return };
+    let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else {
+        return;
+    };
     let over = (o.eye[2] - o.ground).max(0.0);
     let coarsest = GROUND.grid_zoom(top).max(SQUARE_SHIFT);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
-        libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
+        libm::hypot(
+            libm::hypot(
+                gap(x as f64 * side, o.eye[0]),
+                gap(y as f64 * side, o.eye[1]),
+            ),
+            over,
+        )
     };
     let zoom = squares_zoom(coarsest);
     // Its room kept from one walk to the next.
@@ -113,7 +124,13 @@ pub fn squares(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<2>, [f64; 2]
             stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
             continue;
         }
-        let Some(b) = world.bounds(&mut walked, (zoom, xy), cell).value().flatten() else { continue };
+        let Some(b) = world
+            .bounds(&mut walked, (zoom, xy), cell)
+            .value()
+            .flatten()
+        else {
+            continue;
+        };
         each((zoom, xy), [b.min[2], b.max[2]]);
     }
     *STACK.get(Vec::new) = stack;

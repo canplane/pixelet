@@ -223,7 +223,7 @@
       "car": "Car",
       "train": "Train"
     },
-    "marker": "Marker"
+    "pin": "Pin"
   },
   "pets": {
     "beaver": "Beaver",
@@ -274,7 +274,7 @@
         "nature": "Nature",
         "vehicle": "Vehicles"
       },
-      "marker": "Markers"
+      "pin": "Pins"
     },
     "character": {
       "person_label": "Character",
@@ -312,9 +312,9 @@
       "pointer": "Pointer",
       "eraser": "Eraser",
       "message_placeholder": "Type a message…",
-      "marker_placeholder": "Words for this marker…",
+      "pin_placeholder": "Words for this pin…",
       "send": "Send",
-      "marker_done": "Put Up Marker",
+      "pin_done": "Put Up Pin",
       "drawer_tooltip": "Open Drawer",
       "object_size": "Size {{n}}"
     },

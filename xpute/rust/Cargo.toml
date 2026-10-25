@@ -3,13 +3,14 @@
 # quota measured from the frame, I/O asked of the host — and depends on
 # `kit`, never the reverse; `host` is the host's end in Rust, for a guest
 # linked into the host's own native process. `gpu` is WebGPU's vocabulary
-# for a guest's calls to a device it cannot reach, beside both. `link` is
-# how a guest's build script links it as a module. `conformance` is the guest the
-# contract's traces drive (spec/conformance/).
+# for a guest's calls to a device it cannot reach, beside both. A guest's
+# form lives in its end's path: `guest`'s `wasm` (a module's link arguments,
+# which a build script takes it for, and its entry) and `host`'s `native`.
+# `conformance` is the guest the contract's traces drive (spec/conformance/).
 
 [workspace]
 resolver = "2"
-members = ["kit", "guest", "host", "gpu", "link", "conformance"]
+members = ["kit", "guest", "host", "gpu", "conformance"]
 
 [workspace.dependencies]
 # The workspace's own crates, each by its path once, so a crate names another
@@ -17,7 +18,6 @@ members = ["kit", "guest", "host", "gpu", "link", "conformance"]
 xpute-kit = { path = "kit" }
 xpute-guest = { path = "guest" }
 xpute-host = { path = "host" }
-xpute-link = { path = "link" }
 # A set whose position is the value: insert appends, swap_remove moves the
 # last entry into the hole, and a caller keeps its own lanes at the same
 # positions.

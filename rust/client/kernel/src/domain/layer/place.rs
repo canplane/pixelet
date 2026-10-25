@@ -30,7 +30,12 @@ impl Base for PlaceTile {
     }
 
     /// Small, so held on the heap; the record is only a count slot.
-    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PlaceTile, Failure> {
+    fn receive(
+        _tile: Tile,
+        _record: u32,
+        pkt: &[u8],
+        _phases: &mut Phases,
+    ) -> Result<PlaceTile, Failure> {
         Ok(place::decode(pkt)?)
     }
 

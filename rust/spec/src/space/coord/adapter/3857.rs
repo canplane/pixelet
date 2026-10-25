@@ -59,7 +59,10 @@ pub type BBox3857 = [G3857; 2];
 pub fn get_tile_bbox(zoom: Zoom, tile: [i32; 2]) -> BBox3857 {
     let span = units(zoom);
     let min = tile.map(|v| f64::from(v) * span);
-    [[mer_from_u(min[0]), mer_from_u(min[1]), 0.0], [mer_from_u(min[0] + span), mer_from_u(min[1] + span), 0.0]]
+    [
+        [mer_from_u(min[0]), mer_from_u(min[1]), 0.0],
+        [mer_from_u(min[0] + span), mer_from_u(min[1] + span), 0.0],
+    ]
 }
 
 #[cfg(test)]

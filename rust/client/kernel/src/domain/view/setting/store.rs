@@ -9,10 +9,23 @@
 //! checks the slot's format). schema.json gives a number out once, so what
 //! was kept never reads as another setting.
 
-pub use crate::domain::view::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::domain::view::setting::schema_spec::{
+    AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings,
+};
 use crate::sys::io::file::{self, Kept, KeptFile};
-use crate::sys::io::host::development;
 use xpute_guest::global::Global;
+
+static DEVELOPMENT: Global<bool> = Global::new();
+
+/// Development builds offer the settings schema.json marks `dev`, as the
+/// shell's boot says (`WORLD_BOOT`).
+pub fn set_development(development: bool) {
+    DEVELOPMENT.set(development);
+}
+
+fn development() -> bool {
+    *DEVELOPMENT.get(|| false)
+}
 
 /// A dev-only setting outside a development build is not offered: storage
 /// outlives the build, and a value with no row left to turn it off would stay
@@ -123,7 +136,9 @@ pub fn settings_load_step() -> bool {
     if settings_loaded() {
         return false;
     }
-    let Some(kept) = file::take_kept(Kept::Settings) else { return false };
+    let Some(kept) = file::take_kept(Kept::Settings) else {
+        return false;
+    };
     let (s, now) = match kept {
         KeptFile::Bytes(bytes) => (read_kept(&bytes), Load::Loaded),
         KeptFile::None => (Settings::DEFAULT, Load::Loaded),

@@ -10,8 +10,18 @@ fn scalar_computes_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
     v.each("", |k| {
         let (x, s) = (v.f64(&format!("{k}.x")), v.f64(&format!("{k}.s")));
-        let bits = |name: &str, got: f64| assert_eq!(got.to_bits(), v.f64(&format!("{k}.{name}")).to_bits(), "{k}.{name}({x}, {s}) = {got}");
-        assert_eq!(approx_eq(x, x + s * 1e-6, None), v.bool(&format!("{k}.approx_eq")), "{k}.approx_eq");
+        let bits = |name: &str, got: f64| {
+            assert_eq!(
+                got.to_bits(),
+                v.f64(&format!("{k}.{name}")).to_bits(),
+                "{k}.{name}({x}, {s}) = {got}"
+            )
+        };
+        assert_eq!(
+            approx_eq(x, x + s * 1e-6, None),
+            v.bool(&format!("{k}.approx_eq")),
+            "{k}.approx_eq"
+        );
         assert_eq!(near(x, s, 0.3), v.bool(&format!("{k}.near")), "{k}.near");
         bits("lerp", lerp(x, s, 0.3));
         bits("inv_lerp", inv_lerp(x, -s, s * 2.0));

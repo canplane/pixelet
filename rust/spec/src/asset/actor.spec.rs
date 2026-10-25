@@ -7,13 +7,14 @@
 // asset/content/, how tall it stands and which clip is its move. What a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 /// The groups a character is of, each numbered, and in each its variants by
 /// key, row for row with its models, the colormap its pack shares, how tall it

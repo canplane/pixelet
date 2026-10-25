@@ -39,7 +39,8 @@ impl Sketch {
     fn line(&mut self, from: V3, to: V3, color: [f64; 3]) {
         for p in [from, to] {
             let [x, y, z] = core::array::from_fn(|k| p[k] - self.about[k]);
-            self.lines.extend([x, y, z, color[0], color[1], color[2], 1.0].map(|v| v as f32));
+            self.lines
+                .extend([x, y, z, color[0], color[1], color[2], 1.0].map(|v| v as f32));
         }
     }
 
@@ -54,7 +55,8 @@ impl Sketch {
 
     /// Its twelve edges: those between corners one bit of the index apart.
     fn cube(&mut self, base: V3, side: f64) {
-        let corner = |i: usize| -> V3 { core::array::from_fn(|k| base[k] + ((i >> k) & 1) as f64 * side) };
+        let corner =
+            |i: usize| -> V3 { core::array::from_fn(|k| base[k] + ((i >> k) & 1) as f64 * side) };
         for i in 0..8 {
             for k in 0..3 {
                 if i & (1 << k) == 0 {
@@ -83,7 +85,10 @@ fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
     s.about = center;
     s.lines.clear();
     let ground = World::now().floor_under(focus, LEAF_ZOOM).value().flatten();
-    let cell = v3::floor(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
+    let cell = v3::floor(
+        &[center[0], center[1], ground.unwrap_or(0.0)],
+        units(GROUND.cell()),
+    );
     s.cube(cell, units(GROUND.cell()));
     s.point(center, linear_rgb(frame::focus::rgb));
     // First person the eye is the focus, and nothing about it is seen.
@@ -92,8 +97,18 @@ fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
     let tip = |d: V3| -> V3 { core::array::from_fn(|k| center[k] + d[k] * RING_RADIUS) };
-    s.ring(center, east, north, (frame::level::rgb, frame::level::dashed));
-    s.ring(center, right, up, (frame::forward::rgb, frame::forward::dashed));
+    s.ring(
+        center,
+        east,
+        north,
+        (frame::level::rgb, frame::level::dashed),
+    );
+    s.ring(
+        center,
+        right,
+        up,
+        (frame::forward::rgb, frame::forward::dashed),
+    );
     s.ring(center, north, up, (frame::north::rgb, frame::north::dashed));
     s.point(tip(forward), linear_rgb(frame::forward::rgb));
     s.point(tip(north), linear_rgb(frame::north::rgb));
@@ -104,7 +119,9 @@ fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
 static GIZMOS: Global<(Sketch, bool, Sketch)> = Global::new();
 
 fn set_lines(at: V3, lines: &[f32]) {
-    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else { return };
+    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
+        return;
+    };
     scene.debug.set(draw, at, lines, lines.len());
 }
 
@@ -114,7 +131,10 @@ fn set_lines(at: V3, lines: &[f32]) {
 /// Before the frame's list begins (domain/scene/stage.rs), so its lines and the
 /// origin they are drawn about are the same turn's.
 pub fn frame_gizmo_step(show: bool, focus: Option<Q3>, heading: Option<f64>) {
-    let empty = || Sketch { about: [0.0; 3], lines: Vec::new() };
+    let empty = || Sketch {
+        about: [0.0; 3],
+        lines: Vec::new(),
+    };
     let (drawn, shown, next) = GIZMOS.get(|| (empty(), false, empty()));
     let Some(center) = focus.filter(|_| show) else {
         if core::mem::take(shown) {

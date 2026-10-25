@@ -51,9 +51,15 @@ function ask(): void {
   // A completion the device writes asks for the turn that reads it (`heard.wake`).
   void webgpu.acquire(lost, () => heard.wake()).then((answered) => {
     if (!answered) {
-      if (tries === 1) console.warn(`[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`);
+      if (tries === 1) {
+        console.warn(
+          `[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`,
+        );
+      }
       if (tries >= TRIES) {
-        console.error(`[gpu] no adapter answered in ${tries} requests; nothing can be drawn`);
+        console.error(
+          `[gpu] no adapter answered in ${tries} requests; nothing can be drawn`,
+        );
         heard.state(had ? "lost" : "missing");
         return;
       }
@@ -62,11 +68,16 @@ function ask(): void {
     }
     heard.state("present");
     had = true;
-    if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
+    if (tries > 1) {
+      console.info(`[gpu] a device answered after ${tries} requests`);
+    }
     tries = 0;
     heard.ready();
   }, (err) => {
-    console.error("[gpu] the device request failed; nothing can be drawn:", err);
+    console.error(
+      "[gpu] the device request failed; nothing can be drawn:",
+      err,
+    );
     heard.state(had ? "lost" : "missing");
   });
 }

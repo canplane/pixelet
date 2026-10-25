@@ -107,7 +107,11 @@ fn u32_le(b: &[u8], at: usize) -> u32 {
 /// Bounds one accessor slice between pauses.
 const ELEMENTS_PER_PAUSE: usize = 1 << 12;
 
-pub async fn parse_gltf<P: Future<Output = ()>>(bytes: &[u8], external_buffers: &[&[u8]], pause: impl Fn() -> P) -> Result<Gltf, MarshalError> {
+pub async fn parse_gltf<P: Future<Output = ()>>(
+    bytes: &[u8],
+    external_buffers: &[&[u8]],
+    pause: impl Fn() -> P,
+) -> Result<Gltf, MarshalError> {
     if bytes.len() >= 12 && u32_le(bytes, 0) == GLB_MAGIC {
         let length = (u32_le(bytes, 8) as usize).min(bytes.len());
         let mut at = 12;
@@ -167,20 +171,36 @@ struct Reader<'a, F> {
 }
 
 impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
-    async fn read<T: Copy + Default>(&self, index: usize, convert: fn(f64) -> T) -> Result<Vec<T>, MarshalError> {
+    async fn read<T: Copy + Default>(
+        &self,
+        index: usize,
+        convert: fn(f64) -> T,
+    ) -> Result<Vec<T>, MarshalError> {
         (self.pause)().await;
-        let a = self.json.get("accessors").and_then(|x| x.at(index)).ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
+        let a = self
+            .json
+            .get("accessors")
+            .and_then(|x| x.at(index))
+            .ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
         let count = num(a.get("count")).unwrap_or(0.0) as usize;
         let width = type_size(plain(a.get("type")).unwrap_or("SCALAR"));
         let mut out = vec![T::default(); count * width];
         if let Some(bv_index) = num(a.get("bufferView")) {
-            let bv = self.json.get("bufferViews").and_then(|x| x.at(bv_index as usize)).ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
+            let bv = self
+                .json
+                .get("bufferViews")
+                .and_then(|x| x.at(bv_index as usize))
+                .ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
             let buffer_index = num(bv.get("buffer")).unwrap_or(0.0) as usize;
-            let buffer = *self.buffers.get(buffer_index).ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
+            let buffer = *self
+                .buffers
+                .get(buffer_index)
+                .ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
             let component_type = num(a.get("componentType")).unwrap_or(5126.0) as u32;
             let comp = component_size(component_type);
             let stride = num(bv.get("byteStride")).map_or(comp * width, |s| s as usize);
-            let base = num(bv.get("byteOffset")).unwrap_or(0.0) as usize + num(a.get("byteOffset")).unwrap_or(0.0) as usize;
+            let base = num(bv.get("byteOffset")).unwrap_or(0.0) as usize
+                + num(a.get("byteOffset")).unwrap_or(0.0) as usize;
             let norm = a.get("normalized").and_then(|n| n.as_bool()) == Some(true);
             for e in 0..count {
                 if e > 0 && e % ELEMENTS_PER_PAUSE == 0 {
@@ -222,7 +242,12 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
                             }
                         }
                         5125 => u32_le(buffer, at) as f64,
-                        _ => f32::from_le_bytes([buffer[at], buffer[at + 1], buffer[at + 2], buffer[at + 3]]) as f64,
+                        _ => f32::from_le_bytes([
+                            buffer[at],
+                            buffer[at + 1],
+                            buffer[at + 2],
+                            buffer[at + 3],
+                        ]) as f64,
                     };
                     out[e * width + c] = convert(v);
                 }
@@ -252,19 +277,33 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
     }
 }
 
-async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>, buffers: &[&[u8]], pause: &F) -> Result<Gltf, MarshalError> {
-    let r = Reader { json, buffers, pause };
+async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
+    json: JsonValue<'_>,
+    buffers: &[&[u8]],
+    pause: &F,
+) -> Result<Gltf, MarshalError> {
+    let r = Reader {
+        json,
+        buffers,
+        pause,
+    };
 
     let mut meshes = Vec::new();
     for m in arr(json.get("meshes")) {
         let mut prims = Vec::new();
         for p in arr(m.get("primitives")) {
             let attributes = p.get("attributes");
-            let attr = |name: &str| attributes.and_then(|a| num(a.get(name))).map(|v| v as usize);
+            let attr = |name: &str| {
+                attributes
+                    .and_then(|a| num(a.get(name)))
+                    .map(|v| v as usize)
+            };
             if num(p.get("mode")).unwrap_or(4.0) != 4.0 {
                 continue;
             }
-            let Some(position_at) = attr("POSITION") else { continue };
+            let Some(position_at) = attr("POSITION") else {
+                continue;
+            };
             let position = r.f32s(position_at).await?;
             let count = position.len() / 3;
             let index = match num(p.get("indices")) {
@@ -311,7 +350,10 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
         }
         nodes.push(GltfNode {
             parent: parents[i],
-            children: arr(n.get("children")).filter_map(|c| c.as_f64()).map(|c| c as u32).collect(),
+            children: arr(n.get("children"))
+                .filter_map(|c| c.as_f64())
+                .map(|c| c as u32)
+                .collect(),
             mesh: num(n.get("mesh")).map_or(-1, |v| v as i32),
             skin: num(n.get("skin")).map_or(-1, |v| v as i32),
             local,
@@ -324,12 +366,26 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
     let mut skins = Vec::new();
     for s in arr(json.get("skins")) {
         pause().await;
-        let joints: Vec<u32> = arr(s.get("joints")).filter_map(|j| j.as_f64()).map(|j| j as u32).collect();
+        let joints: Vec<u32> = arr(s.get("joints"))
+            .filter_map(|j| j.as_f64())
+            .map(|j| j as u32)
+            .collect();
         let inverse_bind = match num(s.get("inverseBindMatrices")) {
             Some(i) => r.f32s(i as usize).await?,
-            None => joints.iter().flat_map(|_| [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]).collect(),
+            None => joints
+                .iter()
+                .flat_map(|_| {
+                    [
+                        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+                        1.0,
+                    ]
+                })
+                .collect(),
         };
-        skins.push(GltfSkin { joints, inverse_bind });
+        skins.push(GltfSkin {
+            joints,
+            inverse_bind,
+        });
     }
 
     let mut animations = Vec::new();
@@ -338,19 +394,30 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
         let mut channels = Vec::new();
         for c in arr(a.get("channels")) {
             pause().await;
-            let Some(target) = c.get("target") else { continue };
-            let Some(node) = num(target.get("node")) else { continue };
+            let Some(target) = c.get("target") else {
+                continue;
+            };
+            let Some(node) = num(target.get("node")) else {
+                continue;
+            };
             let path = match plain(target.get("path")) {
                 Some("translation") => GltfPath::Translation,
                 Some("rotation") => GltfPath::Rotation,
                 Some("scale") => GltfPath::Scale,
                 _ => continue,
             };
-            let Some(sampler) = a.get("samplers").and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize)) else {
+            let Some(sampler) = a
+                .get("samplers")
+                .and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize))
+            else {
                 continue;
             };
-            let mut times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize).await?;
-            let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize).await?;
+            let mut times = r
+                .f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)
+                .await?;
+            let mut values = r
+                .f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)
+                .await?;
             let width = if path == GltfPath::Rotation { 4 } else { 3 };
             let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
             if interpolation == "CUBICSPLINE" {
@@ -382,8 +449,13 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
     let scene_index = num(json.get("scene")).unwrap_or(0.0) as usize;
     let scene = json.get("scenes").and_then(|s| s.at(scene_index));
     let roots = match scene.and_then(|s| s.get("nodes")) {
-        Some(n) => arr(Some(n)).filter_map(|v| v.as_f64()).map(|v| v as u32).collect(),
-        None => (0..raw_nodes.len() as u32).filter(|&i| parents[i as usize] < 0).collect(),
+        Some(n) => arr(Some(n))
+            .filter_map(|v| v.as_f64())
+            .map(|v| v as u32)
+            .collect(),
+        None => (0..raw_nodes.len() as u32)
+            .filter(|&i| parents[i as usize] < 0)
+            .collect(),
     };
     Ok(Gltf {
         nodes,
@@ -395,9 +467,24 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
 }
 
 /// T × R × S, column-major, from a translation, a unit quaternion and a scale.
-pub fn compose_trs<'a>(out: &'a mut Mat4, t: &[f64; 3], q: &[f64; 4], s: &[f64; 3]) -> &'a mut Mat4 {
+pub fn compose_trs<'a>(
+    out: &'a mut Mat4,
+    t: &[f64; 3],
+    q: &[f64; 4],
+    s: &[f64; 3],
+) -> &'a mut Mat4 {
     let [x, y, z, w] = *q;
-    let (xx, yy, zz, xy, xz, yz, wx, wy, wz) = (x * x, y * y, z * z, x * y, x * z, y * z, w * x, w * y, w * z);
+    let (xx, yy, zz, xy, xz, yz, wx, wy, wz) = (
+        x * x,
+        y * y,
+        z * z,
+        x * y,
+        x * z,
+        y * z,
+        w * x,
+        w * y,
+        w * z,
+    );
     *out = [
         (1.0 - 2.0 * (yy + zz)) * s[0],
         2.0 * (xy + wz) * s[0],

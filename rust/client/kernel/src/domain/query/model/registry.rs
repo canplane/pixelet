@@ -6,7 +6,7 @@
 //! joints at a clip's time and writes their palette for whatever plays it.
 
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::alloc;
 
 /// Translation, rotation; anything else is scale.
@@ -122,8 +122,15 @@ fn slerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
         let s = libm::sinf(th);
         (libm::sinf((1.0 - t) * th) / s, libm::sinf(t * th) / s)
     };
-    let q = [a[0] * wa + b[0] * wb, a[1] * wa + b[1] * wb, a[2] * wa + b[2] * wb, a[3] * wa + b[3] * wb];
-    let n = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt().max(1e-12);
+    let q = [
+        a[0] * wa + b[0] * wb,
+        a[1] * wa + b[1] * wb,
+        a[2] * wa + b[2] * wb,
+        a[3] * wa + b[3] * wb,
+    ];
+    let n = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
+        .sqrt()
+        .max(1e-12);
     [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
 }
 
@@ -150,7 +157,15 @@ fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
     } else {
         let k = ch.times.partition_point(|&x| x <= time) - 1;
         let span = ch.times[k + 1] - ch.times[k];
-        (k, k + 1, if span > 0.0 { (time - ch.times[k]) / span } else { 0.0 })
+        (
+            k,
+            k + 1,
+            if span > 0.0 {
+                (time - ch.times[k]) / span
+            } else {
+                0.0
+            },
+        )
     };
     let t = if ch.step { 0.0 } else { t };
     let (a, b) = (at(k0), at(k1));
@@ -186,7 +201,12 @@ pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 
 impl Models {
     /// None when the heap refused.
-    pub fn new_model(&mut self, vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> Option<(u32, usize)> {
+    pub fn new_model(
+        &mut self,
+        vertex_cnt: u32,
+        index_cnt: u32,
+        joint_cnt: u32,
+    ) -> Option<(u32, usize)> {
         let bytes = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) * 4;
         let (at, bytes) = alloc(bytes)?;
         let j = joint_cnt as usize;
@@ -198,8 +218,18 @@ impl Models {
             index_cnt,
             parent: vec![-1; j],
             rest: vec![[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]; j],
-            root_pre: vec![[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]; j],
-            inverse_bind: vec![[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]; j],
+            root_pre: vec![
+                [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0
+                ];
+                j
+            ],
+            inverse_bind: vec![
+                [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0
+                ];
+                j
+            ],
             clips: Vec::new(),
             order: Vec::new(),
             scale: 1.0,
@@ -210,8 +240,18 @@ impl Models {
     }
 
     /// `parent` is -1 for a root; `root_pre` is the transform above a root.
-    pub fn joint(&mut self, model: u32, joint: u32, parent: i32, rest: [f32; 10], root_pre: [f32; 16], inverse_bind: [f32; 16]) {
-        let Some(m) = self.models.get_mut(model as usize) else { return };
+    pub fn joint(
+        &mut self,
+        model: u32,
+        joint: u32,
+        parent: i32,
+        rest: [f32; 10],
+        root_pre: [f32; 16],
+        inverse_bind: [f32; 16],
+    ) {
+        let Some(m) = self.models.get_mut(model as usize) else {
+            return;
+        };
         let j = joint as usize;
         if j >= m.parent.len() {
             return;
@@ -223,7 +263,9 @@ impl Models {
     }
 
     pub fn clip(&mut self, model: u32, duration: f32) -> u32 {
-        let Some(m) = self.models.get_mut(model as usize) else { return u32::MAX };
+        let Some(m) = self.models.get_mut(model as usize) else {
+            return u32::MAX;
+        };
         m.clips.push(Clip {
             duration,
             channels: Vec::new(),
@@ -234,23 +276,51 @@ impl Models {
 
     /// `values` end to end: four a key for a rotation, three otherwise.
     #[allow(clippy::too_many_arguments)]
-    pub fn channel(&mut self, model: u32, clip: u32, joint: u32, path: u8, step: bool, times: &[f32], values: &[f32]) {
-        let Some(m) = self.models.get_mut(model as usize) else { return };
-        let Some(c) = m.clips.get_mut(clip as usize) else { return };
+    pub fn channel(
+        &mut self,
+        model: u32,
+        clip: u32,
+        joint: u32,
+        path: u8,
+        step: bool,
+        times: &[f32],
+        values: &[f32],
+    ) {
+        let Some(m) = self.models.get_mut(model as usize) else {
+            return;
+        };
+        let Some(c) = m.clips.get_mut(clip as usize) else {
+            return;
+        };
         let width = width(path);
         let values = values[..times.len() * width].to_vec();
         let times = times.to_vec();
-        c.channels.push(Channel { joint, path, step, times, values });
+        c.channels.push(Channel {
+            joint,
+            path,
+            step,
+            times,
+            values,
+        });
     }
 
     /// # Safety
     /// The model's block has been written.
     pub unsafe fn seal(&mut self, draw: &mut DrawList, model: u32, scale: f32) {
-        let Some(m) = self.models.get_mut(model as usize) else { return };
+        let Some(m) = self.models.get_mut(model as usize) else {
+            return;
+        };
         m.scale = scale;
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
-        let positions = core::slice::from_raw_parts(ptr_at::<f32>(m.at), m.vertex_cnt as usize * 3);
-        m.radius = positions.as_chunks::<3>().0.iter().map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
+        let positions =
+            core::slice::from_raw_parts(mem::at::<f32>(m.at), m.vertex_cnt as usize * 3);
+        m.radius = positions
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2])
+            .fold(0.0f32, f32::max)
+            .sqrt();
         let n = m.parent.len();
         let mut placed = vec![false; n];
         m.order.clear();
@@ -331,7 +401,12 @@ impl Model {
     /// radius. Twice the farthest from the first key bounds any two.
     fn moved(&self, clip: usize) -> f32 {
         let c = &self.clips[clip];
-        let mut times: Vec<f32> = c.channels.iter().flat_map(|ch| ch.times.iter().copied()).chain([0.0, c.duration]).collect();
+        let mut times: Vec<f32> = c
+            .channels
+            .iter()
+            .flat_map(|ch| ch.times.iter().copied())
+            .chain([0.0, c.duration])
+            .collect();
         times.sort_by(f32::total_cmp);
         times.dedup();
         let n = self.joints();
@@ -343,9 +418,18 @@ impl Model {
         for &t in &times[1..] {
             self.pose(Some((clip as u32, t)), &mut local);
             self.palette(&local, &mut global, &mut palette);
-            for (a, b) in palette.as_chunks::<16>().0.iter().zip(first.as_chunks::<16>().0) {
+            for (a, b) in palette
+                .as_chunks::<16>()
+                .0
+                .iter()
+                .zip(first.as_chunks::<16>().0)
+            {
                 let d: [f32; 16] = core::array::from_fn(|i| a[i] - b[i]);
-                let linear = [0, 1, 2, 4, 5, 6, 8, 9, 10].iter().map(|&i| d[i] * d[i]).sum::<f32>().sqrt();
+                let linear = [0, 1, 2, 4, 5, 6, 8, 9, 10]
+                    .iter()
+                    .map(|&i| d[i] * d[i])
+                    .sum::<f32>()
+                    .sqrt();
                 let moved = (d[12] * d[12] + d[13] * d[13] + d[14] * d[14]).sqrt();
                 far = far.max(moved + linear * self.radius);
             }
@@ -356,7 +440,9 @@ impl Model {
     /// The joints' local transforms at a clip's time, or at rest.
     pub fn pose(&self, at: Option<(u32, f32)>, out: &mut [[f32; 10]]) {
         out.copy_from_slice(&self.rest);
-        let Some(c) = at.and_then(|(clip, _)| self.clips.get(clip as usize)) else { return };
+        let Some(c) = at.and_then(|(clip, _)| self.clips.get(clip as usize)) else {
+            return;
+        };
         let time = at.map_or(0.0, |(_, t)| t);
         for ch in &c.channels {
             if let Some(slot) = out.get_mut(ch.joint as usize) {
@@ -371,10 +457,15 @@ impl Model {
             let j = j as usize;
             let l = mat_trs(&local[j]);
             let p = self.parent[j];
-            global[j] = if p < 0 { mat_mul(&self.root_pre[j], &l) } else { mat_mul(&global[p as usize], &l) };
+            global[j] = if p < 0 {
+                mat_mul(&self.root_pre[j], &l)
+            } else {
+                mat_mul(&global[p as usize], &l)
+            };
         }
         for j in 0..self.joints() {
-            palette[j * 16..j * 16 + 16].copy_from_slice(&mat_mul(&global[j], &self.inverse_bind[j]));
+            palette[j * 16..j * 16 + 16]
+                .copy_from_slice(&mat_mul(&global[j], &self.inverse_bind[j]));
         }
     }
 }

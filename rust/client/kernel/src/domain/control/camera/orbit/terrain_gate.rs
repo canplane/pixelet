@@ -43,7 +43,10 @@ fn pose(view: Intent) -> Option<ViewPose> {
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
-    let ground = World::now().floor_under(&eye, LEAF_ZOOM).value().flatten()?;
+    let ground = World::now()
+        .floor_under(&eye, LEAF_ZOOM)
+        .value()
+        .flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -53,7 +56,11 @@ fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     let (_, eye) = eye(at);
     let center = world_to_canonical(&at.target);
     let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
-    let from = world::at(i64::from(center[0]), i64::from(center[1]), q3::from_real(over(floor)));
+    let from = world::at(
+        i64::from(center[0]),
+        i64::from(center[1]),
+        q3::from_real(over(floor)),
+    );
     // Near, the eye's way walks the leaves; far, it is a map and goes through.
     // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
     let walked = access.step_slide(&from, &eye, &eye, false).unwrap_or(eye);
@@ -114,7 +121,11 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
 
 /// The azimuth goes the short way round, as the step damps it.
 fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
-    let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
+    let turn = wrap(
+        to.azimuth - from.azimuth,
+        -core::f64::consts::PI,
+        core::f64::consts::PI,
+    );
     ViewPose {
         target: std::array::from_fn(|k| from.target[k] + (to.target[k] - from.target[k]) * t),
         dist: from.dist + (to.dist - from.dist) * t,
@@ -125,7 +136,11 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 
 fn in_solid(at: &ViewPose) -> bool {
     let (world, eye) = eye(at);
-    World::now().floor_under(&eye, LEAF_ZOOM).value().flatten().is_some_and(|top| top > world[2])
+    World::now()
+        .floor_under(&eye, LEAF_ZOOM)
+        .value()
+        .flatten()
+        .is_some_and(|top| top > world[2])
 }
 
 /// What lies between the eye and the focus is not asked: that hides the
@@ -136,7 +151,9 @@ fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
 
 /// How far toward `to` the orbit gets from `from`, as the controls ask it.
 pub fn allowed_view(to: Intent, from: Intent) -> Intent {
-    let (Some(from_pose), Some(to_pose)) = (pose(from), pose(to)) else { return to };
+    let (Some(from_pose), Some(to_pose)) = (pose(from), pose(to)) else {
+        return to;
+    };
     let reached = allowed_step(&to_pose, &from_pose);
     Intent {
         dist: reached.dist,
@@ -156,7 +173,13 @@ const CLIMB_PASSES: u32 = 2;
 /// It stands while what it is made of stands: the pose, where its target is
 /// on the world, and the ground its walks read (`Columns`).
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let Some(at) = pose(Intent { dist, polar, azimuth }) else { return polar };
+    let Some(at) = pose(Intent {
+        dist,
+        polar,
+        azimuth,
+    }) else {
+        return polar;
+    };
     let climb = Climb {
         at,
         center: world_to_canonical(&at.target),
@@ -179,7 +202,9 @@ static CLIMBED: Global<Asked<Climb, f64>> = Global::new();
 
 fn climbed(mut at: ViewPose, access: &World) -> ViewPose {
     for _ in 0..CLIMB_PASSES {
-        let Some(rise) = climb_rise(&at, access).filter(|r| *r > 0.0) else { break };
+        let Some(rise) = climb_rise(&at, access).filter(|r| *r > 0.0) else {
+            break;
+        };
         // Only ever steepens.
         let solved = libm::acos((rise / at.dist).min(1.0));
         at.polar = at.polar.min(solved);

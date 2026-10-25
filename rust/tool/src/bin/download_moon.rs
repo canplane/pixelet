@@ -14,7 +14,8 @@ use image::{GrayImage, ImageFormat, Luma};
 
 use pxl_tool::root;
 
-const SOURCE: &str = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg";
+const SOURCE: &str =
+    "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg";
 
 fn to_linear(c: u8) -> f64 {
     let c = c as f64 / 255.0;
@@ -27,13 +28,19 @@ fn to_linear(c: u8) -> f64 {
 
 fn to_srgb(v: f64) -> u8 {
     let v = v.clamp(0.0, 1.0);
-    let c = if v <= 0.0031308 { 12.92 * v } else { 1.055 * libm::pow(v, 1.0 / 2.4) - 0.055 };
+    let c = if v <= 0.0031308 {
+        12.92 * v
+    } else {
+        1.055 * libm::pow(v, 1.0 / 2.4) - 0.055
+    };
     (c * 255.0).round_ties_even() as u8
 }
 
 fn run() -> Result<(), String> {
     let body = pxl_tool::fetch::kept(SOURCE, &root().join("asset/raw/sky/moon"))?;
-    let map = image::load_from_memory_with_format(&body, ImageFormat::Jpeg).map_err(|e| e.to_string())?.to_rgb8();
+    let map = image::load_from_memory_with_format(&body, ImageFormat::Jpeg)
+        .map_err(|e| e.to_string())?
+        .to_rgb8();
     let (w, h) = map.dimensions();
     let (x0, side) = (w / 4, w / 2);
     let mut face = GrayImage::new(side, h);
@@ -52,8 +59,13 @@ fn run() -> Result<(), String> {
     }
     let out = root().join("asset/content/sky/moon.png");
     std::fs::create_dir_all(out.parent().expect("a directory")).map_err(|e| e.to_string())?;
-    face.save_with_format(&out, ImageFormat::Png).map_err(|e| e.to_string())?;
-    println!("[moon] {side}x{h} -> {}; the face's mean reflectance, MOON_MAP_MEAN: {:.4}", out.display(), sum / weight);
+    face.save_with_format(&out, ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    println!(
+        "[moon] {side}x{h} -> {}; the face's mean reflectance, MOON_MAP_MEAN: {:.4}",
+        out.display(),
+        sum / weight
+    );
     Ok(())
 }
 

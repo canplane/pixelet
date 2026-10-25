@@ -95,8 +95,8 @@ export type ErrnoResult<T> = [Errno, T | null];
 
 /** An errno as a reader is shown it: its name and what it means. The
  * strings are for a person to read; an error carries the number alone. */
-export function strerror(errno: Errno): string {
-  return STRERROR[errno] ?? `errno ${errno}`;
+export function strerror(errnum: Errno): string {
+  return STRERROR[errnum] ?? `errno ${errnum}`;
 }
 
 const STRERROR: Record<number, string> = {
@@ -159,7 +159,8 @@ const STRERROR: Record<number, string> = {
   [-114]: "EALREADY: Operation already in progress",
   [-115]: "EINPROGRESS: Operation now in progress",
   [-125]: "ECANCELED: Operation canceled",
-  [-131]: "ENOTRECOVERABLE: State not recoverable: an invariant the code stands on does not hold",
+  [-131]:
+    "ENOTRECOVERABLE: State not recoverable: an invariant the code stands on does not hold",
 };
 
 /** The member `code` is, null for a number no member has. */

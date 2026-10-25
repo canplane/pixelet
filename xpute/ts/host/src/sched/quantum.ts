@@ -7,18 +7,15 @@
  * frame leaves after the margin; otherwise `batch_frames` frames.
  *
  * The display's refresh is a low percentile of the gaps between the
- * animation frames the host is handed (`tick`), every one, run or skipped: not
- * 1000 / 60 and not the mean, as the mean feeds an overrun back into a larger
- * slice, and the near-immediate frame after a late one once read a 170 Hz
- * display as 2.1 ms. Gaps past MAX_FRAME_GAP_MS are idle, not frames.
+ * animation frames the host is handed (`gap`), every one, run or skipped: not
+ * 1000 / 60 and not the mean, which feeds an overrun back into a larger slice
+ * and reads the near-immediate frame after a late one as a fast display. Gaps
+ * past MAX_FRAME_GAP_MS are idle, not frames.
  *
  * A turn runs on every `divisor`-th refresh (Android Swappy's swap interval),
- * so the frame interval is a whole multiple of the refresh and never half of
- * one late: the most refreshes that fit `PACED_MAX_MS`, 60 Hz, and at least
- * one — 60 Hz on a 120 Hz display, 72 on a 144, 90 on a 90, and the refresh
- * itself where a browser caps it below 60. The divisor is the display's, not
- * the load's: what a frame costs is the guest's to fit, so one controller
- * answers it.
+ * the most refreshes that fit `PACED_MAX_MS` and at least one, so the frame
+ * interval is a whole multiple of the refresh: 60 Hz on a 120 Hz display, 72
+ * on a 144. The divisor is the display's, not the load's.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -61,14 +58,14 @@ export class Quantum {
   }
 
   /** The gap between two animation frames the host was handed, in turn. */
-  tick(gap_ms: f64): void {
+  gap(gap_ms: f64): void {
     if (gap_ms > 0 && gap_ms <= MAX_FRAME_GAP_MS) {
       this.gaps[this.gap_at] = gap_ms;
       this.gap_at = (this.gap_at + 1) % FRAME_WINDOW;
     }
   }
 
-  /** The display's refresh, from the ticks. */
+  /** The display's refresh, from the gaps. */
   refresh(): f64 {
     this.sorted.set(this.gaps);
     this.sorted.sort();
@@ -82,7 +79,10 @@ export class Quantum {
    * least.
    */
   paced(refresh_ms: f64): f64 {
-    const divisor = Math.max(1, Math.floor((PACED_MAX_MS + refresh_ms / 8) / refresh_ms));
+    const divisor = Math.max(
+      1,
+      Math.floor((PACED_MAX_MS + refresh_ms / 8) / refresh_ms),
+    );
     return divisor * refresh_ms;
   }
 
@@ -98,6 +98,14 @@ export class Quantum {
     const p = this.policy;
     const interactive = now - this.input_at < p.settle_ms || this.asked_next;
     const frames = interactive ? 1 : p.batch_frames;
-    return { quota_ms: Math.max(0, paced_ms * frames * (1 - p.margin_share) - this.overrun_ms), refresh_ms, paced_ms, interactive };
+    return {
+      quota_ms: Math.max(
+        0,
+        paced_ms * frames * (1 - p.margin_share) - this.overrun_ms,
+      ),
+      refresh_ms,
+      paced_ms,
+      interactive,
+    };
   }
 }

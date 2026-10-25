@@ -95,7 +95,11 @@ impl<L: Base> Residency<L> {
     /// The most of its tiles a zoom's demand names, by its lattice.
     pub const ZOOM_DEMAND_TILES: u32 = reach_tiles(L::LATTICE);
 
-    const DEMAND_TILES: u32 = if matches!(L::ASKS, Asks::View) { OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
+    const DEMAND_TILES: u32 = if matches!(L::ASKS, Asks::View) {
+        OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS
+    } else {
+        0
+    };
 
     /// The lines over the misses, every zoom's but the finest.
     const ANCESTOR_TILES: u32 = if matches!(L::ASKS, Asks::View) {
@@ -128,7 +132,10 @@ impl<L: Base> Residency<L> {
     /// one, and what is asked is at most the frames.
     const ENTRIES: u32 = 2 * Self::FRAMES;
 
-    const SAFE: () = assert!(Self::FRAMES >= Self::HARD_TILES + Self::WORKSPACE, "safety: no frame for a tile nothing holds hard to land in");
+    const SAFE: () = assert!(
+        Self::FRAMES >= Self::HARD_TILES + Self::WORKSPACE,
+        "safety: no frame for a tile nothing holds hard to land in"
+    );
 }
 
 impl<L: Base> Default for Residency<L> {
@@ -177,14 +184,19 @@ pub struct Lines {
 
 impl Default for Lines {
     fn default() -> Self {
-        Lines { at: [None; LEAF_ZOOM as usize + 1] }
+        Lines {
+            at: [None; LEAF_ZOOM as usize + 1],
+        }
     }
 }
 
 impl Line {
     /// Over the top: nothing.
     const ABOVE: Line = Line {
-        tile: Tile { zoom: 0, at: [0, 0] },
+        tile: Tile {
+            zoom: 0,
+            at: [0, 0],
+        },
         drawn: None,
         source: None,
         settled: false,
@@ -239,7 +251,10 @@ impl<L: Base> Residency<L> {
 
     /// Every readable tile.
     pub fn held(&self) -> impl Iterator<Item = (Tile, &L)> {
-        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
+        self.tiles
+            .iter()
+            .filter(|(_, e)| e.ask.is_some())
+            .filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
     /// What `p`'s line says of it, stepped down from the top a tile at a time.
@@ -269,7 +284,8 @@ impl<L: Base> Residency<L> {
         let e = self.entry(child);
         let held = e.filter(|e| e.ask.is_some()).and_then(|e| e.held.as_ref());
         // Answered for itself, or its parent holds no child there.
-        let said = e.is_some_and(|e| e.answered) || parent.children.is_some_and(|o| !o.has_child(child.slot()));
+        let said = e.is_some_and(|e| e.answered)
+            || parent.children.is_some_and(|o| !o.has_child(child.slot()));
         let over = match parent.resident() {
             true => Some(parent.tile),
             false if parent.said => parent.over,
@@ -278,7 +294,11 @@ impl<L: Base> Residency<L> {
         let says = if said { over } else { parent.says };
         Line {
             tile: child,
-            drawn: if held.is_some() { Some(child) } else { parent.drawn },
+            drawn: if held.is_some() {
+                Some(child)
+            } else {
+                parent.drawn
+            },
             source: if held.is_some() { Some(child) } else { says },
             settled: said || parent.settled,
             said,
@@ -303,7 +323,11 @@ impl<L: Base> Residency<L> {
     /// they cost no frame, so nothing would ever evict them. Framed tiles are
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &FnvHashMap<Tile, Ask>) {
-        xpute_kit::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
+        xpute_kit::ensure!(
+            asks.len() <= Self::FRAMES as usize,
+            ENOTRECOVERABLE,
+            asks.len()
+        );
         for (&p, e) in &mut self.tiles {
             let was = e.ask.is_some();
             e.ask = asks.get(&p).copied();
@@ -320,7 +344,9 @@ impl<L: Base> Residency<L> {
         going.extend(
             self.tiles
                 .iter()
-                .filter(|&(_, e)| e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.frame.is_none()))
+                .filter(|&(_, e)| {
+                    e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.frame.is_none())
+                })
                 .map(|(&p, _)| p),
         );
         for &p in &going {
@@ -340,7 +366,11 @@ impl<L: Base> Residency<L> {
     /// A frame for arriving `p`: its own, a free one, or a victim among frames
     /// held only as cache. None only for a tile no longer asked for, counted;
     /// for one asked for, none means the capacity bound is broken.
-    fn frame_for(&mut self, p: Tile, victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>) -> Option<u32> {
+    fn frame_for(
+        &mut self,
+        p: Tile,
+        victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>,
+    ) -> Option<u32> {
         if self.framed(p) {
             return self.remove(p);
         }
@@ -348,7 +378,13 @@ impl<L: Base> Residency<L> {
             return Some(free);
         }
         let unasked = self.asked(p).is_none();
-        let Some(q) = victim(&mut self.tiles.iter().filter(|(_, e)| e.framed() && e.ask.is_none()).map(|(&q, _)| q)) else {
+        let Some(q) = victim(
+            &mut self
+                .tiles
+                .iter()
+                .filter(|(_, e)| e.framed() && e.ask.is_none())
+                .map(|(&q, _)| q),
+        ) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
@@ -366,8 +402,15 @@ impl<L: Base> Residency<L> {
     /// frames held only as cache, so a policy changes what is held next and
     /// never what is correct; none where none may. They come in no order the
     /// state fixes, so a policy picks by a total one.
-    pub fn admit<E>(&mut self, p: Tile, victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
-        let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
+    pub fn admit<E>(
+        &mut self,
+        p: Tile,
+        victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>,
+        receive: impl FnOnce(u32) -> Result<L, E>,
+    ) -> Result<(), E> {
+        let Some(record) = self.frame_for(p, victim) else {
+            return Ok(());
+        };
         match receive(record) {
             Ok(tile) => {
                 self.put(p, tile, Some(record));
@@ -430,7 +473,16 @@ impl<L: Base> Residency<L> {
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        if let Some(was) = self.entry_mut(p).held.replace(Held { body, frame, again: false }).and_then(|h| h.frame) {
+        if let Some(was) = self
+            .entry_mut(p)
+            .held
+            .replace(Held {
+                body,
+                frame,
+                again: false,
+            })
+            .and_then(|h| h.frame)
+        {
             self.in_frame[was as usize] = None;
         }
         if let Some(f) = frame {
@@ -443,7 +495,12 @@ impl<L: Base> Residency<L> {
     /// A framed tile held is fetched once more, read meanwhile: what a
     /// layer that keeps nothing of a packet asks when it needs it again.
     pub fn again(&mut self, p: Tile) {
-        if let Some(h) = self.tiles.get_mut(&p).and_then(|e| e.held.as_mut()).filter(|h| h.frame.is_some()) {
+        if let Some(h) = self
+            .tiles
+            .get_mut(&p)
+            .and_then(|e| e.held.as_mut())
+            .filter(|h| h.frame.is_some())
+        {
             h.again = true;
         }
     }
@@ -456,7 +513,12 @@ impl<L: Base> Residency<L> {
     /// The tiles held and asked for again, not yet come (`again_held`),
     /// of those `counts` says.
     pub fn asked_again(&self, counts: impl Fn(Tile) -> bool) -> u32 {
-        self.tiles.iter().filter(|(&p, e)| e.ask.is_some() && e.held.as_ref().is_some_and(|h| h.again) && counts(p)).count() as u32
+        self.tiles
+            .iter()
+            .filter(|(&p, e)| {
+                e.ask.is_some() && e.held.as_ref().is_some_and(|h| h.again) && counts(p)
+            })
+            .count() as u32
     }
 
     /// What is read over `p` moved, as a tile's arriving would.
@@ -471,7 +533,9 @@ impl<L: Base> Residency<L> {
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.
     fn remove(&mut self, p: Tile) -> Option<u32> {
-        let std::collections::hash_map::Entry::Occupied(mut e) = self.tiles.entry(p) else { return None };
+        let std::collections::hash_map::Entry::Occupied(mut e) = self.tiles.entry(p) else {
+            return None;
+        };
         let held = e.get_mut().held.take()?;
         if e.get().idle() {
             e.remove();

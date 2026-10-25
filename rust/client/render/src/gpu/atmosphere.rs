@@ -12,20 +12,26 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{
-    COMPUTE, PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_FROXEL, STORAGE_TEXTURE_3D,
-    TEXTURE, UNIFORM,
+    COMPUTE, PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER,
+    PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_FROXEL,
+    STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use xpute_guest::mem::base::off_of;
+use xpute_guest::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
-    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE, GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
-    MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR,
-    TOP_RADIUS,
+    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
+    GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
+    MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION,
+    OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL,
+    SUN_ANGULAR_RADIUS, SUN_DIR, TOP_RADIUS,
 };
 use crate::frame::shader::word::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
+use crate::gpu::api::{
+    buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
+    word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE,
+};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
@@ -70,14 +76,24 @@ const FROXEL_GROUP: [u32; 24] = [
 /// A layer for each tile the earth layer's floor holds at once: its residency's frames.
 pub const EARTH_LAYERS: u32 = REACH_TILES;
 /// A tile's layer plus one in four bits, eight to a word.
-const _: () = assert!(EARTH_LAYERS < 1 << EARTH_TILE_BITS && EARTH_LAYERS <= 32 / EARTH_TILE_BITS * 4, "the window's layers fit their word");
+const _: () = assert!(
+    EARTH_LAYERS < 1 << EARTH_TILE_BITS && EARTH_LAYERS <= 32 / EARTH_TILE_BITS * 4,
+    "the window's layers fit their word"
+);
 
 /// The size bake_earth writes the Earth's global picture at.
 const EARTH_SIZE: (u32, u32) = (2048, 1024);
 
 const TABLES: usize = 6;
 /// Transmittance, multiple scattering, sky view, exposure, irradiance, moonlit sky.
-pub(crate) const SIZES: [(u32, u32); TABLES] = [(256, 64), (32, 32), (192, 108), (1, 1), (64, 16), (192, 108)];
+pub(crate) const SIZES: [(u32, u32); TABLES] = [
+    (256, 64),
+    (32, 32),
+    (192, 108),
+    (1, 1),
+    (64, 16),
+    (192, 108),
+];
 pub(crate) const TRANSMITTANCE: usize = 0;
 pub(crate) const MULTISCATTER: usize = 1;
 pub(crate) const SKY_VIEW: usize = 2;
@@ -133,14 +149,28 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> Atmosphere {
-        let uniform = g.buffer(word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+    pub fn new(
+        g: &Gpu,
+        pipelines: &mut Pipelines,
+        frame_buffer: u32,
+        sky_buffer: u32,
+    ) -> Atmosphere {
+        let uniform = g.buffer(
+            word_bytes(ATMOS_FLOATS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
         let mut words = [0.0f32; ATMOS_FLOATS];
         for (at, rgb) in [
             (RAYLEIGH_SCATTERING, model::RAYLEIGH_SCATTERING),
             (OZONE_ABSORPTION, model::OZONE_ABSORPTION),
-            (NIGHT_SKY, core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY)),
-            (CITY_LIGHT, core::array::from_fn(|k| model::CITY_COLOR[k] * model::CITY_LIGHT)),
+            (
+                NIGHT_SKY,
+                core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY),
+            ),
+            (
+                CITY_LIGHT,
+                core::array::from_fn(|k| model::CITY_COLOR[k] * model::CITY_LIGHT),
+            ),
         ] {
             for (w, v) in words[at..at + 3].iter_mut().zip(rgb) {
                 *w = v as f32;
@@ -169,12 +199,26 @@ impl Atmosphere {
         words[EARTH_WINDOW + 2] = f32::from_bits(REACH_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_ZOOM) as u32);
 
-        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, None, 1);
+        let sampler = g.sampler(
+            FilterMode::linear,
+            FilterMode::linear,
+            MipmapFilterMode::nearest,
+            AddressMode::clamp_to_edge,
+            None,
+            1,
+        );
         let mut textures = [0; TABLES];
         let mut views = [0; TABLES];
         for k in 0..TABLES {
             let (w, h) = SIZES[k];
-            textures[k] = g.texture(w, h, 1, Format::rgba16float, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
+            textures[k] = g.texture(
+                w,
+                h,
+                1,
+                Format::rgba16float,
+                1,
+                texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
+            );
             views[k] = g.view(textures[k], false, 0, 1, 0, 1);
         }
         let passes = [
@@ -187,7 +231,11 @@ impl Atmosphere {
         .map(|id| pipelines.build(g, id, Format::rgba16float));
         let n = AIR_FROXELS;
         // A slice past the air's, which holds each column's span (atmos_froxel.wgsl).
-        let volume = g.volume_view(g.volume([n, n, n + 1], Format::rgba16float, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING));
+        let volume = g.volume_view(g.volume(
+            [n, n, n + 1],
+            Format::rgba16float,
+            texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
+        ));
 
         let mut atmosphere = Atmosphere {
             uniform,
@@ -199,7 +247,10 @@ impl Atmosphere {
             baked: false,
             drawn_for: [None; 2],
             slopes: (
-                g.buffer(8, buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST),
+                g.buffer(
+                    8,
+                    buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
+                ),
                 g.buffer(8, buffer_usage::MAP_READ | buffer_usage::COPY_DST),
             ),
             slopes_of: [false; 2],
@@ -243,21 +294,50 @@ impl Atmosphere {
             buffer_entry(14, light)
         };
         // The exposure reads the air but what it writes, and the volume made of it.
-        let unexposed: Vec<u32> = air.iter().map(|e| e.binding).filter(|&b| b != 13 && b != 22).collect();
+        let unexposed: Vec<u32> = air
+            .iter()
+            .map(|e| e.binding)
+            .filter(|&b| b != 13 && b != 22)
+            .collect();
         let reads: [(usize, Vec<Entry>); TABLES] = [
             (TRANSMITTANCE, of(&[8], &[])),
             (MULTISCATTER, of(&medium, &[])),
             (IRRADIANCE, of(&medium, &[multiscatter])),
             // The views are measured from the frame's up, and take their
             // slopes off the land's light too.
-            (SKY_VIEW, of(&[8, 9, 11, 18], &[multiscatter, light(0.0), frame, buffer_entry(20, atmosphere.slopes.0)])),
-            (MOON_VIEW, of(&[8, 9, 11, 18], &[multiscatter, light(1.0), frame, buffer_entry(20, atmosphere.slopes.0)])),
+            (
+                SKY_VIEW,
+                of(
+                    &[8, 9, 11, 18],
+                    &[
+                        multiscatter,
+                        light(0.0),
+                        frame,
+                        buffer_entry(20, atmosphere.slopes.0),
+                    ],
+                ),
+            ),
+            (
+                MOON_VIEW,
+                of(
+                    &[8, 9, 11, 18],
+                    &[
+                        multiscatter,
+                        light(1.0),
+                        frame,
+                        buffer_entry(20, atmosphere.slopes.0),
+                    ],
+                ),
+            ),
             (EXPOSURE_TEXEL, of(&unexposed, &[frame])),
         ];
         for (k, entries) in reads {
             atmosphere.groups[k] = g.bind_group(atmosphere.passes[pass_of(k)].layouts[0], &entries);
         }
-        let froxel = of(&[8, 9, 11, 12, 13], &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)]);
+        let froxel = of(
+            &[8, 9, 11, 12, 13],
+            &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)],
+        );
         atmosphere.froxel_group = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
         atmosphere
     }
@@ -281,7 +361,14 @@ impl Atmosphere {
     /// The air before each point of the view made again where what it is
     /// made of moved (`air`): the frame's words, the sky's, the air's, or the
     /// eye's texel drawn this frame (`exposed`); whether it was.
-    pub fn froxel(&mut self, g: &Gpu, encoder: u32, [frame, sky]: [&[f32]; 2], exposed: bool, stamp: &mut Stamp) -> bool {
+    pub fn froxel(
+        &mut self,
+        g: &Gpu,
+        encoder: u32,
+        [frame, sky]: [&[f32]; 2],
+        exposed: bool,
+        stamp: &mut Stamp,
+    ) -> bool {
         let r = &mut self.air;
         r.begin();
         r.read(frame);
@@ -304,7 +391,13 @@ impl Atmosphere {
     /// stream has room, and the window says which layer each tile reads.
     /// Written by `lay_out`, which the renderer calls after this; whether a
     /// tile came this frame.
-    pub fn set_earth_tiles(&mut self, g: &Gpu, window: [i32; 2], layers: &[u32], upload: &mut Upload) -> bool {
+    pub fn set_earth_tiles(
+        &mut self,
+        g: &Gpu,
+        window: [i32; 2],
+        layers: &[u32],
+        upload: &mut Upload,
+    ) -> bool {
         let (texture, mut came) = (self.earth_tiles.0, false);
         upload(&mut |layer, texels| {
             if !room(write_texture_bytes(texels)) {
@@ -341,7 +434,8 @@ impl Atmosphere {
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
-        self.words[MOON_COLOR..MOON_COLOR + 3].copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
+        self.words[MOON_COLOR..MOON_COLOR + 3]
+            .copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE_KM] = env[ENV_AIR + 3];
@@ -374,7 +468,14 @@ impl Atmosphere {
         self.take_slopes();
         let altitude = self.words[CAMERA_ALTITUDE];
         let free = self.landed_word == 0;
-        let views = [(SKY_VIEW, (self.sun_mu, altitude), true), (MOON_VIEW, (self.moon_mu, altitude), self.words[MOON_LIGHT] > 0.0)];
+        let views = [
+            (SKY_VIEW, (self.sun_mu, altitude), true),
+            (
+                MOON_VIEW,
+                (self.moon_mu, altitude),
+                self.words[MOON_LIGHT] > 0.0,
+            ),
+        ];
         for (k, (table, now, lit)) in views.into_iter().enumerate() {
             if !(free && lit && moved(self.drawn_for[k], now)) {
                 continue;
@@ -425,7 +526,17 @@ impl Atmosphere {
     }
 
     fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
-        let pass = g.pass(encoder, &pass_desc(self.views[k], Load::Clear, 0, Load::Clear, 0.0, stamp.pass()));
+        let pass = g.pass(
+            encoder,
+            &pass_desc(
+                self.views[k],
+                Load::Clear,
+                0,
+                Load::Clear,
+                0.0,
+                stamp.pass(),
+            ),
+        );
         g.set_pipeline(pass, self.passes[pass_of(k)].pipeline);
         g.set_bind_group(pass, 0, self.groups[k], &[]);
         g.draw(pass, 3, 1, 0, 0);
@@ -448,6 +559,8 @@ fn pass_of(table: usize) -> usize {
 fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {
         None => true,
-        Some((mu, h)) => mu != now.0 || (now.1 - h).abs() > (h.abs() * ALTITUDE_SHARE).max(ALTITUDE_FLOOR_KM),
+        Some((mu, h)) => {
+            mu != now.0 || (now.1 - h).abs() > (h.abs() * ALTITUDE_SHARE).max(ALTITUDE_FLOOR_KM)
+        }
     }
 }

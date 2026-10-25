@@ -17,8 +17,16 @@ fn heaps_pop_what_the_record_holds() {
     let (mut a, mut b): (Elements, Elements) = (Vec::new(), Vec::new());
     v.each("steps", |k| {
         if v.s(&format!("{k}.op")) == "pop" {
-            assert_eq!(show(MinHeap::new(&mut a).pop()), v.s(&format!("{k}.min")), "{k}.min");
-            assert_eq!(show(MaxHeap::new(&mut b).pop()), v.s(&format!("{k}.max")), "{k}.max");
+            assert_eq!(
+                show(MinHeap::new(&mut a).pop()),
+                v.s(&format!("{k}.min")),
+                "{k}.min"
+            );
+            assert_eq!(
+                show(MaxHeap::new(&mut b).pop()),
+                v.s(&format!("{k}.max")),
+                "{k}.max"
+            );
         } else {
             let e = Element {
                 key: v.i32(&format!("{k}.key")) as f64,
@@ -39,6 +47,8 @@ fn heaps_pop_what_the_record_holds() {
         .collect();
     heapsort(&mut arr);
     let got: Vec<String> = arr.iter().map(|e| format!("{}:{}", e.key, e.val)).collect();
-    let want: Vec<&str> = (0..v.len("sorted")).map(|j| v.s(&format!("sorted.{j}"))).collect();
+    let want: Vec<&str> = (0..v.len("sorted"))
+        .map(|j| v.s(&format!("sorted.{j}")))
+        .collect();
     assert_eq!(got, want);
 }

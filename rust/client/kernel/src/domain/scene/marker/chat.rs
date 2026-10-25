@@ -37,7 +37,10 @@ fn chat() -> &'static mut Chat {
 }
 
 pub fn append_chat_line(text: &str) {
-    chat().line = Some(Line { text: text.into(), said: now() });
+    chat().line = Some(Line {
+        text: text.into(),
+        said: now(),
+    });
 }
 
 /// The line to show, in its bubble, none once shown its while; the turn is
@@ -48,5 +51,7 @@ pub fn shown_line() -> Option<Design> {
         return None;
     }
     wake_at(line.said + SHOWN_MS);
-    Some(Design::Bubble { words: line.text.clone() })
+    Some(Design::Bubble {
+        words: line.text.clone(),
+    })
 }

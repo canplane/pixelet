@@ -79,8 +79,14 @@ impl Grid {
         let r6 = libm::sqrtf(6.0) * s;
         let k = 2.0 * r6;
         let reach = r6 / (1.0 - r6) * 1.01;
-        let span = [libm::ceilf(2.0 * tan[0] / s) as u32, libm::ceilf(2.0 * tan[1] / s) as u32];
-        let samples = [span[0] * SAMPLE + 1 + 2 * NEAR, span[1] * SAMPLE + 1 + 2 * NEAR];
+        let span = [
+            libm::ceilf(2.0 * tan[0] / s) as u32,
+            libm::ceilf(2.0 * tan[1] / s) as u32,
+        ];
+        let samples = [
+            span[0] * SAMPLE + 1 + 2 * NEAR,
+            span[1] * SAMPLE + 1 + 2 * NEAR,
+        ];
         let mut g = Grid {
             tan,
             s,
@@ -163,7 +169,9 @@ impl Grid {
     /// the corner of it farthest from the screen's axis, as far as any pixel
     /// of it lies, since the slope grows outward.
     pub fn cell_window(&self, [x, y]: [u32; 2]) -> u32 {
-        let far = |t: f32, x: u32| libm::fabsf(-t + x as f32 * self.s).max(libm::fabsf(-t + (x + 1) as f32 * self.s));
+        let far = |t: f32, x: u32| {
+            libm::fabsf(-t + x as f32 * self.s).max(libm::fabsf(-t + (x + 1) as f32 * self.s))
+        };
         self.window([far(self.tan[0], x), far(self.tan[1], y)])
     }
 
@@ -171,7 +179,10 @@ impl Grid {
     /// left and top `past` the window.
     pub fn corner(&self, [i, j]: [u32; 2]) -> [f32; 2] {
         let k = self.past as f32;
-        [-self.tan[0] + (i as f32 - k) * self.s, self.tan[1] - (j as f32 - k) * self.s]
+        [
+            -self.tan[0] + (i as f32 - k) * self.s,
+            self.tan[1] - (j as f32 - k) * self.s,
+        ]
     }
 
     /// The first corner of the screen's cell `[x, y]`.
@@ -183,14 +194,20 @@ impl Grid {
     /// ty]`.
     pub fn cell(&self, [tx, ty]: [f32; 2]) -> [u32; 2] {
         let at = |v: f32, n: u32| (libm::floorf(v / self.s).max(0.0) as u32).min(n - 1);
-        [at(tx + self.tan[0], self.span[0]), at(self.tan[1] - ty, self.span[1])]
+        [
+            at(tx + self.tan[0], self.span[0]),
+            at(self.tan[1] - ty, self.span[1]),
+        ]
     }
 
     /// The tangents across and up of sample `[i, j]`, from the screen's
     /// left and top `NEAR` samples past it.
     pub fn sample(&self, [i, j]: [u32; 2]) -> [f32; 2] {
         let d = self.s / SAMPLE as f32;
-        [-self.tan[0] + (i as f32 - NEAR as f32) * d, self.tan[1] - (j as f32 - NEAR as f32) * d]
+        [
+            -self.tan[0] + (i as f32 - NEAR as f32) * d,
+            self.tan[1] - (j as f32 - NEAR as f32) * d,
+        ]
     }
 
     /// The screen's cell sample `[i, j]` starts from: the one holding it, or
@@ -198,7 +215,10 @@ impl Grid {
     /// have a start.
     pub fn sample_cell(&self, [i, j]: [u32; 2]) -> [u32; 2] {
         let n = self.span;
-        [((i.max(NEAR) - NEAR) / SAMPLE).min(n[0] - 1), ((j.max(NEAR) - NEAR) / SAMPLE).min(n[1] - 1)]
+        [
+            ((i.max(NEAR) - NEAR) / SAMPLE).min(n[0] - 1),
+            ((j.max(NEAR) - NEAR) / SAMPLE).min(n[1] - 1),
+        ]
     }
 
     /// The first of the `2 · NEAR` a side samples about the screen's point

@@ -202,11 +202,17 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     // and never past the ring, whatever the reach comes to: the query is cut to the ring's box, as `load`
     // refuses a tile past it
     let asked = grown(own, reach_of(tunnel::DEEPEST));
-    let asked = [[asked[0][0].max(lo[0]), asked[0][1].max(lo[1])], [asked[1][0].min(hi[0]), asked[1][1].min(hi[1])]];
+    let asked = [
+        [asked[0][0].max(lo[0]), asked[0][1].max(lo[1])],
+        [asked[1][0].min(hi[0]), asked[1][1].min(hi[1])],
+    ];
     for p in portals_in(r.client, asked)? {
         let d = reach_of(p.level);
         if off(p.at) <= d {
-            let [a, b] = [tile_of([p.at[0] - d, p.at[1] - d]), tile_of([p.at[0] + d, p.at[1] + d])];
+            let [a, b] = [
+                tile_of([p.at[0] - d, p.at[1] - d]),
+                tile_of([p.at[0] + d, p.at[1] + d]),
+            ];
             for y in a[1].min(b[1])..=a[1].max(b[1]) {
                 for x in a[0].min(b[0])..=a[0].max(b[0]) {
                     src.load(r, [x, y])?;
@@ -216,19 +222,38 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     }
     let portal_near = |s: &Sampled| {
         let p = &s.piece.way.points;
-        is_road_tunnel(&s.piece) && [p[0], p[p.len() - 1]].iter().any(|e| off([e[0], e[1]]) <= reach_of(s.piece.way.tags.level.unwrap_or(0)))
+        is_road_tunnel(&s.piece)
+            && [p[0], p[p.len() - 1]]
+                .iter()
+                .any(|e| off([e[0], e[1]]) <= reach_of(s.piece.way.tags.level.unwrap_or(0)))
     };
-    let mut queue: Vec<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own) || portal_near(s)).map(|(id, _)| id.clone()).collect();
+    let mut queue: Vec<PartId> = src
+        .pieces
+        .iter()
+        .filter(|(_, s)| s.piece.touches(own) || portal_near(s))
+        .map(|(id, _)| id.clone())
+        .collect();
     // a tile no structure touches nor sinks into has nothing to solve
     if queue.is_empty() {
         return Ok(Solved::default());
     }
-    let reach = mer_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
+    let reach =
+        mer_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
-    let lies_on = |o: &Piece, ends: &FnvHashSet<End>| (o.form == Form::Bridge || is_road_tunnel(o)) && o.way.points.iter().any(|p| ends.contains(&End::at([p[0], p[1]])));
+    let lies_on = |o: &Piece, ends: &FnvHashSet<End>| {
+        (o.form == Form::Bridge || is_road_tunnel(o))
+            && o.way
+                .points
+                .iter()
+                .any(|p| ends.contains(&End::at([p[0], p[1]])))
+    };
     let mut scope: BTreeSet<PartId> = BTreeSet::new();
-    let (mut seen_ends, mut seen_portals, mut seen_decks): (FnvHashSet<End>, FnvHashSet<End>, Vec<[[f64; 2]; 2]>) = Default::default();
+    let (mut seen_ends, mut seen_portals, mut seen_decks): (
+        FnvHashSet<End>,
+        FnvHashSet<End>,
+        Vec<[[f64; 2]; 2]>,
+    ) = Default::default();
     src.fresh.clear();
     while let Some(id) = queue.pop() {
         if !scope.insert(id.clone()) {
@@ -236,24 +261,43 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         }
         src.sample(r, &id)?;
         let s = &src.pieces[&id];
-        let mut reached: Vec<PartId> = s.piece.way.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect();
+        let mut reached: Vec<PartId> = s
+            .piece
+            .way
+            .ends
+            .iter()
+            .flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned())
+            .collect();
         seen_ends.extend(s.piece.way.ends.iter().cloned());
         if is_road_tunnel(&s.piece) {
             // what an end of it lies on, at that one's end or along it: a deck its portal opens
             // on, or a road tunnel it runs on in
             let ends: FnvHashSet<End> = s.piece.way.ends.iter().cloned().collect();
-            reached.extend(src.pieces.iter().filter(|(_, o)| lies_on(&o.piece, &ends)).map(|(id, _)| id.clone()));
+            reached.extend(
+                src.pieces
+                    .iter()
+                    .filter(|(_, o)| lies_on(&o.piece, &ends))
+                    .map(|(id, _)| id.clone()),
+            );
             seen_portals.extend(ends);
         }
         if s.piece.form == Form::Bridge {
             let b = grown(bbox_of(s), reach);
-            reached.extend(src.pieces.iter().filter(|(_, o)| o.piece.form == Form::Bridge && o.piece.touches(b)).map(|(id, _)| id.clone()));
+            reached.extend(
+                src.pieces
+                    .iter()
+                    .filter(|(_, o)| o.piece.form == Form::Bridge && o.piece.touches(b))
+                    .map(|(id, _)| id.clone()),
+            );
             seen_decks.push(b);
         }
         // a tile read late can hold what one looked at early meets or stands beside
         for f in std::mem::take(&mut src.fresh) {
             let o = &src.pieces[&f].piece;
-            if o.way.ends.iter().any(|e| seen_ends.contains(e)) || (o.form == Form::Bridge && seen_decks.iter().any(|&b| o.touches(b))) || lies_on(o, &seen_portals) {
+            if o.way.ends.iter().any(|e| seen_ends.contains(e))
+                || (o.form == Form::Bridge && seen_decks.iter().any(|&b| o.touches(b)))
+                || lies_on(o, &seen_portals)
+            {
                 reached.push(f);
             }
         }
@@ -320,11 +364,21 @@ impl Ring {
                 }
                 let n = libm::ceil(piece.way.length() / step).max(1.0) as usize;
                 self.fresh.push(id.clone());
-                self.pieces.insert(id, Sampled { piece, n, samples: None });
+                self.pieces.insert(
+                    id,
+                    Sampled {
+                        piece,
+                        n,
+                        samples: None,
+                    },
+                );
             }
             if let Some(way) = Way::of(s.clone()) {
                 for e in &s.ends {
-                    self.way_ends.entry(e.clone()).or_default().push(key.clone());
+                    self.way_ends
+                        .entry(e.clone())
+                        .or_default()
+                        .push(key.clone());
                 }
                 self.ways.insert(key, way);
             }
@@ -333,8 +387,15 @@ impl Ring {
             if !self.water_seen.insert(wkb.clone()) {
                 continue;
             }
-            for g in wkb_to_geometries(wkb).into_iter().filter(|g| g.points.len() >= 2) {
-                self.water.push((class.clone(), subtype.clone(), g.points.iter().map(|p| [p[0], p[1]]).collect()));
+            for g in wkb_to_geometries(wkb)
+                .into_iter()
+                .filter(|g| g.points.len() >= 2)
+            {
+                self.water.push((
+                    class.clone(),
+                    subtype.clone(),
+                    g.points.iter().map(|p| [p[0], p[1]]).collect(),
+                ));
             }
         }
         Ok(())
@@ -356,18 +417,32 @@ impl Ring {
             .collect();
         let mut wanted: BTreeSet<[i32; 2]> = BTreeSet::new();
         for (_, p) in &at {
-            for d in [[0.0, 0.0], [reach, 0.0], [-reach, 0.0], [0.0, reach], [0.0, -reach]] {
+            for d in [
+                [0.0, 0.0],
+                [reach, 0.0],
+                [-reach, 0.0],
+                [0.0, reach],
+                [0.0, -reach],
+            ] {
                 wanted.insert(tile_of([p[0] + d[0], p[1] + d[1]]));
             }
         }
-        for e in [s.piece.way.points[0], s.piece.way.points[s.piece.way.points.len() - 1]] {
+        for e in [
+            s.piece.way.points[0],
+            s.piece.way.points[s.piece.way.points.len() - 1],
+        ] {
             wanted.insert(tile_of([e[0], e[1]]));
         }
         for p in wanted {
             self.load(r, p)?;
         }
         let ts = sample_cells(&self.ground, &at.iter().map(|a| a.1).collect::<Vec<_>>())?;
-        self.pieces.get_mut(id).expect("a piece read").samples = Some(at.into_iter().zip(ts).map(|((k, p), t)| (k, (p, t))).collect());
+        self.pieces.get_mut(id).expect("a piece read").samples = Some(
+            at.into_iter()
+                .zip(ts)
+                .map(|((k, p), t)| (k, (p, t)))
+                .collect(),
+        );
         Ok(())
     }
 }
@@ -398,15 +473,39 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
             let clipped = [k0 != 0, k1 != s.n];
             let cut = |k: usize| End::Ring(id.clone(), k as u64);
             let ends = [
-                if clipped[0] { cut(k0) } else { s.piece.way.ends[0].clone() },
-                if clipped[1] { cut(k1) } else { s.piece.way.ends[1].clone() },
+                if clipped[0] {
+                    cut(k0)
+                } else {
+                    s.piece.way.ends[0].clone()
+                },
+                if clipped[1] {
+                    cut(k1)
+                } else {
+                    s.piece.way.ends[1].clone()
+                },
             ];
-            let mut nodes: Vec<End> = s.piece.way.points.iter().map(|p| [p[0], p[1]]).filter(|&p| src.inside(p)).map(End::at).collect();
+            let mut nodes: Vec<End> = s
+                .piece
+                .way
+                .points
+                .iter()
+                .map(|p| [p[0], p[1]])
+                .filter(|&p| src.inside(p))
+                .map(End::at)
+                .collect();
             nodes.extend(ends.iter().cloned());
             out.push(Stretch {
                 piece: s.piece.clone(),
                 k0,
-                cell: at.iter().map(|p| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U]).collect(),
+                cell: at
+                    .iter()
+                    .map(|p| {
+                        [
+                            u_from_mer(p[0] - origin[0]) / CELL_U,
+                            u_from_mer(p[1] - origin[1]) / CELL_U,
+                        ]
+                    })
+                    .collect(),
                 whole: Polyline::of(s.piece.way.points.iter().map(|p| absolute([p[0], p[1]]))),
                 at,
                 terrain,
@@ -452,7 +551,11 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
     let mut anchor = a;
     for k in a..=b {
         let straight = k > a && k < b && {
-            let (h0, h1, h2) = (i64::from(ys[anchor]), i64::from(ys[k]), i64::from(ys[k + 1]));
+            let (h0, h1, h2) = (
+                i64::from(ys[anchor]),
+                i64::from(ys[k]),
+                i64::from(ys[k + 1]),
+            );
             (h1 - h0) * (k + 1 - anchor) as i64 == (h2 - h0) * (k - anchor) as i64
         };
         if !straight {
@@ -464,7 +567,9 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
     for seg in r.piece.way.points.windows(2) {
         distance += libm::hypot(seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]);
         if distance > along(a) && distance < along(b) {
-            let i = ((distance / step).floor() as usize).saturating_sub(r.k0).clamp(a, b - 1);
+            let i = ((distance / step).floor() as usize)
+                .saturating_sub(r.k0)
+                .clamp(a, b - 1);
             let z = f64::from(ys[i]) + f64::from(ys[i + 1] - ys[i]) * (distance - along(i)) / step;
             keep.push((distance, [seg[1][0], seg[1][1]], round(z)));
         }
@@ -480,7 +585,10 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
             class: r.piece.way.class.clone(),
             width_u: r.width_u,
             form,
-            coarsest: super::coarsest(&points, [!(a == 0 && r.clipped[0]), !(b == last && r.clipped[1])]),
+            coarsest: super::coarsest(
+                &points,
+                [!(a == 0 && r.clipped[0]), !(b == last && r.clipped[1])],
+            ),
             points,
             clear,
         },

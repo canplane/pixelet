@@ -16,7 +16,9 @@ use xpute_guest::mem::section::{align_up, Section};
 use xpute_guest::global::Global;
 
 // Shared with the shell and the linker through mem.json.
-pub use crate::sys::mem::spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
+pub use crate::sys::mem::spec::{
+    DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES,
+};
 use xpute_guest::mem::section::PAGE_BYTES;
 
 pub const fn page_up(n: u32) -> u32 {
@@ -37,17 +39,20 @@ pub fn fixed_at(data_end: u32) -> u32 {
 pub fn lay_out(bytes: u32, data_end: u32, fixed_bytes: u32) -> Map {
     let regions = bytes / REGION_BYTES;
     let heap = fixed_at(data_end) + fixed_bytes;
-    xpute_kit::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
+    xpute_kit::ensure!(
+        heap + MIN_HEAP_BYTES <= regions * REGION_BYTES,
+        ENOMEM,
+        heap,
+        bytes
+    );
     Map {
         fixed: Section {
             offset: fixed_at(data_end),
             bytes: fixed_bytes,
-            align: PAGE_BYTES,
         },
         heap: Section {
             offset: heap,
             bytes: regions * REGION_BYTES - heap,
-            align: PAGE_BYTES,
         },
     }
 }

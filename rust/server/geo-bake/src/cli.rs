@@ -10,7 +10,10 @@ use std::str::FromStr;
 /// outside a checkout, it stays where it is.
 pub fn enter() -> Result<(), String> {
     let here = std::env::current_dir().map_err(|e| format!("where this runs: {e}"))?;
-    let Some(root) = here.ancestors().find(|d| d.join("rust/server/geo-bake/Cargo.toml").is_file()) else {
+    let Some(root) = here
+        .ancestors()
+        .find(|d| d.join("rust/server/geo-bake/Cargo.toml").is_file())
+    else {
         return Ok(());
     };
     std::env::set_current_dir(root).map_err(|e| format!("{}: {e}", root.display()))

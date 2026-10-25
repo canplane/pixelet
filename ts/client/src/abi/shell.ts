@@ -1,15 +1,22 @@
 // @pxl/client/abi/shell.ts
 
+/** The kernel as the shell reaches it. The shell names no host (AGENTS.md),
+ * so a function here that only forwards to it is that boundary, not a rename. */
+
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
-import type { Errno } from "@xpute/kit/status/errno.spec.ts";
+import type { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
-import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/abi/cmd.spec.ts";
-import { GUEST, GUEST_DOORBELL, HOST } from "@/host/mem.ts";
+import {
+  Command,
+  encode_input_tracking,
+  encode_setting_set,
+  Tracking,
+} from "@/abi/cmd.spec.ts";
+import { HOST } from "@/host/mount.ts";
 import { bracket } from "@/bracket.tsx";
 
 export { kernel_snapshot } from "@/abi/snapshot.ts";
-export { kernel_hold, kernel_keys } from "@/abi/control/input.ts";
+export { kernel_hold, kernel_keys } from "./input.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */
 export async function kernel_tracking(tracking: Tracking): Promise<void> {
@@ -17,7 +24,10 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
     console.error("[orientation] could not start the sensor.");
     return;
   }
-  HOST.input(Command.INPUT_TRACKING, encode_input_tracking(GUEST_DOORBELL, tracking));
+  HOST.input(
+    Command.INPUT_TRACKING,
+    encode_input_tracking(HOST.doorbell, tracking),
+  );
 }
 
 /** A command of the kernel's, rung at once with no quota. */
@@ -26,32 +36,21 @@ export function kernel_command(cmd: Command, pkt?: PacketWriter): void {
 }
 
 export function kernel_setting(key: u32, value: u32): void {
-  HOST.now(Command.SETTING_SET, encode_setting_set(GUEST_DOORBELL, key, value));
+  HOST.now(Command.SETTING_SET, encode_setting_set(HOST.doorbell, key, value));
 }
 
 /** Where the shell writes a command's packet (`encode_*`), in place: the
- * guest's doorbell as it stands at the write, made at boot. */
-export const kernel_room: PacketRoom = { writer: (count) => GUEST_DOORBELL.writer(count) };
+ * doorbell, looked up at each write, since it is made at boot. */
+export const kernel_room: PacketRoom = {
+  writer: (count) => HOST.doorbell.writer(count),
+};
 
 /** Whether a command carrying `pkt` can be sent; the shell refuses input that cannot. */
 export function kernel_fits(pkt: PacketWriter): boolean {
-  return GUEST_DOORBELL.fits(pkt);
+  return HOST.doorbell.fits(pkt);
 }
 
-export function kernel_enable_location(): void {
-  HOST.now(Command.SENSOR_ENABLE_LOCATION);
-}
-
-/** The kernel's memory, where a call leaves its reply; a view of it holds until the next turn. */
-export function kernel_memory(): ArrayBuffer {
-  return GUEST.memory;
-}
-
-/** A command answered inside the call: the address of its reply in `kernel_memory()`. */
-export function kernel_call(cmd: Command, pkt: PacketWriter | null = null): u32 {
-  return GUEST_DOORBELL.call(cmd, pkt, (at) => {
-    // A refusal is -errno, never an address.
-    if (at < 0) throw new FaultError(-at as Errno);
-    return at >>> 0;
-  });
+/** The guest's doorbell itself, for a development console's `cmd`. */
+export function kernel_doorbell(): Doorbell {
+  return HOST.doorbell;
 }

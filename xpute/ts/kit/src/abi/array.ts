@@ -41,9 +41,11 @@ export type TypedArrayCtor<T extends TypedArray = TypedArray> = {
   readonly BYTES_PER_ELEMENT: number;
 };
 
-export const is_ab = (vals: unknown): vals is ArrayBuffer => vals instanceof ArrayBuffer;
+export const is_ab = (vals: unknown): vals is ArrayBuffer =>
+  vals instanceof ArrayBuffer;
 
-export const is_sab = (vals: unknown): vals is SharedArrayBuffer => typeof SharedArrayBuffer !== "undefined" && vals instanceof SharedArrayBuffer;
+export const is_sab = (vals: unknown): vals is SharedArrayBuffer =>
+  typeof SharedArrayBuffer !== "undefined" && vals instanceof SharedArrayBuffer;
 
 export const is_ta = (vals: unknown): vals is TypedArray =>
   vals instanceof Uint8Array ||
@@ -57,11 +59,13 @@ export const is_ta = (vals: unknown): vals is TypedArray =>
 
 export const is_ta_ab = <T extends TypedArray>(
   vals: T | null | undefined,
-): vals is T & { buffer: ArrayBuffer } => !!vals && is_ta(vals) && is_ab(vals.buffer);
+): vals is T & { buffer: ArrayBuffer } =>
+  !!vals && is_ta(vals) && is_ab(vals.buffer);
 
 export const is_ta_sab = <T extends TypedArray>(
   vals: T | null | undefined,
-): vals is T & { buffer: SharedArrayBuffer } => !!vals && is_ta(vals) && is_sab(vals.buffer);
+): vals is T & { buffer: SharedArrayBuffer } =>
+  !!vals && is_ta(vals) && is_sab(vals.buffer);
 
 /** Wraps an AB-backed view without copying; copies one over a SharedArrayBuffer or a plain array. */
 export const as_ta_ab = <T extends TypedArray>(
@@ -81,7 +85,9 @@ export const as_ta_ab = <T extends TypedArray>(
 
     if (is_sab(buf)) {
       const out = new ctor(len);
-      new Uint8Array(out.buffer).set(new Uint8Array(buf, vals.byteOffset, vals.byteLength));
+      new Uint8Array(out.buffer).set(
+        new Uint8Array(buf, vals.byteOffset, vals.byteLength),
+      );
       return out;
     }
   }
@@ -89,7 +95,10 @@ export const as_ta_ab = <T extends TypedArray>(
   return new ctor(vals);
 };
 
-export const to_ta = <T extends TypedArray>(arr: T | number[], ctor: TypedArrayCtor<T>): T => {
+export const to_ta = <T extends TypedArray>(
+  arr: T | number[],
+  ctor: TypedArrayCtor<T>,
+): T => {
   return (arr instanceof ctor) ? (arr as T) : new ctor(arr);
 };
 
@@ -106,16 +115,25 @@ export const copy_ab_view = <T extends TypedArray>(
 
 export type Bytes = U8Array;
 
-export const is_bytes = (vals: unknown): vals is Bytes => vals instanceof Uint8Array && is_ab(vals.buffer);
+export const is_bytes = (vals: unknown): vals is Bytes =>
+  vals instanceof Uint8Array && is_ab(vals.buffer);
 
-export const as_bytes = (vals: ArrayBuffer | TypedArray | ArrayLike<number>): Bytes => as_ta_ab(vals, Uint8Array);
+export const as_bytes = (
+  vals: ArrayBuffer | TypedArray | ArrayLike<number>,
+): Bytes => as_ta_ab(vals, Uint8Array);
 
-export const to_bytes = (arr: TypedArray | BigTypedArray): Bytes => new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+export const to_bytes = (arr: TypedArray | BigTypedArray): Bytes =>
+  new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
 
-export const copy_bytes = (buf: ArrayBuffer, off: u32, nbyte: u32): Bytes => copy_ab_view(buf, off, nbyte, Uint8Array);
+export const copy_bytes = (buf: ArrayBuffer, off: u32, nbyte: u32): Bytes =>
+  copy_ab_view(buf, off, nbyte, Uint8Array);
 
-export type U64Array<B extends ArrayBufferLike = ArrayBuffer> = BigUint64Array<B>;
-export type I64Array<B extends ArrayBufferLike = ArrayBuffer> = BigInt64Array<B>;
+export type U64Array<B extends ArrayBufferLike = ArrayBuffer> = BigUint64Array<
+  B
+>;
+export type I64Array<B extends ArrayBufferLike = ArrayBuffer> = BigInt64Array<
+  B
+>;
 
 export type BigTypedArray<B extends ArrayBufferLike = ArrayBuffer> =
   | U64Array<B>
@@ -138,11 +156,13 @@ export const is_bta = (vals: unknown): vals is BigTypedArray =>
 
 export const is_bta_ab = <T extends BigTypedArray>(
   vals: T | null | undefined,
-): vals is T & { buffer: ArrayBuffer } => !!vals && is_bta(vals) && is_ab(vals.buffer);
+): vals is T & { buffer: ArrayBuffer } =>
+  !!vals && is_bta(vals) && is_ab(vals.buffer);
 
 export const is_bta_sab = <T extends BigTypedArray>(
   vals: T | null | undefined,
-): vals is T & { buffer: SharedArrayBuffer } => !!vals && is_bta(vals) && is_sab(vals.buffer);
+): vals is T & { buffer: SharedArrayBuffer } =>
+  !!vals && is_bta(vals) && is_sab(vals.buffer);
 
 /** Wraps an AB-backed view without copying; copies one over a SharedArrayBuffer or a plain array. */
 export const as_bta_ab = <T extends BigTypedArray>(
@@ -162,7 +182,9 @@ export const as_bta_ab = <T extends BigTypedArray>(
 
     if (is_sab(buf)) {
       const out = new ctor(len);
-      new Uint8Array(out.buffer).set(new Uint8Array(buf, vals.byteOffset, vals.byteLength));
+      new Uint8Array(out.buffer).set(
+        new Uint8Array(buf, vals.byteOffset, vals.byteLength),
+      );
       return out;
     }
   }
@@ -170,7 +192,10 @@ export const as_bta_ab = <T extends BigTypedArray>(
   return new ctor(vals);
 };
 
-export const to_bta = <T extends BigTypedArray>(arr: T | bigint[], ctor: BigTypedArrayCtor<T>): T => {
+export const to_bta = <T extends BigTypedArray>(
+  arr: T | bigint[],
+  ctor: BigTypedArrayCtor<T>,
+): T => {
   return (arr instanceof ctor) ? (arr as T) : new ctor(arr);
 };
 

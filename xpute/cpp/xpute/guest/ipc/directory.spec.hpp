@@ -34,10 +34,10 @@ inline constexpr std::uint32_t QUANTUM_SCALE = 1000u;
 namespace key {
 
 // Where the submission ring's words begin.
-inline constexpr std::uint32_t SUBMISSION = 1u;
+inline constexpr std::uint32_t SQ = 1u;
 
 // Where the completion ring's words begin.
-inline constexpr std::uint32_t COMPLETION = 2u;
+inline constexpr std::uint32_t CQ = 2u;
 
 // The quantum policy's margin share (sched/quantum.rs), in QUANTUM_SCALE.
 inline constexpr std::uint32_t MARGIN_SHARE = 3u;

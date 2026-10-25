@@ -318,16 +318,27 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
         true
     }
 
-    fn malloc(&mut self, base: usize, end: usize, min_log2: usize, max_log2: usize, request: usize) -> *mut u8 {
+    fn malloc(
+        &mut self,
+        base: usize,
+        end: usize,
+        min_log2: usize,
+        max_log2: usize,
+        request: usize,
+    ) -> *mut u8 {
         if self.base_ptr == 0 {
             self.min_log2 = min_log2;
             self.max_log2 = max_log2;
             self.bucket_count = max_log2 - min_log2 + 1;
             crate::ensure!(
-                self.bucket_count <= MAX_BUCKETS && self.node_is_split.as_ref().len() * 8 == 1 << (self.bucket_count - 1),
+                self.bucket_count <= MAX_BUCKETS
+                    && self.node_is_split.as_ref().len() * 8 == 1 << (self.bucket_count - 1),
                 ENOTRECOVERABLE
             );
-            crate::ensure!(1usize << min_log2 >= core::mem::size_of::<List>(), ENOTRECOVERABLE);
+            crate::ensure!(
+                1usize << min_log2 >= core::mem::size_of::<List>(),
+                ENOTRECOVERABLE
+            );
             self.base_ptr = base;
             self.max_ptr = base;
             self.end_ptr = end;
@@ -370,7 +381,11 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
             }
 
             let size = 1usize << (self.max_log2 - bucket);
-            let bytes_needed = if bucket < original_bucket { size / 2 + core::mem::size_of::<List>() } else { size };
+            let bytes_needed = if bucket < original_bucket {
+                size / 2 + core::mem::size_of::<List>()
+            } else {
+                size
+            };
             if !self.update_max_ptr(ptr as usize + bytes_needed) {
                 // SAFETY: the block just came off this bucket's free list.
                 unsafe { self.list_push(bucket, ptr) };

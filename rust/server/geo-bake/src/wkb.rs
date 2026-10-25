@@ -27,13 +27,21 @@ impl<'a> Reader<'a> {
     fn u32(&mut self, le: bool) -> Option<u32> {
         let raw: [u8; 4] = self.b.get(self.at..self.at + 4)?.try_into().ok()?;
         self.at += 4;
-        Some(if le { u32::from_le_bytes(raw) } else { u32::from_be_bytes(raw) })
+        Some(if le {
+            u32::from_le_bytes(raw)
+        } else {
+            u32::from_be_bytes(raw)
+        })
     }
 
     fn f64(&mut self, le: bool) -> Option<f64> {
         let raw: [u8; 8] = self.b.get(self.at..self.at + 8)?.try_into().ok()?;
         self.at += 8;
-        Some(if le { f64::from_le_bytes(raw) } else { f64::from_be_bytes(raw) })
+        Some(if le {
+            f64::from_le_bytes(raw)
+        } else {
+            f64::from_be_bytes(raw)
+        })
     }
 
     fn skip(&mut self, n: usize) -> Option<()> {

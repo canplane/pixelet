@@ -7,9 +7,13 @@
 use crate::domain::control::camera::controller;
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{long, missed, overran};
-use crate::profiler::record::{profiler_frames_since, profiler_recording_state, profiler_scratch, profiler_tasks_since};
+use crate::profiler::record::{
+    profiler_frames_since, profiler_recording_state, profiler_scratch, profiler_tasks_since,
+};
 use crate::profiler::section::TASK_PHASES;
-use crate::profiler::section::{FramesSection, Spread, Step, StepsSection, TaskSummary, TasksSection, ViewSection};
+use crate::profiler::section::{
+    FramesSection, Spread, Step, StepsSection, TaskSummary, TasksSection, ViewSection,
+};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
@@ -33,7 +37,9 @@ struct Summary {
 static SUMMARY_WORDS: Global<Summary> = Global::new();
 
 fn summary() -> &'static mut Summary {
-    SUMMARY_WORDS.get(|| Summary { words: Box::new([0.0; WORDS]) })
+    SUMMARY_WORDS.get(|| Summary {
+        words: Box::new([0.0; WORDS]),
+    })
 }
 
 fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
@@ -44,7 +50,13 @@ fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
     }
     let sorted = &mut scratch[..n];
     sorted.sort_by(f64::total_cmp);
-    let pct = |q: f64| if n == 0 { 0.0 } else { sorted[((n - 1) as f64 * q).floor() as usize] };
+    let pct = |q: f64| {
+        if n == 0 {
+            0.0
+        } else {
+            sorted[((n - 1) as f64 * q).floor() as usize]
+        }
+    };
     Spread {
         p50: pct(0.5),
         p95: pct(0.95),
@@ -60,8 +72,16 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
 
     put(out, SUMMARY::rec::AT, &profiler_recording_state());
 
-    put(out, SUMMARY::frames::AT, &frames(scratch, profiler_frames_since(since)));
-    put(out, SUMMARY::tasks::AT, &tasks(scratch, profiler_tasks_since(since)));
+    put(
+        out,
+        SUMMARY::frames::AT,
+        &frames(scratch, profiler_frames_since(since)),
+    );
+    put(
+        out,
+        SUMMARY::tasks::AT,
+        &tasks(scratch, profiler_tasks_since(since)),
+    );
     side(out);
     out
 }
@@ -92,9 +112,20 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
         gpu_read: count(&|f| f.gpu.read != 0.0),
-        gpu: spread(scratch, read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans))),
-        phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
-        gpu_spans_p95: core::array::from_fn(|k| spread(scratch, read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)).p95),
+        gpu: spread(
+            scratch,
+            read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans)),
+        ),
+        phases_p95: core::array::from_fn(|k| {
+            spread(scratch, frames.iter().map(|f| f.phases[k])).p95
+        }),
+        gpu_spans_p95: core::array::from_fn(|k| {
+            spread(
+                scratch,
+                read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0),
+            )
+            .p95
+        }),
         kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
         heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
@@ -103,7 +134,11 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
 }
 
 fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
-    let (ok, aborted, error) = (Outcome::ok as u32 as f64, Outcome::aborted as u32 as f64, Outcome::error as u32 as f64);
+    let (ok, aborted, error) = (
+        Outcome::ok as u32 as f64,
+        Outcome::aborted as u32 as f64,
+        Outcome::error as u32 as f64,
+    );
     let mut section = TasksSection::default();
     for (c, slot) in section.slots.iter_mut().enumerate() {
         let mine = || tasks.iter().filter(move |r| r.stream == c as f64);
@@ -115,7 +150,10 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
         let mut counted = [(0.0f64, 0.0f64, 0.0f64); 16];
         let mut kinds = 0;
         for r in mine().filter(|r| r.outcome == error) {
-            match counted[..kinds].iter().position(|x| x.0 == r.fail && x.1 == r.detail) {
+            match counted[..kinds]
+                .iter()
+                .position(|x| x.0 == r.fail && x.1 == r.detail)
+            {
                 Some(i) => counted[i].2 += 1.0,
                 None if kinds < counted.len() => {
                     counted[kinds] = (r.fail, r.detail, 1.0);
@@ -141,7 +179,12 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
             }
         }
 
-        let lat = spread(scratch, mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms));
+        let lat = spread(
+            scratch,
+            mine()
+                .filter(|r| r.outcome == ok)
+                .map(|r| r.end_ms - r.enqueue_ms),
+        );
         *slot = TaskSummary {
             n: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
@@ -150,9 +193,21 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
             lat_p50: lat.p50,
             lat_p95: lat.p95,
             reason_count: shown as f64,
-            reasons: core::array::from_fn(|i| if i < shown { [counted[i].0, counted[i].1, counted[i].2] } else { [0.0; 3] }),
+            reasons: core::array::from_fn(|i| {
+                if i < shown {
+                    [counted[i].0, counted[i].1, counted[i].2]
+                } else {
+                    [0.0; 3]
+                }
+            }),
             phase_n: phase_n as f64,
-            phase_mean: core::array::from_fn(|p| if seen[p] { sums[p] / phase_n as f64 } else { f64::NAN }),
+            phase_mean: core::array::from_fn(|p| {
+                if seen[p] {
+                    sums[p] / phase_n as f64
+                } else {
+                    f64::NAN
+                }
+            }),
         };
     }
     section
@@ -174,8 +229,14 @@ fn side(out: &mut [f64]) {
             reach: crate::domain::view::observation::eye_reach().unwrap_or(0.0),
         };
         let detail = crate::domain::query::by_distance(tau);
-        let hit = crate::domain::query::World::now().first_hit(&ray, detail).value().flatten()?;
-        Some((crate::domain::view::frame::coord::world_to_canonical(&hit.point), detail.at((hit.t * hit.t) as f32)))
+        let hit = crate::domain::query::World::now()
+            .first_hit(&ray, detail)
+            .value()
+            .flatten()?;
+        Some((
+            crate::domain::view::frame::coord::world_to_canonical(&hit.point),
+            detail.at((hit.t * hit.t) as f32),
+        ))
     });
     let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the tool held strikes there, as the hover picks it.
@@ -190,8 +251,10 @@ fn side(out: &mut [f64]) {
     let place = interaction::hover().coord.filter(|_| tool.is_some());
     let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
-    let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
-    let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
+    let [hover_lon, hover_lat, hover_alt] =
+        hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
+    let [center_lon, center_lat, center_z] =
+        controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
     put(
         out,
@@ -214,18 +277,26 @@ fn side(out: &mut [f64]) {
             struck,
             held: zoom(picked.as_ref().map(|p| p.held())),
             drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
-            folded: picked.as_ref().map_or(f64::NAN, |p| f64::from(u8::from(p.folded()))),
+            folded: picked
+                .as_ref()
+                .map_or(f64::NAN, |p| f64::from(u8::from(p.folded()))),
             place_x,
             place_y,
             place_z,
             place_zoom: zoom(tool.map(|t| t.zoom())),
-            blocked: tool.zip(place).map_or(f64::NAN, |(t, p)| f64::from(u8::from(collision::is_placement_blocked(t, &p)))),
+            blocked: tool.zip(place).map_or(f64::NAN, |(t, p)| {
+                f64::from(u8::from(collision::is_placement_blocked(t, &p)))
+            }),
         },
     );
 
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     let mut steps = StepsSection::default();
-    for s in tick_step_stats().iter().filter(|s| s.count > 0).take(STEP_SLOTS) {
+    for s in tick_step_stats()
+        .iter()
+        .filter(|s| s.count > 0)
+        .take(STEP_SLOTS)
+    {
         steps.slots[steps.count as usize] = Step {
             phase: s.phase as u8 as f64,
             name: s.name as f64,

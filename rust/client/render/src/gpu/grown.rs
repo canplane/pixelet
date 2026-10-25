@@ -18,9 +18,13 @@ use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_PATCHES};
 
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
-use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
+use crate::frame::shader::record::{
+    SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE,
+};
 use crate::frame::shader::word::DRAW_FLOATS;
-use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
+use crate::gpu::api::{
+    buffer_entry, buffer_range_entry, buffer_usage, bytes, release, word_bytes, Gpu,
+};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
 
@@ -137,11 +141,19 @@ impl Grown {
         let rows = buffer(core::mem::size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
         // SAFETY: the rows are `repr(C)` words alone (pxl-spec-core decor.spec.rs), read while `table` lives.
-        let words = unsafe { core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), core::mem::size_of_val(&table) / 4) };
+        let words = unsafe {
+            core::slice::from_raw_parts(
+                table.as_ptr().cast::<u32>(),
+                core::mem::size_of_val(&table) / 4,
+            )
+        };
         g.write_buffer(rows, 0, bytes(words));
         let drawn_by = pipelines.build(g, PIPELINE_DECOR, g.canvas());
         let draw_layouts = [drawn_by.layouts[1], drawn_by.layouts[3]];
-        let uniforms = buffer(word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::UNIFORM);
+        let uniforms = buffer(
+            word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize),
+            storage | buffer_usage::UNIFORM,
+        );
         Grown {
             mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &compute::DECOR_MARK_GROUP),
             grow: pipelines.build_compute(g, SHADER_GROWN, &compute::DECOR_GROUP),
@@ -150,18 +162,27 @@ impl Grown {
             place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &compute::DECOR_PLACE_GROUP),
             groups: [0; 5],
             marks: buffer(word_bytes(scatter::MARKS_WORDS as usize), storage),
-            grows: buffer(word_bytes(scatter::GROWS_WORDS as usize), storage | buffer_usage::INDIRECT),
+            grows: buffer(
+                word_bytes(scatter::GROWS_WORDS as usize),
+                storage | buffer_usage::INDIRECT,
+            ),
             shown: buffer(word_bytes(DECORS.len()), storage),
             params: buffer(word_bytes(drawn::PARAM_WORDS as usize), storage),
             rows,
             meshes: buffer(word_bytes(GROUPS as usize), storage),
             regions: buffer(word_bytes(2 * drawn::REGIONS as usize), storage),
-            args: buffer(word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::INDIRECT),
+            args: buffer(
+                word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize),
+                storage | buffer_usage::INDIRECT,
+            ),
             uniforms,
             records: 0,
             instances: 0,
             draw_layouts,
-            uniform_group: g.bind_group(draw_layouts[0], &[buffer_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))]),
+            uniform_group: g.bind_group(
+                draw_layouts[0],
+                &[buffer_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))],
+            ),
             instances_group: 0,
             room: 0,
             placed_count: 0,
@@ -185,24 +206,43 @@ impl Grown {
     /// `meshes` each group's index count, none while its model loads.
     /// Grouped again where `world` is not the one its groups bind or the
     /// records' room grew, so a frame without a cast misses no change.
-    pub fn prepare(&mut self, g: &Gpu, f: DecorFrame, grows: Grows, meshes: &[u32; GROUPS as usize], world: World) {
+    pub fn prepare(
+        &mut self,
+        g: &Gpu,
+        f: DecorFrame,
+        grows: Grows,
+        meshes: &[u32; GROUPS as usize],
+        world: World,
+    ) {
         self.on = true;
         let need = scatter::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
         let grew = need > self.room;
         if grew {
             // The slots' records carried over: the placed tail is laid anew.
             let (records, instances) = (self.records, self.instances);
-            self.records = g.buffer(word_bytes(scatter::record_at(need).0 as usize), buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC);
-            self.instances = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
+            self.records = g.buffer(
+                word_bytes(scatter::record_at(need).0 as usize),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
+            );
+            self.instances = g.buffer(
+                word_bytes(((drawn::LANES + 1) * need) as usize),
+                buffer_usage::STORAGE,
+            );
             if records != 0 {
                 let e = g.encoder();
-                g.copy_buffer(e, (records, 0), (self.records, 0), word_bytes(scatter::record_at(scatter::SLOT_RECORDS).0 as usize));
+                g.copy_buffer(
+                    e,
+                    (records, 0),
+                    (self.records, 0),
+                    word_bytes(scatter::record_at(scatter::SLOT_RECORDS).0 as usize),
+                );
                 g.submit(e);
             }
             release(records);
             release(instances);
             release(self.instances_group);
-            self.instances_group = g.bind_group(self.draw_layouts[1], &[buffer_entry(0, self.instances)]);
+            self.instances_group =
+                g.bind_group(self.draw_layouts[1], &[buffer_entry(0, self.instances)]);
             self.room = need;
             self.placed.forget();
         }
@@ -231,7 +271,10 @@ impl Grown {
             let (was, is) = (&was[k..k + eye::CUT_WORDS], &is[k..k + eye::CUT_WORDS]);
             if was != is {
                 for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
-                    self.hold(scatter::cut_box(c[3], [c[0] as i32, c[1] as i32, c[2] as i32]));
+                    self.hold(scatter::cut_box(
+                        c[3],
+                        [c[0] as i32, c[1] as i32, c[2] as i32],
+                    ));
                 }
             }
         }
@@ -243,10 +286,27 @@ impl Grown {
         self.marked = self.holding;
         self.marking = self.stale || moved || grows.filled != 0 || self.marked != 0;
         if self.marking {
-            g.write_buffer(self.marks, 0, bytes(&[u32::from(self.stale), grows.filled, self.marked as u32, 0]));
-            g.write_buffer(self.marks, scatter::MARKS_AT * 4, bytes(self.held[..self.marked].as_flattened()));
+            g.write_buffer(
+                self.marks,
+                0,
+                bytes(&[u32::from(self.stale), grows.filled, self.marked as u32, 0]),
+            );
+            g.write_buffer(
+                self.marks,
+                scatter::MARKS_AT * 4,
+                bytes(self.held[..self.marked].as_flattened()),
+            );
             let w = compute::DECOR_WORKGROUP;
-            g.write_buffer(self.grows, 0, bytes(&[(COUNTS as u32).div_ceil(w[0]), SQUARE_PATCHES.div_ceil(w[1]), 0, 0]));
+            g.write_buffer(
+                self.grows,
+                0,
+                bytes(&[
+                    (COUNTS as u32).div_ceil(w[0]),
+                    SQUARE_PATCHES.div_ceil(w[1]),
+                    0,
+                    0,
+                ]),
+            );
         }
         let p = &mut self.placed;
         p.begin();
@@ -254,16 +314,29 @@ impl Grown {
         let placed_moved = !p.end();
         self.placed_count = f.placed.len() as u32;
         if placed_moved {
-            g.write_buffer(self.records, scatter::PLACED_HEAD * 4, bytes(&[f.placed.len() as u32, 0, 0, 0]));
+            g.write_buffer(
+                self.records,
+                scatter::PLACED_HEAD * 4,
+                bytes(&[f.placed.len() as u32, 0, 0, 0]),
+            );
             if !f.placed.is_empty() {
                 // Read where the kernel holds them, one record however many.
-                g.upload_buffer(self.records, scatter::record_at(scatter::SLOT_RECORDS).0 * 4, bytes(f.placed.as_flattened()));
+                g.upload_buffer(
+                    self.records,
+                    scatter::record_at(scatter::SLOT_RECORDS).0 * 4,
+                    bytes(f.placed.as_flattened()),
+                );
             }
         }
         let c = &mut self.counted;
         c.begin();
         c.read(&grows.eye[eye::ORIGIN..eye::ORIGIN + 3]);
-        c.read(&[grows.eye[eye::TAU], grows.eye[eye::RANGE], grows.eye[eye::RANGE + 1], self.room]);
+        c.read(&[
+            grows.eye[eye::TAU],
+            grows.eye[eye::RANGE],
+            grows.eye[eye::RANGE + 1],
+            self.room,
+        ]);
         c.read(f.params);
         c.read(meshes);
         c.read(&f.translation);
@@ -283,7 +356,16 @@ impl Grown {
         for r in 0..drawn::REGIONS {
             let u = (r * drawn::UNIFORM_WORDS) as usize;
             let layer = if r % 2 == 1 { r / 2 } else { 0 };
-            uniforms[u..u + DRAW_FLOATS].copy_from_slice(&[x.to_bits(), y.to_bits(), z.to_bits(), 0, self.room, 1.0f32.to_bits(), layer, drawn::LANES * self.room]);
+            uniforms[u..u + DRAW_FLOATS].copy_from_slice(&[
+                x.to_bits(),
+                y.to_bits(),
+                z.to_bits(),
+                0,
+                self.room,
+                1.0f32.to_bits(),
+                layer,
+                drawn::LANES * self.room,
+            ]);
         }
         g.write_buffer(self.uniforms, 0, bytes(&uniforms));
     }
@@ -302,11 +384,58 @@ impl Grown {
         }
         let [eye, window, ground, shards, overwrites, pool, fresh] = world;
         self.groups = [
-            group(&self.mark, &[self.marks, window, fresh, self.records, self.grows, self.rows, self.shown]),
-            group(&self.grow, &[eye, window, ground, shards, overwrites, self.records, self.rows, self.grows, pool]),
-            group(&self.count, &[eye, self.params, self.rows, self.records, self.regions, window]),
-            group(&self.args_built, &[self.meshes, self.regions, self.args, self.uniforms]),
-            group(&self.place, &[self.params, self.rows, self.records, self.regions, self.instances, window]),
+            group(
+                &self.mark,
+                &[
+                    self.marks,
+                    window,
+                    fresh,
+                    self.records,
+                    self.grows,
+                    self.rows,
+                    self.shown,
+                ],
+            ),
+            group(
+                &self.grow,
+                &[
+                    eye,
+                    window,
+                    ground,
+                    shards,
+                    overwrites,
+                    self.records,
+                    self.rows,
+                    self.grows,
+                    pool,
+                ],
+            ),
+            group(
+                &self.count,
+                &[
+                    eye,
+                    self.params,
+                    self.rows,
+                    self.records,
+                    self.regions,
+                    window,
+                ],
+            ),
+            group(
+                &self.args_built,
+                &[self.meshes, self.regions, self.args, self.uniforms],
+            ),
+            group(
+                &self.place,
+                &[
+                    self.params,
+                    self.rows,
+                    self.records,
+                    self.regions,
+                    self.instances,
+                    window,
+                ],
+            ),
         ];
     }
 
@@ -326,7 +455,12 @@ impl Grown {
             self.holding += 1;
         } else {
             let last = &mut self.held[self.holding - 1];
-            *last = [last[0].min(b[0]), last[1].min(b[1]), last[2].max(b[2]), last[3].max(b[3])];
+            *last = [
+                last[0].min(b[0]),
+                last[1].min(b[1]),
+                last[2].max(b[2]),
+                last[3].max(b[3]),
+            ];
         }
     }
 
@@ -375,7 +509,12 @@ impl Grown {
         if self.marking {
             g.set_pipeline(pass, self.mark.pipeline);
             g.set_bind_group(pass, 0, self.groups[0], &[]);
-            g.dispatch(pass, scatter::EYE_SLOTS.div_ceil(compute::DECOR_MARK_WORKGROUP[0]), 1, 1);
+            g.dispatch(
+                pass,
+                scatter::EYE_SLOTS.div_ceil(compute::DECOR_MARK_WORKGROUP[0]),
+                1,
+                1,
+            );
             g.set_pipeline(pass, self.grow.pipeline);
             g.set_bind_group(pass, 0, self.groups[1], &[]);
             g.dispatch_indirect(pass, self.grows, 0);

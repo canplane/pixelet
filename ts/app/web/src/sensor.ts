@@ -17,7 +17,9 @@ export function hear(given: SensorHeard): void {
 interface IosOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
 }
-type IosOrientationEventCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
+type IosOrientationEventCtor = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<"granted" | "denied">;
+};
 
 function geo_has(): boolean {
   return "geolocation" in navigator;
@@ -28,7 +30,9 @@ function orient_has(): boolean {
 }
 
 function orient_gated(): boolean {
-  return orient_has() && typeof (DeviceOrientationEvent as IosOrientationEventCtor).requestPermission === "function";
+  return orient_has() &&
+    typeof (DeviceOrientationEvent as IosOrientationEventCtor)
+        .requestPermission === "function";
 }
 
 /** No event says the listener stopped hearing, so silence is how a loss shows. */
@@ -47,9 +51,22 @@ function geo_start(): void {
   if (geo_watch !== null || !("geolocation" in navigator)) return;
   geo_watch = navigator.geolocation.watchPosition(
     (pos) => {
-      const { latitude, longitude, altitude, altitudeAccuracy, accuracy, heading } = pos.coords;
+      const {
+        latitude,
+        longitude,
+        altitude,
+        altitudeAccuracy,
+        accuracy,
+        heading,
+      } = pos.coords;
       // An altitude with no accuracy is none measured: a desktop's location gives 0.
-      heard.position(longitude, latitude, altitudeAccuracy === null ? null : altitude, accuracy, heading);
+      heard.position(
+        longitude,
+        latitude,
+        altitudeAccuracy === null ? null : altitude,
+        accuracy,
+        heading,
+      );
     },
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
@@ -57,7 +74,13 @@ function geo_start(): void {
       // so it is left running on any other; the kernel shows the failure until a fix lands.
       if (err.code === err.PERMISSION_DENIED) geo_stop();
       heard.positionError(
-        err.code === err.PERMISSION_DENIED ? "denied" : err.code === err.POSITION_UNAVAILABLE ? "unavailable" : err.code === err.TIMEOUT ? "timeout" : "other",
+        err.code === err.PERMISSION_DENIED
+          ? "denied"
+          : err.code === err.POSITION_UNAVAILABLE
+          ? "unavailable"
+          : err.code === err.TIMEOUT
+          ? "timeout"
+          : "other",
       );
     },
     // No timeout: one would raise TIMEOUT on a clock while no fix comes
@@ -80,14 +103,22 @@ function orient_listen(name: string): void {
 }
 
 function orient_start(): void {
-  orient_listen("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
+  orient_listen(
+    "ondeviceorientationabsolute" in globalThis
+      ? "deviceorientationabsolute"
+      : "deviceorientation",
+  );
 }
 
 /** A grant in the browser's site settings reaches the kernel, since nothing re-asks after a refusal. */
 export function follow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;
-  const on_change = () => heard.permission("geolocation", status?.state === "granted" ? "granted" : "denied");
+  const on_change = () =>
+    heard.permission(
+      "geolocation",
+      status?.state === "granted" ? "granted" : "denied",
+    );
   navigator.permissions?.query({ name: "geolocation" }).then((s) => {
     if (stopped) return;
     status = s;
@@ -102,7 +133,8 @@ export function follow(): () => void {
 /** The prompt is called before any await, so it stays inside the gesture. */
 function orient_permit(): Promise<boolean> {
   if (!orient_gated() || orient_event !== null) return Promise.resolve(true);
-  const prompt = (DeviceOrientationEvent as IosOrientationEventCtor).requestPermission!();
+  const prompt = (DeviceOrientationEvent as IosOrientationEventCtor)
+    .requestPermission!();
   heard.permission("orientation", "asking");
   return prompt.then(
     (permission) => {
@@ -120,9 +152,18 @@ function orient_permit(): Promise<boolean> {
 }
 
 function orient_stop(): void {
-  if (orient_event !== null) globalThis.removeEventListener(orient_event, on_orient, true);
+  if (orient_event !== null) {
+    globalThis.removeEventListener(orient_event, on_orient, true);
+  }
   orient_event = null;
 }
 
 export const geo = { has: geo_has(), start: geo_start, stop: geo_stop };
-export const orient = { has: orient_has(), gated: orient_gated(), silence: orient_silence(), permit: orient_permit, start: orient_start, stop: orient_stop };
+export const orient = {
+  has: orient_has(),
+  gated: orient_gated(),
+  silence: orient_silence(),
+  permit: orient_permit,
+  start: orient_start,
+  stop: orient_stop,
+};

@@ -26,7 +26,10 @@ use xpute_kit::math::scalar::wrap;
 // east, wrapped. At either pole φ still names the direction the look returns
 // along. The orbit adds r = dist. There is no roll control.
 pub fn look_domain(polar: f64, azimuth: f64) -> (f64, f64) {
-    (polar.clamp(0.0, core::f64::consts::PI), wrap(azimuth, -core::f64::consts::PI, core::f64::consts::PI))
+    (
+        polar.clamp(0.0, core::f64::consts::PI),
+        wrap(azimuth, -core::f64::consts::PI, core::f64::consts::PI),
+    )
 }
 
 pub fn look_dir(polar: f64, azimuth: f64) -> V3 {
@@ -165,7 +168,10 @@ pub fn pan_across(cx: f64, cy: f64) {
 fn pan_by(lx: f64, ly: f64) {
     let Some(from) = target_center() else { return };
     let eye = eye_world().map_or(from, |e| world_to_canonical(&e));
-    put_center(pan_to(&from, lx, ly, camera().azimuth, &eye), Motion::Smooth);
+    put_center(
+        pan_to(&from, lx, ly, camera().azimuth, &eye),
+        Motion::Smooth,
+    );
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,7 +219,8 @@ pub fn pose() -> Option<ObserverPose> {
     let c = controllers();
     match (&c.tracked, c.base) {
         (Some(t), _) => {
-            let (mut camera_to_world, mut rotation, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
+            let (mut camera_to_world, mut rotation, mut moved) =
+                (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
             mat4::transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
             Some(ObserverPose {
@@ -269,7 +276,9 @@ pub fn come_in_to_default() {
 }
 
 pub fn zooming() -> bool {
-    active() == Active::Orbit && (crate::domain::control::camera::input::pinching() || crate::domain::control::camera::orbit::zoom_settling())
+    active() == Active::Orbit
+        && (crate::domain::control::camera::input::pinching()
+            || crate::domain::control::camera::orbit::zoom_settling())
 }
 
 /// `delta_y` in CSS pixels. First person has no zoom.
@@ -360,9 +369,14 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let c = controllers();
     if c.tracked.is_none() {
         let Some(now) = pose() else { return };
-        let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) = (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
+        let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) =
+            (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
         mat4::transpose(&mut camera_to_world, &now.rotation);
-        mat4::mul(&mut world_turn, &camera_to_world, mat4::transpose(&mut turn_back, &turn));
+        mat4::mul(
+            &mut world_turn,
+            &camera_to_world,
+            mat4::transpose(&mut turn_back, &turn),
+        );
         mat4::transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
         c.tracked = Some(Tracked {
             world_turn,

@@ -105,12 +105,21 @@ impl World<'_> {
     pub(super) fn drawn(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom], lines).map(|i| if i.kind == Kind::Block { i.block[0] } else { VOID })
+        self.node(at, [zoom, zoom], lines).map(|i| {
+            if i.kind == Kind::Block {
+                i.block[0]
+            } else {
+                VOID
+            }
+        })
     }
 
     /// A preview's entry as pxl-spec-core `overwrite` takes it.
     fn cut(&self, entry: Option<EntryAt>) -> Cut {
-        entry.map_or(Cut::NONE, |e| Cut { zoom: e.zoom(), at: e.at() })
+        entry.map_or(Cut::NONE, |e| Cut {
+            zoom: e.zoom(),
+            at: e.at(),
+        })
     }
 
     /// Its child `k`, in `child_of`'s order, with what it found handed down.
@@ -133,10 +142,27 @@ impl World<'_> {
     /// `asked` tells. The four looks a block is drawn by are the GPU's to
     /// draw. `lines` are the ground's lines the walk asking it read, which
     /// its own steps from (`line_walked`).
-    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<In<[u32; 2]>> {
-        let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
+    pub(super) fn node(
+        &self,
+        at: &mut At,
+        asked: [Zoom; 2],
+        lines: &mut Lines,
+    ) -> Answer<In<[u32; 2]>> {
+        let (lanes, cuts) = (
+            self.objects.lanes(),
+            [self.cut(self.carve), self.cut(self.hide)],
+        );
         let mut reading = Reading::new(self, lines);
-        let i = world::node(&mut reading, &Windowed, &lanes, pool(), &mut at.handed, at.node, asked, cuts);
+        let i = world::node(
+            &mut reading,
+            &Windowed,
+            &lanes,
+            pool(),
+            &mut at.handed,
+            at.node,
+            asked,
+            cuts,
+        );
         reading.answer(i.kind != Kind::Lacks, || i)
     }
 }
@@ -201,9 +227,21 @@ impl ground::Held for Reading<'_, '_> {
     /// stepped from `place` (pxl-spec-core `Held::relief`); its line names the
     /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
     /// and false.
-    fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], (zoom, c): (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
-        let line = self.world.terrain.line_walked(self.lines, (zoom, [c[0], c[1]]), cells[1]);
-        match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cells)) {
+    fn relief(
+        &mut self,
+        place: &mut Found,
+        cells: [Zoom; 2],
+        (zoom, c): (Zoom, [i32; 3]),
+    ) -> (ground::Bounds, bool) {
+        let line = self
+            .world
+            .terrain
+            .line_walked(self.lines, (zoom, [c[0], c[1]]), cells[1]);
+        match self.take(
+            self.world
+                .terrain
+                .relief(&line, place, (zoom, [c[0], c[1]]), cells),
+        ) {
             Some(r) => (r, true),
             None => ([ground::EMPTY; 2], false),
         }

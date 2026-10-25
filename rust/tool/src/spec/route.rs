@@ -12,23 +12,57 @@ const JSON: &str = "spec/spec/route.json";
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let spec = read(JSON)?;
-    let roots: Vec<(&str, &Node)> = spec.get("roots").map(|r| r.entries().iter().map(|(k, v)| (k.as_str(), v)).collect()).unwrap_or_default();
-    let branches: Vec<(&str, &Node)> = spec.get("branches").map(|b| b.entries().iter().map(|(k, v)| (k.as_str(), v)).collect()).unwrap_or_default();
+    let roots: Vec<(&str, &Node)> = spec
+        .get("roots")
+        .map(|r| r.entries().iter().map(|(k, v)| (k.as_str(), v)).collect())
+        .unwrap_or_default();
+    let branches: Vec<(&str, &Node)> = spec
+        .get("branches")
+        .map(|b| b.entries().iter().map(|(k, v)| (k.as_str(), v)).collect())
+        .unwrap_or_default();
 
-    let mut paths: Vec<(String, String)> = roots.iter().map(|(n, r)| (n.to_string(), r.str_at("path").unwrap_or_default().to_string())).collect();
+    let mut paths: Vec<(String, String)> = roots
+        .iter()
+        .map(|(n, r)| {
+            (
+                n.to_string(),
+                r.str_at("path").unwrap_or_default().to_string(),
+            )
+        })
+        .collect();
     for (name, b) in &branches {
         let under = b.str_at("under").unwrap_or_default();
         let base = paths
             .iter()
             .find(|(n, _)| n == under)
             .map(|(_, p)| p.clone())
-            .ok_or(format!("{JSON}: {name} is under {under}, which is not a root"))?;
-        paths.push((name.to_string(), format!("{base}/{}", b.str_at("name").unwrap_or_default())));
+            .ok_or(format!(
+                "{JSON}: {name} is under {under}, which is not a root"
+            ))?;
+        paths.push((
+            name.to_string(),
+            format!("{base}/{}", b.str_at("name").unwrap_or_default()),
+        ));
     }
-    let path = |name: &str| paths.iter().find(|(n, _)| n == name).map(|(_, p)| p.clone()).unwrap_or_default();
-    let doc = |name: &str| roots.iter().chain(branches.iter()).find(|(n, _)| *n == name).and_then(|(_, r)| r.lines_at("$doc"));
+    let path = |name: &str| {
+        paths
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, p)| p.clone())
+            .unwrap_or_default()
+    };
+    let doc = |name: &str| {
+        roots
+            .iter()
+            .chain(branches.iter())
+            .find(|(n, _)| *n == name)
+            .and_then(|(_, r)| r.lines_at("$doc"))
+    };
 
-    let worker_first: Vec<String> = roots.iter().map(|(n, _)| format!("{}/*", path(n))).collect();
+    let worker_first: Vec<String> = roots
+        .iter()
+        .map(|(n, _)| format!("{}/*", path(n)))
+        .collect();
 
     // A tile's object under its kind: the one place its segments are ordered.
     let object = roots
@@ -36,42 +70,72 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .find(|(n, _)| *n == "TILE_ROOT")
         .and_then(|(_, r)| r.str_at("object"))
         .ok_or(format!("{JSON}: TILE_ROOT has no object"))?;
-    let segments: Vec<&str> = object.split('/').map(|s| s.strip_prefix('{').and_then(|s| s.strip_suffix('}')).unwrap_or_default()).collect();
+    let segments: Vec<&str> = object
+        .split('/')
+        .map(|s| {
+            s.strip_prefix('{')
+                .and_then(|s| s.strip_suffix('}'))
+                .unwrap_or_default()
+        })
+        .collect();
     // A version is a folder its tiles go up in whole (script/publish.py), so it comes first.
     if segments != ["version", "name"] {
-        return Err(format!("{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"));
+        return Err(format!(
+            "{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"
+        ));
     }
-    let object_doc = [format!("A kind's tile under `TILE_PREFIX` and the kind, `{object}`.")];
+    let object_doc = [format!(
+        "A kind's tile under `TILE_PREFIX` and the kind, `{object}`."
+    )];
     let sphere = roots
         .iter()
         .find(|(n, _)| *n == "TILE_ROOT")
         .and_then(|(_, r)| r.str_at("sphere"))
         .ok_or(format!("{JSON}: TILE_ROOT has no sphere"))?;
-    if sphere.is_empty() || !sphere.bytes().all(|b| b.is_ascii_lowercase()) || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b)) {
-        return Err(format!("{JSON}: TILE_ROOT.sphere {sphere:?} is no name a tile could have"));
+    if sphere.is_empty()
+        || !sphere.bytes().all(|b| b.is_ascii_lowercase())
+        || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b))
+    {
+        return Err(format!(
+            "{JSON}: TILE_ROOT.sphere {sphere:?} is no name a tile could have"
+        ));
     }
     let sphere_doc = "The Earth's picture whole, in place of a tile's name under the earth layer's version: the sphere's, no tile of the pyramid.";
 
     // Every root, so none is answered by the static-asset fallback with
     // index.html, which reads as the app loading rather than as no route.
     let wrangler_path = "ts/server/edge/wrangler.jsonc";
-    let wrangler = std::fs::read_to_string(root().join(wrangler_path)).map_err(|e| format!("{wrangler_path}: {e}"))?;
+    let wrangler = std::fs::read_to_string(root().join(wrangler_path))
+        .map_err(|e| format!("{wrangler_path}: {e}"))?;
     let claim = Regex::new(r#""run_worker_first"\s*:\s*\[[^\]]*\]"#).map_err(|e| e.to_string())?;
     if !claim.is_match(&wrangler) {
         return Err(format!("{wrangler_path}: no run_worker_first to write"));
     }
-    let list = serde_json::to_string(&worker_first).unwrap_or_default().replace(',', ", ");
-    let wrangler = claim.replace(&wrangler, format!(r#""run_worker_first": {list}"#).as_str()).into_owned();
+    let list = serde_json::to_string(&worker_first)
+        .unwrap_or_default()
+        .replace(',', ", ");
+    let wrangler = claim
+        .replace(&wrangler, format!(r#""run_worker_first": {list}"#).as_str())
+        .into_owned();
 
     let mut all: Vec<(String, String)> = Vec::new();
     all.extend(roots.iter().map(|(n, _)| (n.to_string(), path(n))));
     all.extend(branches.iter().map(|(n, _)| (n.to_string(), path(n))));
     // A prefix keeps its separator; a bare root would match a sibling starting with it.
-    all.extend(roots.iter().map(|(n, _)| (format!("{}_PREFIX", n.strip_suffix("_ROOT").unwrap_or(n)), format!("{}/", path(n)))));
+    all.extend(roots.iter().map(|(n, _)| {
+        (
+            format!("{}_PREFIX", n.strip_suffix("_ROOT").unwrap_or(n)),
+            format!("{}/", path(n)),
+        )
+    }));
 
     let spec_doc = spec.lines_at("$doc").unwrap_or_default();
     let head = |logical: &str| {
-        let mut h = vec![format!("// {logical}"), "//".to_string(), format!("// GENERATED by pxl-tool/bin/spec.rs from {JSON} — do not edit.")];
+        let mut h = vec![
+            format!("// {logical}"),
+            "//".to_string(),
+            format!("// GENERATED by pxl-tool/bin/spec.rs from {JSON} — do not edit."),
+        ];
         h.extend(line_comments(&spec_doc, ""));
         h.push(String::new());
         h
@@ -79,8 +143,17 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     let mut rs = head("pxl-spec/route.spec.rs");
     for (name, value) in &all {
-        rs.extend(doc(name).unwrap_or_default().iter().map(|l| if l.is_empty() { "///".to_string() } else { format!("/// {l}") }));
-        rs.extend([format!("pub const {name}: &str = {};", json_str(value)), String::new()]);
+        rs.extend(doc(name).unwrap_or_default().iter().map(|l| {
+            if l.is_empty() {
+                "///".to_string()
+            } else {
+                format!("/// {l}")
+            }
+        }));
+        rs.extend([
+            format!("pub const {name}: &str = {};", json_str(value)),
+            String::new(),
+        ]);
     }
     rs.extend(object_doc.iter().map(|l| format!("/// {l}")));
     rs.extend([
@@ -105,15 +178,22 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         format!(
             "pub const WORKER_FIRST: [&str; {}] = [{}];",
             worker_first.len(),
-            worker_first.iter().map(|w| json_str(w)).collect::<Vec<_>>().join(", ")
+            worker_first
+                .iter()
+                .map(|w| json_str(w))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         String::new(),
     ]);
 
-    let mut ts = head("@pxl/client/config/route.spec.ts");
+    let mut ts = head("@pxl/client/namespace/route.spec.ts");
     for (name, value) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
-        ts.extend([format!("export const {name} = {};", json_str(value)), String::new()]);
+        ts.extend([
+            format!("export const {name} = {};", json_str(value)),
+            String::new(),
+        ]);
     }
 
     ts.extend(ts_doc(&object_doc, ""));
@@ -124,7 +204,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
     ]);
     ts.extend(ts_doc(&[sphere_doc.to_string()], ""));
-    ts.extend([format!("export const TILE_SPHERE = {};", json_str(sphere)), String::new()]);
+    ts.extend([
+        format!("export const TILE_SPHERE = {};", json_str(sphere)),
+        String::new(),
+    ]);
 
     let mut worker = head("@pxl/edge/route.spec.ts");
     worker.extend(
@@ -137,18 +220,36 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]
         .map(String::from),
     );
-    worker.extend(all.iter().filter(|(n, _)| n.ends_with("_PREFIX")).map(|(n, v)| format!("export const {n} = {};", json_str(v))));
+    worker.extend(
+        all.iter()
+            .filter(|(n, _)| n.ends_with("_PREFIX"))
+            .map(|(n, v)| format!("export const {n} = {};", json_str(v))),
+    );
     worker.push(String::new());
     // A version is any one segment the declaration names; a name, a digit a zoom (pxl-spec space/hierarchy/morton.rs).
-    let pattern = object.replace("{version}", "[^/]+").replace("{name}", "[0-3]+").replace('/', "\\/");
-    worker.extend(ts_doc(&[format!("A tile's object under its kind, `{object}`, as a pattern.")], ""));
-    worker.extend([format!("export const TILE_OBJECT = String.raw`{pattern}`;"), String::new()]);
+    let pattern = object
+        .replace("{version}", "[^/]+")
+        .replace("{name}", "[0-3]+")
+        .replace('/', "\\/");
+    worker.extend(ts_doc(
+        &[format!(
+            "A tile's object under its kind, `{object}`, as a pattern."
+        )],
+        "",
+    ));
+    worker.extend([
+        format!("export const TILE_OBJECT = String.raw`{pattern}`;"),
+        String::new(),
+    ]);
     worker.extend(ts_doc(&[sphere_doc.to_string()], ""));
-    worker.extend([format!("export const TILE_SPHERE = {};", json_str(sphere)), String::new()]);
+    worker.extend([
+        format!("export const TILE_SPHERE = {};", json_str(sphere)),
+        String::new(),
+    ]);
 
     Ok(vec![
         Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
-        Output::new("ts/client/src/config/route.spec.ts", ts.join("\n")),
+        Output::new("ts/client/src/namespace/route.spec.ts", ts.join("\n")),
         Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
     ])

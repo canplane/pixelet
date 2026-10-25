@@ -9,20 +9,23 @@ use crate::status::errno::Errno;
 /// fatality: an invariant violation is fatal, an external fault is not.
 #[derive(Debug)]
 pub struct XputeError {
-    pub errno: Errno,
+    pub errnum: Errno,
     pub at: &'static Location<'static>,
 }
 
 impl XputeError {
     #[track_caller]
-    pub fn new(errno: Errno) -> XputeError {
-        XputeError { errno, at: Location::caller() }
+    pub fn new(errnum: Errno) -> XputeError {
+        XputeError {
+            errnum,
+            at: Location::caller(),
+        }
     }
 }
 
 impl fmt::Display for XputeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} at {}", self.errno, self.at)
+        write!(f, "{:?} at {}", self.errnum, self.at)
     }
 }
 
@@ -44,8 +47,8 @@ macro_rules! subclass {
     ($name:ident extends $base:ident) => {
         impl $name {
             #[track_caller]
-            pub fn new(errno: Errno) -> $name {
-                $name($base::new(errno))
+            pub fn new(errnum: Errno) -> $name {
+                $name($base::new(errnum))
             }
         }
 

@@ -28,7 +28,7 @@ template <class F> std::string encode(F &&build, std::size_t cap = 1024) {
     PacketWriter w(buf);
     build(w);
     Result<std::uint32_t> n = w.finish();
-    if (!n) return "errno:" + std::to_string(static_cast<int>(n.error().code));
+    if (!n) return "errno:" + std::to_string(static_cast<int>(n.error().errnum));
     return hex(std::span(buf).first(*n));
 }
 

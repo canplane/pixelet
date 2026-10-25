@@ -12,7 +12,9 @@ use xpute_guest::global::Global;
 use xpute_guest::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
-use crate::profiler::frame::{DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample};
+use crate::profiler::frame::{
+    DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample,
+};
 use crate::profiler::record::{profiler_record_frame, profiler_recording};
 use crate::sys::io::demand::Stream;
 use crate::sys::io::request::stream_counts;
@@ -45,7 +47,7 @@ pub fn set_host_frame(kind: FrameKind, gpu: GpuSample, device: DeviceSample) {
 
 /// The heap as its allocator states it, in its own bytes.
 fn heap_sample() -> HeapSample {
-    let h = crate::sys::io::host::heap_stat();
+    let h = crate::sys::boot::heap_stat();
     HeapSample {
         used_bytes: h.used as f64,
         live_bytes: h.live as f64,

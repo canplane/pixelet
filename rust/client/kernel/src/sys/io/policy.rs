@@ -38,7 +38,9 @@ pub struct Policy {
 
 impl Policy {
     pub const fn standard() -> Policy {
-        Policy { intake: param::INTAKE }
+        Policy {
+            intake: param::INTAKE,
+        }
     }
 }
 
@@ -50,7 +52,11 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
             detail: 0,
         };
     }
-    let base = if layer == Stream::terrain { TERRAIN } else { PLACE };
+    let base = if layer == Stream::terrain {
+        TERRAIN
+    } else {
+        PLACE
+    };
     Rank {
         class: base + !ask.order.seen as u8,
         distance: ask.order.near,
@@ -84,7 +90,7 @@ impl Serve for Policy {
     /// failure comes back the same however often it is asked: the bytes are
     /// fixed by the key within a version.
     fn blame(&self, failure: Failure) -> Blame {
-        match failure.errno {
+        match failure.errnum {
             // The browser says it is offline.
             Errno::ENETUNREACH => Blame::Network,
             // Any other status but 204 and 404, or no response while online. The
@@ -107,7 +113,8 @@ impl Serve for Policy {
         if strikes > param::RETRY_ATTEMPTS {
             return None;
         }
-        let ceiling = (param::RETRY_BASE_MS * libm::exp2(f64::from(strikes - 1))).min(param::RETRY_CAP_MS);
+        let ceiling =
+            (param::RETRY_BASE_MS * libm::exp2(f64::from(strikes - 1))).min(param::RETRY_CAP_MS);
         Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
     }
 }

@@ -24,13 +24,17 @@ fn run() -> Result<(), String> {
     let run = Run::parse("place")?;
     let coverage = Coverage::of_source()?;
     if run.leaf {
-        let (_, mut client) = Overture::reading(&[&place::READS], &run.shards.iter().copied().collect())?;
+        let (_, mut client) =
+            Overture::reading(&[&place::READS], &run.shards.iter().copied().collect())?;
         for &shard in &run.shards {
             let within = Tile::new(SHARD_ZOOM, shard.at);
             let tiles = leaves(&mut client, &coverage, within)?;
             run.stage.leaf::<PlaceTile>(shard, |set| {
                 for (tile, place) in &tiles {
-                    set.write(*tile, &pack(&place.encode(*tile)?, Level::Stored).map_err(|e| e.to_string())?)?;
+                    set.write(
+                        *tile,
+                        &pack(&place.encode(*tile)?, Level::Stored).map_err(|e| e.to_string())?,
+                    )?;
                 }
                 Ok(())
             })?;

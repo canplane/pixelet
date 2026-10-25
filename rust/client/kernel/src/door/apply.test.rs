@@ -10,7 +10,9 @@ fn surface(n: f64) -> Result<u32, Errno> {
         w.f64(Some(n));
         w.finish().expect("the buffer holds one number")
     };
-    abi::SurfaceClose::read(&buf[..len as usize]).map(|p| p.surface).map_err(|e| e.errno)
+    abi::SurfaceClose::read(&buf[..len as usize])
+        .map(|p| p.surface)
+        .map_err(|e| e.errnum)
 }
 
 #[test]

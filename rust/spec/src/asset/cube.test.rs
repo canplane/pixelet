@@ -13,7 +13,11 @@ fn every_cube_round_trips_through_its_leaf_value_and_has_a_color() {
 
 #[test]
 fn no_sentinel_air_or_decor_is_a_cube() {
-    for value in [sentinel::void as u32, sentinel::unknown as u32, object::air as u32] {
+    for value in [
+        sentinel::void as u32,
+        sentinel::unknown as u32,
+        object::air as u32,
+    ] {
         assert_eq!(cube_of(value), None, "{value}");
     }
     for &id in decor_ids.iter() {

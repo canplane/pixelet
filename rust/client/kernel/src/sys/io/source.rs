@@ -42,7 +42,9 @@ fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
     let n = 1i64 << zoom;
     let row = i64::from(at[1]) + n / 2;
     let first = ((1i64 << (2 * zoom)) - 1) / 3;
-    (0..n).contains(&row).then(|| (first + row * n + i64::from(at[0]).rem_euclid(n)) as usize)
+    (0..n)
+        .contains(&row)
+        .then(|| (first + row * n + i64::from(at[0]).rem_euclid(n)) as usize)
 }
 
 static DECLARED: Global<Option<Source>> = Global::new();
@@ -52,7 +54,11 @@ static DECLARED: Global<Option<Source>> = Global::new();
 /// names, in any order. Refused whole for anything the client cannot follow:
 /// a zoom out of the pyramid, a name no shard or node over shards (pxl-spec
 /// bake/source.rs), or a kind with no format or one it does not read.
-pub fn declare<'a>(top_zoom: u32, format: &[u32], shard: impl IntoIterator<Item = &'a str>) -> Result<(), Errno> {
+pub fn declare<'a>(
+    top_zoom: u32,
+    format: &[u32],
+    shard: impl IntoIterator<Item = &'a str>,
+) -> Result<(), Errno> {
     let declared = DECLARED.get(Default::default);
     if declared.is_some() {
         return Err(Errno::EEXIST);
@@ -80,7 +86,10 @@ pub fn serves(layer: BaseLayer, p: Tile) -> bool {
 /// told of the focus (shell.rs `outside`); a walk or an edit asks
 /// domain/query/limit.rs `within`, which keeps off the area's edge as well.
 pub fn past_at([x, y]: [f64; 2]) -> bool {
-    let leaf = GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile().at;
+    let leaf = GROUND
+        .cell_of(LEAF_ZOOM, &world::point(x, y, 0.0))
+        .tile()
+        .at;
     area::past(&Declared, leaf)
 }
 
@@ -113,11 +122,16 @@ impl Source {
 
     /// A shard over `p`, or at or under it: one read.
     fn covers(&self, p: Tile) -> bool {
-        self.node_over(p).is_some_and(|w| w & OVER != 0 || p.zoom <= SHARD_ZOOM && w & UNDER != 0)
+        self.node_over(p)
+            .is_some_and(|w| w & OVER != 0 || p.zoom <= SHARD_ZOOM && w & UNDER != 0)
     }
 }
 
-fn parse<'a>(top_zoom: u32, format: &[u32], names: impl IntoIterator<Item = &'a str>) -> Option<Source> {
+fn parse<'a>(
+    top_zoom: u32,
+    format: &[u32],
+    names: impl IntoIterator<Item = &'a str>,
+) -> Option<Source> {
     let top_zoom: Zoom = Some(top_zoom).filter(|z| (TOP_ZOOM..=LEAF_ZOOM).contains(z))?;
     reads_every(format)?;
     let mut shard = Vec::new();
@@ -150,7 +164,10 @@ fn parse<'a>(top_zoom: u32, format: &[u32], names: impl IntoIterator<Item = &'a 
     let mut nine = vec![0u16; cells];
     for &[x, y] in &covered {
         for k in 0..9 {
-            let n = [pxl_spec_core::wrap_index(SHARD_ZOOM, x + k % 3 - 1), y + k / 3 - 1];
+            let n = [
+                pxl_spec_core::wrap_index(SHARD_ZOOM, x + k % 3 - 1),
+                y + k / 3 - 1,
+            ];
             let key = area::shard_key(n);
             if key != area::NO_KEY {
                 nine[key as usize] = area::nine(serves, n) as u16;
@@ -179,12 +196,20 @@ fn parse<'a>(top_zoom: u32, format: &[u32], names: impl IntoIterator<Item = &'a 
             }
         }
     }
-    Some(Source { top_zoom, nine, nodes })
+    Some(Source {
+        top_zoom,
+        nine,
+        nodes,
+    })
 }
 
 /// Every kind is in the format this client reads it in, by its bake's number.
 fn reads_every(format: &[u32]) -> Option<()> {
-    (format.len() == BaseLayer::ALL.len() && BaseLayer::ALL.into_iter().all(|l| format[l as usize] == FORMAT.of(l))).then_some(())
+    (format.len() == BaseLayer::ALL.len()
+        && BaseLayer::ALL
+            .into_iter()
+            .all(|l| format[l as usize] == FORMAT.of(l)))
+    .then_some(())
 }
 
 #[cfg(test)]

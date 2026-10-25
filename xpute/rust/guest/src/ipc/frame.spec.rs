@@ -2,19 +2,15 @@
 //
 // GENERATED from spec/ipc/frame.json — do not edit.
 //
-// A message in a ring (ring.json): four words, a frame. The submitter's tag comes back on
+// A frame in a ring (ring.json): four words. The submitter's tag comes back on
 // the reply; the command shares its word with the flags; a reply carries a value or a
 // negative errno; and a packet, where there is one, lies in the ring's payload slot.
 //
 // Reserved for later, so taking them moves no word: the tag's high bits (a sender id for
 // routing), flag bits 2 and up, and the result word on a submission.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// The submitter's, echoed on the reply; a signal's subject.

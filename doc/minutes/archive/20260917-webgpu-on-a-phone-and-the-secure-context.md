@@ -17,47 +17,46 @@ Nothing here is wired; only the message was fixed.
 
 ## The requirement is the origin, not the device
 
-WebGPU's IDL puts `gpu` on `Navigator` behind `[SecureContext]`, so on an
-origin the browser does not consider potentially trustworthy the attribute is
-simply absent — there is no adapter to refuse, no error to catch, nothing to
+WebGPU's IDL puts `gpu` on `Navigator` behind `[SecureContext]`, so on an origin
+the browser does not consider potentially trustworthy the attribute is simply
+absent — there is no adapter to refuse, no error to catch, nothing to
 feature-detect past `"gpu" in navigator`. The Secure Contexts rules treat
 `http://localhost` and `http://127.0.0.1` as trustworthy and a private LAN
 address as not; `192.168.0.2` is an ordinary insecure origin as far as the
 browser is concerned.
 
 `apps/web/vite.config.ts` sets `host: true`, so the dev server binds every
-interface and both addresses reach the same process. Which one is in the
-address bar decides whether the client can draw, and nothing in the page says
-so.
+interface and both addresses reach the same process. Which one is in the address
+bar decides whether the client can draw, and nothing in the page says so.
 
 ## The message named the wrong cause
 
 `acquire_device` returned `null` for three different situations — no
 `navigator.gpu`, no adapter, and (by rejecting) no device — and the shell
 printed one sentence for all three. The sentence it printed blamed the device,
-which is the one of the three that was not true here, and it sent the reading
-in the wrong direction for as long as it was believed.
+which is the one of the three that was not true here, and it sent the reading in
+the wrong direction for as long as it was believed.
 
 It now returns a reason and the caller prints it, so the three read apart:
-whether the origin is the problem, whether the browser has no WebGPU at all,
-and whether an adapter declined. The rejection path had no handler at all and
-escaped as an unhandled rejection with no `[gpu]` line anywhere; it has one
-now. This matters on the re-boot after a device loss, which is the only place
+whether the origin is the problem, whether the browser has no WebGPU at all, and
+whether an adapter declined. The rejection path had no handler at all and
+escaped as an unhandled rejection with no `[gpu]` line anywhere; it has one now.
+This matters on the re-boot after a device loss, which is the only place
 `requestDevice` is called a second time.
 
 ## Why this is new
 
-Before 2026-09-14 the client drew through WebGL, which carries no
-secure-context requirement, so an insecure LAN origin was a perfectly good
-place to run the whole client. The renderer moving into the module is what put
-a `[SecureContext]` attribute on the critical path.
+Before 2026-09-14 the client drew through WebGL, which carries no secure-context
+requirement, so an insecure LAN origin was a perfectly good place to run the
+whole client. The renderer moving into the module is what put a
+`[SecureContext]` attribute on the critical path.
 
 That makes one existing record wrong as written:
 [`experiment/20260913-bake-worker-on-the-phone.md`](../experiment/20260913-bake-worker-on-the-phone.md)
-describes its procedure as an iPhone reaching the dev server over the LAN,
-which was fine for what it measured — a bake worker needs no GPU — and is no
-longer a procedure that produces a picture. Anyone following it now gets a
-blank canvas and the message above.
+describes its procedure as an iPhone reaching the dev server over the LAN, which
+was fine for what it measured — a bake worker needs no GPU — and is no longer a
+procedure that produces a picture. Anyone following it now gets a blank canvas
+and the message above.
 
 ## Why an iPhone is the hard case
 
@@ -75,8 +74,8 @@ origin, which means a certificate the phone will accept.
 
 ## What the ways cost
 
-None of `mkcert`, `cloudflared`, `ngrok`, `tailscale` or `caddy` is installed
-on this machine, so every row below starts from an install.
+None of `mkcert`, `cloudflared`, `ngrok`, `tailscale` or `caddy` is installed on
+this machine, so every row below starts from an install.
 
 | Way                        | Installs                                       | Phone-side work                                                                                                        | What it costs                                                                                                            |
 | -------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |

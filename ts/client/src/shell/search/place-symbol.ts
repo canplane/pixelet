@@ -14,7 +14,10 @@ export interface PlaceSymbol {
 export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
   "symbols/amenity/aerodrome.svg": {
     box: [12, 12],
-    shapes: [["M6 0C5.255 0 5 2 5 2L5 3.969L0 7.5L0 8.5L5 7.25L5 9.656L3 11L3 12L6 11.25L9 12L9 11L7 9.656L7 7.25L12 8.5L12 7.5L7 3.969L7 2C7 2 6.745 0 6 0Z", false]],
+    shapes: [[
+      "M6 0C5.255 0 5 2 5 2L5 3.969L0 7.5L0 8.5L5 7.25L5 9.656L3 11L3 12L6 11.25L9 12L9 11L7 9.656L7 7.25L12 8.5L12 7.5L7 3.969L7 2C7 2 6.745 0 6 0Z",
+      false,
+    ]],
   },
   "symbols/amenity/arts_centre.svg": {
     box: [14, 14],
@@ -37,7 +40,13 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       false,
     ]],
   },
-  "symbols/amenity/bar.svg": { box: [12, 12], shapes: [["M0 0L5.5 6L5.5 10C5.5 10 1 11 1 12L11 12C11 11 6.5 10 6.5 10L6.5 6L12 0Z", false]] },
+  "symbols/amenity/bar.svg": {
+    box: [12, 12],
+    shapes: [[
+      "M0 0L5.5 6L5.5 10C5.5 10 1 11 1 12L11 12C11 11 6.5 10 6.5 10L6.5 6L12 0Z",
+      false,
+    ]],
+  },
   "symbols/amenity/cafe.svg": {
     box: [14, 14],
     shapes: [[
@@ -117,7 +126,10 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
   },
   "symbols/amenity/hospital.svg": {
     box: [14, 14],
-    shapes: [["M7 0C3.134 0 0 3.134 0 7C0 10.866 3.134 14 7 14C10.866 14 14 10.866 14 7C14 3.134 10.866 0 7 0ZM6 3L8 3L8 6L11 6L11 8L8 8L8 11L6 11L6 8L3 8L3 6L6 6Z", false]],
+    shapes: [[
+      "M7 0C3.134 0 0 3.134 0 7C0 10.866 3.134 14 7 14C10.866 14 14 10.866 14 7C14 3.134 10.866 0 7 0ZM6 3L8 3L8 6L11 6L11 8L8 8L8 11L6 11L6 8L3 8L3 6L6 6Z",
+      false,
+    ]],
   },
   "symbols/amenity/library.svg": {
     box: [14, 14],
@@ -135,9 +147,18 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
   },
   "symbols/amenity/parking.svg": {
     box: [12, 12],
-    shapes: [["M2 0L2 12L3.75 12L3.75 7L8 7C9.657 7 11 5.433 11 3.5C11 1.567 9.657 0 8 0ZM3.75 1.75L7.5 1.75C8.373 1.75 9.08 2.534 9.08 3.5C9.08 4.466 8.373 5.25 7.5 5.25L3.75 5.25Z", false]],
+    shapes: [[
+      "M2 0L2 12L3.75 12L3.75 7L8 7C9.657 7 11 5.433 11 3.5C11 1.567 9.657 0 8 0ZM3.75 1.75L7.5 1.75C8.373 1.75 9.08 2.534 9.08 3.5C9.08 4.466 8.373 5.25 7.5 5.25L3.75 5.25Z",
+      false,
+    ]],
   },
-  "symbols/amenity/pharmacy.svg": { box: [14, 14], shapes: [["M4 4L2 6L2 14L12 14L12 6L10 4ZM6 6L8 6L8 8L10 8L10 10L8 10L8 12L6 12L6 10L4 10L4 8L6 8ZM4 0L4 3L10 3L10 0Z", false]] },
+  "symbols/amenity/pharmacy.svg": {
+    box: [14, 14],
+    shapes: [[
+      "M4 4L2 6L2 14L12 14L12 6L10 4ZM6 6L8 6L8 8L10 8L10 10L8 10L8 12L6 12L6 10L4 10L4 8L6 8ZM4 0L4 3L10 3L10 0Z",
+      false,
+    ]],
+  },
   "symbols/amenity/place_of_worship.svg": {
     box: [14, 14],
     shapes: [[
@@ -217,9 +238,18 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
   },
   "symbols/historic/memorial.svg": {
     box: [14, 14],
-    shapes: [["M6 2C5 2 4 3 4 4L4 12L12 12L12 4C12 3 11 2 10 2ZM7 4L9 4L9 5L7 5ZM5 6L11 6L11 7L5 7ZM6 8L10 8L10 9L6 9ZM3 13L2 14L2 15L14 15L14 14L13 13Z", false]],
+    shapes: [[
+      "M6 2C5 2 4 3 4 4L4 12L12 12L12 4C12 3 11 2 10 2ZM7 4L9 4L9 5L7 5ZM5 6L11 6L11 7L5 7ZM6 8L10 8L10 9L6 9ZM3 13L2 14L2 15L14 15L14 14L13 13Z",
+      false,
+    ]],
   },
-  "symbols/historic/monument.svg": { box: [14, 14], shapes: [["M7 0C7 0 5 1.497 5 2L5 10L9 10L9 2C9 1.521 7 0 7 0ZM4 11C3 11 3 12 3 13L2 13L1 14L13 14L12 13L11 13C11 12 11 11 10 11Z", false]] },
+  "symbols/historic/monument.svg": {
+    box: [14, 14],
+    shapes: [[
+      "M7 0C7 0 5 1.497 5 2L5 10L9 10L9 2C9 1.521 7 0 7 0ZM4 11C3 11 3 12 3 13L2 13L1 14L13 14L12 13L11 13C11 12 11 11 10 11Z",
+      false,
+    ]],
+  },
   "symbols/leisure/amusement_arcade.svg": {
     box: [14, 14],
     shapes: [[
@@ -255,7 +285,10 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       false,
     ]],
   },
-  "symbols/natural/peak.svg": { box: [8, 8], shapes: [["M4 1L0 8L8 8Z", false]] },
+  "symbols/natural/peak.svg": {
+    box: [8, 8],
+    shapes: [["M4 1L0 8L8 8Z", false]],
+  },
   "symbols/natural/waterfall.svg": {
     box: [14, 14],
     shapes: [[
@@ -265,7 +298,10 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
   },
   "symbols/office/embassy.svg": {
     box: [14, 14],
-    shapes: [["M8 1C5 3 3 1 3 1L3 8C3 8 5 10 8 8C11 6 13 8 13 8L13 1C13 1 11 -1 8 1ZM1.5 0.25C1.25 0.25 1 0.5 1 1L1 13C1 14 2 14 2 13L2 1C2 0.5 1.75 0.25 1.5 0.25Z", false]],
+    shapes: [[
+      "M8 1C5 3 3 1 3 1L3 8C3 8 5 10 8 8C11 6 13 8 13 8L13 1C13 1 11 -1 8 1ZM1.5 0.25C1.25 0.25 1 0.5 1 1L1 13C1 14 2 14 2 13L2 1C2 0.5 1.75 0.25 1.5 0.25Z",
+      false,
+    ]],
   },
   "symbols/religion/buddhist.svg": {
     box: [14, 14],
@@ -274,7 +310,13 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       false,
     ]],
   },
-  "symbols/religion/christian.svg": { box: [14, 14], shapes: [["M6 1C6 0.448 6.448 0 7 0C7.552 -0 8 0.448 8 1L8 4L12 4L12 6L8 6L8 14L6 14L6 6L2 6L2 4L6 4Z", false]] },
+  "symbols/religion/christian.svg": {
+    box: [14, 14],
+    shapes: [[
+      "M6 1C6 0.448 6.448 0 7 0C7.552 -0 8 0.448 8 1L8 4L12 4L12 6L8 6L8 14L6 14L6 6L2 6L2 4L6 4Z",
+      false,
+    ]],
+  },
   "symbols/religion/hinduist.svg": {
     box: [14, 14],
     shapes: [[
@@ -310,7 +352,13 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       false,
     ]],
   },
-  "symbols/shop/clothes.svg": { box: [14, 14], shapes: [["M3 1L0 3L1 6.35L3 5L3 13L11 13L11 5L13 6.35L14 3L11 1L9 1C9 2 8 3 7 3C6 3 5 2 5 1Z", false]] },
+  "symbols/shop/clothes.svg": {
+    box: [14, 14],
+    shapes: [[
+      "M3 1L0 3L1 6.35L3 5L3 13L11 13L11 5L13 6.35L14 3L11 1L9 1C9 2 8 3 7 3C6 3 5 2 5 1Z",
+      false,
+    ]],
+  },
   "symbols/shop/convenience.svg": {
     box: [14, 14],
     shapes: [[
@@ -406,7 +454,13 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       false,
     ]],
   },
-  "symbols/tourism/camping.svg": { box: [14, 14], shapes: [["M14 14L8 3L9 0L8 0L7 2L6 0L5 0L6 3L0 14ZM7 7L10 13L4 13Z", false]] },
+  "symbols/tourism/camping.svg": {
+    box: [14, 14],
+    shapes: [[
+      "M14 14L8 3L9 0L8 0L7 2L6 0L5 0L6 3L0 14ZM7 7L10 13L4 13Z",
+      false,
+    ]],
+  },
   "symbols/tourism/caravan_park.svg": {
     box: [14, 14],
     shapes: [[
@@ -416,7 +470,10 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
   },
   "symbols/tourism/guest_house.svg": {
     box: [14, 14],
-    shapes: [["M7 0.853L1 5L3 5L3 13L6 13L6 8L8 8L8 13L11 13L11 5L13 5Z", false], [
+    shapes: [[
+      "M7 0.853L1 5L3 5L3 13L6 13L6 8L8 8L8 13L11 13L11 5L13 5Z",
+      false,
+    ], [
       "M0.5 6C0.223 6 0 6.223 0 6.5L0 7L0 11L0 12L0 12.5L0 14L1 14L1 12.5L1 12L13 12L13 13.5L13 14L13.5 14L14 14L14 13.5L14 12L14 11L14 9L14 8.5C14 8.223 13.777 8 13.5 8C13.223 8 13 8.223 13 8.5L13 9L13 11L1 11L1 7L1 6.5C1 6.223 0.777 6 0.5 6ZM3.5 7C2.672 7 2 7.672 2 8.5C2 9.328 2.672 10 3.5 10C4.328 10 5 9.328 5 8.5C5 7.672 4.328 7 3.5 7ZM6 8L6 10L12 10C12 9 10.964 8 10 8Z",
       false,
     ]],

@@ -25,8 +25,14 @@ function float(bits: u32): number {
 /** Greedy by words; a word too wide alone (Korean typed without spaces)
  * breaks between characters. A space stays at the next line's head for the
  * kernel to trim. */
-function line_ends(text: string, max_width: number, width: (s: string) => number): number[] {
-  const words = [...text.matchAll(/\S+/g)].map((m) => [m.index, m.index + m[0].length]);
+function line_ends(
+  text: string,
+  max_width: number,
+  width: (s: string) => number,
+): number[] {
+  const words = [...text.matchAll(/\S+/g)].map((
+    m,
+  ) => [m.index, m.index + m[0].length]);
   if (max_width <= 0 || words.length === 0) return [text.length];
   const spans: [number, number][] = [];
   let [start, end] = words[0];
@@ -63,7 +69,13 @@ function line_ends(text: string, max_width: number, width: (s: string) => number
 export function text_call(code: u32, w: U32Array, a: u32): void {
   switch (code) {
     case op.TEXT_LAYOUT: {
-      const [weight, px, max_width, at, lines] = [w[a], float(w[a + 1]), float(w[a + 2]), w[a + 3], w[a + 4]];
+      const [weight, px, max_width, at, lines] = [
+        w[a],
+        float(w[a + 1]),
+        float(w[a + 2]),
+        w[a + 3],
+        w[a + 4],
+      ];
       const text = text_of(w, a + 5);
       const width = (s: string) => bracket.text.width(weight, px, s);
       const ends = line_ends(text, max_width, width).slice(0, lines);
@@ -81,8 +93,25 @@ export function text_call(code: u32, w: U32Array, a: u32): void {
       break;
     }
     case op.TEXT_RASTER: {
-      const [weight, px, rgba, at, width, height, x] = [w[a], float(w[a + 1]), w[a + 2], w[a + 3], w[a + 4], w[a + 5], float(w[a + 6])];
-      bracket.text.raster(weight, px, rgba, text_of(w, a + 7), x, width, height, new Uint8Array(w.buffer, at, width * height * 4));
+      const [weight, px, rgba, at, width, height, x] = [
+        w[a],
+        float(w[a + 1]),
+        w[a + 2],
+        w[a + 3],
+        w[a + 4],
+        w[a + 5],
+        float(w[a + 6]),
+      ];
+      bracket.text.raster(
+        weight,
+        px,
+        rgba,
+        text_of(w, a + 7),
+        x,
+        width,
+        height,
+        new Uint8Array(w.buffer, at, width * height * 4),
+      );
       break;
     }
     default:

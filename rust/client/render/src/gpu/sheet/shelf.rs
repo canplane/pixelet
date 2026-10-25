@@ -13,7 +13,12 @@ pub const NO_SLOT: i32 = -1;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Paint {
     /// Words alone on a pill in its fill and text colors (`ink`).
-    Pill { words: String, fill: u32, ink: u32, logical_w: f64 },
+    Pill {
+        words: String,
+        fill: u32,
+        ink: u32,
+        logical_w: f64,
+    },
     /// A place as Carto draws it: a dot or its icon in the fill, and under
     /// it the name, if shown, in the text color (`ink`).
     Point {
@@ -82,7 +87,11 @@ impl SlotSet {
 
     /// Its slots, lowest first.
     pub fn iter(&self) -> impl Iterator<Item = u32> + '_ {
-        self.0.iter().enumerate().flat_map(|(k, &w)| (0..64).filter(move |b| w >> b & 1 == 1).map(move |b| (k * 64 + b) as u32))
+        self.0.iter().enumerate().flat_map(|(k, &w)| {
+            (0..64)
+                .filter(move |b| w >> b & 1 == 1)
+                .map(move |b| (k * 64 + b) as u32)
+        })
     }
 }
 
@@ -107,7 +116,8 @@ struct Shelves {
 impl Shelves {
     /// The first shelf of height `h` with room, else a new one; none past `size`.
     fn fit(&mut self, w: u32, h: u32, size: u32) -> Option<(u32, u32)> {
-        let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= size) {
+        let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= size)
+        {
             Some(s) => s,
             None => {
                 if self.next_y + h > size || w > size {
@@ -135,7 +145,9 @@ struct Plan {
 
 fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
     let mut shelves = Shelves::default();
-    let at = (0..ws.len()).map(|i| shelves.fit(ws[i], hs[i], size)).collect::<Option<_>>()?;
+    let at = (0..ws.len())
+        .map(|i| shelves.fit(ws[i], hs[i], size))
+        .collect::<Option<_>>()?;
     Some(Plan { at, shelves })
 }
 
@@ -208,7 +220,9 @@ impl Sheet {
     }
 
     pub fn slot_paint(&self, slot: u32) -> Option<&Paint> {
-        (self.state.get(slot as usize) == Some(&LIVE)).then(|| self.paints[slot as usize].as_ref()).flatten()
+        (self.state.get(slot as usize) == Some(&LIVE))
+            .then(|| self.paints[slot as usize].as_ref())
+            .flatten()
     }
 
     /// The slot drawn into, or NO_SLOT when the sheet is full. `w`/`h` are device pixels.
@@ -298,7 +312,9 @@ impl Sheet {
     }
 
     fn place(&mut self, w: u32, h: u32) -> i32 {
-        let Some((x, y)) = self.shelves.fit(w, h, self.size) else { return NO_SLOT };
+        let Some((x, y)) = self.shelves.fit(w, h, self.size) else {
+            return NO_SLOT;
+        };
         let slot = self.unused_slot();
         (self.x[slot], self.y[slot], self.w[slot], self.h[slot]) = (x, y, w, h);
         self.used_px += w * h;
@@ -306,7 +322,9 @@ impl Sheet {
     }
 
     fn live_slots(&self) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
-        let slots: Vec<usize> = (0..self.state.len()).filter(|&s| self.state[s] == LIVE).collect();
+        let slots: Vec<usize> = (0..self.state.len())
+            .filter(|&s| self.state[s] == LIVE)
+            .collect();
         let ws = slots.iter().map(|&s| self.w[s]).collect();
         let hs = slots.iter().map(|&s| self.h[s]).collect();
         (slots, ws, hs)
@@ -322,7 +340,9 @@ impl Sheet {
                 break;
             }
             let (slots, ws, hs) = self.live_slots();
-            let Some(plan) = pack(target, &ws, &hs) else { break };
+            let Some(plan) = pack(target, &ws, &hs) else {
+                break;
+            };
             self.rebuild(target, &slots, plan);
             changed = true;
         }
@@ -336,7 +356,9 @@ impl Sheet {
         }
         let (slots, ws, hs) = self.live_slots();
         // Everything fit at half the size, so this fits by construction.
-        let Some(plan) = pack(self.size * 2, &ws, &hs) else { return false };
+        let Some(plan) = pack(self.size * 2, &ws, &hs) else {
+            return false;
+        };
         self.rebuild(self.size * 2, &slots, plan);
         true
     }

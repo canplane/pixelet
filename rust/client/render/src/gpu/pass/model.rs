@@ -8,12 +8,22 @@ use xpute_guest::global::Global;
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::word::DRAW_FLOATS;
-use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes, Entry, Gpu, Image};
+use crate::gpu::api::{
+    buffer_entry, buffer_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
+    Entry, Gpu, Image,
+};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::{put_f32, put_u32, Scratch};
 
-fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [Entry; 2], ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
+fn frame_group(
+    g: &Gpu,
+    layout: u32,
+    frame: u32,
+    shadow: [Entry; 2],
+    ao: Entry,
+    air: [Entry; AIR_ENTRIES],
+) -> u32 {
     let mut e = vec![buffer_entry(0, frame), shadow[0], shadow[1], ao];
     e.extend(air);
     g.bind_group(layout, &e)
@@ -43,10 +53,20 @@ pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
     let skins = SKINS.get(Skins::default);
     let texture = g.image(image, file)?;
     if skins.sampler == 0 {
-        skins.sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
+        skins.sampler = g.sampler(
+            FilterMode::linear,
+            FilterMode::linear,
+            MipmapFilterMode::nearest,
+            AddressMode::repeat,
+            None,
+            1,
+        );
     }
     let view = g.view(texture, false, 0, 1, 0, 1);
-    let group = g.bind_group(layout, &[view_entry(0, view), sampler_entry(1, skins.sampler)]);
+    let group = g.bind_group(
+        layout,
+        &[view_entry(0, view), sampler_entry(1, skins.sampler)],
+    );
     skins.groups.push((image, group));
     Some(group)
 }
@@ -54,7 +74,12 @@ pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
 /// A skin's bind group as a frame's draws bind it: the one a prepare made
 /// (`skin_group`), or none.
 pub fn skin_made(image: u32) -> Option<u32> {
-    SKINS.get(Skins::default).groups.iter().find(|&&(i, _)| i == image).map(|&(_, group)| group)
+    SKINS
+        .get(Skins::default)
+        .groups
+        .iter()
+        .find(|&&(i, _)| i == image)
+        .map(|&(_, group)| group)
 }
 
 /// The device gone, its groups go with it.
@@ -90,7 +115,14 @@ pub struct FrameGroups {
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [Entry; 2], [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
+    pub fn new(
+        g: &Gpu,
+        layout: u32,
+        frame_buffer: u32,
+        shadow: [Entry; 2],
+        [ao, open]: [Entry; 2],
+        air: [Entry; AIR_ENTRIES],
+    ) -> FrameGroups {
         FrameGroups {
             frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
             over: frame_group(g, layout, frame_buffer, shadow, open, air),
@@ -149,7 +181,15 @@ impl DrawUniforms {
     /// for every draw. Grows to the next power of two, eight at least. Written
     /// only where the lists the draws are made from `moved`, or it grew: else
     /// the buffer holds these bytes already.
-    pub fn write<T>(&mut self, g: &Gpu, layout: u32, count: u32, draws: impl Iterator<Item = T>, moved: bool, mut put: impl FnMut(&mut [u8], T)) {
+    pub fn write<T>(
+        &mut self,
+        g: &Gpu,
+        layout: u32,
+        count: u32,
+        draws: impl Iterator<Item = T>,
+        moved: bool,
+        mut put: impl FnMut(&mut [u8], T),
+    ) {
         if count == 0 {
             return;
         }
@@ -247,20 +287,46 @@ pub fn draw_models<'a>(
             }
         }
         match m.mesh {
-            Some((mesh, vertex_cnt, index_cnt)) => draw_model(g, pass, lit, &mut mesh_bound, mesh, vertex_cnt, index_cnt, m.instances),
+            Some((mesh, vertex_cnt, index_cnt)) => draw_model(
+                g,
+                pass,
+                lit,
+                &mut mesh_bound,
+                mesh,
+                vertex_cnt,
+                index_cnt,
+                m.instances,
+            ),
             None => g.draw(pass, 4, m.instances, 0, 0),
         }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, vertex_cnt: u32, index_cnt: u32, instances: u32) {
+pub fn draw_model(
+    g: &Gpu,
+    pass: u32,
+    lit: &Built,
+    bound: &mut u32,
+    mesh: u32,
+    vertex_cnt: u32,
+    index_cnt: u32,
+    instances: u32,
+) {
     bind_mesh(g, pass, lit, bound, mesh, vertex_cnt, index_cnt);
     g.draw_indexed(pass, index_cnt, instances, 0, 0);
 }
 
 /// A mesh's vertex lanes and indices bound, unless `bound` is it already.
-pub fn bind_mesh(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, vertex_cnt: u32, index_cnt: u32) {
+pub fn bind_mesh(
+    g: &Gpu,
+    pass: u32,
+    lit: &Built,
+    bound: &mut u32,
+    mesh: u32,
+    vertex_cnt: u32,
+    index_cnt: u32,
+) {
     if *bound != mesh {
         let mut at = 0;
         for lane in 0..lit.lanes {
@@ -268,7 +334,12 @@ pub fn bind_mesh(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, ve
             g.set_vertex_buffer(pass, lane as u32, mesh, at, size);
             at += size;
         }
-        g.set_index_buffer(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
+        g.set_index_buffer(
+            pass,
+            mesh,
+            vertex_cnt * MODEL_VERTEX_WORDS * 4,
+            index_cnt * 4,
+        );
         *bound = mesh;
     }
 }

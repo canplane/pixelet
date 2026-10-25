@@ -59,7 +59,10 @@ pub fn geoid_m(lng: f64, lat: f64) -> f64 {
     use crate::space::coord::geoid::{GEOID_M, GEOID_STEP_DEG};
     let cols = (360.0 / GEOID_STEP_DEG) as usize;
     let rows = GEOID_M.len() / cols;
-    let (r, c) = ((90.0 - CLAMP_LAT(lat)) / GEOID_STEP_DEG, (NORMALIZE_LNG(lng) + 360.0) % 360.0 / GEOID_STEP_DEG);
+    let (r, c) = (
+        (90.0 - CLAMP_LAT(lat)) / GEOID_STEP_DEG,
+        (NORMALIZE_LNG(lng) + 360.0) % 360.0 / GEOID_STEP_DEG,
+    );
     let (r0, c0) = ((r as usize).min(rows - 2), c as usize);
     let (fr, fc) = (r - r0 as f64, c - c0 as f64);
     let at = |r: usize, c: usize| f64::from(GEOID_M[r * cols + c % cols]);

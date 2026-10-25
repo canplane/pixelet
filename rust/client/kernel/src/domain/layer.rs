@@ -68,7 +68,9 @@ pub trait Base: Clone + 'static {
     /// coarsest it is read at (`COARSEST`); none until the source is
     /// declared.
     fn top() -> Option<Zoom> {
-        Self::TOP.or(crate::sys::io::source::top()).map(|t| t.max(Self::COARSEST))
+        Self::TOP
+            .or(crate::sys::io::source::top())
+            .map(|t| t.max(Self::COARSEST))
     }
 
     /// The most tiles a reader that takes no coarser answer pins apart from

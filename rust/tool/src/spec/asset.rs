@@ -3,7 +3,10 @@
 use regex::Regex;
 
 use super::catalog::{run_of, CUBE_JSON, DECOR_JSON};
-use super::{align_star, casing_note, file, js_num, json_str, pretty, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
+use super::{
+    align_star, casing_note, file, js_num, json_str, pretty, read, rgb_literal, rs_doc, rs_ident,
+    ts_doc, Node, Output,
+};
 const ID_JSON: &str = "spec/spec/asset/id.json";
 const COLOR_JSON: &str = "spec/spec/asset/color.json";
 
@@ -16,14 +19,23 @@ struct Entry<'a> {
 
 /// A list's entries in order, a section heading as `Err(id)`.
 fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a str>>, String> {
-    let list = list.get("entries").and_then(Node::arr).or_else(|| list.arr()).ok_or(format!("{CUBE_JSON}: {what} has no entries"))?;
+    let list = list
+        .get("entries")
+        .and_then(Node::arr)
+        .or_else(|| list.arr())
+        .ok_or(format!("{CUBE_JSON}: {what} has no entries"))?;
     list.iter()
         .map(|e| {
             if let Some(section) = e.str_at("section") {
                 return Ok(Err(section));
             }
-            let name = e.str_at("name").ok_or(format!("{CUBE_JSON}: {what}: an entry with no name"))?;
-            let value = e.get("value").and_then(Node::num).ok_or(format!("{CUBE_JSON}: {name} has no value"))? as u32;
+            let name = e
+                .str_at("name")
+                .ok_or(format!("{CUBE_JSON}: {what}: an entry with no name"))?;
+            let value = e
+                .get("value")
+                .and_then(Node::num)
+                .ok_or(format!("{CUBE_JSON}: {name} has no value"))? as u32;
             Ok(Ok(Entry {
                 name,
                 value,
@@ -41,7 +53,11 @@ fn named<'l, 'a>(list: &'l [Result<Entry<'a>, &'a str>]) -> impl Iterator<Item =
 /// The path the cube kind's texture pack ships at (`cube.json` `pack`).
 pub fn pack_path() -> Result<String, String> {
     let spec = read(CUBE_JSON)?;
-    spec.get("pack").map(Node::value).and_then(Node::str).map(str::to_string).ok_or(format!("{CUBE_JSON}: no pack"))
+    spec.get("pack")
+        .map(Node::value)
+        .and_then(Node::str)
+        .map(str::to_string)
+        .ok_or(format!("{CUBE_JSON}: no pack"))
 }
 
 /// The catalog's two groups of placeable cubes, the ground's looks and the
@@ -51,8 +67,17 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     let ground = entries(spec.get("ground").ok_or("no ground")?, "ground")?;
     let object = entries(spec.get("object").ok_or("no object")?, "object")?;
     Ok(vec![
-        ("ground".into(), named(&ground).map(|e| e.name.to_string()).collect()),
-        ("object".into(), named(&object).filter(|e| is_color(e)).map(|e| e.name.to_string()).collect()),
+        (
+            "ground".into(),
+            named(&ground).map(|e| e.name.to_string()).collect(),
+        ),
+        (
+            "object".into(),
+            named(&object)
+                .filter(|e| is_color(e))
+                .map(|e| e.name.to_string())
+                .collect(),
+        ),
     ])
 }
 
@@ -62,7 +87,9 @@ fn is_color(e: &Entry) -> bool {
 }
 
 /// Each placeable cube with the section heading it is listed under.
-fn sectioned<'l, 'a>(list: &'l [Result<Entry<'a>, &'a str>]) -> impl Iterator<Item = (&'a str, &'l Entry<'a>)> {
+fn sectioned<'l, 'a>(
+    list: &'l [Result<Entry<'a>, &'a str>],
+) -> impl Iterator<Item = (&'a str, &'l Entry<'a>)> {
     list.iter()
         .scan("", |section, item| {
             Some(match item {
@@ -83,7 +110,15 @@ pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String
     ground
         .entries()
         .iter()
-        .map(|(n, e)| Ok((n.clone(), super::packed(e.str_at("hex").ok_or(format!("color.json: ground.{n} has no hex"))?)?)))
+        .map(|(n, e)| {
+            Ok((
+                n.clone(),
+                super::packed(
+                    e.str_at("hex")
+                        .ok_or(format!("color.json: ground.{n} has no hex"))?,
+                )?,
+            ))
+        })
         .collect()
 }
 
@@ -111,7 +146,9 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
         }
         let mut packed_entries = Vec::new();
         for (n, e) in entries.entries() {
-            let hex = e.str_at("hex").ok_or(format!("color.json: {group}.{n} has no hex"))?;
+            let hex = e
+                .str_at("hex")
+                .ok_or(format!("color.json: {group}.{n} has no hex"))?;
             let mut fields: Vec<(String, Node)> = e.entries().to_vec();
             fields.push(("rgb".to_string(), Node::Num(super::packed(hex)? as f64)));
             packed_entries.push((n.clone(), Node::Obj(fields)));
@@ -126,7 +163,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     let json = bare_keys.replace_all(&json, "$1:");
     let json = close_brace.replace_all(&json, ",\n$1}");
     let json = close_bracket.replace_all(&json, ",\n$1]");
-    let mut ts = vec!["// @pxl/client/catalog/asset/color.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/shell/catalog/asset/color.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend([String::new(), format!("export default {json};")]);
 
@@ -136,7 +173,11 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     rs.push(String::new());
     rs.extend(casing_note());
     rs.extend(["", "use super::cube;", "use super::Swatch;"].map(String::from));
-    let groups = [("sentinel", "sentinel", "u8"), ("ground", "ground", "u8"), ("object", "object", "u16")];
+    let groups = [
+        ("sentinel", "sentinel", "u8"),
+        ("ground", "ground", "u8"),
+        ("object", "object", "u16"),
+    ];
     for (group, module, width) in groups {
         let list = entries(
             if group == "sentinel" {
@@ -146,7 +187,9 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
             },
             group,
         )?;
-        let colors = spec.get(group).ok_or(format!("color.json has no {group}"))?;
+        let colors = spec
+            .get(group)
+            .ok_or(format!("color.json has no {group}"))?;
         rs.extend([
             String::new(),
             format!("/// `{group}`'s color for a value."),
@@ -155,13 +198,21 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
         ]);
         for (name, entry) in colors.entries() {
             if !named(&list).any(|e| e.name == name.as_str()) {
-                return Err(format!("color.json: {group}.{name} is nothing cube.json names"));
+                return Err(format!(
+                    "color.json: {group}.{name} is nothing cube.json names"
+                ));
             }
             if let Some(doc) = entry.str_at("$doc") {
                 rs.push(format!("        // {doc}"));
             }
-            let hex = entry.str_at("hex").ok_or(format!("color.json: {group}.{name} has no hex"))?;
-            rs.push(format!("        cube::{module}::{} => Some(Swatch::new({})),", rs_ident(name), rgb_literal(hex)?));
+            let hex = entry
+                .str_at("hex")
+                .ok_or(format!("color.json: {group}.{name} has no hex"))?;
+            rs.push(format!(
+                "        cube::{module}::{} => Some(Swatch::new({})),",
+                rs_ident(name),
+                rgb_literal(hex)?
+            ));
         }
         if group == "ground" {
             for e in named(&list) {
@@ -177,7 +228,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
         rs.extend(["    }", "}"].map(String::from));
     }
     Ok(vec![
-        Output::new("ts/client/src/catalog/asset/color.spec.ts", file(&ts)),
+        Output::new("ts/client/src/shell/catalog/asset/color.spec.ts", file(&ts)),
         Output::new("rust/spec/src/asset/color.spec.rs", file(&rs)),
     ])
 }
@@ -199,17 +250,33 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         .ok_or(format!("{DECOR_JSON}: no decors"))?
         .entries()
         .iter()
-        .map(|(k, v)| v.get("value").and_then(Node::num).map(|n| (k.as_str(), n as u32)).ok_or(format!("{DECOR_JSON}: {k} has no value")))
+        .map(|(k, v)| {
+            v.get("value")
+                .and_then(Node::num)
+                .map(|n| (k.as_str(), n as u32))
+                .ok_or(format!("{DECOR_JSON}: {k} has no value"))
+        })
         .collect::<Result<_, _>>()?;
     let mut seen = std::collections::BTreeMap::new();
-    for (name, value) in named(&sentinel).chain(named(&ground)).chain(named(&object)).map(|e| (e.name, e.value)).chain(decor.iter().copied()) {
+    for (name, value) in named(&sentinel)
+        .chain(named(&ground))
+        .chain(named(&object))
+        .map(|e| (e.name, e.value))
+        .chain(decor.iter().copied())
+    {
         if let Some(other) = seen.insert(value, name) {
-            return Err(format!("{CUBE_JSON}, {DECOR_JSON}: {name} and {other} are both {value}"));
+            return Err(format!(
+                "{CUBE_JSON}, {DECOR_JSON}: {name} and {other} are both {value}"
+            ));
         }
     }
     // An id is its kind over its shape (id.json).
     let id = read(ID_JSON)?;
-    let shape_bits = id.get("SHAPE_BITS").map(Node::value).and_then(Node::num).ok_or(format!("{ID_JSON}: no SHAPE_BITS"))? as u32;
+    let shape_bits = id
+        .get("SHAPE_BITS")
+        .map(Node::value)
+        .and_then(Node::num)
+        .ok_or(format!("{ID_JSON}: no SHAPE_BITS"))? as u32;
     let kind = |name: &str| {
         id.get("KIND")
             .and_then(|c| c.get(name))
@@ -220,23 +287,33 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     let (cube_kind, decor_kind) = (kind("cube")?, kind("decor")?);
     for (name, value) in &decor {
         if *value > u32::from(u16::MAX) || value >> shape_bits != decor_kind {
-            return Err(format!("{DECOR_JSON}: {name} is {value}, not of the decor kind within a u16"));
+            return Err(format!(
+                "{DECOR_JSON}: {name} is {value}, not of the decor kind within a u16"
+            ));
         }
     }
     for e in named(&ground) {
         if e.value == 0 || e.value >= 255 {
-            return Err(format!("{CUBE_JSON}: ground.{} is {}, not within 1-254", e.name, e.value));
+            return Err(format!(
+                "{CUBE_JSON}: ground.{} is {}, not within 1-254",
+                e.name, e.value
+            ));
         }
     }
     for e in named(&object) {
         if e.value <= 255 || e.value >> shape_bits != cube_kind {
-            return Err(format!("{CUBE_JSON}: object.{} is {}, not past a byte of the cube kind", e.name, e.value));
+            return Err(format!(
+                "{CUBE_JSON}: object.{} is {}, not past a byte of the cube kind",
+                e.name, e.value
+            ));
         }
     }
     for (group, values) in [("ground", &ground), ("object", &object)] {
         let values: Vec<u32> = named(values).map(|e| e.value).collect();
         if values.windows(2).any(|w| w[0] >= w[1]) {
-            return Err(format!("{CUBE_JSON}: {group} is numbered ascending, as its order is read"));
+            return Err(format!(
+                "{CUBE_JSON}: {group} is numbered ascending, as its order is read"
+            ));
         }
     }
 
@@ -254,15 +331,23 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         n.lines_at("$doc")
             .unwrap_or_default()
             .iter()
-            .map(|l| if l.is_empty() { format!("{indent}//") } else { format!("{indent}// {l}") })
+            .map(|l| {
+                if l.is_empty() {
+                    format!("{indent}//")
+                } else {
+                    format!("{indent}// {l}")
+                }
+            })
             .collect::<Vec<_>>()
     };
 
     // TS
-    let mut ts = vec!["// @pxl/client/catalog/asset/cube.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/shell/catalog/asset/cube.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     // Every placeable cube under its heading: the ground's looks, and the colors past a ground byte.
-    let cube_sections: Vec<(&str, &Entry)> = sectioned(&ground).chain(sectioned(&object).filter(|(_, e)| is_color(e))).collect();
+    let cube_sections: Vec<(&str, &Entry)> = sectioned(&ground)
+        .chain(sectioned(&object).filter(|(_, e)| is_color(e)))
+        .collect();
     let mut section_ids: Vec<&str> = Vec::new();
     for (s, _) in &cube_sections {
         if !section_ids.contains(s) {
@@ -271,13 +356,31 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     }
     ts.extend([
         String::new(),
-        "/** The catalog's section a placeable cube is listed under, as Carto groups the looks. */".to_string(),
-        format!("export type CubeSection = {};", section_ids.iter().map(|s| format!("\"{s}\"")).collect::<Vec<_>>().join(" | ")),
+        "/** The catalog's section a placeable cube is listed under, as Carto groups the looks. */"
+            .to_string(),
+        format!(
+            "export type CubeSection = {};",
+            section_ids
+                .iter()
+                .map(|s| format!("\"{s}\""))
+                .collect::<Vec<_>>()
+                .join(" | ")
+        ),
     ]);
-    ts.extend([String::new(), "export const cube = {".into(), "  sentinel: {".into()]);
+    ts.extend([
+        String::new(),
+        "export const cube = {".into(),
+        "  sentinel: {".into(),
+    ]);
     for e in named(&sentinel) {
         if let Some(doc) = &e.doc {
-            ts.extend(ts_doc(doc, "    ").into_iter().enumerate().map(|(i, l)| if i == 0 { l } else { align_star(l, "    ") }));
+            ts.extend(ts_doc(doc, "    ").into_iter().enumerate().map(|(i, l)| {
+                if i == 0 {
+                    l
+                } else {
+                    align_star(l, "    ")
+                }
+            }));
         }
         ts.push(format!("    {}: 0x{:02x},", e.name, e.value));
     }
@@ -286,10 +389,20 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ts.push("  ground: {".into());
     for item in &ground {
         match item {
-            Err(section) => ts.extend([String::new(), format!("    // ---- {section} ----"), String::new()]),
+            Err(section) => ts.extend([
+                String::new(),
+                format!("    // ---- {section} ----"),
+                String::new(),
+            ]),
             Ok(e) => {
                 if let Some(doc) = &e.doc {
-                    ts.extend(ts_doc(doc, "    ").into_iter().enumerate().map(|(i, l)| if i == 0 { l } else { align_star(l, "    ") }));
+                    ts.extend(ts_doc(doc, "    ").into_iter().enumerate().map(|(i, l)| {
+                        if i == 0 {
+                            l
+                        } else {
+                            align_star(l, "    ")
+                        }
+                    }));
                 }
                 ts.push(format!("    {}: {},", e.name, e.value));
             }
@@ -300,40 +413,63 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ts.push("  object: {".into());
     for item in &object {
         match item {
-            Err(section) => ts.extend([String::new(), format!("    // ---- {section} ----"), String::new()]),
+            Err(section) => ts.extend([
+                String::new(),
+                format!("    // ---- {section} ----"),
+                String::new(),
+            ]),
             Ok(e) => ts.push(format!("    {}: {},", e.name, e.value)),
         }
     }
-    ts.extend(["  },".to_string(), "} as const satisfies Record<string, Record<string, number>>;".into(), String::new()]);
+    ts.extend([
+        "  },".to_string(),
+        "} as const satisfies Record<string, Record<string, number>>;".into(),
+        String::new(),
+    ]);
     ts.push("/** Each placeable cube's section, by its number. */".into());
     ts.push("export const cube_section: Readonly<Record<number, CubeSection>> = {".into());
-    ts.extend(cube_sections.iter().map(|(s, e)| format!("  {}: \"{s}\",", e.value)));
-    ts.extend([
-        "};".to_string(),
-        String::new(),
-        "/** What a cell nothing painted shows. */".into(),
-        format!("export const BASE = cube.ground.{base_type};"),
-    ]);
+    ts.extend(
+        cube_sections
+            .iter()
+            .map(|(s, e)| format!("  {}: \"{s}\",", e.value)),
+    );
+    ts.extend(["};".to_string()]);
 
     // Rust
     let mut rs = vec!["// pxl-spec-core/cube.spec.rs".to_string()];
     rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
-    rs.extend(["#![allow(non_camel_case_types, non_upper_case_globals)]", ""].map(String::from));
-    rs.extend(["pub mod cubes {".to_string(), "    pub mod sentinel {".into()]);
+    rs.extend(
+        [
+            "#![allow(non_camel_case_types, non_upper_case_globals)]",
+            "",
+        ]
+        .map(String::from),
+    );
+    rs.extend([
+        "pub mod cubes {".to_string(),
+        "    pub mod sentinel {".into(),
+    ]);
     for e in named(&sentinel) {
         if let Some(doc) = &e.doc {
             rs.extend(rs_doc(doc, "        ", "///"));
         }
-        rs.push(format!("        pub const {}: u8 = 0x{:02x};", e.name, e.value));
+        rs.push(format!(
+            "        pub const {}: u8 = 0x{:02x};",
+            e.name, e.value
+        ));
     }
     rs.extend(["    }".to_string(), String::new()]);
     rs.extend(note(ground_node, "    "));
     rs.push("    pub mod ground {".into());
     for item in &ground {
         match item {
-            Err(section) => rs.extend([String::new(), format!("        // ---- {section} ----"), String::new()]),
+            Err(section) => rs.extend([
+                String::new(),
+                format!("        // ---- {section} ----"),
+                String::new(),
+            ]),
             Ok(e) => {
                 if let Some(doc) = &e.doc {
                     rs.extend(rs_doc(doc, "        ", "///"));
@@ -342,7 +478,10 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
             }
         }
     }
-    rs.extend([String::new(), "        pub const ENTRIES: &[(&str, u8)] = &[".to_string()]);
+    rs.extend([
+        String::new(),
+        "        pub const ENTRIES: &[(&str, u8)] = &[".to_string(),
+    ]);
     rs.extend(named(&ground).map(|e| format!("            ({}, {}),", json_str(e.name), e.name)));
     rs.extend([
         "        ];".to_string(),
@@ -356,7 +495,11 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     rs.push("    pub mod object {".into());
     for item in &object {
         match item {
-            Err(section) => rs.extend([String::new(), format!("        // ---- {section} ----"), String::new()]),
+            Err(section) => rs.extend([
+                String::new(),
+                format!("        // ---- {section} ----"),
+                String::new(),
+            ]),
             Ok(e) => {
                 if let Some(doc) = &e.doc {
                     rs.extend(rs_doc(doc, "        ", "///"));
@@ -379,7 +522,10 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "    impl Ground {".into(),
         "        /// Every look, in paint order.".into(),
-        format!("        pub const ALL: [Ground; {}] = [", named(&ground).count()),
+        format!(
+            "        pub const ALL: [Ground; {}] = [",
+            named(&ground).count()
+        ),
     ]);
     rs.extend(named(&ground).map(|e| format!("            Ground::{},", e.name)));
     rs.extend([
@@ -389,13 +535,16 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        pub const fn of(value: u8) -> Option<Ground> {".into(),
         "            match value {".into(),
     ]);
-    rs.extend(named(&ground).map(|e| format!("                {} => Some(Ground::{}),", e.value, e.name)));
+    rs.extend(
+        named(&ground).map(|e| format!("                {} => Some(Ground::{}),", e.value, e.name)),
+    );
     rs.extend([
         "                _ => None,".to_string(),
         "            }".into(),
         "        }".into(),
         String::new(),
-        "        /// Whether a look read into a word, as a GPU has it with no byte, is one `of`".into(),
+        "        /// Whether a look read into a word, as a GPU has it with no byte, is one `of`"
+            .into(),
         "        /// names.".into(),
         format!(
             "        pub const fn grounds(value: u32) -> bool {{ matches!(value, {}) }}",
@@ -420,21 +569,33 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "    #[repr(u16)]".into(),
         "    pub enum Object {".into(),
     ]);
-    rs.extend(colors.iter().map(|e| format!("        {} = {},", e.name, e.value)));
+    rs.extend(
+        colors
+            .iter()
+            .map(|e| format!("        {} = {},", e.name, e.value)),
+    );
     rs.extend([
         "    }".to_string(),
         String::new(),
         "    impl Object {".into(),
         format!("        pub const ALL: [Object; {}] = [", colors.len()),
     ]);
-    rs.extend(colors.iter().map(|e| format!("            Object::{},", e.name)));
+    rs.extend(
+        colors
+            .iter()
+            .map(|e| format!("            Object::{},", e.name)),
+    );
     rs.extend([
         "        ];".to_string(),
         String::new(),
         "        pub const fn of(value: u16) -> Option<Object> {".into(),
         "            match value {".into(),
     ]);
-    rs.extend(colors.iter().map(|e| format!("                {} => Some(Object::{}),", e.value, e.name)));
+    rs.extend(
+        colors
+            .iter()
+            .map(|e| format!("                {} => Some(Object::{}),", e.value, e.name)),
+    );
     rs.extend([
         "                _ => None,".to_string(),
         "            }".into(),
@@ -449,8 +610,11 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "}".into(),
     ]);
     Ok(vec![
-        Output::new("ts/client/src/catalog/asset/cube.spec.ts", file(&ts)),
-        Output::new("rust/spec/core/src/cube.spec.rs", file(&unwrapped(rs, "pub mod cubes {"))),
+        Output::new("ts/client/src/shell/catalog/asset/cube.spec.ts", file(&ts)),
+        Output::new(
+            "rust/spec/core/src/cube.spec.rs",
+            file(&unwrapped(rs, "pub mod cubes {")),
+        ),
     ])
 }
 
@@ -463,7 +627,15 @@ fn runs(values: impl Iterator<Item = u32>) -> Vec<String> {
             _ => out.push((v, v)),
         }
     }
-    out.into_iter().map(|(lo, hi)| if lo == hi { lo.to_string() } else { format!("{lo}..={hi}") }).collect()
+    out.into_iter()
+        .map(|(lo, hi)| {
+            if lo == hi {
+                lo.to_string()
+            } else {
+                format!("{lo}..={hi}")
+            }
+        })
+        .collect()
 }
 
 pub fn decor_outputs() -> Result<Vec<Output>, String> {
@@ -483,28 +655,60 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         .map(|d| {
             d.entries()
                 .iter()
-                .map(|(k, v)| (k.as_str(), v.get("value").and_then(Node::num).map(js_num).unwrap_or_default()))
+                .map(|(k, v)| {
+                    (
+                        k.as_str(),
+                        v.get("value")
+                            .and_then(Node::num)
+                            .map(js_num)
+                            .unwrap_or_default(),
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();
     let (portable, table) = decor_table(&spec, &ground_looks()?)?;
 
-    let mut ts = vec!["// @pxl/client/catalog/asset/decor.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/shell/catalog/asset/decor.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend(doc.iter().map(|l| format!("// {l}")));
     ts.push("export const decor = {".into());
     ts.extend(entries.iter().map(|(k, v)| format!("  {k}: {v},")));
-    ts.extend(["} as const satisfies Record<string, number>;", "", "export type DecorId = keyof typeof decor;"].map(String::from));
+    ts.extend(
+        [
+            "} as const satisfies Record<string, number>;",
+            "",
+            "export type DecorId = keyof typeof decor;",
+        ]
+        .map(String::from),
+    );
 
     let mut rs = vec!["// pxl-spec/asset/decor.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
     rs.extend(doc.iter().map(|l| format!("// {l}")));
     rs.push("//".into());
     rs.extend(casing_note());
-    rs.extend(["#![allow(non_upper_case_globals, non_camel_case_types)]", "pub mod decors {"].map(String::from));
-    rs.extend(entries.iter().map(|(k, v)| format!("    pub const {k}: u16 = {v};")));
+    rs.extend(
+        [
+            "#![allow(non_upper_case_globals, non_camel_case_types)]",
+            "pub mod decors {",
+        ]
+        .map(String::from),
+    );
+    rs.extend(
+        entries
+            .iter()
+            .map(|(k, v)| format!("    pub const {k}: u16 = {v};")),
+    );
     rs.push(String::new());
-    rs.extend(["    #[derive(Clone, Copy, Debug, PartialEq, Eq)]", "    #[repr(u16)]", "    pub enum DecorId {"].map(String::from));
+    rs.extend(
+        [
+            "    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+            "    #[repr(u16)]",
+            "    pub enum DecorId {",
+        ]
+        .map(String::from),
+    );
     rs.extend(entries.iter().map(|(k, v)| format!("        {k} = {v},")));
     rs.extend(["    }".to_string(), String::new()]);
     rs.extend([
@@ -513,7 +717,11 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         format!(
             "        pub const ALL: [DecorId; {}] = [{}];",
             entries.len(),
-            entries.iter().map(|(k, _)| format!("DecorId::{k}")).collect::<Vec<_>>().join(", ")
+            entries
+                .iter()
+                .map(|(k, _)| format!("DecorId::{k}"))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         String::new(),
     ]);
@@ -545,8 +753,11 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     );
     row.extend(portable);
     Ok(vec![
-        Output::new("ts/client/src/catalog/asset/decor.spec.ts", file(&ts)),
-        Output::new("rust/spec/src/asset/decor.spec.rs", file(&unwrapped(rs, "pub mod decors {"))),
+        Output::new("ts/client/src/shell/catalog/asset/decor.spec.ts", file(&ts)),
+        Output::new(
+            "rust/spec/src/asset/decor.spec.rs",
+            file(&unwrapped(rs, "pub mod decors {")),
+        ),
         Output::new("rust/spec/core/src/decor.spec.rs", file(&row)),
     ])
 }
@@ -554,7 +765,11 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
 /// The ground's looks by name and number, what a decor may stand on.
 fn ground_looks() -> Result<Vec<(String, u32)>, String> {
     let spec = read(CUBE_JSON)?;
-    Ok(named(&entries(spec.get("ground").ok_or("no ground")?, "ground")?).map(|e| (e.name.to_string(), e.value)).collect())
+    Ok(
+        named(&entries(spec.get("ground").ok_or("no ground")?, "ground")?)
+            .map(|e| (e.name.to_string(), e.value))
+            .collect(),
+    )
 }
 
 /// The decors' table, in the catalog's order, which is the order their
@@ -564,7 +779,9 @@ fn ground_looks() -> Result<Vec<(String, u32)>, String> {
 fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec<String>), String> {
     const SLOT: &str = "crate::asset::catalog::Slot";
     let mut slot = run_of(DECOR_JSON)?.0;
-    let scatter = spec.get("scatter").ok_or(format!("{DECOR_JSON}: no scatter"))?;
+    let scatter = spec
+        .get("scatter")
+        .ok_or(format!("{DECOR_JSON}: no scatter"))?;
     let whole = |key: &str| {
         scatter
             .get(key)
@@ -575,7 +792,9 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     };
     let (patch, kept) = (whole("patch")?, whole("kept")?);
     if !patch.is_power_of_two() || kept < 2 {
-        return Err(format!("{DECOR_JSON}: scatter.patch is a power of two and scatter.kept at least 2"));
+        return Err(format!(
+            "{DECOR_JSON}: scatter.patch is a power of two and scatter.kept at least 2"
+        ));
     }
     // A patch's mean count: at the top all it bears, finer all but what the
     // zoom over it kept.
@@ -594,12 +813,24 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         models: Vec<String>,
     }
     let mut rows = Vec::new();
-    for (name, k) in spec.get("decors").ok_or(format!("{DECOR_JSON}: no decors"))?.entries() {
+    for (name, k) in spec
+        .get("decors")
+        .ok_or(format!("{DECOR_JSON}: no decors"))?
+        .entries()
+    {
         let at = |field: &str| format!("{DECOR_JSON}: {name}.{field}");
         let seed = k.str_at("seed").ok_or(at("seed"))?;
-        u32::from_str_radix(seed.trim_start_matches("0x"), 16).map_err(|e| format!("{}: {e}", at("seed")))?;
-        let density = k.get("density").and_then(Node::num).filter(|d| *d > 0.0).ok_or(at("density"))?;
-        let orientation = k.str_at("orientation").filter(|o| matches!(*o, "random" | "along_transport")).ok_or(at("orientation"))?;
+        u32::from_str_radix(seed.trim_start_matches("0x"), 16)
+            .map_err(|e| format!("{}: {e}", at("seed")))?;
+        let density = k
+            .get("density")
+            .and_then(Node::num)
+            .filter(|d| *d > 0.0)
+            .ok_or(at("density"))?;
+        let orientation = k
+            .str_at("orientation")
+            .filter(|o| matches!(*o, "random" | "along_transport"))
+            .ok_or(at("orientation"))?;
         let mut on = [0u32; 8];
         for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
             let v = l
@@ -612,15 +843,41 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         }
         let scale_steps = match k.get("scale_steps") {
             None => 0.0,
-            Some(n) => n.num().filter(|n| n.fract() == 0.0 && (f64::from(i8::MIN)..=f64::from(i8::MAX)).contains(n)).ok_or(at("scale_steps"))?,
+            Some(n) => n
+                .num()
+                .filter(|n| {
+                    n.fract() == 0.0 && (f64::from(i8::MIN)..=f64::from(i8::MAX)).contains(n)
+                })
+                .ok_or(at("scale_steps"))?,
         };
         let (mut sizes, mut models) = (Vec::new(), Vec::new());
-        for v in k.get("variants").and_then(Node::arr).ok_or(at("variants"))? {
-            let size = v.get("size").and_then(Node::arr).filter(|s| s.len() == 3).map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
+        for v in k
+            .get("variants")
+            .and_then(Node::arr)
+            .ok_or(at("variants"))?
+        {
+            let size = v
+                .get("size")
+                .and_then(Node::arr)
+                .filter(|s| s.len() == 3)
+                .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
             match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
-                (Some(_), Some(_), Some(size)) if size.iter().all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) => {
-                    sizes.push(format!("[{}]", size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")));
-                    models.push(format!("Variant {{ model: {SLOT}({slot}), skin: {SLOT}({}) }}", slot + 1));
+                (Some(_), Some(_), Some(size))
+                    if size
+                        .iter()
+                        .all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) =>
+                {
+                    sizes.push(format!(
+                        "[{}]",
+                        size.iter()
+                            .map(|&n| js_num(n))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                    models.push(format!(
+                        "Variant {{ model: {SLOT}({slot}), skin: {SLOT}({}) }}",
+                        slot + 1
+                    ));
                     slot += 2;
                 }
                 _ => return Err(at("variants")),
@@ -629,13 +886,18 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         if sizes.is_empty() {
             return Err(at("variants"));
         }
-        let value = k.get("value").and_then(Node::num).map(js_num).ok_or(at("value"))?;
+        let value = k
+            .get("value")
+            .and_then(Node::num)
+            .map(js_num)
+            .ok_or(at("value"))?;
         rows.push(Row {
             name: name.clone(),
             value,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
-            counts: shares.map(|share| poisson_thresholds(density * f64::from(patch * patch) * share)),
+            counts: shares
+                .map(|share| poisson_thresholds(density * f64::from(patch * patch) * share)),
             orientation: orientation.to_string(),
             on,
             scale_steps: scale_steps as i32,
@@ -644,10 +906,18 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         });
     }
     let variants_max = rows.iter().map(|r| r.sizes.len()).max().unwrap_or(1);
-    let counts_max = rows.iter().flat_map(|r| r.counts.iter().map(Vec::len)).max().unwrap_or(1);
+    let counts_max = rows
+        .iter()
+        .flat_map(|r| r.counts.iter().map(Vec::len))
+        .max()
+        .unwrap_or(1);
 
     let mut portable: Vec<String> = vec![String::new()];
-    portable.extend(rs_doc(&scatter.lines_at("$doc").unwrap_or_default(), "", "///"));
+    portable.extend(rs_doc(
+        &scatter.lines_at("$doc").unwrap_or_default(),
+        "",
+        "///",
+    ));
     portable.extend([
         format!("pub const PATCH: u32 = {patch};"),
         format!("pub const KEPT: u32 = {kept};"),
@@ -718,9 +988,15 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    Decor {".to_string(),
             format!("        value: {},", r.value),
             format!("        seed: {},", r.seed),
-            format!("        counts: [{}],", counts.collect::<Vec<_>>().join(", ")),
+            format!(
+                "        counts: [{}],",
+                counts.collect::<Vec<_>>().join(", ")
+            ),
             format!("        orientation: Orientation::{},", r.orientation),
-            format!("        on: [{}],", r.on.map(|w| format!("{w:#010x}")).join(", ")),
+            format!(
+                "        on: [{}],",
+                r.on.map(|w| format!("{w:#010x}")).join(", ")
+            ),
             format!("        scale_steps: {},", r.scale_steps),
             format!("        variants: {},", r.models.len()),
             format!("        sizes: [{}],", sizes.join(", ")),
@@ -754,20 +1030,30 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     ]
     .map(String::from)
     .to_vec();
-    let meta = spec.get("meta").ok_or(format!("{DECOR_JSON}: no meta"))?.entries();
+    let meta = spec
+        .get("meta")
+        .ok_or(format!("{DECOR_JSON}: no meta"))?
+        .entries();
     rs.extend([
         "/// What a decor thing carries beside where it stands.".to_string(),
         "#[derive(Clone, Copy, Debug, PartialEq)]".into(),
         "pub struct DecorMeta {".into(),
     ]);
     for (field, ty) in meta {
-        let ty = ty.str().filter(|t| matches!(*t, "u32" | "f64")).ok_or(format!("{DECOR_JSON}: meta.{field} is no u32 or f64"))?;
+        let ty = ty
+            .str()
+            .filter(|t| matches!(*t, "u32" | "f64"))
+            .ok_or(format!("{DECOR_JSON}: meta.{field} is no u32 or f64"))?;
         rs.push(format!("    pub {field}: {ty},"));
     }
     rs.extend(["}".to_string(), String::new()]);
     rs.push(format!("pub const DECORS: [Decor; {}] = [", rows.len()));
     for (i, r) in rows.iter().enumerate() {
-        rs.extend(r.doc.iter().map(|l| format!("    // {l}").trim_end().to_string()));
+        rs.extend(
+            r.doc
+                .iter()
+                .map(|l| format!("    // {l}").trim_end().to_string()),
+        );
         rs.extend([
             "    Decor {".to_string(),
             format!("        id: DecorId::{},", r.name),
@@ -803,7 +1089,9 @@ fn poisson_thresholds(mean: f64) -> Vec<u32> {
 /// The lines of `rs` with the module `open` opens taken off, its body one
 /// indent out: the generated file is the module itself.
 fn unwrapped(rs: Vec<String>, open: &str) -> Vec<String> {
-    let Some(at) = rs.iter().position(|l| l == open) else { return rs };
+    let Some(at) = rs.iter().position(|l| l == open) else {
+        return rs;
+    };
     let mut depth = 0i32;
     let mut close = at;
     for (i, l) in rs.iter().enumerate().skip(at) {
@@ -813,6 +1101,13 @@ fn unwrapped(rs: Vec<String>, open: &str) -> Vec<String> {
             break;
         }
     }
-    let body = rs[at + 1..close].iter().map(|l| l.strip_prefix("    ").unwrap_or(l).to_string());
-    rs[..at].iter().cloned().chain(body).chain(rs[close + 1..].iter().cloned()).collect()
+    let body = rs[at + 1..close]
+        .iter()
+        .map(|l| l.strip_prefix("    ").unwrap_or(l).to_string());
+    rs[..at]
+        .iter()
+        .cloned()
+        .chain(body)
+        .chain(rs[close + 1..].iter().cloned())
+        .collect()
 }

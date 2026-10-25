@@ -33,7 +33,12 @@ pub trait Query {
     fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Self::Cursor;
 
     /// A child's cursor from its parent's; `node` is the child.
-    fn child<const D: usize>(&self, parent: &Self::Cursor, node: Node<D>, cell: Zoom) -> Self::Cursor;
+    fn child<const D: usize>(
+        &self,
+        parent: &Self::Cursor,
+        node: Node<D>,
+        cell: Zoom,
+    ) -> Self::Cursor;
 
     /// Where anything stands in the node, as its cells at `cell` are read,
     /// off its cursor: a box holding what may show there, what is stored
@@ -41,7 +46,12 @@ pub trait Query {
     /// seen; none where nothing does. What is not known is the
     /// answer's, not a bound's: no third state.
     /// A node in fewer than three axes is the column over the rest.
-    fn bound<const D: usize>(&self, at: &Self::Cursor, node: Node<D>, cell: Zoom) -> Answer<Option<Aabb>>;
+    fn bound<const D: usize>(
+        &self,
+        at: &Self::Cursor,
+        node: Node<D>,
+        cell: Zoom,
+    ) -> Answer<Option<Aabb>>;
 
     fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
         self.bound(&self.cursor(node, cell), node, cell)

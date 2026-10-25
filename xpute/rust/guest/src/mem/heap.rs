@@ -1,17 +1,16 @@
 // xpute-guest/mem/heap.rs
 
-//! The heap a guest installs, and blocks of it named by offset. The heap is
-//! a slab of size classes over a buddy of pages between the bounds the guest
-//! gives (`Bounds`); the slab borrows and returns whole runs of pages, so
-//! neither level starves while the other has room. A guest that installs
-//! another `#[global_allocator]` still gets its blocks here.
+//! The guest's heap, its blocks named by offset: a slab of size classes over
+//! a buddy of pages within the guest's `Bounds`, the slab borrowing and
+//! returning whole runs so neither level starves while the other has room.
+//! It serves its blocks whatever `#[global_allocator]` is installed.
 
 use core::marker::PhantomData;
 
 use xpute_kit::alloc::buddy_tree::Range;
 use xpute_kit::alloc::slab::SlabMalloc;
 
-use crate::mem::base::{off_of, ptr_at};
+use crate::mem::{at, off_of};
 
 /// Where a guest's heap lies: from `base` to `end`, ascending. A pure
 /// function each: the first block is asked for before anything has laid the
@@ -48,7 +47,6 @@ impl<B: Bounds> Range for Span<B> {
     }
 }
 
-/// The heap between `B`'s bounds, for `#[global_allocator]`.
 pub type Heap<B> = SlabMalloc<Span<B>>;
 
 /// One reading of a heap, so compared fields are from one moment.
@@ -104,29 +102,12 @@ pub fn alloc(bytes: u32) -> Option<Block> {
 
 /// # Safety
 /// `block` came from `alloc` and has not been given back.
-pub unsafe fn free((at, bytes): Block) {
+pub unsafe fn free((off, bytes): Block) {
     // SAFETY: the caller's; `alloc` made this layout for this address.
-    unsafe { std::alloc::dealloc(ptr_at(at), std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
-}
-
-/// Freed on drop unless `keep` hands it on.
-pub struct Guard(Block);
-
-impl Guard {
-    pub fn alloc(bytes: u32) -> Option<Guard> {
-        alloc(bytes).map(Guard)
-    }
-
-    pub fn keep(self) -> Block {
-        let block = self.0;
-        core::mem::forget(self);
-        block
-    }
-}
-
-impl Drop for Guard {
-    fn drop(&mut self) {
-        // SAFETY: a guard is made only by `Guard::alloc`, and `keep` forgets it.
-        unsafe { free(self.0) }
+    unsafe {
+        std::alloc::dealloc(
+            at(off),
+            std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN),
+        )
     }
 }

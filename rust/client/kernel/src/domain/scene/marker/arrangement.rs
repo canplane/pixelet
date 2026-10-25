@@ -183,7 +183,10 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
         direction: [0.0, 0.0, -1.0],
         reach: high - low,
     };
-    let hit = World::now().first_hit(&ray, at_zoom(zoom)).value().flatten()?;
+    let hit = World::now()
+        .first_hit(&ray, at_zoom(zoom))
+        .value()
+        .flatten()?;
     Some(high - hit.t)
 }
 
@@ -196,7 +199,8 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 fn spacing_px() -> f64 {
     let v = crate::domain::view::frame::pose::view();
     let drawn = v.height * crate::domain::view::frame::resolution::display_ratio();
-    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau()) * px_per_unit(drawn, crate::domain::view::param::FOV);
+    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau())
+        * px_per_unit(drawn, crate::domain::view::param::FOV);
     libm::rint(f64::from(SPACING_CELLS) * cell)
 }
 
@@ -242,7 +246,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let reach = reach_px(seen.spacing);
     crate::domain::view::observation::squares(&o, tau, &mut |square, heights| {
         let b = region(square, heights);
-        let far = v3::len(&core::array::from_fn(|k| (b.min[k] - o.eye[k]).abs().max((b.max[k] - o.eye[k]).abs())));
+        let far = v3::len(&core::array::from_fn(|k| {
+            (b.min[k] - o.eye[k]).abs().max((b.max[k] - o.eye[k]).abs())
+        }));
         let pad = reach * crate::domain::view::frame::pose::units_per_px_at(far);
         if frame.sees_box(b.min.map(|v| v - pad), b.max.map(|v| v + pad)) {
             now.drawn.push(square);
@@ -268,9 +274,14 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let drawn = |s: &Square| now.drawn.binary_search(s).is_ok();
     let stands = |&s: &Square| {
         let r = columns(s);
-        before.binary_search(&s).is_ok() && !crate::domain::query::changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+        before.binary_search(&s).is_ok()
+            && !crate::domain::query::changed::within(
+                [[r.min[0], r.min[1]], [r.max[0], r.max[1]]],
+                moved_places,
+            )
     };
-    let (mut pins, mut read_places) = (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
+    let (mut pins, mut read_places) =
+        (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
     pins.retain(|s| drawn(&s.square) && stands(&s.square));
     read_places.retain(|s| drawn(&s.square) && stands(&s.square));
     let entering = &mut p.entering;
@@ -278,11 +289,15 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     entering.extend(now.drawn.iter().filter(|s| !stands(s)).map(|&s| {
         let r = columns(s);
         let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];
-        (libm::hypot(middle[0] - o.eye[0], middle[1] - o.eye[1]), s, r)
+        (
+            libm::hypot(middle[0] - o.eye[0], middle[1] - o.eye[1]),
+            s,
+            r,
+        )
     }));
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let read = ctx
-        .budget
+        .pass
         .run(
             entering.iter(),
             |&(_, square, columns)| {
@@ -299,7 +314,8 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     // Not read, so not what they were read from.
     let later = &mut entering[read..];
     later.sort_unstable_by_key(|e| e.1);
-    now.drawn.retain(|d| later.binary_search_by_key(d, |e| e.1).is_err());
+    now.drawn
+        .retain(|d| later.binary_search_by_key(d, |e| e.1).is_err());
     p.moved_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
         let now = core::mem::take(&mut p.now);
@@ -329,7 +345,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     for s in shown.drain(..) {
         let (design, region) = s.design.spaced(spacing);
         let (design, held) = match before.get(&s.key) {
-            Some(before) if *before != design && !design::ready(&design) => (before.clone(), Some(design)),
+            Some(before) if *before != design && !design::ready(&design) => {
+                (before.clone(), Some(design))
+            }
             _ => (design, None),
         };
         // Its words are laid out by a later turn.
@@ -338,14 +356,27 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
             continue;
         };
         let local = crate::domain::view::frame::coord::to_world(&s.stands);
-        p.pending.extend(held.map(|held| (sized.len() as u32, held)));
-        p.candidates.push(local[0], local[1], local[2], [width, height, region], anchor, sized.len() as f64);
+        p.pending
+            .extend(held.map(|held| (sized.len() as u32, held)));
+        p.candidates.push(
+            local[0],
+            local[1],
+            local[2],
+            [width, height, region],
+            anchor,
+            sized.len() as f64,
+        );
         sized.push(Instance { design, ..s });
     }
     // The line's slot is kept while it is said, wherever its speaker is.
     p.keep.clear();
-    p.keep
-        .extend(sized.iter().map(|s| s.design.clone()).chain(p.pending.iter().map(|w| w.1.clone())).chain(seen.said.kept()));
+    p.keep.extend(
+        sized
+            .iter()
+            .map(|s| s.design.clone())
+            .chain(p.pending.iter().map(|w| w.1.clone()))
+            .chain(seen.said.kept()),
+    );
     let freed = design::retain(&p.keep);
     (p.pins, p.places, p.shown) = (pins, read_places, shown);
     select_visible(&mut p.candidates, &mut p.kept);
@@ -357,7 +388,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     // asks the turn its words come (`design::coming`).
     let mut refused = false;
     for &i in &p.kept {
-        let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else { continue };
+        let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else {
+            continue;
+        };
         if design::size(&p.pending[k].1).is_none() {
             continue;
         }
@@ -390,22 +423,38 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
             .then(candidates.tiebreak[a as usize].total_cmp(&candidates.tiebreak[b as usize]))
     });
     p.hits.clear();
-    p.hits.extend(p.drawn.iter().rev().filter_map(|&i| Some((p.candidates.screen[i as usize], sized[i as usize].tap?))));
+    p.hits.extend(
+        p.drawn
+            .iter()
+            .rev()
+            .filter_map(|&i| Some((p.candidates.screen[i as usize], sized[i as usize].tap?))),
+    );
     let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
     let about = crate::domain::view::frame::pose::sea_under_eye();
     for &i in &p.drawn {
         let i = i as usize;
-        let at = [p.candidates.local_x[i] - about[0], p.candidates.local_y[i] - about[1], p.candidates.local_z[i] - about[2]];
+        let at = [
+            p.candidates.local_x[i] - about[0],
+            p.candidates.local_y[i] - about[1],
+            p.candidates.local_z[i] - about[2],
+        ];
         let design = &sized[i].design;
         let [w, h, anchor] = design::size(design).or_bug(Errno::ENOTRECOVERABLE);
-        instances.extend_from_slice(&set::instance(at, [w, h], design::slot(design) as u32, anchor / h, f64::from(p.candidates.region_px[i])));
+        instances.extend_from_slice(&set::instance(
+            at,
+            [w, h],
+            design::slot(design) as u32,
+            anchor / h,
+            f64::from(p.candidates.region_px[i]),
+        ));
     }
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
         if section::map().is_some() {
-            p.set.write(crate::domain::query::model::draw_list(), about, &instances);
+            p.set
+                .write(crate::domain::query::model::draw_list(), about, &instances);
         }
         ctx.invalidate();
     }
@@ -429,5 +478,7 @@ pub enum Went {
 pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &ARRANGEMENT.get(Arrangement::default).hits;
-    hits.iter().find(|(r, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y)).map(|&(_, went)| went)
+    hits.iter()
+        .find(|(r, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y))
+        .map(|&(_, went)| went)
 }

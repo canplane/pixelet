@@ -12,7 +12,10 @@
 
 use naga::proc::TypeResolution;
 use naga::valid::{Capabilities, FunctionInfo, ModuleInfo, ValidationFlags, Validator};
-use naga::{AddressSpace, Arena, Barrier, Block, Expression, Function, GlobalVariable, Handle, Module, Range, Span, Statement, Type, UniqueArena};
+use naga::{
+    AddressSpace, Arena, Barrier, Block, Expression, Function, GlobalVariable, Handle, Module,
+    Range, Span, Statement, Type, UniqueArena,
+};
 use spirv_builder::{Capability, ModuleResult, SpirvBuilder};
 
 fn main() {
@@ -20,7 +23,10 @@ fn main() {
     // WebGPU's own types alone, and a texture's size asked of it (WGSL
     // `textureDimensions`): the rays are as large as the surface they lie on.
     // Vulkan 1.3 is the SPIR-V rust-gpu emits for its naga target.
-    let result = SpirvBuilder::new(shader, "spirv-unknown-vulkan1.3").multimodule(true).capability(Capability::ImageQuery).build();
+    let result = SpirvBuilder::new(shader, "spirv-unknown-vulkan1.3")
+        .multimodule(true)
+        .capability(Capability::ImageQuery)
+        .build();
     let modules = match result.map(|r| r.module) {
         Ok(ModuleResult::MultiModule(m)) => m,
         Ok(ModuleResult::SingleModule(_)) => unreachable!("built as multimodule"),
@@ -41,12 +47,18 @@ fn main() {
 
 /// One entry's SPIR-V as WGSL, validated as WebGPU takes it.
 fn wgsl(spv: &[u8]) -> Result<String, String> {
-    let mut module = naga::front::spv::parse_u8_slice(spv, &naga::front::spv::Options::default()).map_err(|e| e.to_string())?;
-    let validate = |m: &Module| Validator::new(ValidationFlags::all(), Capabilities::empty()).validate(m).map_err(|e| format!("{e:?}"));
+    let mut module = naga::front::spv::parse_u8_slice(spv, &naga::front::spv::Options::default())
+        .map_err(|e| e.to_string())?;
+    let validate = |m: &Module| {
+        Validator::new(ValidationFlags::all(), Capabilities::empty())
+            .validate(m)
+            .map_err(|e| format!("{e:?}"))
+    };
     let info = validate(&module)?;
     uniform_loads(&mut module, &info);
     let info = validate(&module)?;
-    naga::back::wgsl::write_string(&module, &info, naga::back::wgsl::WriterFlags::empty()).map_err(|e| e.to_string())
+    naga::back::wgsl::write_string(&module, &info, naga::back::wgsl::WriterFlags::empty())
+        .map_err(|e| e.to_string())
 }
 
 /// Every `ControlBarrier(WORK_GROUP)`, load of a workgroup pointer,
@@ -62,16 +74,32 @@ fn uniform_loads(module: &mut Module, info: &ModuleInfo) {
     }
     for (i, e) in module.entry_points.iter_mut().enumerate() {
         let loads = rewrite(&mut e.function, globals);
-        retype(&mut module.types, &mut e.function, info.get_entry_point(i), loads);
+        retype(
+            &mut module.types,
+            &mut e.function,
+            info.get_entry_point(i),
+            loads,
+        );
     }
 }
 
 /// Each taken load's value is the statement's result now, of the load's type.
-fn retype(types: &mut UniqueArena<Type>, f: &mut Function, fi: &FunctionInfo, loads: Vec<Handle<Expression>>) {
+fn retype(
+    types: &mut UniqueArena<Type>,
+    f: &mut Function,
+    fi: &FunctionInfo,
+    loads: Vec<Handle<Expression>>,
+) {
     for load in loads {
         let ty = match &fi[load].ty {
             TypeResolution::Handle(t) => *t,
-            TypeResolution::Value(inner) => types.insert(Type { name: None, inner: inner.clone() }, Span::UNDEFINED),
+            TypeResolution::Value(inner) => types.insert(
+                Type {
+                    name: None,
+                    inner: inner.clone(),
+                },
+                Span::UNDEFINED,
+            ),
         };
         f.expressions[load] = Expression::WorkGroupUniformLoadResult { ty };
     }
@@ -86,7 +114,12 @@ fn rewrite(f: &mut Function, globals: &Arena<GlobalVariable>) -> Vec<Handle<Expr
     loads
 }
 
-fn block(b: &mut Block, f: &Function, globals: &Arena<GlobalVariable>, loads: &mut Vec<Handle<Expression>>) {
+fn block(
+    b: &mut Block,
+    f: &Function,
+    globals: &Arena<GlobalVariable>,
+    loads: &mut Vec<Handle<Expression>>,
+) {
     let s: Vec<(Statement, Span)> = std::mem::take(b)
         .span_into_iter()
         .map(|(mut st, span)| {
@@ -96,25 +129,40 @@ fn block(b: &mut Block, f: &Function, globals: &Arena<GlobalVariable>, loads: &m
                     block(accept, f, globals, loads);
                     block(reject, f, globals, loads);
                 }
-                Statement::Loop { body, continuing, .. } => {
+                Statement::Loop {
+                    body, continuing, ..
+                } => {
                     block(body, f, globals, loads);
                     block(continuing, f, globals, loads);
                 }
-                Statement::Switch { cases, .. } => cases.iter_mut().for_each(|c| block(&mut c.body, f, globals, loads)),
+                Statement::Switch { cases, .. } => cases
+                    .iter_mut()
+                    .for_each(|c| block(&mut c.body, f, globals, loads)),
                 _ => {}
             }
             (st, span)
         })
         .collect();
-    let barrier = |k: usize| matches!(s[k].0, Statement::ControlBarrier(b) if b == Barrier::WORK_GROUP);
+    let barrier =
+        |k: usize| matches!(s[k].0, Statement::ControlBarrier(b) if b == Barrier::WORK_GROUP);
     let mut i = 0;
     while i < s.len() {
         let close = (i + 1..s.len()).find(|&k| !matches!(s[k].0, Statement::Emit(_)));
         if let Some(k) = close.filter(|&k| barrier(i) && barrier(k)) {
             if let Some(t) = load_between(&s[i + 1..k], f, globals) {
-                let emit = |b: &mut Block, hs: &[Handle<Expression>]| hs.iter().for_each(|&h| b.push(Statement::Emit(Range::new_from_bounds(h, h)), s[i].1));
+                let emit = |b: &mut Block, hs: &[Handle<Expression>]| {
+                    hs.iter().for_each(|&h| {
+                        b.push(Statement::Emit(Range::new_from_bounds(h, h)), s[i].1)
+                    })
+                };
                 emit(b, &t.before);
-                b.push(Statement::WorkGroupUniformLoad { pointer: t.pointer, result: t.load }, s[i].1);
+                b.push(
+                    Statement::WorkGroupUniformLoad {
+                        pointer: t.pointer,
+                        result: t.load,
+                    },
+                    s[i].1,
+                );
                 emit(b, &t.after);
                 loads.push(t.load);
                 i = k + 1;
@@ -132,15 +180,25 @@ fn block(b: &mut Block, f: &Function, globals: &Arena<GlobalVariable>, loads: &m
 /// reads its value. An expression is made after those it reads, so each
 /// side keeps what it needs; a read of memory besides the load, which the
 /// load's own barriers would move, matches nothing.
-fn load_between(emits: &[(Statement, Span)], f: &Function, globals: &Arena<GlobalVariable>) -> Option<Taken> {
+fn load_between(
+    emits: &[(Statement, Span)],
+    f: &Function,
+    globals: &Arena<GlobalVariable>,
+) -> Option<Taken> {
     let mut held = Vec::new();
     for (st, _) in emits {
         let Statement::Emit(r) = st else { return None };
         held.extend(r.clone());
     }
-    let mut loads = held.iter().filter(|h| matches!(f.expressions[**h], Expression::Load { .. }));
-    let (Some(&load), None) = (loads.next(), loads.next()) else { return None };
-    let Expression::Load { pointer } = f.expressions[load] else { return None };
+    let mut loads = held
+        .iter()
+        .filter(|h| matches!(f.expressions[**h], Expression::Load { .. }));
+    let (Some(&load), None) = (loads.next(), loads.next()) else {
+        return None;
+    };
+    let Expression::Load { pointer } = f.expressions[load] else {
+        return None;
+    };
     let mut at = pointer;
     loop {
         match f.expressions[at] {

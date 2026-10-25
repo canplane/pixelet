@@ -20,8 +20,8 @@ make bake-star       # the Yale catalog's stars (make download-star first)
 make bake-geoid ARGS=egm2008-5.pgm   # EGM2008, into spec/spec/space/geoid.json
 ```
 
-The first four write a tile set, `out/<kind>/`; star and geoid are not tile
-sets and are not published. The binaries make runs are the Makefile's `TOOLS`, each
+The first four write a tile set, `out/<kind>/`; star and geoid are not tile sets
+and are not published. The binaries make runs are the Makefile's `TOOLS`, each
 rust/'s cargo alias of the same name.
 
 ## Before starting
@@ -33,9 +33,9 @@ docker compose -f infra/local/docker-compose.yml up -d
 ```
 
 A missing or partial table is an ingest's job, not a bake's: the bake refuses
-and names the ingest to run ([infra/geo/README.md](../../../infra/geo/README.md)).
-**Never `down -v` to "reset" the database**: the volume is several gigabytes of
-ingested data.
+and names the ingest to run
+([infra/geo/README.md](../../../infra/geo/README.md)). **Never `down -v` to
+"reset" the database**: the volume is several gigabytes of ingested data.
 
 ## Stages and flags
 
@@ -43,7 +43,8 @@ A bake changes its set only through `out/<kind>.stage/`, a shard at a time:
 `leaf` (the named shards' leaves), then `fold`, then `commit`; `publish`, only
 when named, makes `out/<kind>.publish/` for an upload. Every stage can stop and
 run again, and `commit` refuses to run before `fold`. A change of source, code
-or coverage is a purge: `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`, then bake every shard.
+or coverage is a purge: `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`,
+then bake every shard.
 
 ```bash
 make bake-terrain ARGS="--shard 01033210 --stage leaf"
@@ -59,8 +60,8 @@ make bake-terrain ARGS="--stage fold --stage commit"
 
 ## Verifying
 
-1. **Zero failures.** The leaf stage's line reports `failed=`; above zero,
-   tiles are missing, so repeat the stage.
+1. **Zero failures.** The leaf stage's line reports `failed=`; above zero, tiles
+   are missing, so repeat the stage.
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
    It bakes a missed tile with the same functions, but packs at zstd's quick
    level, so compare the decompressed packets, not the objects. Run
@@ -73,10 +74,11 @@ make bake-terrain ARGS="--stage fold --stage commit"
    zstd -dcq ./out/terrain/<name> | shasum
    ```
 
-   A tile coarser than z13 makes the server bake what is under it first, so
-   the first ask takes seconds to a minute. A mismatch means the two paths
-   have drifted: investigate before publishing.
-3. **Places:** the manifest's `zooms` reach the coarsest the client reads (pxl-spec `lattice.rs` `coarsest`), and a leaf decodes
+   A tile coarser than z13 makes the server bake what is under it first, so the
+   first ask takes seconds to a minute. A mismatch means the two paths have
+   drifted: investigate before publishing.
+3. **Places:** the manifest's `zooms` reach the coarsest the client reads
+   (pxl-spec `lattice.rs` `coarsest`), and a leaf decodes
    (`pxl-spec bake/tile/place.rs` `decode`). The client draws places only with
    the `place` setting on, which is off by default, so a world without them is
    not a failed bake.

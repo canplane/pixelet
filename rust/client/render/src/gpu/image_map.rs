@@ -22,10 +22,19 @@ pub struct ImageMap {
 impl ImageMap {
     pub fn new(g: &Gpu, width: u32, height: u32) -> ImageMap {
         let levels = mip_levels(width, height);
-        let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
+        let usage = texture_usage::TEXTURE_BINDING
+            | texture_usage::COPY_DST
+            | texture_usage::RENDER_ATTACHMENT;
         let texture = g.texture(width, height, 1, Format::rgba8unorm_srgb, levels, usage);
         let view = g.view(texture, true, 0, levels, 0, 1);
-        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::clamp_to_edge, None, 1);
+        let sampler = g.sampler(
+            FilterMode::linear,
+            FilterMode::linear,
+            MipmapFilterMode::linear,
+            AddressMode::clamp_to_edge,
+            None,
+            1,
+        );
         ImageMap {
             texture,
             view,
@@ -41,9 +50,22 @@ impl ImageMap {
         if self.loaded {
             return false;
         }
-        let Some(face) = image().and_then(|(image, file)| g.image(image, file)) else { return false };
+        let Some(face) = image().and_then(|(image, file)| g.image(image, file)) else {
+            return false;
+        };
         let encoder = g.encoder();
-        g.copy_texture(encoder, face, 0, 0, self.texture, 0, 0, 0, self.size.0, self.size.1);
+        g.copy_texture(
+            encoder,
+            face,
+            0,
+            0,
+            self.texture,
+            0,
+            0,
+            0,
+            self.size.0,
+            self.size.1,
+        );
         g.submit(encoder);
         release(face);
         mips.build(g, self.texture, self.levels, 0, 1);

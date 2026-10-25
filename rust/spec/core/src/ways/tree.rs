@@ -42,7 +42,7 @@ pub trait Pool: Lanes {
 }
 
 /// A pool in one lane, its heap words, then its data words: the GPU's
-/// buffer (pxl-render gpu/renderer.rs) and a bake's.
+/// buffer (pxl-render gpu/ray/ground.rs) and a bake's.
 pub struct Lane<'a>(pub &'a mut [u32]);
 
 impl Lanes for Lane<'_> {
@@ -105,7 +105,7 @@ impl Of {
 /// tree's: a bake's set fits it wherever the eye is (pxl-spec
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
 /// The pool starts smaller and grows as a build runs out
-/// (pxl-render gpu/renderer.rs `GroundBuffers::grow`), up to the kernel's
+/// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`), up to the kernel's
 /// cap (pxl-kernel domain/layer/terrain/param.rs `WAYS_POOL_BYTES`), no more than this; a build
 /// past what it holds is refused (`fits`), its square left absent. Family 0
 /// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
@@ -134,7 +134,7 @@ pub const NONE: u32 = u32::MAX;
 /// record each, its family's id and its eight heap and eight data words,
 /// which the read-back carries to the CPU's mirror. A build takes no more
 /// than its scratch holds (`cramped`), so neither runs past its room. The
-/// renderer starts it small and grows it (pxl-render gpu/renderer.rs
+/// renderer starts it small and grows it (pxl-render gpu/ray/ground.rs
 /// `GroundBuffers::grow_scratch`), every square's alike, so a frame's
 /// scratch is `window::HANDED` of them and each square's length is a
 /// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
@@ -174,7 +174,7 @@ pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_FAMILIES);
 /// scratch holds (`cramped`), short of the square's own most: no record
 /// kept and its root word 0, which the renderer reads as the scratch's to
 /// grow, as a count of none is the pool's, and `NONE` the square's own
-/// most (pxl-render gpu/renderer.rs `Short`). Past any count of a square's.
+/// most (pxl-render gpu/ray/ground.rs `Short`). Past any count of a square's.
 pub const CRAMPED: u32 = NONE - 1;
 const _: () = assert!(CRAMPED > SQUARE_FAMILIES, "no count of records is the mark");
 
@@ -184,13 +184,19 @@ const _: () = assert!(CRAMPED > SQUARE_FAMILIES, "no count of records is the mar
 const REL_MASK: u32 = (1 << SQUARE_SHIFT) - 1;
 const OFF: u32 = 1 << (2 * SQUARE_SHIFT);
 const Z_SHIFT: u32 = 2 * SQUARE_SHIFT + 1;
-const _: () = assert!(32 - Z_SHIFT > 16, "a cell's Z, an i16 at the leaves, in a candidate's word");
+const _: () = assert!(
+    32 - Z_SHIFT > 16,
+    "a cell's Z, an i16 at the leaves, in a candidate's word"
+);
 
 /// The square's node at `zoom`, no finer than the square, X counted from
 /// the round's start (`overwrite::path`).
 fn over(of: Of, zoom: Zoom) -> [i32; 2] {
     let s = of.zoom() - zoom;
-    [(of.at[0] >> s) & (1u32 << zoom).wrapping_sub(1) as i32, of.at[1] >> s]
+    [
+        (of.at[0] >> s) & (1u32 << zoom).wrapping_sub(1) as i32,
+        of.at[1] >> s,
+    ]
 }
 
 /// The candidate word of the node `at` of `zoom` under the root.
@@ -198,7 +204,11 @@ fn pack(of: Of, zoom: Zoom, at: [i32; 3]) -> u32 {
     let z = (at[2] as u32) << Z_SHIFT;
     if zoom <= of.zoom() {
         let o = over(of, zoom);
-        return if at[0] == o[0] && at[1] == o[1] { z } else { z | OFF };
+        return if at[0] == o[0] && at[1] == o[1] {
+            z
+        } else {
+            z | OFF
+        };
     }
     let s = zoom - of.zoom();
     let rel = [at[0] - (of.at[0] << s), at[1] - (of.at[1] << s)];
@@ -214,8 +224,14 @@ fn unpack(of: Of, zoom: Zoom, w: u32) -> ([i32; 3], bool) {
         return ([o[0], o[1], z], w & OFF == 0);
     }
     let s = zoom - of.zoom();
-    let rel = [(w & REL_MASK) as i32, ((w >> SQUARE_SHIFT) & REL_MASK) as i32];
-    ([(of.at[0] << s) + rel[0], (of.at[1] << s) + rel[1], z], true)
+    let rel = [
+        (w & REL_MASK) as i32,
+        ((w >> SQUARE_SHIFT) & REL_MASK) as i32,
+    ];
+    (
+        [(of.at[0] << s) + rel[0], (of.at[1] << s) + rel[1], z],
+        true,
+    )
 }
 
 /// The first level: the world's zoom-0 block, its eight nodes in the family at `root` as
@@ -244,7 +260,13 @@ pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, of: Of, zoom: Zoom, slot
         (LEVELS, [0, 0])
     } else {
         let s = zoom - of.zoom();
-        (of.cell - zoom, [(at[0] - (of.at[0] << s)) as u32, (at[1] - (of.at[1] << s)) as u32])
+        (
+            of.cell - zoom,
+            [
+                (at[0] - (of.at[0] << s)) as u32,
+                (at[1] - (of.at[1] << s)) as u32,
+            ],
+        )
     };
     let [lo, hi] = ground::bounds_of(w.level(of.cell, s, j, e))[1];
     let d = LEAF_CELL - zoom;
@@ -289,7 +311,11 @@ pub fn branch(pool: &mut impl Pool, of: Of, zoom: Zoom, slot: u32, first: u32) {
     pool.set_heap(slot, BRANCH | first);
     let mut k = 0;
     while k < 8 {
-        let child = [2 * at[0] + (k & 1) as i32, 2 * at[1] + (k >> 1 & 1) as i32, 2 * at[2] + (k >> 2) as i32];
+        let child = [
+            2 * at[0] + (k & 1) as i32,
+            2 * at[1] + (k >> 1 & 1) as i32,
+            2 * at[2] + (k >> 2) as i32,
+        ];
         pool.set_heap(first + k, 0);
         pool.set_data(first + k, pack(of, zoom + 1, child));
         k += 1;
@@ -313,7 +339,10 @@ pub fn leaf(pool: &mut impl Pool, runs: &impl Runs, of: Of, slot: u32) {
     let mut value = super::NOTHING;
     if under {
         let s = SQUARE_SHIFT;
-        let i = crate::window::index_of([(at[0] - (of.at[0] << s)) as u32, (at[1] - (of.at[1] << s)) as u32]);
+        let i = crate::window::index_of([
+            (at[0] - (of.at[0] << s)) as u32,
+            (at[1] - (of.at[1] << s)) as u32,
+        ]);
         // The first run past Z: the one before it holds Z.
         let [first, to] = runs.column(i);
         let (mut lo, mut hi) = (first, to);
@@ -366,7 +395,19 @@ pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
             d
         }
     };
-    let folded = overwrite::fold([share(0), share(1), share(2), share(3), share(4), share(5), share(6), share(7)], zoom);
+    let folded = overwrite::fold(
+        [
+            share(0),
+            share(1),
+            share(2),
+            share(3),
+            share(4),
+            share(5),
+            share(6),
+            share(7),
+        ],
+        zoom,
+    );
     pool.set_data(slot, folded);
     NONE
 }
@@ -387,11 +428,14 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
 /// scratch from `records_at` on, their count, then a family its tree holds
 /// each.
 pub const RECORDS_WORDS: u32 = 1 + SQUARE_FAMILIES * RECORD_WORDS;
-const _: () = assert!(RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_FAMILIES), "the records end the scratch");
+const _: () = assert!(
+    RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_FAMILIES),
+    "the records end the scratch"
+);
 
 /// A square's records in bytes at their most: the most a read-back
 /// copies off its scratch, which copies what its room holds
-/// (pxl-render gpu/renderer.rs `GroundBuffers::record_bytes`).
+/// (pxl-render gpu/ray/ground.rs `GroundBuffers::record_bytes`).
 pub const RECORDS_BYTES: u32 = RECORDS_WORDS * 4;
 
 /// A square's records (`RECORDS_WORDS`) laid into `pool` at the slots they
@@ -433,15 +477,24 @@ mod tests {
     fn a_scratch_holds_the_families_it_is_made_for() {
         // At a square's most, the layout it had before it grew: its runs,
         // its freed families' count and ids, its records' count and records.
-        assert_eq!(SCRATCH_WORDS, crate::window::TREE_AT + 1 + SQUARE_FAMILIES + 1 + SQUARE_FAMILIES * RECORD_WORDS);
+        assert_eq!(
+            SCRATCH_WORDS,
+            crate::window::TREE_AT + 1 + SQUARE_FAMILIES + 1 + SQUARE_FAMILIES * RECORD_WORDS
+        );
         for families in [1, 539, 1078, SQUARE_FAMILIES] {
             assert_eq!(scratch_families(scratch_words(families)), families);
             // A word short holds a family fewer.
             assert_eq!(scratch_families(scratch_words(families) - 1), families - 1);
             // Its records end it.
-            assert_eq!(records_at(families) + 1 + families * RECORD_WORDS, scratch_words(families));
+            assert_eq!(
+                records_at(families) + 1 + families * RECORD_WORDS,
+                scratch_words(families)
+            );
         }
-        assert_eq!(scratch_families(scratch_words(SQUARE_FAMILIES) + 1000), SQUARE_FAMILIES);
+        assert_eq!(
+            scratch_families(scratch_words(SQUARE_FAMILIES) + 1000),
+            SQUARE_FAMILIES
+        );
         assert_eq!(scratch_families(FREED_AT + 1), 0);
     }
 

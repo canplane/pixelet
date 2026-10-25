@@ -30,8 +30,16 @@ fn a_cave_cube_is_the_majority_of_its_children() {
             for y in 0..6 {
                 for z in -6..0 {
                     let c = [x, y, z];
-                    let hollow = (0..8).filter(|&k| Cave::of(zoom + 1, [0, 1, 2].map(|a| 2 * c[a] + (k >> a & 1))).hollow()).count();
-                    assert_eq!(hollow > 4, Cave::of(zoom, c).hollow(), "z{zoom} {c:?}: {hollow} of 8");
+                    let hollow = (0..8)
+                        .filter(|&k| {
+                            Cave::of(zoom + 1, [0, 1, 2].map(|a| 2 * c[a] + (k >> a & 1))).hollow()
+                        })
+                        .count();
+                    assert_eq!(
+                        hollow > 4,
+                        Cave::of(zoom, c).hollow(),
+                        "z{zoom} {c:?}: {hollow} of 8"
+                    );
                 }
             }
         }

@@ -33,7 +33,10 @@ struct Geolocation {
 static GEOLOCATION: Global<Geolocation> = Global::new();
 
 fn geolocation() -> &'static mut Geolocation {
-    GEOLOCATION.get(|| Geolocation { open: false, command: None })
+    GEOLOCATION.get(|| Geolocation {
+        open: false,
+        command: None,
+    })
 }
 
 /// A watch runs while the store tracks the location
@@ -88,9 +91,19 @@ pub fn geolocation_permission_granted(supported: bool) {
 
 /// `altitude` is the ellipsoid's, as GPS gives it; kept over sea level, the
 /// terrain's, by the geoid at the base of the leaf tile it falls in.
-pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, course: Option<f64>) {
-    let (x0, y0, _) = GROUND.cell_of(LEAF_ZOOM, &epsg4326::project(&[longitude, latitude, 0.0])).tile().rect();
-    let [lng, lat, _] = epsg4326::from_mercator(&[epsg3857::mer_from_u(x0), epsg3857::mer_from_u(y0), 0.0]);
+pub fn geolocation_fix(
+    longitude: f64,
+    latitude: f64,
+    altitude: Option<f64>,
+    accuracy: f64,
+    course: Option<f64>,
+) {
+    let (x0, y0, _) = GROUND
+        .cell_of(LEAF_ZOOM, &epsg4326::project(&[longitude, latitude, 0.0]))
+        .tile()
+        .rect();
+    let [lng, lat, _] =
+        epsg4326::from_mercator(&[epsg3857::mer_from_u(x0), epsg3857::mer_from_u(y0), 0.0]);
     let altitude = altitude.map(|h| h - epsg4326::geoid_m(lng, lat));
     device_location_store().set_location([longitude, latitude], altitude, accuracy, course);
 }
@@ -107,7 +120,10 @@ pub fn geolocation_error(code: GeolocationErrorCode) {
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,
         GeolocationErrorCode::Other => Message::GeolocationGenericError,
     });
-    if matches!(code, GeolocationErrorCode::PermissionDenied | GeolocationErrorCode::Other) {
+    if matches!(
+        code,
+        GeolocationErrorCode::PermissionDenied | GeolocationErrorCode::Other
+    ) {
         store.set_is_tracking_location(false);
     }
 }

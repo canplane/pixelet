@@ -18,20 +18,21 @@ upload must set both.
 
 ## One-time setup
 
-In the Cloudflare dashboard: create the bucket, named as `wrangler.jsonc`'s
-`r2_buckets[0].bucket_name` and kept **private**; create an R2 API token (an
-S3-compatible key ID and secret); note the account ID. Then, in a profile of
-its own so a default AWS profile is left alone:
+In the Cloudflare dashboard: create the bucket, named as
+`ts/server/edge/wrangler.jsonc`'s `r2_buckets[0].bucket_name` and kept
+**private**; create an R2 API token (an S3-compatible key ID and secret); note
+the account ID. Then, in a profile of its own so a default AWS profile is left
+alone:
 
 ```bash
 aws configure --profile r2          # region: auto
 aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
 ```
 
-`publish.py` uses exactly that profile, since a set is too many objects to put one by one;
-`$R2`, where set, stands in for its endpoint. A manual `aws s3 sync` needs
-`AWS_REQUEST_CHECKSUM_CALCULATION=when_required` too, since the CLI's checksum
-headers are refused by R2; `publish.py` sets it for itself.
+`publish.py` uses exactly that profile, since a set is too many objects to put
+one by one; `$R2`, where set, stands in for its endpoint. A manual `aws s3 sync`
+needs `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` too, since the CLI's
+checksum headers are refused by R2; `publish.py` sets it for itself.
 
 ## Upload
 
@@ -44,8 +45,8 @@ and after:
 ./.agents/skills/publish-bucket/usage.py     # Class A this month against the million
 ```
 
-and set the object count `publish` prints against what is left. Deleting an
-old version is free.
+and set the object count `publish` prints against what is left. Deleting an old
+version is free.
 
 ```bash
 make bake-<kind> ARGS="--stage publish"    # terrain, place or division
@@ -54,17 +55,17 @@ make bake-<kind> ARGS="--stage publish"    # terrain, place or division
 
 `publish` names the version, uploads the copy with the manifest's
 content-encoding, checks the stored count, then writes `source`.
-`./script/publish.py serve <kind> <version>` serves a version the bucket holds
-again, which is how to go back; `./script/publish.py override <shard> <kind>
-<version>` serves a version for one shard and the tiles under it, `-` dropping
-it.
+```bash
+./script/publish.py serve <kind> <version>              # serve a held version again: how to go back
+./script/publish.py override <shard> <kind> <version>   # one shard and the tiles under it; - drops it
+```
 
-**Never overwrite an existing version in place**, of any kind: publish a new
-one and serve it.
+**Never overwrite an existing version in place**, of any kind: publish a new one
+and serve it.
 
-For places and divisions, a tile no reader asks for is no object, and the
-client reads its ground from the tile over it, so a missing tile is never an
-error to repair.
+For places and divisions, a tile no reader asks for is no object, and the client
+reads its ground from the tile over it, so a missing tile is never an error to
+repair.
 
 ### Earth
 
@@ -83,7 +84,7 @@ make ingest-asset
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-tiles/asset \
-    --profile r2 --endpoint-url $R2 \
+    --profile r2 \
     --exclude "*" --include "*.${t%%:*}" \
     --content-type ${t#*:} --cache-control "public, max-age=31536000, immutable"
 done
@@ -99,15 +100,15 @@ names that is not in the bucket is a 404 on the live site.
 ```bash
 # expect the manifest's ContentEncoding on a tile;
 # ContentType model/gltf-binary and no ContentEncoding on a glb
-aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2 --endpoint-url $R2
-aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profile r2 --endpoint-url $R2
+aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2
+aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profile r2
 ```
 
 ## Verify what is served
 
 The bucket can be right while the serving path is not. The smoke checks the
-served bytes, and CI runs it after every deploy; run it by hand after a
-publish, which is not a deploy:
+served bytes, and CI runs it after every deploy; run it by hand after a publish,
+which is not a deploy:
 
 ```bash
 ./script/smoke.py https://plei.me
@@ -116,9 +117,9 @@ publish, which is not a deploy:
 It fails on a tile packed twice (the Worker's `Response` lost
 `encodeBody: "manual"`, `serve`), on a second ask off the edge cache that
 differs from the first (`STORED_ENCODING`), on an unbaked page answered with
-anything but an empty 204 (HTML means `run_worker_first` is missing), and on
-an asset with the wrong type or a `content-encoding`. It only warns when the
-second ask did not hit the cache, which leaves that path unchecked.
+anything but an empty 204 (HTML means `run_worker_first` is missing), and on an
+asset with the wrong type or a `content-encoding`. It only warns when the second
+ask did not hit the cache, which leaves that path unchecked.
 
 ## Purging the edge cache
 

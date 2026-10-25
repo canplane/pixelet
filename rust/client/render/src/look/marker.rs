@@ -19,7 +19,10 @@ pub const BLACK: u32 = 0x000000ff;
 pub const WHITE: u32 = 0xffffffff;
 
 /// A marker's words on a pill, the dot under it at its cell's center.
-pub const PILL_FONT: Font = Font { weight: REGULAR, px: 12.0 };
+pub const PILL_FONT: Font = Font {
+    weight: REGULAR,
+    px: 12.0,
+};
 const PILL_INNER: f32 = 20.0;
 const PAD_X: f32 = 10.0;
 const PAD_Y: f32 = 7.0;
@@ -42,7 +45,11 @@ pub const COUNT_INK: u32 = 0x14141aff;
 /// A pill's sprite for words as wide as `text_w`: its width, height down to
 /// the dot's foot, and where what it marks is, at the dot's.
 pub fn pill_size(text_w: f64) -> [f64; 3] {
-    [(text_w + 2.0 * f64::from(PAD_X)).max(f64::from(PILL_H)), f64::from(PILL_H + DOT_GAP + DOT_DIAM), f64::from(DOT_CY)]
+    [
+        (text_w + 2.0 * f64::from(PAD_X)).max(f64::from(PILL_H)),
+        f64::from(PILL_H + DOT_GAP + DOT_DIAM),
+        f64::from(DOT_CY),
+    ]
 }
 
 // A place as a map app draws one: its symbol white on a disc of its
@@ -51,7 +58,10 @@ pub fn pill_size(text_w: f64) -> [f64; 3] {
 // color, semibold, in a near-opaque white halo. Which places and when are
 // Carto's (`pxl-spec bake/place_theme.spec.rs`); how they look is not.
 
-pub const POINT_FONT: Font = Font { weight: SEMIBOLD, px: 12.0 };
+pub const POINT_FONT: Font = Font {
+    weight: SEMIBOLD,
+    px: 12.0,
+};
 /// A symbol's disc across: the symbol (`SYMBOL_PX` at the sheet's scale, 14)
 /// with four pixels of fill round it.
 const POINT_DISC: f32 = 22.0;
@@ -100,16 +110,30 @@ pub fn point_size(icon: bool, text: Option<(f64, usize)>) -> [f64; 3] {
         None => [mark, mark, mark / 2.0],
         Some((w, lines)) => {
             // The last line's shadow reaches past its halo.
-            let shadow = f64::from(POINT_TEXT_HALO.shadow_radius - POINT_HALO + POINT_TEXT_HALO.shadow_dy);
-            let h = mark - f64::from(POINT_PAD) + f64::from(POINT_GAP) + f64::from(POINT_PITCH) * (lines.max(1) - 1) as f64 + f64::from(POINT_LINE) + shadow;
-            [(w + 2.0 * f64::from(POINT_TEXT_HALO.shadow_radius)).ceil().max(mark), h.ceil(), mark / 2.0]
+            let shadow =
+                f64::from(POINT_TEXT_HALO.shadow_radius - POINT_HALO + POINT_TEXT_HALO.shadow_dy);
+            let h = mark - f64::from(POINT_PAD)
+                + f64::from(POINT_GAP)
+                + f64::from(POINT_PITCH) * (lines.max(1) - 1) as f64
+                + f64::from(POINT_LINE)
+                + shadow;
+            [
+                (w + 2.0 * f64::from(POINT_TEXT_HALO.shadow_radius))
+                    .ceil()
+                    .max(mark),
+                h.ceil(),
+                mark / 2.0,
+            ]
         }
     }
 }
 
 /// A line said in the chat, black on a white bubble whose tail points at its
 /// speaker.
-pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
+pub const BUBBLE_FONT: Font = Font {
+    weight: SEMIBOLD,
+    px: 14.0,
+};
 /// The widest a bubble's line runs before it wraps.
 pub const BUBBLE_TEXT_W: f64 = 220.0;
 const PADDING_X: f32 = 11.0;

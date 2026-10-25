@@ -27,7 +27,7 @@
 //! which the query and the controls read, fills with no frame drawn.
 //!
 //! A body is refused a slot in two cases, and its want waits on what can
-//! end it (sys/io/host.rs `Refused`): one that came for a read since stopped,
+//! end it (sys/io/room.rs `Refused`): one that came for a read since stopped,
 //! held a turn until it is dropped (sys/io/fetch.rs `fetch_task`), can find
 //! every slot out, and waits for one given back; and one that needs a run
 //! when the heap can give none waits for the heap's pages or a slot given
@@ -51,8 +51,8 @@ use xpute_guest::mem::heap::{alloc, free, Block};
 use xpute_guest::mem::section::PAGE_BYTES;
 
 use crate::sys::io::demand::Stream;
-use crate::sys::io::host::Refused;
 use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
+use crate::sys::io::room::Refused;
 
 /// The kinds whose bodies take a slot.
 const SLOTTED: [Stream; 2] = [Stream::terrain, Stream::earth];
@@ -80,11 +80,21 @@ const SLOT_BYTES: u32 = {
 /// Seven at today's packets.
 const SLOTS: u32 = BODY_RUN_BYTES / SLOT_BYTES;
 
-const FULL: u32 = if SLOTS == u32::BITS { u32::MAX } else { (1 << SLOTS) - 1 };
+const FULL: u32 = if SLOTS == u32::BITS {
+    u32::MAX
+} else {
+    (1 << SLOTS) - 1
+};
 
 const _: () = {
-    assert!(BODY_RUN_BYTES.is_power_of_two(), "a run is the buddy's own block");
-    assert!(SLOTS >= 2 && SLOTS <= u32::BITS, "a run holds two slots or more, a bit each");
+    assert!(
+        BODY_RUN_BYTES.is_power_of_two(),
+        "a run is the buddy's own block"
+    );
+    assert!(
+        SLOTS >= 2 && SLOTS <= u32::BITS,
+        "a run holds two slots or more, a bit each"
+    );
     let mut k = 0;
     while k < SLOTTED.len() {
         assert!(
@@ -172,14 +182,22 @@ pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refused> {
 /// `block` came from `take` and has not been given back.
 pub unsafe fn give(block: Block) {
     let s = held();
-    let Some(i) = s.runs.iter().position(|r| (r.at..r.at + BODY_RUN_BYTES as usize).contains(&block.0)) else {
+    let Some(i) = s
+        .runs
+        .iter()
+        .position(|r| (r.at..r.at + BODY_RUN_BYTES as usize).contains(&block.0))
+    else {
         // SAFETY: the caller's; a block outside every run is the heap's own.
         return unsafe { free(block) };
     };
     let run = &mut s.runs[i];
     let off = block.0 - run.at;
     // A block inside a run that is not a slot out is given back twice, or was never taken.
-    xpute_kit::ensure!(off < (SLOTS * SLOT_BYTES) as usize && off.is_multiple_of(SLOT_BYTES as usize), ENOTRECOVERABLE, off);
+    xpute_kit::ensure!(
+        off < (SLOTS * SLOT_BYTES) as usize && off.is_multiple_of(SLOT_BYTES as usize),
+        ENOTRECOVERABLE,
+        off
+    );
     let bit = 1 << (off / SLOT_BYTES as usize);
     xpute_kit::ensure!(run.out & bit != 0, ENOTRECOVERABLE, off);
     run.out &= !bit;

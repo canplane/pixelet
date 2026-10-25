@@ -6,9 +6,7 @@
 // order Carto paints, and an object's value a u16 whose byte range is
 // that palette and whose range past it is what only an object can be.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
+// Names as the spec spells them, so one record has one name on every side.
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
 pub mod sentinel {

@@ -9,8 +9,8 @@ interface PxlPlatform {
   /** The module's event (Expo's EventEmitter): `onWake`, the device's host
    * asking a turn (gpu.ts). */
   addListener(event: "onWake", listener: () => void): { remove(): void };
-  memory(): ArrayBuffer;
-  interrupt(quotaMs: f64): f64;
+  mem(): ArrayBuffer;
+  intr(quotaMs: f64): f64;
   /** Whether the device opened; what it is, the kernel reads from the host. */
   gpuOpen(): boolean;
   /** A body sent zstd, decoded off the JavaScript thread (origin.ts). */
@@ -19,10 +19,21 @@ interface PxlPlatform {
   storageSet(key: string, value: string): void;
   clipboardSet(text: string): void;
   textWidth(weight: u32, px: f32, text: string): f32;
-  textRaster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void;
+  textRaster(
+    weight: u32,
+    px: f32,
+    rgba: u32,
+    text: string,
+    x: f32,
+    width: u32,
+    height: u32,
+    out: Uint8Array,
+  ): void;
   headingAvailable(): boolean;
   /** Android's: the bottom inset that takes a touch (nav buttons), 0 with gestures, in dp. */
   tappableBottom(): f64;
 }
 
-export const PLATFORM: PxlPlatform = requireNativeModule<PxlPlatform>("PxlPlatform");
+export const PLATFORM: PxlPlatform = requireNativeModule<PxlPlatform>(
+  "PxlPlatform",
+);

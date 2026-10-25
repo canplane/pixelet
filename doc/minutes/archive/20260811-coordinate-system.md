@@ -3,8 +3,8 @@
 **2026-08-11**, reconstructed from git history — the reasoning behind PVF3, the
 L4 anchor registry, the three-tier camera frame, and the 3857/4326 adapters.
 
-[ARCHITECTURE.md](../../ARCHITECTURE.md) describes _what_ these are. This document
-covers _why_, and what the design went through to get there.
+[ARCHITECTURE.md](../../ARCHITECTURE.md) describes _what_ these are. This
+document covers _why_, and what the design went through to get there.
 
 ---
 
@@ -28,18 +28,19 @@ sufficient motivation by itself, and they all point the same way:
    than a math problem.
 5. **The guard bit absorbs transient overflow at the antimeridian wrap**, not
    just SIMD headroom — stated explicitly in `3857.ts`.
-6. **`Z_SCALE` is fixed per L3 page on purpose**, deliberately coarse. Mercator's
-   latitude-dependent vertical distortion could be corrected per point, but then
-   terrain, objects, and baking would each land on slightly different scales and
-   fail to line up. Consistency between subsystems was chosen over precision.
-7. **The L5 (shard) slot is reserved ahead of need**, so server-side distribution
-   later doesn't force a coordinate redesign.
+6. **`Z_SCALE` is fixed per L3 page on purpose**, deliberately coarse.
+   Mercator's latitude-dependent vertical distortion could be corrected per
+   point, but then terrain, objects, and baking would each land on slightly
+   different scales and fail to line up. Consistency between subsystems was
+   chosen over precision.
+7. **The L5 (shard) slot is reserved ahead of need**, so server-side
+   distribution later doesn't force a coordinate redesign.
 8. **AR/VR was anticipated.** Splitting the view into three frames was partly
    about a later XR transition. On desktop and touch the camera is fixed and the
    world moves; in AR/VR the device genuinely moves with 6DOF and the world is
    fixed. With content already separated by which invariance it needs, switching
-   _who moves_ becomes a swap rather than a rewrite. **No WebXR code exists — this
-   is design motivation only, not implementation.**
+   _who moves_ becomes a swap rather than a rewrite. **No WebXR code exists —
+   this is design motivation only, not implementation.**
 
 ## The three-tier camera frame, and the combination it can't express
 
@@ -55,8 +56,9 @@ combinations. The tree has room for three:
 
 The missing one is the interesting case: POI place labels, which should follow a
 position but stay upright regardless of bearing — the same counter-rotation
-pattern Google Maps and Mapbox use for labels. `poi/layer.tsx` and `poi_item.tsx`
-exist, but there is no text-label feature yet, so the need hasn't surfaced.
+pattern Google Maps and Mapbox use for labels. `poi/layer.tsx` and
+`poi_item.tsx` exist, but there is no text-label feature yet, so the need hasn't
+surfaced.
 
 **Why the slot doesn't exist:** `local-world-frame` is nested _inside_
 `world-frame`, and there is no way to inherit a parent's translation without its
@@ -109,17 +111,18 @@ atomic. Recorded in the code comment.
 
 ## Note on level sizes
 
-Level extents have changed over the project's life — the page was 128 u before it
-became 1024 u, and the chunk 32 u before 64 u. Current values live in
-`indexer.ts` (`L2_SHAMT` 6 → 64 u, `L3_SHAMT` 10 → 1024 u, `L4_SHAMT` 12 →
-4096 u, L5 reserved at 16 → 65536 u but commented out). Anything quoting other
-numbers is stale; read the constants, and note that some derived tuning constants
-(`modules/world/terrain/config.ts`) carry their own re-derivation notes tied to
-the page size change.
+Level extents have changed over the project's life — the page was 128 u before
+it became 1024 u, and the chunk 32 u before 64 u. Current values live in
+`indexer.ts` (`L2_SHAMT` 6 → 64 u, `L3_SHAMT` 10 → 1024 u, `L4_SHAMT` 12 → 4096
+u, L5 reserved at 16 → 65536 u but commented out). Anything quoting other
+numbers is stale; read the constants, and note that some derived tuning
+constants (`modules/world/terrain/config.ts`) carry their own re-derivation
+notes tied to the page size change.
 
 ## Related
 
 - Why BigInt was chosen, and what the abandoned Rust port would have done about
-  its cost — [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md#corrections-to-earlier-readings)
-- Why PVF3 stayed in `pxl` rather than moving to `xpute` — same document,
-  "Why `xpute` and `pxl` are separate packages"
+  its cost —
+  [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md#corrections-to-earlier-readings)
+- Why PVF3 stayed in `pxl` rather than moving to `xpute` — same document, "Why
+  `xpute` and `pxl` are separate packages"

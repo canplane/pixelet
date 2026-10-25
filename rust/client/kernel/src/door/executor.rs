@@ -7,7 +7,7 @@
 use crate::sys::sched::edge::TASKS;
 use embassy_executor::raw::Executor as Raw;
 use xpute_guest::global::Global;
-use xpute_guest::sched::task::{set_executor, Executor, Priority, Task};
+use xpute_guest::sched::task::{self, Executor, Priority, Task};
 
 struct OneThread;
 
@@ -69,5 +69,5 @@ static EMBASSY: Embassy = Embassy;
 
 /// Before the kernel spawns anything.
 pub fn install() {
-    set_executor(&EMBASSY);
+    task::set(&EMBASSY);
 }

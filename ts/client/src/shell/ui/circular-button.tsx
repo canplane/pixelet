@@ -20,12 +20,29 @@ interface CircularButtonProps {
   label: string;
 }
 
-export function CircularButton({ glyph, size = chrome.control, place = BackingPlace.OverMap, onPress, label }: CircularButtonProps) {
+export function CircularButton(
+  {
+    glyph,
+    size = chrome.control,
+    place = BackingPlace.OverMap,
+    onPress,
+    label,
+  }: CircularButtonProps,
+) {
   const round = { width: size, height: size, borderRadius: size / 2 };
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={round}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={round}
+    >
       {({ pressed }) => (
-        <Motion to={{ scale: pressed && !SYSTEM_BACKING ? 0.95 : 1 }} transition={SNAP} style={[styles.press, { borderRadius: size / 2 }]}>
+        <Motion
+          to={{ scale: pressed && !SYSTEM_BACKING ? 0.95 : 1 }}
+          transition={SNAP}
+          style={[styles.press, { borderRadius: size / 2 }]}
+        >
           <Backing
             fill={place === BackingPlace.OnSheet ? color.faint : color.ground}
             place={place}

@@ -36,7 +36,10 @@ fn run() -> Result<(), String> {
         if flag != "--blocks" {
             return Err(format!("unknown flag: {flag}"));
         }
-        let shard = coverage.shards().find(|s| s.name() == *name).ok_or(format!("{name}: no shard of the coverage"))?;
+        let shard = coverage
+            .shards()
+            .find(|s| s.name() == *name)
+            .ok_or(format!("{name}: no shard of the coverage"))?;
         let inner = shard.tiles(BLOCK_ZOOM);
         let (xs, ys) = (inner.iter().map(|&p| p[0]), inner.iter().map(|&p| p[1]));
         let (x0, x1) = (xs.clone().min().unwrap_or(0), xs.max().unwrap_or(0));
@@ -51,7 +54,12 @@ fn run() -> Result<(), String> {
                 if (mer_from_u(west + side) - w - block_m).abs() > 1e-6 * block_m {
                     return Err(format!("{}: its side is not a block's", tile.name()));
                 }
-                println!("{} {} {}", round(w / block_m) as i64, round(n / block_m) as i64, tile.name());
+                println!(
+                    "{} {} {}",
+                    round(w / block_m) as i64,
+                    round(n / block_m) as i64,
+                    tile.name()
+                );
             }
         }
         return Ok(());
@@ -60,7 +68,10 @@ fn run() -> Result<(), String> {
     for shard in coverage.shards() {
         let [x0, y0, x1, y1] = shard.rect();
         let [x0, y0, x1, y1] = [x0 - apron, y0 - apron, x1 + apron, y1 + apron].map(mer_from_u);
-        println!("{} {x0} {y0} {x1} {y1} {stride} {BLOCK} {block_m}", shard.name());
+        println!(
+            "{} {x0} {y0} {x1} {y1} {stride} {BLOCK} {block_m}",
+            shard.name()
+        );
     }
     Ok(())
 }

@@ -20,7 +20,11 @@ impl Piece {
     }
 
     pub fn width(&self) -> f64 {
-        width_u(&self.way.subtype, self.way.class.as_deref(), self.way.tags.role)
+        width_u(
+            &self.way.subtype,
+            self.way.class.as_deref(),
+            self.way.tags.role,
+        )
     }
 
     /// Whether any of it lies in `[lo, hi]`.
@@ -48,5 +52,8 @@ pub fn piece_of(way: &Part) -> Option<Piece> {
     } else {
         return None;
     };
-    (way.points.len() >= 2).then(|| Piece { way: way.clone(), form })
+    (way.points.len() >= 2).then(|| Piece {
+        way: way.clone(),
+        form,
+    })
 }

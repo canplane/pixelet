@@ -26,7 +26,8 @@ pub const EARTH_REACH: f64 = demand_reach(GROUND, EARTH_ZOOM);
 pub const EARTH_BYTES: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 
 /// Every packet's length: its texels, as `encode` lays them.
-pub const PACKET_BYTES: usize = super::packet::HEADER + super::packet::branch(1) + super::packet::seq(EARTH_BYTES);
+pub const PACKET_BYTES: usize =
+    super::packet::HEADER + super::packet::branch(1) + super::packet::seq(EARTH_BYTES);
 
 pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
     if rgba.len() != EARTH_BYTES {
@@ -36,12 +37,21 @@ pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
     t.branch(Some(&mut |b| {
         b.u8_array(Some(rgba));
     }));
-    encoder().encode(&t, TreeEncoderOptions::default())
+    encoder().encode(
+        &t,
+        TreeEncoderOptions {
+            init_cap: super::ENCODE_FROM,
+            max_cap: None,
+        },
+    )
 }
 
 /// The tile's texels, read in place.
 pub fn decode(bytes: &[u8]) -> Result<&[u8], MarshalError> {
-    let rgba = TreeReader::new(bytes)?.read_branch()?.at(0)?.get_array::<u8>()?;
+    let rgba = TreeReader::new(bytes)?
+        .read_branch()?
+        .at(0)?
+        .get_array::<u8>()?;
     if rgba.len() != EARTH_BYTES {
         return Err(malformed());
     }

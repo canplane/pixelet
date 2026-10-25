@@ -180,7 +180,10 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             let s = zoom - c;
             ([x >> s, y >> s], [x >> s, y >> s])
         };
-        let (q0, q1) = ([lo[0] >> SQUARE_SHIFT, lo[1] >> SQUARE_SHIFT], [hi[0] >> SQUARE_SHIFT, hi[1] >> SQUARE_SHIFT]);
+        let (q0, q1) = (
+            [lo[0] >> SQUARE_SHIFT, lo[1] >> SQUARE_SHIFT],
+            [hi[0] >> SQUARE_SHIFT, hi[1] >> SQUARE_SHIFT],
+        );
         // As wide as the window or wider, every slot; else each square.
         let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
         if wide {

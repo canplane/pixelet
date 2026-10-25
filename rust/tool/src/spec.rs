@@ -28,7 +28,10 @@ pub struct Output {
 
 impl Output {
     pub fn new(path: &str, text: String) -> Output {
-        Output { path: path.to_string(), text }
+        Output {
+            path: path.to_string(),
+            text,
+        }
     }
 }
 
@@ -56,23 +59,33 @@ pub fn generate(write: bool) -> Result<(), String> {
     let outputs = thread::scope(|scope| {
         let handles: Vec<_> = outputs()?
             .into_iter()
-            .map(|o| scope.spawn(move || formatted(&o.path, o.text).map(|text| Output { path: o.path, text })))
+            .map(|o| {
+                scope.spawn(move || {
+                    formatted(&o.path, o.text).map(|text| Output { path: o.path, text })
+                })
+            })
             .collect();
         handles
             .into_iter()
-            .map(|h| h.join().map_err(|_| "a formatter thread panicked".to_string())?)
+            .map(|h| {
+                h.join()
+                    .map_err(|_| "a formatter thread panicked".to_string())?
+            })
             .collect::<Result<Vec<_>, String>>()
     })?;
     let root = root();
     let stale: Vec<&Output> = outputs
         .iter()
-        .filter(|o| std::fs::read_to_string(root.join(&o.path)).ok().as_deref() != Some(o.text.as_str()))
+        .filter(|o| {
+            std::fs::read_to_string(root.join(&o.path)).ok().as_deref() != Some(o.text.as_str())
+        })
         .collect();
     if write {
         // Only what differs: a rewrite moves the mtime, and cargo and Vite rebuild.
         for o in &stale {
             let at = root.join(&o.path);
-            std::fs::create_dir_all(at.parent().ok_or("a path with no parent")?).map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(at.parent().ok_or("a path with no parent")?)
+                .map_err(|e| e.to_string())?;
             std::fs::write(&at, &o.text).map_err(|e| format!("{}: {e}", o.path))?;
             println!("wrote {}", o.path);
         }
@@ -85,7 +98,10 @@ pub fn generate(write: bool) -> Result<(), String> {
         }
         return Err(format!("{} stale", stale.len()));
     }
-    println!("spec: {} generated files are what their JSON writes", outputs.len());
+    println!(
+        "spec: {} generated files are what their JSON writes",
+        outputs.len()
+    );
     Ok(())
 }
 
@@ -168,7 +184,10 @@ impl Node {
     }
 
     pub fn named(&self) -> impl Iterator<Item = (&str, &Node)> {
-        self.entries().iter().filter(|(k, _)| !k.starts_with('$')).map(|(k, v)| (k.as_str(), v))
+        self.entries()
+            .iter()
+            .filter(|(k, _)| !k.starts_with('$'))
+            .map(|(k, v)| (k.as_str(), v))
     }
 
     pub fn is_obj(&self) -> bool {
@@ -209,7 +228,11 @@ impl Node {
     }
 
     pub fn lines_at(&self, key: &str) -> Option<Vec<String>> {
-        self.get(key)?.arr().map(|a| a.iter().filter_map(|l| l.str().map(str::to_string)).collect())
+        self.get(key)?.arr().map(|a| {
+            a.iter()
+                .filter_map(|l| l.str().map(str::to_string))
+                .collect()
+        })
     }
 }
 
@@ -221,11 +244,18 @@ impl Node {
 /// its `WORDS`) or a number in one (`LIMITS.ZOOMS`, `op.DESTROY`), else one
 /// in a file it uses (`used`). So a lane grown moves everything after it.
 pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
-    let Node::Obj(entries) = node else { return Ok(node) };
+    let Node::Obj(entries) = node else {
+        return Ok(node);
+    };
     let mut above: Vec<(String, Node)> = Vec::with_capacity(entries.len());
     for (k, v) in entries {
         let v = match v {
-            Node::Obj(ref t) if t.iter().any(|(f, x)| f == "$packed" && *x == Node::Bool(true)) => Node::Obj(lay(t.clone(), &above, used).map_err(|e| format!("{k}.{e}"))?),
+            Node::Obj(ref t)
+                if t.iter()
+                    .any(|(f, x)| f == "$packed" && *x == Node::Bool(true)) =>
+            {
+                Node::Obj(lay(t.clone(), &above, used).map_err(|e| format!("{k}.{e}"))?)
+            }
             v => v,
         };
         above.push((k, v));
@@ -233,7 +263,11 @@ pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     Ok(Node::Obj(above))
 }
 
-fn lay(entries: Vec<(String, Node)>, above: &[(String, Node)], used: &[(String, Node)]) -> Result<Vec<(String, Node)>, String> {
+fn lay(
+    entries: Vec<(String, Node)>,
+    above: &[(String, Node)],
+    used: &[(String, Node)],
+) -> Result<Vec<(String, Node)>, String> {
     let mut at = 0.0;
     let mut out = Vec::with_capacity(entries.len() + 1);
     for (k, v) in entries {
@@ -242,13 +276,18 @@ fn lay(entries: Vec<(String, Node)>, above: &[(String, Node)], used: &[(String, 
             continue;
         }
         if k == "WORDS" || k == "AT" {
-            return Err(format!("{k}: a packed table's {k} is laid out, not written"));
+            return Err(format!(
+                "{k}: a packed table's {k} is laid out, not written"
+            ));
         }
         match v {
             Node::Obj(section) => {
                 let mut section = lay(section, above, used).map_err(|e| format!("{k}.{e}"))?;
                 let words = words_of(&section).unwrap_or(0.0);
-                let first = section.iter().take_while(|(f, _)| f.starts_with('$')).count();
+                let first = section
+                    .iter()
+                    .take_while(|(f, _)| f.starts_with('$'))
+                    .count();
                 section.insert(first, ("AT".into(), Node::Num(at)));
                 at += words;
                 out.push((k, Node::Obj(section)));
@@ -265,18 +304,29 @@ fn lay(entries: Vec<(String, Node)>, above: &[(String, Node)], used: &[(String, 
 }
 
 fn words_of(table: &[(String, Node)]) -> Option<f64> {
-    table.iter().find(|(f, _)| f == "WORDS").and_then(|(_, w)| w.num())
+    table
+        .iter()
+        .find(|(f, _)| f == "WORDS")
+        .and_then(|(_, w)| w.num())
 }
 
 fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<f64, String> {
-    let named = |name: &str| above.iter().chain(used).find(|(k, _)| k == name).map(|(_, n)| n);
+    let named = |name: &str| {
+        above
+            .iter()
+            .chain(used)
+            .find(|(k, _)| k == name)
+            .map(|(_, n)| n)
+    };
     let term = |t: &str| -> Result<f64, String> {
         let t = t.trim();
         if let Ok(n) = t.parse::<f64>() {
             return Ok(n);
         }
         let found = match t.split_once('.') {
-            Some((table, field)) => named(table).and_then(|n| n.get(field)).and_then(|f| f.value().num()),
+            Some((table, field)) => named(table)
+                .and_then(|n| n.get(field))
+                .and_then(|f| f.value().num()),
             None => named(t).and_then(|n| match n {
                 Node::Arr(a) => Some(a.len() as f64),
                 Node::Obj(_) if n.is_wrapper() => n.value().num(),
@@ -386,18 +436,31 @@ pub fn ts_doc(doc: &[String], indent: &str) -> Vec<String> {
 }
 
 pub fn rs_doc(doc: &[String], indent: &str, mark: &str) -> Vec<String> {
-    doc.iter().map(|l| if l.is_empty() { format!("{indent}{mark}") } else { format!("{indent}{mark} {l}") }).collect()
+    doc.iter()
+        .map(|l| {
+            if l.is_empty() {
+                format!("{indent}{mark}")
+            } else {
+                format!("{indent}{mark} {l}")
+            }
+        })
+        .collect()
 }
 
 pub fn line_comments(doc: &[String], indent: &str) -> Vec<String> {
-    doc.iter().map(|l| if l.is_empty() { format!("{indent}//") } else { format!("{indent}// {l}") }).collect()
+    doc.iter()
+        .map(|l| {
+            if l.is_empty() {
+                format!("{indent}//")
+            } else {
+                format!("{indent}// {l}")
+            }
+        })
+        .collect()
 }
 
-pub const RS_CASING_NOTE: [&str; 3] = [
-    "// Casing here is the spec's and not Rust's: a name is spelled as the JSON",
-    "// spells it, so that one record is indexed by one name on both sides. To",
-    "// case them the way Rust would is to rename the protocol.",
-];
+pub const RS_CASING_NOTE: [&str; 1] =
+    ["// Names as the spec spells them, so one record has one name on every side."];
 
 pub fn casing_note() -> Vec<String> {
     RS_CASING_NOTE.iter().map(|l| l.to_string()).collect()
@@ -407,7 +470,9 @@ pub fn snake(name: &str) -> String {
     let mut out = String::new();
     let mut prev: Option<char> = None;
     for c in name.chars() {
-        if c.is_ascii_uppercase() && prev.is_some_and(|p| p.is_ascii_lowercase() || p.is_ascii_digit()) {
+        if c.is_ascii_uppercase()
+            && prev.is_some_and(|p| p.is_ascii_lowercase() || p.is_ascii_digit())
+        {
             out.push('_');
         }
         out.push(c);
@@ -421,7 +486,9 @@ pub fn pascal(name: &str) -> String {
         .split('_')
         .map(|w| {
             let mut c = w.chars();
-            c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+            c.next()
+                .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+                .unwrap_or_default()
         })
         .collect()
 }
@@ -438,13 +505,24 @@ pub fn enum_name(name: &str) -> String {
 }
 
 const RS_KEYWORDS: [&str; 50] = [
-    "type", "move", "mod", "fn", "struct", "enum", "match", "loop", "ref", "self", "super", "crate", "use", "where", "impl", "trait", "static", "const", "let", "mut", "in", "for", "if", "else",
-    "while", "return", "true", "false", "as", "box", "dyn", "pub", "unsafe", "async", "await", "break", "continue", "extern", "priv", "virtual", "yield", "try", "macro", "abstract", "become", "do",
-    "final", "override", "typeof", "unsized",
+    "type", "move", "mod", "fn", "struct", "enum", "match", "loop", "ref", "self", "super",
+    "crate", "use", "where", "impl", "trait", "static", "const", "let", "mut", "in", "for", "if",
+    "else", "while", "return", "true", "false", "as", "box", "dyn", "pub", "unsafe", "async",
+    "await", "break", "continue", "extern", "priv", "virtual", "yield", "try", "macro", "abstract",
+    "become", "do", "final", "override", "typeof", "unsized",
 ];
 
 pub fn rs_ident(k: &str) -> String {
-    let id: String = k.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect();
+    let id: String = k
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
     if RS_KEYWORDS.contains(&id.as_str()) {
         format!("r#{id}")
     } else if id.starts_with(|c: char| c.is_ascii_digit()) {
@@ -455,8 +533,12 @@ pub fn rs_ident(k: &str) -> String {
 }
 
 pub fn packed(hex: &str) -> Result<u32, String> {
-    let digits = hex.strip_prefix('#').filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()));
-    digits.and_then(|d| u32::from_str_radix(d, 16).ok()).ok_or(format!("color JSON: \"{hex}\" is not #RRGGBB"))
+    let digits = hex
+        .strip_prefix('#')
+        .filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()));
+    digits
+        .and_then(|d| u32::from_str_radix(d, 16).ok())
+        .ok_or(format!("color JSON: \"{hex}\" is not #RRGGBB"))
 }
 
 pub fn rgb_literal(hex: &str) -> Result<String, String> {
@@ -464,7 +546,10 @@ pub fn rgb_literal(hex: &str) -> Result<String, String> {
 }
 
 pub fn align_star(line: String, indent: &str) -> String {
-    match line.strip_prefix(indent).and_then(|rest| rest.strip_prefix('*')) {
+    match line
+        .strip_prefix(indent)
+        .and_then(|rest| rest.strip_prefix('*'))
+    {
         Some(rest) => format!("{indent} *{rest}"),
         None => line,
     }

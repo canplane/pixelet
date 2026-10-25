@@ -129,10 +129,19 @@ impl Figure {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_of(variant.skin).and_then(load_image)) else {
+        let (Some(model), Some(_)) = (
+            model_of(variant.model, Some(variant.height_u)),
+            load_of(variant.skin).and_then(load_image),
+        ) else {
             return;
         };
-        let Some(Some(actor)) = section::map().map(|_| Actor::new(draw_list(), crate::domain::query::model::models(), model.model)) else {
+        let Some(Some(actor)) = section::map().map(|_| {
+            Actor::new(
+                draw_list(),
+                crate::domain::query::model::models(),
+                model.model,
+            )
+        }) else {
             return;
         };
         self.held = Some(Held { actor, model });
@@ -205,7 +214,10 @@ impl Figure {
             if let Some(to) = destination {
                 // Re-planning toward the same place would restart the clock and slow the
                 // walk to a crawl.
-                let under_way = self.walk_plan.as_ref().is_some_and(|plan| gap(plan.target, to) <= WALK_EPS);
+                let under_way = self
+                    .walk_plan
+                    .as_ref()
+                    .is_some_and(|plan| gap(plan.target, to) <= WALK_EPS);
                 if !under_way && gap(to, self.at) > WALK_EPS {
                     self.walk_plan = Some(WalkPlan {
                         start: self.at,
@@ -217,7 +229,10 @@ impl Figure {
             }
             // A plan in flight finishes even once the focus moves again: dropping it
             // stalled the figure during gestures and a run of quick pans ended in one jump.
-            let (step, heading) = self.walk_plan.as_ref().map_or((self.at, None), |plan| plan.at(now));
+            let (step, heading) = self
+                .walk_plan
+                .as_ref()
+                .map_or((self.at, None), |plan| plan.at(now));
             if heading.is_none() {
                 self.walk_plan = None;
             }
@@ -246,7 +261,11 @@ impl Figure {
         } else if moved {
             // Where the leaf under it, or a map's `to`, is not held, it goes on at its height.
             if let Some((to, z)) = walk_to(World::now(), self.at, *stands, at, p) {
-                (at, *stands) = if follows && gap(to, at) > WALK_EPS { (target, arrive_z) } else { (to, z) };
+                (at, *stands) = if follows && gap(to, at) > WALK_EPS {
+                    (target, arrive_z)
+                } else {
+                    (to, z)
+                };
             }
         }
         self.at = at;
@@ -257,10 +276,15 @@ impl Figure {
             rotation_z: self.heading as f32,
             scale: held.model.scale,
         });
-        let clip = if is_walking { variant.move_clip } else { IDLE_CLIP };
+        let clip = if is_walking {
+            variant.move_clip
+        } else {
+            IDLE_CLIP
+        };
         if self.actor_clip != Some(clip) {
             if clip < held.model.clip_count {
-                held.actor.play(clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
+                held.actor
+                    .play(clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
             }
             self.actor_clip = Some(clip);
         }
@@ -323,8 +347,15 @@ pub fn focus_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Opti
     c.floor.of(World::now(), goal, ask)
 }
 
-fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
-    if slot.as_ref().is_some_and(|w| w.variant.number != variant.number) {
+fn figure_for<'a>(
+    slot: &'a mut Option<Figure>,
+    variant: &CharacterVariant,
+    target: [f64; 2],
+) -> &'a mut Figure {
+    if slot
+        .as_ref()
+        .is_some_and(|w| w.variant.number != variant.number)
+    {
         if let Some(mut old) = slot.take() {
             old.release();
         }
@@ -349,7 +380,10 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let settings = settings_store();
-    let (Some(person_variant), Some(pet_variant)) = (character_variant(Group::person, settings.person), character_variant(Group::pet, settings.pet)) else {
+    let (Some(person_variant), Some(pet_variant)) = (
+        character_variant(Group::person, settings.person),
+        character_variant(Group::pet, settings.pet),
+    ) else {
         return;
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
@@ -365,13 +399,23 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, walked to from the person.
-    let reached = |(beside, _): &([f64; 2], f64)| libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS;
+    let reached = |(beside, _): &([f64; 2], f64)| {
+        libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS
+    };
     let from = |floor: f64| world_to_canonical(&[p.center[0], p.center[1], over(floor)]);
     let mut walked = |floor: f64| {
         let of = (p.center, floor, pet_target, walks(&from(floor), &p.eye));
-        c.beside.of(World::now(), of, |w| walk_to(w, p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z))
+        c.beside.of(World::now(), of, |w| {
+            walk_to(w, p.center, floor, pet_target, &p)
+                .filter(reached)
+                .map_or(floor, |(_, z)| z)
+        })
     };
-    if let Some((target, z)) = p.floor.map(|z| (pet_target, walked(z))).or_else(|| hold(pet)) {
+    if let Some((target, z)) = p
+        .floor
+        .map(|z| (pet_target, walked(z)))
+        .or_else(|| hold(pet))
+    {
         pet.step(ctx, target, z, &p);
     }
 }
@@ -381,7 +425,11 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
     let c = companion();
     let mut moved = false;
-    for (actor, stance) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
+    for (actor, stance) in [&mut c.person, &mut c.pet]
+        .into_iter()
+        .flatten()
+        .filter_map(Figure::drawn)
+    {
         moved |= actor.tick(draw, models, frame, &stance);
     }
     moved
@@ -390,7 +438,11 @@ pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) ->
 /// Each figure's actor into the frame's list, where it stands.
 pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     let c = companion();
-    for (actor, stance) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
+    for (actor, stance) in [&mut c.person, &mut c.pet]
+        .into_iter()
+        .flatten()
+        .filter_map(Figure::drawn)
+    {
         actor.draw(draw, models, &stance, eye);
     }
 }
@@ -403,7 +455,11 @@ pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
 pub fn line_hangs(eye: V3, tau: Tau) -> Option<Q3> {
     let person = companion().person.as_ref()?;
     let feet = person.stance?.at;
-    let over = [feet[0], feet[1], feet[2] + person.variant.height_u + HEAD_CLEARANCE_U];
+    let over = [
+        feet[0],
+        feet[1],
+        feet[2] + person.variant.height_u + HEAD_CLEARANCE_U,
+    ];
     marker_shows(cell_at(eye, tau, feet)).then(|| world_to_canonical(&over))
 }
 
@@ -411,16 +467,24 @@ pub fn line_hangs(eye: V3, tau: Tau) -> Option<Q3> {
 /// loader has it now, which a lost device takes back until it lands again.
 pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
     let c: &'static _ = companion();
-    [&c.person, &c.pet]
-        .into_iter()
-        .flatten()
-        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_of(w.variant.skin).and_then(load_image)?)))
+    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| {
+        Some((
+            w.held.as_ref()?.model.model,
+            load_of(w.variant.skin).and_then(load_image)?,
+        ))
+    })
 }
 
 /// `world`'s step-slide from `from`, its floor at `stands`, toward `to`:
 /// where it ends and its floor there, short of a leaf on the way not held;
 /// none where the leaf under `from`, or a map's `to`, is not held.
-fn walk_to(world: World<'_>, from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Option<([f64; 2], f64)> {
+fn walk_to(
+    world: World<'_>,
+    from: [f64; 2],
+    stands: f64,
+    to: [f64; 2],
+    p: &CompanionProps,
+) -> Option<([f64; 2], f64)> {
     let [a, b] = [from, to].map(|[x, y]| world_to_canonical(&[x, y, over(stands)]));
     let at = to_world(&world.step_slide(&a, &b, &p.eye, true)?);
     Some(([at[0], at[1]], under(at[2])))
@@ -430,13 +494,23 @@ fn walk_to(world: World<'_>, from: [f64; 2], stands: f64, to: [f64; 2], p: &Comp
 /// at the zoom the camera grid at `tau` takes there from the eye, kept in
 /// `asked` while none of it moves. A coarser answer is taken where that zoom
 /// is not held, as a ray draws the ground it has.
-fn drawn_floor(asked: &mut Asked<([f64; 2], f64, Zoom), f64>, at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
+fn drawn_floor(
+    asked: &mut Asked<([f64; 2], f64, Zoom), f64>,
+    at: [f64; 2],
+    stands: f64,
+    p: &CompanionProps,
+) -> f64 {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&p.eye);
-    let r2 = (0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum();
+    let r2 = (0..3)
+        .map(|k| (center[k] - eye[k]) * (center[k] - eye[k]))
+        .sum();
     let zoom = GROUND.z_at(p.tau, r2);
     asked.of(World::now(), (at, stands, zoom), |w| {
-        w.floor_under(&world_to_canonical(&center), zoom).value().flatten().unwrap_or(stands)
+        w.floor_under(&world_to_canonical(&center), zoom)
+            .value()
+            .flatten()
+            .unwrap_or(stands)
     })
 }
 

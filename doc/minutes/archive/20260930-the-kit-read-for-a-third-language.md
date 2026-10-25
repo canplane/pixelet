@@ -5,18 +5,19 @@ as a conformance guest needs (`cpp/xpute/`), and the next step is to give it the
 same `core` the other two have. Before writing it, this reads how TypeScript and
 Rust each made the one kit their own: which parts are the kit twice, which are
 one language's, and why. The C++ `core` is shaped from that reading rather than
-from either implementation. It follows [the pair audited](./20260919-the-pair-audited-what-left.md)
-and [inside a language, and across a protocol](./20260919-inside-a-language-and-across-a-protocol.md),
+from either implementation. It follows
+[the pair audited](./20260919-the-pair-audited-what-left.md) and
+[inside a language, and across a protocol](./20260919-inside-a-language-and-across-a-protocol.md),
 which drew the lines this applies.
 
 ## C++ is a third world, not a second host
 
-Rust and C++ are parallel implementations, not one serving the other. The
-first C++ guest was driven by a Rust test harness that played the host, which
-made Rust a host of C++: a second host, written for the test, beside the real
-one in TypeScript. That goes. Every guest, in whatever language, is driven by
-the one host that exists, and every language keeps the same shape — `core`,
-`runtime`, a conformance guest — so none of them is where the others are held.
+Rust and C++ are parallel implementations, not one serving the other. The first
+C++ guest was driven by a Rust test harness that played the host, which made
+Rust a host of C++: a second host, written for the test, beside the real one in
+TypeScript. That goes. Every guest, in whatever language, is driven by the one
+host that exists, and every language keeps the same shape — `core`, `runtime`, a
+conformance guest — so none of them is where the others are held.
 
 ## The kit twice, by design
 
@@ -51,27 +52,27 @@ Every module present on one side only is there for one of three reasons.
 2. **The platform lacks it.** `alloc` (buddy and slab) is Rust's alone, since
    JavaScript has no heap to hand out; `status/bug` is Rust's alone, since a
    thrown JavaScript error carries its own stack; `env` is TypeScript's alone.
-3. **A protocol needs the same bytes.** Rust's `codec/json` is a byte-exact
-   port of the host's `JSON.stringify` and `parse`, for the records' tags;
-   Rust's `rng` draws through a double, as JavaScript's does, so the scatter the
-   decor is placed from is the same; `tlv` and `xtp` are held to each other by
-   the records both read.
+3. **A protocol needs the same bytes.** Rust's `codec/json` is a byte-exact port
+   of the host's `JSON.stringify` and `parse`, for the records' tags; Rust's
+   `rng` draws through a double, as JavaScript's does, so the scatter the decor
+   is placed from is the same; `tlv` and `xtp` are held to each other by the
+   records both read.
 
 ## What the reading found
 
 None of these is fixed here; each is recorded so the C++ `core` is not written
 against it. All seven were fixed the same day, after the C++: `libm` left
-`xpute-core`, which never called it, and the comments that cited it; the
-`rng` and `FIELD_MASK64` comments say what the code does, and `FIELD_MASK`
-gives Rust's answers at the word's edge; a deque's pop from empty is none and
-its push onto full a bug, in all three languages; `lower.ts` keeps only the
-tuple helpers the XTP README recommends; the headers name no absent pair;
-and `codec/json` is filed across a protocol, the host's own JSON held to the
-record by a TypeScript test.
+`xpute-core`, which never called it, and the comments that cited it; the `rng`
+and `FIELD_MASK64` comments say what the code does, and `FIELD_MASK` gives
+Rust's answers at the word's edge; a deque's pop from empty is none and its push
+onto full a bug, in all three languages; `lower.ts` keeps only the tuple helpers
+the XTP README recommends; the headers name no absent pair; and `codec/json` is
+filed across a protocol, the host's own JSON held to the record by a TypeScript
+test.
 
 - `xpute-core` declares `libm` and no source in it uses it, while `golden.rs`
-  and `lib.rs` say Rust rounds through it. Either the dependency or the
-  comments are left over.
+  and `lib.rs` say Rust rounds through it. Either the dependency or the comments
+  are left over.
 - TypeScript's `rng` says its draw is the word's low 32 bits. It goes through a
   double, so past 2^53 it is not; Rust's comment says so and is right.
 - TypeScript's `deque` pops without checking, and an empty one's length is left
@@ -93,9 +94,9 @@ The three reasons, applied to C++ rather than copied from either side:
   own rather than take the system's, so `alloc` is C++'s as it is Rust's. With
   exceptions off, an error carries no stack, so `status/bug` is C++'s too.
 - **The language.** The standard library has no base64, hex, FNV or
-  order-keeping map, so `codec/{hex,base64,fnv}` is written, as TypeScript's
-  is; the map waits for a runtime that asks for one, since Rust's `core` has
-  none either. `codec/json` waits for a C++ guest that reads the records it was
+  order-keeping map, so `codec/{hex,base64,fnv}` is written, as TypeScript's is;
+  the map waits for a runtime that asks for one, since Rust's `core` has none
+  either. `codec/json` waits for a C++ guest that reads the records it was
   written for.
 - **Errors, as Rust's.** Exceptions are off, so what came from outside is a
   small `Result<T>` (C++20 has no `std::expected`), a broken invariant is `bug`,
@@ -107,44 +108,42 @@ The three reasons, applied to C++ rather than copied from either side:
 ## What writing it found
 
 The C++ XTP was held to both records and turned up three places where the pair
-disagrees with itself. All three are fixed in the three languages the same
-day, each with a test of the law it broke; the first changed the `graft`
-vector's root type from GRAFT to BRANCH.
+disagrees with itself. All three are fixed in the three languages the same day,
+each with a test of the law it broke; the first changed the `graft` vector's
+root type from GRAFT to BRANCH.
 
 - **A grafted root does not read back.** The tree encoder writes GRAFT as the
-  header's type when the root is a graft, where a grafted child takes its
-  root's type; `golden/wire/xtp/encode.tsv` records it, and the reader refuses
-  the packet (EBADMSG). The fix is the three languages' and the record's
-  together.
+  header's type when the root is a graft, where a grafted child takes its root's
+  type; `golden/wire/xtp/encode.tsv` records it, and the reader refuses the
+  packet (EBADMSG). The fix is the three languages' and the record's together.
 - **Rust's `PacketWriter` and its tree encoder lay one tree two ways.** The
-  encoder ends a branch on a word; the writer does not, so a byte after a
-  branch whose last child ends off a word lies at 57 from one and 64 from the
-  other. The C++ lays it as the encoder does.
+  encoder ends a branch on a word; the writer does not, so a byte after a branch
+  whose last child ends off a word lies at 57 from one and 64 from the other.
+  The C++ lays it as the encoder does.
 - **The tree encoder refuses packets that fit.** Its buffer doubles from 1 KiB,
-  and a doubling past the cap is refused even when the packet is under it: a
-  cap over 1 KiB that is not 1 KiB times a power of two refuses what fits, and
-  at the default cap every packet between 1 GiB and 2 GiB. The records hold
-  only caps under 1 KiB, where the buffer never grows. The C++ writes in place
-  and refuses only what does not fit.
+  and a doubling past the cap is refused even when the packet is under it: a cap
+  over 1 KiB that is not 1 KiB times a power of two refuses what fits, and at
+  the default cap every packet between 1 GiB and 2 GiB. The records hold only
+  caps under 1 KiB, where the buffer never grows. The C++ writes in place and
+  refuses only what does not fit.
 
 ## Open
 
 - **Where the records live.** They were under `crates/xpute/core/golden/` and
-  the traces under `crates/xpute/conformance/golden/`, both the three
-  languages' and belonging to none. Moved 09-30: the records to
-  `spec/xpute/golden/`, the traces beside `guest.json` in
-  `spec/xpute/conformance/`, and every reader with them.
-- **A guest built to WebAssembly.** Built 09-30, both guests: the module
-  imports its memory and `env.now`, its stack (1 MiB, said in each build)
-  and data come first, and its range begins on the page past them. The
-  guest.json number for the directory went: boot answers where the directory
-  is, the contract's rule 0 taken the other way it allows, so the host finds
-  a native guest's at 0 and a module's past a megabyte by the same call.
-  Every pointer is made from an address, the base being address 0 on a
-  module. The C++ is built with the WASI SDK, and libc++'s abort on its own
-  broken preconditions is the guest's `bug`, since its default printed to
-  stderr and imported WASI's file calls; a module that imports anything but
-  its memory and the clock fails the traces.
+  the traces under `crates/xpute/conformance/golden/`, both the three languages'
+  and belonging to none. Moved 09-30: the records to `spec/xpute/golden/`, the
+  traces beside `guest.json` in `spec/xpute/conformance/`, and every reader with
+  them.
+- **A guest built to WebAssembly.** Built 09-30, both guests: the module imports
+  its memory and `env.now`, its stack (1 MiB, said in each build) and data come
+  first, and its range begins on the page past them. The guest.json number for
+  the directory went: boot answers where the directory is, the contract's rule 0
+  taken the other way it allows, so the host finds a native guest's at 0 and a
+  module's past a megabyte by the same call. Every pointer is made from an
+  address, the base being address 0 on a module. The C++ is built with the WASI
+  SDK, and libc++'s abort on its own broken preconditions is the guest's `bug`,
+  since its default printed to stderr and imported WASI's file calls; a module
+  that imports anything but its memory and the clock fails the traces.
 
 ## Where it stands
 
@@ -157,6 +156,6 @@ allocated.
 
 The Rust harness is gone. Each guest is a library of the same two C calls, its
 state in the memory it is booted over, and one host —
-`packages/xpute/conformance/`, the TypeScript runtime over Deno's FFI — runs
-the traces against both. The C++ is built by `script/cpp.ts` with the
-platform's compiler, and `cc` has left the workspace.
+`packages/xpute/conformance/`, the TypeScript runtime over Deno's FFI — runs the
+traces against both. The C++ is built by `script/cpp.ts` with the platform's
+compiler, and `cc` has left the workspace.
