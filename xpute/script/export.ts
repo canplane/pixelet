@@ -1,7 +1,8 @@
 #!/usr/bin/env -S deno run -A
 // Copies what git tracks under xpute/ into xpute's own repository byte for
-// byte, its root being this directory. Prints a commit message naming the
-// pixelet commit it came from, for `git commit -F -` there.
+// byte, its root being this directory, and beside it the C++ library in two
+// files, which cpp/Makefile's `amalgamation` makes. Prints a commit message
+// naming the pixelet commit it came from, for `git commit -F -` there.
 //
 //   ./script/export.ts --to ../xpute [--check]
 
@@ -64,6 +65,18 @@ function tracked(): File[] {
   });
 }
 
+/** Made by the step the C++ tree runs itself, from what git tracks there, and
+ * shipped at cpp/amalgamation/ as SQLite ships its two files; here they are
+ * build output, under target/. */
+const AMALGAMATION = ["xpute.hpp", "xpute.cpp"];
+
+function amalgamation(): File[] {
+  // Its own output piped, so stdout carries only the commit message.
+  const out = new Deno.Command("make", { args: ["-C", "cpp", "amalgamation"], cwd: XPUTE, stdout: "piped", stderr: "piped" }).outputSync();
+  if (!out.success) die(`make -C cpp amalgamation: ${new TextDecoder().decode(out.stderr).trim()}`);
+  return AMALGAMATION.map((name) => ({ path: `cpp/amalgamation/${name}`, bytes: Deno.readFileSync(join(XPUTE, "target/cpp/amalgamation", name)), executable: false }));
+}
+
 function same(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
@@ -119,7 +132,7 @@ const args = Deno.args;
 const toAt = args.indexOf("--to");
 if (toAt < 0 || !args[toAt + 1]) die("--to <dir> is required: the xpute repository to export into");
 const to = args[toAt + 1];
-const files = tracked();
+const files = [...tracked(), ...amalgamation()];
 
 if (args.includes("--check")) {
   const { differs, extra } = compare(files, to);

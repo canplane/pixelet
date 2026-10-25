@@ -3,9 +3,11 @@
 # Routes only. Each tree is a root of its own: ts/ as Deno's, and script/,
 # the repository's own scripts, as another; rust/ as Cargo's, its commands as
 # aliases in rust/.cargo/config.toml; and cpp/ as Make's (cpp/Makefile). Here
-# is a target a tree for each verb, the aggregates over them, and one order:
-# the traces run after the guests they drive. The documents and the spec are formatted
-# by deno fmt under deno.jsonc. GNU Make 3.81 is enough.
+# is a target a tree for each verb, the aggregates over them, and two
+# orders: the traces run after the guests they drive, and cpp/'s tests,
+# which build those guests too, after build has, so two makes never write
+# one object at once. The documents and the spec are formatted by deno fmt
+# under deno.jsonc. GNU Make 3.81 is enough.
 #
 #   make -j8 check | test | build | test-gpu | fmt | lint
 #   make check-ts, make test-cpp, ...   one tree's
@@ -43,7 +45,7 @@ build-rust:
 test: test-ts test-cpp test-rust test-conformance
 test-ts:
 	deno task --cwd ts test
-test-cpp:
+test-cpp: build-cpp
 	$(MAKE) -C cpp test
 test-rust:
 	+cd rust && cargo test --all

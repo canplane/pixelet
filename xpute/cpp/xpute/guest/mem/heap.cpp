@@ -7,15 +7,15 @@ namespace xpute {
 namespace {
 // The platform's allocator is never a guest's: on wasm it links the libc that
 // prints its failures through WASI.
-Heap installed{nullptr, nullptr};
+Allocator installed_heap{nullptr, nullptr};
 } // namespace
 
-void set_heap(Heap heap) noexcept {
-    installed = heap;
+void set_heap(Allocator heap) noexcept {
+    installed_heap = heap;
 }
 
-Heap heap() noexcept {
-    return installed;
+Allocator heap() noexcept {
+    return installed_heap;
 }
 
 } // namespace xpute

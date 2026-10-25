@@ -26,18 +26,18 @@ struct Block {
 inline constexpr std::size_t BLOCK_ALIGN = 8;
 
 // The same size and alignment are told back on free.
-struct Heap {
+struct Allocator {
     void *(*alloc)(std::size_t bytes, std::size_t align) noexcept;
     void (*free)(void *at, std::size_t bytes, std::size_t align) noexcept;
 };
 
-void set_heap(Heap heap) noexcept;
+void set_heap(Allocator heap) noexcept;
 
-Heap heap() noexcept;
+Allocator heap() noexcept;
 
 // None for no room, no allocator, or zero bytes.
 inline std::optional<Block> alloc(Memory mem, std::uint32_t bytes) noexcept {
-    Heap h = heap();
+    Allocator h = heap();
     if (bytes == 0 || h.alloc == nullptr) return std::nullopt;
     void *p = h.alloc(bytes, BLOCK_ALIGN);
     if (p == nullptr) return std::nullopt;

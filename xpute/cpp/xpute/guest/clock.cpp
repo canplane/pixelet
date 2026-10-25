@@ -5,15 +5,15 @@
 namespace xpute {
 
 namespace {
-Clock installed = nullptr;
+Clock installed_clock = nullptr;
 }
 
 void set_clock(Clock clock) noexcept {
-    installed = clock;
+    installed_clock = clock;
 }
 
 double now() noexcept {
-    return installed != nullptr ? installed() : 0.0;
+    return installed_clock != nullptr ? installed_clock() : 0.0;
 }
 
 } // namespace xpute

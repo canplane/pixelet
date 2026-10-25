@@ -8,16 +8,16 @@
 namespace xpute {
 
 namespace {
-std::atomic<Report> installed{nullptr};
+std::atomic<Report> installed_report{nullptr};
 }
 
 void set_report(Report report) noexcept {
     Report none = nullptr;
-    installed.compare_exchange_strong(none, report);
+    installed_report.compare_exchange_strong(none, report);
 }
 
 void bug(Errno code, std::uint64_t a, std::uint64_t b, std::source_location at) noexcept {
-    if (Report report = installed.load()) report(code, at, a, b);
+    if (Report report = installed_report.load()) report(code, at, a, b);
     std::abort();
 }
 

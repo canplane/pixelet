@@ -81,6 +81,18 @@ xpute_host::native_abi!(
 );
 ```
 
+A **C++ program** takes the library as SQLite ships its own, in two files: `xpute.hpp`, every header, and `xpute.cpp`, every source over it. They are at `cpp/amalgamation/` in xpute's own repository, and `make -C cpp amalgamation` makes them from the tree under `target/cpp/amalgamation/`. The program includes the one and compiles the other once, as C++20 with `-ffp-contract=off`, the flags `cpp/Makefile` builds with; the conformance guest is built that way, so the traces hold the two files:
+
+```cpp
+#include "xpute.hpp"
+```
+
+Or it takes the tree itself: `-I cpp`, each header by its path from there, which begins `xpute/` as every name the library declares begins `xpute::`, and every source under `cpp/xpute/` but the tests' (`*.test.cpp`, `kit/test.cpp`, `kit/golden.cpp`):
+
+```cpp
+#include "xpute/guest/ipc/door.hpp"
+```
+
 ## What it leaves to whoever uses it
 
 The line is drawn in the same place every time: xpute carries the mechanism, and the policy belongs to the program.

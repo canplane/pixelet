@@ -170,7 +170,7 @@ std::uint32_t range_at() {
     return page_up(static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__heap_base)));
 }
 
-double now() {
+double host_now() {
     return xpute_conformance_host_now();
 }
 
@@ -193,29 +193,29 @@ struct HeapRange {
     static std::uintptr_t end() noexcept { return base() + HEAP_BYTES; }
 };
 
-SlabMalloc<HeapRange> heap;
+SlabMalloc<HeapRange> slab;
 
 void *operator new(std::size_t n) {
-    void *p = heap.alloc(n, alignof(std::max_align_t));
+    void *p = slab.alloc(n, alignof(std::max_align_t));
     if (p == nullptr) bug(Errno::enomem, n);
     return p;
 }
 void *operator new(std::size_t n, std::align_val_t a) {
-    void *p = heap.alloc(n, static_cast<std::size_t>(a));
+    void *p = slab.alloc(n, static_cast<std::size_t>(a));
     if (p == nullptr) bug(Errno::enomem, n);
     return p;
 }
 void *operator new(std::size_t n, const std::nothrow_t &) noexcept {
-    return heap.alloc(n, alignof(std::max_align_t));
+    return slab.alloc(n, alignof(std::max_align_t));
 }
 void *operator new(std::size_t n, std::align_val_t a, const std::nothrow_t &) noexcept {
-    return heap.alloc(n, static_cast<std::size_t>(a));
+    return slab.alloc(n, static_cast<std::size_t>(a));
 }
 void operator delete(void *p, std::size_t n) noexcept {
-    if (p != nullptr) heap.dealloc(p, n, alignof(std::max_align_t));
+    if (p != nullptr) slab.dealloc(p, n, alignof(std::max_align_t));
 }
 void operator delete(void *p, std::size_t n, std::align_val_t a) noexcept {
-    if (p != nullptr) heap.dealloc(p, n, static_cast<std::size_t>(a));
+    if (p != nullptr) slab.dealloc(p, n, static_cast<std::size_t>(a));
 }
 // Without its size a block cannot be given back to a slab.
 void operator delete(void *p) noexcept {
@@ -229,7 +229,7 @@ extern "C" std::uint32_t xpute_conformance_boot(void) {
     std::uint32_t range = range_at();
     // A range past the memory's end is a host that sized it for another guest.
     ensure(std::uint64_t{range} + MEMORY_BYTES <= std::uint64_t{__builtin_wasm_memory_size(0)} * 65536, Errno::enomem, range);
-    return boot(Memory(0), range, now);
+    return boot(Memory(0), range, host_now);
 }
 
 extern "C" double xpute_conformance_interrupt(double) {

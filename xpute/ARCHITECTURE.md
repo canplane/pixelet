@@ -289,7 +289,7 @@ Under `spec/golden/` are lines of `path<TAB>value`, produced once, checked once,
 
 The **traces** under `spec/conformance/` are a third kind, not outputs at all. Each says what a host does and what it must then see: the completions, stream records and next-turn asks each turn leaves. They are written from the contract's rules and name only what a host can observe, so they hold every guest to the same thing.
 
-One host runs them against every guest through the boundary alone (`ts/host/src/conformance.test.ts`): the Rust guest (`conformance guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`), each over the commands `spec/conformance/guest.json` numbers. Each guest is built both as a native library and as a WebAssembly module that imports nothing but its memory and the clock.
+One host runs them against every guest through the boundary alone (`ts/host/src/conformance.test.ts`): the Rust guest (`conformance guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`), each over the commands `spec/conformance/guest.json` numbers. Each guest is built both as a native library and as a WebAssembly module that imports nothing but its memory and the clock; the C++ one from the library's amalgamation (`cpp/amalgamation.awk`), the two files a C++ program takes, so what the traces hold is what ships.
 
 ## Prior art
 

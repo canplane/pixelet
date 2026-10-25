@@ -5,32 +5,32 @@
 namespace xpute {
 
 namespace {
-Executor *installed = nullptr;
+Executor *installed_executor = nullptr;
 }
 
 void set_executor(Executor &executor) noexcept {
-    installed = &executor;
+    installed_executor = &executor;
 }
 
 Executor *executor() noexcept {
-    return installed;
+    return installed_executor;
 }
 
 bool spawn(Task<> task, Priority priority) noexcept {
-    if (installed == nullptr || !task) return false;
+    if (installed_executor == nullptr || !task) return false;
     Task<>::Handle h = task.release();
-    h.promise().executor = installed;
-    if (installed->spawn(h, priority)) return true;
+    h.promise().executor = installed_executor;
+    if (installed_executor->spawn(h, priority)) return true;
     h.destroy();
     return false;
 }
 
 void poll() noexcept {
-    if (installed != nullptr) installed->poll();
+    if (installed_executor != nullptr) installed_executor->poll();
 }
 
 bool pending() noexcept {
-    return installed != nullptr && installed->pending();
+    return installed_executor != nullptr && installed_executor->pending();
 }
 
 } // namespace xpute
