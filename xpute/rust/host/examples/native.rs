@@ -13,7 +13,9 @@ use xpute_host::native::{self, Alloc, Guest, Plan};
 static ALLOC: Alloc = Alloc;
 
 /// The guest, booted with the program's numbers on the first call, from
-/// whichever thread makes it: a 16 MiB memory, its heap from 64 KiB on.
+/// whichever thread makes it: a 16 MiB memory, its heap from 64 KiB on, a
+/// whole number of pages. The plan's clock, `native::now` unless it says
+/// otherwise, is installed on the guest's thread before its first call.
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
     *GUEST.get_or_init(|| native::boot(&Plan::new(16 << 20, 1 << 16)))

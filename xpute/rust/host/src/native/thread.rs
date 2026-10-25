@@ -9,6 +9,7 @@
 //! twice a frame for nothing. Callers may be several threads, so they take
 //! the handoff in turn.
 
+use core::cell::Cell;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
@@ -29,10 +30,32 @@ struct Handoff {
 
 static HANDOFF: OnceLock<Mutex<Handoff>> = OnceLock::new();
 
-/// The handoff, held. A caller that panicked holding it left it as it was:
-/// the guest's thread had run its job or never got it.
-fn handoff() -> MutexGuard<'static, Handoff> {
-    HANDOFF.get().expect("the guest is booted").lock().unwrap_or_else(PoisonError::into_inner)
+thread_local! {
+    /// This thread holds the handoff: a `run` or a `while_idle` is under way
+    /// on it, and another would wait for the first to let it go.
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion"))]
+    static HOLDING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The handoff, held, with this thread marked its holder until it is let go.
+struct Held(MutexGuard<'static, Handoff>);
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        HOLDING.with(|h| h.set(false));
+    }
+}
+
+/// The handoff, held. Refused to the guest's own thread, whose caller holds
+/// it while it runs, and to a thread that holds it already: either would wait
+/// for itself. A caller that panicked holding it left it as it was: the
+/// guest's thread had run its job or never got it.
+fn handoff() -> Held {
+    assert!(!on_marked_thread(), "a call into the guest from its own thread would wait for itself");
+    assert!(!HOLDING.with(Cell::get), "a call into the guest inside another on the same thread would wait for itself");
+    let held = Held(HANDOFF.get().expect("the guest is booted").lock().unwrap_or_else(PoisonError::into_inner));
+    HOLDING.with(|h| h.set(true));
+    held
 }
 
 /// Starts the guest's thread, named `name` with a stack of `stack_bytes`,
@@ -58,7 +81,6 @@ pub fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send
 
 /// Runs `f` on the guest's thread and returns what it returns once it has.
 pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
-    assert!(!on_marked_thread(), "a call into the guest from its own thread would wait for itself");
     let h = handoff();
     let mut f = Some(f);
     let mut out = None;
@@ -67,15 +89,15 @@ pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
     // SAFETY: the borrow is made `'static` only to cross to the guest's
     // thread; this call waits for the run to finish before `run` goes.
     let run: *mut (dyn FnMut() + Send + 'static) = unsafe { core::mem::transmute(run) };
-    h.jobs.send(Job(run)).expect("the guest's thread is gone");
-    h.done.recv().expect("the guest's thread is gone");
+    h.0.jobs.send(Job(run)).expect("the guest's thread is gone");
+    h.0.done.recv().expect("the guest's thread is gone");
     drop(h);
     out.expect("the guest's thread ran the call")
 }
 
 /// Runs `f` on this thread while the guest's runs nothing: the handoff is
 /// held, so no call is on the guest's thread, and `f` is the only one
-/// touching the guest.
+/// touching the guest. Refused where `handoff` is.
 pub fn while_idle<R>(f: impl FnOnce() -> R) -> R {
     let _h = handoff();
     f()

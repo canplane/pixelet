@@ -128,8 +128,11 @@ pub fn stat() -> HeapStat {
 }
 
 /// The allocator a program installs as its `#[global_allocator]`. It holds
-/// nothing: every `Alloc` is the one heap. Before `boot` no thread is the
-/// guest's, and every block is the system's.
+/// nothing: every `Alloc` is the one heap. Before `boot` marks the guest's
+/// thread no thread is the guest's, and every block is the system's: this
+/// reads "no thread marked" the other way from a guest asking whether it may
+/// touch its `Global`s (`xpute_guest::global`), since there is no memory yet
+/// to place a block in.
 pub struct Alloc;
 
 // SAFETY: every call into the slab holds the lock, and every block goes back

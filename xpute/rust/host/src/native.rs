@@ -39,35 +39,43 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use xpute_guest::mem::heap::HeapStat;
+use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
 
 /// The guest's thread's stack unless the plan says otherwise: a main
-/// thread's on Linux and macOS.
-pub const STACK_BYTES: usize = 8 << 20;
+/// thread's on Linux and macOS. Not a module guest's, which its linker sizes
+/// (`xpute_link::MODULE_STACK_BYTES`).
+pub const THREAD_STACK_BYTES: usize = 8 << 20;
 
 /// The guest's numbers, which the host boots it with.
 pub struct Plan {
     /// The core memory's size, reserved once and never grown.
     pub memory_bytes: u32,
     /// Where the guest's heap begins, as an offset; it runs to the memory's
-    /// end. What lies below it is the guest's to place.
+    /// end. What lies below it is the guest's to place. A whole number of
+    /// the heap's pages (`xpute_guest::mem::section::PAGE_BYTES`): the slab
+    /// aligns a block by its offset from here.
     pub heap_at: u32,
     /// The guest's thread's stack.
     pub stack_bytes: usize,
     /// The guest's thread's name, as a debugger and a crash report show it.
     pub thread_name: &'static str,
+    /// The clock the guest reads (`xpute_guest::clock`), installed on its
+    /// thread before its first call.
+    pub clock: fn() -> f64,
 }
 
 impl Plan {
     /// A memory of `memory_bytes`, its heap from `heap_at`, on a thread
-    /// named `guest` with a stack of `STACK_BYTES`.
+    /// named `guest` with a stack of `THREAD_STACK_BYTES`, reading `now`.
     pub const fn new(memory_bytes: u32, heap_at: u32) -> Plan {
         Plan {
             memory_bytes,
             heap_at,
-            stack_bytes: STACK_BYTES,
+            stack_bytes: THREAD_STACK_BYTES,
             thread_name: "guest",
+            clock: now,
         }
     }
 }
@@ -81,16 +89,21 @@ pub struct Guest {
 static BOOTED: AtomicBool = AtomicBool::new(false);
 
 /// Boots the guest as `plan` says: reserves its memory, starts its thread,
-/// and there marks the thread as the guest's and sets the memory's base, all
-/// before it returns. Once a process; a second boot panics.
+/// and there marks the thread as the guest's, sets the memory's base and
+/// installs the clock, all before it returns. Once a process; a second boot
+/// panics, and so does a plan whose heap does not begin on a page inside the
+/// memory, before anything is reserved.
 pub fn boot(plan: &Plan) -> Guest {
-    assert!(!BOOTED.swap(true, Ordering::AcqRel), "a guest is booted once a process");
     assert!(plan.heap_at < plan.memory_bytes, "the heap begins at {} of a {}-byte memory", plan.heap_at, plan.memory_bytes);
+    assert!(plan.heap_at.is_multiple_of(PAGE_BYTES), "the heap begins at {}, not on a {PAGE_BYTES}-byte page", plan.heap_at);
+    assert!(!BOOTED.swap(true, Ordering::AcqRel), "a guest is booted once a process");
     let (at, bytes) = reserve::reserve(plan.memory_bytes as usize);
     alloc::bound(plan.heap_at as usize);
+    let clock = plan.clock;
     thread::start(plan.thread_name, plan.stack_bytes, move || {
         xpute_guest::global::mark_thread();
         xpute_guest::mem::base::set_base(at, bytes);
+        xpute_guest::clock::set_clock(clock);
     });
     Guest { _booted: () }
 }
@@ -98,13 +111,16 @@ pub fn boot(plan: &Plan) -> Guest {
 impl Guest {
     /// Runs `f` on the guest's thread and returns what it returns, the
     /// caller waiting: one of the two runs at a time. From the guest's own
-    /// thread it would wait for itself, and panics.
+    /// thread, or inside a `while_idle` on this one, it would wait for
+    /// itself, and panics.
     pub fn run<R: Send>(self, f: impl FnOnce() -> R + Send) -> R {
         thread::run(f)
     }
 
     /// Runs `f` on this thread while the guest's runs nothing, for what must
-    /// happen on a given thread but touches the guest.
+    /// happen on a given thread but touches the guest. From the guest's own
+    /// thread, or inside another `run` or `while_idle` on this one, it would
+    /// wait for itself, and panics.
     pub fn while_idle<R>(self, f: impl FnOnce() -> R) -> R {
         thread::while_idle(f)
     }

@@ -8,8 +8,24 @@
 //! with the host's other threads, so its host runs it on one of them and
 //! marks that one (`mark_thread`): what the guest does process-wide, such as
 //! a panic hook, can then tell its own thread from the others, and touch its
-//! `Global`s only there. Until a thread is marked every thread is taken for
-//! the guest's, as a test's are.
+//! `Global`s only there.
+//!
+//! Until a thread is marked, no thread is known to be the guest's or known
+//! not to be: `on_marked_thread` and `off_marked_thread` are both false. Each
+//! reader takes the unknown for what is safe where it stands, so the two read
+//! "no thread marked" in opposite ways:
+//!
+//! - a guest that asks whether it may touch its `Global`s
+//!   (`off_marked_thread`) takes every thread for its own, since a module
+//!   guest and a test never mark one, and the guest's own thread must not be
+//!   taken for another's;
+//! - a host that asks whether a block is the guest's (`on_marked_thread`,
+//!   as xpute-host's native allocator asks) takes no thread for the guest's,
+//!   since before boot there is no guest's memory to place a block in.
+//!
+//! One rule for both is unsound either way: a module guest whose own thread
+//! counted as another's would report nothing, and an allocator that placed a
+//! block before boot would place it in a memory not yet reserved.
 
 use core::cell::{Cell, UnsafeCell};
 use core::sync::atomic::{AtomicBool, Ordering};
