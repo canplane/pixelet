@@ -119,8 +119,6 @@ ts = under("ts/") or under("xpute/ts/")
 
 if ts:
     task("check-ts")
-if under("script/"):
-    task("check-script")
 if fmt_rust:
     runs.append(("cargo fmt", ["cargo", "fmt", "--check", *fmt_rust], RUST))
 cargo("lint-")
@@ -128,9 +126,9 @@ if under("spec/") or any(".spec." in path for path in changed) or "pxl-tool" in 
     task("check-spec")
 if under("ts/client/") or under("ts/app/web/") or under("ts/server/edge/") or under("xpute/ts/") or "pxl-wasm" in touched:
     task("check-build")
-# Each formatted file under the tree that formats it, ts/ and script/ by their own configs; what lies outside the trees is not formatted.
+# Each formatted file under ts/, by its config; what lies outside the trees is not formatted.
 formatted = [path for path in present if re.search(r"\.(ts|tsx|js|json|jsonc|md)$", path)]
-for tree in ["ts/", "script/"]:
+for tree in ["ts/"]:
     own = [path[len(tree):] for path in formatted if path.startswith(tree)]
     if own:
         runs.append((f"fmt {tree}", ["deno", "fmt", "--check", *own], ROOT / tree))
@@ -139,7 +137,8 @@ if xpute:
     task("check-xpute")
 
 # The tests of what the same selection reached.
-if under("ts/client/") or under("xpute/ts/"):
+# The web app's test compiles the generated shaders with Tint.
+if under("ts/client/") or under("ts/app/web/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
     task("test-ts")
 if xpute:
     task("test-xpute")

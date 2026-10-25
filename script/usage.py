@@ -7,8 +7,8 @@
 #   ./script/usage.py
 
 import json
-import signal
 import os
+import signal
 import subprocess
 import sys
 import urllib.error

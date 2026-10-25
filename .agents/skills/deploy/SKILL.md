@@ -29,7 +29,6 @@ git push origin main:deploy        # --force once main has been rewritten
 
 What `check` runs, a task a tree, side by side:
 
-- `check-script` — the repository's scripts: format, lint, types.
 - `check-ts` — the TypeScript workspace: format, lint, and the types of
   the page, the device's modules, the Worker and their scripts.
 - `check-rust` — `cargo fmt`, and clippy over the module in both builds,
@@ -40,7 +39,8 @@ What `check` runs, a task a tree, side by side:
 - `check-build` — the bundle and the Worker built as a deploy builds them.
 - `check-xpute` — xpute's own workspace.
 
-`test` is every workspace's tests: the client's, xpute's (its C++ guest
+`test` is every workspace's tests: the client's, the web app's (Tint's
+compile of the generated shaders, on this machine's GPU through Dawn), xpute's (its C++ guest
 built for wasm among them) and the crates'.
 
 Neither runs the GPU hosts: `make -C xpute test-gpu` needs a GPU and

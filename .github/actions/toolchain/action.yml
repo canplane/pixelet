@@ -54,5 +54,5 @@ runs:
           ~/.cache/deno
           ts/node_modules
           ts/app/native/node_modules
-        key: deno-${{ runner.os }}-${{ hashFiles('ts/deno.lock', 'script/deno.lock') }}
+        key: deno-${{ runner.os }}-${{ hashFiles('ts/deno.lock') }}
         restore-keys: deno-${{ runner.os }}-

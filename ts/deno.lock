@@ -33,6 +33,7 @@
     "npm:sharp@0.33": "0.33.5",
     "npm:vite@*": "8.3.0",
     "npm:vite@^8.3.0": "8.3.0",
+    "npm:webgpu@0.6.2": "0.6.2",
     "npm:wrangler@*": "4.123.0",
     "npm:zustand@^5.0.15": "5.0.15_@types+react@19.2.14_react@19.2.3"
   },
@@ -4787,6 +4788,14 @@
         "defaults"
       ]
     },
+    "webgpu@0.6.2": {
+      "integrity": "sha512-3L4GfmqJLvYUIEWJngEQY+2HQiUlAFkg8+P8NDDj3Xx5hHHIFO/r8JW+ynfqBj7kHN4mbnwO74uB+lrRtLhp4Q==",
+      "dependencies": [
+        "@webgpu/types",
+        "debug@4.4.3"
+      ],
+      "scripts": true
+    },
     "webidl-conversions@3.0.1": {
       "integrity": "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="
     },
@@ -4973,6 +4982,7 @@
           "npm:react@19.2.3",
           "npm:vite@*",
           "npm:vite@^8.3.0",
+          "npm:webgpu@0.6.2",
           "npm:zustand@^5.0.15"
         ]
       },

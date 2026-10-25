@@ -8,19 +8,17 @@
 //!   cargo shader-wgsl            write them   (in rust/)
 //!   cargo shader-wgsl --check    fail if one is not current
 //!
-//! Either way each module is compiled first by Tint, the WGSL compiler a
-//! browser's WebGPU runs (script/tint.ts, over Dawn's), and nothing is written
-//! where one is refused: naga takes modules Tint refuses (a literal past f32's
-//! range, at e84ddd56e).
+//! Whether the browser's compiler takes what this writes is the web app's
+//! test (ts/app/web src/shader.test.ts, Tint through Dawn), which make
+//! test-ts runs: naga takes modules Tint refuses.
 //!
 //! The check judges only that each checked-in file is what the source makes
 //! now; it never compares two implementations, since there is one. Each file
 //! carries the digest of its sources, which check_rules recomputes without
 //! the container, so a file the source has moved past fails there too.
 
-use std::io::Write;
 use std::path::Path;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::{Command, ExitCode};
 
 use pxl_tool::root;
 use pxl_tool::shader::{header, inputs_digest, DIR, ENTRIES};
@@ -62,43 +60,10 @@ fn generate(root: &Path, digest: &str) -> Result<Vec<(&'static str, &'static str
         .collect()
 }
 
-/// What Tint refuses of the modules, each said by the file it is written as
-/// (script/tint.ts, given the modules as JSON on its input).
-fn refused(root: &Path, made: &[(&str, &str, String)]) -> Result<Vec<String>, String> {
-    let modules: Vec<serde_json::Value> = made.iter().map(|(entry, file, code)| serde_json::json!({ "entry": entry, "file": file, "code": code })).collect();
-    let mut child = Command::new("deno")
-        .args(["run", "-A", "tint.ts"])
-        .current_dir(root.join("script"))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|e| format!("script/tint.ts: {e}"))?;
-    child
-        .stdin
-        .take()
-        .ok_or("no stdin")?
-        .write_all(serde_json::Value::Array(modules).to_string().as_bytes())
-        .map_err(|e| e.to_string())?;
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    let said = String::from_utf8_lossy(&out.stdout).lines().map(str::to_string).collect::<Vec<_>>();
-    if !out.status.success() && said.is_empty() {
-        return Err("script/tint.ts failed".into());
-    }
-    Ok(said)
-}
-
 fn run() -> Result<bool, String> {
     let check = std::env::args().any(|a| a == "--check");
     let root = root();
     let made = generate(&root, &inputs_digest(&root)?)?;
-    let refusals = refused(&root, &made)?;
-    for r in &refusals {
-        eprintln!("refused by Tint: {r}");
-    }
-    if !refusals.is_empty() {
-        return Ok(false);
-    }
     let mut current = true;
     for (_, file, text) in &made {
         let target = root.join(DIR).join(file);

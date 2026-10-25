@@ -1,9 +1,10 @@
 # Makefile
 #
 # Routes only. Each tree is a root of its own: ts/ the TypeScript workspace
-# (ts/deno.jsonc), script/ the repository's own scripts, rust/ Cargo's, its
-# commands as aliases in rust/.cargo/config.toml, and xpute/ a project of its
-# own (xpute/Makefile). Here is a target a tree for each verb, the aggregates
+# (ts/deno.jsonc), rust/ Cargo's, its commands as aliases in
+# rust/.cargo/config.toml, and xpute/ a project of its own (xpute/Makefile).
+# script/ holds the repository's own scripts, each in the language its work
+# takes and run by its path. Here is a target a tree for each verb, the aggregates
 # over them, and what runs across them: the generated code, the dev servers
 # and the deploy. Only code is formatted, each tree's by its own formatter;
 # the documents and data outside the trees are not. A script that runs alone
@@ -17,10 +18,10 @@
 # With -j the trees run in parallel; xpute's make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: check check-script check-ts check-rust check-rules check-spec check-build check-xpute \
+.PHONY: check check-ts check-rust check-rules check-spec check-build check-xpute \
 	test test-ts test-rust test-xpute \
-	fmt fmt-script fmt-ts fmt-rust \
-	lint lint-script lint-ts \
+	fmt fmt-ts fmt-rust \
+	lint lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
 	$(TOOLS) serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
 	sync-build-number deploy
@@ -29,9 +30,7 @@
 # since CI checks nothing (.agents/skills/deploy/SKILL.md). `check-build` is
 # what ships, made as a deploy makes it without publishing: the client's
 # bundle and the Worker beside it.
-check: check-script check-ts check-rust check-rules check-spec check-build check-xpute
-check-script:
-	deno task --cwd script check
+check: check-ts check-rust check-rules check-spec check-build check-xpute
 check-ts:
 	deno task --cwd ts check
 # The module as it ships in both builds, the servers, what runs here alone
@@ -56,17 +55,13 @@ test-rust:
 test-xpute:
 	$(MAKE) -C xpute test
 
-fmt: fmt-script fmt-ts fmt-rust
-fmt-script:
-	deno task --cwd script fmt
+fmt: fmt-ts fmt-rust
 fmt-ts:
 	deno task --cwd ts fmt
 fmt-rust:
 	cd rust && cargo fmt --all
 
-lint: lint-script lint-ts
-lint-script:
-	deno task --cwd script lint
+lint: lint-ts
 lint-ts:
 	deno task --cwd ts lint
 

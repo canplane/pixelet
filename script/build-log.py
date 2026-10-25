@@ -9,8 +9,8 @@
 #   ./script/build-log.py --record 18 --web --server --smoke success     append one (CI)
 
 import json
-import signal
 import os
+import signal
 import subprocess
 import sys
 import tempfile
