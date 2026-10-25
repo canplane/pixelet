@@ -205,7 +205,7 @@ asset/raw/sky/
 out[0-9]*/
 
 # wrangler's local scratch: its simulated R2/KV, build state and temporaries.
-ts/server/edge/.wrangler/
+.wrangler/
 # The page's bundle, staged beside the Worker that serves it (script/deploy.py).
 ts/server/edge/dist/
 
