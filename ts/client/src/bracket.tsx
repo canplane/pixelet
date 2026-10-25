@@ -97,6 +97,19 @@ export interface CaseSurfaceProps {
   openKey: string;
 }
 
+/** The entry a place hears a long frame by: a long animation frame, or a long task. */
+export type LongFrameSource = "loaf" | "longtask";
+
+/** A long frame of the place's own, on `performance.now()`'s clock, which the kernel's frames are on too. */
+export interface LongFrame {
+  source: LongFrameSource;
+  t: f64;
+  durationMs: f64;
+  blockingMs: f64;
+  scriptMs: f64;
+  renderMs: f64;
+}
+
 export interface Bracket {
   /** Whether the device is held to a phone's ceilings. */
   device: { handheld: boolean };
@@ -110,8 +123,9 @@ export interface Bracket {
     width(weight: u32, px: f32, text: string): f32;
     raster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void;
   };
-  /** Where a route is asked of ("" on a page, its own origin); `get` rejects with a TypeError on a transport failure. */
-  origin: { url: string; get(route: string, signal?: AbortSignal): Promise<Response> };
+  /** Where a route is asked of ("" on a page, its own origin); `get` rejects with a TypeError on a transport failure. `credits`
+   * are the reads the place runs at once, each frame's to the kernel, so its scheduler, not the place's queue, orders the rest. */
+  origin: { url: string; credits: u32; get(route: string, signal?: AbortSignal): Promise<Response> };
   /** Whether the device is online, as far as the place can tell: a place that cannot says nothing. */
   online: { watch(report: (online: boolean) => void): void };
   sensor: {
@@ -124,6 +138,9 @@ export interface Bracket {
   };
   share: { save(name: string, text: string, mime: string): Promise<void>; copy(text: string): Promise<void> };
   locale: { list(): readonly string[]; show(lng: string): void };
+  /** The place's own long frames, as its platform reports them: `sources`, the entries it hears them by, none where it
+   * reports none; `watch`, once, hears each from then on and those it buffered before. */
+  longFrame: { sources(): readonly LongFrameSource[]; watch(heard: (frame: LongFrame) => void): void };
   view: {
     useSafeArea(): SafeArea;
     useWindowSize(): { width: f64; height: f64 };

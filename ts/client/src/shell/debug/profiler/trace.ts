@@ -11,9 +11,9 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
 
-import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
+import { type Frame, is_list, LANES, profiler_frames, profiler_tasks } from "@/abi/profiler.ts";
+import { LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
-import { profilerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { bracket } from "@/bracket.tsx";
@@ -48,7 +48,7 @@ const threadName = (tid: u32, name: string) => event("thread_name", "__metadata"
 function frameArgs(f: Frame): Args {
   const args: Args = {};
   for (const { name } of LANES) {
-    if (!isList(name)) {
+    if (!is_list(name)) {
       args[name] = fixedN(f[name], 2);
       continue;
     }
@@ -65,7 +65,8 @@ function frameArgs(f: Frame): Args {
 }
 
 function profilerTraceJson(): string {
-  const { frames, tasks } = profilerRingsRead();
+  const frames = profiler_frames();
+  const tasks = profiler_tasks();
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 

@@ -2,11 +2,9 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { Doorbell } from "@xpute/host/ipc/doorbell.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
-import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/abi/cmd.spec.ts";
-import { GUEST, GUEST_DOORBELL, HOST } from "@/host/mount.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 import { bracket } from "@/bracket.tsx";
 
 export { kernel_snapshot } from "@/abi/snapshot.ts";
@@ -42,18 +40,4 @@ export function kernel_fits(pkt: PacketWriter): boolean {
 /** The guest's doorbell itself, for a development console's `cmd`. */
 export function kernel_doorbell(): Doorbell {
   return GUEST_DOORBELL;
-}
-
-/** The kernel's memory, where a call leaves its reply; a view of it holds until the next turn. */
-export function kernel_memory(): ArrayBuffer {
-  return GUEST.memory;
-}
-
-/** A command answered inside the call: the address of its reply in `kernel_memory()`. */
-export function kernel_call(cmd: Command, pkt: PacketWriter | null = null): u32 {
-  return GUEST_DOORBELL.call(cmd, pkt, (at) => {
-    // A refusal is -errno, never an address.
-    if (at < 0) throw new FaultError(-at as Errno);
-    return at >>> 0;
-  });
 }

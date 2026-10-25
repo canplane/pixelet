@@ -4,11 +4,11 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 
-import { drawn, type Frame, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
-import { loafSupported, type LongFrame } from "./long-frame.ts";
-import { fps, type ProfilerReport, type Spread, type TaskRecord, type TaskSummary } from "./view.ts";
+import type { Frame, Spread, TaskRecord, TaskSummary } from "@/abi/profiler.ts";
+import { drawn, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
+import { fps, type ProfilerReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
-import { bracket } from "@/bracket.tsx";
+import { bracket, type LongFrame } from "@/bracket.tsx";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 /** A count of bytes in the one unit the figures are shown in, signed. */
@@ -45,6 +45,13 @@ export function frameLine(s: Frame, prev: Frame | null): string {
   return `[${n1(s.t).padStart(9)}] ${valueText("kind_name", s.kind_name)}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(s)}  tick ${n1(s.tick_ms)}/${
     n1(s.budget_ms)
   }${s.settled ? " (still)" : ""}  gpu ${s.gpu_read ? n1(gpuMs(s)) : "-"}  draws ${draws} tris ${tris(triangles)}  uploads ${s.uploads}  heap used ${bytes(s.heap_used_bytes)}${d}`;
+}
+
+/** What the place hears its long frames by, where that is less than both sources. */
+function longSourcesText(): string {
+  const sources = bracket.longFrame.sources();
+  if (sources.includes("loaf")) return "";
+  return sources.includes("longtask") ? " (LoAF unsupported; longtask only)" : " (none reported here)";
 }
 
 export const longFrameLine = (l: LongFrame) =>
@@ -98,7 +105,7 @@ export function profilerReportText(r: ProfilerReport): string {
   const out = [`=== profiler @ t=${n1(r.t)}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`];
   out.push(...windowSection(r));
   out.push(...tasksSection(r.tasks));
-  out.push(`long frames n=${r.longs.length}${loafSupported() ? "" : " (LoAF unsupported; longtask only)"}`);
+  out.push(`long frames n=${r.longs.length}${longSourcesText()}`);
 
   if (r.recent.length > 0) {
     out.push(`--- last ${r.recent.length} tasks ---`);

@@ -7,6 +7,7 @@ import * as device from "./device.ts";
 import * as gpu from "./gpu.ts";
 import * as guest from "./guest.ts";
 import * as locale from "./locale.ts";
+import * as longFrame from "./long-frame.ts";
 import * as online from "./online.ts";
 import * as origin from "./origin.ts";
 import * as sensor from "./sensor.ts";
@@ -28,6 +29,7 @@ export const app: Bracket = {
   sensor,
   share,
   locale,
+  longFrame,
   view: { useSafeArea, useWindowSize, useVisualViewport, useViewportTop },
   surface,
 };

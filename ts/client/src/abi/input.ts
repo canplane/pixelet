@@ -24,9 +24,6 @@ import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 /** Asked every frame, so a resize needs no event of its own. */
 let driver: (() => Viewport) | null = null;
 
-/** A browser's ~6 connections per origin, so the kernel's queue, not the socket pool, orders the work. */
-const NET_CREDITS = 6;
-
 /** What each frame the strobe grants submits: the viewport, the display's
  * pacing, whether it is interactive, the reads allowed out and the clock. */
 export function submit_frame(grant: Grant): void {
@@ -34,7 +31,7 @@ export function submit_frame(grant: Grant): void {
   const { width: w, height: h } = driver();
   const width = Math.max(1, w);
   const height = Math.max(1, h);
-  GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, grant.refresh_ms, grant.paced_ms, grant.interactive, NET_CREDITS, Date.now()));
+  GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, grant.refresh_ms, grant.paced_ms, grant.interactive, bracket.origin.credits, Date.now()));
 }
 
 export function kernel_pointer(phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): void {

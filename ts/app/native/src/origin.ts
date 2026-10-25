@@ -1,9 +1,20 @@
 // @pxl/native/origin.ts
 
+import { Platform } from "react-native";
+
 import { PLATFORM } from "./module.ts";
 
 /** A device's app has no origin of its own. */
 export const url = "https://plei.me";
+
+/** The reads Expo's fetch runs at once. On Android its OkHttp client runs at most
+ * five calls a host, a sixth waiting in OkHttp's own queue (`Dispatcher`
+ * `maxRequestsPerHost`, which React Native's OkHttpClientProvider leaves at its
+ * default). On iOS URLSession caps connections, not requests, and the origin
+ * speaks HTTP/2, one connection carrying every read, so nothing caps it below
+ * the six the kernel's body slots are sized by (pxl-kernel sys/io/param.rs
+ * `BODY_SLOTS`). */
+export const credits = Platform.OS === "android" ? 5 : 6;
 
 /** What the bake stores its objects as, asked for so they come as stored. */
 const ZSTD = "zstd";
