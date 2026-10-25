@@ -189,6 +189,10 @@ jobs:
 
 
       # Its own cargo cache: the module and what builds it.
+      # wrangler, Cloudflare's CLI, a program the steps call as any other.
+      - name: Install wrangler
+        run: npm install --global "wrangler@${WRANGLER_VERSION}"
+
       - uses: ./.github/actions/toolchain
         with:
           cache: rust-publish

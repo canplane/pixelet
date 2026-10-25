@@ -5,14 +5,12 @@
 # A whole set's upload is the AWS CLI's (publish.py), which syncs a directory.
 
 import os
-import shutil
 import subprocess
 import tempfile
 
 BUCKET = "pixelet-tiles"
-# wrangler as installed on the machine; where it is not, Deno runs its npm
-# release, so a machine that runs the client needs nothing more.
-WRANGLER = ["wrangler"] if shutil.which("wrangler") else ["deno", "run", "-A", "npm:wrangler"]
+# Cloudflare's CLI, a program on the PATH as git and aws are.
+WRANGLER = ["wrangler"]
 
 
 class Unreachable(Exception):

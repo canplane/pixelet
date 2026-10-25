@@ -7,7 +7,6 @@
 
 import json
 import os
-import shutil
 import signal
 import subprocess
 import sys
@@ -22,9 +21,8 @@ signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 WORKER = "pixelet"
 BUCKET = "pixelet-tiles"
 SERVER = "pixelet-prod"
-# wrangler as installed on the machine; where it is not, Deno runs its npm
-# release, so a machine that runs the client needs nothing more.
-WRANGLER = ["wrangler"] if shutil.which("wrangler") else ["deno", "run", "-A", "npm:wrangler"]
+# Cloudflare's CLI, a program on the PATH as git and aws are.
+WRANGLER = ["wrangler"]
 
 WORKER_REQUESTS_PER_DAY = 100_000
 R2_STORAGE_BYTES = 10e9
