@@ -343,16 +343,16 @@ type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
 const BOX_GROUP: [[u32; 2]; 19] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
 /// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
-/// and its block: one layout each wherever a draw binds them, so a group
+/// and its upload: one layout each wherever a draw binds them, so a group
 /// one owner makes binds in every pipeline that names them (gpu/grown.rs,
-/// gpu/block.rs).
+/// gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
-const BLOCK: [[u32; 2]; 1] = [[0, STORAGE]];
-/// A block's group as every pipeline binding one lays it out, which the
-/// draw list's blocks are grouped in (gpu/block.rs `Blocks::group`).
-pub const BLOCK_LAYOUT: [u32; 3] = [BLOCK[0][0], seen(&BLOCK, BLOCK[0][0]), BLOCK[0][1]];
+const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];
+/// An upload's group as every pipeline binding one lays it out, which the
+/// draw list's uploads are grouped in (gpu/upload.rs `Uploads::group`).
+pub const UPLOAD_LAYOUT: [u32; 3] = [UPLOAD[0][0], seen(&UPLOAD, UPLOAD[0][0]), UPLOAD[0][1]];
 
-const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &BLOCK];
+const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the sun: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
@@ -389,7 +389,7 @@ const fn plan_of(id: u32) -> Plan {
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
         PIPELINE_SKINNED => plan(lit(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
-        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE), &PUCK_ZONE_LANES, &[FRAME, &DRAW, &BLOCK]),
+        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE), &PUCK_ZONE_LANES, &[FRAME, &DRAW, &UPLOAD]),
         PIPELINE_PUCK_BEACON => plan(lit(SHADER_PUCK_BEACON, CULL_BACK), &PUCK_BEACON_LANES, &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &DRAW]),
         PIPELINE_MARKER => plan(
             Head {
@@ -497,7 +497,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
             },
             &[],
-            &[&LIT_FRAME, &DRAW, &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]], &BLOCK],
+            &[&LIT_FRAME, &DRAW, &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]], &UPLOAD],
         ),
         PIPELINE_IMPOSTOR_BAKE => plan(
             Head {

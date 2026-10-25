@@ -33,7 +33,6 @@ use crate::gpu::api::{
     write_buffer_bytes, Device, Entry, Format, Gpu, Image, Load, Stamp, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::atmosphere::{Atmosphere, Upload, AIR_ENTRIES};
-use crate::gpu::block::{blocks, Blocks, Draws};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
 use crate::gpu::image_map::ImageMap;
@@ -53,6 +52,7 @@ use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::star::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
+use crate::gpu::upload::{uploads, Draws, Uploads};
 use crate::look::environment::{ENV_AIR, ENV_STARS, ENV_SUN};
 use crate::mesh::paint::ground::look_words;
 use pxl_spec_core::beam;
@@ -246,10 +246,10 @@ pub struct FrameStat {
     /// measured with this frame.
     pub gpu_read: bool,
     pub gpu_px: f64,
-    /// The block table's blocks and their bytes, the depth targets' bytes
+    /// The upload table's uploads and their bytes, the depth targets' bytes
     /// and the texture pack's: each as counted, in bytes.
-    pub blocks: f64,
-    pub block_bytes: f64,
+    pub uploads: f64,
+    pub upload_bytes: f64,
     pub depth_bytes: f64,
     pub pack_bytes: f64,
     /// Every draw's, counted only while `counted`: its sums are the frame's
@@ -311,7 +311,7 @@ pub fn gpu_lost() {
     RENDERER.set(None);
     skins_lost();
     device_lost();
-    blocks().lose();
+    uploads().lose();
     surfaces_lost();
 }
 
@@ -372,7 +372,7 @@ impl DebugPass {
 
     /// `depth` is the world's, which nothing reads after this.
     #[allow(clippy::too_many_arguments)]
-    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, blocks: &Blocks, stamp: &mut Stamp) {
+    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uploads: &Uploads, stamp: &mut Stamp) {
         let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
         let held = self.uniforms.slots().filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
         if held.is_none() && !grid {
@@ -383,8 +383,8 @@ impl DebugPass {
         let sets = || {
             draws.of(PIPELINE_DEBUG).enumerate().filter_map(|(k, d)| {
                 let slots = slots?;
-                let (block, _, _) = blocks.get(d[0])?;
-                (d[1] > 0).then_some((k, d, block, d[1], d[2], slots))
+                let (buffer, _, _) = uploads.get(d[0])?;
+                (d[1] > 0).then_some((k, d, buffer, d[1], d[2], slots))
             })
         };
         // With no faces the lines' pass clears the depth itself.
@@ -393,10 +393,10 @@ impl DebugPass {
             let pass = g.pass(encoder, &pass_desc(0, Load::Clear, depth, Load::Clear, 0.0, stamp.pass()));
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, block, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
+            for (k, _, buffer, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
                 let (group, offset) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(pass, 0, block, lines * 28, faces * 12);
+                g.set_vertex_buffer(pass, 0, buffer, lines * 28, faces * 12);
                 g.draw(pass, faces, 1, 0, 0);
             }
             g.end(pass);
@@ -413,10 +413,10 @@ impl DebugPass {
             }
             g.set_pipeline(pass, self.built.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, block, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
+            for (k, _, buffer, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
                 let (group, offset) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(pass, 0, block, 0, lines * 28);
+                g.set_vertex_buffer(pass, 0, buffer, 0, lines * 28);
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }
@@ -1740,7 +1740,7 @@ pub struct Renderer {
     screen: RaysPass,
     /// The frame's whole input as the last frame drew it (stage 2): the
     /// frame's, the sky's and the stars' words, the air's, the surface's
-    /// textures, the draws and the blocks they read, the markers' sheet, the
+    /// textures, the draws and the uploads they read, the markers' sheet, the
     /// clouds' words and the cases, and what came or was drawn again without
     /// words.
     frame_read: Read,
@@ -1915,7 +1915,7 @@ impl Renderer {
     /// instance. Both vertex slots bind the same buffer; the record index rides
     /// on the first vertex.
     fn draw_boxes(&self, g: &Gpu, pass: u32, draws: &Draws) {
-        let b = blocks();
+        let b = uploads();
         let mut bound = 0;
         for d in draws.of(PIPELINE_GHOST_BOX) {
             let (handle, box_cnt, first_box, uniform) = (d[0], d[1], d[2], d[3]);
@@ -1939,7 +1939,7 @@ impl Renderer {
     /// The world image's opaque models: the decor grown over the world. The
     /// impostors are the lit pass's alone. `bound` comes back as the group 0
     /// the pass has.
-    fn draw_opaque(&mut self, g: &Gpu, pass: u32, b: &mut Blocks, stage: Stage) -> u32 {
+    fn draw_opaque(&mut self, g: &Gpu, pass: u32, b: &mut Uploads, stage: Stage) -> u32 {
         let mut bound = 0;
         self.decor.draw_grown(g, pass, self.screen.grown(), b, stage, (self.models.frame, &mut bound));
         bound
@@ -1974,8 +1974,8 @@ impl Renderer {
         let tiles = input.earth_tiles;
         read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
         read.mark(self.marker.sync_sheet(g, &self.mips, input.sheet, input.text));
-        let (records, uniforms, blocks_moved) = take_lists(Some(g), input.lists);
-        read.mark(blocks_moved);
+        let (records, uniforms, uploads_moved) = take_lists(Some(g), input.lists);
+        read.mark(uploads_moved);
         // Each list's writers write again only where it moved.
         let uniforms_moved = read.read(uniforms);
         let lists_moved = read.read(records) | uniforms_moved;
@@ -2029,7 +2029,7 @@ impl Renderer {
         }
         read.read(self.atmosphere.words());
         read.read(&[world.depth, world.rays, u32::from(self.screen_ao)]);
-        let b = blocks();
+        let b = uploads();
         self.decor.prepare(g, &draws, uniforms, lists_moved, b);
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
@@ -2138,7 +2138,7 @@ impl Renderer {
         g.end(pass);
         self.marker.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_MARKER]);
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_DEBUG]);
-        self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASE]);
+        self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, uploads_moved || tables || exposed, &mut stamps[SPAN_CASE]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
         release(canvas_view);
@@ -2207,12 +2207,12 @@ impl Renderer {
             }
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skins(&[(model, image)]);
-            case.skinned.prepare(g, core::iter::once(own), uniforms, moved, blocks());
+            case.skinned.prepare(g, core::iter::once(own), uniforms, moved, uploads());
         }
     }
 
     /// Each case whose picture's makings moved, `moved` what moved without
-    /// words: the models' blocks, the air's tables or its exposure.
+    /// words: the models' uploads, the air's tables or its exposure.
     fn draw_cases<'d>(&mut self, g: &Gpu, encoder: u32, cases: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>, uniforms: &[f32], moved: bool, stamp: &mut Stamp) {
         for (id, model, image, own) in cases {
             let Some(s) = surface(id) else { continue };
@@ -2249,17 +2249,17 @@ impl Renderer {
             g.write_buffer(case.frame_buffer, 0, bytes(&frame));
             let view_id = g.current(s.handle);
             let pass = g.pass(encoder, &pass_desc(view_id, Load::Clear, s.depth_view, Load::Clear, 0.0, stamp.pass()));
-            case.skinned.draw(g, pass, core::iter::once(own), blocks(), Stage::Lit, (case.frames.frame, &mut 0));
+            case.skinned.draw(g, pass, core::iter::once(own), uploads(), Stage::Lit, (case.frames.frame, &mut 0));
             g.end(pass);
             release(view_id);
         }
     }
 
-    /// What the scheduler asked for: a draw passed over because its block, skin or
+    /// What the scheduler asked for: a draw passed over because its upload, skin or
     /// sprite is not on the device yet is still counted. The draws are counted
     /// only while `counted`, the profiler's, so a frame no one reads counts none.
     fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, counted: bool, gpu_spans: [f64; GPU_SPAN_NAMES]) -> FrameStat {
-        let b = blocks();
+        let b = uploads();
         let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
         for d in draws.iter().filter(|_| counted) {
             let tris = match d[4] {
@@ -2283,8 +2283,8 @@ impl Renderer {
         FrameStat {
             gpu_read: false,
             gpu_px: 0.0,
-            blocks: b.count as f64,
-            block_bytes: b.bytes as f64,
+            uploads: b.count as f64,
+            upload_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the markers' regions'.
             depth_bytes: px * 4.0 + self.ao.depth_bytes() + self.marker.depth_bytes(),
             pack_bytes: self.pack.bytes as f64,
@@ -2373,7 +2373,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     }
     let slot = RENDERER.get(|| None);
     let r = slot.get_or_insert_with(|| Renderer::new(g, device));
-    blocks().restore(g);
+    uploads().restore(g);
     let (kind, stat) = r.frame(g, world, input);
     FrameOutput {
         kind,
@@ -2383,12 +2383,12 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     }
 }
 
-/// Blocks listed with no device wait in the table for the next one.
-/// The draws and their uniforms, and whether a block was let go, made or
+/// Uploads listed with no device wait in the table for the next one.
+/// The draws and their uniforms, and whether an upload was let go, made or
 /// rewritten.
 fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], bool) {
-    let b = blocks();
-    // Frees first, so the table never holds a block beside its replacement.
+    let b = uploads();
+    // Frees first, so the table never holds an upload beside its replacement.
     for &handle in lists.frees {
         b.remove(handle);
     }

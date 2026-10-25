@@ -41,10 +41,10 @@ export function frameLine(s: Frame, prev: Frame | null): string {
   const [draws, triangles] = drawn(s);
   const d = prev === null
     ? ""
-    : `  Δblocks ${signed(s.blocks - prev.blocks)} Δblocks bytes ${signedBytes(s.blocks_bytes - prev.blocks_bytes)} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
+    : `  Δuploads ${signed(s.uploads - prev.uploads)} Δuploads bytes ${signedBytes(s.uploads_bytes - prev.uploads_bytes)} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
   return `[${n1(s.t).padStart(9)}] ${valueText("kind_name", s.kind_name)}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(s)}  tick ${n1(s.tick_ms)}/${
     n1(s.budget_ms)
-  }${s.settled ? " (still)" : ""}  gpu ${s.gpu_read ? n1(gpuMs(s)) : "-"}  draws ${draws} tris ${tris(triangles)}  blocks ${s.blocks}  heap used ${bytes(s.heap_used_bytes)}${d}`;
+  }${s.settled ? " (still)" : ""}  gpu ${s.gpu_read ? n1(gpuMs(s)) : "-"}  draws ${draws} tris ${tris(triangles)}  uploads ${s.uploads}  heap used ${bytes(s.heap_used_bytes)}${d}`;
 }
 
 export const longFrameLine = (l: LongFrame) =>

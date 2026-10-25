@@ -1,13 +1,13 @@
-// pxl-render/gpu/block.rs
+// pxl-render/gpu/upload.rs
 
-//! The draw list's blocks on the device by the list's handle, and its
+//! The draw list's uploads on the device by the list's handle, and its
 //! records by pipeline, as the renderer and its passes read them.
 
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 
 use crate::frame::draw::DRAW_WORDS;
-use crate::frame::shader::record::{BLOCK_LAYOUT, PIPELINES};
+use crate::frame::shader::record::{PIPELINES, UPLOAD_LAYOUT};
 use crate::gpu::api::{buffer_entry, buffer_usage, release, room, write_buffer_bytes, Gpu};
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -53,14 +53,14 @@ const EMPTY: u32 = 0;
 
 /// A power of two so a position wraps by masking, at least twice `live` so
 /// open addressing never fills past half.
-pub const fn block_slots(live: usize) -> usize {
+pub const fn upload_slots(live: usize) -> usize {
     (2 * live).next_power_of_two()
 }
 
-/// Blocks by the list's handle: open addressing in `.fixed.blocks`. The heap
+/// Uploads by the list's handle: open addressing in `.fixed.uploads`. The heap
 /// is the source and the device a copy, so a lost device is restored from the
 /// addresses.
-pub struct Blocks {
+pub struct Uploads {
     handle: &'static mut [u32],
     at: &'static mut [u32],
     len: &'static mut [u32],
@@ -71,7 +71,7 @@ pub struct Blocks {
     pub(crate) count: u32,
     pub(crate) bytes: u64,
     missing: u32,
-    /// The layout every block's group is in (record.rs `BLOCK_LAYOUT`),
+    /// The layout every upload's group is in (record.rs `UPLOAD_LAYOUT`),
     /// made on the device as the first is grouped.
     layout: u32,
 }
@@ -86,22 +86,22 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 /// Handle, address, length, the two counts, buffer, group.
-const BLOCK_LANES: usize = 7;
+const UPLOAD_LANES: usize = 7;
 
 /// The table's lanes, then the draw list's (frame/draw.rs `lanes_bytes`),
-/// room for the most blocks live, half the slots.
-pub const fn blocks_bytes(slots: usize) -> u32 {
-    (BLOCK_LANES * slots * 4) as u32 + crate::frame::draw::lanes_bytes(slots / 2)
+/// room for the most uploads live, half the slots.
+pub const fn uploads_bytes(slots: usize) -> u32 {
+    (UPLOAD_LANES * slots * 4) as u32 + crate::frame::draw::lanes_bytes(slots / 2)
 }
 
 /// # Safety
-/// `at` must address `blocks_bytes(slots)`, 4-aligned and zeroed, the
+/// `at` must address `uploads_bytes(slots)`, 4-aligned and zeroed, the
 /// renderer's alone for as long as the module runs.
-pub unsafe fn set_blocks(at: u32, slots: usize) {
+pub unsafe fn set_uploads(at: u32, slots: usize) {
     xpute_kit::ensure!(slots.is_power_of_two(), EINVAL, slots);
     // SAFETY: the caller's range, one lane of `slots` words after another.
     let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + k * slots * 4), slots) };
-    BLOCKS.set(Blocks {
+    UPLOADS.set(Uploads {
         handle: lane(0),
         at: lane(1),
         len: lane(2),
@@ -115,14 +115,14 @@ pub unsafe fn set_blocks(at: u32, slots: usize) {
         layout: 0,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { crate::frame::draw::set_lanes(at + (BLOCK_LANES * slots * 4) as u32, slots / 2) };
+    unsafe { crate::frame::draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, slots / 2) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {
     (handle.wrapping_mul(0x9e37_79b1) >> (32 - slots.trailing_zeros())) as usize
 }
 
-impl Blocks {
+impl Uploads {
     pub(crate) fn lose(&mut self) {
         self.buffer.fill(0);
         self.group.fill(0);
@@ -142,7 +142,7 @@ impl Blocks {
         }
     }
 
-    /// False, the block still missing, where the turn's stream has no room.
+    /// False, the upload still missing, where the turn's stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
         if !room(write_buffer_bytes(memory(self.at[i], self.len[i] & !3))) {
             return false;
@@ -169,14 +169,14 @@ impl Blocks {
         }
     }
 
-    /// None until the block is on the device.
+    /// None until the upload is on the device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
         self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
     }
 
     pub(crate) fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
-        // Slots are twice the most blocks the owners can hold, so this is that bound broken.
+        // Slots are twice the most uploads the owners can hold, so this is that bound broken.
         xpute_kit::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
@@ -197,7 +197,7 @@ impl Blocks {
         }
     }
 
-    /// Where the turn's stream has no room, the buffer goes and the block is put
+    /// Where the turn's stream has no room, the buffer goes and the upload is put
     /// again whole once there is.
     pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
@@ -255,7 +255,7 @@ impl Blocks {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
             if self.layout == 0 {
-                self.layout = g.layout(&BLOCK_LAYOUT);
+                self.layout = g.layout(&UPLOAD_LAYOUT);
             }
             let id = g.bind_group(self.layout, &[buffer_entry(0, self.buffer[i])]);
             self.group[i] = id;
@@ -264,8 +264,8 @@ impl Blocks {
     }
 }
 
-static BLOCKS: Global<Blocks> = Global::new();
+static UPLOADS: Global<Uploads> = Global::new();
 
-pub(crate) fn blocks() -> &'static mut Blocks {
-    BLOCKS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
+pub(crate) fn uploads() -> &'static mut Uploads {
+    UPLOADS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }

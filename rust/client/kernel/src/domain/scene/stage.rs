@@ -192,8 +192,8 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
             census: stat.census,
         },
         DeviceSample {
-            blocks: stat.blocks,
-            blocks_bytes: stat.block_bytes,
+            uploads: stat.uploads,
+            uploads_bytes: stat.upload_bytes,
             depth_bytes: stat.depth_bytes,
             pack_bytes: stat.pack_bytes,
             objects,

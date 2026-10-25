@@ -200,11 +200,11 @@ fn lay_out(b: &Bracket) -> u32 {
     crate::domain::layer::division::RANGE.set(layout::range(layout::Fixed::Division));
     // A layer asks for no more tiles than its residency frames.
     crate::sys::io::request::open(|c| crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames));
-    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
+    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
         crate::sys::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
-        pxl_render::gpu::block::set_blocks(fixed_at(layout::Fixed::Blocks), layout::BLOCK_SLOTS);
+        pxl_render::gpu::upload::set_uploads(fixed_at(layout::Fixed::Uploads), layout::UPLOAD_SLOTS);
         pxl_render::gpu::api::install(fixed_at(layout::Fixed::Gpu))
     }
 }

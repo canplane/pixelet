@@ -1,7 +1,7 @@
 // A decor draw's instances, as the model tier (decor.wgsl) and the
 // impostors (impostor.wgsl) both read them: the draw's uniform
-// (gpu/pass/model.rs `put_instances`) and the decor block its instances lie
-// in, a lane a field; the n-th instance drawn is the one the index list's
+// (gpu/pass/model.rs `put_instances`) and the decor's instances, `instances`,
+// a lane a field; the n-th instance drawn is the one the index list's
 // n-th word names.
 
 struct Draw {
@@ -25,9 +25,9 @@ fn draw_opacity() -> f32 { return draw_words[1].y; }
 fn draw_layer() -> u32 { return bitcast<u32>(draw_words[1].z); }
 fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
-@group(3) @binding(0) var<storage, read> block: array<u32>;
+@group(3) @binding(0) var<storage, read> instances: array<u32>;
 
 // Instance `i`'s word in lane `k`.
 fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
+  return bitcast<f32>(instances[draw_offset() + k * draw_stride() + i]);
 }

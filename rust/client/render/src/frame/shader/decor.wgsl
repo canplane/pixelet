@@ -1,5 +1,5 @@
-// Decor: instanced variant models, each instance read from the decor block
-// (instance.wgsl).
+// Decor: instanced variant models, each instance read from the decor's
+// instances (instance.wgsl).
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
@@ -30,7 +30,7 @@ struct Placed {
 };
 
 fn placed(v: VertexIn) -> Placed {
-  let i = block[draw_index() + v.i];
+  let i = instances[draw_index() + v.i];
   let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
   var p: Placed;
   p.spin = lane(3u, i);

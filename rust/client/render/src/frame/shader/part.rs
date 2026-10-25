@@ -50,7 +50,7 @@ pub const SHADER_HEIGHTS: u32 = 28;
 pub const SHADER_GROWN: u32 = 29;
 /// What `SHADER_GROWN` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn into the decor block: pxl-spec-core `scatter::drawn`.
+/// args; each drawn into the decor's instances: pxl-spec-core `scatter::drawn`.
 pub const SHADER_GROWN_COUNT: u32 = 30;
 pub const SHADER_GROWN_ARGS: u32 = 31;
 pub const SHADER_GROWN_PLACE: u32 = 32;

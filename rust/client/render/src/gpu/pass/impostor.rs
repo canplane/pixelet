@@ -10,11 +10,11 @@ use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
-use crate::gpu::block::Blocks;
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::decor::{DecorPass, GROUPS};
 use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::upload::Uploads;
 
 /// Impostors cover fewer pixels than the model tier's floor (twelve at the
 /// reference viewport), so this is several times any one's drawn size.
@@ -91,14 +91,14 @@ impl ImpostorPass {
     }
 
     /// Whether a group was baked again.
-    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &DecorPass, blocks: &Blocks) -> bool {
+    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &DecorPass, uploads: &Uploads) -> bool {
         // The groups whose model or extent moved since baked, each once, and
         // whose model has landed: one still landing is due on a later frame,
         // and this one bakes, writes and submits nothing for it.
         let (mut due, mut len) = ([(0, Baked::default(), (0, 0, 0, 0)); GROUPS], 0);
         for k in 0..GROUPS {
             if let Some(w) = self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)) {
-                if let Some(model) = decor.model_of(g, k as u32, blocks) {
+                if let Some(model) = decor.model_of(g, k as u32, uploads) {
                     (due[len], len) = ((k, w, model), len + 1);
                 }
             }
@@ -128,25 +128,25 @@ impl ImpostorPass {
         true
     }
 
-    /// Every block group the draws will bind is made here, so drawing makes
+    /// Every upload group the draws will bind is made here, so drawing makes
     /// nothing that outlives its frame.
     /// `moved` whether the lists the draws are made from moved.
-    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
+    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], moved: bool, uploads: &mut Uploads) {
         self.uniforms.write(g, self.draw.layouts[1], draws.len() as u32, draws.clone(), moved, |buf, d| {
             put_instances(buf, uniform_of(uniforms, d), d[1]);
         });
         for d in draws {
-            blocks.group(g, d[0]);
+            uploads.group(g, d[0]);
         }
     }
 
     /// A group whose layer is not drawn yet is not drawn.
-    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, frame: (u32, &mut u32)) {
+    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, uploads: &mut Uploads, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
         draw_models(g, pass, &self.draw, self.draw.pipeline, frame, slots, 0, draws, |d| {
             self.baked.get(d[1] as usize).copied().flatten()?;
             Some(ModelDraw {
-                groups: [self.group, blocks.group(g, d[0])?],
+                groups: [self.group, uploads.group(g, d[0])?],
                 mesh: None,
                 instances: d[2],
             })
@@ -164,7 +164,7 @@ impl ImpostorPass {
             *bound = frame;
         }
         g.set_bind_group(pass, 2, self.group, &[]);
-        g.set_bind_group(pass, 3, d.block_group, &[]);
+        g.set_bind_group(pass, 3, d.instances_group, &[]);
         for group in 0..groups.min(GROUPS as u32) {
             if self.baked[group as usize].is_none() {
                 continue;

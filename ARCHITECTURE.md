@@ -356,7 +356,7 @@ So a still view draws nothing, and a clock steps the sky by a display level and 
 
 Shaders and pipelines are the kernel's (`frame/shader/`), and the tests compile each shader with naga and check its pipeline against it. What a shader shares with the host has no padding, and a uniform block is read a field at a time, never rebuilt as a struct; a phone's Vulkan and Safari's WebGPU each broke on one. A fact the GPU needs has one home, such as the frame uniform's cell angle.
 
-Depth is reversed float, near at 1, so far coplanar faces do not fight. On device loss the blocks are still in memory and are uploaded again from the same addresses.
+Depth is reversed float, near at 1, so far coplanar faces do not fight. On device loss the uploads' bytes are still in memory and are uploaded again from the same addresses.
 
 ## Past the pyramid: the sky and the sphere
 
@@ -563,11 +563,11 @@ end          PHONE_BYTES or DESKTOP_BYTES
 
 The map is `pxl-kernel sys/mem/section.rs`'s. `.stack` is first so an overflow wraps below zero and traps, the only guard without an MMU. The rings and the directory sit at addresses from `spec/client/kernel/sys/mem/mem.json`, which also tells the linker where its data may begin.
 
-`.fixed` holds what the kernel places once, sizes at compile time and never frees, and only what is mostly in use whenever it runs or is the host's reservation: the terrain's room, the resident divisions' cells, the renderer's live blocks, the GPU and host streams. Each owner states its size, and the door lays the ranges in order and hands each its own at boot (`door/layout.rs` `FIXED_BYTES`). The terrain's and the divisions' ranges are read through a `Section`, which checks every access against its end; the others are handed their first byte, which the renderer and the streams write from.
+`.fixed` holds what the kernel places once, sizes at compile time and never frees, and only what is mostly in use whenever it runs or is the host's reservation: the terrain's room, the resident divisions' cells, the renderer's live uploads, the GPU and host streams. Each owner states its size, and the door lays the ranges in order and hands each its own at boot (`door/layout.rs` `FIXED_BYTES`). The terrain's and the divisions' ranges are read through a `Section`, which checks every access against its end; the others are handed their first byte, which the renderer and the streams write from.
 
 `.heap` is everything else, under xpute's slab over buddy, including what another format sizes, such as a glTF or a PNG. A refused request is a wait, not a failure: the asker tries again on a later turn, the mirror's chunk once the heap gives a page back, its square filled again. What is held only at times, or far below its worst most of the time, is a heap flow with a cap, grown as it is used and refused past the cap, each counted at its worst, in the buddy's blocks, against the heap a phone is guaranteed (`door/layout.rs` `HEAP_FLOWS_BYTES`): the bodies on their way, the CPU's mirror of the ways' pool and the squares' records read back (`domain/layer/terrain/mirror.rs`, `pxl-render gpu/renderer.rs` `GroundBuffers`), and the profiler's rings while its setting is on.
 
-What the renderer reads each frame is the kernel's **draw list**, records of uploads, rewrites, draws and frees (`pxl-render frame/draw.rs`), its uploads' and frees' lanes in `.fixed.blocks`. What an upload names is a block laid out in lanes, structure-of-arrays: a model's positions, normals, UVs, joints and weights each its own. The JavaScript heap holds only glue.
+What the renderer reads each frame is the kernel's **draw list**, records of uploads, rewrites, draws and frees (`pxl-render frame/draw.rs`), its uploads' and frees' lanes in `.fixed.uploads`. What an upload names is a heap block laid out in lanes, structure-of-arrays: a model's positions, normals, UVs, joints and weights each its own. The JavaScript heap holds only glue.
 
 ## Settings and the profiler
 

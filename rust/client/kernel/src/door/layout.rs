@@ -52,7 +52,7 @@ const _: () = assert!(
 );
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
-/// resident divisions' cells, the renderer's block table, the GPU call
+/// resident divisions' cells, the renderer's upload table, the GPU call
 /// stream, the kernel's other host calls. Each is mostly in use whenever
 /// the kernel runs, or the host's reservation; what is held only at times,
 /// or far below its worst most of the time, is the heap's
@@ -61,7 +61,7 @@ const _: () = assert!(
 pub enum Fixed {
     Terrain,
     Division,
-    Blocks,
+    Uploads,
     Gpu,
     Host,
 }
@@ -71,26 +71,26 @@ const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX +
 
 /// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
-const SINGLE_BLOCKS: usize = 5;
+const SINGLE_UPLOADS: usize = 5;
 
 /// An actor's palette, one for each frame that holds one: the companion's
 /// figures and the display cases.
-const ACTOR_BLOCKS: usize = crate::domain::scene::character::companion::FIGURES + crate::domain::scene::character::preview::CASES_MAX;
+const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES + crate::domain::scene::character::preview::CASES_MAX;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
-/// blocks within their reach, the actors, the singles), so overflowing the
+/// patches within their reach, the actors, the singles), so overflowing the
 /// renderer's table is a bug, not a load.
-/// The renderer frees a list's blocks before taking its uploads, so it never
-/// holds more.
-const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::PATCHES_MAX + ACTOR_BLOCKS + SINGLE_BLOCKS;
+/// The renderer frees a list's uploads before taking its new ones, so it
+/// never holds more.
+const MAX_LIVE_UPLOADS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
-pub const BLOCK_SLOTS: usize = pxl_render::gpu::block::block_slots(MAX_LIVE_BLOCKS);
+pub const UPLOAD_SLOTS: usize = pxl_render::gpu::upload::upload_slots(MAX_LIVE_UPLOADS);
 
 const FIXED: [u32; 5] = [
     crate::domain::layer::terrain::fixed::TERRAIN_BYTES,
     crate::domain::layer::division::DIVISION_BYTES,
-    pxl_render::gpu::block::blocks_bytes(BLOCK_SLOTS),
+    pxl_render::gpu::upload::uploads_bytes(UPLOAD_SLOTS),
     pxl_render::api_spec::stream::BYTES,
     crate::sys::io::host_spec::stream::BYTES,
 ];

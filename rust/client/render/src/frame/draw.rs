@@ -19,8 +19,8 @@ pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
     &uniforms[d[3] as usize * DRAW_FLOATS..][..DRAW_FLOATS]
 }
 
-/// Box draw: (block handle, box count, first box, uniform, pipeline).
-/// Decor draw: (block handle, group, instance count, uniform, pipeline); the
+/// Box draw: (upload handle, box count, first box, uniform, pipeline).
+/// Decor draw: (upload handle, group, instance count, uniform, pipeline); the
 /// uniform carries the group's first lane word, stride and index-list start.
 pub const PIPELINE_DECOR: u32 = 0;
 /// Half transparent, at the depth of the faces it lies on, which stand
@@ -32,11 +32,11 @@ pub const MODEL_VERTEX_WORDS: u32 = 16;
 /// (model handle, joint palette handle, model id, uniform, pipeline); uniform
 /// float 4 is the turn about Z.
 pub const PIPELINE_SKINNED: u32 = 3;
-/// Zone: (zone block handle, instance count, 0, uniform, pipeline). Beacon:
+/// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
 /// (0, night, 0, uniform, pipeline), uniform float 4 its spin.
 pub const PIPELINE_PUCK_ZONE: u32 = 4;
 pub const PIPELINE_PUCK_BEACON: u32 = 5;
-/// (block handle, count, 0, uniform, pipeline).
+/// (upload handle, count, 0, uniform, pipeline).
 pub const PIPELINE_MARKER: u32 = 6;
 /// Line segments: handle, line vertex count, face vertex count.
 pub const PIPELINE_DEBUG: u32 = 7;
@@ -72,10 +72,10 @@ pub fn census_slot(pipeline: u32) -> usize {
 /// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;
 
-/// The uploads' and the frees' lanes in `.fixed.blocks` (pxl-render
-/// gpu/block.rs `set_blocks`), each twice, the one written and the one
-/// the renderer took: room for as many records as blocks live, since a
-/// turn's uploads become live blocks and its frees were.
+/// The uploads' and the frees' lanes in `.fixed.uploads` (pxl-render
+/// gpu/upload.rs `set_uploads`), each twice, the one written and the one
+/// the renderer took: room for as many records as uploads live, since a
+/// turn's uploads become live and its frees were.
 struct ListLanes {
     uploads: [&'static mut [u32]; 2],
     frees: [&'static mut [u32]; 2],
@@ -87,7 +87,7 @@ fn lanes() -> &'static mut ListLanes {
     LANES.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }
 
-/// The lists' lanes' bytes, for `live` blocks.
+/// The lists' lanes' bytes, for `live` uploads.
 pub const fn lanes_bytes(live: usize) -> u32 {
     (2 * (UPLOAD_WORDS + 1) * live * 4) as u32
 }
@@ -139,7 +139,7 @@ impl DrawList {
         handle
     }
 
-    /// `handle` 0 names no block.
+    /// `handle` 0 names no upload.
     pub fn free(&mut self, handle: u32) {
         if handle == 0 {
             return;
@@ -172,7 +172,7 @@ impl DrawList {
         self.rewrite_part(handle, at, 0, bytes);
     }
 
-    /// One rewrite a part of a block, however often it is asked before the
+    /// One rewrite a part of an upload, however often it is asked before the
     /// list is taken: its bytes are read then, at the latest place asked,
     /// as many as the most asked.
     pub fn rewrite_part(&mut self, handle: u32, at: u32, from: u32, bytes: u32) {

@@ -62,7 +62,7 @@ const WIDTH: [f64; 2] = [1024.0, 1840.0];
 /// The farthest a patch is built: where the widest cloud is a sprite's worth.
 const REACH_MAX: f64 = sprite_reach(WIDTH[1]);
 /// The most patches the reach spans, the keys of a side squared: its share of
-/// the renderer's block table.
+/// the renderer's upload table.
 pub const PATCHES_MAX: usize = {
     let side = (2.0 * REACH_MAX / PATCH) as usize + 2;
     side * side

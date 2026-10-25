@@ -5,9 +5,9 @@
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, Entry, Gpu};
 use crate::gpu::atmosphere::AIR_ENTRIES;
-use crate::gpu::block::{buffer_size, Blocks, Draws};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::upload::{buffer_size, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 
@@ -119,9 +119,9 @@ impl PuckPass {
     }
 
     /// Each draw's uniform in a slot of its own, written once before the
-    /// pass where the lists it is made from `moved`; and every block group
+    /// pass where the lists it is made from `moved`; and every upload group
     /// the zones will bind, so drawing makes nothing that outlives its frame.
-    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
+    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], moved: bool, uploads: &mut Uploads) {
         let c = self.color;
         let put = |buf: &mut [u8], (d, night): (&[u32; DRAW_WORDS], f32)| {
             let u = uniform_of(uniforms, d);
@@ -134,7 +134,7 @@ impl PuckPass {
         self.zone_uniforms
             .write(g, self.zone.layouts[1], zones.clone().count() as u32, zones.clone().map(|d| (d, 0.0)), moved, put);
         for d in zones {
-            blocks.group(g, d[0]);
+            uploads.group(g, d[0]);
         }
     }
 
@@ -158,9 +158,9 @@ impl PuckPass {
     }
 
     /// The pipeline, the frame's group and the box bound once; a draw binds
-    /// its uniform's slot and its block alone. A zone whose block is not on
+    /// its uniform's slot and its upload alone. A zone whose upload is not on
     /// the device yet is passed over.
-    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks) {
+    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uploads: &mut Uploads) {
         let Some(slots) = self.zone_uniforms.slots() else { return };
         if zones(draws).next().is_none() {
             return;
@@ -171,10 +171,10 @@ impl PuckPass {
         g.set_vertex_buffer(pass, 1, self.box_uv, 0, 0);
         g.set_index_buffer(pass, self.box_index, 0, 0);
         for (k, d) in zones(draws).enumerate() {
-            let Some(block) = blocks.group(g, d[0]) else { continue };
+            let Some(upload) = uploads.group(g, d[0]) else { continue };
             let (group, offset) = slots.at(k as u32);
             g.set_bind_group(pass, 1, group, &[offset]);
-            g.set_bind_group(pass, 2, block, &[]);
+            g.set_bind_group(pass, 2, upload, &[]);
             g.draw_indexed(pass, 36, d[1], 0, 0);
         }
     }

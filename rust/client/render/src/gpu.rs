@@ -5,7 +5,6 @@
 pub mod ao;
 pub mod api;
 pub mod atmosphere;
-pub mod block;
 pub mod cloud;
 pub mod grown;
 pub mod image_map;
@@ -23,3 +22,4 @@ pub mod span_spec;
 pub mod star;
 pub mod surface;
 pub mod text;
+pub mod upload;

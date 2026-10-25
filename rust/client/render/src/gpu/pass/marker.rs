@@ -12,13 +12,13 @@ use crate::frame::shader::record::PIPELINE_MARKER_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Format, Gpu, Load, Stamp};
-use crate::gpu::block::{Blocks, Draws};
 use crate::gpu::mip::{mip_levels, Mips};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::{Paint, Sheet, SlotSet};
 use crate::gpu::sheet::{SheetPainter, Sketch, SHEET_SCALE};
 use crate::gpu::text::TextOf;
+use crate::gpu::upload::{Draws, Uploads};
 use crate::look::marker::{
     bubble_box_h, point_mark, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL, DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_FONT, PILL_H, PILL_R, POINT_FONT, POINT_GAP, POINT_LINE,
     POINT_PAD, POINT_PITCH, POINT_RIM, POINT_RIM_FILL, POINT_SHADE, POINT_SHADOW_BLUR, POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
@@ -79,13 +79,13 @@ fn bubble(p: &mut Sketch, lines: &[String], box_w: f32) {
     }
 }
 
-/// A set's block, bound twice: its regions read the world's depth, its
+/// A set's upload, bound twice: its regions read the world's depth, its
 /// markers the regions.
 #[derive(Clone, Copy, Default)]
 struct Set {
     group: u32,
     region_group: u32,
-    block: u32,
+    upload: u32,
     depth: u32,
     numbers: u32,
 }
@@ -227,7 +227,7 @@ impl MarkerPass {
 
     /// The regions' depth at the world's size, and each set's groups and
     /// uniform, made here so drawing makes nothing that outlives its frame.
-    pub fn prepare(&mut self, g: &Gpu, depth: u32, size: (u32, u32), draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
+    pub fn prepare(&mut self, g: &Gpu, depth: u32, size: (u32, u32), draws: &Draws, uniforms: &[f32], uploads: &Uploads) {
         if self.sheet_group == 0 {
             return;
         }
@@ -241,20 +241,20 @@ impl MarkerPass {
             self.regions_view = g.view(self.regions, false, 0, 1, 0, 1);
             self.regions_size = size;
         }
-        let placed = draws.of(PIPELINE_MARKER).filter(|d| d[1] > 0).filter_map(|d| blocks.get(d[0]));
-        for (set, (block, _, _)) in self.sets.iter_mut().zip(placed) {
-            if set.block != block || set.depth != depth || set.numbers != self.numbers_view || set.group == 0 {
-                let bound = |layout: u32, before: u32| g.bind_group(layout, &[buffer_entry(0, block), view_entry(1, before)]);
+        let placed = draws.of(PIPELINE_MARKER).filter(|d| d[1] > 0).filter_map(|d| uploads.get(d[0]));
+        for (set, (upload, _, _)) in self.sets.iter_mut().zip(placed) {
+            if set.upload != upload || set.depth != depth || set.numbers != self.numbers_view || set.group == 0 {
+                let bound = |layout: u32, before: u32| g.bind_group(layout, &[buffer_entry(0, upload), view_entry(1, before)]);
                 release(set.group);
                 release(set.region_group);
                 set.group = bound(self.built.layouts[2], self.numbers_view);
                 set.region_group = bound(self.region_built.layouts[2], depth);
-                (set.block, set.depth, set.numbers) = (block, depth, self.numbers_view);
+                (set.upload, set.depth, set.numbers) = (upload, depth, self.numbers_view);
             }
         }
         // A set's uniform a slot, written each frame, as the eye moves them
         // all; numbered on from the sets before, so no two markers share one.
-        let placed = || draws.of(PIPELINE_MARKER).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
+        let placed = || draws.of(PIPELINE_MARKER).filter(|d| d[1] > 0).filter(|d| uploads.get(d[0]).is_some());
         let (view, proj, px_k) = (self.view, self.proj, self.px_k);
         let count = placed().take(SETS).count() as u32;
         let mut before = 0;
@@ -271,11 +271,11 @@ impl MarkerPass {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, blocks: &Blocks, stamp: &mut Stamp) {
+    pub fn draw(&self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, uploads: &Uploads, stamp: &mut Stamp) {
         if self.sheet_group == 0 {
             return;
         }
-        let placed = || draws.of(PIPELINE_MARKER).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
+        let placed = || draws.of(PIPELINE_MARKER).filter(|d| d[1] > 0).filter(|d| uploads.get(d[0]).is_some());
         if placed().next().is_none() {
             return;
         }

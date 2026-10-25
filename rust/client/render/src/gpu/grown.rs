@@ -8,7 +8,7 @@
 //! record taken where the rays ask the zoom it was grown at and sized for
 //! the screen, counted a draw region (`decor_count_cs`), the regions laid
 //! out with their indirect args (`decor_args_cs`), and each record drawn
-//! into one decor block in the layout the decor and impostor shaders read
+//! into the decor's instances in the layout the decor and impostor shaders read
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
 //! what is grown.
 
@@ -36,8 +36,8 @@ pub struct DecorFrame<'a> {
     /// sunk under it by none, as it stands where it is placed; read where
     /// it lies, unwritten until the page replays the turn.
     pub placed: &'a [[u32; scatter::GROWN_WORDS as usize]],
-    /// The anchor the lanes are about, less the frame's eye: where the decor
-    /// block is drawn.
+    /// The anchor the lanes are about, less the frame's eye: where the decor's
+    /// instances are drawn.
     pub translation: [f32; 3],
     /// What overwrites wrote since the last frame, `scatter::EDITS` boxes
     /// of leaf cells at most (pxl-spec-core `scatter::meets`): the slots
@@ -82,16 +82,16 @@ pub struct Grown {
     /// Each region's draw uniform (`drawn::UNIFORM_WORDS` apart), as the
     /// decor and impostor shaders read one, its index set by the args pass.
     uniforms: u32,
-    /// The records, laid by slot (`scatter::record_at`); then the decor
-    /// block, `drawn::LANES` lanes and the index list, `room` slots each.
+    /// The records, laid by slot (`scatter::record_at`); then the decor's
+    /// instances, `drawn::LANES` lanes and the index list, `room` slots each.
     records: u32,
-    block: u32,
+    instances: u32,
     /// The draws' bind groups over the uniforms, a region's at a dynamic
-    /// offset, and over the block, in the layouts the decor and impostor
-    /// draws share (record.rs `DRAW`, `BLOCK`): made with their buffers.
+    /// offset, and over the instances, in the layouts the decor and impostor
+    /// draws share (record.rs `DRAW`, `UPLOAD`): made with their buffers.
     draw_layouts: [u32; 2],
     uniform_group: u32,
-    block_group: u32,
+    instances_group: u32,
     room: u32,
     /// The placed decor's records, as last handed.
     placed_count: u32,
@@ -159,10 +159,10 @@ impl Grown {
             args: buffer(word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::INDIRECT),
             uniforms,
             records: 0,
-            block: 0,
+            instances: 0,
             draw_layouts,
             uniform_group: g.bind_group(draw_layouts[0], &[buffer_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))]),
-            block_group: 0,
+            instances_group: 0,
             room: 0,
             placed_count: 0,
             bound: [0; 7],
@@ -191,18 +191,18 @@ impl Grown {
         let grew = need > self.room;
         if grew {
             // The slots' records carried over: the placed tail is laid anew.
-            let (records, block) = (self.records, self.block);
+            let (records, instances) = (self.records, self.instances);
             self.records = g.buffer(word_bytes(scatter::record_at(need).0 as usize), buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC);
-            self.block = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
+            self.instances = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
             if records != 0 {
                 let e = g.encoder();
                 g.copy_buffer(e, (records, 0), (self.records, 0), word_bytes(scatter::record_at(scatter::SLOT_RECORDS).0 as usize));
                 g.submit(e);
             }
             release(records);
-            release(block);
-            release(self.block_group);
-            self.block_group = g.bind_group(self.draw_layouts[1], &[buffer_entry(0, self.block)]);
+            release(instances);
+            release(self.instances_group);
+            self.instances_group = g.bind_group(self.draw_layouts[1], &[buffer_entry(0, self.instances)]);
             self.room = need;
             self.placed.forget();
         }
@@ -306,7 +306,7 @@ impl Grown {
             group(&self.grow, &[eye, window, ground, shards, overwrites, self.records, self.rows, self.grows, pool]),
             group(&self.count, &[eye, self.params, self.rows, self.records, self.regions, window]),
             group(&self.args_built, &[self.meshes, self.regions, self.args, self.uniforms]),
-            group(&self.place, &[self.params, self.rows, self.records, self.regions, self.block, window]),
+            group(&self.place, &[self.params, self.rows, self.records, self.regions, self.instances, window]),
         ];
     }
 
@@ -399,22 +399,22 @@ impl Grown {
         }
     }
 
-    /// What the draws read, while decor is on: the decor block, its slots,
-    /// the regions' indirect args, and where the block is drawn.
+    /// What the draws read, while decor is on: the decor's instances, their slots,
+    /// the regions' indirect args, and where they are drawn.
     pub fn drawn(&self) -> Option<Drawn> {
-        (self.on && self.block != 0).then_some(Drawn {
-            block_group: self.block_group,
+        (self.on && self.instances != 0).then_some(Drawn {
+            instances_group: self.instances_group,
             args: self.args,
             uniform_group: self.uniform_group,
         })
     }
 }
 
-/// The decor block as the draws read it (`Grown::drawn`): the block's
+/// The decor's instances as the draws read them (`Grown::drawn`): their
 /// group, the regions' indirect args and their draw uniforms' group.
 #[derive(Clone, Copy)]
 pub struct Drawn {
-    pub block_group: u32,
+    pub instances_group: u32,
     pub args: u32,
     pub uniform_group: u32,
 }

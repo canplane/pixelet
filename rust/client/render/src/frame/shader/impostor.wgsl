@@ -1,6 +1,6 @@
 // Decor instances too small on screen for their model, drawn as quads turned
-// to the eye about the world's up, each instance read from the decor block
-// (instance.wgsl).
+// to the eye about the world's up, each instance read from the decor's
+// instances (instance.wgsl).
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;
@@ -25,7 +25,7 @@ struct VertexOut {
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let i = block[draw_index() + v.i];
+  let i = instances[draw_index() + v.i];
   var o: VertexOut;
   let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
   let scale = lane(4u, i);
