@@ -13,7 +13,6 @@ import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
 
 import type { CaseSurfaceProps, PointerPhase, SurfaceDriver, Viewport, WorldSurfaceProps } from "@pxl/client/bracket.tsx";
-import { request_frame } from "@pxl/client/host/sched.ts";
 
 interface SurfaceProps extends ViewProps {
   surface: u32;
@@ -80,7 +79,7 @@ export function WorldSurface({ surface: driver, input }: WorldSurfaceProps) {
   const onLayout = (e: LayoutChangeEvent) => {
     props.onLayout?.(e);
     input.rect(0, 0, e.nativeEvent.layout.width, e.nativeEvent.layout.height);
-    request_frame();
+    input.requestFrame();
   };
 
   const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {

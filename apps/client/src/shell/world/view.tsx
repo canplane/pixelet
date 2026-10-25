@@ -11,6 +11,7 @@ import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, P
 import { surface_role } from "@/abi/render/gpu/api.spec.ts";
 import { surface_driver } from "@/abi/render/surface.ts";
 import { useKernel } from "@/abi/shell.ts";
+import { request_frame } from "@/host/sched.ts";
 import { keyDown, keyUp, releaseKeys } from "@/shell/store/keyboard.ts";
 import { releasePointers, worldPointer } from "@/shell/store/pointer.ts";
 import { Corner } from "./corner.tsx";
@@ -34,7 +35,7 @@ const WORLD = surface_driver(surface_role.WORLD);
 
 /** The place's input as the world takes it: pointers and keys through the
  * shell's own stores first (`worldPointer`, `keyDown`), the box, the wheel and
- * the visibility to the kernel. */
+ * the visibility to the kernel, and a moved box's turn to the strobe. */
 const INPUT: InputDriver = {
   open: kernel_open,
   rect: kernel_rect,
@@ -45,6 +46,7 @@ const INPUT: InputDriver = {
   releaseKeys,
   releasePointers,
   visible: kernel_visible,
+  requestFrame: request_frame,
 };
 
 /** Alone, so a badge under the pointer re-renders only the surface. */

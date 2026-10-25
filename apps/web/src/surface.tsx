@@ -10,7 +10,6 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
 import type { CaseSurfaceProps, InputDriver, PointerKind, PointerPhase, SurfaceDriver, WorldSurfaceProps } from "@pxl/client/bracket.tsx";
-import { request_frame } from "@pxl/client/host/sched.ts";
 import { bindSurface, unbindSurface } from "./webgpu.ts";
 
 /** A wheel line in CSS pixels: a page's default line height. */
@@ -104,7 +103,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
   const onResize = () => {
     sendRect();
-    request_frame();
+    input.requestFrame();
   };
   // A composed or shortcut key is the IME's or the browser's; Tab switches the dock mid-word too.
   const onKeyDown = (e: KeyboardEvent) => {

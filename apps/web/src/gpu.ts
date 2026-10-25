@@ -1,8 +1,7 @@
 // @pxl/web/gpu.ts
 
+import type { GpuHeard } from "@pxl/client/bracket.tsx";
 import { acquireDevice } from "./webgpu.ts";
-import { request_frame } from "@pxl/client/host/sched.ts";
-import { Gpu, setGpu } from "@pxl/client/host/gpu.ts";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
  * page keeps asking. The first retry waits too, or an adapter returning an
@@ -19,8 +18,8 @@ let tries = 0;
 /** A device answered once: giving up after it is losing the GPU, not lacking one. */
 let had = false;
 
-/** Told each time a device answers; kept for the asks after a loss. */
-let ready: () => void = () => {};
+/** Told what each ask hears; kept for the asks after a loss. */
+let heard: GpuHeard;
 
 /** A hidden page draws nothing, so it waits to be shown. */
 function askAgain(): void {
@@ -36,8 +35,8 @@ function askAgain(): void {
   document.addEventListener("visibilitychange", shown);
 }
 
-export function gpuBoot(told: () => void): void {
-  ready = told;
+export function gpuBoot(told: GpuHeard): void {
+  heard = told;
   ask();
 }
 
@@ -45,29 +44,29 @@ function ask(): void {
   // The kernel hears of the loss from the device's host (xpute GpuHost);
   // asking again is the page's.
   const lost = () => {
-    setGpu(Gpu.Waiting);
+    heard.state("waiting");
     askAgain();
   };
   tries += 1;
-  // A completion the device writes asks the strobe for the turn that reads it.
-  void acquireDevice(lost, request_frame).then((answered) => {
+  // A completion the device writes asks for the turn that reads it (`heard.wake`).
+  void acquireDevice(lost, () => heard.wake()).then((answered) => {
     if (!answered) {
       if (tries === 1) console.warn(`[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`);
       if (tries >= TRIES) {
         console.error(`[gpu] no adapter answered in ${tries} requests; nothing can be drawn`);
-        setGpu(had ? Gpu.Lost : Gpu.Missing);
+        heard.state(had ? "lost" : "missing");
         return;
       }
-      setGpu(Gpu.Waiting);
+      heard.state("waiting");
       return askAgain();
     }
-    setGpu(Gpu.Present);
+    heard.state("present");
     had = true;
     if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
     tries = 0;
-    ready();
+    heard.ready();
   }, (err) => {
     console.error("[gpu] the device request failed; nothing can be drawn:", err);
-    setGpu(had ? Gpu.Lost : Gpu.Missing);
+    heard.state(had ? "lost" : "missing");
   });
 }

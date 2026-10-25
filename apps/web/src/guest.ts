@@ -12,7 +12,7 @@ import { reserve_memory } from "@xpute/host/mem/reserve.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
 import type { Guest, GuestPlan } from "@pxl/client/bracket.tsx";
 import { runGpuStream } from "./webgpu.ts";
-import { DEV_BUNDLE } from "@pxl/client/config/bundle.ts";
+import { DEV_BUNDLE } from "@pxl/client/bracket.tsx";
 
 const GUEST_WASM_URL = new URL("./guest.wasm", import.meta.url);
 

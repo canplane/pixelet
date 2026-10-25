@@ -1,7 +1,7 @@
 // @pxl/client/bracket.tsx
 
 /**
- * What the client asks of the place it runs in, as pxl-kernel's door asks
+ * What the client asks of the place it runs in, and hands it, as pxl-kernel's door asks
  * its bracket (pxl_kernel::door::Bracket): the page's (apps/web) or the
  * device's (apps/native), handed in once by the app's entry before anything
  * here runs. Nothing here names either, and neither names the other.
@@ -13,6 +13,8 @@ import type { f32, f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Guest } from "@/host/module.ts";
 
 export type { Guest };
+/** Whether this is a development bundle, as the bundler defines it; the place's to read. */
+export { DEV_BUNDLE } from "@/config/bundle.ts";
 
 /** What a place needs to open the guest, which the guest's own numbers say:
  * its memory, the offset its directory is at, and where its GPU stream's
@@ -24,6 +26,16 @@ export interface GuestPlan {
   /** The directory's key for the GPU stream, and the stream's head, in words. */
   gpu_stream: u32;
   gpu_head: u32;
+}
+
+/** What a place's GPU says, in its words. */
+export interface GpuHeard {
+  /** A device answered, the first time or after a loss. */
+  ready(): void;
+  /** Whether there is a GPU: one, none yet while it asks again, none it will ask for again, or none again after one it drew with. */
+  state(state: "present" | "waiting" | "missing" | "lost"): void;
+  /** A completion the device wrote between turns, which a turn must read. */
+  wake(): void;
 }
 
 export interface SafeArea {
@@ -71,6 +83,8 @@ export interface InputDriver {
   releaseKeys(): void;
   releasePointers(): void;
   visible(visible: boolean): void;
+  /** A turn, for a box that moved without the kernel's asking. */
+  requestFrame(): void;
 }
 
 export interface WorldSurfaceProps {
@@ -88,8 +102,8 @@ export interface CaseSurfaceProps {
 export interface Bracket {
   /** The guest opened in this place: its memory and its doorbell. */
   openGuest(plan: GuestPlan): Promise<Guest>;
-  /** Asks for a GPU, and calls `ready` each time one answers. */
-  gpuBoot(ready: () => void): void;
+  /** Asks for a GPU, and says what it heard of one. */
+  gpuBoot(heard: GpuHeard): void;
   /** Whether the device is held to a phone's ceilings. */
   HANDHELD: boolean;
 
@@ -104,7 +118,8 @@ export interface Bracket {
   ORIGIN: string;
   /** Rejects with a TypeError on a transport failure. */
   originGet(route: string, signal?: AbortSignal): Promise<Response>;
-  onlineWatch(): void;
+  /** Says whether the device is online, now and on each change. */
+  onlineWatch(report: (online: boolean) => void): void;
 
   geolocationSupported(): boolean;
   orientationSupported(): boolean;
@@ -154,13 +169,13 @@ function b(): Bracket {
 }
 
 export const openGuest: Bracket["openGuest"] = (plan) => b().openGuest(plan);
-export const gpuBoot: Bracket["gpuBoot"] = (ready) => b().gpuBoot(ready);
+export const gpuBoot: Bracket["gpuBoot"] = (heard) => b().gpuBoot(heard);
 export const storageGet: Bracket["storageGet"] = (key) => b().storageGet(key);
 export const storageSet: Bracket["storageSet"] = (key, value) => b().storageSet(key, value);
 export const textWidth: Bracket["textWidth"] = (weight, px, text) => b().textWidth(weight, px, text);
 export const textRaster: Bracket["textRaster"] = (...args) => b().textRaster(...args);
 export const originGet: Bracket["originGet"] = (route, signal) => b().originGet(route, signal);
-export const onlineWatch: Bracket["onlineWatch"] = () => b().onlineWatch();
+export const onlineWatch: Bracket["onlineWatch"] = (report) => b().onlineWatch(report);
 export const geolocationSupported: Bracket["geolocationSupported"] = () => b().geolocationSupported();
 export const orientationSupported: Bracket["orientationSupported"] = () => b().orientationSupported();
 export const orientationNeedsPermission: Bracket["orientationNeedsPermission"] = () => b().orientationNeedsPermission();

@@ -1,8 +1,8 @@
 // @pxl/client/abi/boot.ts
 
 /**
- * Boots the kernel: hands the place the guest's plan, the sensors' sink and
- * what to call when a GPU answers; fills the host's slots with what pixelet's
+ * Boots the kernel: hands the place the guest's plan and where to tell what
+ * its sensors, its GPU and its network hear; fills the host's slots with what pixelet's
  * numbers mean (the roots, the program's calls, the stop report, each frame's
  * submission and the signals); then hands the completion ring's signals to
  * whoever runs them.
@@ -39,7 +39,9 @@ import { BUILD_NUMBER } from "@/config/deploy.ts";
 import { bytes_at } from "@/host/module.ts";
 import { gpuBoot, type GuestPlan, HANDHELD, sensorsHear } from "@/bracket.tsx";
 import { onlineWatch } from "@/bracket.tsx";
-import { send_next, start_sched, strobe } from "@/host/sched.ts";
+import { GPU_STATE, setGpu } from "@/host/gpu.ts";
+import { setOnline } from "@/host/online.ts";
+import { request_frame, send_next, start_sched, strobe } from "@/host/sched.ts";
 import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
 
 let stopCode: string | null = null;
@@ -95,8 +97,8 @@ export async function boot_kernel(): Promise<void> {
   start_sched(submit_frame);
   sensorsHear(SENSOR_HEARD);
   GUEST_DOORBELL.signal = on_signal;
-  gpuBoot(() => send_next(Command.GPU_READY));
-  onlineWatch();
+  gpuBoot({ ready: () => send_next(Command.GPU_READY), state: (state) => setGpu(GPU_STATE[state]), wake: request_frame });
+  onlineWatch(setOnline);
   const boot = (settings: string) =>
     encode_world_boot(
       GUEST_DOORBELL,
