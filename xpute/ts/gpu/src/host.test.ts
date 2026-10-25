@@ -7,7 +7,7 @@
  * (rust/gpu/src/host.test.rs). Turn K's ticket, K + 1, stands at the done
  * word as the guest left it, and the next turn waits for its DONE.
  *
- * ts/tool/web-gpu.ts serves it to Chrome, and the page posts its outcome
+ * ts/gpu/script/web-gpu.ts serves it to Chrome, and the page posts its outcome
  * back: "ok", or what failed.
  */
 
