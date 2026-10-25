@@ -1,0 +1,8 @@
+{
+  // @pxl/tool: the TypeScript tools that read pixelet's own code, beside
+  // crates/tool for the Rust ones. A tool that reads none of it is the
+  // repository's script/.
+  "imports": {
+    "@pxl/client/": "../client/src/"
+  }
+}

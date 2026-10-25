@@ -163,6 +163,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   │       ├── catalog/      #   the data screens show (cells, assets)
 │   │       └── config/       #   deployment config and routes
 │   ├── web/                  # The page's app: its entry, its bracket (src/), its build and deploy, the Cloudflare Worker
+│   ├── tool/                 # The TypeScript tools that read pixelet's code: the publish, the deployment smoke
 │   └── native/               # The device's app, through Expo and Metro
 │       ├── src/              #   its entry and its bracket: what the app gives the client, through its native module
 │       └── modules/platform/ #   its native half: one module, the views, the linked kernel
@@ -187,7 +188,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ├── xpute/                    # The system under it, its own repository's root and workspaces:
 │                             #   rust/, ts/ and cpp/ by language: kit, guest, host; spec/ the contract
 ├── asset/                    # Shipped models, texture pack and sky, imported by nothing
-├── script/                   # the tree's checks, the shaders' WGSL, the publish, the deployment smoke, the usage report
+├── script/                   # the repository's own scripts, reading none of its code: the tree's checks, the shaders' WGSL, the usage report
 ├── infra/                    # local and production compose files, and what fills db-geo
 └── doc/                      # The record: backlog.md what is queued, minutes/ each meeting's
                               #   record (archive/ those retired), experiment/ measurements
@@ -207,6 +208,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `apps/client`   | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).       |
 | `apps/web`      | The page's app: its entry; its bracket, what a browser tab gives the client and the guest module it instantiates; and the Cloudflare Worker that serves it all.          |
 | `apps/native`   | The device's app: its entry, and its bracket, what the app gives the client through its native module, which links the kernel.                                           |
+| `apps/tool`     | The TypeScript tools that read pixelet's code, beside `crates/tool`'s Rust ones: the publish, the deployment smoke. A tool that reads none of it is `script/`'s.         |
 | `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                                              |
 | `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                 |
 | `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                                               |

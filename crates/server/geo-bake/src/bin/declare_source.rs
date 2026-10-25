@@ -2,7 +2,7 @@
 
 //! Writes the published declaration (`source`) out of a record of what the
 //! bucket serves, read from stdin (`source::recorded`), to stdout, for
-//! script/publish.ts to upload.
+//! apps/tool/publish.ts to upload.
 
 use std::io::Read;
 use std::process::ExitCode;

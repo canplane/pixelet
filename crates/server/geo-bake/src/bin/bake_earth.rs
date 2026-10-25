@@ -10,7 +10,7 @@
 //!    ground cell a texel, to its set, `./out/earth/<name>`, as every kind's is
 //!    flat under its tiles' names. A tile that is one color says nothing the
 //!    global picture does not, and has no object.
-//!    Its upload's copy, `./out/earth.publish/`, beside it (script/publish.ts).
+//!    Its upload's copy, `./out/earth.publish/`, beside it (apps/tool/publish.ts).
 //!  - The global picture every tile falls back to, 2048 × 1024, the sphere's
 //!    and no tile of the pyramid, beside the tiles under its own name
 //!    (`TILE_SPHERE`), packed as they are, and published with them.
@@ -311,7 +311,7 @@ fn run() -> Result<(), String> {
         git_sha().as_deref(),
         serde_json::json!({ "objects": objects + 1, "z": EARTH_ZOOM, "format": FORMAT.earth }),
     )?;
-    // The copy an upload takes (script/publish.ts), its manifest with it, as the other bakes' `publish` stage makes one.
+    // The copy an upload takes (apps/tool/publish.ts), its manifest with it, as the other bakes' `publish` stage makes one.
     let copy = PathBuf::from("./out/earth.publish");
     if copy.exists() {
         std::fs::remove_dir_all(&copy).map_err(|e| format!("{}: {e}", copy.display()))?;
