@@ -37,6 +37,7 @@ host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
   (`ts/app/native/script/build-native.ts`, `ts/server/edge/script/stage.ts`).
 - cargo runs from `rust/`, where rustup reads `rust-toolchain.toml`: the
   root's tasks as `cd rust && cargo <alias>` (`rust/.cargo/config.toml`).
+
 ## Files
 
 - A source file opens with its own path as a comment: a crate's name and
