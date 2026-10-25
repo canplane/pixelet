@@ -2,6 +2,13 @@
 
 **2026-10-12** — decided in the conversation.
 
+**Status (2026-10-24): the layers, their order, the one answer and the
+invariant hold** (pxl-spec-core world.rs `node`). No mesher is left: the
+screen's rays are cast on the GPU and paint the block each stops at
+(pxl-render frame/shader/paint.wgsl), and a chunk is an address only
+(pxl-kernel domain/chunk.rs), so what this says of making chunks is superseded
+("What is drawn").
+
 ## The structure
 
 What is drawn is 1 × 1 × 1 blocks. What is in a block is one answer, laid
@@ -11,8 +18,8 @@ in this order, each layer written over the one before:
    cell's height at once: one pass over a fixed-stride grid. A cell
    shows its top face, and a side face as tall as the step down to each
    neighbour lower than it. A way at grade only recolors its cell.
-2. **Caves.** A procedural field (`pxl-spec procedural.rs` `hollow`), asked
-   only under the ground's face.
+2. **Caves.** A procedural field (`pxl-spec-core caves.rs` `Cave::hollow`),
+   asked only under the ground's face.
 3. **Separation.** The ways off the ground — decks, piers, the fill a ramp
    stands on, a tunnel's bore — written in 3D where they are, nowhere else.
    A bore writes its air and, in the blocks about it, a block of its own,
@@ -22,21 +29,25 @@ in this order, each layer written over the one before:
 
 Where air meets ground under its face, whatever made the air, the ground
 shows faces of its material by depth, soil or stone, bedrock under its
-floor (`pxl-spec block/limit.rs`). Strata are that rule of depth, not
-stored.
+floor (`pxl-spec-core ground.rs` `by_depth`, `pxl-spec block/limit.rs`).
+Strata are that rule of depth, not stored.
 
 **One answer, every reader.** What is at a block is these layers read in
-this order, by one function; a chunk draws it, and control — a walk, a floor,
+this order, by one function; the cast draws it, and control — a walk, a floor,
 a ray, an edit, where decor grows — asks the same function at the same zoom.
 Coarser than the leaves, the ground folds in 2D (height and color over the
 cells folded) and each overwrite carries the fill its store already folds
-(`pxl-kernel layer/object/store.rs` `fold`).
+(`pxl-spec-core overwrite.rs` `fold_word`).
 
 **Invariant.** The ground has one representation, the grid; nothing that is
 not an overwrite is 3D, and an overwrite exists only where its source holds
 something.
 
 ## What is drawn
+
+Superseded where it makes chunks: a ray is a pixel's, started off its
+cell's beam ([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)), and
+no chunk is made; that the rays read the world and the descent hold.
 
 What is drawn is what the eye's rays reach. A ray is cast for each cell of
 the camera grid, down the pyramid, the same wherever the eye is. It passes
@@ -77,6 +88,9 @@ it.
 
 What stays: the box format and the shaders, the mesh slots, the object
 store (already a sparse 3D map), the terrain bound (heights only), the bake.
+Of these the box format, its shaders and the mesh slots went with the
+chunks' meshes on 2026-10-23, and the terrain's bound is now the windows'
+(`pxl-spec-core ground.rs` `Bounds`).
 
 ## Why
 

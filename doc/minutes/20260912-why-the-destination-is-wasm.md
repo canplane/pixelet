@@ -1,6 +1,6 @@
 # Why the destination is WASM, and why three.js leaves with it
 
-**2026-09-12** — [20260708-vision-and-scope-pivot.md](./closed/20260708-vision-and-scope-pivot.md#corrections-to-earlier-readings)
+**2026-09-12** — [20260708-vision-and-scope-pivot.md](./archive/20260708-vision-and-scope-pivot.md#corrections-to-earlier-readings)
 recorded that parking the WASM core reopened the problem Rust was going to
 solve, and named two ways out: keep BigInt in plain JS and accept the cost,
 or replace PVF3's exactness with floating-origin rebasing onto float64.
@@ -29,7 +29,7 @@ MVP was the right call against that cost.
 Three prerequisites converged, none of them for this reason alone:
 
 - **The client's state already lives in one `WebAssembly.Memory`.**
-  [20260912-linear-memory-what-is-left.md](./closed/20260912-linear-memory-what-is-left.md)
+  [20260912-linear-memory-what-is-left.md](./archive/20260912-linear-memory-what-is-left.md)
   is nearly closed: `CORE_POOL` is one fixed memory with `BuddyAllocator`
   and `CORE_ALLOC` over it, and chunk build data, the scheduler's per-chunk
   table, the object store's entries, decor instances and banks, the page
@@ -39,14 +39,14 @@ Three prerequisites converged, none of them for this reason alone:
   rewrite." The double cost the pivot was avoiding has been paid down
   deliberately, item by item.
 - **The concurrency question is settled in a way that needs no shared
-  memory.** [20260911-single-thread-core-and-when-to-spawn-a-worker.md](./closed/20260911-single-thread-core-and-when-to-spawn-a-worker.md)
+  memory.** [20260911-single-thread-core-and-when-to-spawn-a-worker.md](./archive/20260911-single-thread-core-and-when-to-spawn-a-worker.md)
   fixed one core on one thread with cooperative scheduling, and ruled out
   SharedArrayBuffer and the COOP/COEP headers it requires. A main-thread
   core owning one linear memory is exactly the arrangement that needs
   neither: there is one owner, so there is nothing to share. Workers, if
   any, get their own small memory and exchange transferables.
 - **The wire format was kept for a Rust reader.**
-  [20260910-why-xtp-and-what-would-end-it.md](./closed/20260910-why-xtp-and-what-would-end-it.md)
+  [20260910-why-xtp-and-what-would-end-it.md](./archive/20260910-why-xtp-and-what-would-end-it.md)
   kept XTP on the stated expectation of a Rust implementation of both
   halves. Its C layout, relative offsets and lazy reads mean the format
   does not change when the reader does.
@@ -105,11 +105,16 @@ three.js, and the declarative surface it is actually used for is small —
 28 JSX 3D nodes across 14 files, six of them `<primitive object={...}>`,
 which is three.js objects built imperatively and mounted. It goes when
 three.js goes, and dropping it earlier is available as its own small step.
-[20260816-csr-vs-ssr.md](./closed/20260816-csr-vs-ssr.md) turns on R3F's inability
+[20260816-csr-vs-ssr.md](./archive/20260816-csr-vs-ssr.md) turns on R3F's inability
 to server-render; raw WebGPU strengthens that conclusion rather than
 disturbing it, since there is then no server-side path at all.
 
 ## Already de-risked
+
+> History: this list and the next name the TypeScript client of this date.
+> `CORE_POOL`, `BuddyAllocator`, `gltf_cache.ts`, `render/scene_depth.ts`
+> and `billboard/anchor_occlusion.ts` are gone with it; the client is the
+> Rust under `rust/client/` (`kernel`, `render`, `shader`).
 
 - The wire format, per XTP above.
 - The state layout, per the linear-memory checklist.
@@ -136,7 +141,7 @@ disturbing it, since there is then no server-side path at all.
   twin. That last one is a real shader and a real pass, not a library call.
   Cost it before the cut, not during.
 - **The read direction has no protocol yet.**
-  [20260908-command-channel-for-state-mutation.md](./closed/20260908-command-channel-for-state-mutation.md)
+  [20260908-command-channel-for-state-mutation.md](./archive/20260908-command-channel-for-state-mutation.md)
   settles how state is mutated. It does not settle how the UI learns that
   state changed once the truth is in the core: settings panels, markers,
   POI badges and chat currently read stores. A core has no idea what the UI
@@ -247,7 +252,7 @@ first put behind a boundary that carries typed arrays, in TypeScript, and
 only then does what is behind the boundary change language. The chunk bake
 in a worker is first — it has the phone's numbers behind it and the
 mesher already takes and returns typed arrays. The order is P0 in
-[BACKLOG.md](../BACKLOG.md).
+[the backlog](../backlog.md).
 
 "Cost it before the cut", above, is not a gate. The decision does not turn
 on implementation size, and no estimate would change it. What that line
@@ -297,7 +302,7 @@ view-only
 **The condition is the boundary, not the graphics API.** What does not
 port is the shell: React, `fetch`, OPFS, geolocation and sensors, workers.
 So the core does not call a platform API. Commands arrive in the shape
-[20260913-boundaries-commands-and-what-comes-back-from-april.md](./closed/20260913-boundaries-commands-and-what-comes-back-from-april.md)
+[20260913-boundaries-commands-and-what-comes-back-from-april.md](./archive/20260913-boundaries-commands-and-what-comes-back-from-april.md)
 settles, so a web UI and a native one call the same ones; work is a Demand
 in a slot, executed by a worker on the web and by a thread natively; I/O,
 the clock, storage and sensors are handed in, not reached for. A core that

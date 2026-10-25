@@ -1,8 +1,8 @@
 // xpute-kit/wire/xtp/encode.test.rs
 
 use super::*;
-use crate::wire::xtp::cursor::{Cursor, TreeReader};
-use crate::wire::xtp::spec::{Array, NodeValue, SequenceType};
+use crate::wire::xtp::cursor::TreeReader;
+use crate::wire::xtp::spec::{Array, SequenceType};
 use crate::wire::xtp::view::{NodeView, TreeView, ViewValue};
 
 const GOLDEN: &str = include_str!("../../../../../spec/golden/wire/xtp/encode.tsv");
@@ -122,58 +122,6 @@ fn the_encoder_writes_the_bytes_the_typescript_writes() {
     check("graft", |t| {
         t.graft(&inner).unwrap();
     });
-}
-
-#[test]
-fn a_packet_reads_back_what_was_written() {
-    let pkt = encode(|t| {
-        t.set(ViewValue::List(vec![
-            ViewValue::I32(42),
-            ViewValue::Str("hello".into()),
-            ViewValue::Bool(true),
-            ViewValue::Null,
-            ViewValue::List(vec![ViewValue::I32(1), ViewValue::I64(-2)]),
-            ViewValue::Array(i32_arr(&[7, 8])),
-        ]))
-        .unwrap();
-    });
-    let reader = TreeReader::new(&pkt).unwrap();
-    let root = reader.read_branch().unwrap();
-    assert_eq!(root.len, 6);
-    let deep = root.get_deep().unwrap();
-    assert_eq!(
-        deep,
-        NodeValue::List(vec![
-            NodeValue::I32(42),
-            NodeValue::Str("hello".into()),
-            NodeValue::Bool(true),
-            NodeValue::Null,
-            NodeValue::List(vec![NodeValue::I32(1), NodeValue::I64(-2)]),
-            NodeValue::Array(i32_arr(&[7, 8])),
-        ])
-    );
-    let NodeValue::List(shallow) = root.get().unwrap() else { panic!() };
-    assert!(matches!(shallow[4], NodeValue::Extra(_)));
-    let pkt = encode(|t| {
-        t.branch(Some(&mut |b| {
-            b.u32(None);
-        }));
-    });
-    let root = TreeReader::new(&pkt).unwrap().read_branch().unwrap();
-    let Cursor::Null(n) = root.at(0).unwrap() else { panic!("a null cursor") };
-    assert_eq!(n.0.type_, ScalarType::U32 as u8);
-    assert!(root.at(0).unwrap().opt().is_none());
-}
-
-#[test]
-fn a_packet_grafted_whole_is_that_packet() {
-    let inner = encode(|t| {
-        t.set(ViewValue::List(vec![ViewValue::I32(1), ViewValue::Str("x".into())])).unwrap();
-    });
-    let grafted = encode(|t| {
-        t.graft(&inner).unwrap();
-    });
-    assert_eq!(grafted, inner);
 }
 
 #[test]

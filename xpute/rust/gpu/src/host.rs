@@ -12,12 +12,13 @@
 //! guest finds its word at `ticket | DONE` a turn or more later, as on the
 //! web, and nothing here waits.
 
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 
 use serde::de::value::{Error as NameError, StrDeserializer};
 use serde::de::{DeserializeOwned, IntoDeserializer};
-use xpute_guest::abi::handle::handle_slot;
+use xpute_guest::abi::handle::{handle_slot, SLOT_BITS};
+use xpute_host::mem::Memory;
 
 use crate::enums::{
     ADDRESS_MODE, BLEND_FACTOR, BLEND_OPERATION, BUFFER_BINDING_TYPE, CANVAS_ALPHA_MODE, COMPARE_FUNCTION, CULL_MODE, FEATURE_NAME, FILTER_MODE, FRONT_FACE, INDEX_FORMAT, LIMIT_NAME, LOAD_OP,
@@ -268,6 +269,13 @@ struct Surface {
     /// RESIZE's, at least a pixel each way.
     size: [u32; 2],
     bound: Option<Bound>,
+    /// The guest's handle for the surface bound here, 0 for none: a slot
+    /// outlives a handle, so letting an old one go must not take the one
+    /// bound since (`GpuHost::unbind`).
+    handle: u32,
+    /// The newest handle bound here, kept after it is let go: an older one's
+    /// bind, from a view that still holds it, is refused (`GpuHost::bind`).
+    seen: u32,
     /// This turn's texture, the same to every CURRENT of the turn.
     frame: Option<Frame>,
     /// The texture drawn where the window gives none, kept until what is
@@ -296,6 +304,8 @@ impl Default for Surface {
             asked: None,
             size: [1, 1],
             bound: None,
+            handle: 0,
+            seen: 0,
             frame: None,
             unshown: None,
         }
@@ -311,13 +321,162 @@ impl Frame {
     }
 }
 
+/// One frame admitted and not yet done, counted in its host's count from
+/// when it is handed to the queue until the queue's callback that holds it
+/// ends: called once the work is done, or let go uncalled, as wgpu lets go
+/// a device's callbacks when the device goes. The count is taken off as the
+/// guard drops, not in the callback's body, so a frame let go uncalled is
+/// taken off too, and a host's frames never stand forever.
+struct Unfinished(Arc<AtomicU32>);
+
+impl Unfinished {
+    /// `count`'s next frame, and the callback the queue is handed for it.
+    fn count(count: &Arc<AtomicU32>) -> impl FnOnce() + Send + 'static {
+        count.fetch_add(1, Ordering::Relaxed);
+        let frame = Unfinished(count.clone());
+        move || drop(frame)
+    }
+}
+
+impl Drop for Unfinished {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 /// Where a stale surface is configured: configuring one sets its layer's
-/// properties, which some platforms allow on one thread alone. `Elsewhere`
-/// asks for it there, where the caller then runs `configure_surfaces`.
+/// properties, which some platforms allow on one thread alone.
 #[derive(Clone, Copy)]
 pub enum ConfigureAt {
+    /// On the thread that runs the stream, as the stream asks.
     Here,
+    /// Wherever `ask` sends it, from where `configure_surfaces` is then run.
     Elsewhere(fn()),
+    /// On the main thread, which Core Animation sets a layer's properties on:
+    /// the main queue is asked to run `configure` (libdispatch's
+    /// `dispatch_async_f`), which runs `configure_surfaces` while nothing
+    /// else uses the host — for a host that runs beside a native guest,
+    /// inside the guest's `while_idle` (xpute-host native `Guest`). Asked
+    /// again before it has run, it configures nothing twice, since only a
+    /// stale surface is configured.
+    #[cfg(target_vendor = "apple")]
+    Main(fn()),
+}
+
+impl ConfigureAt {
+    /// Asks for a configuring where it is not here.
+    fn ask(self) {
+        match self {
+            ConfigureAt::Here => {}
+            ConfigureAt::Elsewhere(ask) => ask(),
+            #[cfg(target_vendor = "apple")]
+            ConfigureAt::Main(configure) => on_main(configure),
+        }
+    }
+}
+
+/// Asks the main queue to run `f` once, and returns at once.
+#[cfg(target_vendor = "apple")]
+fn on_main(f: fn()) {
+    use core::ffi::c_void;
+    unsafe extern "C" {
+        /// What `dispatch_get_main_queue()`, a header's inline, returns.
+        static _dispatch_main_q: c_void;
+        fn dispatch_async_f(queue: *const c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
+    }
+    extern "C" fn work(context: *mut c_void) {
+        // SAFETY: the `fn()` `on_main` was given, carried as the context.
+        let f = unsafe { core::mem::transmute::<*mut c_void, fn()>(context) };
+        f();
+    }
+    // SAFETY: libdispatch's main queue, which lives as long as the process;
+    // the context is a function's address, which `work` alone reads.
+    unsafe { dispatch_async_f(&raw const _dispatch_main_q, core::ptr::with_exposed_provenance_mut(f as usize), work) };
+}
+
+/// The program's numbers and choices, which the host runs by: none of them
+/// is the host's to pick, so each is said.
+#[derive(Clone, Copy)]
+pub struct Plan {
+    /// The surface format SURFACE_PREFERRED names and DEVICE tells the guest,
+    /// as the web's `getPreferredCanvasFormat`: what the platform shows best.
+    pub preferred: wgpu::TextureFormat,
+    /// Where a surface may be configured.
+    pub configure_at: ConfigureAt,
+    /// The frames admitted and not yet finished on the GPU at once, which
+    /// `GpuHost::admit` lets stand and each surface is configured to queue
+    /// (`desired_maximum_frame_latency`): the program's lag behind its input
+    /// against how busy it keeps the GPU. At least one. A surface keeps one
+    /// texture more than this, so with this many unfinished one is still
+    /// free, and taking it never blocks the thread that turns the guest.
+    pub frame_latency: u32,
+    /// The chunk the host stages buffer writes in (`wgpu::util::StagingBelt`),
+    /// each mapped once and reused: as large as the writes the program's
+    /// frames make, since a larger write takes a chunk of its own.
+    pub upload_chunk_bytes: u64,
+    /// How a surface presents: `Fifo` waits for the display, as a canvas does.
+    pub present_mode: wgpu::PresentMode,
+}
+
+/// What a program asks of the device it opens (`open`), every part its own.
+#[derive(Clone)]
+pub struct Ask {
+    /// The backends an adapter is looked for on.
+    pub backends: wgpu::Backends,
+    pub power_preference: wgpu::PowerPreference,
+    /// Asked for where the adapter offers them, and left out where it does
+    /// not: what the device has, the guest reads from its block (DEVICE).
+    pub features: wgpu::Features,
+    /// What the device is asked to hold, from the adapter it is asked of,
+    /// since an adapter refuses a device that asks past its own.
+    pub limits: fn(&wgpu::Adapter) -> wgpu::Limits,
+    pub memory_hints: wgpu::MemoryHints,
+}
+
+/// Why `open` opened no device.
+#[derive(Debug)]
+pub enum OpenError {
+    Adapter(wgpu::RequestAdapterError),
+    Device(wgpu::RequestDeviceError),
+}
+
+/// A device opened as asked, and the instance a program makes its surfaces
+/// with (`GpuHost::bind`).
+pub struct Opened {
+    pub instance: wgpu::Instance,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+}
+
+/// Opens a device as `ask` says, for `GpuHost::new`: an error where no
+/// adapter answers, or the adapter refuses the device. It waits out wgpu's futures,
+/// which a native backend resolves at once. The instance takes each
+/// surface's display handle with the surface (`SurfaceTargetUnsafe`), so it
+/// is made without one.
+pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: ask.backends,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: ask.power_preference,
+        ..Default::default()
+    }))
+    .map_err(OpenError::Adapter)?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_features: adapter.features() & ask.features,
+        required_limits: (ask.limits)(&adapter),
+        memory_hints: ask.memory_hints.clone(),
+        ..Default::default()
+    }))
+    .map_err(OpenError::Device)?;
+    Ok(Opened { instance, adapter, device, queue })
+}
+
+/// Whether `a`'s generation is behind `b`'s, generations wrapping in 16 bits.
+fn older(a: u32, b: u32) -> bool {
+    (((a >> SLOT_BITS) as u16).wrapping_sub((b >> SLOT_BITS) as u16) as i16) < 0
 }
 
 pub struct GpuHost {
@@ -328,8 +487,7 @@ pub struct GpuHost {
     objects: Vec<Option<Object>>,
     /// At the number the program binds each by, as objects at their slots.
     surfaces: Vec<Surface>,
-    /// The surface format the device prefers, which SURFACE_PREFERRED names
-    /// and DEVICE tells the guest, as the web's getPreferredCanvasFormat.
+    /// The surface format SURFACE_PREFERRED names (`Plan::preferred`).
     preferred: wgpu::TextureFormat,
     configure_at: ConfigureAt,
     /// Where the guest asked the device's block written, for its status.
@@ -345,6 +503,16 @@ pub struct GpuHost {
     scratch: Vec<u32>,
     /// A submit's command buffers, gathered in place each time.
     finished: Vec<wgpu::CommandBuffer>,
+    /// This turn's frame was admitted, so it is counted once presented.
+    admitted: bool,
+    /// Its frames admitted and not yet done on the GPU: its own, so one
+    /// host's frames, or a gone device's, hold back no other. Shared with
+    /// each frame's callback (`Unfinished`), which wgpu boxes: a block a
+    /// frame, beside the box it makes of any callback.
+    unfinished: Arc<AtomicU32>,
+    /// The frames it lets stand unfinished (`Plan::frame_latency`).
+    frame_latency: u32,
+    present_mode: wgpu::PresentMode,
     /// Every buffer write goes through the belt, whose chunks are mapped once
     /// and reused, into `uploads`, which goes ahead of whatever is submitted
     /// next: `Queue::write_buffer` makes a Metal buffer and mapping a write.
@@ -352,25 +520,8 @@ pub struct GpuHost {
     uploads: Option<wgpu::CommandEncoder>,
 }
 
-/// A mesh, the largest write a frame makes, is about a MiB; larger writes take
-/// a chunk of their own.
-const BELT_CHUNK_BYTES: u64 = 1 << 20;
-
-/// The guest's memory, as the host reads and writes it at the addresses the
-/// guest names.
-fn word_at(memory: &[u8], at: u32) -> u32 {
-    let a = at as usize;
-    u32::from_le_bytes([memory[a], memory[a + 1], memory[a + 2], memory[a + 3]])
-}
-
-fn set_word(memory: &mut [u8], at: u32, v: u32) {
-    let a = at as usize;
-    memory[a..a + 4].copy_from_slice(&v.to_le_bytes());
-}
-
 impl GpuHost {
-    /// `preferred` the surface format the platform shows best, `configure_at`
-    /// where its surfaces may be configured. `wake` asks the platform's loop
+    /// Runs by the program's `plan`. `wake` asks the platform's loop
     /// for a turn, from any thread: a completion is written into the guest's
     /// memory only at a turn's poll, so whoever learns of one between turns
     /// asks for it, as an executor's pender asks for a poll
@@ -380,7 +531,8 @@ impl GpuHost {
     /// for a loss of the device's (`Unknown`), and for its destruction or drop
     /// by its owner (`Destroyed`), which is no loss; the host tells the guest
     /// in its block at the next turn's edge and asks for that turn.
-    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, preferred: wgpu::TextureFormat, configure_at: ConfigureAt, wake: fn()) -> GpuHost {
+    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, plan: Plan, wake: fn()) -> GpuHost {
+        assert!(plan.frame_latency >= 1, "[gpu] a frame latency of {}", plan.frame_latency);
         let gone = Arc::new(AtomicBool::new(false));
         let lost = gone.clone();
         device.set_device_lost_callback(move |reason, _| {
@@ -391,14 +543,14 @@ impl GpuHost {
         });
         GpuHost {
             adapter,
-            belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
+            belt: wgpu::util::StagingBelt::new(device.clone(), plan.upload_chunk_bytes),
             device,
             queue,
             names: Names::new(),
             objects: Vec::new(),
             surfaces: Vec::new(),
-            preferred,
-            configure_at,
+            preferred: plan.preferred,
+            configure_at: plan.configure_at,
             block: None,
             gone,
             pending: Vec::new(),
@@ -406,29 +558,65 @@ impl GpuHost {
             decoding: std::collections::VecDeque::new(),
             scratch: Vec::new(),
             finished: Vec::new(),
+            admitted: false,
+            unfinished: Arc::new(AtomicU32::new(0)),
+            frame_latency: plan.frame_latency,
+            present_mode: plan.present_mode,
             uploads: None,
         }
     }
 
-    /// The window's surface for the guest's `surface`, configured as the
-    /// guest asked once it is (`configure_at`), at the size it last gave.
-    pub fn bind_surface(&mut self, surface: u32, s: wgpu::Surface<'static>) {
-        self.surface(surface).bound = Some(Bound { surface: s, stale: true });
-        self.want_configured(surface);
+    /// The window's surface `s` for the guest's surface `handle`
+    /// (`slot | generation << 16`, the contract's), configured as the guest
+    /// asked once it is (`configure_at`), at the size it last gave: the guest
+    /// names it by its slot. It takes the slot from whatever was bound there,
+    /// unless a newer handle has bound it since: whether it was bound.
+    pub fn bind(&mut self, handle: u32, s: wgpu::Surface<'static>) -> bool {
+        let Some(slot) = self.claim(handle) else { return false };
+        self.surface(slot).bound = Some(Bound { surface: s, stale: true });
+        self.want_configured(slot);
+        true
     }
 
-    /// The guest's `surface` drawn, until a surface is bound again, into
-    /// frames never shown.
-    pub fn unbind_surface(&mut self, surface: u32) {
-        let s = self.surface(surface);
+    /// Lets `handle`'s surface go, if it is still the one bound under its
+    /// slot, which is then drawn into frames never shown until a surface is
+    /// bound again: whether it was. An older handle of the slot lets nothing
+    /// go, so a view that goes after a newer one took its slot does not
+    /// unbind the newer.
+    pub fn unbind(&mut self, handle: u32) -> bool {
+        let Some(slot) = self.release(handle) else { return false };
+        let s = self.surface(slot);
         s.bound = None;
         s.frame = None;
+        true
+    }
+
+    /// `handle` made the one bound under its slot: the slot, or none where
+    /// the slot has seen a newer handle.
+    fn claim(&mut self, handle: u32) -> Option<u32> {
+        let slot = handle_slot(handle);
+        let s = self.surface(slot);
+        if s.seen != 0 && older(handle, s.seen) {
+            return None;
+        }
+        s.seen = handle;
+        s.handle = handle;
+        Some(slot)
+    }
+
+    /// `handle`'s slot, if `handle` is the one bound there, which then holds none.
+    fn release(&mut self, handle: u32) -> Option<u32> {
+        let slot = handle_slot(handle);
+        let s = self.surfaces.get_mut(slot as usize).filter(|s| handle != 0 && s.handle == handle)?;
+        s.handle = 0;
+        Some(slot)
     }
 
     /// Every bound surface whose configuration is not what is asked,
     /// configured: run where `configure_at` says, while nothing else uses the
     /// host.
     pub fn configure_surfaces(&mut self) {
+        let frame_latency = self.frame_latency;
         for (n, s) in self.surfaces.iter_mut().enumerate() {
             let (Some(b), Some((format, usage, premultiplied))) = (s.bound.as_mut().filter(|b| b.stale), s.asked) else {
                 continue;
@@ -448,8 +636,8 @@ impl GpuHost {
                 color_space: wgpu::SurfaceColorSpace::Auto,
                 width: s.size[0],
                 height: s.size[1],
-                present_mode: wgpu::PresentMode::Fifo,
-                desired_maximum_frame_latency: 2,
+                present_mode: self.present_mode,
+                desired_maximum_frame_latency: frame_latency,
                 alpha_mode,
                 view_formats: Vec::new(),
             };
@@ -473,9 +661,7 @@ impl GpuHost {
                 wgpu::CurrentSurfaceTexture::Success(f) => return Frame::Shown(f),
                 wgpu::CurrentSurfaceTexture::Suboptimal(f) => {
                     b.stale = true;
-                    if let ConfigureAt::Elsewhere(ask) = self.configure_at {
-                        ask();
-                    }
+                    self.configure_at.ask();
                     return Frame::Shown(f);
                 }
                 wgpu::CurrentSurfaceTexture::Outdated if !asked => {
@@ -529,17 +715,17 @@ impl GpuHost {
         s.frame = None;
         match self.configure_at {
             ConfigureAt::Here => self.configure_surfaces(),
-            ConfigureAt::Elsewhere(ask) => ask(),
+            elsewhere => elsewhere.ask(),
         }
     }
 
     /// The device went: every object with it, and the guest told in its block.
-    fn lost(&mut self, memory: &mut [u8]) {
+    fn lost(&mut self, memory: &mut Memory<'_>) {
         self.objects.clear();
         self.pending.clear();
         self.decoding.clear();
         if let Some((address, words)) = self.block {
-            set_word(memory, address + 4 * (words - 1), STATUS::LOST);
+            memory.set_word(address + 4 * (words - 1), STATUS::LOST);
         }
     }
 
@@ -548,7 +734,7 @@ impl GpuHost {
     /// and the buffer unmapped; each done's word set where its ticket still
     /// stands.
     /// Run at the turn's edge, before the turn reads its words.
-    pub fn poll(&mut self, memory: &mut [u8]) {
+    pub fn poll(&mut self, memory: &mut Memory<'_>) {
         if self.gone.swap(false, Ordering::AcqRel) {
             self.lost(memory);
             return;
@@ -560,13 +746,12 @@ impl GpuHost {
                 if let Some((buffer, offset, size, address)) = &p.read {
                     let slice = buffer.slice(*offset..*offset + *size);
                     if let Ok(range) = slice.get_mapped_range() {
-                        let a = *address as usize;
-                        memory[a..a + range.len()].copy_from_slice(&range);
+                        memory.write(*address as usize, &range);
                     }
                     buffer.unmap();
-                    set_word(memory, p.word, p.ticket | DONE);
-                } else if word_at(memory, p.word) == p.ticket {
-                    set_word(memory, p.word, p.ticket | DONE);
+                    memory.set_word(p.word, p.ticket | DONE);
+                } else if memory.word(p.word) == p.ticket {
+                    memory.set_word(p.word, p.ticket | DONE);
                 }
                 false
             }
@@ -592,35 +777,50 @@ impl GpuHost {
             };
             self.queue.write_texture(d.to.info(), &image.rgba, layout, size);
             // In the queue ahead of anything the guest submits from here.
-            if word_at(memory, d.word) == d.ticket {
-                set_word(memory, d.word, d.ticket | DONE);
+            if memory.word(d.word) == d.ticket {
+                memory.set_word(d.word, d.ticket | DONE);
             }
         }
     }
 
-    /// Each surface's texture this turn drew, shown.
+    /// Whether this turn may draw a frame: while fewer than its frame latency
+    /// of the frames it admitted are unfinished, so each surface's next
+    /// texture is free and taking it does not block. Asked once a turn,
+    /// before the turn draws; on the web the browser paces frames and every
+    /// one is admitted.
+    pub fn admit(&mut self) -> bool {
+        self.admitted = self.unfinished.load(Ordering::Relaxed) < self.frame_latency;
+        self.admitted
+    }
+
+    /// Each surface's texture this turn drew, shown. An admitted frame is
+    /// unfinished from here until the queue has done the work submitted with
+    /// it.
     pub fn present(&mut self) {
         for s in &mut self.surfaces {
             if let Some(Frame::Shown(frame)) = s.frame.take() {
                 self.queue.present(frame);
             }
         }
+        if core::mem::take(&mut self.admitted) {
+            self.queue.on_submitted_work_done(Unfinished::count(&self.unfinished));
+        }
     }
 
     /// Runs the stream at `at`, `head` words of head, as the turn left it:
     /// word 0 of the head the count of record words past it, each record its
     /// op, its count of words, then they.
-    pub fn run(&mut self, memory: &mut [u8], at: u32, head: u32) {
-        let end = word_at(memory, at);
+    pub fn run(&mut self, memory: &mut Memory<'_>, at: u32, head: u32) {
+        let end = memory.word(at);
         let first = at + 4 * head;
         let mut k = 0;
         while k + 2 <= end {
-            let code = word_at(memory, first + 4 * k);
-            let n = word_at(memory, first + 4 * (k + 1));
+            let code = memory.word(first + 4 * k);
+            let n = memory.word(first + 4 * (k + 1));
             let mut scratch = core::mem::take(&mut self.scratch);
             scratch.clear();
             let from = (first + 4 * (k + 2)) as usize;
-            scratch.extend(memory[from..from + 4 * n as usize].as_chunks::<4>().0.iter().map(|w| u32::from_le_bytes(*w)));
+            scratch.extend(memory.read(from, 4 * n as usize).as_chunks::<4>().0.iter().map(|w| u32::from_le_bytes(*w)));
             self.record(memory, code, &mut Words { w: &scratch, at: 0 });
             self.scratch = scratch;
             k += 2 + n;
@@ -775,7 +975,7 @@ impl GpuHost {
         }
     }
 
-    fn record(&mut self, memory: &mut [u8], code: u32, r: &mut Words) {
+    fn record(&mut self, memory: &mut Memory<'_>, code: u32, r: &mut Words) {
         match code {
             op::BUFFER => {
                 let id = r.u();
@@ -1000,7 +1200,7 @@ impl GpuHost {
             }
             op::WRITE_BUFFER_AT => {
                 let (id, offset, address, size) = (r.u(), u64::from(r.u()), r.u() as usize, r.u() as usize);
-                self.write(id, offset, &memory[address..address + size]);
+                self.write(id, offset, memory.read(address, size));
             }
             op::WRITE_TEXTURE | op::WRITE_TEXTURE_AT => {
                 let place = self.texture_place(r);
@@ -1015,7 +1215,7 @@ impl GpuHost {
                     self.queue.write_texture(place.info(), bytes, layout, size);
                 } else {
                     let (address, n) = (r.u() as usize, r.u() as usize);
-                    self.queue.write_texture(place.info(), &memory[address..address + n], layout, size);
+                    self.queue.write_texture(place.info(), memory.read(address, n), layout, size);
                 }
             }
             op::COPY_EXTERNAL_IMAGE => {
@@ -1026,7 +1226,7 @@ impl GpuHost {
                 // turn; decoded off the turn, so a large image costs none.
                 let job = self.decoder.next;
                 self.decoder.next += 1;
-                let _ = self.decoder.ask.send((job, memory[address..address + n].to_vec(), flip_y, premultiplied));
+                let _ = self.decoder.ask.send((job, memory.read(address, n).to_vec(), flip_y, premultiplied));
                 self.decoding.push_back(Decoding { job, to, word, ticket });
             }
             op::ENCODER => {
@@ -1238,7 +1438,7 @@ impl GpuHost {
                 self.block = Some((address, words));
                 let (limits, features) = (self.device.limits(), self.device.features());
                 for (k, name) in LIMIT_NAME.iter().enumerate() {
-                    set_word(memory, address + 4 * k as u32, limit(&limits, name));
+                    memory.set_word(address + 4 * k as u32, limit(&limits, name));
                 }
                 let mut bits = vec![0u32; FEATURE_NAME.len().div_ceil(32)];
                 for (k, name) in FEATURE_NAME.iter().enumerate() {
@@ -1248,17 +1448,16 @@ impl GpuHost {
                 }
                 let period_at = LIMIT_NAME.len() + bits.len();
                 for (k, w) in bits.into_iter().enumerate() {
-                    set_word(memory, address + 4 * (LIMIT_NAME.len() + k) as u32, w);
+                    memory.set_word(address + 4 * (LIMIT_NAME.len() + k) as u32, w);
                 }
                 // wgpu resolves timestamps in ticks of this many nanoseconds.
-                set_word(memory, address + 4 * period_at as u32, self.queue.get_timestamp_period().to_bits());
+                memory.set_word(address + 4 * period_at as u32, self.queue.get_timestamp_period().to_bits());
                 let preferred = self.names.texture_format.iter().position(|f| *f == Some(self.preferred));
-                set_word(
-                    memory,
+                memory.set_word(
                     address + 4 * (period_at + 1) as u32,
                     preferred.unwrap_or_else(|| panic!("[gpu] {:?} is no format the spec names", self.preferred)) as u32,
                 );
-                set_word(memory, address + 4 * (words - 1), STATUS::READY);
+                memory.set_word(address + 4 * (words - 1), STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }

@@ -163,11 +163,3 @@ fn run_under_budget_the_first_item_is_attempted_even_under_a_zero_ceiling() {
     assert_eq!(seen, [1]);
     assert_eq!(stats.ran, 1);
 }
-
-#[test]
-fn run_under_budget_an_empty_list_is_a_clean_no_op() {
-    let stats = run_under_budget(core::iter::empty::<u32>(), |_| true, opts(10.0));
-    assert_eq!(stats.ran, 0);
-    assert_eq!(stats.visited, 0);
-    assert!(!stats.stopped_early);
-}

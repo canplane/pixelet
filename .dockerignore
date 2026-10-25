@@ -1,6 +1,6 @@
-# Repo-root .dockerignore — crates/server/geo/Dockerfile builds from this context
+# Repo-root .dockerignore — rust/server/geo/Dockerfile builds from this context
 # (see that file's own top comment on why the context is the whole repo,
-# not just crates/).
+# not just rust/).
 
 .git
 node_modules

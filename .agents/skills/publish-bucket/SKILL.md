@@ -1,6 +1,6 @@
 ---
 name: publish-bucket
-description: Upload baked tiles, ingested models and textures to the R2 bucket the Worker serves, deploy, and verify the served bytes. Use after a bake or an asset change, when the client must point at a new version, or when a live tile decodes wrong.
+description: Upload baked tiles, ingested models and textures to the R2 bucket the Worker serves, and verify the served bytes. Use after a bake or an asset change, when the client must point at a new version, or when a live tile decodes wrong.
 ---
 
 # Publishing the bucket
@@ -11,7 +11,7 @@ arrived. What the bucket holds, and how the Worker serves it, is
 [bake-tiles](../bake-tiles/SKILL.md).
 
 The versions the client requests are the bucket's `source`, which
-`deno task publish` alone writes and the client reads at boot, so a publish is
+`./script/publish.py` alone writes and the client reads at boot, so a publish is
 never a commit or a deploy. An object's name carries no extension, so **its
 content-type and content-encoding are stored with it at upload**: a manual
 upload must set both.
@@ -25,12 +25,13 @@ its own so a default AWS profile is left alone:
 
 ```bash
 aws configure --profile r2          # region: auto
-export R2=https://<account_id>.r2.cloudflarestorage.com
+aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
 ```
 
-`publish.ts` uses exactly that profile and `$R2`. A manual `aws s3 sync` needs
+`publish.py` uses exactly that profile, since a set is too many objects to put one by one;
+`$R2`, where set, stands in for its endpoint. A manual `aws s3 sync` needs
 `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` too, since the CLI's checksum
-headers are refused by R2; `publish.ts` sets it for itself.
+headers are refused by R2; `publish.py` sets it for itself.
 
 ## Upload
 
@@ -40,21 +41,21 @@ terrain version is every tile, so a few in a month is past it. Before an upload
 and after:
 
 ```bash
-deno task usage     # Class A this month against the million
+./.agents/skills/publish-bucket/usage.py     # Class A this month against the million
 ```
 
 and set the object count `publish` prints against what is left. Deleting an
 old version is free.
 
 ```bash
-deno task bake <kind> --stage publish    # terrain, place or division
-deno task publish <kind>
+make bake-<kind> ARGS="--stage publish"    # terrain, place or division
+./script/publish.py <kind>
 ```
 
 `publish` names the version, uploads the copy with the manifest's
 content-encoding, checks the stored count, then writes `source`.
-`deno task publish serve <kind> <version>` serves a version the bucket holds
-again, which is how to go back; `deno task publish override <shard> <kind>
+`./script/publish.py serve <kind> <version>` serves a version the bucket holds
+again, which is how to go back; `./script/publish.py override <shard> <kind>
 <version>` serves a version for one shard and the tiles under it, `-` dropping
 it.
 
@@ -68,17 +69,17 @@ error to repair.
 ### Earth
 
 ```bash
-deno task download earth
-deno task bake earth
-deno task publish earth
+make download-earth
+make bake-earth
+./script/publish.py earth
 ```
 
 ### Assets
 
 ```bash
-deno task ingest:asset
-# -> ./out/asset/<sha256>.<ext>, and regenerates crates/spec/src/asset/ingested.spec.rs
-#    and apps/client/src/catalog/asset/ingested.spec.ts
+make ingest-asset
+# -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingested.json and
+#    what the spec generates from it (the host's table, the catalog, the pack's layout)
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-tiles/asset \
@@ -104,24 +105,20 @@ aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profil
 
 ## Verify what is served
 
-The bucket can be right while the serving path is not, so check the served
-bytes:
+The bucket can be right while the serving path is not. The smoke checks the
+served bytes, and CI runs it after every deploy; run it by hand after a
+publish, which is not a deploy:
 
 ```bash
-U=https://plei.me/tile/terrain/<version>/<name>
-curl -s -H "Accept-Encoding: zstd" -D - -o /dev/null "$U"                  # expect content-encoding: zstd
-curl -s -H "Accept-Encoding: zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # expect 5854 (XT)
+./script/smoke.py https://plei.me
 ```
 
-- A body that does not decode to `5854` was encoded a second time: the Worker's
-  `Response` lost `encodeBody: "manual"` (`serve`).
-- **Request each tile twice.** A cached hit leaves by its own path
-  (`STORED_ENCODING`): compare both against the stored size, and check
-  `cf-cache-status` that the second one hit.
-- An unbaked ocean tile answers **204** with no body. `index.html` instead means
-  `run_worker_first` is missing, and the client would decode HTML as terrain.
-- An asset answers `model/gltf-binary` or `image/png` with no
-  `content-encoding`.
+It fails on a tile packed twice (the Worker's `Response` lost
+`encodeBody: "manual"`, `serve`), on a second ask off the edge cache that
+differs from the first (`STORED_ENCODING`), on an unbaked page answered with
+anything but an empty 204 (HTML means `run_worker_first` is missing), and on
+an asset with the wrong type or a `content-encoding`. It only warns when the
+second ask did not hit the cache, which leaves that path unchecked.
 
 ## Purging the edge cache
 

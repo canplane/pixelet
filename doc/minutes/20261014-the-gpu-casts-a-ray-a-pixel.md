@@ -2,14 +2,19 @@
 
 **2026-10-14** — decided in the conversation.
 
-**Status (2026-10-23): holds, and is no longer an experiment.** A ray a
+**Status (2026-10-24): holds, and is no longer an experiment.** A ray a
 pixel of the render resolution, its start its cell's beam
-([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). The render
-resolution is the display's times a scale the load sets: once a frame, the
-measured cast against the paced frame's budget moves the scale by the square
-root of their ratio, between half and whole, and holds while the cast is
-within a tenth of the budget (pxl-kernel view/frame/resolution.rs); the frame
-is upscaled within itself. The `rays` setting below is gone.
+([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)); a pixel takes
+the nearest block the samples about it stopped at that its ray enters, and
+walks itself only where none is (pxl-shader `cast_cs`). The render
+resolution is the display's times a scale the load sets by default: one of
+`SCALE_STEPS` steps between whole and `SCALE_MIN`, each a like share of the
+last; where the GPU's time is read, a window over its budget by more than
+`SCALE_BAND` steps down at once, and a step up waits until the step above
+fits for `SCALE_UP_WINDOWS` windows in a row (pxl-kernel
+domain/view/frame/resolution.rs, domain/view/param.rs); the frame is upscaled within
+itself. The `rays` setting below is gone, and the overwrites
+run on the GPU (One kind, one side).
 
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md)),
@@ -34,7 +39,7 @@ legitimate target.
 
 ## The structure
 
-**One source, two compilers.** `pxl-spec-core` (`crates/spec/core`,
+**One source, two compilers.** `pxl-spec-core` (`rust/spec/core`,
 `#![no_std]`, `gpu-portable` in its header) holds what the CPU and the GPU
 both compute:
 
@@ -47,7 +52,7 @@ both compute:
 
 pxl-spec re-exports it. rust-gpu compiles the same crate to WGSL
 (`script/shader-wgsl.ts`, in a Linux container), and the generated
-`crates/client/render/src/frame/shader/cast.gen.wgsl` is checked in. `--check`
+`rust/client/render/src/frame/shader/cast.gen.wgsl` is checked in. `--check`
 says whether it is current, so no everyday build needs rust-gpu.
 
 **What the source cannot hold.** WGSL has no u64, i64, f64, u8 or i16, no
@@ -73,6 +78,10 @@ The bytes come from their owner's range while it lives until the page replays
 the turn, else from a copy into the stream. The ground goes up as a window a
 zoom, origin and layer a tile, in `earth_window`'s shape. A tile not held is
 answered by the coarser zoom.
+
+_Superseded below: the separation (pxl-spec-core ways.rs, `ways*.gen.wgsl`),
+what is placed (pxl-spec-core overwrite.rs) and decor (`decor*.gen.wgsl`)
+now run on the GPU, and the CPU's cast draws nothing._
 
 **One kind, one side.** The GPU's query answers the ground and the caves.
 Separation, what is placed and decor are the CPU's alone for now. That is
@@ -154,6 +163,12 @@ arithmetic and three times its bandwidth. The walk matches theirs, and the
 difference is the step's work.
 
 ## What follows, in order, each measured alone
+
+_History: the order as set on 2026-10-14. Steps 1 to 3 are now a square's
+fill on the GPU as it lands (pxl-spec-core fill.rs: `heights_cs`,
+`bound_cs`, the area laid on a cell), 6 is the beam, and 7 the overwrites
+above; what the code holds is in ARCHITECTURE.md (Windows and squares;
+Drawing)._
 
 The rule for every step: 0 differing rays, then fps at full and half. A step
 that does not pay is reverted.

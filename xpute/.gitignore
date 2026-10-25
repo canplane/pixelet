@@ -27,7 +27,7 @@ jspm_packages/
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
 
-# Build output: the Rust workspace's, and the C++'s (script/cpp.ts).
+# Build output: the Rust workspace's, and the C++'s (cpp/Makefile).
 rust/target/
 target/
 

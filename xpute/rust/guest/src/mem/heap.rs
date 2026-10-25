@@ -63,7 +63,9 @@ pub struct HeapStat {
     /// Past the tree's current root the range is untouched rather than listed,
     /// so this is not the free space.
     pub largest_free: usize,
-    /// Moves exactly when a request refused before might now be served.
+    /// Moves when a page is released, which is when a request of a page or
+    /// more refused before might now be served; a slot returned to a run
+    /// still in use does not move it (`SlabMalloc::releases`).
     pub releases: u32,
     pub refusals: u32,
     pub requests: u32,

@@ -4,10 +4,9 @@
 
 //! Reads golden records: lines of `dotted.path<TAB>value`.
 //!
-//! A record of a protocol (XTP packets, TLV bytes, which texts are JSON) binds
-//! every language and is never re-recorded to make a test pass: a difference
-//! means one side moved. A record of a value that stays inside one language
-//! may be re-recorded on a deliberate change.
+//! Every record binds every language that reads it and is never re-recorded
+//! to make a test pass: a difference means one side moved. One changed on
+//! purpose changes for every language at once.
 
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};

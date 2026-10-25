@@ -4,6 +4,8 @@
 //! posted in place. The host reads the completion ring dry before it rings
 //! again, so overrunning it is a sizing bug, not a state to wait out.
 
+use core::cell::Cell;
+
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
@@ -29,13 +31,24 @@ pub type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
 /// None for an unknown command, which replies ENOSYS.
 pub type Applied = Result<Option<i32>, MarshalError>;
 
+/// How full the rings ran since the stat was last taken (`Door::take_stat`):
+/// each figure the most it reached.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DoorStat {
+    /// The completion ring's length.
+    pub cq_peak: u32,
+    /// The submission ring's length as a drain started: how close it came to full.
+    pub sq_peak: u32,
+    /// The submissions a drain left for lack of room.
+    pub left_peak: u32,
+}
+
 pub struct Door {
     sq: Ring,
     cq: Ring,
     /// What one command may leave: its signals, or the turn's after the drain, and its reply.
     reserve: u32,
-    /// Told the completion ring's length and the submissions left unapplied.
-    note: fn(u32, u32),
+    stat: Cell<DoorStat>,
 }
 
 impl Door {
@@ -43,7 +56,7 @@ impl Door {
     /// `mem` stays valid and never moves for as long as the door is used, and
     /// the ranges `layout` names are the door's alone. `most_signals` is the most
     /// one command raises, or the turn once its drain is done: the program's bound.
-    pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, most_signals: u32, note: fn(u32, u32)) -> Door {
+    pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, most_signals: u32) -> Door {
         let ring = |r: &RingLayout| {
             // SAFETY: the caller's memory and ranges.
             unsafe { Ring::init(mem, r.desc_at, r.capacity, r.slot_at, layout.slot_bytes) }
@@ -52,8 +65,19 @@ impl Door {
             sq: ring(&layout.submission),
             cq: ring(&layout.completion),
             reserve: most_signals + 1,
-            note,
+            stat: Cell::default(),
         }
+    }
+
+    /// The peaks since the last take, which starts the next from zero.
+    pub fn take_stat(&self) -> DoorStat {
+        self.stat.take()
+    }
+
+    fn keep(&self, f: impl FnOnce(&mut DoorStat)) {
+        let mut s = self.stat.get();
+        f(&mut s);
+        self.stat.set(s);
     }
 
     pub fn submission(&self) -> &Ring {
@@ -69,7 +93,7 @@ impl Door {
             Some(w) => self.cq.push_in_place(tag, cmd, flags, result, w),
             None => self.cq.push(tag, cmd, flags, None, result),
         };
-        (self.note)(self.cq.len(), 0);
+        self.keep(|s| s.cq_peak = s.cq_peak.max(self.cq.len()));
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
@@ -102,6 +126,7 @@ impl Door {
     /// many completions it made.
     pub fn drain(&self, mut apply: impl FnMut(u32, &Option<&[u8]>) -> Applied) -> u32 {
         let tail = self.cq.tail();
+        self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
         loop {
             if !self.has_room() {
                 break;
@@ -125,7 +150,7 @@ impl Door {
                 self.post(tag, number, frame::RES, result.unwrap_or_else(|errno| errno), None);
             }
         }
-        (self.note)(self.cq.len(), self.sq.len());
+        self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));
         self.cq.tail().wrapping_sub(tail)
     }
 }

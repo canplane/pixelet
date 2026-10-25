@@ -2,6 +2,13 @@
 
 **2026-10-13** — decided in the conversation.
 
+**Status (2026-10-24): the descent and the query hold; a ray is no longer
+cast a camera-grid cell.** A ray is cast a pixel, started off its cell's
+beam ([a cell casts a beam](./20261022-a-cell-casts-a-beam.md); pxl-spec-core
+beam.rs, cast.rs `Until::Beam`), and asks the zoom its distance asks by the
+camera grid as below. The query is pxl-spec-core world.rs `node`, which the
+kernel asks through query/node.rs `World::node`.
+
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md),
 "What is drawn"). This is how a ray reaches it, the same in space, on the
@@ -58,7 +65,7 @@ grow with the cells under it.
 One function stands between the ray and storage: what is in a node, at the
 node's own zoom. It is the world's one query, not a second beside it: asked
 of a node it answers what is there at that zoom, and at the zoom the ray
-asks that is the block, as `pxl-spec block/sample.rs` `at` does now. A block
+asks that is the block, as `pxl-spec block/sample.rs` `at` did then. A block
 is the smallest node, so a node and a block are one answer at two sizes, and
 every reader — the ray, a chunk, a walk, an edit — calls that one function.
 The ray knows where to ask and nothing of how the layers are held; the
@@ -88,12 +95,20 @@ node fills, from what each source already keeps, with nothing new stored:
 - **The ground**: its tile index's highest height under the node's bottom,
   or the node within where the ground may be taken (under its face block,
   over its bedrock, off the wall, as `at` takes it) with a cave through all
-  of it.
+  of it. The index is gone: the bound is now the windows' (pxl-spec-core
+  ground.rs `Held::relief`), and where the ground may be taken is
+  `ground::slab`.
 - **Caves**: the hash node hollow and drawing nothing again under it
   (`live`).
 - **Separation**: no part of the ways' 3D fold at the node, as for the
   objects.
 - **Objects**: no record of the objects' pyramid at the node.
+
+> Since changed for separation: whether anything under a node fills is no
+> longer read off the ways' fold, as for the objects, but by a bound of
+> their own, joined apart from the ground's (pxl-spec-core `ways::slab`).
+> What a node is still comes from a tree of the placed tree's shape, built
+> on the GPU a square at a time (pxl-spec-core `ways/tree.rs`).
 
 ## What goes
 

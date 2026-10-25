@@ -1,0 +1,34 @@
+[package]
+name = "pxl-render"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+fnv.workspace = true
+libm.workspace = true
+xpute-guest.workspace = true
+xpute-kit = { workspace = true, features = ["std"] }
+pxl-spec.workspace = true
+# The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs),
+# and the cloud field the sheets lie on (gpu/cloud.rs).
+pxl-spec-core.workspace = true
+
+# WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which
+# the page's host and the device app's run alike.
+xpute-gpu.workspace = true
+
+[build-dependencies]
+# The zooms the screen's rays are painted by (build.rs `lattice.wgsl`), and
+# the cloud field's hash (`cloud_hash.wgsl`).
+pxl-spec-core.workspace = true
+# Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
+naga = { version = "30", features = ["wgsl-in"] }
+
+
+[lints]
+workspace = true

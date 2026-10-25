@@ -27,7 +27,7 @@ any name.
 
 1. **The proxy holds no fact of its own.** Its shape comes from what already
    bounds the world: the ground's per-square height bounds the eye's windows
-   already hold (`bound_cs`, the levels of crates/spec/core/src/window.rs),
+   already hold (`bound_cs`, the levels of rust/spec/core/src/window.rs),
    and the objects' tree's nodes that hold something. Nothing is baked,
    meshed or cached for the proxy.
 2. **It is made on the GPU each frame, from those bounds as they stand.**
@@ -45,7 +45,7 @@ any name.
 ## What it would replace
 
 A ray's start is set today by three passes over a buffer sized by the screen
-(crates/spec/core/src/beam.rs): beam rays at the camera grid's corners
+(rust/spec/core/src/beam.rs): beam rays at the camera grid's corners
 (`beam_cs`), a start for each cell off them (`cells_cs`), and samples a quarter
 cell apart that pixels take their block from (`sample_cs`). That buffer is
 the one that met the 128 MiB per-binding floor on a 4K surface. A depth a
@@ -56,10 +56,10 @@ cannot remove them, it is not taken.
 ## What is done first
 
 Each of these holds whether or not the proxy is taken, because the ray stays
-what decides the pixel. They are in, or being finished:
+what decides the pixel. They are in:
 
 - a block's face bits asked of the query once a block, by the sample that
-  stops on it (crates/spec/core/src/faces.rs);
+  stops on it (rust/spec/core/src/faces.rs);
 - the camera grid computed once a frame and handed to the GPU in the eye's
   words (`beam::Grid`);
 - the per-pixel miss list gone: a pixel that missed says so in its own ray
@@ -98,9 +98,13 @@ the first the largest:
    The references agree: ESVO's coarse rays, Reshetov's beams and DIST's
    split rays give each pixel a start, never its first hit, and Lumen
    interpolates sparse probes only for low-frequency light.
-2. **The render resolution moves continuously.** Out of a tenth of its
+2. **The render resolution moves continuously.** _Fixed since: the scale
+   takes one of `SCALE_STEPS` steps down to `SCALE_MIN`, a step up held
+   until `SCALE_UP_WINDOWS` windows in a row would fit it and no window
+   judged for `SCALE_SETTLE_WINDOWS` after a change (pxl-kernel
+   domain/view/frame/resolution.rs, domain/view/param.rs)._ Out of a tenth of its
    budget, the scale moves by the square root of the ratio, between half and
-   whole, in no steps (pxl-kernel view/frame/resolution.rs), and each move
+   whole, in no steps (pxl-kernel domain/view/frame/resolution.rs), and each move
    lays every pixel anew. Engines that scale by load hold small changes back
    and wait frames between changes, and upscale over time to hide them.
 3. **Lines and silhouettes are point-sampled**, one sample at a pixel's
@@ -119,16 +123,17 @@ What is proposed, not yet ordered:
   more than now: about ten visits a pixel (20261022, As built), and face
   bits a pixel's own unless a sample stopped on the same block. Whether
   the sample pass stays only to share face bits is decided by measuring.
-- **For 2,** a few steps of scale, each held a while once taken.
+- **For 2,** a few steps of scale, each held a while once taken. Done
+  (cause 2).
 - **Then the proxy is measured** against that exact cast, whose start is
   the only thing a proxy changes.
 
 ## Measured: a pixel's own walk
 
-The steps view (setting `ray_steps`) walks every pixel's own ray from its
-cell's start (8f8c6152d), the cast "For 1" proposes. On the page (Chrome,
-dpr 2, render scale 1.00, the dev build with the profiler on, one standing
-view over 30 s, 97 cast frames each):
+The steps view (setting `ray_steps`) then walked every pixel's own ray from
+its cell's start (8f8c6152d; no longer, below), the cast "For 1" proposes.
+On the page (Chrome, dpr 2, render scale 1.00, the dev build with the
+profiler on, one standing view over 30 s, 97 cast frames each):
 
 | The cast                        | Cast span, p95 |
 | ------------------------------- | -------------- |
@@ -161,7 +166,10 @@ Recommended by the reduce session, not ordered.
 - **Until then the steps view shows a path the frame does not run.** It
   should show the frame's own: a pixel that took a sample's block reports
   that sample's visits, recorded beside the sample's block. That waits for
-  the beam layout in flight (`beam::Grid`) to be committed.
+  the beam layout in flight (`beam::Grid`) to be committed. Since then the
+  steps view runs the frame's own cast, but a pixel that took a sample's
+  block reports no visits, as a sample keeps none beside its block
+  (pxl-shader `cast_cs`, `word`; `beam::SAMPLE_WORDS`).
 
 ## Deferred: the sun's map costs what 10-12's did not
 
@@ -172,7 +180,11 @@ frame of 200 to 300 ms now and then; with shadows off, 120 throughout. At
 triangles. Now each of its texels walks a ray (pxl-shader `sun_cs`), about
 200 ms for the whole map, and the whole map is walked again where a
 square lands that the map lies inside, and whenever the sun steps
-(pxl-render gpu/shadow.rs `aim`). The eye's rays read the observed
+(pxl-render gpu/shadow.rs `aim`). Since then a texel is cast again only
+where the box moved onto it, the eye's zoom at its stop changed, or its ray
+passes over a node the query answers otherwise (pxl-spec-core sun.rs
+`Sun::kept`, `Sun::stands`, `over`); a step of the sun still casts the
+whole map. The eye's rays read the observed
 pyramid and share their descent by the beam; the sun's do neither: each
 walks from the roots through the world's query (`World`, `cast::first`),
 composing every node it visits again. Left as it is: a proxy taken here

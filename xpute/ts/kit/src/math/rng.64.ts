@@ -1,8 +1,8 @@
 // @xpute/kit/math/rng.64.ts
 
-/** The 64-bit family: splitmix64's finalizer, a seed derived through it, and splitmix64's stream drawn as u32. */
+/** The 64-bit family: splitmix64's finalizer, a seed derived through it, and splitmix64's stream drawn as u32, each its word's high 32 bits. */
 
-import { U32, U64, type u64 } from "../abi/word.ts";
+import { U64, type u64 } from "../abi/word.ts";
 import type { RNG } from "./rng.ts";
 
 /** Web Crypto entropy, for shuffling and sampling; not for anything that must resist prediction. */
@@ -27,7 +27,7 @@ export function derive_seed_u64(base: u64, tag: u64): u64 {
   return mix64(U64(base ^ U64(tag)));
 }
 
-/** splitmix64; not cryptographic. */
+/** splitmix64, drawn as each output's high 32 bits; not cryptographic. */
 export function make_rng(seed: u64 = seed64()): RNG {
   let x: u64 = U64(seed);
 
@@ -39,8 +39,9 @@ export function make_rng(seed: u64 = seed64()): RNG {
     z = U64((z ^ (z >> 27n)) * 0x94d049bb133111ebn);
     z ^= z >> 31n;
 
-    // Not the low 32 bits: `Number` rounds past 2^53 first. The Rust and C++
-    // draw it the same way, and golden/math/rng.64.tsv holds this sequence.
-    return U32(Number(z));
+    // The high half, as java.util.random's `nextInt` and rand_xoshiro's
+    // `SplitMix64` take a u32 from a 64-bit word; shifted while a bigint, so
+    // `Number` holds it exactly.
+    return Number(z >> 32n);
   };
 }

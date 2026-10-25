@@ -10,6 +10,18 @@ This records the arguments, what was rejected and why, and the order the
 pieces go in. The first steps were taken the same day — what they turned up is
 at the end.
 
+> Status: done, and since moved on. From "What steps 1 and 2 turned up" on,
+> this is a log of the port as it went, and its paths and names are that
+> day's. What holds now: four roots, `/geo`, `/api`, `/tile` and `/asset`
+> (`spec/spec/route.json`), the tiles under `TILE_ROOT`, `/tile`, and not
+> `/geo/tiles`; the routes are generated too (`SEARCH_URL`, `GEO_INTERNAL`
+> and `API_INTERNAL` in `pxl_spec::route`, `rust/spec/src/route.spec.rs`);
+> the generator is pxl-tool (`rust/tool/src/bin/spec.rs`, `deno task
+> spec`); the crates are under `rust/server/` (`geo`, `api`, `geo-bake`,
+> `geo-spec`); and the bakes are `bake_terrain`, `bake_place` and
+> `bake_division` (`./script/tool.ts bake <kind>`, `script/tool.ts`). `apps/api`
+> and `tool/` are gone.
+
 ## What `apps/api` actually is
 
 `deno task dev` runs it as one thing. It is three, and only the first is a
@@ -29,7 +41,7 @@ invalidation endpoints are registered inside the dev-gated tile module
 behind it.
 
 **socket.io is dead code.** `main.ts` constructs a `Server`, binds it to the
-HTTP server, and no handler is ever registered on either side; `apps/web` has
+HTTP server, and no handler is ever registered on either side; `ts/app/web` has
 no client for it. The production edge does not proxy `/io` either
 ([one server root](./20260910-one-server-root.md)). It is removed rather than
 ported: its wire protocol — its own handshake, reconnection and packet
@@ -130,7 +142,7 @@ reasons.
 
 **The symmetry is already had, one layer down.** What this repo keeps in pairs
 is _source_: `@xpute/core` ↔ `xpute-core`, `@pxl/shared` ↔ `pxl-spec`, pinned
-to the bit by the vectors ([where the pair differs](./closed/20260914-where-the-pair-differs.md)).
+to the bit by the vectors ([where the pair differs](./archive/20260914-where-the-pair-differs.md)).
 That pair is not "both TypeScript" or "both Rust" — it is one set of
 definitions expressed for two runtimes. Extending that logic gives "compile
 `pxl-spec` for the host", which is what this move is.
@@ -199,6 +211,12 @@ pxl-spec ─────┼── pxl-geo        db-geo (three)        resident
 
 No edges between the three; each sees only `pxl-spec`. One database each.
 
+> Since shared: the servers have a crate in common besides `pxl-spec`.
+> `pxl-server` (`rust/server/src`) holds what `pxl-geo` and `pxl-api`
+> share because each is a server, the env, the pool, the internal-route
+> gate and the serve loop, and `serve_tiles` takes it under `serve`. Each
+> still has one database.
+
 **`pxl-geo-bake` rather than `pxl-bake`:** it says what it bakes, and it says
 that `geo` and `geo-bake` are the resident and offline halves of one data
 domain. The asset ingest is also a bake and is not geo — it stays in Deno, so
@@ -262,7 +280,15 @@ client go in `pxl-geo` and `pxl-geo-bake` only. Adding serde to `pxl-spec`
 because a response type is convenient is the erosion AGENTS.md warns about,
 billed to the client's bundle.
 
+> Since changed: `pxl-spec` has an optional `serde` feature for the shapes
+> both servers answer with (`rust/spec/Cargo.toml`), which `pxl-geo` and
+> `pxl-geo-bake` turn on and the kernel does not, so the client's bundle
+> carries none of it. `xpute-core` is `xpute-kit` now.
+
 ## The URL roots
+
+> Superseded by _The frame_ below, and that in turn by four roots: tiles
+> are under `/tile`, not `/geo/tiles` (the note at the top).
 
 `/api` alone, with two origins behind it, forces the routing split into Caddy —
 and Caddy would then have to name `/api/search`, so adding a geo route means
@@ -303,6 +329,10 @@ Both were settled the same day, in the other direction — see _The frame_ below
 
 ## What is not moving
 
+> Superseded: these moved to Rust after all — the Overture ingest is
+> pxl-geo-bake `bin/ingest_overture.rs`, and the asset ingest and the brand
+> renderer are `ingest_asset` and `render_brand` in `rust/tool/src/bin/`.
+
 The Overture ingests (`ingest_{base,buildings,divisions,places,transportation}.ts`),
 the asset ingest and the brand renderer stay in Deno. They run a handful of
 times a year, they touch no `pxl-spec` format, and `sharp`→`image` buys
@@ -310,7 +340,7 @@ nothing while risking a visual regression on shipped assets. Porting them for
 uniformity is the cost without the reason.
 
 The TypeScript pair stays too — `packages/pxl/shared/src/bake/*`,
-`model/feature.ts` and the encoders are not deleted. `apps/web` still imports
+`model/feature.ts` and the encoders are not deleted. `ts/app/web` still imports
 constants and types from them, `kernel.test.ts` builds its fixture packets with
 `encode_terrain`/`encode_poi_page`, and — the larger reason — the byte-for-byte
 verification below needs both sides alive to compare.
@@ -324,7 +354,7 @@ output, not look right.
 The mechanism exists — `crates/*/vector/*.tsv`, written by the TypeScript and
 read back by the Rust test beside the module. `crates/pxl/spec/vector/bake/format.tsv`
 is already there. Note that the `deno task vector` and `check:pair` tasks that
-[where the pair differs](./closed/20260914-where-the-pair-differs.md) names are no
+[where the pair differs](./archive/20260914-where-the-pair-differs.md) names are no
 longer in `deno.jsonc`; the vectors survived the migration and their emitters
 did not.
 
@@ -348,7 +378,7 @@ rasterizer, encoder — rather than one function at a time.
    the whole coverage single-threaded today and wants rayon with a connection
    per worker.
 5. **The dev tile server binary**, taking over `module/tile/*`.
-6. **`[profile.server]`** in `crates/Cargo.toml`.
+6. **`[profile.server]`** in `rust/Cargo.toml`.
 7. **`pxl-api`** — when it has code. Its name is settled; nothing else about it
    is.
 8. **The URL root split** — when there are two origins to route between.
@@ -499,7 +529,7 @@ the set, and a real walk goes in index order rather than at random — spatial
 locality should help it and a dense city should hurt. Only a full run says.
 
 Where the time goes was then measured rather than assumed
-([where the bake spends its time](./experiment/20260918-where-the-bake-spends-its-time.md)),
+([where the bake spends its time](../experiment/20260918-where-the-bake-spends-its-time.md)),
 and it is not the rasterizer. `bake_terrain` is 64 ms a page against 29, a
 factor of 2.2 and the smaller half. The `base` statement is 167 of the
 TypeScript's 277, and 149 of that 167 is 3.2 MB of WKB arriving — the server
@@ -572,7 +602,19 @@ what a divergence in the category table or the ladders would cost is a place
 drawing different icons in two parts of the UI, which is why those are still
 shared.
 
+> Since shared: one `DivisionPart` in `pxl-spec`, behind its `serde`
+> feature (`rust/spec/src/division.rs`), carries `approx` and leaves it out
+> when false; no server defines its own.
+
 ## The category table is generated now, and checked against the theme
+
+> Since changed: the places' categories are
+> `spec/spec/bake/place_category.json` and their theme
+> `spec/spec/bake/place_theme.json`, which pxl-tool checks against each
+> other and writes into `rust/spec/src/bake/place_theme.spec.rs`
+> (`place_theme_outputs` in `rust/tool/src/spec/bake.rs`).
+> `spec/overture/category.json`, `script/spec.ts` and the POI theme are
+> gone.
 
 Porting it left two hand-maintained copies of the same 61 entries, one in
 TypeScript and one in Rust. They agreed — checked, key for key — but that is a
@@ -650,6 +692,10 @@ verify. Built and run for real against the live database before this was
 written — 160 MB on `debian:trixie-slim` with ca-certificates, 51 MB without
 either.
 
+> Since moved: the image is built from `rust/server/geo/Dockerfile`, and
+> pxl-api's from `rust/server/api/Dockerfile`
+> (`infra/prod/docker-compose.yml`).
+
 **db-main is out of the server's environment.** It stays provisioned and
 running, because the application server will own it; nothing reads it until
 then. `main_pool` had been created, probed with `select 1` and queried by
@@ -712,6 +758,14 @@ carries the tools alone. Neither exists yet.
 
 ## The frame
 
+> Superseded in part: four roots now, with the tiles under their own,
+> `/tile` (`TILE_ROOT`), and route names are generated as well as roots.
+> pxl-tool writes `ts/client/src/config/route.spec.ts`,
+> `ts/server/edge/route.spec.ts` and
+> `rust/spec/src/route.spec.rs`, and writes `run_worker_first` into
+> `wrangler.jsonc` (`rust/tool/src/spec/route.rs`); `check_bundle.ts` and
+> its sentinels are not in the tree.
+
 The split above was argued as something to do at deploy time. It was built
 instead, and the reason is that a deployment is the worst moment to first
 discover what the addresses are: the Worker, the client bundle, the Caddyfile
@@ -747,7 +801,7 @@ and throws when they drift. It earned that on its first run, before any of this
 was wired:
 
 ```
-apps/web/wrangler.jsonc's run_worker_first is ["/api/*"]
+ts/server/edge/wrangler.jsonc's run_worker_first is ["/api/*"]
 where spec/route.json's roots are ["/geo/*","/api/*","/asset/*"]
 ```
 
@@ -767,7 +821,7 @@ started; dropping it here would have meant putting it back — along with the
 root, the origin, the container and the secret — on the day the first route is
 written. What does not belong in it yet is a command schema or a payload shape;
 the order those come in is
-[point density and the order to multiplayer](./closed/20260910-point-density-and-the-order-to-multiplayer.md)'s,
+[point density and the order to multiplayer](./archive/20260910-point-density-and-the-order-to-multiplayer.md)'s,
 and an address space is not a carrier.
 
 **Each server reads its own root's variables.** `GEO_HOST`/`GEO_PORT` and
@@ -798,6 +852,11 @@ Verified end to end through vite with all four processes up:
 ```
 
 ## Where it stands
+
+> As of 09-18. Now `serve_tiles` serves `/tile/*` and `/asset/*`
+> (`rust/server/geo-bake/src/bin/serve_tiles.rs`), and the four local
+> processes are `make dev-oven` or `dev:shelf`; `make dev` reads
+> the published deployment (`deno.jsonc`, `ts/app/web/vite.config.ts`).
 
 **The move is through, and the frame is in.** `crates/pxl/geo` answers `/geo/*`
 against db-geo, `crates/pxl/api` answers `/api/*` against db-main and has no
@@ -850,6 +909,6 @@ from the wrong server is what a stale relay looks like.
 made against — and the 14 that were never part of the move (the Overture and
 asset ingests, the brand renderer, the texture-pack tool, the elevation
 pipeline) went to `tool/`, a root of its own because nothing under it is
-deployed. See [the gate that deploys](./closed/20260918-the-gate-that-deploys.md). The Overture ingests, the
+deployed. See [the gate that deploys](./archive/20260918-the-gate-that-deploys.md). The Overture ingests, the
 asset ingest and the brand renderer stay in Deno for the reasons under _What is
 not moving_, and those are not waiting on anything.

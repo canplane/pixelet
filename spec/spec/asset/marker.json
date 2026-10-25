@@ -1,0 +1,33 @@
+{
+  "$doc": [
+    "How the marker kind is shown: its one shape, the pin, the marker someone",
+    "puts up at a place (id.json). A marker's cell is the camera grid's at its",
+    "scale, as a place's icon is, its own apart from the places' since a",
+    "marker is drawn as its own design (pxl-spec asset/marker.rs",
+    "`marker_cell`). Per id where the kind comes to hold more than one shape."
+  ],
+  "MARKER_SHOWN_FROM": {
+    "$value": 19,
+    "$type": "u8",
+    "$doc": [
+      "The coarsest camera grid cell a marker shows at: z19, 32 of them across",
+      "a z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at",
+      "(layers/poi/poi.yaml). What someone puts up, by the cells of the square",
+      "it is read from (pxl-kernel domain/scene/marker/pin.rs); a chat line's",
+      "bubble, which no square holds, by the cell where its speaker stands,",
+      "which its speaker judges (pxl-kernel",
+      "domain/scene/character/companion.rs `line_hangs`)."
+    ]
+  },
+  "MARKER_SCALE_STEPS": {
+    "$value": -1,
+    "$type": "i8",
+    "$doc": [
+      "A marker's cell on the camera grid, in zooms: −1 spans two of the grid's",
+      "cells, as a place's icon does. A cell shows one marker: where more than",
+      "one stands in it, they are one, their count on a marker's pill in its",
+      "colors turned over, at the cell's middle over what is drawn there",
+      "(pxl-kernel domain/scene/marker/pin.rs)."
+    ]
+  }
+}

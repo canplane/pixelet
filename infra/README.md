@@ -32,8 +32,8 @@ infra/
 pxl-api owns db-main and probes it at boot, but no route reads it yet
 ([the server in Rust](../doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md));
 pxl-geo reads db-geo through `DB_GEO_URL`. All spatial data is EPSG:3857.
-Passwords and `ADMIN_TOKEN` come from `.env` only, and production's are its
-own.
+Passwords come from `infra/local/.env` and `ADMIN_TOKEN` from
+`rust/server/.env` only, and production's are its own (`infra/prod/.env`).
 
 **Never `down -v` db-geo** (`pixelet-db-geo`): its volume is a
 multi-gigabyte PostGIS dataset, hours of ingest to fill again.
@@ -74,9 +74,9 @@ db-geo holds only what search reads: `overture_places`,
 4. **DNS.** An A record for `api.plei.me` to the VM, **proxied** through
    Cloudflare; DNS-only would bypass the edge the firewall relies on.
 5. **The tree.** Cloned whole onto the VM: both servers' Dockerfiles
-   (`crates/server/geo/Dockerfile`, `crates/server/api/Dockerfile`) build
+   (`rust/server/geo/Dockerfile`, `rust/server/api/Dockerfile`) build
    from the repository root, since their dependencies are path dependencies
-   across `crates/`.
+   across `rust/`.
 6. **Up.**
    ```sh
    cd infra/prod
@@ -90,10 +90,16 @@ db-geo holds only what search reads: `overture_places`,
 
    CI's deploy user is root, which installing them needs.
 
-A CI deploy updates the stack after that (§5). By hand it is the same steps
-in `/opt/pixelet`: `git reset --hard` to the commit, install a changed
-`infra/prod/etc/` file and restart what reads it, then in `infra/prod`
-`docker compose up -d --build --force-recreate` and `docker image prune -f`.
+A CI deploy updates the stack after that (§5) with `infra/prod/deploy.sh`,
+sent from a checkout and run on the VM: `git reset --hard` to the commit,
+install a changed `infra/prod/etc/` file and restart what reads it, then in
+`infra/prod` `docker compose up -d --build --force-recreate` and
+`docker image prune -f`. By hand it is the same script, for a commit `deploy`
+already holds, since the VM fetches it from there:
+
+```sh
+ssh root@$(hcloud server ip pixelet-prod) bash -eu -s -- "$(git rev-parse origin/deploy)" < infra/prod/deploy.sh
+```
 
 ### Copying the search tables
 
@@ -106,7 +112,7 @@ Dump with the local container's own `pg_dump`, since a newer host one writes
 a format production's Postgres 16 cannot restore:
 
 ```sh
-set -a; . ./.env; set +a
+set -a; . ./infra/local/.env; set +a
 docker exec pixelet-db-geo pg_dump --format=custom --no-owner \
   -U "$DB_GEO_USER" -d "$DB_GEO_NAME" \
   -t overture_places -t overture_division_areas -t overture_divisions > overture.dump
@@ -130,7 +136,7 @@ sql psql -v ON_ERROR_STOP=1 -c "ANALYZE overture_places; ANALYZE overture_divisi
 rm ~/overture.dump
 ```
 
-`deno task smoke https://api.plei.me --origin` checks the result.
+`./script/smoke.py https://api.plei.me --origin` checks the result.
 
 ## 4. Cloudflare
 
@@ -149,21 +155,21 @@ free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
 that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
 Writes are outside it, and nothing configures a spending cap: a publish is a
-pyramid's worth of Class A operations, so `deno task usage` comes before one.
+pyramid's worth of Class A operations, so the publish-bucket skill checks the month's count before one.
 
 The bucket, `pixelet-tiles`, holds everything the client fetches that is not the app itself:
 
 | Prefix                  | Object                                          | Named by                 | Policy                                                           |
 | ----------------------- | ----------------------------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP tile                                 | name, 5–15               | immutable; a re-bake is a new version                            |
-| `place/<version>/`      | XTP count tile                                  | name, 5–15               | immutable; a re-bake is a new version                            |
-| `division/<version>/`   | XTP division tile                               | name, 5–12               | immutable; a re-bake is a new version                            |
-| `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 5                  | immutable; a re-bake is a new version                            |
+| `terrain/<version>/`    | packed XTP tile                                 | name, 4–15               | immutable; a re-bake is a new version                            |
+| `place/<version>/`      | XTP count tile                                  | name, 7–15               | immutable; a re-bake is a new version                            |
+| `division/<version>/`   | XTP division tile                               | name, 4–12               | immutable; a re-bake is a new version                            |
+| `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 4                  | immutable; a re-bake is a new version                            |
 | `asset/`                | glb, png, webp — not packed                     | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted whenever    |
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
-| `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's gate, never by hand           |
-| `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.ts`)                |
-| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `deno task deploy` under a build number; never served |
+| `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's number job, never by hand     |
+| `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.py`)                |
+| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `make deploy` under a build number; never served      |
 
 A tile's name is its Morton key, so the same name under two kinds is the same ground, and one prefix is one region across every kind at every zoom. Every object is uploaded `public, max-age=31536000, immutable`, so a new version is a new prefix and no cache needs purging.
 
@@ -172,16 +178,23 @@ answers `/tile/*`, under its path less the root, and `/asset/*`, under its
 path; `/geo/*` and `/api/*` go to `GEO_ORIGIN` and `API_ORIGIN` unchanged.
 No path is rewritten anywhere. A route outside a root is unreachable in
 production — the app's fallback answers it with `index.html`, which looks
-like the app loading, not like a missing route. Locally `deno task dev:oven`
+like the app loading, not like a missing route. Locally `make dev-oven`
 runs pxl-geo on 3000, the tile server on 3001 and pxl-api on 3002, and the
 dev proxy splits on the same roots.
 
-**Deploying the client** is CI's (§5); by hand, the same command it runs:
+**Deploying the client** is CI's (§5); by hand it is the script CI runs.
+Neither checks or tests anything, so first `make -j8 check` and
+`make -j8 test` pass over the commit
+([the deploy skill](../.agents/skills/deploy/SKILL.md)), and the servers it
+talks to are already deployed (§3), since a new client against an old server
+is the direction that breaks. A hand deploy takes no number and goes out
+unnumbered.
 
 ```sh
 wrangler login           # once a machine
-deno task deploy         # build, publish
-deno task smoke https://plei.me
+make -j8 check && make -j8 test
+make deploy         # build, publish
+./script/smoke.py https://plei.me
 ```
 
 A deploy uploads only
@@ -193,28 +206,33 @@ skill's "Verify what is served".
 
 ## 5. CI/CD
 
-`.github/workflows/check-and-deploy.yml` runs on a push to `deploy` and on
-pull requests, never on main: main carries work between machines, compiling
-or not. **Publishing is `git push origin main:deploy`**, forced once main has
-been rewritten. Why each job is as it is lives in the workflow's comments.
+`.github/workflows/deploy.yml` runs on a push to `deploy` and on a dispatch,
+never on main: main carries work between machines, compiling or not. A push
+that changes only markdown runs nothing, and a dispatch against any other ref
+does nothing. **Publishing is `git push origin main:deploy`**, forced once
+main has been rewritten, after `make -j8 check` and `make -j8 test` pass
+here: CI checks and tests nothing
+([the deploy skill](../.agents/skills/deploy/SKILL.md)). Why each job is as
+it is lives in the workflow's comments.
 
-| Job             | When                  | What                                                                                                                                                                                            |
-| :-------------- | :-------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gate`          | always                | `check:ship` over the whole commit: the shipped TypeScript type-checks, the shipped crates pass clippy, the generated files match `spec/`; nothing of behavior; on deploy, takes a build number |
-| `deploy-server` | gate green            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`                                                                                                                 |
-| `deploy-web`    | after `deploy-server` | `deno task deploy` under the build number                                                                                                                                                       |
-| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                                                                                                               |
-| `record`        | after either deployed | appends the build to the log                                                                                                                                                                    |
+| Job             | When                  | What                                                                                                    |
+| :-------------- | :-------------------- | :------------------------------------------------------------------------------------------------------ |
+| `number`        | every push to deploy  | takes a build number                                                                                    |
+| `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate` |
+| `deploy-web`    | after `deploy-server` | `make deploy` under the build number: builds, keeps the panic paths, publishes                          |
+| `smoke`         | after both deployed   | `./script/smoke.py https://plei.me`                                                          |
+| `record`        | after either deployed | appends the build to the log                                                                            |
 
 A deploy is whole: the client and the servers go out from the one commit,
 every time, so they never run different ones. The servers go first because an
 old client against a new server is safe and the reverse is not.
 
-Every build of `deploy` that passes the gate takes a number from a counter in
+Every build of `deploy` takes a number from a counter in
 the bucket, never reset; a published one is a line in `_meta/build-log.jsonl`
 with the subjects of the commits it carried, since main's shas do not
-survive its rewrites. `./script/build-log.ts` reads it, newest first, and
-writes the last number into `apps/client/.build_number` for dev builds.
+survive its rewrites. `./script/build-log.py` reads it, newest first. A
+deployment states its own number at `/build.json`, which `make dev` caches
+(`script/build-number.py`) to label a build CI did not number after it.
 
 The secrets are GitHub's alone: `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` for wrangler and the counter; `VM_HOST`, `VM_USER`
@@ -224,7 +242,7 @@ optional, without which the deploy warns and trusts whatever answers.
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`apps/client/src/shell/setting/section/attribution.tsx`). Check the source
+(`ts/client/src/shell/setting/section/attribution.tsx`). Check the source
 before shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |
