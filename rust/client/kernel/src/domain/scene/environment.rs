@@ -19,7 +19,7 @@ use crate::sys::sched::edge::wake_at;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use xpute_guest::clock::now;
 
-/// Runs before the chunks' step: the sky moves with the wall clock and
+/// Runs before the markers' step: the sky moves with the wall clock and
 /// nothing else asks for a frame while the view is still, so the clock asks
 /// for one when its next step falls (`EnvironmentDraw::observe`).
 pub fn environment_step() {

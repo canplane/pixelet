@@ -10,7 +10,6 @@ pub use spec::{MARKER_SCALE_STEPS, MARKER_SHOWN_FROM};
 
 use crate::asset::id::{asset_id, AssetId, Kind};
 use crate::bake::constant::EntryAt;
-use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::tree::ancestor_of;
 
@@ -36,10 +35,10 @@ pub fn marker_cell_of(cell: Zoom, at: EntryAt) -> (Zoom, [i32; 3]) {
     (z, ancestor_of(at.at(), at.zoom() - z))
 }
 
-/// Whether a marker shows where the camera grid's cell is at `cell`: its
-/// chunk no coarser than `MARKER_SHOWN_FROM`.
+/// Whether a marker shows where the camera grid's cell is at `cell`: no
+/// coarser than `MARKER_SHOWN_FROM`.
 pub const fn marker_shows(cell: Zoom) -> bool {
-    cell as i32 - CHUNK_STEPS as i32 >= MARKER_SHOWN_FROM as i32
+    cell >= MARKER_SHOWN_FROM as Zoom
 }
 
 #[cfg(test)]

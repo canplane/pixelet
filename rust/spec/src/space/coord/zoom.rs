@@ -1,7 +1,7 @@
 // pxl-spec/space/coord/zoom.rs
 
 //! Every size is a zoom: X goes once round the world in 2^24 units, so a thing
-//! the world over 2^z wide is at zoom z. A cell's, a chunk's and a tile's
+//! the world over 2^z wide is at zoom z. A cell's, a square's and a tile's
 //! size are each named by this one number; a bigger zoom is finer, and one
 //! zoom finer is half as wide.
 

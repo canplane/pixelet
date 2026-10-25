@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene/param.rs
 
-//! What is drawn beside the chunks, how it is lit, and what the stage hands
+//! What is drawn and how it is lit, and what the stage hands
 //! the GPU of the ways: the pool's first size, the records' first room and
 //! the scratch. The pool's cap is the terrain's, which the mirror reads.
 

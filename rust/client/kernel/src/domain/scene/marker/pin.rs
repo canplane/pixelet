@@ -8,8 +8,7 @@
 
 use core::hash::Hasher;
 
-use super::arrangement::{surface, Instance, Key, Went};
-use crate::domain::chunk::Chunk;
+use super::arrangement::{cell_zoom, surface, Instance, Key, Square, Went};
 use crate::domain::layer::object::preview::draft;
 use crate::domain::query::World;
 use crate::domain::scene::marker::design::Design;
@@ -17,6 +16,7 @@ use pxl_render::look::marker::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::block::object::object_value_is_marker;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::point;
@@ -31,12 +31,12 @@ pub(super) enum Held {
     Cell((Zoom, [i32; 3])),
 }
 
-/// A pin read from a drawn chunk, in a run a pin's cell: its pill,
+/// A pin read from a drawn square, in a run a pin's cell: its pill,
 /// where it stands, and where the cell holds more than one, where their
 /// count stands and the count.
 #[derive(Clone)]
 pub(super) struct Pin {
-    pub(super) chunk: Chunk,
+    pub(super) square: Square,
     at: EntryAt,
     design: Design,
     stands: Q3,
@@ -82,24 +82,24 @@ fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
     }
 }
 
-/// The pins put up in `chunk`, by the chunk their base is in, a run a
-/// pin's cell: a cell nests in its chunk, so no run is another chunk's too.
-pub(super) fn read(chunk: Chunk, pins: &mut Vec<Pin>) {
-    let cell_zoom = chunk.cell_zoom();
+/// The pins put up in `square`, whose world stands in `region`, by the
+/// square their base is in, a run a pin's cell: a cell nests in its square,
+/// so no run is another square's too.
+pub(super) fn read(square: Square, region: &Aabb, pins: &mut Vec<Pin>) {
+    let cell_zoom = cell_zoom(square);
     if !marker_shows(cell_zoom) {
         return;
     }
-    let region = chunk.region();
     let world = World::now();
     let from = pins.len();
-    world.placed_in(&region, &mut |e| {
+    world.placed_in(region, &mut |e| {
         if !object_value_is_marker(e.state) {
             return;
         }
         let (stands, at) = pin_at(e.id());
         if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) {
             pins.push(Pin {
-                chunk,
+                square,
                 at: e.id(),
                 design: pill(world.words(e).unwrap_or_default()),
                 stands,

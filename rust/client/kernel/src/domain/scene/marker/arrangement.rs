@@ -1,10 +1,11 @@
 // pxl-kernel/domain/scene/marker/arrangement.rs
 
-//! The markers' arrangement: where each is drawn, read by its own source: a
-//! place as Carto draws it, read from the tile that says its ground at the
-//! zoom the view is at there (`place.rs`); a pin someone put up, near
-//! enough (`pin.rs`); a line said, hung over its speaker's head where its
-//! own rule shows it (`line.rs`). Each source hands the arrangement an
+//! The markers' arrangement: where each is drawn, read by its own source
+//! over the eye's windows' squares, as decor is grown over them
+//! (domain/view/observation.rs `squares`): a place as Carto draws it, read
+//! from the tile that says its ground at the zoom the view is at there
+//! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,
+//! hung over its speaker's head where its frame shows it (`line.rs`). Each source hands the arrangement an
 //! `Instance`, and the arrangement asks each the same: its design, its
 //! size, its slot and whether it is ready (`design.rs`), and where a tap on
 //! it goes.
@@ -12,7 +13,6 @@
 use super::selection::select_visible;
 use super::{line, pin, place};
 
-use crate::domain::chunk::Chunk;
 use crate::domain::query::{at_zoom, Ray, World};
 use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::scene::marker::design::{self, Design};
@@ -31,9 +31,32 @@ use xpute_kit::status::errno::Errno;
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::tile::place::SPACING_CELLS;
 use pxl_spec::space::camera::grid::px_per_unit;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::window::SQUARE_SHIFT;
+
+/// A square of the eye's windows the markers are read over, by its zoom
+/// and place, X running on round the world as the view's frame does
+/// (domain/view/observation.rs `squares`).
+pub(super) type Square = Node<2>;
+
+/// Its cells' zoom: the camera grid's there.
+pub(super) fn cell_zoom((zoom, _): Square) -> Zoom {
+    zoom + SQUARE_SHIFT
+}
+
+/// The box over `square` the world stands in, between `heights`.
+pub(super) fn region((zoom, [x, y]): Square, [low, high]: [f64; 2]) -> Aabb {
+    let span = units(zoom);
+    let (x0, y0) = (f64::from(x) * span, f64::from(y) * span);
+    Aabb {
+        min: [x0, y0, low],
+        max: [x0 + span, y0 + span, high],
+    }
+}
 
 #[derive(Default)]
 struct Arrangement {
@@ -43,23 +66,24 @@ struct Arrangement {
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], Went)>,
-    /// Kept so a settled turn asks the heap for nothing; a chunk's in a
+    /// Kept so a settled turn asks the heap for nothing; a square's in a
     /// run, as each source reads it (`pin.rs`, `place.rs`).
     pins: Vec<pin::Pin>,
-    places: Vec<(Chunk, Instance)>,
-    /// The drawn chunks `pins` and `places` were read from: a chunk drawn still keeps
-    /// what was read from it, so an eye move casts rays only in the chunks it
-    /// enters.
+    places: Vec<(Square, Instance)>,
+    /// The drawn squares `pins` and `places` were read from: a square drawn
+    /// still keeps what was read from it, so an eye move casts rays only in
+    /// the squares it enters.
     found_for: Option<Found>,
     /// The same, read this turn.
     now: Found,
     /// Places, ground or objects moved since they were read.
     moved: bool,
     /// The place tiles whose answer moved, beside the ground's
-    /// (domain/query/changed.rs): a chunk they touch is read again.
+    /// (domain/query/changed.rs): a square they touch is read again.
     moved_places: Vec<Tile>,
-    /// The chunks this turn would read, by how far from the eye.
-    entering: Vec<(f64, Chunk)>,
+    /// The squares this turn would read, by how far from the eye, with the
+    /// box the world stands in over each.
+    entering: Vec<(f64, Square, Aabb)>,
     sized: Vec<Instance>,
     /// Last turn's `sized`, its buffer reused.
     spare: Vec<Instance>,
@@ -78,7 +102,7 @@ struct Arrangement {
     /// and nothing left waiting, the designs it laid out stand.
     last: Option<Seen>,
     /// The last run left a design not laid out or not painted, which a later
-    /// turn has, or a chunk not read yet: the next runs again.
+    /// turn has, or a square not read yet: the next runs again.
     waiting: bool,
 }
 
@@ -122,11 +146,11 @@ pub(super) struct Instance {
 
 static ARRANGEMENT: Global<Arrangement> = Global::new();
 
-/// What `pins` and `places` were read from: the drawn chunks, and whether
-/// places were on.
+/// What `pins` and `places` were read from: the drawn squares, each with
+/// the heights the world stood between in it, and whether places were on.
 #[derive(Default, PartialEq)]
 struct Found {
-    drawn: Vec<Chunk>,
+    drawn: Vec<(Square, [f64; 2])>,
     places: bool,
 }
 
@@ -196,51 +220,55 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         return;
     }
     p.last = Some(seen.clone());
-    // The eye's cubes in view (domain/view/observation.rs `cubes`), as decor's are.
+    // The eye's windows' squares in view (domain/view/observation.rs
+    // `squares`), as decor's are.
     let now = &mut p.now;
     now.drawn.clear();
-    crate::domain::view::observation::cubes(&o, tau, &mut |(zoom, at)| {
-        let chunk = Chunk::indexed(zoom, at);
-        let b = chunk.region();
+    crate::domain::view::observation::squares(&o, tau, &mut |square, heights| {
+        let b = region(square, heights);
         if frame.sees_box(b.min, b.max) {
-            now.drawn.push(chunk);
+            now.drawn.push((square, heights));
         }
     });
-    now.drawn.sort_unstable();
+    now.drawn.sort_unstable_by_key(|d| d.0);
     // Places are a setting; what someone placed is always shown.
     now.places = settings_store().place;
     let places = now.places;
-    // What was read stands for a chunk still drawn whose columns no change
-    // touches (domain/query/changed.rs), while places did not turn: a chunk left or
-    // touched drops its run, and only one entered or touched is read, as
-    // many a turn as a pass of the tick's budget reads and at least one,
-    // nearest the eye first; the rest are not read yet, so a later turn
-    // reads them.
+    // What was read stands for a square still drawn as it was, whose
+    // columns no change touches (domain/query/changed.rs), while places did
+    // not turn: a square left, touched or standing between other heights
+    // drops its run, and only one entered or touched is read, as many a turn
+    // as a pass of the tick's budget reads and at least one, nearest the eye
+    // first; the rest are not read yet, so a later turn reads them.
     p.moved = false;
     let before = match &p.found_for {
         Some(f) if f.places == places => f.drawn.as_slice(),
         _ => &[],
     };
     let moved_places = &p.moved_places;
-    let stands = |c: &Chunk| {
-        let r = c.region();
-        before.binary_search(c).is_ok() && !crate::domain::query::changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+    let drawn = |s: &Square| now.drawn.binary_search_by_key(s, |d| d.0).ok().map(|k| now.drawn[k]);
+    let stands = |&(s, heights): &(Square, [f64; 2])| {
+        let r = region(s, heights);
+        before.binary_search_by_key(&s, |d| d.0).is_ok_and(|k| before[k].1 == heights) && !crate::domain::query::changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
     };
     let (mut pins, mut read_places) = (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
-    pins.retain(|s| now.drawn.binary_search(&s.chunk).is_ok() && stands(&s.chunk));
-    read_places.retain(|(c, _)| now.drawn.binary_search(c).is_ok() && stands(c));
+    pins.retain(|s| drawn(&s.square).is_some_and(|d| stands(&d)));
+    read_places.retain(|(s, _)| drawn(s).is_some_and(|d| stands(&d)));
     let entering = &mut p.entering;
     entering.clear();
-    entering.extend(now.drawn.iter().filter(|c| !stands(c)).map(|&c| (v3::len(&v3::sub(&c.region().center(), &o.eye)), c)));
+    entering.extend(now.drawn.iter().filter(|d| !stands(d)).map(|&(s, heights)| {
+        let r = region(s, heights);
+        (v3::len(&v3::sub(&r.center(), &o.eye)), s, r)
+    }));
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let read = ctx
         .budget
         .run(
             entering.iter(),
-            |&(_, chunk)| {
-                pin::read(chunk, &mut pins);
+            |&(_, square, region)| {
+                pin::read(square, &region, &mut pins);
                 if places {
-                    place::read(chunk, &mut read_places);
+                    place::read(square, &mut read_places);
                 }
                 true
             },
@@ -251,7 +279,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     // Not read, so not what they were read from.
     let later = &mut entering[read..];
     later.sort_unstable_by_key(|e| e.1);
-    now.drawn.retain(|c| later.binary_search_by_key(c, |e| e.1).is_err());
+    now.drawn.retain(|d| later.binary_search_by_key(&d.0, |e| e.1).is_err());
     p.moved_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
         let now = core::mem::take(&mut p.now);

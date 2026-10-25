@@ -20,7 +20,6 @@ The kernel is one order of dependency, a DAG rather than a pipeline: an edge may
   asks                                                         answers
     │   scene/       a head: what this frame draws                ▲
     │   control/     a head: moves the eye, asks the query        │
-    │   chunk.rs     a cube about the eye, by address, for now    │
     │   approach.rs  the easing both heads share                  │
     │   param.rs     the tuned number both heads share            │
     │   view/        the trunk: the pose, the lens, demand        │
@@ -61,7 +60,6 @@ The words for what is sized:
 - A **cell** is the granule at a zoom, possibly empty. A **voxel** is a cell carrying a material.
 - A **tile** is what is fetched and stored as one. A layer's tile has the same number of cells a side at every zoom (`pxl-spec space/layer/lattice.rs`). Terrain's is 512, so its z24 cells make z15 tiles.
 - The **pyramid** is the tree of all tiles: a tile at z covers the 2 × 2 under it at z + 1, and its Morton key is a prefix of theirs (`space/hierarchy/morton.rs`).
-- A **chunk** is a cube of cells about the eye, which gathers what stands in the world.
 - A **block** is what stands in a cell, grown by the ground or placed: a cube, a decor or a marker (`domain/layer/object/store.rs` `Entry`).
 
 A tile's zoom is a web map's, and a z24 cell is a web map's z16 pixel; only the 3857 adapter knows it (`adapter/3857.rs` `cell_zoom_of`).
@@ -254,17 +252,17 @@ The **floor** is a law: every observation has an answer. It is kept by holding t
 
 The view is loading until something has reached the screen and every tile demanded shows, exact or coarser (`domain/layer/residency.rs` `Residency::shown`). A version is never rewritten, so a tile never changes under its key; what changes is which tile answers a node. **Nothing is prefetched**: a view converges to exact on its misses alone.
 
-## The eye's cubes
+## What stands over the squares
 
-What stands beside the ground, decor and the markers, is gathered a chunk at a time. A chunk is a cube of the camera grid's cells 32 a side, addressed by zoom and x, y and z (`domain/chunk.rs`). It is never fetched or held; only its address exists.
+What stands beside the ground, decor and the markers, is gathered over the eye's windows' squares. The GPU grows decor in every window's squares and draws each where the rays ask the zoom it was grown at.
 
-**The eye's cubes** are one partition of the ground (`domain/view/observation.rs` `cubes`). A square of ground splits into four while its nearest point is nearer than its zoom's split distance, as a ray's descent does. Each square left holds the cubes the world stands in there. The partition never depends on what a ray met.
+The markers read the squares as one partition of the ground (`domain/view/observation.rs` `squares`). A square splits into its four while its nearest point is nearer than its cells' split distance, as a ray's descent does, and each square left is read at its window's zoom, between the heights the world stands at in it. The partition never depends on what a ray met.
 
 Decor is grown and drawn on the GPU each frame, a thread a candidate, never stored (`pxl-render gpu/grown.rs`). Placed decor is handed in beside it as records (`domain/scene/decor/drawn.rs`). A kind is drawn as a model down to its own size on screen, and as a sprite below it.
 
 ## Markers
 
-A **marker** is what is drawn flat to the camera, a billboard, from a design on the sheet: a place, a pin someone put up, or the chat's line. Each source reads its own, and one arrangement draws them together (`domain/scene/marker/arrangement.rs`). The places and the pins are read over the eye's cubes, each standing at its cell's center on the surface drawn there; the chat's line is read from no cube, and hangs over its speaker's head.
+A **marker** is what is drawn flat to the camera, a billboard, from a design on the sheet: a place, a pin someone put up, or the chat's line. Each source reads its own, and one arrangement draws them together (`domain/scene/marker/arrangement.rs`). The places and the pins are read over the windows' squares, each standing at its cell's center on the surface drawn there; the chat's line is read from no square, and hangs in its speaker's frame, over the person's head.
 
 A place is the place layer's marker (`domain/scene/marker/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`domain/scene/marker/place.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
 

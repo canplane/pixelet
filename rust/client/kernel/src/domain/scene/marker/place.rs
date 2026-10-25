@@ -6,33 +6,35 @@
 //! category's label zoom. A place stands at its ground leaf cell's center on
 //! the surface a ray down meets first, and a tap on it goes there.
 
-use super::arrangement::{surface, Instance, Key, Went};
-use crate::domain::chunk::Chunk;
+use super::arrangement::{cell_zoom, surface, Instance, Key, Square, Went};
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::World;
 use crate::domain::scene::marker::design::Design;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{stands, symbol_of, Placed, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::coord::zoom::index_of;
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows};
+use pxl_spec_core::wrap_index;
 
 /// What `read` read, as the arrangement takes it.
-pub(super) fn shown(read: &[(Chunk, Instance)]) -> impl Iterator<Item = Instance> + '_ {
+pub(super) fn shown(read: &[(Square, Instance)]) -> impl Iterator<Item = Instance> + '_ {
     read.iter().map(|(_, s)| s.clone())
 }
 
-/// The places standing in `chunk`, read where its cells are tiles' cells,
+/// The places standing in `square`, read where its cells are tiles' cells,
 /// each read from the tile that says it exactly; of them what Carto shows
 /// at the zoom those cells are drawn at, as it shows them (`point_of`).
-pub(super) fn read(chunk: Chunk, found: &mut Vec<(Chunk, Instance)>) {
-    let zoom = carto_zoom(chunk.cell_zoom());
+pub(super) fn read(square: Square, found: &mut Vec<(Square, Instance)>) {
+    let cells = cell_zoom(square);
+    let zoom = carto_zoom(cells);
     if zoom < PLACE_FIRST as i32 {
         return;
     }
-    let t = PLACE_LATTICE.read_zoom(chunk.cell_zoom());
-    let (z, column) = chunk.column();
+    let t = PLACE_LATTICE.read_zoom(cells);
+    let (z, column) = square;
     // The tile over the column, or its tiles under it: `n` a side from the first.
     let ([x0, y0], n) = if t <= z {
         (ancestor_of(column, z - t), 1)
@@ -40,23 +42,20 @@ pub(super) fn read(chunk: Chunk, found: &mut Vec<(Chunk, Instance)>) {
         (first_descendant_of(column, t - z), 1 << (t - z))
     };
     let tiles = (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
-    let (h0, h1) = chunk.z_range();
-    let detail = GROUND.read_zoom(chunk.cell_zoom());
+    let detail = GROUND.read_zoom(cells);
+    // The square as the world names it, once round the world.
+    let named = [wrap_index(z, column[0]), column[1]];
     World::now().places_in(tiles, &mut |src, place, h| {
         let Some(design) = point_of(&h, zoom) else { return };
         let ground = stands(src, h.at);
-        if Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
+        let [x, y, _] = index_of(z, &ground.mid());
+        if [x, y] != named {
             return;
         }
-        // Counted only by the chunk the top of what stands there is in, so a
-        // column's several chunks do not repeat it.
         let Some(top) = surface(&ground.mid(), (REACH.max[2], REACH.min[2]), detail) else { return };
-        if top - 1.0 < h0 || top - 1.0 >= h1 {
-            return;
-        }
         let stands = ground.center(top);
         found.push((
-            chunk,
+            square,
             Instance {
                 key: Key::Place(src, place),
                 design,

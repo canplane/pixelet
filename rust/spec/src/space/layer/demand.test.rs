@@ -62,7 +62,7 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 
 /// The reach is exactly where a zoom stops being asked for.
 #[test]
-fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
+fn the_fault_bound_is_where_a_zoom_ends() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         let r = demand_reach(GROUND, zoom);
         assert_eq!(zoom_at(short_of(r)), zoom as i32, "z{zoom} is asked for up to its radius");

@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Markers spread over a few chunks, two to a leaf cell in places.
+/// Markers spread over a few squares, two to a leaf cell in places.
 fn markers() -> Vec<EntryAt> {
     let z = crate::space::coord::zoom::UNIT_ZOOM;
     (0..400i32).map(|k| EntryAt::new(z, [(k * 7919) % 300, (k * 104_729) % 300, (k * 31) % 9])).collect()
@@ -27,16 +27,19 @@ fn a_markers_cell_nests_in_the_one_a_grid_zoom_coarser() {
     }
 }
 
-/// A marker's cell lies in the chunk drawing its grid's cells, so no cell's
-/// count is split between two chunks, wherever the chunk is no finer than
-/// the marker.
+/// A marker's cell lies in the window's square drawing its grid's cells
+/// (pxl-spec-core window.rs), so no cell's count is split between two
+/// squares, wherever the square is no finer than the marker.
 #[test]
-fn a_markers_cell_lies_in_its_chunk() {
+fn a_markers_cell_lies_in_its_square() {
+    use pxl_spec_core::window::{squares_zoom, SQUARE_SHIFT};
     for at in markers() {
-        for cell in 19..=at.zoom() + CHUNK_STEPS {
+        for cell in MARKER_SHOWN_FROM as Zoom..=at.zoom() + SQUARE_SHIFT {
             let (z, c) = marker_cell_of(cell, at);
-            let chunk = cell - CHUNK_STEPS;
-            assert_eq!(ancestor_of(c, z - chunk), ancestor_of(at.at(), at.zoom() - chunk), "{at:?} at {cell}");
+            let square = squares_zoom(cell);
+            let [x, y, _] = ancestor_of(c, z - square);
+            let [ax, ay, _] = ancestor_of(at.at(), at.zoom() - square);
+            assert_eq!([x, y], [ax, ay], "{at:?} at {cell}");
         }
     }
 }

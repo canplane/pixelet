@@ -4,7 +4,7 @@
 //! (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md, "The
 //! query"). It is asked of a node of the one hierarchy, a cube by its zoom
 //! and index, the same of every layer; how a layer answers is its own. It
-//! knows nothing of the view: what a chunk is, and how fine its cells, are
+//! knows nothing of the view: what node is asked, and how fine its cells, are
 //! said by the asker. Neither form fetches, holds or asks for anything: an
 //! answer is exact, coarser with the tile it lacked, or nothing and that tile.
 //!

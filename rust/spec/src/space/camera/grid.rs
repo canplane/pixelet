@@ -1,7 +1,7 @@
 // pxl-spec/space/camera/grid.rs
 
 //! The camera grid, the one resolution: a cell is an angle about the eye,
-//! its zoom the distance's, and a chunk a cube of its cells.
+//! its zoom the distance's.
 
 use crate::space::coord::zoom::{units, Zoom};
 
@@ -75,8 +75,3 @@ impl Tau {
         pxl_spec_core::grid::cell_at((r2 * (self.0 * self.0)) as f32)
     }
 }
-
-/// A chunk, the cube of the camera grid's cells that what stands in the world
-/// is gathered by, is 2^CHUNK_STEPS cells a side: its zoom is its cells' less
-/// this.
-pub use pxl_spec_core::CHUNK_STEPS;

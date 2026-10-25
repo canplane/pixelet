@@ -178,5 +178,5 @@ first, since none is missing.
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | [`coord/`](./coord/)         | where and how big: a position (`q3.rs`), sizes as zooms (`zoom.rs`), what a position means (`world.rs`), the adapters, `v3`, `mat4` |
 | [`hierarchy/`](./hierarchy/) | parent and child in any number of axes (`tree.rs`), a node's one key (`morton.rs`), a sparse octree (`sparse_tree.rs`)              |
-| [`camera/`](./camera/)       | the camera grid, its cell zoom a distance is drawn at and the chunk (`grid.rs`), and the eye (`eye.rs`)                             |
+| [`camera/`](./camera/)       | the camera grid, its cell zoom a distance is drawn at (`grid.rs`), and the eye (`eye.rs`)                                           |
 | [`layer/`](./layer/)         | a layer's lattice (`lattice.rs`), the pyramid of tiles (`tile.rs`), and what an observation demands of them (`demand.rs`)           |

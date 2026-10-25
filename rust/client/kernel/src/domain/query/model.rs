@@ -1,7 +1,7 @@
 // pxl-kernel/domain/query/model.rs
 
 //! glTF models, each registered once as an uploaded mesh with its joints and
-//! clips: the scene's actors play them and decor stands them in chunks. The
+//! clips: the scene's actors play them and decor stands them over the ground. The
 //! draw list sits here, beside its lowest reader: a model's mesh is uploaded
 //! through it, and the scene lists into it.
 

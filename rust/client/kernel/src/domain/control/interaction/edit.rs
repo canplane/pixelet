@@ -185,7 +185,7 @@ pub fn remove(at: EntryAt) {
 }
 
 /// The edit the pointer would make, decided once a turn: the cursor's ghost
-/// shows it, and what it removes is handed to the chunks to leave out.
+/// shows it, and what it removes is handed to what is drawn to leave out.
 #[derive(Clone, Copy, Default)]
 pub struct Pending {
     pub object: Option<Entry>,

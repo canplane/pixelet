@@ -8,13 +8,14 @@ use pxl_spec::space::layer::lattice::demand_reach;
 use xpute_guest::global::Global;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec_core::window::{squares_zoom, SQUARE_SHIFT};
 
 use crate::domain::layer::residency::floor;
 use crate::domain::layer::Base as _;
@@ -76,26 +77,26 @@ pub fn observation() -> Option<Observation> {
     })
 }
 
-/// The cubes `CHUNK_STEPS` zooms over the cells a reader draws, the ground
-/// about the eye cut into one partition: from the coarsest squares within the
+/// The eye's windows' squares (pxl-spec-core window.rs), the ground about
+/// the eye cut into one partition: from the coarsest squares within the
 /// floor's ring (residency/floor.rs `ring`), the far edge cut by the ground,
 /// a square splits into its four while its nearest point is nearer than its
-/// cell zoom's split distance (`Tau::split_distance`), the rule a ray's
-/// descent asks by, taken about the eye's height; each square left is
-/// at the zoom its nearest point asks, and in each, the cubes the world stands
-/// in there. A function of the eye and the world alone, never of what a ray
-/// met; a column it knows nothing of yet names none, as nothing there is to
-/// stand in.
-pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
+/// cells' split distance (`Tau::split_distance`), the rule a ray's descent
+/// asks by, taken about the eye's height; each square left is at the zoom
+/// its nearest point asks, and handed with the heights the world stands
+/// between in it. A function of the eye and the world alone, never of what
+/// a ray met; a column it knows nothing of yet is handed none, as nothing
+/// there is to stand in.
+pub fn squares(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else { return };
     let over = (o.eye[2] - o.ground).max(0.0);
-    let coarsest = GROUND.grid_zoom(top).max(CHUNK_STEPS);
+    let coarsest = GROUND.grid_zoom(top).max(SQUARE_SHIFT);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
         libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
     };
-    let zoom = coarsest - CHUNK_STEPS;
+    let zoom = squares_zoom(coarsest);
     // Its room kept from one walk to the next.
     static STACK: Global<Vec<(Zoom, [i32; 2])>> = Global::new();
     let mut stack = core::mem::take(STACK.get(Vec::new));
@@ -104,7 +105,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
     // Depth first, so each square's lines step from its neighbour's.
     let (world, mut walked) = (World::now(), Walked::default());
     while let Some((zoom, xy)) = stack.pop() {
-        let (cell, d) = (zoom + CHUNK_STEPS, near(zoom, xy));
+        let (cell, d) = (zoom + SQUARE_SHIFT, near(zoom, xy));
         if d > o.reach {
             continue;
         }
@@ -113,10 +114,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
             continue;
         }
         let Some(b) = world.bounds(&mut walked, (zoom, xy), cell).value().flatten() else { continue };
-        let side = units(zoom);
-        for z in (b.min[2] / side).floor() as i32..=(b.max[2] / side).floor() as i32 {
-            each((zoom, [xy[0], xy[1], z]));
-        }
+        each((zoom, xy), [b.min[2], b.max[2]]);
     }
     *STACK.get(Vec::new) = stack;
 }

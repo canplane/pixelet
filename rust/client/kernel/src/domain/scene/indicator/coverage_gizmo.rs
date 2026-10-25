@@ -22,8 +22,8 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::window::{self, Slot, EYE_WINDOWS, FIRST_CELL, SLOTS, SQUARE_SHIFT};
-use pxl_spec_core::{CHUNK_STEPS, LEAF_CELL};
+use pxl_spec_core::window::{self, Slot, EYE_WINDOWS, FIRST_CELL, SLOTS};
+use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::terrain::window::{eye_slots, tile_of};
@@ -166,12 +166,11 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
     (q3::to_real(i64::from(base[0])), q3::to_real(i64::from(base[1])), units(zoom))
 }
 
-/// The goal, as 10-12's chunks cut the ground: each eye window's squares in
-/// pieces a chunk's cells a side (`CHUNK_STEPS`), finest first, a piece
-/// where the zoom its nearest point asks (`Tau::cell_at`, about the eye's
-/// height, as a ray's descent asks) is its window's or finer, within the
-/// reach, and not wholly under the finer window's pieces, which are read
-/// there instead; none coarser than the source's top, which nothing asks
+/// The goal, as the markers' squares cut the ground (domain/view/observation.rs
+/// `squares`): each eye window's squares, finest first, a square where the
+/// zoom its nearest point asks (`Tau::cell_at`, about the eye's height, as a
+/// ray's descent asks) is its window's or finer, within the reach, and not
+/// wholly under the finer window's squares, which are read there instead; none coarser than the source's top, which nothing asks
 /// for. A piece is drawn where its square is present, or where a coarser
 /// window's square is, which the cast reads in its place (pxl-spec-core
 /// `window::step`): from the floor where that square's tile is the floor's
@@ -206,43 +205,37 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
             continue;
         }
         let Some(slots) = held[(cell - FIRST_CELL) as usize] else { continue };
-        let zoom = window::squares_zoom(cell);
-        // Each square's pieces, a chunk's cells a side each, as 10-12's goal cut the ground.
-        let k = SQUARE_SHIFT - CHUNK_STEPS;
-        let pz = zoom + k;
+        let pz = window::squares_zoom(cell);
         for slot in slots {
-            let q = slot.square;
-            let tile = tile_of(cell, q).0;
+            let p = slot.square;
+            let tile = tile_of(cell, p).0;
             // The square drawn in its place: its own, or the finest coarser one present.
-            let drawn = (FIRST_CELL..=cell).rev().map(|c| (c, [q[0] >> (cell - c), q[1] >> (cell - c)])).find(|&(c, at)| present(c, at));
-            for i in 0..1i32 << (2 * k) {
-                let p = [(q[0] << k) + (i & ((1 << k) - 1)), (q[1] << k) + (i >> k)];
-                let r2 = near(rect((pz, p)));
-                if r2 > o.reach * o.reach || tau.cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
-                    continue;
-                }
-                read.insert((pz, p));
-                if (0..4).all(|c| read.contains(&(pz + 1, [2 * p[0] + (c & 1), 2 * p[1] + (c >> 1)]))) {
-                    continue;
-                }
-                let mark = match drawn {
-                    Some((c, at)) => {
-                        out.tiles.push(tile);
-                        let s = pz.saturating_sub(SHARD_ZOOM);
-                        out.shards.push((pz.min(SHARD_ZOOM), [p[0] >> s, p[1] >> s]));
-                        match c < cell && floor_only(tile_of(c, at).0) {
-                            true => Mark::DrawnFromFloor,
-                            false => Mark::Drawn,
-                        }
-                    }
-                    None => match residency.line(tile).drawn {
-                        None => Mark::NoTile,
-                        Some(s) if floor_only(s) => Mark::FloorOnly,
-                        Some(_) => Mark::Unbuilt,
-                    },
-                };
-                out.squares.push(((pz, p), mark));
+            let drawn = (FIRST_CELL..=cell).rev().map(|c| (c, [p[0] >> (cell - c), p[1] >> (cell - c)])).find(|&(c, at)| present(c, at));
+            let r2 = near(rect((pz, p)));
+            if r2 > o.reach * o.reach || tau.cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
+                continue;
             }
+            read.insert((pz, p));
+            if (0..4).all(|c| read.contains(&(pz + 1, [2 * p[0] + (c & 1), 2 * p[1] + (c >> 1)]))) {
+                continue;
+            }
+            let mark = match drawn {
+                Some((c, at)) => {
+                    out.tiles.push(tile);
+                    let s = pz.saturating_sub(SHARD_ZOOM);
+                    out.shards.push((pz.min(SHARD_ZOOM), [p[0] >> s, p[1] >> s]));
+                    match c < cell && floor_only(tile_of(c, at).0) {
+                        true => Mark::DrawnFromFloor,
+                        false => Mark::Drawn,
+                    }
+                }
+                None => match residency.line(tile).drawn {
+                    None => Mark::NoTile,
+                    Some(s) if floor_only(s) => Mark::FloorOnly,
+                    Some(_) => Mark::Unbuilt,
+                },
+            };
+            out.squares.push(((pz, p), mark));
         }
     }
     out.tiles.sort_unstable();

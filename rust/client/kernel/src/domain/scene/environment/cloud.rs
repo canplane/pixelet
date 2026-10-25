@@ -2,7 +2,7 @@
 
 //! The cumulus, drawn as decor is and held as decor is not. It claims no cell,
 //! so nothing is built around it and a tower stands through it; it is no
-//! layer and no chunk holds it. It is laid on the field's own map, which the
+//! layer and no window's square holds it. It is laid on the field's own map, which the
 //! wind carries (`pxl-spec-core cloud.rs` `drift`): a block of cells there
 //! is built once and drawn moved, each instance a model, a sprite or nothing
 //! by its size on the screen (`domain/scene/decor/cell.rs` `present_block`).

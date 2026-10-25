@@ -6,7 +6,6 @@
 //! edge points down, and nothing here names the turn, the door or the shell.
 
 pub mod approach;
-pub mod chunk;
 pub mod control;
 pub mod layer;
 pub mod param;

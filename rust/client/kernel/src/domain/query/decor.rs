@@ -5,8 +5,8 @@
 //! cell, each read as asked (`World::surfaces`), and what objects place, each
 //! struck by its model. A ray strikes it as the ground walk passes, only
 //! where the frame draws it as held, at the leaf cells: a fold strikes none of
-//! it. The walk follows the detail rule, not the chunk the view chose, which
-//! may differ at a chunk's edge.
+//! it. The walk follows the detail rule, not a partition the view chose,
+//! which may differ at its edges.
 //!
 //! Under it is the decors' runtime half, beside the catalog
 //! (spec/spec/asset/decor.json): their models as they arrive (`assets`),
