@@ -7,7 +7,7 @@ counts.
 **Status (2026-10-24): built, as the observed pyramid** (pxl-spec-core
 observed.rs). It is filled where the rays asked: the beam rays, the samples,
 and the pixels whose reading walk missed (`ray::MISS`), walked again from
-their cell's start in the same pass (pxl-shader `miss_cs`). An entry's key
+their cell's start in the same pass (pxl-shader cast.rs `miss_cs`). An entry's key
 is its walk's tag and the zooms asked (`key(tag, [far, near])`); entries are
 kept between frames and forgotten over the squares that moved (`forgets`),
 or whole where what every node is asked of moved (`FORGETS_ALL`).
@@ -258,7 +258,7 @@ Neither the log nor the probe was kept.
 ## What disappears when it is built
 
 _As built (Status), only the reading walk is free of these (pxl-shader
-`Reading`); the walks that write the pyramid still compose a node its entry
+observed.rs `Reading`); the walks that write the pyramid still compose a node its entry
 does not hold, from what was handed it, and keep that in the entry
 (`Writing`, `world::At::words`)._
 

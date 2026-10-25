@@ -27,7 +27,7 @@ Three edges, and one call the other way: the guest reads the host's clock (`now`
 
 `intr` is the whole of the guest's life, the entry the floor names as a C runtime names `main`. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all. Its answer, `wake_ms`, is when it would like the next turn. A guest that asks for nothing is rung for nothing.
 
-Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a frame of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again. Every file call goes to the program's one `SysHost.open`: xpute does not route by root, and the program dispatches by root to whatever it bound there.
+Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a frame of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again. Every file call goes to whatever the program bound below the root it names, in the host's namespace (`ipc/ns`): xpute carries the call, and what a file is stays the binding's.
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the frames and the packets they carry, the turn, the handles, I/O and the GPU's calls, the contract either end must keep, and the records that hold the languages to it.
 
@@ -86,7 +86,7 @@ xpute_host::native_abi!(
 );
 ```
 
-A **C++ program** takes the library as SQLite ships its own, in two files: `xpute.hpp`, every header, and `xpute.cpp`, every source over it. They are at `cpp/amalgamation/` in xpute's own repository, and `make -C cpp amalgamation` makes them from the tree under `target/cpp/amalgamation/`. The program includes the one and compiles the other once, as C++20 with `-ffp-contract=off`, the flags `cpp/Makefile` builds with; the conformance guest is built that way, so the traces hold the two files:
+A **C++ program** takes the library as SQLite ships its own, in two files: `xpute.hpp`, every header, and `xpute.cpp`, every source over it. They are at `cpp/amalgamation/` in xpute's own repository, and `make -C cpp amalgamation` makes them from the tree under `cpp/target/amalgamation/`. The program includes the one and compiles the other once, as C++20 with `-ffp-contract=off`, the flags `cpp/Makefile` builds with; the conformance guest is built that way, so the traces hold the two files:
 
 ```cpp
 #include "xpute.hpp"

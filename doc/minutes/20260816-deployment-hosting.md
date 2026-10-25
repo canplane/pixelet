@@ -106,7 +106,7 @@ so a 404 there is a genuine failure and must keep surfacing as one.
 > Superseded: `__TILE_BASE_URL__` is gone, and `VITE_TILE_BASE_URL` now
 > only points the dev server's proxy at a local tile server
 > (`ts/app/web/vite.config.ts`). Tile URLs are `/tile/<kind>/<version>/<name>`
-> (`tile_url` in `ts/client/src/config/route.ts`), and which version is
+> (`tile_url` in `ts/client/src/namespace/route.ts`), and which version is
 > served is the bucket's `source` declaration (`spec/spec/bake/published.json`).
 > Immutable versions, never overwritten in place, still hold.
 
@@ -655,7 +655,7 @@ attribution link in the license section.
 > Since superseded: Nominatim is not called; reverse geocoding is baked
 > (the divisions bake), and the coordinate that leaves the client now is
 > forward search's `near`, sent to the project's own `/geo/search`
-> (`fetchSearch` in `ts/client/src/shell/search/repository.ts`). The
+> (`fetchSearch` in `ts/client/src/shell/search/fetch.ts`). The
 > settings this paragraph lists are now `pxl:lang`, `pxl:ui_hotbar` and the
 > kernel's two kept slots, the settings and the placed objects
 > (`pxl:kept:settings`, `pxl:kept:objects`;

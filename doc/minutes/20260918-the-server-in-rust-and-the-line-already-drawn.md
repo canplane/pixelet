@@ -101,6 +101,10 @@ sound in a WASM module, a data race in a worker pool. `pxl-spec` itself uses no
 > Since changed: xpute's Rust has no `ArrayBuffer`, `U8Array` or `Bytes`,
 > and neither it nor `pxl-spec` holds an `Rc`; of the two premises' first,
 > what is left is `Global`'s one thread (`xpute-guest global.rs`).
+>
+> Since 2026-10-26, `sched::task`'s executor is not the only `Global`: the
+> core memory set once on a native guest's thread is one too (`xpute-guest
+> mem.rs` `set`).
 
 The temptation when the compiler refuses is to reach for `Arc`. That breaks
 the premise rather than satisfying it, and the premise is the same one
@@ -776,7 +780,7 @@ carries the tools alone. Neither exists yet.
 
 > Superseded in part: four roots now, with the tiles under their own,
 > `/tile` (`TILE_ROOT`), and route names are generated as well as roots.
-> pxl-tool writes `ts/client/src/config/route.spec.ts`,
+> pxl-tool writes `ts/client/src/namespace/route.spec.ts`,
 > `ts/server/edge/route.spec.ts` and
 > `rust/spec/src/route.spec.rs`, and writes `run_worker_first` into
 > `wrangler.jsonc` (`rust/tool/src/spec/route.rs`); `check_bundle.ts` and

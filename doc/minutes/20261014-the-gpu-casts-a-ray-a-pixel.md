@@ -6,7 +6,7 @@
 pixel of the render resolution, its start its cell's beam
 ([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)); a pixel takes
 the nearest block the samples about it stopped at that its ray enters, and
-walks itself only where none is (pxl-shader `cast_cs`). The render
+walks itself only where none is (pxl-shader cast.rs `cast_cs`). The render
 resolution is the display's times a scale the load sets by default: one of
 `SCALE_STEPS` steps between whole and `SCALE_MIN`, each a like share of the
 last; where the GPU's time is read, a window over its budget by more than

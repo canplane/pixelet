@@ -86,7 +86,7 @@ the first the largest:
 
 1. **A sample decides what a pixel shows.** Since 2026-10-23 a pixel does not
    walk: of the blocks the 4 × 4 samples about it stopped at, it takes the
-   nearest its ray enters (pxl-shader `cast_cs`). Samples lie a quarter cell
+   nearest its ray enters (pxl-shader cast.rs `cast_cs`). Samples lie a quarter cell
    apart, about three drawn pixels. A face drawn thinner than that, a riser
    seen at a slant or a far tree, is met by a sample or not depending on
    where the screen's grid falls, and where none meets it the pixel shows a
@@ -169,7 +169,7 @@ Recommended by the reduce session, not ordered.
   the beam layout in flight (`beam::Grid`) to be committed. Since then the
   steps view runs the frame's own cast, but a pixel that took a sample's
   block reports no visits, as a sample keeps none beside its block
-  (pxl-shader `cast_cs`, `word`; `beam::SAMPLE_WORDS`).
+  (pxl-shader cast.rs `cast_cs`, `word`; `beam::SAMPLE_WORDS`).
 
 ## Deferred: the sun's map costs what 10-12's did not
 
@@ -177,7 +177,7 @@ Measured 2026-10-24 on the start view, shadows on, the camera still: about
 5 to 10 frames a second for the first ten seconds, 40 to 70 after, and a
 frame of 200 to 300 ms now and then; with shadows off, 120 throughout. At
 10-12 the map was the chunks' meshes rasterized, a cost of their
-triangles. Now each of its texels walks a ray (pxl-shader `sun_cs`), about
+triangles. Now each of its texels walks a ray (pxl-shader sun.rs `sun_cs`), about
 200 ms for the whole map, and the whole map is walked again where a
 square lands that the map lies inside, and whenever the sun steps
 (pxl-render gpu/shadow.rs `aim`). Since then a texel is cast again only

@@ -74,8 +74,8 @@ pass                one list of steps within a phase's share
                                                          sched/frame_budget
 ```
 
-> `sched/frame_budget` is since `sched/pass` (`Pass`), the one word for the
-> mechanism.
+> Since 2026-10-26, `sched/frame_budget` is `sched/pass` (`Pass`), the one
+> word for the mechanism.
 
 > Since split by end: the two are no longer one file in each language. The
 > host's half is TypeScript (`xpute/ts/host/src/sched`, the quantum and the

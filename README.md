@@ -12,7 +12,7 @@ _Started on December 15, 2025._
 
 The planet is too large to load or draw at once, so how finely anything is drawn follows one rule: **the eye decides.** The view is a grid of cells of equal angle about the eye, so a cell grows with distance. Space is cut into cubes at every zoom; one cube of space at one zoom is a **node**, an address the world is asked about, never something stored. A block is drawn at the zoom whose block spans at least a cell where it stands (`pxl-spec-core grid.rs` `cell_at`). A city, a mountain range or a tower behind a ridge costs the cells it covers on the screen, not what it holds.
 
-Every pixel's ray, every step a walker takes and every edit asks the world the same question: what fills this node? One function answers it (`pxl-spec-core world.rs` `node`), building the answer from the ground up: the ground's grid with its caves carved in it, then the ways off the ground over that, then what players placed over all. The function is compiled twice, for the CPU and through rust-gpu for the GPU (`pxl-spec-core cast.rs` `first`, `pxl-shader` `cast_cs`), so what is drawn is what is walked on and edited.
+Every pixel's ray, every step a walker takes and every edit asks the world the same question: what fills this node? One function answers it (`pxl-spec-core world.rs` `node`), building the answer from the ground up: the ground's grid with its caves carved in it, then the ways off the ground over that, then what players placed over all. The function is compiled twice, for the CPU and through rust-gpu for the GPU (`pxl-spec-core cast.rs` `first`, `pxl-shader cast.rs` `cast_cs`), so what is drawn is what is walked on and edited.
 
 ```text
  a pixel's ray        a walker's step       an edit
@@ -210,8 +210,8 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-render`     | The view: glTF, the marker sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                                                 |
 | `pxl-kernel`     | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                           |
 | `pxl-shader`     | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `cargo shader-wgsl` (pxl-tool) and checked in beside the renderer's shaders.                    |
-| `pxl-wasm`       | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports xpute's entry, `intr`.                                            |
-| `pxl-native`     | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host, which runs every call on a thread of its own.                   |
+| `pxl-wasm`       | The guest in a tab: one module in xpute's module form (`wasm_abi!`), its memory's front kept from the linker (`global_base`) and the kernel as its entry, `intr`.               |
+| `pxl-native`     | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host (`native_abi!`), which runs every call on a thread of its own.   |
 | `ts/client`      | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).              |
 | `ts/app/web`     | The page's app: its entry, and the client's bracket (`src/bracket.ts`), what a browser tab gives the client, the guest it instantiates included.                                |
 | `ts/app/native`  | The device's app: its entry, and the client's bracket (`src/bracket.ts`), what it gives the client through its native module, which links the kernel.                           |

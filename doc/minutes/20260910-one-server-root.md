@@ -91,7 +91,7 @@ per-route rewrite left in the dev proxy.
 > everything else is app assets. `run_worker_first` lists the four roots
 > (`ts/server/edge/wrangler.jsonc`), and pxl-tool (`rust/tool/src/bin/spec.rs`)
 > writes the roots and branches from `spec/spec/route.json` into
-> `ts/client/src/config/route.spec.ts`,
+> `ts/client/src/namespace/route.spec.ts`,
 > `ts/server/edge/route.spec.ts` and
 > `rust/spec/src/route.spec.rs`. `apps/api`, `src/lib/env/routes.ts`, `/io`
 > and `SOCKET_PATH` are gone.

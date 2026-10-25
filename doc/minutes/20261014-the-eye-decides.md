@@ -216,7 +216,7 @@ the retreat is the first middle road, chunks chosen by rays, from
 `checkpoint/20261012-eye-axis` with the runs gone.
 
 > Since a square's columns are filled on the GPU as it lands (pxl-shader
-> `heights_cs`), a step reads its cell's column, and no longer reads a
+> ground.rs `heights_cs`), a step reads its cell's column, and no longer reads a
 > tile's samples or runs the bicubic again.
 
 **Two reductions in view.** Neither adds a mechanism; each hands a role
