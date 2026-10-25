@@ -91,7 +91,7 @@ export function Message({ message, width }: { message: ReturnType<typeof useMess
           value={messageText}
           onChangeText={changeText}
           onSubmit={sendMessage}
-          placeholder={wording ? t("world.dock.marker_placeholder") : t("world.dock.message_placeholder")}
+          placeholder={wording ? t("world.dock.pin_placeholder") : t("world.dock.message_placeholder")}
           placeholderTextColor={LABEL.placeholder}
           style={styles.messageInput}
         />
@@ -101,7 +101,7 @@ export function Message({ message, width }: { message: ReturnType<typeof useMess
           onPress={sendMessage}
           disabled={isSending || !fits}
           accessibilityRole="button"
-          accessibilityLabel={wording ? t("world.dock.marker_done") : t("world.dock.send")}
+          accessibilityLabel={wording ? t("world.dock.pin_done") : t("world.dock.send")}
           style={({ pressed }) => [styles.send, wording && styles.confirm, pressed && styles.sendPressed, !fits && styles.sendRefused]}
         >
           <Glyph glyph={wording ? "checkmark" : "arrow.up"} size={chrome.glyph} weight="bold" color={color.white} />

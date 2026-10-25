@@ -62,7 +62,7 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Marker);
 
   return (
-    <Item label={t("blocks.marker")} active={active} cell={cell} onPress={onPick}>
+    <Item label={t("blocks.pin")} active={active} cell={cell} onPress={onPick}>
       <View style={[styles.decor, { width: itemOf(cell), height: itemOf(cell) }, active ? [mark.on, styles.decorOn] : mark.off]}>
         <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
       </View>
@@ -126,7 +126,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                   </Grid>
                 ))}
               {tab === DrawerTab.Marker && (
-                <Grid head={<SectionTitle>{t("drawer.sections.marker")}</SectionTitle>}>
+                <Grid head={<SectionTitle>{t("drawer.sections.pin")}</SectionTitle>}>
                   {(cell) => <MarkerItem cell={cell} onPick={pickMarker} />}
                 </Grid>
               )}
