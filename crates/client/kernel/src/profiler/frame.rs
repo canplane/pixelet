@@ -170,7 +170,7 @@ words!(FrameSample, FRAME::WORDS,
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
-pub const STREAMS: usize = crate::sys::io::spec::STREAM_NAMES;
+pub const STREAMS: usize = crate::sys::io::demand_spec::STREAM_NAMES;
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 
 const _: () = assert!(

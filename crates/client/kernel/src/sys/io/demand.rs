@@ -5,13 +5,13 @@
 
 use pxl_spec::bake::published::BaseLayer;
 
-pub use crate::sys::io::spec::TaskPhaseName;
+pub use crate::sys::io::demand_spec::TaskPhaseName;
 use core::cmp::Ordering;
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 
-pub const PHASES_MAX: usize = crate::sys::io::spec::TASK_PHASES_MAX as usize;
+pub const PHASES_MAX: usize = crate::sys::io::demand_spec::TASK_PHASES_MAX as usize;
 
 /// Sub-timings a run reports (e.g. network vs decode), named by the run.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -45,7 +45,7 @@ impl Phases {
 
 /// A stream of demands (spec `STREAM_NAMES`). An asset shares the
 /// tiles' credits but is never withdrawn: it is wanted until it arrives.
-pub use crate::sys::io::spec::StreamName as Stream;
+pub use crate::sys::io::demand_spec::StreamName as Stream;
 
 impl Stream {
     /// An asset belongs to no bake and is asked for by its own command.

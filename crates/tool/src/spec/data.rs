@@ -263,7 +263,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         uses: &[],
         ts: Some("apps/client/src/abi/io/demand.spec.ts"),
         rs: Some("crates/client/kernel/src/sys/io/demand.spec.rs"),
-        module: Some("spec"),
+        module: Some("demand_spec"),
         enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ts_names: None,
         cpp: None,

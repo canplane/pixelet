@@ -9,7 +9,7 @@ use xpute_kit::status::error::MarshalError;
 
 use crate::sys::io::host::Refused;
 
-pub use crate::sys::io::spec::OutcomeName as Outcome;
+pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 
 /// Why a task failed, as numbers the summary can count by. A kernel-made
 /// failure carries its source location: EBADMSG alone does not say which

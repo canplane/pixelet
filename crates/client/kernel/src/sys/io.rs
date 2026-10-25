@@ -8,6 +8,8 @@
 
 pub mod body;
 pub mod demand;
+#[path = "io/demand.spec.rs"]
+pub mod demand_spec;
 pub mod failure;
 pub mod fetch;
 pub mod file;
@@ -20,6 +22,4 @@ pub mod param;
 pub mod policy;
 pub mod request;
 pub mod source;
-#[path = "io/demand.spec.rs"]
-pub mod spec;
 pub mod text;
