@@ -197,7 +197,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
             blocks: stat.blocks,
             blocks_bytes: stat.block_bytes,
             depth_bytes: stat.depth_bytes,
-            layers_bytes: stat.layers_bytes,
+            pack_bytes: stat.pack_bytes,
             objects,
         },
     );

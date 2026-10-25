@@ -1,7 +1,7 @@
 // pxl-render/gpu/pack.rs
 
-//! The texture pack as one 2D array texture with its mip chain, and the table
-//! mapping a layer's top, side and bottom to array slots. A slot is a distinct
+//! The texture pack as one 2D array texture with its mip chain (`mip.rs`),
+//! and the table mapping a layer's top, side and bottom to array slots. A slot is a distinct
 //! tile: a face with no tile of its own shares the top's slot, and a layer the
 //! pack ships nothing for takes none and reads as the box's color.
 //! Without the mip chain the far ground crawls as the camera moves.
@@ -10,62 +10,13 @@ use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, S
 use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
-use crate::frame::shader::record::PIPELINE_MIPS;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Image, Load};
-use crate::gpu::pipeline::Pipelines;
+use crate::gpu::api::{buffer_usage, bytes, release, texture_usage, Format, Gpu, Image};
+use crate::gpu::mip::{mip_levels, Mips};
 use crate::mesh::paint::palette::{palette, LAYERS};
 
 pub const LAYER_TEX_SZ: u32 = PACK.cell;
-
-pub fn mip_levels(width: u32, height: u32) -> u32 {
-    32 - width.max(height).max(1).leading_zeros()
-}
-
-pub struct Mips {
-    pipeline: u32,
-    layout: u32,
-    sampler: u32,
-}
-
-impl Mips {
-    /// A pipeline draws into the format it was built for, so each format needs its own.
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: Format) -> Mips {
-        let built = pipelines.build(g, PIPELINE_MIPS, format);
-        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, None, 1);
-        Mips {
-            pipeline: built.pipeline,
-            layout: built.layouts[0],
-            sampler,
-        }
-    }
-
-    pub fn build(&self, g: &Gpu, texture: u32, levels: u32, first_layer: u32, layers: u32) {
-        let encoder = g.encoder();
-        for layer in first_layer..first_layer + layers {
-            for level in 1..levels {
-                let above = g.view(texture, false, level - 1, 1, layer, 1);
-                let target = g.view(texture, false, level, 1, layer, 1);
-                let group = g.bind_group(self.layout, &[view_entry(0, above), sampler_entry(1, self.sampler)]);
-                let pass = g.pass(encoder, &pass_desc(target, Load::Clear, 0, Load::Clear, 0.0, None));
-                g.set_pipeline(pass, self.pipeline);
-                g.set_bind_group(pass, 0, group, &[]);
-                g.draw(pass, 3, 1, 0, 0);
-                g.end(pass);
-                // The encoder keeps what it recorded; letting these go now only frees the handles.
-                for id in [pass, group, target, above] {
-                    release(id);
-                }
-            }
-        }
-        g.submit(encoder);
-    }
-
-    pub fn release(self) {
-        release(self.sampler);
-    }
-}
 
 const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
     top << (IMAGE_TOP * SLOT_BITS) | side << (IMAGE_SIDE * SLOT_BITS) | bottom << (IMAGE_BOTTOM * SLOT_BITS)
@@ -100,7 +51,7 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
     (slots, table)
 }
 
-pub struct Layers {
+pub struct Pack {
     tex: u32,
     pub view: u32,
     pub table: u32,
@@ -111,10 +62,10 @@ pub struct Layers {
     loaded: bool,
 }
 
-impl Layers {
+impl Pack {
     /// Nothing is drawn until the pack arrives: a flat color is the box's own,
     /// which the shader already has. Until then every face reads NO_SLOT.
-    pub fn new(g: &Gpu) -> Layers {
+    pub fn new(g: &Gpu) -> Pack {
         let (tiles, _) = plan();
         let slots = tiles.len() as u32;
         let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
@@ -129,7 +80,7 @@ impl Layers {
         g.write_buffer(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.
         let bytes = (0..levels).map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots).sum();
-        Layers {
+        Pack {
             tex,
             view,
             table,

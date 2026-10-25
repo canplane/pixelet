@@ -45,7 +45,7 @@ pub struct DeviceSample {
     pub blocks: f64,
     pub blocks_bytes: f64,
     pub depth_bytes: f64,
-    pub layers_bytes: f64,
+    pub pack_bytes: f64,
     /// The GPU objects the renderer holds, by the op that made them, as its
     /// encoder counts them (xpute-gpu encode `Gpu::objects`): op k + 1 in
     /// slot k, as no op is 0.
@@ -156,7 +156,7 @@ words!(FrameSample, FRAME::WORDS,
     gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
     gpu.census => FRAME::census,
     device.blocks => FRAME::blocks, device.blocks_bytes => FRAME::blocks_bytes,
-    device.depth_bytes => FRAME::depth_bytes, device.layers_bytes => FRAME::layers_bytes, device.objects => FRAME::gpu_objects,
+    device.depth_bytes => FRAME::depth_bytes, device.pack_bytes => FRAME::pack_bytes, device.objects => FRAME::gpu_objects,
     tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
     heap.used_bytes => FRAME::heap_used_bytes, heap.live_bytes => FRAME::heap_live_bytes, heap.run_bytes => FRAME::heap_run_bytes,
     heap.slot_bytes => FRAME::heap_slot_bytes, heap.range_bytes => FRAME::heap_range_bytes,

@@ -8,7 +8,7 @@
 use pxl_spec::asset::star::{self, RECORD_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;
 
-use crate::frame::shader::record::PIPELINE_STARS;
+use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::STARS_FLOATS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -36,7 +36,7 @@ impl StarPass {
     /// `air`, the air's entries (gpu/atmosphere.rs `entries`): a star is
     /// dimmed by the air above the eye as its table holds it.
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES]) -> StarPass {
-        let built = pipelines.build(g, PIPELINE_STARS, g.canvas());
+        let built = pipelines.build(g, PIPELINE_STAR, g.canvas());
         let uniform = g.buffer(word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let stars: Vec<f32> = CATALOG.as_chunks::<RECORD_BYTES>().0.iter().flat_map(star_floats).collect();
         let catalog = g.buffer(word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);

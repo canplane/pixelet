@@ -19,7 +19,7 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED, SHADER_MISS,
+    PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY, PIPELINE_SKY, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED, SHADER_MISS,
     SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::word::frame::{
@@ -37,7 +37,8 @@ use crate::gpu::block::{blocks, Blocks, Draws};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
 use crate::gpu::image_map::ImageMap;
-use crate::gpu::pack::{Layers, Mips};
+use crate::gpu::mip::Mips;
+use crate::gpu::pack::Pack;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::marker::MarkerPass;
@@ -78,7 +79,7 @@ const SPAN_AO: usize = GpuSpanName::ao as usize;
 const SPAN_WORLD: usize = GpuSpanName::world as usize;
 const SPAN_MARKER: usize = GpuSpanName::marker as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
-const SPAN_CASES: usize = GpuSpanName::cases as usize;
+const SPAN_CASE: usize = GpuSpanName::case as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
 const SPAN_CAST: usize = GpuSpanName::cast as usize;
 const SPAN_GROW: usize = GpuSpanName::grow as usize;
@@ -244,11 +245,11 @@ pub struct FrameStat {
     pub gpu_read: bool,
     pub gpu_px: f64,
     /// The block table's blocks and their bytes, the depth targets' bytes
-    /// and the texture layers': each as counted, in bytes.
+    /// and the texture pack's: each as counted, in bytes.
     pub blocks: f64,
     pub block_bytes: f64,
     pub depth_bytes: f64,
-    pub layers_bytes: f64,
+    pub pack_bytes: f64,
     /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
     pub census: DrawCensus,
@@ -890,7 +891,7 @@ const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
 
 impl RaysPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
-        let built = pipelines.build(g, PIPELINE_SCREEN_RAYS, g.canvas());
+        let built = pipelines.build(g, PIPELINE_SCREEN_RAY, g.canvas());
         let depth = pipelines.build(g, PIPELINE_SCREEN_PREPASS, Format::depth32float);
         let words = look_words();
         let looks = g.buffer(word_bytes(4 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
@@ -1726,7 +1727,7 @@ pub struct Renderer {
     stars: StarPass,
     clouds: CloudPass,
     mips: Mips,
-    layers: Layers,
+    pack: Pack,
     moon: ImageMap,
     decor: DecorPass,
     impostor: ImpostorPass,
@@ -1760,7 +1761,7 @@ impl Renderer {
         let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, sky_buffer, air);
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
-        let layers = Layers::new(g);
+        let pack = Pack::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
         let mut sky_entries = vec![buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer), view_entry(2, moon.view), sampler_entry(3, moon.sampler)];
@@ -1803,7 +1804,7 @@ impl Renderer {
             stars,
             clouds,
             mips,
-            layers,
+            pack,
             moon,
             cases: [const { None }; SURFACES],
             order: Vec::new(),
@@ -1813,7 +1814,7 @@ impl Renderer {
     }
 
     /// What a block's face is painted by, wherever it is drawn from
-    /// (paint.wgsl): the frame, the sun's shadow, the layers, the occlusion
+    /// (paint.wgsl): the frame, the sun's shadow, the texture pack, the occlusion
     /// and the air.
     fn lit_entries(&self, frame: u32) -> Vec<Entry> {
         let [map, sampler] = self.shadow.entries(1);
@@ -1821,9 +1822,9 @@ impl Renderer {
             buffer_entry(0, frame),
             map,
             sampler,
-            view_entry(4, self.layers.view),
-            buffer_entry(5, self.layers.table),
-            sampler_entry(6, self.layers.sampler),
+            view_entry(4, self.pack.view),
+            buffer_entry(5, self.pack.table),
+            sampler_entry(6, self.pack.sampler),
             self.ao.entry(7),
         ];
         e.extend(self.atmosphere.entries());
@@ -1957,7 +1958,7 @@ impl Renderer {
         self.impostor.set_models(input.decor.iter().map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)));
         self.skinned.set_skins(input.skins);
         read.read(input.skins);
-        read.mark(self.layers.step(g, &self.mips, input.pack));
+        read.mark(self.pack.step(g, &self.mips, input.pack));
         read.mark(self.moon.step(g, &self.mips, input.moon));
         read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
         let mut cast = input.cast;
@@ -2135,7 +2136,7 @@ impl Renderer {
         g.end(pass);
         self.marker.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_MARKER]);
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_DEBUG]);
-        self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
+        self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASE]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
         release(canvas_view);
@@ -2282,7 +2283,7 @@ impl Renderer {
             block_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the markers' regions'.
             depth_bytes: px * 4.0 + self.ao.depth_bytes() + self.marker.depth_bytes(),
-            layers_bytes: self.layers.bytes as f64,
+            pack_bytes: self.pack.bytes as f64,
             census,
             gpu_spans,
         }

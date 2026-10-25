@@ -39,7 +39,7 @@ include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 10;
-pub const PIPELINE_MIPS: u32 = 11;
+pub const PIPELINE_MIP: u32 = 11;
 pub const PIPELINE_DECOR_PREPASS: u32 = 12;
 pub const PIPELINE_AO_DOWNSAMPLE: u32 = 13;
 pub const PIPELINE_AO_SAMPLE: u32 = 14;
@@ -49,9 +49,9 @@ pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 17;
 pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 18;
 pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 19;
 pub const PIPELINE_ATMOS_EXPOSURE: u32 = 20;
-pub const PIPELINE_STARS: u32 = 21;
-pub const PIPELINE_CLOUDS: u32 = 22;
-pub const PIPELINE_CLOUDS_ABOVE: u32 = 23;
+pub const PIPELINE_STAR: u32 = 21;
+pub const PIPELINE_CLOUD: u32 = 22;
+pub const PIPELINE_CLOUD_ABOVE: u32 = 23;
 pub const PIPELINE_CLOUD_FIELD: u32 = 24;
 pub const PIPELINE_SHEET: u32 = 25;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 26;
@@ -61,7 +61,7 @@ pub const PIPELINE_MARKER_REGION: u32 = 28;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 29;
 /// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
-pub const PIPELINE_SCREEN_RAYS: u32 = 30;
+pub const PIPELINE_SCREEN_RAY: u32 = 30;
 /// Decor's and the actors' depth from the sun, and the world's laid in
 /// before them, into the sun's shadow map (gpu/shadow.rs).
 pub const PIPELINE_DECOR_DEPTH: u32 = 31;
@@ -442,11 +442,11 @@ const fn plan_of(id: u32) -> Plan {
             &[],
             &[&[[0, UNIFORM], [19, UNIFORM]]],
         ),
-        PIPELINE_SCREEN_RAYS => plan(
+        PIPELINE_SCREEN_RAY => plan(
             Head {
                 depth_write: true,
                 blend: OPAQUE,
-                ..blended(SHADER_SCREEN_RAYS, CULL_NONE)
+                ..blended(SHADER_SCREEN_RAY, CULL_NONE)
             },
             &[],
             &[&SCREEN_GROUP],
@@ -490,7 +490,7 @@ const fn plan_of(id: u32) -> Plan {
             &[],
             &[&SKY_GROUP],
         ),
-        PIPELINE_MIPS => plan(screen(SHADER_MIPS), &[], &[&SKIN]),
+        PIPELINE_MIP => plan(screen(SHADER_MIP), &[], &[&SKIN]),
         PIPELINE_IMPOSTOR => plan(
             Head {
                 topology: STRIP,
@@ -543,29 +543,29 @@ const fn plan_of(id: u32) -> Plan {
             &[],
             &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9]]],
         ),
-        PIPELINE_STARS => plan(
+        PIPELINE_STAR => plan(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
                 blend: ADD,
-                ..blended(SHADER_STARS, CULL_NONE)
+                ..blended(SHADER_STAR, CULL_NONE)
             },
             &[],
             &[&[[0, UNIFORM], [8, UNIFORM], [9, TEXTURE], [11, SAMPLER]], &[[0, UNIFORM], [1, STORAGE]]],
         ),
         // From under the sheets only where the world left the far plane; from over them everywhere.
-        PIPELINE_CLOUDS => plan(
+        PIPELINE_CLOUD => plan(
             Head {
                 depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_CLOUDS, CULL_NONE)
+                ..blended(SHADER_CLOUD, CULL_NONE)
             },
             &[],
             &[&CLOUD_GROUP],
         ),
-        PIPELINE_CLOUDS_ABOVE => plan(
+        PIPELINE_CLOUD_ABOVE => plan(
             Head {
                 depth_compare: ALWAYS,
-                ..blended(SHADER_CLOUDS, CULL_NONE)
+                ..blended(SHADER_CLOUD, CULL_NONE)
             },
             &[],
             &[&CLOUD_GROUP],

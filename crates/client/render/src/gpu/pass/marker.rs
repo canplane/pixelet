@@ -13,7 +13,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Format, Gpu, Load, Stamp};
 use crate::gpu::block::{Blocks, Draws};
-use crate::gpu::pack::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, Mips};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::{Paint, Sheet, SlotSet};

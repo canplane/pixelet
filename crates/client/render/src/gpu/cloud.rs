@@ -5,14 +5,14 @@
 //! per device.
 //! The cumulus is drawn as decor is (`pxl-kernel domain/scene/environment/cloud.rs`).
 
-use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
+use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load};
 use crate::gpu::atmosphere::AIR_ENTRIES;
-use crate::gpu::pack::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::space::coord::world::EXTENT;
@@ -34,8 +34,8 @@ pub struct CloudPass {
 impl CloudPass {
     /// `sky_buffer`, the sky's words, whose ray each pixel's is.
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32, air: [Entry; AIR_ENTRIES]) -> CloudPass {
-        let below = pipelines.build(g, PIPELINE_CLOUDS, g.canvas());
-        let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, g.canvas());
+        let below = pipelines.build(g, PIPELINE_CLOUD, g.canvas());
+        let above = pipelines.build(g, PIPELINE_CLOUD_ABOVE, g.canvas());
         let tile = g.texture(
             CLOUD_TILE_TEXELS,
             CLOUD_TILE_TEXELS,

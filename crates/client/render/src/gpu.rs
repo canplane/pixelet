@@ -9,6 +9,7 @@ pub mod block;
 pub mod cloud;
 pub mod grown;
 pub mod image_map;
+pub mod mip;
 pub mod pack;
 pub mod pass;
 pub mod pipeline;

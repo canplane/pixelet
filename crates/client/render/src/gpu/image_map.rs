@@ -8,7 +8,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{release, texture_usage, Format, Gpu, Image};
 
-use crate::gpu::pack::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, Mips};
 
 pub struct ImageMap {
     texture: u32,

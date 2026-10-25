@@ -15,7 +15,7 @@ pub const SHADER_PUCK_BEACON: u32 = 4;
 pub const SHADER_MARKER: u32 = 5;
 pub const SHADER_SKY: u32 = 6;
 pub const SHADER_DEBUG: u32 = 7;
-pub const SHADER_MIPS: u32 = 8;
+pub const SHADER_MIP: u32 = 8;
 pub const SHADER_AO_DOWNSAMPLE: u32 = 9;
 pub const SHADER_AO_SAMPLE: u32 = 10;
 pub const SHADER_AO_BLUR: u32 = 11;
@@ -24,8 +24,8 @@ pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 13;
 pub const SHADER_ATMOS_MULTISCATTER: u32 = 14;
 pub const SHADER_ATMOS_SKY_VIEW: u32 = 15;
 pub const SHADER_ATMOS_EXPOSURE: u32 = 16;
-pub const SHADER_STARS: u32 = 17;
-pub const SHADER_CLOUDS: u32 = 18;
+pub const SHADER_STAR: u32 = 17;
+pub const SHADER_CLOUD: u32 = 18;
 pub const SHADER_CLOUD_FIELD: u32 = 19;
 pub const SHADER_SHEET: u32 = 20;
 pub const SHADER_IMPOSTOR: u32 = 21;
@@ -33,7 +33,7 @@ pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
 pub const SHADER_MARKER_REGION: u32 = 24;
 /// The eye's rays drawn at their pixels (pxl-spec-core ray.rs).
-pub const SHADER_SCREEN_RAYS: u32 = 25;
+pub const SHADER_SCREEN_RAY: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-spec-core's descent (script/shader-wgsl.ts): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
@@ -137,7 +137,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_word", "sky"],
     // SHADER_DEBUG
     &["frame", "encode", "debug"],
-    // SHADER_MIPS
+    // SHADER_MIP
     &["mip"],
     // SHADER_AO_DOWNSAMPLE
     &["frame", "ao_view", "ao_downsample"],
@@ -181,9 +181,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_pass",
         "atmos_exposure",
     ],
-    // SHADER_STARS
+    // SHADER_STAR
     &["frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "star"],
-    // SHADER_CLOUDS
+    // SHADER_CLOUD
     air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_word", "cloud"],
     // SHADER_CLOUD_FIELD
     &["cloud_hash", "noise", "cloud_tile", "atmos_pass", "cloud_bake"],
@@ -197,7 +197,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "atmos_pass", "atmos_march", "atmos_irradiance"],
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
-    // SHADER_SCREEN_RAYS
+    // SHADER_SCREEN_RAY
     lit!["lattice", "ray", "eye", "paint", "screen_ray", "screen_lit"],
     // SHADER_CAST
     &["cast.gen"],
