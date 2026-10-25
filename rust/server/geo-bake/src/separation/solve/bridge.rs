@@ -65,7 +65,7 @@ fn is_non_vehicular(class: &str) -> bool {
 }
 
 /// Arnis's `effective_layer`: the layer, never below 0; a bridge untagged is 1.
-fn effective_layer(r: &Run) -> i64 {
+fn effective_layer(r: &Stretch) -> i64 {
     r.piece.way.tags.level.map(|l| l.max(0)).unwrap_or(i64::from(r.piece.form == Form::Bridge))
 }
 
@@ -97,7 +97,7 @@ impl Obstacles {
         }
     }
 
-    fn of(src: &Source, [origin, far]: [[f64; 2]; 2], units: Units) -> Obstacles {
+    fn of(src: &Ring, [origin, far]: [[f64; 2]; 2], units: Units) -> Obstacles {
         let cell = |p: [f64; 2]| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U];
         let mut out = Obstacles {
             list: Vec::new(),
@@ -212,11 +212,11 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 // ---- road bridges (Arnis `BridgeStructureMap::build`) ----
 
 /// Decks resolved: by cell, the deck's height and layer.
-pub(super) type Separation = FnvHashMap<(i64, i64), (i32, i64)>;
+pub(super) type Laid = FnvHashMap<(i64, i64), (i32, i64)>;
 
-pub(super) struct Bridges {
+pub(super) struct Decks {
     pub(super) ys: Vec<(usize, Vec<i32>)>,
-    pub(super) separation: Separation,
+    pub(super) laid: Laid,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
     pub(super) ramp_ways: FnvHashSet<PartId>,
 }
@@ -226,7 +226,7 @@ fn cell_key(c: [f64; 2]) -> (i64, i64) {
 }
 
 /// The way's heading end to end, whole, not as far as the ring cut it.
-fn heading_of(r: &Run) -> Option<f64> {
+fn heading_of(r: &Stretch) -> Option<f64> {
     let p = &r.whole.points;
     let (s, e) = (p[0], p[p.len() - 1]);
     let d = [e[0] - s[0], e[1] - s[1]];
@@ -252,21 +252,21 @@ fn cells_box(cells: &[[f64; 2]]) -> [[f64; 2]; 2] {
     b
 }
 
-fn lateral(p: [f64; 2], r: &Run) -> f64 {
+fn lateral(p: [f64; 2], r: &Stretch) -> f64 {
     r.whole.points.windows(2).map(|w| dist_to_segment(p, w[0], w[1])).fold(f64::INFINITY, f64::min)
 }
 
 /// Arnis `side_by_side`: parallel decks forming one, across layers only when they touch. Weighed
 /// on the ways whole, as Arnis weighs an OSM way, so two tiles that see both decide alike wherever
 /// their rings cut them.
-fn side_by_side(a: &Run, b: &Run, units: Units) -> bool {
+fn side_by_side(a: &Stretch, b: &Stretch, units: Units) -> bool {
     let (Some(ha), Some(hb)) = (heading_of(a), heading_of(b)) else { return false };
     if !parallel(ha, hb) {
         return false;
     }
     let same = effective_layer(a) == effective_layer(b);
     // their edges meet where each way's cover ends (pxl-spec-core `reach`)
-    let reach = |r: &Run| f64::from(ways::reach((r.width_u / CELL_U) as f32));
+    let reach = |r: &Stretch| f64::from(ways::reach((r.width_u / CELL_U) as f32));
     let touching = reach(a) + reach(b) + f64::from(units.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same { touching.max(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M))) } else { touching };
     let (short, long) = if a.whole.length() <= b.whole.length() { (a, b) } else { (b, a) };
@@ -440,8 +440,8 @@ impl DeckBlock {
     }
 }
 
-/// Run `r`'s deck cell by cell, member `m` of its group (`DECK_BLOCK`).
-fn deck_of(r: &Run, m: usize, members: &[DeckMember], reqs: &DeckReqs, units: Units) -> Vec<i32> {
+/// Stretch `r`'s deck cell by cell, member `m` of its group (`DECK_BLOCK`).
+fn deck_of(r: &Stretch, m: usize, members: &[DeckMember], reqs: &DeckReqs, units: Units) -> Vec<i32> {
     let me = &members[m];
     let mut blocks: FnvHashMap<usize, DeckBlock> = FnvHashMap::default();
     (0..r.cell.len())
@@ -462,11 +462,11 @@ fn along(me: &DeckMember, p: [f64; 2]) -> f64 {
     (p[0] - me.origin[0]) * me.dir[0] + (p[1] - me.origin[1]) * me.dir[1]
 }
 
-/// Block `k` of run `r`'s deck, from what its group must meet about its middle: as Arnis's structure,
+/// Block `k` of stretch `r`'s deck, from what its group must meet about its middle: as Arnis's structure,
 /// but over the windows (`DECK_WINDOW`, `DECK_NEAR`), not the whole. The ground floors the deck and is
 /// no point of its line, so a deck with one thing to clear in sight holds its height over it rather
 /// than dipping to the ground at the window's edge; where an end is in sight, it comes down to it.
-fn deck_block(r: &Run, k: usize, m: usize, members: &[DeckMember], reqs: &DeckReqs, units: Units) -> DeckBlock {
+fn deck_block(r: &Stretch, k: usize, m: usize, members: &[DeckMember], reqs: &DeckReqs, units: Units) -> DeckBlock {
     let me = &members[m];
     let c = r.whole.at(((k * DECK_BLOCK) as f64).min(r.whole.length()));
     let within = |p: &[f64; 2], d: usize| libm::hypot(p[0] - c[0], p[1] - c[1]) <= d as f64;
@@ -541,20 +541,20 @@ fn deck_block(r: &Run, k: usize, m: usize, members: &[DeckMember], reqs: &DeckRe
     DeckBlock::Hull(upper_hull(pts))
 }
 
-fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Bridges {
-    let road: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bridge && !runs[q].rail()).collect();
+fn road_decks(src: &Ring, stretches: &[Stretch], obstacles: &Obstacles, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Decks {
+    let road: Vec<usize> = (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Bridge && !stretches[q].rail()).collect();
     let mut uf = Uf((0..road.len()).collect());
     // shared ends at one layer, then decks side by side
     let mut by_node: BTreeMap<&End, Vec<usize>> = BTreeMap::new();
     for (i, &q) in road.iter().enumerate() {
-        for e in &runs[q].ends {
+        for e in &stretches[q].ends {
             by_node.entry(e).or_default().push(i);
         }
     }
     for members in by_node.values() {
         for (a, &i) in members.iter().enumerate() {
             for &j in &members[a + 1..] {
-                if effective_layer(&runs[road[i]]) == effective_layer(&runs[road[j]]) {
+                if effective_layer(&stretches[road[i]]) == effective_layer(&stretches[road[j]]) {
                     uf.union(i, j);
                 }
             }
@@ -562,13 +562,13 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
     }
     // two decks whose cells lie further apart than any deck beside another (`side_by_side`'s
     // farthest) are not weighed
-    let boxes: Vec<[[f64; 2]; 2]> = road.iter().map(|&q| cells_box(&runs[q].whole.points)).collect();
-    let reach = |q: usize| f64::from(ways::reach((runs[q].width_u / CELL_U) as f32));
+    let boxes: Vec<[[f64; 2]; 2]> = road.iter().map(|&q| cells_box(&stretches[q].whole.points)).collect();
+    let reach = |q: usize| f64::from(ways::reach((stretches[q].width_u / CELL_U) as f32));
     let farthest = |a: usize, b: usize| (reach(a) + reach(b) + f64::from(units.c(SIDE_DECK_EDGE_GAP_M))).max(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M)));
     for i in 0..road.len() {
         for j in i + 1..road.len() {
             let apart = (0..2).map(|k| (boxes[j][0][k] - boxes[i][1][k]).max(boxes[i][0][k] - boxes[j][1][k])).fold(0.0, f64::max);
-            if apart <= farthest(road[i], road[j]) && uf.find(i) != uf.find(j) && side_by_side(&runs[road[i]], &runs[road[j]], units) {
+            if apart <= farthest(road[i], road[j]) && uf.find(i) != uf.find(j) && side_by_side(&stretches[road[i]], &stretches[road[j]], units) {
                 uf.union(i, j);
             }
         }
@@ -578,15 +578,15 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         groups.entry(uf.find(i)).or_default().push(r);
     }
     let mut groups: Vec<Vec<usize>> = groups.into_values().collect();
-    groups.sort_by_key(|g| (g.iter().map(|&q| effective_layer(&runs[q])).max().unwrap_or(0), runs[g[0]].piece.id()));
+    groups.sort_by_key(|g| (g.iter().map(|&q| effective_layer(&stretches[q])).max().unwrap_or(0), stretches[g[0]].piece.id()));
 
     let mut bridge_nodes: FnvHashMap<&End, Vec<usize>> = FnvHashMap::default();
-    for q in (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bridge) {
-        for e in &runs[q].ends {
+    for q in (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Bridge) {
+        for e in &stretches[q].ends {
             bridge_nodes.entry(e).or_default().push(q);
         }
     }
-    let mut separation: Separation = FnvHashMap::default();
+    let mut laid: Laid = FnvHashMap::default();
     let mut joints: FnvHashMap<End, i32> = FnvHashMap::default();
     let mut claimed: FnvHashSet<PartId> = FnvHashSet::default();
     let mut out = Vec::new();
@@ -594,7 +594,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         let mut node_members: FnvHashMap<&End, usize> = FnvHashMap::default();
         let mut group_nodes: FnvHashSet<&End> = FnvHashSet::default();
         for &q in g {
-            let seen: FnvHashSet<&End> = runs[q].nodes.iter().collect();
+            let seen: FnvHashSet<&End> = stretches[q].nodes.iter().collect();
             for n in &seen {
                 *node_members.entry(n).or_default() += 1;
             }
@@ -608,7 +608,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         let mut ramp_ends: FnvHashSet<&End> = FnvHashSet::default();
         let mut pending: Vec<(PartId, Vec<[f64; 2]>, End, i32)> = Vec::new();
         for &q in g {
-            for e in &runs[q].ends {
+            for e in &stretches[q].ends {
                 if !is_boundary(e) {
                     continue;
                 }
@@ -637,7 +637,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         // what the deck must meet or clear, each where it lies, in the ring's cells
         let mut reqs = DeckReqs::default();
         for (m, &q) in g.iter().enumerate() {
-            let r = &runs[q];
+            let r = &stretches[q];
             let last = r.cell.len() - 1;
             for (e, i) in [(&r.ends[0], 0), (&r.ends[1], last)] {
                 if is_boundary(e) {
@@ -664,7 +664,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         };
         let mut needs = Vec::new();
         for (m, &q) in g.iter().enumerate() {
-            let r = &runs[q];
+            let r = &stretches[q];
             let layer = effective_layer(r);
             for (i, &c) in r.cell.iter().enumerate() {
                 let (at, ground) = (absolute(r.at[i]), r.terrain[i]);
@@ -680,7 +680,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                 if need > ground {
                     needs.push((at, need, ground, false));
                 }
-                if let Some(&(lower, lower_layer)) = separation.get(&cell_key(c)) {
+                if let Some(&(lower, lower_layer)) = laid.get(&cell_key(c)) {
                     let over = lower + units.c(f64::from(STACKED_DECK_HEADROOM_M));
                     if lower_layer < layer && over > ground {
                         needs.push((at, over, ground, true));
@@ -695,7 +695,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         let members: Vec<DeckMember> = g
             .iter()
             .map(|&q| {
-                let w = &runs[q].whole;
+                let w = &stretches[q].whole;
                 let (s, e) = (w.points[0], w.points[w.points.len() - 1]);
                 let d = libm::hypot(e[0] - s[0], e[1] - s[1]);
                 let dir = if d > 0.0 { [(e[0] - s[0]) / d, (e[1] - s[1]) / d] } else { [1.0, 0.0] };
@@ -705,16 +705,16 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                     dir,
                     // whether the way runs along its own heading, judged on the way whole
                     follows: d >= 1.0 && is_monotonic(&w.points.iter().map(along).collect::<Vec<f64>>(), f64::from(units.c(PROFILE_MONOTONIC_TOLERANCE_M))),
-                    level: runs[q].piece.way.tags.level.map_or(0, |l| l.max(0)),
+                    level: stretches[q].piece.way.tags.level.map_or(0, |l| l.max(0)),
                     length: w.length(),
                 }
             })
             .collect();
-        let mut ys: Vec<Vec<i32>> = g.iter().enumerate().map(|(m, &q)| deck_of(&runs[q], m, &members, &reqs, units)).collect();
+        let mut ys: Vec<Vec<i32>> = g.iter().enumerate().map(|(m, &q)| deck_of(&stretches[q], m, &members, &reqs, units)).collect();
 
         // an end above the ground ramps down to it inside the member
         for (m, &q) in g.iter().enumerate() {
-            let r = &runs[q];
+            let r = &stretches[q];
             let total = ys[m].len();
             let (gs, ge) = (r.terrain[0], r.terrain[total - 1]);
             let ramp_s = anchors_end(&r.ends[0]) && ys[m][0] > gs + 1;
@@ -746,9 +746,9 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                 .iter()
                 .enumerate()
                 .find_map(|(m, &q)| {
-                    if runs[q].ends[0] == e {
+                    if stretches[q].ends[0] == e {
                         ys[m].first().copied()
-                    } else if runs[q].ends[1] == e {
+                    } else if stretches[q].ends[1] == e {
                         ys[m].last().copied()
                     } else {
                         None
@@ -771,18 +771,18 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
 
         // what the structures after it meet and clear
         for (m, &q) in g.iter().enumerate() {
-            let r = &runs[q];
+            let r = &stretches[q];
             for (e, y) in [(&r.ends[0], ys[m][0]), (&r.ends[1], ys[m][ys[m].len() - 1])] {
                 let j = joints.entry(e.clone()).or_insert(y);
                 *j = (*j).max(y);
             }
             let layer = effective_layer(r);
             let width = (r.width_u / CELL_U) as f32;
-            let around = within(ways::reach(width));
+            let around = disk(ways::reach(width));
             for (&c, &y) in r.cell.iter().zip(&ys[m]) {
                 let (x, z) = cell_key(c);
                 for &[dx, dz] in &around {
-                    let e = separation.entry((x + dx, z + dz)).or_insert((y, layer));
+                    let e = laid.entry((x + dx, z + dz)).or_insert((y, layer));
                     if y > e.0 {
                         *e = (y, layer);
                     }
@@ -791,21 +791,17 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             out.push((q, std::mem::take(&mut ys[m])));
         }
     }
-    Bridges {
-        ys: out,
-        separation,
-        ramp_ways: claimed,
-    }
+    Decks { ys: out, laid, ramp_ways: claimed }
 }
 
 // ---- rail bridges: on a road deck, or one level a viaduct with ramps at its free ends ----
 
-fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, units: Units) -> Vec<(usize, Vec<i32>)> {
-    let rail: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bridge && runs[q].rail()).collect();
+fn rail_decks(stretches: &[Stretch], obstacles: &Obstacles, laid: &Laid, units: Units) -> Vec<(usize, Vec<i32>)> {
+    let rail: Vec<usize> = (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Bridge && stretches[q].rail()).collect();
     let mut out = Vec::new();
     let mut ends_count: FnvHashMap<&End, usize> = FnvHashMap::default();
     for &q in &rail {
-        for e in &runs[q].ends {
+        for e in &stretches[q].ends {
             *ends_count.entry(e).or_default() += 1;
         }
     }
@@ -814,8 +810,8 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
     let on: Vec<Vec<Option<i32>>> = rail
         .iter()
         .map(|&q| {
-            let layer = effective_layer(&runs[q]);
-            runs[q]
+            let layer = effective_layer(&stretches[q]);
+            stretches[q]
                 .cell
                 .iter()
                 .map(|&c| {
@@ -823,7 +819,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
                     let mut best: Option<(i64, i32)> = None;
                     for dx in -reach..=reach {
                         for dz in -reach..=reach {
-                            if let Some(&(y, l)) = separation.get(&(x + dx, z + dz)) {
+                            if let Some(&(y, l)) = laid.get(&(x + dx, z + dz)) {
                                 let d = dx.abs() + dz.abs();
                                 if l == layer && best.is_none_or(|(bd, _)| d < bd) {
                                     best = Some((d, y));
@@ -840,11 +836,11 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
     let mut uf = Uf((0..rail.len()).collect());
     let mut at_end: FnvHashMap<(&End, i64), usize> = FnvHashMap::default();
     for (i, &q) in rail.iter().enumerate() {
-        for e in &runs[q].ends {
-            match at_end.get(&(e, effective_layer(&runs[q]))) {
+        for e in &stretches[q].ends {
+            match at_end.get(&(e, effective_layer(&stretches[q]))) {
                 Some(&j) => uf.union(i, j),
                 None => {
-                    at_end.insert((e, effective_layer(&runs[q])), i);
+                    at_end.insert((e, effective_layer(&stretches[q])), i);
                 }
             }
         }
@@ -858,7 +854,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
         // of a deck under it, and its layer
         let mut cells: Vec<([f64; 2], i32, i32, i32, i64)> = Vec::new();
         for &i in &g {
-            let r = &runs[rail[i]];
+            let r = &stretches[rail[i]];
             let layer = effective_layer(r);
             for (j, &c) in r.cell.iter().enumerate() {
                 let ground = r.terrain[j];
@@ -869,7 +865,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
                         floor = floor.max(ground + o.headroom);
                     }
                 }
-                if let Some(&(lower, lower_layer)) = separation.get(&cell_key(c)) {
+                if let Some(&(lower, lower_layer)) = laid.get(&cell_key(c)) {
                     if lower_layer < layer {
                         over = lower + units.c(f64::from(STACKED_DECK_HEADROOM_M));
                     }
@@ -901,7 +897,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
             )
         };
         for &i in &g {
-            let r = &runs[rail[i]];
+            let r = &stretches[rail[i]];
             let total = r.cell.len();
             let last = total - 1;
             // the deck it rides, a gap in it taken from the cell before or after
@@ -977,21 +973,21 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
     out
 }
 
-/// The decks of the runs in scope, road bridges lower first and rail bridges over them, as lines,
+/// The decks of the stretches in scope, road bridges lower first and rail bridges over them, as lines,
 /// what a deck must clear read from the ring `ring`; and what a bore opening on one needs of them.
-pub(super) fn decks(src: &Source, runs: &[Run], ring: [[f64; 2]; 2], units: Units, lines: &mut Vec<(Line, Drawn)>) -> Bridges {
+pub(super) fn decks(src: &Ring, stretches: &[Stretch], ring: [[f64; 2]; 2], units: Units, lines: &mut Vec<(Line, Drawn)>) -> Decks {
     // what a deck must clear, only where there is a deck
-    let obstacles = if runs.iter().any(|r| r.piece.form == Form::Bridge) {
+    let obstacles = if stretches.iter().any(|r| r.piece.form == Form::Bridge) {
         Obstacles::of(src, ring, units)
     } else {
         Obstacles::none()
     };
-    let solved = bridges(src, runs, &obstacles, units, lines);
+    let solved = road_decks(src, stretches, &obstacles, units, lines);
     for (q, ys) in &solved.ys {
-        lines.push(part_of(&runs[*q], ys, [0, ys.len() - 1], Form::Bridge, 0));
+        lines.push(line_of(&stretches[*q], ys, [0, ys.len() - 1], Form::Bridge, 0));
     }
-    for (q, ys) in rail_bridges(runs, &obstacles, &solved.separation, units) {
-        lines.push(part_of(&runs[q], &ys, [0, ys.len() - 1], Form::Bridge, 0));
+    for (q, ys) in rail_decks(stretches, &obstacles, &solved.laid, units) {
+        lines.push(line_of(&stretches[q], &ys, [0, ys.len() - 1], Form::Bridge, 0));
     }
     solved
 }

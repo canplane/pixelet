@@ -33,7 +33,7 @@ use crate::segment::{End, PartId};
 use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::{Drawn, Line};
 
-use super::bridge::Bridges;
+use super::bridge::Decks;
 use super::*;
 
 // ---- Arnis's numbers for a bore, in metres, under its names ----
@@ -46,7 +46,7 @@ const TUNNEL_LAYER_DROP_M: f64 = 7.0;
 const TUNNEL_MAX_LAYERS_BELOW: i64 = 8;
 const TUNNEL_APPROACH_WAYS: usize = 8;
 /// Ours, not Arnis's: the steepest a bore longer than a tile rises from the lowest floor near it
-/// (`road_tunnels`): 2%, which a road tunnel is built within.
+/// (`road_bores`): 2%, which a road tunnel is built within.
 const TUNNEL_FAR_GRADE: f64 = 0.02;
 const RAIL_TUNNEL_DEPTH_M: f64 = 3.0;
 const RAIL_INTERIOR_HEIGHT_M: f64 = 4.0;
@@ -61,12 +61,12 @@ pub(super) fn approach_reach(level: i64, units: Units) -> f64 {
     mer_from_u(f64::from(tunnel_drop(level, units) * TUNNEL_RAMP_RUN) * CELL_U)
 }
 
-/// The bores of the runs in scope, road tunnels and rail tunnels, as lines; a road tunnel's portal
+/// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road tunnel's portal
 /// on a deck opens at it (`decks`).
-pub(super) fn bores(src: &Source, runs: &[Run], decks: &Bridges, units: Units, lines: &mut Vec<(Line, Drawn)>) {
+pub(super) fn bores(src: &Ring, stretches: &[Stretch], decks: &Decks, units: Units, lines: &mut Vec<(Line, Drawn)>) {
     let ceiling = (units.c(TUNNEL_CEIL_OFFSET_M) - units.c(BLOCK_M)).clamp(0, 255) as u8;
-    for (q, ys, covered) in road_tunnels(src, runs, decks, units, lines) {
-        let r = &runs[q];
+    for (q, ys, covered) in road_bores(src, stretches, decks, units, lines) {
+        let r = &stretches[q];
         // a stretch under cover keeps its ceiling, one open to the sky is cut to the surface, and
         // one a deck's portal holds over the ground is an embankment up to it
         let bore: Vec<Bore> = (0..ys.len())
@@ -86,14 +86,14 @@ pub(super) fn bores(src: &Source, runs: &[Run], decks: &Bridges, units: Units, l
                 Bore::Open => (Form::Tunnel, u8::MAX),
                 Bore::Raised => (Form::Approach, 0),
             };
-            lines.push(part_of(r, &ys, stretch, form, clear));
+            lines.push(line_of(r, &ys, stretch, form, clear));
         }
     }
-    for q in (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Tunnel && runs[q].rail()) {
+    for q in (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Tunnel && stretches[q].rail()) {
         // the floor under the interior, under the ceiling, under the cover (Arnis `generate_rail_tunnel_shell`)
         let depth = units.c(RAIL_TUNNEL_DEPTH_M + RAIL_INTERIOR_HEIGHT_M + BLOCK_M);
-        let ys: Vec<i32> = runs[q].terrain.iter().map(|t| t - depth).collect();
-        lines.push(part_of(&runs[q], &ys, [0, ys.len() - 1], Form::Tunnel, units.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
+        let ys: Vec<i32> = stretches[q].terrain.iter().map(|t| t - depth).collect();
+        lines.push(line_of(&stretches[q], &ys, [0, ys.len() - 1], Form::Tunnel, units.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
     }
 }
 
@@ -118,15 +118,15 @@ fn tunnel_drop(level: i64, units: Units) -> i32 {
     units.c(TUNNEL_COVER_DROP_M) + (-(level + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * units.c(TUNNEL_LAYER_DROP_M)
 }
 
-fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
-    let ramp_ways = &bridges.ramp_ways;
-    let tunnels: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Tunnel && !runs[q].rail()).collect();
+fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
+    let ramp_ways = &decks.ramp_ways;
+    let tunnels: Vec<usize> = (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Tunnel && !stretches[q].rail()).collect();
     // a node two tunnels share, or an end the ring cut, stays at depth
     let mut owner: FnvHashMap<&End, PartId> = FnvHashMap::default();
     let mut shared: FnvHashSet<&End> = FnvHashSet::default();
     for &q in &tunnels {
-        for n in &runs[q].nodes {
-            let id = runs[q].piece.id();
+        for n in &stretches[q].nodes {
+            let id = stretches[q].piece.id();
             match owner.get(n) {
                 Some(o) if *o != id => {
                     shared.insert(n);
@@ -138,22 +138,22 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
             }
         }
     }
-    let internal = |q: usize, e: usize| runs[q].clipped[e] || shared.contains(&runs[q].ends[e]);
-    let drop_of = |r: &Run| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), units);
+    let internal = |q: usize, e: usize| stretches[q].clipped[e] || shared.contains(&stretches[q].ends[e]);
+    let drop_of = |r: &Stretch| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), units);
 
     // ---- a portal on a road deck, at its end or along it, opens at the deck's height there, where Arnis
     // leaves it at the terrain under the deck: the bore ramps down from it, with no approach to sink ----
     let mut deck: FnvHashMap<&End, i32> = FnvHashMap::default();
     for &q in &tunnels {
         for e in (0..2).filter(|&e| !internal(q, e)) {
-            let (node, p) = (&runs[q].ends[e], runs[q].at[if e == 0 { 0 } else { runs[q].at.len() - 1 }]);
-            let on = bridges
+            let (node, p) = (&stretches[q].ends[e], stretches[q].at[if e == 0 { 0 } else { stretches[q].at.len() - 1 }]);
+            let on = decks
                 .ys
                 .iter()
-                .filter(|(b, _)| runs[*b].nodes.contains(node))
+                .filter(|(b, _)| stretches[*b].nodes.contains(node))
                 .filter_map(|(b, ys)| {
-                    let near = |k: &usize| libm::hypot(runs[*b].at[*k][0] - p[0], runs[*b].at[*k][1] - p[1]);
-                    // the run of the deck that passes it: a cell of it within a cell of the portal
+                    let near = |k: &usize| libm::hypot(stretches[*b].at[*k][0] - p[0], stretches[*b].at[*k][1] - p[1]);
+                    // the stretch of the deck that passes it: a cell of it within a cell of the portal
                     (0..ys.len()).min_by(|i, j| near(i).total_cmp(&near(j))).filter(|k| near(k) <= mer_from_u(CELL_U)).map(|k| ys[k])
                 })
                 .max();
@@ -164,7 +164,7 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
     }
 
     // ---- the approaches: ways at grade from a portal, as far as the drop needs and the road goes on ----
-    let portal_nodes: FnvHashSet<&End> = tunnels.iter().flat_map(|&q| (0..2).filter(move |&e| !internal(q, e)).map(move |e| &runs[q].ends[e])).collect();
+    let portal_nodes: FnvHashSet<&End> = tunnels.iter().flat_map(|&q| (0..2).filter(move |&e| !internal(q, e)).map(move |e| &stretches[q].ends[e])).collect();
     let surface = |part: &PartId| {
         src.ways
             .get(part)
@@ -190,7 +190,7 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
     let mut claims: BTreeMap<PartId, Vec<Claim>> = BTreeMap::new();
     let mut drops: FnvHashMap<End, i32> = FnvHashMap::default();
     for &q in &tunnels {
-        let r = &runs[q];
+        let r = &stretches[q];
         let want = drop_of(r);
         let walking = is_pedestrian(r.piece.way.class.as_deref().unwrap_or(""));
         for e in 0..2 {
@@ -315,11 +315,11 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
     let roof = units.c(TUNNEL_ROOF_COVER_M);
     let mut out = Vec::new();
     for &q in &tunnels {
-        let r = &runs[q];
+        let r = &stretches[q];
         let n = r.cell.len();
         let last = n - 1;
         // the lowest ground over the bore's footprint decides its roof
-        let wall = within(ways::footprint((r.width_u / CELL_U) as f32));
+        let wall = disk(ways::footprint((r.width_u / CELL_U) as f32));
         let cover: Vec<i32> =
             r.at.iter()
                 .zip(&r.terrain)

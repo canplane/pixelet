@@ -15,7 +15,7 @@
 // limitations under the License.
 
 //! A tile's bridges and tunnels, solved: what it reads, the structures in
-//! scope, the stretches of them it sees (`Run`), and the lines it keeps; the
+//! scope, the stretches of them it sees (`Stretch`), and the lines it keeps; the
 //! bridges are `bridge`'s, the tunnels `tunnel`'s. It began as louis-e/arnis `c96872e`
 //! ported, read for Overture's fields where Arnis reads OSM's tags, its widths
 //! the ground's, and its numbers, metres (a block a metre upright on the
@@ -38,7 +38,7 @@
 //! - What only the whole piece can answer is not answered by reading past the
 //!   ring for it, which costs every tile reads it is not owed. A tile that
 //!   cannot see it does without it, by a rule that leans on what it sees
-//!   (a long bore, `tunnel::road_tunnels`; a deck, `bridge::deck_block`).
+//!   (a long bore, `tunnel::road_bores`; a deck, `bridge::deck_block`).
 //!
 //! Arnis is where this solve started, not a bound on it: where its answer
 //! needs a structure whole, the ring wins and the answer is reworked.
@@ -81,8 +81,8 @@ impl Units {
 
 /// What the search has read: the ring's tiles it reached, their ground, every
 /// way on them, their water, and their structures' pieces.
-struct Source {
-    ring: BTreeSet<[i32; 2]>,
+struct Ring {
+    tiles: BTreeSet<[i32; 2]>,
     loaded: BTreeSet<[i32; 2]>,
     ground: FnvHashMap<[i32; 2], Vec<i16>>,
     ways: BTreeMap<PartId, Way>,
@@ -105,13 +105,13 @@ struct Sampled {
 
 /// Whether a piece is a road tunnel: one Arnis bores as deep as its cover
 /// asks, where a rail tunnel keeps a depth under the ground.
-fn road_tunnel(piece: &Piece) -> bool {
+fn is_road_tunnel(piece: &Piece) -> bool {
     piece.form == Form::Tunnel && piece.way.subtype != "rail"
 }
 
 /// A stretch of a piece inside the ring: what Arnis takes for a way, its
 /// cells a cell apart.
-struct Run {
+struct Stretch {
     piece: Piece,
     k0: usize,
     /// Cells: DB coordinates, the ring's cell coordinates, the terrain.
@@ -131,7 +131,7 @@ struct Run {
     width_u: f64,
 }
 
-impl Run {
+impl Stretch {
     /// A railway's, not a road's: Arnis solves the two apart.
     fn rail(&self) -> bool {
         self.piece.way.subtype == "rail"
@@ -173,8 +173,8 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     let units = Units {
         per_m: Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m(),
     };
-    let mut src = Source {
-        ring: tiles.into_iter().collect(),
+    let mut src = Ring {
+        tiles: tiles.into_iter().collect(),
         loaded: BTreeSet::new(),
         ground: FnvHashMap::default(),
         ways: BTreeMap::new(),
@@ -216,7 +216,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     }
     let portal_near = |s: &Sampled| {
         let p = &s.piece.way.points;
-        road_tunnel(&s.piece) && [p[0], p[p.len() - 1]].iter().any(|e| off([e[0], e[1]]) <= reach_of(s.piece.way.tags.level.unwrap_or(0)))
+        is_road_tunnel(&s.piece) && [p[0], p[p.len() - 1]].iter().any(|e| off([e[0], e[1]]) <= reach_of(s.piece.way.tags.level.unwrap_or(0)))
     };
     let mut queue: Vec<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own) || portal_near(s)).map(|(id, _)| id.clone()).collect();
     // a tile no structure touches nor sinks into has nothing to solve
@@ -226,7 +226,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     let reach = mer_from_u(f64::from(units.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
-    let lies_on = |o: &Piece, ends: &FnvHashSet<End>| (o.form == Form::Bridge || road_tunnel(o)) && o.way.points.iter().any(|p| ends.contains(&End::at([p[0], p[1]])));
+    let lies_on = |o: &Piece, ends: &FnvHashSet<End>| (o.form == Form::Bridge || is_road_tunnel(o)) && o.way.points.iter().any(|p| ends.contains(&End::at([p[0], p[1]])));
     let mut scope: BTreeSet<PartId> = BTreeSet::new();
     let (mut seen_ends, mut seen_portals, mut seen_decks): (FnvHashSet<End>, FnvHashSet<End>, Vec<[[f64; 2]; 2]>) = Default::default();
     src.fresh.clear();
@@ -238,7 +238,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         let s = &src.pieces[&id];
         let mut reached: Vec<PartId> = s.piece.way.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect();
         seen_ends.extend(s.piece.way.ends.iter().cloned());
-        if road_tunnel(&s.piece) {
+        if is_road_tunnel(&s.piece) {
             // what an end of it lies on, at that one's end or along it: a deck its portal opens
             // on, or a road tunnel it runs on in
             let ends: FnvHashSet<End> = s.piece.way.ends.iter().cloned().collect();
@@ -259,12 +259,12 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         }
         queue.extend(reached.into_iter().filter(|q| !scope.contains(q)));
     }
-    let runs = runs_of(&src, &scope, lo);
+    let stretches = stretches_of(&src, &scope, lo);
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
-    let decks = bridge::decks(&src, &runs, [lo, hi], units, &mut lines);
-    tunnel::bores(&src, &runs, &decks, units, &mut lines);
+    let decks = bridge::decks(&src, &stretches, [lo, hi], units, &mut lines);
+    tunnel::bores(&src, &stretches, &decks, units, &mut lines);
     let mut out = Solved::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
@@ -288,10 +288,10 @@ fn grown(b: [[f64; 2]; 2], by: f64) -> [[f64; 2]; 2] {
     [[b[0][0] - by, b[0][1] - by], [b[1][0] + by, b[1][1] + by]]
 }
 
-impl Source {
+impl Ring {
     /// Whether a point lies in the ring: past it nothing of a way is used.
     fn inside(&self, p: [f64; 2]) -> bool {
-        self.ring.contains(&tile_of(p))
+        self.tiles.contains(&tile_of(p))
     }
 
     /// Whether a point's ground is held: its tile of the ring was read.
@@ -301,7 +301,7 @@ impl Source {
 
     /// Reads a tile of the ring once; a tile past it is never read.
     fn load(&mut self, r: &mut Reader<impl Store>, p: [i32; 2]) -> Result<(), String> {
-        if !self.ring.contains(&p) || self.loaded.contains(&p) {
+        if !self.tiles.contains(&p) || self.loaded.contains(&p) {
             return Ok(());
         }
         self.loaded.insert(p);
@@ -352,7 +352,7 @@ impl Source {
         let reach = mer_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
-            .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
+            .filter(|(_, p)| self.tiles.contains(&tile_of(*p)))
             .collect();
         let mut wanted: BTreeSet<[i32; 2]> = BTreeSet::new();
         for (_, p) in &at {
@@ -373,7 +373,7 @@ impl Source {
 }
 
 /// Each piece in scope as its stretches inside the ring.
-fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run> {
+fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Stretch> {
     let mut out = Vec::new();
     for id in scope {
         let s = &src.pieces[id];
@@ -392,7 +392,7 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
             }
             let at: Vec<[f64; 2]> = (k0..=k1).map(|k| samples[&k].0).collect();
             let terrain: Vec<i32> = (k0..=k1).map(|k| samples[&k].1).collect();
-            // a run's end the ring cut (`End::Ring`) marks where this tile stops looking, never an
+            // a stretch's end the ring cut (`End::Ring`) marks where this tile stops looking, never an
             // end of the piece: nothing joins there, and no height may be drawn from it (the module's
             // rules)
             let clipped = [k0 != 0, k1 != s.n];
@@ -403,7 +403,7 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
             ];
             let mut nodes: Vec<End> = s.piece.way.points.iter().map(|p| [p[0], p[1]]).filter(|&p| src.inside(p)).map(End::at).collect();
             nodes.extend(ends.iter().cloned());
-            out.push(Run {
+            out.push(Stretch {
                 piece: s.piece.clone(),
                 k0,
                 cell: at.iter().map(|p| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U]).collect(),
@@ -423,7 +423,7 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
 
 /// The cells about one whose centers lie within `reach` cells of its own, as
 /// a way covers them (pxl-spec-core `covers`, here its distance to its own).
-fn within(reach: f32) -> Vec<[i64; 2]> {
+fn disk(reach: f32) -> Vec<[i64; 2]> {
     let r = libm::ceilf(reach) as i64;
     (-r..=r)
         .flat_map(|dz| (-r..=r).map(move |dx| [dx, dz]))
@@ -437,15 +437,15 @@ fn way_width(row: &Segment) -> f64 {
 }
 
 /// A point in DB coordinates as cells from the world's corner: the same bits on every tile, where a
-/// ring's own cells (`Run::cell`), taken from its corner, differ in their last bits from one tile's to
+/// ring's own cells (`Stretch::cell`), taken from its corner, differ in their last bits from one tile's to
 /// the next's, enough to move what lies on a window's edge.
 fn absolute(p: [f64; 2]) -> [f64; 2] {
     [u_from_mer(p[0]) / CELL_U, u_from_mer(p[1]) / CELL_U]
 }
 
-/// Cells `a..=b` of a run as a line of `form` at heights `ys`: the piece's
+/// Cells `a..=b` of a stretch as a line of `form` at heights `ys`: the piece's
 /// vertices and where the slope bends, no more.
-fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, Drawn) {
+fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, Drawn) {
     let step = mer_from_u(CELL_U);
     let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
