@@ -6,11 +6,14 @@
 //! layer and no window's square holds it. It is laid on the field's own map, which the
 //! wind carries (`pxl-spec-core cloud.rs` `drift`): a block of cells there
 //! is built once and drawn moved, each instance a model, a sprite or nothing
-//! by its size on the screen (`domain/scene/decor/cell.rs` `present_block`).
+//! by its size on the screen (`present_block`), by the tiers the GPU draws
+//! decor by, one rule (pxl-spec-core scatter.rs `drawn::tier`). A block is
+//! laid in the lanes the decor and impostor shaders read
+//! (domain/scene/lane.rs).
 
 use fnv::FnvHashMap;
 
-use pxl_render::frame::draw::DrawList;
+use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::asset::decor::DECORS;
@@ -26,10 +29,9 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
 use crate::domain::query::model::asset::model_of;
-use crate::domain::scene::decor::cell::{present_block, Shown};
 use crate::domain::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
-use crate::domain::scene::decor::instance::{decor_groups, GroupLanes};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{km_per_u, units_per_px_at};
 use crate::domain::view::observation::eye;
@@ -293,7 +295,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 fn built(b: &Block) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the block's bytes, held until it goes, which is after this turn reads them.
     let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
-    decor_groups(words).zip(VARIANTS).flat_map(move |((first, n), asset)| {
+    lane::groups(words).zip(VARIANTS).flat_map(move |((first, n), asset)| {
         let lane = GroupLanes {
             first: first as usize,
             count: n as usize,
@@ -346,4 +348,83 @@ fn build(key: [i64; 2], base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], 
         index,
         heights: if instances == 0 { [0.0; 2] } else { heights },
     })
+}
+
+/// A block of the clouds' lanes as `present_block` reads it: its square's corner
+/// about the eye's lap, its side, and the heights its instances stand between.
+struct Shown {
+    handle: u32,
+    at: u32,
+    index: u32,
+    bytes: u32,
+    corner: [f64; 2],
+    side: f64,
+    heights: [f32; 2],
+}
+
+/// Lists one block's instances, model, sprite or nothing each, under the
+/// draw groups `groups` names in the block's order, each with its model's
+/// extent and the least and most scale its instances are drawn at. Under an
+/// `opacity` of one the models are laid over the world blended, and a sprite,
+/// which cannot be, is left out.
+#[allow(clippy::too_many_arguments)]
+fn present_block(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye: V3, groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>, opacity: f32, sprites: &mut Vec<u32>) {
+    let (model_px, sprite_px) = (decor_gone_px() as f32, decor_sprite_px() as f32);
+    let tier = |px: f64| drawn::tier(px as f32, model_px, sprite_px);
+    let [x0, y0] = b.corner;
+    let [zlo, zhi] = b.heights.map(f64::from);
+    let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
+    let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
+    let nearest = v3::len(&[gap(x0, x0 + b.side, eye[0]), gap(y0, y0 + b.side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
+    let farthest = v3::len(&[reach(x0, x0 + b.side, eye[0]), reach(y0, y0 + b.side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
+    // SAFETY: the block, `bytes` long, its owner's to write past `index`.
+    let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    let (lanes_of, list) = words.split_at_mut(b.index as usize / 4);
+    let (mut at, mut changed) = (0usize, false);
+    for ((offset, count), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
+        let lane = GroupLanes {
+            first: offset as usize,
+            count: count as usize,
+        };
+        let first = at;
+        sprites.clear();
+        let gone = tier(extent * most / units_per_px_at(nearest)) == drawn::GONE;
+        let modeled = tier(extent * least / units_per_px_at(farthest)) == drawn::MODEL;
+        for i in 0..if gone { 0 } else { count as usize } {
+            if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
+                continue;
+            }
+            if modeled {
+                changed |= list[at] != i as u32;
+                list[at] = i as u32;
+                at += 1;
+                continue;
+            }
+            let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
+            let d = v3::len(&[x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]]).max(1e-3);
+            let t = tier(extent * f(4) / units_per_px_at(d));
+            if t == drawn::MODEL {
+                changed |= list[at] != i as u32;
+                list[at] = i as u32;
+                at += 1;
+            } else if t == drawn::SPRITE && opacity >= 1.0 {
+                sprites.push(i as u32);
+            }
+        }
+        let models = (at - first) as u32;
+        changed |= list[at..at + sprites.len()] != sprites[..];
+        list[at..at + sprites.len()].copy_from_slice(sprites);
+        at += sprites.len();
+        let index = b.index / 4 + first as u32;
+        if models > 0 {
+            let pipeline = if opacity < 1.0 { PIPELINE_GHOST_DECOR } else { PIPELINE_DECOR };
+            draw.draw_instances(pipeline, b.handle, group, models, [offset, count, index], translation, opacity);
+        }
+        if !sprites.is_empty() {
+            draw.draw_instances(PIPELINE_IMPOSTOR, b.handle, group, sprites.len() as u32, [offset, count, index + models], translation, 1.0);
+        }
+    }
+    if changed {
+        draw.rewrite_part(b.handle, b.at, b.index, at as u32 * 4);
+    }
 }

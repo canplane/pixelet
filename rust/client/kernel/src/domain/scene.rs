@@ -10,6 +10,7 @@ pub mod decor;
 pub mod environment;
 pub mod frame;
 pub mod indicator;
+pub mod lane;
 pub mod marker;
 pub mod param;
 pub mod stage;

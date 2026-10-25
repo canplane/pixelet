@@ -20,6 +20,7 @@ use pxl_spec::space::coord::v3::V3;
 
 use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::query::decor::asset::{decor_model, decor_skin};
+use crate::domain::scene::lane::GroupLanes;
 use crate::domain::view::setting::store::settings_store;
 
 pub const GHOST_OPACITY: f32 = 0.5;
@@ -104,8 +105,11 @@ impl GhostDraw {
         if self.shape == Some(shape) {
             return moved;
         }
-        // One group of one: five float lanes, its flags, and the index list.
-        let m = [0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), scale.to_bits(), 0, 0];
+        // One group of one, with no header: its lanes, its flags, and the
+        // index list.
+        let lane = GroupLanes { first: 0, count: 1 };
+        let mut m = [0u32; GroupLanes::words(1) + 1];
+        (m[lane.f32_at(3, 0)], m[lane.f32_at(4, 0)]) = (rotation.to_bits(), scale.to_bits());
         self.write(draw, shape, bytes(&m));
         true
     }
@@ -130,7 +134,10 @@ impl GhostDraw {
                 let unit = f64::from_bits(size_bits) as f32;
                 draw.draw_in(PIPELINE_GHOST_BOX, self.held.handle, 1, 0, t, GHOST_OPACITY, unit, self.z_step as f32);
             }
-            Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, self.held.handle, group, 1, [0, 1, 6], DrawList::translation(self.at, eye), GHOST_OPACITY),
+            Shape::Decor { group, .. } => {
+                let index = GroupLanes::words(1) as u32;
+                draw.draw_instances(PIPELINE_GHOST_DECOR, self.held.handle, group, 1, [0, 1, index], DrawList::translation(self.at, eye), GHOST_OPACITY)
+            }
         }
     }
 }
