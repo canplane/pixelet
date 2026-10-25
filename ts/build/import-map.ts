@@ -5,9 +5,10 @@
  * type-check reads them: a module resolves through its own workspace
  * member's map (`<member>/deno.jsonc`) over the workspace's (ts/deno.jsonc), each
  * directory from the file that names it, so `@/` is the importing file's own
- * package. What reads the tree beside Deno — Vite's and Metro's resolvers,
- * the const-enum table — resolves through these and holds no list of its
- * own. Plain TypeScript over `node:` modules: Deno imports it, and Node, from
+ * package. What reads the tree beside Deno and has no Deno resolver of its
+ * own — Metro's, and the const-enum table both bundlers share — resolves
+ * through these and holds no list of its own; Vite resolves through Deno
+ * itself (@deno/vite-plugin), member maps included. Plain TypeScript over `node:` modules: Deno imports it, and Node, from
  * 22.18, loads it under a bundler's config (ts/app/native/package.json
  * `engines`).
  */

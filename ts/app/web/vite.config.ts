@@ -12,7 +12,7 @@ import react from "@vitejs/plugin-react";
 
 import { DEV_PROXY_ROUTES } from "@pxl/client/config/route.ts";
 import { DECL, enumAt, literal, type Members, readEnums, stale } from "@pxl/build/const-enum.ts";
-import { mapped, REPO, WORKSPACE } from "@pxl/build/import-map.ts";
+import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -361,24 +361,6 @@ function fullReloadOnCoreChange() {
 // build-wasm writes nothing when it is not one of them. One build at a time; a
 // change during one asks for one more after it, which covers every change it
 // missed.
-/**
- * The tree's own prefixes, as the importing file's import map gives them
- * (ts/build/import-map.ts), the reader Metro resolves through too.
- * A file's platform variants (pill.ios.tsx beside pill.tsx) are a device's;
- * the page takes the default every import names.
- */
-function importMaps(): Plugin {
-  return {
-    name: "pxl-import-maps",
-    enforce: "pre",
-    resolveId(id, importer) {
-      if (!importer || importer.startsWith("\0")) return null;
-      const hit = mapped(importer, id);
-      return hit ? this.resolve(hit.path, importer, { skipSelf: true }) : null;
-    },
-  };
-}
-
 function rebuildKernelOnRustChange(): Plugin {
   return {
     name: "rebuild-kernel",
@@ -482,7 +464,6 @@ export default defineConfig(({ mode }) => {
       buildStamp(),
       remoteConsole(),
       constEnum([path.resolve(__dirname, "src"), path.join(WORKSPACE, "client", "src"), path.join(REPO, "xpute", "ts")]),
-      importMaps(),
       deno(),
       react(),
 
