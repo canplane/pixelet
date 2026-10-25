@@ -1,8 +1,10 @@
 // @pxl/client/host/online.ts
 
+import { Listeners } from "@xpute/kit/lang/listeners.ts";
+
 /** Whether the device says it is online: the host's to know, as the GPU is, and the guest's only as a read's failure. */
 let state = true;
-const listeners = new Set<() => void>();
+const listeners = new Listeners();
 
 export function online(): boolean {
   return state;
@@ -10,13 +12,10 @@ export function online(): boolean {
 
 export function set_online(online: boolean): void {
   state = online;
-  for (const listener of listeners) listener();
+  listeners.notify();
 }
 
-export function watch_online(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+export const watch_online = listeners.watch;
 
 /** Resolved once the device says it is online: at once if it does, else on its word, with no timer. */
 export function when_online(): Promise<void> {

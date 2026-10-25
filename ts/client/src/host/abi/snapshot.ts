@@ -1,6 +1,7 @@
 // @pxl/client/host/abi/snapshot.ts
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import { ActiveTool, DevicePoseStatus, GroundStatus, read_snapshot, type Snapshot } from "@/host/abi/cmd.spec.ts";
 
@@ -24,18 +25,15 @@ const INITIAL: Snapshot = {
 };
 
 let snapshot: Snapshot = INITIAL;
-const snapshot_listeners = new Set<() => void>();
+const listeners = new Listeners();
 
 /** Read whole now: the kernel writes the next one in the same place. */
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
-  for (const listener of snapshot_listeners) listener();
+  listeners.notify();
 }
 
-export function watch_snapshot(listener: () => void): () => void {
-  snapshot_listeners.add(listener);
-  return () => snapshot_listeners.delete(listener);
-}
+export const watch_snapshot = listeners.watch;
 
 export function kernel_snapshot(): Snapshot {
   return snapshot;

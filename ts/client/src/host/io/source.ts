@@ -8,6 +8,7 @@
  * bakes' objects (tile.ts) and the settings.
  */
 
+import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { Command, encode_world_source } from "@/host/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/host/config/route.ts";
 import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
@@ -67,11 +68,11 @@ export const enum Source {
 let state = Source.Asking;
 let declared: Declaration | null = null;
 let shown: readonly { kind: BaseLayer; version: string }[] = [];
-const listeners = new Set<() => void>();
+const listeners = new Listeners();
 
 function set(next: Source): void {
   state = next;
-  for (const listener of listeners) listener();
+  listeners.notify();
 }
 
 export function source_state(): Source {
@@ -88,10 +89,7 @@ export function source_versions(): readonly { kind: BaseLayer; version: string }
   return shown;
 }
 
-export function watch_source(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+export const watch_source = listeners.watch;
 
 /** The most wait after a refused ask, doubled each time up to the most, and
  * the wait drawn below it (full jitter): clients one outage failed together
