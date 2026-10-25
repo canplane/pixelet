@@ -122,6 +122,7 @@ What runs across the trees is the Makefile's (`make -j8 check`, its trees in par
 | `make download-<what>`                | Fetch a source a tool reads: `pack`, the texture pack's; `moon`; `earth`; `star`                                                                                                                                                                          |
 | `make ingest-asset`                   | Hash `asset/content/` into `./out/asset`, compose the texture pack, regenerate the asset tables                                                                                                                                                           |
 | `make render-brand`                   | The symbol's outline both apps bundle, from `ts/client/brand/`; the page's icons and link preview are made by its build                                                                                                                                   |
+| `make sync-build-number`              | The number the deployment serves, cached for a dev build to be labeled after; `dev` and `preview` run it first                                                                                                                                            |
 | `make deploy`                         | Build the client and publish it with the Cloudflare Worker; CI runs it, after the checks and tests run here ([deploy skill](./.agents/skills/deploy/SKILL.md))                                                                                            |
 | `make -j8 check`                      | Everything: format, rules, types, clippy, the device, the C++, the files made from `spec/`, the client's bundle as a deploy builds it                                                                                                                     |
 | `make check-<tree>`                   | One tree's: `ts`, `rust`, `xpute`; or `rules`, `spec`, the files made from it, and `build`, the client's bundle                                                                                                                                           |
@@ -133,6 +134,7 @@ What runs across the trees is the Makefile's (`make -j8 check`, its trees in par
 | `./script/publish.py`     | Declare in the bucket which baked version of each kind clients read; nothing in the tree changes and nothing is deployed |
 | `./script/smoke.py <url>` | What a deployment must answer, against a running one                                                                     |
 | `./script/check-diff.py`  | `check` and `test` over the working tree's changes                                                                       |
+| `./script/build-log.py`   | The published builds, newest first: the number, the commit and the commits it carried                                   |
 
 The oven's cache and the shelf's sets are files under `./out`, emptied by hand after a re-ingest or a bake change: `rm -rf out/oven`, or `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish` to bake a kind from nothing.
 
