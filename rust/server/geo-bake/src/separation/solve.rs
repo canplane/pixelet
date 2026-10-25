@@ -69,11 +69,11 @@ use crate::wkb::wkb_to_geometries;
 /// The tile's scale: Arnis's metres in leaf cells (pxl-spec-core
 /// `cells_of_m`), at the tile's `Frame::per_m`.
 #[derive(Clone, Copy)]
-struct Units {
+struct Scale {
     per_m: f32,
 }
 
-impl Units {
+impl Scale {
     fn c(self, m: f64) -> i32 {
         pxl_spec_core::cells_of_m(m as f32, self.per_m)
     }
@@ -170,7 +170,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         }
     }
     let [pmin, pmax] = get_tile_bbox(LEAF_ZOOM, tile);
-    let units = Units {
+    let scale = Scale {
         per_m: Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m(),
     };
     let mut src = Ring {
@@ -194,7 +194,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     // draws, whether or not it touches the tile: the tunnels about the tile are asked for alone, as far
     // as the deepest one's approaches run, a reach well inside the ring, and only about a portal that
     // near are the ring's tiles read, as far as its approaches run
-    let reach_of = |level: i64| tunnel::approach_reach(level, units);
+    let reach_of = |level: i64| tunnel::approach_reach(level, scale);
     let off = |p: [f64; 2]| {
         let d = [0, 1].map(|k| (own[0][k] - p[k]).max(p[k] - own[1][k]).max(0.0));
         libm::hypot(d[0], d[1])
@@ -223,7 +223,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     if queue.is_empty() {
         return Ok(Solved::default());
     }
-    let reach = mer_from_u(f64::from(units.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
+    let reach = mer_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| (o.form == Form::Bridge || is_road_tunnel(o)) && o.way.points.iter().any(|p| ends.contains(&End::at([p[0], p[1]])));
@@ -263,8 +263,8 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
-    let decks = bridge::decks(&src, &stretches, [lo, hi], units, &mut lines);
-    tunnel::bores(&src, &stretches, &decks, units, &mut lines);
+    let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
+    tunnel::bores(&src, &stretches, &decks, scale, &mut lines);
     let mut out = Solved::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);

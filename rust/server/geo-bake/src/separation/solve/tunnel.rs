@@ -57,15 +57,15 @@ const BLOCK_M: f64 = 1.0;
 pub(super) const DEEPEST: i64 = -(TUNNEL_MAX_LAYERS_BELOW + 1);
 
 /// How far a portal's approaches can run for a road tunnel at `level`, in DB coordinates.
-pub(super) fn approach_reach(level: i64, units: Units) -> f64 {
-    mer_from_u(f64::from(tunnel_drop(level, units) * TUNNEL_RAMP_RUN) * CELL_U)
+pub(super) fn approach_reach(level: i64, scale: Scale) -> f64 {
+    mer_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
 }
 
 /// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road tunnel's portal
 /// on a deck opens at it (`decks`).
-pub(super) fn bores(src: &Ring, stretches: &[Stretch], decks: &Decks, units: Units, lines: &mut Vec<(Line, Drawn)>) {
-    let ceiling = (units.c(TUNNEL_CEIL_OFFSET_M) - units.c(BLOCK_M)).clamp(0, 255) as u8;
-    for (q, ys, covered) in road_bores(src, stretches, decks, units, lines) {
+pub(super) fn bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, lines: &mut Vec<(Line, Drawn)>) {
+    let ceiling = (scale.c(TUNNEL_CEIL_OFFSET_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
+    for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
         let r = &stretches[q];
         // a stretch under cover keeps its ceiling, one open to the sky is cut to the surface, and
         // one a deck's portal holds over the ground is an embankment up to it
@@ -91,9 +91,9 @@ pub(super) fn bores(src: &Ring, stretches: &[Stretch], decks: &Decks, units: Uni
     }
     for q in (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Tunnel && stretches[q].rail()) {
         // the floor under the interior, under the ceiling, under the cover (Arnis `generate_rail_tunnel_shell`)
-        let depth = units.c(RAIL_TUNNEL_DEPTH_M + RAIL_INTERIOR_HEIGHT_M + BLOCK_M);
+        let depth = scale.c(RAIL_TUNNEL_DEPTH_M + RAIL_INTERIOR_HEIGHT_M + BLOCK_M);
         let ys: Vec<i32> = stretches[q].terrain.iter().map(|t| t - depth).collect();
-        lines.push(line_of(&stretches[q], &ys, [0, ys.len() - 1], Form::Tunnel, units.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
+        lines.push(line_of(&stretches[q], &ys, [0, ys.len() - 1], Form::Tunnel, scale.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
     }
 }
 
@@ -114,11 +114,11 @@ struct Claim {
 
 /// How far under its cover a road tunnel at `level` is bored, and so how far its portals' approaches
 /// sink, in cells: Arnis's cover drop, and a layer's drop for each layer below the first.
-fn tunnel_drop(level: i64, units: Units) -> i32 {
-    units.c(TUNNEL_COVER_DROP_M) + (-(level + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * units.c(TUNNEL_LAYER_DROP_M)
+fn tunnel_drop(level: i64, scale: Scale) -> i32 {
+    scale.c(TUNNEL_COVER_DROP_M) + (-(level + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * scale.c(TUNNEL_LAYER_DROP_M)
 }
 
-fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
+fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let ramp_ways = &decks.ramp_ways;
     let tunnels: Vec<usize> = (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Tunnel && !stretches[q].rail()).collect();
     // a node two tunnels share, or an end the ring cut, stays at depth
@@ -139,7 +139,7 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, units: Units, li
         }
     }
     let internal = |q: usize, e: usize| stretches[q].clipped[e] || shared.contains(&stretches[q].ends[e]);
-    let drop_of = |r: &Stretch| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), units);
+    let drop_of = |r: &Stretch| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), scale);
 
     // ---- a portal on a road deck, at its end or along it, opens at the deck's height there, where Arnis
     // leaves it at the terrain under the deck: the bore ramps down from it, with no approach to sink ----
@@ -312,7 +312,7 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, units: Units, li
     }
 
     // ---- each bore (Arnis `generate_highway_tunnel_shell`); the world has no bedrock to stop it ----
-    let roof = units.c(TUNNEL_ROOF_COVER_M);
+    let roof = scale.c(TUNNEL_ROOF_COVER_M);
     let mut out = Vec::new();
     for &q in &tunnels {
         let r = &stretches[q];
