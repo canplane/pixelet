@@ -54,4 +54,4 @@ taps in five; UIKit's switch in the same place took every one
 never takes a touch from a UIKit control; it has no such promise for a
 SwiftUI one.
 
-`check:rules` holds `@expo/ui` to `panel.ios.tsx`.
+The convention skill holds `@expo/ui` to `panel.ios.tsx`.

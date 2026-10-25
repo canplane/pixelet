@@ -1,14 +1,11 @@
 {
-  // The repository's own scripts, each standing alone and reading none of
-  // the trees' code: the tree's checks, the shaders' WGSL, the deployment's
-  // usage report and build log. A root of its own, beside the trees it runs
-  // over, as xpute's script/ is.
+  // The one script here bound to a JS-only library: tint.ts, Tint's compile
+  // of the generated shaders through Dawn (npm:webgpu). The rest of script/
+  // is Python and sh, each in the language its work takes.
   "workspace": [],
 
   "imports": {
-    "@std/path": "jsr:@std/path@^1",
-
-    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (shader-wgsl.ts).
+    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile.
     "webgpu": "npm:webgpu@0.6.2"
   },
 

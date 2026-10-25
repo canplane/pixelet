@@ -48,7 +48,7 @@ function buildId(): string {
  * than a sign meaning "after"; before any number is cached, the id alone.
  * The count lives in the bucket and is taken by CI's number job
  * (.github/script/build-counter.sh); ts/client/.build_number is only this checkout's cache of
- * it, written by any read of `./script/build-log.ts`.
+ * it, written by any read of `./script/build-log.py`.
  */
 function buildNumber(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;

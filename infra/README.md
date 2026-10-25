@@ -155,7 +155,7 @@ free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
 that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
 Writes are outside it, and nothing configures a spending cap: a publish is a
-pyramid's worth of Class A operations, so `./script/usage.ts` comes before one.
+pyramid's worth of Class A operations, so `./script/usage.py` comes before one.
 
 The bucket, `pixelet-tiles`, holds everything the client fetches that is not the app itself:
 
@@ -168,7 +168,7 @@ The bucket, `pixelet-tiles`, holds everything the client fetches that is not the
 | `asset/`                | glb, png, webp — not packed                     | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted whenever    |
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
 | `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's number job, never by hand     |
-| `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.ts`)                |
+| `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.py`)                |
 | `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `make deploy` under a build number; never served      |
 
 A tile's name is its Morton key, so the same name under two kinds is the same ground, and one prefix is one region across every kind at every zoom. Every object is uploaded `public, max-age=31536000, immutable`, so a new version is a new prefix and no cache needs purging.
@@ -230,7 +230,7 @@ old client against a new server is safe and the reverse is not.
 Every build of `deploy` takes a number from a counter in
 the bucket, never reset; a published one is a line in `_meta/build-log.jsonl`
 with the subjects of the commits it carried, since main's shas do not
-survive its rewrites. `./script/build-log.ts` reads it, newest first, and
+survive its rewrites. `./script/build-log.py` reads it, newest first, and
 writes the last number into `ts/client/.build_number` for dev builds.
 
 The secrets are GitHub's alone: `CLOUDFLARE_API_TOKEN` and

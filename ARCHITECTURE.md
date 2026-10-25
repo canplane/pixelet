@@ -90,7 +90,7 @@ The layers split on what changes. The **base** is baked from the sources: terrai
 
 A ground cell is one byte, a **look** from OpenStreetMap Carto, numbered in the order Carto paints (`spec/spec/asset/cube.json`). Each look is drawn as land, water, transport or a structure. `0` is void and `255` the unknown past the coverage, and neither gives a surface.
 
-Heights are made on the GPU and read back, never sent (`pxl-spec-core ground.rs` `height`). Every rounding in pixelet and xpute is half to even, and check:rules refuses any other.
+Heights are made on the GPU and read back, never sent (`pxl-spec-core ground.rs` `height`). Every rounding in pixelet and xpute is half to even, and check-rules (pxl-tool `bin/check_rules.rs`) refuses any other.
 
 **Objects** are client-local. Their store is one sparse tree, each leaf a catalog value at its node and each branch its eight children folded (`pxl-kernel domain/layer/object/store.rs`). A write splits leaves only on its path, joins eight equal leaves into one, and folds its path again. So one picture has one tree. A leaf of `AIR` erases what a lower layer would show.
 

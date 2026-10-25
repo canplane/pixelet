@@ -39,7 +39,7 @@ check-ts:
 check-rust:
 	+cd rust && cargo fmt --all --check && cargo lint-guest && cargo lint-guest-published && cargo lint-server && cargo lint-host && cargo lint-ios && cargo lint-android
 check-rules:
-	./script/check-rules.ts
+	+cd rust && cargo check-rules
 check-spec:
 	+cd rust && cargo spec
 check-build:
@@ -122,7 +122,7 @@ $(TOOLS):
 # ts/client/.build_number is written by any read of the build log, so it is
 # refreshed before vite reads it.
 sync-build-number:
-	@./script/build-log.ts >/dev/null || echo "[build-number] not synced: this build is labeled from the cached number" >&2
+	@./script/build-log.py >/dev/null || echo "[build-number] not synced: this build is labeled from the cached number" >&2
 
 # The deployment: the client built and published with the Worker. Does not
 # upload what the bucket holds.

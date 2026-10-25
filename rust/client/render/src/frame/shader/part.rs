@@ -35,7 +35,7 @@ pub const SHADER_MARKER_REGION: u32 = 24;
 /// The eye's rays drawn at their pixels (pxl-spec-core ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
-/// pxl-spec-core's descent (script/shader-wgsl.ts): its one compute entry.
+/// pxl-spec-core's descent (pxl-tool bin/shader_wgsl.rs): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
 /// Each newly held square's levels over its columns, a level a dispatch,
 /// generated with the cast from pxl-spec-core's `fill::level` and

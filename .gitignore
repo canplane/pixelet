@@ -193,7 +193,7 @@ ts/app/web/src/guest.paths.json
 # build (pxl-tool/bin/render_brand.rs).
 ts/app/web/public/brand/
 
-# The last build number this checkout saw (script/build-log.ts), which a dev build of either app is labeled from
+# The last build number this checkout saw (script/build-log.py), which a dev build of either app is labeled from
 ts/client/.build_number
 
 # Backup files sometimes created by rustfmt/editor tooling
@@ -228,3 +228,6 @@ ts/app/native/modules/platform/android/build/
 ts/app/native/modules/platform/android/.gradle/
 ts/app/native/ios/
 ts/app/native/android/
+
+# What Python compiles of a script it imports.
+__pycache__/

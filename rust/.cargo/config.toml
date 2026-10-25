@@ -19,6 +19,10 @@ test-kernel-published = ["test", "-p", "pxl-kernel", "--no-default-features"]
 test-bake-serve = ["test", "-p", "pxl-geo-bake", "--features", "serve"]
 # The code generated from spec/: `cargo spec` says what is stale, `cargo spec --write` writes it.
 spec = ["run", "-q", "-p", "pxl-tool", "--bin", "spec", "--"]
+# pxl-spec-core's WGSL, made by rust-gpu in a container: `cargo shader-wgsl` writes it, `--check` says what is stale.
+shader-wgsl = ["run", "-q", "-p", "pxl-tool", "--bin", "shader_wgsl", "--"]
+# What the tree must keep that no compiler sees (pxl-tool bin/check_rules.rs).
+check-rules = ["run", "-q", "-p", "pxl-tool", "--bin", "check_rules", "--"]
 
 # The binaries that make the repository's data and the servers a dev run
 # starts, each with its profile and features: `server` where a debug build is

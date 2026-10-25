@@ -80,7 +80,7 @@ pxl-geo-spec = { path = "server/geo-spec" }
 # cast and every harmless one alike, so the harmless ones are made to say
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
 # any `as *const` or `as *mut` left is an offset made a pointer, which
-# script/check-rules.ts refuses. A crate takes these with `[lints]
+# pxl-tool's check_rules refuses. A crate takes these with `[lints]
 # workspace = true`; xpute-guest, in its own workspace, spells them itself.
 [workspace.lints.clippy]
 ptr_as_ptr = "warn"

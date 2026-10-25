@@ -1,6 +1,6 @@
 # pxl-shader: the GPU's compute entries, written in Rust over pxl-spec-core
 # and compiled by rust-gpu to SPIR-V, which build/ (pxl-shader-build) reads
-# into the WGSL pxl-render checks in (script/shader-wgsl.ts). Its own
+# into the WGSL pxl-render checks in (pxl-tool bin/shader_wgsl.rs). Its own
 # workspace on rust-gpu's nightly (rust-toolchain.toml), so no everyday build
 # needs either.
 [workspace]

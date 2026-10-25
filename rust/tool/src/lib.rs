@@ -3,6 +3,7 @@
 pub mod asset;
 pub mod fetch;
 pub mod fmt;
+pub mod shader;
 pub mod spec;
 
 use std::path::{Path, PathBuf};
