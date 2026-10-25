@@ -212,7 +212,7 @@ Some calls are every program's: open, read, write and close a file, and report t
 Files borrow Plan 9's file namespace:
 
 - the guest issues the descriptor, a handle of its own file table (`ipc/file`), which is fixed at N slots as every table is;
-- it names a file by a root the program numbers and a path below it, and the program binds each root to wherever it keeps things, in the host's namespace (`ipc/ns`), sealed once bound;
+- it names a file by a root the program numbers and a path below it, and the program binds each root to wherever it keeps things, in the mount table of the host (`ipc/mount`), sealed once mounted;
 - a path walks down a name at a time, and an empty name, `.` or `..` is refused, so a root is the whole of what it grants.
 
 An open is the one call that waits: the host answers it on a later turn, once the file can be read whole. A read, a write and a close are done before the next turn. A close ends a descriptor whether or not its open was answered, so a late answer reaches nothing.
@@ -308,7 +308,7 @@ What xpute took from work before it, or found it had arrived at. A link is given
 | SLUB                                                        | `alloc/slab`                     | A slab keeps its free list inside its free slots                               |
 | virtio's descriptor table, AF_XDP's UMEM                    | the rings (`spec/ipc/ring.json`) | Descriptors kept apart from the payload's slots                                |
 | io_uring                                                    | the rings                        | A submission ring and a completion ring, rung by a doorbell                    |
-| Plan 9's file access, in POSIX's words                      | `ipc/sys`, `ipc/ns`              | Descriptors the guest issues; a root and a path; the host binds the roots      |
+| Plan 9's file access, in POSIX's words                      | `ipc/sys`, `ipc/mount`           | Descriptors the guest issues; a root and a path; the host binds the roots      |
 | The ELF auxiliary vector                                    | `ipc/directory`                  | Entries a reader skips when it does not know them                              |
 | POSIX and Linux errno                                       | `spec/status/errno.json`         | Negative errno numbers                                                         |
 | The host's `JSON.parse`                                     | `codec/json`                     | The grammar, judged as the host's parser judges it                             |

@@ -76,8 +76,8 @@ export async function boot(): Promise<void> {
     gpu_stream: key.GPU_STREAM,
     gpu_head: stream.HEAD,
   };
-  const ns = io.namespace();
-  await open_host(plan, { open: ns.open, commit: ns.commit, program: text_call, abort }, submit_frame);
+  const mounts = io.mount_table();
+  await open_host(plan, { open: mounts.open, commit: mounts.commit, program: text_call, abort }, submit_frame);
   bracket.sensor.hear(SENSOR_HEARD);
   GUEST_DOORBELL.signal = on_signal;
   bracket.gpu.boot({ ready: () => HOST.send(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: () => HOST.strobe.request() });
