@@ -70,7 +70,7 @@ pub enum Fixed {
 const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX + crate::domain::query::decor::assets::MODELS_MAX + crate::domain::scene::environment::cloud::MODELS_MAX;
 
 /// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
-/// coverage's, `domain/scene.rs` `debug` and `coverage`) and the billboards'.
+/// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
 const SINGLE_BLOCKS: usize = 5;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a

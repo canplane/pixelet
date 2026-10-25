@@ -60,7 +60,7 @@ pub fn words_at(at: EntryAt) -> Option<&'static str> {
     objects.words(&objects.read((at.zoom(), at.at())).placed()?)
 }
 
-/// The one waiting, which the badges draw.
+/// The one waiting, which the markers draw.
 pub fn draft() -> Option<&'static Draft> {
     DRAFT.get(|| None).as_ref()
 }

@@ -15,10 +15,10 @@ few and each is distinct. This directory holds every one of them:
 Where an actor stands is the kernel's, never the shell's. Its clips advance
 in the scene's own tick (`../../scene.rs`).
 
-The person's chat line is not an actor. It is a billboard hung from the
+The person's chat line is not an actor. It is a marker hung from the
 point over the person's head that the companion hands down (`speak_from`),
-shown by its own rule (`../billboard/chat.rs` `hangs`) and laid out with
-the markers (`../place.rs`).
+shown by its own rule (`../marker/chat.rs` `hangs`) and laid out with
+the others (`../marker/layout.rs`).
 
 The folder is `character/`, not `actors/`, because "Character" is already
 what a user reads: the settings' Character section and the drawer's

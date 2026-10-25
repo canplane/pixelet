@@ -131,7 +131,7 @@
     },
     "place": {
       "number": 3,
-      "$doc": ["The places' badges over the world, from the published places tiles."],
+      "$doc": ["The places' markers over the world, from the published places tiles."],
       "kind": "toggle",
       "default": false,
       "section": "world",

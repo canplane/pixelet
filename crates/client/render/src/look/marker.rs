@@ -1,10 +1,10 @@
-// pxl-render/look/badge.rs
+// pxl-render/look/marker.rs
 
-//! How each billboard's design is laid out, in logical pixels: its fonts, its
+//! How each marker's design is laid out, in logical pixels: its fonts, its
 //! sizes and its colors, and where its anchor stands down from its top. The
-//! pass paints by them (`gpu/pass/badges.rs`), and the kernel sizes a
-//! billboard's sprite by them before it is painted (pxl-kernel
-//! domain/scene/billboard/badge.rs).
+//! pass paints by them (`gpu/pass/marker.rs`), and the kernel sizes a
+//! marker's sprite by them before it is painted (pxl-kernel
+//! domain/scene/marker/design.rs).
 
 use crate::gpu::sheet::Halo;
 use crate::gpu::text::Font;
@@ -19,7 +19,7 @@ pub const BLACK: u32 = 0x000000ff;
 pub const WHITE: u32 = 0xffffffff;
 
 /// A marker's words on a pill, the dot under it at its cell's center.
-pub const BADGE_FONT: Font = Font { weight: REGULAR, px: 12.0 };
+pub const PILL_FONT: Font = Font { weight: REGULAR, px: 12.0 };
 const PILL_INNER: f32 = 20.0;
 const PAD_X: f32 = 10.0;
 const PAD_Y: f32 = 7.0;
@@ -41,7 +41,7 @@ pub const COUNT_INK: u32 = 0x14141aff;
 
 /// A pill's sprite for words as wide as `text_w`: its width, height down to
 /// the dot's foot, and where what it marks is, at the dot's.
-pub fn marker_size(text_w: f64) -> [f64; 3] {
+pub fn pill_size(text_w: f64) -> [f64; 3] {
     [(text_w + 2.0 * f64::from(PAD_X)).max(f64::from(PILL_H)), f64::from(PILL_H + DOT_GAP + DOT_DIAM), f64::from(DOT_CY)]
 }
 

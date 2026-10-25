@@ -55,7 +55,7 @@ fn aim(frag: vec2f, size: vec2f) -> vec3f {
 
 // How far behind its face a ray's depth is written (`behind`): the world is
 // the one that steps back, and what is laid on its faces — the puck's zone,
-// the ghosts, the badges' anchors — is rasterized with no offset at all. A
+// the ghosts, the markers' anchors — is rasterized with no offset at all. A
 // raster on the face rounds apart from the ray's exact depth two ways:
 // - its depth interpolated across its corners in f32, about 2^-23 of it:
 //   `BEHIND` of the depth, 2^-14, stands past that;

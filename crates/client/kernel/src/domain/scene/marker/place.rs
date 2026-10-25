@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/place/place_tile.rs
+// pxl-kernel/domain/scene/marker/place.rs
 
 //! The place layer's markers, read from its place tiles: each place a tile
 //! holds as Carto draws it at the zoom of Carto's the view is at where it
@@ -6,11 +6,11 @@
 //! category's label zoom. A place stands at its ground leaf cell's center on
 //! the surface a ray down meets first, and a tap on it goes there.
 
-use super::{surface, Instance, Key, Went};
+use super::layout::{surface, Instance, Key, Went};
 use crate::domain::chunk::Chunk;
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::World;
-use crate::domain::scene::billboard::badge::Label;
+use crate::domain::scene::marker::design::Design;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{stands, symbol_of, Placed, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::world::REACH;
@@ -43,7 +43,7 @@ pub(super) fn read(chunk: Chunk, found: &mut Vec<(Chunk, Instance)>) {
     let (h0, h1) = chunk.z_range();
     let detail = GROUND.read_zoom(chunk.cell_zoom());
     World::now().places_in(tiles, &mut |src, place, h| {
-        let Some(label) = point_of(&h, zoom) else { return };
+        let Some(design) = point_of(&h, zoom) else { return };
         let ground = stands(src, h.at);
         if Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
             return;
@@ -59,7 +59,7 @@ pub(super) fn read(chunk: Chunk, found: &mut Vec<(Chunk, Instance)>) {
             chunk,
             Instance {
                 key: Key::Place(src, place),
-                label,
+                design,
                 stands,
                 tap: Some(Went::To(stands)),
             },
@@ -70,8 +70,8 @@ pub(super) fn read(chunk: Chunk, found: &mut Vec<(Chunk, Instance)>) {
 /// A place as Carto shows it where its zoom is `zoom`, if it does: from the
 /// zoom it is shown from, as a dot or its icon by its category's zooms,
 /// named from its category's label zoom, its name wrapped where it is laid
-/// out (`Label::spaced`).
-fn point_of(h: &Placed, zoom: i32) -> Option<Label> {
+/// out (`Design::spaced`).
+fn point_of(h: &Placed, zoom: i32) -> Option<Design> {
     let k = usize::from(h.place.category.checked_sub(1)?);
     let from = |z: u8| z != 0 && zoom >= i32::from(z);
     let (icon, dot) = (from(ICON_ZOOM[k]), from(DOT_ZOOM[k]));
@@ -79,7 +79,7 @@ fn point_of(h: &Placed, zoom: i32) -> Option<Label> {
         return None;
     }
     let named = from(LABEL_ZOOM[k]) && !h.place.name.is_empty();
-    Some(Label::Point {
+    Some(Design::Point {
         name: named.then(|| h.place.name.into()),
         wrap: 0,
         icon,

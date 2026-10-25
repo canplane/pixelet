@@ -88,7 +88,7 @@ export interface InputDriver {
 export interface WorldSurfaceProps {
   surface: SurfaceDriver;
   input: InputDriver;
-  overBadge: boolean;
+  overMarker: boolean;
 }
 
 export interface CaseSurfaceProps {

@@ -199,7 +199,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pxl-spec`      | The model: the position, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation.                         |
 | `pxl-spec-core` | The part of the model the GPU computes too, one source for both: the zooms' cells, the caves, the ground, the decor it grows, the world's one query and a ray's descent. |
-| `pxl-render`    | The view: glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                                           |
+| `pxl-render`    | The view: glTF, the marker sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                                          |
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                    |
 | `pxl-shader`    | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `script/shader-wgsl.ts` and checked in beside the renderer's shaders.                    |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                               |
@@ -225,7 +225,7 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 | `sys`, under everyone   | `io` `sched` `mem` `load`                          |
 | beside                  | `profiler`                                         |
 
-A leaf sits under its lowest reader: the settings under `view`, the models and decor under `query`, the billboards under `scene`, and each tuned number in a `param` beside the lowest part that reads it.
+A leaf sits under its lowest reader: the settings under `view`, the models and decor under `query`, the markers under `scene`, and each tuned number in a `param` beside the lowest part that reads it.
 
 One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 

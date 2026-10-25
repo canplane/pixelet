@@ -14,8 +14,8 @@ use xpute_guest::mem::base::off_of;
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{
-    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
+    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
@@ -38,9 +38,9 @@ use crate::gpu::clouds::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
-use crate::gpu::pass::badges::BadgePass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
+use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, skins_lost, DrawUniforms, FrameGroups, Stage};
 use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
@@ -76,7 +76,7 @@ const SPAN_AIR: usize = GpuSpanName::air as usize;
 const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
 const SPAN_AO: usize = GpuSpanName::ao as usize;
 const SPAN_WORLD: usize = GpuSpanName::world as usize;
-const SPAN_BADGES: usize = GpuSpanName::badges as usize;
+const SPAN_MARKER: usize = GpuSpanName::marker as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
@@ -105,7 +105,7 @@ pub struct FrameInput<'a> {
     /// screen pass draws, a drawn pixel each; none without an eye, and none
     /// drawn.
     pub cast: Option<Cast<'a>>,
-    pub billboards: &'a mut Sheet,
+    pub sheet: &'a mut Sheet,
     pub text: TextOf,
     /// Whether the surfaces take a frame now without blocking; one admitted
     /// is drawn. Asked only once nothing else stops the frame.
@@ -263,7 +263,7 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 
 /// The passes drawn at the world's own pixels, whose cost goes with them:
 /// its depth prepass, its occlusion, its drawing and its cast. The air's
-/// tables, the fill and the decor's growth, the thumbnails, badges and debug
+/// tables, the fill and the decor's growth, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
 const PER_PIXEL: [GpuSpanName; 4] = [GpuSpanName::prepass, GpuSpanName::ao, GpuSpanName::world, GpuSpanName::cast];
 
@@ -1732,12 +1732,12 @@ pub struct Renderer {
     impostor: ImpostorPass,
     skinned: SkinnedPass,
     puck: PuckPass,
-    badges: BadgePass,
+    marker: MarkerPass,
     debug: DebugPass,
     screen: RaysPass,
     /// The frame's whole input as the last frame drew it (stage 2): the
     /// frame's, the sky's and the stars' words, the air's, the surface's
-    /// textures, the draws and the blocks they read, the badges' sheet, the
+    /// textures, the draws and the blocks they read, the markers' sheet, the
     /// clouds' words and the cases, and what came or was drawn again without
     /// words.
     frame_read: Read,
@@ -1779,7 +1779,7 @@ impl Renderer {
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air, device.align),
-            badges: BadgePass::new(g, &mut pipelines, frame_buffer, device.align),
+            marker: MarkerPass::new(g, &mut pipelines, frame_buffer, device.align),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
@@ -1851,9 +1851,9 @@ impl Renderer {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
         proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
-        // The badges measure their size in view space.
-        let b = &mut self.badges;
-        put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
+        // The markers measure their size in view space.
+        let b = &mut self.marker;
+        put_mat(&mut b.view, 0, s[STAGE_AT::MARKER_VIEW..STAGE_AT::MARKER_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
         put_mat(&mut b.proj, 0, &proj);
         b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0))) as f32;
 
@@ -1946,7 +1946,7 @@ impl Renderer {
     /// the cast's rays (stage 1, `RaysPass::prepare`); and the frame,
     /// everything the world and its light make off those rays, then over it
     /// what moves on its own — the actors, whose clips play, the clouds,
-    /// which the wind carries, the puck, the ghosts, the badges, the gizmos
+    /// which the wind carries, the puck, the ghosts, the markers, the gizmos
     /// (stage 2, `frame_read`). The rays hold the world as the cast left
     /// it, so the frame draws it again off them rather than off an image of
     /// it: that costs what laying an image would.
@@ -1970,7 +1970,7 @@ impl Renderer {
         self.screen.hand(g, &mut self.pipelines, &mut input.ground);
         let tiles = input.earth_tiles;
         read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
-        read.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
+        read.mark(self.marker.sync_sheet(g, &self.mips, input.sheet, input.text));
         let (records, uniforms, blocks_moved) = take_lists(Some(g), input.lists);
         read.mark(blocks_moved);
         // Each list's writers write again only where it moved.
@@ -2031,7 +2031,7 @@ impl Renderer {
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.puck.prepare(g, &draws, uniforms, lists_moved, b);
-        self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, uniforms, b);
+        self.marker.prepare(g, world.depth_view, (world.width, world.height), &draws, uniforms, b);
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
         self.screen
@@ -2133,7 +2133,7 @@ impl Renderer {
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
-        self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_BADGES]);
+        self.marker.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_MARKER]);
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
@@ -2264,7 +2264,7 @@ impl Renderer {
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
                 PIPELINE_PUCK_ZONE => 12 * d[1],
                 PIPELINE_PUCK_BEACON => 8,
-                PIPELINE_BADGE => 2 * d[1],
+                PIPELINE_MARKER => 2 * d[1],
                 // Two a segment, and the faces'.
                 PIPELINE_DEBUG => d[1] + d[2] / 3,
                 PIPELINE_CAMERA_GRID => 1,
@@ -2280,8 +2280,8 @@ impl Renderer {
             gpu_px: 0.0,
             blocks: b.count as f64,
             block_bytes: b.bytes as f64,
-            // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
-            depth_bytes: px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes(),
+            // The depth targets at the world's size: its own, one f32 a pixel, AO's and the markers' regions'.
+            depth_bytes: px * 4.0 + self.ao.depth_bytes() + self.marker.depth_bytes(),
             layers_bytes: self.layers.bytes as f64,
             census,
             gpu_spans,

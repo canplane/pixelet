@@ -37,7 +37,7 @@ pub const PIPELINE_SKINNED: u32 = 3;
 pub const PIPELINE_PUCK_ZONE: u32 = 4;
 pub const PIPELINE_PUCK_BEACON: u32 = 5;
 /// (block handle, count, 0, uniform, pipeline).
-pub const PIPELINE_BADGE: u32 = 6;
+pub const PIPELINE_MARKER: u32 = 6;
 /// Line segments: handle, line vertex count, face vertex count.
 pub const PIPELINE_DEBUG: u32 = 7;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
@@ -55,7 +55,7 @@ pub const DRAW_PIPELINES: [u32; 10] = [
     PIPELINE_SKINNED,
     PIPELINE_PUCK_ZONE,
     PIPELINE_PUCK_BEACON,
-    PIPELINE_BADGE,
+    PIPELINE_MARKER,
     PIPELINE_DEBUG,
     PIPELINE_IMPOSTOR,
     PIPELINE_CAMERA_GRID,

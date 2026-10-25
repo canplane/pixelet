@@ -169,7 +169,7 @@ pub enum SettingKey {
     /// (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).
     /// Med as decor is: models in view, and a pass over the screen for the sheets.
     clouds = 2,
-    /// The places' badges over the world, from the published places tiles.
+    /// The places' markers over the world, from the published places tiles.
     place = 3,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a view from above is expected to

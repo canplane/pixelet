@@ -1,25 +1,21 @@
-// pxl-kernel/domain/scene/place.rs
+// pxl-kernel/domain/scene/marker/layout.rs
 
-//! Where places, markers and the chat's line are drawn, each by its own
-//! source: a place as Carto draws it, read from the tile that says its
-//! ground at the zoom the view is at there (`place_tile.rs`); a marker someone
-//! put up, near enough (`pin.rs`); a line said, hung over its speaker's
-//! head where its own rule shows it (`line.rs`). Each source hands the
-//! layout an `Instance`, and the layout asks each the same: what it paints,
-//! its size, its slot and whether it is ready (`domain/scene/billboard/badge.rs`), and
-//! where a tap on it goes.
+//! Where the markers are drawn, each by its own source: a place as Carto
+//! draws it, read from the tile that says its ground at the zoom the view
+//! is at there (`place.rs`); a marker someone put up, near enough
+//! (`pin.rs`); a line said, hung over its speaker's head where its own rule
+//! shows it (`line.rs`). Each source hands the layout an `Instance`, and the
+//! layout asks each the same: its design, its size, its slot and whether it
+//! is ready (`design.rs`), and where a tap on it goes.
 
-mod line;
-mod pin;
-mod place_tile;
-mod selection;
-use selection::select_visible_billboards;
+use super::selection::select_visible;
+use super::{line, pin, place};
 
 use crate::domain::chunk::Chunk;
 use crate::domain::query::{at_zoom, Ray, World};
-use crate::domain::scene::billboard::badge::{self, Label};
-use crate::domain::scene::billboard::batch::BillboardBatch;
-use crate::domain::scene::billboard::field::{billboard_instance, BillboardSet};
+use crate::domain::scene::marker::batch::Batch;
+use crate::domain::scene::marker::design::{self, Design};
+use crate::domain::scene::marker::set::{self, Set};
 use crate::domain::view::frame::pose::ndc_to_px;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::mem::section;
@@ -40,14 +36,14 @@ use pxl_spec::space::layer::tile::Tile;
 
 #[derive(Default)]
 struct Placement {
-    batch: BillboardBatch,
+    batch: Batch,
     kept: Vec<u32>,
-    set: BillboardSet,
+    set: Set,
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], Went)>,
     /// Kept so a settled turn asks the heap for nothing; a chunk's in a
-    /// run, as each source reads it (`pin.rs`, `place_tile.rs`).
+    /// run, as each source reads it (`pin.rs`, `place.rs`).
     pins: Vec<pin::Pin>,
     places: Vec<(Chunk, Instance)>,
     /// The drawn chunks `pins` and `places` were read from: a chunk drawn still keeps
@@ -63,24 +59,24 @@ struct Placement {
     moved_places: Vec<Tile>,
     /// The chunks this turn would read, by how far from the eye.
     entering: Vec<(f64, Chunk)>,
-    labeled: Vec<Instance>,
-    /// Last turn's `labeled`, its buffer reused.
+    sized: Vec<Instance>,
+    /// Last turn's `sized`, its buffer reused.
     spare: Vec<Instance>,
-    /// Labels not ready yet, kept to become so, each by the index in
-    /// `labeled` of the instance showing its old drawing meanwhile.
-    pending: Vec<(u32, Label)>,
-    /// What was drawn last by its holder's key, and the labels the badges
+    /// Designs not ready yet, kept to become so, each by the index in
+    /// `sized` of the instance showing its old drawing meanwhile.
+    pending: Vec<(u32, Design)>,
+    /// What was drawn last by its holder's key, and the designs the markers
     /// keep: made each run, their room kept.
-    before: FnvHashMap<Key, Label>,
-    keep: FnvHashSet<Label>,
-    /// What the billboard set holds, and the buffer the next run lays out
-    /// into, swapped as `labeled` and `spare` are.
+    before: FnvHashMap<Key, Design>,
+    keep: FnvHashSet<Design>,
+    /// What the marker set holds, and the buffer the next run lays out
+    /// into, swapped as `sized` and `spare` are.
     instances: Vec<f32>,
     spare_instances: Vec<f32>,
     /// What the last run read, compared by value: equal, with nothing moved
-    /// and nothing left waiting, the labels it laid out stand.
+    /// and nothing left waiting, the designs it laid out stand.
     last: Option<Seen>,
-    /// The last run left a label not laid out or not painted, which a later
+    /// The last run left a design not laid out or not painted, which a later
     /// turn has, or a chunk not read yet: the next runs again.
     waiting: bool,
 }
@@ -101,26 +97,26 @@ struct Seen {
 }
 
 /// The name a holder calls what it shows by, from one run to the next, and
-/// none of what is painted (`badge.rs`): the markers by their own
-/// (`pin::Held`), a place by its tile and its index there, the chat's line
+/// none of what is painted (`design.rs`): a marker someone put up by its
+/// own (`pin::Held`), a place by its tile and its index there, the chat's line
 /// by its speaker, of whom there is one. The layout only tells one from
 /// another, to keep an instance's old drawing until its new one is painted;
 /// where a tap goes is the instance's own (`Instance::tap`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum Key {
+pub(super) enum Key {
     Pin(pin::Held),
     Place(Tile, u32),
     Line,
 }
 
-/// What a source hands the layout: by its holder's key, the label it paints,
+/// What a source hands the layout: by its holder's key, the design it paints,
 /// where it stands, and where a tap on it goes, none where it takes none.
 #[derive(Clone)]
-struct Instance {
-    key: Key,
-    label: Label,
-    stands: Q3,
-    tap: Option<Went>,
+pub(super) struct Instance {
+    pub(super) key: Key,
+    pub(super) design: Design,
+    pub(super) stands: Q3,
+    pub(super) tap: Option<Went>,
 }
 
 static PLACEMENT: Global<Placement> = Global::new();
@@ -141,7 +137,7 @@ pub fn moved(places: &[Tile]) {
 
 /// The height a ray down over `at` from `high` first meets what is drawn,
 /// above `low`; none where nothing there is known.
-fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
+pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
     let xy = q3::unpack(at);
     let ray = Ray {
         origin: [xy[0], xy[1], high],
@@ -155,7 +151,7 @@ fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
 /// The cell a place keeps to itself, as wide as the camera grid's cells are
 /// at the view's own τ, its drawn pixels counted as the CSS pixels a name is
 /// laid out in, so it is one width at every ratio: its name wraps to it and
-/// its billboard's region is it. Not the τ in force, which coarsens while
+/// its marker's region is it. Not the τ in force, which coarsens while
 /// the view moves and would lay every name out again; whole pixels, so only
 /// the view's size or angle does.
 fn spacing_px() -> f64 {
@@ -176,7 +172,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         p.moved_places.clear();
         p.instances.clear();
         p.hits.clear();
-        badge::retain(&FnvHashSet::default());
+        design::retain(&FnvHashSet::default());
         return;
     }
     // No observation yet, the source's reach not declared: laid out afresh
@@ -243,7 +239,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
             |&(_, chunk)| {
                 pin::read(chunk, &mut pins);
                 if places {
-                    place_tile::read(chunk, &mut read_places);
+                    place::read(chunk, &mut read_places);
                 }
                 true
             },
@@ -261,73 +257,73 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         p.now = p.found_for.replace(now).unwrap_or_default();
     }
     p.batch.reset();
-    let drawn_before = core::mem::take(&mut p.labeled);
-    let mut labeled = core::mem::take(&mut p.spare);
-    labeled.clear();
+    let drawn_before = core::mem::take(&mut p.sized);
+    let mut sized = core::mem::take(&mut p.spare);
+    sized.clear();
     p.pending.clear();
-    let shown = pin::shown(&pins).chain(place_tile::shown(&read_places)).chain(seen.said.shown());
+    let shown = pin::shown(&pins).chain(place::shown(&read_places)).chain(seen.said.shown());
     let spacing = seen.spacing;
     // What was drawn last by its holder's key, read once: what a holder
     // shows changed, and what was drawn stays until the new one is ready to
     // show.
     let before = &mut p.before;
     before.clear();
-    before.extend(drawn_before.iter().map(|s| (s.key, s.label.clone())));
+    before.extend(drawn_before.iter().map(|s| (s.key, s.design.clone())));
     let mut unlaid = false;
-    // The line is laid out last, so it wins a tie with a badge (the sort's
+    // The line is laid out last, so it wins a tie with another marker (the sort's
     // tiebreak).
     for s in shown {
-        let (label, region) = s.label.spaced(spacing);
-        let (label, held) = match before.get(&s.key) {
-            Some(before) if *before != label && !badge::ready(&label) => (before.clone(), Some(label)),
-            _ => (label, None),
+        let (design, region) = s.design.spaced(spacing);
+        let (design, held) = match before.get(&s.key) {
+            Some(before) if *before != design && !design::ready(&design) => (before.clone(), Some(design)),
+            _ => (design, None),
         };
         // Its words are laid out by a later turn.
-        let Some([width, height, anchor]) = badge::size(&label) else {
+        let Some([width, height, anchor]) = design::size(&design) else {
             unlaid = true;
             continue;
         };
         let local = crate::domain::view::frame::coord::to_world(&s.stands);
-        p.pending.extend(held.map(|held| (labeled.len() as u32, held)));
-        p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, labeled.len() as f64);
-        labeled.push(Instance { label, ..s });
+        p.pending.extend(held.map(|held| (sized.len() as u32, held)));
+        p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, sized.len() as f64);
+        sized.push(Instance { design, ..s });
     }
     // The line's slot is kept while it is said, wherever its speaker is.
     p.keep.clear();
     p.keep
-        .extend(labeled.iter().map(|s| s.label.clone()).chain(p.pending.iter().map(|w| w.1.clone())).chain(seen.said.kept()));
-    let freed = badge::retain(&p.keep);
+        .extend(sized.iter().map(|s| s.design.clone()).chain(p.pending.iter().map(|w| w.1.clone())).chain(seen.said.kept()));
+    let freed = design::retain(&p.keep);
     (p.pins, p.places) = (pins, read_places);
-    select_visible_billboards(&mut p.batch, &mut p.kept);
-    // A label held for an instance seen asks its slot now, after the slots
+    select_visible(&mut p.batch, &mut p.kept);
+    // A design held for an instance seen asks its slot now, after the slots
     // let go are freed, so it is painted at render. Where the sheet has no
-    // room for it, the hold is let go: the instance shows the new label,
+    // room for it, the hold is let go: the instance shows the new design,
     // which waits, and the next run frees the old one's slot and asks again.
     // One whose words are not laid out yet stays held and asks nothing: it
-    // asks the turn its words come (`badge::coming`).
+    // asks the turn its words come (`design::coming`).
     let mut refused = false;
     for &i in &p.kept {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else { continue };
-        if badge::size(&p.pending[k].1).is_none() {
+        if design::size(&p.pending[k].1).is_none() {
             continue;
         }
-        if badge::slot(&p.pending[k].1) == NO_SLOT {
-            labeled[i as usize].label = p.pending[k].1.clone();
+        if design::slot(&p.pending[k].1) == NO_SLOT {
+            sized[i as usize].design = p.pending[k].1.clone();
             refused = true;
         }
     }
     // Painted at render, or laid out by the host, neither of which asks a
-    // turn: one looks again, while a label is on its way (`badge::coming`),
+    // turn: one looks again, while a design is on its way (`design::coming`),
     // once a slot let go may make room for one that had none, or once a
     // hold let go frees the old slot.
-    let pending = p.pending.iter().any(|w| badge::coming(&w.1)) || freed && !p.pending.is_empty();
+    let pending = p.pending.iter().any(|w| design::coming(&w.1)) || freed && !p.pending.is_empty();
     p.waiting = pending || refused || unlaid || unread > 0;
     if p.waiting {
         crate::sys::sched::edge::request_world_tick();
     }
     p.drawn.clear();
     for &i in &p.kept {
-        if badge::slot(&labeled[i as usize].label) == NO_SLOT {
+        if design::slot(&sized[i as usize].design) == NO_SLOT {
             continue;
         }
         p.drawn.push(i);
@@ -340,7 +336,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
             .then(batch.tiebreak[a as usize].total_cmp(&batch.tiebreak[b as usize]))
     });
     p.hits.clear();
-    p.hits.extend(p.drawn.iter().rev().filter_map(|&i| Some((p.batch.screen[i as usize], labeled[i as usize].tap?))));
+    p.hits.extend(p.drawn.iter().rev().filter_map(|&i| Some((p.batch.screen[i as usize], sized[i as usize].tap?))));
     let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
@@ -348,9 +344,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     for &i in &p.drawn {
         let i = i as usize;
         let at = [p.batch.local_x[i] - about[0], p.batch.local_y[i] - about[1], p.batch.local_z[i] - about[2]];
-        let label = &labeled[i].label;
-        let [w, h, anchor] = badge::size(label).or_bug(Errno::ENOTRECOVERABLE);
-        instances.extend_from_slice(&billboard_instance(at, [w, h], badge::slot(label) as u32, anchor / h, f64::from(p.batch.region_px[i])));
+        let design = &sized[i].design;
+        let [w, h, anchor] = design::size(design).or_bug(Errno::ENOTRECOVERABLE);
+        instances.extend_from_slice(&set::instance(at, [w, h], design::slot(design) as u32, anchor / h, f64::from(p.batch.region_px[i])));
     }
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
@@ -360,15 +356,15 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         ctx.invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);
-    (p.labeled, p.spare, p.spare_instances) = (labeled, drawn_before, drawn_instances);
+    (p.sized, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);
 }
 
-/// The billboards the last step laid out, into the frame's list.
+/// The markers the last step laid out, into the frame's list.
 pub fn draw(draw: &mut pxl_render::frame::draw::DrawList, eye: V3) {
     PLACEMENT.get(Placement::default).set.draw(draw, eye);
 }
 
-/// Where a tap on a billboard goes: to its place; a marker someone put up is
+/// Where a tap on a marker goes: to its place; a marker someone put up is
 /// its entry's, which the tool held decides what to do with.
 #[derive(Clone, Copy)]
 pub enum Went {
@@ -376,7 +372,7 @@ pub enum Went {
     Marker(EntryAt, Q3),
 }
 
-/// `ndc` in [−1, 1], y up. The badge that took the tap, if any.
+/// `ndc` in [−1, 1], y up. The marker that took the tap, if any.
 pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &PLACEMENT.get(Placement::default).hits;

@@ -1,9 +1,9 @@
-// pxl-kernel/domain/scene/billboard/batch.rs
+// pxl-kernel/domain/scene/marker/batch.rs
 
-//! One frame's billboard candidates, as lanes.
+//! One frame's marker candidates, as lanes.
 
 #[derive(Clone, Debug, Default)]
-pub struct BillboardBatch {
+pub struct Batch {
     pub count: u32,
 
     /// Relative to the local world frame's origin.
@@ -14,7 +14,7 @@ pub struct BillboardBatch {
     /// CSS pixels.
     pub w_px: Vec<f32>,
     pub h_px: Vec<f32>,
-    /// The width of the region it keeps (`field.rs`), at least its own.
+    /// The width of the region it keeps (`set.rs`), at least its own.
     pub region_px: Vec<f32>,
     /// Canvas-space Y of the anchor, CSS pixels.
     pub anchor_px: Vec<f32>,
@@ -30,7 +30,7 @@ pub struct BillboardBatch {
     pub order: Vec<u32>,
 }
 
-impl BillboardBatch {
+impl Batch {
     /// A high-water mark, not a limit.
     pub fn cap(&self) -> usize {
         self.local_x.len()

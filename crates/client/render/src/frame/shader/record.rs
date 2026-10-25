@@ -56,8 +56,8 @@ pub const PIPELINE_CLOUD_FIELD: u32 = 24;
 pub const PIPELINE_SHEET: u32 = 25;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 26;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 27;
-/// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
-pub const PIPELINE_BADGE_REGION: u32 = 28;
+/// The markers' regions, numbered, into a target of their own (pass/marker.rs).
+pub const PIPELINE_MARKER_REGION: u32 = 28;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 29;
 /// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
@@ -136,7 +136,7 @@ pub const fn same<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> b
 }
 
 use crate::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+    PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
 
@@ -356,11 +356,11 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &BLOCK];
 /// A model's depth from the sun: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
-/// A billboard set's instances, and what its pass reads at an anchor: the
+/// A marker set's instances, and what its pass reads at an anchor: the
 /// world's depth for the regions, the regions for the sprites. Its uniform is
 /// a draw's (`DRAW`).
-const BADGE_SPRITES: Group = &[[0, STORAGE], [1, TEXTURE_UNFILTERED]];
-const BADGE_REGIONS: Group = &[[0, STORAGE], [1, DEPTH]];
+const MARKER_SPRITES: Group = &[[0, STORAGE], [1, TEXTURE_UNFILTERED]];
+const MARKER_REGIONS: Group = &[[0, STORAGE], [1, DEPTH]];
 const SKY_GROUP: [[u32; 2]; 15] = and([[0, UNIFORM], [19, UNIFORM], [2, TEXTURE_ARRAY], [3, SAMPLER]], AIR);
 
 /// A pipeline's record before its groups' stages: its head, its lanes and
@@ -391,25 +391,25 @@ const fn plan_of(id: u32) -> Plan {
         PIPELINE_SKINNED => plan(lit(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
         PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE), &PUCK_ZONE_LANES, &[FRAME, &DRAW, &BLOCK]),
         PIPELINE_PUCK_BEACON => plan(lit(SHADER_PUCK_BEACON, CULL_BACK), &PUCK_BEACON_LANES, &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &DRAW]),
-        PIPELINE_BADGE => plan(
+        PIPELINE_MARKER => plan(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_BADGE, CULL_NONE)
+                ..blended(SHADER_MARKER, CULL_NONE)
             },
             &[],
-            &[FRAME, &DRAW, BADGE_SPRITES, &SKIN],
+            &[FRAME, &DRAW, MARKER_SPRITES, &SKIN],
         ),
-        PIPELINE_BADGE_REGION => plan(
+        PIPELINE_MARKER_REGION => plan(
             Head {
                 topology: STRIP,
                 depth_write: true,
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
-                ..blended(SHADER_BADGE_REGION, CULL_NONE)
+                ..blended(SHADER_MARKER_REGION, CULL_NONE)
             },
             &[],
-            &[FRAME, &DRAW, BADGE_REGIONS],
+            &[FRAME, &DRAW, MARKER_REGIONS],
         ),
         // Against the gizmos' own faces, not the world's depth.
         PIPELINE_DEBUG => plan(

@@ -6,7 +6,7 @@ No reader asks block by block. It descends (`pxl-spec-core cast.rs` `first`), pa
 
 How finely the world is drawn is the other half, and it is one rule too: the view is a grid of angular cells about the eye, and a block is drawn at the zoom whose block spans at least a cell at its distance (`pxl-spec-core grid.rs` `cell_at`). What a zoom folds away is not there at that zoom, to draw, to walk on or to miss, and nothing finer is fetched to keep it.
 
-A kind of thing is drawn wholly on one side. The GPU's rays find the world's blocks, a player's cubes among them, and the GPU grows the ground's decor and draws it with a player's, which the kernel hands it as records, each where it is drawn. Everything else the kernel decides to draw, it lists: the actors, the cumulus, the puck, the ghosts, the badges. The renderer draws the list and decides nothing but color. Control is headless: the walk, the pointer and the camera's clearance ask the same query on the CPU and draw nothing.
+A kind of thing is drawn wholly on one side. The GPU's rays find the world's blocks, a player's cubes among them, and the GPU grows the ground's decor and draws it with a player's, which the kernel hands it as records, each where it is drawn. Everything else the kernel decides to draw, it lists: the actors, the cumulus, the puck, the ghosts, the markers. The renderer draws the list and decides nothing but color. Control is headless: the walk, the pointer and the camera's clearance ask the same query on the CPU and draw nothing.
 
 pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel that runs as xpute's guest, the TypeScript around it, and Rust servers and bakes that share the kernel's model. The memory, the rings and the turn are xpute's and described there; this document is what pixelet builds on them.
 
@@ -34,7 +34,7 @@ The kernel is one order of dependency, a DAG rather than a pipeline: an edge may
         load.rs      what the kernel loads, which io and sched read
 
   leaves   under their lowest reader: the settings in view/, the models
-           and decor in query/, the billboards in scene/, each knob in
+           and decor in query/, the markers in scene/, each knob in
            a param.rs beside the lowest part that reads it
   beside   profiler/: reads anything; no decision reads it
 ```
@@ -256,17 +256,17 @@ The view is loading until something has reached the screen and every tile demand
 
 ## The eye's cubes
 
-What stands beside the ground, decor and the marks, is gathered a chunk at a time. A chunk is a cube of the camera grid's cells 32 a side, addressed by zoom and x, y and z (`domain/chunk.rs`). It is never fetched or held; only its address exists.
+What stands beside the ground, decor and the markers, is gathered a chunk at a time. A chunk is a cube of the camera grid's cells 32 a side, addressed by zoom and x, y and z (`domain/chunk.rs`). It is never fetched or held; only its address exists.
 
 **The eye's cubes** are one partition of the ground (`domain/view/observation.rs` `cubes`). A square of ground splits into four while its nearest point is nearer than its zoom's split distance, as a ray's descent does. Each square left holds the cubes the world stands in there. The partition never depends on what a ray met.
 
 Decor is grown and drawn on the GPU each frame, a thread a candidate, never stored (`pxl-render gpu/grown.rs`). Placed decor is handed in beside it as records (`domain/scene/decor/drawn.rs`). A kind is drawn as a model down to its own size on screen, and as a sprite below it.
 
-## Marks
+## Markers
 
-**Marks** are the places and markers, gathered over the eye's cubes. Each stands at a cell's center, at the height of the surface drawn there.
+A **marker** is what is drawn flat to the camera, a billboard, from a design on the sheet: a place, a marker someone put up, or the chat's line. Each source reads its own, and one layout gathers them over the eye's cubes (`domain/scene/marker/layout.rs`). Each stands at a cell's center, at the height of the surface drawn there.
 
-A place is the place layer's mark (`domain/scene/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`domain/scene/place/place_tile.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
+A place is the place layer's marker (`domain/scene/marker/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`domain/scene/marker/place.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
 
 ---
 
@@ -334,9 +334,9 @@ A receiver compares nine taps, each moved by its own plane's slope (`shadow.wgsl
 
 ## The frame
 
-Each turn ends with a **draw list** (`pxl-render frame/draw.rs`), one for the kernel's life, kept beside the models whose meshes it uploads (`domain/query/model.rs` `draw_list`): entries tagged by the pipeline that draws them, each with its block and uniform. It holds the cumulus (instanced as decor is, or as an **impostor** sprite where a model is drawn too small to be worth it), the actors, the location puck, an edit's ghosts, the badges and the debug lines. The rays and the GPU's decor are not in it; they are the cast and the grown decor (`gpu/grown.rs`).
+Each turn ends with a **draw list** (`pxl-render frame/draw.rs`), one for the kernel's life, kept beside the models whose meshes it uploads (`domain/query/model.rs` `draw_list`): entries tagged by the pipeline that draws them, each with its block and uniform. It holds the cumulus (instanced as decor is, or as an **impostor** sprite where a model is drawn too small to be worth it), the actors, the location puck, an edit's ghosts, the markers and the debug lines. The rays and the GPU's decor are not in it; they are the cast and the grown decor (`gpu/grown.rs`).
 
-The kernel writes the frame's uniforms into one lane of doubles (`frame/stage.rs`) and calls the renderer (`gpu/renderer.rs` `render_frame`) with the list, the models, the badges' images, the earth's tiles, the windows' squares and the cast. It draws every open surface, the world and the character picker's display case, and reports the cost and whether it wants another turn.
+The kernel writes the frame's uniforms into one lane of doubles (`frame/stage.rs`) and calls the renderer (`gpu/renderer.rs` `render_frame`) with the list, the models, the markers' sheet, the earth's tiles, the windows' squares and the cast. It draws every open surface, the world and the character picker's display case, and reports the cost and whether it wants another turn.
 
 A frame runs in this order:
 
@@ -347,7 +347,7 @@ cast        the screen's rays; the sun's map; the occlusion prepass
 world pass  grown decor → rays at their depth → grown impostors
             → sky and stars at the far plane → listed actors,
             cumulus, impostors → high cloud planes → puck, ghosts
-over        badges → debug lines → display cases
+over        markers → debug lines → display cases
 ```
 
 The calls are WebGPU's, written through xpute's encoder (`gpu/api.rs`) into one stream in the kernel's memory. The page runs it on WebGPU after the turn returns (`apps/web/src/webgpu.ts`); the device app runs it on wgpu inside its turn, on the kernel's thread (`crates/client-bracket/native/src/surface.rs`). Every GPU object is an xpute handle, and a test links no GPU.
@@ -377,13 +377,13 @@ The **clouds** are three layers on one wind (`pxl-spec-core cloud.rs`). The cumu
 
 Above it, altocumulus and cirrus are planes read where a ray meets them (`frame/shader/clouds.wgsl` `sheet_t`), laid over the world without depth. From below they fill only the sky and from above they cover everything, so a peak above one is knowingly wrong. Every layer fades out as the eye climbs toward where the clouds are gone (`domain/scene/environment/cloud.rs` `clouds_shown`).
 
-## Badges and the sheet
+## Markers and the sheet
 
-A badge stands at a cell's center and is drawn flat to the camera; its records come from the view (Marks).
+A marker stands at a cell's center and is drawn flat to the camera; its records come from the view (Markers).
 
-Badges are one instanced quad (`domain/scene/billboard/field.rs`) over one texture packed shelf by shelf, the **badge sheet** (`pxl-render gpu/sheet/shelf.rs`). The pass (`frame/shader/badge.wgsl`) tests several points of each badge against the world's depth and drops the badge when most are hidden. It writes depth from an upright twin of the quad, so badges sort against the world along its up. Chat bubbles share the pass, each hung from the point over its speaker's head that the speaker hands over, and shown by its own rule (`domain/scene/billboard/chat.rs` `hangs`).
+Markers are one instanced quad (`domain/scene/marker/set.rs`) over one texture packed shelf by shelf, the **sheet** (`pxl-render gpu/sheet/shelf.rs`). The pass (`frame/shader/marker.wgsl`) tests several points of each marker against the world's depth and drops the marker when most are hidden. It writes depth from an upright twin of the quad, so markers sort against the world along its up. The chat's bubble is a marker too, hung from the point over its speaker's head that the speaker hands over, and shown by its own rule (`domain/scene/marker/chat.rs` `hangs`).
 
-A sheet entry is found by what it paints, never by who shows it: equal words, colors and look share one slot, let go once nothing shown or waiting uses it (`domain/scene/billboard/badge.rs`). What shows it is named apart, by its holder's key, which the old drawing kept until the new one is painted goes by (`domain/scene/place.rs` `Key`); where a tap on it goes is each instance's own (`Instance::tap`). An entry is drawn on the GPU only when what it shows changes (`gpu/sheet.rs`): its shapes as signed distances, its text as lines the platform drew. Asking the platform a line at a time leaves shaping, bidirectional text and emoji to each platform's own engine ([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
+A sheet entry is found by its design, what it paints, never by who shows it: equal words, colors and look share one slot, let go once nothing shown or waiting uses it (`domain/scene/marker/design.rs` `Design`). What shows it is named apart, by its holder's key, which the old drawing kept until the new one is painted goes by (`domain/scene/marker/layout.rs` `Key`); where a tap on it goes is each instance's own (`Instance::tap`). An entry is drawn on the GPU only when what it shows changes (`gpu/sheet.rs`): its shapes as signed distances, its text as lines the platform drew. Asking the platform a line at a time leaves shaping, bidirectional text and emoji to each platform's own engine ([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
 
 Markers people put up are an object kind drawn by the same pass, whether or not places are on. Where several share a cell, the cell shows their count on a marker's pill in its colors turned over, counted afresh each time the cube is read (`spec/spec/block/marker.json`). Unlike places, markers are one kind, so their number means something. Each keeps its own words with its entry (`domain/layer/object/ext.rs` `Ext::MarkerText`).
 
@@ -536,7 +536,7 @@ The shell reads the kernel through one **snapshot**, replaced whole after a turn
 - the focus, whether the view shows ground there yet, and whether it has wandered from the device or past the service area;
 - the state of the device's location and heading, the camera's azimuth, whether it follows the device, and whether it is dragged or zooming;
 - the companion's readiness, the tool held and a marker waiting for its words, the display cases, and the settings by their numbers;
-- the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a badge, the kept slots it refused, and a server's stall.
+- the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a marker, the kept slots it refused, and a server's stall.
 
 What is rounded or timed for presentation, such as a scale bar's length or a toast, is the shell's.
 
@@ -681,7 +681,7 @@ What the tree took from work done before it, or found it had arrived at: each li
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c))                              | `pxl-kernel domain/query/support.rs` `step_slide`                                                                                   | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
 | Amanatides and Woo's voxel traversal                                                                                                                                | `pxl-kernel domain/query/ray.rs`, `domain/query/support.rs`                                                                         | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
 | OpenStreetMap Carto                                                                                                                                                 | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/block/`                                                              | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
-| Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/badge.rs`                                                                                                          | A label's line pitch                                                                                                                     |
+| Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/marker.rs`                                                                                                         | A label's line pitch                                                                                                                     |
 | OpenMapTiles' schema                                                                                                                                                | `spec/spec/block/marker.json`                                                                                                       | A marker shows from z14, as its `poi` layer does                                                                                         |
 | [Arnis](https://github.com/louis-e/arnis)                                                                                                                           | `pxl-geo-bake separation/arnis.rs`                                                                                                  | Bridges and tunnels solved structure by structure: clearances, ramps, decks, pillars                                                     |
 | osm2streets, osm2lanes                                                                                                                                              | the bake's way rules ([doc/minutes/archive/20261001-ways-off-the-ground.md](./doc/minutes/archive/20261001-ways-off-the-ground.md)) | Lane and buffer widths                                                                                                                   |

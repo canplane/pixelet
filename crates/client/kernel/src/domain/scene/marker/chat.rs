@@ -1,9 +1,9 @@
-// pxl-kernel/domain/scene/billboard/chat.rs
+// pxl-kernel/domain/scene/marker/chat.rs
 
 //! The (dev-only) map chat's latest line and who says it: a bubble hung from
 //! the point over its speaker's head that the scene hands over
 //! (`speak_from`), and shown by its own rule (`hangs`), not read from the
-//! chunks as a marker someone put up is. `domain/scene/place.rs` lays both out.
+//! chunks as a marker someone put up is. `layout.rs` lays both out.
 
 use std::rc::Rc;
 
@@ -15,7 +15,7 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 use crate::domain::query::cell_at;
-use crate::domain::scene::billboard::badge::Label;
+use crate::domain::scene::marker::design::Design;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::sched::edge::wake_at;
 
@@ -50,13 +50,13 @@ pub fn append_chat_line(text: &str) {
 
 /// The line to show, in its bubble, none once shown its while; the turn is
 /// woken then.
-pub fn shown_line() -> Option<Label> {
+pub fn shown_line() -> Option<Design> {
     let line = chat().line.as_ref()?;
     if line.said + SHOWN_MS <= now() {
         return None;
     }
     wake_at(line.said + SHOWN_MS);
-    Some(Label::Bubble { words: line.text.clone() })
+    Some(Design::Bubble { words: line.text.clone() })
 }
 
 /// None while there is no one to speak.

@@ -1,22 +1,22 @@
-// pxl-kernel/domain/scene/place/selection.rs
+// pxl-kernel/domain/scene/marker/selection.rs
 
-//! Visibility of world-anchored billboards: in the frustum as a sphere about
-//! the anchor (a point test dropped the nearest badges first at an oblique
-//! camera, since a badge is drawn above its anchor), and with a box on
+//! Visibility of world-anchored markers: in the frustum as a sphere about
+//! the anchor (a point test dropped the nearest markers first at an oblique
+//! camera, since a marker is drawn above its anchor), and with a box on
 //! screen, nearest first.
 
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3;
 
-use crate::domain::scene::billboard::batch::BillboardBatch;
+use crate::domain::scene::marker::batch::Batch;
 use crate::domain::view::frame::pose::{ndc_to_px, view};
 
-/// A fraction of the distance, since the badge holds a constant screen size.
-/// Generous: one badge too many costs a sprite.
+/// A fraction of the distance, since the marker holds a constant screen size.
+/// Generous: one marker too many costs a sprite.
 const ANCHOR_REACH: f64 = 0.08;
 
 /// Indices into `batch`, in the root frame.
-pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>) {
+pub fn select_visible(batch: &mut Batch, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.at().eye;
 

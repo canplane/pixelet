@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/place/pin.rs
+// pxl-kernel/domain/scene/marker/pin.rs
 
 //! The markers someone put up, as the object store holds them: each its
 //! words on a pill at its own cell, or where more than one stands in a
@@ -8,12 +8,12 @@
 
 use core::hash::Hasher;
 
-use super::{surface, Instance, Key, Went};
+use super::layout::{surface, Instance, Key, Went};
 use crate::domain::chunk::Chunk;
 use crate::domain::layer::object::preview::draft;
 use crate::domain::query::World;
-use crate::domain::scene::billboard::badge::Label;
-use pxl_render::look::badge::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
+use crate::domain::scene::marker::design::Design;
+use pxl_render::look::marker::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::block::object::{marker_cell_of, marker_shows, object_value_is_marker};
 use pxl_spec::space::coord::q3::Q3;
@@ -37,23 +37,23 @@ pub(super) enum Held {
 pub(super) struct Pin {
     pub(super) chunk: Chunk,
     at: EntryAt,
-    label: Label,
+    design: Design,
     stands: Q3,
     cell: (Zoom, [i32; 3]),
-    count: Option<(Q3, Label)>,
+    count: Option<(Q3, Design)>,
 }
 
-/// A product choice: the length a one-line badge still reads as a name at.
+/// A product choice: the length a one-line marker still reads as a name at.
 /// Code points, so a non-BMP character is never cut in half.
 const SHOWN_CHARS: usize = 12;
 
 /// A marker's words, cut to `SHOWN_CHARS`, on its pill.
-fn pill(words: &str) -> Label {
+fn pill(words: &str) -> Design {
     let mut shown: String = words.chars().take(SHOWN_CHARS).collect();
     if words.chars().count() > SHOWN_CHARS {
         shown.push('…');
     }
-    Label::Pill {
+    Design::Pill {
         words: shown.into(),
         fill: PILL_FILL,
         ink: PILL_INK,
@@ -62,8 +62,8 @@ fn pill(words: &str) -> Label {
 
 /// The count of `n` markers in one marker's cell, on a marker's pill in the
 /// count's colors.
-fn count(n: usize) -> Label {
-    Label::Pill {
+fn count(n: usize) -> Design {
+    Design::Pill {
         words: n.to_string().into(),
         fill: COUNT_FILL,
         ink: COUNT_INK,
@@ -72,10 +72,10 @@ fn count(n: usize) -> Label {
 
 /// One marker, taken to its entry, which the tool held decides what to do
 /// with.
-fn one(at: EntryAt, label: Label, stands: Q3) -> Instance {
+fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
     Instance {
         key: Key::Pin(Held::One(at)),
-        label,
+        design,
         stands,
         tap: Some(Went::Marker(at, stands)),
     }
@@ -100,7 +100,7 @@ pub(super) fn read(chunk: Chunk, pins: &mut Vec<Pin>) {
             pins.push(Pin {
                 chunk,
                 at: e.id(),
-                label: pill(world.words(e).unwrap_or_default()),
+                design: pill(world.words(e).unwrap_or_default()),
                 stands,
                 cell: marker_cell_of(cell_zoom, e.id()),
                 count: None,
@@ -130,11 +130,11 @@ pub(super) fn shown(pins: &[Pin]) -> impl Iterator<Item = Instance> + '_ {
         Some(match &first.count {
             Some((at, counted)) if n > 1 => Instance {
                 key: Key::Pin(Held::Cell(first.cell)),
-                label: if n == run.len() { counted.clone() } else { count(n) },
+                design: if n == run.len() { counted.clone() } else { count(n) },
                 stands: *at,
                 tap: Some(Went::To(*at)),
             },
-            _ => one(first.at, first.label.clone(), first.stands),
+            _ => one(first.at, first.design.clone(), first.stands),
         })
     }))
 }

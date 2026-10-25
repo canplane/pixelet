@@ -6,6 +6,6 @@
 // in the order the renderer encodes them, and the kind of frame it made; the profiler records and reports
 // them by these names.
 
-export const GPU_SPAN_NAMES = ["air", "prepass", "ao", "world", "badges", "debug", "cases", "fill", "cast", "grow", "shadow"] as const;
+export const GPU_SPAN_NAMES = ["air", "prepass", "ao", "world", "marker", "debug", "cases", "fill", "cast", "grow", "shadow"] as const;
 
 export const FRAME_KINDS = ["none", "unready", "held", "dropped", "plain", "standing", "cast", "stood"] as const;

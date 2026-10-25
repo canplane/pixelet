@@ -1,34 +1,34 @@
-// pxl-render/frame/shader/badge.wgsl
+// pxl-render/frame/shader/marker.wgsl
 
-// Billboards drawn after the world, each standing in it as an upright twin of
-// its quad, in two passes over the same instances. A billboard keeps a region
-// about itself, clear and centered on what it draws, and asks at one point,
-// its anchor, whether it is seen: badge_region.wgsl draws every region whose
-// anchor the world leaves seen, each as its billboard's number, the nearest
-// winning a pixel; badge_sprite.wgsl draws a billboard only where the number
+// Markers drawn after the world as billboards, each standing in it as an
+// upright twin of its quad, in two passes over the same instances. A marker
+// keeps a region about itself, clear and centered on what it draws, and asks
+// at one point, its anchor, whether it is seen: marker_region.wgsl draws every
+// region whose anchor the world leaves seen, each as its marker's number, the
+// nearest winning a pixel; marker_sprite.wgsl draws a marker only where the number
 // at its anchor is its own. So one is seen whole or not at all, and two seen
 // may still overlap.
 
-// A twin stands this far toward the eye, so a badge is not lost in the
+// A twin stands this far toward the eye, so a marker is not lost in the
 // surface it stands on.
 const DEPTH_BIAS_U: f32 = 1.0;
 const DEPTH_BIAS_CELLS: f32 = 1.5;
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process. view, proj, translation and px_k, then the
-// number before the set's first billboard.
-@group(1) @binding(0) var<uniform> badge_words: array<vec4f, 10>;
+// number before the set's first marker.
+@group(1) @binding(0) var<uniform> marker_words: array<vec4f, 10>;
 
-fn badge_view() -> mat4x4f { return mat4x4f(badge_words[0], badge_words[1], badge_words[2], badge_words[3]); }
-fn badge_proj() -> mat4x4f { return mat4x4f(badge_words[4], badge_words[5], badge_words[6], badge_words[7]); }
-fn badge_translation() -> vec3f { return badge_words[8].xyz; }
-fn badge_px_k() -> f32 { return badge_words[8].w; }
+fn marker_view() -> mat4x4f { return mat4x4f(marker_words[0], marker_words[1], marker_words[2], marker_words[3]); }
+fn marker_proj() -> mat4x4f { return mat4x4f(marker_words[4], marker_words[5], marker_words[6], marker_words[7]); }
+fn marker_translation() -> vec3f { return marker_words[8].xyz; }
+fn marker_px_k() -> f32 { return marker_words[8].w; }
 
 @group(2) @binding(0) var<storage, read> instances: array<f32>;
 
-// A billboard's number, never 0, which is no region.
-fn badge_number(ii: u32) -> u32 {
-  return u32(badge_words[9].x) + ii + 1u;
+// A marker's number, never 0, which is no region.
+fn marker_number(ii: u32) -> u32 {
+  return u32(marker_words[9].x) + ii + 1u;
 }
 
 struct Placed {
@@ -45,32 +45,32 @@ struct Placed {
 
 // Corner `vi` of instance `ii`'s quad, as wide as its sprite or its region.
 fn placed(vi: u32, ii: u32, region: bool) -> Placed {
-  // BILLBOARD_FLOATS floats an instance.
+  // INSTANCE_FLOATS floats an instance (pxl-kernel domain/scene/marker/set.rs).
   let k = ii * 11u;
-  let anchor = vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge_translation();
+  let anchor = vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + marker_translation();
   let sprite_w = instances[k + 3u];
   let size_px = vec2f(select(sprite_w, instances[k + 10u], region), instances[k + 4u]);
   let frac = instances[k + 9u];
   let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
   let q = corners[vi];
 
-  let anchor_view = (badge_view() * vec4f(anchor, 1.0)).xyz;
+  let anchor_view = (marker_view() * vec4f(anchor, 1.0)).xyz;
   let depth = max(-anchor_view.z, 1e-3);
-  let size = size_px * depth / badge_px_k();
+  let size = size_px * depth / marker_px_k();
   let drop = size.y * (frac - 0.5);
   let center_view = anchor_view + vec3f(0.0, drop, 0.0);
   // A region reaches a pixel past its sprite above and below, so an anchor on
   // the sprite's edge, a bubble's tail tip, is inside its own region whatever
   // the subpixel it falls on; on the edge it flickered as it moved.
-  let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / badge_px_k()));
+  let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / marker_px_k()));
 
   var p: Placed;
-  p.clip = badge_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
+  p.clip = marker_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
   p.across = q.x * size_px.x / sprite_w + 0.5;
   p.q = q;
   p.anchor_view = anchor_view;
 
-  let world_up_view = normalize((badge_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
+  let world_up_view = normalize((marker_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
   p.push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
   // What hangs under the anchor lies on the level ground through it, where the
   // eye sees it; stood up, it would be in the ground the eye sees in front.
@@ -82,14 +82,14 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placed {
   if (over < 0.0 && abs(toward) > 1e-6 && t > 0.0 && t < 1.0) {
     twin = shown * t;
   }
-  let upright = badge_proj() * vec4f(twin + vec3f(0.0, 0.0, p.push), 1.0);
+  let upright = marker_proj() * vec4f(twin + vec3f(0.0, 0.0, p.push), 1.0);
   p.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
   return p;
 }
 
 // The pixel of a target `dims` large the anchor falls in; x < 0 off the screen.
 fn anchor_pixel(p: Placed, dims: vec2u) -> vec2i {
-  let at = badge_proj() * vec4f(p.anchor_view, 1.0);
+  let at = marker_proj() * vec4f(p.anchor_view, 1.0);
   if (at.w <= 0.0) {
     return vec2i(-1);
   }

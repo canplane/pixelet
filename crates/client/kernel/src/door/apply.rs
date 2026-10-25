@@ -302,7 +302,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::CHAT_SEND => {
-            crate::domain::scene::billboard::chat::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
+            crate::domain::scene::marker::chat::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
             applied(s)
         }
         Command::PREVIEW_OPEN => {
@@ -387,37 +387,37 @@ fn profiler_rings() -> u32 {
 #[path = "apply.test.rs"]
 mod test;
 
-/// What a tap on a badge does with the tool held.
-enum BadgeTap {
+/// What a tap on a marker does with the tool held.
+enum MarkerTap {
     Go(Q3),
     Remove(EntryAt),
     Wait(EntryAt),
 }
 
-/// A badge takes a tap before the ground under it: the pointer goes to it,
+/// A marker takes a tap before the ground under it: the pointer goes to it,
 /// the eraser takes away a marker someone put up, and the marker tool has the
-/// waiting marker stand there. None where no badge there takes it.
-fn badge_tap(x: f64, y: f64) -> Option<BadgeTap> {
+/// waiting marker stand there. None where no marker there takes it.
+fn marker_tap(x: f64, y: f64) -> Option<MarkerTap> {
     use crate::domain::control::interaction::ActiveTool;
-    use crate::domain::scene::place::Went;
-    match (crate::domain::control::interaction::holding().active_tool, crate::domain::scene::place::tap(x, y)?) {
-        (ActiveTool::Pointer, Went::To(at) | Went::Marker(_, at)) => Some(BadgeTap::Go(at)),
-        (ActiveTool::Eraser, Went::Marker(e, _)) => Some(BadgeTap::Remove(e)),
-        (ActiveTool::Marker, Went::Marker(e, _)) => Some(BadgeTap::Wait(e)),
+    use crate::domain::scene::marker::layout::Went;
+    match (crate::domain::control::interaction::holding().active_tool, crate::domain::scene::marker::layout::tap(x, y)?) {
+        (ActiveTool::Pointer, Went::To(at) | Went::Marker(_, at)) => Some(MarkerTap::Go(at)),
+        (ActiveTool::Eraser, Went::Marker(e, _)) => Some(MarkerTap::Remove(e)),
+        (ActiveTool::Marker, Went::Marker(e, _)) => Some(MarkerTap::Wait(e)),
         _ => None,
     }
 }
 
-/// Whether the pointer is over a badge a tap would act on.
-pub(crate) fn over_badge() -> bool {
-    crate::domain::control::interaction::pointed().is_some_and(|[x, y]| badge_tap(x, y).is_some())
+/// Whether the pointer is over a marker a tap would act on.
+pub(crate) fn over_marker() -> bool {
+    crate::domain::control::interaction::pointed().is_some_and(|[x, y]| marker_tap(x, y).is_some())
 }
 
 fn tap_at(x: f64, y: f64) {
-    match badge_tap(x, y) {
-        Some(BadgeTap::Go(at)) => crate::domain::control::navigation::destination::go_to_place(at),
-        Some(BadgeTap::Remove(e)) => crate::domain::control::interaction::edit::remove(e),
-        Some(BadgeTap::Wait(e)) => crate::domain::control::interaction::edit::wait_at(e),
+    match marker_tap(x, y) {
+        Some(MarkerTap::Go(at)) => crate::domain::control::navigation::destination::go_to_place(at),
+        Some(MarkerTap::Remove(e)) => crate::domain::control::interaction::edit::remove(e),
+        Some(MarkerTap::Wait(e)) => crate::domain::control::interaction::edit::wait_at(e),
         None => crate::domain::control::interaction::tap(x, y, crate::domain::view::lens::tau()),
     }
 }

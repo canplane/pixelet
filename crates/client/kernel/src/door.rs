@@ -5,7 +5,7 @@
 //! rings are xpute's (`xpute_guest::ipc::door`).
 
 mod apply;
-pub(crate) use apply::over_badge;
+pub(crate) use apply::over_marker;
 /// The directory's keys, generated from directory.json.
 #[path = "door/directory.spec.rs"]
 pub mod directory;

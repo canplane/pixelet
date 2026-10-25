@@ -2,7 +2,7 @@
 
 //! Carto's place symbols, each SVG under `asset/raw/place/symbol/` named by the
 //! path Carto gives it (`symbols/…`), which is how the places' theme names
-//! it: for the billboard sheet, the masks it tints, each rasterized once to
+//! it: for the marker sheet, the masks it tints, each rasterized once to
 //! its coverage, a byte a pixel, in a square of `SYMBOL_PX`, laid end to end
 //! in one file the spec crate includes; for the shell, its outlines.
 

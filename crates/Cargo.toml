@@ -59,7 +59,7 @@ hex = "0.4"
 # A set whose position is the value: insert appends, swap_remove moves the
 # last entry into the hole, and a caller keeps its own lanes at the same
 # positions. What a change log keys a topic by, a page table a page by, a
-# badge table a place by — hashed by the FNV above, so no random state.
+# marker table a design by — hashed by the FNV above, so no random state.
 indexmap = "2"
 
 # The client's crates name the kernel's memory by offsets from one base

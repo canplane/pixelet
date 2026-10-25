@@ -12,7 +12,7 @@
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
 
-export const CENSUS_TAGS = ["decor", "ghost_box", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug", "impostor", "camera_grid"] as const;
+export const CENSUS_TAGS = ["decor", "ghost_box", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "marker", "debug", "impostor", "camera_grid"] as const;
 
 export const WAKES = ["next", "timer", "none"] as const;
 

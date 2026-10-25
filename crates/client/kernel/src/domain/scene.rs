@@ -4,15 +4,14 @@
 //! state, listed into the draw list (domain/query/model.rs `draw_list`).
 
 pub mod actor;
-pub mod billboard;
 pub mod cast;
 pub mod character;
 pub mod decor;
 pub mod environment;
 pub mod frame;
 pub mod indicator;
+pub mod marker;
 pub mod param;
-pub mod place;
 pub mod stage;
 
 use pxl_render::frame::draw::DrawList;

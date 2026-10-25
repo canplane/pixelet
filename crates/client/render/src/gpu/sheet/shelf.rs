@@ -1,8 +1,8 @@
 // pxl-render/gpu/sheet/shelf.rs
 
-//! Where each billboard's bitmap lies in the sheet, one texture, so all badges draw in one instanced
+//! Where each marker's bitmap lies in the sheet, one texture, so all markers draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
-//! doubles the sheet and replays each entry's `DrawSpec`. Only dirty rectangles
+//! doubles the sheet and replays each entry's `Paint`. Only dirty rectangles
 //! are uploaded: re-uploading the whole 4096 sheet cost a phone ~100 ms per frame.
 
 /// Slot rectangles are in canvas orientation (v0 top < v1 bottom) and move on a
@@ -11,7 +11,7 @@ pub const NO_SLOT: i32 = -1;
 
 /// What an entry paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
-pub enum DrawSpec {
+pub enum Paint {
     /// Words alone on a pill in its fill and text colors (`ink`).
     Pill { words: String, fill: u32, ink: u32, logical_w: f64 },
     /// A place as Carto draws it: a dot or its icon in the fill, and under
@@ -31,13 +31,13 @@ pub enum DrawSpec {
 }
 
 /// Freed slots are matched by size class, not exact fit. 16 device pixels is 8
-/// logical at the badge render scale.
+/// logical at the marker render scale.
 const WIDTH_BUCKET: u32 = 16;
 const HEIGHT_BUCKET: u32 = 16;
 
 pub const INITIAL_SIZE: u32 = 1024;
 
-/// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen badges (one per
+/// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen markers (one per
 /// places cell); past the limit an entry waits unshown (`NO_SLOT`).
 const MAX_SIZE: u32 = 2048;
 
@@ -162,7 +162,7 @@ pub struct Sheet {
     cw: Vec<u32>,
     ch: Vec<u32>,
     /// What drew each entry, kept so a repack can replay it.
-    draws: Vec<Option<DrawSpec>>,
+    paints: Vec<Option<Paint>>,
 
     generation: u32,
     used_px: u32,
@@ -207,12 +207,12 @@ impl Sheet {
         self.state.get(s) == Some(&LIVE) && !self.dirty.contains(slot)
     }
 
-    pub fn slot_draw(&self, slot: u32) -> Option<&DrawSpec> {
-        (self.state.get(slot as usize) == Some(&LIVE)).then(|| self.draws[slot as usize].as_ref()).flatten()
+    pub fn slot_paint(&self, slot: u32) -> Option<&Paint> {
+        (self.state.get(slot as usize) == Some(&LIVE)).then(|| self.paints[slot as usize].as_ref()).flatten()
     }
 
     /// The slot drawn into, or NO_SLOT when the sheet is full. `w`/`h` are device pixels.
-    pub fn add(&mut self, w: f64, h: f64, draw: DrawSpec) -> i32 {
+    pub fn add(&mut self, w: f64, h: f64, paint: Paint) -> i32 {
         let bw = bucket(w + (PAD * 2) as f64, WIDTH_BUCKET);
         let bh = bucket(h + (PAD * 2) as f64, HEIGHT_BUCKET);
 
@@ -230,7 +230,7 @@ impl Sheet {
         let s = slot as usize;
         self.cw[s] = w.ceil() as u32;
         self.ch[s] = h.ceil() as u32;
-        self.draws[s] = Some(draw);
+        self.paints[s] = Some(paint);
         self.state[s] = LIVE;
         self.mark_dirty(slot as u32);
         slot
@@ -293,7 +293,7 @@ impl Sheet {
         self.h.push(0);
         self.cw.push(0);
         self.ch.push(0);
-        self.draws.push(None);
+        self.paints.push(None);
         self.state.len() - 1
     }
 

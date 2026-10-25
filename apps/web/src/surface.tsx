@@ -169,7 +169,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
 }
 
-export function WorldSurface({ surface: driver, input, overBadge }: WorldSurfaceProps) {
+export function WorldSurface({ surface: driver, input, overMarker }: WorldSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -183,8 +183,8 @@ export function WorldSurface({ surface: driver, input, overBadge }: WorldSurface
     };
   }, []);
 
-  // A badge a tap acts on reads as a link does.
-  return <canvas ref={ref} style={{ ...FILL, touchAction: "none", cursor: overBadge ? "pointer" : undefined }} />;
+  // A marker a tap acts on reads as a link does.
+  return <canvas ref={ref} style={{ ...FILL, touchAction: "none", cursor: overMarker ? "pointer" : undefined }} />;
 }
 
 export function CaseSurface({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {

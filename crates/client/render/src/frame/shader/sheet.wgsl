@@ -1,5 +1,5 @@
-// One billboard sheet entry: shapes by signed distance, text as the platform's
-// pixels. Stored premultiplied; badge.wgsl divides it out.
+// One marker sheet entry: shapes by signed distance, text as the platform's
+// pixels. Stored premultiplied; marker.wgsl divides it out.
 
 // kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text, 4 a text's halo.
 // `p`: radius and a fill's edge width or a stroke's, a triangle's first two

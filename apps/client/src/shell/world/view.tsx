@@ -49,10 +49,10 @@ const INPUT: InputDriver = {
   requestFrame: request_frame,
 };
 
-/** Alone, so a badge under the pointer re-renders only the surface. */
+/** Alone, so a marker under the pointer re-renders only the surface. */
 function World() {
-  const overBadge = useKernel((s) => s.over_badge);
-  return <WorldSurface surface={WORLD} input={INPUT} overBadge={overBadge} />;
+  const overMarker = useKernel((s) => s.over_marker);
+  return <WorldSurface surface={WORLD} input={INPUT} overMarker={overMarker} />;
 }
 
 /** The room a panel may fill between the settings button and the dock. */

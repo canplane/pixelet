@@ -1,7 +1,7 @@
-// pxl-render/frame/shader/badge_sprite.wgsl
+// pxl-render/frame/shader/marker_sprite.wgsl
 
-// A billboard's sprite where the region nearest at its anchor is its own
-// (badge.wgsl); one whose anchor is off the screen is drawn.
+// A marker's sprite where the region nearest at its anchor is its own
+// (marker.wgsl); one whose anchor is off the screen is drawn.
 
 @group(2) @binding(1) var nearest: texture_2d<f32>;
 @group(3) @binding(0) var sheet: texture_2d<f32>;
@@ -19,7 +19,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   var o: VertexOut;
   o.clip = p.clip;
   let at = anchor_pixel(p, textureDimensions(nearest));
-  if (at.x >= 0 && pack4x8unorm(textureLoad(nearest, at, 0)) != badge_number(ii)) {
+  if (at.x >= 0 && pack4x8unorm(textureLoad(nearest, at, 0)) != marker_number(ii)) {
     o.clip = NOWHERE;
   }
   let k = ii * 11u;

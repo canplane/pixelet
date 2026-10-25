@@ -58,7 +58,7 @@ pub fn destination_step() {
     put_center(to, motion);
 }
 
-/// A badge's height is its zoom's, coarser than where the center stands, so
+/// A marker's height is its zoom's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
 pub(crate) fn go_on_ground(target: Q3, motion: Motion) {
     crate::domain::control::navigation::follow_mode::set_following(false);

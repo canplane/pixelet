@@ -1,7 +1,7 @@
-// pxl-render/frame/shader/badge_region.wgsl
+// pxl-render/frame/shader/marker_region.wgsl
 
-// Each billboard's region at its twin's depth, as its number in four bytes,
-// where the world leaves its anchor seen (badge.wgsl).
+// Each marker's region at its twin's depth, as its number in four bytes,
+// where the world leaves its anchor seen (marker.wgsl).
 
 @group(2) @binding(1) var world_depth: texture_depth_2d;
 
@@ -14,12 +14,12 @@ struct RegionOut {
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> RegionOut {
   let p = placed(vi, ii, true);
   var o: RegionOut;
-  o.number = badge_number(ii);
+  o.number = marker_number(ii);
   o.clip = vec4f(p.clip.xy, p.upright_z * p.clip.w, p.clip.w);
   let at = anchor_pixel(p, textureDimensions(world_depth));
   if (at.x >= 0) {
     // Reversed depth: nearer is greater.
-    let probe = badge_proj() * vec4f(p.anchor_view + vec3f(0.0, 0.0, p.push), 1.0);
+    let probe = marker_proj() * vec4f(p.anchor_view + vec3f(0.0, 0.0, p.push), 1.0);
     if (textureLoad(world_depth, at, 0) > probe.z / probe.w) {
       o.clip = NOWHERE;
     }

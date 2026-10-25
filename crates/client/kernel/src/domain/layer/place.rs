@@ -2,7 +2,7 @@
 
 //! Places as a layer of the pyramid: what OpenStreetMap Carto would draw of
 //! a tile at its zoom, read where the camera grid's cell is a cell of the
-//! tile, an icon wide, and drawn as Carto draws it (`domain/scene/place.rs`).
+//! tile, an icon wide, and drawn as Carto draws it (`domain/scene/marker/place.rs`).
 
 use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;

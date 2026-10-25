@@ -70,7 +70,7 @@ pub struct Shown {
     is_follow_mode: bool,
     camera_busy: bool,
     zooming: bool,
-    over_badge: bool,
+    over_marker: bool,
     /// By each setting's number, a retired number's 0.
     settings: [u32; SettingKey::SLOTS],
     m_per_px: f64,
@@ -110,7 +110,7 @@ fn shown() -> Shown {
         is_follow_mode: following(),
         camera_busy: dragging(),
         zooming: crate::domain::control::camera::controller::zooming(),
-        over_badge: crate::door::over_badge(),
+        over_marker: crate::door::over_marker(),
         settings: {
             let mut by_number = [0; SettingKey::SLOTS];
             for key in SettingKey::ALL {
@@ -196,7 +196,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         is_follow_mode: shown.is_follow_mode,
         camera_busy: shown.camera_busy,
         zooming: shown.zooming,
-        over_badge: shown.over_badge,
+        over_marker: shown.over_marker,
         settings: &shown.settings,
         m_per_px: shown.m_per_px,
         division: &|each| division_parts(shown.division, each),

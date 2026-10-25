@@ -12,7 +12,7 @@ pub const SHADER_DECOR: u32 = 1;
 pub const SHADER_SKINNED: u32 = 2;
 pub const SHADER_PUCK_ZONE: u32 = 3;
 pub const SHADER_PUCK_BEACON: u32 = 4;
-pub const SHADER_BADGE: u32 = 5;
+pub const SHADER_MARKER: u32 = 5;
 pub const SHADER_SKY: u32 = 6;
 pub const SHADER_DEBUG: u32 = 7;
 pub const SHADER_MIPS: u32 = 8;
@@ -31,7 +31,7 @@ pub const SHADER_SHEET: u32 = 20;
 pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
-pub const SHADER_BADGE_REGION: u32 = 24;
+pub const SHADER_MARKER_REGION: u32 = 24;
 /// The eye's rays drawn at their pixels (pxl-spec-core ray.rs).
 pub const SHADER_SCREEN_RAYS: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
@@ -131,8 +131,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "encode", "finish", "puck", "puck_zone"],
     // SHADER_PUCK_BEACON
     &["frame", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "place", "puck", "puck_beacon"],
-    // SHADER_BADGE
-    &["frame", "encode", "badge", "badge_sprite"],
+    // SHADER_MARKER
+    &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
     air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_words", "sky"],
     // SHADER_DEBUG
@@ -195,8 +195,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
     &["atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "atmos_pass", "atmos_march", "atmos_irradiance"],
-    // SHADER_BADGE_REGION
-    &["frame", "encode", "badge", "badge_region"],
+    // SHADER_MARKER_REGION
+    &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAYS
     lit!["lattice", "ray", "eye", "paint", "screen_rays", "screen_lit"],
     // SHADER_CAST

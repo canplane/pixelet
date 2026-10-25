@@ -66,7 +66,7 @@ export const SETTINGS = {
     section: "display",
     cost: "med",
   },
-  /** The places' badges over the world, from the published places tiles. */
+  /** The places' markers over the world, from the published places tiles. */
   place: {
     key: 3 as number,
     kind: "toggle",
@@ -269,7 +269,7 @@ export const SETTINGS_SHIPPED = {
     section: "display",
     cost: "med",
   },
-  /** The places' badges over the world, from the published places tiles. */
+  /** The places' markers over the world, from the published places tiles. */
   place: {
     key: 3 as number,
     kind: "toggle",
