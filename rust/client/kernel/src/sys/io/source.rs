@@ -3,7 +3,7 @@
 //! The tile source's declaration, read once at boot: the published bake's
 //! `source` out of the bucket (script/publish.py), or the dev tile server's
 //! answer in its shape. The client reads its text and hands over what is the
-//! kernel's (ts/client/src/host/io/source.ts, `WORLD_SOURCE`): the zoom
+//! kernel's (ts/client/src/io/source.ts, `WORLD_SOURCE`): the zoom
 //! the floor is held at, the format each kind is in, and the shards served,
 //! so a tile no served shard is over or under is never asked for. The
 //! versions it names are the client's, which reads a tile under the one that

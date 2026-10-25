@@ -22,10 +22,10 @@ import { touches } from "@/shell/ui/touch.ts";
 import { alpha, chrome, color, disabledContent, material, shadow } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
 import { cancelMarker, chatFits, DockMode, draftMarkerWords, holdTier, holdTool, markerTextFits, putMarker, useInHand, useUiStore } from "@/shell/store/ui.ts";
-import { kernel_snapshot } from "@/host/abi/shell.ts";
-import { ActiveTool } from "@/host/abi/cmd.spec.ts";
+import { kernel_snapshot } from "@/abi/shell.ts";
+import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
-import { OBJECT_TIERS } from "@/host/config/object.spec.ts";
+import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/shell/catalog/asset/swatch.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 

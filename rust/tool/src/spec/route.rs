@@ -110,7 +110,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
     ]);
 
-    let mut ts = head("@pxl/client/host/config/route.spec.ts");
+    let mut ts = head("@pxl/client/config/route.spec.ts");
     for (name, value) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
         ts.extend([format!("export const {name} = {};", json_str(value)), String::new()]);
@@ -148,7 +148,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     Ok(vec![
         Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
-        Output::new("ts/client/src/host/config/route.spec.ts", ts.join("\n")),
+        Output::new("ts/client/src/config/route.spec.ts", ts.join("\n")),
         Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
     ])

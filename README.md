@@ -38,7 +38,7 @@ The world lives in one Rust **kernel** (`pxl-kernel`, drawing through `pxl-rende
 
 What the host is made of depends on where the kernel runs. The kernel's **bracket** plugs it into its place (`pxl-kernel door.rs` `Bracket`), and there are two, named for the guest's form. In a browser tab, `pxl-wasm` makes the kernel one WebAssembly module, and the page (`ts/app/web`) instantiates it and runs its GPU calls on the browser's WebGPU. On a device, `pxl-native` links the kernel into the app as a library that runs its own GPU calls on wgpu, and the app (`ts/app/native`) reaches it through one native module. Each app (`ts/app/web`, `ts/app/native`) bundles the client with that guest and hands the client its own bracket once, at its entry: the guest and the rest of what its place gives — storage, text, the network, the sensors, the surfaces drawn into (`ts/client/src/bracket.tsx` `Bracket`, made in each app's `src/bracket.ts`).
 
-The **client** (`ts/client`) is the same TypeScript in both: the host (`src/host/`, with the kernel's vocabulary and boot in `src/host/abi/` and what answers its opens and writes in `src/host/io/`), which boots the kernel, submits each turn's frame and answers its reads, and the **shell** (`src/shell/`), the UI, which decides nothing about the world and changes it only by commands the kernel applies.
+The **client** (`ts/client`) is the same TypeScript in both: the host (`src/host/`), with the kernel's vocabulary and boot in `src/abi/` and what answers its opens and writes in `src/io/`, which boots the kernel, submits each turn's frame and answers its reads, and the **shell** (`src/shell/`), the UI, which decides nothing about the world and changes it only by commands the kernel applies.
 
 Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked. [ARCHITECTURE.md](./ARCHITECTURE.md) follows the kernel part by part.
 
@@ -159,10 +159,10 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   │   ├── brand/            #     the icons and symbol both apps and the shell draw
 │   │   └── src/
 │   │       ├── bracket.tsx   #     what the client asks of the place it runs in
-│   │       ├── host/         #     the host, which runs the kernel: xpute's host mounted on it (mem); the GPU and the network
-│   │       │   ├── abi/      #       the kernel's commands, snapshot, text calls and boot, its specs generated
-│   │       │   ├── io/       #       what answers the kernel's opens and writes: tiles, assets, storage, the source
-│   │       │   └── config/   #       deployment config and routes
+│   │       ├── host/         #     the host: xpute's host mounted with the one spec it is handed (mem)
+│   │       ├── abi/          #     the kernel's commands, snapshot, text calls, the GPU's state and boot, its specs generated
+│   │       ├── io/           #     what answers the kernel's opens and writes: tiles, assets, storage, the source, online
+│   │       ├── config/       #     deployment config and routes
 │   │       └── shell/        #     the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
 │   │           └── catalog/  #       the data screens show (cells, assets)
 │   ├── app/                  #   each app, which bundles the client with the guest and hands it its bracket
@@ -236,7 +236,7 @@ A leaf sits under its lowest reader: the settings under `view`, the models and d
 
 One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev-oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which `.gitignore` keeps out, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
-The casing in the tree is not mixed by accident, and React is the line. Below the shell — Rust, the xpute packages, the client's host (`ts/client/src/host/`), the brackets and the boot — the code shares one `snake_case` vocabulary across the boundary, a word under its namespace where it can be one: `len`, `new_len`, `bracket.gpu.boot`. What is below hands the shell a value and a way to watch it (`watch_snapshot`, `watch_gpu`), never a hook. The shell, the catalog it shows and the scripts are `camelCase`, as TypeScript is, and React's hooks and components keep React's names wherever they sit (`shell/store/system.ts` wraps what is below). A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident, and React is the line. Below the shell — Rust, the xpute packages, the client's host, abi, io and config (`ts/client/src/{host,abi,io,config}/`), the brackets and the boot — the code shares one `snake_case` vocabulary across the boundary, a word under its namespace where it can be one: `len`, `new_len`, `bracket.gpu.boot`. What is below hands the shell a value and a way to watch it (`watch_snapshot`, `watch_gpu`), never a hook. The shell, the catalog it shows and the scripts are `camelCase`, as TypeScript is, and React's hooks and components keep React's names wherever they sit (`shell/store/system.ts` wraps what is below). A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
 ---
 

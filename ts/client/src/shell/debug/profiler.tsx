@@ -18,8 +18,8 @@ import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { fps, type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
-import { Command } from "@/host/abi/cmd.spec.ts";
-import { kernel_command } from "@/host/abi/shell.ts";
+import { Command } from "@/abi/cmd.spec.ts";
+import { kernel_command } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/system.ts";
 

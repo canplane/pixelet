@@ -1,7 +1,7 @@
 // @pxl/client/shell/search/repository.ts
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { SEARCH_URL } from "@/host/config/route.spec.ts";
+import { SEARCH_URL } from "@/config/route.spec.ts";
 import type { DivisionPart, NamePart } from "@/shell/world/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/shell/world/division/division.spec.ts";
 import { bracket } from "@/bracket.tsx";

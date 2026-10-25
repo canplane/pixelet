@@ -9,7 +9,7 @@
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
-import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/host/config/deploy.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 
 import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";

@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-import { DevicePoseStatus } from "@/host/abi/cmd.spec.ts";
+import { DevicePoseStatus } from "@/abi/cmd.spec.ts";
 
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { haloGap, HaloIcon } from "@/shell/ui/halo.tsx";

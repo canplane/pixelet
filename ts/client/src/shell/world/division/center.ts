@@ -3,9 +3,9 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { useTranslation } from "react-i18next";
 
-import type { DivisionPart, LonLat } from "@/host/abi/cmd.spec.ts";
+import type { DivisionPart, LonLat } from "@/abi/cmd.spec.ts";
 import { DIVISION_SUBTYPE } from "./division.spec.ts";
-import { EARTH_RADIUS_M } from "@/host/config/earth.spec.ts";
+import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 import { assembleLabel, primaryLanguage } from "./label.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { useKernel } from "@/shell/store/system.ts";

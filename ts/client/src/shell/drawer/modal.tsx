@@ -8,7 +8,7 @@ import type { f64, u8 } from "@xpute/kit/abi/word.ts";
 import { allCubes, type Cube, cubeId, cubeSection, decorIds, decorSection } from "@/shell/catalog/asset/mod.ts";
 
 import { useInHand, useUiStore } from "@/shell/store/ui.ts";
-import { ActiveTool } from "@/host/abi/cmd.spec.ts";
+import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { Panel } from "@/shell/ui/panel.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { PanelBar, PanelBody, PanelScroll } from "@/shell/ui/panel.tsx";

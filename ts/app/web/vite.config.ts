@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 
-import { DEV_PROXY_ROUTES } from "@pxl/client/host/config/route.ts";
+import { DEV_PROXY_ROUTES } from "@pxl/client/config/route.ts";
 import { DECL, enumAt, literal, type Members, readEnums, stale } from "@pxl/build/const-enum.ts";
 import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
@@ -277,11 +277,11 @@ function constEnum(roots: string[]): Plugin {
 // everything, and nothing here would say why.
 const remoteOriginDefault = "https://plei.me";
 
-// anti-HMR. The client's host is here too: its modules hold the one
+// anti-HMR. The client's host, abi and io are here too: their modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first. The built module
 // is the page's own, beside the guest.ts that opens it.
-const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/ts/client/src/host/", "/ts/client/src/shell/catalog/", "/ts/app/web/src/guest."];
+const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/ts/client/src/host/", "/ts/client/src/abi/", "/ts/client/src/io/", "/ts/client/src/shell/catalog/", "/ts/app/web/src/guest."];
 
 // One reload for a change that reaches both sides: while the kernel builds, a
 // core change waits for it, so the page never runs the shell generated from a

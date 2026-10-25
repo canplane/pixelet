@@ -7,7 +7,7 @@ import type { DecorId } from "@/shell/catalog/asset/decor.spec.ts";
 import { type Cube, cubeHex, cubeId, decorName } from "@/shell/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/shell/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
-import { asset_url } from "@/host/config/route.ts";
+import { asset_url } from "@/config/route.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/system.ts";

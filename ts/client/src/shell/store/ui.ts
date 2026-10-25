@@ -5,10 +5,10 @@ import { create } from "zustand";
 import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
 import { cube } from "@/shell/catalog/asset/cube.spec.ts";
 import { allCubes, type Cube, decorIds } from "@/shell/catalog/asset/mod.ts";
-import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/host/abi/cmd.spec.ts";
+import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/abi/cmd.spec.ts";
 import { MARKER_TEXT_CHARS } from "@/shell/catalog/asset/marker.spec.ts";
-import { kernel_command, kernel_fits, kernel_hold, kernel_room, kernel_snapshot } from "@/host/abi/shell.ts";
-import { OBJECT_TIERS } from "@/host/config/object.spec.ts";
+import { kernel_command, kernel_fits, kernel_hold, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
+import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 
