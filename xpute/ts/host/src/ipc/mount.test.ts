@@ -9,7 +9,7 @@ import { FileError } from "./sys.ts";
 
 const signal = new AbortController().signal;
 
-Deno.test("a number answers by what is mounted there, and refuses where nothing is or it is read-only", () => {
+Deno.test("open and commit go to the handler mounted on the number", () => {
   const kept: [string, U8Array][] = [];
   const mounts = new MountTable([
     [1, { open: (path) => new TextEncoder().encode(path) }],

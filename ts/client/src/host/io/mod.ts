@@ -1,10 +1,9 @@
 // @pxl/client/host/io/mod.ts
 
 /**
- * The mount table of the kernel: each number it opens a file under
- * (host.json `root`) mounted on what fetches or keeps its bytes, a path
- * below it the number of an object in decimal. The boot hands it to the
- * system calls of `@xpute/host` (abi/boot.ts).
+ * Which handler serves each number the kernel opens files under
+ * (host.json `root`): tiles, assets and storage. A path is an object number
+ * in decimal. The boot passes the table to `@xpute/host` (abi/boot.ts).
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -20,13 +19,13 @@ import { source_declared } from "@/host/io/source.ts";
 import { commit_storage, open_storage } from "@/host/io/storage.ts";
 import { read_object } from "@/host/io/tile.ts";
 
-/** What answers below one number, by the number of an object; one with no `commit` is read-only. */
+/** Reads, and maybe writes, objects by number. */
 interface Backend {
   open(number: bigint, signal: AbortSignal): U8Array | Promise<U8Array>;
   commit?(number: bigint, bytes: U8Array): void;
 }
 
-/** The one name of a path, the number of an object in decimal; ENOENT for any other. */
+/** The object number a path names; ENOENT if it is not one. */
 function number_of(path: string): bigint {
   if (!/^\d{1,20}$/.test(path)) throw new FileError(Errno.ENOENT);
   return BigInt(path);
@@ -40,7 +39,7 @@ function by_number(backend: Backend): Mounted {
   };
 }
 
-/** Each bake to its tiles at the edge, ASSET to the shipped assets, STORAGE to the storage of the platform. */
+/** Each tile layer reads from the edge, ASSET from the shipped assets, STORAGE from the device. */
 export function mount_table(): MountTable {
   const mounted: [u32, Backend][] = [
     ...BASE_LAYERS.map((_, bake): [u32, Backend] => [bake, { open: (number, signal) => read_object(source_declared(), bake, number, signal) }]),

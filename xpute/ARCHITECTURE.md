@@ -212,7 +212,7 @@ Some calls are every program's: open, read, write and close a file, and report t
 Files borrow Plan 9's file namespace:
 
 - the guest issues the descriptor, a handle of its own file table (`ipc/file`), which is fixed at N slots as every table is;
-- it names a file by a root the program numbers and a path below it, and the program binds each root to wherever it keeps things, in the mount table of the host (`ipc/mount`), sealed once mounted;
+- it names a file by a root the program numbers and a path below it, and the program binds each root to wherever it keeps things. The host keeps these in a mount table (`ipc/mount`), fixed once the program starts;
 - a path walks down a name at a time, and an empty name, `.` or `..` is refused, so a root is the whole of what it grants.
 
 An open is the one call that waits: the host answers it on a later turn, once the file can be read whole. A read, a write and a close are done before the next turn. A close ends a descriptor whether or not its open was answered, so a late answer reaches nothing.
