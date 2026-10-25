@@ -17,7 +17,7 @@ export const BUILD_TIME: string = buildTime;
 /** `<hash>[-dirty]`. */
 export const BUILD_ID: string = buildId;
 
-/** `#<n>`, or `#<n>-<id>` for a build after it that CI did not number. */
+/** `#<n>` for a build CI numbered; the source's id (`<short hash>`, `-dirty` where the tree had changes) for one it did not. */
 export const BUILD_NUMBER: string = buildNumber;
 
 export const DEV_SOURCE: string = __DEV_SOURCE__;
