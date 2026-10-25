@@ -56,11 +56,6 @@ fnv = "1"
 base64 = "0.23"
 # What a test reads a golden packet's bytes back as.
 hex = "0.4"
-# A set whose position is the value: insert appends, swap_remove moves the
-# last entry into the hole, and a caller keeps its own lanes at the same
-# positions. What a change log keys a topic by, a page table a page by, a
-# marker table a design by — hashed by the FNV above, so no random state.
-indexmap = "2"
 
 # The client's crates name the kernel's memory by offsets from one base
 # (xpute-guest mem/base.rs), and an offset cast straight to a pointer

@@ -1729,7 +1729,6 @@ dependencies = [
  "critical-section",
  "embassy-executor",
  "fnv",
- "indexmap",
  "libm",
  "pxl-render",
  "pxl-spec",
