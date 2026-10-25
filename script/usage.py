@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
 # What the deployment has used against its free allowances: R2's writes and
 # Hetzner traffic, which the free Workers plan does not bound. Uses
-# wrangler's credential and hcloud's active context.
+# wrangler's credential and hcloud's active context; wrangler runs from the
+# edge's package, so ts/deno.lock pins it.
 #
 #   ./script/usage.py
 
 import json
+import signal
 import os
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+# Its output piped into a pager or head ends quietly when the reader stops.
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 WORKER = "pixelet"
 BUCKET = "pixelet-tiles"
 SERVER = "pixelet-prod"
-WRANGLER = ["deno", "run", "-A", "--node-modules-dir=auto", "npm:wrangler@4.123.0"]
+EDGE = Path(__file__).resolve().parent.parent / "ts/server/edge"
+WRANGLER = ["deno", "run", "-A", "--node-modules-dir=auto", "npm:wrangler"]
 
 WORKER_REQUESTS_PER_DAY = 100_000
 R2_STORAGE_BYTES = 10e9
@@ -59,8 +66,8 @@ def die(message: str):
     sys.exit(1)
 
 
-def run(cmd: list[str]) -> str:
-    out = subprocess.run(cmd, capture_output=True, text=True)
+def run(cmd: list[str], cwd: Path | None = None) -> str:
+    out = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if out.returncode != 0:
         die(f"{' '.join(cmd[:4])} failed:\n{out.stderr}")
     return out.stdout
@@ -69,7 +76,7 @@ def run(cmd: list[str]) -> str:
 def token() -> str:
     if set_ := os.environ.get("CLOUDFLARE_API_TOKEN"):
         return set_
-    out = run([*WRANGLER, "auth", "token", "--json"])
+    out = run([*WRANGLER, "auth", "token", "--json"], cwd=EDGE)
     return json.loads(out[out.index("{") :]).get("token") or die("wrangler has no credential: run `wrangler login`")
 
 

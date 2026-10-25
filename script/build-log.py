@@ -2,13 +2,14 @@
 # What each published build carried. Records commit subjects, since main's
 # history is rewritten and a sha may stop resolving. Kept in R2 beside the
 # counter; R2 has no append, so the workflow's `build-log` concurrency group
-# keeps two writes from losing a line. wrangler, the bucket's CLI, runs pinned
-# through Deno.
+# keeps two writes from losing a line. wrangler, the bucket's CLI, runs as the
+# edge's deploy runs it, from its package, so ts/deno.lock pins it.
 #
 #   ./script/build-log.py                      every build, newest first
 #   ./script/build-log.py --record 18 --web --server --smoke success     append one (CI)
 
 import json
+import signal
 import os
 import subprocess
 import sys
@@ -16,11 +17,15 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Its output piped into a pager or head ends quietly when the reader stops.
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
 ROOT = Path(__file__).resolve().parent.parent
 BUCKET = "pixelet-tiles"
 KEY = "_meta/build-log.jsonl"
 CACHE = ROOT / "ts/client/.build_number"
-WRANGLER = ["deno", "run", "-A", "--node-modules-dir=auto", "npm:wrangler@4.123.0"]
+EDGE = ROOT / "ts/server/edge"
+WRANGLER = ["deno", "run", "-A", "--node-modules-dir=auto", "npm:wrangler"]
 
 
 def die(message: str):
@@ -37,7 +42,7 @@ def smoke_of(result: str | None) -> str | None:
 
 
 def wrangler(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([*WRANGLER, *args], capture_output=True, text=True)
+    return subprocess.run([*WRANGLER, *args], cwd=EDGE, capture_output=True, text=True)
 
 
 def git(*args: str) -> str | None:
@@ -52,7 +57,7 @@ def read() -> tuple[str, list[dict]]:
         print(got.stderr, file=sys.stderr)
         die(
             f"no log at {KEY}, and an empty one is not assumed. Start it with:\n"
-            f"  printf '' | {' '.join(WRANGLER)} r2 object put {BUCKET}/{KEY} --remote --pipe --content-type application/x-ndjson"
+            f"  printf '' | (cd ts/server/edge && {' '.join(WRANGLER)} r2 object put {BUCKET}/{KEY} --remote --pipe --content-type application/x-ndjson)"
         )
     raw = got.stdout
     entries = []
