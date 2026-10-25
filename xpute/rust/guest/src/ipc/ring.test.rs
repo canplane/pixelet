@@ -43,7 +43,7 @@ fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_befo
         t.branch(Some(&mut |b| {
             b.u32(Some(n)).u64(Some((n as u64) << 40));
         }));
-        encoder().encode(&t, TreeEncoderOptions::default()).unwrap()
+        encoder().encode(&t, TreeEncoderOptions { init_cap: 1 << 10, max_cap: None }).unwrap()
     };
     assert_eq!(pkt(1).len(), 56);
 

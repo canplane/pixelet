@@ -36,7 +36,13 @@ pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
     t.branch(Some(&mut |b| {
         b.u8_array(Some(rgba));
     }));
-    encoder().encode(&t, TreeEncoderOptions::default())
+    encoder().encode(
+        &t,
+        TreeEncoderOptions {
+            init_cap: super::ENCODE_FROM,
+            max_cap: None,
+        },
+    )
 }
 
 /// The tile's texels, read in place.

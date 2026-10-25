@@ -18,8 +18,8 @@
 namespace xpute {
 
 struct ArenaOptions {
-    std::uint32_t init_cap = 1 << 10;
-    std::uint32_t max_cap = 1 << 24;
+    std::uint32_t init_cap;
+    std::uint32_t max_cap;
 };
 
 template <class T, class Alloc> class Arena {

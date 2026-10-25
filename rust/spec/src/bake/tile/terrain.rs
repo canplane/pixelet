@@ -404,7 +404,13 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
         b.i16_array(Some(&tile.ele)).u8_array(Some(looks)).u8(Some(tile.occupancy.bits()));
         separation::write_branch(&tile.separation, b);
     }));
-    encoder().encode(&t, TreeEncoderOptions::default())
+    encoder().encode(
+        &t,
+        TreeEncoderOptions {
+            init_cap: super::ENCODE_FROM,
+            max_cap: None,
+        },
+    )
 }
 
 struct Lanes<'a> {

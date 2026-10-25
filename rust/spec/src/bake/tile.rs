@@ -38,6 +38,9 @@ pub mod packet {
     }
 }
 
+/// Where a tile's encoding starts its buffer; it doubles to the packet's size.
+pub const ENCODE_FROM: u32 = 1 << 10;
+
 /// The most bytes a packet of `layer` takes: what a client may hold one
 /// in, and refuses one past. Terrain's and the Earth's follow from their
 /// lanes; places' and divisions' are a room their bake refuses a tile past.

@@ -61,13 +61,7 @@ fn encode() -> Result<Vec<u8>, MarshalError> {
     tree.branch(Some(&mut |b| {
         b.u64_array(Some(&hi)).u64_array(Some(&lo)).u32_array(Some(&id)).u32_array(Some(&text_rows)).strs(Some(&texts));
     }));
-    encoder().encode(
-        &tree,
-        TreeEncoderOptions {
-            init_cap: Some(1 << 14),
-            max_cap: None,
-        },
-    )
+    encoder().encode(&tree, TreeEncoderOptions { init_cap: 1 << 14, max_cap: None })
 }
 
 fn decode(bytes: &[u8]) -> Result<(), MarshalError> {

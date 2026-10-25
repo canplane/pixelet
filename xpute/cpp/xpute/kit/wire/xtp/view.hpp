@@ -275,7 +275,8 @@ template <class Alloc = std::allocator<std::byte>> class BranchView : public Nod
 };
 
 struct TreeEncoderOptions {
-    std::optional<std::uint32_t> init_cap;
+    // The first buffer's size; it doubles where the tree overflows it.
+    std::uint32_t init_cap;
     std::optional<std::uint32_t> max_cap;
 };
 
@@ -375,7 +376,7 @@ Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template
     using Bytes = std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>;
     std::uint32_t max_cap = opts.max_cap.value_or(MAX_PKT_SZ);
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) return marshal_error(Errno::einval);
-    std::uint32_t cap = std::max(HDR_SZ, std::min(opts.init_cap.value_or(1u << 10), max_cap));
+    std::uint32_t cap = std::max(HDR_SZ, std::min(opts.init_cap, max_cap));
     Bytes buf(alloc);
     for (;;) {
         buf.assign(cap, 0);

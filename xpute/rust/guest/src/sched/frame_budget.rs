@@ -6,7 +6,7 @@
 
 use crate::clock::now;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct BudgetOpts {
     /// Waived until a step has done work.
     pub budget_ms: f64,

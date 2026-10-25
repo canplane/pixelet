@@ -9,8 +9,8 @@ import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 
 export interface ArenaOptions {
-  init_cap?: u32;
-  max_cap?: u32;
+  init_cap: u32;
+  max_cap: u32;
 }
 
 export class Arena<T extends object> {
@@ -22,8 +22,8 @@ export class Arena<T extends object> {
 
   private _factory: () => T;
 
-  constructor(factory: () => T, opts: ArenaOptions = {}) {
-    const { init_cap: _init_cap = 1 << 10, max_cap = 1 << 24 } = opts;
+  constructor(factory: () => T, opts: ArenaOptions) {
+    const { init_cap: _init_cap, max_cap } = opts;
     this.max_cap = max_cap;
     this._cap = 0;
 
@@ -96,8 +96,8 @@ export class Vector<T extends AnyTypedArray> {
   private _cap: u32;
   private _len: u32 = 0;
 
-  constructor(readonly ctor: AnyTypedArrayCtor<T>, opts: ArenaOptions = {}) {
-    const { init_cap: _init_cap = 1 << 10, max_cap = 1 << 24 } = opts;
+  constructor(readonly ctor: AnyTypedArrayCtor<T>, opts: ArenaOptions) {
+    const { init_cap: _init_cap, max_cap } = opts;
     this.max_cap = max_cap;
     this._cap = Math.min(_init_cap, max_cap);
 

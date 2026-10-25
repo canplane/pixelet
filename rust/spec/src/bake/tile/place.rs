@@ -297,8 +297,8 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
     encoder().encode(
         &t,
         TreeEncoderOptions {
+            init_cap: super::ENCODE_FROM,
             max_cap: Some(MAX_PACKET_BYTES as u32),
-            ..TreeEncoderOptions::default()
         },
     )
 }

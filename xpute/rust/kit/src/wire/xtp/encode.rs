@@ -9,9 +9,9 @@ use super::spec::{
 };
 use super::view::NodeView;
 
-#[derive(Default)]
 pub struct TreeEncoderOptions {
-    pub init_cap: Option<u32>,
+    /// The first buffer's size; it doubles where the tree overflows it.
+    pub init_cap: u32,
     /// A hard limit on the packet's size.
     pub max_cap: Option<u32>,
 }
@@ -35,7 +35,7 @@ impl TreeEncoder {
         if !(HDR_SZ..=MAX_PKT_SZ).contains(&max_cap) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
-        let mut cap = HDR_SZ.max(opts.init_cap.unwrap_or(1 << 10).min(max_cap));
+        let mut cap = HDR_SZ.max(opts.init_cap.min(max_cap));
         loop {
             let mut buf = vec![0u8; cap as usize];
             let mut w = PacketWriter::root(&mut buf);

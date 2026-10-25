@@ -19,7 +19,7 @@ function expected(v: Golden, name: string): string {
 function encode(build: (t: TreeView) => void): U8Array {
   const t = new TreeView();
   build(t);
-  return new TreeEncoder().encode(t);
+  return new TreeEncoder().encode(t, { init_cap: 1 << 10 });
 }
 
 Deno.test("the encoder writes the bytes the typescript writes", async () => {
@@ -52,5 +52,5 @@ Deno.test("the encoder writes the bytes the typescript writes", async () => {
 
 Deno.test("a packet under the cap is written, whatever the cap", () => {
   const t = new TreeView().u8_array(new Uint8Array(1100) as U8Array);
-  assertEquals(new TreeEncoder().encode(t, { max_cap: 1500 }).byteLength, 16 + 8 + 1104);
+  assertEquals(new TreeEncoder().encode(t, { init_cap: 1 << 10, max_cap: 1500 }).byteLength, 16 + 8 + 1104);
 });

@@ -50,7 +50,7 @@ import { TreeEncoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 const tree = new TreeView();
 tree.set([42, "hello", true]);
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 
 console.log(packet.byteLength > 0);
 // true
@@ -198,7 +198,7 @@ tree.branch((b) =>
     .branch(null)
 );
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const root = new TreeReader(packet).read_branch();
 
 console.log(root.at(0).get<number>()); // 1
@@ -231,7 +231,7 @@ const data = [
 const tree = new TreeView();
 tree.set(data);
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const value = new TreeReader(packet).read_branch().get_deep<typeof data>();
 
 console.log(value[1]); // "Hello xpute!"
@@ -262,7 +262,7 @@ tree.branch((b) =>
     .f32(99.9)
 );
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const b = new TreeReader(packet).read_branch();
 
 const level = b.at(0).get<number>();
@@ -301,7 +301,7 @@ tree.branch((b) =>
     .u8_array(null)
 );
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const b = new TreeReader(packet).read_branch();
 
 const id = b.at(0).get<number>();
@@ -535,10 +535,10 @@ Encodes a built tree into an immutable packet.
 
 ```ts
 const encoder = new TreeEncoder();
-const packet = encoder.encode(tree);
+const packet = encoder.encode(tree, { init_cap: 1024 });
 ```
 
-`encode()` uses throwing semantics on malformed input or packet-cap overflow.
+`encode()` writes into a buffer of `init_cap` bytes, doubled where the tree overflows it, up to `max_cap` (the packet format's most when none is given). It throws on malformed input or a tree past the cap.
 
 ### `TreeReader`
 
@@ -636,7 +636,7 @@ const keys = ["a", "b", "c"] as const;
 const tree = new TreeView();
 tree.set(to_tuple(obj, keys));
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 
 const out_tuple = new TreeReader(packet).read_branch().get_deep<[number, number, string]>();
 const out = from_tuple<typeof obj>(out_tuple, keys);
@@ -672,12 +672,12 @@ import { TreeEncoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 const child = new TreeView();
 child.set([1, 2, 3]);
 
-const child_packet = new TreeEncoder().encode(child);
+const child_packet = new TreeEncoder().encode(child, { init_cap: 1024 });
 
 const parent = new TreeView();
 parent.graft(child_packet);
 
-const parent_packet = new TreeEncoder().encode(parent);
+const parent_packet = new TreeEncoder().encode(parent, { init_cap: 1024 });
 ```
 
 `graft()` expects a packet intended for this tree format, not an arbitrary byte blob.

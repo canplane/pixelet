@@ -115,8 +115,8 @@ fn the_cursor_reads_what_the_typescript_reads() {
         match TreeEncoder::new().encode(
             &t,
             TreeEncoderOptions {
+                init_cap: 1 << 10,
                 max_cap: Some(cap),
-                ..Default::default()
             },
         ) {
             Ok(p) => hex::encode(&p),

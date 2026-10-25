@@ -31,7 +31,7 @@ fn expected(name: &str) -> String {
 fn encode<'a>(build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
     let mut t = TreeView::new();
     build(&mut t);
-    TreeEncoder::new().encode(&t, TreeEncoderOptions::default()).unwrap()
+    TreeEncoder::new().encode(&t, TreeEncoderOptions { init_cap: 1 << 10, max_cap: None }).unwrap()
 }
 
 fn check<'a>(name: &str, build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
@@ -130,8 +130,8 @@ fn a_packet_under_the_cap_is_written_whatever_the_cap() {
     let mut t = TreeView::new();
     t.u8_array(Some(&bytes[..]));
     let options = TreeEncoderOptions {
+        init_cap: 1 << 10,
         max_cap: Some(1500),
-        ..Default::default()
     };
     assert_eq!(TreeEncoder::new().encode(&t, options).unwrap().len(), 16 + 8 + 1104);
 }

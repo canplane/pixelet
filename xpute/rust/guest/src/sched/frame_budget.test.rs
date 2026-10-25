@@ -22,7 +22,11 @@ fn burn(ms: f64) {
 fn opts(budget_ms: f64) -> BudgetOpts {
     set_clock(clock);
     CLOCK_MS.with(|c| c.set(0.0));
-    BudgetOpts { budget_ms, ..Default::default() }
+    BudgetOpts {
+        budget_ms,
+        hard_budget_ms: None,
+        max_steps: None,
+    }
 }
 
 #[test]

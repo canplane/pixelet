@@ -70,7 +70,7 @@ Deno.test("the cursor reads what the typescript reads", async () => {
     const t = new TreeView();
     t.str(s);
     try {
-      return bytes_to_hex(new TreeEncoder().encode(t, { max_cap: cap }));
+      return bytes_to_hex(new TreeEncoder().encode(t, { init_cap: 1 << 10, max_cap: cap }));
     } catch (err) {
       return `errno:${(err as FaultError).errno}`;
     }

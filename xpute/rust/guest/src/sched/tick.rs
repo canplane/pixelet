@@ -19,7 +19,7 @@ const PHASE_COUNT: usize = Phase::ALL.len();
 /// Steps unregistered from inside one step.
 const OFFS_MAX: usize = 8;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TickPolicy {
     /// The hard ceiling over what is left, so steps that report no work
     /// cannot walk the whole list.

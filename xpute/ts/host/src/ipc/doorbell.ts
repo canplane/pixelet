@@ -69,7 +69,9 @@ export class Doorbell implements PacketRoom {
    * outside the host's own code, a console's. */
   cmd(cmd: u32, ...args: NodeValue<NodeView>[]): void {
     const pkt = args.length === 0 ? null : this.writer(args.length);
-    for (const a of args) pkt?.graft(encoder.encode(new TreeView().set(a)));
+    // Each is grafted into the slot, so a slot is its most.
+    const cap = { init_cap: this.sq.slot_bytes, max_cap: this.sq.slot_bytes };
+    for (const a of args) pkt?.graft(encoder.encode(new TreeView().set(a), cap));
     this.send(0, cmd, pkt);
     this.ring(0);
   }

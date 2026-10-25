@@ -36,7 +36,8 @@ import type { NodeView } from "./view.ts";
 const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
 export interface TreeEncoderOptions {
-  init_cap?: u32;
+  /** The first buffer's size; it doubles where the tree overflows it. */
+  init_cap: u32;
   max_cap?: u32; // hard packet size limit
 }
 
@@ -47,8 +48,8 @@ export interface TreeEncoderOptions {
  */
 export class TreeEncoder {
   /** EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past the cap. */
-  encode(view: NodeView, opts: TreeEncoderOptions = {}): U8Array {
-    const { init_cap = 1 << 10, max_cap = MAX_PKT_SZ } = opts;
+  encode(view: NodeView, opts: TreeEncoderOptions): U8Array {
+    const { init_cap, max_cap = MAX_PKT_SZ } = opts;
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) throw new MarshalError(Errno.EINVAL);
     let cap: u32 = Math.max(HDR_SZ, Math.min(init_cap, max_cap));
     for (;;) {
