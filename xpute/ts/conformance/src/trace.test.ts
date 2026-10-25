@@ -22,8 +22,8 @@ import { each_record } from "@xpute/host/ipc/stream.ts";
 import { cmd, key, MEMORY_BYTES } from "./guest.spec.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
-/** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from the root. */
-const CARGO_TARGET = resolve(ROOT, Deno.env.get("CARGO_TARGET_DIR") ?? "rust/target");
+/** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
+const CARGO_TARGET = resolve(join(ROOT, "rust"), Deno.env.get("CARGO_TARGET_DIR") ?? "target");
 
 function library(dir: string, name: string): string {
   return join(dir, Deno.build.os === "darwin" ? `lib${name}.dylib` : Deno.build.os === "windows" ? `${name}.dll` : `lib${name}.so`);

@@ -1,25 +1,20 @@
 {
   "description": "A kit, and a guest and a host end over it, for a program run inside another.",
 
-  // What runs across the languages, and the files that are no one language's:
-  // the documents and the spec, formatted here with the scripts. Each tree
-  // keeps its own manifest:
-  // ts/deno.jsonc, rust/Cargo.toml, script/deno.jsonc, and cpp/ built by
-  // script/cpp.ts.
-  "exclude": ["ts/"],
-  // The scripts are its one member, which makes this the workspace root
-  // where a checkout holds the tree inside another workspace.
-  "workspace": ["script"],
+  // Routes only. Each tree is a root of its own: ts/ and script/ as Deno's,
+  // rust/ as Cargo's, its commands as aliases in rust/.cargo/config.toml, and
+  // cpp/ built by script/cpp.ts. What is here is the documents and the spec,
+  // formatted below, and the order of a test: the traces run against the
+  // guests the Rust and the C++ build first.
+  "workspace": [],
+  "exclude": ["ts/", "script/"],
 
   "tasks": {
-    // Routes only: each tree checks, tests and formats itself. The order of
-    // test is the one thing said here: the traces run against the guests the
-    // Rust and the C++ trees build first.
-    "check": "deno fmt --check && deno task --cwd script check && deno task --cwd ts check && cargo fmt --manifest-path rust/Cargo.toml --all --check && cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings && ./script/cpp.ts check",
-    "test": "deno task --cwd ts test && cargo test --manifest-path rust/Cargo.toml --all && ./script/cpp.ts test && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno task --cwd ts test:conformance",
+    "check": "deno fmt --check && deno task --cwd script check && deno task --cwd ts check && ./script/cpp.ts check && cd rust && cargo fmt --all --check && cargo lint",
+    "test": "deno task --cwd ts test && ./script/cpp.ts test && ./script/cpp.ts guest && ./script/cpp.ts wasm && cd rust && cargo test --all && cargo guest && cargo guest-wasm && cd .. && deno task --cwd ts test:conformance",
     // What needs a GPU: the native host on wgpu, and the web host in Chrome (script/web-gpu.ts).
-    "test:gpu": "cargo test --manifest-path rust/Cargo.toml -p xpute-gpu --features host && ./script/web-gpu.ts",
-    "fmt": "deno fmt && deno task --cwd ts fmt && cargo fmt --manifest-path rust/Cargo.toml --all",
+    "test:gpu": "./script/web-gpu.ts && cd rust && cargo test-gpu",
+    "fmt": "deno fmt && deno task --cwd script fmt && deno task --cwd ts fmt && cd rust && cargo fmt --all",
     "lint": "deno task --cwd script lint && deno task --cwd ts lint",
     "export": "./script/export.ts"
   },

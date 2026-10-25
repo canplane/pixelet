@@ -1,0 +1,8 @@
+# The workspace's own commands, run from rust/ as the root's tasks do: what
+# a check holds a change to, and the guest the contract's traces drive,
+# native and as a module.
+[alias]
+lint = ["clippy", "--all-targets", "--", "-D", "warnings"]
+guest = ["build", "-p", "xpute-conformance"]
+guest-wasm = ["build", "-p", "xpute-conformance", "--target", "wasm32-unknown-unknown"]
+test-gpu = ["test", "-p", "xpute-gpu", "--features", "host"]

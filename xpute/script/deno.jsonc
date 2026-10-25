@@ -1,12 +1,20 @@
 {
   // The scripts that run across the languages: the C++ build, the web GPU
-  // test in Chrome, and the export. What they import is said here.
+  // test in Chrome, and the export. A root of its own, as ts/ is.
+  "workspace": [],
+
   "imports": {
     "@std/path": "jsr:@std/path@^1"
   },
 
   "tasks": {
-    "check": "deno lint && deno check *.ts",
+    "check": "deno fmt --check && deno lint && deno check *.ts",
+    "fmt": "deno fmt",
     "lint": "deno lint"
+  },
+
+  "fmt": {
+    "lineWidth": 200,
+    "proseWrap": "preserve"
   }
 }
