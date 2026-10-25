@@ -41,7 +41,7 @@ host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
 - The same bits on every machine: pxl's Rust takes a transcendental from the
   pinned `libm`, never the platform's, writes no `powi`, whose precision is
   unspecified, and keys a map by `fnv`, never std's seeded hasher
-  (`crates/clippy.toml`).
+  (`rust/clippy.toml`).
 - In the crates that address the core memory by offset (xpute's guest and
   host, the kernel, the renderer, both brackets — `script/check-rules.ts`
   `OFFSET_CRATES`), an offset becomes a pointer only

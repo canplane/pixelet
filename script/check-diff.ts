@@ -34,7 +34,7 @@ interface Package {
 }
 
 const metadata = new Deno.Command("cargo", {
-  args: ["metadata", "--no-deps", "--format-version", "1", "--manifest-path", "crates/Cargo.toml"],
+  args: ["metadata", "--no-deps", "--format-version", "1", "--manifest-path", "rust/Cargo.toml"],
   cwd: root,
   stdout: "piped",
 }).outputSync();

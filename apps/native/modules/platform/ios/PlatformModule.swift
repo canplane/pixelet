@@ -14,7 +14,7 @@ import UIKit
 /// guest took — no copy, so a ring the shell writes is the ring the kernel
 /// reads. The shell calls on the JavaScript thread, one call at a time; the
 /// guest runs each on its own thread while this one waits
-/// (crates/client-bracket/native/src/lib.rs `on_kernel`), and an image's decode runs off both.
+/// (rust/client-bracket/native/src/lib.rs `on_kernel`), and an image's decode runs off both.
 public class PlatformModule: Module {
   /// The module `pxl_wake_on`'s function sends through.
   nonisolated(unsafe) static weak var current: PlatformModule?

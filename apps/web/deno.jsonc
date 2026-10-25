@@ -10,7 +10,7 @@
   },
 
   "tasks": {
-    // The guest's module, from crates/, into src/guest.wasm. Every
+    // The guest's module, from rust/, into src/guest.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build-wasm.ts",
     // The same module in its published shape — without the dev-only settings
@@ -20,7 +20,7 @@
     // The icons and link preview, from apps/client/brand into public/brand/ and kept
     // out of git, so what is served is never older than the brand
     // (pxl-tool/bin/render_brand.rs).
-    "build:brand": "cargo run -q --manifest-path ../../crates/Cargo.toml -p pxl-tool --bin render_brand",
+    "build:brand": "cargo run -q --manifest-path ../../rust/Cargo.toml -p pxl-tool --bin render_brand",
 
     // Server routes answered by the published deployment: no local server,
     // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.

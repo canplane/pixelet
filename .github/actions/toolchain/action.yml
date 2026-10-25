@@ -40,7 +40,7 @@ runs:
     # which every run rebuilds anyway; keyed on the lockfile and the toolchain.
     - uses: Swatinem/rust-cache@v2
       with:
-        workspaces: crates -> target
+        workspaces: rust -> target
         shared-key: ${{ inputs.cache }}
 
     - uses: actions/cache@v5

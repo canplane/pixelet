@@ -57,7 +57,7 @@ export const SETTINGS = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/cloud.rs).
+   * (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -118,7 +118,7 @@ export const SETTINGS = {
     section: "camera",
     dev_options: ["through"],
   },
-  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).
+  /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
     key: 8 as number,
@@ -150,7 +150,7 @@ export const SETTINGS = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world
+  /** The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
    * cast once more from the sun, a ray a texel through the world's query at
    * the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the
    * actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB
@@ -215,7 +215,7 @@ export const SETTINGS = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_ray.wgsl). */
+  /** Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (rust/client/render/src/frame/shader/screen_ray.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",
@@ -260,7 +260,7 @@ export const SETTINGS_SHIPPED = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/cloud.rs).
+   * (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -313,7 +313,7 @@ export const SETTINGS_SHIPPED = {
     section: "camera",
     dev_options: ["through"],
   },
-  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).
+  /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
     key: 8 as number,
@@ -345,7 +345,7 @@ export const SETTINGS_SHIPPED = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world
+  /** The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
    * cast once more from the sun, a ray a texel through the world's query at
    * the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the
    * actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB

@@ -9,4 +9,4 @@
 *.test.ts linguist-detectable=false
 *.test.cpp linguist-detectable=false
 spec/golden/** linguist-generated=true
-crates/spec/golden/** linguist-generated=true
+rust/spec/golden/** linguist-generated=true

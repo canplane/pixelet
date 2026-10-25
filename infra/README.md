@@ -74,9 +74,9 @@ db-geo holds only what search reads: `overture_places`,
 4. **DNS.** An A record for `api.plei.me` to the VM, **proxied** through
    Cloudflare; DNS-only would bypass the edge the firewall relies on.
 5. **The tree.** Cloned whole onto the VM: both servers' Dockerfiles
-   (`crates/server/geo/Dockerfile`, `crates/server/api/Dockerfile`) build
+   (`rust/server/geo/Dockerfile`, `rust/server/api/Dockerfile`) build
    from the repository root, since their dependencies are path dependencies
-   across `crates/`.
+   across `rust/`.
 6. **Up.**
    ```sh
    cd infra/prod

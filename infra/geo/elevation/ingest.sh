@@ -44,8 +44,8 @@ if [ "$OTHER" != "0" ]; then
 fi
 
 mkdir -p "$WARPED_DIR"
-BAKE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/crates/target}/server/elevation_shards"
-cargo build -q --manifest-path "$REPO_ROOT/crates/Cargo.toml" --profile server -p pxl-geo-bake --bin elevation_shards
+BAKE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}/server/elevation_shards"
+cargo build -q --manifest-path "$REPO_ROOT/rust/Cargo.toml" --profile server -p pxl-geo-bake --bin elevation_shards
 SHARDS=$("$BAKE_BIN")
 
 # On its own descriptor: psql would read the list as its input.

@@ -356,7 +356,7 @@ function fullReloadOnCoreChange() {
 // built once as the server starts (deno.jsonc `dev`'s dependency), and the
 // page reloads when src/guest.wasm is replaced
 // (fullReloadOnCoreChange), so a Rust edit otherwise waited for a hand-run
-// build or a restart of everything. Every change under crates/ asks, outside
+// build or a restart of everything. Every change under rust/ asks, outside
 // cargo's own target/: cargo knows which of them the module is built from, and
 // build-wasm writes nothing when it is not one of them. One build at a time; a
 // change during one asks for one more after it, which covers every change it
@@ -384,7 +384,7 @@ function rebuildKernelOnRustChange(): Plugin {
     name: "rebuild-kernel",
     apply: "serve",
     configureServer(server) {
-      const crates = path.resolve(__dirname, "..", "..", "crates");
+      const crates = path.resolve(__dirname, "..", "..", "rust");
       const target = path.join(crates, "target") + path.sep;
       let again = false;
       const build = async () => {

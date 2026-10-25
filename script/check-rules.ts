@@ -2,7 +2,7 @@
 // Holds the tree to what a reader cannot see and the code must keep: no raw
 // pointer casts in offset crates, each rounding half to even in every
 // language, no CommonJS file, each generated shader made from the sources the
-// tree holds now. A rule Rust alone keeps is clippy's (crates/clippy.toml);
+// tree holds now. A rule Rust alone keeps is clippy's (rust/clippy.toml);
 // how the tree is written is the convention skill's.
 //   deno run -A script/check-rules.ts
 
@@ -40,10 +40,10 @@ const problems: string[] = [];
 const OFFSET_CRATES = [
   "xpute/rust/guest/src/",
   "xpute/rust/host/src/",
-  "crates/client/kernel/src/",
-  "crates/client/render/src/",
-  "crates/client-bracket/wasm/src/",
-  "crates/client-bracket/native/src/",
+  "rust/client/kernel/src/",
+  "rust/client/render/src/",
+  "rust/client-bracket/wasm/src/",
+  "rust/client-bracket/native/src/",
 ];
 const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
 
@@ -59,7 +59,7 @@ for (const f of files) {
 // rounds otherwise, or a floor of a half added, is refused in pixelet's code
 // and xpute's; xpute's scalar keeps its named variants, round_half_up and
 // round_half_away, as options a library offers.
-const ROUNDING_ROOTS = ["crates/", "apps/", "xpute/"];
+const ROUNDING_ROOTS = ["rust/", "apps/", "xpute/"];
 const ROUNDING_NAMED = [
   "xpute/rust/kit/src/math/scalar.rs",
   "xpute/rust/kit/src/math/scalar.test.rs",

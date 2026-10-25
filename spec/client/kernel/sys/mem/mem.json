@@ -7,11 +7,11 @@
     "Every one of these is read by more than one language or by more than one",
     "stage of the build, which is why they are here rather than in any of them:",
     "",
-    "  crates/client/kernel/src/sys/mem/section.rs  the map — the fixed ranges and the heap",
-    "  crates/client/kernel/src/door/layout.rs      the front — the rings and the directory",
-    "  crates/client-bracket/wasm/build.rs          the linker flags for the module",
+    "  rust/client/kernel/src/sys/mem/section.rs    the map — the fixed ranges and the heap",
+    "  rust/client/kernel/src/door/layout.rs        the front — the rings and the directory",
+    "  rust/client-bracket/wasm/build.rs            the linker flags for the module",
     "  apps/client/src/abi/boot.ts                  the reservation a tab makes, handed to the page",
-    "  crates/client-bracket/native/src/lib.rs      the memory a device is given"
+    "  rust/client-bracket/native/src/lib.rs        the memory a device is given"
   ],
 
   "STACK_BYTES": {

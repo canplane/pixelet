@@ -7,7 +7,7 @@ developed in this repository and keeps its own record of what it ported:
 [xpute/THIRD_PARTY_NOTICES.md](./xpute/THIRD_PARTY_NOTICES.md).
 
 This file covers copied source only. Crates and npm packages that are merely
-depended on are not listed: `crates/Cargo.toml` and `apps/web/deno.jsonc`
+depended on are not listed: `rust/Cargo.toml` and `apps/web/deno.jsonc`
 name them, and each carries its own license where it is published.
 
 Data sources have their own obligations and their own place:
@@ -15,7 +15,7 @@ Data sources have their own obligations and their own place:
 `apps/client/src/shell/setting/section/attribution.tsx` is where the ones
 that must reach a user are shown.
 
-## louis-e/arnis — `crates/server/geo-bake/src/separation/arnis.rs`, `crates/spec/src/procedural.rs`
+## louis-e/arnis — `rust/server/geo-bake/src/separation/arnis.rs`, `rust/spec/src/procedural.rs`
 
 How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 (Apache-2.0), its [element processing][processing] for bridges,

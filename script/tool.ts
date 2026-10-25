@@ -39,7 +39,7 @@ if (!tool) {
   console.error(`usage:\n  ${usage}`);
   Deno.exit(2);
 }
-const cargo = ["cargo", "run", "--manifest-path", "crates/Cargo.toml", ...(tool.profile ? ["--profile", tool.profile] : []), "-p", tool.crate, "--bin", tool.bin, "--", ...args];
+const cargo = ["cargo", "run", "--manifest-path", "rust/Cargo.toml", ...(tool.profile ? ["--profile", tool.profile] : []), "-p", tool.crate, "--bin", tool.bin, "--", ...args];
 const [cmd, ...rest] = tool.env ? ["./script/with-env.sh", ...cargo] : cargo;
 const run = await new Deno.Command(cmd, { args: rest, stdin: "inherit", stdout: "inherit", stderr: "inherit" }).output();
 Deno.exit(run.code);

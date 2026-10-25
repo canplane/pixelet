@@ -1,7 +1,7 @@
 // @pxl/native/modules/platform/android/build.gradle
 //
 // The device's half of the app's platform on Android (src/main/java/…), and
-// the kernel linked with it: the guest (crates/client-bracket/native) built by
+// the kernel linked with it: the guest (rust/client-bracket/native) built by
 // apps/native/script/build-native.ts for each variant the app is built as,
 // before the variant's native libraries are merged — the same kernel, and the
 // same guarantee, as an iPhone's pod phase gives (ios/PxlPlatform.podspec).

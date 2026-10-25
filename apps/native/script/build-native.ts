@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// Builds the guest for a device (crates/client-bracket/native) as the app is
+// Builds the guest for a device (rust/client-bracket/native) as the app is
 // built, and the app links what it leaves: so the kernel in an app is always
 // this tree's, built for the configuration and the system the app is. A
 // kernel kept between builds let an app link one left from another
@@ -22,7 +22,7 @@
 // kernel's `dev` feature off, so an app built for release carries the kernel a
 // deployed page does; any other configuration keeps its dev settings.
 
-const CRATES = new URL("../../../crates/", import.meta.url);
+const RUST = new URL("../../../rust/", import.meta.url);
 
 /** What one build asks for: the Rust target, whether it is a release, where
  * the library is put, and what cargo runs with. */
@@ -105,7 +105,7 @@ const build = Deno.args.includes("--android") ? gradle(args) : xcode();
 
 const { code } = await new Deno.Command("cargo", {
   args: [...build.cargo, "--profile", "native", "--package", "pxl-native", "--target", build.target, ...(build.published ? ["--no-default-features"] : [])],
-  cwd: CRATES,
+  cwd: RUST,
   env: build.env,
   clearEnv: true,
   stdout: "inherit",
@@ -116,7 +116,7 @@ if (code !== 0) Deno.exit(code);
 // Copied only when cargo wrote a new one: the app relinks whenever the
 // library it takes is newer than the one it has.
 // Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
-const targetDir = Deno.env.get("CARGO_TARGET_DIR") ? new URL(`file://${Deno.env.get("CARGO_TARGET_DIR")}/`) : new URL("target/", CRATES);
+const targetDir = Deno.env.get("CARGO_TARGET_DIR") ? new URL(`file://${Deno.env.get("CARGO_TARGET_DIR")}/`) : new URL("target/", RUST);
 const built = new URL(build.built, targetDir).pathname;
 const mtime = (path: string) => Deno.stat(path).then((s) => s.mtime?.getTime() ?? 0, () => 0);
 if ((await mtime(built)) > (await mtime(build.linked))) {

@@ -1,15 +1,15 @@
 #!/usr/bin/env -S deno run -A
-// Builds the guest's module (crates/client-bracket/wasm) to where
+// Builds the guest's module (rust/client-bracket/wasm) to where
 // src/guest.ts loads it.
 //
 //   deno run -A script/build-wasm.ts [--published]
 
 import { fileURLToPath } from "node:url";
 
-const CRATES = new URL("../../../crates/", import.meta.url);
+const RUST = new URL("../../../rust/", import.meta.url);
 const TARGET = "wasm32-unknown-unknown";
 // Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
-const TARGET_DIR = Deno.env.get("CARGO_TARGET_DIR") ? new URL(`file://${Deno.env.get("CARGO_TARGET_DIR")}/`) : new URL("target/", CRATES);
+const TARGET_DIR = Deno.env.get("CARGO_TARGET_DIR") ? new URL(`file://${Deno.env.get("CARGO_TARGET_DIR")}/`) : new URL("target/", RUST);
 const BUILT = new URL(`${TARGET}/release/pxl_wasm.wasm`, TARGET_DIR);
 const OUT = new URL("../src/guest.wasm", import.meta.url);
 /** The source path each number in a published module's panics stands for; kept by the deploy, never bundled. */
@@ -19,7 +19,7 @@ const PATHS = new URL("../src/guest.paths.json", import.meta.url);
  * prefixes are remapped. The repo goes first since it lies under home. */
 function remapped(): string {
   const home = Deno.env.get("HOME");
-  const root = new URL("../", CRATES).pathname.replace(/\/$/, "");
+  const root = new URL("../", RUST).pathname.replace(/\/$/, "");
   const prefixes = [root, home].filter((p): p is string => !!p);
   const flags = prefixes.map((p) => `--remap-path-prefix=${p}=`);
   return [Deno.env.get("RUSTFLAGS"), ...flags].filter(Boolean).join(" ");
@@ -30,7 +30,7 @@ const published = Deno.args.includes("--published");
 
 const cargo = new Deno.Command("cargo", {
   args: ["build", "--release", "--package", "pxl-wasm", "--target", TARGET, ...(published ? ["--no-default-features"] : [])],
-  cwd: CRATES,
+  cwd: RUST,
   env: { RUSTFLAGS: remapped() },
   stdout: "inherit",
   stderr: "inherit",
@@ -74,7 +74,7 @@ const EXPORTS = ["interrupt"];
 async function finish(...args: string[]): Promise<string> {
   const done = await new Deno.Command("cargo", {
     args: ["run", "-q", "--package", "pxl-tool", "--bin", "finish_wasm", "--", ...args],
-    cwd: CRATES,
+    cwd: RUST,
     stdout: "piped",
     stderr: "inherit",
   }).output();

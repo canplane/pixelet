@@ -128,7 +128,7 @@ async function servedNow(): Promise<Served> {
 /** The declaration pxl-geo-bake writes of a record (bin/declare_source.rs), refusing what a client would. */
 async function declared(record: Served): Promise<Uint8Array> {
   const child = new Deno.Command("cargo", {
-    args: ["run", "-q", "--manifest-path", "crates/Cargo.toml", "-p", "pxl-geo-bake", "--bin", "declare_source"],
+    args: ["run", "-q", "--manifest-path", "rust/Cargo.toml", "-p", "pxl-geo-bake", "--bin", "declare_source"],
     stdin: "piped",
     stdout: "piped",
     stderr: "inherit",

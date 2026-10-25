@@ -73,7 +73,7 @@ One format was made here: **XTP**, xpute's relocatable binary tree, read without
 
 ## Getting Started
 
-> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`), and Docker for the local databases. The dev and build tasks build the kernel module from `crates/` first.
+> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`), and Docker for the local databases. The dev and build tasks build the kernel module from `rust/` first.
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -166,7 +166,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   └── native/               # The device's app, through Expo and Metro
 │       ├── src/              #   its entry and its bracket: what the app gives the client, through its native module
 │       └── modules/platform/ #   its native half: one module, the views, the linked kernel
-├── crates/                   # The Rust workspace, grouped by where a crate runs
+├── rust/                     # The Rust workspace, grouped by where a crate runs
 │   ├── spec/                 #   pxl-spec: the model every crate shares
 │   │   └── core/             #     pxl-spec-core: what the CPU and the GPU compute alike
 │   ├── client/               #   what the client runs
@@ -183,7 +183,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   │   └── geo-bake/         #     pxl-geo-bake: the tile bakes and the dev tile server
 │   └── tool/                 #   pxl-tool: the binaries that write files the tree keeps
 ├── spec/                     # JSON every language is generated from (pxl-tool),
-│                             #   grouped as crates/ is: spec/, client/
+│                             #   grouped as rust/ is: spec/, client/
 ├── xpute/                    # The system under it, its own repository's root and workspaces:
 │                             #   rust/, ts/ and cpp/ by language: kit, guest, host; spec/ the contract
 ├── asset/                    # Shipped models, texture pack and sky, imported by nothing

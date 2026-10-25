@@ -77,7 +77,7 @@ deno task publish earth
 
 ```bash
 deno task ingest:asset
-# -> ./out/asset/<sha256>.<ext>, and regenerates crates/spec/src/asset/ingested.spec.rs
+# -> ./out/asset/<sha256>.<ext>, and regenerates rust/spec/src/asset/ingested.spec.rs
 #    and apps/client/src/catalog/asset/ingested.spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do

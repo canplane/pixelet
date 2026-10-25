@@ -29,7 +29,7 @@
       "  auto  — the display's, stepped down to a share of it while moving",
       "          frames run over their budget — the display's interval, no",
       "          tighter than a sixtieth of a second — and back up once they",
-      "          have room (crates/client/kernel/src/domain/view/frame/resolution.rs).",
+      "          have room (rust/client/kernel/src/domain/view/frame/resolution.rs).",
       "  fixed — the display's, whatever the frames cost.",
       "  low   — one."
     ]
@@ -70,10 +70,10 @@
       "  corner — the screen pass's own: the floor along a cube and the inside",
       "           of a corner, where a neighbouring pixel's face rises in front",
       "           of the pixel's own plane within a block or two of it",
-      "           (crates/client/render/src/frame/shader/screen_ray.wgsl).",
+      "           (rust/client/render/src/frame/shader/screen_ray.wgsl).",
       "           A few taps of the rays a pixel, behind a uniform.",
       "  screen — N8AO",
-      "           (crates/client/render/src/gpu/ao.rs): the world's depth drawn",
+      "           (rust/client/render/src/gpu/ao.rs): the world's depth drawn",
       "           once more, the occlusion sampled from it at half resolution,",
       "           denoised, and applied to every lit surface as a warm dark",
       "           tint. Five passes and 11 bytes a pixel."
@@ -121,7 +121,7 @@
       "number": 2,
       "$doc": [
         "The cumulus' models and the altocumulus and cirrus sheets",
-        "(crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/cloud.rs).",
+        "(rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).",
         "Med as decor is: models in view, and a pass over the screen for the sheets."
       ],
       "kind": "toggle",
@@ -183,7 +183,7 @@
     "edge_shade": {
       "number": 8,
       "$doc": [
-        "Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).",
+        "Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).",
         "A few fragment ops behind a uniform; the shader is the same either way."
       ],
       "kind": "toggle",
@@ -215,7 +215,7 @@
     "shadows": {
       "number": 11,
       "$doc": [
-        "The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world",
+        "The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world",
         "cast once more from the sun, a ray a texel through the world's query at",
         "the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the",
         "actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB",
@@ -274,7 +274,7 @@
     "ray_steps": {
       "number": 19,
       "$doc": [
-        "Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_ray.wgsl)."
+        "Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (rust/client/render/src/frame/shader/screen_ray.wgsl)."
       ],
       "kind": "toggle",
       "default": false,

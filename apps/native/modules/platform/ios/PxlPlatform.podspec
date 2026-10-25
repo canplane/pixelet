@@ -3,7 +3,7 @@
 # The device's half of the app's platform (apps/native/src/): the
 # view the kernel draws into, the kernel linked with it, and what the shell
 # asks of the system — storage, the clipboard, text, the compass. The kernel
-# is in the guest (crates/client-bracket/native), built by this pod's script phase
+# is in the guest (rust/client-bracket/native), built by this pod's script phase
 # (apps/native/script/build-native.ts) for the configuration and the SDK the
 # app is, into a directory each has of its own, which the app links from and
 # Swift imports it from (`import PxlNative`, the guest's include/). Not named
@@ -36,7 +36,7 @@ Pod::Spec.new do |s|
     always_out_of_date: '1',
   }
   s.pod_target_xcconfig = {
-    'SWIFT_INCLUDE_PATHS' => '"$(PODS_TARGET_SRCROOT)/../../../../../crates/client-bracket/native/include"',
+    'SWIFT_INCLUDE_PATHS' => '"$(PODS_TARGET_SRCROOT)/../../../../../rust/client-bracket/native/include"',
   }
   # The simulator the kernel is built for is an Apple silicon Mac's, arm64
   # alone (build-native.ts); a Release build makes every architecture it is
@@ -44,7 +44,7 @@ Pod::Spec.new do |s|
   s.user_target_xcconfig = {
     # The app imports this pod's Swift module, which imports PxlNative, and
     # Xcode's scan of the app's modules resolves that one from here too.
-    'SWIFT_INCLUDE_PATHS' => '$(inherited) "$(PODS_ROOT)/../../../../crates/client-bracket/native/include"',
+    'SWIFT_INCLUDE_PATHS' => '$(inherited) "$(PODS_ROOT)/../../../../rust/client-bracket/native/include"',
     'LIBRARY_SEARCH_PATHS' => '$(inherited) "$(PODS_CONFIGURATION_BUILD_DIR)/PxlNative"',
     'OTHER_LDFLAGS' => '$(inherited) -lpxl_native',
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'x86_64',
