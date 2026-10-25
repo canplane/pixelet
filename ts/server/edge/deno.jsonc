@@ -8,7 +8,10 @@
   "exports": "./index.ts",
 
   "tasks": {
-    "check": "deno check index.ts"
+    // Without the workspace's import map, as wrangler's bundler resolves it:
+    // an alias or a bare specifier the Worker could not be bundled with fails
+    // here, before CI's bundle.
+    "check": "deno check --no-config index.ts"
   },
 
   "compilerOptions": {
