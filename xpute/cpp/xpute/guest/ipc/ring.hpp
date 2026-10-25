@@ -16,12 +16,16 @@
 
 namespace xpute {
 
+constexpr std::uint32_t ring_bytes(std::uint32_t capacity) noexcept {
+    return (ring::HEADER_WORDS + capacity * frame::WORDS) * 4;
+}
+
+constexpr std::uint32_t slots_bytes(std::uint32_t capacity, std::uint32_t slot_bytes) noexcept {
+    return capacity * slot_bytes;
+}
+
 class Ring {
   public:
-    static constexpr std::uint32_t bytes(std::uint32_t capacity) noexcept { return (ring::HEADER_WORDS + capacity * frame::WORDS) * 4; }
-
-    static constexpr std::uint32_t slots_bytes(std::uint32_t capacity, std::uint32_t slot_bytes) noexcept { return capacity * slot_bytes; }
-
     // A capacity that is not a power of two is a bug.
     Ring(Memory mem, std::uint32_t at) noexcept;
 
@@ -33,6 +37,9 @@ class Ring {
     std::uint32_t tail() const noexcept { return header(ring::TAIL); }
     std::uint32_t len() const noexcept { return tail() - head(); }
     bool empty() const noexcept { return len() == 0; }
+
+    // The word, from the ring's start, where the frame at `position` begins.
+    std::uint32_t entry_at(std::uint32_t position) const noexcept { return ring::HEADER_WORDS + (position & (capacity_ - 1)) * frame::WORDS; }
 
     // EAGAIN when full, EMSGSIZE when larger than a slot.
     Errno push(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result,
@@ -50,27 +57,17 @@ class Ring {
         return Errno::ok;
     }
 
-    struct Message {
-        std::uint32_t tag;
-        std::uint32_t cmd;
-        std::uint32_t flags;
-        std::int32_t result;
-        // 0 for none.
-        std::uint32_t packet_at;
-    };
+    // The head's frame, none when empty. Read it, then `advance`.
+    std::optional<Frame> peek() const noexcept;
 
-    // Read it, then `advance`.
-    std::optional<Message> peek() const noexcept;
-
-    // Valid until `advance`. EBADMSG when it names bytes outside a slot.
-    Result<std::span<const std::uint8_t>> packet(const Message &m) const noexcept;
+    // Valid until `advance`. EBADMSG when the frame names bytes outside a slot.
+    Result<std::span<const std::uint8_t>> packet(const Frame &f) const noexcept;
 
     void advance() const noexcept;
 
   private:
     std::uint32_t header(std::uint32_t word) const noexcept { return mem_.word(at_ + 4 * word); }
     void set_header(std::uint32_t word, std::uint32_t w) const noexcept { mem_.set_word(at_ + 4 * word, w); }
-    std::uint32_t frame_at(std::uint32_t position) const noexcept;
     std::uint32_t slot_at(std::uint32_t position) const noexcept;
     void pad(std::uint32_t slot, std::uint32_t n) const noexcept;
     void publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t packet_at) const noexcept;

@@ -208,7 +208,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
-    w.finish()
+    w.fitted()
 }
 
 /// The shell decides which of the three from the state it drew the button

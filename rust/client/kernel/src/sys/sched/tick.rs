@@ -4,7 +4,7 @@
 //! settle time, declared quantum and step table.
 
 use xpute_guest::sched::quantum::QuantumPolicy;
-use xpute_guest::sched::tick::{Phase, StepStats, Tick, TickPolicy, TickReport};
+use xpute_guest::sched::tick::{Phase, StepStat, Tick, TickPolicy, TickReport};
 
 use crate::sys::sched::param;
 use xpute_guest::global::Global;
@@ -39,7 +39,7 @@ pub fn set_step_timing(on: bool) {
     tick().set_step_timing(on);
 }
 
-pub fn tick_step_stats() -> &'static [StepStats] {
+pub fn tick_step_stats() -> &'static [StepStat] {
     tick().step_stats()
 }
 

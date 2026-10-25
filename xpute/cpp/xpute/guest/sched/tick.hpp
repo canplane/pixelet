@@ -60,14 +60,14 @@ template <class S> class TickContext {
 template <class S> using TickStep = void (*)(TickContext<S> &);
 
 // Two registrations under one name in one phase add into one row.
-struct StepStats {
+struct StepStat {
     Phase phase = Phase::interaction;
     std::uint32_t name = 0;
     double ms = 0;
     std::uint32_t count = 0;
     double max_ms = 0;
 
-    bool operator==(const StepStats &) const = default;
+    bool operator==(const StepStat &) const = default;
 };
 
 struct TickReport {
@@ -95,7 +95,7 @@ template <class S, std::size_t N> class Tick {
 
     void set_step_timing(bool on) noexcept { step_timing_ = on; }
 
-    std::span<const StepStats> step_stats() const noexcept { return {stats_.data(), stats_len_}; }
+    std::span<const StepStat> step_stats() const noexcept { return {stats_.data(), stats_len_}; }
     void step_stats_reset() noexcept { stats_len_ = 0; }
 
     TickReport last() const noexcept { return last_report_; }
@@ -136,9 +136,9 @@ template <class S, std::size_t N> class Tick {
         while (at < stats_len_ && !(stats_[at].phase == phase && stats_[at].name == name)) at++;
         if (at == stats_len_) {
             if (stats_len_ == N) return;
-            stats_[stats_len_++] = StepStats{.phase = phase, .name = name};
+            stats_[stats_len_++] = StepStat{.phase = phase, .name = name};
         }
-        StepStats &s = stats_[at];
+        StepStat &s = stats_[at];
         s.ms += ms;
         s.count++;
         s.max_ms = std::max(s.max_ms, ms);
@@ -171,7 +171,7 @@ template <class S, std::size_t N> class Tick {
     std::array<Registered, N> registry_{};
     std::size_t len_ = 0;
     std::uint32_t next_id_ = 1;
-    std::array<StepStats, N> stats_{};
+    std::array<StepStat, N> stats_{};
     std::size_t stats_len_ = 0;
     bool step_timing_ = false;
     TickReport last_report_{};

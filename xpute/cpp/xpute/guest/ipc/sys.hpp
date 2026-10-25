@@ -66,7 +66,7 @@ class Sys {
 
     // The one call of the turn, published at once; what was recorded before it is
     // dropped.
-    void abort(Errno code, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept;
+    void abort(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept;
 
   private:
     Memory mem_;

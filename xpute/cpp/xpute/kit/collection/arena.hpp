@@ -17,6 +17,8 @@
 
 namespace xpute {
 
+template <class T, class Alloc> class ArenaGuard;
+
 struct ArenaOptions {
     std::uint32_t init_cap;
     std::uint32_t max_cap;
@@ -60,21 +62,8 @@ template <class T, class Alloc> class Arena {
         len_ = new_len;
     }
 
-    class Scope {
-      public:
-        explicit Scope(Arena &arena) noexcept : arena_(arena), mark_(arena.len()) {}
-        ~Scope() { arena_.truncate(mark_); }
-        Scope(const Scope &) = delete;
-        Scope &operator=(const Scope &) = delete;
-        Arena &operator*() noexcept { return arena_; }
-        Arena *operator->() noexcept { return &arena_; }
-
-      private:
-        Arena &arena_;
-        std::uint32_t mark_;
-    };
-
-    Scope scope() noexcept { return Scope(*this); }
+    // Marks here and rewinds to the mark when the guard goes.
+    ArenaGuard<T, Alloc> scope() noexcept;
 
   private:
     Arena(std::uint32_t max_cap, const Alloc &alloc) : mem_(alloc), max_cap_(max_cap) {}
@@ -95,5 +84,23 @@ template <class T, class Alloc> class Arena {
     std::uint32_t cap_ = 0;
     std::uint32_t len_ = 0;
 };
+
+template <class T, class Alloc> class ArenaGuard {
+  public:
+    explicit ArenaGuard(Arena<T, Alloc> &arena) noexcept : arena_(arena), mark_(arena.len()) {}
+    ~ArenaGuard() { arena_.truncate(mark_); }
+    ArenaGuard(const ArenaGuard &) = delete;
+    ArenaGuard &operator=(const ArenaGuard &) = delete;
+    Arena<T, Alloc> &operator*() noexcept { return arena_; }
+    Arena<T, Alloc> *operator->() noexcept { return &arena_; }
+
+  private:
+    Arena<T, Alloc> &arena_;
+    std::uint32_t mark_;
+};
+
+template <class T, class Alloc> ArenaGuard<T, Alloc> Arena<T, Alloc>::scope() noexcept {
+    return ArenaGuard<T, Alloc>(*this);
+}
 
 } // namespace xpute

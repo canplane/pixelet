@@ -592,7 +592,7 @@ template <std::size_t N> class Gpu {
             return std::nullopt;
         }
         if (op < OBJECT_OPS) {
-            made_by_[handle_slot(*id)] = static_cast<std::uint8_t>(op);
+            made_by_[abi::handle_slot(*id)] = static_cast<std::uint8_t>(op);
             objects_[op]++;
         }
         return id;
@@ -607,11 +607,11 @@ template <std::size_t N> class Gpu {
 
     // Slot `id`'s object let go from the count of what made it.
     void forget(Id id) noexcept {
-        std::uint8_t op = std::exchange(made_by_[handle_slot(id)], 0);
+        std::uint8_t op = std::exchange(made_by_[abi::handle_slot(id)], 0);
         if (op != 0) objects_[op]--;
     }
 
-    HandleTable<N> handles_;
+    abi::HandleTable<N> handles_;
     // The op that made each slot's live object, where it lasts; 0 otherwise.
     std::array<std::uint8_t, N> made_by_{};
     // The live objects by the op that made them, slot `op`.

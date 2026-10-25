@@ -74,15 +74,15 @@ class Door {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {
-            std::optional<Ring::Message> m = sq_.peek();
-            if (!m) break;
-            Result<std::span<const std::uint8_t>> pkt = sq_.packet(*m);
-            Applied a = pkt ? apply(m->cmd, *pkt) : Applied{.error = pkt.error().code};
+            std::optional<Frame> f = sq_.peek();
+            if (!f) break;
+            Result<std::span<const std::uint8_t>> pkt = sq_.packet(*f);
+            Applied a = pkt ? apply(f->cmd, *pkt) : Applied{.error = pkt.error().errnum};
             sq_.advance();
             if (a.error != Errno::ok) {
-                post(m->tag, m->cmd, frame::RES, static_cast<std::int32_t>(a.error));
-            } else if (m->flags & frame::ACKREQ) {
-                post(m->tag, m->cmd, frame::RES, a.value);
+                post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.error));
+            } else if (f->flags & frame::ACKREQ) {
+                post(f->tag, f->cmd, frame::RES, a.value);
             }
         }
         stat_.left_peak = std::max(stat_.left_peak, sq_.len());

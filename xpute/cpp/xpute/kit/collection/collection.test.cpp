@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "xpute/kit/golden.hpp"
@@ -11,6 +12,7 @@
 #include "arena.hpp"
 #include "deque.hpp"
 #include "heap.hpp"
+#include "list.hpp"
 
 using namespace xpute;
 
@@ -129,7 +131,7 @@ XPUTE_TEST(arena_growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was) 
     XPUTE_CHECK(a.cap() == 4);
     Result<Slot *> refused = a.alloc();
     XPUTE_CHECK_EQ(refused.ok(), false, "the arena grew past max_cap");
-    XPUTE_CHECK_EQ(refused.error().code, Errno::eoverflow, "refused for the wrong reason");
+    XPUTE_CHECK_EQ(refused.error().errnum, Errno::eoverflow, "refused for the wrong reason");
     XPUTE_CHECK_EQ(a.len(), 4u, "a refused alloc moved the cursor");
     XPUTE_CHECK(a.cap() == 4);
     for (std::uint32_t i = 0; i < 4; i++) XPUTE_CHECK_EQ(a.get(i).mark, i + 10, "a refusal wrote over a live slot");
@@ -147,4 +149,61 @@ XPUTE_TEST(arena_a_scope_rewinds_to_where_it_began) {
     }
     XPUTE_CHECK_EQ(a.len(), 1u, "the scope did not rewind to its mark");
     XPUTE_CHECK_EQ(a.get(0).mark, 1u, "the rewind reached past the mark");
+}
+
+namespace {
+
+// Counts the values it ends, so a test sees each live one dropped once.
+struct Counted {
+    int n;
+    int *ended;
+    Counted(int n, int *ended) noexcept : n(n), ended(ended) {}
+    Counted(Counted &&o) noexcept : n(o.n), ended(std::exchange(o.ended, nullptr)) {}
+    Counted(const Counted &) = delete;
+    ~Counted() {
+        if (ended != nullptr) (*ended)++;
+    }
+};
+
+template <std::size_t N> std::vector<int> values(const List<Counted, N> &l) {
+    std::vector<int> out;
+    for (const Counted &c : l) out.push_back(c.n);
+    return out;
+}
+
+} // namespace
+
+XPUTE_TEST(list_keeps_its_order_through_remove_and_retain_and_ends_each_value_once) {
+    int ended = 0;
+    {
+        List<Counted, 8> l;
+        XPUTE_CHECK(l.is_empty() && l.as_slice().empty());
+        for (int i = 1; i <= 6; i++) l.push(Counted(i, &ended));
+        XPUTE_CHECK_EQ(l.len(), 6u, "six pushed");
+        XPUTE_CHECK_EQ(ended, 0, "a push ended a value");
+
+        Counted gone = l.remove(1);
+        XPUTE_CHECK_EQ(gone.n, 2, "remove answered another value");
+        XPUTE_CHECK_EQ(values(l), (std::vector<int>{1, 3, 4, 5, 6}), "remove did not keep the order");
+        XPUTE_CHECK_EQ(l[4].n, 6, "the last moved down one");
+        l.remove(4);
+        XPUTE_CHECK_EQ(ended, 1, "the last removed, unkept, ends once");
+
+        l.retain([](const Counted &c) { return c.n != 3 && c.n != 5; });
+        XPUTE_CHECK_EQ(values(l), (std::vector<int>{1, 4}), "retain did not keep the order of the rest");
+        XPUTE_CHECK_EQ(ended, 3, "retain ends what it refuses, once each");
+
+        l.as_mut_slice()[0].n = 7;
+        List<Counted, 8> moved(std::move(l));
+        XPUTE_CHECK(l.is_empty());
+        XPUTE_CHECK_EQ(values(moved), (std::vector<int>{7, 4}), "a move lost a value");
+        XPUTE_CHECK_EQ(ended, 3, "a move ended a value");
+
+        moved.clear();
+        XPUTE_CHECK(moved.is_empty());
+        XPUTE_CHECK_EQ(ended, 5, "clear ends every live value");
+        for (int i = 0; i < 8; i++) moved.push(Counted(i, &ended));
+        XPUTE_CHECK_EQ(moved.len(), 8u, "a cleared list holds N again");
+    }
+    XPUTE_CHECK_EQ(ended, 14, "the list ends what it holds when it goes, and `gone` its own");
 }

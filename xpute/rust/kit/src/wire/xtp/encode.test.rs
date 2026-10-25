@@ -52,7 +52,7 @@ fn a_string_written_from_display_reads_back_where_it_lies() {
     let mut small = [0u8; 40];
     let mut w = PacketWriter::new(&mut small, 1);
     w.str_display("far longer than the room that is left");
-    assert_eq!(w.finish(), None, "a string that does not fit spoils the packet");
+    assert_eq!(w.finish().map_err(|e| e.errno), Err(Errno::EOVERFLOW), "a string that does not fit spoils the packet");
 }
 
 #[test]

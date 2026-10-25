@@ -40,7 +40,7 @@ impl TreeEncoder {
             let mut buf = vec![0u8; cap as usize];
             let mut w = PacketWriter::root(&mut buf);
             walk(&mut w, view.node());
-            match w.finished() {
+            match w.finish() {
                 Ok(n) => {
                     buf.truncate(n as usize);
                     return Ok(buf);
@@ -527,7 +527,7 @@ impl<'a> PacketWriter<'a> {
     }
 
     /// The length, header included and to the word, or why it was refused.
-    pub fn finished(mut self) -> Result<u32, MarshalError> {
+    pub fn finish(mut self) -> Result<u32, MarshalError> {
         let f = self.frame;
         crate::ensure!(f.written == f.count, ENOTRECOVERABLE, f.count, f.written);
         // The root branch `new` opened, closed as `branch` closes one.
@@ -547,10 +547,10 @@ impl<'a> PacketWriter<'a> {
         Ok(end)
     }
 
-    /// The packet's length, or none when a child did not fit: for a room
+    /// `finish`'s length, or none when the packet was refused: for a room
     /// that fits a packet or not.
-    pub fn finish(self) -> Option<u32> {
-        self.finished().ok()
+    pub fn fitted(self) -> Option<u32> {
+        self.finish().ok()
     }
 }
 

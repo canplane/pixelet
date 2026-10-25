@@ -1,6 +1,6 @@
 // xpute-gpu/encode.test.rs
 
-use xpute_guest::ipc::stream::Stream;
+use xpute_guest::ipc::stream::{Stream, WORD};
 use xpute_kit::golden::Golden;
 
 use crate::programs::{At, Encoder, PROGRAMS};
@@ -41,7 +41,7 @@ fn every_program_writes_the_words_its_record_holds() {
         (p.encode)(&mut Encoder::new(), &mut stream, &at, &mut |s: &mut Stream| {
             s.publish();
             // SAFETY: as `bytes`; the stream is between records.
-            let words = unsafe { core::slice::from_raw_parts(base.cast::<u32>(), head + s.head()[0] as usize) };
+            let words = unsafe { core::slice::from_raw_parts(base.cast::<u32>(), head + xpute_guest::mem::core().word(s.head_at() + Stream::END * WORD) as usize) };
             let got: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
             assert_eq!(got, g.bytes(&format!("{}.turn.{turn}", p.name)), "{}.turn.{turn}", p.name);
             turn += 1;

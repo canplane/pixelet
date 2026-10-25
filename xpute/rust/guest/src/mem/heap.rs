@@ -109,11 +109,15 @@ pub unsafe fn free((off, bytes): Block) {
 }
 
 /// Freed on drop unless `keep` hands it on.
-pub struct Guard(Block);
+pub struct BlockGuard(Block);
 
-impl Guard {
-    pub fn alloc(bytes: u32) -> Option<Guard> {
-        alloc(bytes).map(Guard)
+impl BlockGuard {
+    pub fn alloc(bytes: u32) -> Option<BlockGuard> {
+        alloc(bytes).map(BlockGuard)
+    }
+
+    pub fn block(&self) -> Block {
+        self.0
     }
 
     pub fn keep(self) -> Block {
@@ -123,9 +127,9 @@ impl Guard {
     }
 }
 
-impl Drop for Guard {
+impl Drop for BlockGuard {
     fn drop(&mut self) {
-        // SAFETY: a guard is made only by `Guard::alloc`, and `keep` forgets it.
+        // SAFETY: a guard is made only by `BlockGuard::alloc`, and `keep` forgets it.
         unsafe { free(self.0) }
     }
 }

@@ -12,6 +12,7 @@
 #include <optional>
 #include <utility>
 
+#include "xpute/kit/alloc/slab.hpp"
 #include "xpute/guest/mem.hpp"
 
 namespace xpute {
@@ -33,6 +34,42 @@ struct Allocator {
 };
 
 void set_heap(Allocator heap) noexcept;
+
+// One reading of a heap, so compared fields are from one moment.
+struct HeapStat {
+    std::size_t range = 0;
+    // A high-water mark, not a holding.
+    std::size_t used = 0;
+    std::size_t live = 0;
+    std::size_t run = 0;
+    std::size_t slot = 0;
+    // Past the tree's current root the range is untouched rather than listed,
+    // so this is not the free space.
+    std::size_t largest_free = 0;
+    // Moves when a page is released, which is when a request of a page or
+    // more refused before might now be served; a slot returned to a run still
+    // in use does not move it (`SlabMalloc::releases`).
+    std::uint32_t releases = 0;
+    std::uint32_t refusals = 0;
+    std::uint32_t requests = 0;
+
+    bool operator==(const HeapStat &) const = default;
+};
+
+// Reads the slab whose calls the guest installed as its heap (`set_heap`).
+template <Range R> HeapStat heap_stat(const SlabMalloc<R> &a) noexcept {
+    return HeapStat{
+        .range = a.range_bytes(),
+        .used = a.used(),
+        .live = a.live(),
+        .run = a.run_live(),
+        .slot = a.slot_live(),
+        .largest_free = a.largest_free(),
+        .releases = a.releases(),
+        .refusals = a.refusals(),
+        .requests = static_cast<std::uint32_t>(a.pages().allocs()),
+    };
+}
 
 Allocator heap() noexcept;
 

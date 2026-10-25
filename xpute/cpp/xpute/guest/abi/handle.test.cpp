@@ -5,6 +5,7 @@
 #include "xpute/kit/test.hpp"
 
 using namespace xpute;
+using namespace xpute::abi;
 
 XPUTE_TEST(handle_a_full_table_refuses) {
     HandleTable<3> t;

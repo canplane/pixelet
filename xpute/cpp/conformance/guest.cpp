@@ -47,8 +47,8 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
 constexpr std::uint32_t DIRECTORY_AT = 0;
 constexpr std::uint32_t STREAM_AT = PAGE_BYTES;
 constexpr std::uint32_t COMPLETION_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 4);
-constexpr std::uint32_t SUBMISSION_DESC_AT = COMPLETION_DESC_AT + page_up(Ring::bytes(COMPLETION_CAPACITY));
-constexpr std::uint32_t COMPLETION_SLOT_AT = SUBMISSION_DESC_AT + page_up(Ring::bytes(SUBMISSION_CAPACITY));
+constexpr std::uint32_t SUBMISSION_DESC_AT = COMPLETION_DESC_AT + page_up(ring_bytes(COMPLETION_CAPACITY));
+constexpr std::uint32_t COMPLETION_SLOT_AT = SUBMISSION_DESC_AT + page_up(ring_bytes(SUBMISSION_CAPACITY));
 constexpr std::uint32_t SUBMISSION_SLOT_AT = COMPLETION_SLOT_AT + COMPLETION_CAPACITY * SLOT_BYTES;
 constexpr std::uint32_t SYS_AT = SUBMISSION_SLOT_AT + SUBMISSION_CAPACITY * SLOT_BYTES;
 constexpr std::uint32_t STATE_AT = page_up(SYS_AT + SYS_WORDS * 4);
@@ -59,7 +59,7 @@ struct State {
     Sys sys;
     // Each for the owner its packet named.
     Files<std::uint32_t, HANDLES> files;
-    HandleTable<HANDLES> handles;
+    abi::HandleTable<HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
 };
@@ -92,7 +92,7 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
     std::uint32_t arg = 0;
     if (cmd == static_cast<std::uint32_t>(abi::Command::SYS_OPENED)) {
         Result<abi::SysOpened> answer = abi::SysOpened::read(packet);
-        if (!answer) return {.error = answer.error().code};
+        if (!answer) return {.error = answer.error().errnum};
         if (const std::uint32_t *owner = s.files.owner(answer->fd)) s.door.post(*owner, cmd::OPENED, 0, answer->res);
         return {};
     }

@@ -387,7 +387,7 @@ Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template
             buf.resize(*n);
             return buf;
         }
-        if (n.error().code != Errno::eoverflow || cap == max_cap) return n.error();
+        if (n.error().errnum != Errno::eoverflow || cap == max_cap) return n.error();
         cap = cap > max_cap / 2 ? max_cap : cap * 2;
     }
 }

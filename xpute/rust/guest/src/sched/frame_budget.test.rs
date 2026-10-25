@@ -19,10 +19,10 @@ fn burn(ms: f64) {
     CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
 
-fn opts(budget_ms: f64) -> BudgetOpts {
+fn opts(budget_ms: f64) -> BudgetOptions {
     set_clock(clock);
     CLOCK_MS.with(|c| c.set(0.0));
-    BudgetOpts {
+    BudgetOptions {
         budget_ms,
         hard_budget_ms: None,
         max_steps: None,
@@ -88,7 +88,7 @@ fn run_under_budget_max_steps_caps_completed_work() {
             seen.push(n);
             true
         },
-        BudgetOpts { max_steps: Some(2), ..opts(1000.0) },
+        BudgetOptions { max_steps: Some(2), ..opts(1000.0) },
     );
     assert_eq!(seen, [1, 2]);
     assert_eq!(stats.ran, 2);
@@ -104,7 +104,7 @@ fn run_under_budget_a_no_op_step_neither_counts_nor_arms_the_guard() {
             seen.push(n);
             n == 4
         },
-        BudgetOpts { max_steps: Some(1), ..opts(0.0) },
+        BudgetOptions { max_steps: Some(1), ..opts(0.0) },
     );
     assert_eq!(seen, [1, 2, 3, 4]);
     assert_eq!(stats.ran, 1);
@@ -122,7 +122,7 @@ fn run_under_budget_hard_budget_ms_bounds_a_pass_of_expensive_no_ops() {
             burn(3.0);
             false
         },
-        BudgetOpts {
+        BudgetOptions {
             hard_budget_ms: Some(12.0),
             ..opts(4.0)
         },
@@ -159,7 +159,7 @@ fn run_under_budget_the_first_item_is_attempted_even_under_a_zero_ceiling() {
             burn(2.0);
             true
         },
-        BudgetOpts {
+        BudgetOptions {
             hard_budget_ms: Some(0.0),
             ..opts(0.0)
         },

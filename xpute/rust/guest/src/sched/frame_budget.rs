@@ -7,7 +7,7 @@
 use crate::clock::now;
 
 #[derive(Clone, Copy, Debug)]
-pub struct BudgetOpts {
+pub struct BudgetOptions {
     /// Waived until a step has done work.
     pub budget_ms: f64,
     /// Never waived: a step can cost time and still report no work, and
@@ -17,14 +17,14 @@ pub struct BudgetOpts {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PassStats {
+pub struct PassStat {
     pub ran: u32,
     pub visited: u32,
     pub elapsed_ms: f64,
     pub stopped_early: bool,
 }
 
-pub fn run_under_budget<T>(items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> bool, opts: BudgetOpts) -> PassStats {
+pub fn run_under_budget<T>(items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> bool, opts: BudgetOptions) -> PassStat {
     let t0 = now();
     let deadline = t0 + opts.budget_ms;
     let hard_deadline = t0 + opts.hard_budget_ms.unwrap_or(f64::INFINITY);
@@ -51,7 +51,7 @@ pub fn run_under_budget<T>(items: impl IntoIterator<Item = T>, mut step: impl Fn
         }
     }
 
-    PassStats {
+    PassStat {
         ran,
         visited,
         elapsed_ms: now() - t0,
@@ -83,12 +83,12 @@ impl FrameBudget {
         (self.t0 + self.total_ms - self.reserve_ms - now()).max(0.0)
     }
 
-    pub fn run<T>(&self, items: impl IntoIterator<Item = T>, step: impl FnMut(T) -> bool, max_steps: Option<u32>) -> PassStats {
+    pub fn run<T>(&self, items: impl IntoIterator<Item = T>, step: impl FnMut(T) -> bool, max_steps: Option<u32>) -> PassStat {
         let remaining = self.remaining();
         run_under_budget(
             items,
             step,
-            BudgetOpts {
+            BudgetOptions {
                 budget_ms: remaining,
                 hard_budget_ms: Some(remaining + self.hard_slack_ms),
                 max_steps,

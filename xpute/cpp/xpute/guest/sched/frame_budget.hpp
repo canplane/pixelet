@@ -16,7 +16,7 @@
 
 namespace xpute {
 
-struct BudgetOpts {
+struct BudgetOptions {
     // Waived until a step completes.
     double budget_ms;
     // Never waived: a step may cost real time and still report false, and a run
@@ -25,23 +25,23 @@ struct BudgetOpts {
     std::optional<std::uint32_t> max_steps;
 };
 
-struct PassStats {
+struct PassStat {
     std::uint32_t ran = 0;
     // Includes no-op steps and the one that tripped the stop.
     std::uint32_t visited = 0;
     double elapsed_ms = 0;
     bool stopped_early = false;
 
-    bool operator==(const PassStats &) const = default;
+    bool operator==(const PassStat &) const = default;
 };
 
-template <class Items, class Step> PassStats run_under_budget(Items &&items, Step &&step, BudgetOpts opts) {
+template <class Items, class Step> PassStat run_under_budget(Items &&items, Step &&step, BudgetOptions opts) {
     double t0 = now();
     double deadline = t0 + opts.budget_ms;
     double hard_deadline = t0 + opts.hard_budget_ms.value_or(std::numeric_limits<double>::infinity());
     std::uint32_t cap = opts.max_steps.value_or(UINT32_MAX);
 
-    PassStats stats;
+    PassStat stats;
     for (auto &&item : items) {
         double at = now();
         // Checked first so the waiver below cannot out-vote it; gated on `visited`
@@ -73,9 +73,9 @@ struct FrameBudget {
 
     double remaining() const noexcept { return std::max(t0 + total_ms - reserve_ms - now(), 0.0); }
 
-    template <class Items, class Step> PassStats run(Items &&items, Step &&step, std::optional<std::uint32_t> max_steps = std::nullopt) const {
+    template <class Items, class Step> PassStat run(Items &&items, Step &&step, std::optional<std::uint32_t> max_steps = std::nullopt) const {
         double left = remaining();
-        return run_under_budget(items, step, BudgetOpts{.budget_ms = left, .hard_budget_ms = left + hard_slack_ms, .max_steps = max_steps});
+        return run_under_budget(items, step, BudgetOptions{.budget_ms = left, .hard_budget_ms = left + hard_slack_ms, .max_steps = max_steps});
     }
 };
 

@@ -69,7 +69,7 @@ impl Door {
     }
 
     pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32) {
-        self.posted(cmd, self.cq.push(tag, cmd, flags, None, result));
+        self.posted(cmd, self.cq.push(tag, cmd, flags, result, None));
     }
 
     /// `write` fills the slot's payload and answers the packet's length, or
@@ -87,7 +87,7 @@ impl Door {
         self.post_in_place(0, cmd, 0, 0, |out: &mut [u8]| {
             let mut w = PacketWriter::new(out, count);
             f(&mut w);
-            w.finish()
+            w.fitted()
         });
     }
 
@@ -98,7 +98,7 @@ impl Door {
     }
 
     pub fn pending(&self) -> bool {
-        self.sq.peek() >= 0
+        !self.sq.is_empty()
     }
 
     /// Applies submissions in order while there is room; the rest waits for
@@ -107,18 +107,12 @@ impl Door {
     pub fn drain(&self, mut apply: impl FnMut(u32, &Option<&[u8]>) -> Applied) -> u32 {
         let tail = self.cq.tail();
         self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
-        loop {
-            if !self.has_room() {
+        while self.has_room() {
+            let Some(f) = self.sq.peek() else {
                 break;
-            }
-            let at = self.sq.peek();
-            if at < 0 {
-                break;
-            }
-            let at = at as u32;
-            let (tag, number, flags) = (self.sq.tag(at), self.sq.cmd(at), self.sq.flags(at));
-            let result = match self.sq.packet(at) {
-                Ok(pkt) => match apply(number, &pkt) {
+            };
+            let result = match self.sq.packet(&f) {
+                Ok(pkt) => match apply(f.cmd, &pkt) {
                     Ok(Some(value)) => Ok(value),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errno as i32),
@@ -126,8 +120,8 @@ impl Door {
                 Err(e) => Err(e.errno as i32),
             };
             self.sq.advance();
-            if flags & frame::ACKREQ != 0 || result.is_err() {
-                self.post(tag, number, frame::RES, result.unwrap_or_else(|errno| errno));
+            if f.flags & frame::ACKREQ != 0 || result.is_err() {
+                self.post(f.tag, f.cmd, frame::RES, result.unwrap_or_else(|errno| errno));
             }
         }
         self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));

@@ -10,8 +10,6 @@
 
 use crate::mem::Memory;
 
-pub const END: usize = 0;
-
 /// A stream word's bytes.
 pub const WORD: usize = size_of::<u32>();
 
@@ -42,6 +40,9 @@ pub struct Stream {
 }
 
 impl Stream {
+    /// The word that holds how many words of records the turn published.
+    pub const END: usize = 0;
+
     /// The `words` at `at` in `mem`. A new stream has published nothing,
     /// whatever the range held.
     ///
@@ -49,7 +50,7 @@ impl Stream {
     /// The range stays valid, unmoved and the stream's alone (the host reads
     /// it between turns) for as long as the stream is used.
     pub unsafe fn new(mem: Memory, at: usize, words: usize, head: usize) -> Stream {
-        xpute_kit::ensure!(head > END && head < words, EINVAL);
+        xpute_kit::ensure!(head > Stream::END && head < words, EINVAL);
         let s = Stream {
             mem,
             at,
@@ -59,7 +60,7 @@ impl Stream {
             mark: None,
             spilled: false,
         };
-        s.words()[END] = 0;
+        s.words()[Stream::END] = 0;
         s
     }
 
@@ -69,8 +70,9 @@ impl Stream {
         unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), self.words) }
     }
 
-    pub fn head(&self) -> &[u32] {
-        &self.words()[..self.head]
+    /// Where the stream begins in its memory: its head's first word, `END`.
+    pub fn head_at(&self) -> usize {
+        self.at
     }
 
     pub fn left(&self) -> usize {
@@ -78,7 +80,7 @@ impl Stream {
     }
 
     pub fn publish(&mut self) {
-        self.words()[END] = self.len as u32;
+        self.words()[Stream::END] = self.len as u32;
         self.len = 0;
     }
 

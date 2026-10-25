@@ -8,6 +8,22 @@
 
 #include "frame.spec.hpp"
 
+namespace xpute {
+
+// A frame's four words as read, its command word split.
+struct Frame {
+    std::uint32_t tag;
+    std::uint32_t cmd;
+    std::uint32_t flags;
+    std::int32_t result;
+    // 0 for none.
+    std::uint32_t packet_at;
+
+    bool operator==(const Frame &) const = default;
+};
+
+} // namespace xpute
+
 namespace xpute::frame {
 
 inline constexpr std::uint32_t CMD_MASK = (1u << FLAG_SHIFT) - 1;

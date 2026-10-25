@@ -47,6 +47,13 @@ XPUTE_TEST(heap_a_block_is_named_by_its_offset_and_a_guard_gives_back_what_it_di
     XPUTE_CHECK_EQ(slab.live(), live, "what a guard did not keep goes back");
     free(kept);
     XPUTE_CHECK_EQ(alloc(1u << (MAX + 1)), std::nullopt, "and a block past the range is none, not a bug");
+
+    HeapStat stat = heap_stat(slab);
+    XPUTE_CHECK(stat.range == slab.range_bytes() && stat.used == slab.used() && stat.live == slab.live());
+    XPUTE_CHECK(stat.run == slab.run_live() && stat.slot == slab.slot_live() && stat.largest_free == slab.largest_free());
+    XPUTE_CHECK(stat.releases == slab.releases() && stat.refusals == slab.refusals() && stat.requests == slab.pages().allocs());
+    XPUTE_CHECK_EQ(stat.refusals, 1u, "the block past the range was the one refusal");
+    XPUTE_CHECK_EQ(stat.slot, 0u, "every slot went back");
     set_heap(Allocator{nullptr, nullptr});
     mem::set(0);
 }

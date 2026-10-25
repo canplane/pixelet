@@ -51,7 +51,7 @@ template <class O, std::size_t N> class Files {
     }
 
   private:
-    Slots<O, N> held_;
+    abi::Slots<O, N> held_;
 };
 
 } // namespace xpute

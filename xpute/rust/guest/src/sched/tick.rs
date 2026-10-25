@@ -54,7 +54,7 @@ pub type TickStep<S> = fn(&mut TickContext<S>);
 
 /// Cumulative until reset; registrations sharing a phase and name share a row.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct StepStats {
+pub struct StepStat {
     pub phase: Phase,
     pub name: u32,
     pub ms: f64,
@@ -62,9 +62,9 @@ pub struct StepStats {
     pub max_ms: f64,
 }
 
-impl StepStats {
-    const fn new(phase: Phase, name: u32) -> StepStats {
-        StepStats {
+impl StepStat {
+    const fn new(phase: Phase, name: u32) -> StepStat {
+        StepStat {
             phase,
             name,
             ms: 0.0,
@@ -102,7 +102,7 @@ pub struct Tick<S, const N: usize> {
     registry: [Option<Registered<S>>; N],
     len: usize,
     next_id: u32,
-    stats: [StepStats; N],
+    stats: [StepStat; N],
     stats_len: usize,
     step_timing: bool,
     last_report: TickReport,
@@ -116,7 +116,7 @@ impl<S, const N: usize> Tick<S, N> {
             len: 0,
             next_id: 1,
             // Past `stats_len` a row is room, not a step.
-            stats: [StepStats::new(Phase::interaction, 0); N],
+            stats: [StepStat::new(Phase::interaction, 0); N],
             stats_len: 0,
             step_timing: false,
             last_report: TickReport::default(),
@@ -142,7 +142,7 @@ impl<S, const N: usize> Tick<S, N> {
         self.step_timing = on;
     }
 
-    pub fn step_stats(&self) -> &[StepStats] {
+    pub fn step_stats(&self) -> &[StepStat] {
         &self.stats[..self.stats_len]
     }
 
@@ -167,7 +167,7 @@ impl<S, const N: usize> Tick<S, N> {
         let at = match (0..self.stats_len).find(|&k| self.stats[k].phase == phase && self.stats[k].name == name) {
             Some(k) => k,
             None if self.stats_len < N => {
-                self.stats[self.stats_len] = StepStats::new(phase, name);
+                self.stats[self.stats_len] = StepStat::new(phase, name);
                 self.stats_len += 1;
                 self.stats_len - 1
             }

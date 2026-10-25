@@ -10,7 +10,7 @@ mod spec;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-use super::frame::{self, cmd_of, cmd_word, flags_of};
+use super::frame::{self, cmd_of, cmd_word, flags_of, Frame};
 use crate::mem::Memory;
 use spec::{CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL};
 
@@ -112,6 +112,7 @@ impl Ring {
         self.len() == 0
     }
 
+    /// The word, from the ring's start, where the frame at `position` begins.
     pub fn entry_at(&self, position: u32) -> u32 {
         HEADER_WORDS + (position & self.mask) * frame::WORDS
     }
@@ -120,7 +121,7 @@ impl Ring {
         ((position & self.mask) * self.slot_bytes) as usize
     }
 
-    pub fn push(&self, tag: u32, cmd: u32, flags: u32, packet: Option<&[u8]>, result: i32) -> Errno {
+    pub fn push(&self, tag: u32, cmd: u32, flags: u32, result: i32, packet: Option<&[u8]>) -> Errno {
         if self.len() >= self.capacity {
             return Errno::EAGAIN;
         }
@@ -171,40 +172,32 @@ impl Ring {
         w[TAIL as usize] = w[TAIL as usize].wrapping_add(1);
     }
 
-    /// -1 when empty.
-    pub fn peek(&self) -> i64 {
+    /// The head's frame, none when empty. Read it, then `advance`.
+    pub fn peek(&self) -> Option<Frame> {
         if self.is_empty() {
-            -1
-        } else {
-            self.entry_at(self.head()) as i64
+            return None;
         }
-    }
-
-    pub fn tag(&self, at: u32) -> u32 {
-        self.words()[(at + frame::TAG) as usize]
-    }
-
-    pub fn cmd(&self, at: u32) -> u32 {
-        cmd_of(self.words()[(at + frame::CMD) as usize])
-    }
-
-    pub fn flags(&self, at: u32) -> u32 {
-        flags_of(self.words()[(at + frame::CMD) as usize])
-    }
-
-    pub fn result(&self, at: u32) -> i32 {
-        self.words()[(at + frame::RESULT) as usize] as i32
+        let w = self.words();
+        let at = self.entry_at(self.head()) as usize;
+        let word = w[at + frame::CMD as usize];
+        Some(Frame {
+            tag: w[at + frame::TAG as usize],
+            cmd: cmd_of(word),
+            flags: flags_of(word),
+            result: w[at + frame::RESULT as usize] as i32,
+            packet_at: w[at + frame::PACKET as usize],
+        })
     }
 
     /// Valid until `advance`; `'static` because the memory's lifetime is
     /// `new`'s contract, and a reader holds the packet while it acts on the ring.
-    pub fn packet(&self, at: u32) -> Result<Option<&'static [u8]>, MarshalError> {
-        let packet_at = self.words()[(at + frame::PACKET) as usize];
-        if packet_at == 0 {
+    /// EBADMSG when the frame names bytes outside a slot.
+    pub fn packet(&self, f: &Frame) -> Result<Option<&'static [u8]>, MarshalError> {
+        if f.packet_at == 0 {
             return Ok(None);
         }
         let bad = || MarshalError::new(Errno::EBADMSG);
-        let off = packet_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
+        let off = f.packet_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
         if !off.is_multiple_of(self.slot_bytes as usize) || off + 16 > self.slots().len() {
             return Err(bad());
         }
