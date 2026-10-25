@@ -1,6 +1,7 @@
 {
   // The format of what is no tree's: the root's own files, the documents,
-  // spec/, infra/, asset/ and the tools' settings. Each tree is a root of its
+  // spec/, infra/ and the tools' settings; asset/raw/ stays as it was
+  // obtained, so of asset/ only its README. Each tree is a root of its
   // own (ts/ and script/ with their own configs, rust/ Cargo's, xpute/ its
   // own), so what this formats is named rather than every tree left out: a
   // tree added, or anything left behind at the root, is not taken in. The
@@ -10,11 +11,8 @@
   "lock": false,
 
   "fmt": {
-    "include": ["./*.md", "./deno.jsonc", "./doc/", "./spec/", "./infra/", "./asset/", "./.agents/", "./.github/", "./.vscode/"],
+    "include": ["./*.md", "./deno.jsonc", "./doc/", "./spec/", "./infra/", "./asset/README.md", "./.agents/", "./.github/", "./.vscode/"],
     "lineWidth": 200,
-    "proseWrap": "preserve",
-
-    // Carto's symbols stay as Carto ships them.
-    "exclude": ["asset/raw/place/symbol/"]
+    "proseWrap": "preserve"
   }
 }
