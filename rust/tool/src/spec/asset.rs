@@ -308,9 +308,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ts.push("/** Each placeable cube's section, by its number. */".into());
     ts.push("export const cube_section: Readonly<Record<number, CubeSection>> = {".into());
     ts.extend(cube_sections.iter().map(|(s, e)| format!("  {}: \"{s}\",", e.value)));
-    ts.extend([
-        "};".to_string(),
-    ]);
+    ts.extend(["};".to_string()]);
 
     // Rust
     let mut rs = vec!["// pxl-spec-core/cube.spec.rs".to_string()];
