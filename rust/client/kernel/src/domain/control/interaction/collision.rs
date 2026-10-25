@@ -90,12 +90,12 @@ pub fn placement_reads(tool: PlacementTool, corner: &Q3) -> [[f64; 2]; 2] {
 
 /// The shared check for the placement commit and its hover preview: its room
 /// is where the world takes an edit (`World::editable`), and nothing placed
-/// shares it, by its cell or by the room its kind occupies
-/// (`World::placed_occupying`). A decor or a marker is stood on nowhere
+/// shares the room its kind occupies (`World::placed_occupying`), which
+/// holds its cell. A decor or a marker is stood on nowhere
 /// (`Kind::stood_on`), so neither is placed on one, grown or placed.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
     let (world, room) = (World::now(), room(tool, corner));
-    let taken = !world.editable(&room) || world.placed_sharing(&room, |_| true).is_some() || world.placed_occupying(&room, |_| true).is_some();
+    let taken = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
     let under = Aabb {
         min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
         max: [room.max[0], room.max[1], room.min[2]],

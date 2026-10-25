@@ -43,17 +43,6 @@ impl<'a> World<'a> {
         self.objects.words(e)
     }
 
-    /// What is placed sharing room with `space`, air left out, that `which` takes.
-    pub fn placed_sharing(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
-        let mut met = None;
-        self.objects.entries_in(space, &mut |e| {
-            if met.is_none() && !object_value_is_air(e.state) && e.cube().shares(*space) && which(e) {
-                met = Some(*e);
-            }
-        });
-        met
-    }
-
     /// What is placed whose own room shares `space`, air left out, that
     /// `which` takes: the room its kind says it occupies (`occupies`).
     pub fn placed_occupying(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
@@ -73,7 +62,8 @@ impl<'a> World<'a> {
 }
 
 /// The room a placed entry occupies, as its kind has it: a decor its box
-/// (`decor::claim`), anything else its cell.
+/// (`decor::claim`), which holds its cell, the corner it stands at, since
+/// a variant is a cell or more a side; anything else its cell.
 fn occupies(e: &Entry) -> Option<Aabb> {
     match placed(e) {
         Some(decor) => claim(&decor),
