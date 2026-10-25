@@ -2,9 +2,10 @@
 
 //! The actor kind's behaviour: an instance of a registered model that plays
 //! its clips. What is its own alone is its clips' times and its joint
-//! palette, in a block of its own; where it stands is its frame's, which
-//! holds it and hands its pose in (`Pose`). Each tick advances its clips,
-//! cross-fades as three's mixer did, and writes the palette into its block.
+//! palette, in a block of its own; where it stands is its holder's, a
+//! figure or a case, which hands its stance in (`Stance`). Each tick
+//! advances its clips, cross-fades as three's mixer did, and writes the
+//! palette into its block.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
@@ -21,10 +22,10 @@ struct Playing {
     time: f32,
 }
 
-/// Where a frame stands its actor: in units, its turn about Z, and the
-/// scale its model is drawn at.
+/// How its holder stands an actor: where, in units, its turn about Z, and
+/// the scale its model is drawn at.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Pose {
+pub struct Stance {
     pub at: V3,
     pub rotation_z: f32,
     pub scale: f32,
@@ -106,24 +107,24 @@ impl Actor {
         unsafe { free((self.palette_at, self.palette_bytes)) };
     }
 
-    /// Its clock advanced, standing at `pose`; true where the eye can see it
+    /// Its clock advanced, standing at `stance`; true where the eye can see it
     /// move: in the view and a cell of the camera grid across or more, as
     /// the rays observe nothing smaller, and its clip moving it a cell or
     /// more, or fading into the next. So a frame is asked only for what can
     /// be seen to change. A clip moving it less holds its time and its pose
     /// until the eye comes close enough to see it move.
-    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame, pose: &Pose) -> bool {
+    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame, stance: &Stance) -> bool {
         let dt = frame.delta_s as f32;
         let Some(m) = models.get(self.model) else { return false };
         let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
-        let (about, r) = (v3::sub(&pose.at, &frame.anchor), f64::from(m.radius() * pose.scale));
+        let (about, r) = (v3::sub(&stance.at, &frame.anchor), f64::from(m.radius() * stance.scale));
         // What spans a camera cell at the actor's distance is observed.
         let cell_there = crate::domain::view::lens::cell_there(v3::len(&v3::sub(&about, &frame.camera)));
         let seen = frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
         // A clip of some length plays, or one fades into the next.
         let playing = self.current.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.previous.is_some();
-        let moves = seen && (self.previous.is_some() || playing.is_some_and(|p| f64::from(m.motion(p.clip) * pose.scale) >= cell_there));
+        let moves = seen && (self.previous.is_some() || playing.is_some_and(|p| f64::from(m.motion(p.clip) * stance.scale) >= cell_there));
         let wrap = |p: &mut Playing| {
             p.time += dt;
             if let Some(d) = length(p) {
@@ -173,13 +174,13 @@ impl Actor {
         moves
     }
 
-    /// Into the frame's list, standing at `pose`.
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, pose: &Pose, eye: V3) {
+    /// Into the frame's list, standing at `stance`.
+    pub fn draw(&self, draw: &mut DrawList, models: &Models, stance: &Stance, eye: V3) {
         let Some(m) = models.get(self.model) else { return };
         if m.handle() == 0 {
             return;
         }
-        let t = DrawList::translation(pose.at, eye);
-        draw.draw_scaled(PIPELINE_SKINNED, m.handle(), self.palette_handle, self.model, t, pose.rotation_z, 1.0, pose.scale);
+        let t = DrawList::translation(stance.at, eye);
+        draw.draw_scaled(PIPELINE_SKINNED, m.handle(), self.palette_handle, self.model, t, stance.rotation_z, 1.0, stance.scale);
     }
 }

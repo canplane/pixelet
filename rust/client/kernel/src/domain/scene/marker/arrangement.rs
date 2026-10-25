@@ -5,7 +5,7 @@
 //! (domain/view/observation.rs `squares`), and shown at the zoom the camera
 //! grid's cell at its own point is: a place as Carto draws it at that zoom
 //! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,
-//! hung over its speaker's head where its frame shows it (`line.rs`). A
+//! hung over its speaker's head where its speaker shows it (`line.rs`). A
 //! square is only what a source is read over. Each source hands the
 //! arrangement an `Instance`, and the arrangement asks each the same: its
 //! design, its size, its slot and whether it is ready (`design.rs`), and

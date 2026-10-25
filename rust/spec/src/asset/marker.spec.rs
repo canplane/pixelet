@@ -21,7 +21,7 @@
 /// (layers/poi/poi.yaml). What someone puts up, by the cells of the square
 /// it is read from (pxl-kernel domain/scene/marker/pin.rs); a chat line's
 /// bubble, which no square holds, by the cell where its speaker stands,
-/// which its speaker's frame judges (pxl-kernel
+/// which its speaker judges (pxl-kernel
 /// domain/scene/character/companion.rs `line_hangs`).
 pub const MARKER_SHOWN_FROM: u8 = 19;
 

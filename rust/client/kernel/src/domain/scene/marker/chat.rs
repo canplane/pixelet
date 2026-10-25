@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/marker/chat.rs
 
 //! The (dev-only) map chat's latest line: what was said and when, its words
-//! on a bubble. Its speaker is the person, whose frame hangs the bubble over
+//! on a bubble. Its speaker is the person, who hangs the bubble over
 //! its head and says whether it shows (pxl-kernel
 //! domain/scene/character/companion.rs `line_hangs`); `line.rs` hands it to
 //! the arrangement.

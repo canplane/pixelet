@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/marker/line.rs
 
 //! The chat's line as the arrangement takes it (`chat.rs`): its bubble, hung
-//! in its speaker's frame over its head while that frame shows it
+//! by its speaker over its head while the speaker shows it
 //! (pxl-kernel domain/scene/character/companion.rs `line_hangs`); no place a
 //! tap goes to.
 
