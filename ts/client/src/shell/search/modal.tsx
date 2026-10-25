@@ -14,7 +14,7 @@ import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, textScale, textStyle, weight } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { Command, DevicePoseStatus, encode_input_go_to, type LonLat } from "@/abi/cmd.spec.ts";
-import { kernel_command, kernel_enable_location, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
+import { kernel_command, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/shell/ui/text-field.tsx";
@@ -130,7 +130,7 @@ function LocateCard() {
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing fill={color.ground} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
-        <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
+        <Pressable onPress={() => kernel_command(Command.SENSOR_ENABLE_LOCATION)} accessibilityRole="button" style={styles.locateRow}>
           <Glyph glyph="location" size={chrome.glyph} color={poseColor(location)} />
           <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={styles.locateLabel}>{t("world.sensors.label")}</Text>
           <Text maxFontSizeMultiplier={textScale.chrome} style={styles.locateAction}>{t("world.sensors.turn_on")}</Text>

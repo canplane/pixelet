@@ -38,10 +38,6 @@ export function kernel_fits(pkt: PacketWriter): boolean {
   return GUEST_DOORBELL.fits(pkt);
 }
 
-export function kernel_enable_location(): void {
-  HOST.now(Command.SENSOR_ENABLE_LOCATION);
-}
-
 /** The kernel's memory, where a call leaves its reply; a view of it holds until the next turn. */
 export function kernel_memory(): ArrayBuffer {
   return GUEST.memory;

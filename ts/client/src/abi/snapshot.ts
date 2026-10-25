@@ -40,5 +40,3 @@ export function watch_snapshot(listener: () => void): () => void {
 export function kernel_snapshot(): Snapshot {
   return snapshot;
 }
-
-/** `select` must return a primitive or an existing reference; a fresh object renders forever. */
