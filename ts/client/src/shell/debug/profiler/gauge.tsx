@@ -2,7 +2,7 @@
 
 /**
  * The kernel's numbers over the last few seconds as a corner panel, read in
- * place from the summary block the report is built from. Read-only.
+ * place from the summary the report is built from. Read-only.
  */
 
 import type { ReactNode } from "react";

@@ -1,4 +1,4 @@
-// pxl-kernel/profiler/block.rs
+// pxl-kernel/profiler/section.rs
 
 //! Every summary section as a record held to profiler.json by `words!`.
 //! Written word by word, sections had shifted lanes, mirrored structures and
@@ -31,19 +31,19 @@ words!(Spread, SPREAD::WORDS, p50 => SPREAD::p50, p95 => SPREAD::p95, max => SPR
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RecBlock {
+pub struct RecSection {
     pub recording: f64,
     pub elapsed_ms: f64,
     pub truncated: f64,
 }
 
-words!(RecBlock, SUMMARY::rec::WORDS,
+words!(RecSection, SUMMARY::rec::WORDS,
     recording => SUMMARY::rec::recording, elapsed_ms => SUMMARY::rec::elapsed_ms, truncated => SUMMARY::rec::truncated,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct FramesBlock {
+pub struct FramesSection {
     /// 0 for a window with no frames, where every other word is 0 too.
     pub present: f64,
     pub n: f64,
@@ -70,9 +70,9 @@ pub struct FramesBlock {
     pub last: FrameSample,
 }
 
-const _: () = assert!(SUMMARY::frames::last + FRAME::WORDS <= SUMMARY::frames::WORDS, "the last frame runs past the summary's frames block");
+const _: () = assert!(SUMMARY::frames::last + FRAME::WORDS <= SUMMARY::frames::WORDS, "the last frame runs past the summary's frames section");
 
-words!(FramesBlock, SUMMARY::frames::WORDS,
+words!(FramesSection, SUMMARY::frames::WORDS,
     present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
     moving => SUMMARY::frames::moving, missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
     long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
@@ -86,7 +86,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TaskBlock {
+pub struct TaskSummary {
     pub n: f64,
     pub ok: f64,
     pub aborted: f64,
@@ -101,7 +101,7 @@ pub struct TaskBlock {
     pub phase_mean: [f64; TASK_PHASES],
 }
 
-words!(TaskBlock, TASK_SUMMARY::WORDS,
+words!(TaskSummary, TASK_SUMMARY::WORDS,
     n => TASK_SUMMARY::n, ok => TASK_SUMMARY::ok, aborted => TASK_SUMMARY::aborted, error => TASK_SUMMARY::error,
     lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_count => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
     phase_n => TASK_SUMMARY::phase_n, phase_mean => TASK_SUMMARY::phase_mean,
@@ -109,15 +109,15 @@ words!(TaskBlock, TASK_SUMMARY::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TasksBlock {
-    pub slots: [TaskBlock; CATEGORIES],
+pub struct TasksSection {
+    pub slots: [TaskSummary; CATEGORIES],
 }
 
-words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
+words!(TasksSection, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ViewBlock {
+pub struct ViewSection {
     pub dist: f64,
     pub polar: f64,
     pub azimuth: f64,
@@ -143,7 +143,7 @@ pub struct ViewBlock {
     pub blocked: f64,
 }
 
-words!(ViewBlock, SUMMARY::view::WORDS,
+words!(ViewSection, SUMMARY::view::WORDS,
     dist => SUMMARY::view::dist, polar => SUMMARY::view::polar, azimuth => SUMMARY::view::azimuth, tau => SUMMARY::view::tau,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
@@ -155,7 +155,7 @@ words!(ViewBlock, SUMMARY::view::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StepBlock {
+pub struct Step {
     /// Indices into PHASES and STEP_NAMES.
     pub phase: f64,
     pub name: f64,
@@ -164,15 +164,15 @@ pub struct StepBlock {
     pub max_ms: f64,
 }
 
-words!(StepBlock, STEP::WORDS,
+words!(Step, STEP::WORDS,
     phase => STEP::phase, name => STEP::name, ms => STEP::ms, count => STEP::count, max_ms => STEP::max_ms,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StepsBlock {
+pub struct StepsSection {
     pub count: f64,
-    pub slots: [StepBlock; STEP_SLOTS],
+    pub slots: [Step; STEP_SLOTS],
 }
 
-words!(StepsBlock, SUMMARY::steps::WORDS, count => SUMMARY::steps::count, slots => SUMMARY::steps::slots);
+words!(StepsSection, SUMMARY::steps::WORDS, count => SUMMARY::steps::count, slots => SUMMARY::steps::slots);

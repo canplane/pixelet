@@ -4,17 +4,17 @@
 
 use core::mem::size_of;
 
-/// A record laid out as a profiler.json block. Implemented only through
+/// A record laid out as a profiler.json section. Implemented only through
 /// `words!`, which checks every field's offset at compile time.
 ///
 /// # Safety
 /// The implementor is `#[repr(C)]` and all f64 (or such records), no padding.
 pub unsafe trait Words: Sized {}
 
-pub fn put<T: Words>(out: &mut [f64], block: u32, value: &T) {
+pub fn put<T: Words>(out: &mut [f64], at: u32, value: &T) {
     // SAFETY: `Words` guarantees plain f64s laid end to end.
     let words = unsafe { core::slice::from_raw_parts(std::ptr::from_ref::<T>(value).cast::<f64>(), size_of::<T>() / 8) };
-    let at = block as usize;
+    let at = at as usize;
     out[at..at + words.len()].copy_from_slice(words);
 }
 

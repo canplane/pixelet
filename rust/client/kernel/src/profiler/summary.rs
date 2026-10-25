@@ -1,15 +1,15 @@
 // pxl-kernel/profiler/summary.rs
 
-//! The profiler window reduced into profiler.json's SUMMARY block, read in
+//! The profiler window reduced into profiler.json's SUMMARY, read in
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
 use crate::domain::control::camera::controller;
-use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FramesBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{long, missed, overran};
 use crate::profiler::record::{profiler_frames_since, profiler_recording_state, profiler_scratch, profiler_tasks_since};
+use crate::profiler::section::TASK_PHASES;
+use crate::profiler::section::{FramesSection, Spread, Step, StepsSection, TaskSummary, TasksSection, ViewSection};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
@@ -25,15 +25,15 @@ const WORDS: usize = SUMMARY::WORDS as usize;
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 
-struct Block {
+struct Summary {
     /// On the heap, not a static: a native build's statics are outside the shell-readable memory.
     words: Box<[f64; WORDS]>,
 }
 
-static BLOCK: Global<Block> = Global::new();
+static SUMMARY_WORDS: Global<Summary> = Global::new();
 
-fn block() -> &'static mut Block {
-    BLOCK.get(|| Block { words: Box::new([0.0; WORDS]) })
+fn summary() -> &'static mut Summary {
+    SUMMARY_WORDS.get(|| Summary { words: Box::new([0.0; WORDS]) })
 }
 
 fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
@@ -54,7 +54,7 @@ fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
 
 /// No window is the whole recording.
 pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
-    let (out, scratch) = (&mut block().words[..], profiler_scratch());
+    let (out, scratch) = (&mut summary().words[..], profiler_scratch());
     out.fill(0.0);
     let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
 
@@ -66,9 +66,9 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
     out
 }
 
-fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
+fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     let (Some(first), Some(last)) = (frames.first(), frames.last()) else {
-        return FramesBlock::default();
+        return FramesSection::default();
     };
     let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
@@ -79,7 +79,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     // A span the frame did not run reads 0 and is left out.
     // The GPU's figures over the frames a read landed with, each read once.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
-    FramesBlock {
+    FramesSection {
         present: 1.0,
         n,
         seconds,
@@ -102,10 +102,10 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     }
 }
 
-fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
+fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
     let (ok, aborted, error) = (Outcome::ok as u32 as f64, Outcome::aborted as u32 as f64, Outcome::error as u32 as f64);
-    let mut block = TasksBlock::default();
-    for (c, slot) in block.slots.iter_mut().enumerate() {
+    let mut section = TasksSection::default();
+    for (c, slot) in section.slots.iter_mut().enumerate() {
         let mine = || tasks.iter().filter(move |r| r.stream == c as f64);
         let n = mine().count();
         if n == 0 {
@@ -142,7 +142,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
         }
 
         let lat = spread(scratch, mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms));
-        *slot = TaskBlock {
+        *slot = TaskSummary {
             n: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
@@ -155,7 +155,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
             phase_mean: core::array::from_fn(|p| if seen[p] { sums[p] / phase_n as f64 } else { f64::NAN }),
         };
     }
-    block
+    section
 }
 
 fn side(out: &mut [f64]) {
@@ -196,7 +196,7 @@ fn side(out: &mut [f64]) {
     put(
         out,
         SUMMARY::view::AT,
-        &ViewBlock {
+        &ViewSection {
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
@@ -224,9 +224,9 @@ fn side(out: &mut [f64]) {
     );
 
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
-    let mut steps = StepsBlock::default();
+    let mut steps = StepsSection::default();
     for s in tick_step_stats().iter().filter(|s| s.count > 0).take(STEP_SLOTS) {
-        steps.slots[steps.count as usize] = StepBlock {
+        steps.slots[steps.count as usize] = Step {
             phase: s.phase as u8 as f64,
             name: s.name as f64,
             ms: s.ms,

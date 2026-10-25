@@ -13,8 +13,8 @@ use core::mem::size_of;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-use crate::profiler::block::RecBlock;
 use crate::profiler::frame::{FrameSample, WorstFrame};
+use crate::profiler::section::RecSection;
 use crate::profiler::task::TaskRow;
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
@@ -140,10 +140,10 @@ pub fn profiler_recording() -> bool {
     profiler().recording
 }
 
-/// The recording as the summary's block holds it, each flag 0 or 1.
-pub fn profiler_recording_state() -> RecBlock {
+/// The recording as the summary's section holds it, each flag 0 or 1.
+pub fn profiler_recording_state() -> RecSection {
     let l = profiler();
-    RecBlock {
+    RecSection {
         recording: l.recording as u8 as f64,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
         truncated: l.truncated as u8 as f64,
