@@ -3,12 +3,14 @@
   "editor.insertSpaces": true,
   "editor.detectIndentation": false,
 
-  "deno.enable": true,
+  // Deno is the trees' alone; nothing at the root is Deno's, so outside them
+  // it neither formats, lints nor types.
+  "deno.enablePaths": ["ts", "script", "xpute/ts", "xpute/script"],
   "deno.lint": true,
   "deno.unstable": ["webgpu"],
   // No "deno.config" pin: each workspace member resolves its own import map
   // ("@/" in ts/client, ts/app/web and ts/app/native), and a pin makes every
-  // file resolve against the root's alone, which takes nothing (deno.jsonc).
+  // file resolve against one config alone, where "@/" is unknown.
 
   "deno.suggest.imports.hosts": {
     "https://deno.land": false,
@@ -18,9 +20,9 @@
   "js/ts.validate.enabled": false,
 
   // Code is formatted on save by its tree's formatter, Deno's under each
-  // tree's config and none outside one (deno.jsonc), rustfmt by rust-analyzer;
-  // the documents and the data are formatted by no one, so no other
-  // formatter takes them on save (.prettierignore).
+  // tree's config and rustfmt by rust-analyzer; the documents and the data
+  // are formatted by no one, so no other formatter takes them on save
+  // (.prettierignore).
   "editor.formatOnSave": true,
   "[markdown]": { "editor.formatOnSave": false },
   "[yaml]": { "editor.formatOnSave": false },

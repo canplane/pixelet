@@ -7,8 +7,7 @@
 # orders: the traces run after the guests they drive, and cpp/'s tests,
 # which build those guests too, after build has, so two makes never write
 # one object at once. Only code is formatted, each tree's by its own
-# formatter; the documents and the spec are not, and deno.jsonc keeps Deno
-# off them. GNU Make 3.81 is enough.
+# formatter; the documents and the spec are not. GNU Make 3.81 is enough.
 #
 #   make -j8 check | test | build | test-gpu | fmt | lint
 #   make check-ts, make test-cpp, ...   one tree's

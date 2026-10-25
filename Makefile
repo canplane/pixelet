@@ -6,8 +6,7 @@
 # own (xpute/Makefile). Here is a target a tree for each verb, the aggregates
 # over them, and what runs across them: the generated code, the dev servers
 # and the deploy. Only code is formatted, each tree's by its own formatter;
-# the documents and data outside the trees are not, and deno.jsonc keeps Deno
-# off them. A script that runs alone
+# the documents and data outside the trees are not. A script that runs alone
 # is run by its path, not from here (README.md, Commands). GNU Make 3.81 is enough.
 #
 #   make -j8 check | test | fmt | lint
