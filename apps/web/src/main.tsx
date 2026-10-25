@@ -8,35 +8,34 @@
 import { StrictMode } from "react";
 import { AppRegistry, type RootTag } from "react-native";
 
-import { setBracket } from "@pxl/client/bracket.tsx";
+import * as bracket from "@pxl/client/bracket.tsx";
+import * as locale from "@pxl/client/shell/locale/i18n.ts";
+import { boot } from "@pxl/client/shell/boot.ts";
 import { AppRouter } from "@pxl/client/shell/router.tsx";
-import { bootstrapApp } from "@pxl/client/shell/bootstrap.ts";
-import { bootstrapI18n } from "@pxl/client/shell/locale/i18n.ts";
 import { Halt } from "@pxl/client/shell/halt.tsx";
-import { PAGE } from "@/bracket.ts";
+import { page } from "@/bracket.ts";
 import { whatIsMissing } from "@/webgpu.ts";
 import "@pxl/client/shell/style/index.css";
 
-if (import.meta.env.DEV) {
-  const { installRemoteConsole } = await import("@/remote-console.ts");
-  installRemoteConsole();
-}
+const ROOT = "pixelet";
 
-setBracket(PAGE);
+if (import.meta.env.DEV) (await import("@/remote-console.ts")).install();
+
+bracket.set(page);
 
 try {
   const missing = await whatIsMissing();
-  if (missing) bootstrapI18n();
-  else bootstrapApp();
+  if (missing) locale.boot();
+  else boot();
 
   const container = document.getElementById("root");
   if (!container) throw new Error("web: missing root container: #root");
-  AppRegistry.registerComponent("pixelet", () => () => (
+  AppRegistry.registerComponent(ROOT, () => () => (
     <StrictMode>
       {missing ? <Halt of={`halt.${missing}`} /> : <AppRouter />}
     </StrictMode>
   ));
-  AppRegistry.runApplication("pixelet", { rootTag: container as unknown as RootTag, initialProps: {} });
+  AppRegistry.runApplication(ROOT, { rootTag: container as unknown as RootTag, initialProps: {} });
 } catch (err) {
   console.error("[web] failed to start:", err);
 }

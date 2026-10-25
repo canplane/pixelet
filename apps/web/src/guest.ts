@@ -10,14 +10,14 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { reserve_memory } from "@xpute/host/mem/reserve.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
-import type { Guest, GuestPlan } from "@pxl/client/bracket.tsx";
+import type { Guest, Plan } from "@pxl/client/bracket.tsx";
 import { runGpuStream } from "./webgpu.ts";
 import { DEV_BUNDLE } from "./bundle.ts";
 
 const GUEST_WASM_URL = new URL("./guest.wasm", import.meta.url);
 
 /** No smaller fallback: the guest's map needs `plan.bytes`. */
-export async function openGuest(plan: GuestPlan): Promise<Guest> {
+export async function open(plan: Plan): Promise<Guest> {
   const memory = reserve_memory([plan.bytes / plan.region], plan.region);
   // A cached module would run yesterday's guest under today's glue.
   const bytes = await (await fetch(GUEST_WASM_URL, DEV_BUNDLE ? { cache: "no-store" } : undefined)).arrayBuffer();

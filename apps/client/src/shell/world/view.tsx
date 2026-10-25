@@ -4,9 +4,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
-import { useSafeArea } from "@/bracket.tsx";
-import { useVisualViewport } from "@/bracket.tsx";
-import { type InputDriver, WorldSurface } from "@/bracket.tsx";
+import { bracket, type InputDriver } from "@/bracket.tsx";
 import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/control/input.ts";
 import { surface_role } from "@/abi/render/gpu/api.spec.ts";
 import { surface_driver } from "@/abi/render/surface.ts";
@@ -52,18 +50,18 @@ const INPUT: InputDriver = {
 /** Alone, so a marker under the pointer re-renders only the surface. */
 function World() {
   const overMarker = useKernel((s) => s.over_marker);
-  return <WorldSurface surface={WORLD} input={INPUT} overMarker={overMarker} />;
+  return <bracket.surface.World surface={WORLD} input={INPUT} overMarker={overMarker} />;
 }
 
 /** The room a panel may fill between the settings button and the dock. */
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + chrome.control + PANEL_GAP_PX;
-  const bottom = bottomRest(useSafeArea(), chrome.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
+  const bottom = bottomRest(bracket.view.useSafeArea(), chrome.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 
 function Overlays() {
-  useVisualViewport();
+  bracket.view.useVisualViewport();
 
   return (
     <>

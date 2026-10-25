@@ -1,7 +1,7 @@
 // @pxl/web/origin.ts
 
-export const ORIGIN: string = "";
+export const url: string = "";
 
-export function originGet(route: string, signal?: AbortSignal): Promise<Response> {
+export function get(route: string, signal?: AbortSignal): Promise<Response> {
   return fetch(route, { signal });
 }

@@ -9,15 +9,15 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
-import { originGet } from "@/bracket.tsx";
 import { online } from "@/host/online.ts";
+import { bracket } from "@/bracket.tsx";
 
 /** The object at `url`, whole; `name` is what a warning calls it. */
 export async function get(url: string, name: string, signal: AbortSignal): Promise<U8Array> {
   let res: Response;
   let body: U8Array;
   try {
-    res = await originGet(url, signal);
+    res = await bracket.origin.get(url, signal);
     body = new Uint8Array(await res.arrayBuffer());
   } catch (err) {
     // TypeError covers offline, DNS, CORS and refused alike, so only the

@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
-import { useWindowSize } from "@/bracket.tsx";
 import { openModal } from "@/shell/modal.tsx";
 import { useKernel } from "@/abi/shell.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
@@ -21,12 +20,13 @@ import { ViewButtons } from "../control/view-buttons.tsx";
 import { BusyDim } from "../busy-dim.tsx";
 import { useChromeTop } from "../chrome.ts";
 import { CircularButton } from "@/shell/ui/circular-button.tsx";
+import { bracket } from "@/bracket.tsx";
 
 export function TopOverlays() {
   const { t } = useTranslation();
   const top = useChromeTop();
 
-  const { width } = useWindowSize();
+  const { width } = bracket.view.useWindowSize();
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
   const from = (width - Math.min(width, SCRIM_WIDTH)) / 2 - SCRIM_FADE;
   const ramp = SCRIM_FADE / (width - 2 * from);

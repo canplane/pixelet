@@ -8,13 +8,13 @@ import { Spinner } from "@/shell/ui/icon.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { Pill } from "@/shell/ui/pill.tsx";
-import { useWindowSize } from "@/bracket.tsx";
 import { BackingPlace } from "@/shell/ui/backing.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { Swap } from "@/shell/ui/motion/presence.tsx";
 import { FADE, SNAP, spring, type Transition } from "@/shell/ui/motion/transition.ts";
 import { alpha, chrome, color, shadow, surface, SYSTEM, textScale, textStyle } from "@/shell/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
+import { bracket } from "@/bracket.tsx";
 
 export const TOAST_SIDE = 32;
 const MESSAGE_PAD = 4;
@@ -51,7 +51,7 @@ interface ToastProps extends ToastSpec {
 
 export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }: ToastProps) {
   const error = tone === ToastTone.Error;
-  const span = useWindowSize().width;
+  const span = bracket.view.useWindowSize().width;
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState<f64>(TOAST_SIDE);
 

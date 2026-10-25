@@ -4,10 +4,10 @@
 
 import { PLATFORM } from "./module.ts";
 
-export function storageGet(key: string): string | null {
+export function get(key: string): string | null {
   return PLATFORM.storageGet(key);
 }
 
-export function storageSet(key: string, value: string): void {
+export function set(key: string, value: string): void {
   PLATFORM.storageSet(key, value);
 }

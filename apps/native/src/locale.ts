@@ -1,7 +1,7 @@
 // @pxl/native/locale.ts
 
-export function preferredLanguages(): readonly string[] {
+export function list(): readonly string[] {
   return [Intl.DateTimeFormat().resolvedOptions().locale];
 }
 
-export function showLanguage(_lng: string): void {}
+export function show(_lng: string): void {}

@@ -46,7 +46,7 @@ function send(level: string, args: unknown[]): void {
   setTimeout(flush, 200);
 }
 
-export function installRemoteConsole(): void {
+export function install(): void {
   for (const level of ["log", "warn", "error", "info"] as const) {
     const original = console[level].bind(console);
     console[level] = (...args: unknown[]) => {

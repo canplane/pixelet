@@ -2,7 +2,7 @@
 
 /** localStorage; a refusal (sandboxed frame, private-window quota) keeps nothing, never throws. */
 
-export function storageGet(key: string): string | null {
+export function get(key: string): string | null {
   try {
     return globalThis.localStorage?.getItem(key) ?? null;
   } catch {
@@ -10,7 +10,7 @@ export function storageGet(key: string): string | null {
   }
 }
 
-export function storageSet(key: string, value: string): void {
+export function set(key: string, value: string): void {
   try {
     globalThis.localStorage?.setItem(key, value);
   } catch {

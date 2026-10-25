@@ -8,7 +8,7 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Directory } from "@xpute/host/ipc/directory.ts";
 import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
-import { type GuestPlan, openGuest } from "@/bracket.tsx";
+import { bracket, type Plan } from "@/bracket.tsx";
 import { key } from "@xpute/host/ipc/directory.spec.ts";
 import { directory, type Guest } from "@/host/module.ts";
 import { run_host_stream } from "@/host/sys.ts";
@@ -26,8 +26,8 @@ export let GUEST_DIRECTORY: Directory;
 /** Opens the guest as `plan` says, its directory at `plan.directory_at`. Each turn the
  * doorbell rings runs its host stream as it ends, a trapped one's too, so its
  * report is read before the doorbell hears it stop. */
-export async function load_guest(plan: GuestPlan): Promise<void> {
-  const guest = await openGuest(plan);
+export async function load_guest(plan: Plan): Promise<void> {
+  const guest = await bracket.guest.open(plan);
   const dir = directory(guest.buffer, plan.directory_at);
   const host_stream = dir.get(key.SYS);
   GUEST = guest;

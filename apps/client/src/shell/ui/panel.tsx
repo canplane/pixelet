@@ -12,7 +12,7 @@ import { ease, SLIDE, SLIDE_AWAY } from "@/shell/ui/motion/transition.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { alpha, chrome, color, layer, material } from "@/shell/ui/theme.ts";
 import { touches } from "@/shell/ui/touch.ts";
-import { useSafeArea, useWindowSize } from "@/bracket.tsx";
+import { bracket } from "@/bracket.tsx";
 
 export const PANEL_CONTROL = chrome.target;
 /** iOS 26 Maps' sheet inset, for the top row's controls and the content's sides. */
@@ -66,7 +66,7 @@ function PanelClose({ onClose }: { onClose: () => void }) {
 
 /** A tab's scroller under the tabs; keyed per tab, since a shared one kept its offset across a switch. */
 export function PanelScroll({ children }: { children: ReactNode }) {
-  const { bottom } = useSafeArea();
+  const { bottom } = bracket.view.useSafeArea();
   return (
     <ScrollView style={styles.tabScroll} contentContainerStyle={[styles.tabContent, { paddingBottom: bottom + PANEL_EDGE }]}>
       {children}
@@ -99,8 +99,8 @@ const HANDLE = { width: 36, height: 5 };
 const TAP_SLOP = 8;
 
 export function Panel({ label, onClose, half, children }: PanelProps) {
-  const window = useWindowSize();
-  const { top } = useSafeArea();
+  const window = bracket.view.useWindowSize();
+  const { top } = bracket.view.useSafeArea();
   const { open, gone } = useContext(PanelPresence);
   const width = Math.min(window.width, MAX_WIDTH);
   const fullHeight = window.height - top - WHOLE_GAP;

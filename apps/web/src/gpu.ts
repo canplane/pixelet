@@ -35,7 +35,7 @@ function askAgain(): void {
   document.addEventListener("visibilitychange", shown);
 }
 
-export function gpuBoot(told: GpuHeard): void {
+export function boot(told: GpuHeard): void {
   heard = told;
   ask();
 }

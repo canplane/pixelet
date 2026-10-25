@@ -13,16 +13,6 @@ import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { SysHost } from "@xpute/host/ipc/sys.ts";
 import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/abi/cmd.spec.ts";
-import {
-  geolocationStart,
-  geolocationStop,
-  geolocationSupported,
-  orientationListen,
-  orientationNeedsPermission,
-  orientationRemove,
-  orientationSilenceIsLoss,
-  orientationSupported,
-} from "@/bracket.tsx";
 import { declare_source } from "@/namespace/source.ts";
 import { bind_roots, commit_root, open_root } from "@/namespace/roots.ts";
 import { kept_refused, migrate_kept, read_kept } from "@/namespace/storage.ts";
@@ -37,8 +27,7 @@ import { text_call } from "@/abi/text.ts";
 import { start_sys } from "@/host/sys.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
 import { bytes_at } from "@/host/module.ts";
-import { gpuBoot, type GuestPlan, HANDHELD, sensorsHear } from "@/bracket.tsx";
-import { onlineWatch } from "@/bracket.tsx";
+import { bracket, type Plan } from "@/bracket.tsx";
 import { GPU_STATE, setGpu } from "@/host/gpu.ts";
 import { setOnline } from "@/host/online.ts";
 import { request_frame, send_next, start_sched, strobe } from "@/host/sched.ts";
@@ -70,23 +59,23 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       return;
     }
     case Command.SENSOR_START:
-      if (read_sensor_start(f!).sensor === Sensor.Geolocation) geolocationStart();
-      else orientationListen();
+      if (read_sensor_start(f!).sensor === Sensor.Geolocation) bracket.sensor.geo.start();
+      else bracket.sensor.orient.start();
       return;
     case Command.SENSOR_STOP:
-      if (read_sensor_stop(f!).sensor === Sensor.Geolocation) geolocationStop();
-      else orientationRemove();
+      if (read_sensor_stop(f!).sensor === Sensor.Geolocation) bracket.sensor.geo.stop();
+      else bracket.sensor.orient.stop();
       return;
   }
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-/** Called once from shell/bootstrap.ts, so boot order is explicit, not import order. */
-export async function boot_kernel(): Promise<void> {
+/** Called once from shell/boot.ts, so boot order is explicit, not import order. */
+export async function boot(): Promise<void> {
   start_sys({ open: open_root, commit: commit_root, program: text_call, abort });
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
-  const plan: GuestPlan = {
-    bytes: HANDHELD ? PHONE_BYTES : DESKTOP_BYTES,
+  const plan: Plan = {
+    bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
     region: REGION_BYTES,
     directory_at: DIRECTORY_AT,
     gpu_stream: key.GPU_STREAM,
@@ -95,25 +84,25 @@ export async function boot_kernel(): Promise<void> {
   await load_guest(plan);
   bind_roots();
   start_sched(submit_frame);
-  sensorsHear(SENSOR_HEARD);
+  bracket.sensor.hear(SENSOR_HEARD);
   GUEST_DOORBELL.signal = on_signal;
-  gpuBoot({ ready: () => send_next(Command.GPU_READY), state: (state) => setGpu(GPU_STATE[state]), wake: request_frame });
-  onlineWatch(setOnline);
-  const boot = (settings: string) =>
+  bracket.gpu.boot({ ready: () => send_next(Command.GPU_READY), state: (state) => setGpu(GPU_STATE[state]), wake: request_frame });
+  bracket.online.watch(setOnline);
+  const packet = (settings: string) =>
     encode_world_boot(
       GUEST_DOORBELL,
       __IS_DEV__,
-      geolocationSupported(),
-      orientationSupported(),
-      orientationNeedsPermission(),
-      orientationSilenceIsLoss(),
+      bracket.sensor.geo.has,
+      bracket.sensor.orient.has,
+      bracket.sensor.orient.gated,
+      bracket.sensor.orient.silence,
       settings,
     );
   migrate_kept();
   // Storage is the user's to edit: kept settings too large to send are no
   // settings, and the kernel starts from the defaults, written over them.
-  let pkt = boot(read_kept(kept.SETTINGS) ?? "");
-  if (!GUEST_DOORBELL.fits(pkt)) pkt = boot("");
+  let pkt = packet(read_kept(kept.SETTINGS) ?? "");
+  if (!GUEST_DOORBELL.fits(pkt)) pkt = packet("");
   const booted = GUEST_DOORBELL.call(Command.WORLD_BOOT, pkt, (result) => result);
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
@@ -121,7 +110,7 @@ export async function boot_kernel(): Promise<void> {
 }
 
 /** `listener` hears the kernel stop for good: its turns end with it. */
-export function on_kernel_stop(listener: () => void): void {
+export function on_stop(listener: () => void): void {
   GUEST_DOORBELL.stopped = () => {
     strobe.stop();
     listener();

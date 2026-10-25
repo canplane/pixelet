@@ -137,7 +137,7 @@ db-geo is filled by each source's `ingest` under `infra/geo/`, run by path as [i
 
 To measure the client, use `preview` (`localhost:4173`): the bundle as a deploy builds it, without the dev server's unbundled modules and hooks or the settings only a development build offers. The `profiler` setting opens the profiler's panel and records while it is open (`apps/client/src/shell/debug/profiler.tsx` `ProfilerPanel`), in either build.
 
-A development page puts two things in the browser console once the kernel has booted (`apps/client/src/shell/debug/console.ts`, installed by `shell/bootstrap.ts` under `__IS_DEV__`): `xpute`, the guest's doorbell, whose `cmd(command, ...args)` sends the kernel any command by its number with its arguments as the packet's fields, in order (`spec/client/kernel/domain/control/cmd.json` numbers them); and `pxl.profiler`, whose `report()` and `trace()` are the profiler panel's two exports.
+A development page puts two things in the browser console once the kernel has booted (`apps/client/src/shell/debug/console.ts`, installed by `shell/boot.ts` under `__IS_DEV__`): `xpute`, the guest's doorbell, whose `cmd(command, ...args)` sends the kernel any command by its number with its arguments as the packet's fields, in order (`spec/client/kernel/domain/control/cmd.json` numbers them); and `pxl.profiler`, whose `report()` and `trace()` are the profiler panel's two exports.
 
 ### On a device
 

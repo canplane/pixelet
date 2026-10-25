@@ -6,7 +6,7 @@ import { StyleSheet, View } from "react-native";
 import { Message } from "@/abi/cmd.spec.ts";
 import { Gpu, useGpu } from "@/host/gpu.ts";
 import { useKernel } from "@/abi/shell.ts";
-import { Boot, useBoot, useStopCode } from "./bootstrap.ts";
+import { Boot, useBoot, useStop } from "./boot.ts";
 import { Modals } from "./modal.tsx";
 import { BlueScreen, Halt } from "./halt.tsx";
 import { messageKey } from "@/shell/locale/message-key.ts";
@@ -31,7 +31,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const gpu = useGpu();
   const boot = useBoot();
   const givenUp = useKernel((s) => s.stall === Message.WorldUnavailable);
-  const stopCode = useStopCode();
+  const stopCode = useStop();
   useEffect(() => {
     if (givenUp) console.error("[read] a read failed past every retry; the space is given up");
   }, [givenUp]);

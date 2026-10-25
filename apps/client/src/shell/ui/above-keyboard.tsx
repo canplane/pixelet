@@ -1,8 +1,8 @@
 // @pxl/client/shell/ui/above-keyboard.tsx
 
-import { useSafeArea } from "@/bracket.tsx";
 import { type AboveKeyboardProps, bottomRest } from "@/shell/ui/bottom-rest.ts";
 import { layer } from "@/shell/ui/theme.ts";
+import { bracket } from "@/bracket.tsx";
 
 /**
  * A bottom layer standing `inset` above the keyboard via `--vv-bottom`, a CSS
@@ -10,7 +10,7 @@ import { layer } from "@/shell/ui/theme.ts";
  * one final value, so `bottom` gets a short ease.
  */
 export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps) {
-  const rest = bottomRest(useSafeArea(), inset);
+  const rest = bottomRest(bracket.view.useSafeArea(), inset);
   return (
     <div
       style={{

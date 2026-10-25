@@ -16,27 +16,27 @@ import { PLATFORM } from "./module.ts";
 /** Set once at boot, before any sensor starts. */
 let heard: SensorHeard;
 
-export function sensorsHear(given: SensorHeard): void {
+export function hear(given: SensorHeard): void {
   heard = given;
 }
 
-export function geolocationSupported(): boolean {
+function geo_has(): boolean {
   return true;
 }
 
-export function orientationSupported(): boolean {
+function orient_has(): boolean {
   return PLATFORM.headingAvailable();
 }
 
-export function orientationNeedsPermission(): boolean {
+function orient_gated(): boolean {
   return false;
 }
 
-export function orientationSilenceIsLoss(): boolean {
+function orient_silence(): boolean {
   return false;
 }
 
-export function orientationPermit(): Promise<boolean> {
+function orient_permit(): Promise<boolean> {
   return Promise.resolve(true);
 }
 
@@ -52,7 +52,7 @@ async function permitted(): Promise<boolean> {
 }
 
 /** A grant made in the device's settings reaches the kernel on return. */
-export function permissionFollow(): () => void {
+export function follow(): () => void {
   const back = AppState.addEventListener("change", (state) => {
     if (state === "active") recheck();
   });
@@ -95,11 +95,11 @@ let geolocation: Watch | null = null;
 
 function geolocationFail(watch: Watch, error: "denied" | "other"): void {
   if (geolocation !== watch) return;
-  geolocationStop();
+  geo_stop();
   heard.positionError(error);
 }
 
-export function geolocationStart(): void {
+function geo_start(): void {
   if (geolocation !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
@@ -123,7 +123,7 @@ export function geolocationStart(): void {
   })().catch(() => geolocationFail(watch, "other"));
 }
 
-export function geolocationStop(): void {
+function geo_stop(): void {
   if (geolocation === null) return;
   watchEnd(geolocation);
   geolocation = null;
@@ -133,12 +133,12 @@ let orientation: Watch | null = null;
 
 function orientationFail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
-  orientationRemove();
+  orient_stop();
   if (refused) heard.permission("orientation", "denied");
   else heard.orientationLost();
 }
 
-export function orientationListen(): void {
+function orient_start(): void {
   if (orientation !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
   orientation = watch;
@@ -161,8 +161,11 @@ export function orientationListen(): void {
   });
 }
 
-export function orientationRemove(): void {
+function orient_stop(): void {
   if (orientation === null) return;
   watchEnd(orientation);
   orientation = null;
 }
+
+export const geo = { has: geo_has(), start: geo_start, stop: geo_stop };
+export const orient = { has: orient_has(), gated: orient_gated(), silence: orient_silence(), permit: orient_permit, start: orient_start, stop: orient_stop };

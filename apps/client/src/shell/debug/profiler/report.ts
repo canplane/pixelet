@@ -3,12 +3,12 @@
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
-import { copyText } from "@/bracket.tsx";
 
 import { drawn, type Frame, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import { fps, type ProfilerReport, type Spread, type TaskRecord, type TaskSummary } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
+import { bracket } from "@/bracket.tsx";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 /** A count of bytes in the one unit the figures are shown in, signed. */
@@ -120,7 +120,7 @@ export async function profilerReportCopy(text: string): Promise<string> {
   const kb = `${Math.max(1, round(text.length / 1024))} KiB`;
   let said: string;
   try {
-    await copyText(text);
+    await bracket.share.copy(text);
     said = `report copied · ${kb}`;
   } catch {
     said = `report printed to the console · ${kb} (the clipboard refused it)`;

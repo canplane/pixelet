@@ -1,6 +1,6 @@
-// @pxl/web/save.ts
+// @pxl/web/share.ts
 
-export function saveFile(name: string, text: string, mime: string): Promise<void> {
+export function save(name: string, text: string, mime: string): Promise<void> {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
   const a = document.createElement("a");
   a.href = url;
@@ -11,6 +11,6 @@ export function saveFile(name: string, text: string, mime: string): Promise<void
 }
 
 /** Rejects without a user gesture or off a secure origin. */
-export function copyText(text: string): Promise<void> {
+export function copy(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
 }

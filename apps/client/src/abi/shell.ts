@@ -7,14 +7,14 @@ import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/abi/cmd.spec.ts";
 import { GUEST, GUEST_DOORBELL } from "@/host/mem.ts";
 import { ring_now, send_input } from "@/host/sched.ts";
-import { orientationPermit } from "@/bracket.tsx";
+import { bracket } from "@/bracket.tsx";
 
 export { kernel_snapshot, useKernel } from "@/abi/snapshot.ts";
 export { kernel_hold, kernel_keys } from "@/abi/control/input.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */
 export async function kernel_tracking(tracking: Tracking): Promise<void> {
-  if (tracking === Tracking.Follow && !(await orientationPermit())) {
+  if (tracking === Tracking.Follow && !(await bracket.sensor.orient.permit())) {
     console.error("[orientation] could not start the sensor.");
     return;
   }

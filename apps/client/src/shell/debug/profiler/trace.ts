@@ -10,13 +10,13 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
-import { saveFile } from "@/bracket.tsx";
 
 import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
 import { profilerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/shell/fixed.ts";
+import { bracket } from "@/bracket.tsx";
 
 const PID = 1;
 const TID_FRAMES = 1;
@@ -120,7 +120,7 @@ export async function profilerTraceSave(): Promise<string> {
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
   const name = `pxl-profiler-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {
-    await saveFile(name, json, "application/json");
+    await bracket.share.save(name, json, "application/json");
     console.log(`[profiler] trace saved as ${name} · ${mb} — open it at ui.perfetto.dev`);
     return `trace saved · ${mb}`;
   } catch (err) {

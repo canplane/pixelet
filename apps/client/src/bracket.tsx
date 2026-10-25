@@ -1,10 +1,9 @@
 // @pxl/client/bracket.tsx
 
 /**
- * What the client asks of the place it runs in, and hands it, as pxl-kernel's door asks
- * its bracket (pxl_kernel::door::Bracket): the page's (apps/web) or the
- * device's (apps/native), handed in once by the app's entry before anything
- * here runs. Nothing here names either, and neither names the other.
+ * What the client asks of the place it runs in, as pxl-kernel's door asks its
+ * bracket (pxl_kernel::door::Bracket): the page's (apps/web) or the device's
+ * (apps/native), set once by the app's entry before the client boots.
  */
 
 import type { ComponentType } from "react";
@@ -17,7 +16,7 @@ export type { Guest };
 /** What a place needs to open the guest, which the guest's own numbers say:
  * its memory, the offset its directory is at, and where its GPU stream's
  * records begin. A place that links the guest in may need none of it. */
-export interface GuestPlan {
+export interface Plan {
   bytes: u32;
   region: u32;
   directory_at: u32;
@@ -98,108 +97,46 @@ export interface CaseSurfaceProps {
 }
 
 export interface Bracket {
-  /** The guest opened in this place: its memory and its doorbell. */
-  openGuest(plan: GuestPlan): Promise<Guest>;
-  /** Asks for a GPU, and says what it heard of one. */
-  gpuBoot(heard: GpuHeard): void;
   /** Whether the device is held to a phone's ceilings. */
-  HANDHELD: boolean;
-
-  storageGet(key: string): string | null;
-  storageSet(key: string, value: string): void;
-
+  device: { handheld: boolean };
+  /** The guest opened in this place: its memory and its doorbell. */
+  guest: { open(plan: Plan): Promise<Guest> };
+  /** Asks for a GPU, and says what it heard of one. */
+  gpu: { boot(heard: GpuHeard): void };
+  storage: { get(key: string): string | null; set(key: string, value: string): void };
   /** `rgba` is 0xRRGGBBAA; `out` is RGBA, top row first, not premultiplied. */
-  textWidth(weight: u32, px: f32, text: string): f32;
-  textRaster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void;
-
-  /** Where a route is asked of: "" on a page, its own origin. */
-  ORIGIN: string;
-  /** Rejects with a TypeError on a transport failure. */
-  originGet(route: string, signal?: AbortSignal): Promise<Response>;
-  /** Says whether the device is online, as far as the place can tell: a place that cannot says nothing. */
-  onlineWatch(report: (online: boolean) => void): void;
-
-  geolocationSupported(): boolean;
-  orientationSupported(): boolean;
-  orientationNeedsPermission(): boolean;
-  orientationSilenceIsLoss(): boolean;
-  orientationPermit(): Promise<boolean>;
-  permissionFollow(): () => void;
-  geolocationStart(): void;
-  geolocationStop(): void;
-  orientationListen(): void;
-  orientationRemove(): void;
-  /** Once, at boot, before any sensor starts. */
-  sensorsHear(heard: SensorHeard): void;
-
-  saveFile(name: string, text: string, mime: string): Promise<void>;
-  copyText(text: string): Promise<void>;
-
-  preferredLanguages(): readonly string[];
-  showLanguage(lng: string): void;
-
-  useSafeArea(): SafeArea;
-  useWindowSize(): { width: f64; height: f64 };
-  useVisualViewport(): void;
-  useViewportTop(): number;
-
+  text: {
+    width(weight: u32, px: f32, text: string): f32;
+    raster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void;
+  };
+  /** Where a route is asked of ("" on a page, its own origin); `get` rejects with a TypeError on a transport failure. */
+  origin: { url: string; get(route: string, signal?: AbortSignal): Promise<Response> };
+  /** Whether the device is online, as far as the place can tell: a place that cannot says nothing. */
+  online: { watch(report: (online: boolean) => void): void };
+  sensor: {
+    geo: { has: boolean; start(): void; stop(): void };
+    /** `gated`: a permission asked inside a gesture; `silence`: no event is how a loss shows. */
+    orient: { has: boolean; gated: boolean; silence: boolean; permit(): Promise<boolean>; start(): void; stop(): void };
+    /** Once, at boot, before any sensor starts. */
+    hear(heard: SensorHeard): void;
+    follow(): () => void;
+  };
+  share: { save(name: string, text: string, mime: string): Promise<void>; copy(text: string): Promise<void> };
+  locale: { list(): readonly string[]; show(lng: string): void };
+  view: {
+    useSafeArea(): SafeArea;
+    useWindowSize(): { width: f64; height: f64 };
+    useVisualViewport(): void;
+    useViewportTop(): number;
+  };
   /** The world's surface, and the place's input driver. */
-  WorldSurface: ComponentType<WorldSurfaceProps>;
-  CaseSurface: ComponentType<CaseSurfaceProps>;
+  surface: { World: ComponentType<WorldSurfaceProps>; Case: ComponentType<CaseSurfaceProps> };
 }
 
-let given: Bracket | null = null;
-
-/** Live bindings, set with the bracket. */
-export let HANDHELD = false;
-export let ORIGIN = "";
+/** The place's bracket. */
+export let bracket: Bracket;
 
 /** Once, from the app's entry, before the client boots. */
-export function setBracket(bracket: Bracket): void {
-  given = bracket;
-  HANDHELD = bracket.HANDHELD;
-  ORIGIN = bracket.ORIGIN;
-}
-
-function b(): Bracket {
-  if (given === null) throw new Error("no bracket: the app's entry calls setBracket before the client runs");
-  return given;
-}
-
-export const openGuest: Bracket["openGuest"] = (plan) => b().openGuest(plan);
-export const gpuBoot: Bracket["gpuBoot"] = (heard) => b().gpuBoot(heard);
-export const storageGet: Bracket["storageGet"] = (key) => b().storageGet(key);
-export const storageSet: Bracket["storageSet"] = (key, value) => b().storageSet(key, value);
-export const textWidth: Bracket["textWidth"] = (weight, px, text) => b().textWidth(weight, px, text);
-export const textRaster: Bracket["textRaster"] = (...args) => b().textRaster(...args);
-export const originGet: Bracket["originGet"] = (route, signal) => b().originGet(route, signal);
-export const onlineWatch: Bracket["onlineWatch"] = (report) => b().onlineWatch(report);
-export const geolocationSupported: Bracket["geolocationSupported"] = () => b().geolocationSupported();
-export const orientationSupported: Bracket["orientationSupported"] = () => b().orientationSupported();
-export const orientationNeedsPermission: Bracket["orientationNeedsPermission"] = () => b().orientationNeedsPermission();
-export const orientationSilenceIsLoss: Bracket["orientationSilenceIsLoss"] = () => b().orientationSilenceIsLoss();
-export const orientationPermit: Bracket["orientationPermit"] = () => b().orientationPermit();
-export const permissionFollow: Bracket["permissionFollow"] = () => b().permissionFollow();
-export const geolocationStart: Bracket["geolocationStart"] = () => b().geolocationStart();
-export const geolocationStop: Bracket["geolocationStop"] = () => b().geolocationStop();
-export const orientationListen: Bracket["orientationListen"] = () => b().orientationListen();
-export const orientationRemove: Bracket["orientationRemove"] = () => b().orientationRemove();
-export const sensorsHear: Bracket["sensorsHear"] = (heard) => b().sensorsHear(heard);
-export const saveFile: Bracket["saveFile"] = (name, text, mime) => b().saveFile(name, text, mime);
-export const copyText: Bracket["copyText"] = (text) => b().copyText(text);
-export const preferredLanguages: Bracket["preferredLanguages"] = () => b().preferredLanguages();
-export const showLanguage: Bracket["showLanguage"] = (lng) => b().showLanguage(lng);
-export const useSafeArea: Bracket["useSafeArea"] = () => b().useSafeArea();
-export const useWindowSize: Bracket["useWindowSize"] = () => b().useWindowSize();
-export const useVisualViewport: Bracket["useVisualViewport"] = () => b().useVisualViewport();
-export const useViewportTop: Bracket["useViewportTop"] = () => b().useViewportTop();
-
-export function WorldSurface(props: WorldSurfaceProps) {
-  const Surface = b().WorldSurface;
-  return <Surface {...props} />;
-}
-
-export function CaseSurface(props: CaseSurfaceProps) {
-  const Surface = b().CaseSurface;
-  return <Surface {...props} />;
+export function set(given: Bracket): void {
+  bracket = given;
 }

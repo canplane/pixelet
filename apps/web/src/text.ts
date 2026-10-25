@@ -21,7 +21,7 @@ function context(): OffscreenCanvasRenderingContext2D | null {
   return canvas;
 }
 
-export function textWidth(weight: u32, px: f32, text: string): f32 {
+export function width(weight: u32, px: f32, text: string): f32 {
   const ctx = context();
   if (ctx === null) return text.length * px * 0.6;
   ctx.font = cssFont(weight, px);
@@ -29,7 +29,7 @@ export function textWidth(weight: u32, px: f32, text: string): f32 {
 }
 
 /** `rgba` is 0xRRGGBBAA; `out` is RGBA, top row first, not premultiplied. */
-export function textRaster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void {
+export function raster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void {
   const ctx = context();
   if (ctx === null) return;
   const c = ctx.canvas;

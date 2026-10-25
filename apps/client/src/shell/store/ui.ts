@@ -8,8 +8,8 @@ import { allCubes, type Cube, decorIds } from "@/catalog/asset/mod.ts";
 import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/abi/cmd.spec.ts";
 import { MARKER_TEXT_CHARS } from "@/catalog/block/ext.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_room, kernel_snapshot, useKernel } from "@/abi/shell.ts";
-import { storageGet, storageSet } from "@/bracket.tsx";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
+import { bracket } from "@/bracket.tsx";
 
 interface ChatLine {
   id: number;
@@ -102,7 +102,7 @@ interface Stored {
 function load(): Stored {
   let stored: Partial<Stored> | null = null;
   try {
-    stored = JSON.parse(storageGet(STORAGE_KEY) ?? "null");
+    stored = JSON.parse(bracket.storage.get(STORAGE_KEY) ?? "null");
   } catch { /* nothing stored that reads */ }
   const picks = Array.isArray(stored?.picks) ? stored.picks.filter((p) => typeof p === "object" && p !== null && isKnownPick(p)).slice(0, RECENT_PICKS) : [];
   // Padded from the seed: an empty tail reads as broken.
@@ -114,7 +114,7 @@ function load(): Stored {
 }
 
 function save(s: UiState): void {
-  storageSet(STORAGE_KEY, JSON.stringify({ picks: s.recentPicks } satisfies Stored));
+  bracket.storage.set(STORAGE_KEY, JSON.stringify({ picks: s.recentPicks } satisfies Stored));
 }
 
 /** What is held stays as the tool or the tier changes. */

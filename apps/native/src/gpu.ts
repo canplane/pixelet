@@ -3,7 +3,7 @@
 import type { GpuHeard } from "@pxl/client/bracket.tsx";
 import { PLATFORM } from "./module.ts";
 
-export function gpuBoot(heard: GpuHeard): void {
+export function boot(heard: GpuHeard): void {
   if (!PLATFORM.gpuOpen()) {
     // The app installs only where Metal or Vulkan exists, so this is the system failing.
     console.error("[gpu] the system opened no GPU; nothing can be drawn");

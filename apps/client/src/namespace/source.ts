@@ -13,12 +13,12 @@ import { useSyncExternalStore } from "react";
 
 import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
-import { originGet } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { send_next } from "@/host/sched.ts";
 import { online, whenOnline } from "@/host/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
 import { type Declaration, declaration } from "@/namespace/tile.ts";
+import { bracket } from "@/bracket.tsx";
 
 let declared: Declaration | null = null;
 let shown: readonly { kind: BaseLayer; version: string }[] = [];
@@ -45,7 +45,7 @@ const ASK_AGAIN_MOST_MS = 60_000;
 
 async function asked(): Promise<string | null> {
   try {
-    const res = await originGet(TILE_SOURCE_ROUTE);
+    const res = await bracket.origin.get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
     // A refusal's body is not read: let go, not held until collected.
     await res.body?.cancel();

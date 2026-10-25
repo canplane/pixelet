@@ -8,13 +8,13 @@ import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/shell/ui/icon.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
-import { CaseSurface } from "@/bracket.tsx";
 import { surface_role } from "@/abi/render/gpu/api.spec.ts";
 import { surface_driver } from "@/abi/render/surface.ts";
 import { Command, encode_preview_close, encode_preview_open } from "@/abi/cmd.spec.ts";
 import { kernel_command, kernel_room, useKernel } from "@/abi/shell.ts";
 import type { CharacterVariant } from "@/shell/character/variant.ts";
 import { chrome } from "@/shell/ui/theme.ts";
+import { bracket } from "@/bracket.tsx";
 
 const CASE = surface_driver(surface_role.CASE);
 
@@ -34,7 +34,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
         // Hidden until drawn: the canvas still holds the last variant's frame.
       }
       <View style={[StyleSheet.absoluteFill, !drawn && styles.hidden]}>
-        <CaseSurface
+        <bracket.surface.Case
           surface={CASE}
           openKey={`${variant.group}:${variant.number}`}
           onOpen={(surface) => {

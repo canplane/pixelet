@@ -4,9 +4,9 @@ import { requireNativeView } from "expo";
 import { type ComponentType, useState } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
-import { useSafeArea } from "@/bracket.tsx";
 import { type AboveKeyboardProps, bottomRest } from "@/shell/ui/bottom-rest.ts";
 import { layer } from "@/shell/ui/theme.ts";
+import { bracket } from "@/bracket.tsx";
 
 interface KeyboardDockProps extends ViewProps {
   clearance: number;
@@ -24,7 +24,7 @@ const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView("PxlPla
  * where the layer is.
  */
 export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps) {
-  const rest = bottomRest(useSafeArea(), inset);
+  const rest = bottomRest(bracket.view.useSafeArea(), inset);
   const [applied, setApplied] = useState(0);
   return (
     <KeyboardDock

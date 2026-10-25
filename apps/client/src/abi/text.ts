@@ -13,7 +13,7 @@ import { te } from "@xpute/kit/codec/encoding.ts";
 import { text_of } from "@xpute/host/ipc/stream.ts";
 
 import { op } from "@/abi/host.spec.ts";
-import { textRaster, textWidth } from "@/bracket.tsx";
+import { bracket } from "@/bracket.tsx";
 
 const word = new DataView(new ArrayBuffer(4));
 
@@ -65,7 +65,7 @@ export function text_call(code: u32, w: U32Array, a: u32): void {
     case op.TEXT_LAYOUT: {
       const [weight, px, max_width, at, lines] = [w[a], float(w[a + 1]), float(w[a + 2]), w[a + 3], w[a + 4]];
       const text = text_of(w, a + 5);
-      const width = (s: string) => textWidth(weight, px, s);
+      const width = (s: string) => bracket.text.width(weight, px, s);
       const ends = line_ends(text, max_width, width).slice(0, lines);
       const out = new DataView(w.buffer, at, 4 * (1 + 2 * lines));
       out.setUint32(0, ends.length, true);
@@ -82,7 +82,7 @@ export function text_call(code: u32, w: U32Array, a: u32): void {
     }
     case op.TEXT_RASTER: {
       const [weight, px, rgba, at, width, height, x] = [w[a], float(w[a + 1]), w[a + 2], w[a + 3], w[a + 4], w[a + 5], float(w[a + 6])];
-      textRaster(weight, px, rgba, text_of(w, a + 7), x, width, height, new Uint8Array(w.buffer, at, width * height * 4));
+      bracket.text.raster(weight, px, rgba, text_of(w, a + 7), x, width, height, new Uint8Array(w.buffer, at, width * height * 4));
       break;
     }
     default:

@@ -1,10 +1,10 @@
 // @pxl/client/shell/search/repository.ts
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { originGet } from "@/bracket.tsx";
 import { SEARCH_URL } from "@/config/route.spec.ts";
 import type { DivisionPart, NamePart } from "@/shell/world/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/shell/world/division/division.spec.ts";
+import { bracket } from "@/bracket.tsx";
 
 /** A part as the API writes it: Overture's subtype by its word, and `approx` where no area holds the point. */
 interface WirePart extends DivisionPart {
@@ -30,7 +30,7 @@ export async function fetchSearch(query: string, opts?: { near?: { lon: f64; lat
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
-  const res = await originGet(`${SEARCH_URL}?${params.toString()}`, opts?.signal);
+  const res = await bracket.origin.get(`${SEARCH_URL}?${params.toString()}`, opts?.signal);
   if (!res.ok) {
     // A refusal's body is not read: let go, not held until collected.
     await res.body?.cancel();

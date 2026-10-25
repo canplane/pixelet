@@ -3,13 +3,11 @@
 import i18next, { type LanguageDetectorModule } from "i18next";
 import { initReactI18next } from "react-i18next";
 
-import { preferredLanguages, showLanguage } from "@/bracket.tsx";
-import { storageGet, storageSet } from "@/bracket.tsx";
-
 import en from "./en.json" with { type: "json" };
 import ko from "./ko.json" with { type: "json" };
 import enDev from "./dev/en.json" with { type: "json" };
 import koDev from "./dev/ko.json" with { type: "json" };
+import { bracket } from "@/bracket.tsx";
 
 interface Catalog {
   [key: string]: string | Catalog;
@@ -43,18 +41,18 @@ const languageDetector: LanguageDetectorModule = {
   type: "languageDetector",
   // By language alone: i18next takes a later exact match over an earlier
   // region, so ["en-US", "ko"] read as Korean.
-  detect: () => storageGet(LANG_KEY) ?? preferredLanguages().map((code) => new Intl.Locale(code).language),
-  cacheUserLanguage: (lng) => storageSet(LANG_KEY, lng),
+  detect: () => bracket.storage.get(LANG_KEY) ?? bracket.locale.list().map((code) => new Intl.Locale(code).language),
+  cacheUserLanguage: (lng) => bracket.storage.set(LANG_KEY, lng),
 };
 
 let booted = false;
 
 /**
- * Called before the first render (main.tsx, bootstrapApp). Catalogs are
+ * Called before the first render (main.tsx, shell/boot.ts). Catalogs are
  * bundled, so `t()` is correct from the first render; fetching them flashed
  * raw keys on a cold load.
  */
-export function bootstrapI18n(): void {
+export function boot(): void {
   if (booted) return;
   booted = true;
 
@@ -76,6 +74,6 @@ export function bootstrapI18n(): void {
       },
     });
 
-  showLanguage(i18next.language);
-  i18next.on("languageChanged", showLanguage);
+  bracket.locale.show(i18next.language);
+  i18next.on("languageChanged", (lng) => bracket.locale.show(lng));
 }

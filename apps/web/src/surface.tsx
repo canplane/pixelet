@@ -169,7 +169,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
 }
 
-export function WorldSurface({ surface: driver, input, overMarker }: WorldSurfaceProps) {
+export function World({ surface: driver, input, overMarker }: WorldSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -187,7 +187,7 @@ export function WorldSurface({ surface: driver, input, overMarker }: WorldSurfac
   return <canvas ref={ref} style={{ ...FILL, touchAction: "none", cursor: overMarker ? "pointer" : undefined }} />;
 }
 
-export function CaseSurface({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
+export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const open = useRef(onOpen);
   open.current = onOpen;

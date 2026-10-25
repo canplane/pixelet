@@ -18,7 +18,7 @@ import {
   PointerPhase,
   PointerType,
 } from "@/abi/cmd.spec.ts";
-import { permissionFollow, type PointerKind, type PointerPhase as PlacePhase, type Viewport } from "@/bracket.tsx";
+import { bracket, type PointerKind, type PointerPhase as PlacePhase, type Viewport } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { request_frame, ring_now, send_input, strobe } from "@/host/sched.ts";
 
@@ -62,7 +62,7 @@ export function kernel_open(viewport: () => Viewport): () => void {
   driver = viewport;
   ring_now(Command.SENSOR_OPEN);
   strobe.start();
-  const unfollow = permissionFollow();
+  const unfollow = bracket.sensor.follow();
   return () => {
     unfollow();
     strobe.stop();

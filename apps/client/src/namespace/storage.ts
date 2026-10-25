@@ -18,7 +18,7 @@ import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import { kept } from "@/abi/host.spec.ts";
-import { storageGet, storageSet } from "@/bracket.tsx";
+import { bracket } from "@/bracket.tsx";
 
 /** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */
 export interface Storage {
@@ -111,7 +111,7 @@ export function follow_refused(refused: readonly u32[], s: Storage, emptied: (sl
   }
 }
 
-const STORAGE: Storage = { get: storageGet, set: storageSet };
+const STORAGE: Storage = { get: (key) => bracket.storage.get(key), set: (key, value) => bracket.storage.set(key, value) };
 
 /** STORAGE's object `number` is a kept slot, under the key `kept_key` gives it. */
 function storage_key(number: bigint): string {
@@ -122,19 +122,19 @@ function storage_key(number: bigint): string {
 
 /** STORAGE's object `number`, whole; ENOENT where nothing is kept. */
 export function open_storage(number: bigint): U8Array {
-  const value = storageGet(storage_key(number));
+  const value = bracket.storage.get(storage_key(number));
   if (value === null) throw new FileError(Errno.ENOENT);
   return te.encode(value);
 }
 
 /** What the kernel wrote to STORAGE's object `number`, kept whole. */
 export function commit_storage(number: bigint, bytes: U8Array): void {
-  storageSet(storage_key(number), td.decode(bytes));
+  bracket.storage.set(storage_key(number), td.decode(bytes));
 }
 
 /** A kept slot's text, or null where none is kept. */
 export function read_kept(slot: u32): string | null {
-  return storageGet(storage_key(BigInt(slot)));
+  return bracket.storage.get(storage_key(BigInt(slot)));
 }
 
 /** Before the kernel reads a slot: what was kept before the slots carried over, once. */

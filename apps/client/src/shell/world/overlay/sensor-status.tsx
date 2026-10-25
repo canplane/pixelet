@@ -7,10 +7,10 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { DevicePoseStatus } from "@/abi/cmd.spec.ts";
 import { useKernel } from "@/abi/shell.ts";
 
-import { HANDHELD } from "@/bracket.tsx";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { haloGap, HaloIcon } from "@/shell/ui/halo.tsx";
 import { color } from "@/shell/ui/theme.ts";
+import { bracket } from "@/bracket.tsx";
 
 const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
   [DevicePoseStatus.Idle]: { color: color.white, presence: 0.35 },
@@ -34,7 +34,7 @@ export function SensorStatus() {
   return (
     <View style={styles.row}>
       {icon("location", location)}
-      {HANDHELD && orientation !== DevicePoseStatus.Unavailable && icon("location.north.circle", orientation)}
+      {bracket.device.handheld && orientation !== DevicePoseStatus.Unavailable && icon("location.north.circle", orientation)}
     </View>
   );
 }

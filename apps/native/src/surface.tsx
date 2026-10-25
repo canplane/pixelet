@@ -64,7 +64,7 @@ function useSurface(driver: SurfaceDriver, key: string, opened?: (surface: u32) 
   return { size, props };
 }
 
-export function WorldSurface({ surface: driver, input }: WorldSurfaceProps) {
+export function World({ surface: driver, input }: WorldSurfaceProps) {
   const { size, props } = useSurface(driver, "world");
 
   useEffect(() => {
@@ -99,7 +99,7 @@ export function WorldSurface({ surface: driver, input }: WorldSurfaceProps) {
   );
 }
 
-export function CaseSurface({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
+export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
   const { props } = useSurface(driver, openKey, onOpen);
   return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;
 }

@@ -3,62 +3,31 @@
 /** The page's bracket: what the client asks of a browser tab (@pxl/client/bracket.tsx), answered by the browser's own APIs. */
 
 import type { Bracket } from "@pxl/client/bracket.tsx";
-import { HANDHELD } from "./device.ts";
-import { gpuBoot } from "./gpu.ts";
-import { openGuest } from "./guest.ts";
-import { preferredLanguages, showLanguage } from "./locale.ts";
-import { onlineWatch } from "./online.ts";
-import { ORIGIN, originGet } from "./origin.ts";
+import * as device from "./device.ts";
+import * as gpu from "./gpu.ts";
+import * as guest from "./guest.ts";
+import * as locale from "./locale.ts";
+import * as online from "./online.ts";
+import * as origin from "./origin.ts";
+import * as sensor from "./sensor.ts";
+import * as share from "./share.ts";
+import * as storage from "./storage.ts";
+import * as surface from "./surface.tsx";
+import * as text from "./text.ts";
 import { useSafeArea } from "./safe-area.ts";
-import { copyText, saveFile } from "./save.ts";
-import {
-  geolocationStart,
-  geolocationStop,
-  geolocationSupported,
-  orientationListen,
-  orientationNeedsPermission,
-  orientationPermit,
-  orientationRemove,
-  orientationSilenceIsLoss,
-  orientationSupported,
-  permissionFollow,
-  sensorsHear,
-} from "./sensor.ts";
-import { storageGet, storageSet } from "./storage.ts";
-import { textRaster, textWidth } from "./text.ts";
 import { useViewportTop, useVisualViewport, useWindowSize } from "./viewport.ts";
-import { CaseSurface, WorldSurface } from "./surface.tsx";
 
-export const PAGE: Bracket = {
-  openGuest,
-  gpuBoot,
-  HANDHELD,
-  storageGet,
-  storageSet,
-  textWidth,
-  textRaster,
-  ORIGIN,
-  originGet,
-  onlineWatch,
-  geolocationSupported,
-  orientationSupported,
-  orientationNeedsPermission,
-  orientationSilenceIsLoss,
-  orientationPermit,
-  permissionFollow,
-  geolocationStart,
-  geolocationStop,
-  orientationListen,
-  orientationRemove,
-  sensorsHear,
-  saveFile,
-  copyText,
-  preferredLanguages,
-  showLanguage,
-  useSafeArea,
-  useWindowSize,
-  useVisualViewport,
-  useViewportTop,
-  WorldSurface,
-  CaseSurface,
+export const page: Bracket = {
+  device,
+  guest,
+  gpu,
+  storage,
+  text,
+  origin,
+  online,
+  sensor,
+  share,
+  locale,
+  view: { useSafeArea, useWindowSize, useVisualViewport, useViewportTop },
+  surface,
 };
