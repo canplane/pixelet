@@ -14,8 +14,8 @@ pub struct Row {
 }
 
 pub struct Pack {
-    pub key: String,
-    pub bytes: u64,
+    /// The path its image ships at, a row of the table (`cube.json` `pack`).
+    pub image: String,
     pub cell: u32,
     pub columns: u32,
     pub tiles: Vec<String>,
@@ -130,15 +130,14 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
     out.push_str(
         r#"};
 
-/** The texture pack as one image: `columns` tiles of `cell` pixels per
- * row, tile n at column n % columns and row n / columns, `tiles` the asset
- * path each holds, and `faces` the cube face — group, type, face — each
- * tile is. */
+/** The texture pack as one image, the asset at `image`: `columns` tiles of
+ * `cell` pixels per row, tile n at column n % columns and row n / columns,
+ * `tiles` the asset path each holds, and `faces` the cube face — group,
+ * type, face — each tile is. */
 export const PACK = {
 "#,
     );
-    let _ = writeln!(out, "  key: \"{}\",", pack.key);
-    let _ = writeln!(out, "  bytes: {},", pack.bytes);
+    let _ = writeln!(out, "  image: \"{}\",", pack.image);
     let _ = writeln!(out, "  cell: {},", pack.cell);
     let _ = writeln!(out, "  columns: {},", pack.columns);
     out.push_str("  tiles: [\n");
@@ -227,11 +226,12 @@ pub enum CubeFace {
     Bottom,
 }
 
-/// The texture pack as one image: `columns` tiles of `cell` pixels per
-/// row, tile n at column n % columns and row n / columns, and `tiles` the
-/// cube face each tile is.
+/// The texture pack as one image, the asset `image`, the file the cube
+/// kind's definition references (`cube.json` `pack`): `columns` tiles of
+/// `cell` pixels per row, tile n at column n % columns and row n / columns,
+/// and `tiles` the cube face each tile is.
 pub struct Pack {
-    pub bytes: u64,
+    pub image: Asset,
     pub cell: u32,
     pub columns: u32,
     pub tiles: &'static [(Cube, CubeFace, u32)],
@@ -246,7 +246,7 @@ pub struct Pack {
 pub const PACK: Pack = Pack {
 "##,
     );
-    let _ = writeln!(out, "    bytes: {},", pack.bytes);
+    let _ = writeln!(out, "    image: Asset::{},", ident(&pack.image));
     let _ = writeln!(out, "    cell: {},", pack.cell);
     let _ = writeln!(out, "    columns: {},", pack.columns);
     out.push_str("    tiles: &[\n");

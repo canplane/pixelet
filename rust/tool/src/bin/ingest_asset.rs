@@ -133,12 +133,25 @@ fn run() -> Result<(), String> {
     }
     let faces = table::faces(&tile_slots, &pxl_tool::spec::asset::catalog()?)?;
     let composed = pack::compose(&tiles.iter().map(|t| (t.clone(), shipped[t].as_slice())).collect::<Vec<_>>())?;
-    let image_name = named("pack.webp", &composed.bytes);
+    // The sheet ships as a file of the table, at the path the cube kind's
+    // definition names, which no file under asset/content/ may take.
+    let image = pxl_tool::spec::asset::pack_path()?;
+    if rows.iter().any(|r| r.path == image) {
+        return Err(format!("{image}, the texture pack's path, is a file under asset/content/ too"));
+    }
+    let image_name = named(&image, &composed.bytes);
     std::fs::write(out_dir.join(&image_name), &composed.bytes).map_err(|e| e.to_string())?;
-
-    let laid = Pack {
+    total += composed.bytes.len() as u64;
+    rows.push(Row {
+        path: image.clone(),
         key: format!("{KEY_PREFIX}{image_name}"),
         bytes: composed.bytes.len() as u64,
+        extent: None,
+    });
+    rows.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let laid = Pack {
+        image,
         cell: pack::TILE_SIZE,
         columns: pack::COLUMNS,
         tiles: composed.tiles,
@@ -161,7 +174,7 @@ fn run() -> Result<(), String> {
         rows.len(),
         total as f64 / 1024.0 / 1024.0,
         laid.tiles.len(),
-        laid.bytes as f64 / 1024.0
+        composed.bytes.len() as f64 / 1024.0
     );
     Ok(())
 }

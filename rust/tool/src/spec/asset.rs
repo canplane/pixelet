@@ -40,6 +40,12 @@ fn named<'l, 'a>(list: &'l [Result<Entry<'a>, &'a str>]) -> impl Iterator<Item =
     list.iter().filter_map(|e| e.as_ref().ok())
 }
 
+/// The path the cube kind's texture pack ships at (`cube.json` `pack`).
+pub fn pack_path() -> Result<String, String> {
+    let spec = read(CUBE_JSON)?;
+    spec.get("pack").map(Node::value).and_then(Node::str).map(str::to_string).ok_or(format!("{CUBE_JSON}: no pack"))
+}
+
 /// The catalog's two groups of placeable cubes, the ground's looks and the
 /// object's colors, which a texture is filed under.
 pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {

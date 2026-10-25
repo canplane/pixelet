@@ -67,6 +67,7 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
   "cube/block/block_violet.png": { key: "asset/b08576ec1a70440b8b0b59d3e01a9c1e6f12518a4a610d4cb69cac061421a874.png", bytes: 91559 },
   "cube/block/block_white.png": { key: "asset/6da2cf5f8dd2c146ff9addd9d45416087bd1e8ab5ccf75d65c37c06bdbe6d039.png", bytes: 78320 },
   "cube/block/block_yellow.png": { key: "asset/383731be87d80f67be4f25b8bc40ca921c034e359e4e9e15cc42dfc34b3f524d.png", bytes: 88054 },
+  "cube/pack.webp": { key: "asset/6394424253433a73ae94ae5c4de37eb56bd1e831d519cd1bcdb2d3eac5bbc824.webp", bytes: 882258 },
   "cube/terrain/bottom_apron.png": { key: "asset/b5713e6cdf0d84a951154d3b8ab1f529cf90cfdb8997c8156e1ec3104e784367.png", bytes: 91907 },
   "cube/terrain/bottom_commercial.png": { key: "asset/59530abe14367ed90a921c0c970145037b75bfe97222780fb86b48b4f56a3ae9.png", bytes: 102120 },
   "cube/terrain/bottom_forest.png": { key: "asset/da27b6c52b6c9ab7ea0de9a73350d74846a76da3d850bc28e11d08f7e616c886.png", bytes: 104341 },
@@ -176,13 +177,12 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
   "sky/moon.png": { key: "asset/e6977d49922c1676da63b5d6179388ba61f1ad7a9ae0b40408718b7cc7123881.png", bytes: 165698 },
 };
 
-/** The texture pack as one image: `columns` tiles of `cell` pixels per
- * row, tile n at column n % columns and row n / columns, `tiles` the asset
- * path each holds, and `faces` the cube face — group, type, face — each
- * tile is. */
+/** The texture pack as one image, the asset at `image`: `columns` tiles of
+ * `cell` pixels per row, tile n at column n % columns and row n / columns,
+ * `tiles` the asset path each holds, and `faces` the cube face — group,
+ * type, face — each tile is. */
 export const PACK = {
-  key: "asset/6394424253433a73ae94ae5c4de37eb56bd1e831d519cd1bcdb2d3eac5bbc824.webp",
-  bytes: 882258,
+  image: "cube/pack.webp",
   cell: 256,
   columns: 8,
   tiles: [

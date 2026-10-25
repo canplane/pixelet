@@ -658,7 +658,7 @@ A catalog is never sent, because both sides compile it. Where bytes cross, as a 
 - **Cubes and decors** are numbers in `spec/spec/asset/`, and the object store writes the number.
 - **Models** are named by a path under `asset/content/` in the catalog that uses them.
 - **Asset keys** come from the table `pxl-tool`'s ingest writes (`pxl-spec asset/ingested.spec.rs`). Each file is keyed by the SHA-256 of its bytes, so moving it changes no key.
-- **The texture pack** is one table of which image a cube wears on which face, and one WebP image. A textured look is drawn from afar as its tile's mean, so the ingest draws each top toward its look's color (`pxl-tool asset/pack.rs` `TOWARD_CARTO`).
+- **The texture pack** is one table of which image a cube wears on which face, and one WebP image, the file the cube kind's definition names (`spec/spec/asset/cube.json` `pack`), which the ingest composes and ships as a row of the table like any other. A textured look is drawn from afar as its tile's mean, so the ingest draws each top toward its look's color (`pxl-tool asset/pack.rs` `TOWARD_CARTO`).
 
 # Prior art
 
