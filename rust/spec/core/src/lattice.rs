@@ -29,13 +29,19 @@ impl Lattice {
         if cell >= FINEST_ZOOM || cell <= LEAF_ZOOM {
             panic!()
         }
-        Lattice { cell, scale_steps: 0 }
+        Lattice {
+            cell,
+            scale_steps: 0,
+        }
     }
 
     /// Drawn in the camera grid's cells `steps` zooms coarser than its own,
     /// or where negative, finer.
     pub const fn scaled(self, steps: i32) -> Lattice {
-        Lattice { scale_steps: steps, ..self }
+        Lattice {
+            scale_steps: steps,
+            ..self
+        }
     }
 
     // What a layer reads for a node of the view, named by its zoom and column

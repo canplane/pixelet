@@ -24,8 +24,11 @@ export function Dock() {
   // hold, so the two never compete.
   const swipe = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_e, s) => Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
-      ...deckSwipe(() => useDockStore.getState().switchDockMode(), { press: keepKeyboard }),
+      onMoveShouldSetPanResponderCapture: (_e, s) =>
+        Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
+      ...deckSwipe(() => useDockStore.getState().switchDockMode(), {
+        press: keepKeyboard,
+      }),
     }),
   ).current;
   const message = useMessage(mode);
@@ -40,10 +43,23 @@ export function Dock() {
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
 
   return (
-    <View ref={bar} {...swipe.panHandlers} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)} style={styles.bar}>
+    <View
+      ref={bar}
+      {...swipe.panHandlers}
+      onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+      style={styles.bar}
+    >
       {barWidth > 0 && (
         <>
-          <Card key={DockMode.Message} pane={DockMode.Message} mode={mode} fill={color.ground} x={x} width={width} span={barWidth}>
+          <Card
+            key={DockMode.Message}
+            pane={DockMode.Message}
+            mode={mode}
+            fill={color.ground}
+            x={x}
+            width={width}
+            span={barWidth}
+          >
             <Message message={message} width={width} />
           </Card>
 
@@ -58,7 +74,11 @@ export function Dock() {
             span={barWidth}
             onContentWidth={setStripWidth}
           >
-            <Strip span={barWidth} scrolls={flyout?.sizes !== Sizes.Open} sizes={sizes} />
+            <Strip
+              span={barWidth}
+              scrolls={flyout?.sizes !== Sizes.Open}
+              sizes={sizes}
+            />
           </Card>
 
           {shownFlyout && <SizeFlyout flyout={shownFlyout} />}
@@ -69,5 +89,10 @@ export function Dock() {
 }
 
 const styles = StyleSheet.create({
-  bar: { height: DOCK_HEIGHT, width: "100%", minWidth: 0, pointerEvents: "box-none" },
+  bar: {
+    height: DOCK_HEIGHT,
+    width: "100%",
+    minWidth: 0,
+    pointerEvents: "box-none",
+  },
 });

@@ -38,14 +38,27 @@ impl<'a> Draws<'a> {
                 *at += 1;
             }
         }
-        Draws { records, order, starts }
+        Draws {
+            records,
+            order,
+            starts,
+        }
     }
 
-    pub fn of(&self, pipeline: u32) -> impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
+    pub fn of(
+        &self,
+        pipeline: u32,
+    ) -> impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
         let p = (pipeline as usize).min(PIPELINES as usize);
-        let end = if p < PIPELINES as usize { self.starts[p + 1] } else { self.starts[p] };
+        let end = if p < PIPELINES as usize {
+            self.starts[p + 1]
+        } else {
+            self.starts[p]
+        };
         let records = self.records;
-        self.order[self.starts[p] as usize..end as usize].iter().map(move |&i| &records[i as usize])
+        self.order[self.starts[p] as usize..end as usize]
+            .iter()
+            .map(move |&i| &records[i as usize])
     }
 }
 
@@ -101,7 +114,9 @@ pub const fn uploads_bytes(live: usize) -> u32 {
 pub unsafe fn set_uploads(at: u32, live: usize) {
     let slots = slots_of(live);
     // SAFETY: the caller's range, one lane of `slots` words after another.
-    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + k * slots * 4), slots) };
+    let lane = |k: usize| unsafe {
+        core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + k * slots * 4), slots)
+    };
     UPLOADS.set(Uploads {
         handle: lane(0),
         at: lane(1),
@@ -149,7 +164,13 @@ impl Uploads {
         if !room(write_buffer_bytes(memory(self.at[i], self.len[i] & !3))) {
             return false;
         }
-        let buffer = g.buffer(buffer_size(self.len[i]), buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let buffer = g.buffer(
+            buffer_size(self.len[i]),
+            buffer_usage::VERTEX
+                | buffer_usage::INDEX
+                | buffer_usage::STORAGE
+                | buffer_usage::COPY_DST,
+        );
         g.write_buffer(buffer, 0, memory(self.at[i], self.len[i] & !3));
         self.buffer[i] = buffer;
         self.group[i] = 0;
@@ -173,10 +194,20 @@ impl Uploads {
 
     /// None until the upload is on the device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
-        self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
+        self.find(handle)
+            .filter(|&i| self.buffer[i] != 0)
+            .map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
     }
 
-    pub(crate) fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
+    pub(crate) fn insert(
+        &mut self,
+        g: Option<&Gpu>,
+        handle: u32,
+        at: u32,
+        len: u32,
+        vertex_cnt: u32,
+        index_cnt: u32,
+    ) {
         self.remove(handle);
         // The owners' summed bound itself, not the slots' rounded half, so an owner left out of it shows.
         xpute_kit::ensure!(self.count < self.live, ENOTRECOVERABLE, self.live);
@@ -204,7 +235,9 @@ impl Uploads {
     pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
-        let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else { return };
+        let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else {
+            return;
+        };
         let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
         if room(write_buffer_bytes(memory(at + from, bytes))) {
             g.write_buffer(buffer, from, memory(at + from, bytes));
@@ -217,7 +250,9 @@ impl Uploads {
     }
 
     pub(crate) fn remove(&mut self, handle: u32) {
-        let Some(mut i) = self.find(handle) else { return };
+        let Some(mut i) = self.find(handle) else {
+            return;
+        };
         release(self.group[i]);
         if self.buffer[i] == 0 {
             self.missing = self.missing.saturating_sub(1);
@@ -236,7 +271,11 @@ impl Uploads {
                     return;
                 }
                 let k = home(self.handle[j], self.handle.len());
-                let stays = if i <= j { i < k && k <= j } else { i < k || k <= j };
+                let stays = if i <= j {
+                    i < k && k <= j
+                } else {
+                    i < k || k <= j
+                };
                 if !stays {
                     self.handle[i] = self.handle[j];
                     self.at[i] = self.at[j];

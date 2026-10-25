@@ -12,7 +12,9 @@
 
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
-use pxl_spec_core::window::{BACK_WORDS, EYE_JOINED_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
+use pxl_spec_core::window::{
+    BACK_WORDS, EYE_JOINED_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS,
+};
 
 use crate::domain::layer::residency::Residency;
 use crate::sys::mem::fixed::lane_bytes;
@@ -27,7 +29,15 @@ const FRAMES: u32 = Residency::<TerrainTile>::FRAMES;
 /// The separation's lanes, a plane each in order: line starts, points, tops,
 /// width, kind, form, clear; each its length and its element's bytes, which
 /// pxl-spec `separation::Room` is laid on (domain/layer/terrain/tile.rs `room_of`).
-pub const SEPARATION_LANES: [(usize, usize); 7] = [(MAX_LINES + 1, 4), (MAX_POINTS, 4), (MAX_POINTS, 2), (MAX_LINES, 1), (MAX_LINES, 1), (MAX_LINES, 1), (MAX_LINES, 1)];
+pub const SEPARATION_LANES: [(usize, usize); 7] = [
+    (MAX_LINES + 1, 4),
+    (MAX_POINTS, 4),
+    (MAX_POINTS, 2),
+    (MAX_LINES, 1),
+    (MAX_LINES, 1),
+    (MAX_LINES, 1),
+    (MAX_LINES, 1),
+];
 
 /// Separation lane `k`'s bytes in a record.
 const fn separation_lane_bytes(k: usize) -> u32 {

@@ -1,6 +1,12 @@
 // @pxl/client/shell/drawer/name-tip.tsx
 
-import { createContext, type ReactNode, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { type LayoutChangeEvent, StyleSheet, Text, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -31,9 +37,18 @@ interface Named {
 
 function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
   return (
-    <View pointerEvents="none" style={[styles.tipAnchor, { left: named.x - TIP_SPAN / 2, bottom: sheetHeight - named.y }]}>
+    <View
+      pointerEvents="none"
+      style={[styles.tipAnchor, {
+        left: named.x - TIP_SPAN / 2,
+        bottom: sheetHeight - named.y,
+      }]}
+    >
       <View style={styles.tipShape}>
-        <View needsOffscreenAlphaCompositing style={[StyleSheet.absoluteFill, styles.tipFill]}>
+        <View
+          needsOffscreenAlphaCompositing
+          style={[StyleSheet.absoluteFill, styles.tipFill]}
+        >
           <View style={styles.tipPill} />
           <View style={styles.tipPoint} />
         </View>
@@ -56,7 +71,9 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
       const at = ++press.current;
       sheet.current?.measureInWindow((sx, sy) =>
         item.measureInWindow((x, y, w) => {
-          if (press.current === at) setNamed({ label, x: x - sx + w / 2, y: y - sy });
+          if (press.current === at) {
+            setNamed({ label, x: x - sx + w / 2, y: y - sy });
+          }
         })
       );
     },
@@ -67,7 +84,12 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
   }), []);
 
   return (
-    <View ref={sheet} style={styles.sheet} onLayout={(e: LayoutChangeEvent) => setSheetHeight(e.nativeEvent.layout.height)}>
+    <View
+      ref={sheet}
+      style={styles.sheet}
+      onLayout={(e: LayoutChangeEvent) =>
+        setSheetHeight(e.nativeEvent.layout.height)}
+    >
       <NamingContext.Provider value={naming}>{children}</NamingContext.Provider>
       {named && <NameTip named={named} sheetHeight={sheetHeight} />}
     </View>
@@ -76,10 +98,20 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   sheet: { flex: 1 },
-  tipAnchor: { position: "absolute", width: TIP_SPAN, alignItems: "center", paddingBottom: 2 },
+  tipAnchor: {
+    position: "absolute",
+    width: TIP_SPAN,
+    alignItems: "center",
+    paddingBottom: 2,
+  },
   tipShape: { alignItems: "center", paddingBottom: TIP_POINT },
   tipFill: { opacity: TIP_OPACITY, alignItems: "center" },
-  tipPill: { alignSelf: "stretch", flex: 1, backgroundColor: TIP_FILL, borderRadius: TIP_RADIUS },
+  tipPill: {
+    alignSelf: "stretch",
+    flex: 1,
+    backgroundColor: TIP_FILL,
+    borderRadius: TIP_RADIUS,
+  },
   tip: {
     ...textStyle.notice,
     color: color.white,

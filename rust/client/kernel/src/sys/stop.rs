@@ -11,7 +11,12 @@ use xpute_kit::status::errno::Errno;
 /// Numbers only: formatting is the bracket's, so a module that reports
 /// nothing links none of it.
 pub enum Stop<'a> {
-    Bug { errnum: Errno, at: &'a Location<'a>, a: u64, b: u64 },
+    Bug {
+        errnum: Errno,
+        at: &'a Location<'a>,
+        a: u64,
+        b: u64,
+    },
     Panic(&'a std::panic::PanicHookInfo<'a>),
 }
 

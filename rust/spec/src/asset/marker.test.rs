@@ -5,7 +5,9 @@ use super::*;
 /// Markers spread over a few squares, two to a leaf cell in places.
 fn markers() -> Vec<EntryAt> {
     let z = crate::space::coord::zoom::UNIT_ZOOM;
-    (0..400i32).map(|k| EntryAt::new(z, [(k * 7919) % 300, (k * 104_729) % 300, (k * 31) % 9])).collect()
+    (0..400i32)
+        .map(|k| EntryAt::new(z, [(k * 7919) % 300, (k * 104_729) % 300, (k * 31) % 9]))
+        .collect()
 }
 
 /// A marker's cell is its parent's child one grid zoom finer, so a cell's

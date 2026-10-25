@@ -45,11 +45,20 @@ fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
 
 /// Applies one submission. None (replied as ENOSYS) for an unknown command
 /// or a signal submitted as one.
-pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
-    use crate::domain::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel};
+pub(super) fn apply(
+    s: &mut State,
+    number: u32,
+    pkt: &Option<&[u8]>,
+) -> Result<Option<i32>, MarshalError> {
+    use crate::domain::control::camera::input::{
+        camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move,
+        camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel,
+    };
     use crate::domain::control::interaction::{hold, holding};
     use crate::domain::control::sensor::{device_orientation, geolocation};
-    use crate::domain::view::setting::store::{settings_loaded, settings_open, settings_store, SettingKey};
+    use crate::domain::view::setting::store::{
+        settings_loaded, settings_open, settings_store, SettingKey,
+    };
     use crate::profiler::window::{profiler_follow, profiler_window_start, profiler_window_stop};
     use crate::shell as ui;
     use crate::sys::sched::edge::request_world_tick;
@@ -58,15 +67,24 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     if let Some(cmd) = xpute_cmd::Command::of(number) {
         return apply_xpute(cmd, pkt);
     }
-    let Some(cmd) = Command::of(number) else { return Ok(None) };
+    let Some(cmd) = Command::of(number) else {
+        return Ok(None);
+    };
     match cmd {
         Command::WORLD_FRAME => {
             let p = abi::WorldFrame::read(packet(pkt)?)?;
-            refuse_unless(p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(), Errno::EINVAL)?;
+            refuse_unless(
+                p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(),
+                Errno::EINVAL,
+            )?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
             let last = crate::turn::wall_now();
-            let delta = if last > 0.0 { ((p.unix_ms - last) / 1000.0).max(0.0) } else { 0.0 };
+            let delta = if last > 0.0 {
+                ((p.unix_ms - last) / 1000.0).max(0.0)
+            } else {
+                0.0
+            };
             crate::turn::world_frame_asked(crate::turn::HostFrame {
                 width: p.width,
                 height: p.height,
@@ -100,13 +118,19 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
-            refuse_unless(crate::sys::io::source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(), Errno::EINVAL)?;
+            refuse_unless(
+                crate::sys::io::source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(),
+                Errno::EINVAL,
+            )?;
             Ok(Some(0))
         }
         Command::WORLD_KEPT_EMPTIED => {
             use crate::sys::io::file::{self, Kept};
             let p = abi::WorldKeptEmptied::read(packet(pkt)?)?;
-            let kept = or_refuse(Kept::of_slot(p.slot).filter(|&k| file::refused(k)), Errno::EINVAL)?;
+            let kept = or_refuse(
+                Kept::of_slot(p.slot).filter(|&k| file::refused(k)),
+                Errno::EINVAL,
+            )?;
             file::emptied(kept);
             // The settings write what they hold from the next keep on; the
             // objects are read again, empty, and saved from then on.
@@ -125,7 +149,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_POINTER => {
             let p = abi::InputPointer::read(packet(pkt)?)?;
             match p.phase {
-                abi::PointerPhase::Down => camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y),
+                abi::PointerPhase::Down => {
+                    camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y)
+                }
                 abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
                 abi::PointerPhase::Up => {
                     if let Some([x, y]) = camera_pointer_up(p.pointer_type, p.id) {
@@ -151,7 +177,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                     holding.object_cube = or_refuse(cube_of(p.value), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
-                    holding.decor_id = or_refuse(u16::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
+                    holding.decor_id = or_refuse(
+                        u16::try_from(p.value).ok().and_then(DecorId::of),
+                        Errno::EINVAL,
+                    )?;
                 }
                 abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
             }
@@ -161,7 +190,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_MARKER_WORDS => {
             let text = abi::InputMarkerWords::read(packet(pkt)?)?.text;
-            or_refuse(crate::domain::control::interaction::edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
+            or_refuse(
+                crate::domain::control::interaction::edit::draft_words(text).ok(),
+                Errno::EMSGSIZE,
+            )?;
             Ok(Some(0))
         }
         Command::INPUT_MARKER_PUT => {
@@ -202,8 +234,14 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_POSE => {
             let p = abi::InputPose::read(packet(pkt)?)?;
             // A unit quaternion by the protocol; one of no length turns nothing.
-            refuse_unless(p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0, Errno::EINVAL)?;
-            crate::domain::control::camera::controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
+            refuse_unless(
+                p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0,
+                Errno::EINVAL,
+            )?;
+            crate::domain::control::camera::controller::tracked_pose(
+                [p.x, p.y, p.z],
+                [p.qx, p.qy, p.qz, p.qw],
+            );
             applied(s)
         }
         Command::INPUT_POSE_END => {
@@ -212,16 +250,27 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::SENSOR_POSITION => {
             let p = abi::SensorPosition::read(packet(pkt)?)?;
-            refuse_unless(on_earth(p.lon, p.lat) && p.accuracy.is_none_or(|a| a >= 0.0) && bearing(p.course), Errno::EINVAL)?;
+            refuse_unless(
+                on_earth(p.lon, p.lat) && p.accuracy.is_none_or(|a| a >= 0.0) && bearing(p.course),
+                Errno::EINVAL,
+            )?;
             // An accuracy the device does not give is no accuracy at all.
-            geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy.unwrap_or(f64::INFINITY), p.course);
+            geolocation::geolocation_fix(
+                p.lon,
+                p.lat,
+                p.altitude,
+                p.accuracy.unwrap_or(f64::INFINITY),
+                p.course,
+            );
             Ok(Some(0))
         }
         Command::SENSOR_FAILED => {
             let p = abi::SensorFailed::read(packet(pkt)?)?;
             match p.sensor {
                 // A failure the platform named no cause for is Other's.
-                abi::Sensor::Geolocation => geolocation::geolocation_error(p.code.unwrap_or(abi::GeolocationErrorCode::Other)),
+                abi::Sensor::Geolocation => geolocation::geolocation_error(
+                    p.code.unwrap_or(abi::GeolocationErrorCode::Other),
+                ),
                 abi::Sensor::Orientation => device_orientation::orientation_lost(),
             }
             Ok(Some(0))
@@ -230,8 +279,19 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::SensorOrientation::read(packet(pkt)?)?;
             // DeviceOrientationEvent's ranges, closed: a reading at an end is still one.
             let within = |v: Option<f64>, half: f64| v.is_none_or(|v| (-half..=half).contains(&v));
-            refuse_unless(bearing(p.webkit_compass_heading) && bearing(p.alpha) && within(p.beta, 180.0) && within(p.gamma, 90.0), Errno::EINVAL)?;
-            device_orientation::orientation_event(p.webkit_compass_heading, p.alpha, p.beta, p.gamma);
+            refuse_unless(
+                bearing(p.webkit_compass_heading)
+                    && bearing(p.alpha)
+                    && within(p.beta, 180.0)
+                    && within(p.gamma, 90.0),
+                Errno::EINVAL,
+            )?;
+            device_orientation::orientation_event(
+                p.webkit_compass_heading,
+                p.alpha,
+                p.beta,
+                p.gamma,
+            );
             Ok(Some(0))
         }
         Command::SENSOR_PERMISSION => {
@@ -242,7 +302,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                         geolocation::geolocation_permission_granted(world_platform().geolocation);
                     }
                 }
-                abi::Sensor::Orientation => device_orientation::orientation_permission(p.answer, world_platform().orientation),
+                abi::Sensor::Orientation => device_orientation::orientation_permission(
+                    p.answer,
+                    world_platform().orientation,
+                ),
             }
             Ok(Some(0))
         }
@@ -274,7 +337,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             Ok(Some(0))
         }
         Command::SURFACE_OPEN => {
-            let handle = pxl_render::gpu::surface::surface_open(abi::SurfaceOpen::read(packet(pkt)?)?.role);
+            let handle =
+                pxl_render::gpu::surface::surface_open(abi::SurfaceOpen::read(packet(pkt)?)?.role);
             if handle != 0 {
                 request_world_tick();
             }
@@ -284,14 +348,30 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::SurfaceResize::read(packet(pkt)?)?;
             refuse_unless(p.device_pixel_ratio > 0.0, Errno::EINVAL)?;
             let role = pxl_render::gpu::surface::surface(p.surface).map_or(0, |s| s.role);
-            let ratio = crate::domain::view::frame::resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
-            refuse_unless(pxl_render::gpu::surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio, ratio), Errno::EBADF)?;
+            let ratio = crate::domain::view::frame::resolution::surface_ratio(
+                role,
+                [p.width, p.height],
+                p.device_pixel_ratio,
+            );
+            refuse_unless(
+                pxl_render::gpu::surface::surface_resize(
+                    p.surface,
+                    p.width,
+                    p.height,
+                    p.device_pixel_ratio,
+                    ratio,
+                ),
+                Errno::EBADF,
+            )?;
             request_world_tick();
             Ok(Some(0))
         }
         Command::SURFACE_CLOSE => {
             let surface = abi::SurfaceClose::read(packet(pkt)?)?.surface;
-            refuse_unless(pxl_render::gpu::surface::surface(surface).is_some(), Errno::EBADF)?;
+            refuse_unless(
+                pxl_render::gpu::surface::surface(surface).is_some(),
+                Errno::EBADF,
+            )?;
             super::close_surface(surface);
             Ok(Some(0))
         }
@@ -312,12 +392,25 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::PREVIEW_OPEN => {
             let p = abi::PreviewOpen::read(packet(pkt)?)?;
-            refuse_unless(pxl_render::gpu::surface::surface(p.surface).is_some(), Errno::EBADF)?;
-            refuse_unless(crate::domain::scene::character::preview::preview_open(p.surface, p.group, p.number), Errno::EINVAL)?;
+            refuse_unless(
+                pxl_render::gpu::surface::surface(p.surface).is_some(),
+                Errno::EBADF,
+            )?;
+            refuse_unless(
+                crate::domain::scene::character::preview::preview_open(
+                    p.surface, p.group, p.number,
+                ),
+                Errno::EINVAL,
+            )?;
             applied(s)
         }
         Command::PREVIEW_CLOSE => {
-            refuse_unless(crate::domain::scene::character::preview::preview_close(abi::PreviewClose::read(packet(pkt)?)?.surface), Errno::EBADF)?;
+            refuse_unless(
+                crate::domain::scene::character::preview::preview_close(
+                    abi::PreviewClose::read(packet(pkt)?)?.surface,
+                ),
+                Errno::EBADF,
+            )?;
             applied(s)
         }
         // Records only while the profiler setting is on: a window opened with the
@@ -332,7 +425,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         // Memory is at most 1 GiB, so an address fits an i32.
-        Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
+        Command::PROFILER_READ => Ok(Some(profiler_read(
+            abi::ProfilerRead::read(packet(pkt)?)?.window_ms,
+        ) as i32)),
         Command::PROFILER_RINGS => Ok(Some(profiler_rings() as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
     }
@@ -362,7 +457,8 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 fn profiler_read(window_ms: Option<f64>) -> u32 {
     use crate::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
-    static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_guest::global::Global::new();
+    static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> =
+        xpute_guest::global::Global::new();
     let summary = crate::profiler::summary::profiler_summarize(window_ms);
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
     w[READ::summary_at as usize] = off_of_slice(&raw const *summary) as u32;
@@ -376,7 +472,8 @@ fn profiler_rings() -> u32 {
     use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::profiler::spec::RINGS;
     // On the heap, as READ's words are.
-    static WORDS: xpute_guest::global::Global<Box<[u32; RINGS::WORDS as usize]>> = xpute_guest::global::Global::new();
+    static WORDS: xpute_guest::global::Global<Box<[u32; RINGS::WORDS as usize]>> =
+        xpute_guest::global::Global::new();
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
     w[RINGS::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
@@ -405,7 +502,10 @@ enum MarkerTap {
 fn marker_tap(x: f64, y: f64) -> Option<MarkerTap> {
     use crate::domain::control::interaction::ActiveTool;
     use crate::domain::scene::marker::Went;
-    match (crate::domain::control::interaction::holding().active_tool, crate::domain::scene::marker::tap(x, y)?) {
+    match (
+        crate::domain::control::interaction::holding().active_tool,
+        crate::domain::scene::marker::tap(x, y)?,
+    ) {
         (ActiveTool::Pointer, Went::To(at) | Went::Pin(_, at)) => Some(MarkerTap::Go(at)),
         (ActiveTool::Eraser, Went::Pin(e, _)) => Some(MarkerTap::Remove(e)),
         (ActiveTool::Marker, Went::Pin(e, _)) => Some(MarkerTap::Wait(e)),

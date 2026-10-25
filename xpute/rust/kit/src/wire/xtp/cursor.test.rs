@@ -31,16 +31,61 @@ fn show<T>(v: &NodeValue<T>) -> String {
             let (name, elements): (&str, Vec<String>) = match a.type_ {
                 SequenceType::U8_ARRAY => ("Uint8Array", b.iter().map(|x| x.to_string()).collect()),
                 SequenceType::BITSET => ("Uint8Array", b.iter().map(|x| x.to_string()).collect()),
-                SequenceType::I8_ARRAY => ("Int8Array", b.iter().map(|x| (*x as i8).to_string()).collect()),
-                SequenceType::U16_ARRAY => ("Uint16Array", b.chunks(2).map(|c| u16::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::I16_ARRAY => ("Int16Array", b.chunks(2).map(|c| i16::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::U32_ARRAY => ("Uint32Array", b.chunks(4).map(|c| u32::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::I32_ARRAY => ("Int32Array", b.chunks(4).map(|c| i32::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::U64_ARRAY => ("BigUint64Array", b.chunks(8).map(|c| u64::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::I64_ARRAY => ("BigInt64Array", b.chunks(8).map(|c| i64::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::F32_ARRAY => ("Float32Array", b.chunks(4).map(|c| (f32::from_le_bytes(c.try_into().unwrap()) as f64).to_string()).collect()),
-                SequenceType::F64_ARRAY => ("Float64Array", b.chunks(8).map(|c| f64::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::STR | SequenceType::STRS => unreachable!("a string leaf reads as NodeValue::Str, a sequence of them as NodeValue::List"),
+                SequenceType::I8_ARRAY => (
+                    "Int8Array",
+                    b.iter().map(|x| (*x as i8).to_string()).collect(),
+                ),
+                SequenceType::U16_ARRAY => (
+                    "Uint16Array",
+                    b.chunks(2)
+                        .map(|c| u16::from_le_bytes(c.try_into().unwrap()).to_string())
+                        .collect(),
+                ),
+                SequenceType::I16_ARRAY => (
+                    "Int16Array",
+                    b.chunks(2)
+                        .map(|c| i16::from_le_bytes(c.try_into().unwrap()).to_string())
+                        .collect(),
+                ),
+                SequenceType::U32_ARRAY => (
+                    "Uint32Array",
+                    b.chunks(4)
+                        .map(|c| u32::from_le_bytes(c.try_into().unwrap()).to_string())
+                        .collect(),
+                ),
+                SequenceType::I32_ARRAY => (
+                    "Int32Array",
+                    b.chunks(4)
+                        .map(|c| i32::from_le_bytes(c.try_into().unwrap()).to_string())
+                        .collect(),
+                ),
+                SequenceType::U64_ARRAY => (
+                    "BigUint64Array",
+                    b.chunks(8)
+                        .map(|c| u64::from_le_bytes(c.try_into().unwrap()).to_string())
+                        .collect(),
+                ),
+                SequenceType::I64_ARRAY => (
+                    "BigInt64Array",
+                    b.chunks(8)
+                        .map(|c| i64::from_le_bytes(c.try_into().unwrap()).to_string())
+                        .collect(),
+                ),
+                SequenceType::F32_ARRAY => (
+                    "Float32Array",
+                    b.chunks(4)
+                        .map(|c| (f32::from_le_bytes(c.try_into().unwrap()) as f64).to_string())
+                        .collect(),
+                ),
+                SequenceType::F64_ARRAY => (
+                    "Float64Array",
+                    b.chunks(8)
+                        .map(|c| f64::from_le_bytes(c.try_into().unwrap()).to_string())
+                        .collect(),
+                ),
+                SequenceType::STR | SequenceType::STRS => unreachable!(
+                    "a string leaf reads as NodeValue::Str, a sequence of them as NodeValue::List"
+                ),
             };
             format!("{name}({})", elements.join(" "))
         }
@@ -60,7 +105,11 @@ impl Packet {
         let mut buf = vec![0u8; bytes.len() + WORD_SZ as usize];
         let at = buf.as_ptr().align_offset(WORD_SZ as usize);
         buf[at..at + bytes.len()].copy_from_slice(&bytes);
-        Packet { buf, at, len: bytes.len() }
+        Packet {
+            buf,
+            at,
+            len: bytes.len(),
+        }
     }
 
     fn as_slice(&self) -> &[u8] {
@@ -76,15 +125,33 @@ fn the_cursor_reads_what_the_typescript_reads() {
         let reader = TreeReader::new(pkt.as_slice()).unwrap();
         let root = reader.read();
         assert_eq!(root.type_() as u32, v.u32(&format!("{k}.type")), "{k}.type");
-        assert_eq!(show(&root.get_deep().unwrap()), v.s(&format!("{k}.deep")), "{k}.deep");
+        assert_eq!(
+            show(&root.get_deep().unwrap()),
+            v.s(&format!("{k}.deep")),
+            "{k}.deep"
+        );
         if let Cursor::Branch(b) = &root {
             let got: Vec<String> = b
                 .children()
                 .unwrap()
                 .iter()
-                .map(|c| format!("{}:{}", c.type_(), if c.is_branch() { "branch".to_string() } else { show(&c.get().unwrap()) }))
+                .map(|c| {
+                    format!(
+                        "{}:{}",
+                        c.type_(),
+                        if c.is_branch() {
+                            "branch".to_string()
+                        } else {
+                            show(&c.get().unwrap())
+                        }
+                    )
+                })
                 .collect();
-            let n = if v.has(&format!("{k}.shallow.0")) { v.len(&format!("{k}.shallow")) } else { 0 };
+            let n = if v.has(&format!("{k}.shallow.0")) {
+                v.len(&format!("{k}.shallow"))
+            } else {
+                0
+            };
             let want: Vec<&str> = (0..n).map(|j| v.s(&format!("{k}.shallow.{j}"))).collect();
             assert_eq!(got, want, "{k}.shallow");
         }
@@ -98,10 +165,22 @@ fn the_cursor_reads_what_the_typescript_reads() {
         }
     };
     assert_eq!(refused(&good[..20]), v.s("malformed.truncated_header"));
-    assert_eq!(refused(&format!("00{}", &good[2..])), v.s("malformed.bad_magic"));
+    assert_eq!(
+        refused(&format!("00{}", &good[2..])),
+        v.s("malformed.bad_magic")
+    );
     assert_eq!(refused(&good[..40]), v.s("malformed.truncated_payload"));
-    v.each("refused", |k| assert_eq!(refused(v.s(&format!("{k}.packet"))), v.s(&format!("{k}.read")), "{k}"));
-    for (j, n) in [0x7ffffff9u32, 0xfffffff8, 0xfffffff9].into_iter().enumerate() {
+    v.each("refused", |k| {
+        assert_eq!(
+            refused(v.s(&format!("{k}.packet"))),
+            v.s(&format!("{k}.read")),
+            "{k}"
+        )
+    });
+    for (j, n) in [0x7ffffff9u32, 0xfffffff8, 0xfffffff9]
+        .into_iter()
+        .enumerate()
+    {
         let got = match crate::wire::xtp::spec::ALIGN(n, 8) {
             Ok(a) => format!("ok:{a}"),
             Err(e) => format!("errno:{}", e.errnum as i32),
@@ -124,9 +203,17 @@ fn the_cursor_reads_what_the_typescript_reads() {
         }
     };
     for (j, cap) in [24, 32, 40, 48].into_iter().enumerate() {
-        assert_eq!(at_cap("abcdefgh", cap), v.s(&format!("caps.{j}")), "caps.{j} at {cap}");
+        assert_eq!(
+            at_cap("abcdefgh", cap),
+            v.s(&format!("caps.{j}")),
+            "caps.{j} at {cap}"
+        );
     }
     for (j, cap) in [24, 32, 40].into_iter().enumerate() {
-        assert_eq!(at_cap("€€€", cap), v.s(&format!("caps_utf8.{j}")), "caps_utf8.{j} at {cap}");
+        assert_eq!(
+            at_cap("€€€", cap),
+            v.s(&format!("caps_utf8.{j}")),
+            "caps_utf8.{j} at {cap}"
+        );
     }
 }

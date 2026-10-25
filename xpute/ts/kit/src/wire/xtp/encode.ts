@@ -1,12 +1,35 @@
 // @xpute/kit/wire/xtp/encode.ts
 
-import { BOOL, type f32, type f64, FIELD_SET, type i16, type i32, type i64, type i8, type u16, type u32, type u64, type u8 } from "@xpute/kit/abi/word.ts";
-import type { BigTypedArray, TypedArray, U8Array } from "@xpute/kit/abi/array.ts";
+import {
+  BOOL,
+  type f32,
+  type f64,
+  FIELD_SET,
+  type i16,
+  type i32,
+  type i64,
+  type i8,
+  type u16,
+  type u32,
+  type u64,
+  type u8,
+} from "@xpute/kit/abi/word.ts";
+import type {
+  BigTypedArray,
+  TypedArray,
+  U8Array,
+} from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 
-import type { AlignUnit, Node, NodeType, ScalarNode, SequenceNode } from "./spec.ts";
+import type {
+  AlignUnit,
+  Node,
+  NodeType,
+  ScalarNode,
+  SequenceNode,
+} from "./spec.ts";
 import {
   ALIGN,
   ALIGN_SZ,
@@ -50,7 +73,9 @@ export class TreeEncoder {
   /** EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past the cap. */
   encode(view: NodeView, opts: TreeEncoderOptions): U8Array {
     const { init_cap, max_cap = MAX_PKT_SZ } = opts;
-    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) throw new MarshalError(Errno.EINVAL);
+    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) {
+      throw new MarshalError(Errno.EINVAL);
+    }
     let cap: u32 = Math.max(HDR_SZ, Math.min(init_cap, max_cap));
     for (;;) {
       const buf: U8Array = new Uint8Array(cap);
@@ -59,7 +84,10 @@ export class TreeEncoder {
       try {
         return buf.subarray(0, w.finished());
       } catch (e) {
-        if (!(e instanceof MarshalError) || e.errnum !== Errno.EOVERFLOW || cap === max_cap) throw e;
+        if (
+          !(e instanceof MarshalError) || e.errnum !== Errno.EOVERFLOW ||
+          cap === max_cap
+        ) throw e;
         cap = cap > max_cap / 2 ? max_cap : cap * 2;
       }
     }
@@ -212,7 +240,13 @@ export class PacketWriter {
   }
 
   /** A packet whose root is a branch of `count`, its children written next. */
-  begin(bytes: U8Array, view: DataView, start: u32, cap: u32, count: u32): this {
+  begin(
+    bytes: U8Array,
+    view: DataView,
+    start: u32,
+    cap: u32,
+    count: u32,
+  ): this {
     this.root(bytes, view, start, cap);
     const at = this.branch_open(count);
     this.root_type = SpecialType.BRANCH;
@@ -241,20 +275,34 @@ export class PacketWriter {
     if (f.written >= f.count) throw new InvariantError(Errno.ENOSPC);
     if (f.root) this.root_type = type;
     else if (this.error === null) {
-      SET_WORD(this.view, this.start + f.base + WORD_SZ * (1 + f.written), at < 0 ? 0 : at - f.base, FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type));
+      SET_WORD(
+        this.view,
+        this.start + f.base + WORD_SZ * (1 + f.written),
+        at < 0 ? 0 : at - f.base,
+        FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type),
+      );
     }
     f.written++;
     return this;
   }
 
-  private scalar(type: ScalarType, unit: AlignUnit, set: ((at: u32) => void) | null): this {
+  private scalar(
+    type: ScalarType,
+    unit: AlignUnit,
+    set: ((at: u32) => void) | null,
+  ): this {
     const at = set === null ? -1 : this.reserve(unit, unit);
     if (at >= 0) set!(this.start + at);
     return this.entry(at, type);
   }
 
   /** A sequence's length word and `bytes` of payload after it, filled by `fill` at the payload's place in `bytes`. */
-  private seq(type: SequenceType, len: u32, bytes: number, fill: (payload: number) => void): this {
+  private seq(
+    type: SequenceType,
+    len: u32,
+    bytes: number,
+    fill: (payload: number) => void,
+  ): this {
     const at = this.reserve(WORD_SZ, WORD_SZ + word_up(bytes));
     if (at >= 0) {
       SET_WORD(this.view, this.start + at, len, RESERVED);
@@ -268,73 +316,140 @@ export class PacketWriter {
   }
 
   u8(v: u8 | null): this {
-    return this.scalar(ScalarType.U8, 1, v === null ? null : (at) => this.view.setUint8(at, v));
+    return this.scalar(
+      ScalarType.U8,
+      1,
+      v === null ? null : (at) => this.view.setUint8(at, v),
+    );
   }
 
   i8(v: i8 | null): this {
-    return this.scalar(ScalarType.I8, 1, v === null ? null : (at) => this.view.setInt8(at, v));
+    return this.scalar(
+      ScalarType.I8,
+      1,
+      v === null ? null : (at) => this.view.setInt8(at, v),
+    );
   }
 
   u16(v: u16 | null): this {
-    return this.scalar(ScalarType.U16, 2, v === null ? null : (at) => this.view.setUint16(at, v, LE));
+    return this.scalar(
+      ScalarType.U16,
+      2,
+      v === null ? null : (at) => this.view.setUint16(at, v, LE),
+    );
   }
 
   i16(v: i16 | null): this {
-    return this.scalar(ScalarType.I16, 2, v === null ? null : (at) => this.view.setInt16(at, v, LE));
+    return this.scalar(
+      ScalarType.I16,
+      2,
+      v === null ? null : (at) => this.view.setInt16(at, v, LE),
+    );
   }
 
   u32(v: u32 | null): this {
-    return this.scalar(ScalarType.U32, 4, v === null ? null : (at) => this.view.setUint32(at, v, LE));
+    return this.scalar(
+      ScalarType.U32,
+      4,
+      v === null ? null : (at) => this.view.setUint32(at, v, LE),
+    );
   }
 
   i32(v: i32 | null): this {
-    return this.scalar(ScalarType.I32, 4, v === null ? null : (at) => this.view.setInt32(at, v, LE));
+    return this.scalar(
+      ScalarType.I32,
+      4,
+      v === null ? null : (at) => this.view.setInt32(at, v, LE),
+    );
   }
 
   u64(v: u64 | null): this {
-    return this.scalar(ScalarType.U64, 8, v === null ? null : (at) => this.view.setBigUint64(at, v, LE));
+    return this.scalar(
+      ScalarType.U64,
+      8,
+      v === null ? null : (at) => this.view.setBigUint64(at, v, LE),
+    );
   }
 
   i64(v: i64 | null): this {
-    return this.scalar(ScalarType.I64, 8, v === null ? null : (at) => this.view.setBigInt64(at, v, LE));
+    return this.scalar(
+      ScalarType.I64,
+      8,
+      v === null ? null : (at) => this.view.setBigInt64(at, v, LE),
+    );
   }
 
   f32(v: f32 | null): this {
-    return this.scalar(ScalarType.F32, 4, v === null ? null : (at) => this.view.setFloat32(at, v, LE));
+    return this.scalar(
+      ScalarType.F32,
+      4,
+      v === null ? null : (at) => this.view.setFloat32(at, v, LE),
+    );
   }
 
   f64(v: f64 | null): this {
-    return this.scalar(ScalarType.F64, 8, v === null ? null : (at) => this.view.setFloat64(at, v, LE));
+    return this.scalar(
+      ScalarType.F64,
+      8,
+      v === null ? null : (at) => this.view.setFloat64(at, v, LE),
+    );
   }
 
   bool(v: boolean | null): this {
-    return this.scalar(ScalarType.BOOL, 1, v === null ? null : (at) => this.view.setUint8(at, BOOL(v)));
+    return this.scalar(
+      ScalarType.BOOL,
+      1,
+      v === null ? null : (at) => this.view.setUint8(at, BOOL(v)),
+    );
   }
 
   /** An array of `type`, its elements as they lie in `a`, little-endian. */
   array(type: SequenceType, a: TypedArray | BigTypedArray | null): this {
     if (a === null) return this.entry(-1, type);
-    return this.seq(type, a.length, a.byteLength, (payload) => this.bytes.set(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), payload));
+    return this.seq(
+      type,
+      a.length,
+      a.byteLength,
+      (payload) =>
+        this.bytes.set(
+          new Uint8Array(a.buffer, a.byteOffset, a.byteLength),
+          payload,
+        ),
+    );
   }
 
   /** One byte a bit, packed low bit first. */
   bitset(bits: U8Array | null): this {
     if (bits === null) return this.entry(-1, SequenceType.BITSET);
-    return this.seq(SequenceType.BITSET, bits.length, Math.ceil(bits.length / 8), (payload) => {
-      bits.forEach((b, i) => {
-        if (b) this.bytes[payload + (i >>> 3)] |= 1 << (i & 7);
-      });
-    });
+    return this.seq(
+      SequenceType.BITSET,
+      bits.length,
+      Math.ceil(bits.length / 8),
+      (payload) => {
+        bits.forEach((b, i) => {
+          if (b) this.bytes[payload + (i >>> 3)] |= 1 << (i & 7);
+        });
+      },
+    );
   }
 
   /** UTF-8 as `TextEncoder` writes it, a NUL after it that its length leaves out. */
   str(s: string | null): this {
-    if (s === null || this.error !== null) return this.entry(-1, SequenceType.STR);
+    if (s === null || this.error !== null) {
+      return this.entry(-1, SequenceType.STR);
+    }
     const base: u32 = ALIGN(this.lim, WORD_SZ);
     const payload: u32 = base + WORD_SZ;
-    const res = payload < this.cap ? encoding.te.encodeInto(s, this.bytes.subarray(this.start + payload, this.start + this.cap)) : null;
+    const res = payload < this.cap
+      ? encoding.te.encodeInto(
+        s,
+        this.bytes.subarray(this.start + payload, this.start + this.cap),
+      )
+      : null;
     const end: number = res === null ? 0 : payload + word_up(res.written + 1);
-    if (res === null || res.read < s.length || end > this.cap) return this.entry(this.spoil(Errno.EOVERFLOW), SequenceType.STR);
+    if (res === null || res.read < s.length || end > this.cap) {
+      return this.entry(this.spoil(Errno.EOVERFLOW), SequenceType.STR);
+    }
     this.bytes.fill(0, this.start + this.lim, this.start + payload);
     this.bytes.fill(0, this.start + payload + res.written, this.start + end);
     SET_WORD(this.view, this.start + base, res.written, RESERVED);
@@ -347,15 +462,20 @@ export class PacketWriter {
     if (items === null) return this.entry(-1, SequenceType.STRS);
     const utf8 = items.map((s) => encoding.te.encode(s));
     const lane: u32 = 4 * (utf8.length + 1);
-    return this.seq(SequenceType.STRS, utf8.length, lane + utf8.reduce((n, b) => n + b.byteLength, 0), (payload) => {
-      let off: u32 = 0;
-      this.view.setUint32(payload, 0, LE);
-      utf8.forEach((b, i) => {
-        this.bytes.set(b, payload + lane + off);
-        off += b.byteLength;
-        this.view.setUint32(payload + 4 * (i + 1), off, LE);
-      });
-    });
+    return this.seq(
+      SequenceType.STRS,
+      utf8.length,
+      lane + utf8.reduce((n, b) => n + b.byteLength, 0),
+      (payload) => {
+        let off: u32 = 0;
+        this.view.setUint32(payload, 0, LE);
+        utf8.forEach((b, i) => {
+          this.bytes.set(b, payload + lane + off);
+          off += b.byteLength;
+          this.view.setUint32(payload + 4 * (i + 1), off, LE);
+        });
+      },
+    );
   }
 
   private branch_open(count: u32): number {
@@ -381,7 +501,9 @@ export class PacketWriter {
     const outer = this.frame;
     this.frame = { base: at < 0 ? HDR_SZ : at, count, written: 0, root: false };
     fill(this);
-    if (this.frame.written !== this.frame.count) throw new InvariantError(Errno.ENOTRECOVERABLE);
+    if (this.frame.written !== this.frame.count) {
+      throw new InvariantError(Errno.ENOTRECOVERABLE);
+    }
     this.frame = outer;
     return this.entry(this.branch_close(at), SpecialType.BRANCH);
   }
@@ -402,7 +524,9 @@ export class PacketWriter {
       if (!(e instanceof MarshalError)) throw e;
       return this.entry(this.spoil(Errno.EBADMSG), SpecialType.NIL);
     }
-    if (payload_sz > packet.byteLength - HDR_SZ) return this.entry(this.spoil(Errno.EBADMSG), type);
+    if (payload_sz > packet.byteLength - HDR_SZ) {
+      return this.entry(this.spoil(Errno.EBADMSG), type);
+    }
     if (payload_sz === 0) return this.entry(-1, type);
     let unit: AlignUnit;
     try {
@@ -413,7 +537,12 @@ export class PacketWriter {
     }
     if (payload_sz % unit) return this.entry(this.spoil(Errno.EBADMSG), type);
     const at = this.reserve(unit, payload_sz);
-    if (at >= 0) this.bytes.set(packet.subarray(HDR_SZ, HDR_SZ + payload_sz), this.start + at);
+    if (at >= 0) {
+      this.bytes.set(
+        packet.subarray(HDR_SZ, HDR_SZ + payload_sz),
+        this.start + at,
+      );
+    }
     return this.entry(at, type);
   }
 
@@ -428,7 +557,12 @@ export class PacketWriter {
     if (end > this.cap) throw new MarshalError(Errno.EOVERFLOW);
     this.bytes.fill(0, this.start + this.lim, this.start + end);
     SET_WORD(this.view, this.start, MAGIC, RESERVED);
-    SET_WORD(this.view, this.start + WORD_SZ, this.lim - HDR_SZ, FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, this.root_type));
+    SET_WORD(
+      this.view,
+      this.start + WORD_SZ,
+      this.lim - HDR_SZ,
+      FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, this.root_type),
+    );
     return end;
   }
 

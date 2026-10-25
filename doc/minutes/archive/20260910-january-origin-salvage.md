@@ -17,14 +17,16 @@ This is not a backlog. It is the missing first chapter before
 
 The earliest design was already trying to solve four distinct problems at once:
 
-1. represent a planet-scale editable world without GPU-coordinate precision loss;
+1. represent a planet-scale editable world without GPU-coordinate precision
+   loss;
 2. stream and render it in bounded spatial units;
-3. normalize messy external GIS/API data into a compact canonical representation;
+3. normalize messy external GIS/API data into a compact canonical
+   representation;
 4. build a portable Rust/WASM runtime around that world, eventually including
    networking and distributed ownership.
 
-The first three produced durable mechanisms. The fourth expanded into a
-"spatial OS" metaphor that outran the browser and the product.
+The first three produced durable mechanisms. The fourth expanded into a "spatial
+OS" metaphor that outran the browser and the product.
 
 The important distinction in hindsight is therefore not _old vs new_. It is
 **domain invariants that survived contact with the implementation** versus
@@ -35,13 +37,13 @@ The important distinction in hindsight is therefore not _old vs new_. It is
 ### One canonical world coordinate, local rendering coordinates
 
 The 2026-01-09 note treated a 64-bit integer world coordinate as the single
-source of truth and explicitly separated it from floating-origin rendering.
-The exact bit layout and physical cell sizes changed, but the invariant did not:
+source of truth and explicitly separated it from floating-origin rendering. The
+exact bit layout and physical cell sizes changed, but the invariant did not:
 absolute world identity must not depend on the renderer's small local float
 frame.
 
-Today's PVF3/IVec representation, L4 anchoring and floating-origin camera are the
-mature descendant. The full later reasoning is in
+Today's PVF3/IVec representation, L4 anchoring and floating-origin camera are
+the mature descendant. The full later reasoning is in
 [20260811-coordinate-system.md](./20260811-coordinate-system.md).
 
 ### A spatial hierarchy aligned to different costs
@@ -81,8 +83,8 @@ format changes and several renderer rewrites. OSM/GLO-30 later became
 Overture/GEDTM30, but those providers terminate at the same kind of internal
 boundary: source-specific ingress is converted into pixelet-owned page data.
 
-This is one of the clearest cases where the original problem statement was
-right while nearly every implementation detail around it changed.
+This is one of the clearest cases where the original problem statement was right
+while nearly every implementation detail around it changed.
 
 ### Flexible ingress, static egress
 
@@ -171,10 +173,11 @@ cooperative. See
 Later April work made this more concrete, but the same tendency begins in the
 January IVT design. The September April audit reached the cleaner conclusion:
 request/response and fire-and-forget operations do not need two OS-like planes
-merely because an interrupt table made that split aesthetically attractive.
-The command-plane contract is salvageable; the signal plane is not.
+merely because an interrupt table made that split aesthetically attractive. The
+command-plane contract is salvageable; the signal plane is not.
 
-See [20260909-april-checkpoint-salvage.md](./20260909-april-checkpoint-salvage.md).
+See
+[20260909-april-checkpoint-salvage.md](./20260909-april-checkpoint-salvage.md).
 
 ### Security by hiding the client runtime
 
@@ -244,14 +247,19 @@ opposite:
 > Keep the invariant when implementations keep rediscovering it. Keep a
 > mechanism only when a concrete boundary makes it pay for itself.
 
-That is the pattern behind the current codebase's later consolidations:
-features create pressure, the pressure exposes symmetry or a broken invariant,
-and only then does the shared abstraction become part of the engine.
+That is the pattern behind the current codebase's later consolidations: features
+create pressure, the pressure exposes symmetry or a broken invariant, and only
+then does the shared abstraction become part of the engine.
 
 ## Related
 
-- [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md) — why the P2P/BFT/metaverse scope collapsed and what remained.
-- [20260708-concurrency-model.md](./20260708-concurrency-model.md) — why SAB/preemptive browser threading was parked and what a restart would require.
-- [20260811-coordinate-system.md](./20260811-coordinate-system.md) — the mature coordinate/floating-origin design and its actual history.
-- [20260909-april-checkpoint-salvage.md](./20260909-april-checkpoint-salvage.md) — the later command/RPC/runtime design, split into salvage and discard.
-- [20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md) — the measured, budget-driven return of cooperative scheduling.
+- [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md) —
+  why the P2P/BFT/metaverse scope collapsed and what remained.
+- [20260708-concurrency-model.md](./20260708-concurrency-model.md) — why
+  SAB/preemptive browser threading was parked and what a restart would require.
+- [20260811-coordinate-system.md](./20260811-coordinate-system.md) — the mature
+  coordinate/floating-origin design and its actual history.
+- [20260909-april-checkpoint-salvage.md](./20260909-april-checkpoint-salvage.md)
+  — the later command/RPC/runtime design, split into salvage and discard.
+- [20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)
+  — the measured, budget-driven return of cooperative scheduling.

@@ -58,7 +58,9 @@ pub struct Part {
 /// An end by identity, never by a computed point: a segment's own first or
 /// last vertex, which every segment at that connector carries bit for bit,
 /// or a cut at a fraction of one segment, which only its parts share.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum End {
     Vertex(u64, u64),
     Cut(String, u64),
@@ -88,18 +90,41 @@ impl End {
 impl Part {
     /// A row's parts, in order along it; none of a row with no line.
     pub fn of(r: &postgres::Row) -> Vec<Part> {
-        let (gers_id, subtype, class, subclass): (String, String, Option<String>, Option<String>) = (r.get("gers_id"), r.get("subtype"), r.get("class"), r.get("subclass"));
-        let [flags, levels, subclasses] = ["flags", "levels", "subclasses"].map(|c| Rules::of(r.get::<_, Option<&str>>(c)));
-        let Some(g) = wkb_to_geometries(r.get::<_, &[u8]>("geom_wkb")).into_iter().next() else {
+        let (gers_id, subtype, class, subclass): (String, String, Option<String>, Option<String>) = (
+            r.get("gers_id"),
+            r.get("subtype"),
+            r.get("class"),
+            r.get("subclass"),
+        );
+        let [flags, levels, subclasses] =
+            ["flags", "levels", "subclasses"].map(|c| Rules::of(r.get::<_, Option<&str>>(c)));
+        let Some(g) = wkb_to_geometries(r.get::<_, &[u8]>("geom_wkb"))
+            .into_iter()
+            .next()
+        else {
             return Vec::new();
         };
-        let Some(line) = Line::of(&g.points) else { return Vec::new() };
+        let Some(line) = Line::of(&g.points) else {
+            return Vec::new();
+        };
         let (whole, length) = ([g.points[0], g.points[g.points.len() - 1]], line.length());
         let flag = |wanted: &[&str]| flags.flagged(wanted, cell_of(length));
-        let (bridge, tunnel, indoor, link, gone) = (flag(&["is_bridge"]), flag(&["is_tunnel"]), flag(&["is_indoor"]), flag(&["is_link"]), flag(GONE));
+        let (bridge, tunnel, indoor, link, gone) = (
+            flag(&["is_bridge"]),
+            flag(&["is_tunnel"]),
+            flag(&["is_indoor"]),
+            flag(&["is_link"]),
+            flag(GONE),
+        );
         let holds = |s: &[[f64; 2]], at: f64| s.iter().any(|&[a, b]| a <= at && at <= b);
         let mut cuts = vec![0.0, 1.0];
-        cuts.extend([&bridge, &tunnel, &indoor, &link, &gone].into_iter().flatten().flatten().copied());
+        cuts.extend(
+            [&bridge, &tunnel, &indoor, &link, &gone]
+                .into_iter()
+                .flatten()
+                .flatten()
+                .copied(),
+        );
         cuts.extend(levels.bounds().chain(subclasses.bounds()));
         cuts.sort_by(f64::total_cmp);
         cuts.dedup();
@@ -144,7 +169,9 @@ impl Part {
             drop(line);
             return vec![part(runs[0], g.points)];
         }
-        runs.into_iter().map(|run| part(run, line.between(run.0[0], run.0[1]))).collect()
+        runs.into_iter()
+            .map(|run| part(run, line.between(run.0[0], run.0[1])))
+            .collect()
     }
 
     pub fn id(&self) -> PartId {

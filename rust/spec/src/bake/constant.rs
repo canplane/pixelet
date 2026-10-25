@@ -7,7 +7,10 @@ use crate::space::layer::lattice::GROUND;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
 // resample and the bake's bicubic, and stored as i16 ground cells.
-const _: () = assert!(EXTENT[2] == i16::BITS && GROUND.cell() == UNIT_ZOOM, "a height in i16 ground cells is the world's height");
+const _: () = assert!(
+    EXTENT[2] == i16::BITS && GROUND.cell() == UNIT_ZOOM,
+    "a height in i16 ground cells is the world's height"
+);
 /// A leaf's elevation samples and their padding, which the bake draws its
 /// cells' heights off (pxl-spec-core).
 pub use pxl_spec_core::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
@@ -30,7 +33,10 @@ pub struct EntryAt {
 
 impl EntryAt {
     pub fn new(zoom: Zoom, at: [i32; 3]) -> EntryAt {
-        EntryAt { zoom, at: wrap_cell(zoom, at) }
+        EntryAt {
+            zoom,
+            at: wrap_cell(zoom, at),
+        }
     }
 
     /// The cube of `zoom` that holds `p`.

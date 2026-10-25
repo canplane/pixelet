@@ -13,7 +13,8 @@ import { flag, HEAD, op } from "./sys.spec.ts";
 
 const SCRATCH = 1 << 15;
 
-const hex = (s: string): U8Array => new Uint8Array((s.match(/../g) ?? []).map((b) => parseInt(b, 16)));
+const hex = (s: string): U8Array =>
+  new Uint8Array((s.match(/../g) ?? []).map((b) => parseInt(b, 16)));
 const text = new TextEncoder();
 
 class Turn {
@@ -41,7 +42,10 @@ class Turn {
   }
 }
 
-const ERRNO: Record<string, number> = { ENOENT: Errno.ENOENT, EACCES: Errno.EACCES };
+const ERRNO: Record<string, number> = {
+  ENOENT: Errno.ENOENT,
+  EACCES: Errno.EACCES,
+};
 const errno = (name: string): number => ERRNO[name];
 
 async function run(g: Golden, scenario: string): Promise<void> {
@@ -56,12 +60,21 @@ async function run(g: Golden, scenario: string): Promise<void> {
       const key = `${root} ${path}`;
       const b = kept.get(key);
       if (b === undefined || b === "ENOENT") throw new FileError(Errno.ENOENT);
-      if (b === "later") return new Promise((res, rej) => (waiting.set(key, res), failing.set(key, rej)));
+      if (b === "later") {
+        return new Promise((
+          res,
+          rej,
+        ) => (waiting.set(key, res), failing.set(key, rej)));
+      }
       return hex(b);
     },
-    commit: (root, path, bytes) => void commits.set(`${root} ${path}`, new TextDecoder().decode(bytes)),
+    commit: (root, path, bytes) =>
+      void commits.set(`${root} ${path}`, new TextDecoder().decode(bytes)),
   };
-  const sys = new Sys({ fs, abort: () => {}, program: () => {} }, (fd, res) => void answers.push([fd, res]));
+  const sys = new Sys(
+    { fs, abort: () => {}, program: () => {} },
+    (fd, res) => void answers.push([fd, res]),
+  );
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   const steps: string[] = [];
@@ -75,7 +88,11 @@ async function run(g: Golden, scenario: string): Promise<void> {
         kept.set(`${a[0]} ${a[1]}`, a[2]);
         break;
       case "openat":
-        turn.record(op.OPENAT, [Number(a[0]), Number(a[1]), a[2] === "wr" ? flag.O_WRONLY : flag.O_RDONLY], text.encode(path(a[3])));
+        turn.record(op.OPENAT, [
+          Number(a[0]),
+          Number(a[1]),
+          a[2] === "wr" ? flag.O_WRONLY : flag.O_RDONLY,
+        ], text.encode(path(a[3])));
         break;
       case "read":
         turn.record(op.READ, [Number(a[0]), SCRATCH, Number(a[1])]);
@@ -108,7 +125,10 @@ async function run(g: Golden, scenario: string): Promise<void> {
       case "expect":
         switch (a[0]) {
           case "opened": {
-            const want: [number, number] = [Number(a[1]), /^\d+$/.test(a[2]) ? Number(a[2]) : errno(a[2])];
+            const want: [number, number] = [
+              Number(a[1]),
+              /^\d+$/.test(a[2]) ? Number(a[2]) : errno(a[2]),
+            ];
             assertEquals(answers.shift(), want, at);
             break;
           }
@@ -116,7 +136,11 @@ async function run(g: Golden, scenario: string): Promise<void> {
             assertEquals(answers, [], at);
             break;
           case "read":
-            assertEquals(Array.from(new Uint8Array(turn.memory, SCRATCH, a[1].length / 2)), Array.from(hex(a[1])), at);
+            assertEquals(
+              Array.from(new Uint8Array(turn.memory, SCRATCH, a[1].length / 2)),
+              Array.from(hex(a[1])),
+              at,
+            );
             break;
           case "commit":
             assertEquals(commits.get(`${a[1]} ${a[2]}`), a[3], at);

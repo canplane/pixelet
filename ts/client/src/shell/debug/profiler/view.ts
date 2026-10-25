@@ -8,7 +8,17 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
-import { type FrameSummary, profiler_counts, profiler_summary, profiler_tasks, profiler_worst, type Step, type TaskRecord, type TaskSummary, type Worst } from "@/abi/profiler.ts";
+import {
+  type FrameSummary,
+  profiler_counts,
+  profiler_summary,
+  profiler_tasks,
+  profiler_worst,
+  type Step,
+  type TaskRecord,
+  type TaskSummary,
+  type Worst,
+} from "@/abi/profiler.ts";
 import type { LongFrame } from "@/bracket.tsx";
 import { longFramesSince } from "./long-frame.ts";
 
@@ -26,11 +36,19 @@ export interface ProfilerReport {
 }
 
 /** Frames a second over a window: its intervals over its span, none under two frames. */
-export const fps = (f: { n: f64; seconds: f64 }): f64 | null => (f.n >= 2 && f.seconds > 0 ? (f.n - 1) / f.seconds : null);
+export const fps = (
+  f: { n: f64; seconds: f64 },
+): f64 | null => (f.n >= 2 && f.seconds > 0 ? (f.n - 1) / f.seconds : null);
 
 export interface Gauge {
   /** The frames and tasks the rings hold, as RINGS counts them. */
-  rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
+  rec: {
+    recording: boolean;
+    elapsed_ms: f64;
+    tasks: u32;
+    frames: u32;
+    truncated: boolean;
+  };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   view: Record<string, f64>;
@@ -40,7 +58,13 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
   const s = profiler_summary(windowMs);
   const held = profiler_counts();
   return {
-    rec: { recording: s.rec.recording, elapsed_ms: s.rec.elapsed_ms, tasks: held.tasks, frames: held.frames, truncated: s.rec.truncated },
+    rec: {
+      recording: s.rec.recording,
+      elapsed_ms: s.rec.elapsed_ms,
+      tasks: held.tasks,
+      frames: held.frames,
+      truncated: s.rec.truncated,
+    },
     frames: s.frames,
     tasks: s.tasks,
     view: s.view,

@@ -11,8 +11,13 @@ import { round } from "@xpute/kit/math/scalar.ts";
  */
 export function fixed(x: number, digits: number): string {
   if (!Number.isFinite(x)) return String(x);
-  const whole = String(round(Math.abs(x) * 10 ** digits)).padStart(digits + 1, "0");
+  const whole = String(round(Math.abs(x) * 10 ** digits)).padStart(
+    digits + 1,
+    "0",
+  );
   const at = whole.length - digits;
   const sign = x < 0 && /[1-9]/.test(whole) ? "-" : "";
-  return digits === 0 ? `${sign}${whole}` : `${sign}${whole.slice(0, at)}.${whole.slice(at)}`;
+  return digits === 0
+    ? `${sign}${whole}`
+    : `${sign}${whole.slice(0, at)}.${whole.slice(at)}`;
 }

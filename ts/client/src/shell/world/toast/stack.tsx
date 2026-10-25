@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import { Motion } from "@/shell/ui/motion/motion.tsx";
-import { cardPose, deckSwipe, peekBelow, useTurnedBack } from "@/shell/world/deck.ts";
+import {
+  cardPose,
+  deckSwipe,
+  peekBelow,
+  useTurnedBack,
+} from "@/shell/world/deck.ts";
 import { type Key, usePresent } from "@/shell/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shell/ui/motion/transition.ts";
 import { setToastDragging, toastRotate, useToastStore } from "./store.ts";
@@ -27,11 +32,20 @@ export function Toaster() {
   const lastOrder = useRef<Key[]>([]);
   const turnedBack = useTurnedBack(turns);
   const order: Key[] = entries.map((e) => e.id);
-  const arrivals = new Set<Key>(order.filter((key) => !lastOrder.current.includes(key)));
+  const arrivals = new Set<Key>(
+    order.filter((key) => !lastOrder.current.includes(key)),
+  );
   const arrived = arrivals.size;
   // Behind the card it was behind, and behind any that came in there: a new card goes in by rank, not only in front.
-  for (const key of list.filter((c) => !c.present).map((c) => c.key).sort((a, b) => lastOrder.current.indexOf(a) - lastOrder.current.indexOf(b))) {
-    const ahead = lastOrder.current.slice(0, Math.max(0, lastOrder.current.indexOf(key))).findLast((k) => order.includes(k));
+  for (
+    const key of list.filter((c) => !c.present).map((c) => c.key).sort((a, b) =>
+      lastOrder.current.indexOf(a) - lastOrder.current.indexOf(b)
+    )
+  ) {
+    const ahead = lastOrder.current.slice(
+      0,
+      Math.max(0, lastOrder.current.indexOf(key)),
+    ).findLast((k) => order.includes(k));
     let at = ahead === undefined ? 0 : order.indexOf(ahead) + 1;
     while (at < order.length && arrivals.has(order[at])) at++;
     order.splice(at, 0, key);
@@ -44,50 +58,80 @@ export function Toaster() {
   if (!swipe.current) {
     swipe.current = PanResponder.create({
       // On press: by the first move, a swipe down has left the pointer to the dock.
-      onStartShouldSetPanResponder: () => useToastStore.getState().entries.length > 1,
+      onStartShouldSetPanResponder: () =>
+        useToastStore.getState().entries.length > 1,
       ...deckSwipe(toastRotate, { drag: setToastDragging }),
     });
   }
 
   return (
-    <View style={styles.anchor} onLayout={(e) => setCenter(PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2))}>
+    <View
+      style={styles.anchor}
+      onLayout={(e) =>
+        setCenter(
+          PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2),
+        )}
+    >
       {
         // In a fixed order, stacked by zIndex alone: a card React moves in the tree drops its running animation.
       }
-      {[...list].sort((a, b) => (a.key as number) - (b.key as number)).map(({ item, key, present }) => {
-        const depth = order.indexOf(key);
-        const pose = cardPose(depth, PEEK_PX);
-        const front = present && depth === 0;
-        const fromAbove = front && turnedBack && lastOrder.current.indexOf(key) !== 0;
-        const transition = !present ? LEAVE : arrivals.has(key) ? SETTLE : arrived > 0 ? MAKE_ROOM : SETTLE;
-        // No opacity here: it would hide a device's glass wrongly.
-        return (
-          <Motion
-            key={key}
-            from={fromAbove ? pose.above : pose.rest}
-            replay={fromAbove ? turns : null}
-            to={present ? pose.rest : { scale: 0.9 }}
-            transition={transition}
-            onSettled={present ? undefined : () => gone(key)}
-            style={[styles.card, { left: center, zIndex: pose.zIndex, pointerEvents: front ? "auto" : "none" }]}
-          >
-            <Toast
-              message={item.message}
-              tone={item.tone}
-              fade={present ? pose.fade : 0}
-              fadeTransition={transition}
-              touch={front ? swipe.current!.panHandlers : undefined}
-              touchBelow={front ? peekBelow(entries.length, PEEK_PX) : 0}
-            />
-          </Motion>
-        );
-      })}
+      {[...list].sort((a, b) => (a.key as number) - (b.key as number)).map(
+        ({ item, key, present }) => {
+          const depth = order.indexOf(key);
+          const pose = cardPose(depth, PEEK_PX);
+          const front = present && depth === 0;
+          const fromAbove = front && turnedBack &&
+            lastOrder.current.indexOf(key) !== 0;
+          const transition = !present
+            ? LEAVE
+            : arrivals.has(key)
+            ? SETTLE
+            : arrived > 0
+            ? MAKE_ROOM
+            : SETTLE;
+          // No opacity here: it would hide a device's glass wrongly.
+          return (
+            <Motion
+              key={key}
+              from={fromAbove ? pose.above : pose.rest}
+              replay={fromAbove ? turns : null}
+              to={present ? pose.rest : { scale: 0.9 }}
+              transition={transition}
+              onSettled={present ? undefined : () => gone(key)}
+              style={[styles.card, {
+                left: center,
+                zIndex: pose.zIndex,
+                pointerEvents: front ? "auto" : "none",
+              }]}
+            >
+              <Toast
+                message={item.message}
+                tone={item.tone}
+                fade={present ? pose.fade : 0}
+                fadeTransition={transition}
+                touch={front ? swipe.current!.panHandlers : undefined}
+                touchBelow={front ? peekBelow(entries.length, PEEK_PX) : 0}
+              />
+            </Motion>
+          );
+        },
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   // No card is placed by measuring another.
-  anchor: { alignItems: "center", height: TOAST_SIDE, pointerEvents: "box-none" },
-  card: { position: "absolute", bottom: 0, width: 0, height: TOAST_SIDE, transformOrigin: "center bottom" },
+  anchor: {
+    alignItems: "center",
+    height: TOAST_SIDE,
+    pointerEvents: "box-none",
+  },
+  card: {
+    position: "absolute",
+    bottom: 0,
+    width: 0,
+    height: TOAST_SIDE,
+    transformOrigin: "center bottom",
+  },
 });

@@ -17,5 +17,10 @@ import { profilerReportRead } from "./profiler/view.ts";
 export function installConsole(): void {
   const g = globalThis as { xpute?: unknown; pxl?: unknown };
   g.xpute = kernel_doorbell();
-  g.pxl = { profiler: { report: () => profilerReportText(profilerReportRead()), trace: profilerTraceSave } };
+  g.pxl = {
+    profiler: {
+      report: () => profilerReportText(profilerReportRead()),
+      trace: profilerTraceSave,
+    },
+  };
 }

@@ -24,7 +24,11 @@ pub fn len(v: &V3) -> f64 {
     libm::hypot(libm::hypot(v[0], v[1]), v[2])
 }
 pub fn cross(v: &V3, w: &V3) -> V3 {
-    [v[1] * w[2] - v[2] * w[1], v[2] * w[0] - v[0] * w[2], v[0] * w[1] - v[1] * w[0]]
+    [
+        v[1] * w[2] - v[2] * w[1],
+        v[2] * w[0] - v[0] * w[2],
+        v[0] * w[1] - v[1] * w[0],
+    ]
 }
 /// A zero vector stays zero.
 pub fn norm(v: &V3) -> V3 {
@@ -36,10 +40,18 @@ pub fn norm(v: &V3) -> V3 {
 }
 
 pub fn floor(v: &V3, k: f64) -> V3 {
-    [(v[0] / k).floor() * k, (v[1] / k).floor() * k, (v[2] / k).floor() * k]
+    [
+        (v[0] / k).floor() * k,
+        (v[1] / k).floor() * k,
+        (v[2] / k).floor() * k,
+    ]
 }
 pub fn ceil(v: &V3, k: f64) -> V3 {
-    [(v[0] / k).ceil() * k, (v[1] / k).ceil() * k, (v[2] / k).ceil() * k]
+    [
+        (v[0] / k).ceil() * k,
+        (v[1] / k).ceil() * k,
+        (v[2] / k).ceil() * k,
+    ]
 }
 /// The middle of the cell of side `k` holding `v`.
 pub fn center(v: &V3, k: f64) -> V3 {

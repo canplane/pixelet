@@ -5,11 +5,11 @@ and it turned out to be a description of the project. The module's name section
 held 853 function paths, so the crate tree, its modules and its types printed
 out of `strings` whole. Every panic location carried the home directory it was
 built in. The data section held every shader in full, comments included, and
-those comments named source files and a branch. The bundle spelled every
-command and every errno as a string.
+those comments named source files and a branch. The bundle spelled every command
+and every errno as a string.
 
-None of that was decided. It is what a release build hands over when nothing
-has asked it not to.
+None of that was decided. It is what a release build hands over when nothing has
+asked it not to.
 
 ## The rule this settled
 
@@ -27,9 +27,9 @@ Hold that line. Removing what a published build has no use for is worth doing
 and will go on being worth doing. Scrambling what it runs on is not.
 
 **For the shaders the stopping point is comments**, and that was tested rather
-than assumed: the rename was built on naga, it worked, and it was dropped on
-the numbers. Do not spend the effort again — the reasons are structural and a
-better tool will not change them.
+than assumed: the rename was built on naga, it worked, and it was dropped on the
+numbers. Do not spend the effort again — the reasons are structural and a better
+tool will not change them.
 
 What is still worth doing is not obfuscation at all. The module carries about
 1,400 strings its authors wrote — assert messages describing the memory map and
@@ -87,8 +87,8 @@ are the optimizer's and change whenever the module does.
 
 `strip = true` came off the release profile for this. Cargo strips the target
 features, and wasm-opt has to read them before it can take them off; with Cargo
-doing it first, wasm-opt could not parse the module at all. Stripping belongs
-in one pass and the pass is Binaryen's.
+doing it first, wasm-opt could not parse the module at all. Stripping belongs in
+one pass and the pass is Binaryen's.
 
 ## Two claims about the standard tools that were wrong
 
@@ -146,9 +146,9 @@ slice.
 
 `process::exit` and `process::abort` carry nothing, and this kernel already
 calls `abort` where it gives up (`sched/turn.rs`). But those are calls, and a
-failed bounds check is not a call anyone writes: the compiler puts a panic
-there and the panic carries the location. So the only switch that removes them
-is the one that changes what a panic _is_ (`panic_immediate_abort`), and
+failed bounds check is not a call anyone writes: the compiler puts a panic there
+and the panic carries the location. So the only switch that removes them is the
+one that changes what a panic _is_ (`panic_immediate_abort`), and
 `panic = "abort"`, which this build already sets, is not it — it drops the
 unwinding and keeps the message on purpose, because the module's hook forwards
 that message to the console. The trap carries nothing, so without it a
@@ -166,22 +166,21 @@ people who build compilers rather than the people who ship applications.
 ### So they are blanked after the link, and only in a published build
 
 A `&'static str` is a pointer and a length held apart, so overwriting the bytes
-where they lie, to the same length, leaves a module that runs as it did:
-nothing compares a path at runtime. 87 paths, 4,443 bytes, to dots, in
-`build_wasm.ts`, for the module `build` bundles (`--published`; until 09-21 it
-was gated on `PXL_BUILD_NUMBER` instead, which only the deploy hands out — see
-below for why that moved). A build anyone is working on keeps its paths — what
-is lost is the file name in a panic's message, and it is lost only where nobody
-is reading it. It is the same result `-Z location-detail=none` gives, without
-the toolchain.
+where they lie, to the same length, leaves a module that runs as it did: nothing
+compares a path at runtime. 87 paths, 4,443 bytes, to dots, in `build_wasm.ts`,
+for the module `build` bundles (`--published`; until 09-21 it was gated on
+`PXL_BUILD_NUMBER` instead, which only the deploy hands out — see below for why
+that moved). A build anyone is working on keeps its paths — what is lost is the
+file name in a panic's message, and it is lost only where nobody is reading it.
+It is the same result `-Z location-detail=none` gives, without the toolchain.
 
 Two things make it safe rather than lucky. **Every match is filled with the same
 byte**, which is what an overlap needs: the linker merges a string that is
 another's tail, so two matches can cover the same bytes, and one character
 leaves the same result whichever order they are written in. And **a match under
-no known source root stops the build** rather than being blanked on a guess —
-a `.rs` from somewhere unrecognized could be a format string or something a
-person typed. That check earned itself immediately, refusing
+no known source root stops the build** rather than being blanked on a guess — a
+`.rs` from somewhere unrecognized could be a format string or something a person
+typed. That check earned itself immediately, refusing
 `/rust/deps/hashbrown-0.16.1/src/raw/mod.rs`, a real path from a dependency
 rustc vendors that the roots did not yet name.
 
@@ -221,10 +220,10 @@ matters (`block[offset + k*count + i]`). It hides the grouping and leaves the
 offsets.
 
 **The comments were still worth taking off.** They carried what the code does
-not: why a branch exists, and file names (`volume.rs`, `shade.wgsl`) that
-leaked the module tree a second time after the name section was stripped.
-The sources keep them; `build.rs` strips them on the way in. 77,816 →
-46,376 characters assembled.
+not: why a branch exists, and file names (`volume.rs`, `shade.wgsl`) that leaked
+the module tree a second time after the name section was stripped. The sources
+keep them; `build.rs` strips them on the way in. 77,816 → 46,376 characters
+assembled.
 
 ### Renaming the identifiers was built, measured and dropped
 
@@ -251,28 +250,31 @@ It was dropped on this:
   semantically faithful across naga versions, and the tests catch "does not
   compile", not "draws differently".
 
-Minifying the rest goes the same way. Removing the whitespace that is left
-saves 6,316 characters and **392 bytes once gzipped**, on a 1.2 MB module; it
-needs the tokenizer the rename needed, it costs the line numbers a driver
-reports against, and `mat4x4f(f[0],f[1],f[2],f[3])*position` reads the same
-either way. JavaScript minification buys transfer size and parse time; a shader's
-transfer size is absorbed by gzip and its parse time is a driver's lexer.
+Minifying the rest goes the same way. Removing the whitespace that is left saves
+6,316 characters and **392 bytes once gzipped**, on a 1.2 MB module; it needs
+the tokenizer the rename needed, it costs the line numbers a driver reports
+against, and `mat4x4f(f[0],f[1],f[2],f[3])*position` reads the same either way.
+JavaScript minification buys transfer size and parse time; a shader's transfer
+size is absorbed by gzip and its parse time is a driver's lexer.
 
 ## Two axes, and only one of them is finished
 
-The published module was swept string by string once the paths were gone.
-**On the hygiene axis it is done**: no home directory, no user name, no
-credential, no key, no token; the only URLs are the `/api/tiles` and geocode
-prefixes the client requests anyway. Nothing left in it is private.
+The published module was swept string by string once the paths were gone. **On
+the hygiene axis it is done**: no home directory, no user name, no credential,
+no key, no token; the only URLs are the `/api/tiles` and geocode prefixes the
+client requests anyway. Nothing left in it is private.
 
 **On the black-box axis it is not**, and what is left is neither privacy nor
 WGSL. About 850 strings remain, and the ones that matter are panic and assert
-messages, which give away the same kind of thing the paths did — the paths
-named the module tree, and these describe what is inside it:
+messages, which give away the same kind of thing the paths did — the paths named
+the module tree, and these describe what is inside it:
 
-- **our own invariants** — `what is fixed in this memory leaves the heap less
-  than it is budgeted`, `ring: advance on an empty ring`, `a chunk's palette
-  past a leaf's width`, `band shorter than its voxels`
+- **our own invariants** —
+  `what is fixed in this memory leaves the heap less
+  than it is budgeted`,
+  `ring: advance on an empty ring`, `a chunk's palette
+  past a leaf's width`,
+  `band shorter than its voxels`
 - **the packet contract** — `bad packet: magic mismatch`, `truncated payload`,
   `missing string terminator`, `payload OOB`, so XTP's framing reads off the
   binary without opening a decoder
@@ -283,8 +285,8 @@ named the module tree, and these describe what is inside it:
 Alongside them sit the name tables the spec generates and the shell reads: the
 ground channels, the color catalog, the road classes, the tick's phases, the
 settings' sections, the UI's fourteen actions. Those are domain vocabulary
-rather than internals, and the last of them — the action names — is the one
-that hands back what the ring's numbering otherwise hides.
+rather than internals, and the last of them — the action names — is the one that
+hands back what the ring's numbering otherwise hides.
 
 ### Most of this is a decision already taken, not a new one
 
@@ -296,18 +298,19 @@ by a string, and a catalog is numbers.
 
 Every authored string above is one of those two shapes. The name tables are
 identity and the rule already covers them; a panic message is a string that
-exists to be read, and `message.rs`'s reasoning applies to it unchanged. So
-this is not an obfuscation measure waiting to be justified. It is the policy
-carried the rest of the way, and the fact that it also closes the leak is a
-consequence rather than the argument.
+exists to be read, and `message.rs`'s reasoning applies to it unchanged. So this
+is not an obfuscation measure waiting to be justified. It is the policy carried
+the rest of the way, and the fact that it also closes the leak is a consequence
+rather than the argument.
 
 Two things bound it.
 
-**The standard library's strings cannot be numbered.** `assertion failed: idx <
-CAPACITY` and `index out of bounds` come from `core` and `alloc`, and nothing
-written here reaches them. Only `panic_immediate_abort` removes those, by
-dropping the formatting rather than the text — nightly, and it costs every
-panic message the console would have shown.
+**The standard library's strings cannot be numbered.**
+`assertion failed: idx <
+CAPACITY` and `index out of bounds` come from `core`
+and `alloc`, and nothing written here reaches them. Only `panic_immediate_abort`
+removes those, by dropping the formatting rather than the text — nightly, and it
+costs every panic message the console would have shown.
 
 **A panic is not a message.** `Message` numbers what a user should see, and the
 shell has the locale file to look it up in. A panic is for whoever is debugging,
@@ -323,75 +326,74 @@ switch reaches.
 ## 2026-09-21 — the settings the build does not offer
 
 Read back again, the bundle named the nine settings a production build
-withholds, with their defaults: `enable_terrain_carving:{kind:"toggle",
-default:!1,section:"editing",dev:!0}` and the eight beside it, each carrying
-the `dev:!0` that says which rows a reader is not supposed to see. The kernel
-module held the same nine names in its data. And the action that sets one was
-reachable: `set_setting` checked what storage brought in against the build's
-offer and checked nothing that arrived live, so
-`kernel_action({type:"set_setting",key:"show_ledger",value:true})` from the
-console turned the scheduler ledger on in the published build.
+withholds, with their defaults:
+`enable_terrain_carving:{kind:"toggle",
+default:!1,section:"editing",dev:!0}`
+and the eight beside it, each carrying the `dev:!0` that says which rows a
+reader is not supposed to see. The kernel module held the same nine names in its
+data. And the action that sets one was reachable: `set_setting` checked what
+storage brought in against the build's offer and checked nothing that arrived
+live, so `kernel_action({type:"set_setting",key:"show_ledger",value:true})` from
+the console turned the scheduler ledger on in the published build.
 
 None of it was a decision either. The settings table is generated whole from
 `schema.json`, and the sheet filtered it on `__IS_DEV__` at run time — which
 removes the row from the screen and leaves it in the artifact, the same shape
-the debug section's labels had taken through the locale catalog. The rule
-above already says what to do with it: the rows are something a production
-build does not need to run, so they go.
+the debug section's labels had taken through the locale catalog. The rule above
+already says what to do with it: the rows are something a production build does
+not need to run, so they go.
 
 **The shell takes a second table.** `script/spec.ts` writes `SETTINGS_SHIPPED`
 beside `SETTINGS`, the same literal without its `dev` entries, and
 `feature/setting/schema.ts` picks one with `__IS_DEV__ ? EVERY : SHIPPED`. The
-bundler folds the constant and drops the literal a production build never
-reads, so a dev row is absent rather than hidden. The type stays the whole
-table's — a dev key is a `SettingKey` in every build; what a production build
-lacks is its row — which is what lets the kernel's test still name `show_poi`.
+bundler folds the constant and drops the literal a production build never reads,
+so a dev row is absent rather than hidden. The type stays the whole table's — a
+dev key is a `SettingKey` in every build; what a production build lacks is its
+row — which is what lets the kernel's test still name `show_poi`.
 
 **The kernel takes a feature.** `pxl-kernel`'s `dev`, on by default and
-forwarded through `pxl-wasm`; the dev rows of the table and the store's arms
-for them sit under `#[cfg(feature = "dev")]`, and `build-wasm.ts` builds the
+forwarded through `pxl-wasm`; the dev rows of the table and the store's arms for
+them sit under `#[cfg(feature = "dev")]`, and `build-wasm.ts` builds the
 published module `--no-default-features` — under its `--published`, the same
-flag the panic paths are blanked on. A setting out of the table is not
-offered, not stored and not named, and what it does the module still does: the
-store's defaults are written from the spec's constants rather than from the
-table, so the POI layer is on in a build that cannot turn it off. Two tests
-hold the seams — that a module without the feature has no `dev` row at all,
-which is what catches a `dev: true` added to the JSON without its `cfg`, and
-that the hand-written defaults agree with the table on either device.
+flag the panic paths are blanked on. A setting out of the table is not offered,
+not stored and not named, and what it does the module still does: the store's
+defaults are written from the spec's constants rather than from the table, so
+the POI layer is on in a build that cannot turn it off. Two tests hold the seams
+— that a module without the feature has no `dev` row at all, which is what
+catches a `dev: true` added to the JSON without its `cfg`, and that the
+hand-written defaults agree with the table on either device.
 
 **The live path checks the offer.** `set_setting` refuses a key `is_offered`
 says no to, as `load` already did; the row is gone from the sheet, but the
 action that sets it is not gone from the console.
 
 **`check-bundle.ts` reads for all three.** A dev row in the JavaScript — the
-name as a property whose value is an object, not the bare name, since the
-ledger overlay reads `settings.show_ledger` and the ledger report has an
-`msaa` of its own — with `show_structures`'s row as the sentinel; and a dev
-name in the kernel's data.
+name as a property whose value is an object, not the bare name, since the ledger
+overlay reads `settings.show_ledger` and the ledger report has an `msaa` of its
+own — with `show_structures`'s row as the sentinel; and a dev name in the
+kernel's data.
 
-**One flag says what the published shape is.** Both of the module's
-omissions were first gated on `PXL_BUILD_NUMBER`, the number the deploy's
-gate hands out, on the reading that a number is what says a module is going
-out. It says who built it, not what shape it is: a local `deno task build`
-came out with the dev names and the panic paths in, so its `check:bundle`
-had to skip the kernel and the unnumbered deploy `deploy.ts` allows would
-have published both. Now `build` bundles the module `build-wasm.ts` makes
-with `--published`, whoever runs it, and the number is a stamp on the build
-info and nothing more: a local build and the deploy's are the same bytes,
-and the kernel is checked every time. What this costs is the file name in a
-panic under `vite preview`, which is the deploy's own behavior reproduced
-rather than a loss.
+**One flag says what the published shape is.** Both of the module's omissions
+were first gated on `PXL_BUILD_NUMBER`, the number the deploy's gate hands out,
+on the reading that a number is what says a module is going out. It says who
+built it, not what shape it is: a local `deno task build` came out with the dev
+names and the panic paths in, so its `check:bundle` had to skip the kernel and
+the unnumbered deploy `deploy.ts` allows would have published both. Now `build`
+bundles the module `build-wasm.ts` makes with `--published`, whoever runs it,
+and the number is a stamp on the build info and nothing more: a local build and
+the deploy's are the same bytes, and the kernel is checked every time. What this
+costs is the file name in a panic under `vite preview`, which is the deploy's
+own behavior reproduced rather than a loss.
 
-One row nearly changed sides and did not. `show_ledger` turns on the
-scheduler ledger's panel, and the panel's hook — `settings.show_ledger`, read
-by an overlay mounted in every build — was still in the production bundle,
-which read as the ledger being meant for a published build, measured on a
-phone. It is not: the overlay returns nothing outside `import.meta.env.DEV`,
-which `vite build` folds to false whatever `VITE_APP_ENV` says, and the
-panel's markup is absent from the published bundle. Taking the setting out of
-`dev` on that reading shipped a toggle that did nothing, for one build; it is
-`dev` again, and what was dev stays dev unless the thing it switches is made
-to work outside it first.
+One row nearly changed sides and did not. `show_ledger` turns on the scheduler
+ledger's panel, and the panel's hook — `settings.show_ledger`, read by an
+overlay mounted in every build — was still in the production bundle, which read
+as the ledger being meant for a published build, measured on a phone. It is not:
+the overlay returns nothing outside `import.meta.env.DEV`, which `vite build`
+folds to false whatever `VITE_APP_ENV` says, and the panel's markup is absent
+from the published bundle. Taking the setting out of `dev` on that reading
+shipped a toggle that did nothing, for one build; it is `dev` again, and what
+was dev stays dev unless the thing it switches is made to work outside it first.
 
 | What it gave away                                  | What closed it                         | Size    |
 | -------------------------------------------------- | -------------------------------------- | ------- |
@@ -400,13 +402,12 @@ to work outside it first.
 | `set_setting` from the console, in production      | `is_offered` on the live path          | 0       |
 
 The kernel's figure is the published module against the same source with the
-feature on: 1,048,892 → 1,047,548 bytes, and 1.5 KB less gzipped. The build
-with the feature on is itself 91 B under the head it was cut from, the live
-guard included. Measured twice, because the first reading came out as growth:
-another change had bumped `libm` underneath it between the baseline and the
-build, and the module moved 1.6 KB on that alone. A size that goes the wrong
-way for no reason the diff shows is a baseline to re-cut, not a number to
-explain.
+feature on: 1,048,892 → 1,047,548 bytes, and 1.5 KB less gzipped. The build with
+the feature on is itself 91 B under the head it was cut from, the live guard
+included. Measured twice, because the first reading came out as growth: another
+change had bumped `libm` underneath it between the baseline and the build, and
+the module moved 1.6 KB on that alone. A size that goes the wrong way for no
+reason the diff shows is a baseline to re-cut, not a number to explain.
 
 ## Where it stands
 

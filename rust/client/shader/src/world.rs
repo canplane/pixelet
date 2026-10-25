@@ -138,7 +138,10 @@ impl<L: Looks> Squares for World<'_, L> {
     }
     /// Off the windows' rows past their table (`joined_cs`).
     fn joined(&self, cell: u32, e: u32) -> [u32; window::JOINED_WORDS as usize] {
-        let r = at(self.window, window::JOINED_AT + (cell - FIRST_CELL) * window::JOINED_ENTRIES + e);
+        let r = at(
+            self.window,
+            window::JOINED_AT + (cell - FIRST_CELL) * window::JOINED_ENTRIES + e,
+        );
         [r.x as u32, r.y as u32, r.z as u32, r.w as u32]
     }
     /// The window's row past every window's slots (`window::ORIGIN_AT`).
@@ -167,7 +170,12 @@ impl<L: Looks> ground::Held for World<'_, L> {
     /// The bound over the node of the window `cell` reads its cells from,
     /// the finest holding them present (`window::bound_over`), as the CPU reads
     /// it (pxl-spec-core `Held::relief`).
-    fn relief(&mut self, place: &mut Found, cells: [u32; 2], (zoom, c): (u32, [i32; 3])) -> (ground::Bounds, bool) {
+    fn relief(
+        &mut self,
+        place: &mut Found,
+        cells: [u32; 2],
+        (zoom, c): (u32, [i32; 3]),
+    ) -> (ground::Bounds, bool) {
         let (r, _, here) = window::bound_over(self, place, cells, (zoom, [c[0], c[1]]));
         (r, here)
     }
@@ -196,7 +204,14 @@ impl<L: Looks> Query for World<'_, L> {
 
     /// What is in the node `c` at `zoom`: the world's one query
     /// (pxl-spec-core `world::node`).
-    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
+    fn node(
+        &mut self,
+        at: &mut At,
+        zoom: u32,
+        c: [i32; 3],
+        asked: [u32; 2],
+        _t0: f32,
+    ) -> In<[u32; 2]> {
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
         world::node(self, &w, &w, &w.pool, at, (zoom, c), asked, cuts)
     }
@@ -215,7 +230,12 @@ impl<L: Looks> World<'_, L> {
     /// (`World::block`), filling its cube whole (`answer::whole`); a box's
     /// own, a block kept short of its cube (`faces::BOX`); nothing where the
     /// ray stopped on none.
-    pub(crate) fn faced<A: Copy>(&mut self, origin: [i32; 3], ray: &cast::Ray, met: &Met<A>) -> u32 {
+    pub(crate) fn faced<A: Copy>(
+        &mut self,
+        origin: [i32; 3],
+        ray: &cast::Ray,
+        met: &Met<A>,
+    ) -> u32 {
         if met.ends != Ends::Stop {
             return 0;
         }
@@ -223,7 +243,9 @@ impl<L: Looks> World<'_, L> {
             return faces::BOX;
         }
         let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
-        faces::word(face_of(ray, met.stop.axis), |d| answer::whole(self.block(zoom, faces::beside(zoom, c, d))))
+        faces::word(face_of(ray, met.stop.axis), |d| {
+            answer::whole(self.block(zoom, faces::beside(zoom, c, d)))
+        })
     }
 }
 

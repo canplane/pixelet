@@ -17,10 +17,24 @@ use crate::space::layer::lattice::demand_reach;
 /// cell its tiles fold into begins (0 for the leaves) to where the next
 /// coarser one's does, or the reach of the source's `top` at `zoom` alone,
 /// unscaled. None past the far edge.
-pub fn band(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<(f64, f64)> {
-    let from = if zoom == LEAF_ZOOM { 0.0 } else { tau.split_distance(lattice.grid_zoom(zoom)) };
+pub fn band(
+    o: &Observation,
+    tau: Tau,
+    lattice: Lattice,
+    top: Zoom,
+    zoom: Zoom,
+) -> Option<(f64, f64)> {
+    let from = if zoom == LEAF_ZOOM {
+        0.0
+    } else {
+        tau.split_distance(lattice.grid_zoom(zoom))
+    };
     let coarser = lattice.grid_zoom(zoom - 1);
-    let to = if zoom == top { split_distance(coarser) } else { tau.split_distance(coarser) };
+    let to = if zoom == top {
+        split_distance(coarser)
+    } else {
+        tau.split_distance(coarser)
+    };
     (from <= o.reach).then_some((from, to))
 }
 
@@ -43,7 +57,9 @@ pub const REACH_TILES: u32 = reach_tiles(GROUND);
 /// Every tile at `z` with ground within `radius` of `at`.
 pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {
     let ys = tile_rows(zoom);
-    squares_within(zoom, at, radius).filter(move |&[_, y]| ys.contains(&y)).map(move |xy| tile_at(zoom, xy))
+    squares_within(zoom, at, radius)
+        .filter(move |&[_, y]| ys.contains(&y))
+        .map(move |xy| tile_at(zoom, xy))
 }
 
 /// `tiles_within` before X wraps.
@@ -51,7 +67,11 @@ pub fn squares_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<It
     let span = units(zoom);
     let rows = |c: f64| ((c - radius) / span).floor() as i32..=((c + radius) / span).floor() as i32;
     let (xs, ys) = (rows(at[0]), rows(at[1]));
-    let gap = move |c: f64, i: i32| (f64::from(i) * span - c).max(c - f64::from(i + 1) * span).max(0.0);
+    let gap = move |c: f64, i: i32| {
+        (f64::from(i) * span - c)
+            .max(c - f64::from(i + 1) * span)
+            .max(0.0)
+    };
     ys.flat_map(move |y| xs.clone().map(move |x| [x, y]))
         .filter(move |&[x, y]| libm::hypot(gap(at[0], x), gap(at[1], y)) <= radius)
 }

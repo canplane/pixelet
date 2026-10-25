@@ -15,9 +15,18 @@ fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Number => cpp_number(&f.ty).to_string(),
         Kind::Str => "std::string_view".to_string(),
         Kind::Bool => "bool".to_string(),
-        _ => return Err(format!("cmd.json: a C++ guest reads no {} ({})", f.ty, f.name)),
+        _ => {
+            return Err(format!(
+                "cmd.json: a C++ guest reads no {} ({})",
+                f.ty, f.name
+            ))
+        }
     };
-    Ok(if f.optional { format!("std::optional<{one}>") } else { one })
+    Ok(if f.optional {
+        format!("std::optional<{one}>")
+    } else {
+        one
+    })
 }
 
 fn cpp_number(ty: &str) -> &'static str {
@@ -31,7 +40,12 @@ fn cpp_number(ty: &str) -> &'static str {
 
 /// A number is checked as the Rust guest's is (`abi/number.rs`), never cast into its type.
 fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
-    let read = |call: String| vec![format!("auto v = {call};"), "if (!v) return v.error();".to_string()];
+    let read = |call: String| {
+        vec![
+            format!("auto v = {call};"),
+            "if (!v) return v.error();".to_string(),
+        ]
+    };
     let mut out = match spec.kind(&f.ty)? {
         Kind::Number => {
             let mut out = read(format!("{c}->get_number()"));
@@ -39,7 +53,10 @@ fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>
                 "f64" => "auto n = finite(*v);".to_string(),
                 ty => format!("auto n = integer<{}>(*v);", cpp_number(ty)),
             });
-            out.extend(["if (!n) return n.error();".to_string(), format!("{to} = *n;")]);
+            out.extend([
+                "if (!n) return n.error();".to_string(),
+                format!("{to} = *n;"),
+            ]);
             return Ok(out);
         }
         Kind::Bool => read(format!("{c}->get_bool()")),
@@ -50,20 +67,37 @@ fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>
 }
 
 fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
-    let mut out = vec!["{".to_string(), format!("    Result<xtp::Cursor> c = f->at({i});"), "    if (!c) return c.error();".to_string()];
+    let mut out = vec![
+        "{".to_string(),
+        format!("    Result<xtp::Cursor> c = f->at({i});"),
+        "    if (!c) return c.error();".to_string(),
+    ];
     if f.optional {
         out.push("    if (!c->is_null()) {".to_string());
-        out.extend(cpp_read_one(spec, f, "c", &format!("out.{}", f.name))?.into_iter().map(|l| format!("        {l}")));
+        out.extend(
+            cpp_read_one(spec, f, "c", &format!("out.{}", f.name))?
+                .into_iter()
+                .map(|l| format!("        {l}")),
+        );
         out.push("    }".to_string());
     } else {
-        out.extend(cpp_read_one(spec, f, "c", &format!("out.{}", f.name))?.into_iter().map(|l| format!("    {l}")));
+        out.extend(
+            cpp_read_one(spec, f, "c", &format!("out.{}", f.name))?
+                .into_iter()
+                .map(|l| format!("    {l}")),
+        );
     }
     out.push("}".to_string());
     Ok(out)
 }
 
 pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
-    let mut out = vec![format!("// {}", crate::spec::in_xpute(path)), "//".into(), crate::spec::generated(t.json, t.json), "//".into()];
+    let mut out = vec![
+        format!("// {}", crate::spec::in_xpute(path)),
+        "//".into(),
+        crate::spec::generated(t.json, t.json),
+        "//".into(),
+    ];
     out.extend(crate::spec::line_comments(&spec.doc, ""));
     out.extend(
         [
@@ -111,12 +145,18 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
             String::new(),
             format!("}} // namespace {namespace}"),
             String::new(),
-            format!("template <> struct xpute::Members<{namespace}::{}> {{", e.name),
+            format!(
+                "template <> struct xpute::Members<{namespace}::{}> {{",
+                e.name
+            ),
             format!(
                 "    static constexpr std::array<{namespace}::{0}, {1}> ALL{{{2}}};",
                 e.name,
                 all.len(),
-                all.iter().map(|m| format!("{namespace}::{}::{}", e.name, m.name)).collect::<Vec<_>>().join(", ")
+                all.iter()
+                    .map(|m| format!("{namespace}::{}::{}", e.name, m.name))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
             "};".to_string(),
             String::new(),
@@ -129,10 +169,17 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
     for c in spec.commands()? {
         let name = pascal(&c.name);
         if c.signal.is_some() {
-            return Err(format!("{}: a C++ guest raises no signal ({})", t.json, c.name));
+            return Err(format!(
+                "{}: a C++ guest raises no signal ({})",
+                t.json, c.name
+            ));
         }
         if let Some(packet) = &c.packet {
-            out.extend([String::new(), format!("// Command::{}'s packet.", c.name), format!("struct {name} {{")]);
+            out.extend([
+                String::new(),
+                format!("// Command::{}'s packet.", c.name),
+                format!("struct {name} {{"),
+            ]);
             for f in packet {
                 if let Some(doc) = &f.doc {
                     out.extend(crate::spec::line_comments(doc, "    "));
@@ -141,7 +188,9 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
             }
             out.extend([
                 String::new(),
-                format!("    static Result<{name}> read(std::span<const std::uint8_t> pkt) noexcept {{"),
+                format!(
+                    "    static Result<{name}> read(std::span<const std::uint8_t> pkt) noexcept {{"
+                ),
                 "        Result<xtp::TreeReader> t = xtp::TreeReader::make(pkt);".to_string(),
                 "        if (!t) return t.error();".to_string(),
                 "        Result<xtp::BranchCursor> f = t->read_branch();".to_string(),
@@ -149,9 +198,17 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 format!("        {name} out;"),
             ]);
             for (i, f) in packet.iter().enumerate() {
-                out.extend(cpp_read(spec, f, i)?.into_iter().map(|l| format!("        {l}")));
+                out.extend(
+                    cpp_read(spec, f, i)?
+                        .into_iter()
+                        .map(|l| format!("        {l}")),
+                );
             }
-            out.extend(["        return out;".to_string(), "    }".to_string(), "};".to_string()]);
+            out.extend([
+                "        return out;".to_string(),
+                "    }".to_string(),
+                "};".to_string(),
+            ]);
         }
     }
     out.extend([String::new(), format!("}} // namespace {namespace}")]);

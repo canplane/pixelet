@@ -72,7 +72,12 @@ fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
     while d < fill::SCAN_THREADS {
         spirv_std::arch::workgroup_memory_barrier_with_group_sync();
         // SAFETY: masked, as above.
-        let (before, sum) = unsafe { (*sums.index_unchecked(at(t.wrapping_sub(d))), *sums.index_unchecked(at(t))) };
+        let (before, sum) = unsafe {
+            (
+                *sums.index_unchecked(at(t.wrapping_sub(d))),
+                *sums.index_unchecked(at(t)),
+            )
+        };
         spirv_std::arch::workgroup_memory_barrier_with_group_sync();
         // SAFETY: masked, as above.
         unsafe { *sums.index_unchecked_mut(at(t)) = sum + if t >= d { before } else { 0 } };
@@ -114,7 +119,10 @@ fn settle() {
     spirv_std::arch::control_barrier::<
         { spirv_std::memory::Scope::Workgroup as u32 },
         { spirv_std::memory::Scope::Workgroup as u32 },
-        { spirv_std::memory::Semantics::UNIFORM_MEMORY.bits() | spirv_std::memory::Semantics::ACQUIRE_RELEASE.bits() },
+        {
+            spirv_std::memory::Semantics::UNIFORM_MEMORY.bits()
+                | spirv_std::memory::Semantics::ACQUIRE_RELEASE.bits()
+        },
     >();
 }
 
@@ -164,14 +172,25 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     // SAFETY: word `TAKEN`, the stack's first; the buffer is never empty
     // (pxl-render gpu/ray/ground.rs makes it a word a family of the pool's).
     let count = unsafe { stack.get_unchecked_mut(TAKEN as usize) };
-    let mut gone = unsafe { spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(count) };
+    let mut gone = unsafe {
+        spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(
+            count,
+        )
+    };
     let (mut done, mut ok) = (false, false);
     while !done {
         if !tree::fits(free(len, gone), taken, n) {
             done = true;
         } else {
             // SAFETY: as above.
-            let was = unsafe { spirv_std::arch::atomic_compare_exchange::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }, { Semantics::NONE.bits() }>(count, gone + n, gone) };
+            let was = unsafe {
+                spirv_std::arch::atomic_compare_exchange::<
+                    u32,
+                    { Scope::QueueFamily as u32 },
+                    { Semantics::NONE.bits() },
+                    { Semantics::NONE.bits() },
+                >(count, gone + n, gone)
+            };
             (done, ok) = (was == gone, was == gone);
             if !done {
                 gone = was;
@@ -216,7 +235,10 @@ pub fn ways_free_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] stack: &mut [u32],
 ) {
-    let root = at(ground, square_at(at(fresh, window::handed_at(group.z) + window::FRESH_SQUARE)) + window::ROOT_AT);
+    let root = at(
+        ground,
+        square_at(at(fresh, window::handed_at(group.z) + window::FRESH_SQUARE)) + window::ROOT_AT,
+    );
     if lane.x != 0 || root == 0 {
         return;
     }
@@ -337,7 +359,11 @@ pub fn ways_tree_cs(
             } else {
                 0
             };
-            let (next, fits) = if short == 0 { pop(stack, had, flagged) } else { (0, false) };
+            let (next, fits) = if short == 0 {
+                pop(stack, had, flagged)
+            } else {
+                (0, false)
+            };
             set_shared(levels, t, taken, had + flagged);
             set_shared(levels, t, 2 * j + 2, next);
             set_shared(levels, t, 2 * j + 3, 8 * flagged);
@@ -366,7 +392,10 @@ pub fn ways_tree_cs(
     if !ok && t == 0 {
         let mut level = 0;
         while level < j {
-            let (from, n) = (lane_word(levels, 2 * level), lane_word(levels, 2 * level + 1));
+            let (from, n) = (
+                lane_word(levels, 2 * level),
+                lane_word(levels, 2 * level + 1),
+            );
             let mut b = 0;
             while b < n / 8 {
                 freed(scratch, mine, id(stack, from + b));
@@ -382,7 +411,10 @@ pub fn ways_tree_cs(
     // flow, which WebGPU takes only there.
     let mut c = 0;
     while ok && c < n {
-        let runs = fill::Scratch { words: scratch, at: mine };
+        let runs = fill::Scratch {
+            words: scratch,
+            at: mine,
+        };
         if c + t < n {
             tree::leaf(&mut pool, &runs, of, slot(stack, from, c + t));
         }

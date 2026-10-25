@@ -9,7 +9,12 @@ function system(name: string): string {
   return PlatformColor(name) as unknown as string;
 }
 
-export const LABEL: { primary: string; secondary: string; tertiary: string; placeholder: string } = {
+export const LABEL: {
+  primary: string;
+  secondary: string;
+  tertiary: string;
+  placeholder: string;
+} = {
   primary: system("label"),
   secondary: system("secondaryLabel"),
   tertiary: system("tertiaryLabel"),

@@ -43,13 +43,16 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
             }
         }
     }
-    let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land)).then(|| cells.iter().map(|&c| c == ground::water).collect());
+    let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land))
+        .then(|| cells.iter().map(|&c| c == ground::water).collect());
 
     let mut ordered: Vec<&Feature> = features.iter().collect();
     ordered.sort_by(|a, b| a.rank.cmp(&b.rank));
     for f in ordered {
         let mask = match f.rank.layer {
-            Layer::Landcover | Layer::LandcoverLine | Layer::WaterLine | Layer::Water => sea.as_deref(),
+            Layer::Landcover | Layer::LandcoverLine | Layer::WaterLine | Layer::Water => {
+                sea.as_deref()
+            }
             _ => None,
         };
         if f.closed {
@@ -59,7 +62,9 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
         }
     }
 
-    Ground { cells: cells.into() }
+    Ground {
+        cells: cells.into(),
+    }
 }
 
 #[inline]
@@ -71,14 +76,26 @@ fn put<T: Copy>(cells: &mut [T], mask: Sea, at: usize, value: T) {
 }
 
 /// Every cell of a tile of the ground's lattice whose center the polygon covers.
-pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], holes: &[Vec<P>], mask: Sea) {
+pub(crate) fn render_polygon<T: Copy>(
+    points: &[P],
+    value: T,
+    cells: &mut [T],
+    holes: &[Vec<P>],
+    mask: Sea,
+) {
     if points.len() < 3 {
         return;
     }
 
-    let (min_y, max_y) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p[1]), hi.max(p[1])));
+    let (min_y, max_y) = points
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| {
+            (lo.min(p[1]), hi.max(p[1]))
+        });
     let start_row = (min_y - f64::from(CELL_CENTER)).ceil().max(0.0);
-    let end_row = (max_y - f64::from(CELL_CENTER)).floor().min((SPAN - 1) as f64);
+    let end_row = (max_y - f64::from(CELL_CENTER))
+        .floor()
+        .min((SPAN - 1) as f64);
     if !start_row.is_finite() || !end_row.is_finite() || start_row > end_row {
         return;
     }
@@ -117,7 +134,14 @@ pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], h
 /// Every cell whose center the way covers along a segment (pxl-spec-core
 /// ways.rs `on_way`, the rule a column is crossed by), its line cut square
 /// where `cut` says at its first and last.
-fn render_linear_feat(points: &[P], value: GroundId, cells: &mut [GroundId], width_cell: f64, cut: [bool; 2], mask: Sea) {
+fn render_linear_feat(
+    points: &[P],
+    value: GroundId,
+    cells: &mut [GroundId],
+    width_cell: f64,
+    cut: [bool; 2],
+    mask: Sea,
+) {
     let (width, center) = (width_cell as f32, f64::from(CELL_CENTER));
     let reach = f64::from(ways::reach(width));
     let last = points.len().saturating_sub(2);
@@ -125,7 +149,9 @@ fn render_linear_feat(points: &[P], value: GroundId, cells: &mut [GroundId], wid
         let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
         let span = |k: usize| {
             let lo = (a[k].min(b[k]) - reach - center).ceil().max(0.0) as i64;
-            let hi = (a[k].max(b[k]) + reach - center).floor().min((SPAN - 1) as f64) as i64;
+            let hi = (a[k].max(b[k]) + reach - center)
+                .floor()
+                .min((SPAN - 1) as f64) as i64;
             lo..=hi
         };
         let ends = [s == 0 && cut[0], s == last && cut[1]];

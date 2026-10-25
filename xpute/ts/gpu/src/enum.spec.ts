@@ -151,7 +151,13 @@ export const VERTEX_FORMAT = [
   "unorm8x4-bgra",
 ] as const;
 
-export const PRIMITIVE_TOPOLOGY = ["point-list", "line-list", "line-strip", "triangle-list", "triangle-strip"] as const;
+export const PRIMITIVE_TOPOLOGY = [
+  "point-list",
+  "line-list",
+  "line-strip",
+  "triangle-list",
+  "triangle-strip",
+] as const;
 
 export const INDEX_FORMAT = ["uint16", "uint32"] as const;
 
@@ -159,11 +165,35 @@ export const FRONT_FACE = ["ccw", "cw"] as const;
 
 export const CULL_MODE = ["none", "front", "back"] as const;
 
-export const COMPARE_FUNCTION = ["never", "less", "equal", "less-equal", "greater", "not-equal", "greater-equal", "always"] as const;
+export const COMPARE_FUNCTION = [
+  "never",
+  "less",
+  "equal",
+  "less-equal",
+  "greater",
+  "not-equal",
+  "greater-equal",
+  "always",
+] as const;
 
-export const STENCIL_OPERATION = ["keep", "zero", "replace", "invert", "increment-clamp", "decrement-clamp", "increment-wrap", "decrement-wrap"] as const;
+export const STENCIL_OPERATION = [
+  "keep",
+  "zero",
+  "replace",
+  "invert",
+  "increment-clamp",
+  "decrement-clamp",
+  "increment-wrap",
+  "decrement-wrap",
+] as const;
 
-export const BLEND_OPERATION = ["add", "subtract", "reverse-subtract", "min", "max"] as const;
+export const BLEND_OPERATION = [
+  "add",
+  "subtract",
+  "reverse-subtract",
+  "min",
+  "max",
+] as const;
 
 export const BLEND_FACTOR = [
   "zero",
@@ -187,7 +217,11 @@ export const BLEND_FACTOR = [
 
 export const VERTEX_STEP_MODE = ["vertex", "instance"] as const;
 
-export const ADDRESS_MODE = ["clamp-to-edge", "repeat", "mirror-repeat"] as const;
+export const ADDRESS_MODE = [
+  "clamp-to-edge",
+  "repeat",
+  "mirror-repeat",
+] as const;
 
 export const FILTER_MODE = ["nearest", "linear"] as const;
 
@@ -195,17 +229,42 @@ export const MIPMAP_FILTER_MODE = ["nearest", "linear"] as const;
 
 export const TEXTURE_DIMENSION = ["1d", "2d", "3d"] as const;
 
-export const TEXTURE_VIEW_DIMENSION = ["1d", "2d", "2d-array", "cube", "cube-array", "3d"] as const;
+export const TEXTURE_VIEW_DIMENSION = [
+  "1d",
+  "2d",
+  "2d-array",
+  "cube",
+  "cube-array",
+  "3d",
+] as const;
 
 export const TEXTURE_ASPECT = ["all", "stencil-only", "depth-only"] as const;
 
-export const BUFFER_BINDING_TYPE = ["uniform", "storage", "read-only-storage"] as const;
+export const BUFFER_BINDING_TYPE = [
+  "uniform",
+  "storage",
+  "read-only-storage",
+] as const;
 
-export const SAMPLER_BINDING_TYPE = ["filtering", "non-filtering", "comparison"] as const;
+export const SAMPLER_BINDING_TYPE = [
+  "filtering",
+  "non-filtering",
+  "comparison",
+] as const;
 
-export const TEXTURE_SAMPLE_TYPE = ["float", "unfilterable-float", "depth", "sint", "uint"] as const;
+export const TEXTURE_SAMPLE_TYPE = [
+  "float",
+  "unfilterable-float",
+  "depth",
+  "sint",
+  "uint",
+] as const;
 
-export const STORAGE_TEXTURE_ACCESS = ["write-only", "read-only", "read-write"] as const;
+export const STORAGE_TEXTURE_ACCESS = [
+  "write-only",
+  "read-only",
+  "read-write",
+] as const;
 
 export const LOAD_OP = ["load", "clear"] as const;
 

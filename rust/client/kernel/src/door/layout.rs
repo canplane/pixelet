@@ -9,8 +9,12 @@
 use xpute_guest::entry::BootInfo;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
-use crate::sys::mem::section::{self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
-use crate::sys::mem::spec::{CQ_CAP, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES};
+use crate::sys::mem::section::{
+    self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES,
+};
+use crate::sys::mem::spec::{
+    CQ_CAP, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES,
+};
 use xpute_guest::mem::section::{Section, PAGE_BYTES};
 
 /// A packet is at most a page; anything larger crosses by address. A page
@@ -36,20 +40,43 @@ pub unsafe fn rings() -> (Ring, Ring) {
     // SAFETY: the caller's.
     unsafe {
         (
-            Ring::init(mem, SQ_DESC_AT as usize, SQ_CAP, SQ_SLOT_AT, RING_SLOT_BYTES),
-            Ring::init(mem, CQ_DESC_AT as usize, CQ_CAP, CQ_SLOT_AT, RING_SLOT_BYTES),
+            Ring::init(
+                mem,
+                SQ_DESC_AT as usize,
+                SQ_CAP,
+                SQ_SLOT_AT,
+                RING_SLOT_BYTES,
+            ),
+            Ring::init(
+                mem,
+                CQ_DESC_AT as usize,
+                CQ_CAP,
+                CQ_SLOT_AT,
+                RING_SLOT_BYTES,
+            ),
         )
     }
 }
 
 // The boundaries are chosen constants, not roundings, so page alignment is asserted.
 const _: () = assert!(
-    RING_DESC_AT.is_multiple_of(PAGE_BYTES) && RING_SLOT_AT.is_multiple_of(PAGE_BYTES) && GLOBAL_BASE.is_multiple_of(PAGE_BYTES),
+    RING_DESC_AT.is_multiple_of(PAGE_BYTES)
+        && RING_SLOT_AT.is_multiple_of(PAGE_BYTES)
+        && GLOBAL_BASE.is_multiple_of(PAGE_BYTES),
     "a range begins on a page, so every slot in it begins on one"
 );
-const _: () = assert!(STACK_BYTES <= RING_DESC_AT, "the stack runs into the descriptors");
-const _: () = assert!(DESC_END <= RING_SLOT_AT, "the descriptors run into the payloads");
-const _: () = assert!(SLOT_END <= DIRECTORY_AT, "the payloads run into the directory");
+const _: () = assert!(
+    STACK_BYTES <= RING_DESC_AT,
+    "the stack runs into the descriptors"
+);
+const _: () = assert!(
+    DESC_END <= RING_SLOT_AT,
+    "the descriptors run into the payloads"
+);
+const _: () = assert!(
+    SLOT_END <= DIRECTORY_AT,
+    "the payloads run into the directory"
+);
 const _: () = assert!(
     DIRECTORY_AT.is_multiple_of(PAGE_BYTES) && DIRECTORY_AT + PAGE_BYTES <= GLOBAL_BASE,
     "the directory is a page under the bracket's data"
@@ -71,7 +98,9 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX + crate::domain::query::decor::asset::MODELS_MAX + crate::domain::scene::environment::cloud::MODELS_MAX;
+const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX
+    + crate::domain::query::decor::asset::MODELS_MAX
+    + crate::domain::scene::environment::cloud::MODELS_MAX;
 
 /// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
@@ -79,7 +108,8 @@ const SINGLE_UPLOADS: usize = 5;
 
 /// An actor's palette, one for each frame that holds one: the companion's
 /// figures and the display cases.
-const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES + crate::domain::scene::character::preview::CASES_MAX;
+const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES
+    + crate::domain::scene::character::preview::CASES_MAX;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
@@ -87,7 +117,10 @@ const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's uploads before taking its new ones, so it
 /// never holds more.
-pub const MAX_LIVE_UPLOADS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
+pub const MAX_LIVE_UPLOADS: usize = MODELS_MAX
+    + crate::domain::scene::environment::cloud::PATCHES_MAX
+    + ACTOR_UPLOADS
+    + SINGLE_UPLOADS;
 
 const FIXED: [u32; 5] = [
     crate::domain::layer::terrain::fixed::TERRAIN_BYTES,
@@ -100,7 +133,9 @@ const FIXED: [u32; 5] = [
 pub const FIXED_BYTES: u32 = xpute_guest::mem::section::span_of(&FIXED, PAGE_BYTES);
 
 const _: () = assert!(
-    REGION_BYTES.is_multiple_of(PAGE_BYTES) && GLOBAL_BASE.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
+    REGION_BYTES.is_multiple_of(PAGE_BYTES)
+        && GLOBAL_BASE.is_multiple_of(PAGE_BYTES)
+        && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
     "a section begins on a page, so every block in it begins on one"
 );
 
@@ -142,8 +177,12 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = crate::domain::layer::terrain::mirror::MIRROR_BYTES + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
-    slots_bytes(crate::sys::io::param::BODY_SLOTS) + crate::sys::io::param::MAX_CREDITS as u64 * longest + ways + crate::profiler::record::PROFILER_BYTES
+    let ways = crate::domain::layer::terrain::mirror::MIRROR_BYTES
+        + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
+    slots_bytes(crate::sys::io::param::BODY_SLOTS)
+        + crate::sys::io::param::MAX_CREDITS as u64 * longest
+        + ways
+        + crate::profiler::record::PROFILER_BYTES
 };
 
 const _: () = assert!(
@@ -160,7 +199,10 @@ pub fn heap_at(data_end: u32) -> u32 {
 /// Asking before boot lays out memory is a bug.
 pub fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
-    map().or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE).fixed.nth(&FIXED, PAGE_BYTES, f as usize)
+    map()
+        .or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
+        .fixed
+        .nth(&FIXED, PAGE_BYTES, f as usize)
 }
 
 /// Lays the memory map and hands each range of `.fixed` to its owner.

@@ -10,7 +10,12 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { b64url_to_bytes, bytes_to_b64url, td, te } from "@xpute/kit/codec/encoding.ts";
+import {
+  b64url_to_bytes,
+  bytes_to_b64url,
+  td,
+  te,
+} from "@xpute/kit/codec/encoding.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
@@ -24,7 +29,10 @@ export interface Storage {
 }
 
 /** The bracket's, read at each call: the bracket is set after this loads. */
-const STORAGE: Storage = { get: (key) => bracket.storage.get(key), set: (key, value) => bracket.storage.set(key, value) };
+const STORAGE: Storage = {
+  get: (key) => bracket.storage.get(key),
+  set: (key, value) => bracket.storage.set(key, value),
+};
 
 const KEYS: ReadonlyMap<u32, string> = new Map([
   [kept.SETTINGS, "pxl:kept:settings"],
@@ -49,10 +57,20 @@ const OBJECTS_BEFORE_FORMAT = 15;
  * with their format put before them. */
 export function migrate(s: Storage = STORAGE): void {
   carry(s, kept.SETTINGS, SETTINGS_BEFORE, (text) => text);
-  carry(s, kept.OBJECTS, OBJECTS_BEFORE, (text) => formatted(OBJECTS_BEFORE_FORMAT, text));
+  carry(
+    s,
+    kept.OBJECTS,
+    OBJECTS_BEFORE,
+    (text) => formatted(OBJECTS_BEFORE_FORMAT, text),
+  );
 }
 
-function carry(s: Storage, slot: u32, before: string, as: (text: string) => string): void {
+function carry(
+  s: Storage,
+  slot: u32,
+  before: string,
+  as: (text: string) => string,
+): void {
   const key = KEYS.get(slot)!;
   const text = s.get(before);
   if (text === null || s.get(key) !== null) return;
@@ -86,7 +104,9 @@ export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
   const text = s.get(key);
   if (text !== null && text !== "") {
     let aside = `${key}:aside:${now_ms}`;
-    for (let n = 1; s.get(aside) !== null; n++) aside = `${key}:aside:${now_ms}-${n}`;
+    for (let n = 1; s.get(aside) !== null; n++) {
+      aside = `${key}:aside:${now_ms}-${n}`;
+    }
     s.set(aside, text);
     if (s.get(aside) !== text) return false;
   }
@@ -101,8 +121,14 @@ const emptying = new Set<u32>();
 
 /** The snapshot's `kept_refused`: each slot set aside once, and the kernel
  * told it is empty (`emptied`). */
-export function follow_refused(refused: readonly u32[], emptied: (slot: u32) => void, s: Storage = STORAGE): void {
-  for (const slot of emptying) if (!refused.includes(slot)) emptying.delete(slot);
+export function follow_refused(
+  refused: readonly u32[],
+  emptied: (slot: u32) => void,
+  s: Storage = STORAGE,
+): void {
+  for (const slot of emptying) {
+    if (!refused.includes(slot)) emptying.delete(slot);
+  }
   for (const slot of refused) {
     if (emptying.has(slot) || !set_aside(s, slot, Date.now())) continue;
     emptying.add(slot);

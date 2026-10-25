@@ -57,7 +57,13 @@ fn sun_of(eye: &Eye) -> pxl_spec_core::sun::Sun {
 /// and at what zooms, and whether it walks again, where its world texel
 /// was not held, the eye asks its stop at another zoom, or its ray to its
 /// stop passes over a node moved (pxl-spec-core `sun::over`).
-fn sun_slot(eye: &Eye, sun: &SunWords, moved: &SunMoved, size: u32, slot: UVec3) -> (bool, [i32; 3], cast::Ray, Detail) {
+fn sun_slot(
+    eye: &Eye,
+    sun: &SunWords,
+    moved: &SunMoved,
+    size: u32,
+    slot: UVec3,
+) -> (bool, [i32; 3], cast::Ray, Detail) {
     let s = sun_of(eye);
     let p = s.texel(size, [slot.x, slot.y]);
     let (origin, mut detail) = eye_origin(eye);
@@ -142,13 +148,26 @@ pub fn sun_mark_cs(
         let row = at / pxl_spec_core::sun::LIST_ACROSS + 1;
         if pxl_spec_core::sun::LIST_ROWS < list.len() {
             // SAFETY: just bounded by the slice's own length.
-            unsafe { spirv_std::arch::atomic_u_max::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(list.get_unchecked_mut(pxl_spec_core::sun::LIST_ROWS), row) };
+            unsafe {
+                spirv_std::arch::atomic_u_max::<
+                    u32,
+                    { Scope::QueueFamily as u32 },
+                    { Semantics::NONE.bits() },
+                >(list.get_unchecked_mut(pxl_spec_core::sun::LIST_ROWS), row)
+            };
         }
-        put(list, pxl_spec_core::sun::LIST_AT as u32 + at, tile[1] << 16 | tile[0]);
+        put(
+            list,
+            pxl_spec_core::sun::LIST_AT as u32 + at,
+            tile[1] << 16 | tile[0],
+        );
     }
 }
 
-const _: () = assert!(pxl_spec_core::sun::TILE == 8, "`sun_cs` is a workgroup a tile, its threads a side of it");
+const _: () = assert!(
+    pxl_spec_core::sun::TILE == 8,
+    "`sun_cs` is a workgroup a tile, its threads a side of it"
+);
 
 /// The world's depth from the sun into the slots the mark found walk again
 /// (`sun_mark_cs`): a workgroup a listed tile, a thread a slot, each walked

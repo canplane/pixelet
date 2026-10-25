@@ -14,15 +14,28 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { kernel_keys } from "@/abi/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
-import { DockMode, holdTool, RECENT_PICKS, useDockStore } from "@/shell/store/dock.ts";
+import {
+  DockMode,
+  holdTool,
+  RECENT_PICKS,
+  useDockStore,
+} from "@/shell/store/dock.ts";
 
-const MOVE: Record<string, [i32, i32]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
+const MOVE: Record<string, [i32, i32]> = {
+  KeyW: [0, -1],
+  KeyS: [0, 1],
+  KeyA: [-1, 0],
+  KeyD: [1, 0],
+};
 
 /** Digit1 on, the hotbar's slots in order. */
 const SLOT = /^Digit([1-9])$/;
 
 /** Figma's and Photoshop's letters for the move tool and the eraser. */
-const TOOL: Record<string, ActiveTool> = { KeyV: ActiveTool.Pointer, KeyE: ActiveTool.Eraser };
+const TOOL: Record<string, ActiveTool> = {
+  KeyV: ActiveTool.Pointer,
+  KeyE: ActiveTool.Eraser,
+};
 
 /** A game's inventory key, and Figma's for its resources (Shift+I); Escape closes it as any sheet. */
 const DRAWER = "KeyI";
@@ -45,7 +58,8 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const { recentPicks, selectCube, selectDecor, selectMarker, cueSwatch } = useDockStore.getState();
+  const { recentPicks, selectCube, selectDecor, selectMarker, cueSwatch } =
+    useDockStore.getState();
   const pick = recentPicks[slot];
   if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
   if (pick.tool === ActiveTool.Marker) return selectMarker();
@@ -54,7 +68,10 @@ function pickSlot(slot: number): void {
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */
-export function keyDown(code: string, { inField }: { inField: boolean }): boolean {
+export function keyDown(
+  code: string,
+  { inField }: { inField: boolean },
+): boolean {
   if (code === "Escape") {
     if (modalOpen()) {
       closeModal();

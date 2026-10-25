@@ -14,7 +14,12 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 pub const SHAPE_BITS: u32 = 10;
 
@@ -30,7 +35,13 @@ pub enum Kind {
 
 impl Kind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [Kind; 5] = [Kind::cube, Kind::decor, Kind::marker, Kind::actor, Kind::sky];
+    pub const ALL: [Kind; 5] = [
+        Kind::cube,
+        Kind::decor,
+        Kind::marker,
+        Kind::actor,
+        Kind::sky,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.

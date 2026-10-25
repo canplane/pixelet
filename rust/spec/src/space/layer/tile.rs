@@ -11,7 +11,9 @@ use crate::space::coord::q3::{self, FRAC_W, Q3};
 use crate::space::coord::world;
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
-use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node};
+use crate::space::hierarchy::tree::{
+    ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node,
+};
 use pxl_spec_core::wrap_index;
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
@@ -19,7 +21,10 @@ use pxl_spec_core::wrap_index;
 pub use pxl_spec_core::LEAF_ZOOM;
 /// The top: the coarsest tile any layer is kept in.
 pub use pxl_spec_core::TOP_ZOOM;
-const _: () = assert!(morton::bits::<2>(LEAF_ZOOM) < 63, "a tile's key fits its subject's word");
+const _: () = assert!(
+    morton::bits::<2>(LEAF_ZOOM) < 63,
+    "a tile's key fits its subject's word"
+);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Tile {
@@ -54,7 +59,9 @@ impl Tile {
     /// `key`'s inverse; `None` for a zoom the pyramid does not hold.
     pub fn of_key(key: u128) -> Option<Tile> {
         let (zoom, at) = node_of::<2>(key);
-        (TOP_ZOOM..=LEAF_ZOOM).contains(&zoom).then(|| tile_at(zoom, at))
+        (TOP_ZOOM..=LEAF_ZOOM)
+            .contains(&zoom)
+            .then(|| tile_at(zoom, at))
     }
 
     /// What a baked tile is stored as, on disk and in the bucket alike.
@@ -89,7 +96,11 @@ impl Tile {
     pub fn rect(self) -> (f64, f64, f64) {
         let (zoom, [x, y]) = self.node();
         let base = base_of(zoom, [x, y, 0]);
-        (q3::to_real(i64::from(base[0])), q3::to_real(i64::from(base[1])), units(zoom))
+        (
+            q3::to_real(i64::from(base[0])),
+            q3::to_real(i64::from(base[1])),
+            units(zoom),
+        )
     }
 
     /// The tile as a box of the world: its square, every height.

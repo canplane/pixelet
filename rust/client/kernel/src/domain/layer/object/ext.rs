@@ -57,7 +57,10 @@ impl Pools {
 
     pub fn free(&mut self, class: Class, h: u16) {
         let pool = &mut self.pools[class as usize];
-        if let Some(slot) = h.checked_sub(1).and_then(|s| pool.slots.get_mut(usize::from(s))) {
+        if let Some(slot) = h
+            .checked_sub(1)
+            .and_then(|s| pool.slots.get_mut(usize::from(s)))
+        {
             if slot.take().is_some() {
                 pool.free.push(h);
             }

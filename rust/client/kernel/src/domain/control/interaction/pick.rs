@@ -40,7 +40,10 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// decor met in front of it).
 #[allow(clippy::needless_range_loop)]
 pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Q3 {
-    let Aabb { min: box_min, max: box_max } = precise_box.copied().unwrap_or(hit.cube);
+    let Aabb {
+        min: box_min,
+        max: box_max,
+    } = precise_box.copied().unwrap_or(hit.cube);
     let mut out: V3 = [0.0; 3];
 
     for axis in 0..3 {
@@ -78,7 +81,11 @@ pub fn world_struck_corner(hit: &Hit, size: f64) -> Q3 {
 /// The placed object struck: a cube, or a decor someone placed.
 pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.struck {
-        Struck::Object(at) | Struck::Decor(Instance { source: Source::Object(at), .. }) => World::now().placed(at),
+        Struck::Object(at)
+        | Struck::Decor(Instance {
+            source: Source::Object(at),
+            ..
+        }) => World::now().placed(at),
         Struck::Ground | Struck::Objects | Struck::Decor(_) => None,
     }
 }
@@ -94,7 +101,11 @@ pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<Hit> {
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
-    World::now().striking_decor(drawn).first_hit(&ray, held()).exact().flatten()
+    World::now()
+        .striking_decor(drawn)
+        .first_hit(&ray, held())
+        .exact()
+        .flatten()
 }
 
 #[cfg(test)]

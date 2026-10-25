@@ -59,7 +59,10 @@ interface SwipeHooks {
  * forward. It turns once, when the swipe crosses the line; the card does not
  * follow the finger, which would set a pose every move on the kernel's thread.
  */
-export function deckSwipe(turn: (delta: i32) => void, { press, drag }: SwipeHooks = {}): PanResponderCallbacks {
+export function deckSwipe(
+  turn: (delta: i32) => void,
+  { press, drag }: SwipeHooks = {},
+): PanResponderCallbacks {
   // From where the touch began: a grant after the first moves restarts the gesture's own dy.
   let from: f64 = 0;
   let turned = false;

@@ -30,7 +30,9 @@ export function tile_name(subject: bigint): string | null {
   while (((subject >> BigInt(low)) & 1n) === 0n) low++;
   if ((62 - low) % 2 !== 0) return null;
   let name = "";
-  for (let z = 0; z < (62 - low) / 2; z++) name += String((subject >> BigInt(61 - 2 * z)) & 3n);
+  for (let z = 0; z < (62 - low) / 2; z++) {
+    name += String((subject >> BigInt(61 - 2 * z)) & 3n);
+  }
   return name;
 }
 
@@ -42,15 +44,24 @@ function version_of(d: Declaration, kind: BaseLayer, name: string): string {
   if (kind !== "earth") {
     for (const [key, shard] of Object.entries(d.shard)) {
       const own = shard.version?.[kind];
-      if (own !== undefined && name.startsWith(key) && (finest === null || key.length >= finest[0])) finest = [key.length, own];
+      if (
+        own !== undefined && name.startsWith(key) &&
+        (finest === null || key.length >= finest[0])
+      ) finest = [key.length, own];
     }
   }
   return finest?.[1] ?? d.version[kind];
 }
 
 /** The object `number`, a path's one name, is below `kind`'s root; none for one that is no object's. */
-export function tile_object(d: Declaration, kind: BaseLayer, number: bigint): string | null {
-  if (number === BigInt(SPHERE)) return kind === "earth" ? tileObject(d.version.earth, TILE_SPHERE) : null;
+export function tile_object(
+  d: Declaration,
+  kind: BaseLayer,
+  number: bigint,
+): string | null {
+  if (number === BigInt(SPHERE)) {
+    return kind === "earth" ? tileObject(d.version.earth, TILE_SPHERE) : null;
+  }
   const name = tile_name(number);
   return name === null ? null : tileObject(version_of(d, kind, name), name);
 }
@@ -62,18 +73,28 @@ export function tile_object(d: Declaration, kind: BaseLayer, number: bigint): st
  * device whose own decode (ts/app/native/src/origin.ts) was skipped.
  */
 function packed(body: U8Array): boolean {
-  return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);
+  return (body[0] === 0x28 && body[1] === 0xb5) ||
+    (body[0] === 0x1f && body[1] === 0x8b);
 }
 
 /** A bake's object by its number, under the source `declared`; none before
  * the source is declared, as the kernel asks for none. */
-export async function read_object(declared: Declaration | null, bake: u32, number: bigint, signal: AbortSignal): Promise<U8Array> {
-  const name = declared === null ? null : tile_object(declared, BASE_LAYERS[bake], number);
+export async function read_object(
+  declared: Declaration | null,
+  bake: u32,
+  number: bigint,
+  signal: AbortSignal,
+): Promise<U8Array> {
+  const name = declared === null
+    ? null
+    : tile_object(declared, BASE_LAYERS[bake], number);
   if (name === null) throw new FileError(Errno.ENOENT);
   const body = await get(tile_url(BASE_LAYERS[bake], name), name, signal);
   if (body.byteLength > 0 && packed(body)) {
     // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
-    console.warn(`[read] ${name}: the body arrived still packed, with no encoding to undo it`);
+    console.warn(
+      `[read] ${name}: the body arrived still packed, with no encoding to undo it`,
+    );
     throw new FileError(Errno.EBADMSG);
   }
   return body;

@@ -7,7 +7,13 @@
  */
 
 import type { ReactNode } from "react";
-import { Pressable, type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
+import {
+  Pressable,
+  type StyleProp,
+  StyleSheet,
+  View,
+  type ViewStyle,
+} from "react-native";
 
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
@@ -26,13 +32,32 @@ const INSET = 2;
 const THUMB = { width: 37, height: TRACK.height - 2 * INSET };
 const TRAVEL = TRACK.width - THUMB.width - 2 * INSET;
 
-export function ToggleRow({ value, onValueChange, style, children }: ToggleRowProps) {
+export function ToggleRow(
+  { value, onValueChange, style, children }: ToggleRowProps,
+) {
   return (
-    <Pressable onPress={() => onValueChange(!value)} accessibilityRole="switch" aria-checked={value} style={style}>
+    <Pressable
+      onPress={() => onValueChange(!value)}
+      accessibilityRole="switch"
+      aria-checked={value}
+      style={style}
+    >
       {children}
-      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.track}>
-        <Motion to={{ opacity: value ? 1 : 0 }} transition={SNAP} style={styles.on} />
-        <Motion to={{ translateX: value ? TRAVEL : 0 }} transition={SNAP} style={styles.thumb} />
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={styles.track}
+      >
+        <Motion
+          to={{ opacity: value ? 1 : 0 }}
+          transition={SNAP}
+          style={styles.on}
+        />
+        <Motion
+          to={{ translateX: value ? TRAVEL : 0 }}
+          transition={SNAP}
+          style={styles.thumb}
+        />
       </View>
     </Pressable>
   );
@@ -45,7 +70,11 @@ const styles = StyleSheet.create({
     backgroundColor: color.track,
     pointerEvents: "none",
   },
-  on: { ...StyleSheet.absoluteFill, borderRadius: TRACK.height / 2, backgroundColor: color.chosen },
+  on: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: TRACK.height / 2,
+    backgroundColor: color.chosen,
+  },
   thumb: {
     position: "absolute",
     top: INSET,

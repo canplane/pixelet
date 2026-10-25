@@ -3,7 +3,10 @@
 import { StyleSheet } from "react-native";
 
 import { Motion } from "@/shell/ui/motion/motion.tsx";
-import { useCenterCoordinates, useDivisionLabel } from "@/shell/division/focus.ts";
+import {
+  useCenterCoordinates,
+  useDivisionLabel,
+} from "@/shell/division/focus.ts";
 import { FADE } from "@/shell/ui/motion/transition.ts";
 import { HaloText } from "./halo.tsx";
 import { color, textStyle, weight } from "@/shell/ui/theme.ts";
@@ -17,8 +20,16 @@ export function CurrentAddress() {
   if (!text) return null;
 
   return (
-    <Motion key={label ?? ""} from={{ opacity: 0 }} to={{}} transition={FADE} style={styles.shrink}>
-      <HaloText style={[styles.label, !label && styles.numbers]}>{text}</HaloText>
+    <Motion
+      key={label ?? ""}
+      from={{ opacity: 0 }}
+      to={{}}
+      transition={FADE}
+      style={styles.shrink}
+    >
+      <HaloText style={[styles.label, !label && styles.numbers]}>
+        {text}
+      </HaloText>
     </Motion>
   );
 }

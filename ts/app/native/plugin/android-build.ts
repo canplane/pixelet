@@ -24,7 +24,11 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { withAppBuildGradle, withDangerousMod, withGradleProperties } from "expo/config-plugins";
+import {
+  withAppBuildGradle,
+  withDangerousMod,
+  withGradleProperties,
+} from "expo/config-plugins";
 
 const PROPERTIES = {
   reactNativeArchitectures: "arm64-v8a",
@@ -32,30 +36,50 @@ const PROPERTIES = {
 };
 
 const FLAVORS = ["mobile", "quest"];
-const DEBUGGABLE = FLAVORS.flatMap((flavor) => [`${flavor}Debug`, `${flavor}DebugOptimized`]);
+const DEBUGGABLE = FLAVORS.flatMap((
+  flavor,
+) => [`${flavor}Debug`, `${flavor}DebugOptimized`]);
 const MARK = "// pxl: the flavors' debug builds (plugin/android-build.ts)";
 const DAEMON_JAVA = "17";
 
 export default (config) => {
   config = withGradleProperties(config, (config) => {
-    const items = config.modResults.filter((item) => !(item.type === "property" && item.key in PROPERTIES));
-    for (const [key, value] of Object.entries(PROPERTIES)) items.push({ type: "property", key, value });
+    const items = config.modResults.filter((item) =>
+      !(item.type === "property" && item.key in PROPERTIES)
+    );
+    for (const [key, value] of Object.entries(PROPERTIES)) {
+      items.push({ type: "property", key, value });
+    }
     config.modResults = items;
     return config;
   });
   config = withDangerousMod(config, ["android", (config) => {
-    const file = path.join(config.modRequest.platformProjectRoot, "gradle", "gradle-daemon-jvm.properties");
-    fs.writeFileSync(file, `# plugin/android-build.ts\ntoolchainVersion=${DAEMON_JAVA}\n`);
+    const file = path.join(
+      config.modRequest.platformProjectRoot,
+      "gradle",
+      "gradle-daemon-jvm.properties",
+    );
+    fs.writeFileSync(
+      file,
+      `# plugin/android-build.ts\ntoolchainVersion=${DAEMON_JAVA}\n`,
+    );
     return config;
   }]);
   return withAppBuildGradle(config, (config) => {
     const gradle = config.modResults.contents;
     if (gradle.includes(MARK)) return config;
     const at = gradle.search(/^react \{\n/m);
-    if (at < 0) throw new Error("android-build: the app's build.gradle has no react block");
+    if (at < 0) {
+      throw new Error(
+        "android-build: the app's build.gradle has no react block",
+      );
+    }
     const end = gradle.indexOf("\n", at) + 1;
-    const line = `    ${MARK}\n    debuggableVariants = ${JSON.stringify(DEBUGGABLE)}\n`;
-    config.modResults.contents = gradle.slice(0, end) + line + gradle.slice(end);
+    const line = `    ${MARK}\n    debuggableVariants = ${
+      JSON.stringify(DEBUGGABLE)
+    }\n`;
+    config.modResults.contents = gradle.slice(0, end) + line +
+      gradle.slice(end);
     return config;
   });
 };

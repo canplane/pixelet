@@ -11,5 +11,8 @@ import { PLATFORM } from "./module.ts";
 export function open(): Promise<Guest> {
   const buffer = PLATFORM.mem();
   PLATFORM.intr(0);
-  return Promise.resolve({ memory: buffer, intr: (quota_ms: f64) => PLATFORM.intr(quota_ms) });
+  return Promise.resolve({
+    memory: buffer,
+    intr: (quota_ms: f64) => PLATFORM.intr(quota_ms),
+  });
 }

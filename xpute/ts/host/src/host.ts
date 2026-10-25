@@ -50,21 +50,35 @@ export interface Host {
 export function mount(guest: Guest, plan: Plan): Host {
   const directory = new Directory(guest.memory, plan.directory_at);
   const stream = directory.get(key.SYS);
-  const doorbell = new Doorbell(guest.memory, directory.get(key.SQ), directory.get(key.CQ), (quota_ms) => {
-    let wake: f64;
-    try {
-      wake = guest.intr(quota_ms);
-    } finally {
-      sys.run(guest.memory, stream);
-    }
-    return wake;
-  });
-  const strobe = new Strobe(doorbell, directory.quantum(), plan.submit, plan.next_frame);
+  const doorbell = new Doorbell(
+    guest.memory,
+    directory.get(key.SQ),
+    directory.get(key.CQ),
+    (quota_ms) => {
+      let wake: f64;
+      try {
+        wake = guest.intr(quota_ms);
+      } finally {
+        sys.run(guest.memory, stream);
+      }
+      return wake;
+    },
+  );
+  const strobe = new Strobe(
+    doorbell,
+    directory.quantum(),
+    plan.submit,
+    plan.next_frame,
+  );
   const send = (cmd: u32, pkt?: PacketWriter) => {
     doorbell.send(0, cmd, pkt);
     strobe.request();
   };
-  const sys = new Sys(plan.sys, (fd, res, detail) => send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)));
+  const sys = new Sys(
+    plan.sys,
+    (fd, res, detail) =>
+      send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
+  );
   return {
     guest,
     directory,

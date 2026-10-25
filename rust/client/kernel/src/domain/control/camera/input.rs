@@ -9,7 +9,10 @@
 use pxl_spec::space::camera::grid::Tau;
 use std::collections::BTreeMap;
 
-use crate::domain::control::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
+use crate::domain::control::param::{
+    AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX,
+    TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION,
+};
 
 use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
@@ -168,7 +171,11 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
         if libm::hypot(total_dx, total_dy) < AXIS_LOCK_THRESHOLD_PX {
             return;
         }
-        s.rotate_axis_lock = if total_dy.abs() > total_dx.abs() { RotateAxisLock::Tilt } else { RotateAxisLock::Rotate };
+        s.rotate_axis_lock = if total_dy.abs() > total_dx.abs() {
+            RotateAxisLock::Tilt
+        } else {
+            RotateAxisLock::Rotate
+        };
     }
 
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
@@ -193,7 +200,9 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
         return;
     }
     let angle = libm::atan2(dyc, dx);
-    let turn = s.rotate_turn.get_or_insert(Anchor::new(camera_state().intent.azimuth, angle));
+    let turn = s
+        .rotate_turn
+        .get_or_insert(Anchor::new(camera_state().intent.azimuth, angle));
     let azimuth = turn.ask(angle, linear(-1.0));
     let took = crate::domain::control::camera::controller::set_intent(IntentPatch {
         azimuth: Some(azimuth),
@@ -209,7 +218,9 @@ fn pointer_pair(s: &Input) -> Option<(PointerPos, PointerPos)> {
 
 /// On the second finger down, and again when a third lifts, so the gesture never jumps.
 fn begin_pinch(s: &mut Input) {
-    let Some((p0, p1)) = pointer_pair(s) else { return };
+    let Some((p0, p1)) = pointer_pair(s) else {
+        return;
+    };
     s.pinch_start_dist = libm::hypot(p1.x - p0.x, p1.y - p0.y);
     crate::domain::control::camera::controller::pinch_begin(s.pinch_start_dist);
     let camera = camera_state();
@@ -221,7 +232,9 @@ fn begin_pinch(s: &mut Input) {
 }
 
 fn update_pinch(s: &mut Input) {
-    let Some((p0, p1)) = pointer_pair(s) else { return };
+    let Some((p0, p1)) = pointer_pair(s) else {
+        return;
+    };
     if s.pinch_start_dist < 1.0 {
         return;
     }
@@ -237,12 +250,21 @@ fn update_pinch(s: &mut Input) {
     if dist < MIN_TWIST_DIST_PX {
         s.pinch_twist = None;
     }
-    let twist = (dist >= MIN_TWIST_DIST_PX).then(|| *s.pinch_twist.get_or_insert(Anchor::new(intent.azimuth, angle)));
-    let azimuth = twist.map(|t| t.ask(angle, linear(-1.0))).filter(|&a| a != intent.azimuth);
+    let twist = (dist >= MIN_TWIST_DIST_PX).then(|| {
+        *s.pinch_twist
+            .get_or_insert(Anchor::new(intent.azimuth, angle))
+    });
+    let azimuth = twist
+        .map(|t| t.ask(angle, linear(-1.0)))
+        .filter(|&a| a != intent.azimuth);
     if polar.is_none() && azimuth.is_none() {
         return;
     }
-    let took = crate::domain::control::camera::controller::set_intent(IntentPatch { dist: None, azimuth, polar });
+    let took = crate::domain::control::camera::controller::set_intent(IntentPatch {
+        dist: None,
+        azimuth,
+        polar,
+    });
     if let Some(polar) = polar {
         s.pinch_tilt.settle(polar, took.polar, midpoint_y);
     }
@@ -251,12 +273,24 @@ fn update_pinch(s: &mut Input) {
     }
 }
 
-pub fn camera_pointer_down(pointer_type: PointerType, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
+pub fn camera_pointer_down(
+    pointer_type: PointerType,
+    pointer_id: i32,
+    button: i32,
+    client_x: f64,
+    client_y: f64,
+) {
     let s = input();
     let camera = camera_state();
     if pointer_type == PointerType::Touch {
         s.hovering = false;
-        s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
+        s.active_pointers.insert(
+            pointer_id,
+            PointerPos {
+                x: client_x,
+                y: client_y,
+            },
+        );
         set_following(false);
         match s.active_pointers.len() {
             1 => {
@@ -296,18 +330,28 @@ pub fn camera_pointer_down(pointer_type: PointerType, pointer_id: i32, button: i
     set_following(false);
 }
 
-pub fn camera_pointer_move(pointer_type: PointerType, pointer_id: i32, client_x: f64, client_y: f64) {
+pub fn camera_pointer_move(
+    pointer_type: PointerType,
+    pointer_id: i32,
+    client_x: f64,
+    client_y: f64,
+) {
     let s = input();
     if pointer_type == PointerType::Touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
-            *pt = PointerPos { x: client_x, y: client_y };
+            *pt = PointerPos {
+                x: client_x,
+                y: client_y,
+            };
         }
         if s.drag_mode == DragMode::Pinch && s.active_pointers.len() >= 2 {
             s.drag_pending = true;
             return;
         }
         if s.drag_mode == DragMode::Pan && s.active_pointers.len() == 1 {
-            if libm::hypot(client_x - s.tap_start_x, client_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
+            if libm::hypot(client_x - s.tap_start_x, client_y - s.tap_start_y)
+                > TAP_DRAG_THRESHOLD_PX
+            {
                 s.did_drag = true;
             }
             s.pending_pan_dx += client_x - s.last_x;
@@ -361,7 +405,11 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
             }
             1 => {
                 // Already mid-gesture, so the lift is no tap.
-                let remaining = *s.active_pointers.values().next().or_bug(Errno::ENOTRECOVERABLE);
+                let remaining = *s
+                    .active_pointers
+                    .values()
+                    .next()
+                    .or_bug(Errno::ENOTRECOVERABLE);
                 s.drag_mode = DragMode::Pan;
                 s.last_x = remaining.x;
                 s.last_y = remaining.y;
@@ -404,7 +452,11 @@ pub fn camera_wheel(delta_y: f64) {
 pub fn camera_keys(x: i32, y: i32) {
     let s = input();
     let len = libm::hypot(x as f64, y as f64);
-    let keys = if len > 0.0 { [x as f64 / len, y as f64 / len] } else { [0.0; 2] };
+    let keys = if len > 0.0 {
+        [x as f64 / len, y as f64 / len]
+    } else {
+        [0.0; 2]
+    };
     if s.keys == [0.0; 2] {
         s.keys_at = now();
     }

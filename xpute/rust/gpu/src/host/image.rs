@@ -42,23 +42,46 @@ impl Decoder {
         let (answer, answers) = channel();
         std::thread::spawn(move || {
             for (job, bytes, flip_y, premultiplied) in jobs {
-                if answer.send((job, decode(&bytes, flip_y, premultiplied))).is_err() {
+                if answer
+                    .send((job, decode(&bytes, flip_y, premultiplied)))
+                    .is_err()
+                {
                     return;
                 }
                 wake();
             }
         });
-        Decoder { ask, answers, next: 0 }
+        Decoder {
+            ask,
+            answers,
+            next: 0,
+        }
     }
 }
 
 impl GpuHost {
     /// `bytes` copied now, since they are the guest's only until the next turn.
-    pub(super) fn copy_external_image(&mut self, to: OwnedTexture, bytes: &[u8], flip_y: bool, premultiplied: bool, word: u32, ticket: u32) {
+    pub(super) fn copy_external_image(
+        &mut self,
+        to: OwnedTexture,
+        bytes: &[u8],
+        flip_y: bool,
+        premultiplied: bool,
+        word: u32,
+        ticket: u32,
+    ) {
         let job = self.decoder.next;
         self.decoder.next += 1;
-        let _ = self.decoder.ask.send((job, bytes.to_vec(), flip_y, premultiplied));
-        self.decoding.push_back(Decoding { job, to, word, ticket });
+        let _ = self
+            .decoder
+            .ask
+            .send((job, bytes.to_vec(), flip_y, premultiplied));
+        self.decoding.push_back(Decoding {
+            job,
+            to,
+            word,
+            ticket,
+        });
     }
 
     /// Each decoded image written to its texture, ahead in the queue of
@@ -67,9 +90,17 @@ impl GpuHost {
     /// has nowhere to land; one the device's loss forgot answers to nothing.
     pub(super) fn land_images(&mut self, memory: &mut Memory<'_>) {
         while let Ok((job, image)) = self.decoder.answers.try_recv() {
-            let Some(d) = self.decoding.pop_front_if(|d| d.job == job) else { continue };
-            let held = self.objects.iter().flatten().any(|o| matches!(o, Object::Texture(t) if *t == d.to.texture));
-            let Some(image) = image.filter(|_| held) else { continue };
+            let Some(d) = self.decoding.pop_front_if(|d| d.job == job) else {
+                continue;
+            };
+            let held = self
+                .objects
+                .iter()
+                .flatten()
+                .any(|o| matches!(o, Object::Texture(t) if *t == d.to.texture));
+            let Some(image) = image.filter(|_| held) else {
+                continue;
+            };
             let layout = wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * image.width),
@@ -80,7 +111,8 @@ impl GpuHost {
                 height: image.height,
                 depth_or_array_layers: 1,
             };
-            self.queue.write_texture(d.to.info(), &image.rgba, layout, size);
+            self.queue
+                .write_texture(d.to.info(), &image.rgba, layout, size);
             if memory.word(d.word) == d.ticket {
                 memory.set_word(d.word, d.ticket | DONE);
             }
@@ -129,11 +161,25 @@ fn decode(bytes: &[u8], flip_y: bool, premultiplied: bool) -> Option<Image> {
 fn rgba(width: u32, height: u32, channels: usize, from: &[u8]) -> Image {
     let rgba = match channels {
         4 => from.to_vec(),
-        3 => from.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
-        2 => from.as_chunks::<2>().0.iter().flat_map(|p| [p[0], p[0], p[0], p[1]]).collect(),
+        3 => from
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect(),
+        2 => from
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[0], p[0], p[1]])
+            .collect(),
         _ => from.iter().flat_map(|&g| [g, g, g, 255]).collect(),
     };
-    Image { width, height, rgba }
+    Image {
+        width,
+        height,
+        rgba,
+    }
 }
 
 fn png(bytes: &[u8]) -> Option<Image> {
@@ -143,11 +189,17 @@ fn png(bytes: &[u8]) -> Option<Image> {
     let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
     let channels = info.color_type.samples();
-    Some(rgba(info.width, info.height, channels, &buf[..info.buffer_size()]))
+    Some(rgba(
+        info.width,
+        info.height,
+        channels,
+        &buf[..info.buffer_size()],
+    ))
 }
 
 fn jpeg(bytes: &[u8]) -> Option<Image> {
-    let options = zune_jpeg::zune_core::options::DecoderOptions::default().jpeg_set_out_colorspace(zune_jpeg::zune_core::colorspace::ColorSpace::RGBA);
+    let options = zune_jpeg::zune_core::options::DecoderOptions::default()
+        .jpeg_set_out_colorspace(zune_jpeg::zune_core::colorspace::ColorSpace::RGBA);
     let mut decoder = zune_jpeg::JpegDecoder::new_with_options(Cursor::new(bytes), options);
     let rgba = decoder.decode().ok()?;
     let info = decoder.info()?;
@@ -163,5 +215,10 @@ fn webp(bytes: &[u8]) -> Option<Image> {
     let (width, height) = decoder.dimensions();
     let mut buf = vec![0; decoder.output_buffer_size()?];
     decoder.read_image(&mut buf).ok()?;
-    Some(rgba(width, height, if decoder.has_alpha() { 4 } else { 3 }, &buf))
+    Some(rgba(
+        width,
+        height,
+        if decoder.has_alpha() { 4 } else { 3 },
+        &buf,
+    ))
 }

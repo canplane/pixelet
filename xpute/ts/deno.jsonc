@@ -36,8 +36,6 @@
   },
 
   "fmt": {
-    "lineWidth": 200,
-    "proseWrap": "preserve",
     "exclude": ["node_modules/"]
   },
 

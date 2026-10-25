@@ -34,7 +34,11 @@ fn on_main(f: fn()) {
     unsafe extern "C" {
         /// What `dispatch_get_main_queue()`, a header's inline, returns.
         static _dispatch_main_q: c_void;
-        fn dispatch_async_f(queue: *const c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
+        fn dispatch_async_f(
+            queue: *const c_void,
+            context: *mut c_void,
+            work: extern "C" fn(*mut c_void),
+        );
     }
     extern "C" fn work(context: *mut c_void) {
         // SAFETY: the `fn()` `on_main` was given, carried as the context.
@@ -43,5 +47,11 @@ fn on_main(f: fn()) {
     }
     // SAFETY: libdispatch's main queue, which lives as long as the process;
     // the context is a function's address, which `work` alone reads.
-    unsafe { dispatch_async_f(&raw const _dispatch_main_q, core::ptr::with_exposed_provenance_mut(f as usize), work) };
+    unsafe {
+        dispatch_async_f(
+            &raw const _dispatch_main_q,
+            core::ptr::with_exposed_provenance_mut(f as usize),
+            work,
+        )
+    };
 }

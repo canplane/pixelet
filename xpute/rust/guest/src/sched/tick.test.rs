@@ -57,7 +57,11 @@ fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
     t.on_tick(Phase::cosmetic, |_| seen(|s| s.order.push("cosmetic")), 0);
     t.on_tick(Phase::content, |_| seen(|s| s.order.push("content")), 0);
     t.on_tick(Phase::visible, |_| seen(|s| s.order.push("visible")), 0);
-    t.on_tick(Phase::interaction, |_| seen(|s| s.order.push("interaction")), 0);
+    t.on_tick(
+        Phase::interaction,
+        |_| seen(|s| s.order.push("interaction")),
+        0,
+    );
     t.run(0.016, QUOTA_MS, now());
     assert_eq!(saw().order, PHASES);
 }
@@ -74,13 +78,21 @@ fn tick_within_a_phase_steps_run_in_registration_order() {
 
 #[test]
 fn tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_get() {
-    let mut t = tick(Seen { a: -1.0, ..Default::default() });
+    let mut t = tick(Seen {
+        a: -1.0,
+        ..Default::default()
+    });
     t.on_tick(Phase::visible, |c| burn(c.pass.total_ms * 0.75), 0);
     t.on_tick(Phase::content, |c| seen(|s| s.a = c.pass.remaining()), 0);
     let report = t.run(0.016, QUOTA_MS, now());
     let s = saw();
     assert!(s.a >= 0.0);
-    assert!(s.a <= report.budget_ms * 0.3, "content saw {} of {}", s.a, report.budget_ms);
+    assert!(
+        s.a <= report.budget_ms * 0.3,
+        "content saw {} of {}",
+        s.a,
+        report.budget_ms
+    );
 }
 
 #[test]
@@ -104,8 +116,18 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
     t.on_tick(Phase::content, |c| seen(|s| s.b = c.pass.remaining()), 0);
     let report = t.run(0.016, QUOTA_MS, now());
     let s = saw();
-    assert!(s.a <= report.budget_ms * 0.8 + 0.01, "visible saw {} of {}", s.a, report.budget_ms);
-    assert!(s.b >= report.budget_ms * 0.1, "content saw {} of {}", s.b, report.budget_ms);
+    assert!(
+        s.a <= report.budget_ms * 0.8 + 0.01,
+        "visible saw {} of {}",
+        s.a,
+        report.budget_ms
+    );
+    assert!(
+        s.b >= report.budget_ms * 0.1,
+        "content saw {} of {}",
+        s.b,
+        report.budget_ms
+    );
 }
 
 #[test]
@@ -151,7 +173,10 @@ fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_s
 
 #[test]
 fn tick_the_report_phase_sees_every_phase_before_it() {
-    let mut t = tick(Seen { a: -1.0, ..Default::default() });
+    let mut t = tick(Seen {
+        a: -1.0,
+        ..Default::default()
+    });
     t.on_tick(Phase::visible, |_| burn(2.0), 0);
     t.on_tick(
         Phase::report,

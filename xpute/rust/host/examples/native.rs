@@ -42,7 +42,10 @@ mod program {
         assert!(!at.is_null());
         assert_eq!(bytes, MEMORY_BYTES);
         assert_eq!(xpute_intr(4.0), -1.0);
-        assert!(guest().heap_stat().requests > 0, "the turn's block is the guest's heap's");
+        assert!(
+            guest().heap_stat().requests > 0,
+            "the turn's block is the guest's heap's"
+        );
     }
 }
 

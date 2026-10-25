@@ -90,7 +90,13 @@ pub struct Division {
 }
 
 impl Division {
-    pub fn new(gers_id: String, subtype: &str, name: String, names_common: Option<serde_json::Value>, parent: Option<String>) -> Division {
+    pub fn new(
+        gers_id: String,
+        subtype: &str,
+        name: String,
+        names_common: Option<serde_json::Value>,
+        parent: Option<String>,
+    ) -> Division {
         Division {
             gers_id,
             subtype: Subtype::named(subtype),
@@ -111,12 +117,19 @@ impl Division {
 }
 
 fn names_of(common: Option<serde_json::Value>) -> BTreeMap<String, String> {
-    let Some(serde_json::Value::Object(map)) = common else { return BTreeMap::new() };
-    map.into_iter().filter_map(|(lang, name)| name.as_str().map(|n| (lang, n.to_string()))).collect()
+    let Some(serde_json::Value::Object(map)) = common else {
+        return BTreeMap::new();
+    };
+    map.into_iter()
+        .filter_map(|(lang, name)| name.as_str().map(|n| (lang, n.to_string())))
+        .collect()
 }
 
 /// [`FINEST_SQL`]'s rows by point; `idx` counts from 1.
-pub fn by_point(points: usize, rows: impl IntoIterator<Item = (i64, String, bool)>) -> Vec<Option<(String, bool)>> {
+pub fn by_point(
+    points: usize,
+    rows: impl IntoIterator<Item = (i64, String, bool)>,
+) -> Vec<Option<(String, bool)>> {
     let mut out = vec![None; points];
     for (idx, id, approx) in rows {
         out[(idx - 1) as usize] = Some((id, approx));
@@ -128,11 +141,13 @@ pub fn by_point(points: usize, rows: impl IntoIterator<Item = (i64, String, bool
 /// held; only the division itself can be approximate. A walk longer than
 /// there are subtypes is a cycle, and stops.
 pub fn name(id: &str, approx: bool, lineage: &FnvHashMap<String, Division>) -> Vec<DivisionPart> {
-    let mut parts: Vec<DivisionPart> = core::iter::successors(lineage.get(id), |d| d.parent.as_ref().and_then(|p| lineage.get(p)))
-        .take(Subtype::ALL.len())
-        .enumerate()
-        .filter_map(|(k, d)| d.part(approx && k == 0))
-        .collect();
+    let mut parts: Vec<DivisionPart> = core::iter::successors(lineage.get(id), |d| {
+        d.parent.as_ref().and_then(|p| lineage.get(p))
+    })
+    .take(Subtype::ALL.len())
+    .enumerate()
+    .filter_map(|(k, d)| d.part(approx && k == 0))
+    .collect();
     parts.reverse();
     parts
 }

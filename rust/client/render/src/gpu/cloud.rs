@@ -10,7 +10,10 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load};
+use crate::gpu::api::{
+    buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
+    view_entry, word_bytes, Entry, Format, Gpu, Load,
+};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -19,8 +22,14 @@ use pxl_spec::space::coord::world::EXTENT;
 use pxl_spec_core::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT};
 use pxl_spec_core::UNIT_ZOOM;
 
-const _: () = assert!(EXTENT[0] == UNIT_ZOOM && EXTENT[1] == UNIT_ZOOM, "one lattice count for both axes");
-const _: () = assert!(LATTICE_COUNT.is_multiple_of(CLOUD_TILE_UNITS), "the world is whole tiles");
+const _: () = assert!(
+    EXTENT[0] == UNIT_ZOOM && EXTENT[1] == UNIT_ZOOM,
+    "one lattice count for both axes"
+);
+const _: () = assert!(
+    LATTICE_COUNT.is_multiple_of(CLOUD_TILE_UNITS),
+    "the world is whole tiles"
+);
 
 pub struct CloudPass {
     below: Built,
@@ -33,7 +42,13 @@ pub struct CloudPass {
 
 impl CloudPass {
     /// `sky_buffer`, the sky's words, whose ray each pixel's is.
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32, air: [Entry; AIR_ENTRIES]) -> CloudPass {
+    pub fn new(
+        g: &Gpu,
+        pipelines: &mut Pipelines,
+        frame_buffer: u32,
+        sky_buffer: u32,
+        air: [Entry; AIR_ENTRIES],
+    ) -> CloudPass {
         let below = pipelines.build(g, PIPELINE_CLOUD, g.canvas());
         let above = pipelines.build(g, PIPELINE_CLOUD_ABOVE, g.canvas());
         let tile = g.texture(
@@ -44,10 +59,27 @@ impl CloudPass {
             mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
             texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
         );
-        let tile_view = g.view(tile, false, 0, mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS), 0, 1);
+        let tile_view = g.view(
+            tile,
+            false,
+            0,
+            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
+            0,
+            1,
+        );
         // Repeated, since the tile meets itself.
-        let tile_sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::repeat, None, 1);
-        let uniform = g.buffer(word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let tile_sampler = g.sampler(
+            FilterMode::linear,
+            FilterMode::linear,
+            MipmapFilterMode::linear,
+            AddressMode::repeat,
+            None,
+            1,
+        );
+        let uniform = g.buffer(
+            word_bytes(CLOUDS_FLOATS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
         let mut e = vec![
             buffer_entry(0, frame_buffer),
             buffer_entry(19, sky_buffer),
@@ -57,7 +89,12 @@ impl CloudPass {
         ];
         e.extend(air);
         let group = g.bind_group(below.layouts[0], &e);
-        bake(g, pipelines, tile, mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS));
+        bake(
+            g,
+            pipelines,
+            tile,
+            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
+        );
         CloudPass {
             below,
             above,
@@ -95,7 +132,14 @@ impl CloudPass {
         if self.words[SHOWN] <= 0.0 {
             return;
         }
-        g.set_pipeline(pass, if self.over { self.above.pipeline } else { self.below.pipeline });
+        g.set_pipeline(
+            pass,
+            if self.over {
+                self.above.pipeline
+            } else {
+                self.below.pipeline
+            },
+        );
         g.set_bind_group(pass, 0, self.group, &[]);
         g.draw(pass, 3, 1, 0, 0);
     }
@@ -111,7 +155,8 @@ fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
     let drift = drift(f64::from(env[ENV_SKY + 1]));
     for k in 0..2 {
         let u = eye[k] / side;
-        words[BASE + k] = f32::from_bits((u.floor() as i64).rem_euclid(i64::from(LATTICE_COUNT)) as u32);
+        words[BASE + k] =
+            f32::from_bits((u.floor() as i64).rem_euclid(i64::from(LATTICE_COUNT)) as u32);
         words[FRAC + k] = (u - u.floor()) as f32;
         words[DRIFT + k] = drift[k] as f32;
     }
@@ -122,7 +167,10 @@ fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
     let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
     let encoder = g.encoder();
     let level = g.view(tile, false, 0, 1, 0, 1);
-    let pass = g.pass(encoder, &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None));
+    let pass = g.pass(
+        encoder,
+        &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None),
+    );
     g.set_pipeline(pass, built.pipeline);
     g.draw(pass, 3, 1, 0, 0);
     g.end(pass);

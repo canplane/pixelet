@@ -20,8 +20,13 @@ import { get } from "@/namespace/read.ts";
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 
 /** A load number: the catalog's, or a file's row in the ingest's table from 1. */
-export function read_asset(load: bigint, signal: AbortSignal): Promise<U8Array> {
-  if (load === BigInt(CATALOG)) return Promise.resolve(hex_to_bytes(CATALOG_HEX));
+export function read_asset(
+  load: bigint,
+  signal: AbortSignal,
+): Promise<U8Array> {
+  if (load === BigInt(CATALOG)) {
+    return Promise.resolve(hex_to_bytes(CATALOG_HEX));
+  }
   const key = KEYS[Number(load) - 1];
   if (key === undefined) return Promise.reject(new FileError(Errno.ENOENT));
   return get(asset_url(key), key, signal);

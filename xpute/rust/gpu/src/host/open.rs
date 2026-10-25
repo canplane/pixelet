@@ -51,7 +51,12 @@ pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
         ..Default::default()
     }))
     .map_err(OpenError::Device)?;
-    Ok(Opened { instance, adapter, device, queue })
+    Ok(Opened {
+        instance,
+        adapter,
+        device,
+        queue,
+    })
 }
 
 /// The device's limits and features as the block lays them (DEVICE): each
@@ -78,8 +83,12 @@ fn limit(l: &wgpu::Limits, name: &str) -> u32 {
         "maxBindGroups" => l.max_bind_groups.into(),
         "maxBindGroupsPlusVertexBuffers" => l.max_bind_groups_plus_vertex_buffers.into(),
         "maxBindingsPerBindGroup" => l.max_bindings_per_bind_group.into(),
-        "maxDynamicUniformBuffersPerPipelineLayout" => l.max_dynamic_uniform_buffers_per_pipeline_layout.into(),
-        "maxDynamicStorageBuffersPerPipelineLayout" => l.max_dynamic_storage_buffers_per_pipeline_layout.into(),
+        "maxDynamicUniformBuffersPerPipelineLayout" => {
+            l.max_dynamic_uniform_buffers_per_pipeline_layout.into()
+        }
+        "maxDynamicStorageBuffersPerPipelineLayout" => {
+            l.max_dynamic_storage_buffers_per_pipeline_layout.into()
+        }
         "maxSampledTexturesPerShaderStage" => l.max_sampled_textures_per_shader_stage.into(),
         "maxSamplersPerShaderStage" => l.max_samplers_per_shader_stage.into(),
         "maxStorageBuffersPerShaderStage" => l.max_storage_buffers_per_shader_stage.into(),

@@ -81,7 +81,9 @@ export class Strobe {
     // Paced: a frame nearer the last turn than the interval, less half a
     // refresh for the frame's own jitter, is skipped, and the next asked.
     const refresh_ms = this.quantum.refresh();
-    if (now - this.last < this.quantum.paced(refresh_ms) - refresh_ms / 2) return this.request();
+    if (now - this.last < this.quantum.paced(refresh_ms) - refresh_ms / 2) {
+      return this.request();
+    }
     // Unclamped: how long a gap still counts as motion is the guest's call,
     // and a clamp here is where every frame worth reporting would land.
     const delta_s = Math.max(0, (now - this.last) / 1000);

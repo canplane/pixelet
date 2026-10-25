@@ -22,7 +22,11 @@ fn burn(ms: f64) {
 fn pass(budget_ms: f64, hard_budget_ms: Option<f64>) -> Pass {
     clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
-    Pass::new(budget_ms, 0.0, hard_budget_ms.map_or(f64::INFINITY, |h| h - budget_ms))
+    Pass::new(
+        budget_ms,
+        0.0,
+        hard_budget_ms.map_or(f64::INFINITY, |h| h - budget_ms),
+    )
 }
 
 #[test]

@@ -133,7 +133,9 @@ pub fn read_json(text: &str) -> Option<JsonValue<'_>> {
     let s = text.as_bytes();
     let start = skip_ws(s, 0);
     let end = skip_value(s, start, 0)?;
-    (skip_ws(s, end) == s.len()).then(|| JsonValue { s: &text[start..end] })
+    (skip_ws(s, end) == s.len()).then(|| JsonValue {
+        s: &text[start..end],
+    })
 }
 
 impl<'a> JsonValue<'a> {
@@ -161,11 +163,15 @@ impl<'a> JsonValue<'a> {
     }
 
     pub fn as_f64(&self) -> Option<f64> {
-        (self.type_of() == JsonType::Number).then(|| self.s.parse().ok()).flatten()
+        (self.type_of() == JsonType::Number)
+            .then(|| self.s.parse().ok())
+            .flatten()
     }
 
     pub fn as_str(&self) -> Option<JsonStr<'a>> {
-        (self.type_of() == JsonType::String).then(|| JsonStr { raw: &self.s[1..self.s.len() - 1] })
+        (self.type_of() == JsonType::String).then(|| JsonStr {
+            raw: &self.s[1..self.s.len() - 1],
+        })
     }
 
     pub fn items(&self) -> JsonItems<'a> {
@@ -187,7 +193,10 @@ impl<'a> JsonValue<'a> {
 
     /// The last field of that name, as the host's parse keeps.
     pub fn get(&self, key: &str) -> Option<JsonValue<'a>> {
-        self.fields().filter(|(k, _)| k.eq_str(key)).last().map(|(_, v)| v)
+        self.fields()
+            .filter(|(k, _)| k.eq_str(key))
+            .last()
+            .map(|(_, v)| v)
     }
 
     pub fn at(&self, index: usize) -> Option<JsonValue<'a>> {
@@ -219,7 +228,9 @@ impl<'a> Iterator for JsonItems<'a> {
         // The text was checked whole, so a value is where the grammar says.
         let end = skip_value(b, start, 0).or_bug(Errno::ENOTRECOVERABLE);
         self.at = skip_ws(b, end) + 1;
-        Some(JsonValue { s: &self.s[start..end] })
+        Some(JsonValue {
+            s: &self.s[start..end],
+        })
     }
 }
 
@@ -246,7 +257,9 @@ impl<'a> Iterator for JsonFields<'a> {
             JsonStr {
                 raw: &self.s[key_at + 1..key_end - 1],
             },
-            JsonValue { s: &self.s[value_at..value_end] },
+            JsonValue {
+                s: &self.s[value_at..value_end],
+            },
         ))
     }
 }
@@ -297,7 +310,11 @@ pub struct JsonChars<'a> {
 
 fn hex4(s: &str) -> Option<u32> {
     let digits = s.get(..4)?;
-    digits.bytes().all(|b| b.is_ascii_hexdigit()).then(|| u32::from_str_radix(digits, 16).ok()).flatten()
+    digits
+        .bytes()
+        .all(|b| b.is_ascii_hexdigit())
+        .then(|| u32::from_str_radix(digits, 16).ok())
+        .flatten()
 }
 
 impl Iterator for JsonChars<'_> {

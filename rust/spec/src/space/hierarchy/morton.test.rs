@@ -27,8 +27,15 @@ fn a_coarser_key_s_digits_prefix_a_finer_one_s() {
     for p in POINTS {
         for fine in 0..=UNIT_ZOOM {
             for coarse in 0..=fine {
-                let ((f, nf), (c, nc)) = (digits_of(key_of(fine, at(p, fine))), digits_of(key_of(coarse, at(p, coarse))));
-                assert_eq!(f.checked_shr(nf - nc).unwrap_or(0), c, "{p:?} z{coarse} under z{fine}");
+                let ((f, nf), (c, nc)) = (
+                    digits_of(key_of(fine, at(p, fine))),
+                    digits_of(key_of(coarse, at(p, coarse))),
+                );
+                assert_eq!(
+                    f.checked_shr(nf - nc).unwrap_or(0),
+                    c,
+                    "{p:?} z{coarse} under z{fine}"
+                );
             }
         }
     }
@@ -40,7 +47,11 @@ fn a_3d_key_is_the_2d_one_to_z8() {
     for p in POINTS {
         for zoom in 0..=8 {
             let [x, y, z] = at(p, zoom);
-            assert_eq!(key_of(zoom, [x, y, z]), key_of(zoom, [x, y]), "{p:?} z{zoom}");
+            assert_eq!(
+                key_of(zoom, [x, y, z]),
+                key_of(zoom, [x, y]),
+                "{p:?} z{zoom}"
+            );
         }
     }
     assert_eq!(bits::<3>(9), bits::<2>(9) + 1);
@@ -53,7 +64,11 @@ fn a_key_reads_back_as_its_node() {
             let node = ancestor_of(p.map(|v| v << 3), UNIT_ZOOM + 3 - zoom);
             let (z, back) = node_of::<3>(key_of(zoom, node));
             let lane = |v: i32, axis: usize| signed(v, digits(axis, zoom));
-            assert_eq!((z, back), (zoom, [lane(node[0], 0), lane(node[1], 1), lane(node[2], 2)]), "{p:?} z{zoom}");
+            assert_eq!(
+                (z, back),
+                (zoom, [lane(node[0], 0), lane(node[1], 1), lane(node[2], 2)]),
+                "{p:?} z{zoom}"
+            );
         }
     }
 }

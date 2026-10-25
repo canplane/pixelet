@@ -8,7 +8,9 @@ use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::PIPELINE_SKINNED_DEPTH;
 
 use crate::gpu::api::{bytes, Gpu, Image};
-use crate::gpu::pass::model::{draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
+use crate::gpu::pass::model::{
+    draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES,
+};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::Uploads;
 
@@ -36,20 +38,37 @@ impl SkinnedPass {
     }
 
     fn image_of(&self, model: u32) -> Option<Image> {
-        self.skins.iter().find(|&&(m, _)| m == model).map(|&(_, image)| image)
+        self.skins
+            .iter()
+            .find(|&&(m, _)| m == model)
+            .map(|&(_, image)| image)
     }
 
     /// Every palette and skin group the draws will bind is made here, so
     /// drawing makes nothing that outlives its frame; a skin whose image
     /// lands later is drawn on a later frame.
     /// `moved` whether the lists the draws are made from moved.
-    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], moved: bool, uploads: &mut Uploads) {
-        self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws.clone(), moved, |buf, d| {
-            let u = uniform_of(uniforms, d);
-            // Translation, turn about Z, opacity, scale, padding (skinned.wgsl `Draw`).
-            buf[..24].copy_from_slice(bytes(&u[..6]));
-            buf[24..DRAW_BYTES as usize].fill(0);
-        });
+    pub fn prepare<'a>(
+        &mut self,
+        g: &Gpu,
+        draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone,
+        uniforms: &[f32],
+        moved: bool,
+        uploads: &mut Uploads,
+    ) {
+        self.uniforms.write(
+            g,
+            self.lit.layouts[1],
+            draws.len() as u32,
+            draws.clone(),
+            moved,
+            |buf, d| {
+                let u = uniform_of(uniforms, d);
+                // Translation, turn about Z, opacity, scale, padding (skinned.wgsl `Draw`).
+                buf[..24].copy_from_slice(bytes(&u[..6]));
+                buf[24..DRAW_BYTES as usize].fill(0);
+            },
+        );
         for d in draws {
             uploads.group(g, d[1]);
             if let Some(image) = self.image_of(d[2]) {
@@ -61,8 +80,18 @@ impl SkinnedPass {
     /// Lit, or their depth from the sun (`Stage::Depth`), `frame` the group
     /// 0 the stage reads.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, uploads: &mut Uploads, stage: Stage, frame: (u32, &mut u32)) {
-        let Some(slots) = self.uniforms.slots() else { return };
+    pub fn draw<'a>(
+        &self,
+        g: &Gpu,
+        pass: u32,
+        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
+        uploads: &mut Uploads,
+        stage: Stage,
+        frame: (u32, &mut u32),
+    ) {
+        let Some(slots) = self.uniforms.slots() else {
+            return;
+        };
         let pipeline = match stage {
             Stage::Depth => self.depth.pipeline,
             _ => self.lit.pipeline,

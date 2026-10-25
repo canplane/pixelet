@@ -26,16 +26,29 @@ async fn get(uri: &str, token: Option<&str>) -> StatusCode {
     if let Some(token) = token {
         req = req.header("x-admin-token", token);
     }
-    shell(&cfg(), INTERNAL, Router::new()).oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status()
+    shell(&cfg(), INTERNAL, Router::new())
+        .oneshot(req.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status()
 }
 
 #[tokio::test]
 async fn the_internal_prefix_is_gated_even_where_nothing_is_mounted() {
-    assert_eq!(get("/root/internal/anything", None).await, StatusCode::UNAUTHORIZED);
-    assert_eq!(get("/root/internal/anything", Some("wrong")).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        get("/root/internal/anything", None).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        get("/root/internal/anything", Some("wrong")).await,
+        StatusCode::UNAUTHORIZED
+    );
 
     // 404 past the gate means the token was accepted.
-    assert_eq!(get("/root/internal/anything", Some(TOKEN)).await, StatusCode::NOT_FOUND);
+    assert_eq!(
+        get("/root/internal/anything", Some(TOKEN)).await,
+        StatusCode::NOT_FOUND
+    );
 }
 
 #[tokio::test]

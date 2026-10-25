@@ -9,7 +9,12 @@ import { Gpu } from "@/abi/gpu.ts";
 import { Source } from "@/namespace/source.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "./store.ts";
-import { useGpu, useKernel, useOnline, useSource } from "@/shell/store/watch.ts";
+import {
+  useGpu,
+  useKernel,
+  useOnline,
+  useSource,
+} from "@/shell/store/watch.ts";
 
 /** Each report's toast; of one tone, by rank: a cause before what it holds
  * up, the device's before the server's, the world's before a sensor's. */
@@ -72,9 +77,14 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
 const error = (key: string): Said => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Said => ({ key, tone: ToastTone.Loading });
 
-function location(status: DevicePoseStatus, failure: Message | null): Said | null {
+function location(
+  status: DevicePoseStatus,
+  failure: Message | null,
+): Said | null {
   if (failure !== null) return error(messageKey(failure));
-  return status === DevicePoseStatus.Loading ? loading("toast.location_checking") : null;
+  return status === DevicePoseStatus.Loading
+    ? loading("toast.location_checking")
+    : null;
 }
 
 /** The GPU's: none answered yet, or the one drawing is lost. */
@@ -90,11 +100,18 @@ function serverError(source: Source, stall: Message | null): Said | null {
 }
 
 /** The world's one toast: none there, or it coming, then its companions, then the ready word once. */
-function world(outside: boolean, shown: boolean, companionLoading: boolean, greeting: Greeting): Said | null {
+function world(
+  outside: boolean,
+  shown: boolean,
+  companionLoading: boolean,
+  greeting: Greeting,
+): Said | null {
   if (outside) return error("toast.outside");
   if (!shown) return loading("toast.world_loading");
   if (companionLoading) return loading("toast.companion_loading");
-  return greeting === Greeting.Said ? { key: "toast.world_ready", tone: ToastTone.Ready } : null;
+  return greeting === Greeting.Said
+    ? { key: "toast.world_ready", tone: ToastTone.Ready }
+    : null;
 }
 
 /** Each toast is derived from what the kernel and the host say now; an error is one toast a source. */
@@ -104,7 +121,10 @@ export function ToastController() {
   useSaid(Report.Location, location(locationStatus, locationError));
 
   const orientationError = useKernel((s) => s.orientation.error);
-  useSaid(Report.Orientation, orientationError !== null ? error(messageKey(orientationError)) : null);
+  useSaid(
+    Report.Orientation,
+    orientationError !== null ? error(messageKey(orientationError)) : null,
+  );
 
   const gpu = useGpu();
   const stall = useKernel((s) => s.stall);
@@ -114,7 +134,9 @@ export function ToastController() {
 
   const outside = useKernel((s) => s.focus.outside);
   const shown = useKernel((s) => s.focus.status === GroundStatus.Success);
-  const companionLoading = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
+  const companionLoading = useKernel((s) =>
+    !s.companion.person_ready || !s.companion.pet_ready
+  );
   const [greeting, setGreeting] = useState(Greeting.Waiting);
   const ready = !outside && shown && !companionLoading;
   useEffect(() => {

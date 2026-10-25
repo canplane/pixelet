@@ -1,6 +1,7 @@
 # The gate that deploys, and what an audit found still pointing at the TypeScript
 
-2026-09-18, after [the server in Rust](../20260918-the-server-in-rust-and-the-line-already-drawn.md)
+2026-09-18, after
+[the server in Rust](../20260918-the-server-in-rust-and-the-line-already-drawn.md)
 went live as b15.
 
 ## What started it
@@ -27,8 +28,8 @@ closure from the tools that are staying, its 58 tracked files fall out as:
 So 34 files are dead and 17 are not, and the directory keeps its name while
 holding no API. Where the survivors should live is a separate question.
 
-**The finding that mattered was elsewhere.** `.github/workflows/overture-monthly-refresh.yml`
-still ran the TypeScript bakes:
+**The finding that mattered was elsewhere.**
+`.github/workflows/overture-monthly-refresh.yml` still ran the TypeScript bakes:
 
 ```
 deno run -A apps/api/src/bake/poi/tool/bake_poi_tiles.ts     --out ./out/poi/v3     --force
@@ -58,8 +59,8 @@ failures were things a machine checks better than a person:
 - `/api/*` reached the wrong server for twenty minutes because a bind-mounted
   Caddyfile is read at start, and nothing after the deploy asked whether the
   routes answered.
-- The origin was checked by hand, four times, with a `for p in ...; do curl` loop
-  pasted from the README and edited each time.
+- The origin was checked by hand, four times, with a `for p in ...; do curl`
+  loop pasted from the README and edited each time.
 
 ## The shape
 
@@ -93,8 +94,8 @@ to collide, and is worth knowing rather than preventing.
 
 > Since 2026-09-19 the number is the gate's, not the deploy's: every build of
 > main takes one whether or not it ships, `script/build-counter.ts` is what
-> takes it, and `deploy.ts` is handed it. The group covers both jobs, and a
-> hand deploy publishes unnumbered rather than taking one.
+> takes it, and `deploy.ts` is handed it. The group covers both jobs, and a hand
+> deploy publishes unnumbered rather than taking one.
 
 ## The smoke check is a script, not a list
 
@@ -106,8 +107,8 @@ bump or a moved root cannot leave it checking something nobody serves. Pasting a
 path list into a workflow would have reintroduced exactly the copy the address
 space was collapsed to remove.
 
-It checks the old addresses too. `/api/tiles/…` and `/api/search` must be 404:
-a 200 from either means a relay somewhere is still carrying the pre-09-18 shape,
+It checks the old addresses too. `/api/tiles/…` and `/api/search` must be 404: a
+200 from either means a relay somewhere is still carrying the pre-09-18 shape,
 which is precisely the failure that took twenty minutes to see by eye.
 
 `--origin` is the same checks against `api.plei.me` with the bucket's branches
@@ -137,13 +138,13 @@ Rust bakes, `deno lint` clean.
 
 Verified before committing: the smoke script against both the edge (12/12) and
 the origin (5/5); every shell step through `bash -n`; the path filter against
-four real bases, including the force-push and dispatch cases that have none;
-the Binaryen URL; and the monthly refresh's exact command chain, run locally
-against `_meta/land_pages.json` fetched from the bucket the way CI fetches it.
+four real bases, including the force-push and dispatch cases that have none; the
+Binaryen URL; and the monthly refresh's exact command chain, run locally against
+`_meta/land_pages.json` fetched from the bucket the way CI fetches it.
 
-Running: the workflow took build numbers and deployed both halves on 09-18
-(b15, five runs, one red on a smoke that the next push fixed), and the
-monthly refresh ran green through `workflow_dispatch` the same day, so the
-cron on 10-01 repeats a path that has been walked.
+Running: the workflow took build numbers and deployed both halves on 09-18 (b15,
+five runs, one red on a smoke that the next push fixed), and the monthly refresh
+ran green through `workflow_dispatch` the same day, so the cron on 10-01 repeats
+a path that has been walked.
 
 Done since: `apps/api` is deleted and what survived it moved to `tool/`.

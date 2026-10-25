@@ -24,7 +24,14 @@ impl Mips {
     /// A pipeline draws into the format it was built for, so each format needs its own.
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: Format) -> Mips {
         let built = pipelines.build(g, PIPELINE_MIP, format);
-        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, None, 1);
+        let sampler = g.sampler(
+            FilterMode::linear,
+            FilterMode::linear,
+            MipmapFilterMode::nearest,
+            AddressMode::clamp_to_edge,
+            None,
+            1,
+        );
         Mips {
             pipeline: built.pipeline,
             layout: built.layouts[0],
@@ -38,8 +45,14 @@ impl Mips {
             for level in 1..levels {
                 let above = g.view(texture, false, level - 1, 1, layer, 1);
                 let target = g.view(texture, false, level, 1, layer, 1);
-                let group = g.bind_group(self.layout, &[view_entry(0, above), sampler_entry(1, self.sampler)]);
-                let pass = g.pass(encoder, &pass_desc(target, Load::Clear, 0, Load::Clear, 0.0, None));
+                let group = g.bind_group(
+                    self.layout,
+                    &[view_entry(0, above), sampler_entry(1, self.sampler)],
+                );
+                let pass = g.pass(
+                    encoder,
+                    &pass_desc(target, Load::Clear, 0, Load::Clear, 0.0, None),
+                );
                 g.set_pipeline(pass, self.pipeline);
                 g.set_bind_group(pass, 0, group, &[]);
                 g.draw(pass, 3, 1, 0, 0);

@@ -29,10 +29,22 @@ fn runs() -> Result<Vec<(&'static str, Vec<String>)>, String> {
         .map(str::to_string)
         .ok_or(format!("{CUBE_JSON}: no pack"))?;
     let mut decor = Vec::new();
-    for (name, d) in read(DECOR_JSON)?.get("decors").ok_or(format!("{DECOR_JSON}: no decors"))?.entries() {
-        for v in d.get("variants").and_then(Node::arr).ok_or(format!("{DECOR_JSON}: {name}.variants"))? {
+    for (name, d) in read(DECOR_JSON)?
+        .get("decors")
+        .ok_or(format!("{DECOR_JSON}: no decors"))?
+        .entries()
+    {
+        for v in d
+            .get("variants")
+            .and_then(Node::arr)
+            .ok_or(format!("{DECOR_JSON}: {name}.variants"))?
+        {
             for field in ["model", "skin"] {
-                decor.push(v.str_at(field).ok_or(format!("{DECOR_JSON}: {name}'s variant has no {field}"))?.to_string());
+                decor.push(
+                    v.str_at(field)
+                        .ok_or(format!("{DECOR_JSON}: {name}'s variant has no {field}"))?
+                        .to_string(),
+                );
             }
         }
     }
@@ -76,10 +88,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let mut bytes = (slots.len() as u32).to_le_bytes().to_vec();
     let mut extents = Vec::with_capacity(slots.len() * 24);
     for path in &slots {
-        let row = files
-            .iter()
-            .position(|f| f.path == *path)
-            .ok_or(format!("{path}, a slot's file, is no file of {INGESTED_JSON}: run the asset ingest"))?;
+        let row = files.iter().position(|f| f.path == *path).ok_or(format!(
+            "{path}, a slot's file, is no file of {INGESTED_JSON}: run the asset ingest"
+        ))?;
         bytes.extend((row as u32 + 1).to_le_bytes());
         for e in files[row].extent.unwrap_or([0.0; 3]) {
             extents.extend(e.to_le_bytes());

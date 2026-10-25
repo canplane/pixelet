@@ -1,7 +1,12 @@
 // @pxl/client/shell/drawer/grid.tsx
 
 import { useContext, useRef, useState } from "react";
-import { type LayoutChangeEvent, Pressable, StyleSheet, View } from "react-native";
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { heldRing } from "@/shell/catalog/asset/swatch.tsx";
@@ -22,7 +27,10 @@ export function itemOf(cell: f64): f64 {
 
 /** How many cells a target wide, with their gaps, fit `width`; one at least. */
 function columnsOf(width: f64): f64 {
-  return Math.max(1, Math.floor((width + GRID_GAP) / (chrome.target + GRID_GAP)));
+  return Math.max(
+    1,
+    Math.floor((width + GRID_GAP) / (chrome.target + GRID_GAP)),
+  );
 }
 
 /**
@@ -30,20 +38,43 @@ function columnsOf(width: f64): f64 {
  * edges meet the row's, as the other tabs' content does: the cells overhang by
  * the margin an item keeps inside its cell.
  */
-export function Grid({ head, children }: { head: React.ReactNode; children: (cell: f64) => React.ReactNode }) {
+export function Grid(
+  { head, children }: {
+    head: React.ReactNode;
+    children: (cell: f64) => React.ReactNode;
+  },
+) {
   const [width, setWidth] = useState(0);
   const columns = columnsOf(width);
-  const cell = width > 0 ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) / (columns - 1 + ITEM_SLOPE) : chrome.target;
+  const cell = width > 0
+    ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) /
+      (columns - 1 + ITEM_SLOPE)
+    : chrome.target;
   return (
-    <View style={styles.section} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+    <View
+      style={styles.section}
+      onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
+    >
       {head}
-      <View style={[styles.grid, { marginHorizontal: -(cell - itemOf(cell)) / 2 }]}>{children(cell)}</View>
+      <View
+        style={[styles.grid, { marginHorizontal: -(cell - itemOf(cell)) / 2 }]}
+      >
+        {children(cell)}
+      </View>
     </View>
   );
 }
 
 /** Pictures only: names under every item read as a list. A press names it above the finger. */
-export function Item({ label, active, cell, onPress, children }: { label: string; active: boolean; cell: f64; onPress: () => void; children: React.ReactNode }) {
+export function Item(
+  { label, active, cell, onPress, children }: {
+    label: string;
+    active: boolean;
+    cell: f64;
+    onPress: () => void;
+    children: React.ReactNode;
+  },
+) {
   const naming = useContext(NamingContext);
   const ref = useRef<View>(null);
   return (
@@ -65,7 +96,10 @@ export function Item({ label, active, cell, onPress, children }: { label: string
 /** An item's outline, and lit, the ring and the scale `ITEM_BASE` leaves room for. */
 export const mark = StyleSheet.create({
   off: { boxShadow: `0 0 0 1px ${hairline}` },
-  on: { boxShadow: heldRing(color.ground, color.black, LIT_INK), transform: [{ scale: LIT_SCALE }] },
+  on: {
+    boxShadow: heldRing(color.ground, color.black, LIT_INK),
+    transform: [{ scale: LIT_SCALE }],
+  },
 });
 
 const styles = StyleSheet.create({

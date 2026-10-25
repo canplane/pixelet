@@ -79,7 +79,10 @@ export class Quantum {
    * least.
    */
   paced(refresh_ms: f64): f64 {
-    const divisor = Math.max(1, Math.floor((PACED_MAX_MS + refresh_ms / 8) / refresh_ms));
+    const divisor = Math.max(
+      1,
+      Math.floor((PACED_MAX_MS + refresh_ms / 8) / refresh_ms),
+    );
     return divisor * refresh_ms;
   }
 
@@ -95,6 +98,14 @@ export class Quantum {
     const p = this.policy;
     const interactive = now - this.input_at < p.settle_ms || this.asked_next;
     const frames = interactive ? 1 : p.batch_frames;
-    return { quota_ms: Math.max(0, paced_ms * frames * (1 - p.margin_share) - this.overrun_ms), refresh_ms, paced_ms, interactive };
+    return {
+      quota_ms: Math.max(
+        0,
+        paced_ms * frames * (1 - p.margin_share) - this.overrun_ms,
+      ),
+      refresh_ms,
+      paced_ms,
+      interactive,
+    };
   }
 }

@@ -38,11 +38,13 @@ impl World<'_> {
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
         let line = self.terrain.cursor((cell, c), cell);
-        self.terrain.column(&line, Found::NONE, (cell, c)).map(|col| {
-            col.grounded().then(|| Surface {
-                top: f64::from(col.top) * units(cell),
-                block: col.look as GroundId,
+        self.terrain
+            .column(&line, Found::NONE, (cell, c))
+            .map(|col| {
+                col.grounded().then(|| Surface {
+                    top: f64::from(col.top) * units(cell),
+                    block: col.look as GroundId,
+                })
             })
-        })
     }
 }

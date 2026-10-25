@@ -23,7 +23,11 @@ pub fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
     let mut n = 0usize;
     for i in 0..candidates.count as usize {
         // Where the rays find it: the world's own point, nothing bent.
-        let pos = [candidates.local_x[i], candidates.local_y[i], candidates.local_z[i]];
+        let pos = [
+            candidates.local_x[i],
+            candidates.local_y[i],
+            candidates.local_z[i],
+        ];
         let to = v3::sub(&pos, &eye);
         let dist2 = v3::dot(&to, &to);
         if !v.frustum.sees(pos, dist2.sqrt() * ANCHOR_REACH) {
@@ -37,7 +41,11 @@ pub fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
     // Nearest first; the tiebreak only stops equal distances swapping frame to frame.
     let at = |i: u32| candidates.d2[i as usize];
     let tiebreak = &candidates.tiebreak;
-    candidates.order[..n].sort_by(|&a, &b| at(a).total_cmp(&at(b)).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
+    candidates.order[..n].sort_by(|&a, &b| {
+        at(a)
+            .total_cmp(&at(b))
+            .then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize]))
+    });
 
     out.clear();
     let mut ndc = [0.0; 3];
@@ -45,7 +53,13 @@ pub fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
     for k in 0..n {
         let i = candidates.order[k] as usize;
 
-        mat4::transform_point(&mut ndc, &v.world_view_proj, candidates.local_x[i], candidates.local_y[i], candidates.local_z[i]);
+        mat4::transform_point(
+            &mut ndc,
+            &v.world_view_proj,
+            candidates.local_x[i],
+            candidates.local_y[i],
+            candidates.local_z[i],
+        );
         let [sx, sy] = ndc_to_px([ndc[0], ndc[1]]);
 
         let w = candidates.region_px[i] as f64;

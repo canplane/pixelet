@@ -4,9 +4,9 @@
 region is for now that terrain is a modulo-addressed slab rather than a pool.
 Four jobs came back, only one of them the region's own, and following the other
 three led to twenty lines in `ds/buddy.rs` that hold the whole layout by the
-throat: `_locate`, which answers "which region is this address in". This
-records what it does, what it costs, and what the arithmetic is that replaces
-it. Nothing here is built yet.
+throat: `_locate`, which answers "which region is this address in". This records
+what it does, what it costs, and what the arithmetic is that replaces it.
+Nothing here is built yet.
 
 ## What a region is, and what it has been doing besides
 
@@ -27,8 +27,8 @@ and one of them is expensive.
 ## The cost: 59.57 MiB nobody owns
 
 The slab is exactly the terrain the load radius reaches — 7x7 records of
-4,203,552 B, so 205,974,048 B = 196.43 MiB — and it starts at 64 MiB, so it
-ends at 260.43 MiB. The mesh cannot start there:
+4,203,552 B, so 205,974,048 B = 196.43 MiB — and it starts at 64 MiB, so it ends
+at 260.43 MiB. The mesh cannot start there:
 
 ```
 slab end   260.43 MiB
@@ -80,12 +80,11 @@ self._backing_used += self.region_bytes;
 self._backed_at.insert(region.base, i);          // key is offset-relative
 ```
 
-So the key is written offset-relative and read zero-relative. The two agree
-only when `_backing_offset` is itself a multiple of `region_bytes` — which is
-the whole of the alignment requirement, and today it holds by arithmetic
-accident rather than by construction: module 32 MiB, fixed at 32 MiB with
-16 MiB regions, slab at 64 MiB, mesh at 320 MiB with 64 MiB regions all happen
-to divide.
+So the key is written offset-relative and read zero-relative. The two agree only
+when `_backing_offset` is itself a multiple of `region_bytes` — which is the
+whole of the alignment requirement, and today it holds by arithmetic accident
+rather than by construction: module 32 MiB, fixed at 32 MiB with 16 MiB regions,
+slab at 64 MiB, mesh at 320 MiB with 64 MiB regions all happen to divide.
 
 ## What happens when it does not hold
 
@@ -129,8 +128,8 @@ done through a map.
 
 ## Where 4 KiB comes in, and why it is not the host's
 
-The page here is a **borrowed analogy, not a hardware number**. This kernel is an
-operating system inside an operating system: it is handed one fixed range, it
+The page here is a **borrowed analogy, not a hardware number**. This kernel is
+an operating system inside an operating system: it is handed one fixed range, it
 addresses it with 32-bit offsets, it has no MMU, and nothing underneath will
 give it another byte. That is the situation a 32-bit machine was in, and 4 KiB
 is what that situation settled on.
@@ -197,15 +196,16 @@ bits of a `u32` for a length — and 14 bits of pages is 64 MiB, exactly the
 largest block a region can hand out. `Block = (usize, u32)` and the `at`/`bytes`
 pairs in the scheduler's `Slot` collapse to one word.
 
-The rule is about section starts and ends, not about what is inside one.
-A section begins on a 4 KiB boundary and the next begins on the first 4 KiB
-boundary past where this one ends. What a section does with its range is its
-own affair — straddling costs nothing, linear memory being contiguous.
+The rule is about section starts and ends, not about what is inside one. A
+section begins on a 4 KiB boundary and the next begins on the first 4 KiB
+boundary past where this one ends. What a section does with its range is its own
+affair — straddling costs nothing, linear memory being contiguous.
 
 4 KiB and not more, because that is what the mesh pool's own arithmetic needs
-and all it needs: a block lands at `backing_offset + n*region_bytes +
-k*MIN_BLOCK_BYTES`, and `MIN_BLOCK_BYTES` is `1 << 12`, so a 4 KiB-aligned
-section start makes every block 4 KiB-aligned.
+and all it needs: a block lands at
+`backing_offset + n*region_bytes +
+k*MIN_BLOCK_BYTES`, and `MIN_BLOCK_BYTES` is
+`1 << 12`, so a 4 KiB-aligned section start makes every block 4 KiB-aligned.
 
 The slab already obeys this internally without being asked. The ground is four
 planes of 49 MiB, so every channel's plane starts on a page, and the elevation
@@ -222,11 +222,11 @@ end, and the end is only ever rounded up once.
 
 ## The order this falls in
 
-1. `_locate` on the backed path becomes arithmetic. It recovers 59.57 MiB on
-   its own, closes the silent-loss path, and is local to `ds/buddy.rs`.
-2. Section starts stop being multiples of `REGION_BYTES` and become multiples
-   of the kernel's page. `REGION_BYTES` goes back to meaning the mesh pool's
+1. `_locate` on the backed path becomes arithmetic. It recovers 59.57 MiB on its
+   own, closes the silent-loss path, and is local to `ds/buddy.rs`.
+2. Section starts stop being multiples of `REGION_BYTES` and become multiples of
+   the kernel's page. `REGION_BYTES` goes back to meaning the mesh pool's
    largest block and nothing else; `fixed.bytes` says its own size (rings 3 MiB
-   - 16 standing band stores 20 MiB = 23 MiB) instead of `REGION_BYTES - MODULE_BYTES`.
-     The first is worth doing whether or not the second is, and the second cannot be
-     done without it.
+   - 16 standing band stores 20 MiB = 23 MiB) instead of
+     `REGION_BYTES - MODULE_BYTES`. The first is worth doing whether or not the
+     second is, and the second cannot be done without it.

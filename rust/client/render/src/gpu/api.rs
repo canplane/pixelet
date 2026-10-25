@@ -14,9 +14,11 @@
 pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
-    AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction, CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
-    QueryType, SamplerBindingType, StorageTextureAccess, StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode, FEATURE_NAME,
-    LIMIT_NAME,
+    AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
+    CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
+    QueryType, SamplerBindingType, StorageTextureAccess, StoreOp, TextureAspect, TextureDimension,
+    TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode,
+    FEATURE_NAME, LIMIT_NAME,
 };
 use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_guest::abi::handle::handle_slot;
@@ -35,11 +37,15 @@ use crate::frame::shader::record::VERTEX_ENTRY;
 use crate::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub mod buffer_usage {
-    pub use xpute_gpu::spec::BUFFER_USAGE::{COPY_DST, COPY_SRC, INDEX, INDIRECT, MAP_READ, STORAGE, UNIFORM, VERTEX};
+    pub use xpute_gpu::spec::BUFFER_USAGE::{
+        COPY_DST, COPY_SRC, INDEX, INDIRECT, MAP_READ, STORAGE, UNIFORM, VERTEX,
+    };
 }
 
 pub mod texture_usage {
-    pub use xpute_gpu::spec::TEXTURE_USAGE::{COPY_DST, COPY_SRC, RENDER_ATTACHMENT, STORAGE_BINDING, TEXTURE_BINDING};
+    pub use xpute_gpu::spec::TEXTURE_USAGE::{
+        COPY_DST, COPY_SRC, RENDER_ATTACHMENT, STORAGE_BINDING, TEXTURE_BINDING,
+    };
 }
 
 /// The objects the renderer may hold at once.
@@ -71,7 +77,10 @@ const DEVICE_AT: usize = 1;
 const STAMPS_WORD_AT: usize = DEVICE_AT + DEVICE_WORDS;
 const STAMPS_AT: usize = STAMPS_WORD_AT + 1;
 const HEAD: usize = STAMPS_AT + 2 * 2 * SPANS;
-const _: () = assert!(HEAD == stream::HEAD as usize, "spec/client/render/gpu/api.json's stream HEAD is the head laid out here");
+const _: () = assert!(
+    HEAD == stream::HEAD as usize,
+    "spec/client/render/gpu/api.json's stream HEAD is the head laid out here"
+);
 
 /// What the device is, once its block is in.
 #[derive(Clone, Copy)]
@@ -93,7 +102,11 @@ pub struct Stamp {
 }
 
 impl Stamp {
-    pub const NONE: Stamp = Stamp { set: 0, begin: None, end: 0 };
+    pub const NONE: Stamp = Stamp {
+        set: 0,
+        begin: None,
+        end: 0,
+    };
 
     pub fn of(set: Id, span: usize) -> Stamp {
         if set == 0 {
@@ -141,7 +154,14 @@ pub struct PassDesc {
     stamp: Option<encode::TimestampWrites>,
 }
 
-pub fn pass_desc(color: Id, color_load: Load, depth: Id, depth_load: Load, depth_clear: f32, stamp: Option<encode::TimestampWrites>) -> PassDesc {
+pub fn pass_desc(
+    color: Id,
+    color_load: Load,
+    depth: Id,
+    depth_load: Load,
+    depth_clear: f32,
+    stamp: Option<encode::TimestampWrites>,
+) -> PassDesc {
     PassDesc {
         color,
         color_load,
@@ -159,7 +179,11 @@ pub use xpute_gpu::encode::BindGroupEntry as Entry;
 pub const fn buffer_entry(binding: u32, buffer: Id) -> Entry {
     Entry {
         binding,
-        resource: encode::Resource::Buffer { buffer, offset: 0, size: None },
+        resource: encode::Resource::Buffer {
+            buffer,
+            offset: 0,
+            size: None,
+        },
     }
 }
 
@@ -167,7 +191,11 @@ pub const fn buffer_entry(binding: u32, buffer: Id) -> Entry {
 pub const fn buffer_range_entry(binding: u32, buffer: Id, offset: u32, size: u32) -> Entry {
     Entry {
         binding,
-        resource: encode::Resource::Buffer { buffer, offset, size: Some(size) },
+        resource: encode::Resource::Buffer {
+            buffer,
+            offset,
+            size: Some(size),
+        },
     }
 }
 
@@ -252,7 +280,9 @@ fn head(k: usize) -> &'static mut u32 {
 
 /// The encoder's bytes at the range's end, a word-multiple of 8.
 const ENCODER_BYTES: usize = core::mem::size_of::<Encoder<OBJECTS>>().next_multiple_of(8);
-const _: () = assert!(core::mem::align_of::<Encoder<OBJECTS>>() <= 8 && ENCODER_BYTES < stream::RESERVE as usize);
+const _: () = assert!(
+    core::mem::align_of::<Encoder<OBJECTS>>() <= 8 && ENCODER_BYTES < stream::RESERVE as usize
+);
 
 /// # Safety
 /// `at` must address `stream::BYTES`, zeroed, that nothing else writes,
@@ -302,14 +332,30 @@ pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
     if s.device.is_none() && s.asked && *head(DEVICE_AT + DEVICE_WORDS - 1) == STATUS::READY {
         let word = |k: usize| *head(DEVICE_AT + k);
-        let limit = |name: &str| word(LIMIT_NAME.iter().position(|n| *n == name).or_bug(Errno::ENOENT));
+        let limit = |name: &str| {
+            word(
+                LIMIT_NAME
+                    .iter()
+                    .position(|n| *n == name)
+                    .or_bug(Errno::ENOENT),
+            )
+        };
         let feature = |name: &str| {
-            let k = FEATURE_NAME.iter().position(|n| *n == name).or_bug(Errno::ENOENT);
+            let k = FEATURE_NAME
+                .iter()
+                .position(|n| *n == name)
+                .or_bug(Errno::ENOENT);
             word(LIMIT_NAME.len() + k / 32) >> (k % 32) & 1 != 0
         };
-        let canvas = *Format::ALL.get(word(PERIOD_AT + 1) as usize).or_bug(Errno::EINVAL);
+        let canvas = *Format::ALL
+            .get(word(PERIOD_AT + 1) as usize)
+            .or_bug(Errno::EINVAL);
         let align = limit("minUniformBufferOffsetAlignment");
-        xpute_kit::ensure!(align.is_power_of_two() && align <= UNIFORM_ALIGN_MAX, EINVAL, align);
+        xpute_kit::ensure!(
+            align.is_power_of_two() && align <= UNIFORM_ALIGN_MAX,
+            EINVAL,
+            align
+        );
         s.device = Some(Device {
             align,
             timestamps: feature("timestamp-query"),
@@ -357,7 +403,9 @@ fn take_stamps(s: &mut State) -> bool {
     }
     *word = 0;
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
-    let tick = |k: usize| u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32;
+    let tick = |k: usize| {
+        u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32
+    };
     for k in 0..SPANS {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
         let ran = s.stamps_written & 1 << k != 0 && e >= b;
@@ -397,7 +445,10 @@ pub fn take_landed(mut landed: impl FnMut(u32)) {
 /// Whether an image handed to the device has yet to land (`Gpu::image`):
 /// another turn is wanted to take it.
 pub fn images_landing() -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| s.images.iter().any(|a| *a.word & DONE == 0))
+    STATE
+        .get(|| None)
+        .as_ref()
+        .is_some_and(|s| s.images.iter().any(|a| *a.word & DONE == 0))
 }
 
 /// A frame's records are one: past the range they are dropped whole, with
@@ -422,7 +473,10 @@ pub use xpute_gpu::encode::call::{write_buffer_bytes, write_texture_bytes};
 /// Whether records of `bytes` (`write_buffer_bytes`, `write_texture_bytes`)
 /// fit the stream, leaving `stream::RESERVE` for what cannot wait.
 pub fn room(bytes: usize) -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| s.stream.fits(bytes, stream::RESERVE as usize))
+    STATE
+        .get(|| None)
+        .as_ref()
+        .is_some_and(|s| s.stream.fits(bytes, stream::RESERVE as usize))
 }
 
 /// An object's handle, or 0 where the frame it was made in no longer fits
@@ -478,8 +532,13 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
         record::TEXTURE => texture(TextureSampleType::float, TextureViewDimension::_2d),
         record::TEXTURE_ARRAY => texture(TextureSampleType::float, TextureViewDimension::_2d_array),
         record::DEPTH => texture(TextureSampleType::depth, TextureViewDimension::_2d),
-        record::TEXTURE_UNFILTERED => texture(TextureSampleType::unfilterable_float, TextureViewDimension::_2d),
-        record::TEXTURE_UINT_ARRAY => texture(TextureSampleType::uint, TextureViewDimension::_2d_array),
+        record::TEXTURE_UNFILTERED => texture(
+            TextureSampleType::unfilterable_float,
+            TextureViewDimension::_2d,
+        ),
+        record::TEXTURE_UINT_ARRAY => {
+            texture(TextureSampleType::uint, TextureViewDimension::_2d_array)
+        }
         record::STORAGE_TEXTURE_RW => L::StorageTexture {
             access: StorageTextureAccess::read_write,
             format: TextureFormat::r32uint,
@@ -496,13 +555,29 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
     }
 }
 
-const fn component(operation: BlendOperation, from: BlendFactor, to: BlendFactor) -> encode::BlendComponent {
-    encode::BlendComponent { operation, src: from, dst: to }
+const fn component(
+    operation: BlendOperation,
+    from: BlendFactor,
+    to: BlendFactor,
+) -> encode::BlendComponent {
+    encode::BlendComponent {
+        operation,
+        src: from,
+        dst: to,
+    }
 }
 
 const ALPHA_BLEND: encode::BlendState = encode::BlendState {
-    color: component(BlendOperation::add, BlendFactor::src_alpha, BlendFactor::one_minus_src_alpha),
-    alpha: component(BlendOperation::add, BlendFactor::one, BlendFactor::one_minus_src_alpha),
+    color: component(
+        BlendOperation::add,
+        BlendFactor::src_alpha,
+        BlendFactor::one_minus_src_alpha,
+    ),
+    alpha: component(
+        BlendOperation::add,
+        BlendFactor::one,
+        BlendFactor::one_minus_src_alpha,
+    ),
 };
 
 const ADD_BLEND: encode::BlendState = encode::BlendState {
@@ -527,7 +602,11 @@ impl Gpu {
     /// binds (frame/shader/floor.rs `fits`): a size past that is a bug the
     /// structure let through, not a device to fall short on.
     pub fn buffer(&self, size: u32, usage: u32) -> Id {
-        xpute_kit::ensure!(crate::frame::shader::floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0), ENOSPC, size);
+        xpute_kit::ensure!(
+            crate::frame::shader::floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0),
+            ENOSPC,
+            size
+        );
         let s = self.s();
         made(s.encoder.buffer(
             &mut s.stream,
@@ -539,7 +618,15 @@ impl Gpu {
         ))
     }
 
-    pub fn texture(&self, width: u32, height: u32, layers: u32, format: Format, mips: u32, usage: u32) -> Id {
+    pub fn texture(
+        &self,
+        width: u32,
+        height: u32,
+        layers: u32,
+        format: Format,
+        mips: u32,
+        usage: u32,
+    ) -> Id {
         let s = self.s();
         made(s.encoder.texture(
             &mut s.stream,
@@ -590,13 +677,25 @@ impl Gpu {
     }
 
     /// `array` for a view of the texture's layers as one array.
-    pub fn view(&self, texture: Id, array: bool, base_mip: u32, mips: u32, base_layer: u32, layers: u32) -> Id {
+    pub fn view(
+        &self,
+        texture: Id,
+        array: bool,
+        base_mip: u32,
+        mips: u32,
+        base_layer: u32,
+        layers: u32,
+    ) -> Id {
         let s = self.s();
         made(s.encoder.view(
             &mut s.stream,
             texture,
             &encode::ViewDescriptor {
-                dimension: Some(if array { TextureViewDimension::_2d_array } else { TextureViewDimension::_2d }),
+                dimension: Some(if array {
+                    TextureViewDimension::_2d_array
+                } else {
+                    TextureViewDimension::_2d
+                }),
                 base_mip,
                 mips: Some(mips),
                 base_layer,
@@ -607,7 +706,15 @@ impl Gpu {
     }
 
     /// Both directions addressed alike; `compare` for a comparison sampler.
-    pub fn sampler(&self, mag: FilterMode, min: FilterMode, mipmap: MipmapFilterMode, address: AddressMode, compare: Option<CompareFunction>, anisotropy: u32) -> Id {
+    pub fn sampler(
+        &self,
+        mag: FilterMode,
+        min: FilterMode,
+        mipmap: MipmapFilterMode,
+        address: AddressMode,
+        compare: Option<CompareFunction>,
+        anisotropy: u32,
+    ) -> Id {
         let s = self.s();
         made(s.encoder.sampler(
             &mut s.stream,
@@ -641,7 +748,10 @@ impl Gpu {
             }
         });
         let s = self.s();
-        made(s.encoder.bind_group_layout(&mut s.stream, &entries[..words.len()]))
+        made(
+            s.encoder
+                .bind_group_layout(&mut s.stream, &entries[..words.len()]),
+        )
     }
 
     fn pipeline_layout(&self, layouts: &[Id]) -> Id {
@@ -662,7 +772,11 @@ impl Gpu {
         let lanes: Vec<(u32, VertexStepMode, Vec<encode::VertexAttribute>)> = (0..next())
             .map(|_| {
                 let stride = next();
-                let step = if next() == record::PER_INSTANCE { VertexStepMode::instance } else { VertexStepMode::vertex };
+                let step = if next() == record::PER_INSTANCE {
+                    VertexStepMode::instance
+                } else {
+                    VertexStepMode::vertex
+                };
                 let attributes = (0..next())
                     .map(|_| {
                         let location = next();
@@ -719,26 +833,36 @@ impl Gpu {
                     },
                     strip_index_format: None,
                     front_face: FrontFace::ccw,
-                    cull: if words[3] == record::CULL_BACK { CullMode::back } else { CullMode::none },
+                    cull: if words[3] == record::CULL_BACK {
+                        CullMode::back
+                    } else {
+                        CullMode::none
+                    },
                     unclipped_depth: false,
                 },
-                depth_stencil: (words[5] != record::NO_DEPTH).then_some(encode::DepthStencilState {
-                    format: TextureFormat::depth32float,
-                    depth_write: words[4] != 0,
-                    depth_compare: compare,
-                    stencil_front: encode::STENCIL_UNUSED,
-                    stencil_back: encode::STENCIL_UNUSED,
-                    stencil_read_mask: u32::MAX,
-                    stencil_write_mask: u32::MAX,
-                    bias: words[6] as i32,
-                    slope_scale: f32::from_bits(words[7]),
-                    clamp: 0.0,
-                }),
+                depth_stencil: (words[5] != record::NO_DEPTH).then_some(
+                    encode::DepthStencilState {
+                        format: TextureFormat::depth32float,
+                        depth_write: words[4] != 0,
+                        depth_compare: compare,
+                        stencil_front: encode::STENCIL_UNUSED,
+                        stencil_back: encode::STENCIL_UNUSED,
+                        stencil_read_mask: u32::MAX,
+                        stencil_write_mask: u32::MAX,
+                        bias: words[6] as i32,
+                        slope_scale: f32::from_bits(words[7]),
+                        clamp: 0.0,
+                    },
+                ),
                 multisample: encode::MULTISAMPLE_NONE,
                 fragment: (words[1] != 0).then_some(encode::FragmentState {
                     module,
                     entry: "fs",
-                    targets: if format == Format::depth32float { &[] } else { &targets },
+                    targets: if format == Format::depth32float {
+                        &[]
+                    } else {
+                        &targets
+                    },
                 }),
             },
         ));
@@ -750,7 +874,14 @@ impl Gpu {
     pub fn compute_pipeline(&self, module: Id, entry: &str, layouts: &[Id]) -> Id {
         let layout = self.pipeline_layout(layouts);
         let s = self.s();
-        let p = made(s.encoder.compute_pipeline(&mut s.stream, &encode::ComputePipelineDescriptor { layout: Some(layout), module, entry }));
+        let p = made(s.encoder.compute_pipeline(
+            &mut s.stream,
+            &encode::ComputePipelineDescriptor {
+                layout: Some(layout),
+                module,
+                entry,
+            },
+        ));
         s.encoder.destroy(&mut s.stream, layout);
         p
     }
@@ -786,7 +917,13 @@ impl Gpu {
             origin: [0, 0, layer],
             aspect: TextureAspect::all,
         };
-        call::write_texture(&mut self.s().stream, &place, [width * 4, height], [width, height, 1], bytes);
+        call::write_texture(
+            &mut self.s().stream,
+            &place,
+            [width * 4, height],
+            [width, height, 1],
+            bytes,
+        );
     }
 
     /// The image file at `file` (PNG, JPEG, WebP) decoded into `texture`, its
@@ -820,11 +957,18 @@ impl Gpu {
             return Some(s.images.swap_remove(k).texture);
         }
         let (width, height) = pxl_spec::asset::image_size(file)?;
-        let usage = TEXTURE_USAGE::TEXTURE_BINDING | TEXTURE_USAGE::COPY_SRC | TEXTURE_USAGE::COPY_DST | TEXTURE_USAGE::RENDER_ATTACHMENT;
+        let usage = TEXTURE_USAGE::TEXTURE_BINDING
+            | TEXTURE_USAGE::COPY_SRC
+            | TEXTURE_USAGE::COPY_DST
+            | TEXTURE_USAGE::RENDER_ATTACHMENT;
         let texture = self.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
         let mut word = Box::new(0);
         self.copy_image(texture, file, &mut word, image & !DONE | 1);
-        self.s().images.push(Arriving { image, texture, word });
+        self.s().images.push(Arriving {
+            image,
+            texture,
+            word,
+        });
         None
     }
 
@@ -835,14 +979,32 @@ impl Gpu {
 
     /// A region of `source`'s first mip into `target`'s `layer`.
     #[allow(clippy::too_many_arguments)]
-    pub fn copy_texture(&self, encoder: Id, source: Id, x: u32, y: u32, target: Id, tx: u32, ty: u32, layer: u32, width: u32, height: u32) {
+    pub fn copy_texture(
+        &self,
+        encoder: Id,
+        source: Id,
+        x: u32,
+        y: u32,
+        target: Id,
+        tx: u32,
+        ty: u32,
+        layer: u32,
+        width: u32,
+        height: u32,
+    ) {
         let place = |texture, origin| encode::TexelCopyTexture {
             texture,
             mip: 0,
             origin,
             aspect: TextureAspect::all,
         };
-        call::copy_texture_to_texture(&mut self.s().stream, encoder, &place(source, [x, y, 0]), &place(target, [tx, ty, layer]), [width, height, 1]);
+        call::copy_texture_to_texture(
+            &mut self.s().stream,
+            encoder,
+            &place(source, [x, y, 0]),
+            &place(target, [tx, ty, layer]),
+            [width, height, 1],
+        );
     }
 
     pub fn pass(&self, encoder: Id, d: &PassDesc) -> Id {
@@ -907,20 +1069,63 @@ impl Gpu {
 
     /// A size of 0 is the rest of the buffer.
     pub fn set_vertex_buffer(&self, pass: Id, slot: u32, buffer: Id, offset: u32, size: u32) {
-        call::set_vertex_buffer(&mut self.s().stream, pass, slot, buffer, offset, (size != 0).then_some(size));
+        call::set_vertex_buffer(
+            &mut self.s().stream,
+            pass,
+            slot,
+            buffer,
+            offset,
+            (size != 0).then_some(size),
+        );
     }
 
     /// Indices are u32.
     pub fn set_index_buffer(&self, pass: Id, buffer: Id, offset: u32, size: u32) {
-        call::set_index_buffer(&mut self.s().stream, pass, buffer, IndexFormat::uint32, offset, (size != 0).then_some(size));
+        call::set_index_buffer(
+            &mut self.s().stream,
+            pass,
+            buffer,
+            IndexFormat::uint32,
+            offset,
+            (size != 0).then_some(size),
+        );
     }
 
-    pub fn draw(&self, pass: Id, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32) {
-        call::draw(&mut self.s().stream, pass, vertices, instances, first_vertex, first_instance);
+    pub fn draw(
+        &self,
+        pass: Id,
+        vertices: u32,
+        instances: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) {
+        call::draw(
+            &mut self.s().stream,
+            pass,
+            vertices,
+            instances,
+            first_vertex,
+            first_instance,
+        );
     }
 
-    pub fn draw_indexed(&self, pass: Id, indices: u32, instances: u32, first_index: u32, first_instance: u32) {
-        call::draw_indexed(&mut self.s().stream, pass, indices, instances, first_index, 0, first_instance);
+    pub fn draw_indexed(
+        &self,
+        pass: Id,
+        indices: u32,
+        instances: u32,
+        first_index: u32,
+        first_instance: u32,
+    ) {
+        call::draw_indexed(
+            &mut self.s().stream,
+            pass,
+            indices,
+            instances,
+            first_index,
+            0,
+            first_instance,
+        );
     }
 
     pub fn draw_indirect(&self, pass: Id, buffer: Id, offset: u32) {
@@ -978,7 +1183,13 @@ impl Gpu {
 
     /// Configured in the format the device prefers, its alpha premultiplied.
     pub fn configure(&self, surface: u32) {
-        call::configure(&mut self.s().stream, handle_slot(surface), None, TEXTURE_USAGE::RENDER_ATTACHMENT, CanvasAlphaMode::premultiplied);
+        call::configure(
+            &mut self.s().stream,
+            handle_slot(surface),
+            None,
+            TEXTURE_USAGE::RENDER_ATTACHMENT,
+            CanvasAlphaMode::premultiplied,
+        );
     }
 
     pub fn resize(&self, surface: u32, width: u32, height: u32) {
@@ -995,7 +1206,10 @@ impl Gpu {
     /// and the one that is mapped back.
     pub fn spans(&self) -> Id {
         let s = self.s();
-        let set = made(s.encoder.query_set(&mut s.stream, QueryType::timestamp, 2 * SPANS as u32));
+        let set = made(
+            s.encoder
+                .query_set(&mut s.stream, QueryType::timestamp, 2 * SPANS as u32),
+        );
         let resolve = made(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
@@ -1034,7 +1248,13 @@ impl Gpu {
     }
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
-    pub fn copy_buffer(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
+    pub fn copy_buffer(
+        &self,
+        encoder: Id,
+        (from, at): (Id, u32),
+        (to, to_at): (Id, u32),
+        size: u32,
+    ) {
         call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), size);
     }
 
@@ -1043,10 +1263,20 @@ impl Gpu {
     /// the kernel's memory at `address`; `word`, the mapping's own, holds
     /// `ticket | DONE` once they are in, a turn or more later, and only then
     /// may `id` be mapped again (xpute MAP_ASYNC).
-    pub fn map_read(&self, id: Id, offset: u32, length: u32, address: u32, word: &mut u32, ticket: u32) {
+    pub fn map_read(
+        &self,
+        id: Id,
+        offset: u32,
+        length: u32,
+        address: u32,
+        word: &mut u32,
+        ticket: u32,
+    ) {
         // SAFETY: the kernel's own range, which it asked to be written and
         // does not read while the mapping is out.
-        let into = unsafe { core::slice::from_raw_parts_mut(mem::at::<u8>(address as usize), length as usize) };
+        let into = unsafe {
+            core::slice::from_raw_parts_mut(mem::at::<u8>(address as usize), length as usize)
+        };
         call::map_async(&mut self.s().stream, id, offset, into, word, ticket);
     }
 }

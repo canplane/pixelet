@@ -9,7 +9,8 @@ import type { LongFrame, LongFrameSource } from "@pxl/client/bracket.tsx";
 const LONG_TASK_MS = 50;
 
 export function sources(): readonly LongFrameSource[] {
-  const has = typeof PerformanceObserver !== "undefined" && (PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false);
+  const has = typeof PerformanceObserver !== "undefined" &&
+    (PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false);
   return has ? ["longtask"] : [];
 }
 
@@ -17,7 +18,14 @@ export function watch(heard: (frame: LongFrame) => void): void {
   if (sources().length === 0) return;
   new PerformanceObserver((list) => {
     for (const e of list.getEntries()) {
-      heard({ source: "longtask", t: e.startTime, durationMs: e.duration, blockingMs: Math.max(0, e.duration - LONG_TASK_MS), scriptMs: 0, renderMs: 0 });
+      heard({
+        source: "longtask",
+        t: e.startTime,
+        durationMs: e.duration,
+        blockingMs: Math.max(0, e.duration - LONG_TASK_MS),
+        scriptMs: 0,
+        renderMs: 0,
+      });
     }
   }).observe({ type: "longtask", buffered: true });
 }

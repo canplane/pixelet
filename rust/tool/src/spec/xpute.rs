@@ -38,12 +38,28 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     ts.extend(["".to_string(), "export const enum Errno {".into()]);
     let mut rs = vec!["// xpute-kit/status/errno.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
-    rs.extend(["", "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]", "#[repr(i32)]", "pub enum Errno {"].map(String::from));
+    rs.extend(
+        [
+            "",
+            "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]",
+            "#[repr(i32)]",
+            "pub enum Errno {",
+        ]
+        .map(String::from),
+    );
     let mut run: Vec<&ErrnoMember> = Vec::new();
     let flush = |run: &mut Vec<&ErrnoMember>, rs: &mut Vec<String>| {
-        let width = run.iter().map(|e| format!("{} = {},", e.name, e.value).len()).max().unwrap_or(0);
+        let width = run
+            .iter()
+            .map(|e| format!("{} = {},", e.name, e.value).len())
+            .max()
+            .unwrap_or(0);
         for e in run.iter() {
-            rs.push(format!("    {:<width$} // {}", format!("{} = {},", e.name, e.value), e.doc));
+            rs.push(format!(
+                "    {:<width$} // {}",
+                format!("{} = {},", e.name, e.value),
+                e.doc
+            ));
         }
         run.clear();
     };
@@ -52,7 +68,11 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
             ErrnoEntry::Section { section } => {
                 flush(&mut run, &mut rs);
                 rs.extend([String::new(), format!("    // ---- {section} ----")]);
-                ts.extend([String::new(), format!("  // ---- {section} ----"), String::new()]);
+                ts.extend([
+                    String::new(),
+                    format!("  // ---- {section} ----"),
+                    String::new(),
+                ]);
             }
             ErrnoEntry::Member(m) => {
                 run.push(m);
@@ -74,7 +94,10 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     );
     for e in &spec.entries {
         if let ErrnoEntry::Member(m) = e {
-            rs.push(format!("            {} => Some(Errno::{}),", m.value, m.name));
+            rs.push(format!(
+                "            {} => Some(Errno::{}),",
+                m.value, m.name
+            ));
         }
     }
     rs.extend(["            _ => None,", "        }", "    }", "}", ""].map(String::from));
@@ -123,7 +146,11 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     );
     for e in &spec.entries {
         if let ErrnoEntry::Member(m) = e {
-            ts.push(format!("  [{}]: {},", m.value, super::json_str(&format!("{}: {}", m.name, m.doc))));
+            ts.push(format!(
+                "  [{}]: {},",
+                m.value,
+                super::json_str(&format!("{}: {}", m.name, m.doc))
+            ));
         }
     }
     ts.push("};".into());
@@ -158,8 +185,15 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     );
     for e in &spec.entries {
         match e {
-            ErrnoEntry::Section { section } => cpp.extend([String::new(), format!("    // ---- {section} ----")]),
-            ErrnoEntry::Member(m) => cpp.push(format!("    {} = {}, // {}", m.name.to_lowercase(), m.value, m.doc)),
+            ErrnoEntry::Section { section } => {
+                cpp.extend([String::new(), format!("    // ---- {section} ----")])
+            }
+            ErrnoEntry::Member(m) => cpp.push(format!(
+                "    {} = {}, // {}",
+                m.name.to_lowercase(),
+                m.value,
+                m.doc
+            )),
         }
     }
     cpp.extend(["};", ""].map(String::from));
@@ -173,7 +207,11 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     );
     for e in &spec.entries {
         if let ErrnoEntry::Member(m) = e {
-            cpp.push(format!("    case Errno::{}: return \"{}\";", m.name.to_lowercase(), m.name));
+            cpp.push(format!(
+                "    case Errno::{}: return \"{}\";",
+                m.name.to_lowercase(),
+                m.name
+            ));
         }
     }
     cpp.extend(
@@ -190,7 +228,11 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     );
     for e in &spec.entries {
         if let ErrnoEntry::Member(m) = e {
-            cpp.push(format!("    case {}: return Errno::{};", m.value, m.name.to_lowercase()));
+            cpp.push(format!(
+                "    case {}: return Errno::{};",
+                m.value,
+                m.name.to_lowercase()
+            ));
         }
     }
     cpp.extend(

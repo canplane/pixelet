@@ -43,7 +43,8 @@ impl<'w> Words<'w> {
         self.at += n.div_ceil(4);
         // SAFETY: the words as their bytes, which are the guest's in order on
         // a little-endian host, as every host is; at least `n` of them.
-        let all: &'w [u8] = unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), 4 * words.len()) };
+        let all: &'w [u8] =
+            unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), 4 * words.len()) };
         &all[..n]
     }
     pub(super) fn text(&mut self) -> String {

@@ -10,7 +10,9 @@ import { bracket, VISUAL_VIEWPORT_BOTTOM } from "@/bracket.tsx";
  * streams viewport events or sends one final value, so `bottom` gets a short
  * ease.
  */
-export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps) {
+export function AboveKeyboard(
+  { inset, lift = 0, children }: AboveKeyboardProps,
+) {
   const rest = bottomRest(bracket.view.useSafeArea(), inset);
   return (
     <div
@@ -18,7 +20,8 @@ export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps)
         position: "absolute",
         left: inset,
         right: inset,
-        bottom: `calc(max(${rest}px, ${inset}px + var(${VISUAL_VIEWPORT_BOTTOM}, 0px)) + ${lift}px)`,
+        bottom:
+          `calc(max(${rest}px, ${inset}px + var(${VISUAL_VIEWPORT_BOTTOM}, 0px)) + ${lift}px)`,
         zIndex: layer.bottom,
         transition: "bottom 150ms ease-out",
         pointerEvents: "none",

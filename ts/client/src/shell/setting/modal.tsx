@@ -38,7 +38,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           tab === SettingsTab.Options
             ? (
               <>
-                <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
+                <Text style={settingText.faint}>
+                  {t("settings.cost_legend")}
+                </Text>
                 <Separator />
                 <SettingsSection section="display" />
                 <SettingsSection section="navigation" />

@@ -43,7 +43,8 @@ pub const HASH_KEPT: u32 = 24;
 
 /// Cell `[x, y]`'s hash under `salt`, in [0, 1).
 pub fn lattice_hash([x, y]: [u32; 2], salt: u32) -> f32 {
-    let mut h = x.wrapping_mul(HASH_IN[0]) ^ y.wrapping_mul(HASH_IN[1]) ^ salt.wrapping_mul(HASH_IN[2]);
+    let mut h =
+        x.wrapping_mul(HASH_IN[0]) ^ y.wrapping_mul(HASH_IN[1]) ^ salt.wrapping_mul(HASH_IN[2]);
     let mut k = 0;
     while k < HASH_ROUNDS.len() {
         h ^= h >> HASH_ROUNDS[k][0];

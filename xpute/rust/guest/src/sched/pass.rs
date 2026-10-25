@@ -43,7 +43,12 @@ impl Pass {
     }
 
     /// `step` answers whether it did work; only work counts to `max_steps`.
-    pub fn run<T>(&self, items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> bool, max_steps: Option<u32>) -> PassStat {
+    pub fn run<T>(
+        &self,
+        items: impl IntoIterator<Item = T>,
+        mut step: impl FnMut(T) -> bool,
+        max_steps: Option<u32>,
+    ) -> PassStat {
         let t0 = now();
         let deadline = t0 + self.remaining();
         let hard_deadline = deadline + self.hard_slack_ms;
@@ -52,7 +57,9 @@ impl Pass {
         for item in items {
             let at = now();
             // Before the waiver below, but the first item is always tried.
-            if stat.visited > 0 && at >= hard_deadline || stat.ran > 0 && (stat.ran >= cap || at >= deadline) {
+            if stat.visited > 0 && at >= hard_deadline
+                || stat.ran > 0 && (stat.ran >= cap || at >= deadline)
+            {
                 stat.stopped_early = true;
                 break;
             }

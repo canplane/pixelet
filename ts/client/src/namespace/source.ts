@@ -40,17 +40,32 @@ export function declaration(text: string): Declaration | null {
   }
   const versions = (v: unknown, every: boolean) =>
     typeof v === "object" && v !== null &&
-    Object.entries(v).every(([k, s]) => (BASE_LAYERS as readonly string[]).includes(k) && typeof s === "string" && VERSION.test(s)) &&
+    Object.entries(v).every(([k, s]) =>
+      (BASE_LAYERS as readonly string[]).includes(k) && typeof s === "string" &&
+      VERSION.test(s)
+    ) &&
     (!every || BASE_LAYERS.every((k) => k in v));
-  if (typeof d !== "object" || d === null || !("version" in d) || !versions(d.version, true)) return null;
-  const whole = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
+  if (
+    typeof d !== "object" || d === null || !("version" in d) ||
+    !versions(d.version, true)
+  ) return null;
+  const whole = (n: unknown) =>
+    typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
   if (!("top_zoom" in d) || !whole(d.top_zoom)) return null;
-  if (!("format" in d) || typeof d.format !== "object" || d.format === null || !BASE_LAYERS.every((k) => whole((d.format as Record<string, unknown>)[k]))) return null;
+  if (
+    !("format" in d) || typeof d.format !== "object" || d.format === null ||
+    !BASE_LAYERS.every((k) => whole((d.format as Record<string, unknown>)[k]))
+  ) return null;
   if (!("shard" in d)) return null;
   const shard = d.shard;
-  if (typeof shard !== "object" || shard === null || Array.isArray(shard)) return null;
+  if (typeof shard !== "object" || shard === null || Array.isArray(shard)) {
+    return null;
+  }
   for (const s of Object.values(shard)) {
-    if (typeof s !== "object" || s === null || ("version" in s && !versions(s.version, false))) return null;
+    if (
+      typeof s !== "object" || s === null ||
+      ("version" in s && !versions(s.version, false))
+    ) return null;
   }
   return d as Declaration;
 }
@@ -83,7 +98,10 @@ export function source_declared(): Declaration | null {
 }
 
 /** Each kind's own version as declared, empty until then. */
-export function source_versions(): readonly { kind: BaseLayer; version: string }[] {
+export function source_versions(): readonly {
+  kind: BaseLayer;
+  version: string;
+}[] {
   return shown;
 }
 
@@ -104,14 +122,20 @@ async function asked(): Promise<string | null> {
     await res.body?.cancel();
     return null;
   } catch (err) {
-    console.warn(`[source] ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(
+      `[source] ${err instanceof Error ? err.message : String(err)}`,
+    );
     return null;
   }
 }
 
 /** Hands the kernel its part of the declaration (WORLD_SOURCE); false where
  * it is more than a command carries. */
-export type SendSource = (top_zoom: number, formats: number[], shards: string[]) => boolean;
+export type SendSource = (
+  top_zoom: number,
+  formats: number[],
+  shards: string[],
+) => boolean;
 
 export async function declare_source(send: SendSource): Promise<void> {
   let source = await asked();
@@ -119,20 +143,32 @@ export async function declare_source(send: SendSource): Promise<void> {
   while (source === null) {
     if (online()) {
       set(Source.Failing);
-      await new Promise((resolve) => setTimeout(resolve, Math.random() * wait_ms));
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.random() * wait_ms)
+      );
       wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
     } else await when_online();
     source = await asked();
   }
   const read = declaration(source);
   if (read === null) {
-    console.error("[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards");
+    console.error(
+      "[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards",
+    );
     set(Source.Refused);
     return;
   }
   const shards = Object.keys(read.shard);
-  if (!send(read.top_zoom, BASE_LAYERS.map((kind) => read.format[kind]), shards)) {
-    console.error(`[source] the declaration's ${shards.length} shards are more than a command carries`);
+  if (
+    !send(
+      read.top_zoom,
+      BASE_LAYERS.map((kind) => read.format[kind]),
+      shards,
+    )
+  ) {
+    console.error(
+      `[source] the declaration's ${shards.length} shards are more than a command carries`,
+    );
     set(Source.Refused);
     return;
   }

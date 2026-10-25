@@ -77,7 +77,9 @@ export class Deque<T> {
 
   clear(): void {
     const cap = this.cap();
-    for (let i = 0; i < this.len; i++) this.buf[(this.head + i) % cap] = undefined;
+    for (let i = 0; i < this.len; i++) {
+      this.buf[(this.head + i) % cap] = undefined;
+    }
     this.head = 0;
     this.len = 0;
   }

@@ -15,14 +15,21 @@ use crate::domain::control::camera::controller::{dist, Motion};
 use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::Tracking;
-use crate::domain::control::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot};
+use crate::domain::control::cmd::{
+    CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState,
+    LonLat, Message, OrientationState, Snapshot,
+};
 use crate::domain::control::interaction::{holding, Holding};
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::follow_mode::{following, set_following};
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::device_orientation::{orientation_close, request_orientation};
-use crate::domain::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
-use crate::domain::control::sensor::reading::{device_location_store, device_orientation_store, Pose};
+use crate::domain::control::sensor::geolocation::{
+    geolocation_close, geolocation_open, start_watching,
+};
+use crate::domain::control::sensor::reading::{
+    device_location_store, device_orientation_store, Pose,
+};
 use crate::domain::layer::division::{named, naming};
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
@@ -152,7 +159,10 @@ impl Sent {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
     pub fn moved(&mut self) -> Option<Shown> {
-        let (now, (_, words)) = (shown(), crate::domain::control::interaction::edit::marker_waiting());
+        let (now, (_, words)) = (
+            shown(),
+            crate::domain::control::interaction::edit::marker_waiting(),
+        );
         if self.shown == Some(now) && self.words == words {
             return None;
         }
@@ -173,9 +183,14 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
             is_off_center: shown.is_off_center,
             center: shown.focus.map(|c| {
                 let g = epsg4326::unproject(&c);
-                LonLat { lon: g[0], lat: g[1] }
+                LonLat {
+                    lon: g[0],
+                    lat: g[1],
+                }
             }),
-            outside: shown.focus.is_some_and(|c| crate::sys::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))),
+            outside: shown.focus.is_some_and(|c| {
+                crate::sys::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))
+            }),
         },
         location: LocationState {
             status: shown.location.0.status(),
@@ -242,7 +257,10 @@ pub fn tracking_action(tracking: Tracking) {
 
 /// A search's place: a view far out comes in.
 pub fn go_to_degrees(lon: f64, lat: f64) {
-    crate::domain::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    crate::domain::control::navigation::destination::go_on_ground(
+        epsg4326::project(&[lon, lat, 0.0]),
+        Motion::Snap,
+    );
     crate::domain::control::camera::controller::come_in_to_default();
 }
 

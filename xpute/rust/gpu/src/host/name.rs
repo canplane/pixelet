@@ -6,8 +6,10 @@ use serde::de::value::{Error as NameError, StrDeserializer};
 use serde::de::{DeserializeOwned, IntoDeserializer};
 
 use crate::enums::{
-    ADDRESS_MODE, BLEND_FACTOR, BLEND_OPERATION, COMPARE_FUNCTION, FILTER_MODE, FRONT_FACE, INDEX_FORMAT, MIPMAP_FILTER_MODE, PRIMITIVE_TOPOLOGY, SAMPLER_BINDING_TYPE, STENCIL_OPERATION,
-    STORAGE_TEXTURE_ACCESS, TEXTURE_ASPECT, TEXTURE_DIMENSION, TEXTURE_FORMAT, TEXTURE_VIEW_DIMENSION, VERTEX_FORMAT, VERTEX_STEP_MODE,
+    ADDRESS_MODE, BLEND_FACTOR, BLEND_OPERATION, COMPARE_FUNCTION, FILTER_MODE, FRONT_FACE,
+    INDEX_FORMAT, MIPMAP_FILTER_MODE, PRIMITIVE_TOPOLOGY, SAMPLER_BINDING_TYPE, STENCIL_OPERATION,
+    STORAGE_TEXTURE_ACCESS, TEXTURE_ASPECT, TEXTURE_DIMENSION, TEXTURE_FORMAT,
+    TEXTURE_VIEW_DIMENSION, VERTEX_FORMAT, VERTEX_STEP_MODE,
 };
 use crate::spec::{BUFFER_USAGE, COLOR_WRITE, SHADER_STAGE, TEXTURE_USAGE};
 
@@ -81,14 +83,26 @@ pub(super) const BUFFER_USAGES: [(u32, wgpu::BufferUsages); 10] = [
     (BUFFER_USAGE::UNIFORM, wgpu::BufferUsages::UNIFORM),
     (BUFFER_USAGE::STORAGE, wgpu::BufferUsages::STORAGE),
     (BUFFER_USAGE::INDIRECT, wgpu::BufferUsages::INDIRECT),
-    (BUFFER_USAGE::QUERY_RESOLVE, wgpu::BufferUsages::QUERY_RESOLVE),
+    (
+        BUFFER_USAGE::QUERY_RESOLVE,
+        wgpu::BufferUsages::QUERY_RESOLVE,
+    ),
 ];
 pub(super) const TEXTURE_USAGES: [(u32, wgpu::TextureUsages); 5] = [
     (TEXTURE_USAGE::COPY_SRC, wgpu::TextureUsages::COPY_SRC),
     (TEXTURE_USAGE::COPY_DST, wgpu::TextureUsages::COPY_DST),
-    (TEXTURE_USAGE::TEXTURE_BINDING, wgpu::TextureUsages::TEXTURE_BINDING),
-    (TEXTURE_USAGE::STORAGE_BINDING, wgpu::TextureUsages::STORAGE_BINDING),
-    (TEXTURE_USAGE::RENDER_ATTACHMENT, wgpu::TextureUsages::RENDER_ATTACHMENT),
+    (
+        TEXTURE_USAGE::TEXTURE_BINDING,
+        wgpu::TextureUsages::TEXTURE_BINDING,
+    ),
+    (
+        TEXTURE_USAGE::STORAGE_BINDING,
+        wgpu::TextureUsages::STORAGE_BINDING,
+    ),
+    (
+        TEXTURE_USAGE::RENDER_ATTACHMENT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    ),
 ];
 pub(super) const SHADER_STAGES: [(u32, wgpu::ShaderStages); 3] = [
     (SHADER_STAGE::VERTEX, wgpu::ShaderStages::VERTEX),
@@ -110,12 +124,21 @@ const _: () = assert!(
         && COLOR_WRITES.len() == COLOR_WRITE::KEYS.len()
 );
 
-pub(super) fn flags<F: Copy + core::ops::BitOr<Output = F>>(of: &[(u32, F)], none: F, word: u32) -> F {
-    of.iter().filter(|(bit, _)| word & bit == *bit).fold(none, |all, (_, f)| all | *f)
+pub(super) fn flags<F: Copy + core::ops::BitOr<Output = F>>(
+    of: &[(u32, F)],
+    none: F,
+    word: u32,
+) -> F {
+    of.iter()
+        .filter(|(bit, _)| word & bit == *bit)
+        .fold(none, |all, (_, f)| all | *f)
 }
 
 /// A name wgpu gives no value of is the guest asking for what this device
 /// cannot be: the program's bug, not the host's.
 pub(super) fn of<T: Copy>(of: &[Option<T>], n: u32, what: &str) -> T {
-    of.get(n as usize).copied().flatten().unwrap_or_else(|| panic!("[gpu] {what} {n} has no wgpu value"))
+    of.get(n as usize)
+        .copied()
+        .flatten()
+        .unwrap_or_else(|| panic!("[gpu] {what} {n} has no wgpu value"))
 }

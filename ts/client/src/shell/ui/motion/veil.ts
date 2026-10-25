@@ -21,7 +21,11 @@ interface Veil {
 }
 
 /** A change of dim moves as the dim does; anything else as the surface's own fade. */
-export function useVeil(fade: f64, transition: Transition, fadeFrom?: f64): Veil {
+export function useVeil(
+  fade: f64,
+  transition: Transition,
+  fadeFrom?: f64,
+): Veil {
   const dim = useContext(Dim);
   const last = useRef(dim);
   const dimming = dim !== last.current;
@@ -31,6 +35,10 @@ export function useVeil(fade: f64, transition: Transition, fadeFrom?: f64): Veil
   const level = fade * dim;
   return {
     level,
-    motion: { from: fadeFrom === undefined ? undefined : { opacity: fadeFrom }, to: { opacity: level }, transition: dimming ? DIM : transition },
+    motion: {
+      from: fadeFrom === undefined ? undefined : { opacity: fadeFrom },
+      to: { opacity: level },
+      transition: dimming ? DIM : transition,
+    },
   };
 }

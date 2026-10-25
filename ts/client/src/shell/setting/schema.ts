@@ -5,7 +5,10 @@
  * one is a schema.json entry plus its strings under `settings.<section>.<name>`.
  */
 
-import { SETTINGS as EVERY, SETTINGS_SHIPPED as SHIPPED } from "@/abi/schema.spec.ts";
+import {
+  SETTINGS as EVERY,
+  SETTINGS_SHIPPED as SHIPPED,
+} from "@/abi/schema.spec.ts";
 
 type Spec = typeof EVERY;
 

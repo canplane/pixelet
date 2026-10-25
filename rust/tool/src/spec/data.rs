@@ -10,7 +10,10 @@
 use std::cell::Cell;
 
 use super::catalog::{run_of, FILE};
-use super::{align_star, casing_note, enum_name, file, js_num, json_str, laid_out, line_comments, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
+use super::{
+    align_star, casing_note, enum_name, file, js_num, json_str, laid_out, line_comments, read,
+    rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output,
+};
 
 pub enum Enums {
     None,
@@ -122,7 +125,10 @@ const DATA_SPECS: [DataSpec; 26] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/guest/ipc/directory.spec.hpp", "xpute::directory")),
+        cpp: Some((
+            "xpute/cpp/xpute/guest/ipc/directory.spec.hpp",
+            "xpute::directory",
+        )),
     },
     DataSpec {
         json: "xpute/spec/ipc/frame.json",
@@ -351,10 +357,20 @@ const DATA_SPECS: [DataSpec; 26] = [
         ts: Some("ts/client/src/abi/mem.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/mem/mem.spec.rs"),
         // pxl-wasm's build script, which links the module by these numbers.
-        rs_also: &[("rust/client-bracket/wasm/mem.spec.rs", "pxl-wasm/mem.spec.rs")],
+        rs_also: &[(
+            "rust/client-bracket/wasm/mem.spec.rs",
+            "pxl-wasm/mem.spec.rs",
+        )],
         module: Some("spec"),
         enums: Enums::None,
-        ts_names: Some(&["DIRECTORY_AT", "DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "SQ_CAP", "CQ_CAP"]),
+        ts_names: Some(&[
+            "DIRECTORY_AT",
+            "DESKTOP_BYTES",
+            "PHONE_BYTES",
+            "REGION_BYTES",
+            "SQ_CAP",
+            "CQ_CAP",
+        ]),
         cpp: None,
     },
 ];
@@ -365,7 +381,9 @@ fn type_of<'a>(n: &'a Node, or: &'a str) -> &'a str {
 
 fn is_ts_ident(k: &str) -> bool {
     let mut c = k.chars();
-    c.next().is_some_and(|f| f.is_ascii_alphabetic() || f == '_' || f == '$') && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '$')
+    c.next()
+        .is_some_and(|f| f.is_ascii_alphabetic() || f == '_' || f == '$')
+        && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '$')
 }
 
 pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
@@ -378,7 +396,13 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
         Node::Str(s) if ty == "u64" => format!("{s}n"),
         Node::Str(s) if ty == "rgb" => rgb_literal(s)?,
         Node::Str(s) => json_str(s),
-        Node::Arr(a) => format!("[{}]", a.iter().map(|e| ts_literal(e, ty, indent)).collect::<Result<Vec<_>, _>>()?.join(", ")),
+        Node::Arr(a) => format!(
+            "[{}]",
+            a.iter()
+                .map(|e| ts_literal(e, ty, indent))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ")
+        ),
         Node::Null => "null".to_string(),
         Node::Obj(_) => {
             let inner = format!("{indent}  ");
@@ -386,9 +410,19 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
             let mut lines = vec!["{".to_string()];
             for (k, v) in n.named() {
                 if let Some(doc) = v.is_obj().then(|| v.lines_at("$doc")).flatten() {
-                    lines.extend(ts_doc(&doc, &inner).into_iter().enumerate().map(|(i, l)| if i == 0 { l } else { align_star(l, &inner) }));
+                    lines.extend(ts_doc(&doc, &inner).into_iter().enumerate().map(|(i, l)| {
+                        if i == 0 {
+                            l
+                        } else {
+                            align_star(l, &inner)
+                        }
+                    }));
                 }
-                let key = if is_ts_ident(k) { k.to_string() } else { json_str(k) };
+                let key = if is_ts_ident(k) {
+                    k.to_string()
+                } else {
+                    json_str(k)
+                };
                 lines.push(format!("{inner}{key}: {},", ts_literal(v, t, &inner)?));
             }
             lines.push(format!("{indent}}}"));
@@ -410,7 +444,10 @@ struct Scope {
 }
 
 fn is_primitive(ty: &str) -> bool {
-    matches!(ty, "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "rgb" | "str")
+    matches!(
+        ty,
+        "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "rgb" | "str"
+    )
 }
 
 fn enum_path(ty: &str, scope: &Scope) -> Option<String> {
@@ -430,7 +467,10 @@ fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), Stri
         Node::Bool(b) => ("bool".to_string(), b.to_string()),
         Node::Str(_) if ty == FILE => {
             let slot = scope.slot.replace(scope.slot.get() + 1);
-            ("crate::asset::catalog::Slot".to_string(), format!("crate::asset::catalog::Slot({slot})"))
+            (
+                "crate::asset::catalog::Slot".to_string(),
+                format!("crate::asset::catalog::Slot({slot})"),
+            )
         }
         Node::Str(s) => match ty {
             "u64" => ("u64".to_string(), s.clone()),
@@ -440,7 +480,14 @@ fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), Stri
                 Some(path) => (path.clone(), format!("{path}::{}", rs_ident(s))),
             },
         },
-        Node::Num(v) if ty == "f64" || ty == "f32" => (ty.to_string(), if v.fract() == 0.0 { format!("{}.0", js_num(*v)) } else { js_num(*v) }),
+        Node::Num(v) if ty == "f64" || ty == "f32" => (
+            ty.to_string(),
+            if v.fract() == 0.0 {
+                format!("{}.0", js_num(*v))
+            } else {
+                js_num(*v)
+            },
+        ),
         Node::Num(v) => (ty.to_string(), js_num(*v)),
         _ => return Err(format!("a {ty} leaf that is not a scalar: {n:?}")),
     })
@@ -453,14 +500,22 @@ fn rs_enum(name: &str, variants: &[(String, String)], indent: &str, out: &mut Ve
         format!("{indent}#[repr(u8)]"),
         format!("{indent}pub enum {e} {{"),
     ]);
-    out.extend(variants.iter().map(|(v, n)| format!("{indent}    {} = {n},", rs_ident(v))));
+    out.extend(
+        variants
+            .iter()
+            .map(|(v, n)| format!("{indent}    {} = {n},", rs_ident(v))),
+    );
     out.extend([format!("{indent}}}"), String::new()]);
     out.extend([
         format!("{indent}impl {e} {{"),
         format!("{indent}    /// Every member, in the JSON's own order."),
         format!("{indent}    pub const ALL: [{e}; {}] = [", variants.len()),
     ]);
-    out.extend(variants.iter().map(|(v, _)| format!("{indent}        {e}::{},", rs_ident(v))));
+    out.extend(
+        variants
+            .iter()
+            .map(|(v, _)| format!("{indent}        {e}::{},", rs_ident(v))),
+    );
     out.extend([
         format!("{indent}    ];"),
         String::new(),
@@ -473,7 +528,14 @@ fn rs_enum(name: &str, variants: &[(String, String)], indent: &str, out: &mut Ve
     ]);
 }
 
-fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>, scope: &Scope) -> Result<(), String> {
+fn rs_items(
+    name: &str,
+    n: &Node,
+    ty: &str,
+    indent: &str,
+    out: &mut Vec<String>,
+    scope: &Scope,
+) -> Result<(), String> {
     let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
     let mut lines: Vec<String> = Vec::new();
     if n.is_wrapper() {
@@ -484,19 +546,41 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
         let t = type_of(n, ty);
         let keys: Vec<(&str, &Node)> = n.named().collect();
         let numbers: Vec<Option<f64>> = keys.iter().map(|(_, v)| v.num()).collect();
-        let numbered = scope.enums && !keys.is_empty() && matches!(t, "u8" | "u16" | "u32") && numbers.iter().all(|v| v.is_some_and(|v| v < 256.0));
-        let distinct = numbers.iter().enumerate().all(|(i, a)| numbers[..i].iter().all(|b| b != a));
+        let numbered = scope.enums
+            && !keys.is_empty()
+            && matches!(t, "u8" | "u16" | "u32")
+            && numbers.iter().all(|v| v.is_some_and(|v| v < 256.0));
+        let distinct = numbers
+            .iter()
+            .enumerate()
+            .all(|(i, a)| numbers[..i].iter().all(|b| b != a));
         if numbered && distinct {
             rs_enum(
                 name,
-                &keys.iter().map(|(k, v)| (k.to_string(), js_num(v.num().unwrap_or_default()))).collect::<Vec<_>>(),
+                &keys
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), js_num(v.num().unwrap_or_default())))
+                    .collect::<Vec<_>>(),
                 indent,
                 &mut lines,
             );
             lines.push(String::new());
-        } else if scope.enums && !keys.is_empty() && keys.iter().all(|(_, v)| v.is_obj() && v.get("$number").and_then(Node::num).is_some()) {
+        } else if scope.enums
+            && !keys.is_empty()
+            && keys
+                .iter()
+                .all(|(_, v)| v.is_obj() && v.get("$number").and_then(Node::num).is_some())
+        {
             // An object whose entries carry no `$number` is a structure, not a set.
-            let variants: Vec<(String, String)> = keys.iter().map(|(k, v)| (k.to_string(), js_num(v.get("$number").and_then(Node::num).unwrap_or_default()))).collect();
+            let variants: Vec<(String, String)> = keys
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.to_string(),
+                        js_num(v.get("$number").and_then(Node::num).unwrap_or_default()),
+                    )
+                })
+                .collect();
             rs_enum(name, &variants, indent, &mut lines);
             lines.push(String::new());
         }
@@ -508,7 +592,10 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
         if !scope.enums && scope.names {
             body.push(format!(
                 "{indent}    pub const KEYS: &[&str] = &[{}];",
-                keys.iter().map(|(k, _)| json_str(k)).collect::<Vec<_>>().join(", ")
+                keys.iter()
+                    .map(|(k, _)| json_str(k))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ));
         }
         if !body.is_empty() {
@@ -531,14 +618,28 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
 /// digit or `_`, then those or `-` (WebGPU's "2d-array").
 fn is_name(s: &str) -> bool {
     let mut c = s.chars();
-    c.next().is_some_and(|f| f.is_ascii_alphanumeric() || f == '_') && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '-')
+    c.next()
+        .is_some_and(|f| f.is_ascii_alphanumeric() || f == '_')
+        && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '-')
 }
 
 /// A member's name as a C++ enumerator: `-` an `_`, a leading digit behind
 /// an `_`, a keyword followed by one.
 fn cpp_ident(k: &str) -> String {
-    const KEYWORDS: [&str; 12] = ["float", "double", "int", "char", "bool", "default", "delete", "new", "and", "or", "not", "xor"];
-    let id: String = k.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect();
+    const KEYWORDS: [&str; 12] = [
+        "float", "double", "int", "char", "bool", "default", "delete", "new", "and", "or", "not",
+        "xor",
+    ];
+    let id: String = k
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
     if KEYWORDS.contains(&id.as_str()) {
         format!("{id}_")
     } else if id.starts_with(|c: char| c.is_ascii_digit()) {
@@ -548,7 +649,14 @@ fn cpp_ident(k: &str) -> String {
     }
 }
 
-fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, scope: &Scope) -> Result<(), String> {
+fn rs_leaf(
+    name: &str,
+    v: &Node,
+    ty: &str,
+    indent: &str,
+    out: &mut Vec<String>,
+    scope: &Scope,
+) -> Result<(), String> {
     if let Node::Arr(a) = v {
         let strings = matches!(a.first(), Some(Node::Str(_)));
         if strings && ty != "u64" && enum_path(ty, scope).is_none() && ty != "rgb" && ty != FILE {
@@ -556,39 +664,71 @@ fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, 
                 format!(
                     "{indent}pub const {}: &[&str] = &[{}];",
                     rs_ident(name),
-                    a.iter().map(|e| e.str().map(json_str).unwrap_or_default()).collect::<Vec<_>>().join(", ")
+                    a.iter()
+                        .map(|e| e.str().map(json_str).unwrap_or_default())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             } else {
                 // How many there are, as the spec's widths read a list's name.
                 format!("{indent}pub const {}: usize = {};", rs_ident(name), a.len())
             });
-            if (scope.enums || scope.enum_names.iter().any(|n| n == name)) && a.iter().all(|e| e.str().is_some_and(is_name)) {
-                let variants: Vec<(String, String)> = a.iter().enumerate().map(|(i, e)| (e.str().unwrap_or_default().to_string(), i.to_string())).collect();
+            if (scope.enums || scope.enum_names.iter().any(|n| n == name))
+                && a.iter().all(|e| e.str().is_some_and(is_name))
+            {
+                let variants: Vec<(String, String)> = a
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| (e.str().unwrap_or_default().to_string(), i.to_string()))
+                    .collect();
                 rs_enum(name, &variants, indent, out);
             }
             return Ok(());
         }
-        let items = a.iter().map(|e| rs_scalar(e, ty, scope)).collect::<Result<Vec<_>, _>>()?;
-        let item_ty = items.first().map(|(t, _)| t.clone()).unwrap_or_else(|| if ty == "str" { "&str".to_string() } else { ty.to_string() });
+        let items = a
+            .iter()
+            .map(|e| rs_scalar(e, ty, scope))
+            .collect::<Result<Vec<_>, _>>()?;
+        let item_ty = items.first().map(|(t, _)| t.clone()).unwrap_or_else(|| {
+            if ty == "str" {
+                "&str".to_string()
+            } else {
+                ty.to_string()
+            }
+        });
         out.push(format!(
             "{indent}pub const {}: [{item_ty}; {}] = [{}];",
             rs_ident(name),
             a.len(),
-            items.iter().map(|(_, l)| l.as_str()).collect::<Vec<_>>().join(", ")
+            items
+                .iter()
+                .map(|(_, l)| l.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
         return Ok(());
     }
     let (t, lit) = rs_scalar(v, ty, scope)?;
-    out.push(format!("{indent}pub const {}: {t} = {lit};", rs_ident(name)));
+    out.push(format!(
+        "{indent}pub const {}: {t} = {lit};",
+        rs_ident(name)
+    ));
     Ok(())
 }
 
 /// The names `json` may read past its own, from the specs it uses: each
 /// laid out over its own uses, a name owned by one file, no use circular.
 fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>, String> {
-    let d = DATA_SPECS.iter().find(|d| d.json == json).ok_or(format!("{json}: uses a spec that is not listed"))?;
+    let d = DATA_SPECS
+        .iter()
+        .find(|d| d.json == json)
+        .ok_or(format!("{json}: uses a spec that is not listed"))?;
     if path.contains(&d.json) {
-        return Err(format!("{}: uses itself through {}", d.json, path.join(" → ")));
+        return Err(format!(
+            "{}: uses itself through {}",
+            d.json,
+            path.join(" → ")
+        ));
     }
     path.push(d.json);
     let mut names: Vec<(String, Node)> = Vec::new();
@@ -599,7 +739,10 @@ fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>,
         };
         for (k, v) in entries.into_iter().filter(|(k, _)| !k.starts_with('$')) {
             if names.iter().any(|(n, _)| *n == k) {
-                return Err(format!("{}: `{k}` is named in two of the specs it uses", d.json));
+                return Err(format!(
+                    "{}: `{k}` is named in two of the specs it uses",
+                    d.json
+                ));
             }
             names.push((k, v));
         }
@@ -613,18 +756,33 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     for d in &DATA_SPECS {
         let uses = used(d.json, &mut Vec::new())?;
         let spec = laid_out(read(d.json)?, &uses)?;
-        if let Some(k) = spec.named().map(|(k, _)| k).find(|k| uses.iter().any(|(u, _)| u == k)) {
-            return Err(format!("{}: `{k}` is named here and in a spec it uses", d.json));
+        if let Some(k) = spec
+            .named()
+            .map(|(k, _)| k)
+            .find(|k| uses.iter().any(|(u, _)| u == k))
+        {
+            return Err(format!(
+                "{}: `{k}` is named here and in a spec it uses",
+                d.json
+            ));
         }
         let base = d.json.rsplit('/').next().unwrap_or(d.json);
         let names: Vec<&str> = spec.named().map(|(k, _)| k).collect();
         let head_doc = spec.lines_at("$doc");
         if let Some(ts_path) = d.ts {
-            let logical = [("ts/client/src/", "@pxl/client/"), ("xpute/ts/host/src/", "@xpute/host/"), ("xpute/ts/gpu/src/", "@xpute/gpu/")]
-                .iter()
-                .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))
-                .unwrap_or(ts_path.to_string());
-            let mut ts = vec![format!("// {logical}"), "//".into(), super::generated(d.json, d.json)];
+            let logical = [
+                ("ts/client/src/", "@pxl/client/"),
+                ("xpute/ts/host/src/", "@xpute/host/"),
+                ("xpute/ts/gpu/src/", "@xpute/gpu/"),
+            ]
+            .iter()
+            .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))
+            .unwrap_or(ts_path.to_string());
+            let mut ts = vec![
+                format!("// {logical}"),
+                "//".into(),
+                super::generated(d.json, d.json),
+            ];
             if let Some(doc) = &head_doc {
                 ts.push("//".into());
                 ts.extend(line_comments(doc, ""));
@@ -632,18 +790,37 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             let mut body: Vec<String> = Vec::new();
             let mut words: Vec<String> = Vec::new();
             if let Some(listed) = d.ts_names {
-                let unknown: Vec<&str> = listed.iter().copied().filter(|n| !names.contains(n)).collect();
+                let unknown: Vec<&str> = listed
+                    .iter()
+                    .copied()
+                    .filter(|n| !names.contains(n))
+                    .collect();
                 if !unknown.is_empty() {
-                    return Err(format!("{}: tsNames lists {}, which the table does not have", d.json, unknown.join(", ")));
+                    return Err(format!(
+                        "{}: tsNames lists {}, which the table does not have",
+                        d.json,
+                        unknown.join(", ")
+                    ));
                 }
             }
-            for name in names.iter().copied().filter(|n| d.ts_names.is_none_or(|l| l.contains(n))) {
+            for name in names
+                .iter()
+                .copied()
+                .filter(|n| d.ts_names.is_none_or(|l| l.contains(n)))
+            {
                 let n = spec.get(name).ok_or("a name it listed")?;
                 body.push(String::new());
                 if let Some(doc) = n.is_obj().then(|| n.lines_at("$doc")).flatten() {
-                    body.extend(ts_doc(&doc, "").into_iter().enumerate().map(|(i, l)| if i == 0 { l } else { align_star(l, "") }));
+                    body.extend(ts_doc(&doc, "").into_iter().enumerate().map(|(i, l)| {
+                        if i == 0 {
+                            l
+                        } else {
+                            align_star(l, "")
+                        }
+                    }));
                 }
-                if n.is_wrapper() && !matches!(n.value(), Node::Arr(_) | Node::Obj(_) | Node::Null) {
+                if n.is_wrapper() && !matches!(n.value(), Node::Arr(_) | Node::Obj(_) | Node::Null)
+                {
                     let t = type_of(n, "f64");
                     let annot = (matches!(n.value(), Node::Num(_)) || t == "u64").then_some(t);
                     let annot = annot.filter(|a| *a != "u64");
@@ -652,20 +829,50 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                             words.push(a.to_string());
                         }
                     }
-                    body.push(format!("export const {name}{} = {};", annot.map(|a| format!(": {a}")).unwrap_or_default(), ts_literal(n, t, "")?));
+                    body.push(format!(
+                        "export const {name}{} = {};",
+                        annot.map(|a| format!(": {a}")).unwrap_or_default(),
+                        ts_literal(n, t, "")?
+                    ));
                 } else {
-                    body.push(format!("export const {name} = {} as const;", ts_literal(n, "f64", "")?));
-                    let entries: Vec<(&str, &Node)> = if n.is_obj() { n.named().collect() } else { Vec::new() };
-                    if matches!(d.enums, Enums::All) && !entries.is_empty() && entries.iter().all(|(_, v)| v.is_obj() && v.get("$number").and_then(Node::num).is_some()) {
-                        body.extend([String::new(), format!("export const {} = {{", enum_name(name))]);
-                        body.extend(entries.iter().map(|(k, v)| format!("  {k}: {},", js_num(v.get("$number").and_then(Node::num).unwrap_or_default()))));
+                    body.push(format!(
+                        "export const {name} = {} as const;",
+                        ts_literal(n, "f64", "")?
+                    ));
+                    let entries: Vec<(&str, &Node)> = if n.is_obj() {
+                        n.named().collect()
+                    } else {
+                        Vec::new()
+                    };
+                    if matches!(d.enums, Enums::All)
+                        && !entries.is_empty()
+                        && entries.iter().all(|(_, v)| {
+                            v.is_obj() && v.get("$number").and_then(Node::num).is_some()
+                        })
+                    {
+                        body.extend([
+                            String::new(),
+                            format!("export const {} = {{", enum_name(name)),
+                        ]);
+                        body.extend(entries.iter().map(|(k, v)| {
+                            format!(
+                                "  {k}: {},",
+                                js_num(v.get("$number").and_then(Node::num).unwrap_or_default())
+                            )
+                        }));
                         body.push("} as const;".into());
                     }
                 }
             }
             if !words.is_empty() {
                 words.sort();
-                ts.extend([String::new(), format!("import type {{ {} }} from \"@xpute/kit/abi/word.ts\";", words.join(", "))]);
+                ts.extend([
+                    String::new(),
+                    format!(
+                        "import type {{ {} }} from \"@xpute/kit/abi/word.ts\";",
+                        words.join(", ")
+                    ),
+                ]);
             }
             ts.extend(body);
             outputs.push(Output::new(ts_path, file(&ts)));
@@ -682,7 +889,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .iter()
             .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
             .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-guest, xpute-gpu or xpute-conformance"))?;
-            let mut rs = vec![format!("// {crate_name}/{under_src}"), "//".into(), super::generated(d.json, base)];
+            let mut rs = vec![
+                format!("// {crate_name}/{under_src}"),
+                "//".into(),
+                super::generated(d.json, base),
+            ];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());
                 rs.extend(line_comments(doc, ""));
@@ -690,14 +901,23 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             rs.push(String::new());
             rs.extend(casing_note());
             rs.extend([
-                "// A table is generated whole, whether or not this crate calls an entry.".to_string(),
+                "// A table is generated whole, whether or not this crate calls an entry."
+                    .to_string(),
                 format!(
                     "#![allow(non_upper_case_globals, non_snake_case, {}dead_code)]",
-                    if matches!(d.enums, Enums::None) { "" } else { "non_camel_case_types, " }
+                    if matches!(d.enums, Enums::None) {
+                        ""
+                    } else {
+                        "non_camel_case_types, "
+                    }
                 ),
             ]);
             let dir = under_src.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
-            let stem = under_src.rsplit('/').next().unwrap_or(under_src).trim_end_matches(".spec.rs");
+            let stem = under_src
+                .rsplit('/')
+                .next()
+                .unwrap_or(under_src)
+                .trim_end_matches(".spec.rs");
             let mut module = String::from("crate");
             if !dir.is_empty() {
                 module.push_str("::");
@@ -720,7 +940,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             };
             for name in &names {
                 let mut items = Vec::new();
-                rs_items(name, spec.get(name).ok_or("a name it listed")?, "f64", "", &mut items, &scope)?;
+                rs_items(
+                    name,
+                    spec.get(name).ok_or("a name it listed")?,
+                    "f64",
+                    "",
+                    &mut items,
+                    &scope,
+                )?;
                 if !items.is_empty() {
                     rs.push(String::new());
                     rs.extend(items);
@@ -728,7 +955,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
             let (first, count) = run_of(d.json)?;
             if scope.slot.get() != first + count {
-                return Err(format!("{}: its file references are not the catalog's", d.json));
+                return Err(format!(
+                    "{}: its file references are not the catalog's",
+                    d.json
+                ));
             }
             for (path, logical) in d.rs_also {
                 let mut also = rs.clone();
@@ -738,12 +968,18 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             outputs.push(Output::new(rs_path, file(&rs)));
         }
         if let Some((cpp_path, namespace)) = d.cpp {
-            let mut cpp = vec![format!("// {}", super::in_xpute(cpp_path)), "//".into(), super::generated(d.json, d.json)];
+            let mut cpp = vec![
+                format!("// {}", super::in_xpute(cpp_path)),
+                "//".into(),
+                super::generated(d.json, d.json),
+            ];
             if let Some(doc) = &head_doc {
                 cpp.push("//".into());
                 cpp.extend(line_comments(doc, ""));
             }
-            let lists = names.iter().any(|k| matches!(spec.get(k), Some(Node::Arr(_))));
+            let lists = names
+                .iter()
+                .any(|k| matches!(spec.get(k), Some(Node::Arr(_))));
             cpp.extend([String::new(), "#pragma once".into(), String::new()]);
             if lists {
                 cpp.push("#include <array>".into());
@@ -758,7 +994,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 _ => &[],
             };
             for name in &names {
-                cpp_items(name, spec.get(name).ok_or("a name it listed")?, "f64", enums.contains(&&**name), &mut cpp)?;
+                cpp_items(
+                    name,
+                    spec.get(name).ok_or("a name it listed")?,
+                    "f64",
+                    enums.contains(&&**name),
+                    &mut cpp,
+                )?;
             }
             cpp.extend([String::new(), format!("}} // namespace {namespace}")]);
             outputs.push(Output::new(cpp_path, file(&cpp)));
@@ -769,7 +1011,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
 /// A list of names is a `string_view` array, and with `numbered` also an
 /// enum class of them numbered by place; any other non-number is refused.
-fn cpp_items(name: &str, n: &Node, ty: &str, numbered: bool, out: &mut Vec<String>) -> Result<(), String> {
+fn cpp_items(
+    name: &str,
+    n: &Node,
+    ty: &str,
+    numbered: bool,
+    out: &mut Vec<String>,
+) -> Result<(), String> {
     let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
     out.push(String::new());
     if let Some(doc) = doc {
@@ -785,23 +1033,51 @@ fn cpp_items(name: &str, n: &Node, ty: &str, numbered: bool, out: &mut Vec<Strin
         return Ok(());
     }
     if let Node::Arr(list) = if n.is_wrapper() { n.value() } else { n } {
-        let names = list.iter().map(|v| v.str().ok_or(format!("{name}: a C++ list takes names only"))).collect::<Result<Vec<_>, _>>()?;
+        let names = list
+            .iter()
+            .map(|v| {
+                v.str()
+                    .ok_or(format!("{name}: a C++ list takes names only"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         if numbered {
             out.push(format!("enum class {} : std::uint8_t {{", enum_name(name)));
-            out.extend(names.iter().enumerate().map(|(k, v)| format!("    {} = {k},", cpp_ident(v))));
+            out.extend(
+                names
+                    .iter()
+                    .enumerate()
+                    .map(|(k, v)| format!("    {} = {k},", cpp_ident(v))),
+            );
             out.extend(["};".to_string(), String::new()]);
         }
         let quoted: Vec<String> = names.iter().map(|v| json_str(v)).collect();
-        out.push(format!("inline constexpr std::array<std::string_view, {}> {name}{{{}}};", names.len(), quoted.join(", ")));
+        out.push(format!(
+            "inline constexpr std::array<std::string_view, {}> {name}{{{}}};",
+            names.len(),
+            quoted.join(", ")
+        ));
         return Ok(());
     }
-    let (value, t) = if n.is_wrapper() { (n.value(), type_of(n, ty)) } else { (n, ty) };
-    let number = value.num().ok_or(format!("{name}: a C++ header takes numbers only"))?;
+    let (value, t) = if n.is_wrapper() {
+        (n.value(), type_of(n, ty))
+    } else {
+        (n, ty)
+    };
+    let number = value
+        .num()
+        .ok_or(format!("{name}: a C++ header takes numbers only"))?;
     let (ty, suffix) = match t {
         "u32" => ("std::uint32_t", "u"),
         "i32" => ("std::int32_t", ""),
-        other => return Err(format!("{name}: a C++ header takes u32 and i32, not {other}")),
+        other => {
+            return Err(format!(
+                "{name}: a C++ header takes u32 and i32, not {other}"
+            ))
+        }
     };
-    out.push(format!("inline constexpr {ty} {name} = {}{suffix};", js_num(number)));
+    out.push(format!(
+        "inline constexpr {ty} {name} = {}{suffix};",
+        js_num(number)
+    ));
     Ok(())
 }

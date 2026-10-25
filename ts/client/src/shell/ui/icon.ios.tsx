@@ -12,14 +12,33 @@ export type { GlyphName, IconProps };
 const symbol = (glyph: GlyphName): SymbolViewProps["name"] => glyph;
 
 export function Icon({ glyph, size, color, weight = "regular" }: IconProps) {
-  return <SymbolView name={symbol(glyph)} size={size} tintColor={color} weight={weight} resizeMode="scaleAspectFit" />;
+  return (
+    <SymbolView
+      name={symbol(glyph)}
+      size={size}
+      tintColor={color}
+      weight={weight}
+      resizeMode="scaleAspectFit"
+    />
+  );
 }
 
 /** The system indicator comes in one size, 20 pt, so it is scaled to the box. */
 export function Spinner({ size, color }: { size: f64; color: string }) {
   return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-      <ActivityIndicator size="small" color={color} style={{ transform: [{ scale: size / 20 }] }} />
+    <View
+      style={{
+        width: size,
+        height: size,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <ActivityIndicator
+        size="small"
+        color={color}
+        style={{ transform: [{ scale: size / 20 }] }}
+      />
     </View>
   );
 }

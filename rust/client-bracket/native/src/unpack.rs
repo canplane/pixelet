@@ -25,14 +25,19 @@ pub fn decode(mut body: &[u8]) -> Option<Vec<u8>> {
     while !body.is_empty() {
         match frames.init(&mut body) {
             Ok(()) => {}
-            Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame { length, .. })) => {
+            Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
+                length,
+                ..
+            })) => {
                 body = body.get(length as usize..)?;
                 continue;
             }
             Err(_) => return None,
         }
         while !frames.is_finished() {
-            frames.decode_blocks(&mut body, BlockDecodingStrategy::UptoBytes(DRAIN_BYTES)).ok()?;
+            frames
+                .decode_blocks(&mut body, BlockDecodingStrategy::UptoBytes(DRAIN_BYTES))
+                .ok()?;
             frames.collect_to_writer(&mut raw).ok()?;
         }
         frames.collect_to_writer(&mut raw).ok()?;
@@ -47,9 +52,16 @@ pub fn decode(mut body: &[u8]) -> Option<Vec<u8>> {
 /// # Safety
 /// `src` points at `len` readable bytes, `out` and `out_len` at writable words.
 #[no_mangle]
-pub unsafe extern "C" fn pxl_unpack(src: *const u8, len: usize, out: *mut *mut u8, out_len: *mut usize) -> i32 {
+pub unsafe extern "C" fn pxl_unpack(
+    src: *const u8,
+    len: usize,
+    out: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
     // SAFETY: the caller's bytes.
-    let Some(raw) = decode(unsafe { core::slice::from_raw_parts(src, len) }) else { return -1 };
+    let Some(raw) = decode(unsafe { core::slice::from_raw_parts(src, len) }) else {
+        return -1;
+    };
     let raw = Box::into_raw(raw.into_boxed_slice());
     // SAFETY: the caller's words.
     unsafe { (*out, *out_len) = (raw.cast::<u8>(), raw.len()) };

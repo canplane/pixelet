@@ -24,17 +24,29 @@ const ZSTD = "zstd";
  * is decoded natively off this thread (PlatformModule `unpack`), as a browser
  * decodes its own, so no reader sees an encoding; a failed decode is a
  * transport failure. */
-export async function get(route: string, signal?: AbortSignal): Promise<Response> {
+export async function get(
+  route: string,
+  signal?: AbortSignal,
+): Promise<Response> {
   try {
-    const res = await fetch(`${url}${route}`, { signal, headers: { "accept-encoding": ZSTD } });
+    const res = await fetch(`${url}${route}`, {
+      signal,
+      headers: { "accept-encoding": ZSTD },
+    });
     if (res.headers.get("content-encoding") !== ZSTD) return res;
     const body = await PLATFORM.unpack(new Uint8Array(await res.arrayBuffer()));
     const headers = new Headers(res.headers);
     headers.delete("content-encoding");
     headers.delete("content-length");
-    return new Response(body, { status: res.status, statusText: res.statusText, headers });
+    return new Response(body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
   } catch (err) {
     if (signal?.aborted) throw err;
-    throw new TypeError(err instanceof Error ? err.message : String(err), { cause: err });
+    throw new TypeError(err instanceof Error ? err.message : String(err), {
+      cause: err,
+    });
   }
 }

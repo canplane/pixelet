@@ -181,12 +181,19 @@ impl Segment {
     /// Its words, from the wire's integers: its two points in eighths, tops in
     /// leaf cells, and its bytes — width in eighths, kind, `flags` (`flags`),
     /// clear.
-    pub fn words([a, b]: [[i16; 2]; 2], tops: [i16; 2], [width, kind, flags, clear]: [u8; 4]) -> [u32; SEGMENT_WORDS] {
+    pub fn words(
+        [a, b]: [[i16; 2]; 2],
+        tops: [i16; 2],
+        [width, kind, flags, clear]: [u8; 4],
+    ) -> [u32; SEGMENT_WORDS] {
         [
             pair_word(a[0], a[1]),
             pair_word(b[0], b[1]),
             pair_word(tops[0], tops[1]),
-            u32::from(width) | u32::from(kind) << 8 | u32::from(flags) << 16 | u32::from(clear) << 24,
+            u32::from(width)
+                | u32::from(kind) << 8
+                | u32::from(flags) << 16
+                | u32::from(clear) << 24,
         ]
     }
 }
@@ -230,7 +237,10 @@ pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
 pub fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, Stations) {
     let st = Stations {
         step: [f32::from_bits(w[1]), f32::from_bits(w[2])],
-        phase: [[f32::from_bits(w[3]), f32::from_bits(w[4])], [f32::from_bits(w[5]), f32::from_bits(w[6])]],
+        phase: [
+            [f32::from_bits(w[3]), f32::from_bits(w[4])],
+            [f32::from_bits(w[5]), f32::from_bits(w[6])],
+        ],
         leaf: f32::from_bits(w[7]),
     };
     (f32::from_bits(w[0]), st)
@@ -252,7 +262,15 @@ fn bent(half: i32) -> ([i32; 3], u32) {
 /// laid out in leaf cells: a column more than two leaf cells wide holds none,
 /// as it is under half of it; one of two holds it where one of its four leaf
 /// cells does.
-pub fn pier_covers(st: &Stations, width: f32, a: [f32; 2], d: [f32; 2], near: [f32; 2], at: [f32; 2], side: f32) -> bool {
+pub fn pier_covers(
+    st: &Stations,
+    width: f32,
+    a: [f32; 2],
+    d: [f32; 2],
+    near: [f32; 2],
+    at: [f32; 2],
+    side: f32,
+) -> bool {
     let k = if d[0].abs() >= d[1].abs() { 0 } else { 1 };
     let leaves = side * st.leaf;
     if d[k] == 0.0 || leaves > 2.0 {
@@ -272,19 +290,27 @@ pub fn pier_covers(st: &Stations, width: f32, a: [f32; 2], d: [f32; 2], near: [f
     // A leaf cell, and the centers of the leaf cells the column holds: its
     // own where it is one or finer, else its four.
     let leaf = 1.0 / st.leaf;
-    let (off, m) = if leaves >= 2.0 { (leaf / 2.0, 4) } else { (0.0, 1) };
+    let (off, m) = if leaves >= 2.0 {
+        (leaf / 2.0, 4)
+    } else {
+        (0.0, 1)
+    };
     let (sides, n) = bent(half);
     let mut covered = false;
     let mut j = 0;
     while j < m {
-        let p = [at[0] + if j & 1 == 0 { -off } else { off }, at[1] + if j & 2 == 0 { -off } else { off }];
+        let p = [
+            at[0] + if j & 1 == 0 { -off } else { off },
+            at[1] + if j & 2 == 0 { -off } else { off },
+        ];
         let rel = [p[0] - foot[0], p[1] - foot[1]];
         let along = (rel[0] * dir[0] + rel[1] * dir[1]).abs();
         let across = rel[0] * dir[1] - rel[1] * dir[0];
         // an edge column stands a leaf cell in from the edge
         let mut i = 0;
         while i < n as usize {
-            covered |= along <= leaf / 2.0 && (across - (sides[i] * (half - 1).max(0)) as f32 * leaf).abs() <= leaf / 2.0;
+            covered |= along <= leaf / 2.0
+                && (across - (sides[i] * (half - 1).max(0)) as f32 * leaf).abs() <= leaf / 2.0;
             i += 1;
         }
         j += 1;
@@ -334,11 +360,18 @@ fn surface(s: &Segment, t: f32) -> f32 {
 pub fn on_way(a: [f32; 2], b: [f32; 2], width: f32, ends: [bool; 2], at: [f32; 2]) -> (f32, bool) {
     let d = [b[0] - a[0], b[1] - a[1]];
     let len2 = d[0] * d[0] + d[1] * d[1];
-    let t = if len2 > 0.0 { ((at[0] - a[0]) * d[0] + (at[1] - a[1]) * d[1]) / len2 } else { 0.0 };
+    let t = if len2 > 0.0 {
+        ((at[0] - a[0]) * d[0] + (at[1] - a[1]) * d[1]) / len2
+    } else {
+        0.0
+    };
     let cut = (ends[0] && t < 0.0) || (ends[1] && t > 1.0);
     let t = t.clamp(0.0, 1.0);
     let near = [a[0] + d[0] * t, a[1] + d[1] * t];
-    (t, !cut && covers(width, length([at[0] - near[0], at[1] - near[1]])))
+    (
+        t,
+        !cut && covers(width, length([at[0] - near[0], at[1] - near[1]])),
+    )
 }
 
 /// What segment `s` is over the column of `side` cells about `at`, `NONE`
@@ -355,7 +388,11 @@ pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Crossing
     let len2 = d[0] * d[0] + d[1] * d[1];
     let near = [a[0] + d[0] * t, a[1] + d[1] * t];
     // the column's square spans this much of the segment either side of `t`
-    let reach = if len2 > 0.0 { side / 2.0 * (d[0].abs() + d[1].abs()) / len2 } else { 0.0 };
+    let reach = if len2 > 0.0 {
+        side / 2.0 * (d[0].abs() + d[1].abs()) / len2
+    } else {
+        0.0
+    };
     let (z0, z1) = (surface(s, t - reach), surface(s, t + reach));
     Crossing {
         low: z0.min(z1),
@@ -396,7 +433,11 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
     match c.form {
         BRIDGE => {
             let lo = low - slab_depth(per_m);
-            let pier = if c.pier == 1 && lo > ground { [ground, lo] } else { none };
+            let pier = if c.pier == 1 && lo > ground {
+                [ground, lo]
+            } else {
+                none
+            };
             Occupies {
                 what: Occupy::Over,
                 span: [lo, top],
@@ -505,7 +546,18 @@ pub fn filled(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
         return [lo << -d, (hi << -d) - 1];
     }
     let (first, last) = (lo >> d, (hi - 1) >> d);
-    [if fills(cell, [lo, hi], first) { first } else { first + 1 }, if fills(cell, [lo, hi], last) { last } else { last - 1 }]
+    [
+        if fills(cell, [lo, hi], first) {
+            first
+        } else {
+            first + 1
+        },
+        if fills(cell, [lo, hi], last) {
+            last
+        } else {
+            last - 1
+        },
+    ]
 }
 
 /// Whether the leaf cells `[lo, hi)` fill any block of the grid's zoom.
@@ -528,7 +580,13 @@ fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
 /// grade or over a deck `LOWER_DECK_GAP_M` or more under its own (Arnis
 /// `place_pillar`, `support_blocked`), none where the terrain gives no surface
 /// to stand on; water stops none. Empty where none.
-fn pier_stands<C: Columns>(cols: &C, c: [i32; 2], pier: [i32; 2], ground: i32, per_m: f32) -> [i32; 2] {
+fn pier_stands<C: Columns>(
+    cols: &C,
+    c: [i32; 2],
+    pier: [i32; 2],
+    ground: i32,
+    per_m: f32,
+) -> [i32; 2] {
     let (none, look) = ([0, 0], cols.look(c));
     if !Ground::grounds(look) || Ground::transports(look) {
         return none;
@@ -593,7 +651,11 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) 
         Occupy::Over => Writes {
             run: o.span,
             value: x.kind,
-            pier: if empty(o.pier) { o.pier } else { pier_stands(cols, c, o.pier, face, per_m) },
+            pier: if empty(o.pier) {
+                o.pier
+            } else {
+                pier_stands(cols, c, o.pier, face, per_m)
+            },
         },
         // An approach's look, laid into the cells by the bake (pxl-spec bake/way.rs `lay`).
         Occupy::Grade => Writes::NONE,
@@ -750,7 +812,10 @@ pub fn run_word(lo: i32, value: u32) -> u32 {
 /// A run's first block and its value; a value of no way is `NOTHING`.
 pub fn run_of(w: u32) -> (i32, u32) {
     let value = w >> 16;
-    ((w << 16) as i32 >> 16, if value == 0xffff { NOTHING } else { value })
+    (
+        (w << 16) as i32 >> 16,
+        if value == 0xffff { NOTHING } else { value },
+    )
 }
 
 /// The first block past `z` where one of a column's spans' blocks

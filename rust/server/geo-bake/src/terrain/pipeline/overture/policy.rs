@@ -51,7 +51,17 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
 
 /// Carto's `building-major-fill`: a place of worship, a terminal or a station.
 /// Overture's `religious` subtype with no class is `amenity=place_of_worship`.
-const MAJOR_BUILDING_CLASSES: [&str; 9] = ["cathedral", "chapel", "church", "mosque", "religious", "shrine", "synagogue", "temple", "train_station"];
+const MAJOR_BUILDING_CLASSES: [&str; 9] = [
+    "cathedral",
+    "chapel",
+    "church",
+    "mosque",
+    "religious",
+    "shrine",
+    "synagogue",
+    "temple",
+    "train_station",
+];
 
 /// What a Base row paints: its look, Carto's layer, and Carto's `feature`.
 type Paint = (GroundId, Layer, &'static str);
@@ -142,17 +152,28 @@ pub const LAND: &[(&str, Paint)] = {
 };
 
 fn land_paint(class: &str) -> Option<Paint> {
-    LAND.iter().find(|(c, _)| *c == class).map(|&(_, paint)| paint)
+    LAND.iter()
+        .find(|(c, _)| *c == class)
+        .map(|&(_, paint)| paint)
 }
 
 /// `water-lines`' waterways, each its fill's width at z16 (`water.mss`: a
 /// canal is a stream by `@canal-scale-factor`, a ditch and a drain take z14's
 /// until z17); a line of another class has no fill.
-const WATERWAYS: [(&str, f64); 5] = [("river", 8.0), ("canal", 4.2), ("stream", 3.0), ("ditch", 2.0), ("drain", 2.0)];
+const WATERWAYS: [(&str, f64); 5] = [
+    ("river", 8.0),
+    ("canal", 4.2),
+    ("stream", 3.0),
+    ("ditch", 2.0),
+    ("drain", 2.0),
+];
 
 /// A waterway line's width in u, if Carto draws one of its class.
 pub fn waterway_width(class: &str) -> Option<f64> {
-    WATERWAYS.iter().find(|(c, _)| *c == class).map(|(_, px)| carto_u(*px))
+    WATERWAYS
+        .iter()
+        .find(|(c, _)| *c == class)
+        .map(|(_, px)| carto_u(*px))
 }
 
 /// Water areas but what Carto draws as landcover in water's color or as a
@@ -177,17 +198,44 @@ pub const INFRASTRUCTURE: &[(&str, Paint)] = {
     use Layer::{Landcover as L, RoadArea};
     &[
         ("parking", (g::parking, L, "amenity_parking")),
-        ("bicycle_parking", (g::parking, L, "amenity_bicycle_parking")),
-        ("motorcycle_parking", (g::parking, L, "amenity_motorcycle_parking")),
+        (
+            "bicycle_parking",
+            (g::parking, L, "amenity_bicycle_parking"),
+        ),
+        (
+            "motorcycle_parking",
+            (g::parking, L, "amenity_motorcycle_parking"),
+        ),
         ("apron", (g::apron, L, "aeroway_apron")),
         ("airport", (g::transportation_area, L, "aeroway_aerodrome")),
-        ("international_airport", (g::transportation_area, L, "aeroway_aerodrome")),
-        ("municipal_airport", (g::transportation_area, L, "aeroway_aerodrome")),
-        ("regional_airport", (g::transportation_area, L, "aeroway_aerodrome")),
-        ("private_airport", (g::transportation_area, L, "aeroway_aerodrome")),
-        ("military_airport", (g::transportation_area, L, "aeroway_aerodrome")),
-        ("bus_station", (g::transportation_area, L, "amenity_bus_station")),
-        ("ferry_terminal", (g::transportation_area, L, "amenity_ferry_terminal")),
+        (
+            "international_airport",
+            (g::transportation_area, L, "aeroway_aerodrome"),
+        ),
+        (
+            "municipal_airport",
+            (g::transportation_area, L, "aeroway_aerodrome"),
+        ),
+        (
+            "regional_airport",
+            (g::transportation_area, L, "aeroway_aerodrome"),
+        ),
+        (
+            "private_airport",
+            (g::transportation_area, L, "aeroway_aerodrome"),
+        ),
+        (
+            "military_airport",
+            (g::transportation_area, L, "aeroway_aerodrome"),
+        ),
+        (
+            "bus_station",
+            (g::transportation_area, L, "amenity_bus_station"),
+        ),
+        (
+            "ferry_terminal",
+            (g::transportation_area, L, "amenity_ferry_terminal"),
+        ),
         ("railway_station", (g::industrial, L, "railway_station")),
         ("subway_station", (g::industrial, L, "railway_station")),
         ("substation", (g::power, L, "power_substation")),
@@ -197,12 +245,24 @@ pub const INFRASTRUCTURE: &[(&str, Paint)] = {
         ("runway", (g::aeroway, RoadArea, "aeroway_runway")),
         ("taxiway", (g::aeroway, RoadArea, "aeroway_taxiway")),
         ("helipad", (g::aeroway, RoadArea, "aeroway_helipad")),
-        ("seaplane_airport", (g::transportation_area, L, "aeroway_aerodrome")),
+        (
+            "seaplane_airport",
+            (g::transportation_area, L, "aeroway_aerodrome"),
+        ),
         ("dam", (g::dam, Layer::WaterBarrier, "waterway_dam")),
-        ("weir", (g::breakwater, Layer::WaterBarrier, "waterway_weir")),
-        ("breakwater", (g::breakwater, Layer::Pier, "man_made_breakwater")),
+        (
+            "weir",
+            (g::breakwater, Layer::WaterBarrier, "waterway_weir"),
+        ),
+        (
+            "breakwater",
+            (g::breakwater, Layer::Pier, "man_made_breakwater"),
+        ),
         ("pier", (g::land, Layer::Pier, "man_made_pier")),
-        ("cutline", (g::grass, Layer::LandcoverLine, "man_made_cutline")),
+        (
+            "cutline",
+            (g::grass, Layer::LandcoverLine, "man_made_cutline"),
+        ),
     ]
 };
 
@@ -214,7 +274,15 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
     if closed && LINE_ONLY.contains(&class) {
         return None;
     }
-    Some((look, if look == g::aeroway && !closed { Layer::Aeroway } else { layer }, feature))
+    Some((
+        look,
+        if look == g::aeroway && !closed {
+            Layer::Aeroway
+        } else {
+            layer
+        },
+        feature,
+    ))
 }
 
 /// A runway's, the widest line Carto draws at z16, in its pixels.
@@ -243,10 +311,21 @@ fn barrier_order(class: &str, closed: bool) -> i64 {
 }
 
 pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
-    let kind = row.class.as_deref().or(row.subtype.as_deref()).unwrap_or("");
-    let look = if MAJOR_BUILDING_CLASSES.contains(&kind) { g::building_major } else { g::building };
+    let kind = row
+        .class
+        .as_deref()
+        .or(row.subtype.as_deref())
+        .unwrap_or("");
+    let look = if MAJOR_BUILDING_CLASSES.contains(&kind) {
+        g::building_major
+    } else {
+        g::building
+    };
     let rank = Rank::by_area(Layer::Building, row.way_area, "", &row.gers_id);
-    wkb_to_geometries(&row.geom_wkb).iter().filter_map(|geom| Feature::of(geom, tile_min, look, rank.clone())).collect()
+    wkb_to_geometries(&row.geom_wkb)
+        .iter()
+        .filter_map(|geom| Feature::of(geom, tile_min, look, rank.clone()))
+        .collect()
 }
 
 /// What of a segment's part the ground shows: none of a tunnel or an indoor
@@ -255,7 +334,11 @@ pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
 /// road already shows; and not where a line draws it, cut square there, so
 /// the paint ends where the line begins.
 pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
-    if row.subtype == "water" || row.tags.tunnel || row.tags.indoor || row.tags.role == Role::Crossing {
+    if row.subtype == "water"
+        || row.tags.tunnel
+        || row.tags.indoor
+        || row.tags.role == Role::Crossing
+    {
         return Vec::new();
     }
     // the lines' ranges are the segment's; in the part's own
@@ -269,7 +352,12 @@ pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
         0.0,
     );
     let look = segment_type(&row.subtype, row.class.as_deref());
-    let rank = Rank::new(Layer::Road, paint_order(&row.subtype, row.class.as_deref(), row.tags.role), "", &row.gers_id);
+    let rank = Rank::new(
+        Layer::Road,
+        paint_order(&row.subtype, row.class.as_deref(), row.tags.role),
+        "",
+        &row.gers_id,
+    );
     let paint = |points: &[G3857], [a, b]: [f64; 2]| {
         let mut f = Feature::line(points, tile_min, look, rank.clone())?;
         f.width = width_u(&row.subtype, row.class.as_deref(), row.tags.role);
@@ -280,13 +368,22 @@ pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
     if lined.is_empty() {
         return paint(&row.points, [0.0, 1.0]).into_iter().collect();
     }
-    let Some(line) = Line::of(&row.points) else { return Vec::new() };
-    uncovered(&lined).into_iter().filter_map(|r| paint(&line.between(r[0], r[1]), r)).collect()
+    let Some(line) = Line::of(&row.points) else {
+        return Vec::new();
+    };
+    uncovered(&lined)
+        .into_iter()
+        .filter_map(|r| paint(&line.between(r[0], r[1]), r))
+        .collect()
 }
 
 /// Every Base row with a Carto fill; an area layer paints larger areas first.
 pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
-    let (source, subtype, class) = (row.source.as_str(), row.subtype.as_deref().unwrap_or(""), row.class.as_deref().unwrap_or(""));
+    let (source, subtype, class) = (
+        row.source.as_str(),
+        row.subtype.as_deref().unwrap_or(""),
+        row.class.as_deref().unwrap_or(""),
+    );
     wkb_to_geometries(&row.geom_wkb)
         .iter()
         .filter_map(|geom| {
@@ -302,8 +399,12 @@ pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
             }?;
             let rank = match layer {
                 // Carto's `aeroways` puts a runway over a taxiway.
-                Layer::Aeroway => Rank::new(layer, i64::from(class == "runway"), feature, &row.gers_id),
-                Layer::WaterBarrier | Layer::Pier => Rank::new(layer, barrier_order(class, closed), feature, &row.gers_id),
+                Layer::Aeroway => {
+                    Rank::new(layer, i64::from(class == "runway"), feature, &row.gers_id)
+                }
+                Layer::WaterBarrier | Layer::Pier => {
+                    Rank::new(layer, barrier_order(class, closed), feature, &row.gers_id)
+                }
                 _ => Rank::by_area(layer, row.way_area, feature, &row.gers_id),
             };
             let mut f = Feature::of(geom, tile_min, look, rank)?;

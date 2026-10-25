@@ -26,15 +26,25 @@ export function SensorStatus() {
 
   // Faded as one layer with its halo: faded apart, the halo greyed the glyph.
   const icon = (glyph: GlyphName, status: DevicePoseStatus) => (
-    <View needsOffscreenAlphaCompositing style={{ opacity: LOOK[status].presence }}>
-      <HaloIcon glyph={glyph} size={12} color={LOOK[status].color} struck={status === DevicePoseStatus.Error} />
+    <View
+      needsOffscreenAlphaCompositing
+      style={{ opacity: LOOK[status].presence }}
+    >
+      <HaloIcon
+        glyph={glyph}
+        size={12}
+        color={LOOK[status].color}
+        struck={status === DevicePoseStatus.Error}
+      />
     </View>
   );
 
   return (
     <View style={styles.row}>
       {icon("location", location)}
-      {bracket.device.handheld && orientation !== DevicePoseStatus.Unavailable && icon("location.north.circle", orientation)}
+      {bracket.device.handheld &&
+        orientation !== DevicePoseStatus.Unavailable &&
+        icon("location.north.circle", orientation)}
     </View>
   );
 }

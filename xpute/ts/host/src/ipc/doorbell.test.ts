@@ -15,7 +15,13 @@ Deno.test("doorbell - a call from inside a listener is refused and leaves nothin
   const slots_at = cq_at + ring_bytes(CAP);
   const mem = new ArrayBuffer(slots_at + 2 * slots_bytes(CAP, SLOT));
   const sq = Ring.init(mem, sq_at, CAP, slots_at, SLOT);
-  const cq = Ring.init(mem, cq_at, CAP, slots_at + slots_bytes(CAP, SLOT), SLOT);
+  const cq = Ring.init(
+    mem,
+    cq_at,
+    CAP,
+    slots_at + slots_bytes(CAP, SLOT),
+    SLOT,
+  );
 
   // A guest whose every turn raises one signal.
   const door = new Doorbell(mem, sq_at, cq_at, () => {

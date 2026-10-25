@@ -28,7 +28,9 @@ fn brand() -> PathBuf {
 }
 
 fn open(name: &str) -> Result<RgbaImage, String> {
-    Ok(image::open(brand().join(name)).map_err(|e| format!("{name}: {e}"))?.to_rgba8())
+    Ok(image::open(brand().join(name))
+        .map_err(|e| format!("{name}: {e}"))?
+        .to_rgba8())
 }
 
 fn write(out: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -38,13 +40,17 @@ fn write(out: &Path, bytes: &[u8]) -> Result<(), String> {
 
 fn png_bytes(img: &RgbaImage) -> Result<Vec<u8>, String> {
     let mut out = Cursor::new(Vec::new());
-    img.write_to(&mut out, ImageFormat::Png).map_err(|e| e.to_string())?;
+    img.write_to(&mut out, ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
     Ok(out.into_inner())
 }
 
 fn opaque_png_bytes(img: &RgbaImage) -> Result<Vec<u8>, String> {
     let mut out = Cursor::new(Vec::new());
-    DynamicImage::ImageRgba8(img.clone()).to_rgb8().write_to(&mut out, ImageFormat::Png).map_err(|e| e.to_string())?;
+    DynamicImage::ImageRgba8(img.clone())
+        .to_rgb8()
+        .write_to(&mut out, ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
     Ok(out.into_inner())
 }
 
@@ -56,7 +62,11 @@ fn resize(img: &RgbaImage, w: u32, h: u32) -> RgbaImage {
 /// `threshold`; untrimmed, a 16-pixel favicon drew a 12-pixel cube.
 fn trim(img: &RgbaImage, threshold: u8) -> RgbaImage {
     let bg = *img.get_pixel(0, 0);
-    let differs = |p: &Rgba<u8>| p.0.iter().zip(bg.0.iter()).any(|(a, b)| a.abs_diff(*b) > threshold);
+    let differs = |p: &Rgba<u8>| {
+        p.0.iter()
+            .zip(bg.0.iter())
+            .any(|(a, b)| a.abs_diff(*b) > threshold)
+    };
 
     let (mut x0, mut y0, mut x1, mut y1) = (u32::MAX, u32::MAX, 0u32, 0u32);
     for (x, y, p) in img.enumerate_pixels() {
@@ -82,20 +92,31 @@ fn symbol_icon(symbol: &RgbaImage, size: u32, pad: f64) -> RgbaImage {
         ((symbol.height() as f64 * scale).round_ties_even() as u32).max(1),
     );
     let mut out = RgbaImage::from_pixel(size, size, CLEAR);
-    image::imageops::overlay(&mut out, &resize(symbol, w, h), ((size - w) / 2) as i64, ((size - h) / 2) as i64);
+    image::imageops::overlay(
+        &mut out,
+        &resize(symbol, w, h),
+        ((size - w) / 2) as i64,
+        ((size - h) / 2) as i64,
+    );
     out
 }
 
 fn attribute<'a>(svg: &'a str, name: &str) -> Result<&'a str, String> {
     let key = format!(" {name}=\"");
-    let at = svg.find(&key).ok_or(format!("symbol-mono.svg: no {name}"))? + key.len();
-    let len = svg[at..].find('"').ok_or(format!("symbol-mono.svg: {name} is not closed"))?;
+    let at = svg
+        .find(&key)
+        .ok_or(format!("symbol-mono.svg: no {name}"))?
+        + key.len();
+    let len = svg[at..]
+        .find('"')
+        .ok_or(format!("symbol-mono.svg: {name} is not closed"))?;
     Ok(&svg[at..at + len])
 }
 
 /// One even-odd path is all `BrandSymbol` draws; a source that is more is refused.
 fn symbol_module() -> Result<String, String> {
-    let svg = std::fs::read_to_string(brand().join("symbol-mono.svg")).map_err(|e| format!("symbol-mono.svg: {e}"))?;
+    let svg = std::fs::read_to_string(brand().join("symbol-mono.svg"))
+        .map_err(|e| format!("symbol-mono.svg: {e}"))?;
     if svg.matches("<path").count() != 1 || attribute(&svg, "fill-rule")? != "evenodd" {
         return Err("symbol-mono.svg: one path, filled even-odd, is what the shell draws".into());
     }
@@ -122,17 +143,39 @@ fn run() -> Result<(), String> {
     let icon = open("icon.png")?;
     let preview = open("og-image.png")?;
 
-    write(&out.join("apple-touch-icon.png"), &opaque_png_bytes(&resize(&icon, 180, 180))?)?;
-    write(&out.join("web-app-manifest-512x512-maskable.png"), &opaque_png_bytes(&resize(&icon, 512, 512))?)?;
-    write(&out.join("web-app-manifest-192x192.png"), &png_bytes(&symbol_icon(&symbol, 192, 0.06))?)?;
-    write(&out.join("web-app-manifest-512x512.png"), &png_bytes(&symbol_icon(&symbol, 512, 0.06))?)?;
+    write(
+        &out.join("apple-touch-icon.png"),
+        &opaque_png_bytes(&resize(&icon, 180, 180))?,
+    )?;
+    write(
+        &out.join("web-app-manifest-512x512-maskable.png"),
+        &opaque_png_bytes(&resize(&icon, 512, 512))?,
+    )?;
+    write(
+        &out.join("web-app-manifest-192x192.png"),
+        &png_bytes(&symbol_icon(&symbol, 192, 0.06))?,
+    )?;
+    write(
+        &out.join("web-app-manifest-512x512.png"),
+        &png_bytes(&symbol_icon(&symbol, 512, 0.06))?,
+    )?;
 
     let frames = [16, 32, 48]
         .iter()
-        .map(|&s| IcoFrame::as_png(symbol_icon(&symbol, s, 0.0).as_raw(), s, s, ExtendedColorType::Rgba8).map_err(|e| e.to_string()))
+        .map(|&s| {
+            IcoFrame::as_png(
+                symbol_icon(&symbol, s, 0.0).as_raw(),
+                s,
+                s,
+                ExtendedColorType::Rgba8,
+            )
+            .map_err(|e| e.to_string())
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let mut ico = Vec::new();
-    IcoEncoder::new(&mut ico).encode_images(&frames).map_err(|e| e.to_string())?;
+    IcoEncoder::new(&mut ico)
+        .encode_images(&frames)
+        .map_err(|e| e.to_string())?;
     write(&out.join("favicon.ico"), &ico)?;
 
     let rgb = DynamicImage::ImageRgba8(preview).to_rgb8();
@@ -140,16 +183,28 @@ fn run() -> Result<(), String> {
     enc.set_size(rgb.width() as usize, rgb.height() as usize);
     enc.set_quality(88.0);
     let mut started = enc.start_compress(Vec::new()).map_err(|e| e.to_string())?;
-    started.write_scanlines(rgb.as_raw()).map_err(|e| e.to_string())?;
-    write(&out.join("og-image.jpg"), &started.finish().map_err(|e| e.to_string())?)?;
+    started
+        .write_scanlines(rgb.as_raw())
+        .map_err(|e| e.to_string())?;
+    write(
+        &out.join("og-image.jpg"),
+        &started.finish().map_err(|e| e.to_string())?,
+    )?;
 
     let symbol_path = root().join("ts/client/src/shell/setting/info/symbol-path.ts");
     let module = symbol_module()?;
     if std::env::args().any(|a| a == "--symbol") {
         write(&symbol_path, module.as_bytes())?;
-        println!("[brand] icons and og-image written to {}, the symbol's outline to {}", out.display(), symbol_path.display());
+        println!(
+            "[brand] icons and og-image written to {}, the symbol's outline to {}",
+            out.display(),
+            symbol_path.display()
+        );
     } else if std::fs::read_to_string(&symbol_path).ok().as_deref() != Some(module.as_str()) {
-        return Err(format!("{} is not what symbol-mono.svg writes: run `make render-brand`", symbol_path.display()));
+        return Err(format!(
+            "{} is not what symbol-mono.svg writes: run `make render-brand`",
+            symbol_path.display()
+        ));
     } else {
         println!("[brand] icons and og-image written to {}", out.display());
     }

@@ -29,7 +29,9 @@ pub struct ModelHandle {
     pub scale: f32,
 }
 
-const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+const IDENTITY: [f32; 16] = [
+    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+];
 
 /// A model as registered, or as the heap refused it room.
 type Registration = Result<ModelHandle, Refused>;
@@ -47,7 +49,9 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
     let file = load.number();
     let key = height_u.map(f64::to_bits);
     let registered = REGISTERED.get(Vec::new);
-    let at = registered.iter().position(|(a, h, _)| *a == file && *h == key);
+    let at = registered
+        .iter()
+        .position(|(a, h, _)| *a == file && *h == key);
     match at.map(|at| &registered[at].2) {
         Some(Ok(handle)) => return Some(handle.clone()),
         Some(Err(refused)) if !refused.over() => return None,
@@ -68,7 +72,11 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
 pub fn registered(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
     let file = load_of(slot)?.number();
     let key = height_u.map(f64::to_bits);
-    REGISTERED.get(Vec::new).iter().find(|(a, h, _)| *a == file && *h == key).and_then(|(_, _, entry)| entry.clone().ok())
+    REGISTERED
+        .get(Vec::new)
+        .iter()
+        .find(|(a, h, _)| *a == file && *h == key)
+        .and_then(|(_, _, entry)| entry.clone().ok())
 }
 
 /// At its own size when `height_u` is None; None when it has no mesh or the
@@ -76,7 +84,10 @@ pub fn registered(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
 fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
     let order = scene_nodes(gltf);
     let worlds = world_matrices(gltf);
-    let skinned = !gltf.skins.is_empty() && order.iter().any(|&n| gltf.nodes[n as usize].skin >= 0 && gltf.nodes[n as usize].mesh >= 0);
+    let skinned = !gltf.skins.is_empty()
+        && order
+            .iter()
+            .any(|&n| gltf.nodes[n as usize].skin >= 0 && gltf.nodes[n as usize].mesh >= 0);
     let still = !skinned && gltf.animations.is_empty();
 
     let mut joint_nodes: Vec<u32> = Vec::new();
@@ -138,17 +149,35 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
             let count = prim.position.len() / 3;
             // A skinned vertex is already in the skin's space; an unskinned one is
             // placed by its node's joint.
-            let remap: Option<Vec<u32>> = (skinned && node.skin >= 0).then(|| gltf.skins[node.skin as usize].joints.iter().map(|j| *joint_of.get(j).unwrap_or(&0)).collect());
+            let remap: Option<Vec<u32>> = (skinned && node.skin >= 0).then(|| {
+                gltf.skins[node.skin as usize]
+                    .joints
+                    .iter()
+                    .map(|j| *joint_of.get(j).unwrap_or(&0))
+                    .collect()
+            });
             let own_joint = *joint_of.get(&node_index).unwrap_or(&0);
             let world_m = &worlds[node_index as usize];
             for i in 0..count {
                 let v = v0 + i;
-                let (mut x, mut y, mut z) = (prim.position[i * 3], prim.position[i * 3 + 1], prim.position[i * 3 + 2]);
-                let mut normal = prim.normal.as_ref().map_or([0.0, 1.0, 0.0], |nm| [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]);
+                let (mut x, mut y, mut z) = (
+                    prim.position[i * 3],
+                    prim.position[i * 3 + 1],
+                    prim.position[i * 3 + 2],
+                );
+                let mut normal = prim.normal.as_ref().map_or([0.0, 1.0, 0.0], |nm| {
+                    [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]
+                });
                 if still {
                     let at = mat4::transform_point(&mut p, world_m, x as f64, y as f64, z as f64);
                     (x, y, z) = (at[0] as f32, at[1] as f32, at[2] as f32);
-                    let n = mat4::transform_direction(&mut p, world_m, normal[0] as f64, normal[1] as f64, normal[2] as f64);
+                    let n = mat4::transform_direction(
+                        &mut p,
+                        world_m,
+                        normal[0] as f64,
+                        normal[1] as f64,
+                        normal[2] as f64,
+                    );
                     normal = [n[0] as f32, n[1] as f32, n[2] as f32];
                 }
                 put_f(words, lane(0) + v * 3, x);
@@ -157,14 +186,21 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                 for (c, value) in normal.into_iter().enumerate() {
                     put_f(words, lane(3) + v * 3 + c, value);
                 }
-                let uv = prim.uv.as_ref().map_or([0.0, 0.0], |uv| [uv[i * 2], uv[i * 2 + 1]]);
+                let uv = prim
+                    .uv
+                    .as_ref()
+                    .map_or([0.0, 0.0], |uv| [uv[i * 2], uv[i * 2 + 1]]);
                 put_f(words, lane(6) + v * 2, uv[0]);
                 put_f(words, lane(6) + v * 2 + 1, uv[1]);
                 for c in 0..4 {
                     match (&remap, &prim.joints) {
                         (Some(remap), Some(joints)) => {
-                            words[lane(8) + v * 4 + c] = *remap.get(joints[i * 4 + c] as usize).unwrap_or(&0);
-                            let w = prim.weights.as_ref().map_or(if c == 0 { 1.0 } else { 0.0 }, |w| w[i * 4 + c]);
+                            words[lane(8) + v * 4 + c] =
+                                *remap.get(joints[i * 4 + c] as usize).unwrap_or(&0);
+                            let w = prim
+                                .weights
+                                .as_ref()
+                                .map_or(if c == 0 { 1.0 } else { 0.0 }, |w| w[i * 4 + c]);
                             put_f(words, lane(12) + v * 4 + c, w);
                         }
                         _ => {
@@ -200,34 +236,72 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         }
         for j in 0..joint_cnt {
             let Some(&n) = joint_nodes.get(j as usize) else {
-                models.joint(model, j, -1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], IDENTITY, IDENTITY);
+                models.joint(
+                    model,
+                    j,
+                    -1,
+                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                    IDENTITY,
+                    IDENTITY,
+                );
                 continue;
             };
             let node = &gltf.nodes[n as usize];
             let parent_node = node.parent;
-            let parent = if parent_node >= 0 { joint_of.get(&(parent_node as u32)).map_or(-1, |&p| p as i32) } else { -1 };
+            let parent = if parent_node >= 0 {
+                joint_of
+                    .get(&(parent_node as u32))
+                    .map_or(-1, |&p| p as i32)
+            } else {
+                -1
+            };
             if still {
-                models.joint(model, j, parent, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], IDENTITY, IDENTITY);
+                models.joint(
+                    model,
+                    j,
+                    parent,
+                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                    IDENTITY,
+                    IDENTITY,
+                );
                 continue;
             }
             let t = node.translation;
             let r = node.rotation;
             let s = node.scale;
-            let rest = [t[0], t[1], t[2], r[0], r[1], r[2], r[3], s[0], s[1], s[2]].map(|v| v as f32);
+            let rest =
+                [t[0], t[1], t[2], r[0], r[1], r[2], r[3], s[0], s[1], s[2]].map(|v| v as f32);
             // A root joint under a non-joint node carries that node's world transform.
             let root_pre = if parent < 0 && parent_node >= 0 {
                 worlds[parent_node as usize].map(|v| v as f32)
             } else {
                 IDENTITY
             };
-            models.joint(model, j, parent, rest, root_pre, *inverse_bind_of.get(&n).unwrap_or(&IDENTITY));
+            models.joint(
+                model,
+                j,
+                parent,
+                rest,
+                root_pre,
+                *inverse_bind_of.get(&n).unwrap_or(&IDENTITY),
+            );
         }
 
         for anim in &gltf.animations {
             let c = models.clip(model, anim.duration as f32);
             for channel in &anim.channels {
-                let Some(&joint) = joint_of.get(&channel.node) else { continue };
-                models.channel(model, c, joint, channel.path as u8, channel.step, &channel.times, &channel.values);
+                let Some(&joint) = joint_of.get(&channel.node) else {
+                    continue;
+                };
+                models.channel(
+                    model,
+                    c,
+                    joint,
+                    channel.path as u8,
+                    channel.step,
+                    &channel.times,
+                    &channel.values,
+                );
             }
         }
 

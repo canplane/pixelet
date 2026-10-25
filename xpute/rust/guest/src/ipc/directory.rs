@@ -27,13 +27,22 @@ pub const fn directory_words(entries: usize) -> usize {
 /// # Safety
 /// The range is valid and nothing else holds it while the directory is written.
 pub unsafe fn write_directory(mem: Memory, at: usize, words: usize, entries: &[Entry]) {
-    xpute_kit::ensure!(directory_words(entries.len()) <= words, ENOSPC, entries.len());
+    xpute_kit::ensure!(
+        directory_words(entries.len()) <= words,
+        ENOSPC,
+        entries.len()
+    );
     for (i, (key, _)) in entries.iter().enumerate() {
         xpute_kit::ensure!(entries[..i].iter().all(|(k, _)| k != key), EINVAL, *key);
     }
     // SAFETY: the caller's range.
     let words = unsafe { core::slice::from_raw_parts_mut(mem.at::<u32>(at), words) };
-    words[..spec::HEAD as usize].copy_from_slice(&[spec::MAGIC, spec::VERSION, entries.len() as u32, 0]);
+    words[..spec::HEAD as usize].copy_from_slice(&[
+        spec::MAGIC,
+        spec::VERSION,
+        entries.len() as u32,
+        0,
+    ]);
     for (i, (key, value)) in entries.iter().enumerate() {
         let at = spec::HEAD as usize + 2 * i;
         words[at] = *key;

@@ -43,7 +43,12 @@ fn the_memory_is_aligned_zero_and_the_base() {
 
 #[test]
 fn a_call_runs_on_the_guests_named_thread() {
-    let (name, marked) = guest().run(|| (std::thread::current().name().map(str::to_owned), on_marked_thread()));
+    let (name, marked) = guest().run(|| {
+        (
+            std::thread::current().name().map(str::to_owned),
+            on_marked_thread(),
+        )
+    });
     assert_eq!(name.as_deref(), Some("test-guest"));
     assert!(marked);
     assert!(off_marked_thread(), "a caller is not the guest's thread");
@@ -53,7 +58,9 @@ fn a_call_runs_on_the_guests_named_thread() {
 fn callers_on_several_threads_take_turns() {
     let g = guest();
     let sums: Vec<u64> = std::thread::scope(|s| {
-        let calls: Vec<_> = (0..4u64).map(|k| s.spawn(move || (0..100).map(|n| g.run(move || k * n)).sum::<u64>())).collect();
+        let calls: Vec<_> = (0..4u64)
+            .map(|k| s.spawn(move || (0..100).map(|n| g.run(move || k * n)).sum::<u64>()))
+            .collect();
         calls.into_iter().map(|c| c.join().unwrap()).collect()
     });
     assert_eq!(sums, [0, 4950, 9900, 14850]);
@@ -85,7 +92,10 @@ fn a_heap_off_a_page_or_past_the_memory_is_refused_before_the_boot() {
 #[test]
 fn the_first_intr_installs_the_plans_clock() {
     let boot = || guest().boot_info(&plan(HEAP_AT));
-    assert_eq!(guest().run(move || native::intr(0.0, boot, |_, _| xpute_guest::clock::now())), 42.0);
+    assert_eq!(
+        guest().run(move || native::intr(0.0, boot, |_, _| xpute_guest::clock::now())),
+        42.0
+    );
 }
 
 #[test]
@@ -93,8 +103,12 @@ fn while_idle_from_the_guests_own_thread_or_inside_a_call_is_refused() {
     let g = guest();
     let inner = g.run(move || std::panic::catch_unwind(move || g.while_idle(|| ())).is_err());
     assert!(inner, "the guest's thread would wait for its caller");
-    let nested = g.while_idle(move || std::panic::catch_unwind(move || g.while_idle(|| ())).is_err());
-    assert!(nested, "a second hold on one thread would wait for the first");
+    let nested =
+        g.while_idle(move || std::panic::catch_unwind(move || g.while_idle(|| ())).is_err());
+    assert!(
+        nested,
+        "a second hold on one thread would wait for the first"
+    );
     let called = g.while_idle(move || std::panic::catch_unwind(move || g.run(|| ())).is_err());
     assert!(called, "a call inside while_idle would wait for it");
     // Each refusal left the handoff as it was.

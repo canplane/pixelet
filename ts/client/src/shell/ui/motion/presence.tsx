@@ -23,7 +23,18 @@ interface PresenceProps {
   children: ReactNode;
 }
 
-export function Presence({ show, from, to = {}, exit, transition, exitTransition = transition, style, children }: PresenceProps) {
+export function Presence(
+  {
+    show,
+    from,
+    to = {},
+    exit,
+    transition,
+    exitTransition = transition,
+    style,
+    children,
+  }: PresenceProps,
+) {
   const [held, setHeld] = useState(show);
   if (show && !held) setHeld(true);
   if (!show && !held) return null;
@@ -55,7 +66,10 @@ interface Leaving<T> {
 }
 
 /** `items` is compared by identity, so pass the same array until the list changes. */
-export function usePresent<T>(items: readonly T[], keyOf: (item: T) => Key): { list: Present<T>[]; gone: (key: Key) => void } {
+export function usePresent<T>(
+  items: readonly T[],
+  keyOf: (item: T) => Key,
+): { list: Present<T>[]; gone: (key: Key) => void } {
   const [prev, setPrev] = useState(items);
   const [leaving, setLeaving] = useState<Leaving<T>[]>([]);
 
@@ -63,14 +77,19 @@ export function usePresent<T>(items: readonly T[], keyOf: (item: T) => Key): { l
   if (prev !== items) {
     const asked = new Set(items.map(keyOf));
     const held = new Set(leaving.map((l) => l.key));
-    const left = prev.map((item) => ({ item, key: keyOf(item) })).filter((l) => !asked.has(l.key) && !held.has(l.key));
+    const left = prev.map((item) => ({ item, key: keyOf(item) })).filter((l) =>
+      !asked.has(l.key) && !held.has(l.key)
+    );
     current = [...leaving.filter((l) => !asked.has(l.key)), ...left];
     setLeaving(current);
     setPrev(items);
   }
 
   return {
-    list: [...items.map((item) => ({ item, key: keyOf(item), present: true })), ...current.map((l) => ({ ...l, present: false }))],
+    list: [
+      ...items.map((item) => ({ item, key: keyOf(item), present: true })),
+      ...current.map((l) => ({ ...l, present: false })),
+    ],
     gone: (key) => setLeaving((l) => l.filter((x) => x.key !== key)),
   };
 }
@@ -85,7 +104,10 @@ interface SwapProps {
   children: ReactNode;
 }
 
-export function Swap({ id, from, exit, transition, exitTransition = transition, style, children }: SwapProps) {
+export function Swap(
+  { id, from, exit, transition, exitTransition = transition, style, children }:
+    SwapProps,
+) {
   const ids = useMemo(() => [id], [id]);
   // What each id last drew, so a leaving one keeps drawing it.
   const nodes = useRef(new Map<Key, ReactNode>());

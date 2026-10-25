@@ -66,7 +66,11 @@ fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
         unsafe { core::ptr::write_bytes(p, i as u8, *size) };
         live.push((p, *size, i as u8));
     }
-    assert!(live.len() > 40, "the range served only {} of 90 requests", live.len());
+    assert!(
+        live.len() > 40,
+        "the range served only {} of 90 requests",
+        live.len()
+    );
 
     for (p, size, _) in live.iter().step_by(2) {
         // SAFETY: from this allocator, not yet given back.
@@ -87,7 +91,10 @@ fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
     for (p, size, byte) in &live {
         // SAFETY: still live, and `size` bytes long.
         let bytes = unsafe { core::slice::from_raw_parts(*p, *size) };
-        assert!(bytes.iter().all(|b| b == byte), "a slot written with {byte:#04x} was written over");
+        assert!(
+            bytes.iter().all(|b| b == byte),
+            "a slot written with {byte:#04x} was written over"
+        );
     }
 }
 
@@ -109,12 +116,20 @@ fn a_run_goes_back_to_the_pages_when_its_last_slot_does() {
     // Free the second run's slot first, leaving exactly the first run's.
     let spilled = live.pop().unwrap();
     unsafe { heap.dealloc(spilled, small()) };
-    assert_eq!(heap.pages().live(), one_run, "the second run did not go back");
+    assert_eq!(
+        heap.pages().live(),
+        one_run,
+        "the second run did not go back"
+    );
 
     for p in live {
         unsafe { heap.dealloc(p, small()) };
     }
-    assert_eq!(heap.pages().live(), 0, "the last slot of a run did not give the run back");
+    assert_eq!(
+        heap.pages().live(),
+        0,
+        "the last slot of a run did not give the run back"
+    );
 }
 
 #[test]
@@ -127,8 +142,15 @@ fn a_request_of_a_page_or_more_is_the_page_allocator_s_own() {
         let p = unsafe { heap.alloc(layout) };
         assert!(!p.is_null());
         let took = heap.pages().live() - before;
-        assert!(took >= size, "a request of {size} took only {took} from the pages");
-        assert_eq!(p as usize % PAGE, 0, "a whole-page request was not page-aligned");
+        assert!(
+            took >= size,
+            "a request of {size} took only {took} from the pages"
+        );
+        assert_eq!(
+            p as usize % PAGE,
+            0,
+            "a whole-page request was not page-aligned"
+        );
         unsafe { heap.dealloc(p, layout) };
         assert_eq!(heap.pages().live(), before, "it did not go back whole");
     }
@@ -141,9 +163,18 @@ fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
     let mut live: Vec<(*mut u8, Layout)> = Vec::new();
 
     let check = |heap: &SlabMalloc<Held>| {
-        assert!(heap.slot_live() <= heap.run_live(), "slots out past the runs they are carved from");
-        assert!(heap.run_live() <= heap.pages().live(), "runs borrowed past what the pages handed out");
-        assert!(heap.pages().live() <= heap.range_bytes(), "the pages handed out past the range");
+        assert!(
+            heap.slot_live() <= heap.run_live(),
+            "slots out past the runs they are carved from"
+        );
+        assert!(
+            heap.run_live() <= heap.pages().live(),
+            "runs borrowed past what the pages handed out"
+        );
+        assert!(
+            heap.pages().live() <= heap.range_bytes(),
+            "the pages handed out past the range"
+        );
     };
 
     for round in 0..4 {
@@ -167,9 +198,21 @@ fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
         unsafe { heap.dealloc(p, l) };
         check(&heap);
     }
-    assert_eq!(heap.slot_live(), 0, "a slot was left counted after its free");
-    assert_eq!(heap.run_live(), 0, "a run was left counted after it went back");
-    assert_eq!(heap.pages().live(), 0, "the pages were left holding something");
+    assert_eq!(
+        heap.slot_live(),
+        0,
+        "a slot was left counted after its free"
+    );
+    assert_eq!(
+        heap.run_live(),
+        0,
+        "a run was left counted after it went back"
+    );
+    assert_eq!(
+        heap.pages().live(),
+        0,
+        "the pages were left holding something"
+    );
 }
 
 #[test]
@@ -180,8 +223,15 @@ fn a_whole_page_request_is_no_run_and_no_slot() {
     // SAFETY: the range is the test's own.
     let p = unsafe { heap.alloc(layout) };
     assert!(!p.is_null());
-    assert_eq!((heap.run_live(), heap.slot_live()), (run, slot), "a whole-page request was counted as carving");
-    assert!(heap.pages().live() >= run + PAGE * 2, "it did not come from the pages");
+    assert_eq!(
+        (heap.run_live(), heap.slot_live()),
+        (run, slot),
+        "a whole-page request was counted as carving"
+    );
+    assert!(
+        heap.pages().live() >= run + PAGE * 2,
+        "it did not come from the pages"
+    );
     // SAFETY: the block this test was just given, at its own layout.
     unsafe { heap.dealloc(p, layout) };
 }

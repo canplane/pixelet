@@ -8,7 +8,13 @@
  */
 
 import type { Ref } from "react";
-import { Platform, StyleSheet, TextInput, type TextInputProps, type TextStyle } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  TextInput,
+  type TextInputProps,
+  type TextStyle,
+} from "react-native";
 
 import { color, textScale, textStyle } from "@/shell/ui/theme.ts";
 

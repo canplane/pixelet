@@ -73,7 +73,9 @@ impl Occupancy {
 
     /// A tile whose children in `slot_of`'s order are tiles where `slots` says.
     pub fn of_slots(slots: [bool; 4]) -> Occupancy {
-        let bits = (0..4).filter(|&q| slots[q]).fold(0, |bits, q| bits | 1 << q);
+        let bits = (0..4)
+            .filter(|&q| slots[q])
+            .fold(0, |bits, q| bits | 1 << q);
         Occupancy(if bits == 0 { 0 } else { Occupancy::TILE | bits })
     }
 
@@ -91,12 +93,16 @@ impl Occupancy {
 
     /// None for a byte no tile can have: a bit past the five, or a child without its parent.
     pub fn of_bits(bits: u8) -> Option<Occupancy> {
-        (bits == 0 || (bits & Occupancy::TILE != 0 && bits < Occupancy::TILE << 1)).then_some(Occupancy(bits))
+        (bits == 0 || (bits & Occupancy::TILE != 0 && bits < Occupancy::TILE << 1))
+            .then_some(Occupancy(bits))
     }
 }
 
 /// A whole number a byte holds, never a cast of one that is not.
 pub fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
     let whole = number.fract() == 0.0 && (0.0..=255.0).contains(&number);
-    whole.then_some(number as u8).and_then(Occupancy::of_bits).ok_or_else(malformed)
+    whole
+        .then_some(number as u8)
+        .and_then(Occupancy::of_bits)
+        .ok_or_else(malformed)
 }

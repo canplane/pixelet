@@ -42,9 +42,21 @@ pub struct Guest {
 /// Reserves the memory and starts the guest's thread, marked as the guest's
 /// with its base set before this returns. Once a process.
 pub fn boot(plan: &Plan) -> Guest {
-    assert!(plan.heap_at < plan.memory_bytes, "the heap begins at {} of a {}-byte memory", plan.heap_at, plan.memory_bytes);
-    assert!(plan.heap_at.is_multiple_of(PAGE_BYTES), "the heap begins at {}, not on a {PAGE_BYTES}-byte page", plan.heap_at);
-    assert!(reserve::core().is_none(), "a guest is booted once a process");
+    assert!(
+        plan.heap_at < plan.memory_bytes,
+        "the heap begins at {} of a {}-byte memory",
+        plan.heap_at,
+        plan.memory_bytes
+    );
+    assert!(
+        plan.heap_at.is_multiple_of(PAGE_BYTES),
+        "the heap begins at {}, not on a {PAGE_BYTES}-byte page",
+        plan.heap_at
+    );
+    assert!(
+        reserve::core().is_none(),
+        "a guest is booted once a process"
+    );
     let core = reserve::map(plan.memory_bytes as usize, plan.heap_at as usize);
     thread::start(plan.thread_name, plan.stack_bytes, move || {
         xpute_guest::global::mark_thread();
@@ -70,7 +82,11 @@ impl Guest {
     /// host's own blocks lie in it too.
     pub fn memory(self) -> (NonNull<u8>, usize) {
         let c = reserve::core().expect("a Guest is booted");
-        (NonNull::new(core::ptr::with_exposed_provenance_mut(c.at)).expect("a mapping is not at 0"), c.bytes)
+        (
+            NonNull::new(core::ptr::with_exposed_provenance_mut(c.at))
+                .expect("a mapping is not at 0"),
+            c.bytes,
+        )
     }
 
     pub fn heap_stat(self) -> HeapStat {
@@ -108,12 +124,14 @@ macro_rules! native_abi {
             const ENTRY: $crate::native::Entry = $entry;
 
             fn plan() -> &'static $crate::native::Plan {
-                static PLAN: ::std::sync::OnceLock<$crate::native::Plan> = ::std::sync::OnceLock::new();
+                static PLAN: ::std::sync::OnceLock<$crate::native::Plan> =
+                    ::std::sync::OnceLock::new();
                 PLAN.get_or_init(|| $plan)
             }
 
             pub fn guest() -> $crate::native::Guest {
-                static GUEST: ::std::sync::OnceLock<$crate::native::Guest> = ::std::sync::OnceLock::new();
+                static GUEST: ::std::sync::OnceLock<$crate::native::Guest> =
+                    ::std::sync::OnceLock::new();
                 *GUEST.get_or_init(|| $crate::native::boot(plan()))
             }
 

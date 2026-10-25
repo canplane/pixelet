@@ -71,7 +71,14 @@ impl Door {
 
     /// `write` fills the slot's payload and answers the packet's length, or
     /// none when it did not fit.
-    pub fn post_in_place(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: impl FnOnce(&mut [u8]) -> Option<u32>) {
+    pub fn post_in_place(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        result: i32,
+        write: impl FnOnce(&mut [u8]) -> Option<u32>,
+    ) {
         self.posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
     }
 
@@ -118,7 +125,12 @@ impl Door {
             };
             self.sq.advance();
             if f.flags & frame::ACKREQ != 0 || result.is_err() {
-                self.post(f.tag, f.cmd, frame::RES, result.unwrap_or_else(|errnum| errnum));
+                self.post(
+                    f.tag,
+                    f.cmd,
+                    frame::RES,
+                    result.unwrap_or_else(|errnum| errnum),
+                );
             }
         }
         self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));

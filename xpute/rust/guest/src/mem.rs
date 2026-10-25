@@ -56,14 +56,19 @@ impl Memory {
 
     #[track_caller]
     fn within(self, off: usize, len: usize) {
-        off.checked_add(len).filter(|&end| end <= self.bytes).or_bug(Errno::EFAULT);
+        off.checked_add(len)
+            .filter(|&end| end <= self.bytes)
+            .or_bug(Errno::EFAULT);
     }
 
     /// A pointer outside the memory is a bug; on a native build that includes
     /// statics and read-only data.
     #[track_caller]
     pub fn off_of<T>(self, p: *const T) -> usize {
-        p.expose_provenance().checked_sub(self.base).filter(|&off| off < self.bytes).or_bug(Errno::EFAULT)
+        p.expose_provenance()
+            .checked_sub(self.base)
+            .filter(|&off| off < self.bytes)
+            .or_bug(Errno::EFAULT)
     }
 
     /// An empty slice's pointer is only its alignment, possibly outside the
@@ -87,7 +92,10 @@ static CORE: Global<Memory> = Global::new();
 /// As `Memory::new`'s, for the guest's whole life.
 #[cfg(not(target_arch = "wasm32"))]
 pub unsafe fn set(addr: usize, bytes: usize) {
-    assert!(!crate::global::off_marked_thread(), "the core memory is set on the guest's thread");
+    assert!(
+        !crate::global::off_marked_thread(),
+        "the core memory is set on the guest's thread"
+    );
     // SAFETY: the caller's.
     CORE.set(unsafe { Memory::new(addr, bytes) });
 }

@@ -32,7 +32,12 @@ pub enum BaseLayer {
 }
 
 impl BaseLayer {
-    pub const ALL: [BaseLayer; 4] = [BaseLayer::terrain, BaseLayer::place, BaseLayer::division, BaseLayer::earth];
+    pub const ALL: [BaseLayer; 4] = [
+        BaseLayer::terrain,
+        BaseLayer::place,
+        BaseLayer::division,
+        BaseLayer::earth,
+    ];
 
     /// The layer a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<BaseLayer> {

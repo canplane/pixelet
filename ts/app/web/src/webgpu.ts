@@ -32,7 +32,9 @@ export const enum Missing {
  * http has none where localhost has it. */
 export async function missing(): Promise<Missing | null> {
   const absent = await look();
-  if (absent !== null) console.error(`[gpu] cannot draw here: ${MISSING[absent]}`);
+  if (absent !== null) {
+    console.error(`[gpu] cannot draw here: ${MISSING[absent]}`);
+  }
   return absent;
 }
 
@@ -43,19 +45,30 @@ const MISSING: Record<Missing, string> = {
 };
 
 async function look(): Promise<Missing | null> {
-  if (!("gpu" in navigator)) return isSecureContext ? Missing.WebGpu : Missing.Insecure;
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  if (!("gpu" in navigator)) {
+    return isSecureContext ? Missing.WebGpu : Missing.Insecure;
+  }
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: "high-performance",
+  });
   return adapter ? null : Missing.Gpu;
 }
 
 /** False where no adapter answered. What the device is, the kernel reads from
  * the block its first call asks the host for. `wake` is what a completion
  * calls to ask the turn that reads it (@xpute/gpu/host.ts `GpuHost`). */
-export async function acquire(lost: () => void, wake: () => void): Promise<boolean> {
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+export async function acquire(
+  lost: () => void,
+  wake: () => void,
+): Promise<boolean> {
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: "high-performance",
+  });
   if (!adapter) return false;
   const timestamps = adapter.features.has("timestamp-query");
-  const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
+  const d = await adapter.requestDevice({
+    requiredFeatures: timestamps ? ["timestamp-query"] : [],
+  });
   // A compatibility-mode WebGPU (GLES 3.1 hardware) may offer no storage
   // buffers in the vertex stage, which the terrain needs; it shows here only.
   if (DEV_BUNDLE) {
@@ -63,7 +76,13 @@ export async function acquire(lost: () => void, wake: () => void): Promise<boole
     const of = (k: string) => `${k}=${l[k] ?? "-"}`;
     const info = (adapter as unknown as { info?: Record<string, string> }).info;
     console.info(
-      `[gpu] adapter ${info ? `${info.vendor ?? "?"}/${info.architecture ?? "?"}/${info.device ?? "?"}` : "?"} features [${[...d.features].join(",")}] ` +
+      `[gpu] adapter ${
+        info
+          ? `${info.vendor ?? "?"}/${info.architecture ?? "?"}/${
+            info.device ?? "?"
+          }`
+          : "?"
+      } features [${[...d.features].join(",")}] ` +
         [
           "maxStorageBuffersPerShaderStage",
           "maxStorageBuffersInVertexStage",
@@ -84,7 +103,9 @@ export async function acquire(lost: () => void, wake: () => void): Promise<boole
     lost();
   });
   d.onuncapturederror = (e) => console.error(`[gpu] ${e.error.message}`);
-  canvases.forEach((canvas, handle) => h.bind(handle, canvas.getContext("webgpu")!));
+  canvases.forEach((canvas, handle) =>
+    h.bind(handle, canvas.getContext("webgpu")!)
+  );
   host = h;
   return true;
 }

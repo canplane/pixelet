@@ -2,9 +2,19 @@
 
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 
-import { FRAME_WINDOW, type Grant, NO_WAKE, Quantum, type QuantumPolicy } from "./quantum.ts";
+import {
+  FRAME_WINDOW,
+  type Grant,
+  NO_WAKE,
+  Quantum,
+  type QuantumPolicy,
+} from "./quantum.ts";
 
-const POLICY: QuantumPolicy = { margin_share: 0.15, batch_frames: 2, settle_ms: 150 };
+const POLICY: QuantumPolicy = {
+  margin_share: 0.15,
+  batch_frames: 2,
+  settle_ms: 150,
+};
 
 /** A window of animation frames `gap_ms` apart, then the grant after a turn that asked for the next edge. */
 function gapped(q: Quantum, gap_ms: number): Grant {
@@ -71,12 +81,20 @@ Deno.test("quantum - input, or a guest asking for the next edge, makes a turn in
   q.observe(0, q.grant(0), NO_WAKE);
   const idle = q.grant(0);
   assert(!idle.interactive);
-  assertAlmostEquals(idle.quota_ms, idle.paced_ms * POLICY.batch_frames * (1 - POLICY.margin_share), 1e-9);
+  assertAlmostEquals(
+    idle.quota_ms,
+    idle.paced_ms * POLICY.batch_frames * (1 - POLICY.margin_share),
+    1e-9,
+  );
   q.input(1000);
   assert(q.grant(1000 + POLICY.settle_ms - 1).interactive);
   assert(!q.grant(1000 + POLICY.settle_ms).interactive);
   q.observe(0, q.grant(0), 0);
   const asked = q.grant(0);
   assert(asked.interactive);
-  assertAlmostEquals(asked.quota_ms, asked.paced_ms * (1 - POLICY.margin_share), 1e-9);
+  assertAlmostEquals(
+    asked.quota_ms,
+    asked.paced_ms * (1 - POLICY.margin_share),
+    1e-9,
+  );
 });

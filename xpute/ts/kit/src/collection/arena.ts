@@ -4,7 +4,11 @@
 // alloc() hands out uninitialized; Vector is typed-array scratch.
 
 import type { u32 } from "../abi/word.ts";
-import type { AnyElementOf, AnyTypedArray, AnyTypedArrayCtor } from "../abi/array.ts";
+import type {
+  AnyElementOf,
+  AnyTypedArray,
+  AnyTypedArrayCtor,
+} from "../abi/array.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 

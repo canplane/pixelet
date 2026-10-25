@@ -72,13 +72,23 @@ impl Ring {
     fn words(&self) -> &mut [u32] {
         // SAFETY: the memory outlives the ring, and each side writes only its
         // own words.
-        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), ring_bytes(self.cap) as usize / 4) }
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.mem.at::<u32>(self.at),
+                ring_bytes(self.cap) as usize / 4,
+            )
+        }
     }
 
     #[allow(clippy::mut_from_ref)]
     fn slots(&self) -> &mut [u8] {
         // SAFETY: as `words`.
-        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u8>(self.slot_base as usize), slots_bytes(self.cap, self.slot_bytes) as usize) }
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.mem.at::<u8>(self.slot_base as usize),
+                slots_bytes(self.cap, self.slot_bytes) as usize,
+            )
+        }
     }
 
     /// # Safety
@@ -126,7 +136,14 @@ impl Ring {
         ((position & self.mask) * self.slot_bytes) as usize
     }
 
-    pub fn push(&self, tag: u32, cmd: u32, flags: u32, result: i32, packet: Option<&[u8]>) -> Errno {
+    pub fn push(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        result: i32,
+        packet: Option<&[u8]>,
+    ) -> Errno {
         if self.len() >= self.cap {
             return Errno::EAGAIN;
         }
@@ -148,12 +165,21 @@ impl Ring {
 
     /// `write` fills the slot's payload and answers the packet's length, or
     /// none when it did not fit.
-    pub fn push_in_place(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: impl FnOnce(&mut [u8]) -> Option<u32>) -> Errno {
+    pub fn push_in_place(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        result: i32,
+        write: impl FnOnce(&mut [u8]) -> Option<u32>,
+    ) -> Errno {
         if self.len() >= self.cap {
             return Errno::EAGAIN;
         }
         let start = self.slot_at(self.tail());
-        let Some(n) = write(&mut self.slots()[start..start + self.slot_bytes as usize]).filter(|&n| n <= self.slot_bytes) else {
+        let Some(n) = write(&mut self.slots()[start..start + self.slot_bytes as usize])
+            .filter(|&n| n <= self.slot_bytes)
+        else {
             return Errno::EMSGSIZE;
         };
         self.pad(start, n as usize);
@@ -210,7 +236,9 @@ impl Ring {
         }
         let bytes = bytes as usize;
         // SAFETY: the memory `new` was given, as its contract requires.
-        Ok(Some(unsafe { core::slice::from_raw_parts(self.mem.at::<u8>(self.slot_base as usize + off), bytes) }))
+        Ok(Some(unsafe {
+            core::slice::from_raw_parts(self.mem.at::<u8>(self.slot_base as usize + off), bytes)
+        }))
     }
 
     pub fn advance(&self) {

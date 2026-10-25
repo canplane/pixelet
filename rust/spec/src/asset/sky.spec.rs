@@ -14,7 +14,11 @@
 /// cloud one of its models (pxl-kernel domain/scene/environment/cloud.rs).
 /// Quaternius, CC0.
 pub mod cumulus {
-    pub const models: [crate::asset::catalog::Slot; 3] = [crate::asset::catalog::Slot(83), crate::asset::catalog::Slot(84), crate::asset::catalog::Slot(85)];
+    pub const models: [crate::asset::catalog::Slot; 3] = [
+        crate::asset::catalog::Slot(83),
+        crate::asset::catalog::Slot(84),
+        crate::asset::catalog::Slot(85),
+    ];
     pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(86);
 }
 

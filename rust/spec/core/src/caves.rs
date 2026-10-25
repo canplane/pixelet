@@ -75,7 +75,10 @@ pub struct Cave {
 impl Cave {
     /// Any cube coarser than the caves' first: solid, and every cube of the
     /// caves' first zoom under it draws.
-    pub const ROOT: Cave = Cave { hollow: false, live: true };
+    pub const ROOT: Cave = Cave {
+        hollow: false,
+        live: true,
+    };
 
     /// As a word a GPU's storage holds, `bool` being none of its: hollow,
     /// then live.
@@ -84,7 +87,10 @@ impl Cave {
     }
 
     pub const fn of_word(w: u32) -> Cave {
-        Cave { hollow: w & 1 != 0, live: w & 2 != 0 }
+        Cave {
+            hollow: w & 1 != 0,
+            live: w & 2 != 0,
+        }
     }
 
     /// The child `c` at `zoom` of a cube whose caves are `self`, by its
@@ -96,7 +102,10 @@ impl Cave {
             return Cave::ROOT;
         }
         if !self.live || zoom > LEAF_CELL {
-            return Cave { live: false, ..self };
+            return Cave {
+                live: false,
+                ..self
+            };
         }
         let (turns, turn, live) = draws(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1]);
         let k = slot(c);

@@ -21,7 +21,10 @@ use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMod
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_SUN_MAP};
 use crate::frame::shader::word::frame::VIEW_PROJ;
 use crate::frame::shader::word::FRAME_FLOATS;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp};
+use crate::gpu::api::{
+    buffer_entry, buffer_usage, bytes, pass_desc, sampler_entry, texture_usage, view_entry,
+    word_bytes, Entry, Format, Gpu, Load, Stamp,
+};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
 
@@ -79,7 +82,14 @@ pub struct Shadow {
 
 impl Shadow {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Shadow {
-        let map = g.texture(SIZE, SIZE, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+        let map = g.texture(
+            SIZE,
+            SIZE,
+            1,
+            Format::depth32float,
+            1,
+            texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
+        );
         let map_view = g.view(map, false, 0, 1, 0, 1);
         let sampler = g.sampler(
             FilterMode::linear,
@@ -89,7 +99,14 @@ impl Shadow {
             Some(CompareFunction::less_equal),
             1,
         );
-        let blank = g.texture(1, 1, 1, Format::depth32float, 1, texture_usage::TEXTURE_BINDING);
+        let blank = g.texture(
+            1,
+            1,
+            1,
+            Format::depth32float,
+            1,
+            texture_usage::TEXTURE_BINDING,
+        );
         let blank_view = g.view(blank, false, 0, 1, 0, 1);
         let blank_sampler = g.sampler(
             FilterMode::nearest,
@@ -99,13 +116,32 @@ impl Shadow {
             Some(CompareFunction::less_equal),
             1,
         );
-        let world = g.texture(SIZE, SIZE, 1, Format::r32uint, 1, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING);
+        let world = g.texture(
+            SIZE,
+            SIZE,
+            1,
+            Format::r32uint,
+            1,
+            texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
+        );
         let world = g.view(world, true, 0, 1, 0, 1);
         let lay = pipelines.build(g, PIPELINE_SUN_MAP, Format::depth32float);
-        let corner = g.buffer(word_bytes(4), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let lay_group = g.bind_group(lay.layouts[0], &[view_entry(0, world), buffer_entry(1, corner)]);
-        let light_frame = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let light_group = g.bind_group(pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()).layouts[0], &[buffer_entry(0, light_frame)]);
+        let corner = g.buffer(
+            word_bytes(4),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
+        let lay_group = g.bind_group(
+            lay.layouts[0],
+            &[view_entry(0, world), buffer_entry(1, corner)],
+        );
+        let light_frame = g.buffer(
+            word_bytes(FRAME_FLOATS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
+        let light_group = g.bind_group(
+            pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()).layouts[0],
+            &[buffer_entry(0, light_frame)],
+        );
         Shadow {
             map_view,
             sampler,
@@ -129,12 +165,18 @@ impl Shadow {
 
     /// The map and its sampler, at `binding` and the next, as a lit pass reads them (shadow.wgsl).
     pub fn entries(&self, binding: u32) -> [Entry; 2] {
-        [view_entry(binding, self.map_view), sampler_entry(binding + 1, self.sampler)]
+        [
+            view_entry(binding, self.map_view),
+            sampler_entry(binding + 1, self.sampler),
+        ]
     }
 
     /// A map no pass draws, for a pass that draws none: every face reads it unshadowed.
     pub fn blank_entries(&self, binding: u32) -> [Entry; 2] {
-        [view_entry(binding, self.blank_view), sampler_entry(binding + 1, self.blank_sampler)]
+        [
+            view_entry(binding, self.blank_view),
+            sampler_entry(binding + 1, self.blank_sampler),
+        ]
     }
 
     /// `reach` is the map's half width about `target`; `fixed` is a point
@@ -186,7 +228,13 @@ impl Shadow {
         // view and projection undone, the map's NDC to the eye's frame.
         let mut inverse = mat4::new();
         mat4::invert(&mut inverse, &self.light_view_proj);
-        let column = |k: usize| [inverse[4 * k] as f32, inverse[4 * k + 1] as f32, inverse[4 * k + 2] as f32];
+        let column = |k: usize| {
+            [
+                inverse[4 * k] as f32,
+                inverse[4 * k + 1] as f32,
+                inverse[4 * k + 2] as f32,
+            ]
+        };
         self.sun = Sun::of([column(0), column(1), column(2), column(3)], SIZE, corner).words();
     }
 
@@ -203,7 +251,17 @@ impl Shadow {
     /// far plane, as nothing is cast there. The casters are drawn into it
     /// next, then it ends.
     pub fn begin(&self, g: &Gpu, encoder: u32, cast: bool, stamp: &mut Stamp) -> u32 {
-        let pass = g.pass(encoder, &pass_desc(0, Load::Clear, self.map_view, Load::Clear, 1.0, stamp.pass()));
+        let pass = g.pass(
+            encoder,
+            &pass_desc(
+                0,
+                Load::Clear,
+                self.map_view,
+                Load::Clear,
+                1.0,
+                stamp.pass(),
+            ),
+        );
         if cast {
             g.set_pipeline(pass, self.lay.pipeline);
             g.set_bind_group(pass, 0, self.lay_group, &[]);

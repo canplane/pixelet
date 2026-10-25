@@ -62,13 +62,33 @@ pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
     let at = |i: usize| [points[i][0] / cell, points[i][1] / cell, points[i][2]];
     let triangle = |a: usize, b: usize, c: usize| {
         let (a, b, c) = (at(a), at(b), at(c));
-        let (u, v) = ([0, 1, 2].map(|k| b[k] - a[k]), [0, 1, 2].map(|k| c[k] - a[k]));
-        let x = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+        let (u, v) = (
+            [0, 1, 2].map(|k| b[k] - a[k]),
+            [0, 1, 2].map(|k| c[k] - a[k]),
+        );
+        let x = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
         0.5 * libm::sqrt(x[0] * x[0] + x[1] * x[1] + x[2] * x[2])
     };
-    let (mut prev, mut next): (Vec<usize>, Vec<usize>) = ((0..n).map(|i| i.wrapping_sub(1)).collect(), (1..=n).collect());
-    let mut area: Vec<f64> = (0..n).map(|i| if i == 0 || i + 1 == n { f64::INFINITY } else { triangle(i - 1, i, i + 1) }).collect();
-    let mut heap: BinaryHeap<_> = (1..n.saturating_sub(1)).map(|i| Reverse((Area(area[i]), i))).collect();
+    let (mut prev, mut next): (Vec<usize>, Vec<usize>) = (
+        (0..n).map(|i| i.wrapping_sub(1)).collect(),
+        (1..=n).collect(),
+    );
+    let mut area: Vec<f64> = (0..n)
+        .map(|i| {
+            if i == 0 || i + 1 == n {
+                f64::INFINITY
+            } else {
+                triangle(i - 1, i, i + 1)
+            }
+        })
+        .collect();
+    let mut heap: BinaryHeap<_> = (1..n.saturating_sub(1))
+        .map(|i| Reverse((Area(area[i]), i)))
+        .collect();
     let (mut gone, mut floor) = (vec![false; n], 0.0f64);
     while let Some(Reverse((Area(a), i))) = heap.pop() {
         if gone[i] || a != area[i] {

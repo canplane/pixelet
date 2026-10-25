@@ -1,35 +1,35 @@
 # Resources, files and streams
 
 **2026-09-30** — Whether xpute's boundary could be abstracted the way Unix
-abstracts its own — descriptors, files, pipes, system calls — or the way
-Plan 9 does, everything a file served over one protocol. Before any API, this
-sorts every command pixelet sends or raises by what it actually is, and
-keeps apart the ones that do not fit. No code changed.
+abstracts its own — descriptors, files, pipes, system calls — or the way Plan 9
+does, everything a file served over one protocol. Before any API, this sorts
+every command pixelet sends or raises by what it actually is, and keeps apart
+the ones that do not fit. No code changed.
 
 ## What is already Unix-shaped
 
-A message is a system call: a number, arguments in a packet, and a result
-that is a value or `-errno`. The two rings are io_uring's submission and
-completion queues. A handle is a descriptor, with a generation so a number
-reused does not name the old object. The stream, a turn's calls laid end to
-end, is a `writev` of calls. And a command number is a subject and a verb,
-`major << 8 | minor`, with four verbs every subject has — create, read,
-update, delete — and its own from `MINOR_OWN`: a device and its `ioctl`.
+A message is a system call: a number, arguments in a packet, and a result that
+is a value or `-errno`. The two rings are io_uring's submission and completion
+queues. A handle is a descriptor, with a generation so a number reused does not
+name the old object. The stream, a turn's calls laid end to end, is a `writev`
+of calls. And a command number is a subject and a verb, `major << 8 | minor`,
+with four verbs every subject has — create, read, update, delete — and its own
+from `MINOR_OWN`: a device and its `ioctl`.
 
-What is not: the verbs are not common across subjects, there is no name to
-open anything by, and data that flows — a pointer, a position — arrives as
-one message after another rather than from something opened once.
+What is not: the verbs are not common across subjects, there is no name to open
+anything by, and data that flows — a pointer, a position — arrives as one
+message after another rather than from something opened once.
 
 ## Every command, sorted
 
-Each command is read on ten axes: whether it is a resource, whether it has
-a lifetime, which way it goes (H→G host to guest, G→H guest to host), how
-often, when it completes, what it carries, whether order matters, what names
-it, which Unix verb it would be, and whether that verb fits without losing
-meaning or adding state. `apps/web/src/kernel/abi/cmd.spec.ts` is the
-command list; the host's stream is `spec/pxl/web/kernel/abi/host.json`. The
-device's four C calls are not here: they are its host's own services, and
-the kernel learns of what they did by the same commands as on the page
+Each command is read on ten axes: whether it is a resource, whether it has a
+lifetime, which way it goes (H→G host to guest, G→H guest to host), how often,
+when it completes, what it carries, whether order matters, what names it, which
+Unix verb it would be, and whether that verb fits without losing meaning or
+adding state. `apps/web/src/kernel/abi/cmd.spec.ts` is the command list; the
+host's stream is `spec/pxl/web/kernel/abi/host.json`. The device's four C calls
+are not here: they are its host's own services, and the kernel learns of what
+they did by the same commands as on the page
 ([20260930-sync-and-async-across-the-boundary.md](./20260930-sync-and-async-across-the-boundary.md)).
 
 ### Resources
@@ -76,58 +76,55 @@ the kernel learns of what they did by the same commands as on the page
   commands and five stream operations. The rest is the frame's boundary, the
   UI's intents, calls without state and diagnostics.
 - **Either side opens.** The host opens a surface and the guest issues its
-  handle; the guest opens a read or a sensor and the host serves it. Unix
-  has one side opening the other's files. A resource model here has both
-  sides able to serve, which is Plan 9's 9P used both ways rather than a
-  process's system calls.
-- **Identity is not one kind, and should not be made one.** A handle the
-  guest issues, the guest's own domain key, a number the host issues, an
-  enum, a string. A fetch's key is what a read is deduplicated and cancelled
-  by; a descriptor in its place adds a table from key to descriptor and
-  loses what the key meant.
-- **The verbs are a subject added, changed and removed.** Asked for or
-  reported, as a kernel's uevent says add, change and remove: `GPU_CREATE`
-  says a device was added, `SENSOR_UPDATE` that a reading changed,
-  `LOAD_DELETE` that a read went without data, so the guest asks again.
-  Every command reads that way.
+  handle; the guest opens a read or a sensor and the host serves it. Unix has
+  one side opening the other's files. A resource model here has both sides able
+  to serve, which is Plan 9's 9P used both ways rather than a process's system
+  calls.
+- **Identity is not one kind, and should not be made one.** A handle the guest
+  issues, the guest's own domain key, a number the host issues, an enum, a
+  string. A fetch's key is what a read is deduplicated and cancelled by; a
+  descriptor in its place adds a table from key to descriptor and loses what the
+  key meant.
+- **The verbs are a subject added, changed and removed.** Asked for or reported,
+  as a kernel's uevent says add, change and remove: `GPU_CREATE` says a device
+  was added, `SENSOR_UPDATE` that a reading changed, `LOAD_DELETE` that a read
+  went without data, so the guest asks again. Every command reads that way.
 - **Three kinds of flow, not one.** A queue, where every item and its order
-  matter (the pointer); a latest state, where the newest reading is what
-  counts and a whole state is replaced (the snapshot, most of a sensor);
-  and a future, one result for one request (a read). Called one `stream<T>`,
-  the API reads better and the meaning goes. The snapshot is published state
-  with a notice of change, which is what the change log was when it left the
-  contract.
-- **The guest asks through one channel, packed two ways.** Each side puts
-  work in the other's queue and the other takes it on its turn, the host
-  between turns. A guest's request is a message — four words and a packet —
-  or a record in its stream — a few words, thousands to a turn for what one
-  turn asks of the GPU. Whether an answer comes is the message's `ACKREQ`,
-  not which place it went to.
+  matter (the pointer); a latest state, where the newest reading is what counts
+  and a whole state is replaced (the snapshot, most of a sensor); and a future,
+  one result for one request (a read). Called one `stream<T>`, the API reads
+  better and the meaning goes. The snapshot is published state with a notice of
+  change, which is what the change log was when it left the contract.
+- **The guest asks through one channel, packed two ways.** Each side puts work
+  in the other's queue and the other takes it on its turn, the host between
+  turns. A guest's request is a message — four words and a packet — or a record
+  in its stream — a few words, thousands to a turn for what one turn asks of the
+  GPU. Whether an answer comes is the message's `ACKREQ`, not which place it
+  went to.
 
 ## What follows
 
 1. **No system-call or descriptor API now.**
 2. **The minors are a subject added, changed and removed**, asked for or
-   reported; a failure is the result's `-errno`. Written where the minors
-   are defined (`core abi/cmd`), and no command needs renaming.
-3. **One request channel each way.** The stream is the guest's requests
-   packed for volume, not a second kind of request.
-4. **Queue, latest state and future stay three things.** None is folded into
-   one stream abstraction.
+   reported; a failure is the result's `-errno`. Written where the minors are
+   defined (`core abi/cmd`), and no command needs renaming.
+3. **One request channel each way.** The stream is the guest's requests packed
+   for volume, not a second kind of request.
+4. **Queue, latest state and future stay three things.** None is folded into one
+   stream abstraction.
 5. **No namespace.** A command's major already names a resource's class. A
    9P-style namespace — names to open, discovery, late binding — waits for a
    demand for one.
 
-xpute's own "stream", a turn's calls laid end to end, is a different thing
-from any of the three flows and keeps its name; renaming it waits until a
-flow abstraction is shown to recur as a thing of its own.
+xpute's own "stream", a turn's calls laid end to end, is a different thing from
+any of the three flows and keeps its name; renaming it waits until a flow
+abstraction is shown to recur as a thing of its own.
 
 ## Where it stands
 
-**Recorded** 09-30; **corrected** 10-01: the device's C calls are its
-host's own services and left the table; the guest's requests are one
-channel packed two ways; the minors' reading is written in `core abi/cmd`
-and no command needed renaming.
-**Superseded** 10-01 in part: "no system-call or descriptor API now" and "no
-namespace" gave way to a guest's files reached as Plan 9 reaches them
+**Recorded** 09-30; **corrected** 10-01: the device's C calls are its host's own
+services and left the table; the guest's requests are one channel packed two
+ways; the minors' reading is written in `core abi/cmd` and no command needed
+renaming. **Superseded** 10-01 in part: "no system-call or descriptor API now"
+and "no namespace" gave way to a guest's files reached as Plan 9 reaches them
 ([20261001-a-guest-s-files-as-plan-9-s.md](./20261001-a-guest-s-files-as-plan-9-s.md)).

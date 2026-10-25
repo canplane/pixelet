@@ -51,7 +51,10 @@ thread_local! {
 /// Marks this thread as the guest's, once a process, before its first turn.
 pub fn mark_thread() {
     let again = MARKED.swap(true, Ordering::AcqRel);
-    assert!(!again || on_marked_thread(), "a second thread marked as the guest's");
+    assert!(
+        !again || on_marked_thread(),
+        "a second thread marked as the guest's"
+    );
     ON_MARKED.with(|on| on.set(true));
 }
 

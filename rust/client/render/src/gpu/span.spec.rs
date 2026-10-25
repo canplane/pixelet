@@ -8,7 +8,12 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 pub const GPU_SPAN_NAMES: usize = 11;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -46,7 +51,9 @@ impl GpuSpanName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<GpuSpanName> {
-        GpuSpanName::ALL.into_iter().find(|member| *member as u8 == value)
+        GpuSpanName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -80,6 +87,8 @@ impl FrameKind {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<FrameKind> {
-        FrameKind::ALL.into_iter().find(|member| *member as u8 == value)
+        FrameKind::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }

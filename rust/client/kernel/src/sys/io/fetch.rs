@@ -27,7 +27,10 @@ use xpute_guest::global::Global;
 /// Assets are opened below the assets' root (sys/io/loader.rs), never here.
 pub fn start(credit: Credit, stream: Stream, subject: u64) {
     let Some(bake) = stream.bake() else { return };
-    let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
+    let owner = Owner::Fetch {
+        key: credit.key(),
+        at_ms: now(),
+    };
     file::open(credit, bake as u32, subject, owner);
 }
 
@@ -89,7 +92,11 @@ static ANSWERED: Global<List<Answered, { MAX_CREDITS as usize }>> = Global::new(
 
 /// How many answers of one of `of` are not yet taken.
 pub fn answered(of: &[Stream]) -> usize {
-    ANSWERED.get(List::new).iter().filter(|a| of.contains(&a.stream)).count()
+    ANSWERED
+        .get(List::new)
+        .iter()
+        .filter(|a| of.contains(&a.stream))
+        .count()
 }
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
@@ -135,7 +142,12 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                 Ok(block) => {
                     // SAFETY: a block just acquired, `n` long, and no one else's;
                     // the arrival holds it until `fetch_task` waits out the turn.
-                    unsafe { file::read(fd, core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize)) };
+                    unsafe {
+                        file::read(
+                            fd,
+                            core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
+                        )
+                    };
                     Got::Read(Some(block))
                 }
                 Err(refused) => Got::Refused(refused),
@@ -144,7 +156,11 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
             got
         }
     };
-    arrived().push(Arrival { key, got, net_ms: now() - at_ms });
+    arrived().push(Arrival {
+        key,
+        got,
+        net_ms: now() - at_ms,
+    });
     arrivals().notify();
 }
 
@@ -185,7 +201,13 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Got::Absent | Got::Read(Some(_)) => {
             // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
-            ANSWERED.get(List::new).push(Answered { key, stream, subject, block, phases });
+            ANSWERED.get(List::new).push(Answered {
+                key,
+                stream,
+                subject,
+                block,
+                phases,
+            });
             request_world_tick();
             return;
         }

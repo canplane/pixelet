@@ -12,7 +12,10 @@ import { Errno } from "@xpute/kit/status/errno.spec.ts";
 const WASM_PAGE_BYTES: u32 = 1 << 16;
 
 /** The first of `candidates` the device will reserve. */
-export function reserve_memory(candidates: readonly u32[], region_bytes: u32): WebAssembly.Memory {
+export function reserve_memory(
+  candidates: readonly u32[],
+  region_bytes: u32,
+): WebAssembly.Memory {
   for (const regions of candidates) {
     const pages = (regions * region_bytes) / WASM_PAGE_BYTES;
     try {

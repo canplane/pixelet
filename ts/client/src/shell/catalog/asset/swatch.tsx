@@ -4,7 +4,12 @@ import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
 import type { u8 } from "@xpute/kit/abi/word.ts";
 import type { DecorId } from "@/shell/catalog/asset/decor.spec.ts";
-import { type Cube, cubeHex, cubeId, decorName } from "@/shell/catalog/asset/mod.ts";
+import {
+  type Cube,
+  cubeHex,
+  cubeId,
+  decorName,
+} from "@/shell/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/shell/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { asset_url } from "@/namespace/route.ts";
@@ -26,17 +31,30 @@ interface CubeSwatchProps {
 
 /** The cube as the world draws it: its texture while the pack is on, else its color. */
 export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
-  const box = { width: size, height: size, borderRadius: radius, overflow: "hidden" as const };
+  const box = {
+    width: size,
+    height: size,
+    borderRadius: radius,
+    overflow: "hidden" as const,
+  };
   const textured = useKernel((s) => s.settings[SETTINGS.textures.key] === 1);
   const textureUrl = textured ? cubeTextureUrl(cube) : null;
   if (textureUrl) {
     return (
       <View style={[box, style]}>
-        <Image source={{ uri: textureUrl }} resizeMode="cover" style={{ width: size, height: size }} />
+        <Image
+          source={{ uri: textureUrl }}
+          resizeMode="cover"
+          style={{ width: size, height: size }}
+        />
       </View>
     );
   }
-  return <View style={[box, { backgroundColor: cubeHex(cube) ?? undefined }, style]} />;
+  return (
+    <View
+      style={[box, { backgroundColor: cubeHex(cube) ?? undefined }, style]}
+    />
+  );
 }
 
 const DECOR_GLYPH: Record<DecorId, GlyphName> = {

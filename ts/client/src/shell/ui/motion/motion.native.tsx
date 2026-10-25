@@ -9,23 +9,45 @@
 import { useEffect, useReducer, useRef } from "react";
 import { Animated, Easing, type EasingFunction } from "react-native";
 
-import { type MotionProps, type Pose, resolve, type SpinProps } from "@/shell/ui/motion/pose.ts";
+import {
+  type MotionProps,
+  type Pose,
+  resolve,
+  type SpinProps,
+} from "@/shell/ui/motion/pose.ts";
 import { curveAt, type Transition } from "@/shell/ui/motion/transition.ts";
 
 type Channel = keyof Pose;
-const CHANNELS: readonly Channel[] = ["opacity", "translateX", "translateY", "scale", "rotate"];
+const CHANNELS: readonly Channel[] = [
+  "opacity",
+  "translateX",
+  "translateY",
+  "scale",
+  "rotate",
+];
 
-function timing(t: Transition): { duration: number; easing: EasingFunction; delay: number } {
-  return { duration: t.durationMs, easing: (p) => curveAt(t, p), delay: t.delayMs ?? 0 };
+function timing(
+  t: Transition,
+): { duration: number; easing: EasingFunction; delay: number } {
+  return {
+    duration: t.durationMs,
+    easing: (p) => curveAt(t, p),
+    delay: t.delayMs ?? 0,
+  };
 }
 
-export function Motion({ to, from, replay = null, transition, onSettled, style, onLayout, children }: MotionProps) {
+export function Motion(
+  { to, from, replay = null, transition, onSettled, style, onLayout, children }:
+    MotionProps,
+) {
   const target = resolve(to);
   const initial = resolve(from ?? to);
 
   const values = useRef<Record<Channel, Animated.Value> | null>(null);
   if (values.current === null) {
-    values.current = Object.fromEntries(CHANNELS.map((c) => [c, new Animated.Value(initial[c])])) as Record<Channel, Animated.Value>;
+    values.current = Object.fromEntries(
+      CHANNELS.map((c) => [c, new Animated.Value(initial[c])]),
+    ) as Record<Channel, Animated.Value>;
   }
   const v = values.current;
 
@@ -49,7 +71,15 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
 
     const { duration, easing, delay } = timing(transition);
     const moving = CHANNELS.filter((c) => start[c] !== target[c]);
-    const moves = moving.map((c) => Animated.timing(v[c], { toValue: target[c], duration, easing, delay, useNativeDriver: true }));
+    const moves = moving.map((c) =>
+      Animated.timing(v[c], {
+        toValue: target[c],
+        duration,
+        easing,
+        delay,
+        useNativeDriver: true,
+      })
+    );
     if (moves.length === 0) {
       settled.current?.();
       return;
@@ -63,7 +93,14 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
       commit();
       settled.current?.();
     });
-  }, [target.opacity, target.translateX, target.translateY, target.scale, target.rotate, replay]);
+  }, [
+    target.opacity,
+    target.translateX,
+    target.translateY,
+    target.scale,
+    target.rotate,
+    replay,
+  ]);
 
   // Under StrictMode a view put back arrives again from `from`.
   useEffect(() => () => {
@@ -85,7 +122,12 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
             { translateX: v.translateX },
             { translateY: v.translateY },
             { scale: v.scale },
-            { rotate: v.rotate.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "1deg"] }) },
+            {
+              rotate: v.rotate.interpolate({
+                inputRange: [0, 1],
+                outputRange: ["0deg", "1deg"],
+              }),
+            },
           ],
         },
       ]}
@@ -99,9 +141,29 @@ export function Spin({ periodMs, children }: SpinProps) {
   const turn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     turn.setValue(0);
-    const loop = Animated.loop(Animated.timing(turn, { toValue: 1, duration: periodMs, easing: Easing.linear, useNativeDriver: true }));
+    const loop = Animated.loop(
+      Animated.timing(turn, {
+        toValue: 1,
+        duration: periodMs,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
     loop.start();
     return () => loop.stop();
   }, [periodMs]);
-  return <Animated.View style={{ transform: [{ rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }] }}>{children}</Animated.View>;
+  return (
+    <Animated.View
+      style={{
+        transform: [{
+          rotate: turn.interpolate({
+            inputRange: [0, 1],
+            outputRange: ["0deg", "360deg"],
+          }),
+        }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
 }

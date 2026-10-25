@@ -5,7 +5,15 @@ import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { bracket, type InputDriver } from "@/bracket.tsx";
-import { kernel_frame, kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/input.ts";
+import {
+  kernel_frame,
+  kernel_open,
+  kernel_rect,
+  kernel_visible,
+  kernel_wheel,
+  POINTER_KIND,
+  POINTER_PHASE,
+} from "@/abi/input.ts";
 import { surface_role } from "@/abi/gpu.spec.ts";
 import { surface_driver } from "@/abi/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
@@ -36,7 +44,8 @@ const WORLD = surface_driver(surface_role.WORLD);
 const INPUT: InputDriver = {
   open: kernel_open,
   rect: kernel_rect,
-  pointer: (phase, kind, id, button, x, y) => worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
+  pointer: (phase, kind, id, button, x, y) =>
+    worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
   wheel: kernel_wheel,
   keyDown,
   keyUp,
@@ -49,13 +58,20 @@ const INPUT: InputDriver = {
 /** Alone, so a marker under the pointer re-renders only the surface. */
 function World() {
   const overMarker = useKernel((s) => s.over_marker);
-  return <bracket.surface.World surface={WORLD} input={INPUT} overMarker={overMarker} />;
+  return (
+    <bracket.surface.World
+      surface={WORLD}
+      input={INPUT}
+      overMarker={overMarker}
+    />
+  );
 }
 
 /** The room a panel may fill between the settings button and the dock. */
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + chrome.control + PANEL_GAP_PX;
-  const bottom = bottomRest(bracket.view.useSafeArea(), chrome.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
+  const bottom = bottomRest(bracket.view.useSafeArea(), chrome.inset) +
+    DOCK_HEIGHT + PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 
@@ -101,7 +117,13 @@ export function WorldView() {
 
 const styles = StyleSheet.create({
   root: { overflow: "hidden", backgroundColor: "black" },
-  between: { position: "absolute", left: chrome.inset, zIndex: layer.debug, alignItems: "flex-start", pointerEvents: "box-none" },
+  between: {
+    position: "absolute",
+    left: chrome.inset,
+    zIndex: layer.debug,
+    alignItems: "flex-start",
+    pointerEvents: "box-none",
+  },
   // The dock's width chain needs a real ancestor width to grow into.
   bottom: { width: "100%", minWidth: 0, alignItems: "center" },
 });

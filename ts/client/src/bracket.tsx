@@ -51,11 +51,25 @@ export interface Viewport {
 
 /** What the sensors hear, in the platform's words: handed in once, at boot. */
 export interface SensorHeard {
-  position(lon: f64, lat: f64, altitude: f64 | null, accuracy: f64 | null, course: f64 | null): void;
+  position(
+    lon: f64,
+    lat: f64,
+    altitude: f64 | null,
+    accuracy: f64 | null,
+    course: f64 | null,
+  ): void;
   positionError(error: "denied" | "unavailable" | "timeout" | "other"): void;
-  orientation(compass: f64 | null, alpha: f64 | null, beta: f64 | null, gamma: f64 | null): void;
+  orientation(
+    compass: f64 | null,
+    alpha: f64 | null,
+    beta: f64 | null,
+    gamma: f64 | null,
+  ): void;
   orientationLost(): void;
-  permission(sensor: "geolocation" | "orientation", answer: "asking" | "granted" | "denied" | "failed"): void;
+  permission(
+    sensor: "geolocation" | "orientation",
+    answer: "asking" | "granted" | "denied" | "failed",
+  ): void;
 }
 
 /** A surface the guest draws into, by the handle it gave; 0 is none. */
@@ -73,7 +87,14 @@ export interface InputDriver {
   /** The world opened, asking `viewport` each frame; the returned call closes it. */
   open(viewport: () => Viewport): () => void;
   rect(left: f64, top: f64, width: f64, height: f64): void;
-  pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void;
+  pointer(
+    phase: PointerPhase,
+    kind: PointerKind,
+    id: i32,
+    button: i32,
+    x: f64,
+    y: f64,
+  ): void;
   wheel(delta_y: f64): void;
   /** Whether the key was taken, so the page's default is prevented. */
   keyDown(code: string, at: { inField: boolean }): boolean;
@@ -122,30 +143,59 @@ export interface Bracket {
   guest: { open(plan: Plan): Promise<Guest> };
   /** Asks for a GPU, and says what it heard of one. */
   gpu: { boot(heard: GpuHeard): void };
-  storage: { get(key: string): string | null; set(key: string, value: string): void };
+  storage: {
+    get(key: string): string | null;
+    set(key: string, value: string): void;
+  };
   /** `rgba` is 0xRRGGBBAA; `out` is RGBA, top row first, not premultiplied. */
   text: {
     width(weight: u32, px: f32, text: string): f32;
-    raster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void;
+    raster(
+      weight: u32,
+      px: f32,
+      rgba: u32,
+      text: string,
+      x: f32,
+      width: u32,
+      height: u32,
+      out: Uint8Array,
+    ): void;
   };
   /** Where a route is asked of ("" on a page, its own origin); `get` rejects with a TypeError on a transport failure. `credits`
    * are the reads the place runs at once, each frame's to the kernel, so its scheduler, not the place's queue, orders the rest. */
-  origin: { url: string; credits: u32; get(route: string, signal?: AbortSignal): Promise<Response> };
+  origin: {
+    url: string;
+    credits: u32;
+    get(route: string, signal?: AbortSignal): Promise<Response>;
+  };
   /** Whether the device is online, as far as the place can tell: a place that cannot says nothing. */
   online: { watch(report: (online: boolean) => void): void };
   sensor: {
     geo: { has: boolean; start(): void; stop(): void };
     /** `gated`: a permission asked inside a gesture; `silence`: no event is how a loss shows. */
-    orient: { has: boolean; gated: boolean; silence: boolean; permit(): Promise<boolean>; start(): void; stop(): void };
+    orient: {
+      has: boolean;
+      gated: boolean;
+      silence: boolean;
+      permit(): Promise<boolean>;
+      start(): void;
+      stop(): void;
+    };
     /** Once, at boot, before any sensor starts. */
     hear(heard: SensorHeard): void;
     follow(): () => void;
   };
-  share: { save(name: string, text: string, mime: string): Promise<void>; copy(text: string): Promise<void> };
+  share: {
+    save(name: string, text: string, mime: string): Promise<void>;
+    copy(text: string): Promise<void>;
+  };
   locale: { list(): readonly string[]; show(lng: string): void };
   /** The place's own long frames, as its platform reports them: `sources`, the entries it hears them by, none where it
    * reports none; `watch`, once, hears each from then on and those it buffered before. */
-  longFrame: { sources(): readonly LongFrameSource[]; watch(heard: (frame: LongFrame) => void): void };
+  longFrame: {
+    sources(): readonly LongFrameSource[];
+    watch(heard: (frame: LongFrame) => void): void;
+  };
   view: {
     useSafeArea(): SafeArea;
     useWindowSize(): { width: f64; height: f64 };
@@ -154,7 +204,10 @@ export interface Bracket {
     useViewportTop(): number;
   };
   /** The world's surface, and the place's input driver. */
-  surface: { World: ComponentType<WorldSurfaceProps>; Case: ComponentType<CaseSurfaceProps> };
+  surface: {
+    World: ComponentType<WorldSurfaceProps>;
+    Case: ComponentType<CaseSurfaceProps>;
+  };
 }
 
 /** The place's bracket. */

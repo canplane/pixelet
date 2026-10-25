@@ -28,7 +28,10 @@ FROM overture_places WHERE name <> '' AND name ILIKE '%' || $1 || '%'
     };
 }
 
-const SEARCH_SQL: &str = concat!(places_matching!(), "ORDER BY similarity(name, $1) DESC, name, gers_id\nLIMIT $2");
+const SEARCH_SQL: &str = concat!(
+    places_matching!(),
+    "ORDER BY similarity(name, $1) DESC, name, gers_id\nLIMIT $2"
+);
 
 /// The country division `near` (`$3`, `$4`) lies in; null at sea or past the
 /// divisions.
@@ -71,7 +74,10 @@ WHERE name <> '' AND name ILIKE '%' || $1 || '%'
     };
 }
 
-const DIVISION_SEARCH_SQL: &str = concat!(divisions_matching!(), "ORDER BY similarity(name, $1) DESC, gers_id\nLIMIT $2");
+const DIVISION_SEARCH_SQL: &str = concat!(
+    divisions_matching!(),
+    "ORDER BY similarity(name, $1) DESC, gers_id\nLIMIT $2"
+);
 
 /// `near`'s country, and the divisions its lineage holds, first.
 const DIVISION_SEARCH_NEAR_SQL: &str = concat!(
@@ -150,21 +156,35 @@ impl DivisionRow {
     }
 }
 
-pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -> Result<Vec<SearchResult>, DbError> {
+pub async fn search(
+    pool: &Pool,
+    query: &str,
+    near: Option<&Near>,
+    limit: u32,
+) -> Result<Vec<SearchResult>, DbError> {
     let limit_i64 = limit as i64;
 
     let (places_sql, places_params): (&str, Vec<&(dyn ToSql + Sync)>) = match near {
-        Some(near) => (SEARCH_NEAR_SQL, vec![&query, &limit_i64, &near.lon, &near.lat]),
+        Some(near) => (
+            SEARCH_NEAR_SQL,
+            vec![&query, &limit_i64, &near.lon, &near.lat],
+        ),
         None => (SEARCH_SQL, vec![&query, &limit_i64]),
     };
     let (division_sql, division_params): (&str, Vec<&(dyn ToSql + Sync)>) = match near {
-        Some(near) => (DIVISION_SEARCH_NEAR_SQL, vec![&query, &DIVISION_LIMIT, &near.lon, &near.lat]),
+        Some(near) => (
+            DIVISION_SEARCH_NEAR_SQL,
+            vec![&query, &DIVISION_LIMIT, &near.lon, &near.lat],
+        ),
         None => (DIVISION_SEARCH_SQL, vec![&query, &DIVISION_LIMIT]),
     };
 
     let client = pool.get().await?;
     // One checkout: tokio-postgres pipelines both statements on it.
-    let (places, divisions) = tokio::join!(client.query(places_sql, &places_params), client.query(division_sql, &division_params),);
+    let (places, divisions) = tokio::join!(
+        client.query(places_sql, &places_params),
+        client.query(division_sql, &division_params),
+    );
 
     let place_rows: Vec<PlaceRow> = places?.iter().map(PlaceRow::from_row).collect();
     let division_rows: Vec<DivisionRow> = divisions?.iter().map(DivisionRow::from_row).collect();
@@ -193,17 +213,24 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
     let ys: Vec<f64> = place_rows.iter().map(|r| r.y3857).collect();
     let place_context = division::name_points(pool, &xs, &ys).await?;
 
-    let place_results = place_rows.into_iter().zip(place_context).map(|(r, context)| SearchResult {
-        gers_id: r.gers_id,
-        name: r.name,
-        kind: "place",
-        category: pxl_geo_spec::overture::properties::category_of(&r.properties),
-        common: None,
-        context,
-        lon: r.lon,
-        lat: r.lat,
-        distance_m: distance_m(near, r.lon, r.lat),
-    });
+    let place_results = place_rows
+        .into_iter()
+        .zip(place_context)
+        .map(|(r, context)| SearchResult {
+            gers_id: r.gers_id,
+            name: r.name,
+            kind: "place",
+            category: pxl_geo_spec::overture::properties::category_of(&r.properties),
+            common: None,
+            context,
+            lon: r.lon,
+            lat: r.lat,
+            distance_m: distance_m(near, r.lon, r.lat),
+        });
 
-    Ok(division_results.into_iter().chain(place_results).take(limit as usize).collect())
+    Ok(division_results
+        .into_iter()
+        .chain(place_results)
+        .take(limit as usize)
+        .collect())
 }

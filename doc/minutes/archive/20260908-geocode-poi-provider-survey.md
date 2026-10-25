@@ -1,35 +1,35 @@
 # Reverse-geocoding and POI provider survey: Google/Naver/Kakao/Korean-government, and why the 30-day cache plan needs a second look
 
-**2026-09-08** — prompted by a question: now that POI has its own static
-bake ([20260907-world-rendering-tiers.md](../20260907-world-rendering-tiers.md),
-the `PoiProvider` seam in `apps/api/src/modules/world/poi/provider.ts`) and
-reverse geocoding is still a live, uncached call to public Nominatim
+**2026-09-08** — prompted by a question: now that POI has its own static bake
+([20260907-world-rendering-tiers.md](../20260907-world-rendering-tiers.md), the
+`PoiProvider` seam in `apps/api/src/modules/world/poi/provider.ts`) and reverse
+geocoding is still a live, uncached call to public Nominatim
 (`use_reverse_geocode.ts`, `GEOCODE_BASE_URL`), two things came up: whether
-reverse geocoding should get the same static-bake treatment as POI/terrain,
-and what it'd take to add Google/Naver/Kakao/Korean-government as
-alternative providers behind that seam, with results cached server-side for
-30 days. This is the provider research; no code changed.
+reverse geocoding should get the same static-bake treatment as POI/terrain, and
+what it'd take to add Google/Naver/Kakao/Korean-government as alternative
+providers behind that seam, with results cached server-side for 30 days. This is
+the provider research; no code changed.
 
-**Caveat up front:** pricing/ToS pages change and several numbers below
-came from secondary sources (aggregator blogs, community Q&A threads)
-rather than being confirmed against the vendor's own current legal text —
-flagged per-row below. Re-verify directly before committing to any of
-these, not just the pricing.
+**Caveat up front:** pricing/ToS pages change and several numbers below came
+from secondary sources (aggregator blogs, community Q&A threads) rather than
+being confirmed against the vendor's own current legal text — flagged per-row
+below. Re-verify directly before committing to any of these, not just the
+pricing.
 
 ## Today
 
 Reverse geocoding: live call to Nominatim's public instance
-(`use_reverse_geocode.ts`), no cache anywhere (client or server), 1.5s
-debounce to respect Nominatim's 1 req/sec usage policy — the same "not
-deployed against production" gap POI had before its own bake (see
+(`use_reverse_geocode.ts`), no cache anywhere (client or server), 1.5s debounce
+to respect Nominatim's 1 req/sec usage policy — the same "not deployed against
+production" gap POI had before its own bake (see
 [20260816-deployment-hosting.md](../20260816-deployment-hosting.md)).
 
-POI: baked from the same OSM source (`poi_extractor.ts`), already
-statically served (`poi/v1/` in R2). Reverse geocoding baking the same way —
-this session's opening suggestion — is a reasonable next step and doesn't
-need a new provider to do it: it's the same OSM data (admin boundaries +
-named places) this app already ingests, just a different query shape
-against it (nearest/containing named area, not "features in this bbox").
+POI: baked from the same OSM source (`poi_extractor.ts`), already statically
+served (`poi/v1/` in R2). Reverse geocoding baking the same way — this session's
+opening suggestion — is a reasonable next step and doesn't need a new provider
+to do it: it's the same OSM data (admin boundaries + named places) this app
+already ingests, just a different query shape against it (nearest/containing
+named area, not "features in this bbox").
 
 ## Provider survey
 
@@ -45,74 +45,83 @@ against it (nearest/containing named area, not "features in this bbox").
 
 ## The plan this actually affects
 
-The stated plan was: non-OSM provider results get cached server-side for 30
-days once a server exists; today (no server) just call live, uncached. That
-30-day figure lines up almost exactly with Google's own stated exception —
-probably not a coincidence if that number came from awareness of Google's
-policy — but it does not transfer to the other three commercial/government
-sources surveyed:
+The stated plan was: non-OSM provider results get cached server-side for 30 days
+once a server exists; today (no server) just call live, uncached. That 30-day
+figure lines up almost exactly with Google's own stated exception — probably not
+a coincidence if that number came from awareness of Google's policy — but it
+does not transfer to the other three commercial/government sources surveyed:
 
-- **Kakao and VWorld explicitly prohibit any storage.** A 30-day cache of
-  either violates their stated terms as found here, full stop — not "check
-  the fine print," a real conflict with the plan as described.
-- **Google only exempts the coordinate pair, not the rest of a Places
-  result** (name, category, address text). A 30-day cache of a full POI
-  record from Google Places wouldn't be compliant even though _a_ 30-day
-  cache concept is explicitly Google's own.
-- **Naver's terms weren't found either way** — silence isn't permission,
-  needs a direct check before relying on it.
+- **Kakao and VWorld explicitly prohibit any storage.** A 30-day cache of either
+  violates their stated terms as found here, full stop — not "check the fine
+  print," a real conflict with the plan as described.
+- **Google only exempts the coordinate pair, not the rest of a Places result**
+  (name, category, address text). A 30-day cache of a full POI record from
+  Google Places wouldn't be compliant even though _a_ 30-day cache concept is
+  explicitly Google's own.
+- **Naver's terms weren't found either way** — silence isn't permission, needs a
+  direct check before relying on it.
 - **OSM/ODbL is the one source surveyed where a long-lived cache is
   unambiguously fine** — which is also the source this app already bakes
-  POI/terrain from. Reverse geocoding baked the same way (this session's
-  opening suggestion) sidesteps the whole caching-terms question rather
-  than needing per-vendor legal review.
+  POI/terrain from. Reverse geocoding baked the same way (this session's opening
+  suggestion) sidesteps the whole caching-terms question rather than needing
+  per-vendor legal review.
 
-None of this rules Google/Naver/Kakao/government sources out — `PoiProvider`
-was designed exactly so a commercial source can slot in later
-(`provider.ts`'s own doc comment) — it means **the specific "cache
-everything for 30 days" plan needs a per-field, per-vendor design** (cache
-what each vendor's terms actually allow, for however long each allows it,
-possibly nothing for some fields on some vendors) rather than one uniform
-policy applied across all of them. That's real design work, not a detail to
-patch in later.
+None of this rules Google/Naver/Kakao/government sources out — `PoiProvider` was
+designed exactly so a commercial source can slot in later (`provider.ts`'s own
+doc comment) — it means **the specific "cache everything for 30 days" plan needs
+a per-field, per-vendor design** (cache what each vendor's terms actually allow,
+for however long each allows it, possibly nothing for some fields on some
+vendors) rather than one uniform policy applied across all of them. That's real
+design work, not a detail to patch in later.
 
 ## Recommendation
 
-1. **Bake reverse geocoding from OSM into R2 alongside terrain/POI**, per
-   this session's own opening suggestion — same data already ingested, same
-   ODbL clearance the current pipeline already relies on, no new legal
-   surface. The natural default provider, same as POI's OSM default today.
-2. **Client stays uncached for now, exactly as already planned** — nothing
-   here changes that; this only affects the future server-side cache
-   design.
-3. **Before wiring any commercial/government provider behind
-   `PoiProvider`/a future `GeocodeProvider`, re-verify its current terms
-   directly against the vendor's own legal page**, not this survey — pricing
-   pages and terms of service change, and several rows above are already
-   flagged as unconfirmed from public sources alone.
-4. **Design the future cache layer per-field, not as one blanket duration.**
-   A `{value, cached_at, ttl, source}` shape per cached field (not per whole
-   record) would let, say, a Google-sourced coordinate get a 30-day TTL
-   while a Google-sourced name/category gets none, and a Kakao-sourced
-   anything gets none — without different vendors needing structurally
-   different code paths.
+1. **Bake reverse geocoding from OSM into R2 alongside terrain/POI**, per this
+   session's own opening suggestion — same data already ingested, same ODbL
+   clearance the current pipeline already relies on, no new legal surface. The
+   natural default provider, same as POI's OSM default today.
+2. **Client stays uncached for now, exactly as already planned** — nothing here
+   changes that; this only affects the future server-side cache design.
+3. **Before wiring any commercial/government provider behind `PoiProvider`/a
+   future `GeocodeProvider`, re-verify its current terms directly against the
+   vendor's own legal page**, not this survey — pricing pages and terms of
+   service change, and several rows above are already flagged as unconfirmed
+   from public sources alone.
+4. **Design the future cache layer per-field, not as one blanket duration.** A
+   `{value, cached_at, ttl, source}` shape per cached field (not per whole
+   record) would let, say, a Google-sourced coordinate get a 30-day TTL while a
+   Google-sourced name/category gets none, and a Kakao-sourced anything gets
+   none — without different vendors needing structurally different code paths.
 
 ## Status
 
-Discussion only — no code changed. Numbers here are a starting point for a
-real decision, not something to build against without re-confirming the
-flagged rows.
+Discussion only — no code changed. Numbers here are a starting point for a real
+decision, not something to build against without re-confirming the flagged rows.
 
 **Superseded (same day)** by
 [20260908-overture-poi-adoption.md](../20260908-overture-poi-adoption.md):
 Overture Maps turned up mid-thread as a fifth option this survey didn't
-originally cover, and measured out ahead of every provider above — its
-Places theme is licensed clean (no Google/Naver/Kakao-style display or
-storage restrictions) and came back ~5x denser than OSM in two different
-real Korean bboxes, for POI. That same document also moved reverse
-geocoding onto Overture's Divisions theme, not the "bake from OSM, same as
-terrain" recommendation this survey made below — that recommendation does
-NOT still stand. The Google/Naver/Kakao/government pricing/policy findings
-themselves are unaffected.
+originally cover, and measured out ahead of every provider above — its Places
+theme is licensed clean (no Google/Naver/Kakao-style display or storage
+restrictions) and came back ~5x denser than OSM in two different real Korean
+bboxes, for POI. That same document also moved reverse geocoding onto Overture's
+Divisions theme, not the "bake from OSM, same as terrain" recommendation this
+survey made below — that recommendation does NOT still stand. The
+Google/Naver/Kakao/government pricing/policy findings themselves are unaffected.
 
-Sources: [Google Geocoding API usage & billing](https://developers.google.com/maps/documentation/geocoding/usage-and-billing) · [Google Places API policies](https://developers.google.com/maps/documentation/places/web-service/policies) · [Google Maps Platform pricing](https://mapsplatform.google.com/pricing/) · [NAVER Cloud Platform Maps](https://www.ncloud.com/product/applicationService/maps) · [Kakao Local API dev guide](https://developers.kakao.com/docs/latest/ko/local/dev-guide) · [Kakao DevTalk — local API storage policy threads](https://devtalk.kakao.com/t/api/150800) · [VWorld Geocoder API 2.0 reference](https://www.vworld.kr/dev/v4dv_geocoderguide2_s001.do) · [Public Data Portal — MOLIT Geocoder API](https://www.data.go.kr/data/15101106/openapi.do) · [Address-based industry support service (juso.go.kr)](https://www.juso.go.kr/addrlink/main.do)
+Sources:
+[Google Geocoding API usage & billing](https://developers.google.com/maps/documentation/geocoding/usage-and-billing)
+·
+[Google Places API policies](https://developers.google.com/maps/documentation/places/web-service/policies)
+· [Google Maps Platform pricing](https://mapsplatform.google.com/pricing/) ·
+[NAVER Cloud Platform Maps](https://www.ncloud.com/product/applicationService/maps)
+·
+[Kakao Local API dev guide](https://developers.kakao.com/docs/latest/ko/local/dev-guide)
+·
+[Kakao DevTalk — local API storage policy threads](https://devtalk.kakao.com/t/api/150800)
+·
+[VWorld Geocoder API 2.0 reference](https://www.vworld.kr/dev/v4dv_geocoderguide2_s001.do)
+·
+[Public Data Portal — MOLIT Geocoder API](https://www.data.go.kr/data/15101106/openapi.do)
+·
+[Address-based industry support service (juso.go.kr)](https://www.juso.go.kr/addrlink/main.do)

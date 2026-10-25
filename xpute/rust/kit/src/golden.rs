@@ -49,7 +49,10 @@ impl Golden {
     /// A double written through f64_bits.
     pub fn f64(&self, key: &str) -> f64 {
         let text = self.s(key);
-        f64::from_bits(u64::from_str_radix(text.trim_start_matches("0x"), 16).unwrap_or_else(|_| crate::bug!(EINVAL)))
+        f64::from_bits(
+            u64::from_str_radix(text.trim_start_matches("0x"), 16)
+                .unwrap_or_else(|_| crate::bug!(EINVAL)),
+        )
     }
 
     pub fn bool(&self, key: &str) -> bool {
@@ -65,7 +68,9 @@ impl Golden {
         let text = self.s(key);
         (0..text.len())
             .step_by(2)
-            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or_else(|_| crate::bug!(EINVAL)))
+            .map(|i| {
+                u8::from_str_radix(&text[i..i + 2], 16).unwrap_or_else(|_| crate::bug!(EINVAL))
+            })
             .collect()
     }
 
@@ -73,9 +78,17 @@ impl Golden {
     pub fn each(&self, base: &str, mut f: impl FnMut(&str)) {
         let mut k = 0;
         loop {
-            let prefix = if base.is_empty() { format!("{k}") } else { format!("{base}.{k}") };
+            let prefix = if base.is_empty() {
+                format!("{k}")
+            } else {
+                format!("{base}.{k}")
+            };
             let dotted = format!("{prefix}.");
-            if !self.map.keys().any(|key| *key == prefix || key.starts_with(&dotted)) {
+            if !self
+                .map
+                .keys()
+                .any(|key| *key == prefix || key.starts_with(&dotted))
+            {
                 break;
             }
             f(&prefix);

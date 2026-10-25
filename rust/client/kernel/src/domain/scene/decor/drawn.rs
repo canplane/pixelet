@@ -53,7 +53,9 @@ fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
 
 /// Each kind's window zooms where it is a sprite's worth, a bit each.
 fn shown() -> [u32; DECORS.len()] {
-    let at = |k: usize| (FIRST_CELL..=LEAF_CELL).filter(move |&c| decor_shown(DECORS[k].extent(catalog()), c));
+    let at = |k: usize| {
+        (FIRST_CELL..=LEAF_CELL).filter(move |&c| decor_shown(DECORS[k].extent(catalog()), c))
+    };
     core::array::from_fn(|k| at(k).fold(0, |w, c| w | 1 << (c - FIRST_CELL)))
 }
 
@@ -144,7 +146,11 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     // one beside it, whose side the reach is short of. What is past an
     // eye's own reach `decor_count_cs` leaves out by its size, as it does
     // what is past the box.
-    let reach = DECORS.iter().map(|d| d.extent(catalog())).fold(0.0, f64::max) / (decor_sprite_px() * seen.upp);
+    let reach = DECORS
+        .iter()
+        .map(|d| d.extent(catalog()))
+        .fold(0.0, f64::max)
+        / (decor_sprite_px() * seen.upp);
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
         zoom -= 1;
@@ -170,7 +176,13 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         }
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
-        placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), wrapped(x), y as u32, z as u32, 0]);
+        placed.push([
+            scatter::record_word(k, variant, turn, scatter::PLACED_AT),
+            wrapped(x),
+            y as u32,
+            z as u32,
+            0,
+        ]);
     });
 }
 
@@ -179,11 +191,21 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
 fn meets(e: &[i32; 4], around: &Aabb) -> bool {
     let leaf = units(LEAF_CELL);
     let lap = 1i64 << LEAF_CELL;
-    let (lo, hi) = (|v: f64| libm::floor(v / leaf) as i64, |v: f64| libm::ceil(v / leaf) as i64);
-    let b = [lo(around.min[0]), lo(around.min[1]), hi(around.max[0]), hi(around.max[1])];
+    let (lo, hi) = (
+        |v: f64| libm::floor(v / leaf) as i64,
+        |v: f64| libm::ceil(v / leaf) as i64,
+    );
+    let b = [
+        lo(around.min[0]),
+        lo(around.min[1]),
+        hi(around.max[0]),
+        hi(around.max[1]),
+    ];
     let shift = (b[0] - i64::from(e[0])).div_euclid(lap) * lap;
     let ys = i64::from(e[1]) < b[3] && b[1] < i64::from(e[3]);
-    ys && [shift, shift + lap].iter().any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
+    ys && [shift, shift + lap]
+        .iter()
+        .any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
 }
 
 /// The params of a hand-over `seen` makes.
@@ -201,7 +223,9 @@ fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
         let at = drawn::HIDE as usize;
         p[at..at + 4].copy_from_slice(&[wrapped(x), y as u32, z as u32, 1]);
     }
-    let extents = DECORS.iter().flat_map(|d| d.variants.iter().map(|v| v.extent(catalog()) as f32));
+    let extents = DECORS
+        .iter()
+        .flat_map(|d| d.variants.iter().map(|v| v.extent(catalog()) as f32));
     for (k, e) in extents.enumerate() {
         p[drawn::EXTENTS as usize + k] = e.to_bits();
     }
@@ -216,13 +240,24 @@ pub fn edited(regions: &[Aabb]) {
     let h = handed();
     let leaf = units(LEAF_CELL);
     for r in regions {
-        let b = [libm::floor(r.min[0] / leaf), libm::floor(r.min[1] / leaf), libm::ceil(r.max[0] / leaf), libm::ceil(r.max[1] / leaf)].map(|v| v as i32);
+        let b = [
+            libm::floor(r.min[0] / leaf),
+            libm::floor(r.min[1] / leaf),
+            libm::ceil(r.max[0] / leaf),
+            libm::ceil(r.max[1] / leaf),
+        ]
+        .map(|v| v as i32);
         if h.edited < h.edits.len() {
             h.edits[h.edited] = b;
             h.edited += 1;
         } else {
             let last = &mut h.edits[h.edited - 1];
-            *last = [last[0].min(b[0]), last[1].min(b[1]), last[2].max(b[2]), last[3].max(b[3])];
+            *last = [
+                last[0].min(b[0]),
+                last[1].min(b[1]),
+                last[2].max(b[2]),
+                last[3].max(b[3]),
+            ];
         }
     }
 }
@@ -234,7 +269,11 @@ pub fn frame() -> DecorFrame<'static> {
     let h = handed();
     let edited = core::mem::take(&mut h.edited);
     DecorFrame {
-        shown: if settings_store().decor { &h.shown } else { &[0; DECORS.len()] },
+        shown: if settings_store().decor {
+            &h.shown
+        } else {
+            &[0; DECORS.len()]
+        },
         params: &h.params,
         placed: &h.placed,
         translation: h.translation,

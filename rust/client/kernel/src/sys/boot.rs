@@ -26,7 +26,8 @@ pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
 }
 
 pub fn heap_stat() -> HeapStat {
-    BOOT.get(|| None).map_or_else(HeapStat::default, |b| (b.heap_stat)())
+    BOOT.get(|| None)
+        .map_or_else(HeapStat::default, |b| (b.heap_stat)())
 }
 
 /// Whether the GPU's host takes a frame now (xpute_gpu::admit), as the

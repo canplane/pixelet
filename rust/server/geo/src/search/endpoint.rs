@@ -37,11 +37,16 @@ fn parse_near(raw: Option<&str>) -> Option<Near> {
 
 /// An unparseable `limit` falls back to the default rather than a 400.
 fn parse_limit(raw: Option<&str>) -> u32 {
-    raw.and_then(|v| v.parse::<u32>().ok()).filter(|n| *n > 0).unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT)
+    raw.and_then(|v| v.parse::<u32>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(DEFAULT_LIMIT)
+        .clamp(1, MAX_LIMIT)
 }
 
 pub fn routes(pool: Pool) -> Router {
-    Router::new().route(pxl_spec::route::SEARCH_URL, get(search)).with_state(pool)
+    Router::new()
+        .route(pxl_spec::route::SEARCH_URL, get(search))
+        .with_state(pool)
 }
 
 async fn search(State(pool): State<Pool>, Query(params): Query<Params>) -> Response {
@@ -49,7 +54,11 @@ async fn search(State(pool): State<Pool>, Query(params): Query<Params>) -> Respo
     // Characters, not bytes: a Korean syllable is three bytes.
     let len = q.chars().count();
     if !(MIN_QUERY_LEN..=MAX_QUERY_LEN).contains(&len) {
-        return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({ "error": "bad query" }))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({ "error": "bad query" })),
+        )
+            .into_response();
     }
 
     let near = parse_near(params.near.as_deref());

@@ -14,5 +14,7 @@ export function ViewPanel() {
   const v = useProfilerView(show && open);
 
   if (!show) return null;
-  return <Fold name="view" title="View">{v !== null && <ProfilerView v={v} />}</Fold>;
+  return (
+    <Fold name="view" title="View">{v !== null && <ProfilerView v={v} />}</Fold>
+  );
 }

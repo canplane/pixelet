@@ -52,7 +52,11 @@ fn world_struck_corner_at_cell_size_names_the_cell_every_tier_lands_inside() {
     for (name, hit) in cases() {
         let cell = lattice(&world_struck_corner(&hit, units(GROUND.cell())));
         for size in (OBJECT_COARSEST..=OBJECT_FINEST).map(units) {
-            assert_eq!(lattice(&world_struck_corner(&hit, size)), cell, "{name} at tier {size}");
+            assert_eq!(
+                lattice(&world_struck_corner(&hit, size)),
+                cell,
+                "{name} at tier {size}"
+            );
         }
     }
 }

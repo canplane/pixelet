@@ -24,12 +24,21 @@ pub struct DebugPass {
 }
 
 impl DebugPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32, align: u32) -> DebugPass {
+    pub fn new(
+        g: &Gpu,
+        pipelines: &mut Pipelines,
+        frame_buffer: u32,
+        sky_buffer: u32,
+        align: u32,
+    ) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
         let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
         let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, g.canvas());
-        let grid_group = g.bind_group(grid.layouts[0], &[buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer)]);
+        let grid_group = g.bind_group(
+            grid.layouts[0],
+            &[buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer)],
+        );
         DebugPass {
             built,
             faces,
@@ -42,17 +51,36 @@ impl DebugPass {
 
     pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], moved: bool) {
         let sets = draws.of(PIPELINE_DEBUG);
-        self.uniforms.write(g, self.built.layouts[1], sets.len() as u32, sets, moved, |buf, d| {
-            let u = uniform_of(uniforms, d);
-            buf[..16].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0]));
-        });
+        self.uniforms.write(
+            g,
+            self.built.layouts[1],
+            sets.len() as u32,
+            sets,
+            moved,
+            |buf, d| {
+                let u = uniform_of(uniforms, d);
+                buf[..16].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0]));
+            },
+        );
     }
 
     /// `depth` is the world's, which nothing reads after this.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uploads: &Uploads, stamp: &mut Stamp) {
+    pub fn draw(
+        &self,
+        g: &Gpu,
+        encoder: u32,
+        canvas: u32,
+        depth: u32,
+        draws: &Draws,
+        uploads: &Uploads,
+        stamp: &mut Stamp,
+    ) {
         let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
-        let held = self.uniforms.slots().filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
+        let held = self
+            .uniforms
+            .slots()
+            .filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
         if held.is_none() && !grid {
             return;
         }
@@ -68,7 +96,10 @@ impl DebugPass {
         // With no faces the lines' pass clears the depth itself.
         let faced = sets().any(|s| s.4 > 0);
         if faced {
-            let pass = g.pass(encoder, &pass_desc(0, Load::Clear, depth, Load::Clear, 0.0, stamp.pass()));
+            let pass = g.pass(
+                encoder,
+                &pass_desc(0, Load::Clear, depth, Load::Clear, 0.0, stamp.pass()),
+            );
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, buffer, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
@@ -83,11 +114,17 @@ impl DebugPass {
         // their faces' depth, then the rest over none, so the focus's frame
         // is whole under the coverage laid on the ground.
         let depth_load = if faced { Load::Load } else { Load::Clear };
-        let mut pass = g.pass(encoder, &pass_desc(canvas, Load::Load, depth, depth_load, 0.0, stamp.pass()));
+        let mut pass = g.pass(
+            encoder,
+            &pass_desc(canvas, Load::Load, depth, depth_load, 0.0, stamp.pass()),
+        );
         for faces in [true, false] {
             if faced && !faces {
                 g.end(pass);
-                pass = g.pass(encoder, &pass_desc(canvas, Load::Load, depth, Load::Clear, 0.0, stamp.pass()));
+                pass = g.pass(
+                    encoder,
+                    &pass_desc(canvas, Load::Load, depth, Load::Clear, 0.0, stamp.pass()),
+                );
             }
             g.set_pipeline(pass, self.built.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);

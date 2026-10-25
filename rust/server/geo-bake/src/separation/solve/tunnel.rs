@@ -63,7 +63,13 @@ pub(super) fn approach_reach(level: i64, scale: Scale) -> f64 {
 
 /// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road tunnel's portal
 /// on a deck opens at it (`decks`).
-pub(super) fn bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, lines: &mut Vec<(Line, Drawn)>) {
+pub(super) fn bores(
+    src: &Ring,
+    stretches: &[Stretch],
+    decks: &Decks,
+    scale: Scale,
+    lines: &mut Vec<(Line, Drawn)>,
+) {
     let ceiling = (scale.c(TUNNEL_CEIL_OFFSET_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
     for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
         let r = &stretches[q];
@@ -89,11 +95,19 @@ pub(super) fn bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Sca
             lines.push(line_of(r, &ys, stretch, form, clear));
         }
     }
-    for q in (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Tunnel && stretches[q].rail()) {
+    for q in (0..stretches.len())
+        .filter(|&q| stretches[q].piece.form == Form::Tunnel && stretches[q].rail())
+    {
         // the floor under the interior, under the ceiling, under the cover (Arnis `generate_rail_tunnel_shell`)
         let depth = scale.c(RAIL_TUNNEL_DEPTH_M + RAIL_INTERIOR_HEIGHT_M + BLOCK_M);
         let ys: Vec<i32> = stretches[q].terrain.iter().map(|t| t - depth).collect();
-        lines.push(line_of(&stretches[q], &ys, [0, ys.len() - 1], Form::Tunnel, scale.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
+        lines.push(line_of(
+            &stretches[q],
+            &ys,
+            [0, ys.len() - 1],
+            Form::Tunnel,
+            scale.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8,
+        ));
     }
 }
 
@@ -115,12 +129,21 @@ struct Claim {
 /// How far under its cover a road tunnel at `level` is bored, and so how far its portals' approaches
 /// sink, in cells: Arnis's cover drop, and a layer's drop for each layer below the first.
 fn tunnel_drop(level: i64, scale: Scale) -> i32 {
-    scale.c(TUNNEL_COVER_DROP_M) + (-(level + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * scale.c(TUNNEL_LAYER_DROP_M)
+    scale.c(TUNNEL_COVER_DROP_M)
+        + (-(level + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * scale.c(TUNNEL_LAYER_DROP_M)
 }
 
-fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
+fn road_bores(
+    src: &Ring,
+    stretches: &[Stretch],
+    decks: &Decks,
+    scale: Scale,
+    lines: &mut Vec<(Line, Drawn)>,
+) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let ramp_ways = &decks.ramp_ways;
-    let tunnels: Vec<usize> = (0..stretches.len()).filter(|&q| stretches[q].piece.form == Form::Tunnel && !stretches[q].rail()).collect();
+    let tunnels: Vec<usize> = (0..stretches.len())
+        .filter(|&q| stretches[q].piece.form == Form::Tunnel && !stretches[q].rail())
+        .collect();
     // a node two tunnels share, or an end the ring cut, stays at depth
     let mut owner: FnvHashMap<&End, PartId> = FnvHashMap::default();
     let mut shared: FnvHashSet<&End> = FnvHashSet::default();
@@ -138,7 +161,8 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
             }
         }
     }
-    let internal = |q: usize, e: usize| stretches[q].clipped[e] || shared.contains(&stretches[q].ends[e]);
+    let internal =
+        |q: usize, e: usize| stretches[q].clipped[e] || shared.contains(&stretches[q].ends[e]);
     let drop_of = |r: &Stretch| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), scale);
 
     // ---- a portal on a road deck, at its end or along it, opens at the deck's height there, where Arnis
@@ -146,15 +170,26 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
     let mut deck: FnvHashMap<&End, i32> = FnvHashMap::default();
     for &q in &tunnels {
         for e in (0..2).filter(|&e| !internal(q, e)) {
-            let (node, p) = (&stretches[q].ends[e], stretches[q].at[if e == 0 { 0 } else { stretches[q].at.len() - 1 }]);
+            let (node, p) = (
+                &stretches[q].ends[e],
+                stretches[q].at[if e == 0 { 0 } else { stretches[q].at.len() - 1 }],
+            );
             let on = decks
                 .ys
                 .iter()
                 .filter(|(b, _)| stretches[*b].nodes.contains(node))
                 .filter_map(|(b, ys)| {
-                    let near = |k: &usize| libm::hypot(stretches[*b].at[*k][0] - p[0], stretches[*b].at[*k][1] - p[1]);
+                    let near = |k: &usize| {
+                        libm::hypot(
+                            stretches[*b].at[*k][0] - p[0],
+                            stretches[*b].at[*k][1] - p[1],
+                        )
+                    };
                     // the stretch of the deck that passes it: a cell of it within a cell of the portal
-                    (0..ys.len()).min_by(|i, j| near(i).total_cmp(&near(j))).filter(|k| near(k) <= mer_from_u(CELL_U)).map(|k| ys[k])
+                    (0..ys.len())
+                        .min_by(|i, j| near(i).total_cmp(&near(j)))
+                        .filter(|k| near(k) <= mer_from_u(CELL_U))
+                        .map(|k| ys[k])
                 })
                 .max();
             if let Some(y) = on {
@@ -164,11 +199,21 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
     }
 
     // ---- the approaches: ways at grade from a portal, as far as the drop needs and the road goes on ----
-    let portal_nodes: FnvHashSet<&End> = tunnels.iter().flat_map(|&q| (0..2).filter(move |&e| !internal(q, e)).map(move |e| &stretches[q].ends[e])).collect();
+    let portal_nodes: FnvHashSet<&End> = tunnels
+        .iter()
+        .flat_map(|&q| {
+            (0..2)
+                .filter(move |&e| !internal(q, e))
+                .map(move |e| &stretches[q].ends[e])
+        })
+        .collect();
     let surface = |part: &PartId| {
-        src.ways
-            .get(part)
-            .filter(|w| !w.row.tags.bridge && !w.row.tags.tunnel && w.row.subtype == "road" && !ramp_ways.contains(part))
+        src.ways.get(part).filter(|w| {
+            !w.row.tags.bridge
+                && !w.row.tags.tunnel
+                && w.row.subtype == "road"
+                && !ramp_ways.contains(part)
+        })
     };
     let step = mer_from_u(CELL_U);
     // a way's last cell as `cells_along` counts them
@@ -201,14 +246,21 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
             let budget = want * TUNNEL_RAMP_RUN;
             let mut taken: FnvHashSet<PartId> = FnvHashSet::default();
             let mut branches: Vec<Vec<(PartId, bool, i32, i32)>> = Vec::new();
-            let eligible = |at: &End, taken: &FnvHashSet<PartId>, claims: &BTreeMap<PartId, Vec<Claim>>| -> Vec<PartId> {
+            let eligible = |at: &End,
+                            taken: &FnvHashSet<PartId>,
+                            claims: &BTreeMap<PartId, Vec<Claim>>|
+             -> Vec<PartId> {
                 let mut out: Vec<PartId> = src
                     .way_ends
                     .get(at)
                     .into_iter()
                     .flatten()
                     .filter(|g| !taken.contains(*g) && claims.get(*g).is_none_or(|c| c.len() < 2))
-                    .filter(|g| surface(g).is_some_and(|w| is_pedestrian(w.row.class.as_deref().unwrap_or("")) == walking))
+                    .filter(|g| {
+                        surface(g).is_some_and(|w| {
+                            is_pedestrian(w.row.class.as_deref().unwrap_or("")) == walking
+                        })
+                    })
                     .cloned()
                     .collect();
                 out.sort();
@@ -230,7 +282,11 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
                     taken.insert(part.clone());
                     dist += len - 1;
                     at = w.row.ends[usize::from(at_start)].clone();
-                    if leaves || dist >= budget || chain.len() >= TUNNEL_APPROACH_WAYS || portal_nodes.contains(&at) {
+                    if leaves
+                        || dist >= budget
+                        || chain.len() >= TUNNEL_APPROACH_WAYS
+                        || portal_nodes.contains(&at)
+                    {
                         break;
                     }
                     // only where the road goes on: a junction stays at grade
@@ -243,7 +299,11 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
                 branches.push(chain);
             }
             // every branch takes the same descent, or one ends in a cliff
-            let Some(avail) = branches.iter().filter_map(|b| b.last().map(|(_, _, d0, len)| d0 + len - 1)).min() else {
+            let Some(avail) = branches
+                .iter()
+                .filter_map(|b| b.last().map(|(_, _, d0, len)| d0 + len - 1))
+                .min()
+            else {
                 continue;
             };
             let drop = want.min(avail);
@@ -272,7 +332,12 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
         // back at grade; past that it is a way at grade, the ground's to paint
         let mut spans: Vec<[i32; 2]> = cs
             .iter()
-            .map(|c| [(c.anchor - c.drop * c.run).max(0), (c.anchor + c.drop * c.run).min(last)])
+            .map(|c| {
+                [
+                    (c.anchor - c.drop * c.run).max(0),
+                    (c.anchor + c.drop * c.run).min(last),
+                ]
+            })
             .filter(|[a, b]| a < b)
             .collect();
         spans.sort_unstable();
@@ -298,12 +363,22 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
                         let points = (from..k)
                             .zip(cells.iter().zip(&terrain))
                             .map(|(k, (p, &t))| {
-                                let drop = cs.iter().map(|c| c.drop - (k - c.anchor).abs() / c.run).max().unwrap_or(0).max(0);
+                                let drop = cs
+                                    .iter()
+                                    .map(|c| c.drop - (k - c.anchor).abs() / c.run)
+                                    .max()
+                                    .unwrap_or(0)
+                                    .max(0);
                                 [p[0], p[1], f64::from(t - drop)]
                             })
                             .collect();
                         let fraction = |k: i32| w.row.span[0] + along(k) / w.row.segment_length;
-                        lines.push(graded(w, points, [from == 0, k - 1 == last], [fraction(from), fraction(k - 1)]));
+                        lines.push(graded(
+                            w,
+                            points,
+                            [from == 0, k - 1 == last],
+                            [fraction(from), fraction(k - 1)],
+                        ));
                     }
                 }
                 k += 1;
@@ -320,25 +395,50 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
         let last = n - 1;
         // the lowest ground over the bore's footprint decides its roof
         let wall = disk(ways::footprint((r.width_u / CELL_U) as f32));
-        let cover: Vec<i32> =
-            r.at.iter()
-                .zip(&r.terrain)
-                .map(|(p, &t)| {
-                    let around: Vec<[f64; 2]> = wall
-                        .iter()
-                        .map(|&[dx, dz]| [p[0] + mer_from_u(dx as f64 * CELL_U), p[1] + mer_from_u(dz as f64 * CELL_U)])
-                        .filter(|q| src.loaded.contains(&tile_of(*q)))
-                        .collect();
-                    sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
-                })
-                .collect();
+        let cover: Vec<i32> = r
+            .at
+            .iter()
+            .zip(&r.terrain)
+            .map(|(p, &t)| {
+                let around: Vec<[f64; 2]> = wall
+                    .iter()
+                    .map(|&[dx, dz]| {
+                        [
+                            p[0] + mer_from_u(dx as f64 * CELL_U),
+                            p[1] + mer_from_u(dz as f64 * CELL_U),
+                        ]
+                    })
+                    .filter(|q| src.loaded.contains(&tile_of(*q)))
+                    .collect();
+                sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
+            })
+            .collect();
         let (internal_s, internal_e) = (internal(q, 0), internal(q, 1));
-        let deck_s = if internal_s { None } else { deck.get(&r.ends[0]).copied() };
-        let deck_e = if internal_e { None } else { deck.get(&r.ends[1]).copied() };
-        let (gs, ge) = (deck_s.unwrap_or(r.terrain[0]), deck_e.unwrap_or(r.terrain[last]));
+        let deck_s = if internal_s {
+            None
+        } else {
+            deck.get(&r.ends[0]).copied()
+        };
+        let deck_e = if internal_e {
+            None
+        } else {
+            deck.get(&r.ends[1]).copied()
+        };
+        let (gs, ge) = (
+            deck_s.unwrap_or(r.terrain[0]),
+            deck_e.unwrap_or(r.terrain[last]),
+        );
         let drop_cover = drop_of(r);
-        let start_drop = if internal_s { 0 } else { drops.get(&r.ends[0]).copied().unwrap_or(0) };
-        let end_drop = if internal_e { 0 } else { drops.get(&r.ends[1]).copied().unwrap_or(0) };
+        let start_drop = if internal_s {
+            0
+        } else {
+            drops.get(&r.ends[0]).copied().unwrap_or(0)
+        };
+        let end_drop = if internal_e {
+            0
+        } else {
+            drops.get(&r.ends[1]).copied().unwrap_or(0)
+        };
         // A bore no longer than a tile is Arnis's: under the straight run between its portals, at most
         // as high as its cover leaves room for, in one valley. Every tile that draws any of it holds
         // all of it in its ring, so all of them solve it alike.
@@ -357,26 +457,44 @@ fn road_bores(src: &Ring, stretches: &[Stretch], decks: &Decks, scale: Scale, li
         let grade = |i: usize| round(f64::from(gs) + f64::from(ge - gs) * i as f64 / denom) as i32;
         let floor = if long {
             let room: Vec<i32> = cover.iter().map(|c| c - drop_cover).collect();
-            envelope(&room, TUNNEL_FAR_GRADE, TILE_CELLS as usize).into_iter().map(|y| round(y) as i32).collect()
+            envelope(&room, TUNNEL_FAR_GRADE, TILE_CELLS as usize)
+                .into_iter()
+                .map(|y| round(y) as i32)
+                .collect()
         } else {
-            (0..n).map(|i| grade(i).min(cover[i] - drop_cover)).collect::<Vec<i32>>()
+            (0..n)
+                .map(|i| grade(i).min(cover[i] - drop_cover))
+                .collect::<Vec<i32>>()
         };
         // the ground caps the bore, but where a deck's portal holds it over the ground, ramping down from
         // the deck, and in a short bore no higher than the straight run between the portals, so it meets
         // the other one
         let over = |i: usize| {
-            [deck_s.map(|d| d - i as i32 / TUNNEL_RAMP_RUN), deck_e.map(|d| d - (last - i) as i32 / TUNNEL_RAMP_RUN)]
-                .into_iter()
-                .flatten()
-                .max()
-                .map_or(r.terrain[i], |held| r.terrain[i].max(if long { held } else { held.min(grade(i)) }))
+            [
+                deck_s.map(|d| d - i as i32 / TUNNEL_RAMP_RUN),
+                deck_e.map(|d| d - (last - i) as i32 / TUNNEL_RAMP_RUN),
+            ]
+            .into_iter()
+            .flatten()
+            .max()
+            .map_or(r.terrain[i], |held| {
+                r.terrain[i].max(if long { held } else { held.min(grade(i)) })
+            })
         };
         // as deep as cover asks, ramping down from whatever the portals reached
         let mut ys: Vec<i32> = (0..n)
             .map(|i| {
                 let desired = floor[i];
-                let ramp_s = if internal_s { i32::MIN } else { gs - start_drop - i as i32 / TUNNEL_RAMP_RUN };
-                let ramp_e = if internal_e { i32::MIN } else { ge - end_drop - (last - i) as i32 / TUNNEL_RAMP_RUN };
+                let ramp_s = if internal_s {
+                    i32::MIN
+                } else {
+                    gs - start_drop - i as i32 / TUNNEL_RAMP_RUN
+                };
+                let ramp_e = if internal_e {
+                    i32::MIN
+                } else {
+                    ge - end_drop - (last - i) as i32 / TUNNEL_RAMP_RUN
+                };
                 desired.max(ramp_s.max(ramp_e)).min(over(i))
             })
             .collect();

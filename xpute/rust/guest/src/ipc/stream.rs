@@ -149,7 +149,9 @@ impl Stream {
                 *last = 0;
             }
             // SAFETY: the words opened, as bytes; at least `b.len()` of them.
-            unsafe { core::ptr::copy_nonoverlapping(b.as_ptr(), dst.as_mut_ptr().cast::<u8>(), b.len()) };
+            unsafe {
+                core::ptr::copy_nonoverlapping(b.as_ptr(), dst.as_mut_ptr().cast::<u8>(), b.len())
+            };
         }
     }
 }

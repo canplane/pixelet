@@ -30,7 +30,12 @@ pub fn character_variant(group: Group, number: u8) -> Option<CharacterVariant> {
     let (model, skin, height_u, move_clip) = match group {
         Group::person => {
             let row = person::Key::ALL.iter().position(|k| *k as u8 == number)?;
-            (person::models[row], person::skin, person::size, person::move_clip)
+            (
+                person::models[row],
+                person::skin,
+                person::size,
+                person::move_clip,
+            )
         }
         Group::pet => {
             let row = pet::Key::ALL.iter().position(|k| *k as u8 == number)?;

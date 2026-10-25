@@ -31,7 +31,11 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn new(root: PathBuf, admission: Arc<Semaphore>, deadline: std::time::Duration) -> Result<Self, String> {
+    pub fn new(
+        root: PathBuf,
+        admission: Arc<Semaphore>,
+        deadline: std::time::Duration,
+    ) -> Result<Self, String> {
         std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
         Ok(Self {
             root,
@@ -45,7 +49,12 @@ impl Cache {
     /// while the server runs; resource refusals leave nothing. Do not time out this
     /// future: it would release the key before the work stopped. `asked` is
     /// whether a client waits on it, rather than only a fold over it.
-    pub async fn once<F>(&self, key: String, asked: bool, make: impl FnOnce(Lease) -> F + Send + 'static) -> Result<(), Failure>
+    pub async fn once<F>(
+        &self,
+        key: String,
+        asked: bool,
+        make: impl FnOnce(Lease) -> F + Send + 'static,
+    ) -> Result<(), Failure>
     where
         F: Future<Output = Result<(), Failure>> + Send + 'static,
     {
@@ -58,7 +67,11 @@ impl Cache {
                     if self.published(&key) {
                         return Ok(());
                     }
-                    let permit = self.admission.clone().try_acquire_owned().map_err(|_| Failure::Limited("demand queue full"))?;
+                    let permit = self
+                        .admission
+                        .clone()
+                        .try_acquire_owned()
+                        .map_err(|_| Failure::Limited("demand queue full"))?;
                     (e.insert(Arc::default()).clone(), Some(permit))
                 }
             }
@@ -73,7 +86,10 @@ impl Cache {
             let deadline = tokio::time::Instant::now() + self.deadline;
             tokio::spawn(async move {
                 let job = async move { make(Lease { deadline, asked }).await };
-                let result = tokio::spawn(job).await.map_err(|e| Failure::Bake(e.to_string())).and_then(|r| r);
+                let result = tokio::spawn(job)
+                    .await
+                    .map_err(|e| Failure::Bake(e.to_string()))
+                    .and_then(|r| r);
                 if matches!(result, Ok(()) | Err(Failure::Limited(_))) {
                     jobs.lock().expect("flights").remove(&key);
                 }
@@ -99,7 +115,9 @@ impl Cache {
     }
 
     pub fn publish(&self, name: &str, raw: Option<&[u8]>) -> Result<(), String> {
-        let packed = raw.map(|r| pack(r, Level::Live).map_err(|e| e.to_string())).transpose()?;
+        let packed = raw
+            .map(|r| pack(r, Level::Live).map_err(|e| e.to_string()))
+            .transpose()?;
         let path = self.root.join(name);
         std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
         match packed.as_deref() {
@@ -113,7 +131,12 @@ impl Cache {
         let path = self.root.join(name);
         match tokio::fs::read(&path).await {
             Ok(bytes) => Ok(Some(bytes)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound && path.with_extension("empty").is_file() => Ok(None),
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    && path.with_extension("empty").is_file() =>
+            {
+                Ok(None)
+            }
             Err(e) => Err(format!("{}: {e}", path.display())),
         }
     }

@@ -13,7 +13,11 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 /// datum where nothing is held.
 fn ground_under(at: V3) -> f64 {
     let point = world::point(at[0], at[1], at[2]);
-    World::now().floor_under(&point, LEAF_ZOOM).value().flatten().unwrap_or(0.0)
+    World::now()
+        .floor_under(&point, LEAF_ZOOM)
+        .value()
+        .flatten()
+        .unwrap_or(0.0)
 }
 
 /// What the origin grain is measured from.

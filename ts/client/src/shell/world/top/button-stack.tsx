@@ -23,7 +23,9 @@ interface StackItem {
 }
 
 /** iPhone Maps' grouped controls. */
-export function ButtonStack({ items, isActive }: { items: StackItem[]; isActive?: boolean }) {
+export function ButtonStack(
+  { items, isActive }: { items: StackItem[]; isActive?: boolean },
+) {
   return (
     <Backing
       fill={isActive ? surface.chosen.fill : color.ground}
@@ -44,10 +46,23 @@ export function ButtonStack({ items, isActive }: { items: StackItem[]; isActive?
         >
           {({ pressed }) => (
             <Motion
-              to={{ opacity: item.disabled ? disabledContent : pressed && !SYSTEM_BACKING ? 0.5 : 1 }}
+              to={{
+                opacity: item.disabled
+                  ? disabledContent
+                  : pressed && !SYSTEM_BACKING
+                  ? 0.5
+                  : 1,
+              }}
               transition={SNAP}
             >
-              {item.face ?? (item.glyph && <Glyph glyph={item.glyph} size={chrome.glyph} color={item.isActive ? color.action : LABEL.primary} />)}
+              {item.face ??
+                (item.glyph && (
+                  <Glyph
+                    glyph={item.glyph}
+                    size={chrome.glyph}
+                    color={item.isActive ? color.action : LABEL.primary}
+                  />
+                ))}
             </Motion>
           )}
         </Pressable>
@@ -57,7 +72,16 @@ export function ButtonStack({ items, isActive }: { items: StackItem[]; isActive?
 }
 
 const styles = StyleSheet.create({
-  capsule: { width: chrome.control, borderRadius: chrome.control / 2, overflow: "hidden" },
-  item: { width: chrome.control, height: chrome.control, alignItems: "center", justifyContent: "center" },
+  capsule: {
+    width: chrome.control,
+    borderRadius: chrome.control / 2,
+    overflow: "hidden",
+  },
+  item: {
+    width: chrome.control,
+    height: chrome.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   chosen: { boxShadow: `0 0 0 2px ${surface.chosen.edge}` },
 });

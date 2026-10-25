@@ -18,8 +18,10 @@ export class XputeError extends Error {
     this.errnum = errnum;
 
     try {
-      // deno-lint-ignore ban-types
-      (Error as ErrorConstructor & { captureStackTrace?: (target: object, ctor?: Function) => void }).captureStackTrace?.(this, new.target);
+      (Error as ErrorConstructor & {
+        // deno-lint-ignore ban-types
+        captureStackTrace?: (target: object, ctor?: Function) => void;
+      }).captureStackTrace?.(this, new.target);
     } catch {
       // a polyfill that throws
     }

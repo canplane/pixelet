@@ -92,7 +92,11 @@ struct Dataset {
 impl Dataset {
     fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {
         Ok(Self {
-            cache: Cache::new(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
+            cache: Cache::new(
+                base.join(kind.name()),
+                runner.admission.clone(),
+                std::time::Duration::from_secs(runner.limits.seconds),
+            )?,
             coverage: Coverage::of_source()?,
             sources: match kind {
                 Kind::Terrain => TerrainTile::sources,
@@ -110,7 +114,12 @@ pub struct Server {
     top_zoom: Zoom,
 }
 impl Server {
-    pub fn open(workers: usize, base: PathBuf, top_zoom: Zoom, limits: Limits) -> Result<Self, String> {
+    pub fn open(
+        workers: usize,
+        base: PathBuf,
+        top_zoom: Zoom,
+        limits: Limits,
+    ) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(workers, limits)?);
         let datasets = [Kind::Terrain, Kind::Place, Kind::Division].map(|k| {
@@ -130,7 +139,8 @@ impl Server {
     pub async fn get(&self, kind: Kind, name: &str) -> Result<Option<Vec<u8>>, Failure> {
         let data = self.datasets[kind as usize].clone();
         let runner = self.runner.clone();
-        let path = pyramid::resolve(data.clone(), runner, kind, name, kind.top(self.top_zoom)).await?;
+        let path =
+            pyramid::resolve(data.clone(), runner, kind, name, kind.top(self.top_zoom)).await?;
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }
@@ -151,8 +161,15 @@ fn prune(root: &std::path::Path) -> Result<(), String> {
 /// The lock keeps a second server from pruning under a running one.
 fn claim(base: &std::path::Path) -> Result<std::fs::File, String> {
     std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
-    let owner = std::fs::File::options().create(true).truncate(false).write(true).open(base.join(LOCK)).map_err(|e| e.to_string())?;
-    owner.try_lock().map_err(|_| format!("{}: another server owns this cache", base.display()))?;
+    let owner = std::fs::File::options()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(base.join(LOCK))
+        .map_err(|e| e.to_string())?;
+    owner
+        .try_lock()
+        .map_err(|_| format!("{}: another server owns this cache", base.display()))?;
     Ok(owner)
 }
 

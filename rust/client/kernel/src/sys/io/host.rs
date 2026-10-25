@@ -30,7 +30,9 @@ pub(crate) fn sys() -> Option<&'static mut Sys> {
 /// long as the module runs.
 pub unsafe fn set_stream(at: u32) {
     // SAFETY: the caller's range.
-    SYS.set(Some(unsafe { Sys::new(mem::core(), at as usize, stream::BYTES as usize / WORD) }));
+    SYS.set(Some(unsafe {
+        Sys::new(mem::core(), at as usize, stream::BYTES as usize / WORD)
+    }));
 }
 
 pub fn rise() {
@@ -48,7 +50,10 @@ const FILE_TURN_BYTES: usize = fd_turn_bytes(PATH_BYTES);
 /// read and written. Requests that can wait take the stream only past it.
 pub const RESERVE: usize = FILE_TURN_BYTES * (2 * MAX_CREDITS as usize + 2 * Kept::ALL.len());
 
-const _: () = assert!(RESERVE < stream::BYTES as usize, "the calls that cannot wait would not fit the host stream");
+const _: () = assert!(
+    RESERVE < stream::BYTES as usize,
+    "the calls that cannot wait would not fit the host stream"
+);
 
 /// A request that can wait a turn: None where there is no host, false where
 /// the turn's stream has no room for it past `RESERVE`.

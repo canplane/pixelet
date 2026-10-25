@@ -41,14 +41,28 @@ pub fn ghost() -> Ghost {
         ..
     } = pending();
 
-    let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser) || hovered_object.is_some();
-    let current_scale = units(if use_object_style { preview_zoom } else { GROUND.cell() });
+    let use_object_style = matches!(
+        active_tool,
+        ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser
+    ) || hovered_object.is_some();
+    let current_scale = units(if use_object_style {
+        preview_zoom
+    } else {
+        GROUND.cell()
+    });
 
     let carved = CARVED.get(|| Asked::NONE);
     // Looked at each frame turn, a hover not asked of this one too.
     carved.kept();
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
-        (Some(h), true) => carved.of(World::now(), *h, |w| cube_of(u32::from(w.surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block)))),
+        (Some(h), true) => carved.of(World::now(), *h, |w| {
+            cube_of(u32::from(
+                w.surface(h, LEAF_ZOOM)
+                    .value()
+                    .flatten()
+                    .map_or(0, |s| s.block),
+            ))
+        }),
         _ => None,
     };
 
@@ -87,17 +101,20 @@ pub fn ghost() -> Ghost {
         _ => None,
     };
     let erase = active_tool == ActiveTool::Eraser;
-    let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).and_then(|s| {
-        let (m, decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
-        Some(Ghost::Decor {
-            at: s.at,
-            decor,
-            variant: m.variant,
-            rotation: m.spin(),
-            scale: m.scale,
-            stand_in: None,
-        })
-    });
+    let scattered_ghost = hover
+        .scattered
+        .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
+        .and_then(|s| {
+            let (m, decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
+            Some(Ghost::Decor {
+                at: s.at,
+                decor,
+                variant: m.variant,
+                rotation: m.spin(),
+                scale: m.scale,
+                stand_in: None,
+            })
+        });
     match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {

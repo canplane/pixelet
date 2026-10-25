@@ -6,7 +6,11 @@
  * `VITE_APP_ENV`, not `import.meta.env.DEV`.
  */
 
-import { id as buildId, number as buildNumber, time as buildTime } from "virtual:pxl-build";
+import {
+  id as buildId,
+  number as buildNumber,
+  time as buildTime,
+} from "virtual:pxl-build";
 
 /** Shown in settings: a phone has no URL bar to tell which build is on screen. */
 export const APP_ENV: string = __APP_ENV__;

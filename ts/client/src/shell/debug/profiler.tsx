@@ -17,7 +17,10 @@ import { n1 } from "./profiler/lane.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { fps, profilerReportRead } from "./profiler/view.ts";
 import { LIVE_WINDOW_MS, useProfilerGauge } from "./profiler/poll.ts";
-import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
+import {
+  installLongFrameObservers,
+  longFramesClear,
+} from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
 import { kernel_command } from "@/abi/shell.ts";
@@ -40,25 +43,45 @@ interface TintLook {
 }
 
 function hued(hue: string): TintLook {
-  return { border: alpha(hue, 0.4), ground: alpha(hue, 0.1), ink: hue, lit: alpha(hue, 0.2), litInk: hue };
+  return {
+    border: alpha(hue, 0.4),
+    ground: alpha(hue, 0.1),
+    ink: hue,
+    lit: alpha(hue, 0.2),
+    litInk: hue,
+  };
 }
 
 const TINT: Record<Tint, TintLook> = {
-  [Tint.Plain]: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
+  [Tint.Plain]: {
+    border: alpha(color.white, 0.15),
+    ground: alpha(color.white, 0.05),
+    ink: alpha(color.white, 0.6),
+    lit: alpha(color.white, 0.1),
+    litInk: alpha(color.white, 0.9),
+  },
   [Tint.Go]: hued(color.profilerGo),
   [Tint.Halt]: hued(color.profilerHalt),
-  [Tint.Off]: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
+  [Tint.Off]: {
+    border: alpha(color.white, 0.1),
+    ground: alpha(color.white, 0.05),
+    ink: alpha(color.white, 0.25),
+    lit: alpha(color.white, 0.05),
+    litInk: alpha(color.white, 0.25),
+  },
 };
 
 /** The hint shows under the buttons on hover or hold, since a device has no tooltip. */
-function PanelButton({ label, hint, tint = Tint.Plain, onPress, onHint, disabled }: {
-  label: string;
-  hint: string;
-  tint?: Tint;
-  onPress: () => void;
-  onHint: (hint: string | null) => void;
-  disabled?: boolean;
-}) {
+function PanelButton(
+  { label, hint, tint = Tint.Plain, onPress, onHint, disabled }: {
+    label: string;
+    hint: string;
+    tint?: Tint;
+    onPress: () => void;
+    onHint: (hint: string | null) => void;
+    disabled?: boolean;
+  },
+) {
   const [hovered, setHovered] = useState(false);
   const t = TINT[tint];
   return (
@@ -79,9 +102,24 @@ function PanelButton({ label, hint, tint = Tint.Plain, onPress, onHint, disabled
       disabled={disabled}
       accessibilityRole="button"
       accessibilityHint={hint}
-      style={({ pressed }) => [styles.button, { borderColor: t.border, backgroundColor: hovered || pressed ? t.lit : t.ground }]}
+      style={(
+        { pressed },
+      ) => [styles.button, {
+        borderColor: t.border,
+        backgroundColor: hovered || pressed ? t.lit : t.ground,
+      }]}
     >
-      {({ pressed }) => <Text style={[gauge.text, { color: hovered || pressed ? t.litInk : t.ink }, disabled && { opacity: disabledContent }]}>{label}</Text>}
+      {({ pressed }) => (
+        <Text
+          style={[
+            gauge.text,
+            { color: hovered || pressed ? t.litInk : t.ink },
+            disabled && { opacity: disabledContent },
+          ]}
+        >
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -121,7 +159,15 @@ export function ProfilerPanel() {
   const title = rate === null ? "Profiler" : `Profiler · ${n1(rate)} fps`;
 
   return (
-    <Fold name="profiler" title={title} end={<Text style={[gauge.text, gauge.key]}>Last {LIVE_WINDOW_MS / 1000} s</Text>}>
+    <Fold
+      name="profiler"
+      title={title}
+      end={
+        <Text style={[gauge.text, gauge.key]}>
+          Last {LIVE_WINDOW_MS / 1000} s
+        </Text>
+      }
+    >
       <View style={styles.buttons}>
         {/* Both, not a toggle: a window opened at boot would read "Stop" until first stopped. */}
         <PanelButton
@@ -143,12 +189,21 @@ export function ProfilerPanel() {
           onHint={setHint}
           label="Report"
           hint="copy the window's summary as text"
-          onPress={() => void profilerReportCopy(profilerReportText(profilerReportRead())).then(setSaid)}
+          onPress={() =>
+            void profilerReportCopy(profilerReportText(profilerReportRead()))
+              .then(setSaid)}
         />
-        <PanelButton onHint={setHint} label="Trace" hint="save the window as a timeline for ui.perfetto.dev" onPress={() => void profilerTraceSave().then(setSaid)} />
+        <PanelButton
+          onHint={setHint}
+          label="Trace"
+          hint="save the window as a timeline for ui.perfetto.dev"
+          onPress={() => void profilerTraceSave().then(setSaid)}
+        />
       </View>
       {/* Under the buttons: a two-line hint above them moved the hovered button away. */}
-      {(said ?? hint) !== null && <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>}
+      {(said ?? hint) !== null && (
+        <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>
+      )}
       {g !== null && <ProfilerRec rec={g.rec} />}
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
         <ProfilerGauge g={g} />
@@ -158,8 +213,19 @@ export function ProfilerPanel() {
 }
 
 const styles = StyleSheet.create({
-  hint: { marginTop: 6, fontWeight: "600", letterSpacing: 0.25, color: HINT_INK },
+  hint: {
+    marginTop: 6,
+    fontWeight: "600",
+    letterSpacing: 0.25,
+    color: HINT_INK,
+  },
   body: { flexShrink: 1 },
   buttons: { flexDirection: "row", gap: 4, marginTop: 8 },
-  button: { flex: 1, alignItems: "center", paddingVertical: 4, borderWidth: 1, borderRadius: 4 },
+  button: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderRadius: 4,
+  },
 });

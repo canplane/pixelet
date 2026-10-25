@@ -31,7 +31,12 @@ pub use pxl_spec_core::window::{WAYS_ACROSS, WAYS_SHIFT};
 pub const MAX_PACKET_BYTES: usize = {
     use super::packet::{branch, seq, HEADER, SCALAR};
     use crate::bake::separation::{MAX_LINES, MAX_POINTS};
-    let separation = branch(8) + seq((MAX_LINES + 1) * 4) + seq(MAX_POINTS * 4) + seq(MAX_POINTS * 2) + 4 * seq(MAX_LINES) + seq(MAX_POINTS);
+    let separation = branch(8)
+        + seq((MAX_LINES + 1) * 4)
+        + seq(MAX_POINTS * 4)
+        + seq(MAX_POINTS * 2)
+        + 4 * seq(MAX_LINES)
+        + seq(MAX_POINTS);
     HEADER + branch(4) + seq(ELE_LANE * 2) + seq(LOOK_LANE) + SCALAR + separation
 };
 
@@ -59,8 +64,8 @@ pub struct Ground {
 /// ways there off the lines (pxl-spec-core `window`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainTile {
-    pub ground: Ground,           // a class a cell: the source rasterized, or its fold; a client's void tile's alone
-    pub separation: Separation,   // ways off the ground: source lines, tops solved offline
+    pub ground: Ground, // a class a cell: the source rasterized, or its fold; a client's void tile's alone
+    pub separation: Separation, // ways off the ground: source lines, tops solved offline
     pub ele: Cow<'static, [i16]>, // the bake's: padded samples, a leaf's source or the fold's; a client hands them to a GPU off the packet
     pub occupancy: Occupancy,     // which children are tiles: none is asked for that is not
 }
@@ -70,11 +75,17 @@ pub struct TerrainTile {
 /// its place in squares and its count, where one does not.
 pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], usize)> {
     let mut entries = [0usize; (WAYS_ACROSS * WAYS_ACROSS) as usize];
-    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _, _| entries[k] += 1);
+    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _, _| {
+        entries[k] += 1
+    });
     let (bins, squares) = (square >> WAYS_SHIFT, TILE_CELLS / square);
     for qy in 0..squares {
         for qx in 0..squares {
-            let n: usize = (0..bins * bins).map(|b| entries[((qy * bins + b / bins) * WAYS_ACROSS + qx * bins + b % bins) as usize]).sum();
+            let n: usize = (0..bins * bins)
+                .map(|b| {
+                    entries[((qy * bins + b / bins) * WAYS_ACROSS + qx * bins + b % bins) as usize]
+                })
+                .sum();
             if n > WAYS_SQUARE_SEGMENTS {
                 return Err(([qx, qy], n));
             }
@@ -90,9 +101,17 @@ pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], u
 /// `ways_fit` counts, so none holds more than `WAYS_SQUARE_SEGMENTS`. The
 /// words written, the rest left as they were; `scratch` the room it works
 /// in, `WAYS_SQUARE_SEGMENTS` pairs, kept between squares.
-pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratch: &mut [(u32, u32)], out: &mut [u32]) -> usize {
+pub fn square_lines(
+    tile: Tile,
+    separation: &Separation,
+    place: [u32; 2],
+    scratch: &mut [(u32, u32)],
+    out: &mut [u32],
+) -> usize {
     use pxl_spec_core::ways::{header, HEADER_WORDS, SEGMENT_WORDS};
-    use pxl_spec_core::window::{LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE, WAYS_BINS};
+    use pxl_spec_core::window::{
+        LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE, WAYS_BINS,
+    };
     xpute_kit::ensure!(out.len() == LINES_WORDS as usize, ENOTRECOVERABLE);
     xpute_kit::ensure!(scratch.len() == WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE);
     let bins = SQUARE >> WAYS_SHIFT;
@@ -102,7 +121,10 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
         let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
         if [x / bins, y / bins] == place {
             if let Some(e) = scratch.get_mut(count) {
-                *e = ((y % bins) * bins + x % bins, separation.starts[d] + s as u32);
+                *e = (
+                    (y % bins) * bins + x % bins,
+                    separation.starts[d] + s as u32,
+                );
             }
             count += 1;
         }
@@ -119,7 +141,9 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
         let p = e.1;
         if last != Some(p) {
             let at = LINES_SEGMENTS_AT as usize + n * SEGMENT_WORDS;
-            out[at..at + SEGMENT_WORDS].copy_from_slice(&separation.segment_words(p as usize, last == Some(p.wrapping_sub(1))));
+            out[at..at + SEGMENT_WORDS].copy_from_slice(
+                &separation.segment_words(p as usize, last == Some(p.wrapping_sub(1))),
+            );
             (n, last) = (n + 1, Some(p));
         }
         e.1 = (n - 1) as u32;
@@ -183,14 +207,24 @@ fn square_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 /// it, its lines `lines` (`square_lines`): its looks four a cell as a client
 /// hands them (`handed`) and its heights off the tile's samples `ele` as
 /// `heights_cs` draws them (`ground::height`), its ring's too.
-fn laid<'a>(tile: Tile, ground: &'a Ground, ele: &'a [i16], place: [u32; 2], lines: &'a [u32]) -> Laid<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
+fn laid<'a>(
+    tile: Tile,
+    ground: &'a Ground,
+    ele: &'a [i16],
+    place: [u32; 2],
+    lines: &'a [u32],
+) -> Laid<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
     let looks = move |i: u32| {
         let at = square_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
         pxl_spec_core::ground::word(four_looks(&ground.cells, c).map(u32::from))
     };
     let height = move |c: [i32; 2]| {
-        let at = [0, 1].map(|a| (place[a] * pxl_spec_core::window::SQUARE) as f32 + c[a] as f32 + pxl_spec_core::lattice::CELL_CENTER);
+        let at = [0, 1].map(|a| {
+            (place[a] * pxl_spec_core::window::SQUARE) as f32
+                + c[a] as f32
+                + pxl_spec_core::lattice::CELL_CENTER
+        });
         pxl_spec_core::ground::bicubic(|j| i32::from(ele[j]), at[0], at[1])
     };
     Laid {
@@ -206,17 +240,32 @@ fn laid<'a>(tile: Tile, ground: &'a Ground, ele: &'a [i16], place: [u32; 2], lin
 /// `record` as a client hands it to a GPU's fill (pxl-spec-core window.rs
 /// `HANDED_WORDS`): its looks four a cell (`handed`), its tile's padded
 /// samples, and its lines (`square_lines`, with `scratch`); the rest zero.
-fn record(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], record: &mut [u32]) {
+fn record(
+    tile: Tile,
+    held: &TerrainTile,
+    place: [u32; 2],
+    scratch: &mut [(u32, u32)],
+    record: &mut [u32],
+) {
     use pxl_spec_core::window::{ELE_AT, LINES_AT, LINES_WORDS, LOOKS_AT, SQUARE_CELLS};
     record.fill(0);
     for i in 0..SQUARE_CELLS {
         let at = square_cell(place, i);
-        record[(LOOKS_AT + i) as usize] = pxl_spec_core::ground::word(four_looks(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize).map(u32::from));
+        record[(LOOKS_AT + i) as usize] = pxl_spec_core::ground::word(
+            four_looks(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize).map(u32::from),
+        );
     }
     for (k, pair) in held.ele.chunks(2).enumerate() {
-        record[ELE_AT as usize + k] = u32::from(pair[0] as u16) | u32::from(pair.get(1).map_or(0, |&v| v as u16)) << 16;
+        record[ELE_AT as usize + k] =
+            u32::from(pair[0] as u16) | u32::from(pair.get(1).map_or(0, |&v| v as u16)) << 16;
     }
-    square_lines(tile, &held.separation, place, scratch, &mut record[LINES_AT as usize..(LINES_AT + LINES_WORDS) as usize]);
+    square_lines(
+        tile,
+        &held.separation,
+        place,
+        scratch,
+        &mut record[LINES_AT as usize..(LINES_AT + LINES_WORDS) as usize],
+    );
 }
 
 /// What the window's square at `place` (in squares) of `tile` reads as,
@@ -224,7 +273,13 @@ fn record(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, 
 /// `runs`, its scratch (`ways::tree::SCRATCH_WORDS`), as a GPU fills it
 /// (pxl-spec-core `fill::square`): the runs its ways read as, and the most
 /// spans a column makes.
-pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], [handed, lane, runs]: [&mut [u32]; 3]) -> [u32; 2] {
+pub fn square_runs(
+    tile: Tile,
+    held: &TerrainTile,
+    place: [u32; 2],
+    scratch: &mut [(u32, u32)],
+    [handed, lane, runs]: [&mut [u32]; 3],
+) -> [u32; 2] {
     use pxl_spec_core::window::SQUARE;
     record(tile, held, place, scratch, handed);
     let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
@@ -238,7 +293,12 @@ pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mu
 /// and those it holds once folded; none for a tile without ways, whose
 /// squares hold their root's family alone. `runs` its scratch as a GPU's, and
 /// `pool` a square's room to build in, its heap words then its data words.
-pub fn square_families(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)], [handed, lane, runs, pool]: [&mut [u32]; 4]) -> Vec<[u32; 2]> {
+pub fn square_families(
+    tile: Tile,
+    held: &TerrainTile,
+    scratch: &mut [(u32, u32)],
+    [handed, lane, runs, pool]: [&mut [u32]; 4],
+) -> Vec<[u32; 2]> {
     use pxl_spec_core::window::SQUARE;
     if held.separation.is_empty() {
         return Vec::new();
@@ -246,7 +306,13 @@ pub fn square_families(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)
     let side = TILE_CELLS / SQUARE;
     (0..side * side)
         .map(|k| {
-            square_runs(tile, held, [k % side, k / side], scratch, [handed, lane, runs]);
+            square_runs(
+                tile,
+                held,
+                [k % side, k / side],
+                scratch,
+                [handed, lane, runs],
+            );
             pxl_spec_core::fill::tree(lane, runs, pxl_spec_core::fill::of(handed, 0), pool, 1)
         })
         .collect()
@@ -262,7 +328,10 @@ pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
     use pxl_spec_core::window::{EYE_WINDOWS, FIRST_CELL, HANDED, SQUARES, WINDOWS};
     let cells = FIRST_CELL..FIRST_CELL + EYE_WINDOWS;
     let most = cells.clone().map(&worst).max().unwrap_or(0);
-    cells.map(worst).sum::<u64>() + u64::from(WINDOWS - EYE_WINDOWS) * most + u64::from(HANDED) * taken + u64::from(SQUARES)
+    cells.map(worst).sum::<u64>()
+        + u64::from(WINDOWS - EYE_WINDOWS) * most
+        + u64::from(HANDED) * taken
+        + u64::from(SQUARES)
 }
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
@@ -274,7 +343,10 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
     use pxl_spec_core::window::{LINES_WORDS, SQUARE};
     let lines = &held.separation;
     let squares = TILE_CELLS / SQUARE;
-    let (mut scratch, mut words) = (vec![(0, 0); WAYS_SQUARE_SEGMENTS], vec![0; LINES_WORDS as usize]);
+    let (mut scratch, mut words) = (
+        vec![(0, 0); WAYS_SQUARE_SEGMENTS],
+        vec![0; LINES_WORDS as usize],
+    );
     let mut kept = separation::Builder::default();
     for line in lines.iter() {
         let mut one = separation::Builder::default();
@@ -290,7 +362,9 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
         let reach = line.footprint();
         let span = |k: usize| {
             let first = ((lo[k] - reach) / f64::from(SQUARE)).floor().max(0.0) as u32;
-            let last = ((hi[k] + reach) / f64::from(SQUARE)).floor().min(f64::from(squares - 1)) as u32;
+            let last = ((hi[k] + reach) / f64::from(SQUARE))
+                .floor()
+                .min(f64::from(squares - 1)) as u32;
             first..=last
         };
         let seen = span(1).any(|qy| {
@@ -298,7 +372,10 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
                 let n = square_lines(tile, &one, [qx, qy], &mut scratch, &mut words);
                 let sq = laid(tile, &held.ground, &held.ele, [qx, qy], &words[..n]);
                 let ring = -1..=SQUARE as i32;
-                ring.clone().any(|y| ring.clone().any(|x| pxl_spec_core::ways::column(&sq, [x, y]).0.n > 0))
+                ring.clone().any(|y| {
+                    ring.clone()
+                        .any(|x| pxl_spec_core::ways::column(&sq, [x, y]).0.n > 0)
+                })
             })
         });
         if seen {
@@ -311,7 +388,10 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
             );
         }
     }
-    TerrainTile { separation: kept.finish(), ..held }
+    TerrainTile {
+        separation: kept.finish(),
+        ..held
+    }
 }
 
 /// Whether each square of `tile`'s windows holds its ways' runs
@@ -331,7 +411,13 @@ pub fn runs_fit(tile: Tile, held: &TerrainTile) -> Result<(), ([u32; 2], [u32; 2
     );
     for qy in 0..TILE_CELLS / SQUARE {
         for qx in 0..TILE_CELLS / SQUARE {
-            let [n, spans] = square_runs(tile, held, [qx, qy], &mut scratch, [&mut handed, &mut lane, &mut runs]);
+            let [n, spans] = square_runs(
+                tile,
+                held,
+                [qx, qy],
+                &mut scratch,
+                [&mut handed, &mut lane, &mut runs],
+            );
             if n > RUNS_SQUARE || spans > pxl_spec_core::ways::SPANS as u32 {
                 return Err(([qx, qy], [n, spans]));
             }
@@ -341,7 +427,8 @@ pub fn runs_fit(tile: Tile, held: &TerrainTile) -> Result<(), ([u32; 2], [u32; 2
 }
 
 // Made on first use: a constant array of zeros would ship in the module's data.
-static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> = std::sync::LazyLock::new(|| vec![crate::asset::cube::sentinel::void; GROUND_LANE]);
+static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> =
+    std::sync::LazyLock::new(|| vec![crate::asset::cube::sentinel::void; GROUND_LANE]);
 
 impl TerrainTile {
     /// Where the source has nothing at all, as a client holds it: void
@@ -363,12 +450,19 @@ impl TerrainTile {
     /// A leaf as the bake makes it: its padded samples, a look a cell, each
     /// its own four, and its separation.
     pub fn leaf(ele: Vec<i16>, ground: Ground, separation: Separation) -> TerrainTile {
-        let ground = Ground { cells: expand(&ground.cells).into() };
+        let ground = Ground {
+            cells: expand(&ground.cells).into(),
+        };
         TerrainTile::of(ele, ground, separation, Occupancy::LEAF)
     }
 
     /// A tile as the bake holds it: these lanes, nothing a client looks up.
-    pub fn of(ele: Vec<i16>, ground: Ground, separation: Separation, occupancy: Occupancy) -> TerrainTile {
+    pub fn of(
+        ele: Vec<i16>,
+        ground: Ground,
+        separation: Separation,
+        occupancy: Occupancy,
+    ) -> TerrainTile {
         TerrainTile {
             ground,
             separation,
@@ -382,7 +476,12 @@ impl TerrainTile {
 /// (`LOOK_LANE`), one a cell, each its own four, or one for the whole tile.
 fn four_looks(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     match cells.len() {
-        LOOK_LANE => [cells[4 * c], cells[4 * c + 1], cells[4 * c + 2], cells[4 * c + 3]],
+        LOOK_LANE => [
+            cells[4 * c],
+            cells[4 * c + 1],
+            cells[4 * c + 2],
+            cells[4 * c + 3],
+        ],
         1 => [cells[0]; 4],
         _ => [cells[c]; 4],
     }
@@ -390,18 +489,25 @@ fn four_looks(cells: &[GroundId], c: usize) -> [GroundId; 4] {
 
 /// The tile's four looks a cell, however it holds them (`four_looks`).
 fn expand(cells: &[GroundId]) -> Vec<GroundId> {
-    (0..GROUND_LANE).flat_map(|c| four_looks(cells, c)).collect()
+    (0..GROUND_LANE)
+        .flat_map(|c| four_looks(cells, c))
+        .collect()
 }
 
 // A tile whose every cell's four looks are one, a leaf's, goes out a look a
 // cell, expanded on decode.
 pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
     let four = &tile.ground.cells;
-    let one: Option<Vec<GroundId>> = four.chunks(4).all(|q| q.iter().all(|&l| l == q[0])).then(|| four.chunks(4).map(|q| q[0]).collect());
+    let one: Option<Vec<GroundId>> = four
+        .chunks(4)
+        .all(|q| q.iter().all(|&l| l == q[0]))
+        .then(|| four.chunks(4).map(|q| q[0]).collect());
     let looks: &[GroundId] = one.as_deref().unwrap_or(four);
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.i16_array(Some(&tile.ele)).u8_array(Some(looks)).u8(Some(tile.occupancy.bits()));
+        b.i16_array(Some(&tile.ele))
+            .u8_array(Some(looks))
+            .u8(Some(tile.occupancy.bits()));
         separation::write_branch(&tile.separation, b);
     }));
     encoder().encode(
@@ -430,13 +536,21 @@ fn read_tile(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     if ele.len() != ELE_LANE || (ground.len() != GROUND_LANE && ground.len() != LOOK_LANE) {
         return Err(malformed());
     }
-    Ok(Lanes { ele, ground, occupancy, separation })
+    Ok(Lanes {
+        ele,
+        ground,
+        occupancy,
+        separation,
+    })
 }
 
 /// What a GPU is handed off a packet: its looks, four a cell, a lane of
 /// one look a cell expanded into `room`, each its own four; and its padded
 /// samples.
-pub fn handed<'a>(pkt: &'a [u8], room: &'a mut [GroundId]) -> Result<(&'a [GroundId], &'a [i16]), MarshalError> {
+pub fn handed<'a>(
+    pkt: &'a [u8],
+    room: &'a mut [GroundId],
+) -> Result<(&'a [GroundId], &'a [i16]), MarshalError> {
     let Lanes { ele, ground, .. } = read_tile(pkt)?;
     if ground.len() == LOOK_LANE {
         return Ok((ground, ele));
@@ -450,9 +564,15 @@ pub fn handed<'a>(pkt: &'a [u8], room: &'a mut [GroundId]) -> Result<(&'a [Groun
 /// Decode a tile straight into its resident room in `.fixed.terrain`: its
 /// lines; its cells go to its windows (`handed`).
 pub fn decode_into(pkt: &[u8], room: separation::Room) -> Result<TerrainTile, MarshalError> {
-    let Lanes { occupancy, separation, .. } = read_tile(pkt)?;
+    let Lanes {
+        occupancy,
+        separation,
+        ..
+    } = read_tile(pkt)?;
     Ok(TerrainTile {
-        ground: Ground { cells: Cow::Borrowed(&[]) },
+        ground: Ground {
+            cells: Cow::Borrowed(&[]),
+        },
         separation: separation.into_room(room),
         ele: Cow::Borrowed(&[]),
         occupancy,
@@ -461,9 +581,21 @@ pub fn decode_into(pkt: &[u8], room: separation::Room) -> Result<TerrainTile, Ma
 
 // Copied out as the bake holds it, for a tile that outlives its packet.
 pub fn decode(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
-    let Lanes { ele, ground, occupancy, separation } = read_tile(pkt)?;
+    let Lanes {
+        ele,
+        ground,
+        occupancy,
+        separation,
+    } = read_tile(pkt)?;
     let cells = expand(ground);
-    Ok(TerrainTile::of(ele.to_vec(), Ground { cells: cells.into() }, separation.to_separation(), occupancy))
+    Ok(TerrainTile::of(
+        ele.to_vec(),
+        Ground {
+            cells: cells.into(),
+        },
+        separation.to_separation(),
+        occupancy,
+    ))
 }
 
 #[cfg(test)]

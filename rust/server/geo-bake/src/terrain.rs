@@ -22,7 +22,8 @@ use pxl_spec_core::window::{RUNS_SQUARE, SQUARE};
 pub const CELL_U: f64 = units(GROUND.cell());
 
 impl crate::pyramid::Base for TerrainTile {
-    const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::terrain;
+    const LAYER: pxl_spec::bake::published::BaseLayer =
+        pxl_spec::bake::published::BaseLayer::terrain;
 
     const LATTICE: pxl_spec::space::layer::lattice::Lattice = GROUND;
 

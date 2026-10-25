@@ -131,11 +131,18 @@ impl Spec {
     }
 
     fn record(&self, name: &str) -> &Record {
-        self.records.iter().find(|r| r.name == name).expect("a record kind() found")
+        self.records
+            .iter()
+            .find(|r| r.name == name)
+            .expect("a record kind() found")
     }
 
     fn commands(&self) -> Result<Vec<&Member>, String> {
-        let table = self.enums.iter().find(|e| e.name == "Command").ok_or("cmd.json has no Command")?;
+        let table = self
+            .enums
+            .iter()
+            .find(|e| e.name == "Command")
+            .ok_or("cmd.json has no Command")?;
         Ok(members(table).collect())
     }
 }
@@ -163,15 +170,31 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
         let all: Vec<&Member> = members(e).collect();
         for (i, m) in all.iter().enumerate() {
             if let Some(other) = all[..i].iter().find(|o| o.value == m.value) {
-                return Err(format!("{json}: {}'s {} and {} are both {}", e.name, m.name, other.name, literal(m.value, &e.format)));
+                return Err(format!(
+                    "{json}: {}'s {} and {} are both {}",
+                    e.name,
+                    m.name,
+                    other.name,
+                    literal(m.value, &e.format)
+                ));
             }
             if let Some(r) = e.retired.iter().find(|r| r.value == m.value) {
-                return Err(format!("{json}: {}'s {} is {}, retired from {}", e.name, m.name, literal(m.value, &e.format), r.name));
+                return Err(format!(
+                    "{json}: {}'s {} is {}, retired from {}",
+                    e.name,
+                    m.name,
+                    literal(m.value, &e.format),
+                    r.name
+                ));
             }
         }
         for (i, r) in e.retired.iter().enumerate() {
             if e.retired[..i].iter().any(|o| o.value == r.value) {
-                return Err(format!("{json}: {}'s $retired holds {} twice", e.name, literal(r.value, &e.format)));
+                return Err(format!(
+                    "{json}: {}'s $retired holds {} twice",
+                    e.name,
+                    literal(r.value, &e.format)
+                ));
             }
         }
     }
@@ -190,9 +213,16 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
         }
     }
     for c in cmds.into_iter().filter(|c| c.value != 0) {
-        let major = majors.iter().find(|(v, _)| *v == c.value >> 8).map(|(_, n)| *n).ok_or(format!("{json}: {} has no major", c.name))?;
+        let major = majors
+            .iter()
+            .find(|(v, _)| *v == c.value >> 8)
+            .map(|(_, n)| *n)
+            .ok_or(format!("{json}: {} has no major", c.name))?;
         let table_name = format!("{}Minor", pascal(major));
-        let minor = minors.iter().find(|t| t.name == table_name).and_then(|t| members(t).find(|m| m.value == c.value & 0xff));
+        let minor = minors
+            .iter()
+            .find(|t| t.name == table_name)
+            .and_then(|t| members(t).find(|m| m.value == c.value & 0xff));
         if minor.is_none() {
             return Err(format!("{json}: {}'s minor is in no {table_name}", c.name));
         }
@@ -233,22 +263,34 @@ const TARGETS: [Target; 2] = [
 ];
 
 fn majors(spec: &Spec) -> Vec<(u32, &str)> {
-    spec.enums.iter().filter(|e| e.name == "Major").flat_map(|e| members(e).map(|m| (m.value, m.name.as_str()))).collect()
+    spec.enums
+        .iter()
+        .filter(|e| e.name == "Major")
+        .flat_map(|e| members(e).map(|m| (m.value, m.name.as_str())))
+        .collect()
 }
 
 /// A program's majors are past the base's `program_major`, and no command is named in both.
 fn check_base(spec: &Spec, json: &str) -> Result<(), String> {
-    let Some(base_path) = &spec.base else { return Ok(()) };
+    let Some(base_path) = &spec.base else {
+        return Ok(());
+    };
     let base: Spec = read_as(base_path)?;
-    let edge = base.program_major.ok_or(format!("{base_path}: no program_major"))?;
+    let edge = base
+        .program_major
+        .ok_or(format!("{base_path}: no program_major"))?;
     for (value, name) in majors(&base) {
         if value >= edge {
-            return Err(format!("{base_path}: major {name} at {value:#x} is a program's"));
+            return Err(format!(
+                "{base_path}: major {name} at {value:#x} is a program's"
+            ));
         }
     }
     for (value, name) in majors(spec) {
         if value < edge {
-            return Err(format!("{json}: major {name} at {value:#x} is below {edge:#x}, xpute's"));
+            return Err(format!(
+                "{json}: major {name} at {value:#x} is below {edge:#x}, xpute's"
+            ));
         }
     }
     let base_names: Vec<String> = base.commands()?.iter().map(|c| c.name.clone()).collect();
@@ -267,7 +309,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         check_base(&spec, t.json)?;
         check_numbers(&spec, t.json)?;
         out.push(Output::new(t.ts, ts::emit(&spec, t)?));
-        out.push(Output::new(&format!("{}/cmd.spec.rs", t.rs_dir), rs::emit(&spec, t)?));
+        out.push(Output::new(
+            &format!("{}/cmd.spec.rs", t.rs_dir),
+            rs::emit(&spec, t)?,
+        ));
         if let Some((path, namespace)) = t.cpp {
             out.push(Output::new(path, cpp::emit(&spec, t, path, namespace)?));
         }

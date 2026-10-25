@@ -41,12 +41,24 @@ const COVERAGE: Record<keyof typeof coverage, string> = {
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
 
 /** In the spec's order, or `reversed` to list the one drawn over the rest first. */
-function Rows<K extends string>({ looks, labels, reversed }: { looks: Record<K, Look>; labels: Record<K, string>; reversed?: boolean }) {
+function Rows<K extends string>(
+  { looks, labels, reversed }: {
+    looks: Record<K, Look>;
+    labels: Record<K, string>;
+    reversed?: boolean;
+  },
+) {
   const keys = Object.keys(looks) as K[];
   return (reversed ? keys.reverse() : keys).map((k) => (
     <View key={k} style={styles.row}>
       <View style={styles.chip}>
-        <View style={[styles.swatch, { borderColor: hex(looks[k].rgb), borderStyle: looks[k].dashed ? "dashed" : "solid", opacity: looks[k].alpha ?? 1 }]} />
+        <View
+          style={[styles.swatch, {
+            borderColor: hex(looks[k].rgb),
+            borderStyle: looks[k].dashed ? "dashed" : "solid",
+            opacity: looks[k].alpha ?? 1,
+          }]}
+        />
       </View>
       <Text style={gauge.text}>{labels[k]}</Text>
     </View>
@@ -69,6 +81,13 @@ export function GizmoLegend() {
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   // A mid gray, where both the black marks and the faint white one read.
-  chip: { width: 28, height: 12, justifyContent: "center", paddingHorizontal: 3, borderRadius: 2, backgroundColor: "#808080" },
+  chip: {
+    width: 28,
+    height: 12,
+    justifyContent: "center",
+    paddingHorizontal: 3,
+    borderRadius: 2,
+    backgroundColor: "#808080",
+  },
   swatch: { borderTopWidth: 2 },
 });

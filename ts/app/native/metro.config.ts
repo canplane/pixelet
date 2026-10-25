@@ -38,14 +38,23 @@ const FROM_APP = path.join(here, "index.ts");
 function buildStamp(): string {
   let id = "unknown";
   try {
-    const git = (args: string) => execSync(`git ${args}`, { cwd: REPO, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-    id = `${git("rev-parse --short HEAD")}${git("status --porcelain") !== "" ? "-dirty" : ""}`;
+    const git = (args: string) =>
+      execSync(`git ${args}`, {
+        cwd: REPO,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).toString().trim();
+    id = `${git("rev-parse --short HEAD")}${
+      git("status --porcelain") !== "" ? "-dirty" : ""
+    }`;
   } catch { /* not a checkout */ }
   let number = id;
   if (process.env.PXL_BUILD_NUMBER) number = `#${process.env.PXL_BUILD_NUMBER}`;
   else {
     try {
-      const last = fs.readFileSync(path.join(WORKSPACE, "client/.build_number"), "utf8").trim();
+      const last = fs.readFileSync(
+        path.join(WORKSPACE, "client/.build_number"),
+        "utf8",
+      ).trim();
       if (/^\d+$/.test(last)) number = `#${last}-${id}`;
     } catch { /* none seen yet */ }
   }
@@ -67,7 +76,11 @@ const BUILD_STAMP = buildStamp();
  * names the default with its extension, which Metro's own platform lookup
  * does not take, so it is looked for here. A variant's own import of its
  * default is the default, which it extends. */
-function ownPlatform(file: string, platform: string | null, from: string): string {
+function ownPlatform(
+  file: string,
+  platform: string | null,
+  from: string,
+): string {
   if (!platform) return file;
   const ext = path.extname(file);
   const stem = file.slice(0, -ext.length);
@@ -88,15 +101,31 @@ config.resolver.nodeModulesPaths = [path.join(WORKSPACE, "node_modules")];
 
 config.resolver.resolveRequest = (context, name, platform) => {
   if (SINGLETONS.some((s) => name === s || name.startsWith(`${s}/`))) {
-    return context.resolveRequest({ ...context, originModulePath: FROM_APP }, name, platform);
+    return context.resolveRequest(
+      { ...context, originModulePath: FROM_APP },
+      name,
+      platform,
+    );
   }
-  if (name === "virtual:pxl-build") return { type: "sourceFile", filePath: BUILD_STAMP };
+  if (name === "virtual:pxl-build") {
+    return { type: "sourceFile", filePath: BUILD_STAMP };
+  }
   // A prefix is the importing file's own; a file it names, mapped or
   // relative, is taken as this platform has it.
   const from = context.originModulePath;
   const hit = mapped(from, name);
-  const file = hit ? hit.path : name.startsWith(".") && path.extname(name) !== "" ? path.resolve(path.dirname(from), name) : null;
-  if (file) return context.resolveRequest(context, ownPlatform(file, platform, from), platform);
+  const file = hit
+    ? hit.path
+    : name.startsWith(".") && path.extname(name) !== ""
+    ? path.resolve(path.dirname(from), name)
+    : null;
+  if (file) {
+    return context.resolveRequest(
+      context,
+      ownPlatform(file, platform, from),
+      platform,
+    );
+  }
   return context.resolveRequest(context, name, platform);
 };
 

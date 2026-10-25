@@ -44,12 +44,19 @@ pub fn link(plan: &LinkPlan) {
 
 /// The arguments, in the order the linker is given them.
 fn args(plan: &LinkPlan) -> Vec<String> {
-    let mut args = vec!["--import-memory".to_string(), "--stack-first".to_string(), format!("-zstack-size={}", plan.stack_bytes)];
+    let mut args = vec![
+        "--import-memory".to_string(),
+        "--stack-first".to_string(),
+        format!("-zstack-size={}", plan.stack_bytes),
+    ];
     if let Some(at) = plan.global_base {
         args.push(format!("--global-base={at}"));
     }
     if let Some(bytes) = plan.initial_bytes {
-        assert!(bytes.is_multiple_of(WASM_PAGE_BYTES), "a memory is declared in WebAssembly pages, not {bytes} bytes");
+        assert!(
+            bytes.is_multiple_of(WASM_PAGE_BYTES),
+            "a memory is declared in WebAssembly pages, not {bytes} bytes"
+        );
         args.push(format!("--initial-memory={bytes}"));
     }
     args

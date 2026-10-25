@@ -23,7 +23,11 @@ fn unreachable_pool() -> Pool {
 }
 
 async fn get(uri: &str) -> StatusCode {
-    routes(unreachable_pool()).oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap()).await.unwrap().status()
+    routes(unreachable_pool())
+        .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status()
 }
 
 #[tokio::test]
@@ -33,17 +37,26 @@ async fn a_query_outside_the_length_bounds_is_refused_before_the_database() {
     assert_eq!(get("/geo/search?q=%20%20").await, StatusCode::BAD_REQUEST);
 
     let over = "a".repeat(MAX_QUERY_LEN + 1);
-    assert_eq!(get(&format!("/geo/search?q={over}")).await, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get(&format!("/geo/search?q={over}")).await,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[tokio::test]
 async fn the_length_bound_counts_characters_rather_than_bytes() {
     // 100 three-byte characters are 300 bytes; a byte cap would refuse them.
     let wide = "€".repeat(MAX_QUERY_LEN);
-    assert_ne!(get(&format!("/geo/search?q={wide}")).await, StatusCode::BAD_REQUEST);
+    assert_ne!(
+        get(&format!("/geo/search?q={wide}")).await,
+        StatusCode::BAD_REQUEST
+    );
 
     let over = "€".repeat(MAX_QUERY_LEN + 1);
-    assert_eq!(get(&format!("/geo/search?q={over}")).await, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get(&format!("/geo/search?q={over}")).await,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[test]

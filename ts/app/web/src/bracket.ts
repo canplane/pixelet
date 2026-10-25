@@ -16,7 +16,11 @@ import * as storage from "./storage.ts";
 import * as surface from "./surface.tsx";
 import * as text from "./text.ts";
 import { useSafeArea } from "./safe-area.ts";
-import { useViewportTop, useVisualViewport, useWindowSize } from "./viewport.ts";
+import {
+  useViewportTop,
+  useVisualViewport,
+  useWindowSize,
+} from "./viewport.ts";
 
 export const page: Bracket = {
   device,

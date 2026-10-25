@@ -29,7 +29,12 @@
  * retired, so a number an older side still sends never comes to mean another.
  */
 
-import type { BranchCursor, NodeCursor, PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import type {
+  BranchCursor,
+  NodeCursor,
+  PacketRoom,
+  PacketWriter,
+} from "@xpute/kit/wire/xtp/mod.ts";
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
 import { SequenceType } from "@xpute/kit/wire/xtp/mod.ts";
@@ -423,7 +428,12 @@ export interface FocusState {
 }
 
 export function read_focus_state(b: BranchCursor): FocusState {
-  return { status: b.at(0).get<GroundStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), outside: b.at(3).get<boolean>() };
+  return {
+    status: b.at(0).get<GroundStatus>(),
+    is_off_center: b.at(1).get<boolean>(),
+    center: optional(b.at(2), read_lon_lat),
+    outside: b.at(3).get<boolean>(),
+  };
 }
 
 export interface LonLat {
@@ -443,7 +453,11 @@ export interface LocationState {
 }
 
 export function read_location_state(b: BranchCursor): LocationState {
-  return { status: b.at(0).get<DevicePoseStatus>(), has_location: b.at(1).get<boolean>(), error: b.at(2).get<Message | null>() };
+  return {
+    status: b.at(0).get<DevicePoseStatus>(),
+    has_location: b.at(1).get<boolean>(),
+    error: b.at(2).get<Message | null>(),
+  };
 }
 
 export interface CompanionState {
@@ -452,7 +466,10 @@ export interface CompanionState {
 }
 
 export function read_companion_state(b: BranchCursor): CompanionState {
-  return { person_ready: b.at(0).get<boolean>(), pet_ready: b.at(1).get<boolean>() };
+  return {
+    person_ready: b.at(0).get<boolean>(),
+    pet_ready: b.at(1).get<boolean>(),
+  };
 }
 
 /** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words. */
@@ -469,7 +486,14 @@ export interface HoldingState {
 }
 
 export function read_holding_state(b: BranchCursor): HoldingState {
-  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>(), marker: b.at(4).get<boolean>(), words: b.at(5).get<string>() };
+  return {
+    tool: b.at(0).get<ActiveTool>(),
+    cube: b.at(1).get<u32>(),
+    decor: b.at(2).get<u32>(),
+    tier: b.at(3).get<u32>(),
+    marker: b.at(4).get<boolean>(),
+    words: b.at(5).get<string>(),
+  };
 }
 
 export interface OrientationState {
@@ -479,7 +503,10 @@ export interface OrientationState {
 }
 
 export function read_orientation_state(b: BranchCursor): OrientationState {
-  return { status: b.at(0).get<DevicePoseStatus>(), error: b.at(1).get<Message | null>() };
+  return {
+    status: b.at(0).get<DevicePoseStatus>(),
+    error: b.at(1).get<Message | null>(),
+  };
 }
 
 /** One division of the name, in every language the provider had rather than one resolved
@@ -498,7 +525,13 @@ export interface DivisionPart {
 }
 
 export function read_division_part(b: BranchCursor): DivisionPart {
-  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name), shown: b.at(3).get<boolean>(), area: b.at(4).get<boolean>() };
+  return {
+    subtype: b.at(0).get<u8>(),
+    name: b.at(1).get<string>(),
+    names: list(b.at_branch(2), read_lang_name),
+    shown: b.at(3).get<boolean>(),
+    area: b.at(4).get<boolean>(),
+  };
 }
 
 export interface LangName {
@@ -529,19 +562,38 @@ export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
 }
 
 /** Command.SENSOR_POSITION's packet, written in place into `to`. */
-export function encode_sensor_position(to: PacketRoom, lon: f64, lat: f64, altitude: f64 | null, accuracy: f64 | null, course: f64 | null): PacketWriter {
+export function encode_sensor_position(
+  to: PacketRoom,
+  lon: f64,
+  lat: f64,
+  altitude: f64 | null,
+  accuracy: f64 | null,
+  course: f64 | null,
+): PacketWriter {
   return to.writer(5).f64(lon).f64(lat).f64(altitude).f64(accuracy).f64(course);
 }
 
 /** Command.SENSOR_ORIENTATION's packet, written in place into `to`. */
-export function encode_sensor_orientation(to: PacketRoom, webkit_compass_heading: f64 | null, alpha: f64 | null, beta: f64 | null, gamma: f64 | null): PacketWriter {
-  return to.writer(4).f64(webkit_compass_heading).f64(alpha).f64(beta).f64(gamma);
+export function encode_sensor_orientation(
+  to: PacketRoom,
+  webkit_compass_heading: f64 | null,
+  alpha: f64 | null,
+  beta: f64 | null,
+  gamma: f64 | null,
+): PacketWriter {
+  return to.writer(4).f64(webkit_compass_heading).f64(alpha).f64(beta).f64(
+    gamma,
+  );
 }
 
 /** Command.SENSOR_FAILED's packet, written in place into `to`.
  *
  * @param code Geolocation's; orientation gives none today. */
-export function encode_sensor_failed(to: PacketRoom, sensor: Sensor, code: GeolocationErrorCode | null): PacketWriter {
+export function encode_sensor_failed(
+  to: PacketRoom,
+  sensor: Sensor,
+  code: GeolocationErrorCode | null,
+): PacketWriter {
   return to.writer(2).u32(sensor).u32(code);
 }
 
@@ -558,7 +610,8 @@ export function encode_world_boot(
   orientation_permission: boolean,
   orientation_silence_is_loss: boolean,
 ): PacketWriter {
-  return to.writer(5).bool(development).bool(geolocation).bool(orientation).bool(orientation_permission).bool(orientation_silence_is_loss);
+  return to.writer(5).bool(development).bool(geolocation).bool(orientation)
+    .bool(orientation_permission).bool(orientation_silence_is_loss);
 }
 
 /** Command.WORLD_FRAME's packet, written in place into `to`.
@@ -566,12 +619,26 @@ export function encode_world_boot(
  * @param width The viewport, in CSS pixels.
  * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (xpute host sched/quantum.ts `Grant`): the frame's budget.
  * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
-export function encode_world_frame(to: PacketRoom, width: f64, height: f64, refresh_ms: f64, paced_ms: f64, interactive: boolean, credits: u32, unix_ms: f64): PacketWriter {
-  return to.writer(7).f64(width).f64(height).f64(refresh_ms).f64(paced_ms).bool(interactive).u32(credits).f64(unix_ms);
+export function encode_world_frame(
+  to: PacketRoom,
+  width: f64,
+  height: f64,
+  refresh_ms: f64,
+  paced_ms: f64,
+  interactive: boolean,
+  credits: u32,
+  unix_ms: f64,
+): PacketWriter {
+  return to.writer(7).f64(width).f64(height).f64(refresh_ms).f64(paced_ms).bool(
+    interactive,
+  ).u32(credits).f64(unix_ms);
 }
 
 /** Command.WORLD_VISIBILITY's packet, written in place into `to`. */
-export function encode_world_visibility(to: PacketRoom, visible: boolean): PacketWriter {
+export function encode_world_visibility(
+  to: PacketRoom,
+  visible: boolean,
+): PacketWriter {
   return to.writer(1).bool(visible);
 }
 
@@ -580,42 +647,80 @@ export function encode_world_visibility(to: PacketRoom, visible: boolean): Packe
  * @param top_zoom The coarsest zoom the source supplies whole.
  * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/published.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-export function encode_world_source(to: PacketRoom, top_zoom: u32, format: u32[], shard: string[]): PacketWriter {
-  return to.writer(3).u32(top_zoom).array(SequenceType.U32_ARRAY, Uint32Array.from(format)).strs(shard);
+export function encode_world_source(
+  to: PacketRoom,
+  top_zoom: u32,
+  format: u32[],
+  shard: string[],
+): PacketWriter {
+  return to.writer(3).u32(top_zoom).array(
+    SequenceType.U32_ARRAY,
+    Uint32Array.from(format),
+  ).strs(shard);
 }
 
 /** Command.WORLD_KEPT_EMPTIED's packet, written in place into `to`.
  *
  * @param slot host.json's `kept`. */
-export function encode_world_kept_emptied(to: PacketRoom, slot: u32): PacketWriter {
+export function encode_world_kept_emptied(
+  to: PacketRoom,
+  slot: u32,
+): PacketWriter {
   return to.writer(1).u32(slot);
 }
 
 /** Command.SENSOR_PERMISSION's packet, written in place into `to`. */
-export function encode_sensor_permission(to: PacketRoom, sensor: Sensor, answer: PermissionAnswer): PacketWriter {
+export function encode_sensor_permission(
+  to: PacketRoom,
+  sensor: Sensor,
+  answer: PermissionAnswer,
+): PacketWriter {
   return to.writer(2).u32(sensor).u32(answer);
 }
 
 /** Command.INPUT_RECT's packet, written in place into `to`. */
-export function encode_input_rect(to: PacketRoom, left: f64, top: f64, width: f64, height: f64): PacketWriter {
+export function encode_input_rect(
+  to: PacketRoom,
+  left: f64,
+  top: f64,
+  width: f64,
+  height: f64,
+): PacketWriter {
   return to.writer(4).f64(left).f64(top).f64(width).f64(height);
 }
 
 /** Command.INPUT_POINTER's packet, written in place into `to`. */
-export function encode_input_pointer(to: PacketRoom, phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): PacketWriter {
-  return to.writer(6).u32(phase).u32(pointer_type).i32(id).i32(button).f64(x).f64(y);
+export function encode_input_pointer(
+  to: PacketRoom,
+  phase: PointerPhase,
+  pointer_type: PointerType,
+  id: i32,
+  button: i32,
+  x: f64,
+  y: f64,
+): PacketWriter {
+  return to.writer(6).u32(phase).u32(pointer_type).i32(id).i32(button).f64(x)
+    .f64(y);
 }
 
 /** Command.INPUT_HOLD's packet, written in place into `to`.
  *
  * @param value The held cube or decor kind, by its number in the catalog's one value space (cube.json).
  * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
-export function encode_input_hold(to: PacketRoom, tool: ActiveTool, value: u32, tier: u32): PacketWriter {
+export function encode_input_hold(
+  to: PacketRoom,
+  tool: ActiveTool,
+  value: u32,
+  tier: u32,
+): PacketWriter {
   return to.writer(3).u32(tool).u32(value).u32(tier);
 }
 
 /** Command.INPUT_MARKER_WORDS's packet, written in place into `to`. */
-export function encode_input_marker_words(to: PacketRoom, text: string): PacketWriter {
+export function encode_input_marker_words(
+  to: PacketRoom,
+  text: string,
+): PacketWriter {
   return to.writer(1).str(text);
 }
 
@@ -625,7 +730,11 @@ export function encode_input_wheel(to: PacketRoom, delta_y: f64): PacketWriter {
 }
 
 /** Command.INPUT_KEYS's packet, written in place into `to`. */
-export function encode_input_keys(to: PacketRoom, x: i32, y: i32): PacketWriter {
+export function encode_input_keys(
+  to: PacketRoom,
+  x: i32,
+  y: i32,
+): PacketWriter {
   return to.writer(2).i32(x).i32(y);
 }
 
@@ -637,29 +746,52 @@ export function encode_surface_open(to: PacketRoom, role: u32): PacketWriter {
 }
 
 /** Command.SURFACE_RESIZE's packet, written in place into `to`. */
-export function encode_surface_resize(to: PacketRoom, surface: u32, width: u32, height: u32, device_pixel_ratio: f64): PacketWriter {
-  return to.writer(4).u32(surface).u32(width).u32(height).f64(device_pixel_ratio);
+export function encode_surface_resize(
+  to: PacketRoom,
+  surface: u32,
+  width: u32,
+  height: u32,
+  device_pixel_ratio: f64,
+): PacketWriter {
+  return to.writer(4).u32(surface).u32(width).u32(height).f64(
+    device_pixel_ratio,
+  );
 }
 
 /** Command.SURFACE_CLOSE's packet, written in place into `to`. */
-export function encode_surface_close(to: PacketRoom, surface: u32): PacketWriter {
+export function encode_surface_close(
+  to: PacketRoom,
+  surface: u32,
+): PacketWriter {
   return to.writer(1).u32(surface);
 }
 
 /** Command.PREVIEW_OPEN's packet, written in place into `to`. */
-export function encode_preview_open(to: PacketRoom, surface: u32, group: u32, number: u8): PacketWriter {
+export function encode_preview_open(
+  to: PacketRoom,
+  surface: u32,
+  group: u32,
+  number: u8,
+): PacketWriter {
   return to.writer(3).u32(surface).u32(group).u8(number);
 }
 
 /** Command.PREVIEW_CLOSE's packet, written in place into `to`. */
-export function encode_preview_close(to: PacketRoom, surface: u32): PacketWriter {
+export function encode_preview_close(
+  to: PacketRoom,
+  surface: u32,
+): PacketWriter {
   return to.writer(1).u32(surface);
 }
 
 /** Command.SETTING_SET's packet, written in place into `to`.
  *
  * @param value A toggle's 0 or 1, a choice's option by its index, or a number. */
-export function encode_setting_set(to: PacketRoom, key: u32, value: u32): PacketWriter {
+export function encode_setting_set(
+  to: PacketRoom,
+  key: u32,
+  value: u32,
+): PacketWriter {
   return to.writer(2).u32(key).u32(value);
 }
 
@@ -669,27 +801,49 @@ export function encode_chat_send(to: PacketRoom, text: string): PacketWriter {
 }
 
 /** Command.INPUT_TRACKING's packet, written in place into `to`. */
-export function encode_input_tracking(to: PacketRoom, tracking: Tracking): PacketWriter {
+export function encode_input_tracking(
+  to: PacketRoom,
+  tracking: Tracking,
+): PacketWriter {
   return to.writer(1).u32(tracking);
 }
 
 /** Command.INPUT_GO_TO's packet, written in place into `to`. */
-export function encode_input_go_to(to: PacketRoom, lon: f64, lat: f64): PacketWriter {
+export function encode_input_go_to(
+  to: PacketRoom,
+  lon: f64,
+  lat: f64,
+): PacketWriter {
   return to.writer(2).f64(lon).f64(lat);
 }
 
 /** Command.INPUT_POSE's packet, written in place into `to`. */
-export function encode_input_pose(to: PacketRoom, x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64): PacketWriter {
+export function encode_input_pose(
+  to: PacketRoom,
+  x: f64,
+  y: f64,
+  z: f64,
+  qx: f64,
+  qy: f64,
+  qz: f64,
+  qw: f64,
+): PacketWriter {
   return to.writer(7).f64(x).f64(y).f64(z).f64(qx).f64(qy).f64(qz).f64(qw);
 }
 
 /** Command.WORLD_VIEW's packet, written in place into `to`. */
-export function encode_world_view(to: PacketRoom, shown: boolean): PacketWriter {
+export function encode_world_view(
+  to: PacketRoom,
+  shown: boolean,
+): PacketWriter {
   return to.writer(1).bool(shown);
 }
 
 /** Command.PROFILER_READ's packet, written in place into `to`. */
-export function encode_profiler_read(to: PacketRoom, window_ms: f64 | null): PacketWriter {
+export function encode_profiler_read(
+  to: PacketRoom,
+  window_ms: f64 | null,
+): PacketWriter {
   return to.writer(1).f64(window_ms);
 }
 

@@ -4,8 +4,9 @@ use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
 use super::spec::{
-    BranchNode, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, SpecialType, ALIGN_SZ, ELEM_SZ, GET_DESC, GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ, RESERVED,
-    WORD_SZ,
+    BranchNode, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType,
+    SequenceVal, SpecialType, ALIGN_SZ, ELEM_SZ, GET_DESC, GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ,
+    RESERVED, WORD_SZ,
 };
 use super::view::NodeView;
 
@@ -30,7 +31,11 @@ impl TreeEncoder {
 
     /// EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past
     /// the cap.
-    pub fn encode<'a, V: NodeView<'a>>(&mut self, view: &V, opts: TreeEncoderOptions) -> Result<Vec<u8>, MarshalError> {
+    pub fn encode<'a, V: NodeView<'a>>(
+        &mut self,
+        view: &V,
+        opts: TreeEncoderOptions,
+    ) -> Result<Vec<u8>, MarshalError> {
         let max_cap = opts.max_cap.unwrap_or(MAX_PKT_SZ);
         if !(HDR_SZ..=MAX_PKT_SZ).contains(&max_cap) {
             return Err(MarshalError::new(Errno::EINVAL));
@@ -45,7 +50,9 @@ impl TreeEncoder {
                     buf.truncate(n as usize);
                     return Ok(buf);
                 }
-                Err(e) if e.errnum == Errno::EOVERFLOW && cap < max_cap => cap = if cap > max_cap / 2 { max_cap } else { cap * 2 },
+                Err(e) if e.errnum == Errno::EOVERFLOW && cap < max_cap => {
+                    cap = if cap > max_cap / 2 { max_cap } else { cap * 2 }
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -65,8 +72,12 @@ fn walk(w: &mut PacketWriter<'_>, node: &Node) {
         }
         Node::Scalar(n) => scalar_into(w, n),
         Node::Sequence(n) => seq_into(w, n),
-        Node::Branch(BranchNode { val: Some(children) }) => {
-            w.branch(children.len() as u32, |b| children.iter().for_each(|c| walk(b, c)));
+        Node::Branch(BranchNode {
+            val: Some(children),
+        }) => {
+            w.branch(children.len() as u32, |b| {
+                children.iter().for_each(|c| walk(b, c))
+            });
         }
         Node::Branch(BranchNode { val: None }) => {
             w.no_branch();
@@ -116,7 +127,8 @@ fn seq_into(w: &mut PacketWriter<'_>, n: &SequenceNode) {
         (SequenceType::BITSET, Some(SequenceVal::Array(a))) if a.type_ == SequenceType::BITSET => {
             w.bitset(Some(&a.bytes));
         }
-        (SequenceType::BITSET | SequenceType::STR | SequenceType::STRS, _) | (_, Some(SequenceVal::Str(_) | SequenceVal::Strs(_))) => {
+        (SequenceType::BITSET | SequenceType::STR | SequenceType::STRS, _)
+        | (_, Some(SequenceVal::Str(_) | SequenceVal::Strs(_))) => {
             w.spoil(Errno::EBADMSG);
             w.entry(None, type_ as u8);
         }
@@ -245,7 +257,11 @@ impl<'a> PacketWriter<'a> {
         if f.root {
             self.root_type = type_;
         } else if self.error.is_none() {
-            self.word(f.base + WORD_SZ + f.written * WORD_SZ, at.map_or(0, |b| b - f.base), type_ as u32);
+            self.word(
+                f.base + WORD_SZ + f.written * WORD_SZ,
+                at.map_or(0, |b| b - f.base),
+                type_ as u32,
+            );
         }
         self.frame.written += 1;
         self
@@ -261,12 +277,23 @@ impl<'a> PacketWriter<'a> {
     }
 
     /// A sequence's length word and `bytes` of payload after it, filled by `fill`.
-    fn seq(&mut self, type_: SequenceType, len: u32, bytes: u64, fill: impl FnOnce(&mut [u8])) -> &mut Self {
-        let at = self.reserve(WORD_SZ, u64::from(WORD_SZ) + bytes.next_multiple_of(u64::from(WORD_SZ))).inspect(|&at| {
-            self.word(at, len, RESERVED);
-            let payload = (at + WORD_SZ) as usize;
-            fill(&mut self.buf[payload..payload + bytes as usize]);
-        });
+    fn seq(
+        &mut self,
+        type_: SequenceType,
+        len: u32,
+        bytes: u64,
+        fill: impl FnOnce(&mut [u8]),
+    ) -> &mut Self {
+        let at = self
+            .reserve(
+                WORD_SZ,
+                u64::from(WORD_SZ) + bytes.next_multiple_of(u64::from(WORD_SZ)),
+            )
+            .inspect(|&at| {
+                self.word(at, len, RESERVED);
+                let payload = (at + WORD_SZ) as usize;
+                fill(&mut self.buf[payload..payload + bytes as usize]);
+            });
         self.entry(at, type_ as u8)
     }
 
@@ -320,7 +347,9 @@ impl<'a> PacketWriter<'a> {
 
     /// Followed by a NUL that the length leaves out.
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
-        let Some(s) = s else { return self.entry(None, SequenceType::STR as u8) };
+        let Some(s) = s else {
+            return self.entry(None, SequenceType::STR as u8);
+        };
         self.str_with(|room| {
             let out = room.get_mut(..s.len())?;
             out.copy_from_slice(s.as_bytes());
@@ -332,7 +361,12 @@ impl<'a> PacketWriter<'a> {
     pub fn strs<S: AsRef<str>>(&mut self, items: Option<&[S]>) -> &mut Self {
         match items {
             Some(items) => match u32::try_from(strs_size(items)) {
-                Ok(size) => self.seq(SequenceType::STRS, items.len() as u32, u64::from(size), |out| strs_payload(items, out)),
+                Ok(size) => self.seq(
+                    SequenceType::STRS,
+                    items.len() as u32,
+                    u64::from(size),
+                    |out| strs_payload(items, out),
+                ),
                 Err(_) => {
                     self.spoil(Errno::EOVERFLOW);
                     self.entry(None, SequenceType::STRS as u8)
@@ -358,7 +392,9 @@ impl<'a> PacketWriter<'a> {
         }
         self.str_with(|buf| {
             let mut room = Room { buf, len: 0 };
-            core::fmt::Write::write_fmt(&mut room, format_args!("{v}")).ok().map(|()| room.len)
+            core::fmt::Write::write_fmt(&mut room, format_args!("{v}"))
+                .ok()
+                .map(|()| room.len)
         })
     }
 
@@ -390,10 +426,14 @@ impl<'a> PacketWriter<'a> {
     /// An array of `type_` from its elements' bytes, little-endian; bytes
     /// that are not whole elements refuse the packet.
     fn array_bytes(&mut self, type_: SequenceType, a: Option<&[u8]>) -> &mut Self {
-        let Some(a) = a else { return self.entry(None, type_ as u8) };
+        let Some(a) = a else {
+            return self.entry(None, type_ as u8);
+        };
         let elem = ELEM_SZ(type_) as usize;
         match u32::try_from(a.len() / elem) {
-            Ok(len) if a.len() % elem == 0 => self.seq(type_, len, a.len() as u64, |out| out.copy_from_slice(a)),
+            Ok(len) if a.len() % elem == 0 => {
+                self.seq(type_, len, a.len() as u64, |out| out.copy_from_slice(a))
+            }
             _ => {
                 self.spoil(Errno::EBADMSG);
                 self.entry(None, type_ as u8)
@@ -405,7 +445,12 @@ impl<'a> PacketWriter<'a> {
         self.array_bytes(SequenceType::U8_ARRAY, a)
     }
 
-    fn array_with<const N: usize>(&mut self, type_: SequenceType, len: u32, mut value: impl FnMut(u32) -> [u8; N]) -> &mut Self {
+    fn array_with<const N: usize>(
+        &mut self,
+        type_: SequenceType,
+        len: u32,
+        mut value: impl FnMut(u32) -> [u8; N],
+    ) -> &mut Self {
         self.seq(type_, len, u64::from(len) * N as u64, |out| {
             for (i, o) in out.as_chunks_mut::<N>().0.iter_mut().enumerate() {
                 *o = value(i as u32);
@@ -415,21 +460,27 @@ impl<'a> PacketWriter<'a> {
 
     pub fn u32_array(&mut self, a: Option<&[u32]>) -> &mut Self {
         match a {
-            Some(a) => self.array_with(SequenceType::U32_ARRAY, a.len() as u32, |i| a[i as usize].to_le_bytes()),
+            Some(a) => self.array_with(SequenceType::U32_ARRAY, a.len() as u32, |i| {
+                a[i as usize].to_le_bytes()
+            }),
             None => self.entry(None, SequenceType::U32_ARRAY as u8),
         }
     }
 
     pub fn u64_array(&mut self, a: Option<&[u64]>) -> &mut Self {
         match a {
-            Some(a) => self.array_with(SequenceType::U64_ARRAY, a.len() as u32, |i| a[i as usize].to_le_bytes()),
+            Some(a) => self.array_with(SequenceType::U64_ARRAY, a.len() as u32, |i| {
+                a[i as usize].to_le_bytes()
+            }),
             None => self.entry(None, SequenceType::U64_ARRAY as u8),
         }
     }
 
     pub fn f64_array(&mut self, a: Option<&[f64]>) -> &mut Self {
         match a {
-            Some(a) => self.array_with(SequenceType::F64_ARRAY, a.len() as u32, |i| a[i as usize].to_le_bytes()),
+            Some(a) => self.array_with(SequenceType::F64_ARRAY, a.len() as u32, |i| {
+                a[i as usize].to_le_bytes()
+            }),
             None => self.entry(None, SequenceType::F64_ARRAY as u8),
         }
     }
@@ -445,13 +496,18 @@ impl<'a> PacketWriter<'a> {
     /// One byte a bit, packed low bit first.
     pub fn bitset(&mut self, bits: Option<&[u8]>) -> &mut Self {
         match bits {
-            Some(bits) => self.seq(SequenceType::BITSET, bits.len() as u32, (bits.len() as u64).div_ceil(8), |out| {
-                for (i, &b) in bits.iter().enumerate() {
-                    if b != 0 {
-                        out[i >> 3] |= 1 << (i & 7);
+            Some(bits) => self.seq(
+                SequenceType::BITSET,
+                bits.len() as u32,
+                (bits.len() as u64).div_ceil(8),
+                |out| {
+                    for (i, &b) in bits.iter().enumerate() {
+                        if b != 0 {
+                            out[i >> 3] |= 1 << (i & 7);
+                        }
                     }
-                }
-            }),
+                },
+            ),
             None => self.entry(None, SequenceType::BITSET as u8),
         }
     }
@@ -494,7 +550,12 @@ impl<'a> PacketWriter<'a> {
             },
         );
         fill(self);
-        crate::ensure!(self.frame.written == self.frame.count, ENOTRECOVERABLE, self.frame.count, self.frame.written);
+        crate::ensure!(
+            self.frame.written == self.frame.count,
+            ENOTRECOVERABLE,
+            self.frame.count,
+            self.frame.written
+        );
         self.frame = outer;
         let at = self.branch_close(at);
         self.entry(at, SpecialType::BRANCH as u8)
@@ -507,20 +568,28 @@ impl<'a> PacketWriter<'a> {
     /// Its root's payload copied, placed as its root's type places it.
     pub fn graft(&mut self, packet: &[u8]) -> &mut Self {
         let desc = (packet.len() >= HDR_SZ as usize)
-            .then(|| GET_LEN(packet, 0).ok().filter(|&m| m == MAGIC).and_then(|_| GET_DESC(packet, WORD_SZ).ok()))
+            .then(|| {
+                GET_LEN(packet, 0)
+                    .ok()
+                    .filter(|&m| m == MAGIC)
+                    .and_then(|_| GET_DESC(packet, WORD_SZ).ok())
+            })
             .flatten();
         let Some((payload_sz, type_)) = desc else {
             self.spoil(Errno::EBADMSG);
             return self.entry(None, SpecialType::NIL as u8);
         };
-        let unit = ALIGN_SZ(type_).ok().filter(|u| payload_sz.is_multiple_of(*u));
+        let unit = ALIGN_SZ(type_)
+            .ok()
+            .filter(|u| payload_sz.is_multiple_of(*u));
         let at = match unit {
             _ if payload_sz as usize > packet.len() - HDR_SZ as usize => self.spoil(Errno::EBADMSG),
             _ if payload_sz == 0 => None,
             None => self.spoil(Errno::EBADMSG),
             Some(unit) => self.reserve(unit, u64::from(payload_sz)).inspect(|&at| {
                 let (at, from) = (at as usize, HDR_SZ as usize);
-                self.buf[at..at + payload_sz as usize].copy_from_slice(&packet[from..from + payload_sz as usize]);
+                self.buf[at..at + payload_sz as usize]
+                    .copy_from_slice(&packet[from..from + payload_sz as usize]);
             }),
         };
         self.entry(at, type_)

@@ -42,7 +42,13 @@ use spirv_std::memory::{Scope, Semantics};
 fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
     if (i as usize) < s.len() {
         // SAFETY: just bounded by the slice's own length.
-        unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(s.get_unchecked_mut(i as usize), v) }
+        unsafe {
+            spirv_std::arch::atomic_i_add::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+            >(s.get_unchecked_mut(i as usize), v)
+        }
     } else {
         0
     }

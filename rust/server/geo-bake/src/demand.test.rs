@@ -12,7 +12,10 @@ fn a_restart_keeps_the_tiles_and_clears_what_was_cut_short() {
         std::fs::create_dir_all(d).unwrap();
     }
     let owner = claim(&base).unwrap();
-    assert!(claim(&base).is_err(), "a running server's cache is not taken from it");
+    assert!(
+        claim(&base).is_err(),
+        "a running server's cache is not taken from it"
+    );
     prune(&root).unwrap();
     assert!(tile.exists(), "a baked tile is kept");
     assert!(!work.exists(), "a killed job's staging is removed");

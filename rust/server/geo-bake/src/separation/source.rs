@@ -70,13 +70,20 @@ impl TileRows {
             .filter(|p| p.form == Form::Tunnel && p.way.subtype != "rail")
             .flat_map(|p| {
                 let (pts, level) = (&p.way.points, p.way.tags.level.unwrap_or(0));
-                [pts[0], pts[pts.len() - 1]].map(|q| Portal { at: [q[0], q[1]], level })
+                [pts[0], pts[pts.len() - 1]].map(|q| Portal {
+                    at: [q[0], q[1]],
+                    level,
+                })
             })
             .collect()
     }
 }
 
-fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String> {
+fn tile_rows(
+    client: &mut Client,
+    repo: &TerrainRepository,
+    tile: [i32; 2],
+) -> Result<TileRows, String> {
     let [min, max] = epsg3857::get_tile_bbox(LEAF_ZOOM, tile);
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
@@ -85,21 +92,40 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> R
     let ele = repo.ele(client, tile).map_err(|e| e.to_string())?;
     Ok(TileRows {
         ways: ways.iter().flat_map(Part::of).collect(),
-        water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),
+        water: water
+            .iter()
+            .map(|r| {
+                (
+                    r.get("subtype"),
+                    r.get("class"),
+                    r.get::<_, &[u8]>("geom_wkb").to_vec(),
+                )
+            })
+            .collect(),
         ele,
     })
 }
 
 /// Where a tile's rows are kept for its neighbours.
 pub trait Store {
-    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String>;
+    fn tile(
+        &mut self,
+        client: &mut Client,
+        repo: &TerrainRepository,
+        tile: [i32; 2],
+    ) -> Result<TileRows, String>;
 }
 
 /// On disk, shared by the processes that bake tiles on demand.
 pub struct Disk<'a>(pub &'a Path);
 
 impl Store for Disk<'_> {
-    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String> {
+    fn tile(
+        &mut self,
+        client: &mut Client,
+        repo: &TerrainRepository,
+        tile: [i32; 2],
+    ) -> Result<TileRows, String> {
         memo_rows(client, repo, tile, self.0)
     }
 }
@@ -120,7 +146,12 @@ impl Walk {
 }
 
 impl Store for Walk {
-    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String> {
+    fn tile(
+        &mut self,
+        client: &mut Client,
+        repo: &TerrainRepository,
+        tile: [i32; 2],
+    ) -> Result<TileRows, String> {
         if let Some(rows) = self.held.get(&tile) {
             return Ok(rows.clone());
         }
@@ -152,13 +183,26 @@ pub fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Po
 }
 
 /// A tile's rows from `memo` when read before, else from the DB into it.
-fn memo_rows(client: &mut Client, repo: &TerrainRepository, tile: [i32; 2], memo: &Path) -> Result<TileRows, String> {
+fn memo_rows(
+    client: &mut Client,
+    repo: &TerrainRepository,
+    tile: [i32; 2],
+    memo: &Path,
+) -> Result<TileRows, String> {
     let file = memo.join(Tile::new(LEAF_ZOOM, tile).name());
-    if let Some(rows) = std::fs::read(&file).ok().and_then(|b| unpack(&b).ok()).and_then(|b| serde_json::from_slice(&b).ok()) {
+    if let Some(rows) = std::fs::read(&file)
+        .ok()
+        .and_then(|b| unpack(&b).ok())
+        .and_then(|b| serde_json::from_slice(&b).ok())
+    {
         return Ok(rows);
     }
     let rows = tile_rows(client, repo, tile)?;
-    let packed = pack(&serde_json::to_vec(&rows).map_err(|e| e.to_string())?, Level::Live).map_err(|e| e.to_string())?;
+    let packed = pack(
+        &serde_json::to_vec(&rows).map_err(|e| e.to_string())?,
+        Level::Live,
+    )
+    .map_err(|e| e.to_string())?;
     std::fs::create_dir_all(memo).map_err(|e| e.to_string())?;
     write_atomic(&file, &packed).map_err(|e| e.to_string())?;
     Ok(rows)
@@ -167,5 +211,7 @@ fn memo_rows(client: &mut Client, repo: &TerrainRepository, tile: [i32; 2], memo
 /// A tile and the eight around it.
 pub fn ring(tile: [i32; 2]) -> Vec<[i32; 2]> {
     let [px, py] = tile;
-    (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| [px + dx, py + dy])).collect()
+    (-1..=1)
+        .flat_map(|dy| (-1..=1).map(move |dx| [px + dx, py + dy]))
+        .collect()
 }

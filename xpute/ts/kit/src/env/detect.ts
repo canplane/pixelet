@@ -21,7 +21,8 @@ function is_browser_worker(): boolean {
   if (typeof g.document !== "undefined") return false;
   if (typeof g.Deno !== "undefined") return false;
   if (g.process?.versions?.node) return false;
-  return typeof g.postMessage === "function" && typeof g.addEventListener === "function";
+  return typeof g.postMessage === "function" &&
+    typeof g.addEventListener === "function";
 }
 
 export const env = {

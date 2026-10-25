@@ -75,8 +75,13 @@ impl GpuHost {
     /// configured once the guest has asked: whether it was, which it is not
     /// where a newer handle has bound the slot since.
     pub fn bind(&mut self, handle: u32, s: wgpu::Surface<'static>) -> bool {
-        let Some(slot) = self.claim(handle) else { return false };
-        self.surface(slot).bound = Some(Bound { surface: s, stale: true });
+        let Some(slot) = self.claim(handle) else {
+            return false;
+        };
+        self.surface(slot).bound = Some(Bound {
+            surface: s,
+            stale: true,
+        });
         self.want_configured(slot);
         true
     }
@@ -84,7 +89,9 @@ impl GpuHost {
     /// Lets `handle`'s surface go, if it is still the one bound under its
     /// slot, which is then drawn into frames never shown: whether it was.
     pub fn unbind(&mut self, handle: u32) -> bool {
-        let Some(slot) = self.release(handle) else { return false };
+        let Some(slot) = self.release(handle) else {
+            return false;
+        };
         let s = self.surface(slot);
         s.bound = None;
         s.frame = None;
@@ -106,7 +113,10 @@ impl GpuHost {
     /// `handle`'s slot, if `handle` is the one bound there, which then holds none.
     fn release(&mut self, handle: u32) -> Option<u32> {
         let slot = handle_slot(handle);
-        let s = self.surfaces.get_mut(slot as usize).filter(|s| handle != 0 && s.handle == handle)?;
+        let s = self
+            .surfaces
+            .get_mut(slot as usize)
+            .filter(|s| handle != 0 && s.handle == handle)?;
         s.handle = 0;
         Some(slot)
     }
@@ -116,17 +126,25 @@ impl GpuHost {
     pub fn configure_surfaces(&mut self) {
         let frame_latency = self.frame_latency;
         for (n, s) in self.surfaces.iter_mut().enumerate() {
-            let (Some(b), Some((format, usage, premultiplied))) = (s.bound.as_mut().filter(|b| b.stale), s.asked) else {
+            let (Some(b), Some((format, usage, premultiplied))) =
+                (s.bound.as_mut().filter(|b| b.stale), s.asked)
+            else {
                 continue;
             };
             let caps = b.surface.get_capabilities(&self.adapter);
-            assert!(caps.formats.contains(&format), "[gpu] surface {n} cannot show {format:?} on this adapter");
+            assert!(
+                caps.formats.contains(&format),
+                "[gpu] surface {n} cannot show {format:?} on this adapter"
+            );
             // Shows through where clear, as a premultiplied canvas does; Metal
             // offers only opaque and post-multiplied.
-            let alpha_mode = [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied]
-                .into_iter()
-                .find(|m| premultiplied && caps.alpha_modes.contains(m))
-                .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+            let alpha_mode = [
+                wgpu::CompositeAlphaMode::PreMultiplied,
+                wgpu::CompositeAlphaMode::PostMultiplied,
+            ]
+            .into_iter()
+            .find(|m| premultiplied && caps.alpha_modes.contains(m))
+            .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
             let config = wgpu::SurfaceConfiguration {
                 usage,
                 format,
@@ -152,7 +170,9 @@ impl GpuHost {
             if let ConfigureAt::Here = self.configure_at {
                 self.configure_surfaces();
             }
-            let Some(b) = self.surface(surface).bound.as_mut().filter(|b| !b.stale) else { break };
+            let Some(b) = self.surface(surface).bound.as_mut().filter(|b| !b.stale) else {
+                break;
+            };
             match b.surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(f) => return Frame::Shown(f),
                 wgpu::CurrentSurfaceTexture::Suboptimal(f) => {
@@ -178,7 +198,10 @@ impl GpuHost {
             height: s.size[1],
             depth_or_array_layers: 1,
         };
-        let kept = s.unshown.take().filter(|t| t.format() == format && t.usage() == usage && t.size() == size);
+        let kept = s
+            .unshown
+            .take()
+            .filter(|t| t.format() == format && t.usage() == usage && t.size() == size);
         let texture = kept.unwrap_or_else(|| {
             device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -205,7 +228,9 @@ impl GpuHost {
 
     pub(super) fn want_configured(&mut self, surface: u32) {
         let s = self.surface(surface);
-        let Some(b) = s.bound.as_mut().filter(|_| s.asked.is_some()) else { return };
+        let Some(b) = s.bound.as_mut().filter(|_| s.asked.is_some()) else {
+            return;
+        };
         b.stale = true;
         s.frame = None;
         match self.configure_at {

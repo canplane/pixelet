@@ -8,7 +8,12 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 pub const STEP_NAMES: usize = 8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -40,7 +45,9 @@ impl StepName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<StepName> {
-        StepName::ALL.into_iter().find(|member| *member as u8 == value)
+        StepName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -80,6 +87,8 @@ impl EffectName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<EffectName> {
-        EffectName::ALL.into_iter().find(|member| *member as u8 == value)
+        EffectName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }

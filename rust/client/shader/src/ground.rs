@@ -35,7 +35,10 @@ pub fn joined_cs(
 ) {
     // The level this dispatch folds is its depth in workgroups, its last
     // slice the one that runs: the levels under it were folded before.
-    let (l, blocks) = (groups.z, (window::ACROSS >> groups.z) * (window::ACROSS >> groups.z));
+    let (l, blocks) = (
+        groups.z,
+        (window::ACROSS >> groups.z) * (window::ACROSS >> groups.z),
+    );
     if id.z + 1 != l || id.x >= blocks * window::EYE_WINDOWS {
         return;
     }
@@ -53,7 +56,10 @@ pub fn joined_cs(
         };
         window::fold(&world, cell, l, b)
     };
-    let k = (window::JOINED_AT + (cell - FIRST_CELL) * window::JOINED_ENTRIES + window::joined_index(l, [0, 0]) + b) as usize;
+    let k = (window::JOINED_AT
+        + (cell - FIRST_CELL) * window::JOINED_ENTRIES
+        + window::joined_index(l, [0, 0])
+        + b) as usize;
     if k < window.len() {
         window[k] = IVec4::new(x as i32, y as i32, bound as i32, pad as i32);
     }
@@ -103,5 +109,12 @@ pub fn bound_cs(
         words: &*scratch,
         at: fill::scratch_at(scratch, id.z),
     };
-    fill::level(ground, base, &runs, at(fresh, rec + window::FRESH_CELL), j, [id.x, id.y]);
+    fill::level(
+        ground,
+        base,
+        &runs,
+        at(fresh, rec + window::FRESH_CELL),
+        j,
+        [id.x, id.y],
+    );
 }

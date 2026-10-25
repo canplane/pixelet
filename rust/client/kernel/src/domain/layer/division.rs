@@ -48,9 +48,16 @@ impl Base for DivisionTile {
 
     /// Its cells into its record; its divisions, a handful over the focus,
     /// held on the heap with their names decoded.
-    fn receive(_tile: Tile, record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<DivisionTile, Failure> {
+    fn receive(
+        _tile: Tile,
+        record: u32,
+        pkt: &[u8],
+        _phases: &mut Phases,
+    ) -> Result<DivisionTile, Failure> {
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let room = unsafe { crate::sys::mem::fixed::lane::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
+        let room = unsafe {
+            crate::sys::mem::fixed::lane::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS)
+        };
         Ok(division::decode_into(pkt, room)?)
     }
 }

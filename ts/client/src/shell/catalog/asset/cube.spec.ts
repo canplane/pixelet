@@ -7,7 +7,15 @@
 // that palette and whose range past it is what only an object can be.
 
 /** The catalog's section a placeable cube is listed under, as Carto groups the looks. */
-export type CubeSection = "landcover" | "water" | "water_features" | "buildings" | "roads" | "aeroways" | "underground" | "colors";
+export type CubeSection =
+  | "landcover"
+  | "water"
+  | "water_features"
+  | "buildings"
+  | "roads"
+  | "aeroways"
+  | "underground"
+  | "colors";
 
 export const cube = {
   sentinel: {

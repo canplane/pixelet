@@ -4,44 +4,44 @@
 which parts of the current architecture had to change to make that true.
 
 > Mechanical details below (table names, route paths, env vars like
-> `VITE_TILE_BASE_URL`, `apps/api`, `/tiles/v1`, the `_ocean` fallback,
-> gzip) reflect this doc's own date and have since moved —
-> `spec/spec/route.json`, `ts/server/edge/wrangler.jsonc`,
-> `ts/server/edge/index.ts` and `infra/README.md` are current.
-> The reasoning (pre-baked tiles, object storage, one-Worker-one-origin)
-> still holds for what the bucket serves; this note exists so the paths
-> below aren't mistaken for current.
+> `VITE_TILE_BASE_URL`, `apps/api`, `/tiles/v1`, the `_ocean` fallback, gzip)
+> reflect this doc's own date and have since moved — `spec/spec/route.json`,
+> `ts/server/edge/wrangler.jsonc`, `ts/server/edge/index.ts` and
+> `infra/README.md` are current. The reasoning (pre-baked tiles, object storage,
+> one-Worker-one-origin) still holds for what the bucket serves; this note
+> exists so the paths below aren't mistaken for current.
 >
 > The deployment is no longer serverless. The Worker relays `/geo/*` and
 > `/api/*` to `GEO_ORIGIN` and `API_ORIGIN` (`wrangler.jsonc` `vars`), where
 > Caddy sends them to pxl-geo and pxl-api, each with its database
-> (`infra/prod/Caddyfile`, `infra/prod/docker-compose.yml`). The bucket
-> still serves the tiles, under `/tile/*`, and the assets, under `/asset/*`.
+> (`infra/prod/Caddyfile`, `infra/prod/docker-compose.yml`). The bucket still
+> serves the tiles, under `/tile/*`, and the assets, under `/asset/*`.
 
 ---
 
 ## The problem this started from
 
 The engine has been runnable only on a developer machine, because a running
-terrain tile depended on a live PostGIS instance: `GET /api/world/terrain/tiles/:page_idx`
-ran three spatial queries and a full bake **on every request**, with no cache.
-Deploying that meant paying for a database, a Node process, and egress on
-multi-megabyte tile responses — enough to stop the demo from ever going up.
+terrain tile depended on a live PostGIS instance:
+`GET /api/world/terrain/tiles/:page_idx` ran three spatial queries and a full
+bake **on every request**, with no cache. Deploying that meant paying for a
+database, a Node process, and egress on multi-megabyte tile responses — enough
+to stop the demo from ever going up.
 
-The observation that unlocks the whole thing: **`page_idx → tile bytes` is a pure
-function.** OSM and DEM source data don't change underneath a running server, so
-the same page always bakes to the same bytes. Anything that pure can be computed
-once, offline, and served as a static file. That collapses the deployment from
-"web app + API + PostGIS" down to "web app + a bucket of files".
+The observation that unlocks the whole thing: **`page_idx → tile bytes` is a
+pure function.** OSM and DEM source data don't change underneath a running
+server, so the same page always bakes to the same bytes. Anything that pure can
+be computed once, offline, and served as a static file. That collapses the
+deployment from "web app + API + PostGIS" down to "web app + a bucket of files".
 
 ## Decisions
 
 ### 1. Tiles are pre-baked to an object store, not served live
 
-> Superseded in part: tiles are still baked and served from the bucket, now
-> by the Rust bakes (`bake_terrain`, `bake_place`, `bake_division` in
-> `rust/server/geo-bake/src/bin/`), but search and the application are
-> served live behind the same Worker — see the note at the top.
+> Superseded in part: tiles are still baked and served from the bucket, now by
+> the Rust bakes (`bake_terrain`, `bake_place`, `bake_division` in
+> `rust/server/geo-bake/src/bin/`), but search and the application are served
+> live behind the same Worker — see the note at the top.
 
 The whole coverage area is baked once by an offline tool
 (`apps/api/src/bake/terrain/tools/bake_tiles.ts`) and uploaded as static
@@ -58,11 +58,10 @@ what you actually want.
 
 ### 2. Open-ocean pages are not baked at all — one shared fallback covers them
 
-> Superseded: there is no `_ocean` object now. A page a version leaves out
-> is answered `204` by the Worker (`left()` in
-> `ts/server/edge/index.ts`), and the client reads a 204 as no
-> object (`ts/client/src/namespace/read.ts`); 404 stays for a key that
-> names nothing.
+> Superseded: there is no `_ocean` object now. A page a version leaves out is
+> answered `204` by the Worker (`left()` in `ts/server/edge/index.ts`), and the
+> client reads a 204 as no object (`ts/client/src/namespace/read.ts`); 404 stays
+> for a key that names nothing.
 
 Classifying the coverage bbox against `osm_coastline_polygons` (the same
 predicate `repository.ts`'s `OSM_COAST_SQL` already uses, so "has land" means
@@ -77,12 +76,12 @@ exactly what it means to the live bake path) splits it three ways:
 **65% of the bbox is open sea.** Baking and uploading 80,230 copies of "flat
 water" would triple the dataset for no information.
 
-Instead the bucket holds one `_ocean` object. The client requests a tile,
-gets a 404 for any page that wasn't baked, and resolves that to the shared
-tile. A 404 here isn't an error — it's the signal for "nothing but water here".
+Instead the bucket holds one `_ocean` object. The client requests a tile, gets a
+404 for any page that wasn't baked, and resolves that to the shared tile. A 404
+here isn't an error — it's the signal for "nothing but water here".
 
-This is only sound if the ocean tile is genuinely page-independent, which is
-not obvious: `bake_terrain` takes a `page_idx` and derives both a bbox and a
+This is only sound if the ocean tile is genuinely page-independent, which is not
+obvious: `bake_terrain` takes a `page_idx` and derives both a bbox and a
 latitude-dependent `Z_SCALE` from it. So the tool **verifies it rather than
 assuming it** — it bakes a synthesized empty source (zero elevation grid, no
 features, no coastline rows) at three different pages and refuses to proceed
@@ -98,13 +97,13 @@ irrelevant at demo scope — they are invisible dots in open water — but it is
 real difference from what the live API would serve for the same page.
 
 The client only takes the 404 → ocean path when a static tile origin is
-configured. Against the live API every page, ocean included, bakes to a real 200,
-so a 404 there is a genuine failure and must keep surfacing as one.
+configured. Against the live API every page, ocean included, bakes to a real
+200, so a 404 there is a genuine failure and must keep surfacing as one.
 
 ### 3. Tile origin is a build-time env var, versioned by URL prefix
 
-> Superseded: `__TILE_BASE_URL__` is gone, and `VITE_TILE_BASE_URL` now
-> only points the dev server's proxy at a local tile server
+> Superseded: `__TILE_BASE_URL__` is gone, and `VITE_TILE_BASE_URL` now only
+> points the dev server's proxy at a local tile server
 > (`ts/app/web/vite.config.ts`). Tile URLs are `/tile/<kind>/<version>/<name>`
 > (`tile_url` in `ts/client/src/namespace/route.ts`), and which version is
 > served is the bucket's `source` declaration (`spec/spec/bake/published.json`).
@@ -134,8 +133,8 @@ dataset re-baked a handful of times a year needs.
 
 > Superseded: objects are stored zstd now (`CONTENT_ENCODING` in
 > `rust/server/geo-bake/src/util.rs`; see
-> [compression by traffic](./20260913-compression-by-traffic.md)). The
-> upload takes the encoding from the bake's manifest (`script/publish.py`).
+> [compression by traffic](./20260913-compression-by-traffic.md)). The upload
+> takes the encoding from the bake's manifest (`script/publish.py`).
 
 Object stores don't compress on the fly. Each tile is gzipped at bake time and
 uploaded with `content-type: application/octet-stream` +
@@ -160,20 +159,20 @@ Full bake against the local geo DB, concurrency 8, completed:
 | Wall clock          | 36m58s                                      |
 | App bundle          | 1.97 MB (655 kB gzipped)                    |
 
-The earlier estimate of "100–150 kB/tile → 4–6 GB" was measuring **uncompressed**
-tiles. These payloads are dense per-cell ground channels built from polygon
-fills — mostly long uniform runs — so they compress by more than two orders of
-magnitude. The real upload is an order of magnitude smaller than planned for,
-which puts the whole dataset comfortably inside a free storage tier instead of
-brushing against it.
+The earlier estimate of "100–150 kB/tile → 4–6 GB" was measuring
+**uncompressed** tiles. These payloads are dense per-cell ground channels built
+from polygon fills — mostly long uniform runs — so they compress by more than
+two orders of magnitude. The real upload is an order of magnitude smaller than
+planned for, which puts the whole dataset comfortably inside a free storage tier
+instead of brushing against it.
 
 ### Known defect: 297 tiles on the outer boundary have flat elevation
 
 297 of 43,505 tiles (0.68%) logged `invalid ele shape` and fell back to a
 zero-filled elevation grid, so they render perfectly flat.
 
-They are exactly the **outermost ring of the candidate grid** — the maximum-Y row
-(124), the minimum-Y row (111), and the maximum-X column (62). The elevation
+They are exactly the **outermost ring of the candidate grid** — the maximum-Y
+row (124), the minimum-Y row (111), and the maximum-X column (62). The elevation
 query pads its sampling window by `ELE_PAD` around each page, and at the very
 edge of `esa_elevation_raster`'s coverage there is no source raster to fill that
 padding, so the resample returns a short grid (2176 or 1836 cells instead of
@@ -191,18 +190,21 @@ inward neighbors shows why that would be worse:
   way — dropping the ring does not remove the cliff, since the ocean fallback is
   also flat at zero.
 - Dropping it _adds_ a second error on top: land recolored as sea. Composition
-  across the ring is mixed — sampled tiles ran from 99.4% sea to 100% bare land —
-  so the ocean fallback would assert open water over genuine land in part of it.
+  across the ring is mixed — sampled tiles ran from 99.4% sea to 100% bare land
+  — so the ocean fallback would assert open water over genuine land in part of
+  it.
 - Where a ring tile is ~100% sea already, the two options are indistinguishable.
 
-Keeping is therefore better-or-equal in every case sampled, and costs about 6 MB.
+Keeping is therefore better-or-equal in every case sampled, and costs about 6
+MB.
 
 The ring is also not a quality cliff. Tiles just inside it are equally
-featureless (see below); the only thing the ring additionally loses is elevation.
+featureless (see below); the only thing the ring additionally loses is
+elevation.
 
 The correct fix, if this ever matters, is neither option: clamp the padded
-sampling window to the available raster instead of letting a short grid fall back
-to zeros. Worth doing only if the coverage area is extended — the same ring
+sampling window to the available raster instead of letting a short grid fall
+back to zeros. Worth doing only if the coverage area is extended — the same ring
 reappears at whatever the new boundary is.
 
 ### The periphery has no OSM features at all
@@ -216,10 +218,10 @@ tiles:
 | structure pixels | 184 – 184,000          | **0**                                          |
 | transport pixels | 20,000 – 218,000       | **0**                                          |
 
-`osm_coastline_polygons` is global, so any page touching a landmass classifies as
-land and gets baked — but the OSM _feature_ extract is Geofabrik's South Korea
-file. Those pages therefore bake into a bare land/sea silhouette and nothing
-else.
+`osm_coastline_polygons` is global, so any page touching a landmass classifies
+as land and gets baked — but the OSM _feature_ extract is Geofabrik's South
+Korea file. Those pages therefore bake into a bare land/sea silhouette and
+nothing else.
 
 The elevation data behaves the same way, and less visibly. The DEM is four
 GeoTIFFs covering mainland South Korea, Jeju, the far western islands, and
@@ -244,10 +246,10 @@ Size distribution over the 43,505 tiles confirms the scale:
 | under 6 kB (effectively featureless) | **6,949 tiles (16.0%)**                                              |
 | total bytes in those                 | **29 MB**                                                            |
 
-**16% of the tile count, 3% of the bytes** — featureless tiles compress to almost
-nothing, which is exactly why pruning them isn't worth doing. Panning east, south
-or north out of Korea yields plain bare terrain rather than an error or a hard
-world edge, which is the better failure mode anyway.
+**16% of the tile count, 3% of the bytes** — featureless tiles compress to
+almost nothing, which is exactly why pruning them isn't worth doing. Panning
+east, south or north out of Korea yields plain bare terrain rather than an error
+or a hard world edge, which is the better failure mode anyway.
 
 ## Hosting comparison
 
@@ -272,18 +274,18 @@ Three things actually differentiate them:
 so the bucket needs a CORS policy naming the app domain — extra state to keep in
 sync per domain change, and its absence fails _only_ in production, never
 locally. On Cloudflare the bucket can be bound to a path on the app's own
-hostname (`pixelet.app/tiles/*`), making tile requests same-origin, so CORS never
-enters the picture. `VITE_TILE_BASE_URL=/tiles/v1` then suffices.
+hostname (`pixelet.app/tiles/*`), making tile requests same-origin, so CORS
+never enters the picture. `VITE_TILE_BASE_URL=/tiles/v1` then suffices.
 
 **File-count ceiling.** Cloudflare Pages caps a deployment at 20,000 files, so
-43,505 tiles can't live there even in principle. Vercel and Netlify permit it but
-would make builds absurd and would meter tile traffic against the 100 GB
+43,505 tiles can't live there even in principle. Vercel and Netlify permit it
+but would make builds absurd and would meter tile traffic against the 100 GB
 allowance — a session panning around pulls tens of megabytes, so that allowance
 is a number that genuinely depletes. Tiles belong in object storage regardless
 of which host is picked.
 
-**Vercel's Hobby terms** prohibit commercial use. Irrelevant to a portfolio demo;
-relevant if the demo ever becomes anything, at which point it's $20/mo.
+**Vercel's Hobby terms** prohibit commercial use. Irrelevant to a portfolio
+demo; relevant if the demo ever becomes anything, at which point it's $20/mo.
 
 **Decision: Cloudflare Pages for the app + R2 for the tiles.** Vercel has the
 better developer experience by a clear margin, but that doesn't outweigh the
@@ -294,8 +296,8 @@ clause. Netlify shows no advantage over Cloudflare for this workload.
 
 R2's free tier (10 GB storage, 1M class-A writes/mo, 10M class-B reads/mo) and
 zero egress fees cover this entirely: 892.5 MB of storage, 43,506 uploads, and
-read volume that a demo won't come near. Cloudflare Pages adds no bandwidth cost.
-**Expected running cost: $0.**
+read volume that a demo won't come near. Cloudflare Pages adds no bandwidth
+cost. **Expected running cost: $0.**
 
 Even the pathological case stays trivial — going over 10 GB of storage costs
 about $0.015/GB/month. Egress, the thing that stopped this deployment from
@@ -324,18 +326,18 @@ would be a different kind of problem.
 
 **The effective control is caching, not billing configuration.** The Worker
 reads R2 on every request; putting responses through the Cache API means edge
-hits never touch R2 at all, which is sound precisely because tiles are
-immutable and versioned by URL. That turns the one variable meter into a
-fraction of itself.
+hits never touch R2 at all, which is sound precisely because tiles are immutable
+and versioned by URL. That turns the one variable meter into a fraction of
+itself.
 
 That change touches the same content-encoding path as the double-compression
-trap above, and it did in fact regress on the first attempt — see "the same
-trap again" above for what broke and why `no-transform` alone was not the fix.
+trap above, and it did in fact regress on the first attempt — see "the same trap
+again" above for what broke and why `no-transform` alone was not the fix.
 Verified after: six tiles across the dataset serve at exactly their stored size
 on both MISS and HIT, and decode byte-identically to a local `gunzip`.
 
-A dashboard usage notification is worth setting up as a backstop, but it
-reports rather than prevents.
+A dashboard usage notification is worth setting up as a backstop, but it reports
+rather than prevents.
 
 ### What actually bounds the spend (verified 2026-08-17)
 
@@ -363,9 +365,9 @@ Together those compose into a ceiling nobody configured: at most 100k Worker
 invocations a day is at most ~3M class-B reads a month even at a 0% cache hit
 rate, against a 10M free tier. Storage (941 MB) and class-A (one bake's worth of
 uploads) are nowhere near their own limits. **R2 cannot bill while those three
-hold.** Exactly three things break it, and all three are deliberate acts:
-moving Workers to a paid plan, enabling the r2.dev URL, or attaching a custom
-domain to the bucket.
+hold.** Exactly three things break it, and all three are deliberate acts: moving
+Workers to a paid plan, enabling the r2.dev URL, or attaching a custom domain to
+the bucket.
 
 The Worker also validates the object key shape before touching R2:
 
@@ -379,8 +381,8 @@ A miss is a billed class-B operation, so without this anyone can walk
 prober which guesses had the right shape, and the client cannot act on the
 difference anyway.
 
-> Since then: the shape is `KEY_RE` in `ts/server/edge/index.ts`,
-> and a well-shaped page key with no object answers 204 (`left()`), not 404.
+> Since then: the shape is `KEY_RE` in `ts/server/edge/index.ts`, and a
+> well-shaped page key with no object answers 204 (`left()`), not 404.
 
 ### On its own domain — and what that took (2026-08-17)
 
@@ -392,20 +394,19 @@ Closed, by moving the app off `*.workers.dev` and onto `plei.me`. The
 "workers_dev": false,
 ```
 
-`custom_domain: true` means wrangler owns the DNS record and the certificate
-— neither is created by hand, and an existing record at the same name makes
-the deploy fail rather than being silently replaced. `workers_dev: false` is
-not optional bookkeeping: WAF rules attach to a zone, so leaving the old
-hostname up means every rule written against `plei.me` is bypassable by
-asking for `pixelet.canplane.workers.dev` instead. A firewall with the side
-door propped open. It disabled Preview URLs as a side effect, which wrangler
-warns about; nothing needed them.
+`custom_domain: true` means wrangler owns the DNS record and the certificate —
+neither is created by hand, and an existing record at the same name makes the
+deploy fail rather than being silently replaced. `workers_dev: false` is not
+optional bookkeeping: WAF rules attach to a zone, so leaving the old hostname up
+means every rule written against `plei.me` is bypassable by asking for
+`pixelet.canplane.workers.dev` instead. A firewall with the side door propped
+open. It disabled Preview URLs as a side effect, which wrangler warns about;
+nothing needed them.
 
 `plei.me` rather than one of the `xpute.*` domains the account also holds.
-`@xpute/kit` is a runtime kit that carries no pixelet knowledge and is meant
-to stay portable, so spending that name on one of the things
-built with it would be the same conflation the package boundary exists to
-prevent.
+`@xpute/kit` is a runtime kit that carries no pixelet knowledge and is meant to
+stay portable, so spending that name on one of the things built with it would be
+the same conflation the package boundary exists to prevent.
 
 **The rest of it lives only in the Cloudflare dashboard**, which is worth
 writing down precisely because it is not in version control and cannot be
@@ -418,41 +419,39 @@ diffed, reviewed, or restored from this repository.
 | Rules → Redirect Rules         | `www -> apex (301)`              | Dynamic, `concat("https://plei.me", http.request.uri.path)`, preserve query |
 | Security → WAF → Rate limiting | `Throttle /tiles/* per IP`       | 100 requests / 10 seconds, block                                            |
 
-> Since then the tile root is `/tile` (`spec/spec/route.json`), so a rule
-> on `/tiles/*` matches nothing; the dashboard rule has to name `/tile/*`.
+> Since then the tile root is `/tile` (`spec/spec/route.json`), so a rule on
+> `/tiles/*` matches nothing; the dashboard rule has to name `/tile/*`.
 
 Two of those have a reason that is not obvious from the setting itself.
 
-**The dummy A record.** Cloudflare only receives traffic for hostnames it has
-a DNS record for, so a Redirect Rule cannot fire for a name that does not
-resolve — `www` has to exist and be proxied before any rule applies to it.
-`192.0.2.1` is RFC 5737's documentation range: not routable, so nothing can
-accidentally reach it, and the request terminates at the edge in the rule
-before the address is ever used. Both records carry a comment saying as much,
-since a stray A record pointing at a documentation IP is exactly the kind of
-thing a future reader deletes as junk. (The 100-character comment limit is
-why they are terse.)
+**The dummy A record.** Cloudflare only receives traffic for hostnames it has a
+DNS record for, so a Redirect Rule cannot fire for a name that does not resolve
+— `www` has to exist and be proxied before any rule applies to it. `192.0.2.1`
+is RFC 5737's documentation range: not routable, so nothing can accidentally
+reach it, and the request terminates at the edge in the rule before the address
+is ever used. Both records carry a comment saying as much, since a stray A
+record pointing at a documentation IP is exactly the kind of thing a future
+reader deletes as junk. (The 100-character comment limit is why they are terse.)
 
-This whole pattern is a consequence of having no origin. With a real server
-the same redirect was three lines of nginx and the A record held that
-server's own address; the placeholder exists only because the edge replaced
-the machine.
+This whole pattern is a consequence of having no origin. With a real server the
+same redirect was three lines of nginx and the A record held that server's own
+address; the placeholder exists only because the edge replaced the machine.
 
 **Ten seconds, not one minute.** The Free plan allows a single rate-limiting
-rule and only a 10-second counting period; the longer windows are paid. So
-the limit is expressed as 100 requests per 10 seconds rather than the 300 per
-minute it would otherwise be — and deliberately loose. A moving client pulls
-9 tiles per position and up to 6 more per page boundary crossed, and Korean
-mobile carriers put many users behind one CGNAT address, so a tight limit
-costs real sessions. At 100/10s a full sweep of all 43,506 objects takes
-about 72 minutes, which is friction rather than prevention, and friction is
-the right goal: **the actual ceiling is the Workers free plan's 100k/day**,
-and this rule only stops one address from spending that budget alone.
+rule and only a 10-second counting period; the longer windows are paid. So the
+limit is expressed as 100 requests per 10 seconds rather than the 300 per minute
+it would otherwise be — and deliberately loose. A moving client pulls 9 tiles
+per position and up to 6 more per page boundary crossed, and Korean mobile
+carriers put many users behind one CGNAT address, so a tight limit costs real
+sessions. At 100/10s a full sweep of all 43,506 objects takes about 72 minutes,
+which is friction rather than prevention, and friction is the right goal: **the
+actual ceiling is the Workers free plan's 100k/day**, and this rule only stops
+one address from spending that budget alone.
 
 ### The other shape of "custom domain", which is not this one
 
-Kept because the two are easy to confuse, and only one of them is safe here.
-The move above put the domain on the **Worker**. Putting it on the **bucket**
+Kept because the two are easy to confuse, and only one of them is safe here. The
+move above put the domain on the **Worker**. Putting it on the **bucket**
 instead is a different trade entirely:
 
 |                                     | Custom domain on the **Worker** | Custom domain on the **bucket**  |
@@ -466,8 +465,8 @@ instead is a different trade entirely:
 The first adds WAF and changes nothing else, which is why it is what shipped.
 The second is what you would do once 100k/day became the binding constraint
 rather than the safety net — a good problem, and not this one. It also
-reintroduces CORS, which the same-origin `/tiles/*` path was chosen to avoid
-in the first place.
+reintroduces CORS, which the same-origin `/tiles/*` path was chosen to avoid in
+the first place.
 
 > Pricing figures are from model knowledge and should be re-checked against the
 > providers' current pages before committing. Note also that Cloudflare has been
@@ -487,11 +486,12 @@ the whole prefix.
 
 ## Deliberately not addressed
 
-> **Superseded by [20260908-overture-poi-adoption.md](./archive/20260908-overture-poi-adoption.md).**
-> Reverse geocoding no longer calls Nominatim or any third party at request
-> time — it's baked per L3 page from Overture's Divisions theme. The
-> live-call risk and `VITE_GEOCODE_BASE_URL` escape hatch described below no
-> longer apply; kept as the reasoning that was live at the time.
+> **Superseded by
+> [20260908-overture-poi-adoption.md](./archive/20260908-overture-poi-adoption.md).**
+> Reverse geocoding no longer calls Nominatim or any third party at request time
+> — it's baked per L3 page from Overture's Divisions theme. The live-call risk
+> and `VITE_GEOCODE_BASE_URL` escape hatch described below no longer apply; kept
+> as the reasoning that was live at the time.
 
 **Reverse geocoding still calls a third party from the browser — accepted, and
 now disclosed.** `use_reverse_geocode.ts` hits `nominatim.openstreetmap.org`
@@ -507,14 +507,13 @@ if the public instance does start refusing traffic, is a ~20-line Cloudflare
 Worker that forwards the request with a proper User-Agent. That is a relay, not
 a geocoder: no database, and it fits in the free tier of the account already
 being used. `VITE_GEOCODE_BASE_URL` exists to make that swap a config change
-rather than a code change — it is a door left open, not one to walk through
-now.
+rather than a code change — it is a door left open, not one to walk through now.
 
 > Placed objects are now the kernel's kept slot `kept::OBJECTS` below its
-> `STORAGE` root (`rust/client/kernel/src/sys/io/host.spec.rs`); the page
-> keeps each slot in `localStorage` under its key, `pxl:kept:objects` for
-> this one (`kept_key` in `ts/client/src/namespace/storage.ts`), the
-> device app in the platform's preferences.
+> `STORAGE` root (`rust/client/kernel/src/sys/io/host.spec.rs`); the page keeps
+> each slot in `localStorage` under its key, `pxl:kept:objects` for this one
+> (`kept_key` in `ts/client/src/namespace/storage.ts`), the device app in the
+> platform's preferences.
 
 **Placed objects stay in `localStorage`.** Nothing is shared between visitors;
 each browser sees only its own edits. Correct for a demo, and it's what makes
@@ -523,11 +522,12 @@ are known and unaddressed.
 
 **Client engine code is readable in the bundle.** Anything that runs in the
 browser ships to the browser — scene code, coordinate math, LOD shaders, the
-voxel decoder. Minification is not obfuscation. This is a constant of client-side
-rendering, not something deployment changes: the same exposure exists whether the
-demo goes up or not. What stays private is the part that matters more — the bake
-pipeline itself (OSM policy, POI ranking, PostGIS SQL, quantization) lives in
-`apps/api` and never leaves the server, and the baked binaries don't give it up.
+voxel decoder. Minification is not obfuscation. This is a constant of
+client-side rendering, not something deployment changes: the same exposure
+exists whether the demo goes up or not. What stays private is the part that
+matters more — the bake pipeline itself (OSM policy, POI ranking, PostGIS SQL,
+quantization) lives in `apps/api` and never leaves the server, and the baked
+binaries don't give it up.
 
 > The bake pipeline no longer lives in `apps/api`, which is gone: it is
 > `rust/server/geo-bake`, and still never deployed.
@@ -535,20 +535,21 @@ pipeline itself (OSM policy, POI ranking, PostGIS SQL, quantization) lives in
 **API hardening remains parked.** Rate limiting, timeouts, and circuit breaking
 were judged out of scope (see project notes). They're moot for the static
 deployment, which has no API to harden. The in-process LRU cache and
-single-flight added to the live tile endpoint stay useful for development and for
-any future non-static path.
+single-flight added to the live tile endpoint stay useful for development and
+for any future non-static path.
 
 ## Deploying it: what actually broke
 
-> The Worker is `ts/server/edge/index.ts` now, and
-> `run_worker_first` claims four roots, `["/geo/*", "/api/*", "/tile/*",
-> "/asset/*"]` (`ts/server/edge/wrangler.jsonc`, written from
-> `spec/spec/route.json`). The reasoning below holds.
+> The Worker is `ts/server/edge/index.ts` now, and `run_worker_first` claims
+> four roots, `["/geo/*", "/api/*", "/tile/*",
+> "/asset/*"]`
+> (`ts/server/edge/wrangler.jsonc`, written from `spec/spec/route.json`). The
+> reasoning below holds.
 
 The shape that shipped is one Cloudflare Worker serving both the built app and
-the tiles (`ts/server/edge/wrangler.jsonc`, `ts/server/edge/index.ts`), so tiles live
-under `/tiles/` on the app's own hostname and are same-origin by construction.
-Two settings make that work together, and both matter:
+the tiles (`ts/server/edge/wrangler.jsonc`, `ts/server/edge/index.ts`), so tiles
+live under `/tiles/` on the app's own hostname and are same-origin by
+construction. Two settings make that work together, and both matter:
 
 ```jsonc
 "not_found_handling": "single-page-application",
@@ -591,10 +592,9 @@ the wire did.
 
 ### The same trap again, one layer out
 
-> Since replaced: the cache stores the packed bytes with their encoding
-> parked on `x-pxl-stored-encoding` (`STORED_ENCODING`), and `serve()` puts
-> it back with `encodeBody: "manual"` on both paths out
-> (`ts/server/edge/index.ts`).
+> Since replaced: the cache stores the packed bytes with their encoding parked
+> on `x-pxl-stored-encoding` (`STORED_ENCODING`), and `serve()` puts it back
+> with `encodeBody: "manual"` on both paths out (`ts/server/edge/index.ts`).
 
 Putting the Cache API in front of R2 — the cost control described below —
 reintroduced the identical failure on cache hits alone. A tile stored at 34,261
@@ -609,19 +609,22 @@ way out. Re-asserting it on the hit path fixes it:
 ```ts
 const cached = await cache.match(request);
 if (cached) {
-  return new Response(cached.body, { headers: cached.headers, encodeBody: "manual" });
+  return new Response(cached.body, {
+    headers: cached.headers,
+    encodeBody: "manual",
+  });
 }
 ```
 
-Worth noting how this failed: only on the second request, only through the
-edge, and with a _smaller_ response — the sort of thing that looks like the
+Worth noting how this failed: only on the second request, only through the edge,
+and with a _smaller_ response — the sort of thing that looks like the
 compression working rather than breaking. Comparing served size against stored
 size is what catches it; nothing about the response is otherwise suspicious.
 
 ### Verified end to end
 
-> As of this date. A page never baked now answers 204, and there is no
-> `_ocean` (decision 2's note).
+> As of this date. A page never baked now answers 204, and there is no `_ocean`
+> (decision 2's note).
 
 | Check                | Result                                                              |
 | -------------------- | ------------------------------------------------------------------- |
@@ -652,29 +655,28 @@ Two secret-looking literals in the bundle were checked and are benign: React's
 own list of input types (which contains `password`), and the deliberate
 attribution link in the license section.
 
-> Since superseded: Nominatim is not called; reverse geocoding is baked
-> (the divisions bake), and the coordinate that leaves the client now is
-> forward search's `near`, sent to the project's own `/geo/search`
-> (`fetchSearch` in `ts/client/src/shell/search/fetch.ts`). The
-> settings this paragraph lists are now `pxl:lang`, `pxl:ui_hotbar` and the
-> kernel's two kept slots, the settings and the placed objects
-> (`pxl:kept:settings`, `pxl:kept:objects`;
+> Since superseded: Nominatim is not called; reverse geocoding is baked (the
+> divisions bake), and the coordinate that leaves the client now is forward
+> search's `near`, sent to the project's own `/geo/search` (`fetchSearch` in
+> `ts/client/src/shell/search/fetch.ts`). The settings this paragraph lists are
+> now `pxl:lang`, `pxl:ui_hotbar` and the kernel's two kept slots, the settings
+> and the placed objects (`pxl:kept:settings`, `pxl:kept:objects`;
 > `ts/client/src/namespace/storage.ts`). pxl-api is deployed and its
 > `/api/internal` is behind the admin token (`API_INTERNAL`,
 > `rust/server/api/src/main.rs`).
 
-**Location is the sensitive surface here.** The only personal data
-leaving the client is the map-center coordinate sent to Nominatim — rounded to
-four decimal places (~11 m) and debounced, never stored. That is now disclosed
-in the settings license section, translated rather than hardcoded, because it is
-a statement to the user rather than a notice a license demands verbatim.
+**Location is the sensitive surface here.** The only personal data leaving the
+client is the map-center coordinate sent to Nominatim — rounded to four decimal
+places (~11 m) and debounced, never stored. That is now disclosed in the
+settings license section, translated rather than hardcoded, because it is a
+statement to the user rather than a notice a license demands verbatim.
 
 Everything else stays on the device: `pxl:lang`, `pxl:render_settings`,
 `pxl:debug_settings`, and `pxl:objects:v4` in `localStorage`.
 
 If the API is ever deployed, `ADMIN_TOKEN` must be regenerated rather than
-carried over from development. The bucket stays private and is read only
-through the Worker ("What actually bounds the spend", above).
+carried over from development. The bucket stays private and is read only through
+the Worker ("What actually bounds the spend", above).
 
 ## Changes this produced
 

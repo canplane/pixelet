@@ -26,7 +26,9 @@ const useViewport = create(() => ({ size: measure(), top: 0 }));
 new ResizeObserver(() => {
   const next = measure();
   const { size } = useViewport.getState();
-  if (next.width !== size.width || next.height !== size.height) useViewport.setState({ size: next });
+  if (next.width !== size.width || next.height !== size.height) {
+    useViewport.setState({ size: next });
+  }
 }).observe(document.documentElement);
 
 /**
@@ -51,7 +53,9 @@ interface VirtualKeyboard extends EventTarget {
   readonly boundingRect: DOMRect;
 }
 
-const keyboard = (navigator as Navigator & { virtualKeyboard?: VirtualKeyboard }).virtualKeyboard;
+const keyboard =
+  (navigator as Navigator & { virtualKeyboard?: VirtualKeyboard })
+    .virtualKeyboard;
 
 /**
  * Pins the overlays to the visual viewport: the top as `useViewportTop`, the
@@ -75,7 +79,9 @@ export function useVisualViewport(): void {
       if (!vv) return;
 
       // Every frame, as a CSS variable so following it re-renders nothing.
-      const bottom = keyboard ? keyboard.boundingRect.height : Math.max(0, root.clientHeight - (vv.offsetTop + vv.height));
+      const bottom = keyboard
+        ? keyboard.boundingRect.height
+        : Math.max(0, root.clientHeight - (vv.offsetTop + vv.height));
       root.style.setProperty(VISUAL_VIEWPORT_BOTTOM, `${bottom}px`);
 
       // Top waits until the viewport settles: iOS overshoots while the keyboard

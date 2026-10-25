@@ -35,8 +35,15 @@ impl Painter {
     pub fn new() -> Painter {
         // A state past a leaf's width is a catalog bug and is not named,
         // rather than sizing the table to it.
-        let named = ALL_CUBES.iter().map(|&c| cube_id(c)).chain([AIR]).chain(decor_ids.iter().map(|&id| decor_num_id(id)));
-        let states = named.filter(|&s| s < u16::MAX as u32).max().map_or(0, |s| s as usize + 1);
+        let named = ALL_CUBES
+            .iter()
+            .map(|&c| cube_id(c))
+            .chain([AIR])
+            .chain(decor_ids.iter().map(|&id| decor_num_id(id)));
+        let states = named
+            .filter(|&s| s < u16::MAX as u32)
+            .max()
+            .map_or(0, |s| s as usize + 1);
         let mut looks = vec![None; states];
         for &cube in ALL_CUBES.iter() {
             if let Some(l) = looks.get_mut(cube_id(cube) as usize) {
@@ -59,5 +66,8 @@ impl Painter {
 
 /// Its swatch and texture layer: a cube of a look takes its ground's.
 pub fn solid_look(cube: Cube) -> ([u8; 3], u8) {
-    (rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)), LAYER_IDX(cube) as u8)
+    (
+        rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)),
+        LAYER_IDX(cube) as u8,
+    )
 }

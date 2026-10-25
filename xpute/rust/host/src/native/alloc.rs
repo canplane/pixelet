@@ -69,7 +69,10 @@ impl SysLock {
 
     fn hold<R>(&self, f: impl FnOnce() -> R) -> R {
         // A panic under the lock stops the guest; the slab is still the slab.
-        let _held = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _held = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         f()
     }
 }
@@ -144,7 +147,8 @@ unsafe impl GlobalAlloc for Alloc {
         }
         // Grown across the line from where it was made: moved to this thread's side.
         // SAFETY: a layout the caller's allocation was valid under, resized.
-        let grown = unsafe { self.alloc(Layout::from_size_align_unchecked(new_size, layout.align())) };
+        let grown =
+            unsafe { self.alloc(Layout::from_size_align_unchecked(new_size, layout.align())) };
         if !grown.is_null() {
             // SAFETY: two live blocks, the copy no longer than either.
             unsafe {

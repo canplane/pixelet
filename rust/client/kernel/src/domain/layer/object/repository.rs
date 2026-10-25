@@ -29,7 +29,10 @@ struct State {
 static STATE: Global<State> = Global::new();
 
 fn store_state() -> &'static mut State {
-    STATE.get(|| State { save_due_ms: None, loaded: false })
+    STATE.get(|| State {
+        save_due_ms: None,
+        loaded: false,
+    })
 }
 
 // Kept as one blob of every leaf as the write that made it, `<key, id, ext>`:
@@ -59,14 +62,28 @@ fn encode() -> Result<Vec<u8>, MarshalError> {
     let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
-        b.u64_array(Some(&hi)).u64_array(Some(&lo)).u32_array(Some(&id)).u32_array(Some(&text_rows)).strs(Some(&texts));
+        b.u64_array(Some(&hi))
+            .u64_array(Some(&lo))
+            .u32_array(Some(&id))
+            .u32_array(Some(&text_rows))
+            .strs(Some(&texts));
     }));
-    encoder().encode(&tree, TreeEncoderOptions { init_cap: 1 << 14, max_cap: None })
+    encoder().encode(
+        &tree,
+        TreeEncoderOptions {
+            init_cap: 1 << 14,
+            max_cap: None,
+        },
+    )
 }
 
 fn decode(bytes: &[u8]) -> Result<(), MarshalError> {
     let root = TreeReader::new(bytes)?.read_branch()?;
-    let (hi, lo, id) = (root.at(0)?.get_array::<u64>()?, root.at(1)?.get_array::<u64>()?, root.at(2)?.get_array::<u32>()?);
+    let (hi, lo, id) = (
+        root.at(0)?.get_array::<u64>()?,
+        root.at(1)?.get_array::<u64>()?,
+        root.at(2)?.get_array::<u32>()?,
+    );
     let (text_rows, texts) = (root.at(3)?.get_array::<u32>()?, root.at(4)?.get_strs()?);
     if hi.len() != lo.len() || hi.len() != id.len() || text_rows.len() != texts.len() as usize {
         return Err(MarshalError::new(Errno::EINVAL));

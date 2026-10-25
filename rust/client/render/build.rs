@@ -42,7 +42,12 @@ fn main() {
     // A ray's first word, its fields as the cast writes them (pxl-spec-core
     // ray.rs), and each field read as the cast reads it.
     use pxl_spec_core::ray::*;
-    let field = |name: &str, shift: u32, bits: u32| format!("fn ray_{name}(w: u32) -> u32 {{ return (w >> {shift}u) & {}u; }}\n", (1u32 << bits) - 1);
+    let field = |name: &str, shift: u32, bits: u32| {
+        format!(
+            "fn ray_{name}(w: u32) -> u32 {{ return (w >> {shift}u) & {}u; }}\n",
+            (1u32 << bits) - 1
+        )
+    };
     // Its word of what lies about its face, and that word's fields, a bit an
     // edge or a corner (pxl-spec-core faces.rs).
     use pxl_spec_core::faces::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
@@ -50,9 +55,16 @@ fn main() {
     // The side of the box a block kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
     let sides: String = (1..pxl_spec_core::answer::EIGHTHS)
-        .map(|k| format!("case {k}u: {{ return {:?}; }} ", pxl_spec_core::answer::side(k)))
+        .map(|k| {
+            format!(
+                "case {k}u: {{ return {:?}; }} ",
+                pxl_spec_core::answer::side(k)
+            )
+        })
         .collect();
-    let kept = format!("fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n");
+    let kept = format!(
+        "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
+    );
     // A coarse block's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
     let b = pxl_spec_core::ground::LOOK_BITS;
@@ -75,7 +87,13 @@ fn main() {
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
     use pxl_spec_core::eye::{FORWARD, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
-    let last = (ORIGIN + 2).max(STEPS).max(REACH).max(FORWARD + 2).max(RIGHT + 2).max(UP + 2).max(TAN + 1);
+    let last = (ORIGIN + 2)
+        .max(STEPS)
+        .max(REACH)
+        .max(FORWARD + 2)
+        .max(RIGHT + 2)
+        .max(UP + 2)
+        .max(TAN + 1);
     let eye = format!(
         "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
         last / 4 + 1
@@ -84,14 +102,19 @@ fn main() {
     // A sun slot's word read as its depth, a share of the light box's
     // (pxl-spec-core sun.rs `depth_of`): its top bits over the zoom asked.
     use pxl_spec_core::sun::{DEPTH_ONE, ZOOM_BITS as SUN_ZOOM_BITS};
-    let sun = format!("fn sun_depth(w: u32) -> f32 {{ return f32(w >> {SUN_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n");
+    let sun = format!(
+        "fn sun_depth(w: u32) -> f32 {{ return f32(w >> {SUN_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n"
+    );
     std::fs::write(out.join("sun_word.wgsl"), sun).expect("the sun word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
     use pxl_spec_core::cloud::{HASH_IN, HASH_KEPT, HASH_LAST, HASH_ROUNDS, LATTICE_SHAMT};
     let [hx, hy, hs] = HASH_IN;
-    let rounds: String = HASH_ROUNDS.iter().map(|[shift, mul]| format!("h ^= h >> {shift}u; h *= {mul}u; ")).collect();
+    let rounds: String = HASH_ROUNDS
+        .iter()
+        .map(|[shift, mul]| format!("h ^= h >> {shift}u; h *= {mul}u; "))
+        .collect();
     let cloud = format!(
         "const CLOUD_LATTICE_CELLS: u32 = {}u;\nfn lattice_hash(i: vec2u, salt: u32) -> f32 {{ var h = (i.x * {hx}u) ^ (i.y * {hy}u) ^ (salt * {hs}u); {rounds}h ^= h >> {HASH_LAST}u; return f32(h >> {}u) / {}.0; }}\n",
         1u32 << LATTICE_SHAMT,
@@ -99,7 +122,11 @@ fn main() {
         1u32 << HASH_KEPT
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
-    std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
+    std::fs::write(
+        Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"),
+        compute(dir),
+    )
+    .expect("the compute layouts");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/word.rs");
@@ -130,11 +157,19 @@ fn stripped(text: &str) -> String {
 /// by, read off the one module rust-gpu wrote, never stated again.
 fn compute(dir: &Path) -> String {
     let mut out = String::new();
-    let mut files: Vec<_> = std::fs::read_dir(dir).expect("the shaders").map(|e| e.expect("a shader").path()).collect();
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .expect("the shaders")
+        .map(|e| e.expect("a shader").path())
+        .collect();
     files.sort();
     for path in files {
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-        let Some(stem) = name.strip_suffix(".gen.wgsl") else { continue };
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        let Some(stem) = name.strip_suffix(".gen.wgsl") else {
+            continue;
+        };
         let text = std::fs::read_to_string(&path).expect("a generated shader");
         let lines: Vec<&str> = text.lines().collect();
         let mut group = Vec::new();
@@ -142,7 +177,11 @@ fn compute(dir: &Path) -> String {
         for (k, line) in lines.iter().enumerate() {
             let line = line.trim();
             if let Some(rest) = line.strip_prefix("@group(0) @binding(") {
-                let binding: u32 = rest.split(')').next().and_then(|n| n.parse().ok()).expect("a binding's index");
+                let binding: u32 = rest
+                    .split(')')
+                    .next()
+                    .and_then(|n| n.parse().ok())
+                    .expect("a binding's index");
                 let var = lines.get(k + 1).map(|l| l.trim()).unwrap_or_default();
                 let kind = if var.starts_with("var<uniform>") {
                     "UNIFORM"
@@ -158,14 +197,29 @@ fn compute(dir: &Path) -> String {
                 group.push((binding, kind));
             }
             if let Some(rest) = line.strip_prefix("@compute @workgroup_size(") {
-                workgroup = Some(rest.split(')').next().expect("a workgroup").replace(' ', ""));
+                workgroup = Some(
+                    rest.split(')')
+                        .next()
+                        .expect("a workgroup")
+                        .replace(' ', ""),
+                );
             }
         }
         group.sort();
         let upper = stem.to_uppercase();
-        let entries: Vec<String> = group.iter().map(|(b, k)| format!("{b}, COMPUTE, {k}")).collect();
-        out += &format!("pub const {upper}_GROUP: [u32; {}] = [{}];\n", 3 * group.len(), entries.join(", "));
-        out += &format!("pub const {upper}_WORKGROUP: [u32; 3] = [{}];\n", workgroup.expect("an entry's workgroup"));
+        let entries: Vec<String> = group
+            .iter()
+            .map(|(b, k)| format!("{b}, COMPUTE, {k}"))
+            .collect();
+        out += &format!(
+            "pub const {upper}_GROUP: [u32; {}] = [{}];\n",
+            3 * group.len(),
+            entries.join(", ")
+        );
+        out += &format!(
+            "pub const {upper}_WORKGROUP: [u32; 3] = [{}];\n",
+            workgroup.expect("an entry's workgroup")
+        );
         // Its layout within what every device binds (frame/shader/floor.rs).
         out += &format!("const _: () = assert!(crate::frame::shader::floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
     }
@@ -231,12 +285,31 @@ fn accessors(text: &str) -> String {
                 Kind::Vec3 => ("vec3f", format!("{words}[{row}].{lanes}")),
                 Kind::Vec4i => ("vec4i", format!("bitcast<vec4i>({})", vec4(0))),
                 Kind::Vec4u => ("vec4u", format!("bitcast<vec4u>({})", vec4(0))),
-                Kind::Mat3 => ("mat3x3f", format!("mat3x3f({}, {}, {})", column(0), column(1), column(2))),
-                Kind::Mat4 => ("mat4x4f", format!("mat4x4f({}, {}, {}, {})", vec4(0), vec4(1), vec4(2), vec4(3))),
+                Kind::Mat3 => (
+                    "mat3x3f",
+                    format!("mat3x3f({}, {}, {})", column(0), column(1), column(2)),
+                ),
+                Kind::Mat4 => (
+                    "mat4x4f",
+                    format!(
+                        "mat4x4f({}, {}, {}, {})",
+                        vec4(0),
+                        vec4(1),
+                        vec4(2),
+                        vec4(3)
+                    ),
+                ),
             };
             let whole = matches!(f.kind, Kind::Vec4i | Kind::Vec4u | Kind::Mat3 | Kind::Mat4);
-            assert!(if whole { col == 0 } else { col + n <= 4 }, "{uniform}'s {} crosses a vec4", f.name);
-            out += &format!("fn {uniform}_{}() -> {ty} {{ return {read}; }}\n", f.name.to_lowercase());
+            assert!(
+                if whole { col == 0 } else { col + n <= 4 },
+                "{uniform}'s {} crosses a vec4",
+                f.name
+            );
+            out += &format!(
+                "fn {uniform}_{}() -> {ty} {{ return {read}; }}\n",
+                f.name.to_lowercase()
+            );
         }
     }
     out
@@ -249,17 +322,25 @@ fn accessors(text: &str) -> String {
 /// visibility from (record.rs `pipeline`).
 fn assemble(out: &Path) {
     use naga::valid::{Capabilities, ValidationFlags, Validator};
-    let read = |name: &str| std::fs::read_to_string(out.join(format!("{name}.wgsl"))).unwrap_or_else(|e| panic!("{name}.wgsl: {e}"));
+    let read = |name: &str| {
+        std::fs::read_to_string(out.join(format!("{name}.wgsl")))
+            .unwrap_or_else(|e| panic!("{name}.wgsl: {e}"))
+    };
     let constant = read("constant");
     let (mut sources, mut stages) = (String::new(), String::new());
     for (kind, parts) in part::PARTS.iter().enumerate() {
         let generated = parts.len() == 1 && parts[0].ends_with(".gen");
-        let mut text = if generated { String::new() } else { constant.clone() + "\n" };
+        let mut text = if generated {
+            String::new()
+        } else {
+            constant.clone() + "\n"
+        };
         for part in parts.iter() {
             text += &read(part);
             text += "\n";
         }
-        let module = naga::front::wgsl::parse_str(&text).unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
+        let module = naga::front::wgsl::parse_str(&text)
+            .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
@@ -286,7 +367,16 @@ fn assemble(out: &Path) {
         read_by.sort();
         let entries: Vec<String> = read_by
             .iter()
-            .map(|(g, b, by)| format!("[{g}, {b}, {}]", if by.is_empty() { "NONE".to_string() } else { by.join(" | ") }))
+            .map(|(g, b, by)| {
+                format!(
+                    "[{g}, {b}, {}]",
+                    if by.is_empty() {
+                        "NONE".to_string()
+                    } else {
+                        by.join(" | ")
+                    }
+                )
+            })
             .collect();
         stages += &format!("    &[{}],\n", entries.join(", "));
     }

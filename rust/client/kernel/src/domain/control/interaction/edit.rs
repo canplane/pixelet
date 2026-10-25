@@ -3,7 +3,9 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the world's query and written to the store.
 
-use crate::domain::control::interaction::collision::{is_placement_blocked, placement_reads, PlacementTool};
+use crate::domain::control::interaction::collision::{
+    is_placement_blocked, placement_reads, PlacementTool,
+};
 use crate::domain::control::interaction::{holding, hover, ActiveTool};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
@@ -62,35 +64,59 @@ fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
     if zoom > GROUND.cell() || !carved(at) {
         return false;
     }
-    let Cube::Ground(look) = cube else { return false };
+    let Cube::Ground(look) = cube else {
+        return false;
+    };
     let entry = EntryAt::holding(zoom, at);
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let ground = World::now().previewing(Some(entry), None).block_of(&middle(entry)).exact();
+    let ground = World::now()
+        .previewing(Some(entry), None)
+        .block_of(&middle(entry))
+        .exact();
     ground == Some(look as u32)
 }
 
 /// The middle of the cube `at` names.
 fn middle(at: EntryAt) -> Q3 {
-    let (base, half) = (base_of(at.zoom(), at.at()), q3::from_real(units(at.zoom()) / 2.0));
-    world::at(i64::from(base[0]) + half, i64::from(base[1]) + half, i64::from(base[2]) + half)
+    let (base, half) = (
+        base_of(at.zoom(), at.at()),
+        q3::from_real(units(at.zoom()) / 2.0),
+    );
+    world::at(
+        i64::from(base[0]) + half,
+        i64::from(base[1]) + half,
+        i64::from(base[2]) + half,
+    )
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
 pub fn place(at: &Q3, zoom: Zoom, cube: Cube) {
-    let val = if place_value_is_redundant(at, zoom, cube) { VOID } else { cube_id(cube) };
+    let val = if place_value_is_redundant(at, zoom, cube) {
+        VOID
+    } else {
+        cube_id(cube)
+    };
     write_object_value(EntryAt::holding(zoom, at), val);
 }
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
 pub fn place_decor(at: &Q3, decor_id: DecorId) {
-    let value = if restores_scattered(at, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
-    write_object_value(EntryAt::holding(PlacementTool::Decor(decor_id).zoom(), at), value);
+    let value = if restores_scattered(at, decor_id).is_some() {
+        VOID
+    } else {
+        decor_num_id(decor_id)
+    };
+    write_object_value(
+        EntryAt::holding(PlacementTool::Decor(decor_id).zoom(), at),
+        value,
+    );
 }
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
-    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && carved(at)).then(|| World::now().grown(Decor::of(decor_id), at))?
+    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && carved(at))
+        .then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
@@ -134,7 +160,9 @@ pub fn draft_words(text: &str) -> Result<(), Errno> {
 /// The waiting marker put up with its words, where its place is still free
 /// or still a marker; none is put up without words.
 pub fn put_marker() {
-    let Some(Draft { at, words }) = redraft().take() else { return };
+    let Some(Draft { at, words }) = redraft().take() else {
+        return;
+    };
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().placed(at) {
         Some(e) => object_value_is_marker(e.state),
@@ -169,7 +197,11 @@ pub fn remove(at: EntryAt) {
         .collect();
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
-    let id = match world.previewing(Some(at), None).block_of(&middle(at)).exact() {
+    let id = match world
+        .previewing(Some(at), None)
+        .block_of(&middle(at))
+        .exact()
+    {
         Some(v) if v != VOID && !pxl_spec_core::answer::placed(v) => AIR,
         None => AIR,
         Some(_) => VOID,
@@ -229,8 +261,16 @@ pub fn pending_step() -> RenderEdits {
         (Some(h), Some(tool)) => {
             let asked = Some((tool, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
-            let same = was.asked == asked && !crate::domain::query::changed::within(placement_reads(tool, h), &[]);
-            (if same { was.blocked } else { is_placement_blocked(tool, h) }, asked)
+            let same = was.asked == asked
+                && !crate::domain::query::changed::within(placement_reads(tool, h), &[]);
+            (
+                if same {
+                    was.blocked
+                } else {
+                    is_placement_blocked(tool, h)
+                },
+                asked,
+            )
         }
         _ => (false, None),
     };
@@ -241,8 +281,13 @@ pub fn pending_step() -> RenderEdits {
         // The never-written AIR entry injected into the drawn build where
         // the eraser hovers bare terrain: what is one voxel below shows
         // through the ghost.
-        carve: hovered.filter(|_| digging).map(|h| EntryAt::holding(zoom, &h)),
-        scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),
+        carve: hovered
+            .filter(|_| digging)
+            .map(|h| EntryAt::holding(zoom, &h)),
+        scattered: hover
+            .scattered
+            .filter(|_| active_tool == ActiveTool::Eraser)
+            .and_then(|s| s.grown_in()),
     };
     *PENDING.get(Pending::default) = Pending {
         object,

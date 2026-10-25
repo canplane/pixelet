@@ -65,14 +65,22 @@ fn named(bytes: &[u8]) -> String {
 fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tiles {
-        _ if !sharded(layer) => read(&app.out.join(EARTH).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b)),
-        Tiles::Shelf(dir) => read(&dir.join(layer.name()).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b)),
+        _ if !sharded(layer) => {
+            read(&app.out.join(EARTH).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b))
+        }
+        Tiles::Shelf(dir) => {
+            read(&dir.join(layer.name()).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b))
+        }
         Tiles::Oven(_) => {
             let token = app.cache.join(OVEN_TOKEN);
             if !token.exists() {
-                std::fs::create_dir_all(&app.cache).map_err(|e| format!("{}: {e}", app.cache.display()))?;
-                let made = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-                std::fs::write(&token, made.to_string()).map_err(|e| format!("{}: {e}", token.display()))?;
+                std::fs::create_dir_all(&app.cache)
+                    .map_err(|e| format!("{}: {e}", app.cache.display()))?;
+                let made = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_nanos());
+                std::fs::write(&token, made.to_string())
+                    .map_err(|e| format!("{}: {e}", token.display()))?;
             }
             read(&token).map(|b| named(&b))
         }
@@ -92,7 +100,10 @@ fn declaration(app: &App) -> Result<String, String> {
             }),
             Tiles::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
                 k if k.shard.is_some() => Ok(k),
-                _ => Err(format!("{}: its manifest names no shards the set holds", dir.join(l.name()).display())),
+                _ => Err(format!(
+                    "{}: its manifest names no shards the set holds",
+                    dir.join(l.name()).display()
+                )),
             },
             Tiles::Oven(_) => Ok(source::Kind {
                 format: FORMAT.of(l),
@@ -122,14 +133,20 @@ fn packed(bytes: Vec<u8>) -> Response {
         [
             (header::CONTENT_TYPE, "application/octet-stream"),
             (header::CONTENT_ENCODING, CONTENT_ENCODING),
-            (header::CACHE_CONTROL, "public, max-age=31536000, immutable, no-transform"),
+            (
+                header::CACHE_CONTROL,
+                "public, max-age=31536000, immutable, no-transform",
+            ),
         ],
         Bytes::from(bytes),
     )
         .into_response()
 }
 
-async fn tile(State(app): State<Arc<App>>, Path((kind, object)): Path<(String, String)>) -> Response {
+async fn tile(
+    State(app): State<Arc<App>>,
+    Path((kind, object)): Path<(String, String)>,
+) -> Response {
     let Some((version, name)) = tile_object_parts(&object) else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -142,7 +159,9 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, object)): Path<(String, S
     if kind == EARTH {
         return earth(&app, &name).await;
     }
-    let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
+    let Some(kind) = Kind::parse(&kind) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
     let demand = match &app.tiles {
         Tiles::Oven(demand) => demand,
         Tiles::Shelf(dir) => return from_shelf(dir, kind, &name).await,
@@ -151,7 +170,9 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, object)): Path<(String, S
         Ok(Some(bytes)) => packed(bytes),
         Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
-        Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --folds").into_response(),
+        Err(Failure::Unavailable) => {
+            (StatusCode::SERVICE_UNAVAILABLE, "past --folds").into_response()
+        }
         Err(Failure::Limited(reason)) => (StatusCode::SERVICE_UNAVAILABLE, reason).into_response(),
         Err(Failure::Bake(e)) => {
             eprintln!("[tile/{name}] {e}");
@@ -177,7 +198,14 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
 /// Made again at each ask, so a set baked again under a running server is a new version.
 async fn source(State(app): State<Arc<App>>) -> Response {
     match declaration(&app) {
-        Ok(declared) => ([(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")], declared).into_response(),
+        Ok(declared) => (
+            [
+                (header::CONTENT_TYPE, "application/json"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            declared,
+        )
+            .into_response(),
         Err(e) => {
             eprintln!("[tile] {e}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -185,21 +213,35 @@ async fn source(State(app): State<Arc<App>>) -> Response {
     }
 }
 
-const ASSET_TYPES: [(&str, &str); 3] = [("glb", "model/gltf-binary"), ("png", "image/png"), ("webp", "image/webp")];
+const ASSET_TYPES: [(&str, &str); 3] = [
+    ("glb", "model/gltf-binary"),
+    ("png", "image/png"),
+    ("webp", "image/webp"),
+];
 
 async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Response {
     // Refuse a path out of the ingest's tree.
-    if name.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
+    if name
+        .split('/')
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     }
-    let Some(content_type) = name.rsplit_once('.').and_then(|(_, ext)| ASSET_TYPES.iter().find(|(e, _)| *e == ext)).map(|(_, t)| *t) else {
+    let Some(content_type) = name
+        .rsplit_once('.')
+        .and_then(|(_, ext)| ASSET_TYPES.iter().find(|(e, _)| *e == ext))
+        .map(|(_, t)| *t)
+    else {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     };
     match tokio::fs::read(app.asset_dir.join(&name)).await {
         Ok(bytes) => {
             let mut headers = HeaderMap::new();
             headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
-            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
+            headers.insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=31536000, immutable"),
+            );
             (headers, bytes).into_response()
         }
         Err(_) => (StatusCode::NOT_FOUND, "not found — run the asset ingest").into_response(),
@@ -248,8 +290,14 @@ fn run() -> Result<(), String> {
     let (tiles, top_zoom) = match shelf {
         Some(dir) => (Tiles::Shelf(dir), TOP_ZOOM),
         None => {
-            let top_zoom = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= TOP_ZOOM).ok_or("--folds past the pyramid's top")?;
-            (Tiles::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?), top_zoom)
+            let top_zoom = LEAF_ZOOM
+                .checked_sub(folds)
+                .filter(|&z| z >= TOP_ZOOM)
+                .ok_or("--folds past the pyramid's top")?;
+            (
+                Tiles::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?),
+                top_zoom,
+            )
         }
     };
     let coverage: Vec<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
@@ -270,11 +318,18 @@ fn run() -> Result<(), String> {
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .with_state(app.clone());
 
-    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?;
     let served = runtime.block_on(async move {
-        let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await.map_err(|e| format!("{host}:{port}: {e}"))?;
+        let listener = tokio::net::TcpListener::bind((host.as_str(), port))
+            .await
+            .map_err(|e| format!("{host}:{port}: {e}"))?;
         println!("[tile] listening on {host}:{port}");
-        axum::serve(listener, router).await.map_err(|e| e.to_string())
+        axum::serve(listener, router)
+            .await
+            .map_err(|e| e.to_string())
     });
     drop(runtime);
     drop(app);

@@ -17,7 +17,9 @@ use crate::domain::control::camera::input::camera_input_step;
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
-use crate::domain::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
+use crate::domain::control::sensor::device_orientation::{
+    orientation_watchdog_step, OrientationPlatform,
+};
 use crate::sys::io::request::{pump, set_credits};
 use crate::sys::io::text::text_rise;
 use pxl_spec::bake::tile::place::PlaceTile;
@@ -53,12 +55,17 @@ fn companion_props() -> Option<CompanionProps> {
     }
     // Where the camera is going, not where its easing has got to: walked toward
     // only once the eased center settled, it set off as the glide's long tail ended.
-    let goal = crate::domain::control::camera::controller::target_center().or_else(crate::domain::control::camera::controller::focus)?;
-    let eye = crate::domain::view::frame::coord::world_to_canonical(&crate::domain::control::camera::controller::eye_world()?);
+    let goal = crate::domain::control::camera::controller::target_center()
+        .or_else(crate::domain::control::camera::controller::focus)?;
+    let eye = crate::domain::view::frame::coord::world_to_canonical(
+        &crate::domain::control::camera::controller::eye_world()?,
+    );
     let center = crate::domain::view::frame::coord::to_world(&goal);
     Some(CompanionProps {
         center: [center[0], center[1]],
-        floor: crate::domain::scene::character::companion::focus_floor(goal, |w| crate::domain::control::navigation::support::floor_seen(w, &goal)),
+        floor: crate::domain::scene::character::companion::focus_floor(goal, |w| {
+            crate::domain::control::navigation::support::floor_seen(w, &goal)
+        }),
         azimuth: crate::domain::control::camera::controller::azimuth(),
         dragging: crate::domain::control::camera::input::dragging(),
         steered: crate::domain::control::camera::input::steering(),
@@ -98,14 +105,22 @@ fn demand_tick(ctx: &mut TickContext) {
     crate::domain::view::demand::admit_arrived(&ctx.pass);
     changes_step();
     let tau = crate::domain::view::lens::tau();
-    TerrainTile::demand().step(crate::domain::control::navigation::destination::tile(), crate::domain::layer::terrain::window::pinned(), tau);
+    TerrainTile::demand().step(
+        crate::domain::control::navigation::destination::tile(),
+        crate::domain::layer::terrain::window::pinned(),
+        tau,
+    );
     // Nothing is fetched while places are hidden.
     match crate::domain::view::setting::store::settings_store().place {
         true => PlaceTile::demand().step(None, &[], tau),
         false => PlaceTile::demand().idle(),
     }
     Earth::demand().step(None, &[], tau);
-    DivisionTile::demand().step(crate::domain::layer::division::line(crate::domain::control::camera::controller::focus()), &[], tau);
+    DivisionTile::demand().step(
+        crate::domain::layer::division::line(crate::domain::control::camera::controller::focus()),
+        &[],
+        tau,
+    );
 }
 
 /// The scene's turn, handed the camera's focus and, third person, its
@@ -128,7 +143,9 @@ fn camera_input_tick(_: &mut TickContext) {
 /// controllers), before the phases that observe it.
 fn camera_tick(ctx: &mut TickContext) {
     crate::domain::control::camera::controller::camera_step(ctx);
-    crate::domain::view::frame::pose::view_compose(crate::domain::control::camera::controller::pose());
+    crate::domain::view::frame::pose::view_compose(
+        crate::domain::control::camera::controller::pose(),
+    );
 }
 
 fn environment_tick(_: &mut TickContext) {
@@ -138,13 +155,33 @@ fn environment_tick(_: &mut TickContext) {
 /// Registers the tick's steps and spawns the tasks. Called from outside a
 /// frame, since the frame task waits for the host's first frame.
 pub fn boot() {
-    on_tick(Phase::interaction, crate::domain::control::camera::controller::controller_step, StepName::controller as u32);
-    on_tick(Phase::interaction, camera_input_tick, StepName::input as u32);
+    on_tick(
+        Phase::interaction,
+        crate::domain::control::camera::controller::controller_step,
+        StepName::controller as u32,
+    );
+    on_tick(
+        Phase::interaction,
+        camera_input_tick,
+        StepName::input as u32,
+    );
     on_tick(Phase::interaction, camera_tick, StepName::camera as u32);
     // After the view has moved, so the environment sees this tick's camera.
-    on_tick(Phase::interaction, environment_tick, StepName::environment as u32);
-    on_tick(Phase::interaction, companion_tick, StepName::companion as u32);
-    on_tick(Phase::interaction, crate::domain::scene::character::preview::preview_step, StepName::preview as u32);
+    on_tick(
+        Phase::interaction,
+        environment_tick,
+        StepName::environment as u32,
+    );
+    on_tick(
+        Phase::interaction,
+        companion_tick,
+        StepName::companion as u32,
+    );
+    on_tick(
+        Phase::interaction,
+        crate::domain::scene::character::preview::preview_step,
+        StepName::preview as u32,
+    );
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
     on_tick(Phase::visible, scene_tick, StepName::scene as u32);
     world_tasks();
@@ -154,7 +191,12 @@ pub fn boot() {
 fn world_tasks() {
     use crate::sys::sched::edge::TaskPriority::*;
     use xpute_guest::sched::task::spawn;
-    let spawned = spawn(frame_task(), Frame as u8) && spawn(crate::sys::io::fetch::fetch_task(), Arrival as u8) && spawn(crate::domain::layer::object::repository::task(), Background as u8);
+    let spawned = spawn(frame_task(), Frame as u8)
+        && spawn(crate::sys::io::fetch::fetch_task(), Arrival as u8)
+        && spawn(
+            crate::domain::layer::object::repository::task(),
+            Background as u8,
+        );
     if !spawned {
         std::process::abort();
     }
@@ -190,12 +232,18 @@ pub fn world_turn() -> f64 {
     // First, so the turn they are read in is the first to see them.
     effect!(worst, settings, {
         if crate::domain::view::setting::store::settings_load_step() {
-            crate::profiler::window::profiler_follow(crate::domain::view::setting::store::settings_store().profiler);
+            crate::profiler::window::profiler_follow(
+                crate::domain::view::setting::store::settings_store().profiler,
+            );
         }
     });
     effect!(worst, navigation, off_center_step());
     effect!(worst, bootstrap, map_bootstrap_step());
-    effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
+    effect!(
+        worst,
+        orientation,
+        orientation_watchdog_step(platform.orientation)
+    );
     effect!(worst, follow, follow_mode_step());
     effect!(worst, destination, {
         // What the walker found under an unknown Z, let go where it moved.
@@ -203,7 +251,11 @@ pub fn world_turn() -> f64 {
         crate::domain::control::navigation::destination::destination_step()
     });
     effect!(worst, decor, decor_models_step());
-    effect!(worst, objects, crate::domain::layer::object::repository::step());
+    effect!(
+        worst,
+        objects,
+        crate::domain::layer::object::repository::step()
+    );
     effect!(worst, edit, {
         let edits = crate::domain::control::interaction::edit::pending_step();
         // A new preview moves the world as drawn where it was and where it is.
@@ -214,7 +266,11 @@ pub fn world_turn() -> f64 {
     effect!(worst, hover, ghost_step());
     // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(off_center().device_coord));
-    effect!(worst, settings, crate::domain::view::setting::store::settings_keep_step());
+    effect!(
+        worst,
+        settings,
+        crate::domain::view::setting::store::settings_keep_step()
+    );
     *WORST_EFFECT.get(|| (0.0, None)) = worst;
     now() - at
 }
@@ -290,7 +346,9 @@ pub fn take_world_drawn() -> bool {
 async fn frame_task() {
     loop {
         notified(frames).await;
-        let Some(host) = FRAME.get(|| None).take() else { continue };
+        let Some(host) = FRAME.get(|| None).take() else {
+            continue;
+        };
         let edge = world_edge();
         let paced_ms = host.paced_ms;
         world_frame(host, edge.quota_ms(), edge.edge_at());
@@ -314,7 +372,11 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     text_rise();
     let effects_ms = world_turn();
     // Before the tick, so every step and the draw see the screen it is drawn on.
-    crate::domain::view::frame::pose::view_resize(width, height, crate::domain::view::frame::resolution::display_ratio());
+    crate::domain::view::frame::pose::view_resize(
+        width,
+        height,
+        crate::domain::view::frame::resolution::display_ratio(),
+    );
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
@@ -322,7 +384,10 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let after_tick = now();
     // The turn's one pump, after every producer has spoken: the effects, the
     // tick's tile streams (`demand_tick`), and the assets asked for by either.
-    crate::sys::io::request::declare(crate::sys::io::demand::Stream::asset, crate::sys::io::loader::load_wants());
+    crate::sys::io::request::declare(
+        crate::sys::io::demand::Stream::asset,
+        crate::sys::io::loader::load_wants(),
+    );
     pump();
     crate::domain::scene::stage::stage_write();
     crate::domain::scene::stage::stage_render(crate::domain::view::frame::resolution::Pace {

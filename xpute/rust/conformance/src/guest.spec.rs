@@ -87,5 +87,8 @@ pub mod cmd {
     pub const SIGNAL: u32 = 4353;
     /// An open answered: tagged with its owner, its result the host's.
     pub const OPENED: u32 = 4354;
-    pub const KEYS: &[&str] = &["OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN", "CLOSE", "SIGNAL", "OPENED"];
+    pub const KEYS: &[&str] = &[
+        "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
+        "CLOSE", "SIGNAL", "OPENED",
+    ];
 }

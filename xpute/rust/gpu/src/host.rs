@@ -97,8 +97,18 @@ impl GpuHost {
     /// learns of a completion between turns asks for the turn that writes it.
     /// A device lost (`Unknown`, not `Destroyed`, which is its owner's doing)
     /// is told the guest at the next turn's edge.
-    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, plan: Plan, wake: fn()) -> GpuHost {
-        assert!(plan.frame_latency >= 1, "[gpu] a frame latency of {}", plan.frame_latency);
+    pub fn new(
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        plan: Plan,
+        wake: fn(),
+    ) -> GpuHost {
+        assert!(
+            plan.frame_latency >= 1,
+            "[gpu] a frame latency of {}",
+            plan.frame_latency
+        );
         let gone = Arc::new(AtomicBool::new(false));
         let lost = gone.clone();
         device.set_device_lost_callback(move |reason, _| {

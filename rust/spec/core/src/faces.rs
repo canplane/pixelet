@@ -58,7 +58,10 @@ pub fn word(face: u32, mut fills: impl FnMut([i32; 3]) -> bool) -> u32 {
         let (d, open) = match field {
             0 => (add(edge(u, v, k), n), true),
             1 => (edge(u, v, k), w >> (RISE_SHIFT + k) & 1 == 0),
-            _ => (add(add(edge(u, v, a), edge(u, v, b)), n), w >> RISE_SHIFT & (1 << a | 1 << b) == 0),
+            _ => (
+                add(add(edge(u, v, a), edge(u, v, b)), n),
+                w >> RISE_SHIFT & (1 << a | 1 << b) == 0,
+            ),
         };
         // A line where the block beside does not fill; a rise or a corner
         // where the one in front does.
@@ -73,7 +76,11 @@ pub fn word(face: u32, mut fills: impl FnMut([i32; 3]) -> bool) -> u32 {
 /// The node `d` from node `c` at `zoom`, X named as the world names it
 /// going round (`wrap_index`).
 pub fn beside(zoom: Zoom, c: [i32; 3], d: [i32; 3]) -> [i32; 3] {
-    [wrap_index(zoom, c[0].wrapping_add(d[0])), c[1] + d[1], c[2] + d[2]]
+    [
+        wrap_index(zoom, c[0].wrapping_add(d[0])),
+        c[1] + d[1],
+        c[2] + d[2],
+    ]
 }
 
 /// Edge `k`'s way across, along `u` or `v`.
@@ -83,7 +90,11 @@ fn edge(u: u32, v: u32, k: u32) -> [i32; 3] {
 
 // [naga] each axis by itself, not an index (cast.rs `grid_of`).
 fn unit(axis: u32, s: i32) -> [i32; 3] {
-    [if axis == 0 { s } else { 0 }, if axis == 1 { s } else { 0 }, if axis == 2 { s } else { 0 }]
+    [
+        if axis == 0 { s } else { 0 },
+        if axis == 1 { s } else { 0 },
+        if axis == 2 { s } else { 0 },
+    ]
 }
 
 fn add(a: [i32; 3], b: [i32; 3]) -> [i32; 3] {
@@ -178,7 +189,17 @@ mod tests {
         // The west face (−x, u = y, v = z) of a block on flat ground: the
         // ground running on in front of it closes its foot in, across −v;
         // above and to either side the air, lined.
-        let (w, _) = bits(WEST, &[[0, 0, -1], [-1, 0, -1], [0, 1, -1], [0, -1, -1], [-1, 1, -1], [-1, -1, -1]]);
+        let (w, _) = bits(
+            WEST,
+            &[
+                [0, 0, -1],
+                [-1, 0, -1],
+                [0, 1, -1],
+                [0, -1, -1],
+                [-1, 1, -1],
+                [-1, -1, -1],
+            ],
+        );
         assert_eq!(w, 1 << (RISE_SHIFT + 3) | 0b0111 << LINE_SHIFT);
         // A block in front of it, one west and one up: −x then +z, a rise
         // across +v.

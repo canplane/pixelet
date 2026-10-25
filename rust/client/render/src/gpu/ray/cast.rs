@@ -11,8 +11,14 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use super::RaysPass;
-use crate::frame::shader::record::{compute, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED, SHADER_MISS, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu, Stamp, DONE};
+use crate::frame::shader::record::{
+    compute, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
+    SHADER_MISS, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
+};
+use crate::gpu::api::{
+    buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
+    Stamp, DONE,
+};
 use crate::gpu::grown::{Drawn, Grown, Grows};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
@@ -209,20 +215,35 @@ impl RaysPass {
             sun_mark_built,
             sun_groups: [0; 2],
             sun_bound: [0; 7],
-            sun_list: buffer(word_bytes(sun::LIST_AT + (shadow::SIZE / sun::TILE).pow(2) as usize), storage | buffer_usage::INDIRECT),
+            sun_list: buffer(
+                word_bytes(sun::LIST_AT + (shadow::SIZE / sun::TILE).pow(2) as usize),
+                storage | buffer_usage::INDIRECT,
+            ),
             sun_read: Read::default(),
             sun_at: Read::default(),
             sun_kept: None,
-            sun_moved: buffer(word_bytes(sun::MOVED_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
+            sun_moved: buffer(
+                word_bytes(sun::MOVED_WORDS),
+                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+            ),
             sun_cast: false,
-            joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
+            joined_read: buffer(
+                word_bytes(window::EYE_JOINED_WORDS as usize),
+                buffer_usage::MAP_READ | buffer_usage::COPY_DST,
+            ),
             joined_mapping: Box::new(DONE),
             refold: false,
             joined_back: false,
             group: 0,
             bound: [0; 10],
-            eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
-            window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
+            eye: buffer(
+                word_bytes(eye::WORDS),
+                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+            ),
+            window: buffer(
+                word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize),
+                storage | buffer_usage::COPY_SRC,
+            ),
             shards: 0,
             shard_room: 0,
             size: [0; 2],
@@ -238,11 +259,23 @@ impl RaysPass {
     /// The rays for this frame into the world surface's (`rays`, its view,
     /// and its drawn pixels), and the world's depth from the sun into `sun`'s
     /// view: the GPU's cast where an eye casts, its eye handed over first.
-    pub fn prepare(&mut self, g: &Gpu, cast: Option<Cast>, meshes: &[u32; GROUPS as usize], rays: (u32, [u32; 2]), sun_map: (u32, u32)) {
+    pub fn prepare(
+        &mut self,
+        g: &Gpu,
+        cast: Option<Cast>,
+        meshes: &[u32; GROUPS as usize],
+        rays: (u32, [u32; 2]),
+        sun_map: (u32, u32),
+    ) {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
         // made once.
-        let (Some(mut cast), Some((ground, looks, pool))) = (cast, self.ground.as_ref().map(|gb| (gb.ground, gb.looks, gb.pool))) else {
+        let (Some(mut cast), Some((ground, looks, pool))) = (
+            cast,
+            self.ground
+                .as_ref()
+                .map(|gb| (gb.ground, gb.looks, gb.pool)),
+        ) else {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
                 c.grown.off();
@@ -282,8 +315,16 @@ impl RaysPass {
         r.read(&[*room as u32, *revision, rays.0]);
         // And the ground's squares, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        self.kind = if r.end() && fresh == 0 && c.group != 0 { FrameKind::standing } else { FrameKind::cast };
-        xpute_kit::ensure!(cast.window.len() == (4 * window::JOINED_AT) as usize, ENOTRECOVERABLE, cast.window.len());
+        self.kind = if r.end() && fresh == 0 && c.group != 0 {
+            FrameKind::standing
+        } else {
+            FrameKind::cast
+        };
+        xpute_kit::ensure!(
+            cast.window.len() == (4 * window::JOINED_AT) as usize,
+            ENOTRECOVERABLE,
+            cast.window.len()
+        );
         if window_moved {
             g.write_buffer(c.window, 0, bytes(cast.window));
             c.refold = true;
@@ -293,16 +334,31 @@ impl RaysPass {
         // dispatches' sizes, and room for its corners' lines, its cells'
         // starts and its samples' stops, made again only where they outgrow
         // it.
-        let tan = [f32::from_bits(cast.eye[eye::TAN]), f32::from_bits(cast.eye[eye::TAN + 1])];
-        c.grid = beam::Grid::of_words(tan, cast.eye[eye::GRID..eye::GRID + eye::GRID_WORDS].try_into().or_bug(Errno::ENOTRECOVERABLE));
+        let tan = [
+            f32::from_bits(cast.eye[eye::TAN]),
+            f32::from_bits(cast.eye[eye::TAN + 1]),
+        ];
+        c.grid = beam::Grid::of_words(
+            tan,
+            cast.eye[eye::GRID..eye::GRID + eye::GRID_WORDS]
+                .try_into()
+                .or_bug(Errno::ENOTRECOVERABLE),
+        );
         let need = c.grid.size();
         if need > c.beam_room {
             if c.beams != 0 {
                 release(c.beams);
             }
             let size = word_bytes(need as usize);
-            xpute_kit::ensure!(crate::frame::shader::floor::fits(size as u64, true), ENOTRECOVERABLE, need);
-            (c.beams, c.beam_room) = (g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST), need);
+            xpute_kit::ensure!(
+                crate::frame::shader::floor::fits(size as u64, true),
+                ENOTRECOVERABLE,
+                need
+            );
+            (c.beams, c.beam_room) = (
+                g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
+                need,
+            );
         }
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
@@ -310,7 +366,10 @@ impl RaysPass {
                 release(c.shards);
             }
             c.shard_room = cast.shards.len();
-            c.shards = g.buffer(word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            c.shards = g.buffer(
+                word_bytes(4 * c.shard_room),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            );
         }
         if shards_moved || shards_grow {
             // Read where the kernel holds it, one record however large.
@@ -323,7 +382,10 @@ impl RaysPass {
                 release(c.overwrites);
             }
             c.overwrite_room = o.room;
-            c.overwrites = g.buffer(word_bytes(2 * o.room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            c.overwrites = g.buffer(
+                word_bytes(2 * o.room),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            );
             c.overwrite_revision = None;
         }
         let overwrites_moved = c.overwrite_revision != Some(o.revision);
@@ -334,11 +396,26 @@ impl RaysPass {
             fn family(lane: &[u32], first: u32) -> &[u32] {
                 &lane[first as usize..first as usize + 8]
             }
-            let listed = |lane: &[u32]| o.written.iter().map(|&f| write_buffer_bytes(bytes(family(lane, f)))).sum::<usize>();
-            if c.overwrite_revision == Some(o.since) && crate::gpu::api::room(listed(o.heap) + listed(o.data)) {
+            let listed = |lane: &[u32]| {
+                o.written
+                    .iter()
+                    .map(|&f| write_buffer_bytes(bytes(family(lane, f))))
+                    .sum::<usize>()
+            };
+            if c.overwrite_revision == Some(o.since)
+                && crate::gpu::api::room(listed(o.heap) + listed(o.data))
+            {
                 for &first in o.written {
-                    g.write_buffer(c.overwrites, word_bytes(first as usize), bytes(family(o.heap, first)));
-                    g.write_buffer(c.overwrites, word_bytes(o.room + first as usize), bytes(family(o.data, first)));
+                    g.write_buffer(
+                        c.overwrites,
+                        word_bytes(first as usize),
+                        bytes(family(o.heap, first)),
+                    );
+                    g.write_buffer(
+                        c.overwrites,
+                        word_bytes(o.room + first as usize),
+                        bytes(family(o.data, first)),
+                    );
                 }
             } else {
                 g.upload_buffer(c.overwrites, 0, bytes(o.heap));
@@ -350,15 +427,24 @@ impl RaysPass {
         // turn handed (their cells, looks and ways), the service area, what
         // is placed, a preview's cuts. What the observed pyramid kept is
         // forgotten; so it is once its frames would outrun a key's tag.
-        let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE);
-        c.forget |= shards_moved || shards_grow || overwrites_moved || cuts != c.cuts || c.frame >= observed::FRAMES;
+        let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
+            .try_into()
+            .or_bug(Errno::ENOTRECOVERABLE);
+        c.forget |= shards_moved
+            || shards_grow
+            || overwrites_moved
+            || cuts != c.cuts
+            || c.frame >= observed::FRAMES;
         // The eye's windows' slots that hold another square, or whose square
         // the turn handed: what is over them is asked again; the sun's map
         // casts again what passes over the square they held and the one they
         // hold, and over a preview's cuts where they moved.
         let mut nodes = Nodes::default();
         for at in [0, eye::CUT_WORDS] {
-            let (was, is) = (&c.cuts[at..at + eye::CUT_WORDS], &cuts[at..at + eye::CUT_WORDS]);
+            let (was, is) = (
+                &c.cuts[at..at + eye::CUT_WORDS],
+                &cuts[at..at + eye::CUT_WORDS],
+            );
             if was != is {
                 for cut in [was, is] {
                     if cut[3] != eye::NO_CUT {
@@ -369,7 +455,12 @@ impl RaysPass {
         }
         c.cuts = cuts;
         let eye_rows = (window::EYE_WINDOWS * window::SLOTS) as usize;
-        let square = |row: &[i32], k: usize| ([row[0], row[1]], window::squares_zoom(window::eye_cell((k / window::SLOTS as usize) as u32)));
+        let square = |row: &[i32], k: usize| {
+            (
+                [row[0], row[1]],
+                window::squares_zoom(window::eye_cell((k / window::SLOTS as usize) as u32)),
+            )
+        };
         if window_moved {
             let rows = &cast.window[..4 * eye_rows];
             for k in 0..eye_rows {
@@ -391,7 +482,10 @@ impl RaysPass {
         // window's berth it is filled into.
         if let Some(gb) = self.ground.as_ref() {
             for f in &gb.handed[..fresh as usize] {
-                let (cell, q) = (f[FRESH_CELL as usize], window::fresh_square([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]));
+                let (cell, q) = (
+                    f[FRESH_CELL as usize],
+                    window::fresh_square([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]),
+                );
                 let w = cell.wrapping_sub(window::FIRST_CELL);
                 let k = (w * window::SLOTS + window::slot(q)) as usize;
                 if w < window::EYE_WINDOWS && square(&cast.window[4 * k..4 * k + 4], k).0 == q {
@@ -410,7 +504,9 @@ impl RaysPass {
         // another zoom and those whose ray passes over a node moved, each
         // judged where it lies (pxl-spec-core `sun`). None where no shadow is
         // cast.
-        let shadows = cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS].iter().any(|&w| w != 0);
+        let shadows = cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS]
+            .iter()
+            .any(|&w| w != 0);
         let r = &mut c.sun_read;
         r.begin();
         r.read(&[sun_map.1, u32::from(shadows)]);
@@ -453,33 +549,76 @@ impl RaysPass {
             // which slots; forgotten whole, no tile taken and its first frame,
             // else the next frame.
             let mut head = [0u32; observed::HEAD_WORDS as usize];
-            c.frame = if c.forgets == observed::FORGETS_ALL { 1 } else { c.frame + 1 };
+            c.frame = if c.forgets == observed::FORGETS_ALL {
+                1
+            } else {
+                c.frame + 1
+            };
             head[observed::FRAME as usize] = c.frame;
             head[observed::FORGETS as usize] = c.forgets;
             head[observed::MOVED_AT as usize..].copy_from_slice(&c.moved);
-            let from = if c.forgets == observed::FORGETS_ALL { 0 } else { observed::FRAME as usize };
+            let from = if c.forgets == observed::FORGETS_ALL {
+                0
+            } else {
+                observed::FRAME as usize
+            };
             g.write_buffer(c.seen, word_bytes(from), bytes(&head[from..]));
             (c.forget, c.moved) = (false, [0; observed::MOVED_WORDS as usize]);
         }
-        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool, c.beams, c.seen];
+        let bound = [
+            c.eye,
+            c.window,
+            ground,
+            rays.0,
+            looks,
+            c.shards,
+            c.overwrites,
+            pool,
+            c.beams,
+            c.seen,
+        ];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
             c.bound = bound;
         }
-        let sun_bound = [c.eye, c.window, ground, c.shards, c.overwrites, pool, sun_map.0];
+        let sun_bound = [
+            c.eye,
+            c.window,
+            ground,
+            c.shards,
+            c.overwrites,
+            pool,
+            sun_map.0,
+        ];
         if sun_bound != c.sun_bound {
             for group in c.sun_groups {
                 release(group);
             }
-            c.sun_groups = sun_groups(g, [&c.sun_mark_built, &c.sun_built], sun_bound, c.sun_moved, c.sun_list);
+            c.sun_groups = sun_groups(
+                g,
+                [&c.sun_mark_built, &c.sun_built],
+                sun_bound,
+                c.sun_moved,
+                c.sun_list,
+            );
             c.sun_bound = sun_bound;
         }
         let fresh_squares = self.ground.as_ref().map_or(0, |gb| gb.fresh);
-        let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool, fresh_squares];
+        let world = [
+            c.eye,
+            c.window,
+            ground,
+            c.shards,
+            c.overwrites,
+            pool,
+            fresh_squares,
+        ];
         let grows = Grows {
             window: cast.window,
-            cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE),
+            cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
+                .try_into()
+                .or_bug(Errno::ENOTRECOVERABLE),
             filled: fresh,
             eye: &cast.eye,
         };
@@ -492,7 +631,9 @@ impl RaysPass {
     /// (`joined_cs`): ahead of the frame, as the fold outlives it, and then
     /// mapped back (`read_back`).
     pub fn fold(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
-        let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else { return false };
+        let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else {
+            return false;
+        };
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_bind_group(pass, 0, c.group, &[]);
         g.set_pipeline(pass, c.joined_built.pipeline);
@@ -500,7 +641,12 @@ impl RaysPass {
         // dispatch's depth (`joined_cs`).
         for l in 1..=window::JOINED_LEVELS {
             let blocks = (window::ACROSS >> l) * (window::ACROSS >> l);
-            g.dispatch(pass, (blocks * window::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]), 1, l);
+            g.dispatch(
+                pass,
+                (blocks * window::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]),
+                1,
+                l,
+            );
         }
         g.end(pass);
         (c.refold, c.joined_back) = (false, true);
@@ -528,7 +674,12 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != observed::FORGETS_NONE {
                 g.set_pipeline(pass, c.forget_built.pipeline);
-                g.dispatch(pass, observed::ENTRIES.div_ceil(compute::FORGET_WORKGROUP[0]), 1, 1);
+                g.dispatch(
+                    pass,
+                    observed::ENTRIES.div_ceil(compute::FORGET_WORKGROUP[0]),
+                    1,
+                    1,
+                );
             }
             for (built, [x, y], w) in [
                 (&c.beam_built, c.grid.corners, compute::BEAM_WORKGROUP),
@@ -627,7 +778,13 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 10]) -> u32 {
 /// window, the tiles' frames, the service area's index, the overwrites and
 /// the ways' pool, the cast's alone; the clipmap; the nodes moved under it
 /// (`moved`) and the tiles listed (`list`).
-fn sun_groups(g: &Gpu, [mark, walk]: [&Built; 2], bound: [u32; 7], moved: u32, list: u32) -> [u32; 2] {
+fn sun_groups(
+    g: &Gpu,
+    [mark, walk]: [&Built; 2],
+    bound: [u32; 7],
+    moved: u32,
+    list: u32,
+) -> [u32; 2] {
     let [eye, window, ground, shards, overwrites, pool, sun] = bound;
     let entries = [
         (0, buffer_entry(0, eye)),
@@ -642,6 +799,15 @@ fn sun_groups(g: &Gpu, [mark, walk]: [&Built; 2], bound: [u32; 7], moved: u32, l
     ];
     // Each the entries its layout declares (build.rs `compute`): the mark
     // reads the clipmap and the nodes moved alone.
-    let of = |declared: &[u32]| entries.iter().filter(|(b, _)| declared.chunks(3).any(|d| d[0] == *b)).map(|&(_, e)| e).collect::<Vec<_>>();
-    [g.bind_group(mark.layouts[0], &of(&compute::SUN_MARK_GROUP)), g.bind_group(walk.layouts[0], &of(&compute::SUN_GROUP))]
+    let of = |declared: &[u32]| {
+        entries
+            .iter()
+            .filter(|(b, _)| declared.chunks(3).any(|d| d[0] == *b))
+            .map(|&(_, e)| e)
+            .collect::<Vec<_>>()
+    };
+    [
+        g.bind_group(mark.layouts[0], &of(&compute::SUN_MARK_GROUP)),
+        g.bind_group(walk.layouts[0], &of(&compute::SUN_GROUP)),
+    ]
 }

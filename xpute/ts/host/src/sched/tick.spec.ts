@@ -6,4 +6,10 @@
 // then what is visible, then content, then the cosmetic and the report. A phase's number
 // is its place here, and a report of per-phase time is indexed by it.
 
-export const PHASES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
+export const PHASES = [
+  "interaction",
+  "visible",
+  "content",
+  "cosmetic",
+  "report",
+] as const;

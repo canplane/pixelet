@@ -21,13 +21,22 @@ pub struct File {
 /// Every file, in the order that numbers it below the asset root from 1.
 pub fn files() -> Result<Vec<File>, String> {
     let spec = read(INGESTED_JSON)?;
-    let rows = spec.get("files").and_then(Node::arr).ok_or(format!("{INGESTED_JSON}: no files"))?;
+    let rows = spec
+        .get("files")
+        .and_then(Node::arr)
+        .ok_or(format!("{INGESTED_JSON}: no files"))?;
     rows.iter()
         .map(|r| {
             let at = |field: &str| format!("{INGESTED_JSON}: a file's {field}");
             let extent = match r.get("extent").and_then(Node::arr) {
                 None => None,
-                Some(e) => Some(e.iter().map(Node::num).collect::<Option<Vec<_>>>().and_then(|e| e.try_into().ok()).ok_or(at("extent"))?),
+                Some(e) => Some(
+                    e.iter()
+                        .map(Node::num)
+                        .collect::<Option<Vec<_>>>()
+                        .and_then(|e| e.try_into().ok())
+                        .ok_or(at("extent"))?,
+                ),
             };
             Ok(File {
                 path: r.str_at("path").ok_or(at("path"))?.to_string(),
@@ -51,19 +60,34 @@ struct Pack {
 
 fn pack() -> Result<Pack, String> {
     let spec = read(INGESTED_JSON)?;
-    let p = spec.get("pack").ok_or(format!("{INGESTED_JSON}: no pack"))?;
+    let p = spec
+        .get("pack")
+        .ok_or(format!("{INGESTED_JSON}: no pack"))?;
     let at = |field: &str| format!("{INGESTED_JSON}: pack.{field}");
-    let whole = |n: &Node| n.num().filter(|n| n.fract() == 0.0 && *n >= 0.0).map(|n| n as u32);
+    let whole = |n: &Node| {
+        n.num()
+            .filter(|n| n.fract() == 0.0 && *n >= 0.0)
+            .map(|n| n as u32)
+    };
     let list = |field: &str| p.get(field).and_then(Node::arr).ok_or(at(field));
     let means = list("means")?
         .iter()
-        .map(|m| m.arr().and_then(|m| m.iter().map(whole).collect::<Option<Vec<_>>>()).and_then(|m| m.try_into().ok()))
+        .map(|m| {
+            m.arr()
+                .and_then(|m| m.iter().map(whole).collect::<Option<Vec<_>>>())
+                .and_then(|m| m.try_into().ok())
+        })
         .collect::<Option<Vec<_>>>()
         .ok_or(at("means"))?;
     let faces = list("faces")?
         .iter()
         .map(|f| match f.arr()? {
-            [g, t, face, n] => Some((g.str()?.to_string(), t.str()?.to_string(), face.str()?.to_string(), whole(n)?)),
+            [g, t, face, n] => Some((
+                g.str()?.to_string(),
+                t.str()?.to_string(),
+                face.str()?.to_string(),
+                whole(n)?,
+            )),
             _ => None,
         })
         .collect::<Option<Vec<_>>>()
@@ -72,7 +96,11 @@ fn pack() -> Result<Pack, String> {
         image: p.str_at("image").ok_or(at("image"))?.to_string(),
         cell: p.get("cell").and_then(whole).ok_or(at("cell"))?,
         columns: p.get("columns").and_then(whole).ok_or(at("columns"))?,
-        tiles: list("tiles")?.iter().map(|t| t.str().map(str::to_string)).collect::<Option<Vec<_>>>().ok_or(at("tiles"))?,
+        tiles: list("tiles")?
+            .iter()
+            .map(|t| t.str().map(str::to_string))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(at("tiles"))?,
         means,
         faces,
     })
@@ -81,7 +109,10 @@ fn pack() -> Result<Pack, String> {
 pub fn outputs() -> Result<Vec<Output>, String> {
     let (rows, pack) = (files()?, pack()?);
     Ok(vec![
-        Output::new("ts/client/src/namespace/ingested.spec.ts", render_ts(&rows, &pack)),
+        Output::new(
+            "ts/client/src/namespace/ingested.spec.ts",
+            render_ts(&rows, &pack),
+        ),
         Output::new("rust/spec/src/asset/ingested.spec.rs", render_rs(&pack)?),
     ])
 }
@@ -113,7 +144,11 @@ export const INGESTED: Readonly<Record<string, IngestedFile>> = {
             Some(e) => format!(", extent: [{}, {}, {}]", e[0], e[1], e[2]),
             None => String::new(),
         };
-        let _ = writeln!(out, "  \"{}\": {{ key: \"{}\", bytes: {}{} }},", r.path, r.key, r.bytes, extent);
+        let _ = writeln!(
+            out,
+            "  \"{}\": {{ key: \"{}\", bytes: {}{} }},",
+            r.path, r.key, r.bytes, extent
+        );
     }
     out.push_str(
         r#"};
@@ -184,18 +219,28 @@ pub const PACK: Pack = Pack {"##
         "    tiles: &[".to_string(),
     ];
     for (group, ty, face, tile) in &pack.faces {
-        let variant = if group == "object" { "Object" } else { "Ground" };
+        let variant = if group == "object" {
+            "Object"
+        } else {
+            "Ground"
+        };
         let face = match face.as_str() {
             "top" => "Top",
             "side" => "Side",
             "bottom" => "Bottom",
             _ => return Err(format!("{INGESTED_JSON}: pack.faces: {face} is no face")),
         };
-        out.push(format!("        (Cube::{variant}(cube::{variant}::{ty}), CubeFace::{face}, {tile}),"));
+        out.push(format!(
+            "        (Cube::{variant}(cube::{variant}::{ty}), CubeFace::{face}, {tile}),"
+        ));
     }
     out.push("    ],".to_string());
     out.push("    means: &[".to_string());
-    out.extend(pack.means.iter().map(|m| format!("        [{}, {}, {}],", m[0], m[1], m[2])));
+    out.extend(
+        pack.means
+            .iter()
+            .map(|m| format!("        [{}, {}, {}],", m[0], m[1], m[2])),
+    );
     out.extend(["    ],".to_string(), "};".to_string()]);
     Ok(file(&out))
 }

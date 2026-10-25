@@ -84,8 +84,13 @@ fn room(tool: PlacementTool, corner: &Q3) -> Aabb {
 pub fn placement_reads(tool: PlacementTool, corner: &Q3) -> [[f64; 2]; 2] {
     let room = room(tool, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
-    let pad = crate::domain::query::decor::strike::reach() + f64::from(pxl_spec_core::scatter::ALIGN_NEIGHBOR_RADIUS + 1) * units(GROUND.cell()) + width;
-    [[room.min[0] - pad, room.min[1] - pad], [room.max[0] + pad, room.max[1] + pad]]
+    let pad = crate::domain::query::decor::strike::reach()
+        + f64::from(pxl_spec_core::scatter::ALIGN_NEIGHBOR_RADIUS + 1) * units(GROUND.cell())
+        + width;
+    [
+        [room.min[0] - pad, room.min[1] - pad],
+        [room.max[0] + pad, room.max[1] + pad],
+    ]
 }
 
 /// The shared check for the placement commit and its hover preview: its room
@@ -101,7 +106,10 @@ pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
         max: [room.max[0], room.max[1], room.min[2]],
     };
     let stood_on = |e: &Entry| kind_of(e.state).is_none_or(Kind::stood_on);
-    let on_instance = || world.placed_occupying(&under, |e| !stood_on(e)).is_some() || world.grown_claim(&under).is_some();
+    let on_instance = || {
+        world.placed_occupying(&under, |e| !stood_on(e)).is_some()
+            || world.grown_claim(&under).is_some()
+    };
     taken || !tool.kind().stood_on() && on_instance()
 }
 
@@ -109,7 +117,11 @@ pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
 /// tap recenters, which is where the ghost box is drawn.
 pub fn anchor_center(anchor: &Q3) -> Q3 {
     let half = q3::from_real(units(GROUND.cell()) / 2.0);
-    world::at(i64::from(anchor[0]) + half, i64::from(anchor[1]) + half, i64::from(anchor[2]) + half)
+    world::at(
+        i64::from(anchor[0]) + half,
+        i64::from(anchor[1]) + half,
+        i64::from(anchor[2]) + half,
+    )
 }
 
 /// In the world's doubles, the space the pick works in.

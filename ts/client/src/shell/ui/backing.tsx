@@ -7,7 +7,12 @@
  */
 
 import type { ReactNode } from "react";
-import { type ColorValue, Platform, type StyleProp, type ViewStyle } from "react-native";
+import {
+  type ColorValue,
+  Platform,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
@@ -48,15 +53,26 @@ export const SYSTEM_BACKING: boolean = false;
 function backdrop(fill: string, m: Material): ViewStyle {
   if (Platform.OS !== "web") return { backgroundColor: fill };
   // RN's style type has no backdrop filter; react-native-web writes it out.
-  return { backgroundColor: alpha(fill, m.opacity), backdropFilter: `blur(${m.blur}px)` } as ViewStyle;
+  return {
+    backgroundColor: alpha(fill, m.opacity),
+    backdropFilter: `blur(${m.blur}px)`,
+  } as ViewStyle;
 }
 
-export function Backing({ fill, material, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
+export function Backing(
+  { fill, material, fade = 1, fadeFrom, transition = SNAP, style, children }:
+    BackingProps,
+) {
   const veil = useVeil(fade, transition, fadeFrom);
   return (
     <Motion
       {...veil.motion}
-      style={[style, material ? backdrop(fill as string, material) : { backgroundColor: fill }]}
+      style={[
+        style,
+        material
+          ? backdrop(fill as string, material)
+          : { backgroundColor: fill },
+      ]}
     >
       {children}
     </Motion>

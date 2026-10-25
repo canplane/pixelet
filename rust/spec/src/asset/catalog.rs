@@ -34,10 +34,18 @@ impl Catalog {
         if word(0)? as usize != SLOTS || bytes.len() != 4 + SLOTS * (4 + 3 * 8) {
             return None;
         }
-        let files = (0..SLOTS).map(|s| word(4 + 4 * s)).collect::<Option<Vec<_>>>()?;
+        let files = (0..SLOTS)
+            .map(|s| word(4 + 4 * s))
+            .collect::<Option<Vec<_>>>()?;
         let at = 4 + 4 * SLOTS;
         let extents = (0..SLOTS)
-            .map(|s| Some([real(at + 24 * s)?, real(at + 24 * s + 8)?, real(at + 24 * s + 16)?]))
+            .map(|s| {
+                Some([
+                    real(at + 24 * s)?,
+                    real(at + 24 * s + 8)?,
+                    real(at + 24 * s + 16)?,
+                ])
+            })
             .collect::<Option<Vec<_>>>()?;
         Some(Catalog { files, extents })
     }

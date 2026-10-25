@@ -11,7 +11,10 @@ import { format } from "@/abi/host.spec.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { useSourceVersions } from "@/shell/store/watch.ts";
 
-const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
+const ENV_SHORT: Record<string, string> = {
+  development: "dev",
+  staging: "stg",
+};
 
 /** `dev`, or the task that served it: `dev:oven`, `dev:shelf`. */
 function envLabel(): string {
@@ -20,7 +23,9 @@ function envLabel(): string {
 }
 
 /** Each bake a line, as the source declares where it is read from. */
-function bakeLines(source: readonly { kind: string; version: string }[]): string[] {
+function bakeLines(
+  source: readonly { kind: string; version: string }[],
+): string[] {
   return source.map((s) => `${s.kind}/${s.version}`);
 }
 
@@ -34,7 +39,9 @@ function buildLabel(): string {
   const d = new Date(BUILD_TIME);
   if (Number.isNaN(d.getTime())) return BUILD_TIME;
   const s = d.toISOString();
-  return `${s.slice(0, 10).replaceAll("-", "")}T${s.slice(11, 16).replace(":", "")}Z`;
+  return `${s.slice(0, 10).replaceAll("-", "")}T${
+    s.slice(11, 16).replace(":", "")
+  }Z`;
 }
 
 export function AboutSection() {
@@ -50,7 +57,9 @@ export function AboutSection() {
 
         <Text style={settingText.small}>{t("settings.about.tagline")}</Text>
 
-        <Text style={settingText.small}>© 2025 pixelet. All rights reserved.</Text>
+        <Text style={settingText.small}>
+          © 2025 pixelet. All rights reserved.
+        </Text>
 
         <View>
           <Text style={settingText.faint}>
@@ -58,7 +67,9 @@ export function AboutSection() {
             {APP_ENV !== "production" && ` (${envLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
-          {bakeLines(source).map((line) => <Text key={line} style={settingText.faint}>{line}</Text>)}
+          {bakeLines(source).map((line) => (
+            <Text key={line} style={settingText.faint}>{line}</Text>
+          ))}
           <Text style={settingText.faint}>{objectLabel()}</Text>
         </View>
       </Prose>

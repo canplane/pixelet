@@ -16,7 +16,10 @@ pub struct XputeError {
 impl XputeError {
     #[track_caller]
     pub fn new(errnum: Errno) -> XputeError {
-        XputeError { errnum, at: Location::caller() }
+        XputeError {
+            errnum,
+            at: Location::caller(),
+        }
     }
 }
 

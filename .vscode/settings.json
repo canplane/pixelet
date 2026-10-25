@@ -2,42 +2,22 @@
   // Only what the editor alone is told: the trees' own configs say how
   // their code is indented, formatted and linted.
 
-  // Deno is the trees' alone; nothing at the root is Deno's, so outside them
-  // it neither formats, lints nor types.
+  // Deno. It is the trees' alone; nothing at the root is Deno's, so outside
+  // them it neither formats, lints nor types.
   "deno.enablePaths": ["ts", "xpute/ts"],
   // No "deno.config" pin: each workspace member resolves its own import map
   // ("@/" in ts/client, ts/app/web and ts/app/native), and a pin makes every
   // file resolve against one config alone, where "@/" is unknown.
-
-  "deno.suggest.imports.hosts": {
-    "https://deno.land": false,
-    "https://jsr.io": true
-  },
-
+  // The editor's own TypeScript neither checks nor formats what Deno does.
   "js/ts.validate.enabled": false,
-
-  // Cargo's two workspaces, each its own root: rust-analyzer finds only a
-  // manifest at most one folder down, which reaches rust/ but not xpute/rust/.
-  // The shader's (rust/client/shader) is rust-gpu's, built in its container,
-  // and left out.
-  "rust-analyzer.linkedProjects": ["rust/Cargo.toml", "xpute/rust/Cargo.toml"],
-
-  // Code is formatted on save by its tree's formatter, Deno's under each
-  // tree's config and rustfmt by rust-analyzer; the documents and the data
-  // are formatted by no one, so no other formatter takes them on save.
-  "editor.formatOnSave": true,
-  "prettier.enable": false,
-  "[markdown]": { "editor.formatOnSave": false },
-  "[yaml]": { "editor.formatOnSave": false },
-  "[xml]": { "editor.formatOnSave": false },
-
-  "[javascript]": { "editor.defaultFormatter": "denoland.vscode-deno" },
-  "[typescript]": { "editor.defaultFormatter": "denoland.vscode-deno" },
-  "[javascriptreact]": { "editor.defaultFormatter": "denoland.vscode-deno" },
-  "[typescriptreact]": { "editor.defaultFormatter": "denoland.vscode-deno" },
-  "[json]": { "editor.defaultFormatter": "denoland.vscode-deno" },
-  "[jsonc]": { "editor.defaultFormatter": "denoland.vscode-deno" },
-
+  "[javascript][typescript][javascriptreact][typescriptreact][json][jsonc]": { "editor.defaultFormatter": "denoland.vscode-deno" },
+  // An import names another package through the map, never a counted `../`.
   "js/ts.preferences.importModuleSpecifier": "non-relative",
-  "js/ts.updateImportsOnFileMove.enabled": "never"
+  "js/ts.updateImportsOnFileMove.enabled": "never",
+
+  // Rust. Cargo's two workspaces, each its own root: rust-analyzer finds only
+  // a manifest at most one folder down, which reaches rust/ but not
+  // xpute/rust/. The shader's (rust/client/shader) is rust-gpu's, built in its
+  // container, and left out.
+  "rust-analyzer.linkedProjects": ["rust/Cargo.toml", "xpute/rust/Cargo.toml"]
 }

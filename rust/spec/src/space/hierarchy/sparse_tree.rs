@@ -99,7 +99,13 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     /// Makes the node `depth` levels under the root holding `at` one leaf of
     /// `value`, each branch over it its family `fold` folds, given its depth;
     /// whether anything changed.
-    pub fn set(&mut self, depth: u32, at: [i32; D], value: T, fold: impl Fn(&Self, u32, u32) -> T) -> bool {
+    pub fn set(
+        &mut self,
+        depth: u32,
+        at: [i32; D],
+        value: T,
+        fold: impl Fn(&Self, u32, u32) -> T,
+    ) -> bool {
         xpute_kit::ensure!((1..=32).contains(&depth), EINVAL, depth);
         let mut path = [0usize; 32];
         let mut base = 0;
@@ -126,7 +132,9 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         for d in (1..depth).rev() {
             let parent = path[d as usize];
             let family = (self.heap[parent] & !BRANCH) as usize;
-            if (family..family + Self::WIDTH).all(|k| self.heap[k] == 0 && self.data[k] == self.data[family]) {
+            if (family..family + Self::WIDTH)
+                .all(|k| self.heap[k] == 0 && self.data[k] == self.data[family])
+            {
                 self.data[parent] = self.data[family];
                 self.release(parent);
             } else {

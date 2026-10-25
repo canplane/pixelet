@@ -18,7 +18,12 @@ fn door() -> (Door, Box<[u8]>) {
     let mem = unsafe { Memory::new(buf.as_mut_ptr().expose_provenance(), buf.len()) };
     // SAFETY: the buffer outlives the door — both are returned together and
     // the caller holds them for the test.
-    let (sq, cq) = unsafe { (Ring::init(mem, sq_desc as usize, SQ, sq_slot, SLOT), Ring::init(mem, cq_desc as usize, CQ, cq_slot, SLOT)) };
+    let (sq, cq) = unsafe {
+        (
+            Ring::init(mem, sq_desc as usize, SQ, sq_slot, SLOT),
+            Ring::init(mem, cq_desc as usize, CQ, cq_slot, SLOT),
+        )
+    };
     (Door::new(sq, cq, MOST_SIGNALS), buf)
 }
 
@@ -35,7 +40,10 @@ fn door_a_command_is_not_started_with_room_for_its_signals_but_not_its_reply() {
         }
         Ok(Some(7))
     });
-    assert!(d.pending(), "it waits for the next turn rather than overrunning this one");
+    assert!(
+        d.pending(),
+        "it waits for the next turn rather than overrunning this one"
+    );
 }
 
 #[test]
@@ -57,7 +65,11 @@ fn door_keeps_the_rings_peaks_until_they_are_taken_and_starts_again_from_zero() 
             left_peak: SQ - 3
         }
     );
-    assert_eq!(d.take_stat(), DoorStat::default(), "taking it starts the next from zero");
+    assert_eq!(
+        d.take_stat(),
+        DoorStat::default(),
+        "taking it starts the next from zero"
+    );
 
     while d.cq().peek().is_some() {
         d.cq().advance();

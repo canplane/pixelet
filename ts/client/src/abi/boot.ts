@@ -12,12 +12,26 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { SysHost } from "@xpute/host/ipc/sys.ts";
-import { Command, encode_world_boot, encode_world_kept_emptied, encode_world_source, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/abi/cmd.spec.ts";
+import {
+  Command,
+  encode_world_boot,
+  encode_world_kept_emptied,
+  encode_world_source,
+  read_sensor_start,
+  read_sensor_stop,
+  read_world_snapshot,
+  Sensor,
+} from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/namespace/source.ts";
 import { namespace } from "@/namespace/roots.ts";
 import { follow_refused, migrate } from "@/namespace/storage.ts";
 import { HOST, open_host } from "@/host/mount.ts";
-import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "./mem.spec.ts";
+import {
+  DESKTOP_BYTES,
+  DIRECTORY_AT,
+  PHONE_BYTES,
+  REGION_BYTES,
+} from "./mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
 import { stream } from "./gpu.spec.ts";
 import { SENSOR_HEARD } from "./sensor.ts";
@@ -39,9 +53,15 @@ export function stop_code(): string | null {
 }
 
 const abort: SysHost["abort"] = ({ errnum, file, line, column, a, b }) => {
-  console.error(`[kernel] stopped: ${strerror(errnum)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`);
+  console.error(
+    `[kernel] stopped: ${strerror(errnum)} at ${
+      file.replace(/^\.+/, "")
+    }:${line}:${column} (${a}, ${b})`,
+  );
   const where = `${file.split("/").pop()}:${line}`;
-  code = `${strerror(errnum).split(":")[0]} · ${file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where}`;
+  code = `${strerror(errnum).split(":")[0]} · ${
+    file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where
+  }`;
 };
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
@@ -51,23 +71,38 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(new Uint8Array(HOST.guest.memory, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
-      follow_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => HOST.send(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(HOST.doorbell, slot))));
+      follow_refused(
+        kernel_snapshot().kept_refused,
+        (slot) =>
+          queueMicrotask(() =>
+            HOST.send(
+              Command.WORLD_KEPT_EMPTIED,
+              encode_world_kept_emptied(HOST.doorbell, slot),
+            )
+          ),
+      );
       return;
     }
     case Command.SENSOR_START:
-      if (read_sensor_start(f!).sensor === Sensor.Geolocation) bracket.sensor.geo.start();
-      else bracket.sensor.orient.start();
+      if (read_sensor_start(f!).sensor === Sensor.Geolocation) {
+        bracket.sensor.geo.start();
+      } else bracket.sensor.orient.start();
       return;
     case Command.SENSOR_STOP:
-      if (read_sensor_stop(f!).sensor === Sensor.Geolocation) bracket.sensor.geo.stop();
-      else bracket.sensor.orient.stop();
+      if (read_sensor_stop(f!).sensor === Sensor.Geolocation) {
+        bracket.sensor.geo.stop();
+      } else bracket.sensor.orient.stop();
       return;
   }
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
 /** The source's declaration to the kernel, refused where it is more than a command carries. */
-function send_source(top_zoom: number, formats: number[], shards: string[]): boolean {
+function send_source(
+  top_zoom: number,
+  formats: number[],
+  shards: string[],
+): boolean {
   const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
   if (!HOST.doorbell.fits(pkt)) return false;
   HOST.send(Command.WORLD_SOURCE, pkt);
@@ -84,15 +119,34 @@ export async function boot(): Promise<void> {
     gpu_stream: key.GPU_STREAM,
     gpu_head: stream.HEAD,
   };
-  await open_host(plan, { fs: namespace(), program: text_call, abort }, submit_frame);
+  await open_host(
+    plan,
+    { fs: namespace(), program: text_call, abort },
+    submit_frame,
+  );
   bracket.sensor.hear(SENSOR_HEARD);
   HOST.doorbell.signal = on_signal;
-  bracket.gpu.boot({ ready: () => HOST.send(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: () => HOST.strobe.request() });
+  bracket.gpu.boot({
+    ready: () => HOST.send(Command.GPU_READY),
+    state: (state) => set_gpu(GPU_STATE[state]),
+    wake: () => HOST.strobe.request(),
+  });
   bracket.online.watch(set_online);
   // Before the kernel opens its kept slots, which it does from WORLD_BOOT on.
   migrate();
-  const pkt = encode_world_boot(HOST.doorbell, __IS_DEV__, bracket.sensor.geo.has, bracket.sensor.orient.has, bracket.sensor.orient.gated, bracket.sensor.orient.silence);
-  const booted = HOST.doorbell.call(Command.WORLD_BOOT, pkt, (result) => result);
+  const pkt = encode_world_boot(
+    HOST.doorbell,
+    __IS_DEV__,
+    bracket.sensor.geo.has,
+    bracket.sensor.orient.has,
+    bracket.sensor.orient.gated,
+    bracket.sensor.orient.silence,
+  );
+  const booted = HOST.doorbell.call(
+    Command.WORLD_BOOT,
+    pkt,
+    (result) => result,
+  );
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source(send_source);

@@ -20,7 +20,10 @@ fn reads_each_slot() {
     let c = Catalog::read(&laid(SLOTS)).expect("a catalog of the compiled slots");
     let last = Slot(SLOTS as u16 - 1);
     assert_eq!(c.file(last), SLOTS as u32);
-    assert_eq!(c.extent(last), [0.0, 0.25, 0.5].map(|k| (SLOTS - 1) as f64 + k));
+    assert_eq!(
+        c.extent(last),
+        [0.0, 0.25, 0.5].map(|k| (SLOTS - 1) as f64 + k)
+    );
 }
 
 #[test]

@@ -40,9 +40,18 @@ const STATE_AT: u32 = page_up(SYS_AT + spec::SYS_WORDS * 4);
 /// Only as wasm; a native build allocates from the process.
 const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Guest>() as u32);
 
-const _: () = assert!(HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEMORY_BYTES as usize, "the ranges run past the memory");
-const _: () = assert!((STATE_AT as usize).is_multiple_of(core::mem::align_of::<Guest>()), "the state lies on its own alignment");
-const _: () = assert!(directory_words(4) as u32 * 4 <= PAGE_BYTES, "the directory outgrows its page");
+const _: () = assert!(
+    HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEMORY_BYTES as usize,
+    "the ranges run past the memory"
+);
+const _: () = assert!(
+    (STATE_AT as usize).is_multiple_of(core::mem::align_of::<Guest>()),
+    "the state lies on its own alignment"
+);
+const _: () = assert!(
+    directory_words(4) as u32 * 4 <= PAGE_BYTES,
+    "the directory outgrows its page"
+);
 
 pub type Now = extern "C" fn() -> f64;
 
@@ -71,8 +80,20 @@ unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
     // SAFETY: the caller's memory; the ranges are the layout's.
     let (sq, cq, stream, sys) = unsafe {
         (
-            Ring::init(mem, at(SQ_DESC_AT), spec::SQ_CAP, range + SQ_SLOT_AT, spec::SLOT_BYTES),
-            Ring::init(mem, at(CQ_DESC_AT), spec::CQ_CAP, range + CQ_SLOT_AT, spec::SLOT_BYTES),
+            Ring::init(
+                mem,
+                at(SQ_DESC_AT),
+                spec::SQ_CAP,
+                range + SQ_SLOT_AT,
+                spec::SLOT_BYTES,
+            ),
+            Ring::init(
+                mem,
+                at(CQ_DESC_AT),
+                spec::CQ_CAP,
+                range + CQ_SLOT_AT,
+                spec::SLOT_BYTES,
+            ),
             Stream::new(mem, at(STREAM_AT), spec::STREAM_WORDS as usize, 1),
             Sys::new(mem, at(SYS_AT), spec::SYS_WORDS as usize),
         )
@@ -179,7 +200,11 @@ mod wasm {
     pub extern "C" fn xpute_conformance_boot() -> u32 {
         let range = range_at(xpute_guest::wasm::data_end());
         // A host that sized the memory for another guest.
-        xpute_kit::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= xpute_guest::wasm::given(), ENOMEM, range);
+        xpute_kit::ensure!(
+            range as u64 + spec::MEMORY_BYTES as u64 <= xpute_guest::wasm::given(),
+            ENOMEM,
+            range
+        );
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
         unsafe { boot(xpute_guest::mem::core(), range, now) }
@@ -187,7 +212,12 @@ mod wasm {
 
     fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
         // SAFETY: the module's memory, booted.
-        unsafe { turn(xpute_guest::mem::core(), range_at(xpute_guest::wasm::data_end())) }
+        unsafe {
+            turn(
+                xpute_guest::mem::core(),
+                range_at(xpute_guest::wasm::data_end()),
+            )
+        }
     }
 }
 
@@ -218,16 +248,29 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
             stream.record(arg(pkt)?, &[], &[], None);
             Ok(Some(0))
         }
-        spec::cmd::ISSUE => Ok(Some(handles.insert(()).ok_or_else(|| MarshalError::new(Errno::ENFILE))? as i32)),
-        spec::cmd::RELEASE => handles.remove(arg(pkt)?).map(|()| Some(0)).ok_or_else(bad_handle),
-        spec::cmd::USE => handles.live(arg(pkt)?).then_some(Some(0)).ok_or_else(bad_handle),
+        spec::cmd::ISSUE => Ok(Some(
+            handles
+                .insert(())
+                .ok_or_else(|| MarshalError::new(Errno::ENFILE))? as i32,
+        )),
+        spec::cmd::RELEASE => handles
+            .remove(arg(pkt)?)
+            .map(|()| Some(0))
+            .ok_or_else(bad_handle),
+        spec::cmd::USE => handles
+            .live(arg(pkt)?)
+            .then_some(Some(0))
+            .ok_or_else(bad_handle),
         spec::cmd::MARK => {
             *mark = now();
             Ok(Some(0))
         }
         spec::cmd::SINCE => Ok(Some(round(now() - *mark) as i32)),
         spec::cmd::OPEN => Ok(Some(files.open(sys, 1, "f", arg(pkt)?) as i32)),
-        spec::cmd::CLOSE => files.close(sys, arg(pkt)?).map(|_| Some(0)).ok_or_else(bad_handle),
+        spec::cmd::CLOSE => files
+            .close(sys, arg(pkt)?)
+            .map(|_| Some(0))
+            .ok_or_else(bad_handle),
         c if c == Command::SYS_OPENED as u32 => {
             let answer = SysOpened::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?;
             if let Some(&owner) = files.owner(answer.fd) {

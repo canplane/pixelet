@@ -49,8 +49,15 @@ pub const fn lane_bytes(count: usize, size: usize) -> u32 {
 /// The caller holds those bytes alone while it keeps the lane, and they are
 /// a valid `T` (zeroed, for the plain numbers every lane here holds).
 pub unsafe fn lane<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
-    let at = u32::try_from(n * size_of::<T>()).ok().and_then(|bytes| s.at(off, bytes)).or_bug(Errno::ENOTRECOVERABLE);
-    xpute_kit::ensure!((at as usize).is_multiple_of(align_of::<T>()), ENOTRECOVERABLE, at);
+    let at = u32::try_from(n * size_of::<T>())
+        .ok()
+        .and_then(|bytes| s.at(off, bytes))
+        .or_bug(Errno::ENOTRECOVERABLE);
+    xpute_kit::ensure!(
+        (at as usize).is_multiple_of(align_of::<T>()),
+        ENOTRECOVERABLE,
+        at
+    );
     // SAFETY: inside `s`, aligned, and the caller's alone.
     unsafe { core::slice::from_raw_parts_mut(mem::at::<T>(at as usize), n) }
 }

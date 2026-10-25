@@ -19,7 +19,13 @@ use xpute_guest::wasm::Plan;
 // The heap from the page past the last fixed range to the end of the memory:
 // everything before it is settled before it — the stack, the rings, the
 // linker's data, and `.fixed` (door/layout.rs `heap_at`).
-xpute_guest::wasm_abi!(Plan { heap_at, stack_bytes: STACK_BYTES }, kernel);
+xpute_guest::wasm_abi!(
+    Plan {
+        heap_at,
+        stack_bytes: STACK_BYTES
+    },
+    kernel
+);
 
 /// The kernel's turn (pxl_kernel::door::intr). A page outlives the kernel,
 /// so it has no last words to say; the browser paces its frames, so every

@@ -16,14 +16,22 @@ use pxl_spec_core::ground::bicubic;
 
 /// Heights at points from the tiles' elevations, in cells, as the client's
 /// `ground_ele_at` reads the elevation; a point's tile must be held.
-pub fn sample_cells(eles: &FnvHashMap<[i32; 2], Vec<i16>>, points: &[[f64; 2]]) -> Result<Vec<i32>, String> {
+pub fn sample_cells(
+    eles: &FnvHashMap<[i32; 2], Vec<i16>>,
+    points: &[[f64; 2]],
+) -> Result<Vec<i32>, String> {
     points
         .iter()
         .map(|&[x, y]| {
             let tile = tile_of([x, y]);
-            let ele = eles.get(&tile).ok_or_else(|| format!("tile {tile:?} is not held"))?;
+            let ele = eles
+                .get(&tile)
+                .ok_or_else(|| format!("tile {tile:?} is not held"))?;
             let [min, _] = epsg3857::get_tile_bbox(LEAF_ZOOM, tile);
-            let (tx, ty) = (u_from_mer(x - min[0]) / CELL_U, u_from_mer(y - min[1]) / CELL_U);
+            let (tx, ty) = (
+                u_from_mer(x - min[0]) / CELL_U,
+                u_from_mer(y - min[1]) / CELL_U,
+            );
             Ok(bicubic(|i| i32::from(ele[i]), tx as f32, ty as f32))
         })
         .collect()

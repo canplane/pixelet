@@ -35,7 +35,10 @@ const _: () = assert!(
 );
 
 // The padded samples and the resample's two strides past them stay in a leaf.
-const _: () = assert!(ELE_PAD + 2 <= TILE_ELE_SPAN, "a tile's elevation reads past its shard's apron");
+const _: () = assert!(
+    ELE_PAD + 2 <= TILE_ELE_SPAN,
+    "a tile's elevation reads past its shard's apron"
+);
 
 /// A tile's padded grid, `ST_MakeEmptyRaster` at the stride: its top-left
 /// corner, `ELE_PAD` samples out from the tile's, and the stride.
@@ -50,7 +53,12 @@ fn grid_of([min, max]: BBox3857) -> ([f64; 2], f64) {
 pub fn tile_reads(tile_bbox: BBox3857) -> [f64; 4] {
     let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
     let (side, reach) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
-    [ref_x - reach, ref_y - side - reach, ref_x + side + reach, ref_y + reach]
+    [
+        ref_x - reach,
+        ref_y - side - reach,
+        ref_x + side + reach,
+        ref_y + reach,
+    ]
 }
 
 pub struct Raster {
@@ -91,9 +99,17 @@ impl Raster {
     /// Refused unless the raster holds exactly the coverage's shards, each whole.
     pub fn open(client: &mut Client) -> Result<Raster, String> {
         let want: BTreeSet<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
-        let have: BTreeSet<String> = client.query("SELECT shard FROM elevation_catalog", &[]).map_err(|e| e.to_string())?.iter().map(|r| r.get(0)).collect();
+        let have: BTreeSet<String> = client
+            .query("SELECT shard FROM elevation_catalog", &[])
+            .map_err(|e| e.to_string())?
+            .iter()
+            .map(|r| r.get(0))
+            .collect();
         if have != want {
-            let (missing, extra) = (want.difference(&have).count(), have.difference(&want).count());
+            let (missing, extra) = (
+                want.difference(&have).count(),
+                have.difference(&want).count(),
+            );
             return Err(format!(
                 "elevation lacks {missing} of the coverage's shards and holds {extra} past them: run ./infra/geo/elevation/ingest.sh"
             ));
@@ -105,9 +121,17 @@ impl Raster {
                 &[],
             )
             .map_err(|e| e.to_string())?;
-        let (sx, sy) = rows.first().map_or((1.0, -1.0), |r| (r.get::<_, f64>("sx"), r.get::<_, f64>("sy")));
-        let origin = rows.first().map_or([0.0, 0.0], |r| [r.get::<_, f64>("x0"), r.get::<_, f64>("y0")]);
-        let side = rows.iter().map(|r| i64::from(r.get::<_, i32>("w")).max(i64::from(r.get::<_, i32>("h")))).max().unwrap_or(1);
+        let (sx, sy) = rows.first().map_or((1.0, -1.0), |r| {
+            (r.get::<_, f64>("sx"), r.get::<_, f64>("sy"))
+        });
+        let origin = rows.first().map_or([0.0, 0.0], |r| {
+            [r.get::<_, f64>("x0"), r.get::<_, f64>("y0")]
+        });
+        let side = rows
+            .iter()
+            .map(|r| i64::from(r.get::<_, i32>("w")).max(i64::from(r.get::<_, i32>("h"))))
+            .max()
+            .unwrap_or(1);
         let raster_tiles: Vec<RasterTileAt> = rows
             .iter()
             .map(|r| RasterTileAt {
@@ -120,7 +144,11 @@ impl Raster {
                 h: i64::from(r.get::<_, i32>("h")),
             })
             .collect();
-        let by_key = raster_tiles.iter().enumerate().map(|(i, t)| ((t.gx.div_euclid(side), t.gy.div_euclid(side)), i)).collect();
+        let by_key = raster_tiles
+            .iter()
+            .enumerate()
+            .map(|(i, t)| ((t.gx.div_euclid(side), t.gy.div_euclid(side)), i))
+            .collect();
         Ok(Raster {
             origin,
             sx,
@@ -132,18 +160,29 @@ impl Raster {
         })
     }
 
-    fn raster_tile(&self, client: &mut Client, i: usize) -> Result<Arc<RasterTile>, postgres::Error> {
+    fn raster_tile(
+        &self,
+        client: &mut Client,
+        i: usize,
+    ) -> Result<Arc<RasterTile>, postgres::Error> {
         let slot = {
             let mut held = self.held.lock().expect("raster");
             held.tick += 1;
             let tick = held.tick;
             if !held.slots.contains_key(&i) && held.slots.len() >= HELD {
-                let oldest = held.slots.iter().min_by_key(|(_, (t, _))| *t).map(|(&k, _)| k);
+                let oldest = held
+                    .slots
+                    .iter()
+                    .min_by_key(|(_, (t, _))| *t)
+                    .map(|(&k, _)| k);
                 if let Some(k) = oldest {
                     held.slots.remove(&k);
                 }
             }
-            let entry = held.slots.entry(i).or_insert_with(|| (tick, Arc::new(Mutex::new(None))));
+            let entry = held
+                .slots
+                .entry(i)
+                .or_insert_with(|| (tick, Arc::new(Mutex::new(None))));
             entry.0 = tick;
             entry.1.clone()
         };
@@ -152,7 +191,10 @@ impl Raster {
             return Ok(raster_tile.clone());
         }
         let at = &self.raster_tiles[i];
-        let row = client.query_one("SELECT ST_AsBinary(rast) AS wkb FROM elevation_raster WHERE tile = $1", &[&at.tile])?;
+        let row = client.query_one(
+            "SELECT ST_AsBinary(rast) AS wkb FROM elevation_raster WHERE tile = $1",
+            &[&at.tile],
+        )?;
         let raster_tile = Arc::new(RasterTile::of_wkb(row.get("wkb"), (at.w * at.h) as usize));
         *slot = Some(raster_tile.clone());
         Ok(raster_tile)
@@ -160,7 +202,11 @@ impl Raster {
 
     /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
     /// (pxl-spec-core `cells_of_m`, pxl-spec `Frame::per_m`).
-    pub fn tile_grid(&self, client: &mut Client, tile: [i32; 2]) -> Result<Vec<i16>, postgres::Error> {
+    pub fn tile_grid(
+        &self,
+        client: &mut Client,
+        tile: [i32; 2],
+    ) -> Result<Vec<i16>, postgres::Error> {
         let tile_bbox = get_tile_bbox(LEAF_ZOOM, tile);
         let per_m = Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m();
         let span = ELE_PADDED_SPAN as usize;
@@ -176,15 +222,26 @@ impl Raster {
         let mut reached = Vec::new();
         for ky in cy0.div_euclid(self.side)..=(cy1 - 1).div_euclid(self.side) {
             for kx in cx0.div_euclid(self.side)..=(cx1 - 1).div_euclid(self.side) {
-                let Some(&i) = self.by_key.get(&(kx, ky)) else { continue };
+                let Some(&i) = self.by_key.get(&(kx, ky)) else {
+                    continue;
+                };
                 let t = &self.raster_tiles[i];
                 let Some(c) = self.clip(t, env) else { continue };
-                hull = Some(hull.map_or(c, |h| [h[0].min(c[0]), h[1].min(c[1]), h[2].max(c[2]), h[3].max(c[3])]));
+                hull = Some(hull.map_or(c, |h| {
+                    [
+                        h[0].min(c[0]),
+                        h[1].min(c[1]),
+                        h[2].max(c[2]),
+                        h[3].max(c[3]),
+                    ]
+                }));
                 reached.push(i);
             }
         }
         // raster2pgsql stores no block that is all no data.
-        let Some([mx0, my0, mx1, my1]) = hull else { return Ok(vec![0; span * span]) };
+        let Some([mx0, my0, mx1, my1]) = hull else {
+            return Ok(vec![0; span * span]);
+        };
         let (mw, mh) = ((mx1 - mx0) as usize, (my1 - my0) as usize);
         let mut mosaic = vec![None; mw * mh];
         for i in reached {
@@ -192,7 +249,8 @@ impl Raster {
             let raster_tile = self.raster_tile(client, i)?;
             for y in t.gy.max(my0)..(t.gy + t.h).min(my1) {
                 for x in t.gx.max(mx0)..(t.gx + t.w).min(mx1) {
-                    mosaic[(y - my0) as usize * mw + (x - mx0) as usize] = raster_tile.at(((y - t.gy) * t.w + (x - t.gx)) as usize);
+                    mosaic[(y - my0) as usize * mw + (x - mx0) as usize] =
+                        raster_tile.at(((y - t.gy) * t.w + (x - t.gx)) as usize);
                 }
             }
         }
@@ -200,7 +258,13 @@ impl Raster {
         let m_y = self.origin[1] + my0 as f64 * self.sy;
 
         // `ST_Resample`'s output grid (rt_warp.c `rt_raster_gdal_warp`).
-        let snap = |r: f64| if (round(r) - r).abs() <= f64::from(f32::EPSILON) { round(r) } else { r.floor() };
+        let snap = |r: f64| {
+            if (round(r) - r).abs() <= f64::from(f32::EPSILON) {
+                round(r)
+            } else {
+                r.floor()
+            }
+        };
         let along = |w: f64| ((w + stride / 2.0) / stride).max(1.0) as i64;
         let kx = snap((m_x - ref_x) / stride);
         let ky = snap((m_y - ref_y) / -stride);
@@ -247,7 +311,8 @@ impl Raster {
                 // PostgreSQL rounds half to even. No data is 0, the source's
                 // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = source.sample(px, py) {
-                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = pxl_spec_core::cells_of_m(v, per_m) as i16;
+                    grid[ele_index(c as u32, (span - 1 - r) as u32)] =
+                        pxl_spec_core::cells_of_m(v, per_m) as i16;
                 }
             }
         }
@@ -267,7 +332,13 @@ impl Raster {
             return None;
         }
         let along = |w: f64, scale: f64| ((w + scale.abs() / 2.0) / scale.abs()).max(1.0) as i64;
-        let snap = |r: f64| if (round(r) - r).abs() <= f64::from(f32::EPSILON) { round(r) } else { r.floor() };
+        let snap = |r: f64| {
+            if (round(r) - r).abs() <= f64::from(f32::EPSILON) {
+                round(r)
+            } else {
+                r.floor()
+            }
+        };
         let (cx, cy) = (snap((left - t.x0) / sx), snap((top - t.y0) / sy));
         let mut w = along(right - left, sx);
         let mut h = along(top - bottom, sy);
@@ -278,14 +349,21 @@ impl Raster {
             h += 1;
         }
         let (x0, y0) = (t.gx + cx as i64, t.gy + cy as i64);
-        let c = [x0.max(t.gx), y0.max(t.gy), (x0 + w).min(t.gx + t.w), (y0 + h).min(t.gy + t.h)];
+        let c = [
+            x0.max(t.gx),
+            y0.max(t.gy),
+            (x0 + w).min(t.gx + t.w),
+            (y0 + h).min(t.gy + t.h),
+        ];
         (c[0] < c[2] && c[1] < c[3]).then_some(c)
     }
 }
 
 impl RasterTile {
     fn of_wkb(b: &[u8], pixels: usize) -> RasterTile {
-        RasterTile::read(b, pixels).unwrap_or(RasterTile { values: vec![f32::NAN; pixels] })
+        RasterTile::read(b, pixels).unwrap_or(RasterTile {
+            values: vec![f32::NAN; pixels],
+        })
     }
 
     fn read(b: &[u8], pixels: usize) -> Option<RasterTile> {
@@ -301,7 +379,11 @@ impl RasterTile {
         }
         let f32_at = |at: usize| -> Option<f32> {
             let raw: [u8; 4] = b.get(at..at + 4)?.try_into().ok()?;
-            Some(if le { f32::from_le_bytes(raw) } else { f32::from_be_bytes(raw) })
+            Some(if le {
+                f32::from_le_bytes(raw)
+            } else {
+                f32::from_be_bytes(raw)
+            })
         };
         let nodata = (band & HAS_NODATA != 0).then(|| f32_at(62)).flatten();
         let values = (0..pixels)
@@ -329,7 +411,11 @@ impl Axis {
         let (lo, hi) = (from.min(to), from.max(to));
         let (out, raster) = (out as f64, raster as i64);
         let window_scale = (out / (hi - lo)).max(1e-3);
-        let window_radius = if window_scale < 0.95 { (1.0 / window_scale).ceil() as i64 } else { 1 };
+        let window_radius = if window_scale < 0.95 {
+            (1.0 / window_scale).ceil() as i64
+        } else {
+            1
+        };
         let lo_clamped = lo.max(0.0) as i64;
         let hi_clamped = hi.ceil().min(raster as f64) as i64;
         let raw = ((raster - lo_clamped) as f64).min(hi - lo).max(0.0);
@@ -337,7 +423,10 @@ impl Axis {
             (0, raster)
         } else {
             let off = (lo_clamped - window_radius).min(raster).max(0);
-            (off, (raster - off).min(hi_clamped - off + window_radius).max(0))
+            (
+                off,
+                (raster - off).min(hi_clamped - off + window_radius).max(0),
+            )
         };
         let mut scale = out / raw;
         if size as f64 >= out && size as f64 <= out + (size as f64 - raw) {
@@ -350,8 +439,17 @@ impl Axis {
                 scale = 1.0 / whole as f64;
             }
         }
-        let radius = if scale < 1.0 { (1.0 / scale).ceil() as i64 } else { 1 };
-        Axis { off, size, scale, radius }
+        let radius = if scale < 1.0 {
+            (1.0 / scale).ceil() as i64
+        } else {
+            1
+        };
+        Axis {
+            off,
+            size,
+            scale,
+            radius,
+        }
     }
 }
 
@@ -371,7 +469,11 @@ impl Source<'_> {
     /// As `GWKRealCaseThread`/`GWKResample` write it into a 32-bit band.
     fn sample(&self, px: f64, py: f64) -> Option<f32> {
         let (x, y) = (self.x, self.y);
-        if px < x.off as f64 || py < y.off as f64 || px + 1e-10 > (x.size + x.off) as f64 || py + 1e-10 > (y.size + y.off) as f64 {
+        if px < x.off as f64
+            || py < y.off as f64
+            || px + 1e-10 > (x.size + x.off) as f64
+            || py + 1e-10 > (y.size + y.off) as f64
+        {
             return None;
         }
         let cx = ((px + 1e-10) as i64 - x.off).min(x.size - 1);
@@ -383,7 +485,11 @@ impl Source<'_> {
         let iy = (sy - 0.5).floor() as i64;
         let (fx, fy) = (sx - 0.5 - ix as f64, sy - 0.5 - iy as f64);
         let weight = |d: f64, a: Axis| {
-            let t = if a.scale < 1.0 { (d * a.scale).abs() } else { d.abs() };
+            let t = if a.scale < 1.0 {
+                (d * a.scale).abs()
+            } else {
+                d.abs()
+            };
             if t <= 1.0 {
                 1.0 - t
             } else {
@@ -399,7 +505,9 @@ impl Source<'_> {
             let wy = weight(j as f64 - fy, y);
             let (mut row_value, mut row_total) = (0.0, 0.0);
             for i in i0..=i1 {
-                let Some(v) = self.pixel(ix + i + x.off, iy + j + y.off) else { continue };
+                let Some(v) = self.pixel(ix + i + x.off, iy + j + y.off) else {
+                    continue;
+                };
                 let wx = weight(i as f64 - fx, x);
                 row_value += v * wx;
                 row_total += wx;
@@ -410,6 +518,10 @@ impl Source<'_> {
         if total < 0.000001 {
             return None;
         }
-        Some(if !(0.99999..=1.00001).contains(&total) { value / total } else { value } as f32)
+        Some(if !(0.99999..=1.00001).contains(&total) {
+            value / total
+        } else {
+            value
+        } as f32)
     }
 }

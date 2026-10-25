@@ -52,7 +52,9 @@ impl World<'_> {
         if !tiles(1).all(|y| tiles(0).all(|x| within_tile([wrap_index(LEAF_ZOOM, x), y]))) {
             return false;
         }
-        let s = (count(0).max(count(1)) as u64).next_power_of_two().trailing_zeros();
+        let s = (count(0).max(count(1)) as u64)
+            .next_power_of_two()
+            .trailing_zeros();
         let zoom = cell - s;
         let nodes = |k: usize| first(k) >> s..=(first(k) + count(k) - 1) >> s;
         nodes(1).all(|y| {
@@ -63,7 +65,10 @@ impl World<'_> {
                 self.terrain
                     .relief(&line, &mut place, node, [cell, cell])
                     .exact()
-                    .is_some_and(|[[lo, hi], _]| f64::from(bedrock(hi)) * unit <= space.min[2] && space.max[2] <= f64::from(ceiling(lo)) * unit)
+                    .is_some_and(|[[lo, hi], _]| {
+                        f64::from(bedrock(hi)) * unit <= space.min[2]
+                            && space.max[2] <= f64::from(ceiling(lo)) * unit
+                    })
             })
         })
     }
@@ -74,5 +79,13 @@ impl World<'_> {
 fn within_tile(leaf: [i32; 2]) -> bool {
     let node = (LEAF_ZOOM, leaf);
     let shard = Shard::UNKNOWN.at(&source::Declared, node);
-    !at_edge(|dx, dy| shard.past_leaf(node, [wrap_index(LEAF_ZOOM, leaf[0] + dx as i32), leaf[1] + dy as i32]))
+    !at_edge(|dx, dy| {
+        shard.past_leaf(
+            node,
+            [
+                wrap_index(LEAF_ZOOM, leaf[0] + dx as i32),
+                leaf[1] + dy as i32,
+            ],
+        )
+    })
 }

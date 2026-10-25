@@ -4,8 +4,14 @@ import type { f64, i32, numeric } from "../abi/word.ts";
 
 export type Comp<T> = (a: T, b: T) => i32;
 
-export const comp_numeric = (a: numeric, b: numeric): i32 => (a < b ? -1 : a > b ? 1 : 0);
-export const comp_str = (a: string, b: string): i32 => (a < b ? -1 : a > b ? 1 : 0);
+export const comp_numeric = (
+  a: numeric,
+  b: numeric,
+): i32 => (a < b ? -1 : a > b ? 1 : 0);
+export const comp_str = (
+  a: string,
+  b: string,
+): i32 => (a < b ? -1 : a > b ? 1 : 0);
 
 export function make_comp<T, K extends numeric = f64>(
   key_fn: (e: T) => K,

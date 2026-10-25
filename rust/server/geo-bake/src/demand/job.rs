@@ -20,13 +20,20 @@ pub struct Limits {
 }
 impl Default for Limits {
     fn default() -> Self {
-        Self { queued: 64, seconds: 30 }
+        Self {
+            queued: 64,
+            seconds: 30,
+        }
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum Job {
-    Tile { kind: super::Kind, subject: u64, cache: PathBuf },
+    Tile {
+        kind: super::Kind,
+        subject: u64,
+        cache: PathBuf,
+    },
 }
 
 pub struct Runner {
@@ -60,7 +67,10 @@ impl Workers {
         let mut state = self.state.lock().expect("workers");
         let (free, waiting) = &mut *state;
         loop {
-            let next = waiting.iter().position(|w| w.asked.load(Ordering::Relaxed)).or((!waiting.is_empty()).then_some(0));
+            let next = waiting
+                .iter()
+                .position(|w| w.asked.load(Ordering::Relaxed))
+                .or((!waiting.is_empty()).then_some(0));
             let Some(i) = next else {
                 *free += 1;
                 return;
@@ -81,7 +91,10 @@ impl Workers {
                 return Ok(Worker(self.clone()));
             }
             let (wake, woken) = oneshot::channel();
-            waiting.push_back(Waiter { asked: lease.asked.clone(), wake });
+            waiting.push_back(Waiter {
+                asked: lease.asked.clone(),
+                wake,
+            });
             woken
         };
         match tokio::time::timeout_at(lease.deadline, &mut woken).await {
@@ -121,7 +134,12 @@ impl Staging {
 
 impl Runner {
     pub fn new(workers: usize, limits: Limits) -> Result<Self, String> {
-        if workers == 0 || limits.seconds == 0 || workers.checked_add(limits.queued).is_none_or(|n| n > Semaphore::MAX_PERMITS) {
+        if workers == 0
+            || limits.seconds == 0
+            || workers
+                .checked_add(limits.queued)
+                .is_none_or(|n| n > Semaphore::MAX_PERMITS)
+        {
             return Err("invalid demand worker, queue or time limit".into());
         }
         Ok(Self {
@@ -133,11 +151,21 @@ impl Runner {
         })
     }
 
-    pub(super) async fn run(&self, job: Job, data: Arc<Dataset>, lease: Lease, name: String) -> Result<(), Failure> {
+    pub(super) async fn run(
+        &self,
+        job: Job,
+        data: Arc<Dataset>,
+        lease: Lease,
+        name: String,
+    ) -> Result<(), Failure> {
         let _worker = self.workers.acquire(&lease).await?;
         let deadline = lease.deadline;
         static SERIAL: AtomicU64 = AtomicU64::new(0);
-        let out = Staging(data.cache.root.join(format!(".work-{}", SERIAL.fetch_add(1, Ordering::Relaxed))));
+        let out = Staging(
+            data.cache
+                .root
+                .join(format!(".work-{}", SERIAL.fetch_add(1, Ordering::Relaxed))),
+        );
         std::fs::create_dir_all(&out.0).map_err(|e| e.to_string())?;
         let mut command = Command::new(std::env::current_exe().map_err(|e| e.to_string())?);
         command
@@ -180,15 +208,28 @@ async fn supervise(mut command: Command, deadline: tokio::time::Instant) -> Resu
 
 /// Each job opens the DB for what it reads, so a re-ingest while the server
 /// runs is checked by the next job.
-pub fn connect(reads: &[&[&str]], need: &std::collections::BTreeSet<crate::coverage::Node>, seconds: u64) -> Result<(crate::coverage::Overture, Client), String> {
+pub fn connect(
+    reads: &[&[&str]],
+    need: &std::collections::BTreeSet<crate::coverage::Node>,
+    seconds: u64,
+) -> Result<(crate::coverage::Overture, Client), String> {
     let (source, mut client) = crate::coverage::Overture::reading(reads, need)?;
-    client.batch_execute(&format!("SET statement_timeout = {}", seconds.saturating_mul(1000))).map_err(|e| e.to_string())?;
+    client
+        .batch_execute(&format!(
+            "SET statement_timeout = {}",
+            seconds.saturating_mul(1000)
+        ))
+        .map_err(|e| e.to_string())?;
     Ok((source, client))
 }
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
     match job {
-        Job::Tile { kind, subject, cache } => {
+        Job::Tile {
+            kind,
+            subject,
+            cache,
+        } => {
             let p = pxl_spec::space::layer::tile::Tile::of_subject(subject);
             match kind {
                 super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),

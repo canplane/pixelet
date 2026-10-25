@@ -18,7 +18,11 @@ impl Frustum {
     /// Conservative: a sphere near a corner can pass every plane and still
     /// lie outside.
     pub fn sees(&self, center: V3, radius: f64) -> bool {
-        self.planes.as_chunks::<4>().0.iter().all(|p| v3::dot(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
+        self.planes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| v3::dot(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
     }
 
     /// Whether the box from `min` to `max` may show: each plane has its corner

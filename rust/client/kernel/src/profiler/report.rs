@@ -12,7 +12,9 @@ use xpute_guest::global::Global;
 use xpute_guest::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
-use crate::profiler::frame::{DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample};
+use crate::profiler::frame::{
+    DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample,
+};
 use crate::profiler::record::{profiler_record_frame, profiler_recording};
 use crate::sys::io::demand::Stream;
 use crate::sys::io::request::stream_counts;

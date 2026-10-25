@@ -46,7 +46,9 @@ let granted: boolean | null = null;
  * and the resume restarted the sensors, which asked again in a loop. */
 async function permitted(): Promise<boolean> {
   const now = await Location.getForegroundPermissionsAsync();
-  const { status } = now.status === Location.PermissionStatus.UNDETERMINED ? await Location.requestForegroundPermissionsAsync() : now;
+  const { status } = now.status === Location.PermissionStatus.UNDETERMINED
+    ? await Location.requestForegroundPermissionsAsync()
+    : now;
   granted = status === Location.PermissionStatus.GRANTED;
   return granted;
 }
@@ -67,7 +69,9 @@ function known(v: number | null): number | null {
 function recheck(): void {
   if (granted !== false) return;
   void Location.getForegroundPermissionsAsync().then(({ status }) => {
-    if (granted !== false || status !== Location.PermissionStatus.GRANTED) return;
+    if (granted !== false || status !== Location.PermissionStatus.GRANTED) {
+      return;
+    }
     granted = true;
     heard.permission("geolocation", "granted");
     heard.permission("orientation", "granted");
@@ -86,7 +90,10 @@ function watch_end(watch: Watch): void {
 }
 
 /** A subscription that arrives after its stop is let go at once. */
-function watch_keep(watch: Watch, subscription: Location.LocationSubscription): void {
+function watch_keep(
+  watch: Watch,
+  subscription: Location.LocationSubscription,
+): void {
   if (watch.stopped) subscription.remove();
   else watch.subscription = subscription;
 }
@@ -106,11 +113,28 @@ function geo_start(): void {
   void (async () => {
     if (!(await permitted())) return geo_fail(watch, "denied");
     const subscription = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
+      {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 1000,
+        distanceInterval: 0,
+      },
       (pos) => {
-        const { latitude, longitude, altitude, altitudeAccuracy, accuracy, heading } = pos.coords;
+        const {
+          latitude,
+          longitude,
+          altitude,
+          altitudeAccuracy,
+          accuracy,
+          heading,
+        } = pos.coords;
         // An altitude with no accuracy is none measured.
-        heard.position(longitude, latitude, known(altitudeAccuracy) === null ? null : altitude, known(accuracy), known(heading));
+        heard.position(
+          longitude,
+          latitude,
+          known(altitudeAccuracy) === null ? null : altitude,
+          known(accuracy),
+          known(heading),
+        );
       },
       // Android's watch never ends on its own (expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request);
@@ -168,4 +192,11 @@ function orient_stop(): void {
 }
 
 export const geo = { has: geo_has(), start: geo_start, stop: geo_stop };
-export const orient = { has: orient_has(), gated: orient_gated(), silence: orient_silence(), permit: orient_permit, start: orient_start, stop: orient_stop };
+export const orient = {
+  has: orient_has(),
+  gated: orient_gated(),
+  silence: orient_silence(),
+  permit: orient_permit,
+  start: orient_start,
+  stop: orient_stop,
+};

@@ -16,9 +16,18 @@ import { useKernel } from "@/shell/store/watch.ts";
 
 /** MKUserTrackingButton's glyphs. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
-  [Tracking.Recenter]: { glyph: "location", label: "world.controls.move_to_location" },
-  [Tracking.Follow]: { glyph: "location.fill", label: "world.controls.start_compass_mode" },
-  [Tracking.Unfollow]: { glyph: "location.north.line.fill", label: "world.controls.exit_compass_mode" },
+  [Tracking.Recenter]: {
+    glyph: "location",
+    label: "world.controls.move_to_location",
+  },
+  [Tracking.Follow]: {
+    glyph: "location.fill",
+    label: "world.controls.start_compass_mode",
+  },
+  [Tracking.Unfollow]: {
+    glyph: "location.north.line.fill",
+    label: "world.controls.exit_compass_mode",
+  },
 };
 
 export function LocationButtons() {
@@ -28,7 +37,11 @@ export function LocationButtons() {
   const following = useKernel((s) => s.is_follow_mode);
   const offCenter = useKernel((s) => s.focus.is_off_center);
 
-  const press = following ? Tracking.Unfollow : offCenter ? Tracking.Recenter : Tracking.Follow;
+  const press = following
+    ? Tracking.Unfollow
+    : offCenter
+    ? Tracking.Recenter
+    : Tracking.Follow;
   const { glyph, label } = PRESS[press];
 
   return (
@@ -40,12 +53,23 @@ export function LocationButtons() {
           onPress: () => void kernel_tracking(press),
           isActive: following,
           disabled: status !== DevicePoseStatus.Ready || !hasLocation,
-          face: status === DevicePoseStatus.Loading ? <Spinner size={chrome.glyph} color={LABEL.primary} /> : (
-            // One turn as following starts.
-            <Motion to={{ rotate: 0 }} from={{ rotate: -90 }} replay={following ? "follow" : null} transition={SETTLE}>
-              <Glyph glyph={glyph} size={chrome.glyph} color={following ? color.action : LABEL.primary} />
-            </Motion>
-          ),
+          face: status === DevicePoseStatus.Loading
+            ? <Spinner size={chrome.glyph} color={LABEL.primary} />
+            : (
+              // One turn as following starts.
+              <Motion
+                to={{ rotate: 0 }}
+                from={{ rotate: -90 }}
+                replay={following ? "follow" : null}
+                transition={SETTLE}
+              >
+                <Glyph
+                  glyph={glyph}
+                  size={chrome.glyph}
+                  color={following ? color.action : LABEL.primary}
+                />
+              </Motion>
+            ),
         },
         {
           label: t("world.controls.reset_orientation"),

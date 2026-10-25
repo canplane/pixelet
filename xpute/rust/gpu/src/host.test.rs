@@ -7,9 +7,14 @@ use super::*;
 const GOLDEN: &str = include_str!("../../../spec/golden/gpu/programs.tsv");
 
 fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).expect("an adapter");
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("a device");
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let adapter =
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .expect("an adapter");
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("a device");
     (adapter, device, queue)
 }
 
@@ -25,8 +30,19 @@ fn plan(frame_latency: u32) -> Plan {
     }
 }
 
-fn host(adapter: &wgpu::Adapter, device: &wgpu::Device, queue: &wgpu::Queue, frame_latency: u32) -> GpuHost {
-    GpuHost::new(adapter.clone(), device.clone(), queue.clone(), plan(frame_latency), || {})
+fn host(
+    adapter: &wgpu::Adapter,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    frame_latency: u32,
+) -> GpuHost {
+    GpuHost::new(
+        adapter.clone(),
+        device.clone(),
+        queue.clone(),
+        plan(frame_latency),
+        || {},
+    )
 }
 
 /// Each host counts its own frames: one at its latency holds back no other,
@@ -34,7 +50,10 @@ fn host(adapter: &wgpu::Adapter, device: &wgpu::Device, queue: &wgpu::Queue, fra
 #[test]
 fn each_host_paces_its_own_frames() {
     let (adapter, device, queue) = device();
-    let (mut busy, mut other) = (host(&adapter, &device, &queue, 1), host(&adapter, &device, &queue, 2));
+    let (mut busy, mut other) = (
+        host(&adapter, &device, &queue, 1),
+        host(&adapter, &device, &queue, 2),
+    );
     assert!(busy.admit());
     busy.present();
     assert!(!busy.admit(), "its one frame is unfinished");
@@ -66,10 +85,18 @@ fn a_gone_devices_frames_are_released() {
     let count = h.unfinished.clone();
     assert!(h.admit());
     h.present();
-    assert_eq!(count.load(Ordering::Relaxed), 1, "counted, and never polled");
+    assert_eq!(
+        count.load(Ordering::Relaxed),
+        1,
+        "counted, and never polled"
+    );
     device.destroy();
     drop((h, queue, device));
-    assert_eq!(count.load(Ordering::Relaxed), 0, "released as the device went");
+    assert_eq!(
+        count.load(Ordering::Relaxed),
+        0,
+        "released as the device went"
+    );
 }
 
 /// A surface's handle holds its slot only while it is the one bound there:
@@ -85,13 +112,21 @@ fn an_old_handle_binds_and_unbinds_no_newer_surface() {
     assert!(!h.unbind(old), "nothing is bound");
     assert_eq!(h.claim(old), Some(3));
     assert_eq!(h.claim(newer), Some(3), "the newer takes the slot");
-    assert_eq!(h.claim(old), None, "an old handle's late bind takes nothing back");
+    assert_eq!(
+        h.claim(old),
+        None,
+        "an old handle's late bind takes nothing back"
+    );
     assert_eq!(h.claim(newer), Some(3), "the newer binds again");
     assert!(!h.unbind(old), "an old handle unbinds nothing");
     assert_eq!(h.surfaces[3].handle, newer);
     assert!(h.unbind(newer), "the newer unbinds its own");
     assert!(!h.unbind(newer), "and only once");
-    assert_eq!(h.claim(old), None, "the slot remembers the newer after it is let go");
+    assert_eq!(
+        h.claim(old),
+        None,
+        "the slot remembers the newer after it is let go"
+    );
     assert!(!h.unbind(0), "0 is never a handle");
 }
 
@@ -101,14 +136,24 @@ fn an_old_handle_binds_and_unbinds_no_newer_surface() {
 #[test]
 fn every_record_reads_back_its_bytes_on_a_device() {
     let g = Golden::load(GOLDEN);
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).expect("an adapter");
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let adapter =
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .expect("an adapter");
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_features: wgpu::Features::TIMESTAMP_QUERY,
         ..Default::default()
     }))
     .expect("a device with timestamp queries");
-    let [region, head, input_at, done, readback] = ["region", "stream.head", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
+    let [region, head, input_at, done, readback] = [
+        "region",
+        "stream.head",
+        "input.at",
+        "done.at",
+        "readback.at",
+    ]
+    .map(|k| g.u32(k));
     g.each("program", |name| {
         let p = g.s(name);
         let mut memory = vec![0u8; region as usize];
@@ -117,7 +162,13 @@ fn every_record_reads_back_its_bytes_on_a_device() {
             let input = g.bytes(&key);
             memory[input_at as usize..input_at as usize + input.len()].copy_from_slice(&input);
         }
-        let mut host = GpuHost::new(adapter.clone(), device.clone(), queue.clone(), plan(2), || {});
+        let mut host = GpuHost::new(
+            adapter.clone(),
+            device.clone(),
+            queue.clone(),
+            plan(2),
+            || {},
+        );
         g.each(&format!("{p}.turn"), |turn| {
             let words = g.bytes(turn);
             memory[..words.len()].copy_from_slice(&words);
@@ -130,6 +181,10 @@ fn every_record_reads_back_its_bytes_on_a_device() {
             }
         });
         let want = g.bytes(&format!("{p}.readback"));
-        assert_eq!(&memory[readback as usize..readback as usize + want.len()], &want[..], "{p}.readback");
+        assert_eq!(
+            &memory[readback as usize..readback as usize + want.len()],
+            &want[..],
+            "{p}.readback"
+        );
     });
 }

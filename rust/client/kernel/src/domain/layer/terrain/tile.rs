@@ -53,7 +53,12 @@ impl Base for TerrainTile {
 
     /// One pass from the packet: nothing tile-sized stands between arrival and
     /// drawing.
-    fn receive(_tile: Tile, record: u32, pkt: &[u8], phases: &mut Phases) -> Result<TerrainTile, Failure> {
+    fn receive(
+        _tile: Tile,
+        record: u32,
+        pkt: &[u8],
+        phases: &mut Phases,
+    ) -> Result<TerrainTile, Failure> {
         let t0 = now();
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
         let terrain = decode_into(pkt, unsafe { room_of(record) })?;
@@ -65,7 +70,11 @@ impl Base for TerrainTile {
     /// where a window wants one of its squares, so an ancestor's or another
     /// zoom's packet no window reads takes no place of `most_kept`.
     fn keep(record: Option<u32>, block: Block) {
-        let wanted = |r: &u32| TerrainTile::residency().in_frame(*r).is_some_and(crate::domain::layer::terrain::window::tile_wanted);
+        let wanted = |r: &u32| {
+            TerrainTile::residency()
+                .in_frame(*r)
+                .is_some_and(crate::domain::layer::terrain::window::tile_wanted)
+        };
         match record {
             Some(r) if !wanted(&r) => {
                 kept().forget(r);
@@ -98,7 +107,8 @@ const _: () = assert!(
 /// is fetched only to be freed past `most_kept`.
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
-    let coming = TerrainTile::residency().asked_again(|p| !crate::sys::io::request::object_failed(Stream::terrain, p.subject()));
+    let coming = TerrainTile::residency()
+        .asked_again(|p| !crate::sys::io::request::object_failed(Stream::terrain, p.subject()));
     most_kept().saturating_sub(kept().count() + coming)
 }
 
@@ -111,7 +121,9 @@ pub fn kept() -> &'static mut Kept {
 
 /// Whether `tile`'s packet is kept, its squares still to be handed.
 pub fn kept_for(tile: Tile) -> bool {
-    TerrainTile::residency().frame(tile).is_some_and(|f| kept().waiting(f))
+    TerrainTile::residency()
+        .frame(tile)
+        .is_some_and(|f| kept().waiting(f))
 }
 
 /// # Safety
@@ -124,7 +136,12 @@ unsafe fn room_of(record: u32) -> separation::Room {
     /// # Safety
     /// As `room_of`'s.
     unsafe fn lane<T, const K: usize>(record: u32) -> &'static mut [T] {
-        const { assert!(SEPARATION_LANES[K].1 == size_of::<T>(), "a lane's element as wide as the layout counts it") };
+        const {
+            assert!(
+                SEPARATION_LANES[K].1 == size_of::<T>(),
+                "a lane's element as wide as the layout counts it"
+            )
+        };
         let (at, bytes) = separation_lane(record, K);
         // Inside the range by the layout, so past its end is a bug.
         let at = RANGE.get().at(at, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;

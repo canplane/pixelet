@@ -23,7 +23,9 @@ use xpute_gpu::admit::Admit;
 use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
-use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
+use xpute_guest::ipc::directory::{
+    directory_words, quantum_entries, spec::key, write_directory, Entry,
+};
 use xpute_guest::ipc::door::{Door, DoorStat};
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_kit::wire::xtp::PacketWriter;
@@ -97,7 +99,9 @@ fn close_surface(handle: u32) {
 /// let go here.
 fn host_attached(s: &mut State) {
     crate::sys::io::request::reset();
-    let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
+    let open: Vec<u32> = pxl_render::gpu::surface::surfaces()
+        .map(|surface| surface.handle)
+        .collect();
     for handle in open {
         close_surface(handle);
     }
@@ -114,7 +118,9 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     crate::sys::stop::install(last_words);
     let gpu_stream = layout::install(&b);
     // A layer asks for no more tiles than its residency frames.
-    crate::sys::io::request::open(|c| crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames));
+    crate::sys::io::request::open(|c| {
+        crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames)
+    });
     crate::turn::boot();
     let [margin, batch, settle] = quantum_entries(&crate::sys::sched::tick::QUANTUM);
     let entries: [Entry; DIRECTORY_ENTRIES] = [
@@ -128,7 +134,14 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
     // bracket's data; the directory's alone.
-    unsafe { write_directory(mem::core(), crate::sys::mem::spec::DIRECTORY_AT as usize, directory_words(DIRECTORY_ENTRIES), &entries) };
+    unsafe {
+        write_directory(
+            mem::core(),
+            crate::sys::mem::spec::DIRECTORY_AT as usize,
+            directory_words(DIRECTORY_ENTRIES),
+            &entries,
+        )
+    };
 }
 
 /// The entry (xpute_guest::entry `Entry`, with the bracket's last words and
@@ -138,7 +151,12 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
 /// (`boot_info`). `last_words` is where a bracket whose process dies with the
 /// kernel reports why: no host is left to run the record, and a panic's text
 /// is not in its numbers. None where the host outlives the kernel (a page).
-pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastWords>, admit: Admit) -> f64 {
+pub fn intr(
+    quota_ms: f64,
+    boot_info: fn() -> BootInfo,
+    last_words: Option<LastWords>,
+    admit: Admit,
+) -> f64 {
     use crate::turn::{take_world_drawn, world_frame_waiting};
     if section::map().is_none() {
         boot(boot_info(), last_words, admit);
@@ -177,7 +195,12 @@ pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastW
         _ => Wake::timer,
     };
     let fell = now();
-    profiler_record_turn(fell - rise, polled - drained, f64::from(asked as u8), wake.max(0.0));
+    profiler_record_turn(
+        fell - rise,
+        polled - drained,
+        f64::from(asked as u8),
+        wake.max(0.0),
+    );
     wake
 }
 
@@ -187,10 +210,18 @@ pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastW
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
-    use crate::domain::control::sensor::device_orientation::{take_orientation_command, OrientationCommand};
-    use crate::domain::control::sensor::geolocation::{take_geolocation_command, GeolocationCommand};
+    use crate::domain::control::sensor::device_orientation::{
+        take_orientation_command, OrientationCommand,
+    };
+    use crate::domain::control::sensor::geolocation::{
+        take_geolocation_command, GeolocationCommand,
+    };
 
-    let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorStartSignal::FIELDS, |w| SensorStartSignal { sensor }.write(w));
+    let sensor = |cmd: Command, sensor: Sensor| {
+        raise(cmd, SensorStartSignal::FIELDS, |w| {
+            SensorStartSignal { sensor }.write(w)
+        })
+    };
     if let Some(c) = take_geolocation_command() {
         match c {
             GeolocationCommand::Start => sensor(Command::SENSOR_START, Sensor::Geolocation),
@@ -216,6 +247,8 @@ fn post_shell(s: &mut State) {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
         };
-        raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
+        raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| {
+            signal.write(w)
+        });
     }
 }

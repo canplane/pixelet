@@ -16,8 +16,23 @@ import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
 import { Command, encode_profiler_read } from "@/abi/cmd.spec.ts";
-import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/abi/demand.spec.ts";
-import { FRAME, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "@/abi/profiler.spec.ts";
+import {
+  OUTCOME_NAMES,
+  STREAM_NAMES,
+  TASK_PHASE_NAMES,
+} from "@/abi/demand.spec.ts";
+import {
+  FRAME,
+  READ,
+  RINGS,
+  SPREAD,
+  STEP,
+  SUMMARY,
+  TASK,
+  TASK_SUMMARY,
+  WAKES,
+  WORST,
+} from "@/abi/profiler.spec.ts";
 import { STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { HOST } from "@/host/mount.ts";
@@ -35,25 +50,51 @@ function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
 
 const words = (at: u32, n: u32) => new Float64Array(HOST.guest.memory, at, n);
 const u32s = (at: u32, n: u32) => new Uint32Array(HOST.guest.memory, at, n);
-const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${td.decode(new Uint8Array(HOST.guest.memory, file, bytes))}:${line}`;
+const site = (file: u32, bytes: u32, line: u32) =>
+  file === 0
+    ? null
+    : `${td.decode(new Uint8Array(HOST.guest.memory, file, bytes))}:${line}`;
 
 /** The lanes that are lists: a word a name, a census entry two (its draws and
  * triangles). The names are their owners', and shown by the shell. */
-export const LIST_LANES = ["phases", "gpu_spans", "census", "zoom_tiles", "gpu_objects", "waiting", "out"] as const;
+export const LIST_LANES = [
+  "phases",
+  "gpu_spans",
+  "census",
+  "zoom_tiles",
+  "gpu_objects",
+  "waiting",
+  "out",
+] as const;
 export type ListLane = typeof LIST_LANES[number];
 export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
 export type Frame =
   & { [K in ScalarLane]: f64 }
-  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tiles: f64[]; gpu_objects: f64[]; waiting: f64[]; out: f64[] };
+  & {
+    phases: f64[];
+    gpu_spans: f64[];
+    census: [f64, f64][];
+    zoom_tiles: f64[];
+    gpu_objects: f64[];
+    waiting: f64[];
+    out: f64[];
+  };
 
 /** Each lane at its word, and the words it spans: to the next lane's, the last to FRAME's end. */
-export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] = (() => {
-  const at = (Object.entries(FRAME) as [FrameLane | "WORDS", u32][]).filter(([k]) => k !== "WORDS") as [FrameLane, u32][];
-  at.sort((a, b) => a[1] - b[1]);
-  return at.map(([name, a], i) => ({ name, at: a, width: (i + 1 < at.length ? at[i + 1][1] : FRAME.WORDS) - a }));
-})();
+export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] =
+  (() => {
+    const at = (Object.entries(FRAME) as [FrameLane | "WORDS", u32][]).filter((
+      [k],
+    ) => k !== "WORDS") as [FrameLane, u32][];
+    at.sort((a, b) => a[1] - b[1]);
+    return at.map(([name, a], i) => ({
+      name,
+      at: a,
+      width: (i + 1 < at.length ? at[i + 1][1] : FRAME.WORDS) - a,
+    }));
+  })();
 
 const LISTS: ReadonlySet<string> = new Set(LIST_LANES);
 export const is_list = (lane: FrameLane): lane is ListLane => LISTS.has(lane);
@@ -63,9 +104,14 @@ export function frame_at(words: ArrayLike<f64>, o: u32): Frame {
   const f: Record<string, f64 | f64[] | [f64, f64][]> = {};
   for (const { name, at, width } of LANES) {
     const w = (k: u32) => words[o + at + k];
-    if (name === "census") f[name] = Array.from({ length: width / 2 }, (_, k) => [w(2 * k), w(2 * k + 1)] as [f64, f64]);
-    else if (is_list(name)) f[name] = Array.from({ length: width }, (_, k) => w(k));
-    else f[name] = w(0);
+    if (name === "census") {
+      f[name] = Array.from(
+        { length: width / 2 },
+        (_, k) => [w(2 * k), w(2 * k + 1)] as [f64, f64],
+      );
+    } else if (is_list(name)) {
+      f[name] = Array.from({ length: width }, (_, k) => w(k));
+    } else f[name] = w(0);
   }
   return f as Frame;
 }
@@ -157,7 +203,11 @@ export interface RingCounts {
   worst: u32;
 }
 
-const spread_at = (s: F64Array, at: u32): Spread => ({ p50: s[at + SPREAD.p50], p95: s[at + SPREAD.p95], max: s[at + SPREAD.max] });
+const spread_at = (s: F64Array, at: u32): Spread => ({
+  p50: s[at + SPREAD.p50],
+  p95: s[at + SPREAD.p95],
+  max: s[at + SPREAD.max],
+});
 
 function frame_summary(s: F64Array): FrameSummary | null {
   const F = SUMMARY.frames;
@@ -177,7 +227,10 @@ function frame_summary(s: F64Array): FrameSummary | null {
     tick: spread_at(s, a + F.tick),
     gpu: spread_at(s, a + F.gpu),
     phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
-    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, p95: s[a + F.gpu_spans_p95 + k] })),
+    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
+      name,
+      p95: s[a + F.gpu_spans_p95 + k],
+    })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     heap_used_delta_bytes: s[a + F.heap_used_delta_bytes],
@@ -191,18 +244,26 @@ function task_summaries(s: F64Array): TaskSummary[] {
     const a = SUMMARY.tasks.AT + SUMMARY.tasks.slots + c * TASK_SUMMARY.WORDS;
     const n = s[a + TASK_SUMMARY.n];
     if (n === 0) return;
-    const reasons = Array.from({ length: s[a + TASK_SUMMARY.reason_count] }, (_, i) => {
-      const w = a + TASK_SUMMARY.reasons + 3 * i;
-      return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
-    });
-    const means = TASK_PHASE_NAMES.map((name, p) => [name, s[a + TASK_SUMMARY.phase_mean + p]] as [string, f64]).filter(([, v]) => !Number.isNaN(v));
+    const reasons = Array.from(
+      { length: s[a + TASK_SUMMARY.reason_count] },
+      (_, i) => {
+        const w = a + TASK_SUMMARY.reasons + 3 * i;
+        return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
+      },
+    );
+    const means = TASK_PHASE_NAMES.map((name, p) =>
+      [name, s[a + TASK_SUMMARY.phase_mean + p]] as [string, f64]
+    ).filter(([, v]) => !Number.isNaN(v));
     out.push({
       stream,
       n,
       ok: s[a + TASK_SUMMARY.ok],
       aborted: s[a + TASK_SUMMARY.aborted],
       error: s[a + TASK_SUMMARY.error],
-      lat: { p50: s[a + TASK_SUMMARY.lat_p50], p95: s[a + TASK_SUMMARY.lat_p95] },
+      lat: {
+        p50: s[a + TASK_SUMMARY.lat_p50],
+        p95: s[a + TASK_SUMMARY.lat_p95],
+      },
       reasons,
       phase_mean: s[a + TASK_SUMMARY.phase_n] > 0 ? means : null,
     });
@@ -226,13 +287,18 @@ function steps_at(s: F64Array): Step[] {
 
 function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   const out: Record<string, f64> = {};
-  for (const [k, v] of Object.entries(sec)) if (k !== "AT" && k !== "WORDS") out[k] = s[sec.AT + v];
+  for (const [k, v] of Object.entries(sec)) {
+    if (k !== "AT" && k !== "WORDS") out[k] = s[sec.AT + v];
+  }
   return out;
 }
 
 /** The summary's words as PROFILER_READ lays them out over `window_ms`. */
 function summary_words(window_ms: f64 | null): F64Array {
-  const r = u32s(call(Command.PROFILER_READ, encode_profiler_read(HOST.doorbell, window_ms)), READ.WORDS);
+  const r = u32s(
+    call(Command.PROFILER_READ, encode_profiler_read(HOST.doorbell, window_ms)),
+    READ.WORDS,
+  );
   return words(r[READ.summary_at], r[READ.summary_words]);
 }
 
@@ -241,7 +307,11 @@ export function profiler_summary(window_ms: f64 | null): Summary {
   const s = summary_words(window_ms);
   const R = SUMMARY.rec;
   return {
-    rec: { recording: s[R.AT + R.recording] !== 0, elapsed_ms: s[R.AT + R.elapsed_ms], truncated: s[R.AT + R.truncated] !== 0 },
+    rec: {
+      recording: s[R.AT + R.recording] !== 0,
+      elapsed_ms: s[R.AT + R.elapsed_ms],
+      truncated: s[R.AT + R.truncated] !== 0,
+    },
     frames: frame_summary(s),
     tasks: task_summaries(s),
     steps: steps_at(s),
@@ -284,13 +354,20 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   const at = ring + from * TASK.WORDS * WORD;
   const count = held - from;
   const w = words(at, count * TASK.WORDS);
-  const subjects = new BigUint64Array(HOST.guest.memory, at, count * TASK.WORDS);
+  const subjects = new BigUint64Array(
+    HOST.guest.memory,
+    at,
+    count * TASK.WORDS,
+  );
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_count = w[o + TASK.phase_count];
     const phases: [string, f64][] = [];
     for (let k = 0; k < phase_count; k++) {
-      phases.push([TASK_PHASE_NAMES[w[o + TASK.phase_ids + k]] ?? "?", w[o + TASK.phase_values + k]]);
+      phases.push([
+        TASK_PHASE_NAMES[w[o + TASK.phase_ids + k]] ?? "?",
+        w[o + TASK.phase_values + k],
+      ]);
     }
     const start = w[o + TASK.start_ms];
     return {
@@ -303,7 +380,11 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
       outcome: OUTCOME_NAMES[w[o + TASK.outcome]] ?? "?",
       fail: w[o + TASK.fail],
       detail: w[o + TASK.detail],
-      at: site(w[o + TASK.at_file], w[o + TASK.at_file_bytes], w[o + TASK.at_line]),
+      at: site(
+        w[o + TASK.at_file],
+        w[o + TASK.at_file_bytes],
+        w[o + TASK.at_line],
+      ),
       phases,
     };
   });
@@ -315,6 +396,9 @@ export function profiler_worst(): Worst[] {
   const w = words(at, count * WORST.WORDS);
   return Array.from({ length: count }, (_, i) => {
     const o = i * WORST.WORDS;
-    return { sample: frame_at(w, o + WORST.sample), prev: w[o + WORST.has_prev] === 0 ? null : frame_at(w, o + WORST.prev) };
+    return {
+      sample: frame_at(w, o + WORST.sample),
+      prev: w[o + WORST.has_prev] === 0 ? null : frame_at(w, o + WORST.prev),
+    };
   });
 }

@@ -8,11 +8,22 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-export const STREAM_NAMES = ["terrain", "place", "division", "asset", "earth"] as const;
+export const STREAM_NAMES = [
+  "terrain",
+  "place",
+  "division",
+  "asset",
+  "earth",
+] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
-export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as const;
+export const TASK_PHASE_NAMES = [
+  "net_ms",
+  "bytes",
+  "decode_ms",
+  "adopt_ms",
+] as const;
 
 /** Timings a run reports at most; past it one is left out. */
 export const TASK_PHASES_MAX: u32 = 6 as number;

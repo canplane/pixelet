@@ -35,14 +35,31 @@ pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
         let kind = segment_type(&row.subtype, row.class.as_deref());
         let width = row.width_u / CELL_U;
         let width_code = separation::width_byte(width);
-        let world: Vec<Point> = row.points.iter().zip(&row.coarsest).map(|(p, &c)| ([grid(p[0], 0), grid(p[1], 1)], p[2], c)).collect();
+        let world: Vec<Point> = row
+            .points
+            .iter()
+            .zip(&row.coarsest)
+            .map(|(p, &c)| ([grid(p[0], 0), grid(p[1], 1)], p[2], c))
+            .collect();
         let local: Vec<([f64; 2], i16, u8)> = crossings(&world)
             .into_iter()
-            .map(|(q, top, c)| ([0, 1].map(|k| (q[k] - origin[k]) / POINT_SCALE), round(top) as i16, c))
+            .map(|(q, top, c)| {
+                (
+                    [0, 1].map(|k| (q[k] - origin[k]) / POINT_SCALE),
+                    round(top) as i16,
+                    c,
+                )
+            })
             .collect();
         let at: Vec<[f64; 2]> = local.iter().map(|p| p.0).collect();
         for [a, b] in separation::runs_within(&at, separation::footprint(width)) {
-            separation.push(local[a..=b].iter().copied(), width_code, kind, row.form, row.clear);
+            separation.push(
+                local[a..=b].iter().copied(),
+                width_code,
+                kind,
+                row.form,
+                row.clear,
+            );
         }
     }
     separation.finish()
@@ -60,7 +77,11 @@ type Point = ([f64; 2], f64, u8);
 /// ends, which is what a fold of its 4×4 children needs (pxl-spec
 /// bake/separation.rs `fold_separation`).
 fn edge_coarsest(m: i64) -> u8 {
-    let first = LEAF_ZOOM.saturating_sub(if m == 0 { LEAF_ZOOM } else { m.trailing_zeros().min(LEAF_ZOOM) });
+    let first = LEAF_ZOOM.saturating_sub(if m == 0 {
+        LEAF_ZOOM
+    } else {
+        m.trailing_zeros().min(LEAF_ZOOM)
+    });
     first.saturating_sub(1).max(TOP_ZOOM) as u8
 }
 
@@ -87,7 +108,9 @@ fn crossings(points: &[Point]) -> Vec<Point> {
     };
     for (i, &(a, ta, ca)) in points.iter().enumerate() {
         put(&mut out, (a, ta, on(a, ca)));
-        let Some(&(b, tb, _)) = points.get(i + 1) else { break };
+        let Some(&(b, tb, _)) = points.get(i + 1) else {
+            break;
+        };
         let mut cut: Vec<(f64, Point)> = Vec::new();
         for k in 0..2 {
             let (lo, hi) = (a[k].min(b[k]), a[k].max(b[k]));

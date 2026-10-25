@@ -12,7 +12,18 @@
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
 
-export const CENSUS_TAGS = ["decor", "ghost_box", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "marker", "debug", "impostor", "camera_grid"] as const;
+export const CENSUS_TAGS = [
+  "decor",
+  "ghost_box",
+  "ghost_decor",
+  "skinned",
+  "puck_zone",
+  "puck_beacon",
+  "marker",
+  "debug",
+  "impostor",
+  "camera_grid",
+] as const;
 
 export const WAKES = ["next", "timer", "none"] as const;
 
@@ -73,15 +84,46 @@ export const FRAME = {
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it. */
 export const FRAME_GROUPS = {
-  time: ["t", "interval_ms", "refresh_ms", "paced_ms", "settled", "turns", "busy_ms", "budget_ms"],
-  turn: ["effects_ms", "tick_ms", "phases", "stage_ms", "tasks_ms", "worst_effect_ms", "worst_effect_name"],
+  time: [
+    "t",
+    "interval_ms",
+    "refresh_ms",
+    "paced_ms",
+    "settled",
+    "turns",
+    "busy_ms",
+    "budget_ms",
+  ],
+  turn: [
+    "effects_ms",
+    "tick_ms",
+    "phases",
+    "stage_ms",
+    "tasks_ms",
+    "worst_effect_ms",
+    "worst_effect_name",
+  ],
   frame: ["kind_name", "wake_name", "wake_in_ms"],
   gpu: ["gpu_read", "gpu_spans", "gpu_px", "scale", "census"],
   cap: ["cap_terrain_refused"],
   requests: ["waiting", "out"],
   tiles: ["zoom_tiles", "tiles_place"],
-  device: ["uploads", "uploads_bytes", "depth_bytes", "pack_bytes", "gpu_objects"],
-  heap: ["heap_used_bytes", "heap_live_bytes", "heap_run_bytes", "heap_slot_bytes", "heap_range_bytes", "heap_largest_free_bytes", "heap_refusals"],
+  device: [
+    "uploads",
+    "uploads_bytes",
+    "depth_bytes",
+    "pack_bytes",
+    "gpu_objects",
+  ],
+  heap: [
+    "heap_used_bytes",
+    "heap_live_bytes",
+    "heap_run_bytes",
+    "heap_slot_bytes",
+    "heap_range_bytes",
+    "heap_largest_free_bytes",
+    "heap_refusals",
+  ],
   ring: ["ring_cq_peak", "ring_sq_peak", "ring_held_peak"],
   body: ["body_slots_peak"],
 } as const;

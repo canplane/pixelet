@@ -126,13 +126,13 @@ header, and the run is its slots and nothing else. It is the same trick
 
 What a run needs besides is three fields — the head of that free list, how many
 slots are out, and the links of its class's partial list. SLUB puts the
-equivalent in `struct page`, which Linux has for every page anyway. Nothing
-here has a page descriptor array, and one would be proportional to the range
-rather than to what is live: 195,473 pages over the desktop's heap, which is
-the cost this whole arrangement exists to avoid. So the three fields live in
-the run's own leading slots — `head_slots` of them, one for a class of 16 bytes
-and never more than two — and the run is `MIN_SLOTS_LOG2` = 16 slots at the
-least, so that header is at most a sixteenth of what it describes.
+equivalent in `struct page`, which Linux has for every page anyway. Nothing here
+has a page descriptor array, and one would be proportional to the range rather
+than to what is live: 195,473 pages over the desktop's heap, which is the cost
+this whole arrangement exists to avoid. So the three fields live in the run's
+own leading slots — `head_slots` of them, one for a class of 16 bytes and never
+more than two — and the run is `MIN_SLOTS_LOG2` = 16 slots at the least, so that
+header is at most a sixteenth of what it describes.
 
 That sizes the runs of the classes at and above a page's sixteenth:
 
@@ -170,10 +170,10 @@ so the pair satisfies any alignment up to a page and refuses one past it.
 
 - ~~`MAX_ALLOC` is `1 << 30`, exactly `DESKTOP_BYTES`, with nothing tying them
   together. A change to either alone is silent.~~ Closed 09-17 by untying them:
-  `MAX_ALLOC_LOG2` is 31, the C's own, which is the top of what a 32-bit
-  address space holds a whole power of two of and not a claim about any
-  memory. The tree begins as one leaf and doubles only as far as a request
-  takes it, and how much of it is real comes from the range at runtime, so a
-  smaller heap costs only the levels it never reaches. 32 KiB more of split
-  bitmap, and the allocator stops knowing anything about the kernel above it.
+  `MAX_ALLOC_LOG2` is 31, the C's own, which is the top of what a 32-bit address
+  space holds a whole power of two of and not a claim about any memory. The tree
+  begins as one leaf and doubles only as far as a request takes it, and how much
+  of it is real comes from the range at runtime, so a smaller heap costs only
+  the levels it never reaches. 32 KiB more of split bitmap, and the allocator
+  stops knowing anything about the kernel above it.
 - `4da3ff1` and `7c11e18` change only `ds/buddy.rs`, which `a2b9bd4` deletes.

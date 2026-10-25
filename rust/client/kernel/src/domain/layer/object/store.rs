@@ -126,7 +126,10 @@ pub struct Leaf {
     pub ext: u16,
 }
 
-pub(super) const EMPTY: Leaf = Leaf { id: VOID as u16, ext: NONE };
+pub(super) const EMPTY: Leaf = Leaf {
+    id: VOID as u16,
+    ext: NONE,
+};
 
 impl Leaf {
     pub(super) fn of(word: u32) -> Leaf {
@@ -299,7 +302,13 @@ impl Store {
         }
         for k in 0..8 {
             let child = wrap_cell(zoom + 1, child_of(at, k));
-            self.walk(self.child(&held, (zoom + 1, child), zoom + 1), zoom + 1, child, about, enter);
+            self.walk(
+                self.child(&held, (zoom + 1, child), zoom + 1),
+                zoom + 1,
+                child,
+                about,
+                enter,
+            );
         }
     }
 
@@ -331,7 +340,12 @@ impl Store {
     /// `query` within them: each walked from its slot, so what is found and
     /// the order it is found in are the walk's from the roots, taken in the
     /// tree's own order (`tree_key`).
-    pub fn entries_under(&self, from: &[(Node<3>, Held)], query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+    pub fn entries_under(
+        &self,
+        from: &[(Node<3>, Held)],
+        query: &Aabb,
+        visit: &mut dyn FnMut(&Entry),
+    ) {
         let about = about(query);
         for &((zoom, at), held) in from {
             if !held.holds() {
@@ -359,18 +373,25 @@ impl Store {
             return;
         }
         let z = held.zoom();
-        self.walk(held, z, at.map(|c| c >> (zoom - z)), about(&cube(zoom, at)), &mut |zoom, at, _, leaf| {
-            if let Some(v) = leaf {
-                visit(&Entry::of(zoom, at, v));
-            }
-            true
-        });
+        self.walk(
+            held,
+            z,
+            at.map(|c| c >> (zoom - z)),
+            about(&cube(zoom, at)),
+            &mut |zoom, at, _, leaf| {
+                if let Some(v) = leaf {
+                    visit(&Entry::of(zoom, at, v));
+                }
+                true
+            },
+        );
     }
 
     /// The value placed at exactly the node `at` of `zoom`, if one is, read
     /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
     pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3], held: Held) -> Option<Entry> {
-        (held.holds() && !held.folded() && held.zoom() == zoom).then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
+        (held.holds() && !held.folded() && held.zoom() == zoom)
+            .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
     }
 
     /// What a leaf carries beyond its id, if anything.
@@ -391,10 +412,18 @@ impl Store {
         let mut changed = Vec::new();
         for Write { key: k, id, ext } in writes {
             let (zoom, at) = node_of::<3>(k);
-            xpute_kit::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
+            xpute_kit::ensure!(
+                (CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom),
+                ENOTRECOVERABLE,
+                zoom
+            );
             let id16 = u16::try_from(id).or_bug(Errno::EOVERFLOW);
             // A record is the shape its id's class names, or none.
-            xpute_kit::ensure!(ext.as_ref().map(Ext::class) == ext.as_ref().and(class_of(id)), EINVAL, id);
+            xpute_kit::ensure!(
+                ext.as_ref().map(Ext::class) == ext.as_ref().and(class_of(id)),
+                EINVAL,
+                id
+            );
             self.release(zoom, at);
             let handle = match ext {
                 Some(ext) => match self.ext.keep(ext) {
@@ -403,8 +432,17 @@ impl Store {
                 },
                 None => NONE,
             };
-            let value = Leaf { id: id16, ext: handle }.word();
-            if self.tree.set(depth(zoom), path(zoom, at), value, |tree, family, d| fold(tree, family, d - 1)) {
+            let value = Leaf {
+                id: id16,
+                ext: handle,
+            }
+            .word();
+            if self
+                .tree
+                .set(depth(zoom), path(zoom, at), value, |tree, family, d| {
+                    fold(tree, family, d - 1)
+                })
+            {
                 changed.push(cube(zoom, at));
                 self.revision = self.revision.wrapping_add(1);
             }
@@ -419,7 +457,11 @@ impl Store {
         let held = self.cursor((zoom, at), zoom);
         if held.holds() && !held.folded() {
             let z = held.zoom();
-            xpute_kit::ensure!(z == zoom || Leaf::of(self.tree.data()[held.slot() as usize]).ext == NONE, ENOTRECOVERABLE, z);
+            xpute_kit::ensure!(
+                z == zoom || Leaf::of(self.tree.data()[held.slot() as usize]).ext == NONE,
+                ENOTRECOVERABLE,
+                z
+            );
         }
         self.each_in(zoom, at, held, &mut |e| {
             if e.ext != NONE {
@@ -472,13 +514,15 @@ impl Cells<'_> {
     /// Every leaf inside the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
         let (zoom, at) = self.node;
-        self.store.each_in(zoom, at, self.store.cursor(self.node, zoom), visit)
+        self.store
+            .each_in(zoom, at, self.store.cursor(self.node, zoom), visit)
     }
 
     /// The leaf placed at exactly the node, if one is.
     pub fn placed(&self) -> Option<Entry> {
         let (zoom, at) = self.node;
-        self.store.placed(zoom, at, self.store.cursor(self.node, zoom))
+        self.store
+            .placed(zoom, at, self.store.cursor(self.node, zoom))
     }
 }
 
@@ -489,7 +533,12 @@ impl Query for Store {
 
     fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => overwrite::cursor(&self.lanes(), overwrite::PLACED, zoom, [at[0], at[1], at[2]]),
+            3 => overwrite::cursor(
+                &self.lanes(),
+                overwrite::PLACED,
+                zoom,
+                [at[0], at[1], at[2]],
+            ),
             _ => Held::branch(0, zoom),
         }
     }
@@ -550,11 +599,24 @@ impl Store {
     pub fn column(&self, walk: &mut Walk, (zoom, xy): Node<2>) -> Option<Aabb> {
         let p = path(zoom, [xy[0], xy[1], 0]);
         let column = |k: usize| [p[0] >> (zoom as usize - k), p[1] >> (zoom as usize - k)];
-        let kept = walk.at.iter().take(zoom as usize + 1).enumerate().take_while(|&(k, s)| s.column == column(k)).count();
+        let kept = walk
+            .at
+            .iter()
+            .take(zoom as usize + 1)
+            .enumerate()
+            .take_while(|&(k, s)| s.column == column(k))
+            .count();
         walk.at.truncate(kept);
         walk.held.truncate(walk.at.last().map_or(0, |s| s.end));
-        let span = |z: usize, at: [i32; 3]| [f64::from(at[2]) * units(z as Zoom), f64::from(at[2] + 1) * units(z as Zoom)];
-        let join = |a: Option<[f64; 2]>, b: [f64; 2]| Some(a.map_or(b, |a| [a[0].min(b[0]), a[1].max(b[1])]));
+        let span = |z: usize, at: [i32; 3]| {
+            [
+                f64::from(at[2]) * units(z as Zoom),
+                f64::from(at[2] + 1) * units(z as Zoom),
+            ]
+        };
+        let join = |a: Option<[f64; 2]>, b: [f64; 2]| {
+            Some(a.map_or(b, |a| [a[0].min(b[0]), a[1].max(b[1])]))
+        };
         while walk.at.len() <= zoom as usize {
             let k = walk.at.len();
             let c = column(k);
@@ -576,7 +638,11 @@ impl Store {
                     for i in walk.start(o)..walk.at[o].end {
                         let (at, h) = walk.held[i];
                         for child in [0, 1].map(|z| [c[0], c[1], 2 * at[2] + z]) {
-                            met(&mut walk.held, child, self.child(&h, (k as Zoom, child), k as Zoom));
+                            met(
+                                &mut walk.held,
+                                child,
+                                self.child(&h, (k as Zoom, child), k as Zoom),
+                            );
                         }
                     }
                 }
@@ -588,7 +654,9 @@ impl Store {
             });
         }
         let k = zoom as usize;
-        let z = walk.held[walk.start(k)..walk.at[k].end].iter().fold(walk.at[k].leaves, |z, &(at, _)| join(z, span(k, at)))?;
+        let z = walk.held[walk.start(k)..walk.at[k].end]
+            .iter()
+            .fold(walk.at[k].leaves, |z, &(at, _)| join(z, span(k, at)))?;
         let whole = region((zoom, xy));
         let placed = Aabb {
             min: [whole.min[0], whole.min[1], z[0]],

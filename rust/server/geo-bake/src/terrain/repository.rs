@@ -34,13 +34,19 @@ WHERE t.geom && env.e"
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
 pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
-const _: () = assert!(DRAWN_REACH_U <= crate::coverage::BAKE_REACH, "a tile's rows come from past the bakes' reach");
+const _: () = assert!(
+    DRAWN_REACH_U <= crate::coverage::BAKE_REACH,
+    "a tile's rows come from past the bakes' reach"
+);
 
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
 pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
     let r = mer_from_u(DRAWN_REACH_U);
-    [[min[0] - r, min[1] - r, min[2]], [max[0] + r, max[1] + r, max[2]]]
+    [
+        [min[0] - r, min[1] - r, min[2]],
+        [max[0] + r, max[1] + r, max[2]],
+    ]
 }
 
 /// Four tables, one row shape; `source` says whose vocabulary a row uses.
@@ -80,7 +86,12 @@ WHERE NOT ST_IsEmpty(g)";
 
 /// Every statement a tile's bake runs, in the order `prepare` takes them, so
 /// the catalog check (`coverage.rs` `Overture`) sees each table they read.
-pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, COAST_SQL];
+pub const READS: [&str; 4] = [
+    OVERTURE_BUILDINGS_SQL,
+    OVERTURE_TRANSPORTATION_SQL,
+    OVERTURE_BASE_SQL,
+    COAST_SQL,
+];
 
 pub struct BuildingRow {
     pub gers_id: String,
@@ -129,7 +140,10 @@ pub struct TerrainRepository {
 }
 
 impl TerrainRepository {
-    pub fn prepare(client: &mut Client, raster: Arc<Raster>) -> Result<TerrainRepository, postgres::Error> {
+    pub fn prepare(
+        client: &mut Client,
+        raster: Arc<Raster>,
+    ) -> Result<TerrainRepository, postgres::Error> {
         let [buildings, segments, base, coast] = READS.map(|sql| client.prepare(sql));
         Ok(TerrainRepository {
             raster,
@@ -147,7 +161,11 @@ impl TerrainRepository {
         self.raster.tile_grid(client, tile)
     }
 
-    pub fn fetch_tile_source(&self, client: &mut Client, tile: [i32; 2]) -> Result<TileSource, postgres::Error> {
+    pub fn fetch_tile_source(
+        &self,
+        client: &mut Client,
+        tile: [i32; 2],
+    ) -> Result<TileSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(get_tile_bbox(LEAF_ZOOM, tile));
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
         let wkb = |row: &postgres::Row| -> Box<[u8]> { row.get::<_, &[u8]>("geom_wkb").into() };
@@ -164,9 +182,23 @@ impl TerrainRepository {
                     geom_wkb: wkb(row),
                 })
                 .collect(),
-            parts: client.query(&self.segments, &bbox)?.iter().flat_map(Part::of).collect(),
+            parts: client
+                .query(&self.segments, &bbox)?
+                .iter()
+                .flat_map(Part::of)
+                .collect(),
             base_rows: client
-                .query(&self.base, &[bbox[0], bbox[1], bbox[2], bbox[3], &self.infrastructure, &self.land])?
+                .query(
+                    &self.base,
+                    &[
+                        bbox[0],
+                        bbox[1],
+                        bbox[2],
+                        bbox[3],
+                        &self.infrastructure,
+                        &self.land,
+                    ],
+                )?
                 .iter()
                 .map(|row| BaseRow {
                     source: row.get("source"),

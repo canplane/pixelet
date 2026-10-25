@@ -35,7 +35,10 @@ impl GpuHost {
     }
 
     pub(super) fn get(&self, id: u32) -> &Object {
-        self.objects.get(handle_slot(id) as usize).and_then(Option::as_ref).unwrap_or_else(|| panic!("[gpu] no object {id}"))
+        self.objects
+            .get(handle_slot(id) as usize)
+            .and_then(Option::as_ref)
+            .unwrap_or_else(|| panic!("[gpu] no object {id}"))
     }
 
     pub(super) fn get_mut(&mut self, id: u32) -> &mut Object {
@@ -46,7 +49,9 @@ impl GpuHost {
     }
 
     pub(super) fn take(&mut self, id: u32) -> Option<Object> {
-        self.objects.get_mut(handle_slot(id) as usize).and_then(Option::take)
+        self.objects
+            .get_mut(handle_slot(id) as usize)
+            .and_then(Option::take)
     }
 
     pub(super) fn buffer(&self, id: u32) -> &wgpu::Buffer {

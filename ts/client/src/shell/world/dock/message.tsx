@@ -15,7 +15,15 @@ import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, disabledContent } from "@/shell/ui/theme.ts";
-import { cancelMarker, chatFits, DockMode, draftMarkerWords, markerTextFits, putMarker, useDockStore } from "@/shell/store/dock.ts";
+import {
+  cancelMarker,
+  chatFits,
+  DockMode,
+  draftMarkerWords,
+  markerTextFits,
+  putMarker,
+  useDockStore,
+} from "@/shell/store/dock.ts";
 import { kernel_snapshot } from "@/abi/shell.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { SLOT } from "./strip.tsx";
@@ -71,40 +79,88 @@ export function useMessage(mode: DockMode) {
 
   const canSend = messageText.trim() !== "";
   // A line too long for the kernel is refused whole, never cut.
-  const fits = wording ? markerTextFits(messageText.trim()) : chatFits(messageText.trim());
+  const fits = wording
+    ? markerTextFits(messageText.trim())
+    : chatFits(messageText.trim());
 
-  return { wording, messageText, isSending, inputRef, changeText, sendMessage, canSend, fits };
+  return {
+    wording,
+    messageText,
+    isSending,
+    inputRef,
+    changeText,
+    sendMessage,
+    canSend,
+    fits,
+  };
 }
 
-export function Message({ message, width }: { message: ReturnType<typeof useMessage>; width: f64 }) {
+export function Message(
+  { message, width }: { message: ReturnType<typeof useMessage>; width: f64 },
+) {
   const { t } = useTranslation();
-  const { wording, messageText, isSending, inputRef, changeText, sendMessage, canSend, fits } = message;
+  const {
+    wording,
+    messageText,
+    isSending,
+    inputRef,
+    changeText,
+    sendMessage,
+    canSend,
+    fits,
+  } = message;
 
   return (
     <View style={[styles.message, { width }]}>
       <View style={styles.messageIcon}>
         <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
       </View>
-      <Motion to={{ opacity: isSending ? 0 : 1 }} transition={FADE} style={styles.fieldFill}>
+      <Motion
+        to={{ opacity: isSending ? 0 : 1 }}
+        transition={FADE}
+        style={styles.fieldFill}
+      >
         <TextField
           ref={inputRef}
           value={messageText}
           onChangeText={changeText}
           onSubmit={sendMessage}
-          placeholder={wording ? t("world.dock.pin_placeholder") : t("world.dock.message_placeholder")}
+          placeholder={wording
+            ? t("world.dock.pin_placeholder")
+            : t("world.dock.message_placeholder")}
           placeholderTextColor={LABEL.placeholder}
           style={styles.messageInput}
         />
       </Motion>
-      <Presence show={canSend} from={{ opacity: 0, scale: 0.5 }} exit={{ opacity: 0 }} transition={SNAP} style={styles.slot}>
+      <Presence
+        show={canSend}
+        from={{ opacity: 0, scale: 0.5 }}
+        exit={{ opacity: 0 }}
+        transition={SNAP}
+        style={styles.slot}
+      >
         <Pressable
           onPress={sendMessage}
           disabled={isSending || !fits}
           accessibilityRole="button"
-          accessibilityLabel={wording ? t("world.dock.pin_done") : t("world.dock.send")}
-          style={({ pressed }) => [styles.send, wording && styles.confirm, pressed && styles.sendPressed, !fits && styles.sendRefused]}
+          accessibilityLabel={wording
+            ? t("world.dock.pin_done")
+            : t("world.dock.send")}
+          style={(
+            { pressed },
+          ) => [
+            styles.send,
+            wording && styles.confirm,
+            pressed && styles.sendPressed,
+            !fits && styles.sendRefused,
+          ]}
         >
-          <Glyph glyph={wording ? "checkmark" : "arrow.up"} size={chrome.glyph} weight="bold" color={color.white} />
+          <Glyph
+            glyph={wording ? "checkmark" : "arrow.up"}
+            size={chrome.glyph}
+            weight="bold"
+            color={color.white}
+          />
         </Pressable>
       </Presence>
     </View>
@@ -112,11 +168,28 @@ export function Message({ message, width }: { message: ReturnType<typeof useMess
 }
 
 const styles = StyleSheet.create({
-  message: { flexDirection: "row", alignItems: "center", height: chrome.control, paddingRight: (chrome.control - chrome.target) / 2 },
-  messageIcon: { width: chrome.control, height: chrome.control, alignItems: "center", justifyContent: "center" },
+  message: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: chrome.control,
+    paddingRight: (chrome.control - chrome.target) / 2,
+  },
+  messageIcon: {
+    width: chrome.control,
+    height: chrome.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   fieldFill: { flex: 1, minWidth: 0 },
   messageInput: { width: "100%", color: LABEL.primary },
-  send: { width: chrome.selection, height: chrome.selection, borderRadius: chrome.selection / 2, alignItems: "center", justifyContent: "center", backgroundColor: color.send },
+  send: {
+    width: chrome.selection,
+    height: chrome.selection,
+    borderRadius: chrome.selection / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.send,
+  },
   confirm: { backgroundColor: color.confirm },
   sendPressed: { opacity: 0.7 },
   sendRefused: { opacity: disabledContent },

@@ -6,11 +6,20 @@ use pxl_spec_core::ways;
 use crate::procedural::Frame;
 
 /// A leaf tile's frame at the origin: a u a cell.
-const NOWHERE: Frame = Frame { corner: [0.0, 0.0], cell: 1.0 };
+const NOWHERE: Frame = Frame {
+    corner: [0.0, 0.0],
+    cell: 1.0,
+};
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t, 0)), (width_cells * POINT_SCALE) as u8, 3, Form::Bridge, 0);
+    b.push(
+        points.iter().zip(tops).map(|(&p, &t)| (p, t, 0)),
+        (width_cells * POINT_SCALE) as u8,
+        3,
+        Form::Bridge,
+        0,
+    );
     b.finish()
 }
 
@@ -22,7 +31,11 @@ fn a_narrow_line_along_a_diagonal_is_one_band() {
         covered.insert((x, y));
     });
     for k in 0..39 {
-        assert!(covered.contains(&(k + 1, k)) || covered.contains(&(k, k + 1)), "cells {k} and {} meet only at a corner", k + 1);
+        assert!(
+            covered.contains(&(k + 1, k)) || covered.contains(&(k, k + 1)),
+            "cells {k} and {} meet only at a corner",
+            k + 1
+        );
     }
 }
 
@@ -58,16 +71,38 @@ fn each_form_is_drawn_from_its_surface() {
     };
     let no = [0, 0];
     let on = |c: Crossing, ground: i32, cpm: f32| ways::occupies(&c, ground, cpm);
-    let at = |what: Occupy, span: [i32; 2]| Occupies { what, span, pier: [0, 0] };
+    let at = |what: Occupy, span: [i32; 2]| Occupies {
+        what,
+        span,
+        pier: [0, 0],
+    };
     // Two cells a metre: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
     let cpm = 2.0;
-    assert_eq!(on(over(Form::Bridge, 30.0), 10, cpm), at(Occupy::Over, [26, 30]));
-    assert_eq!(on(over(Form::Tunnel, 10.0), 40, cpm), at(Occupy::Under, [10, 13]));
+    assert_eq!(
+        on(over(Form::Bridge, 30.0), 10, cpm),
+        at(Occupy::Over, [26, 30])
+    );
+    assert_eq!(
+        on(over(Form::Tunnel, 10.0), 40, cpm),
+        at(Occupy::Under, [10, 13])
+    );
     // a way on the ground moves the ground: filled up to it, cut down to it
-    assert_eq!(on(over(Form::Approach, 14.0), 10, cpm), at(Occupy::Over, [10, 14]));
-    assert_eq!(on(over(Form::Approach, 20.0), 10, cpm), at(Occupy::Over, [10, 20]));
-    assert_eq!(on(over(Form::Approach, 10.0), 14, cpm), at(Occupy::Under, [10, 14]));
-    assert_eq!(on(over(Form::Approach, 10.0), 10, cpm), at(Occupy::Grade, no));
+    assert_eq!(
+        on(over(Form::Approach, 14.0), 10, cpm),
+        at(Occupy::Over, [10, 14])
+    );
+    assert_eq!(
+        on(over(Form::Approach, 20.0), 10, cpm),
+        at(Occupy::Over, [10, 20])
+    );
+    assert_eq!(
+        on(over(Form::Approach, 10.0), 14, cpm),
+        at(Occupy::Under, [10, 14])
+    );
+    assert_eq!(
+        on(over(Form::Approach, 10.0), 10, cpm),
+        at(Occupy::Grade, no)
+    );
     // a surface falling 8 cells across a column is solid over all of it, and a bore clear over all of it
     let steep = Crossing {
         low: 22.0,

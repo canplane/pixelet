@@ -9,7 +9,9 @@
 //! checks the slot's format). schema.json gives a number out once, so what
 //! was kept never reads as another setting.
 
-pub use crate::domain::view::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::domain::view::setting::schema_spec::{
+    AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings,
+};
 use crate::sys::io::file::{self, Kept, KeptFile};
 use xpute_guest::global::Global;
 
@@ -134,7 +136,9 @@ pub fn settings_load_step() -> bool {
     if settings_loaded() {
         return false;
     }
-    let Some(kept) = file::take_kept(Kept::Settings) else { return false };
+    let Some(kept) = file::take_kept(Kept::Settings) else {
+        return false;
+    };
     let (s, now) = match kept {
         KeptFile::Bytes(bytes) => (read_kept(&bytes), Load::Loaded),
         KeptFile::None => (Settings::DEFAULT, Load::Loaded),

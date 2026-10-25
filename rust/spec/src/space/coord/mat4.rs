@@ -44,10 +44,18 @@ pub fn invert<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
     let (n12, n22, n32, n42) = (m[4], m[5], m[6], m[7]);
     let (n13, n23, n33, n43) = (m[8], m[9], m[10], m[11]);
     let (n14, n24, n34, n44) = (m[12], m[13], m[14], m[15]);
-    let t11 = n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44 + n22 * n33 * n44;
-    let t12 = n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44 - n12 * n33 * n44;
-    let t13 = n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44 + n12 * n23 * n44;
-    let t14 = n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34;
+    let t11 =
+        n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44
+            + n22 * n33 * n44;
+    let t12 =
+        n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44
+            - n12 * n33 * n44;
+    let t13 =
+        n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44
+            + n12 * n23 * n44;
+    let t14 =
+        n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34
+            - n12 * n23 * n34;
     let det = n11 * t11 + n21 * t12 + n31 * t13 + n41 * t14;
     if det == 0.0 {
         out.fill(0.0);
@@ -55,21 +63,57 @@ pub fn invert<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
     }
     let d = 1.0 / det;
     out[0] = t11 * d;
-    out[1] = (n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44 - n21 * n33 * n44) * d;
-    out[2] = (n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44 + n21 * n32 * n44) * d;
-    out[3] = (n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43) * d;
+    out[1] =
+        (n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44
+            - n21 * n33 * n44)
+            * d;
+    out[2] =
+        (n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44
+            + n21 * n32 * n44)
+            * d;
+    out[3] =
+        (n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43
+            - n21 * n32 * n43)
+            * d;
     out[4] = t12 * d;
-    out[5] = (n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44 + n11 * n33 * n44) * d;
-    out[6] = (n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44 - n11 * n32 * n44) * d;
-    out[7] = (n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43) * d;
+    out[5] =
+        (n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44
+            + n11 * n33 * n44)
+            * d;
+    out[6] =
+        (n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44
+            - n11 * n32 * n44)
+            * d;
+    out[7] =
+        (n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43
+            + n11 * n32 * n43)
+            * d;
     out[8] = t13 * d;
-    out[9] = (n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44 - n11 * n23 * n44) * d;
-    out[10] = (n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44 + n11 * n22 * n44) * d;
-    out[11] = (n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43) * d;
+    out[9] =
+        (n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44
+            - n11 * n23 * n44)
+            * d;
+    out[10] =
+        (n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44
+            + n11 * n22 * n44)
+            * d;
+    out[11] =
+        (n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43
+            - n11 * n22 * n43)
+            * d;
     out[12] = t14 * d;
-    out[13] = (n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34 + n11 * n23 * n34) * d;
-    out[14] = (n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34 - n11 * n22 * n34) * d;
-    out[15] = (n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33) * d;
+    out[13] =
+        (n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34
+            + n11 * n23 * n34)
+            * d;
+    out[14] =
+        (n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34
+            - n11 * n22 * n34)
+            * d;
+    out[15] =
+        (n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33
+            + n11 * n22 * n33)
+            * d;
     out
 }
 
@@ -151,7 +195,11 @@ pub fn look_at(out: &mut Mat4, eye: V3, target: V3, up: V3) -> &mut Mat4 {
     zx /= l;
     zy /= l;
     zz /= l;
-    let (mut xx, mut xy, mut xz) = (up[1] * zz - up[2] * zy, up[2] * zx - up[0] * zz, up[0] * zy - up[1] * zx);
+    let (mut xx, mut xy, mut xz) = (
+        up[1] * zz - up[2] * zy,
+        up[2] * zx - up[0] * zz,
+        up[0] * zy - up[1] * zx,
+    );
     l = libm::hypot(libm::hypot(xx, xy), xz);
     if l == 0.0 {
         // Looking straight along `up`: any horizontal right will do.
@@ -207,10 +255,20 @@ pub fn transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64
 /// (depth at most 1). Its far plane is at infinity, which holds every point,
 /// so there is none.
 pub fn frustum_planes<'a>(out: &'a mut [f64; 20], m: &Mat4) -> &'a mut [f64; 20] {
-    let rows = [[m[0], m[4], m[8], m[12]], [m[1], m[5], m[9], m[13]], [m[2], m[6], m[10], m[14]], [m[3], m[7], m[11], m[15]]];
+    let rows = [
+        [m[0], m[4], m[8], m[12]],
+        [m[1], m[5], m[9], m[13]],
+        [m[2], m[6], m[10], m[14]],
+        [m[3], m[7], m[11], m[15]],
+    ];
     let w = rows[3];
     let mut put = |k: usize, a: [f64; 4], sign: f64| {
-        let (nx, ny, nz, d) = (w[0] + sign * a[0], w[1] + sign * a[1], w[2] + sign * a[2], w[3] + sign * a[3]);
+        let (nx, ny, nz, d) = (
+            w[0] + sign * a[0],
+            w[1] + sign * a[1],
+            w[2] + sign * a[2],
+            w[3] + sign * a[3],
+        );
         let l = or_one(libm::hypot(libm::hypot(nx, ny), nz));
         out[k * 4] = nx / l;
         out[k * 4 + 1] = ny / l;

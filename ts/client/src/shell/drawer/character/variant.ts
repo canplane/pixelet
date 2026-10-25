@@ -5,7 +5,11 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTINGS } from "@/shell/setting/schema.ts";
-import { Group, groups, PERSON_GENDER_PREFIXES } from "@/shell/catalog/asset/actor.spec.ts";
+import {
+  Group,
+  groups,
+  PERSON_GENDER_PREFIXES,
+} from "@/shell/catalog/asset/actor.spec.ts";
 
 export interface CharacterVariant {
   group: u32;
@@ -14,7 +18,10 @@ export interface CharacterVariant {
   key: string;
 }
 
-function variantsOf(group: u32, keys: Readonly<Record<string, number>>): readonly CharacterVariant[] {
+function variantsOf(
+  group: u32,
+  keys: Readonly<Record<string, number>>,
+): readonly CharacterVariant[] {
   return Object.entries(keys).map(([key, number]) => ({ group, number, key }));
 }
 
@@ -25,16 +32,25 @@ export type Gender = keyof typeof PERSON_GENDER_PREFIXES;
 export const GENDERS = Object.keys(PERSON_GENDER_PREFIXES) as Gender[];
 
 export function personVariantsOf(gender: Gender): readonly CharacterVariant[] {
-  return PERSON_VARIANTS.filter((v) => v.key.startsWith(PERSON_GENDER_PREFIXES[gender]));
+  return PERSON_VARIANTS.filter((v) =>
+    v.key.startsWith(PERSON_GENDER_PREFIXES[gender])
+  );
 }
 
 export function genderOf(variant: CharacterVariant): Gender {
-  return GENDERS.find((g) => variant.key.startsWith(PERSON_GENDER_PREFIXES[g])) ?? GENDERS[0];
+  return GENDERS.find((g) =>
+    variant.key.startsWith(PERSON_GENDER_PREFIXES[g])
+  ) ?? GENDERS[0];
 }
 
 /** The variant numbered `number`, else the setting's default. */
-function numbered(variants: readonly CharacterVariant[], number: number, fallback: number): CharacterVariant {
-  return variants.find((v) => v.number === number) ?? variants.find((v) => v.number === fallback)!;
+function numbered(
+  variants: readonly CharacterVariant[],
+  number: number,
+  fallback: number,
+): CharacterVariant {
+  return variants.find((v) => v.number === number) ??
+    variants.find((v) => v.number === fallback)!;
 }
 
 export function personVariant(number: number): CharacterVariant {

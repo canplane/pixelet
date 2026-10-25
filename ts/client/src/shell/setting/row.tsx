@@ -8,7 +8,15 @@ import { ToggleRow } from "./toggle-row.tsx";
 
 import type { SettingCost } from "@/shell/setting/schema.ts";
 import { Glyph } from "@/shell/ui/glyph.tsx";
-import { alpha, chrome, color, hairline, textScale, textStyle, weight } from "@/shell/ui/theme.ts";
+import {
+  alpha,
+  chrome,
+  color,
+  hairline,
+  textScale,
+  textStyle,
+  weight,
+} from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 
@@ -24,7 +32,12 @@ const COST_COLOR: Record<SettingCost, string> = {
 function Badge({ text, tint }: { text: string; tint: string }) {
   return (
     <View style={[styles.badge, { backgroundColor: alpha(tint, 0.15) }]}>
-      <Text maxFontSizeMultiplier={textScale.mark} style={[styles.badgeText, { color: tint }]}>{text}</Text>
+      <Text
+        maxFontSizeMultiplier={textScale.mark}
+        style={[styles.badgeText, { color: tint }]}
+      >
+        {text}
+      </Text>
     </View>
   );
 }
@@ -38,7 +51,14 @@ function Badges({ cost, dev }: { cost?: SettingCost; dev?: boolean }) {
   );
 }
 
-function Described({ label, description, cost, dev }: { label: string; description?: string; cost?: SettingCost; dev?: boolean }) {
+function Described(
+  { label, description, cost, dev }: {
+    label: string;
+    description?: string;
+    cost?: SettingCost;
+    dev?: boolean;
+  },
+) {
   return (
     <View style={styles.described}>
       <View style={styles.nameLine}>
@@ -63,8 +83,17 @@ interface SettingRowProps {
 export function SettingRow(props: SettingRowProps) {
   const { label, description, active, onChange, cost, dev } = props;
   return (
-    <ToggleRow value={active} onValueChange={onChange} style={[styles.row, styles.bleed]}>
-      <Described label={label} description={description} cost={cost} dev={dev} />
+    <ToggleRow
+      value={active}
+      onValueChange={onChange}
+      style={[styles.row, styles.bleed]}
+    >
+      <Described
+        label={label}
+        description={description}
+        cost={cost}
+        dev={dev}
+      />
     </ToggleRow>
   );
 }
@@ -80,14 +109,27 @@ interface SettingGroupProps {
 export function SettingGroup(props: SettingGroupProps) {
   const { label, description, cost, dev, children } = props;
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.group, styles.bleed]}>
+    <View
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label}
+      style={[styles.group, styles.bleed]}
+    >
       <View style={styles.legendLine}>
         <View style={styles.legend}>
-          <Text maxFontSizeMultiplier={textScale.chrome} style={styles.legendText}>{label}</Text>
+          <Text
+            maxFontSizeMultiplier={textScale.chrome}
+            style={styles.legendText}
+          >
+            {label}
+          </Text>
           <Badges cost={cost} dev={dev} />
         </View>
       </View>
-      {description && <Text style={[settingText.small, styles.groupDescription]}>{description}</Text>}
+      {description && (
+        <Text style={[settingText.small, styles.groupDescription]}>
+          {description}
+        </Text>
+      )}
       <View style={styles.answers}>{children}</View>
     </View>
   );
@@ -106,9 +148,28 @@ interface SettingChoiceRowProps {
 export function SettingChoiceRow(props: SettingChoiceRowProps) {
   const { label, description, selected, onSelect, cost, dev } = props;
   return (
-    <Pressable onPress={onSelect} accessibilityRole="radio" aria-checked={selected} style={styles.row}>
-      <Described label={label} description={description} cost={cost} dev={dev} />
-      <View style={styles.check}>{selected && <Glyph glyph="checkmark" size={chrome.glyph} weight="semibold" color={color.chosen} />}</View>
+    <Pressable
+      onPress={onSelect}
+      accessibilityRole="radio"
+      aria-checked={selected}
+      style={styles.row}
+    >
+      <Described
+        label={label}
+        description={description}
+        cost={cost}
+        dev={dev}
+      />
+      <View style={styles.check}>
+        {selected && (
+          <Glyph
+            glyph="checkmark"
+            size={chrome.glyph}
+            weight="semibold"
+            color={color.chosen}
+          />
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -146,31 +207,88 @@ export function Prose({ children }: { children: ReactNode }) {
   return <View style={styles.prose}>{children}</View>;
 }
 
-export function Link({ href, children }: { href: string; children?: ReactNode }) {
-  return <Text style={styles.link} onPress={() => Linking.openURL(href)}>{children}</Text>;
+export function Link(
+  { href, children }: { href: string; children?: ReactNode },
+) {
+  return (
+    <Text style={styles.link} onPress={() => Linking.openURL(href)}>
+      {children}
+    </Text>
+  );
 }
 
 export const settingText = StyleSheet.create({
   small: { ...textStyle.caption, color: LABEL.secondary },
-  faint: { ...textStyle.caption2, fontWeight: weight.regular, color: LABEL.secondary },
+  faint: {
+    ...textStyle.caption2,
+    fontWeight: weight.regular,
+    color: LABEL.secondary,
+  },
 });
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: INSET, paddingVertical: 12, borderRadius: 8 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: INSET,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
   bleed: { marginHorizontal: -INSET },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   name: { ...textStyle.body, color: LABEL.primary },
 
-  badge: { height: 16, justifyContent: "center", borderRadius: 8, paddingHorizontal: 4 },
-  badgeText: { ...textStyle.caption2, fontSize: 9, lineHeight: 10, letterSpacing: 0.4 },
+  badge: {
+    height: 16,
+    justifyContent: "center",
+    borderRadius: 8,
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    ...textStyle.caption2,
+    fontSize: 9,
+    lineHeight: 10,
+    letterSpacing: 0.4,
+  },
 
-  group: { marginTop: 16, marginBottom: 12, borderWidth: GROUP_BORDER, borderColor: hairline, borderRadius: 12, padding: 4, paddingTop: 12 },
+  group: {
+    marginTop: 16,
+    marginBottom: 12,
+    borderWidth: GROUP_BORDER,
+    borderColor: hairline,
+    borderRadius: 12,
+    padding: 4,
+    paddingTop: 12,
+  },
   // The border's own line, so the legend centers on it at any text size.
-  legendLine: { position: "absolute", top: -GROUP_BORDER, left: 8, height: GROUP_BORDER, flexDirection: "row", alignItems: "center" },
-  legend: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, backgroundColor: color.ground },
-  legendText: { ...textStyle.caption, fontWeight: weight.medium, color: LABEL.primary },
-  groupDescription: { paddingHorizontal: INSET, paddingTop: 4, paddingBottom: 4 },
+  legendLine: {
+    position: "absolute",
+    top: -GROUP_BORDER,
+    left: 8,
+    height: GROUP_BORDER,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  legend: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+    backgroundColor: color.ground,
+  },
+  legendText: {
+    ...textStyle.caption,
+    fontWeight: weight.medium,
+    color: LABEL.primary,
+  },
+  groupDescription: {
+    paddingHorizontal: INSET,
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
   answers: { gap: 4 },
 
   check: { width: chrome.glyph, height: chrome.glyph, flexShrink: 0 },

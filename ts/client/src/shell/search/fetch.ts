@@ -28,22 +28,32 @@ export interface SearchResult {
 }
 
 /** Always the live API: free-text search has no page key to bake ahead. */
-export async function fetchSearch(query: string, opts?: { near?: { lon: f64; lat: f64 }; signal?: AbortSignal }): Promise<SearchResult[]> {
+export async function fetchSearch(
+  query: string,
+  opts?: { near?: { lon: f64; lat: f64 }; signal?: AbortSignal },
+): Promise<SearchResult[]> {
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
-  const res = await bracket.origin.get(`${SEARCH_URL}?${params.toString()}`, opts?.signal);
+  const res = await bracket.origin.get(
+    `${SEARCH_URL}?${params.toString()}`,
+    opts?.signal,
+  );
   if (!res.ok) {
     // A refusal's body is not read: let go, not held until collected.
     await res.body?.cancel();
     throw new Error(`[search] http ${res.status}`);
   }
-  const results = await res.json() as (Omit<SearchResult, "context"> & { context: WirePart[] })[];
+  const results = await res
+    .json() as (Omit<SearchResult, "context"> & { context: WirePart[] })[];
   return results.map((r) => ({ ...r, context: r.context.flatMap(namePart) }));
 }
 
 /** None for a subtype newer than this client. */
 function namePart({ subtype, approx, ...named }: WirePart): NamePart[] {
-  const number = (DIVISION_SUBTYPE as Record<string, number>)[subtype.toUpperCase()];
-  return number === undefined ? [] : [{ ...named, subtype: number, area: !approx }];
+  const number =
+    (DIVISION_SUBTYPE as Record<string, number>)[subtype.toUpperCase()];
+  return number === undefined
+    ? []
+    : [{ ...named, subtype: number, area: !approx }];
 }

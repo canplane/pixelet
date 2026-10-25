@@ -11,7 +11,11 @@
     "lib": ["esnext", "dom", "dom.iterable", "deno.ns"],
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "types": ["@pxl/client/@types", "npm:@types/react@^19", "npm:@webgpu/types@^0.1.69"]
+    "types": [
+      "@pxl/client/@types",
+      "npm:@types/react@^19",
+      "npm:@webgpu/types@^0.1.69"
+    ]
   },
 
   "imports": {

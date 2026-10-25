@@ -18,8 +18,15 @@ export function ChatLog() {
   return (
     <View style={styles.lines}>
       {chatLines.map((line, i) => (
-        <View key={line.id} style={[styles.line, { opacity: 0.4 + 0.6 * ((i + 1) / chatLines.length) }]}>
-          <Text style={[styles.text, styles.self]}>{t("world.chat.self_label")}</Text>
+        <View
+          key={line.id}
+          style={[styles.line, {
+            opacity: 0.4 + 0.6 * ((i + 1) / chatLines.length),
+          }]}
+        >
+          <Text style={[styles.text, styles.self]}>
+            {t("world.chat.self_label")}
+          </Text>
           <Text style={[styles.text, styles.said]}>{line.text}</Text>
         </View>
       ))}
@@ -29,7 +36,12 @@ export function ChatLog() {
 
 const styles = StyleSheet.create({
   lines: { ...cornerCard, alignItems: "flex-start", gap: 4 },
-  line: { flexDirection: "row", alignItems: "baseline", gap: 8, maxWidth: "100%" },
+  line: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    maxWidth: "100%",
+  },
   text: {
     ...textStyle.caption,
     fontWeight: weight.semibold,

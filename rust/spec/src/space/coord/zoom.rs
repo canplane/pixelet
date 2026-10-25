@@ -86,7 +86,10 @@ pub fn base_of(zoom: Zoom, index: [i32; 3]) -> Q3 {
 pub fn cube(zoom: Zoom, index: [i32; 3]) -> Aabb {
     let side = units(zoom);
     let min = index.map(|c| f64::from(c) * side);
-    Aabb { min, max: min.map(|v| v + side) }
+    Aabb {
+        min,
+        max: min.map(|v| v + side),
+    }
 }
 
 #[cfg(test)]

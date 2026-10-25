@@ -24,10 +24,20 @@ import type { Guest } from "@xpute/host/host.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
-const CARGO_TARGET = resolve(join(ROOT, "rust"), Deno.env.get("CARGO_TARGET_DIR") ?? "target");
+const CARGO_TARGET = resolve(
+  join(ROOT, "rust"),
+  Deno.env.get("CARGO_TARGET_DIR") ?? "target",
+);
 
 function library(dir: string, name: string): string {
-  return join(dir, Deno.build.os === "darwin" ? `lib${name}.dylib` : Deno.build.os === "windows" ? `${name}.dll` : `lib${name}.so`);
+  return join(
+    dir,
+    Deno.build.os === "darwin"
+      ? `lib${name}.dylib`
+      : Deno.build.os === "windows"
+      ? `${name}.dll`
+      : `lib${name}.so`,
+  );
 }
 
 const SYMBOLS = {
@@ -52,14 +62,24 @@ interface Opener {
 
 function native(path: string): Opener {
   const lib = Deno.dlopen(path, SYMBOLS);
-  const now = new Deno.UnsafeCallback({ parameters: [], result: "f64" } as const, () => clock_ms);
+  const now = new Deno.UnsafeCallback(
+    { parameters: [], result: "f64" } as const,
+    () => clock_ms,
+  );
   return {
     open() {
       // Words of eight bytes, so the region is 8-aligned, as a guest asks.
       const memory = new Float64Array(MEMORY_BYTES / 8).buffer;
       const bytes = new Uint8Array(memory);
-      const directory_at = lib.symbols.xpute_conformance_boot(bytes, now.pointer);
-      return { memory, directory_at, intr: (quota) => lib.symbols.xpute_conformance_intr(bytes, quota) };
+      const directory_at = lib.symbols.xpute_conformance_boot(
+        bytes,
+        now.pointer,
+      );
+      return {
+        memory,
+        directory_at,
+        intr: (quota) => lib.symbols.xpute_conformance_intr(bytes, quota),
+      };
     },
     close() {
       now.close();
@@ -70,25 +90,45 @@ function native(path: string): Opener {
 
 function module(path: string): Opener {
   const compiled = new WebAssembly.Module(Deno.readFileSync(path));
-  const imports = WebAssembly.Module.imports(compiled).map((i) => `${i.module}.${i.name}`).sort();
-  assertEquals(imports, MODULE_IMPORTS, `${path}: what the module reaches its host through`);
+  const imports = WebAssembly.Module.imports(compiled).map((i) =>
+    `${i.module}.${i.name}`
+  ).sort();
+  assertEquals(
+    imports,
+    MODULE_IMPORTS,
+    `${path}: what the module reaches its host through`,
+  );
   return {
     open() {
       const pages = MODULE_BYTES >> 16;
       const memory = new WebAssembly.Memory({ initial: pages, maximum: pages });
-      const instance = new WebAssembly.Instance(compiled, { env: { memory, now: () => clock_ms } });
-      const exports = instance.exports as { xpute_conformance_boot(): number; intr(quota_ms: number): number };
+      const instance = new WebAssembly.Instance(compiled, {
+        env: { memory, now: () => clock_ms },
+      });
+      const exports = instance.exports as {
+        xpute_conformance_boot(): number;
+        intr(quota_ms: number): number;
+      };
       const directory_at = exports.xpute_conformance_boot() >>> 0;
-      return { memory: memory.buffer as ArrayBuffer, directory_at, intr: (quota) => exports.intr(quota) };
+      return {
+        memory: memory.buffer as ArrayBuffer,
+        directory_at,
+        intr: (quota) => exports.intr(quota),
+      };
     },
     close() {},
   };
 }
 
 const GUESTS: Record<string, () => Opener> = {
-  "rust native": () => native(library(join(CARGO_TARGET, "debug"), "xpute_conformance")),
-  "cpp native": () => native(library(join(ROOT, "cpp/target"), "xpute_conformance")),
-  "rust wasm": () => module(join(CARGO_TARGET, "wasm32-unknown-unknown/debug/xpute_conformance.wasm")),
+  "rust native": () =>
+    native(library(join(CARGO_TARGET, "debug"), "xpute_conformance")),
+  "cpp native": () =>
+    native(library(join(ROOT, "cpp/target"), "xpute_conformance")),
+  "rust wasm": () =>
+    module(
+      join(CARGO_TARGET, "wasm32-unknown-unknown/debug/xpute_conformance.wasm"),
+    ),
   "cpp wasm": () => module(join(ROOT, "cpp/target/xpute_conformance.wasm")),
 };
 
@@ -130,11 +170,17 @@ class Host {
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
     let packet: PacketWriter | null = null;
     if (args.length > 0) {
-      assert(this.sq.write(this.writer, args.length), "a full ring takes no packet");
+      assert(
+        this.sq.write(this.writer, args.length),
+        "a full ring takes no packet",
+      );
       for (const a of args) this.writer.u32(a);
       packet = this.writer;
     }
-    assertEquals(this.sq.push(tag, command, ack ? frame.ACKREQ : 0, packet), Errno.OK);
+    assertEquals(
+      this.sq.push(tag, command, ack ? frame.ACKREQ : 0, packet),
+      Errno.OK,
+    );
   }
 
   ring(quota_ms: number): Turn {
@@ -143,7 +189,12 @@ class Host {
     each_record(this.guest.memory, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
     for (let at = this.cq.peek(); at >= 0; at = this.cq.peek()) {
-      completions.push({ tag: this.cq.tag(at), cmd: this.cq.cmd(at), reply: (this.cq.flags(at) & frame.RES) !== 0, result: this.cq.result(at) });
+      completions.push({
+        tag: this.cq.tag(at),
+        cmd: this.cq.cmd(at),
+        reply: (this.cq.flags(at) & frame.RES) !== 0,
+        result: this.cq.result(at),
+      });
       this.cq.advance();
     }
     return { completions, stream, wake };
@@ -160,12 +211,19 @@ class Host {
 }
 
 function key_number(name: string): number {
-  const keys: Record<string, number> = { SQ: directory_key.SQ, CQ: directory_key.CQ, STREAM: key.STREAM };
+  const keys: Record<string, number> = {
+    SQ: directory_key.SQ,
+    CQ: directory_key.CQ,
+    STREAM: key.STREAM,
+  };
   if (!(name in keys)) throw new Error(`no key ${name}`);
   return keys[name];
 }
 
-const CMD_NAMES = [...Object.entries(cmd).filter(([, v]) => typeof v === "number"), ["SYS_OPENED", Command.SYS_OPENED]] as [string, number][];
+const CMD_NAMES = [
+  ...Object.entries(cmd).filter(([, v]) => typeof v === "number"),
+  ["SYS_OPENED", Command.SYS_OPENED],
+] as [string, number][];
 
 function cmd_number(name: string): number {
   const found = CMD_NAMES.find(([n]) => n === name);
@@ -176,7 +234,8 @@ function cmd_number(name: string): number {
 }
 
 function cmd_name(n: number): string {
-  return CMD_NAMES.find(([, v]) => v === n)?.[0] ?? `0x${n.toString(16).padStart(4, "0")}`;
+  return CMD_NAMES.find(([, v]) => v === n)?.[0] ??
+    `0x${n.toString(16).padStart(4, "0")}`;
 }
 
 /** A completion ring's sequence as a trace writes it: a reply TAG:CMD=RESULT,
@@ -211,20 +270,41 @@ function render_stream(ops: number[]): string {
 }
 
 /** A result written `$n` binds on first sight and must match after. */
-function expect(seen: string, said: string, vars: Map<string, number>, what: string): void {
+function expect(
+  seen: string,
+  said: string,
+  vars: Map<string, number>,
+  what: string,
+): void {
   const seen_tokens = seen.split(" ");
   const said_tokens = said.split(" ");
-  assertEquals(seen_tokens.length, said_tokens.length, `${what}: saw ${seen}, the trace says ${said}`);
+  assertEquals(
+    seen_tokens.length,
+    said_tokens.length,
+    `${what}: saw ${seen}, the trace says ${said}`,
+  );
   seen_tokens.forEach((seen_token, i) => {
     const said_token = said_tokens[i];
     const [seen_head, value] = seen_token.split("=");
     const [said_head, v] = said_token.split("=");
     if (v !== undefined && v.startsWith("$") && value !== undefined) {
-      assertEquals(seen_head, said_head, `${what}: saw ${seen}, the trace says ${said}`);
+      assertEquals(
+        seen_head,
+        said_head,
+        `${what}: saw ${seen}, the trace says ${said}`,
+      );
       if (!vars.has(v)) vars.set(v, Number(value));
-      assertEquals(vars.get(v), Number(value), `${what}: ${v} again, and not what it was`);
+      assertEquals(
+        vars.get(v),
+        Number(value),
+        `${what}: ${v} again, and not what it was`,
+      );
     } else {
-      assertEquals(seen_token, said_token, `${what}: saw ${seen}, the trace says ${said}`);
+      assertEquals(
+        seen_token,
+        said_token,
+        `${what}: saw ${seen}, the trace says ${said}`,
+      );
     }
   });
 }
@@ -269,14 +349,26 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
     const step = g.s(`${trace}.step.${i}`).split(" ");
     switch (step[0]) {
       case "submit":
-        host.submit(Number(step[1]), cmd_number(step[2]), step[3] === "ack", step.slice(4).map((t) => value(t, vars)));
+        host.submit(
+          Number(step[1]),
+          cmd_number(step[2]),
+          step[3] === "ack",
+          step.slice(4).map((t) => value(t, vars)),
+        );
         break;
       case "ring": {
         // A turn is held to the trace as soon as it is seen, so the results
         // it binds can be named by the steps after it.
         const turn = host.ring(Number(step[1]));
         const at = `${trace}.turn.${turns.length}.completions`;
-        if (g.has(at)) expect(render_completions(turn.completions), g.s(at), vars, `${name} turn ${turns.length}`);
+        if (g.has(at)) {
+          expect(
+            render_completions(turn.completions),
+            g.s(at),
+            vars,
+            `${name} turn ${turns.length}`,
+          );
+        }
         turns.push(turn);
         break;
       }
@@ -287,7 +379,10 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
         for (;;) {
           turns.push(host.ring(0));
           if (host.sq.len === 0) break;
-          assert(turns.length < MOST_SETTLE_TURNS, `${name}: the guest stopped applying what waits`);
+          assert(
+            turns.length < MOST_SETTLE_TURNS,
+            `${name}: the guest stopped applying what waits`,
+          );
         }
         break;
       default:
@@ -296,22 +391,73 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   }
   turns.forEach((turn, t) => {
     const at = (what: string) => `${trace}.turn.${t}.${what}`;
-    if (g.has(at("stream"))) assertEquals(render_stream(turn.stream), g.s(at("stream")), `${name} turn ${t}: the stream`);
-    if (g.has(at("wake"))) assertEquals(wake_name(turn.wake), g.s(at("wake")), `${name} turn ${t}: what it asked for next`);
+    if (g.has(at("stream"))) {
+      assertEquals(
+        render_stream(turn.stream),
+        g.s(at("stream")),
+        `${name} turn ${t}: the stream`,
+      );
+    }
+    if (g.has(at("wake"))) {
+      assertEquals(
+        wake_name(turn.wake),
+        g.s(at("wake")),
+        `${name} turn ${t}: what it asked for next`,
+      );
+    }
   });
   const at = (what: string) => `${trace}.${what}`;
-  if (g.has(at("completions"))) assertEquals(render_completions(turns.flatMap((t) => t.completions)), g.s(at("completions")), `${name}: the completion ring`);
-  if (g.has(at("stream"))) assertEquals(render_stream(turns.flatMap((t) => t.stream)), g.s(at("stream")), `${name}: the stream`);
-  if (g.has(at("turns.least"))) assert(turns.length >= g.u32(at("turns.least")), `${name}: ${turns.length} turns`);
+  if (g.has(at("completions"))) {
+    assertEquals(
+      render_completions(turns.flatMap((t) => t.completions)),
+      g.s(at("completions")),
+      `${name}: the completion ring`,
+    );
+  }
+  if (g.has(at("stream"))) {
+    assertEquals(
+      render_stream(turns.flatMap((t) => t.stream)),
+      g.s(at("stream")),
+      `${name}: the stream`,
+    );
+  }
+  if (g.has(at("turns.least"))) {
+    assert(
+      turns.length >= g.u32(at("turns.least")),
+      `${name}: ${turns.length} turns`,
+    );
+  }
   if (g.has(at("wake.before_last"))) {
-    turns.slice(0, -1).forEach((turn, t) => assertEquals(wake_name(turn.wake), g.s(at("wake.before_last")), `${name} turn ${t}: what it asked for next`));
+    turns.slice(0, -1).forEach((turn, t) =>
+      assertEquals(
+        wake_name(turn.wake),
+        g.s(at("wake.before_last")),
+        `${name} turn ${t}: what it asked for next`,
+      )
+    );
   }
-  if (g.has(at("wake.last"))) assertEquals(wake_name(turns[turns.length - 1].wake), g.s(at("wake.last")), `${name}: what the last turn asked for`);
-  for (let r = 0; g.has(at(`relation.${r}`)); r++) relation(g.s(at(`relation.${r}`)), vars, name);
+  if (g.has(at("wake.last"))) {
+    assertEquals(
+      wake_name(turns[turns.length - 1].wake),
+      g.s(at("wake.last")),
+      `${name}: what the last turn asked for`,
+    );
+  }
+  for (let r = 0; g.has(at(`relation.${r}`)); r++) {
+    relation(g.s(at(`relation.${r}`)), vars, name);
+  }
   if (g.has(at("directory.keys"))) {
-    for (const k of g.s(at("directory.keys")).split(" ")) assert(host.names(key_number(k)), `${name}: the directory names no ${k}`);
+    for (const k of g.s(at("directory.keys")).split(" ")) {
+      assert(host.names(key_number(k)), `${name}: the directory names no ${k}`);
+    }
   }
-  if (g.has(at("directory.reserved"))) assertEquals(host.reserved, g.u32(at("directory.reserved")), `${name}: the directory's reserved word`);
+  if (g.has(at("directory.reserved"))) {
+    assertEquals(
+      host.reserved,
+      g.u32(at("directory.reserved")),
+      `${name}: the directory's reserved word`,
+    );
+  }
 }
 
 for (const trace of ["directory", "door", "handle", "clock", "file"]) {
@@ -320,7 +466,9 @@ for (const trace of ["directory", "door", "handle", "clock", "file"]) {
       const g = await Golden.load(`conformance/${trace}.tsv`);
       const opener = open();
       try {
-        for (const scenario of g.s("scenarios").split(" ")) run(g, guest, opener, scenario);
+        for (const scenario of g.s("scenarios").split(" ")) {
+          run(g, guest, opener, scenario);
+        }
       } finally {
         opener.close();
       }

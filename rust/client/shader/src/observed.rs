@@ -33,23 +33,46 @@ pub(crate) fn seen_put(w: &mut Seen, i: u32, v: u32) {
 /// Word `i` read and written whole, where a walk may race another on it.
 fn seen_load(w: &mut Seen, i: u32) -> u32 {
     // SAFETY: as `seen_at`.
-    unsafe { spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(w.index_mut(i as usize)) }
+    unsafe {
+        spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(
+            w.index_mut(i as usize),
+        )
+    }
 }
 
 fn seen_store(w: &mut Seen, i: u32, v: u32) {
     // SAFETY: as `seen_at`.
-    unsafe { spirv_std::arch::atomic_store::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(w.index_mut(i as usize), v) }
+    unsafe {
+        spirv_std::arch::atomic_store::<
+            u32,
+            { Scope::QueueFamily as u32 },
+            { Semantics::NONE.bits() },
+        >(w.index_mut(i as usize), v)
+    }
 }
 
 fn seen_add(w: &mut Seen, i: u32, v: u32) -> u32 {
     // SAFETY: as `seen_at`.
-    unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(w.index_mut(i as usize), v) }
+    unsafe {
+        spirv_std::arch::atomic_i_add::<
+            u32,
+            { Scope::QueueFamily as u32 },
+            { Semantics::NONE.bits() },
+        >(w.index_mut(i as usize), v)
+    }
 }
 
 /// Word `i` set to `v` where it holds `was`; what it held.
 fn seen_swap(w: &mut Seen, i: u32, was: u32, v: u32) -> u32 {
     // SAFETY: as `seen_at`.
-    unsafe { spirv_std::arch::atomic_compare_exchange::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }, { Semantics::NONE.bits() }>(w.index_mut(i as usize), v, was) }
+    unsafe {
+        spirv_std::arch::atomic_compare_exchange::<
+            u32,
+            { Scope::QueueFamily as u32 },
+            { Semantics::NONE.bits() },
+            { Semantics::NONE.bits() },
+        >(w.index_mut(i as usize), v, was)
+    }
 }
 
 /// The observed pyramid as a pixel's walk reads it, writing nothing
@@ -80,7 +103,10 @@ impl Query for Reading<'_> {
         if *parent == observed::NONE {
             return observed::NONE;
         }
-        let c = seen_at(self.seen, observed::entry_at(*parent) + observed::W_CHILDREN);
+        let c = seen_at(
+            self.seen,
+            observed::entry_at(*parent) + observed::W_CHILDREN,
+        );
         if c == 0 || c == observed::CLAIMED {
             observed::NONE
         } else {
@@ -95,7 +121,10 @@ impl Query for Reading<'_> {
                 let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
                 return In {
                     kind,
-                    block: [seen_at(self.seen, w + observed::W_BLOCK), seen_at(self.seen, w + observed::W_BLOCK + 1)],
+                    block: [
+                        seen_at(self.seen, w + observed::W_BLOCK),
+                        seen_at(self.seen, w + observed::W_BLOCK + 1),
+                    ],
                 };
             }
         }
@@ -143,7 +172,11 @@ impl<L: Looks> Writing<'_, L> {
         }
         let was = seen_swap(self.seen, w, 0, observed::CLAIMED);
         if was != 0 {
-            return if was == observed::CLAIMED { observed::NONE } else { observed::child(was - 1, oct) };
+            return if was == observed::CLAIMED {
+                observed::NONE
+            } else {
+                observed::child(was - 1, oct)
+            };
         }
         let k = seen_add(self.seen, observed::TAKEN, 1);
         if k >= observed::TILES {
@@ -161,7 +194,11 @@ impl<L: Looks> Query for Writing<'_, L> {
     type At = Writ;
 
     fn root(&mut self, node: [i32; 3]) -> Writ {
-        let entry = if observed::keeps(node) { observed::octant(node) } else { observed::NONE };
+        let entry = if observed::keeps(node) {
+            observed::octant(node)
+        } else {
+            observed::NONE
+        };
         Writ {
             entry,
             at: Query::root(&mut self.world, node),
@@ -180,7 +217,14 @@ impl<L: Looks> Query for Writing<'_, L> {
         }
     }
 
-    fn node(&mut self, n: &mut Writ, zoom: u32, c: [i32; 3], asked: [u32; 2], t0: f32) -> In<[u32; 2]> {
+    fn node(
+        &mut self,
+        n: &mut Writ,
+        zoom: u32,
+        c: [i32; 3],
+        asked: [u32; 2],
+        t0: f32,
+    ) -> In<[u32; 2]> {
         let w = observed::entry_at(n.entry);
         if n.entry != observed::NONE {
             let key = seen_load(self.seen, w);
@@ -196,13 +240,20 @@ impl<L: Looks> Query for Writing<'_, L> {
                 let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
                 return In {
                     kind,
-                    block: [seen_at(self.seen, w + observed::W_BLOCK), seen_at(self.seen, w + observed::W_BLOCK + 1)],
+                    block: [
+                        seen_at(self.seen, w + observed::W_BLOCK),
+                        seen_at(self.seen, w + observed::W_BLOCK + 1),
+                    ],
                 };
             }
         }
         let answer = Query::node(&mut self.world, &mut n.at, zoom, c, asked, t0);
         if n.entry != observed::NONE {
-            seen_put(self.seen, w + observed::W_KIND, observed::kind_word(answer.kind));
+            seen_put(
+                self.seen,
+                w + observed::W_KIND,
+                observed::kind_word(answer.kind),
+            );
             seen_put(self.seen, w + observed::W_BLOCK, answer.block[0]);
             seen_put(self.seen, w + observed::W_BLOCK + 1, answer.block[1]);
             let words = n.at.words();
@@ -230,7 +281,10 @@ impl<L: Looks> Query for Writing<'_, L> {
 /// a child read before its own thread cleared it keeps its tile a
 /// forgetting longer, and one read cleared is cleared.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "forget_cs"))]
-pub fn forget_cs(#[spirv(global_invocation_id)] id: UVec3, #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen) {
+pub fn forget_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+) {
     if id.x >= observed::ENTRIES {
         return;
     }
@@ -267,7 +321,9 @@ pub fn forget_cs(#[spirv(global_invocation_id)] id: UVec3, #[spirv(storage_buffe
     let mut oct = 0;
     while oct < 8 {
         let e = observed::entry_at(observed::child(c - 1, oct));
-        kept = kept || seen_load(seen, e + observed::W_KEY) != 0 || seen_load(seen, e + observed::W_CHILDREN) != 0;
+        kept = kept
+            || seen_load(seen, e + observed::W_KEY) != 0
+            || seen_load(seen, e + observed::W_CHILDREN) != 0;
         oct += 1;
     }
     if !kept {

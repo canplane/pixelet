@@ -80,7 +80,12 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     let n = TILE_CELLS as usize;
     let step = side / n as f64;
     let cell_u = units(GROUND.cell_zoom(DIVISION_LEAF));
-    let local = |p: [f64; 2]| [u_from_mer(p[0] - min[0]) / cell_u, u_from_mer(p[1] - min[1]) / cell_u];
+    let local = |p: [f64; 2]| {
+        [
+            u_from_mer(p[0] - min[0]) / cell_u,
+            u_from_mer(p[1] - min[1]) / cell_u,
+        ]
+    };
 
     // ---- the deepest area over each cell; ids numbered as they are met ----
     let mut ids = Numbered::default();
@@ -89,27 +94,48 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         .query(AREAS_SQL, &env)
         .map_err(db)?
         .iter()
-        .map(|r| (r.get::<_, Option<i32>>("depth").unwrap_or(0), r.get("id"), r.get::<_, &[u8]>("geom_wkb").to_vec()))
+        .map(|r| {
+            (
+                r.get::<_, Option<i32>>("depth").unwrap_or(0),
+                r.get("id"),
+                r.get::<_, &[u8]>("geom_wkb").to_vec(),
+            )
+        })
         .collect();
     // shallow first, so the deepest paints last; at one depth the lesser id last, so it wins
     areas.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.cmp(&a.1)));
     let mut cells = vec![NONE; n * n];
     for (_, id, wkb) in &areas {
         let at = ids.of(id);
-        for g in wkb_to_geometries(wkb).into_iter().filter(|g| g.points.len() >= 3) {
+        for g in wkb_to_geometries(wkb)
+            .into_iter()
+            .filter(|g| g.points.len() >= 3)
+        {
             let points: Vec<[f64; 2]> = g.points.iter().map(|p| local([p[0], p[1]])).collect();
-            let holes: Vec<Vec<[f64; 2]>> = g.holes.iter().map(|h| h.iter().map(|p| local([p[0], p[1]])).collect()).collect();
+            let holes: Vec<Vec<[f64; 2]>> = g
+                .holes
+                .iter()
+                .map(|h| h.iter().map(|p| local([p[0], p[1]])).collect())
+                .collect();
             render_polygon(&points, at, &mut cells, &holes, None);
         }
     }
 
     // ---- under the areas, the nearest point of a child, within the reach ----
     let reach = mer_from_u(BAKE_REACH);
-    let ring: [&(dyn ToSql + Sync); 4] = [&(min[0] - reach), &(min[1] - reach), &(max[0] + reach), &(max[1] + reach)];
+    let ring: [&(dyn ToSql + Sync); 4] = [
+        &(min[0] - reach),
+        &(min[1] - reach),
+        &(max[0] + reach),
+        &(max[1] + reach),
+    ];
     let mut children: FnvHashMap<String, Vec<([f64; 2], String)>> = FnvHashMap::default();
     for r in client.query(POINTS_SQL, &ring).map_err(db)? {
         if let Some(parent) = r.get::<_, Option<String>>("parent") {
-            children.entry(parent).or_default().push(([r.get("x"), r.get("y")], r.get("gers_id")));
+            children
+                .entry(parent)
+                .or_default()
+                .push(([r.get("x"), r.get("y")], r.get("gers_id")));
         }
     }
     for kids in children.values_mut() {
@@ -121,7 +147,10 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
             continue;
         }
         let [tx, ty] = GROUND.in_tile(index);
-        let center = [min[0] + (f64::from(tx) + 0.5) * step, min[1] + (f64::from(ty) + 0.5) * step];
+        let center = [
+            min[0] + (f64::from(tx) + 0.5) * step,
+            min[1] + (f64::from(ty) + 0.5) * step,
+        ];
         let mut taken = vec![at];
         while let Some(kids) = children.get(&ids.list[at as usize]) {
             let nearest = kids
@@ -146,9 +175,14 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     let rows = client.query(RECORDS_SQL, &[&ids.list]).map_err(db)?;
     let mut records: FnvHashMap<String, (Division, Option<String>)> = FnvHashMap::default();
     for r in &rows {
-        let Some(subtype) = r.get::<_, Option<&str>>("subtype").and_then(Subtype::named) else { continue };
+        let Some(subtype) = r.get::<_, Option<&str>>("subtype").and_then(Subtype::named) else {
+            continue;
+        };
         let names = match r.get::<_, Option<serde_json::Value>>("names_common") {
-            Some(serde_json::Value::Object(map)) => map.into_iter().filter_map(|(tag, name)| name.as_str().map(|n| (tag, n.to_string()))).collect(),
+            Some(serde_json::Value::Object(map)) => map
+                .into_iter()
+                .filter_map(|(tag, name)| name.as_str().map(|n| (tag, n.to_string())))
+                .collect(),
             _ => Vec::new(),
         };
         let id: String = r.get("gers_id");
@@ -158,7 +192,10 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
             name: r.get::<_, Option<String>>("name").unwrap_or_default(),
             names,
             parent: NONE,
-            prominence: r.get::<_, Option<i32>>("prominence").unwrap_or(0).clamp(0, 100) as u8,
+            prominence: r
+                .get::<_, Option<i32>>("prominence")
+                .unwrap_or(0)
+                .clamp(0, 100) as u8,
             area: r.get("area"),
         };
         records.insert(id, (division, r.get("parent")));
@@ -166,13 +203,21 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     // the divisions in id order, so a tile is the same whatever order its rows came in
     let mut order: Vec<&String> = records.keys().collect();
     order.sort();
-    let at: FnvHashMap<&String, u32> = order.iter().enumerate().map(|(k, id)| (*id, k as u32)).collect();
+    let at: FnvHashMap<&String, u32> = order
+        .iter()
+        .enumerate()
+        .map(|(k, id)| (*id, k as u32))
+        .collect();
     let divisions: Vec<Division> = order
         .iter()
         .map(|id| {
             let (d, parent) = &records[*id];
             Division {
-                parent: parent.as_ref().and_then(|p| at.get(p)).copied().unwrap_or(NONE),
+                parent: parent
+                    .as_ref()
+                    .and_then(|p| at.get(p))
+                    .copied()
+                    .unwrap_or(NONE),
                 ..d.clone()
             }
         })
@@ -184,7 +229,11 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
                 if c == NONE {
                     NONE
                 } else {
-                    ids.list.get(c as usize).and_then(|id| at.get(id)).copied().unwrap_or(NONE)
+                    ids.list
+                        .get(c as usize)
+                        .and_then(|id| at.get(id))
+                        .copied()
+                        .unwrap_or(NONE)
                 }
             })
             .collect(),
@@ -194,11 +243,13 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
 }
 
 impl crate::pyramid::Base for DivisionTile {
-    const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::division;
+    const LAYER: pxl_spec::bake::published::BaseLayer =
+        pxl_spec::bake::published::BaseLayer::division;
 
     const LEAF: pxl_spec::space::coord::zoom::Zoom = DIVISION_LEAF;
 
-    const LATTICE: pxl_spec::space::layer::lattice::Lattice = pxl_spec::space::layer::lattice::GROUND;
+    const LATTICE: pxl_spec::space::layer::lattice::Lattice =
+        pxl_spec::space::layer::lattice::GROUND;
 
     fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
         pxl_spec::bake::tile::division::encode(self).map_err(|e| format!("{e:?}"))
@@ -210,7 +261,10 @@ impl crate::pyramid::Base for DivisionTile {
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(held);
-        Some(pxl_spec::bake::tile::division::fold([a?, b?, c?, d?], p.zoom))
+        Some(pxl_spec::bake::tile::division::fold(
+            [a?, b?, c?, d?],
+            p.zoom,
+        ))
     }
 
     fn occupancy(&self) -> Occupancy {

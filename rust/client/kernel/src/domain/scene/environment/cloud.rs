@@ -45,7 +45,10 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 /// Its draw groups follow the decors' variants, which number the groups
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
 const FIRST_GROUP: usize = pxl_spec_core::scatter::GROUPS as usize;
-const _: () = assert!(FIRST_GROUP + VARIANTS.len() <= GROUPS, "a draw group each variant");
+const _: () = assert!(
+    FIRST_GROUP + VARIANTS.len() <= GROUPS,
+    "a draw group each variant"
+);
 
 /// A cell holds a cloud or none: 2^12 units, about 8 km at mid latitudes.
 const CELL_SHAMT: u32 = 12;
@@ -114,13 +117,19 @@ fn clouds() -> &'static mut Clouds {
 }
 
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
-pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
+pub fn cloud_groups(
+) -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
     let models = crate::domain::query::model::models();
     let skin = load_of(cumulus::skin).and_then(load_image);
-    clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, file))| {
-        let mesh = m.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
-        (FIRST_GROUP + k, mesh, skin, extent(file).map(|e| e as f32))
-    })
+    clouds()
+        .models
+        .iter()
+        .zip(VARIANTS)
+        .enumerate()
+        .map(move |(k, (m, file))| {
+            let mesh = m.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
+            (FIRST_GROUP + k, mesh, skin, extent(file).map(|e| e as f32))
+        })
 }
 
 /// Its model's, as the catalog measures it; none before one is read.
@@ -182,11 +191,19 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let largest = WIDTH[1];
     // As far as the eye observes, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is a sprite's worth.
-    let reach = crate::domain::view::observation::eye_reach().unwrap_or(0.0).min(REACH_MAX);
+    let reach = crate::domain::view::observation::eye_reach()
+        .unwrap_or(0.0)
+        .min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
-    let span = |k: usize| libm::floor((on_map[k] - reach) / PATCH) as i64..=libm::floor((on_map[k] + reach) / PATCH) as i64;
+    let span = |k: usize| {
+        libm::floor((on_map[k] - reach) / PATCH) as i64
+            ..=libm::floor((on_map[k] + reach) / PATCH) as i64
+    };
     let near = |key: [i64; 2]| {
-        let corner = [key[0] as f64 * PATCH - moved[0], key[1] as f64 * PATCH - moved[1]];
+        let corner = [
+            key[0] as f64 * PATCH - moved[0],
+            key[1] as f64 * PATCH - moved[1],
+        ];
         let gap = |lo: f64, v: f64| (lo - v).max(v - lo - PATCH).max(0.0);
         let x0 = nearest(corner[0], eye[0]);
         let dz = (base - eye[2]).max(eye[2] - base - largest).max(0.0);
@@ -197,7 +214,13 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
-            if d <= reach && drawn::tier((largest / units_per_px_at(d)) as f32, decor_gone_px() as f32, decor_sprite_px() as f32) != drawn::GONE {
+            if d <= reach
+                && drawn::tier(
+                    (largest / units_per_px_at(d)) as f32,
+                    decor_gone_px() as f32,
+                    decor_sprite_px() as f32,
+                ) != drawn::GONE
+            {
                 c.wanted.push(([x, y], thinned(d)));
             }
         }
@@ -205,8 +228,17 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     c.wanted.sort_unstable();
     c.gone.clear();
     let wanted = &c.wanted;
-    let kept = |k: &[i64; 2], b: &Patch| wanted.binary_search_by_key(k, |w| w.0).is_ok_and(|i| wanted[i].1 == b.thinned);
-    c.gone.extend(c.patches.iter().filter(|(k, b)| !kept(k, b)).map(|(k, _)| *k));
+    let kept = |k: &[i64; 2], b: &Patch| {
+        wanted
+            .binary_search_by_key(k, |w| w.0)
+            .is_ok_and(|i| wanted[i].1 == b.thinned)
+    };
+    c.gone.extend(
+        c.patches
+            .iter()
+            .filter(|(k, b)| !kept(k, b))
+            .map(|(k, _)| *k),
+    );
     for k in c.gone.drain(..) {
         if let Some(b) = c.patches.remove(&k) {
             draw.free(b.handle);
@@ -229,10 +261,20 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     );
     let frame_eye = frame.eye;
     for (&key, b) in &c.patches {
-        let corner = [key[0] as f64 * PATCH - moved[0], key[1] as f64 * PATCH - moved[1]];
+        let corner = [
+            key[0] as f64 * PATCH - moved[0],
+            key[1] as f64 * PATCH - moved[1],
+        ];
         let [zlo, zhi] = b.heights.map(f64::from);
         let reach = largest / 2.0;
-        if !frame.sees_box([corner[0] - reach, corner[1] - reach, zlo - reach], [corner[0] + PATCH + reach, corner[1] + PATCH + reach, zhi + reach]) {
+        if !frame.sees_box(
+            [corner[0] - reach, corner[1] - reach, zlo - reach],
+            [
+                corner[0] + PATCH + reach,
+                corner[1] + PATCH + reach,
+                zhi + reach,
+            ],
+        ) {
             continue;
         }
         // The nearest cloud the view holds, each as the box it stands in, no
@@ -240,9 +282,22 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         // inside a box the drift is still a cell's at that distance.
         for (local, half) in built(b) {
             let at = [corner[0] + local[0], corner[1] + local[1], local[2]];
-            if frame.sees_box(core::array::from_fn(|k| at[k] - half[k]), core::array::from_fn(|k| at[k] + half[k])) {
-                let gap: V3 = core::array::from_fn(|k| ((if k == 0 { nearest(at[0], eye[0]) } else { at[k] }) - eye[k]).abs() - half[k]);
-                c.seen = c.seen.min(v3::len(&gap.map(|g| g.max(0.0))).max(crate::domain::view::param::NEAR));
+            if frame.sees_box(
+                core::array::from_fn(|k| at[k] - half[k]),
+                core::array::from_fn(|k| at[k] + half[k]),
+            ) {
+                let gap: V3 = core::array::from_fn(|k| {
+                    ((if k == 0 {
+                        nearest(at[0], eye[0])
+                    } else {
+                        at[k]
+                    }) - eye[k])
+                        .abs()
+                        - half[k]
+                });
+                c.seen = c
+                    .seen
+                    .min(v3::len(&gap.map(|g| g.max(0.0))).max(crate::domain::view::param::NEAR));
             }
         }
         let patch = Shown {
@@ -254,9 +309,25 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             side: PATCH,
             heights: b.heights,
         };
-        let translation = DrawList::translation([nearest(corner[0], frame_eye[0]), corner[1], 0.0], frame_eye);
-        let groups = VARIANTS.iter().enumerate().map(|(k, &a)| ((FIRST_GROUP + k) as u32, (widest(a), WIDTH.map(|w| w / widest(a)))));
-        present_patch(draw, &patch, translation, eye, groups, opacity, &mut c.sprites);
+        let translation = DrawList::translation(
+            [nearest(corner[0], frame_eye[0]), corner[1], 0.0],
+            frame_eye,
+        );
+        let groups = VARIANTS.iter().enumerate().map(|(k, &a)| {
+            (
+                (FIRST_GROUP + k) as u32,
+                (widest(a), WIDTH.map(|w| w / widest(a))),
+            )
+        });
+        present_patch(
+            draw,
+            &patch,
+            translation,
+            eye,
+            groups,
+            opacity,
+            &mut c.sprites,
+        );
     }
 }
 
@@ -275,29 +346,38 @@ struct Cloud {
 /// a quarter of them each octave `thinned`.
 fn clouds_of(key: [i64; 2], thinned: u32, base: f64) -> impl Iterator<Item = Cloud> {
     let share = SHARE / f64::from(1u32 << (2 * thinned.min(15)));
-    (0..PATCH_CELLS).flat_map(move |j| (0..PATCH_CELLS).map(move |i| (i, j))).filter_map(move |(i, j)| {
-        let cell = [key[0] * i64::from(PATCH_CELLS) + i64::from(i), key[1] * i64::from(PATCH_CELLS) + i64::from(j)];
-        let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
-        let hash = |salt: u32| f64::from(lattice_hash(at, salt));
-        if hash(SALT) >= share {
-            return None;
-        }
-        let jitter = [hash(SALT + 1), hash(SALT + 2)];
-        let local = [(f64::from(i) + 0.25 + 0.5 * jitter[0]) * CELL, (f64::from(j) + 0.25 + 0.5 * jitter[1]) * CELL];
-        let variant = ((hash(SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
-        let file = VARIANTS[variant];
-        let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * hash(SALT + 3);
-        let scale = width / widest(file);
-        let height = extent(file)[2] * scale;
-        Some(Cloud {
-            variant,
-            local,
-            z: base + 0.5 * height,
-            width,
-            spin: core::f64::consts::TAU * hash(SALT + 5),
-            scale,
+    (0..PATCH_CELLS)
+        .flat_map(move |j| (0..PATCH_CELLS).map(move |i| (i, j)))
+        .filter_map(move |(i, j)| {
+            let cell = [
+                key[0] * i64::from(PATCH_CELLS) + i64::from(i),
+                key[1] * i64::from(PATCH_CELLS) + i64::from(j),
+            ];
+            let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
+            let hash = |salt: u32| f64::from(lattice_hash(at, salt));
+            if hash(SALT) >= share {
+                return None;
+            }
+            let jitter = [hash(SALT + 1), hash(SALT + 2)];
+            let local = [
+                (f64::from(i) + 0.25 + 0.5 * jitter[0]) * CELL,
+                (f64::from(j) + 0.25 + 0.5 * jitter[1]) * CELL,
+            ];
+            let variant =
+                ((hash(SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
+            let file = VARIANTS[variant];
+            let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * hash(SALT + 3);
+            let scale = width / widest(file);
+            let height = extent(file)[2] * scale;
+            Some(Cloud {
+                variant,
+                local,
+                z: base + 0.5 * height,
+                width,
+                spin: core::f64::consts::TAU * hash(SALT + 5),
+                scale,
+            })
         })
-    })
 }
 
 /// The patch's clouds as `build` laid them, read off its lanes: each one's
@@ -305,44 +385,73 @@ fn clouds_of(key: [i64; 2], thinned: u32, base: f64) -> impl Iterator<Item = Clo
 /// extent. The field's hash is asked once a patch, where it is built.
 fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
-    let words: &[u32] = unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
-    lane::groups(words).zip(VARIANTS).flat_map(move |((first, n), file)| {
-        let lane = GroupLanes {
-            first: first as usize,
-            count: n as usize,
-        };
-        (0..n as usize).map(move |i| {
-            let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
-            let scale = at(4);
-            let side = widest(file) * scale / 2.0;
-            ([at(0), at(1), at(2)], [side, side, extent(file)[2] * scale / 2.0])
+    let words: &[u32] =
+        unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    lane::groups(words)
+        .zip(VARIANTS)
+        .flat_map(move |((first, n), file)| {
+            let lane = GroupLanes {
+                first: first as usize,
+                count: n as usize,
+            };
+            (0..n as usize).map(move |i| {
+                let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
+                let scale = at(4);
+                let side = widest(file) * scale / 2.0;
+                (
+                    [at(0), at(1), at(2)],
+                    [side, side, extent(file)[2] * scale / 2.0],
+                )
+            })
         })
-    })
 }
 
 /// The patch's clouds on the field's map, as decor's lanes about its corner;
 /// none where the heap refused.
-fn build(key: [i64; 2], thinned: u32, base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], draw: &mut DrawList) -> Option<Patch> {
+fn build(
+    key: [i64; 2],
+    thinned: u32,
+    base: f64,
+    lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()],
+    draw: &mut DrawList,
+) -> Option<Patch> {
     for l in lanes.iter_mut() {
         l.clear();
     }
     let mut heights = [f32::INFINITY, f32::NEG_INFINITY];
     for c in clouds_of(key, thinned, base) {
-        heights = [heights[0].min((c.z - c.width / 2.0) as f32), heights[1].max((c.z + c.width / 2.0) as f32)];
-        lanes[c.variant].push([c.local[0] as f32, c.local[1] as f32, c.z as f32, c.spin as f32, c.scale as f32]);
+        heights = [
+            heights[0].min((c.z - c.width / 2.0) as f32),
+            heights[1].max((c.z + c.width / 2.0) as f32),
+        ];
+        lanes[c.variant].push([
+            c.local[0] as f32,
+            c.local[1] as f32,
+            c.z as f32,
+            c.spin as f32,
+            c.scale as f32,
+        ]);
     }
     let instances: usize = lanes.iter().map(Vec::len).sum();
     let header = 1 + lanes.len();
-    let words = header + lanes.iter().map(|l| GroupLanes::words(l.len())).sum::<usize>();
+    let words = header
+        + lanes
+            .iter()
+            .map(|l| GroupLanes::words(l.len()))
+            .sum::<usize>();
     let index = (words * 4) as u32;
     let (at, bytes) = alloc(index + instances as u32 * 4)?;
     // SAFETY: a heap block of the bytes asked for, this patch's until given back.
-    let out: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
+    let out: &mut [u32] =
+        unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
     out[0] = lanes.len() as u32;
     let mut first = header;
     for (g, l) in lanes.iter().enumerate() {
         out[1 + g] = l.len() as u32;
-        let lane = GroupLanes { first, count: l.len() };
+        let lane = GroupLanes {
+            first,
+            count: l.len(),
+        };
         for (i, v) in l.iter().enumerate() {
             for (k, &w) in v.iter().enumerate() {
                 out[lane.f32_at(k, i)] = w.to_bits();
@@ -380,17 +489,37 @@ struct Shown {
 /// `opacity` of one the models are laid over the world blended, and a sprite,
 /// which cannot be, is left out.
 #[allow(clippy::too_many_arguments)]
-fn present_patch(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye: V3, groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>, opacity: f32, sprites: &mut Vec<u32>) {
+fn present_patch(
+    draw: &mut DrawList,
+    b: &Shown,
+    translation: [f32; 3],
+    eye: V3,
+    groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>,
+    opacity: f32,
+    sprites: &mut Vec<u32>,
+) {
     let (model_px, sprite_px) = (decor_gone_px() as f32, decor_sprite_px() as f32);
     let tier = |px: f64| drawn::tier(px as f32, model_px, sprite_px);
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
     let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
-    let nearest = v3::len(&[gap(x0, x0 + b.side, eye[0]), gap(y0, y0 + b.side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
-    let farthest = v3::len(&[reach(x0, x0 + b.side, eye[0]), reach(y0, y0 + b.side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
+    let nearest = v3::len(&[
+        gap(x0, x0 + b.side, eye[0]),
+        gap(y0, y0 + b.side, eye[1]),
+        gap(zlo, zhi, eye[2]),
+    ])
+    .max(1e-3);
+    let farthest = v3::len(&[
+        reach(x0, x0 + b.side, eye[0]),
+        reach(y0, y0 + b.side, eye[1]),
+        reach(zlo, zhi, eye[2]),
+    ])
+    .max(1e-3);
     // SAFETY: the patch's bytes, `bytes` long, its owner's to write past `index`.
-    let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    let words: &mut [u32] = unsafe {
+        core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4)
+    };
     let (lanes_of, list) = words.split_at_mut(b.index as usize / 4);
     let (mut at, mut changed) = (0usize, false);
     for ((offset, count), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
@@ -429,11 +558,31 @@ fn present_patch(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye: V3,
         at += sprites.len();
         let index = b.index / 4 + first as u32;
         if models > 0 {
-            let pipeline = if opacity < 1.0 { PIPELINE_GHOST_DECOR } else { PIPELINE_DECOR };
-            draw.draw_instances(pipeline, b.handle, group, models, [offset, count, index], translation, opacity);
+            let pipeline = if opacity < 1.0 {
+                PIPELINE_GHOST_DECOR
+            } else {
+                PIPELINE_DECOR
+            };
+            draw.draw_instances(
+                pipeline,
+                b.handle,
+                group,
+                models,
+                [offset, count, index],
+                translation,
+                opacity,
+            );
         }
         if !sprites.is_empty() {
-            draw.draw_instances(PIPELINE_IMPOSTOR, b.handle, group, sprites.len() as u32, [offset, count, index + models], translation, 1.0);
+            draw.draw_instances(
+                PIPELINE_IMPOSTOR,
+                b.handle,
+                group,
+                sprites.len() as u32,
+                [offset, count, index + models],
+                translation,
+                1.0,
+            );
         }
     }
     if changed {

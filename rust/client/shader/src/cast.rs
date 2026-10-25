@@ -22,15 +22,28 @@ type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 /// the ground's block is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
 /// face (`World::faced`); where it met nothing, the first two zero.
-fn word<A: Copy>(ray: &cast::Ray, met: Met<A>, steps: bool, faces: u32) -> [u32; ray::WORDS as usize] {
+fn word<A: Copy>(
+    ray: &cast::Ray,
+    met: Met<A>,
+    steps: bool,
+    faces: u32,
+) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
         return [0, 0, met.visits, 0];
     }
     let s = met.stop;
     let [value, four] = s.block;
-    [ray::first_word(value, face_of(ray, s.axis), s.node.zoom), s.t.to_bits(), if steps { met.visits } else { four }, faces]
+    [
+        ray::first_word(value, face_of(ray, s.axis), s.node.zoom),
+        s.t.to_bits(),
+        if steps { met.visits } else { four },
+        faces,
+    ]
 }
-const _: () = assert!(ray::FACES == 3, "what lies about a ray's face is its last word");
+const _: () = assert!(
+    ray::FACES == 3,
+    "what lies about a ray's face is its last word"
+);
 
 /// The tangents across and up of the middle of drawn pixel `p` of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
@@ -107,7 +120,10 @@ pub fn cast_cs(
             let k = g.sample_at([about[0] + i, about[1] + j]);
             if seen_at(beams, k + beam::SAMPLE_NODE + beam::NODE_ZOOM) != beam::SAMPLE_NONE {
                 let node = node_at(beams, k + beam::SAMPLE_NODE);
-                let block = [seen_at(beams, k + beam::SAMPLE_BLOCK), seen_at(beams, k + beam::SAMPLE_BLOCK + 1)];
+                let block = [
+                    seen_at(beams, k + beam::SAMPLE_BLOCK),
+                    seen_at(beams, k + beam::SAMPLE_BLOCK + 1),
+                ];
                 let (enter, axis, enters) = cast::entry(origin, &ray, &node, block[0]);
                 let lacks = seen_at(beams, k + beam::SAMPLE_LACKS) != 0;
                 // A block's face the pixel enters across another axis than its
@@ -163,7 +179,11 @@ pub fn cast_cs(
             eye,
             pool: ways::tree::Read(pool),
         };
-        written(rays, id, word(&ray, met, steps, world.faced(origin, &ray, &met)));
+        written(
+            rays,
+            id,
+            word(&ray, met, steps, world.faced(origin, &ray, &met)),
+        );
     }
 }
 
@@ -211,6 +231,22 @@ pub fn miss_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let met = resumed(&mut Writing { world, seen, tag }, origin, &ray, detail, t, &line);
-    written(rays, id, word(&ray, met, eye.origin.w != 0, world.faced(origin, &ray, &met)));
+    let met = resumed(
+        &mut Writing { world, seen, tag },
+        origin,
+        &ray,
+        detail,
+        t,
+        &line,
+    );
+    written(
+        rays,
+        id,
+        word(
+            &ray,
+            met,
+            eye.origin.w != 0,
+            world.faced(origin, &ray, &met),
+        ),
+    );
 }

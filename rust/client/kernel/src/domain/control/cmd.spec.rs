@@ -31,7 +31,12 @@
 // type is long to spell and is spelled once, here, for each. A table
 // with no signal or no enum read off the wire leaves a writer or a
 // number's check unused.
-#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]
+#![allow(
+    non_camel_case_types,
+    clippy::type_complexity,
+    unused_imports,
+    dead_code
+)]
 
 use core::fmt::Display;
 
@@ -203,7 +208,11 @@ pub enum SurfaceMinor {
 }
 
 impl SurfaceMinor {
-    pub const ALL: [SurfaceMinor; 3] = [SurfaceMinor::OPEN, SurfaceMinor::RESIZE, SurfaceMinor::CLOSE];
+    pub const ALL: [SurfaceMinor; 3] = [
+        SurfaceMinor::OPEN,
+        SurfaceMinor::RESIZE,
+        SurfaceMinor::CLOSE,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SurfaceMinor> {
@@ -271,7 +280,12 @@ pub enum ProfilerMinor {
 }
 
 impl ProfilerMinor {
-    pub const ALL: [ProfilerMinor; 4] = [ProfilerMinor::START, ProfilerMinor::STOP, ProfilerMinor::READ, ProfilerMinor::RINGS];
+    pub const ALL: [ProfilerMinor; 4] = [
+        ProfilerMinor::START,
+        ProfilerMinor::STOP,
+        ProfilerMinor::READ,
+        ProfilerMinor::RINGS,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ProfilerMinor> {
@@ -292,7 +306,13 @@ pub enum PointerPhase {
 }
 
 impl PointerPhase {
-    pub const ALL: [PointerPhase; 5] = [PointerPhase::Down, PointerPhase::Move, PointerPhase::Up, PointerPhase::Out, PointerPhase::Cancel];
+    pub const ALL: [PointerPhase; 5] = [
+        PointerPhase::Down,
+        PointerPhase::Move,
+        PointerPhase::Up,
+        PointerPhase::Out,
+        PointerPhase::Cancel,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PointerPhase> {
@@ -331,7 +351,13 @@ pub enum ActiveTool {
 }
 
 impl ActiveTool {
-    pub const ALL: [ActiveTool; 5] = [ActiveTool::Pointer, ActiveTool::Object, ActiveTool::Decor, ActiveTool::Eraser, ActiveTool::Marker];
+    pub const ALL: [ActiveTool; 5] = [
+        ActiveTool::Pointer,
+        ActiveTool::Object,
+        ActiveTool::Decor,
+        ActiveTool::Eraser,
+        ActiveTool::Marker,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ActiveTool> {
@@ -380,7 +406,9 @@ impl GeolocationErrorCode {
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<GeolocationErrorCode> {
-        GeolocationErrorCode::ALL.into_iter().find(|m| *m as u32 == number)
+        GeolocationErrorCode::ALL
+            .into_iter()
+            .find(|m| *m as u32 == number)
     }
 }
 
@@ -414,11 +442,18 @@ pub enum PermissionAnswer {
 }
 
 impl PermissionAnswer {
-    pub const ALL: [PermissionAnswer; 4] = [PermissionAnswer::Asking, PermissionAnswer::Granted, PermissionAnswer::Denied, PermissionAnswer::Failed];
+    pub const ALL: [PermissionAnswer; 4] = [
+        PermissionAnswer::Asking,
+        PermissionAnswer::Granted,
+        PermissionAnswer::Denied,
+        PermissionAnswer::Failed,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PermissionAnswer> {
-        PermissionAnswer::ALL.into_iter().find(|m| *m as u32 == number)
+        PermissionAnswer::ALL
+            .into_iter()
+            .find(|m| *m as u32 == number)
     }
 }
 
@@ -436,7 +471,11 @@ pub enum GroundStatus {
 }
 
 impl GroundStatus {
-    pub const ALL: [GroundStatus; 3] = [GroundStatus::Idle, GroundStatus::Loading, GroundStatus::Success];
+    pub const ALL: [GroundStatus; 3] = [
+        GroundStatus::Idle,
+        GroundStatus::Loading,
+        GroundStatus::Success,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<GroundStatus> {
@@ -467,7 +506,9 @@ impl DevicePoseStatus {
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<DevicePoseStatus> {
-        DevicePoseStatus::ALL.into_iter().find(|m| *m as u32 == number)
+        DevicePoseStatus::ALL
+            .into_iter()
+            .find(|m| *m as u32 == number)
     }
 }
 
@@ -1017,7 +1058,10 @@ impl SensorFailed {
         Ok(SensorFailed {
             sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             code: match f.at(1)?.opt() {
-                Some(c) => Some(GeolocationErrorCode::of(integer::<u32>(c.get_number()?)?).unwrap_or(GeolocationErrorCode::Other)),
+                Some(c) => Some(
+                    GeolocationErrorCode::of(integer::<u32>(c.get_number()?)?)
+                        .unwrap_or(GeolocationErrorCode::Other),
+                ),
                 None => None,
             },
         })
@@ -1094,7 +1138,9 @@ pub struct WorldVisibility {
 impl WorldVisibility {
     pub fn read(pkt: &[u8]) -> Result<WorldVisibility, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldVisibility { visible: f.at(0)?.get_bool()? })
+        Ok(WorldVisibility {
+            visible: f.at(0)?.get_bool()?,
+        })
     }
 }
 
@@ -1150,7 +1196,8 @@ impl SensorPermission {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorPermission {
             sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-            answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1191,8 +1238,10 @@ impl InputPointer {
     pub fn read(pkt: &[u8]) -> Result<InputPointer, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputPointer {
-            phase: PointerPhase::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-            pointer_type: PointerType::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            phase: PointerPhase::of(integer::<u32>(f.at(0)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
+            pointer_type: PointerType::of(integer::<u32>(f.at(1)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
             id: integer::<i32>(f.at(2)?.get_number()?)?,
             button: integer::<i32>(f.at(3)?.get_number()?)?,
             x: finite(f.at(4)?.get_number()?)?,
@@ -1215,7 +1264,8 @@ impl InputHold {
     pub fn read(pkt: &[u8]) -> Result<InputHold, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputHold {
-            tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
             value: integer::<u32>(f.at(1)?.get_number()?)?,
             tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })
@@ -1231,7 +1281,9 @@ pub struct InputMarkerWords<'a> {
 impl<'a> InputMarkerWords<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<InputMarkerWords<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputMarkerWords { text: f.at(0)?.get_str_ref()? })
+        Ok(InputMarkerWords {
+            text: f.at(0)?.get_str_ref()?,
+        })
     }
 }
 
@@ -1332,7 +1384,8 @@ impl PreviewOpen {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(PreviewOpen {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
-            group: pxl_spec::asset::actor::Group::of(integer::<u8>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            group: pxl_spec::asset::actor::Group::of(integer::<u8>(f.at(1)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
             number: integer::<u8>(f.at(2)?.get_number()?)?,
         })
     }
@@ -1365,7 +1418,10 @@ impl SettingSet {
     pub fn read(pkt: &[u8]) -> Result<SettingSet, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingSet {
-            key: crate::domain::view::setting::schema_spec::SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            key: crate::domain::view::setting::schema_spec::SettingKey::of(integer::<u32>(
+                f.at(0)?.get_number()?,
+            )?)
+            .ok_or_else(|| unknown())?,
             value: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }
@@ -1380,7 +1436,9 @@ pub struct ChatSend<'a> {
 impl<'a> ChatSend<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<ChatSend<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ChatSend { text: f.at(0)?.get_str_ref()? })
+        Ok(ChatSend {
+            text: f.at(0)?.get_str_ref()?,
+        })
     }
 }
 
@@ -1394,7 +1452,8 @@ impl InputTracking {
     pub fn read(pkt: &[u8]) -> Result<InputTracking, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputTracking {
-            tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1452,7 +1511,9 @@ pub struct WorldView {
 impl WorldView {
     pub fn read(pkt: &[u8]) -> Result<WorldView, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldView { shown: f.at(0)?.get_bool()? })
+        Ok(WorldView {
+            shown: f.at(0)?.get_bool()?,
+        })
     }
 }
 

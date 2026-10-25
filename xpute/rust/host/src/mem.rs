@@ -27,7 +27,11 @@ impl<'a> Memory<'a> {
     /// The bytes are live while the value is used, and meanwhile nothing else
     /// holds a reference into a range the guest names: the guest is between turns.
     pub unsafe fn from_raw(base: NonNull<u8>, bytes: usize) -> Memory<'a> {
-        Memory { base, bytes, of: PhantomData }
+        Memory {
+            base,
+            bytes,
+            of: PhantomData,
+        }
     }
 
     pub fn bytes(&self) -> usize {
@@ -37,7 +41,11 @@ impl<'a> Memory<'a> {
     /// The `n` bytes at `at`; past the memory's end is the guest's bug.
     fn range(&self, at: usize, n: usize) -> *mut u8 {
         let end = at.checked_add(n).filter(|&end| end <= self.bytes);
-        assert!(end.is_some(), "[mem] {n} bytes at {at} run past the memory's {}", self.bytes);
+        assert!(
+            end.is_some(),
+            "[mem] {n} bytes at {at} run past the memory's {}",
+            self.bytes
+        );
         // SAFETY: in bounds, as just checked.
         unsafe { self.base.as_ptr().add(at) }
     }

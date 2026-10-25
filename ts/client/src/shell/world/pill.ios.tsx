@@ -7,7 +7,12 @@
  */
 
 import { useRef } from "react";
-import { LayoutAnimation, type LayoutAnimationConfig, StyleSheet, View } from "react-native";
+import {
+  LayoutAnimation,
+  type LayoutAnimationConfig,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing } from "@/shell/ui/backing.tsx";
@@ -24,10 +29,32 @@ const MOVE: LayoutAnimationConfig = {
   update: { type: "spring", springDamping: 1 },
 };
 
-export function Pill({ x, width, height, fill, tint, place, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, touchBelow = 0, children, onContentWidth }: PillProps) {
+export function Pill(
+  {
+    x,
+    width,
+    height,
+    fill,
+    tint,
+    place,
+    interactive,
+    border,
+    shadow,
+    fade = 1,
+    fadeFrom,
+    fadeTransition = SNAP,
+    touch,
+    touchBelow = 0,
+    children,
+    onContentWidth,
+  }: PillProps,
+) {
   // In render: a layout animation applies to the next commit.
   const last = useRef<[f64, f64] | null>(null);
-  if (last.current !== null && (last.current[0] !== x || last.current[1] !== width)) LayoutAnimation.configureNext(MOVE);
+  if (
+    last.current !== null &&
+    (last.current[0] !== x || last.current[1] !== width)
+  ) LayoutAnimation.configureNext(MOVE);
   last.current = [x, width];
 
   const r = height / 2;
@@ -37,7 +64,14 @@ export function Pill({ x, width, height, fill, tint, place, interactive, border,
   return (
     <View
       {...touch}
-      style={[touch ? styles.reach : styles.at, { left: x - reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach + touchBelow, padding: reach, paddingBottom: reach + touchBelow }]}
+      style={[touch ? styles.reach : styles.at, {
+        left: x - reach,
+        top: -reach,
+        width: width + 2 * reach,
+        height: height + 2 * reach + touchBelow,
+        padding: reach,
+        paddingBottom: reach + touchBelow,
+      }]}
     >
       <Backing
         fill={fill}
@@ -47,10 +81,21 @@ export function Pill({ x, width, height, fill, tint, place, interactive, border,
         fade={fade}
         fadeFrom={fadeFrom}
         transition={fadeTransition}
-        style={[styles.glass, { borderRadius: r }, border && { borderWidth: border.width, borderColor: border.color }, shadow ? { boxShadow: shadow } : null]}
+        style={[
+          styles.glass,
+          { borderRadius: r },
+          border && { borderWidth: border.width, borderColor: border.color },
+          shadow ? { boxShadow: shadow } : null,
+        ]}
       >
-        <View style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: r }]}>
-          <View onLayout={onContentWidth && ((e) => onContentWidth(e.nativeEvent.layout.width))} style={[styles.content, { height }]}>
+        <View
+          style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: r }]}
+        >
+          <View
+            onLayout={onContentWidth &&
+              ((e) => onContentWidth(e.nativeEvent.layout.width))}
+            style={[styles.content, { height }]}
+          >
             {children}
           </View>
         </View>
@@ -64,5 +109,12 @@ const styles = StyleSheet.create({
   reach: { position: "absolute" },
   glass: { flex: 1 },
   clip: { overflow: "hidden", pointerEvents: "box-none" },
-  content: { position: "absolute", left: 0, top: 0, flexDirection: "row", alignItems: "center", pointerEvents: "box-none" },
+  content: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    pointerEvents: "box-none",
+  },
 });

@@ -72,7 +72,10 @@ impl decor::Decor {
 
     /// The largest over every variant's model, in units.
     pub fn extent(&self, catalog: Option<&Catalog>) -> f64 {
-        self.variants.iter().map(|v| v.extent(catalog)).fold(0.0, largest)
+        self.variants
+            .iter()
+            .map(|v| v.extent(catalog))
+            .fold(0.0, largest)
     }
 
     /// How far any variant's box, or its model about the box's middle, reaches
@@ -86,21 +89,40 @@ impl decor::Decor {
             let (across, up) = (x.max(y).max(ex).max(ey), z.max(ez));
             libm::sqrt(2.0 * across * across + up * up)
         };
-        self.variants.iter().zip(&self.row.sizes).map(reach).fold(0.0, largest)
+        self.variants
+            .iter()
+            .zip(&self.row.sizes)
+            .map(reach)
+            .fold(0.0, largest)
     }
 
     /// The sides of `variant`'s box turned `turn`, in units.
     fn sides(&self, variant: u32, turn: u32) -> [f64; 3] {
-        self.row.cells(variant, turn).map(|n| f64::from(n) * units(self.row.cell_zoom()))
+        self.row
+            .cells(variant, turn)
+            .map(|n| f64::from(n) * units(self.row.cell_zoom()))
     }
 
     /// `variant` turned `turn` with its box's min corner at `corner`, in
     /// units: where it stands, its base's middle, which its model's origin is
     /// put at, and what it carries at `scale`.
-    pub fn stand(&self, corner: [f64; 3], variant: u32, turn: u32, scale: f64) -> ([f64; 3], decor::DecorMeta) {
+    pub fn stand(
+        &self,
+        corner: [f64; 3],
+        variant: u32,
+        turn: u32,
+        scale: f64,
+    ) -> ([f64; 3], decor::DecorMeta) {
         let [x, y, _] = self.sides(variant, turn);
         let at = [corner[0] + x / 2.0, corner[1] + y / 2.0, corner[2]];
-        (at, decor::DecorMeta { variant, turn, scale })
+        (
+            at,
+            decor::DecorMeta {
+                variant,
+                turn,
+                scale,
+            },
+        )
     }
 
     /// The box one standing at `at`, carrying `m`, claims: every cell in it is its.
@@ -123,7 +145,10 @@ impl decor::Decor {
     /// The generator writes one entry a decor, so every id has one.
     pub fn of(id: DecorId) -> &'static decor::Decor {
         use xpute_kit::status::bug::OrBug;
-        decor::DECORS.iter().find(|d| d.id == id).or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
+        decor::DECORS
+            .iter()
+            .find(|d| d.id == id)
+            .or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
     }
 }
 
@@ -170,7 +195,10 @@ pub struct TileOrigin {
 
 /// The pack tile a face wears; None where the pack has no image.
 fn tile_of(cube: Cube, face: CubeFace) -> Option<u32> {
-    PACK.tiles.iter().find(|(c, f, _)| *c == cube && *f == face).map(|&(_, _, n)| n)
+    PACK.tiles
+        .iter()
+        .find(|(c, f, _)| *c == cube && *f == face)
+        .map(|&(_, _, n)| n)
 }
 
 /// The tile's mean color in linear light, seen from far enough that the tile
@@ -191,8 +219,19 @@ pub fn shipped_texture_tile(cube: Cube, face: CubeFace) -> Option<TileOrigin> {
 /// The width and height a PNG's or a WebP's header gives; none for any other file.
 pub fn image_size(file: &[u8]) -> Option<(u32, u32)> {
     let be = |at: usize| Some(u32::from_be_bytes(file.get(at..at + 4)?.try_into().ok()?));
-    let le24 = |at: usize| Some(u32::from_le_bytes([*file.get(at)?, *file.get(at + 1)?, *file.get(at + 2)?, 0]));
-    let le16 = |at: usize| Some(u32::from(u16::from_le_bytes(file.get(at..at + 2)?.try_into().ok()?)));
+    let le24 = |at: usize| {
+        Some(u32::from_le_bytes([
+            *file.get(at)?,
+            *file.get(at + 1)?,
+            *file.get(at + 2)?,
+            0,
+        ]))
+    };
+    let le16 = |at: usize| {
+        Some(u32::from(u16::from_le_bytes(
+            file.get(at..at + 2)?.try_into().ok()?,
+        )))
+    };
     if file.starts_with(b"\x89PNG\r\n\x1a\n") {
         return Some((be(16)?, be(20)?));
     }

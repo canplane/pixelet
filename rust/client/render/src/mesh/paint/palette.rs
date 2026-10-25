@@ -20,11 +20,17 @@ pub fn palette() -> impl Iterator<Item = Cube> {
 
 #[allow(non_snake_case)]
 pub fn LAYER_IDX(cube: Cube) -> u32 {
-    palette().position(|c| c == cube).expect("a cube of the catalog") as u32
+    palette()
+        .position(|c| c == cube)
+        .expect("a cube of the catalog") as u32
 }
 
 pub fn rgb255(rgb: u32) -> [u8; 3] {
-    [((rgb >> 16) & 255) as u8, ((rgb >> 8) & 255) as u8, (rgb & 255) as u8]
+    [
+        ((rgb >> 16) & 255) as u8,
+        ((rgb >> 8) & 255) as u8,
+        (rgb & 255) as u8,
+    ]
 }
 
 /// What a layer reads as once its tile is too small to see: the tile's mean,
@@ -32,7 +38,10 @@ pub fn rgb255(rgb: u32) -> [u8; 3] {
 /// far off a cliff reads as its land use; Distant Horizons summarizes the same way.
 pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(|| {
     palette()
-        .map(|cube| shipped_tile_mean(cube, CubeFace::Top).unwrap_or_else(|| rgb255(cube_rgb(cube).unwrap_or(0))))
+        .map(|cube| {
+            shipped_tile_mean(cube, CubeFace::Top)
+                .unwrap_or_else(|| rgb255(cube_rgb(cube).unwrap_or(0)))
+        })
         .collect()
 });
 

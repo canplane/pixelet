@@ -16,7 +16,8 @@ export default {
   sentinel: {
     unknown: {
       hex: "#565656",
-      "$doc": "Bedrock, where the world holds no more: a dark gray, so it reads as the world's end against the night's black and the day's haze past it alike, rather than as whatever drew last.",
+      "$doc":
+        "Bedrock, where the world holds no more: a dark gray, so it reads as the world's end against the night's black and the day's haze past it alike, rather than as whatever drew last.",
       rgb: 5658198,
     },
   },
@@ -243,12 +244,14 @@ export default {
     },
     soil: {
       hex: "#976d4d",
-      "$doc": "Minecraft's map color DIRT (minecraft.wiki Map_item_format): Carto paints nothing under the ground.",
+      "$doc":
+        "Minecraft's map color DIRT (minecraft.wiki Map_item_format): Carto paints nothing under the ground.",
       rgb: 9923917,
     },
     sandstone: {
       hex: "#f7e9a3",
-      "$doc": "Minecraft's map color SAND, which sandstone is drawn as on a map.",
+      "$doc":
+        "Minecraft's map color SAND, which sandstone is drawn as on a map.",
       rgb: 16247203,
     },
     stone: {

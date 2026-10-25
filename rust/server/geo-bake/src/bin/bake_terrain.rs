@@ -39,7 +39,8 @@ struct Db {
 
 fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
     let mut client = source.connect()?;
-    let repo = TerrainRepository::prepare(&mut client, raster.clone()).map_err(|e| e.to_string())?;
+    let repo =
+        TerrainRepository::prepare(&mut client, raster.clone()).map_err(|e| e.to_string())?;
     Ok(Db { client, repo })
 }
 
@@ -60,7 +61,10 @@ fn zigzag(band: &[[i32; 2]]) -> Vec<[i32; 2]> {
 fn land(client: &mut Client, candidates: &[[i32; 2]]) -> Result<Vec<[i32; 2]>, String> {
     let mut out = Vec::new();
     for batch in candidates.chunks(CLASSIFY_BATCH) {
-        for (&tile, drawn) in batch.iter().zip(has_ground(client, batch).map_err(|e| e.to_string())?) {
+        for (&tile, drawn) in batch
+            .iter()
+            .zip(has_ground(client, batch).map_err(|e| e.to_string())?)
+        {
             if drawn {
                 out.push(tile);
             }
@@ -73,7 +77,8 @@ fn run() -> Result<(), String> {
     pxl_geo_bake::cli::enter()?;
     let run = Run::parse("terrain")?;
     if run.leaf {
-        let (source, mut client) = Overture::reading(&leaf::READS, &run.shards.iter().copied().collect())?;
+        let (source, mut client) =
+            Overture::reading(&leaf::READS, &run.shards.iter().copied().collect())?;
         let raster = Arc::new(Raster::open(&mut client)?);
         for &shard in &run.shards {
             let mut rows = land(&mut client, &shard.tiles(LEAF_ZOOM))?;
@@ -91,7 +96,12 @@ fn run() -> Result<(), String> {
                     bands.len(),
                     1000,
                     |[x, y]| format!("{x}:{y}"),
-                    || Ok((connect(&source, &raster)?, separation::source::Walk::default())),
+                    || {
+                        Ok((
+                            connect(&source, &raster)?,
+                            separation::source::Walk::default(),
+                        ))
+                    },
                     |(db, held), tile| {
                         held.keep_around(tile);
                         let reader = &mut separation::Reader {
@@ -101,9 +111,18 @@ fn run() -> Result<(), String> {
                         };
                         let terrain = bake_leaf(reader, tile)?;
                         let at = Tile::new(LEAF_ZOOM, tile);
-                        let packed = pack(&terrain.encode(at).map_err(|e| format!("{}: {e}", at.name()))?, Level::Stored).map_err(|e| e.to_string())?;
+                        let packed = pack(
+                            &terrain
+                                .encode(at)
+                                .map_err(|e| format!("{}: {e}", at.name()))?,
+                            Level::Stored,
+                        )
+                        .map_err(|e| e.to_string())?;
                         set.write(at, &packed)?;
-                        Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
+                        Ok(Done::Wrote {
+                            bytes: packed.len() as u64,
+                            items: 0,
+                        })
                     },
                 )?;
                 if t.failed > 0 {

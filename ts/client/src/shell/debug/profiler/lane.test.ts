@@ -14,6 +14,10 @@ Deno.test("FRAME_GROUPS - every lane is printed, in one group", () => {
 Deno.test("LANES - a list lane spans a word a name, a census entry two", () => {
   for (const { name, width } of LANES) {
     if (!is_list(name)) assertEquals(width, 1, name);
-    else assertEquals(width, LIST_NAMES[name].length * (name === "census" ? 2 : 1), name);
+    else {assertEquals(
+        width,
+        LIST_NAMES[name].length * (name === "census" ? 2 : 1),
+        name,
+      );}
   }
 });

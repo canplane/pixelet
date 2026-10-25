@@ -105,7 +105,12 @@ pub fn open(_: Credit, root: u32, number: u64, owner: Owner) -> Option<Fd> {
 
 /// Opens a kept file to be read whole; what it held is taken with `take_kept`.
 pub fn open_kept(kept: Kept) -> Option<Fd> {
-    Some(files().open(sys()?, root::STORAGE, kept.path().as_str(), Owner::Kept(kept)))
+    Some(files().open(
+        sys()?,
+        root::STORAGE,
+        kept.path().as_str(),
+        Owner::Kept(kept),
+    ))
 }
 
 /// What a kept file held.
@@ -209,12 +214,18 @@ fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
         // SAFETY: the bytes move into KEPT, their heap buffer with them, and
         // are taken no sooner than the turn after this one.
         Opened::Bytes(n) => match unsafe { read_whole(fd, n) } {
-            Ok(bytes) => KeptRead::Reading { bytes, asked: turn() },
+            Ok(bytes) => KeptRead::Reading {
+                bytes,
+                asked: turn(),
+            },
             Err(refused) => KeptRead::Refused(refused),
         },
         // Only its absence says nothing was kept.
         Opened::Absent => KeptRead::Read(KeptFile::None),
-        Opened::Failed { errnum: Errno::EFBIG, .. } => KeptRead::Read(refuse(kept)),
+        Opened::Failed {
+            errnum: Errno::EFBIG,
+            ..
+        } => KeptRead::Read(refuse(kept)),
         Opened::Failed { .. } => KeptRead::Read(KeptFile::Unreadable),
     };
     kept_read(kept, read);
@@ -225,7 +236,13 @@ fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
 #[cfg(test)]
 pub fn kept_answered(kept: Kept, answer: Result<&[u8], Opened>) {
     match answer {
-        Ok(text) => kept_read(kept, KeptRead::Reading { bytes: text.to_vec(), asked: turn() }),
+        Ok(text) => kept_read(
+            kept,
+            KeptRead::Reading {
+                bytes: text.to_vec(),
+                asked: turn(),
+            },
+        ),
         Err(opened) => kept_opened(kept, 0, opened),
     }
 }
@@ -326,7 +343,13 @@ pub fn write_kept(kept: Kept, bytes: &[u8]) {
         return;
     }
     if let Some(sys) = sys() {
-        files().write_whole(sys, root::STORAGE, kept.path().as_str(), sealed(kept, bytes), Owner::Write);
+        files().write_whole(
+            sys,
+            root::STORAGE,
+            kept.path().as_str(),
+            sealed(kept, bytes),
+            Owner::Write,
+        );
     }
 }
 
@@ -362,9 +385,14 @@ impl Opened {
 /// every device is given cannot be held anywhere: it is the host's answer
 /// refused, and the owner hears EFBIG.
 pub fn opened(fd: Fd, res: i32, detail: u32) {
-    let Some(&owner) = files().owner(fd) else { return };
+    let Some(&owner) = files().owner(fd) else {
+        return;
+    };
     let opened = match answered(res) {
-        Ok(n) if n > MIN_HEAP_BYTES => Opened::Failed { errnum: Errno::EFBIG, detail },
+        Ok(n) if n > MIN_HEAP_BYTES => Opened::Failed {
+            errnum: Errno::EFBIG,
+            detail,
+        },
         Ok(n) => Opened::Bytes(n),
         Err(Errno::ENOENT) => Opened::Absent,
         Err(errnum) => Opened::Failed { errnum, detail },

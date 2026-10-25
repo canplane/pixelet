@@ -48,9 +48,22 @@ const _: () = {
     use at_word as at;
     use core::mem::{offset_of, size_of};
     assert!(size_of::<Eye>() == at(eye::WORDS));
-    assert!(offset_of!(Eye, origin) == at(eye::ORIGIN) && offset_of!(Eye, forward_far) == at(eye::FORWARD) && offset_of!(Eye, right_tau) == at(eye::RIGHT));
-    assert!(offset_of!(Eye, up) == at(eye::UP) && offset_of!(Eye, tan) == at(eye::TAN) && offset_of!(Eye, range) == at(eye::RANGE));
-    assert!(offset_of!(Eye, carve) == at(eye::CARVE) && offset_of!(Eye, hide) == at(eye::HIDE) && offset_of!(Eye, grid) == at(eye::GRID) && offset_of!(Eye, sun) == at(eye::SUN));
+    assert!(
+        offset_of!(Eye, origin) == at(eye::ORIGIN)
+            && offset_of!(Eye, forward_far) == at(eye::FORWARD)
+            && offset_of!(Eye, right_tau) == at(eye::RIGHT)
+    );
+    assert!(
+        offset_of!(Eye, up) == at(eye::UP)
+            && offset_of!(Eye, tan) == at(eye::TAN)
+            && offset_of!(Eye, range) == at(eye::RANGE)
+    );
+    assert!(
+        offset_of!(Eye, carve) == at(eye::CARVE)
+            && offset_of!(Eye, hide) == at(eye::HIDE)
+            && offset_of!(Eye, grid) == at(eye::GRID)
+            && offset_of!(Eye, sun) == at(eye::SUN)
+    );
 };
 
 /// Where the eye's rays start, and the zooms each distance asks.
@@ -68,7 +81,10 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
 /// The eye's ray at the tangents `[tx, ty]`, reaching as far as the eye.
 pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
     let v3 = |v: Vec4| [v.x, v.y, v.z];
-    cast::Ray::new(cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty), eye.forward_far.w)
+    cast::Ray::new(
+        cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty),
+        eye.forward_far.w,
+    )
 }
 
 /// The camera grid the frame casts on, read whole off the eye's words, as
@@ -77,7 +93,8 @@ pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
 pub(crate) fn grid(eye: &Eye) -> beam::Grid {
     let g = &eye.grid;
     let w = [
-        g[0].x, g[0].y, g[0].z, g[0].w, g[1].x, g[1].y, g[1].z, g[1].w, g[2].x, g[2].y, g[2].z, g[2].w, g[3].x, g[3].y, g[3].z, g[3].w,
+        g[0].x, g[0].y, g[0].z, g[0].w, g[1].x, g[1].y, g[1].z, g[1].w, g[2].x, g[2].y, g[2].z,
+        g[2].w, g[3].x, g[3].y, g[3].z, g[3].w,
     ];
     beam::Grid::of_words([eye.tan.x, eye.tan.y], w)
 }

@@ -48,7 +48,10 @@ pub struct Scene {
 impl Scene {
     /// Advances what animates; whether anything did.
     pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-        companion_animate(draw, models, frame) | preview_animate(draw, models, frame) | self.puck.tick(frame) | self.environment.tick(frame)
+        companion_animate(draw, models, frame)
+            | preview_animate(draw, models, frame)
+            | self.puck.tick(frame)
+            | self.environment.tick(frame)
     }
 
     /// Begins the frame's list with the scene's own layers.

@@ -107,7 +107,11 @@ pub fn sea_under_eye() -> V3 {
 /// south edge the lattice would hold the eye at it.
 pub fn globe_anchor() -> Option<G4326> {
     let [x, y, _] = view().pose?.eye;
-    Some(epsg4326::from_mercator(&[epsg3857::mer_from_u(nearest(x, 0.0)), epsg3857::mer_from_u(y), 0.0]))
+    Some(epsg4326::from_mercator(&[
+        epsg3857::mer_from_u(nearest(x, 0.0)),
+        epsg3857::mer_from_u(y),
+        0.0,
+    ]))
 }
 
 /// The eye's longitude and latitude, which the sky is seen from: the
@@ -176,7 +180,12 @@ fn compose() {
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
     // plane holds every height's precision.
-    mat4::perspective(&mut v.proj, FOV.to_radians(), v.width / v.height, crate::domain::view::param::NEAR);
+    mat4::perspective(
+        &mut v.proj,
+        FOV.to_radians(),
+        v.width / v.height,
+        crate::domain::view::param::NEAR,
+    );
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
@@ -196,7 +205,13 @@ pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direc
     let mut back = mat4::new();
     mat4::transpose(&mut back, &pose.rotation);
     *origin = pose.eye;
-    mat4::transform_direction(direction, &back, ndc_x * tan * v.width / v.height, ndc_y * tan, -1.0);
+    mat4::transform_direction(
+        direction,
+        &back,
+        ndc_x * tan * v.width / v.height,
+        ndc_y * tan,
+        -1.0,
+    );
 }
 
 /// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.

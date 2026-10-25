@@ -68,7 +68,11 @@ macro_rules! bug {
         $crate::status::bug::bug($crate::status::errno::Errno::$errnum, ($a) as u64, 0)
     };
     ($errnum:ident, $a:expr, $b:expr) => {
-        $crate::status::bug::bug($crate::status::errno::Errno::$errnum, ($a) as u64, ($b) as u64)
+        $crate::status::bug::bug(
+            $crate::status::errno::Errno::$errnum,
+            ($a) as u64,
+            ($b) as u64,
+        )
     };
 }
 

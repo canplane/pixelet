@@ -1,7 +1,13 @@
 // @pxl/client/shell/world/toast/item.tsx
 
 import { useEffect, useState } from "react";
-import { type GestureResponderHandlers, PixelRatio, StyleSheet, Text, View } from "react-native";
+import {
+  type GestureResponderHandlers,
+  PixelRatio,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/shell/ui/icon.tsx";
@@ -11,8 +17,22 @@ import { Pill } from "@/shell/world/pill.tsx";
 import { BackingPlace } from "@/shell/ui/backing.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { Swap } from "@/shell/ui/motion/presence.tsx";
-import { FADE, SNAP, spring, type Transition } from "@/shell/ui/motion/transition.ts";
-import { alpha, chrome, color, shadow, surface, SYSTEM, textScale, textStyle } from "@/shell/ui/theme.ts";
+import {
+  FADE,
+  SNAP,
+  spring,
+  type Transition,
+} from "@/shell/ui/motion/transition.ts";
+import {
+  alpha,
+  chrome,
+  color,
+  shadow,
+  surface,
+  SYSTEM,
+  textScale,
+  textStyle,
+} from "@/shell/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 import { bracket } from "@/bracket.tsx";
 
@@ -26,7 +46,10 @@ const OPEN_AFTER_MS = 450;
 const POP: Transition = spring({ stiffness: 260, damping: 12, mass: 0.8 });
 
 /** A filled disc, as Apple's status glyphs: a green stroke on glass stood under 2:1. */
-const TONE: Record<ToastTone, { mark: "checkmark" | "xmark" | null; status: string }> = {
+const TONE: Record<
+  ToastTone,
+  { mark: "checkmark" | "xmark" | null; status: string }
+> = {
   [ToastTone.Loading]: { mark: null, status: alpha(SYSTEM.green, 0.3) },
   [ToastTone.Error]: { mark: "xmark", status: STATUS.failed },
   [ToastTone.Ready]: { mark: "checkmark", status: STATUS.ready },
@@ -49,7 +72,9 @@ interface ToastProps extends ToastSpec {
   touchBelow?: f64;
 }
 
-export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }: ToastProps) {
+export function Toast(
+  { message, tone, fade, fadeTransition, touch, touchBelow }: ToastProps,
+) {
   const error = tone === ToastTone.Error;
   const span = bracket.view.useWindowSize().width;
   const [open, setOpen] = useState(false);
@@ -71,7 +96,10 @@ export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }
       fill={error ? surface.alarm.fill : color.ground}
       tint={error ? surface.alarm.glass : undefined}
       place={BackingPlace.OverMap}
-      border={{ width: 2, color: error ? surface.alarm.edge : alpha(color.white, 0.9) }}
+      border={{
+        width: 2,
+        color: error ? surface.alarm.edge : alpha(color.white, 0.9),
+      }}
       shadow={error ? `0 6px 20px ${surface.alarm.shadow}` : shadow.lift}
       fade={fade}
       fadeFrom={0}
@@ -83,7 +111,9 @@ export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }
       <View style={styles.slot}>
         <Swap
           id={tone}
-          from={tone === ToastTone.Ready ? { opacity: 0, scale: 0.3, rotate: -20 } : { opacity: 0, scale: 0.8 }}
+          from={tone === ToastTone.Ready
+            ? { opacity: 0, scale: 0.3, rotate: -20 }
+            : { opacity: 0, scale: 0.8 }}
           exit={{ opacity: 0, scale: 0.5 }}
           transition={tone === ToastTone.Ready ? POP : FADE}
           exitTransition={FADE}
@@ -92,8 +122,19 @@ export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }
           <ToneGlyph tone={tone} />
         </Swap>
       </View>
-      <Motion to={open ? {} : { opacity: 0, translateX: -10 }} transition={SNAP}>
-        <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={[styles.message, { maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE }]}>{message}</Text>
+      <Motion
+        to={open ? {} : { opacity: 0, translateX: -10 }}
+        transition={SNAP}
+      >
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={textScale.chrome}
+          style={[styles.message, {
+            maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
+          }]}
+        >
+          {message}
+        </Text>
       </Motion>
       <View style={styles.slot}>
         <Motion to={open ? {} : { opacity: 0, scale: 0 }} transition={SNAP}>
@@ -105,9 +146,24 @@ export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }
 }
 
 const styles = StyleSheet.create({
-  slot: { width: TOAST_SIDE, height: TOAST_SIDE, alignItems: "center", justifyContent: "center" },
+  slot: {
+    width: TOAST_SIDE,
+    height: TOAST_SIDE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   glyph: { position: "absolute" },
-  disc: { width: chrome.glyph, height: chrome.glyph, borderRadius: chrome.glyph / 2, alignItems: "center", justifyContent: "center" },
-  message: { ...textStyle.notice, color: LABEL.primary, paddingHorizontal: MESSAGE_PAD },
+  disc: {
+    width: chrome.glyph,
+    height: chrome.glyph,
+    borderRadius: chrome.glyph / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  message: {
+    ...textStyle.notice,
+    color: LABEL.primary,
+    paddingHorizontal: MESSAGE_PAD,
+  },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

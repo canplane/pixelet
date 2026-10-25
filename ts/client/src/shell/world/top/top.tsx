@@ -37,23 +37,56 @@ export function TopOverlays() {
         <Svg width="100%" height="100%">
           <Defs>
             <LinearGradient id="scrim-down" x1="0" y1="0" x2="0" y2="1">
-              {SCRIM_EASE.map(([at, k]) => <Stop key={at} offset={at} stopColor={color.black} stopOpacity={SCRIM_OPACITY * (1 - k)} />)}
+              {SCRIM_EASE.map(([at, k]) => (
+                <Stop
+                  key={at}
+                  offset={at}
+                  stopColor={color.black}
+                  stopOpacity={SCRIM_OPACITY * (1 - k)}
+                />
+              ))}
             </LinearGradient>
-            <LinearGradient id="scrim-across" gradientUnits="userSpaceOnUse" x1={from} y1={0} x2={width - from} y2={0}>
-              {[...SCRIM_EASE.map(([at, k]) => [ramp * at, k] as const), ...[...SCRIM_EASE].reverse().map(([at, k]) => [1 - ramp * at, k] as const)].map(([at, k], i) => (
-                <Stop key={i} offset={at} stopColor={color.white} stopOpacity={k} />
+            <LinearGradient
+              id="scrim-across"
+              gradientUnits="userSpaceOnUse"
+              x1={from}
+              y1={0}
+              x2={width - from}
+              y2={0}
+            >
+              {[
+                ...SCRIM_EASE.map(([at, k]) => [ramp * at, k] as const),
+                ...[...SCRIM_EASE].reverse().map(([at, k]) =>
+                  [1 - ramp * at, k] as const
+                ),
+              ].map(([at, k], i) => (
+                <Stop
+                  key={i}
+                  offset={at}
+                  stopColor={color.white}
+                  stopOpacity={k}
+                />
               ))}
             </LinearGradient>
             <Mask id="scrim-mask">
               <Rect width="100%" height="100%" fill="url(#scrim-across)" />
             </Mask>
           </Defs>
-          <Rect width="100%" height="100%" fill="url(#scrim-down)" mask="url(#scrim-mask)" />
+          <Rect
+            width="100%"
+            height="100%"
+            fill="url(#scrim-down)"
+            mask="url(#scrim-mask)"
+          />
         </Svg>
       </View>
 
       <BusyDim style={[styles.left, { top }]}>
-        <CircularButton glyph="line.3.horizontal" onPress={() => openModal("settings")} label={t("settings.trigger_aria_label")} />
+        <CircularButton
+          glyph="line.3.horizontal"
+          onPress={() => openModal("settings")}
+          label={t("settings.trigger_aria_label")}
+        />
       </BusyDim>
 
       <BusyDim style={[styles.center, { top }]}>
@@ -75,11 +108,28 @@ function SearchStrip() {
   const veil = useVeil(1, SNAP);
   return (
     <Motion {...veil.motion} style={styles.fill}>
-      <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("world.search.trigger_aria_label")} style={styles.strip}>
-        <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
+      <Pressable
+        onPress={() => openModal("search")}
+        accessibilityRole="button"
+        accessibilityLabel={t("world.search.trigger_aria_label")}
+        style={styles.strip}
+      >
+        <Presence
+          show={!zooming}
+          from={{ opacity: 0 }}
+          exit={{ opacity: 0 }}
+          transition={SETTLE}
+          exitTransition={LEAVE}
+          style={styles.place}
+        >
           <View style={styles.title}>
             <View style={styles.search}>
-              <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
+              <HaloIcon
+                glyph="magnifyingglass"
+                size={12}
+                weight="semibold"
+                color={color.white}
+              />
               <CurrentAddress />
             </View>
             <SensorStatus />
@@ -105,8 +155,21 @@ const SCRIM_EASE = Array.from({ length: 9 }, (_, i) => {
 });
 
 const styles = StyleSheet.create({
-  scrim: { position: "absolute", top: 0, left: 0, right: 0, zIndex: layer.scrim, pointerEvents: "none" },
-  left: { position: "absolute", left: chrome.inset, zIndex: layer.chrome, alignItems: "flex-start", gap: 12 },
+  scrim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: layer.scrim,
+    pointerEvents: "none",
+  },
+  left: {
+    position: "absolute",
+    left: chrome.inset,
+    zIndex: layer.chrome,
+    alignItems: "flex-start",
+    gap: 12,
+  },
   center: {
     position: "absolute",
     left: 0,
@@ -117,13 +180,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  right: { position: "absolute", right: chrome.inset, zIndex: layer.chrome, alignItems: "center", gap: chrome.controlGap },
+  right: {
+    position: "absolute",
+    right: chrome.inset,
+    zIndex: layer.chrome,
+    alignItems: "center",
+    gap: chrome.controlGap,
+  },
   fill: { alignSelf: "stretch", flex: 1 },
   // The whole strip, scale shown or not.
   strip: { flex: 1, alignItems: "center", justifyContent: "center" },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: haloGap(8) },
   // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.
-  search: { flexDirection: "row", alignItems: "center", gap: haloGap(8), minWidth: 0, maxWidth: "100%", flexShrink: 1 },
-  scale: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
+  search: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: haloGap(8),
+    minWidth: 0,
+    maxWidth: "100%",
+    flexShrink: 1,
+  },
+  scale: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+  },
 });

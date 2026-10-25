@@ -2,7 +2,11 @@
 
 import { useTranslation } from "react-i18next";
 
-import { Section, SettingChoiceRow, SettingChoices } from "@/shell/setting/row.tsx";
+import {
+  Section,
+  SettingChoiceRow,
+  SettingChoices,
+} from "@/shell/setting/row.tsx";
 import { type Language, LANGUAGE_NAMES } from "@/shell/locale/i18n.ts";
 
 export function LanguageSection() {

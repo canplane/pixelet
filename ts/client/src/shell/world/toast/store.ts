@@ -21,10 +21,16 @@ interface Entry extends ToastSpec {
 }
 
 /** Where a new card comes in: an error before a wait, a wait before news. */
-const SEVERITY: Record<ToastTone, u32> = { [ToastTone.Error]: 0, [ToastTone.Loading]: 1, [ToastTone.Ready]: 2 };
+const SEVERITY: Record<ToastTone, u32> = {
+  [ToastTone.Error]: 0,
+  [ToastTone.Loading]: 1,
+  [ToastTone.Ready]: 2,
+};
 
 function outranks(a: Entry, b: Entry): boolean {
-  return SEVERITY[a.tone] !== SEVERITY[b.tone] ? SEVERITY[a.tone] < SEVERITY[b.tone] : a.id < b.id;
+  return SEVERITY[a.tone] !== SEVERITY[b.tone]
+    ? SEVERITY[a.tone] < SEVERITY[b.tone]
+    : a.id < b.id;
 }
 
 interface ToastState {
@@ -36,7 +42,12 @@ interface ToastState {
   pending: u32 | null;
 }
 
-export const useToastStore = create<ToastState>(() => ({ entries: [], turns: 0, dragging: false, pending: null }));
+export const useToastStore = create<ToastState>(() => ({
+  entries: [],
+  turns: 0,
+  dragging: false,
+  pending: null,
+}));
 
 const set = useToastStore.setState;
 const get = useToastStore.getState;
@@ -45,14 +56,19 @@ function toFront(id: u32): void {
   const { entries } = get();
   const at = entries.findIndex((e) => e.id === id);
   if (at < 0) return;
-  set({ entries: [entries[at], ...entries.slice(0, at), ...entries.slice(at + 1)] });
+  set({
+    entries: [entries[at], ...entries.slice(0, at), ...entries.slice(at + 1)],
+  });
 }
 
 export function toastShow(id: u32, spec: ToastSpec): void {
   const { entries, dragging } = get();
   const shown = entries.find((e) => e.id === id);
   // Said again as it is, as a toast kept past its cause is: no card to bring forward.
-  if (shown !== undefined && shown.message === spec.message && shown.tone === spec.tone) return;
+  if (
+    shown !== undefined && shown.message === spec.message &&
+    shown.tone === spec.tone
+  ) return;
   if (shown !== undefined) {
     set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });
     // Reshuffling mid-drag would move the held card out of front.
@@ -69,14 +85,20 @@ export function toastShow(id: u32, spec: ToastSpec): void {
 
 export function toastDismiss(id: u32): void {
   const { entries, pending } = get();
-  set({ entries: entries.filter((e) => e.id !== id), pending: pending === id ? null : pending });
+  set({
+    entries: entries.filter((e) => e.id !== id),
+    pending: pending === id ? null : pending,
+  });
 }
 
 /** Up (1) sends the front card to the back; down (-1) brings the back one forward. */
 export function toastRotate(delta: i32): void {
   const { entries, turns } = get();
   const k = ((delta % entries.length) + entries.length) % entries.length;
-  set({ entries: [...entries.slice(k), ...entries.slice(0, k)], turns: turns + delta });
+  set({
+    entries: [...entries.slice(k), ...entries.slice(0, k)],
+    turns: turns + delta,
+  });
 }
 
 export function setToastDragging(dragging: boolean): void {

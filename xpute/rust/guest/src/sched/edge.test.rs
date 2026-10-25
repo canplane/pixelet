@@ -21,7 +21,12 @@ fn advance(ms: f64) {
     CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
 
-const VTABLE: RawWakerVTable = RawWakerVTable::new(|p| RawWaker::new(p, &VTABLE), |_| WOKEN.with(|w| w.set(w.get() + 1)), |_| WOKEN.with(|w| w.set(w.get() + 1)), |_| {});
+const VTABLE: RawWakerVTable = RawWakerVTable::new(
+    |p| RawWaker::new(p, &VTABLE),
+    |_| WOKEN.with(|w| w.set(w.get() + 1)),
+    |_| WOKEN.with(|w| w.set(w.get() + 1)),
+    |_| {},
+);
 
 fn waker() -> Waker {
     // SAFETY: the vtable counts wakes and holds nothing.

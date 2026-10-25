@@ -50,7 +50,13 @@ impl cast::Over<Writ> for Beamed<'_> {
         let (w, k) = (self.0, self.step(zoom));
         Writ {
             entry: seen_at(w, k),
-            at: At::of_words([seen_at(w, k + 1), seen_at(w, k + 2), seen_at(w, k + 3), seen_at(w, k + 4), seen_at(w, k + 5)]),
+            at: At::of_words([
+                seen_at(w, k + 1),
+                seen_at(w, k + 2),
+                seen_at(w, k + 3),
+                seen_at(w, k + 4),
+                seen_at(w, k + 5),
+            ]),
         }
     }
 }
@@ -59,7 +65,11 @@ impl cast::Over<Writ> for Beamed<'_> {
 /// each hold one (pxl-spec-core `beam::NODE_WORDS`).
 pub(crate) fn node_at(w: &Beams, k: u32) -> cast::Node {
     cast::Node {
-        corner: [seen_at(w, k + beam::NODE_CORNER), seen_at(w, k + beam::NODE_CORNER + 1), seen_at(w, k + beam::NODE_CORNER + 2)],
+        corner: [
+            seen_at(w, k + beam::NODE_CORNER),
+            seen_at(w, k + beam::NODE_CORNER + 1),
+            seen_at(w, k + beam::NODE_CORNER + 2),
+        ],
         zoom: seen_at(w, k + beam::NODE_ZOOM),
         roots: [
             seen_at(w, k + beam::NODE_ROOTS) as i32,
@@ -83,17 +93,37 @@ fn node_put(w: &mut Beams, k: u32, n: &cast::Node) {
 /// Where the ray at the screen's tangents `tan` starts from the screen's
 /// cell `cell` of `grid`: that cell's least, the corner's line it resumes
 /// from, and the ray (pxl-spec-core `beam`).
-pub(crate) fn started<'a>(eye: &Eye, grid: &beam::Grid, beams: &'a Beams, cell: [u32; 2], tan: [f32; 2]) -> (cast::Ray, f32, Beamed<'a>) {
+pub(crate) fn started<'a>(
+    eye: &Eye,
+    grid: &beam::Grid,
+    beams: &'a Beams,
+    cell: [u32; 2],
+    tan: [f32; 2],
+) -> (cast::Ray, f32, Beamed<'a>) {
     let at = grid.cell_at(cell);
     let t = f32::from_bits(seen_at(beams, at + beam::CELL_T));
-    (eye_ray(eye, tan), t, Beamed(beams, beam::Grid::line(seen_at(beams, at + beam::CELL_CORNER))))
+    (
+        eye_ray(eye, tan),
+        t,
+        Beamed(
+            beams,
+            beam::Grid::line(seen_at(beams, at + beam::CELL_CORNER)),
+        ),
+    )
 }
 
 /// `ray`'s walk to the block that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it (doc/minutes/20261022-a-cell-casts-a-beam.md,
 /// "Where a pixel resumes"); through `q`, reading or writing.
-pub(crate) fn resumed<'a, Q: Query>(q: &mut Q, origin: [i32; 3], ray: &cast::Ray, detail: Detail, t: f32, line: &Beamed<'a>) -> Met<Q::At>
+pub(crate) fn resumed<'a, Q: Query>(
+    q: &mut Q,
+    origin: [i32; 3],
+    ray: &cast::Ray,
+    detail: Detail,
+    t: f32,
+    line: &Beamed<'a>,
+) -> Met<Q::At>
 where
     Beamed<'a>: cast::Over<Q::At>,
 {
@@ -144,7 +174,14 @@ pub fn beam_cs(
         pool: ways::tree::Read(pool),
     };
     let base = beam::Grid::line(g.corner_index([id.x, id.y]));
-    let met = cast::rooted(&mut Writing { world, seen, tag }, origin, &ray, detail, Until::Beam, &mut Leaving(beams, base));
+    let met = cast::rooted(
+        &mut Writing { world, seen, tag },
+        origin,
+        &ray,
+        detail,
+        Until::Beam,
+        &mut Leaving(beams, base),
+    );
     seen_put(beams, base + beam::LINE_T, g.handed(met.stop.t).to_bits());
 }
 
@@ -181,7 +218,11 @@ impl cast::Keep<Writ> for Leaving<'_> {
 /// whose line they resume from; past the lines in the beam rays' buffer
 /// (`Grid::cell_at`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cells_cs"))]
-pub fn cells_cs(#[spirv(global_invocation_id)] id: UVec3, #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye, #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams) {
+pub fn cells_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
+) {
     let g = grid(eye);
     if id.x >= g.span[0] || id.y >= g.span[1] {
         return;
@@ -237,7 +278,13 @@ pub fn sample_cs(
     if id.x >= g.samples[0] || id.y >= g.samples[1] {
         return;
     }
-    let (ray, t, line) = started(eye, &g, beams, g.sample_cell([id.x, id.y]), g.sample([id.x, id.y]));
+    let (ray, t, line) = started(
+        eye,
+        &g,
+        beams,
+        g.sample_cell([id.x, id.y]),
+        g.sample([id.x, id.y]),
+    );
     let tag = observed::tag(seen_at(seen, observed::FRAME), 1);
     let mut world = World {
         window,
@@ -248,15 +295,30 @@ pub fn sample_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let met = resumed(&mut Writing { world, seen, tag }, origin, &ray, detail, t, &line);
+    let met = resumed(
+        &mut Writing { world, seen, tag },
+        origin,
+        &ray,
+        detail,
+        t,
+        &line,
+    );
     let faces = world.faced(origin, &ray, &met);
     let base = g.sample_at([id.x, id.y]);
     let stop = met.stop;
     node_put(beams, base + beam::SAMPLE_NODE, &stop.node);
     if met.ends == Ends::On {
-        seen_put(beams, base + beam::SAMPLE_NODE + beam::NODE_ZOOM, beam::SAMPLE_NONE);
+        seen_put(
+            beams,
+            base + beam::SAMPLE_NODE + beam::NODE_ZOOM,
+            beam::SAMPLE_NONE,
+        );
     }
-    seen_put(beams, base + beam::SAMPLE_LACKS, (met.ends == Ends::Lacks) as u32);
+    seen_put(
+        beams,
+        base + beam::SAMPLE_LACKS,
+        (met.ends == Ends::Lacks) as u32,
+    );
     seen_put(beams, base + beam::SAMPLE_BLOCK, stop.block[0]);
     seen_put(beams, base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
     seen_put(beams, base + beam::SAMPLE_AXIS, stop.axis);

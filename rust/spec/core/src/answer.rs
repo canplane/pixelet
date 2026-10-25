@@ -93,9 +93,13 @@ pub fn slab_of(w: u32) -> [i32; 2] {
 /// relief of face heights, both held (`ground::UNBOUNDED`), which is another
 /// fact in another unit.
 pub const ANY: [i32; 2] = [i16::MIN as i32, i16::MAX as i32 + 1];
-const _: () = assert!(crate::LEAF_CELL == crate::UNIT_ZOOM, "a slab's leaf cell is the world's unit");
 const _: () = assert!(
-    -(1i32 << (crate::HEIGHT_BITS - 1)) == i16::MIN as i32 && (1i32 << (crate::HEIGHT_BITS - 1)) - 1 == i16::MAX as i32,
+    crate::LEAF_CELL == crate::UNIT_ZOOM,
+    "a slab's leaf cell is the world's unit"
+);
+const _: () = assert!(
+    -(1i32 << (crate::HEIGHT_BITS - 1)) == i16::MIN as i32
+        && (1i32 << (crate::HEIGHT_BITS - 1)) - 1 == i16::MAX as i32,
     "the world's z, in leaf cells, is i16's range"
 );
 

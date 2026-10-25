@@ -18,7 +18,9 @@ const POLL_MS = 500;
 /** Folding every frame since load on each repaint grew into a 60 ms task. */
 export const LIVE_WINDOW_MS = 10_000;
 
-const useRead = create<{ gauge: Gauge | null; view: Gauge["view"] | null }>(() => ({ gauge: null, view: null }));
+const useRead = create<{ gauge: Gauge | null; view: Gauge["view"] | null }>(
+  () => ({ gauge: null, view: null }),
+);
 
 /** The panels reading each, which says what a poll reads. */
 const readers = { gauge: 0, view: 0 };
@@ -40,7 +42,9 @@ function join(what: keyof typeof readers): () => void {
     readers[what]--;
     // A panel shown again starts from nothing, not from what it read before.
     if (readers.gauge === 0) useRead.setState({ gauge: null });
-    if (readers.view === 0 && readers.gauge === 0) useRead.setState({ view: null });
+    if (readers.view === 0 && readers.gauge === 0) {
+      useRead.setState({ view: null });
+    }
     if (readers.gauge + readers.view === 0) {
       clearInterval(timer);
       timer = undefined;

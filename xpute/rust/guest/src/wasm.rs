@@ -40,7 +40,10 @@ pub struct Plan {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn boot_info(plan: &Plan, heap_stat: fn() -> crate::mem::heap::HeapStat) -> crate::entry::BootInfo {
+pub fn boot_info(
+    plan: &Plan,
+    heap_stat: fn() -> crate::mem::heap::HeapStat,
+) -> crate::entry::BootInfo {
     let high = stack_high();
     xpute_kit::ensure!(high == plan.stack_bytes, ENOTRECOVERABLE, high);
     crate::entry::BootInfo {

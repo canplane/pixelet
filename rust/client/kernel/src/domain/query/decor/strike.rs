@@ -17,7 +17,10 @@ use crate::sys::io::loader::catalog;
 /// How far any decor, its box or its model, reaches from its box's min
 /// corner: its box alone while the catalog loads, when no model is struck.
 pub fn reach() -> f64 {
-    DECORS.iter().map(|d| d.reach(catalog())).fold(0.0, f64::max)
+    DECORS
+        .iter()
+        .map(|d| d.reach(catalog()))
+        .fold(0.0, f64::max)
 }
 
 /// Where a ray from `o` along `d` first meets `i`'s model, nearer than
@@ -31,7 +34,9 @@ pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option
         (
             core::slice::from_raw_parts(mem::at::<f32>(mesh.at), mesh.vertex_cnt as usize * 3),
             core::slice::from_raw_parts(
-                (mem::at::<u32>(mesh.at)).add(mesh.vertex_cnt as usize * pxl_render::frame::draw::MODEL_VERTEX_WORDS as usize),
+                (mem::at::<u32>(mesh.at)).add(
+                    mesh.vertex_cnt as usize * pxl_render::frame::draw::MODEL_VERTEX_WORDS as usize,
+                ),
                 mesh.index_cnt as usize,
             ),
         )
@@ -52,7 +57,9 @@ pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option
     let mut nearest: Option<f64> = None;
     for tri in indices.as_chunks::<3>().0 {
         let at = |k: u32| &positions[k as usize * 3..k as usize * 3 + 3];
-        if let Some(t) = ray_triangle(&mo, &md, at(tri[0]), at(tri[1]), at(tri[2])).filter(|&t| t < nearest.unwrap_or(limit)) {
+        if let Some(t) = ray_triangle(&mo, &md, at(tri[0]), at(tri[1]), at(tri[2]))
+            .filter(|&t| t < nearest.unwrap_or(limit))
+        {
             nearest = Some(t);
         }
     }
@@ -76,8 +83,16 @@ fn ray_meets_sphere(p: &V3, d: &V3, r: f64, limit: f64) -> bool {
 
 /// Möller–Trumbore, both sides.
 fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> Option<f64> {
-    let e1 = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
-    let e2 = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
+    let e1 = [
+        b[0] as f64 - a[0] as f64,
+        b[1] as f64 - a[1] as f64,
+        b[2] as f64 - a[2] as f64,
+    ];
+    let e2 = [
+        c[0] as f64 - a[0] as f64,
+        c[1] as f64 - a[1] as f64,
+        c[2] as f64 - a[2] as f64,
+    ];
     let p = v3::cross(d, &e2);
     let det = v3::dot(&e1, &p);
     if det.abs() < 1e-12 {
@@ -104,16 +119,51 @@ mod test {
 
     #[test]
     fn a_ray_down_the_z_axis_meets_the_triangle_under_it_at_its_height() {
-        let t = ray_triangle(&[0.2, 0.2, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]);
+        let t = ray_triangle(
+            &[0.2, 0.2, 5.0],
+            &[0.0, 0.0, -1.0],
+            &[0.0, 0.0, 1.0],
+            &[1.0, 0.0, 1.0],
+            &[0.0, 1.0, 1.0],
+        );
         assert!(t.is_some_and(|t| (t - 4.0).abs() < 1e-12), "{t:?}");
-        assert!(ray_triangle(&[0.2, 0.2, -5.0], &[0.0, 0.0, 1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]).is_some());
-        assert!(ray_triangle(&[0.8, 0.8, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]).is_none());
+        assert!(ray_triangle(
+            &[0.2, 0.2, -5.0],
+            &[0.0, 0.0, 1.0],
+            &[0.0, 0.0, 1.0],
+            &[1.0, 0.0, 1.0],
+            &[0.0, 1.0, 1.0]
+        )
+        .is_some());
+        assert!(ray_triangle(
+            &[0.8, 0.8, 5.0],
+            &[0.0, 0.0, -1.0],
+            &[0.0, 0.0, 1.0],
+            &[1.0, 0.0, 1.0],
+            &[0.0, 1.0, 1.0]
+        )
+        .is_none());
     }
 
     #[test]
     fn a_sphere_is_met_within_reach_and_missed_past_it() {
-        assert!(ray_meets_sphere(&[-10.0, 0.5, 0.0], &[1.0, 0.0, 0.0], 1.0, 100.0));
-        assert!(!ray_meets_sphere(&[-10.0, 2.0, 0.0], &[1.0, 0.0, 0.0], 1.0, 100.0));
-        assert!(!ray_meets_sphere(&[-10.0, 0.5, 0.0], &[1.0, 0.0, 0.0], 1.0, 5.0));
+        assert!(ray_meets_sphere(
+            &[-10.0, 0.5, 0.0],
+            &[1.0, 0.0, 0.0],
+            1.0,
+            100.0
+        ));
+        assert!(!ray_meets_sphere(
+            &[-10.0, 2.0, 0.0],
+            &[1.0, 0.0, 0.0],
+            1.0,
+            100.0
+        ));
+        assert!(!ray_meets_sphere(
+            &[-10.0, 0.5, 0.0],
+            &[1.0, 0.0, 0.0],
+            1.0,
+            5.0
+        ));
     }
 }

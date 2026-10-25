@@ -19,7 +19,11 @@ pub fn key(name: &str) -> Option<Tile> {
 
 /// A version is one segment of a URL, so a tile's name stays under it.
 pub fn is_version(version: &str) -> bool {
-    !version.is_empty() && version.len() <= VERSION_BYTES && version.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    !version.is_empty()
+        && version.len() <= VERSION_BYTES
+        && version
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
 }
 
 /// Whether a kind is held a shard at a time: the pyramid's are, the Earth's

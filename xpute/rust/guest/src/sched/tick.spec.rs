@@ -8,7 +8,12 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 pub const PHASES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -23,7 +28,13 @@ pub enum Phase {
 
 impl Phase {
     /// Every member, in the JSON's own order.
-    pub const ALL: [Phase; 5] = [Phase::interaction, Phase::visible, Phase::content, Phase::cosmetic, Phase::report];
+    pub const ALL: [Phase; 5] = [
+        Phase::interaction,
+        Phase::visible,
+        Phase::content,
+        Phase::cosmetic,
+        Phase::report,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.

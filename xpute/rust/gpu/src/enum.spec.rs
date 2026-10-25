@@ -9,7 +9,12 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 /// GPUTextureFormat, the core spec's and its texture-compression features'.
 pub const TEXTURE_FORMAT: &[&str] = &[
@@ -312,7 +317,9 @@ impl TextureFormat {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<TextureFormat> {
-        TextureFormat::ALL.into_iter().find(|member| *member as u8 == value)
+        TextureFormat::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -455,11 +462,19 @@ impl VertexFormat {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<VertexFormat> {
-        VertexFormat::ALL.into_iter().find(|member| *member as u8 == value)
+        VertexFormat::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
-pub const PRIMITIVE_TOPOLOGY: &[&str] = &["point-list", "line-list", "line-strip", "triangle-list", "triangle-strip"];
+pub const PRIMITIVE_TOPOLOGY: &[&str] = &[
+    "point-list",
+    "line-list",
+    "line-strip",
+    "triangle-list",
+    "triangle-strip",
+];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum PrimitiveTopology {
@@ -483,7 +498,9 @@ impl PrimitiveTopology {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<PrimitiveTopology> {
-        PrimitiveTopology::ALL.into_iter().find(|member| *member as u8 == value)
+        PrimitiveTopology::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -502,7 +519,9 @@ impl IndexFormat {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<IndexFormat> {
-        IndexFormat::ALL.into_iter().find(|member| *member as u8 == value)
+        IndexFormat::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -521,7 +540,9 @@ impl FrontFace {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<FrontFace> {
-        FrontFace::ALL.into_iter().find(|member| *member as u8 == value)
+        FrontFace::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -541,11 +562,22 @@ impl CullMode {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<CullMode> {
-        CullMode::ALL.into_iter().find(|member| *member as u8 == value)
+        CullMode::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
-pub const COMPARE_FUNCTION: &[&str] = &["never", "less", "equal", "less-equal", "greater", "not-equal", "greater-equal", "always"];
+pub const COMPARE_FUNCTION: &[&str] = &[
+    "never",
+    "less",
+    "equal",
+    "less-equal",
+    "greater",
+    "not-equal",
+    "greater-equal",
+    "always",
+];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CompareFunction {
@@ -575,11 +607,22 @@ impl CompareFunction {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<CompareFunction> {
-        CompareFunction::ALL.into_iter().find(|member| *member as u8 == value)
+        CompareFunction::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
-pub const STENCIL_OPERATION: &[&str] = &["keep", "zero", "replace", "invert", "increment-clamp", "decrement-clamp", "increment-wrap", "decrement-wrap"];
+pub const STENCIL_OPERATION: &[&str] = &[
+    "keep",
+    "zero",
+    "replace",
+    "invert",
+    "increment-clamp",
+    "decrement-clamp",
+    "increment-wrap",
+    "decrement-wrap",
+];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StencilOperation {
@@ -609,7 +652,9 @@ impl StencilOperation {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<StencilOperation> {
-        StencilOperation::ALL.into_iter().find(|member| *member as u8 == value)
+        StencilOperation::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -637,7 +682,9 @@ impl BlendOperation {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<BlendOperation> {
-        BlendOperation::ALL.into_iter().find(|member| *member as u8 == value)
+        BlendOperation::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -707,7 +754,9 @@ impl BlendFactor {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<BlendFactor> {
-        BlendFactor::ALL.into_iter().find(|member| *member as u8 == value)
+        BlendFactor::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -726,7 +775,9 @@ impl VertexStepMode {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<VertexStepMode> {
-        VertexStepMode::ALL.into_iter().find(|member| *member as u8 == value)
+        VertexStepMode::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -741,12 +792,18 @@ pub enum AddressMode {
 
 impl AddressMode {
     /// Every member, in the JSON's own order.
-    pub const ALL: [AddressMode; 3] = [AddressMode::clamp_to_edge, AddressMode::repeat, AddressMode::mirror_repeat];
+    pub const ALL: [AddressMode; 3] = [
+        AddressMode::clamp_to_edge,
+        AddressMode::repeat,
+        AddressMode::mirror_repeat,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<AddressMode> {
-        AddressMode::ALL.into_iter().find(|member| *member as u8 == value)
+        AddressMode::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -765,7 +822,9 @@ impl FilterMode {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<FilterMode> {
-        FilterMode::ALL.into_iter().find(|member| *member as u8 == value)
+        FilterMode::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -784,7 +843,9 @@ impl MipmapFilterMode {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<MipmapFilterMode> {
-        MipmapFilterMode::ALL.into_iter().find(|member| *member as u8 == value)
+        MipmapFilterMode::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -799,12 +860,18 @@ pub enum TextureDimension {
 
 impl TextureDimension {
     /// Every member, in the JSON's own order.
-    pub const ALL: [TextureDimension; 3] = [TextureDimension::_1d, TextureDimension::_2d, TextureDimension::_3d];
+    pub const ALL: [TextureDimension; 3] = [
+        TextureDimension::_1d,
+        TextureDimension::_2d,
+        TextureDimension::_3d,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<TextureDimension> {
-        TextureDimension::ALL.into_iter().find(|member| *member as u8 == value)
+        TextureDimension::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -834,7 +901,9 @@ impl TextureViewDimension {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<TextureViewDimension> {
-        TextureViewDimension::ALL.into_iter().find(|member| *member as u8 == value)
+        TextureViewDimension::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -849,12 +918,18 @@ pub enum TextureAspect {
 
 impl TextureAspect {
     /// Every member, in the JSON's own order.
-    pub const ALL: [TextureAspect; 3] = [TextureAspect::all, TextureAspect::stencil_only, TextureAspect::depth_only];
+    pub const ALL: [TextureAspect; 3] = [
+        TextureAspect::all,
+        TextureAspect::stencil_only,
+        TextureAspect::depth_only,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<TextureAspect> {
-        TextureAspect::ALL.into_iter().find(|member| *member as u8 == value)
+        TextureAspect::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -869,12 +944,18 @@ pub enum BufferBindingType {
 
 impl BufferBindingType {
     /// Every member, in the JSON's own order.
-    pub const ALL: [BufferBindingType; 3] = [BufferBindingType::uniform, BufferBindingType::storage, BufferBindingType::read_only_storage];
+    pub const ALL: [BufferBindingType; 3] = [
+        BufferBindingType::uniform,
+        BufferBindingType::storage,
+        BufferBindingType::read_only_storage,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<BufferBindingType> {
-        BufferBindingType::ALL.into_iter().find(|member| *member as u8 == value)
+        BufferBindingType::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -889,12 +970,18 @@ pub enum SamplerBindingType {
 
 impl SamplerBindingType {
     /// Every member, in the JSON's own order.
-    pub const ALL: [SamplerBindingType; 3] = [SamplerBindingType::filtering, SamplerBindingType::non_filtering, SamplerBindingType::comparison];
+    pub const ALL: [SamplerBindingType; 3] = [
+        SamplerBindingType::filtering,
+        SamplerBindingType::non_filtering,
+        SamplerBindingType::comparison,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<SamplerBindingType> {
-        SamplerBindingType::ALL.into_iter().find(|member| *member as u8 == value)
+        SamplerBindingType::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -922,7 +1009,9 @@ impl TextureSampleType {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<TextureSampleType> {
-        TextureSampleType::ALL.into_iter().find(|member| *member as u8 == value)
+        TextureSampleType::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -937,12 +1026,18 @@ pub enum StorageTextureAccess {
 
 impl StorageTextureAccess {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StorageTextureAccess; 3] = [StorageTextureAccess::write_only, StorageTextureAccess::read_only, StorageTextureAccess::read_write];
+    pub const ALL: [StorageTextureAccess; 3] = [
+        StorageTextureAccess::write_only,
+        StorageTextureAccess::read_only,
+        StorageTextureAccess::read_write,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<StorageTextureAccess> {
-        StorageTextureAccess::ALL.into_iter().find(|member| *member as u8 == value)
+        StorageTextureAccess::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -961,7 +1056,9 @@ impl LoadOp {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<LoadOp> {
-        LoadOp::ALL.into_iter().find(|member| *member as u8 == value)
+        LoadOp::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -980,7 +1077,9 @@ impl StoreOp {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<StoreOp> {
-        StoreOp::ALL.into_iter().find(|member| *member as u8 == value)
+        StoreOp::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -999,7 +1098,9 @@ impl QueryType {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<QueryType> {
-        QueryType::ALL.into_iter().find(|member| *member as u8 == value)
+        QueryType::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -1018,7 +1119,9 @@ impl CanvasAlphaMode {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<CanvasAlphaMode> {
-        CanvasAlphaMode::ALL.into_iter().find(|member| *member as u8 == value)
+        CanvasAlphaMode::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -1089,7 +1192,9 @@ impl FeatureName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<FeatureName> {
-        FeatureName::ALL.into_iter().find(|member| *member as u8 == value)
+        FeatureName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -1202,6 +1307,8 @@ impl LimitName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<LimitName> {
-        LimitName::ALL.into_iter().find(|member| *member as u8 == value)
+        LimitName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }

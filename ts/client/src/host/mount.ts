@@ -13,7 +13,16 @@ import { bracket, type Plan } from "@/bracket.tsx";
 export let HOST: Host;
 
 /** Opens the guest as `plan` says and mounts the host on it, its system calls answered by `sys` and each granted frame filled by `submit`. */
-export async function open_host(plan: Plan, sys: Mount["sys"], submit: Mount["submit"]): Promise<void> {
+export async function open_host(
+  plan: Plan,
+  sys: Mount["sys"],
+  submit: Mount["submit"],
+): Promise<void> {
   const guest = await bracket.guest.open(plan);
-  HOST = mount(guest, { directory_at: plan.directory_at, sys, submit, next_frame: (run) => requestAnimationFrame(run) });
+  HOST = mount(guest, {
+    directory_at: plan.directory_at,
+    sys,
+    submit,
+    next_frame: (run) => requestAnimationFrame(run),
+  });
 }

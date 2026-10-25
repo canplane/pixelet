@@ -45,7 +45,8 @@ impl GpuHost {
             }
         }
         if core::mem::take(&mut self.admitted) {
-            self.queue.on_submitted_work_done(Unfinished::count(&self.unfinished));
+            self.queue
+                .on_submitted_work_done(Unfinished::count(&self.unfinished));
         }
     }
 }

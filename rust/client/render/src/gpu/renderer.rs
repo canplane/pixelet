@@ -19,19 +19,24 @@ use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{
-    census_slot, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_MARKER,
-    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
+    census_slot, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
+    PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS,
+    UPLOAD_WORDS,
 };
 use crate::frame::shader::record::PIPELINE_SKY;
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, LIGHT_VIEW_PROJ, LOW_SPEC, MAP,
+    RIM_INTENSITY, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ,
+    VIGNETTE,
 };
 use crate::frame::shader::word::{sky, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry, Format, Gpu,
-    Image, Load, Stamp,
+    buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu,
+    pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
+    Format, Gpu, Image, Load, Stamp,
 };
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
@@ -63,7 +68,10 @@ use crate::look::environment::{ENV_AIR, ENV_STARS, ENV_SUN};
 const BOX_VERTICES: u32 = 36;
 const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
 
-const _: () = assert!(GPU_SPAN_NAMES <= 32, "a span a bit of the mask the host is told");
+const _: () = assert!(
+    GPU_SPAN_NAMES <= 32,
+    "a span a bit of the mask the host is told"
+);
 const SPAN_AIR: usize = GpuSpanName::air as usize;
 const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
 const SPAN_AO: usize = GpuSpanName::ao as usize;
@@ -164,7 +172,8 @@ pub enum Landing<'a> {
 /// The pool's records the renderer keeps on the heap at their worst, in
 /// the buddy's blocks: every read's room at a square's most
 /// (`GroundBuffers::room`), each a power of two as the heap gives it.
-pub const RECORD_ROOMS_BYTES: u64 = window::READS as u64 * (ways::tree::RECORDS_BYTES as u64).next_power_of_two();
+pub const RECORD_ROOMS_BYTES: u64 =
+    window::READS as u64 * (ways::tree::RECORDS_BYTES as u64).next_power_of_two();
 
 /// A square whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed.
@@ -251,7 +260,12 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 /// its depth prepass, its occlusion, its drawing and its cast. The air's
 /// tables, the fill and the decor's growth, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
-const PER_PIXEL: [GpuSpanName; 4] = [GpuSpanName::prepass, GpuSpanName::ao, GpuSpanName::world, GpuSpanName::cast];
+const PER_PIXEL: [GpuSpanName; 4] = [
+    GpuSpanName::prepass,
+    GpuSpanName::ao,
+    GpuSpanName::world,
+    GpuSpanName::cast,
+];
 
 /// A frame's GPU time in the passes drawn at the world's pixels (`PER_PIXEL`):
 /// what its drawn resolution can buy back.
@@ -272,8 +286,14 @@ fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
         [row(0) / w, row(1) / w, row(2) / w]
     };
     let c = point(0.0, 0.0);
-    for (k, (to, from)) in [(point(1.0, 0.0), c), (point(0.0, 1.0), c), (c, *eye)].into_iter().enumerate() {
-        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(v3::sub(&to, &from)) {
+    for (k, (to, from)) in [(point(1.0, 0.0), c), (point(0.0, 1.0), c), (c, *eye)]
+        .into_iter()
+        .enumerate()
+    {
+        for (o, e) in out[at + 4 * k..at + 4 * k + 3]
+            .iter_mut()
+            .zip(v3::sub(&to, &from))
+        {
             *o = e as f32;
         }
     }
@@ -285,7 +305,10 @@ static RENDERER: Global<Option<Renderer>> = Global::new();
 /// drawn moves a display level (gpu/atmosphere.rs `steps`); none before any
 /// view's slope has landed.
 pub fn sky_steps() -> [Option<f32>; 2] {
-    RENDERER.get(|| None).as_ref().map_or([None; 2], |r| r.atmosphere.steps())
+    RENDERER
+        .get(|| None)
+        .as_ref()
+        .map_or([None; 2], |r| r.atmosphere.steps())
 }
 
 static REDRAW: Global<bool> = Global::new();
@@ -365,8 +388,14 @@ pub struct Renderer {
 impl Renderer {
     fn new(g: &Gpu, device: Device) -> Renderer {
         let mut pipelines = Pipelines::new();
-        let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let sky_buffer = g.buffer(word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let frame_buffer = g.buffer(
+            word_bytes(FRAME_FLOATS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
+        let sky_buffer = g.buffer(
+            word_bytes(SKY_FLOATS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
         let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer, sky_buffer);
         let air = atmosphere.entries();
@@ -376,12 +405,27 @@ impl Renderer {
         let pack = Pack::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
-        let mut sky_entries = vec![buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer), view_entry(2, moon.view), sampler_entry(3, moon.sampler)];
+        let mut sky_entries = vec![
+            buffer_entry(0, frame_buffer),
+            buffer_entry(19, sky_buffer),
+            view_entry(2, moon.view),
+            sampler_entry(3, moon.sampler),
+        ];
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
-        let draws_buffer = g.buffer(DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let draws_buffer = g.buffer(
+            DRAWS_INITIAL * 4,
+            buffer_usage::STORAGE | buffer_usage::COPY_DST,
+        );
         let shadow = Shadow::new(g, &mut pipelines);
-        let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, shadow.entries(1), [ao.blank_entry(7); 2], air);
+        let models = FrameGroups::new(
+            g,
+            frame_layout(g, &mut pipelines),
+            frame_buffer,
+            shadow.entries(1),
+            [ao.blank_entry(7); 2],
+            air,
+        );
         let query_set = if device.timestamps { g.spans() } else { 0 };
         let mut r = Renderer {
             align: device.align,
@@ -456,7 +500,11 @@ impl Renderer {
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
     fn rebind(&mut self, g: &Gpu) {
         self.box_groups(g);
-        self.models.rebind(g, self.frame_buffer, [self.ao.entry(7), self.ao.blank_entry(7)]);
+        self.models.rebind(
+            g,
+            self.frame_buffer,
+            [self.ao.entry(7), self.ao.blank_entry(7)],
+        );
     }
 
     /// `reach` how far the eye observes, in units; none without an eye.
@@ -466,9 +514,17 @@ impl Renderer {
         proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
         // The markers measure their size in view space.
         let b = &mut self.marker;
-        put_mat(&mut b.view, 0, s[STAGE_AT::MARKER_VIEW..STAGE_AT::MARKER_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
+        put_mat(
+            &mut b.view,
+            0,
+            s[STAGE_AT::MARKER_VIEW..STAGE_AT::MARKER_VIEW + 16]
+                .try_into()
+                .or_bug(Errno::ENOTRECOVERABLE),
+        );
         put_mat(&mut b.proj, 0, &proj);
-        b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0))) as f32;
+        b.px_k = (s[STAGE_AT::VIEWPORT + 1]
+            / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0)))
+            as f32;
 
         let u = &mut self.frame;
         m.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
@@ -478,7 +534,12 @@ impl Renderer {
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
         put_ray(&mut self.sky, sky::RAY, &m, &eye);
-        self.clouds.lay_out([eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
+        self.clouds.lay_out(
+            [eye_world[0], eye_world[1]],
+            env,
+            s[STAGE_AT::CLOUDS],
+            reach * env[ENV_AIR + 1],
+        );
         self.stars.lay_out(&m, env, width);
         self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
         self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
@@ -502,7 +563,11 @@ impl Renderer {
         // The eye's own place on the map, Mercator's longitude and ordinate
         // (its units over the map's radius in them), and that radius.
         let lon = world::nearest(eye_world[0], 0.0) / MERCATOR_RADIUS_U;
-        u[MAP..MAP + 3].copy_from_slice(&[lon as f32, (eye_world[1] / MERCATOR_RADIUS_U) as f32, MERCATOR_RADIUS_U as f32]);
+        u[MAP..MAP + 3].copy_from_slice(&[
+            lon as f32,
+            (eye_world[1] / MERCATOR_RADIUS_U) as f32,
+            MERCATOR_RADIUS_U as f32,
+        ]);
         // The sun's map, as wide as the casters reach; none where the
         // shadows are off.
         let far = s[STAGE_AT::SHADOWS];
@@ -512,7 +577,8 @@ impl Renderer {
             // Up to a power of two, so the snap grid and the texel move only in steps;
             // the shadows fade by the casters' own reach.
             let half = libm::exp2(libm::ceil(libm::log2(far)));
-            self.shadow.aim(&env[ENV_SUN..ENV_SUN + 3], eye, half, eye_world.map(|v| -v));
+            self.shadow
+                .aim(&env[ENV_SUN..ENV_SUN + 3], eye, half, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
             u[SHADOW_RIM] = (far / half) as f32;
@@ -532,7 +598,9 @@ impl Renderer {
             let buffer = b.get(handle).map(|(buffer, ..)| buffer);
             // A missing buffer is a fault in the list: skipped, it would draw
             // nothing with every gauge reading normal.
-            let Some(buffer) = buffer else { xpute_kit::bug!(ENOTRECOVERABLE, handle) };
+            let Some(buffer) = buffer else {
+                xpute_kit::bug!(ENOTRECOVERABLE, handle)
+            };
             if bound == 0 {
                 g.set_pipeline(pass, self.ghost.pipeline);
                 g.set_bind_group(pass, 0, self.bind_group, &[]);
@@ -542,7 +610,13 @@ impl Renderer {
                 g.set_vertex_buffer(pass, 1, buffer, 0, 0);
                 bound = buffer;
             }
-            g.draw(pass, BOX_VERTICES, box_cnt, uniform * BOX_VERTICES, first_box);
+            g.draw(
+                pass,
+                BOX_VERTICES,
+                box_cnt,
+                uniform * BOX_VERTICES,
+                first_box,
+            );
         }
     }
 
@@ -551,7 +625,14 @@ impl Renderer {
     /// the pass has.
     fn draw_opaque(&mut self, g: &Gpu, pass: u32, b: &mut Uploads, stage: Stage) -> u32 {
         let mut bound = 0;
-        self.decor.draw_grown(g, pass, self.screen.grown(), b, stage, (self.models.frame, &mut bound));
+        self.decor.draw_grown(
+            g,
+            pass,
+            self.screen.grown(),
+            b,
+            stage,
+            (self.models.frame, &mut bound),
+        );
         bound
     }
 
@@ -563,11 +644,21 @@ impl Renderer {
     /// (stage 2, `frame_read`). The rays hold the world as the cast left
     /// it, so the frame draws it again off them rather than off an image of
     /// it: that costs what laying an image would.
-    fn frame(&mut self, g: &Gpu, world: &mut Surface, mut input: FrameInput) -> (FrameKind, FrameStat) {
+    fn frame(
+        &mut self,
+        g: &Gpu,
+        world: &mut Surface,
+        mut input: FrameInput,
+    ) -> (FrameKind, FrameStat) {
         let mut read = core::mem::take(&mut self.frame_read);
         read.begin();
         self.decor.set_models(input.decor);
-        self.impostor.set_models(input.decor.iter().map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)));
+        self.impostor.set_models(
+            input
+                .decor
+                .iter()
+                .map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)),
+        );
         self.skinned.set_skins(input.skins);
         read.read(input.skins);
         read.mark(self.pack.step(g, &self.mips, input.pack));
@@ -582,8 +673,14 @@ impl Renderer {
         }
         self.screen.hand(g, &mut self.pipelines, &mut input.ground);
         let tiles = input.earth_tiles;
-        read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
-        read.mark(self.marker.sync_sheet(g, &self.mips, input.sheet, input.text));
+        read.mark(
+            self.atmosphere
+                .set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload),
+        );
+        read.mark(
+            self.marker
+                .sync_sheet(g, &self.mips, input.sheet, input.text),
+        );
         let (records, uniforms, uploads_moved) = take_lists(Some(g), input.lists);
         read.mark(uploads_moved);
         let uniforms_moved = read.read(uniforms);
@@ -592,12 +689,18 @@ impl Renderer {
 
         targets(g, world);
         // How far the eye observes, as far as the clouds are drawn.
-        let reach = cast.as_ref().map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
+        let reach = cast
+            .as_ref()
+            .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
         self.lay_out(g, world.width, world.height, input.environment, reach);
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
         if let Some(c) = cast.as_mut() {
-            let sun = if self.shadows { self.shadow.sun } else { [0; eye::SUN_WORDS] };
+            let sun = if self.shadows {
+                self.shadow.sun
+            } else {
+                [0; eye::SUN_WORDS]
+            };
             c.eye[eye::SUN..eye::SUN + eye::SUN_WORDS].copy_from_slice(&sun);
         }
         let ao_remade = self.screen_ao && self.ao.ensure(g, world.width, world.height);
@@ -610,7 +713,10 @@ impl Renderer {
         if grew {
             release(self.draws_buffer);
             self.draws_bytes = uniform_bytes * 2;
-            self.draws_buffer = g.buffer(self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            self.draws_buffer = g.buffer(
+                self.draws_bytes,
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            );
             self.box_groups(g);
         }
         if !uniforms.is_empty() && (grew || uniforms_moved) {
@@ -620,7 +726,11 @@ impl Renderer {
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
         // The camera gizmo listed tints the rays' blocks (screen_lit.wgsl `cell_share`).
-        self.frame[GIZMO] = if draws.of(PIPELINE_CAMERA_GRID).len() > 0 { 1.0 } else { 0.0 };
+        self.frame[GIZMO] = if draws.of(PIPELINE_CAMERA_GRID).len() > 0 {
+            1.0
+        } else {
+            0.0
+        };
         if read.read(&self.frame) {
             g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
             // The light's frame is of the same words.
@@ -639,14 +749,29 @@ impl Renderer {
         read.read(&[world.depth, world.rays, u32::from(self.screen_ao)]);
         let b = uploads();
         self.decor.prepare(g, &draws, uniforms, lists_moved, b);
-        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
-        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
+        self.impostor
+            .prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
+        self.skinned
+            .prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.puck.prepare(g, &draws, uniforms, lists_moved, b);
-        self.marker.prepare(g, world.depth_view, (world.width, world.height), &draws, uniforms, b);
+        self.marker.prepare(
+            g,
+            world.depth_view,
+            (world.width, world.height),
+            &draws,
+            uniforms,
+            b,
+        );
         self.debug.prepare(g, &draws, uniforms, lists_moved);
-        let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
-        self.screen
-            .prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]), (self.shadow.world, self.shadow.frame));
+        let meshes: [u32; GROUPS as usize] =
+            core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
+        self.screen.prepare(
+            g,
+            cast,
+            &meshes,
+            (world.rays_view, [world.width, world.height]),
+            (self.shadow.world, self.shadow.frame),
+        );
         // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
         // frame stands without it.
@@ -664,7 +789,13 @@ impl Renderer {
         let folded = self.screen.fold(g, ahead, &mut stamps[SPAN_FILL]);
         let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
         read.mark(tables);
-        let aired = self.atmosphere.froxel(g, ahead, [&self.frame, &self.sky], exposed, &mut stamps[SPAN_AIR]);
+        let aired = self.atmosphere.froxel(
+            g,
+            ahead,
+            [&self.frame, &self.sky],
+            exposed,
+            &mut stamps[SPAN_AIR],
+        );
         read.mark(aired);
         if baked || gridded || folded || exposed || aired {
             g.submit(ahead);
@@ -679,7 +810,12 @@ impl Renderer {
         // The frame stands where all it draws from read as last time over
         // rays that stood: nothing is drawn, nothing submitted, and the
         // canvases keep the frame they show.
-        if read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !self.screen.sun_casts() && !gridded {
+        if read.end()
+            && self.screen.kind != FrameKind::cast
+            && !self.screen.grows()
+            && !self.screen.sun_casts()
+            && !gridded
+        {
             self.frame_read = read;
             let stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
             self.order = order;
@@ -694,19 +830,44 @@ impl Renderer {
         // The sun's map: the world's depth from the sun, where the rays hold
         // the world it was cast with, then decor's and the actors' drawn over it.
         if self.shadows {
-            let pass = self.shadow.begin(g, encoder, self.screen.kind != FrameKind::plain, &mut stamps[SPAN_SHADOW]);
+            let pass = self.shadow.begin(
+                g,
+                encoder,
+                self.screen.kind != FrameKind::plain,
+                &mut stamps[SPAN_SHADOW],
+            );
             let mut bound = 0;
             let light = self.shadow.light_group;
-            self.decor.draw_grown(g, pass, self.screen.grown(), b, Stage::Depth, (light, &mut bound));
-            self.decor.draw(g, pass, &draws, b, Stage::Depth, (light, &mut bound));
-            self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, Stage::Depth, (light, &mut bound));
+            self.decor.draw_grown(
+                g,
+                pass,
+                self.screen.grown(),
+                b,
+                Stage::Depth,
+                (light, &mut bound),
+            );
+            self.decor
+                .draw(g, pass, &draws, b, Stage::Depth, (light, &mut bound));
+            self.skinned.draw(
+                g,
+                pass,
+                draws.of(PIPELINE_SKINNED),
+                b,
+                Stage::Depth,
+                (light, &mut bound),
+            );
             g.end(pass);
         }
         let a = &mut self.ao_read;
         a.begin();
         a.read(&self.frame);
         a.read(self.ao.words());
-        a.read(&[world.width, world.height, u32::from(self.screen_ao), u32::from(self.screen.grown().is_some())]);
+        a.read(&[
+            world.width,
+            world.height,
+            u32::from(self.screen_ao),
+            u32::from(self.screen.grown().is_some()),
+        ]);
         // The world's depth is the rays', so a cast that laid them again
         // lays the occlusion again.
         a.mark(ao_remade || self.screen.grows() || self.screen.kind == FrameKind::cast);
@@ -719,11 +880,27 @@ impl Renderer {
             self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
         let canvas_view = g.current(world.handle);
-        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
+        let pass = g.pass(
+            encoder,
+            &pass_desc(
+                canvas_view,
+                Load::Clear,
+                world.depth_view,
+                Load::Clear,
+                0.0,
+                stamps[SPAN_WORLD].pass(),
+            ),
+        );
         self.draw_opaque(g, pass, b, Stage::Lit);
         let mut bound = self.screen.draw(g, pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
-        self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
+        self.impostor.draw_grown(
+            g,
+            pass,
+            self.screen.grown(),
+            GROUPS,
+            (self.models.frame, &mut bound),
+        );
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
         g.set_pipeline(pass, self.sky_built.pipeline);
         g.set_bind_group(pass, 0, self.sky_group, &[]);
@@ -734,20 +911,57 @@ impl Renderer {
         // depth, their occlusion open.
         let mut bound = 0;
         let over = (self.models.over, &mut bound);
-        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, Stage::Lit, (over.0, &mut *over.1));
-        self.decor.draw(g, pass, &draws, b, Stage::Lit, (over.0, &mut *over.1));
-        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
+        self.skinned.draw(
+            g,
+            pass,
+            draws.of(PIPELINE_SKINNED),
+            b,
+            Stage::Lit,
+            (over.0, &mut *over.1),
+        );
+        self.decor
+            .draw(g, pass, &draws, b, Stage::Lit, (over.0, &mut *over.1));
+        self.impostor
+            .draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, &draws);
         self.puck.draw_zone(g, pass, &draws, b);
         self.draw_boxes(g, pass, &draws);
         let mut bound = 0;
-        self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
+        self.decor
+            .draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
-        self.marker.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_MARKER]);
-        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_DEBUG]);
-        self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, uploads_moved || tables || exposed, &mut stamps[SPAN_CASE]);
-        let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
+        self.marker.draw(
+            g,
+            encoder,
+            canvas_view,
+            world.depth_view,
+            &draws,
+            b,
+            &mut stamps[SPAN_MARKER],
+        );
+        self.debug.draw(
+            g,
+            encoder,
+            canvas_view,
+            world.depth_view,
+            &draws,
+            b,
+            &mut stamps[SPAN_DEBUG],
+        );
+        self.draw_cases(
+            g,
+            encoder,
+            Self::cases(&draws, input.cases),
+            uniforms,
+            uploads_moved || tables || exposed,
+            &mut stamps[SPAN_CASE],
+        );
+        let written = stamps
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.written())
+            .fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
         release(canvas_view);
         // The read that landed is the one that was on its way; this frame's
@@ -775,7 +989,11 @@ impl Renderer {
         }
         read.end();
         self.frame_read = read;
-        let kind = if skipped { FrameKind::dropped } else { self.screen.kind };
+        let kind = if skipped {
+            FrameKind::dropped
+        } else {
+            self.screen.kind
+        };
         let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
         stat.gpu_px = gpu_px;
@@ -786,7 +1004,10 @@ impl Renderer {
     /// The cases drawn this frame: a surface still a case, its actor's model
     /// and its draw, found by the palette that is the case's alone, since
     /// another actor may play the same model.
-    fn cases<'a, 'd>(draws: &'a Draws<'d>, cases: &'a [(u32, u32, Image)]) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
+    fn cases<'a, 'd>(
+        draws: &'a Draws<'d>,
+        cases: &'a [(u32, u32, Image)],
+    ) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
         cases.iter().filter_map(move |&(id, palette, image)| {
             surface(id).filter(|s| s.role == surface_role::CASE)?;
             let own = draws.of(PIPELINE_SKINNED).find(|d| d[1] == palette)?;
@@ -796,34 +1017,67 @@ impl Renderer {
 
     /// Each case's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, Image)], moved: bool) {
+    fn prepare_cases(
+        &mut self,
+        g: &Gpu,
+        draws: &Draws,
+        uniforms: &[f32],
+        cases: &[(u32, u32, Image)],
+        moved: bool,
+    ) {
         for (id, model, image, own) in Self::cases(draws, cases) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
             let slot = handle_slot(id) as usize;
             if self.cases[slot].is_none() {
-                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
+                self.cases[slot] = Some(Case::new(
+                    g,
+                    &mut self.pipelines,
+                    &self.shadow,
+                    &self.ao,
+                    self.atmosphere.entries(),
+                    self.align,
+                ));
             }
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skins(&[(model, image)]);
-            case.skinned.prepare(g, core::iter::once(own), uniforms, moved, uploads());
+            case.skinned
+                .prepare(g, core::iter::once(own), uniforms, moved, uploads());
         }
     }
 
     /// Each case whose picture's makings moved, `moved` what moved without
     /// words: the models' uploads, the air's tables or its exposure.
-    fn draw_cases<'d>(&mut self, g: &Gpu, encoder: u32, cases: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>, uniforms: &[f32], moved: bool, stamp: &mut Stamp) {
+    fn draw_cases<'d>(
+        &mut self,
+        g: &Gpu,
+        encoder: u32,
+        cases: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>,
+        uniforms: &[f32],
+        moved: bool,
+        stamp: &mut Stamp,
+    ) {
         for (id, model, image, own) in cases {
             let Some(s) = surface(id) else { continue };
-            let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else { continue };
-            case.draw(g, encoder, s, self.frame, own, uniforms, model, image, moved, stamp);
+            let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else {
+                continue;
+            };
+            case.draw(
+                g, encoder, s, self.frame, own, uniforms, model, image, moved, stamp,
+            );
         }
     }
 
     /// What the scheduler asked for: a draw passed over because its upload, skin or
     /// sprite is not on the device yet is still counted. The draws are counted
     /// only while `counted`, the profiler's, so a frame no one reads counts none.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, counted: bool, gpu_spans: [f64; GPU_SPAN_NAMES]) -> FrameStat {
+    fn stat(
+        &self,
+        draws: &[[u32; DRAW_WORDS]],
+        world: &Surface,
+        counted: bool,
+        gpu_spans: [f64; GPU_SPAN_NAMES],
+    ) -> FrameStat {
         let b = uploads();
         let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
         for d in draws.iter().filter(|_| counted) {
@@ -907,7 +1161,9 @@ fn targets(g: &Gpu, s: &mut Surface) {
 /// A frame's cast handed and never drawn: the edits its decor named, held
 /// for the next that is.
 fn unconsumed(cast: &Option<Cast>) {
-    let Some(d) = cast.as_ref().map(|c| &c.decor) else { return };
+    let Some(d) = cast.as_ref().map(|c| &c.decor) else {
+        return;
+    };
     if let Some(r) = RENDERER.get(|| None).as_mut() {
         r.screen.unconsumed(d.edits);
     }

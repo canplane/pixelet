@@ -8,7 +8,13 @@
 import { useContext } from "react";
 import { StyleSheet, View } from "react-native";
 import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import { createModifier, ignoreSafeArea, presentationBackground, presentationDetents, presentationDragIndicator } from "@expo/ui/swift-ui/modifiers";
+import {
+  createModifier,
+  ignoreSafeArea,
+  presentationBackground,
+  presentationDetents,
+  presentationDragIndicator,
+} from "@expo/ui/swift-ui/modifiers";
 
 import { PanelPresence, type PanelProps } from "@/shell/ui/panel.tsx";
 import { color } from "@/shell/ui/theme.ts";
@@ -20,7 +26,11 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const { open, gone } = useContext(PanelPresence);
   return (
     <Host style={styles.host}>
-      <BottomSheet isPresented={open} onIsPresentedChange={(presented) => presented || onClose()} onDismiss={gone}>
+      <BottomSheet
+        isPresented={open}
+        onIsPresentedChange={(presented) => presented || onClose()}
+        onDismiss={gone}
+      >
         <Group
           modifiers={[
             presentationDetents(half ? ["medium", "large"] : ["large"]),

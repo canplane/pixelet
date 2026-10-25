@@ -55,8 +55,10 @@ pub fn text_forget() {
 
 pub fn text_rise() {
     let t = text();
-    t.layouts.retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
-    t.rasters.retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
+    t.layouts
+        .retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
+    t.rasters
+        .retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
 }
 
 /// One line at a width guessed from its characters, where no host lays it out.
@@ -66,19 +68,37 @@ fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
 
 /// None until the platform has laid it out; a later turn has it.
 pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
-    let key: LayoutKey = (font.weight, font.px.to_bits(), (max_width as f32).to_bits(), text_in.to_owned());
+    let key: LayoutKey = (
+        font.weight,
+        font.px.to_bits(),
+        (max_width as f32).to_bits(),
+        text_in.to_owned(),
+    );
     let t = text();
     let Some(answer) = t.layouts.get_mut(&key) else {
         // No more lines than characters, and one for an empty text.
         let lines = text_in.chars().count().max(1) as u32;
         let mut at = vec![0u32; 1 + 2 * lines as usize].into_boxed_slice();
-        let args = [font.weight, font.px.to_bits(), (max_width as f32).to_bits(), off_of_slice(&raw mut *at) as u32, lines];
+        let args = [
+            font.weight,
+            font.px.to_bits(),
+            (max_width as f32).to_bits(),
+            off_of_slice(&raw mut *at) as u32,
+            lines,
+        ];
         match offer(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
             None => return Some(unlaid(text_in)),
             Some(false) => return None,
             Some(true) => {}
         }
-        t.layouts.insert(key, Answer { asked: turn(), read: true, at });
+        t.layouts.insert(
+            key,
+            Answer {
+                asked: turn(),
+                read: true,
+                at,
+            },
+        );
         return None;
     };
     answer.read = true;
@@ -93,7 +113,11 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     let mut start = 0;
     for pair in pairs.iter().take(count) {
         let (end, width) = (pair[0] as usize, f32::from_bits(pair[1]) as f64);
-        if count > pairs.len() || end < start || !text_in.is_char_boundary(end) || !width.is_finite() {
+        if count > pairs.len()
+            || end < start
+            || !text_in.is_char_boundary(end)
+            || !width.is_finite()
+        {
             return Some(unlaid(text_in));
         }
         lines.push((&text_in[start..end], width));
@@ -148,6 +172,13 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         origin,
         advance: advance * scale,
     };
-    text().rasters.insert(key, Answer { asked: turn(), read: true, at });
+    text().rasters.insert(
+        key,
+        Answer {
+            asked: turn(),
+            read: true,
+            at,
+        },
+    );
     None
 }

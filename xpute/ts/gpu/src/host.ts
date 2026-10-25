@@ -61,18 +61,35 @@ type GpuObject =
   | GPUComputePassEncoder;
 
 /** A view with its format, which a pass's depth attachment asks of it. */
-type View = { readonly view: GPUTextureView; readonly format: GPUTextureFormat };
+type View = {
+  readonly view: GPUTextureView;
+  readonly format: GPUTextureFormat;
+};
 
 /** A texture's place in a copy, its fields refilled record by record. */
-type Place = { texture: GPUTexture; mipLevel: number; origin: number[]; aspect: GPUTextureAspect };
+type Place = {
+  texture: GPUTexture;
+  mipLevel: number;
+  origin: number[];
+  aspect: GPUTextureAspect;
+};
 
 function place(): Place {
-  return { texture: undefined as unknown as GPUTexture, mipLevel: 0, origin: [0, 0, 0], aspect: "all" };
+  return {
+    texture: undefined as unknown as GPUTexture,
+    mipLevel: 0,
+    origin: [0, 0, 0],
+    aspect: "all",
+  };
 }
 
 /** `copyExternalImageToTexture`, which the lib's `GPUQueue` does not list. */
 type ExternalImageQueue = GPUQueue & {
-  copyExternalImageToTexture(source: { source: ImageBitmap }, destination: GPUTexelCopyTextureInfo, size: GPUExtent3D): void;
+  copyExternalImageToTexture(
+    source: { source: ImageBitmap },
+    destination: GPUTexelCopyTextureInfo,
+    size: GPUExtent3D,
+  ): void;
 };
 
 /** A run's words read in order, as the guest wrote them: one cursor over
@@ -127,19 +144,35 @@ export class GpuHost {
    * reads a dictionary only during the call it is given to. Two places, as
    * a texture-to-texture copy names two. */
   private readonly places: [Place, Place] = [place(), place()];
-  private readonly buffered: GPUTexelCopyBufferInfo = { buffer: undefined as unknown as GPUBuffer, offset: 0, bytesPerRow: 0, rowsPerImage: 0 };
-  private readonly layout: GPUTexelCopyBufferLayout = { offset: 0, bytesPerRow: 0, rowsPerImage: 0 };
+  private readonly buffered: GPUTexelCopyBufferInfo = {
+    buffer: undefined as unknown as GPUBuffer,
+    offset: 0,
+    bytesPerRow: 0,
+    rowsPerImage: 0,
+  };
+  private readonly layout: GPUTexelCopyBufferLayout = {
+    offset: 0,
+    bytesPerRow: 0,
+    rowsPerImage: 0,
+  };
   private readonly size: number[] = [0, 0, 0];
   /** A pass's: its descriptors, its color attachments (as many as one has
    * had), its depth attachment, its timestamps; a submit's buffers. */
   private readonly pass: GPURenderPassDescriptor = { colorAttachments: [] };
   private readonly colors: GPURenderPassColorAttachment[] = [];
-  private readonly depth: GPURenderPassDepthStencilAttachment = { view: undefined as unknown as GPUTextureView };
+  private readonly depth: GPURenderPassDepthStencilAttachment = {
+    view: undefined as unknown as GPUTextureView,
+  };
   private readonly compute: GPUComputePassDescriptor = {};
-  private readonly stamps: GPURenderPassTimestampWrites = { querySet: undefined as unknown as GPUQuerySet };
+  private readonly stamps: GPURenderPassTimestampWrites = {
+    querySet: undefined as unknown as GPUQuerySet,
+  };
   private readonly finished: GPUCommandBuffer[] = [];
   /** At the slot the guest names each by, with the guest's handle bound there. */
-  private readonly surfaces = new Map<u32, { handle: u32; context: GPUCanvasContext }>();
+  private readonly surfaces = new Map<
+    u32,
+    { handle: u32; context: GPUCanvasContext }
+  >();
   /** Each slot's newest handle, kept after it is let go: an older one's bind is refused. */
   private readonly seen = new Map<u32, u32>();
   /** Where the guest asked the device's block written, for its status. */
@@ -147,7 +180,11 @@ export class GpuHost {
 
   /** `wake` asks the host's loop for a turn: a completion written between
    * turns is read only by a turn. */
-  constructor(private readonly device: GPUDevice, private readonly memory: () => ArrayBufferLike, private readonly wake: () => void) {
+  constructor(
+    private readonly device: GPUDevice,
+    private readonly memory: () => ArrayBufferLike,
+    private readonly wake: () => void,
+  ) {
     // The guest is told of the loss in its block; nothing here destroys the device.
     device.lost.then(() => {
       this.lost();
@@ -183,7 +220,13 @@ export class GpuHost {
   /** The device went: every object with it, and the guest told in its block. */
   private lost(): void {
     this.objects.length = 0;
-    if (this.block) new Uint32Array(this.memory(), this.block.address, this.block.words)[this.block.words - 1] = STATUS.LOST;
+    if (this.block) {
+      new Uint32Array(
+        this.memory(),
+        this.block.address,
+        this.block.words,
+      )[this.block.words - 1] = STATUS.LOST;
+    }
   }
 
   /** Runs the stream at `at`, `head` words of head, as the turn left it. */
@@ -260,7 +303,12 @@ export class GpuHost {
   }
 
   private stencilFace(r: Words): GPUStencilFaceState {
-    return { compare: COMPARE_FUNCTION[r.u()], failOp: STENCIL_OPERATION[r.u()], depthFailOp: STENCIL_OPERATION[r.u()], passOp: STENCIL_OPERATION[r.u()] };
+    return {
+      compare: COMPARE_FUNCTION[r.u()],
+      failOp: STENCIL_OPERATION[r.u()],
+      depthFailOp: STENCIL_OPERATION[r.u()],
+      passOp: STENCIL_OPERATION[r.u()],
+    };
   }
 
   private record(code: u32, r: Words): void {
@@ -268,15 +316,42 @@ export class GpuHost {
     switch (code) {
       case op.BUFFER: {
         const id = r.u();
-        this.put(id, d.createBuffer({ size: r.u(), usage: r.u(), mappedAtCreation: r.flag() }));
+        this.put(
+          id,
+          d.createBuffer({
+            size: r.u(),
+            usage: r.u(),
+            mappedAtCreation: r.flag(),
+          }),
+        );
         return;
       }
       case op.TEXTURE: {
         const id = r.u();
         const size = [r.u(), r.u(), r.u()];
-        const [mipLevelCount, sampleCount, dimension, format, usage] = [r.u(), r.u(), TEXTURE_DIMENSION[r.u()], TEXTURE_FORMAT[r.u()], r.u()];
-        const viewFormats = Array.from({ length: r.u() }, () => TEXTURE_FORMAT[r.u()]);
-        this.put(id, d.createTexture({ size, mipLevelCount, sampleCount, dimension, format, usage, viewFormats }));
+        const [mipLevelCount, sampleCount, dimension, format, usage] = [
+          r.u(),
+          r.u(),
+          TEXTURE_DIMENSION[r.u()],
+          TEXTURE_FORMAT[r.u()],
+          r.u(),
+        ];
+        const viewFormats = Array.from(
+          { length: r.u() },
+          () => TEXTURE_FORMAT[r.u()],
+        );
+        this.put(
+          id,
+          d.createTexture({
+            size,
+            mipLevelCount,
+            sampleCount,
+            dimension,
+            format,
+            usage,
+            viewFormats,
+          }),
+        );
         return;
       }
       case op.VIEW: {
@@ -284,17 +359,41 @@ export class GpuHost {
         const texture = this.get<GPUTexture>(r.u());
         const [f, dim] = [r.opt(), r.opt()];
         const aspect = TEXTURE_ASPECT[r.u()];
-        const [baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount] = [r.u(), r.opt(), r.u(), r.opt()];
+        const [baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount] = [
+          r.u(),
+          r.opt(),
+          r.u(),
+          r.opt(),
+        ];
         const format = f === undefined ? undefined : TEXTURE_FORMAT[f];
         this.put(id, {
-          view: texture.createView({ format, dimension: dim === undefined ? undefined : TEXTURE_VIEW_DIMENSION[dim], aspect, baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount }),
+          view: texture.createView({
+            format,
+            dimension: dim === undefined
+              ? undefined
+              : TEXTURE_VIEW_DIMENSION[dim],
+            aspect,
+            baseMipLevel,
+            mipLevelCount,
+            baseArrayLayer,
+            arrayLayerCount,
+          }),
           format: format ?? texture.format,
         });
         return;
       }
       case op.SAMPLER: {
         const id = r.u();
-        const [u, v, w, mag, min, mip, lodMinClamp, lodMaxClamp] = [r.u(), r.u(), r.u(), r.u(), r.u(), r.u(), r.f32(), r.f32()];
+        const [u, v, w, mag, min, mip, lodMinClamp, lodMaxClamp] = [
+          r.u(),
+          r.u(),
+          r.u(),
+          r.u(),
+          r.u(),
+          r.u(),
+          r.f32(),
+          r.f32(),
+        ];
         const compare = r.opt();
         this.put(
           id,
@@ -307,7 +406,9 @@ export class GpuHost {
             mipmapFilter: MIPMAP_FILTER_MODE[mip],
             lodMinClamp,
             lodMaxClamp,
-            compare: compare === undefined ? undefined : COMPARE_FUNCTION[compare],
+            compare: compare === undefined
+              ? undefined
+              : COMPARE_FUNCTION[compare],
             maxAnisotropy: r.u(),
           }),
         );
@@ -320,34 +421,100 @@ export class GpuHost {
       }
       case op.BIND_GROUP_LAYOUT: {
         const id = r.u();
-        const entries = Array.from({ length: r.u() }, (): GPUBindGroupLayoutEntry => {
-          const [binding, visibility, kind, a, b, c] = [r.u(), r.u(), r.u(), r.u(), r.u(), r.u()];
-          switch (kind) {
-            case 0:
-              return { binding, visibility, buffer: { type: BUFFER_BINDING_TYPE[a], hasDynamicOffset: b !== 0, minBindingSize: c } };
-            case 1:
-              return { binding, visibility, sampler: { type: SAMPLER_BINDING_TYPE[a] } };
-            case 2:
-              return { binding, visibility, texture: { sampleType: TEXTURE_SAMPLE_TYPE[a], viewDimension: TEXTURE_VIEW_DIMENSION[b], multisampled: c !== 0 } };
-            default:
-              return { binding, visibility, storageTexture: { access: STORAGE_TEXTURE_ACCESS[a], format: TEXTURE_FORMAT[b], viewDimension: TEXTURE_VIEW_DIMENSION[c] } };
-          }
-        });
+        const entries = Array.from(
+          { length: r.u() },
+          (): GPUBindGroupLayoutEntry => {
+            const [binding, visibility, kind, a, b, c] = [
+              r.u(),
+              r.u(),
+              r.u(),
+              r.u(),
+              r.u(),
+              r.u(),
+            ];
+            switch (kind) {
+              case 0:
+                return {
+                  binding,
+                  visibility,
+                  buffer: {
+                    type: BUFFER_BINDING_TYPE[a],
+                    hasDynamicOffset: b !== 0,
+                    minBindingSize: c,
+                  },
+                };
+              case 1:
+                return {
+                  binding,
+                  visibility,
+                  sampler: { type: SAMPLER_BINDING_TYPE[a] },
+                };
+              case 2:
+                return {
+                  binding,
+                  visibility,
+                  texture: {
+                    sampleType: TEXTURE_SAMPLE_TYPE[a],
+                    viewDimension: TEXTURE_VIEW_DIMENSION[b],
+                    multisampled: c !== 0,
+                  },
+                };
+              default:
+                return {
+                  binding,
+                  visibility,
+                  storageTexture: {
+                    access: STORAGE_TEXTURE_ACCESS[a],
+                    format: TEXTURE_FORMAT[b],
+                    viewDimension: TEXTURE_VIEW_DIMENSION[c],
+                  },
+                };
+            }
+          },
+        );
         this.put(id, d.createBindGroupLayout({ entries }));
         return;
       }
       case op.PIPELINE_LAYOUT: {
         const id = r.u();
-        this.put(id, d.createPipelineLayout({ bindGroupLayouts: Array.from({ length: r.u() }, () => this.get<GPUBindGroupLayout>(r.u())) }));
+        this.put(
+          id,
+          d.createPipelineLayout({
+            bindGroupLayouts: Array.from(
+              { length: r.u() },
+              () => this.get<GPUBindGroupLayout>(r.u()),
+            ),
+          }),
+        );
         return;
       }
       case op.BIND_GROUP: {
         const id = r.u();
         const layout = this.get<GPUBindGroupLayout>(r.u());
         const entries = Array.from({ length: r.u() }, (): GPUBindGroupEntry => {
-          const [binding, kind, object, offset, size] = [r.u(), r.u(), r.u(), r.u(), r.u()];
-          if (kind === 0) return { binding, resource: { buffer: this.get<GPUBuffer>(object), offset, size: size === NONE ? undefined : size } };
-          return { binding, resource: kind === 1 ? this.get<GPUSampler>(object) : this.get<View>(object).view };
+          const [binding, kind, object, offset, size] = [
+            r.u(),
+            r.u(),
+            r.u(),
+            r.u(),
+            r.u(),
+          ];
+          if (kind === 0) {
+            return {
+              binding,
+              resource: {
+                buffer: this.get<GPUBuffer>(object),
+                offset,
+                size: size === NONE ? undefined : size,
+              },
+            };
+          }
+          return {
+            binding,
+            resource: kind === 1
+              ? this.get<GPUSampler>(object)
+              : this.get<View>(object).view,
+          };
         });
         this.put(id, d.createBindGroup({ layout, entries }));
         return;
@@ -362,11 +529,26 @@ export class GpuHost {
             arrayStride: r.u(),
             stepMode: VERTEX_STEP_MODE[r.u()],
             // WebGPU's newer formats are past what the lib's type lists.
-            attributes: Array.from({ length: r.u() }, (): GPUVertexAttribute => ({ format: VERTEX_FORMAT[r.u()] as GPUVertexFormat, offset: r.u(), shaderLocation: r.u() })),
+            attributes: Array.from(
+              { length: r.u() },
+              (): GPUVertexAttribute => ({
+                format: VERTEX_FORMAT[r.u()] as GPUVertexFormat,
+                offset: r.u(),
+                shaderLocation: r.u(),
+              }),
+            ),
           })),
         };
-        const strip = (topology: u32, s: u32 | undefined) => ({ topology: PRIMITIVE_TOPOLOGY[topology], stripIndexFormat: s === undefined ? undefined : INDEX_FORMAT[s] });
-        const primitive: GPUPrimitiveState = { ...strip(r.u(), r.opt()), frontFace: FRONT_FACE[r.u()], cullMode: CULL_MODE[r.u()], unclippedDepth: r.flag() };
+        const strip = (topology: u32, s: u32 | undefined) => ({
+          topology: PRIMITIVE_TOPOLOGY[topology],
+          stripIndexFormat: s === undefined ? undefined : INDEX_FORMAT[s],
+        });
+        const primitive: GPUPrimitiveState = {
+          ...strip(r.u(), r.opt()),
+          frontFace: FRONT_FACE[r.u()],
+          cullMode: CULL_MODE[r.u()],
+          unclippedDepth: r.flag(),
+        };
         const depthFormat = r.opt();
         const depth: GPUDepthStencilState = {
           format: TEXTURE_FORMAT[depthFormat ?? 0],
@@ -380,29 +562,57 @@ export class GpuHost {
           depthBiasSlopeScale: r.f32(),
           depthBiasClamp: r.f32(),
         };
-        const multisample: GPUMultisampleState = { count: r.u(), mask: r.u(), alphaToCoverageEnabled: r.flag() };
+        const multisample: GPUMultisampleState = {
+          count: r.u(),
+          mask: r.u(),
+          alphaToCoverageEnabled: r.flag(),
+        };
         const module = r.opt();
         const entryPoint = r.text();
-        const targets = Array.from({ length: r.u() }, (): GPUColorTargetState => {
-          const format = TEXTURE_FORMAT[r.u()];
-          const [cop, csrc, cdst, aop, asrc, adst] = [r.u(), r.u(), r.u(), r.u(), r.u(), r.u()];
-          // As the formats, WebGPU's newer factors are past what a DOM lib's type lists.
-          const factor = (k: u32) => BLEND_FACTOR[k] as GPUBlendFactor;
-          const blend = cop === NONE ? undefined : {
-            color: { operation: BLEND_OPERATION[cop], srcFactor: factor(csrc), dstFactor: factor(cdst) },
-            alpha: { operation: BLEND_OPERATION[aop], srcFactor: factor(asrc), dstFactor: factor(adst) },
-          };
-          return { format, blend, writeMask: r.u() };
-        });
+        const targets = Array.from(
+          { length: r.u() },
+          (): GPUColorTargetState => {
+            const format = TEXTURE_FORMAT[r.u()];
+            const [cop, csrc, cdst, aop, asrc, adst] = [
+              r.u(),
+              r.u(),
+              r.u(),
+              r.u(),
+              r.u(),
+              r.u(),
+            ];
+            // As the formats, WebGPU's newer factors are past what a DOM lib's type lists.
+            const factor = (k: u32) => BLEND_FACTOR[k] as GPUBlendFactor;
+            const blend = cop === NONE ? undefined : {
+              color: {
+                operation: BLEND_OPERATION[cop],
+                srcFactor: factor(csrc),
+                dstFactor: factor(cdst),
+              },
+              alpha: {
+                operation: BLEND_OPERATION[aop],
+                srcFactor: factor(asrc),
+                dstFactor: factor(adst),
+              },
+            };
+            return { format, blend, writeMask: r.u() };
+          },
+        );
         this.put(
           id,
           d.createRenderPipeline({
-            layout: layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
+            layout: layout === undefined
+              ? "auto"
+              : this.get<GPUPipelineLayout>(layout),
             vertex,
             primitive,
             depthStencil: depthFormat === undefined ? undefined : depth,
             multisample,
-            fragment: module === undefined ? undefined : { module: this.get<GPUShaderModule>(module), entryPoint, targets },
+            fragment: module === undefined ? undefined : {
+              module: this.get<GPUShaderModule>(module),
+              entryPoint,
+              targets,
+            },
           }),
         );
         return;
@@ -411,18 +621,32 @@ export class GpuHost {
         const id = r.u();
         const layout = r.opt();
         const module = this.get<GPUShaderModule>(r.u());
-        this.put(id, d.createComputePipeline({ layout: layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout), compute: { module, entryPoint: r.text() } }));
+        this.put(
+          id,
+          d.createComputePipeline({
+            layout: layout === undefined
+              ? "auto"
+              : this.get<GPUPipelineLayout>(layout),
+            compute: { module, entryPoint: r.text() },
+          }),
+        );
         return;
       }
       case op.QUERY_SET: {
         const id = r.u();
-        this.put(id, d.createQuerySet({ type: QUERY_TYPE[r.u()], count: r.u() }));
+        this.put(
+          id,
+          d.createQuerySet({ type: QUERY_TYPE[r.u()], count: r.u() }),
+        );
         return;
       }
       case op.DESTROY: {
         const id = r.u();
         const o = this.get<GpuObject>(id);
-        if (o instanceof GPUBuffer || o instanceof GPUTexture || o instanceof GPUQuerySet) o.destroy();
+        if (
+          o instanceof GPUBuffer || o instanceof GPUTexture ||
+          o instanceof GPUQuerySet
+        ) o.destroy();
         this.forget(id);
         return;
       }
@@ -430,14 +654,26 @@ export class GpuHost {
         const buffer = this.get<GPUBuffer>(r.u());
         const offset = r.u();
         const n = r.u();
-        d.queue.writeBuffer(buffer, offset, r.w.buffer as ArrayBuffer, r.w.byteOffset + 4 * r.at, n);
+        d.queue.writeBuffer(
+          buffer,
+          offset,
+          r.w.buffer as ArrayBuffer,
+          r.w.byteOffset + 4 * r.at,
+          n,
+        );
         r.skip(Math.ceil(n / 4));
         return;
       }
       case op.WRITE_BUFFER_AT: {
         const buffer = this.get<GPUBuffer>(r.u());
         const offset = r.u();
-        d.queue.writeBuffer(buffer, offset, this.memory() as ArrayBuffer, r.u(), r.u());
+        d.queue.writeBuffer(
+          buffer,
+          offset,
+          this.memory() as ArrayBuffer,
+          r.u(),
+          r.u(),
+        );
         return;
       }
       case op.WRITE_TEXTURE:
@@ -470,9 +706,16 @@ export class GpuHost {
         const image = new Blob([this.bytesAt(r.u(), r.u()).slice()]);
         const [word, ticket] = [r.u(), r.u()];
         // An image the browser cannot decode is left out, its word not written.
-        createImageBitmap(image, { imageOrientation: flipY ? "flipY" : "from-image", premultiplyAlpha: premultipliedAlpha ? "premultiply" : "none" }).then((source) => {
+        createImageBitmap(image, {
+          imageOrientation: flipY ? "flipY" : "from-image",
+          premultiplyAlpha: premultipliedAlpha ? "premultiply" : "none",
+        }).then((source) => {
           if (this.objects.includes(to.texture)) {
-            (d.queue as ExternalImageQueue).copyExternalImageToTexture({ source }, to, [source.width, source.height]);
+            (d.queue as ExternalImageQueue).copyExternalImageToTexture(
+              { source },
+              to,
+              [source.width, source.height],
+            );
             this.done(word, ticket);
           }
           source.close();
@@ -484,46 +727,82 @@ export class GpuHost {
         return;
       case op.COPY_BUFFER_TO_BUFFER: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.copyBufferToBuffer(this.get<GPUBuffer>(r.u()), r.u(), this.get<GPUBuffer>(r.u()), r.u(), r.u());
+        e.copyBufferToBuffer(
+          this.get<GPUBuffer>(r.u()),
+          r.u(),
+          this.get<GPUBuffer>(r.u()),
+          r.u(),
+          r.u(),
+        );
         return;
       }
       case op.COPY_BUFFER_TO_TEXTURE: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.copyBufferToTexture(this.bufferLayout(r), this.texturePlace(r, this.places[0]), this.extent(r));
+        e.copyBufferToTexture(
+          this.bufferLayout(r),
+          this.texturePlace(r, this.places[0]),
+          this.extent(r),
+        );
         return;
       }
       case op.COPY_TEXTURE_TO_BUFFER: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.copyTextureToBuffer(this.texturePlace(r, this.places[0]), this.bufferLayout(r), this.extent(r));
+        e.copyTextureToBuffer(
+          this.texturePlace(r, this.places[0]),
+          this.bufferLayout(r),
+          this.extent(r),
+        );
         return;
       }
       case op.COPY_TEXTURE_TO_TEXTURE: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.copyTextureToTexture(this.texturePlace(r, this.places[0]), this.texturePlace(r, this.places[1]), this.extent(r));
+        e.copyTextureToTexture(
+          this.texturePlace(r, this.places[0]),
+          this.texturePlace(r, this.places[1]),
+          this.extent(r),
+        );
         return;
       }
       case op.CLEAR_BUFFER: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        const [buffer, offset, size] = [this.get<GPUBuffer>(r.u()), r.u(), r.opt()];
+        const [buffer, offset, size] = [
+          this.get<GPUBuffer>(r.u()),
+          r.u(),
+          r.opt(),
+        ];
         e.clearBuffer(buffer, offset, size);
         return;
       }
       case op.RESOLVE_QUERY_SET: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.resolveQuerySet(this.get<GPUQuerySet>(r.u()), r.u(), r.u(), this.get<GPUBuffer>(r.u()), r.u());
+        e.resolveQuerySet(
+          this.get<GPUQuerySet>(r.u()),
+          r.u(),
+          r.u(),
+          this.get<GPUBuffer>(r.u()),
+          r.u(),
+        );
         return;
       }
       case op.RENDER_PASS: {
         const id = r.u();
         const e = this.get<GPUCommandEncoder>(r.u());
         const n = r.u();
-        const colors = this.pass.colorAttachments as GPURenderPassColorAttachment[];
+        const colors = this.pass
+          .colorAttachments as GPURenderPassColorAttachment[];
         colors.length = 0;
         for (let k = 0; k < n; k++) {
-          const c = this.colors[k] ??= { view: undefined as unknown as GPUTextureView, loadOp: "load", storeOp: "store", clearValue: [0, 0, 0, 0] };
+          const c = this.colors[k] ??= {
+            view: undefined as unknown as GPUTextureView,
+            loadOp: "load",
+            storeOp: "store",
+            clearValue: [0, 0, 0, 0],
+          };
           c.view = this.get<View>(r.u()).view;
           const resolve = r.opt();
-          c.resolveTarget = resolve === undefined ? undefined : this.get<View>(resolve).view;
+          c.resolveTarget = resolve === undefined
+            ? undefined
+            : this.get<View>(resolve).view;
           c.loadOp = LOAD_OP[r.u()];
           c.storeOp = STORE_OP[r.u()];
           const clear = c.clearValue as number[];
@@ -531,7 +810,14 @@ export class GpuHost {
           colors.push(c);
         }
         const depth = r.opt();
-        const dload = r.u(), dstore = r.u(), dclear = r.f32(), dro = r.flag(), sload = r.u(), sstore = r.u(), sclear = r.u(), sro = r.flag();
+        const dload = r.u(),
+          dstore = r.u(),
+          dclear = r.f32(),
+          dro = r.flag(),
+          sload = r.u(),
+          sstore = r.u(),
+          sclear = r.u(),
+          sro = r.flag();
         this.pass.depthStencilAttachment = undefined;
         if (depth !== undefined) {
           // WebGPU refuses ops on an aspect the format lacks, or one read only.
@@ -552,7 +838,9 @@ export class GpuHost {
         }
         this.pass.timestampWrites = this.timestamps(r);
         const occlusion = r.opt();
-        this.pass.occlusionQuerySet = occlusion === undefined ? undefined : this.get<GPUQuerySet>(occlusion);
+        this.pass.occlusionQuerySet = occlusion === undefined
+          ? undefined
+          : this.get<GPUQuerySet>(occlusion);
         this.put(id, e.beginRenderPass(this.pass));
         return;
       }
@@ -564,14 +852,21 @@ export class GpuHost {
         return;
       }
       case op.SET_PIPELINE: {
-        const pass = this.get<GPURenderPassEncoder | GPUComputePassEncoder>(r.u());
-        const pipeline = this.get<GPURenderPipeline | GPUComputePipeline>(r.u());
-        if (pass instanceof GPUComputePassEncoder) pass.setPipeline(pipeline as GPUComputePipeline);
-        else pass.setPipeline(pipeline as GPURenderPipeline);
+        const pass = this.get<GPURenderPassEncoder | GPUComputePassEncoder>(
+          r.u(),
+        );
+        const pipeline = this.get<GPURenderPipeline | GPUComputePipeline>(
+          r.u(),
+        );
+        if (pass instanceof GPUComputePassEncoder) {
+          pass.setPipeline(pipeline as GPUComputePipeline);
+        } else pass.setPipeline(pipeline as GPURenderPipeline);
         return;
       }
       case op.SET_BIND_GROUP: {
-        const pass = this.get<GPURenderPassEncoder | GPUComputePassEncoder>(r.u());
+        const pass = this.get<GPURenderPassEncoder | GPUComputePassEncoder>(
+          r.u(),
+        );
         const index = r.u();
         const group = this.get<GPUBindGroup>(r.u());
         const offsets = r.u();
@@ -587,17 +882,39 @@ export class GpuHost {
       }
       case op.SET_INDEX_BUFFER: {
         const pass = this.get<GPURenderPassEncoder>(r.u());
-        pass.setIndexBuffer(this.get<GPUBuffer>(r.u()), INDEX_FORMAT[r.u()], r.u(), r.opt());
+        pass.setIndexBuffer(
+          this.get<GPUBuffer>(r.u()),
+          INDEX_FORMAT[r.u()],
+          r.u(),
+          r.opt(),
+        );
         return;
       }
       case op.SET_VIEWPORT:
-        this.get<GPURenderPassEncoder>(r.u()).setViewport(r.f32(), r.f32(), r.f32(), r.f32(), r.f32(), r.f32());
+        this.get<GPURenderPassEncoder>(r.u()).setViewport(
+          r.f32(),
+          r.f32(),
+          r.f32(),
+          r.f32(),
+          r.f32(),
+          r.f32(),
+        );
         return;
       case op.SET_SCISSOR:
-        this.get<GPURenderPassEncoder>(r.u()).setScissorRect(r.u(), r.u(), r.u(), r.u());
+        this.get<GPURenderPassEncoder>(r.u()).setScissorRect(
+          r.u(),
+          r.u(),
+          r.u(),
+          r.u(),
+        );
         return;
       case op.SET_BLEND_CONSTANT:
-        this.get<GPURenderPassEncoder>(r.u()).setBlendConstant([r.f32(), r.f32(), r.f32(), r.f32()]);
+        this.get<GPURenderPassEncoder>(r.u()).setBlendConstant([
+          r.f32(),
+          r.f32(),
+          r.f32(),
+          r.f32(),
+        ]);
         return;
       case op.SET_STENCIL_REFERENCE:
         this.get<GPURenderPassEncoder>(r.u()).setStencilReference(r.u());
@@ -606,19 +923,38 @@ export class GpuHost {
         this.get<GPURenderPassEncoder>(r.u()).draw(r.u(), r.u(), r.u(), r.u());
         return;
       case op.DRAW_INDEXED:
-        this.get<GPURenderPassEncoder>(r.u()).drawIndexed(r.u(), r.u(), r.u(), r.i(), r.u());
+        this.get<GPURenderPassEncoder>(r.u()).drawIndexed(
+          r.u(),
+          r.u(),
+          r.u(),
+          r.i(),
+          r.u(),
+        );
         return;
       case op.DRAW_INDIRECT:
-        this.get<GPURenderPassEncoder>(r.u()).drawIndirect(this.get<GPUBuffer>(r.u()), r.u());
+        this.get<GPURenderPassEncoder>(r.u()).drawIndirect(
+          this.get<GPUBuffer>(r.u()),
+          r.u(),
+        );
         return;
       case op.DRAW_INDEXED_INDIRECT:
-        this.get<GPURenderPassEncoder>(r.u()).drawIndexedIndirect(this.get<GPUBuffer>(r.u()), r.u());
+        this.get<GPURenderPassEncoder>(r.u()).drawIndexedIndirect(
+          this.get<GPUBuffer>(r.u()),
+          r.u(),
+        );
         return;
       case op.DISPATCH:
-        this.get<GPUComputePassEncoder>(r.u()).dispatchWorkgroups(r.u(), r.u(), r.u());
+        this.get<GPUComputePassEncoder>(r.u()).dispatchWorkgroups(
+          r.u(),
+          r.u(),
+          r.u(),
+        );
         return;
       case op.DISPATCH_INDIRECT:
-        this.get<GPUComputePassEncoder>(r.u()).dispatchWorkgroupsIndirect(this.get<GPUBuffer>(r.u()), r.u());
+        this.get<GPUComputePassEncoder>(r.u()).dispatchWorkgroupsIndirect(
+          this.get<GPUBuffer>(r.u()),
+          r.u(),
+        );
         return;
       case op.END: {
         const id = r.u();
@@ -650,7 +986,9 @@ export class GpuHost {
         // host's pending reads are dropped.
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(() => {
           if (this.get<GPUBuffer>(id) !== buffer) return;
-          this.bytesAt(address, size).set(new Uint8Array(buffer.getMappedRange(offset, size)));
+          this.bytesAt(address, size).set(
+            new Uint8Array(buffer.getMappedRange(offset, size)),
+          );
           buffer.unmap();
           new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;
           this.wake();
@@ -666,13 +1004,22 @@ export class GpuHost {
         const context = this.surfaces.get(r.u())?.context;
         const format = r.u();
         const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODE[r.u()]];
-        context?.configure({ device: d, format: format === SURFACE_PREFERRED ? navigator.gpu.getPreferredCanvasFormat() : TEXTURE_FORMAT[format], usage, alphaMode });
+        context?.configure({
+          device: d,
+          format: format === SURFACE_PREFERRED
+            ? navigator.gpu.getPreferredCanvasFormat()
+            : TEXTURE_FORMAT[format],
+          usage,
+          alphaMode,
+        });
         return;
       }
       case op.RESIZE: {
         const canvas = this.surfaces.get(r.u())?.context.canvas;
         const [width, height] = [r.u(), r.u()];
-        if (canvas && (canvas.width !== width || canvas.height !== height)) [canvas.width, canvas.height] = [width, height];
+        if (canvas && (canvas.width !== width || canvas.height !== height)) {
+          [canvas.width, canvas.height] = [width, height];
+        }
         return;
       }
       case op.CURRENT: {
@@ -687,14 +1034,21 @@ export class GpuHost {
         this.block = { address, words };
         const out = new Uint32Array(this.memory(), address, words);
         const limits = d.limits as unknown as Record<string, number>;
-        LIMIT_NAME.forEach((name, k) => (out[k] = Math.min(limits[name] ?? 0, 0xffffffff)));
+        LIMIT_NAME.forEach((
+          name,
+          k,
+        ) => (out[k] = Math.min(limits[name] ?? 0, 0xffffffff)));
         FEATURE_NAME.forEach((name, k) => {
-          if (d.features.has(name as GPUFeatureName)) out[LIMIT_NAME.length + (k >> 5)] |= 1 << (k & 31);
+          if (d.features.has(name as GPUFeatureName)) {
+            out[LIMIT_NAME.length + (k >> 5)] |= 1 << (k & 31);
+          }
         });
         // WebGPU resolves timestamps in nanoseconds.
         const period = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32);
         new Float32Array(this.memory(), address, words)[period] = 1;
-        out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(navigator.gpu.getPreferredCanvasFormat());
+        out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(
+          navigator.gpu.getPreferredCanvasFormat(),
+        );
         out[words - 1] = STATUS.READY;
         return;
       }

@@ -24,19 +24,20 @@ Two things to handle when this is actually pursued:
   files, since both are already encapsulated behind `useGeolocation()` /
   `useDeviceOrientation()`.
 - System WebView rendering has a lower performance and battery ceiling than a
-  true native renderer. Acceptable at the current casual-voxel visual complexity;
-  worth revisiting if geometry gets much heavier.
+  true native renderer. Acceptable at the current casual-voxel visual
+  complexity; worth revisiting if geometry gets much heavier.
 
-Note the interaction with [20260708-concurrency-model.md](./20260708-concurrency-model.md):
-Capacitor is a plain WebView wrapper, not Electron, which is precisely why
-SAB/COOP can't be relied on and the worker model has to stay cooperative.
+Note the interaction with
+[20260708-concurrency-model.md](./20260708-concurrency-model.md): Capacitor is a
+plain WebView wrapper, not Electron, which is precisely why SAB/COOP can't be
+relied on and the worker model has to stay cooperative.
 
 ## The two measured bottlenecks
 
 These were found by measuring, and they superseded an earlier speculative list.
 Both were confirmed on an M1 Max — the concern is that mobile SoCs, with much
-lower single-core JS throughput and thermal throttling under sustained load, make
-both worse rather than better.
+lower single-core JS throughput and thermal throttling under sustained load,
+make both worse rather than better.
 
 ### A. Main-thread contention when tiles arrive — still open
 
@@ -48,13 +49,13 @@ network responses completing**, cross-checked against
 
 The cause is a chain that runs **synchronously inside React's render/commit
 phase**, on the same thread as the rAF render loop: `set_tile` fires →
-`layer.tsx`'s `page_to_chunks` (16-chunk slice) → `render/terrain/elevation.ts`'s
-`dense_ele` (bicubic, 4096 samples/chunk) → `layer_table.ts`'s
-`decode_ground_rgba` (per-texel color resolve, up to 65536 texels × 4 channels)
-→ texture and shader-material creation. React batches multiple same-tick
-`set_tile` calls into one commit, so a burst of ~5 simultaneous tile arrivals —
-routine during a fast pan — becomes a single large synchronous block. At 60 fps
-that is 3–7+ dropped frames.
+`layer.tsx`'s `page_to_chunks` (16-chunk slice) →
+`render/terrain/elevation.ts`'s `dense_ele` (bicubic, 4096 samples/chunk) →
+`layer_table.ts`'s `decode_ground_rgba` (per-texel color resolve, up to 65536
+texels × 4 channels) → texture and shader-material creation. React batches
+multiple same-tick `set_tile` calls into one commit, so a burst of ~5
+simultaneous tile arrivals — routine during a fast pan — becomes a single large
+synchronous block. At 60 fps that is 3–7+ dropped frames.
 
 This is exactly the class of work the abandoned WASM-worker architecture existed
 to absorb. The solution space, ranked by scope:
@@ -77,21 +78,21 @@ to absorb. The solution space, ranked by scope:
   this particular code, since the sources are already plain numeric TypeScript
   loops over typed arrays, which is AssemblyScript's sweet spot rather than
   Rust + wasm-bindgen's.
-- **Cheap interim mitigation, no threading:** spread each page's 16 chunks across
-  several frames. Reduces the length of any single task without reducing total
-  CPU time.
+- **Cheap interim mitigation, no threading:** spread each page's 16 chunks
+  across several frames. Reduces the length of any single task without reducing
+  total CPU time.
 
-**Order of operations when this starts:** build the plain-worker split first, then
-re-measure with the same longtask-observer technique, and only then consider
-WASM. The worker is what gets the work off the main thread; WASM only makes the
-work itself faster. Two independent, stackable levers — not one fix.
+**Order of operations when this starts:** build the plain-worker split first,
+then re-measure with the same longtask-observer technique, and only then
+consider WASM. The worker is what gets the work off the main thread; WASM only
+makes the work itself faster. Two independent, stackable levers — not one fix.
 
 ### B. GPU fill rate scaling with screen area — addressed
 
 A large viewport with only _small_ camera movements — no tile loading at all —
 still stuttered, while shrinking the window to phone size made it smooth. A
-different bottleneck from A: present on every frame, scaling with on-screen pixel
-count.
+different bottleneck from A: present on every frame, scaling with on-screen
+pixel count.
 
 The cause was `dpr={[1,2]}` — genuine spatial supersampling, up to 4× the pixels
 on a DPR-2 display — plus a seven-pass full-screen `EffectComposer` stack (N8AO,
@@ -103,11 +104,11 @@ was real.
 **The strategy chosen, and since shipped: invert the process.** Rather than
 shaving cost off an everything-on baseline, start from a Minecraft-like minimal
 baseline and reintroduce selectively. `render_settings_store.ts` now does this —
-`low_spec` defaults true, `high_dpr` defaults false (pinning dpr to `[1,1]`), and
-every post-stack effect (`show_ao`, `show_bloom`, `show_tilt_shift`, `show_smaa`,
-`show_chromatic_aberration`, `show_god_rays`) plus `show_shadow_map` and
-`show_blob_shadow` default off. `frameloop="demand"` also landed, so a fully
-static scene stops re-rendering.
+`low_spec` defaults true, `high_dpr` defaults false (pinning dpr to `[1,1]`),
+and every post-stack effect (`show_ao`, `show_bloom`, `show_tilt_shift`,
+`show_smaa`, `show_chromatic_aberration`, `show_god_rays`) plus
+`show_shadow_map` and `show_blob_shadow` default off. `frameloop="demand"` also
+landed, so a fully static scene stops re-rendering.
 
 Note one honest gap in that store: `show_chromatic_aberration` was defaulted off
 by the same principle as the rest but, unlike `show_ao`/`show_bloom`/
@@ -122,9 +123,10 @@ broke — so both are recorded as leads, not conclusions.
 ### Galaxy S23 janks where an iPhone 13 mini does not
 
 Same build, same scene. The leading suspect is `backdrop-filter`: every blurred
-element over the canvas has to re-read and re-blur its backdrop, and the backdrop
-here repaints every frame, so the cost is continuous rather than one-off. WebKit
-and Chromium do not pay it the same way, which matches the shape of the report.
+element over the canvas has to re-read and re-blur its backdrop, and the
+backdrop here repaints every frame, so the cost is continuous rather than
+one-off. WebKit and Chromium do not pay it the same way, which matches the shape
+of the report.
 
 `backdrop-blur` was removed from the map's circular controls and the address
 pill as a first experiment; the fill went from `/50` to `/70` to keep the icons
@@ -144,10 +146,10 @@ pressure. It appeared immediately after a pass that doubled every view distance.
 
 The chain matters more than the numbers. `MAX_DIST`, fog and `RENDER_RADIUS` are
 not independent: the camera sits `MAX_DIST` from its pivot, so fog has to reach
-past that or full zoom-out is a screen of solid fog, and geometry has to exist as
-far as fog can see. Doubling `MAX_DIST` therefore dragged `FOG_FAR` to 1800 and
-`RENDER_RADIUS` to 3 — and `CHUNK_RENDER_DIST` derives from `FOG_FAR`, so the
-ground **area** that builds chunk geometry went up as its square: 4x.
+past that or full zoom-out is a screen of solid fog, and geometry has to exist
+as far as fog can see. Doubling `MAX_DIST` therefore dragged `FOG_FAR` to 1800
+and `RENDER_RADIUS` to 3 — and `CHUNK_RENDER_DIST` derives from `FOG_FAR`, so
+the ground **area** that builds chunk geometry went up as its square: 4x.
 
 What it settled at: distances 2x, fog and `VIEW_DIST` 1.5x, `RENDER_RADIUS` back
 at 2. Fog does not have to match `MAX_DIST` one for one — it only has to leave
@@ -205,8 +207,8 @@ Kept for the record, since two of three have since been addressed:
 The reference point for all three was Pokémon GO: adaptive GPS polling tied to
 movement state rather than constant max-precision polling; a deliberately
 low-detail always-on world with heavy 3D reserved for short bursts rather than a
-continuously rendered open world; and sensor pausing on backgrounding, which this
-project already does.
+continuously rendered open world; and sensor pausing on backgrounding, which
+this project already does.
 
 ## How to use this
 
@@ -217,21 +219,21 @@ reading code and guessing.
 
 ## Status 2026-09-13
 
-- **A, main-thread contention** — closed by the tick. A page no longer
-  decodes on arrival (it is an XTP packet copied into the core memory,
-  read in place), and everything that used to run inside React's commit —
-  the scan, the bake, the commit — is a step of one frame budget
+- **A, main-thread contention** — closed by the tick. A page no longer decodes
+  on arrival (it is an XTP packet copied into the core memory, read in place),
+  and everything that used to run inside React's commit — the scan, the bake,
+  the commit — is a step of one frame budget
   ([20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)).
-  An iPhone 13 mini reads dt p50 17 ms on a 16 ms display with 13% missed.
-  The bake steps under the budget, in the module; a worker for it was
-  measured and not taken
+  An iPhone 13 mini reads dt p50 17 ms on a 16 ms display with 13% missed. The
+  bake steps under the budget, in the module; a worker for it was measured and
+  not taken
   ([experiment/20260913-bake-worker-on-the-phone.md](../experiment/20260913-bake-worker-on-the-phone.md)).
-- **The reload after wandering** — the client's state is one fixed 256 MB
-  memory on a handheld and the retained meshes sit under a budget
-  ([20260912-what-to-render-when.md](../20260912-what-to-render-when.md));
-  what WebKit does past that is recorded in
+- **The reload after wandering** — the client's state is one fixed 256 MB memory
+  on a handheld and the retained meshes sit under a budget
+  ([20260912-what-to-render-when.md](../20260912-what-to-render-when.md)); what
+  WebKit does past that is recorded in
   [20260912-why-the-destination-is-wasm.md](../20260912-why-the-destination-is-wasm.md)
   and left there on purpose.
-- **Persisting decoded pages** — moot: there is no decode to persist, and
-  the HTTP cache already answers the packet.
+- **Persisting decoded pages** — moot: there is no decode to persist, and the
+  HTTP cache already answers the packet.
 - **`enableHighAccuracy: true`** — still open, unchanged.

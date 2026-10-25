@@ -72,7 +72,9 @@ fn table() -> &'static mut Table {
 /// 0 when every surface is taken.
 pub fn surface_open(role: u32) -> u32 {
     let t = table();
-    let Some(handle) = t.handles.insert(()) else { return 0 };
+    let Some(handle) = t.handles.insert(()) else {
+        return 0;
+    };
     t.surfaces[handle_slot(handle) as usize] = Surface {
         handle,
         role,
@@ -85,7 +87,9 @@ pub fn surface_open(role: u32) -> u32 {
 
 /// Whether the handle was live.
 pub fn surface_resize(handle: u32, px_w: u32, px_h: u32, dpr: f64, ratio: f64) -> bool {
-    let Some(s) = surface(handle) else { return false };
+    let Some(s) = surface(handle) else {
+        return false;
+    };
     s.px_w = px_w;
     s.px_h = px_h;
     s.dpr = dpr;
@@ -104,7 +108,9 @@ pub fn surface_close(handle: u32) -> Option<Surface> {
 
 pub fn surface(handle: u32) -> Option<&'static mut Surface> {
     let t = table();
-    t.handles.live(handle).then(|| &mut t.surfaces[handle_slot(handle) as usize])
+    t.handles
+        .live(handle)
+        .then(|| &mut t.surfaces[handle_slot(handle) as usize])
 }
 
 pub fn surfaces() -> impl Iterator<Item = &'static mut Surface> {

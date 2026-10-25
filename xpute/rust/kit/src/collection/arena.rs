@@ -99,7 +99,10 @@ pub struct ArenaGuard<'a, T: Default> {
 
 impl<'a, T: Default> ArenaGuard<'a, T> {
     fn new(arena: &'a mut Arena<T>) -> ArenaGuard<'a, T> {
-        ArenaGuard { mark: arena.len(), arena }
+        ArenaGuard {
+            mark: arena.len(),
+            arena,
+        }
     }
 }
 

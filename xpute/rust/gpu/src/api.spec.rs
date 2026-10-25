@@ -11,7 +11,12 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 /// An optional field left unset, an index or a handle absent.
 pub const NONE: u32 = 4294967295;
@@ -190,12 +195,19 @@ pub enum BindingKind {
 
 impl BindingKind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [BindingKind; 4] = [BindingKind::buffer, BindingKind::sampler, BindingKind::texture, BindingKind::storage_texture];
+    pub const ALL: [BindingKind; 4] = [
+        BindingKind::buffer,
+        BindingKind::sampler,
+        BindingKind::texture,
+        BindingKind::storage_texture,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<BindingKind> {
-        BindingKind::ALL.into_iter().find(|member| *member as u8 == value)
+        BindingKind::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -210,12 +222,18 @@ pub enum ResourceKind {
 
 impl ResourceKind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [ResourceKind; 3] = [ResourceKind::buffer, ResourceKind::sampler, ResourceKind::texture_view];
+    pub const ALL: [ResourceKind; 3] = [
+        ResourceKind::buffer,
+        ResourceKind::sampler,
+        ResourceKind::texture_view,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<ResourceKind> {
-        ResourceKind::ALL.into_iter().find(|member| *member as u8 == value)
+        ResourceKind::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -231,7 +249,18 @@ pub mod BUFFER_USAGE {
     pub const STORAGE: u32 = 128;
     pub const INDIRECT: u32 = 256;
     pub const QUERY_RESOLVE: u32 = 512;
-    pub const KEYS: &[&str] = &["MAP_READ", "MAP_WRITE", "COPY_SRC", "COPY_DST", "INDEX", "VERTEX", "UNIFORM", "STORAGE", "INDIRECT", "QUERY_RESOLVE"];
+    pub const KEYS: &[&str] = &[
+        "MAP_READ",
+        "MAP_WRITE",
+        "COPY_SRC",
+        "COPY_DST",
+        "INDEX",
+        "VERTEX",
+        "UNIFORM",
+        "STORAGE",
+        "INDIRECT",
+        "QUERY_RESOLVE",
+    ];
 }
 
 /// GPUTextureUsage, its bits as WebGPU numbers them.
@@ -241,7 +270,13 @@ pub mod TEXTURE_USAGE {
     pub const TEXTURE_BINDING: u32 = 4;
     pub const STORAGE_BINDING: u32 = 8;
     pub const RENDER_ATTACHMENT: u32 = 16;
-    pub const KEYS: &[&str] = &["COPY_SRC", "COPY_DST", "TEXTURE_BINDING", "STORAGE_BINDING", "RENDER_ATTACHMENT"];
+    pub const KEYS: &[&str] = &[
+        "COPY_SRC",
+        "COPY_DST",
+        "TEXTURE_BINDING",
+        "STORAGE_BINDING",
+        "RENDER_ATTACHMENT",
+    ];
 }
 
 /// GPUShaderStage, its bits as WebGPU numbers them.

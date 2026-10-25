@@ -26,7 +26,11 @@ export class Namespace implements Fs {
   }
 
   /** ENOENT below a root nothing is bound to. */
-  open(root: u32, path: string, signal: AbortSignal): U8Array | Promise<U8Array> {
+  open(
+    root: u32,
+    path: string,
+    signal: AbortSignal,
+  ): U8Array | Promise<U8Array> {
     const bound = this.bound.get(root);
     if (bound === undefined) throw new FileError(Errno.ENOENT);
     return bound.open(path, signal);

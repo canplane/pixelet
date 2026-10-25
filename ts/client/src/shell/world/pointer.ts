@@ -20,10 +20,19 @@ const spent = new Set<i32>();
 const pressed = new Map<i32, PointerType>();
 
 useDockStore.subscribe((state, before) => {
-  if (state.dockMode === DockMode.Message && before.dockMode !== DockMode.Message) kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
+  if (
+    state.dockMode === DockMode.Message && before.dockMode !== DockMode.Message
+  ) kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
 });
 
-export function worldPointer(phase: PointerPhase, pointerType: PointerType, id: i32, button: i32, x: f64, y: f64): void {
+export function worldPointer(
+  phase: PointerPhase,
+  pointerType: PointerType,
+  id: i32,
+  button: i32,
+  x: f64,
+  y: f64,
+): void {
   const { dockMode, setDockMode } = useDockStore.getState();
   const typing = dockMode === DockMode.Message;
   switch (phase) {
@@ -50,5 +59,7 @@ export function worldPointer(phase: PointerPhase, pointerType: PointerType, id: 
 /** Each pointer still pressed ends with a cancel: the page lost it (blur,
  * hidden, the surface gone) and its lift will not come. */
 export function releasePointers(): void {
-  for (const [id, pointerType] of pressed) worldPointer(PointerPhase.Cancel, pointerType, id, 0, 0, 0);
+  for (const [id, pointerType] of pressed) {
+    worldPointer(PointerPhase.Cancel, pointerType, id, 0, 0, 0);
+  }
 }

@@ -33,7 +33,11 @@ interface Abort {
 export interface Fs {
   /** The file at `path` below `root`, whole, or a FileError; `signal` is
    * aborted when the guest closes it first. */
-  open(root: u32, path: string, signal: AbortSignal): U8Array | Promise<U8Array>;
+  open(
+    root: u32,
+    path: string,
+    signal: AbortSignal,
+  ): U8Array | Promise<U8Array>;
   /** All a file opened for writing was given, once it is closed. */
   commit(root: u32, path: string, bytes: U8Array): void;
 }
@@ -56,14 +60,19 @@ interface File {
 
 /** No name empty, `.` or `..`, so a path never leaves its root. */
 function walks_down(path: string): boolean {
-  return path.split("/").every((name) => name !== "" && name !== "." && name !== "..");
+  return path.split("/").every((name) =>
+    name !== "" && name !== "." && name !== ".."
+  );
 }
 
 export class Sys {
   readonly files = new Map<u32, File>();
 
   /** `opened` answers an open: a size, or an errno and the host's detail. */
-  constructor(private readonly host: SysHost, private readonly opened: (fd: u32, res: i32, detail: u32) => void) {}
+  constructor(
+    private readonly host: SysHost,
+    private readonly opened: (fd: u32, res: i32, detail: u32) => void,
+  ) {}
 
   run(memory: ArrayBuffer, at: u32): void {
     each_record(memory, at, HEAD, this.record);
@@ -94,7 +103,9 @@ export class Sys {
         this.files.delete(w[a]);
         file.controller.abort();
         if (file.written) {
-          const whole = new Uint8Array(file.written.reduce((n, b) => n + b.byteLength, 0));
+          const whole = new Uint8Array(
+            file.written.reduce((n, b) => n + b.byteLength, 0),
+          );
           let off = 0;
           for (const b of file.written) {
             whole.set(b, off);
@@ -106,7 +117,14 @@ export class Sys {
       }
       case op.ABORT: {
         const num = (i: u32) => BigInt(w[a + i]) | BigInt(w[a + i + 1]) << 32n;
-        this.host.abort({ errnum: w[a] | 0, line: w[a + 1], column: w[a + 2], a: num(3), b: num(5), file: text_of(w, a + 7) });
+        this.host.abort({
+          errnum: w[a] | 0,
+          line: w[a + 1],
+          column: w[a + 2],
+          a: num(3),
+          b: num(5),
+          file: text_of(w, a + 7),
+        });
         break;
       }
       default:
@@ -116,7 +134,13 @@ export class Sys {
   };
 
   private openat(fd: u32, root: u32, flags: u32, path: string): void {
-    const file: File = { root, path, controller: new AbortController(), bytes: null, written: null };
+    const file: File = {
+      root,
+      path,
+      controller: new AbortController(),
+      bytes: null,
+      written: null,
+    };
     this.files.set(fd, file);
     // An answer is a submission, and a full ring rings a turn that would
     // overwrite the records this run is still reading, so answers wait until it ends.
@@ -126,8 +150,16 @@ export class Sys {
       this.opened(fd, res, detail);
     };
     const failed = (err: unknown) => {
-      if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
-      const [errnum, detail] = err instanceof FileError ? [err.errnum, err.detail] : [Errno.EIO, 0];
+      if (!(err instanceof FileError)) {
+        console.warn(
+          `[xpute/sys] open ${root}/${path}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+      const [errnum, detail] = err instanceof FileError
+        ? [err.errnum, err.detail]
+        : [Errno.EIO, 0];
       answer(errnum, detail);
     };
     const read = (bytes: U8Array) => {
@@ -135,7 +167,9 @@ export class Sys {
       file.bytes = bytes;
       answer(bytes.byteLength, 0);
     };
-    if (!walks_down(path)) return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
+    if (!walks_down(path)) {
+      return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
+    }
     if (flags === flag.O_WRONLY) {
       file.written = [];
       return queueMicrotask(() => answer(0, 0));

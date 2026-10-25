@@ -9,7 +9,10 @@ use crate::spec::{file, pascal, rs_doc};
 fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     for f in fields {
         let kind = spec.kind(&f.ty)?;
-        if f.list || kind == Kind::Str || (kind == Kind::Record && rs_borrows(spec, &spec.record(&f.ty).fields)?) {
+        if f.list
+            || kind == Kind::Str
+            || (kind == Kind::Record && rs_borrows(spec, &spec.record(&f.ty).fields)?)
+        {
             return Ok(true);
         }
     }
@@ -25,7 +28,9 @@ fn rs_record(spec: &Spec, name: &str, lifetime: &str) -> Result<String, String> 
 }
 
 fn rs_enum(spec: &Spec, ty: &str) -> String {
-    spec.extern_of(ty).map(|x| x.rs.clone()).unwrap_or_else(|| ty.to_string())
+    spec.extern_of(ty)
+        .map(|x| x.rs.clone())
+        .unwrap_or_else(|| ty.to_string())
 }
 
 fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
@@ -37,7 +42,11 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
         return Ok("Strs<'a>".to_string());
     }
     if f.list || kind == Kind::Record {
-        return Err(format!("cmd.json: the kernel reads no {} ({})", if f.list { "list" } else { "record" }, f.name));
+        return Err(format!(
+            "cmd.json: the kernel reads no {} ({})",
+            if f.list { "list" } else { "record" },
+            f.name
+        ));
     }
     let one = match kind {
         Kind::Number => f.ty.clone(),
@@ -45,7 +54,11 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Bool => "bool".to_string(),
         _ => rs_enum(spec, &f.ty),
     };
-    Ok(if f.optional { format!("Option<{one}>") } else { one })
+    Ok(if f.optional {
+        format!("Option<{one}>")
+    } else {
+        one
+    })
 }
 
 fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
@@ -70,7 +83,9 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
     let (repr, unknown) = match spec.enums.iter().find(|e| e.name == f.ty) {
         Some(e) => (None, e.unknown.clone()),
         None => {
-            let x = spec.extern_of(&f.ty).ok_or(format!("cmd.json: no type {}", f.ty))?;
+            let x = spec
+                .extern_of(&f.ty)
+                .ok_or(format!("cmd.json: no type {}", f.ty))?;
             (x.repr.clone(), None)
         }
     };
@@ -88,7 +103,10 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
 
 fn rs_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
     Ok(if f.optional {
-        format!("match f.at({i})?.opt() {{ Some(c) => Some({}), None => None }}", rs_read_one(spec, f, "c")?)
+        format!(
+            "match f.at({i})?.opt() {{ Some(c) => Some({}), None => None }}",
+            rs_read_one(spec, f, "c")?
+        )
     } else {
         rs_read_one(spec, f, &format!("f.at({i})?"))?
     })
@@ -101,12 +119,21 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
             return Ok(format!("&'a [{}]", f.ty));
         }
         if kind != Kind::Record {
-            return Err(format!("cmd.json: a list of {} ({}) is not written", f.ty, f.name));
+            return Err(format!(
+                "cmd.json: a list of {} ({}) is not written",
+                f.ty, f.name
+            ));
         }
-        return Ok(format!("&'a dyn Fn(&mut dyn FnMut(&{}))", rs_record(spec, &f.ty, "'_")?));
+        return Ok(format!(
+            "&'a dyn Fn(&mut dyn FnMut(&{}))",
+            rs_record(spec, &f.ty, "'_")?
+        ));
     }
     if f.optional && kind == Kind::Str {
-        return Err(format!("cmd.json: an optional str ({}) is not written", f.name));
+        return Err(format!(
+            "cmd.json: an optional str ({}) is not written",
+            f.name
+        ));
     }
     let one = match kind {
         Kind::Number => f.ty.clone(),
@@ -115,7 +142,11 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Record => rs_record(spec, &f.ty, "'a")?,
         _ => rs_enum(spec, &f.ty),
     };
-    Ok(if f.optional { format!("Option<{one}>") } else { one })
+    Ok(if f.optional {
+        format!("Option<{one}>")
+    } else {
+        one
+    })
 }
 
 /// A list is walked twice, once to count, since a branch's table precedes its
@@ -153,13 +184,22 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
     }])
 }
 
-fn rs_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[String]>, fields: &[Field]) -> Result<(), String> {
+fn rs_writer(
+    spec: &Spec,
+    out: &mut Vec<String>,
+    name: &str,
+    doc: Option<&[String]>,
+    fields: &[Field],
+) -> Result<(), String> {
     let borrows = rs_borrows(spec, fields)?;
     out.push(String::new());
     if let Some(doc) = doc {
         out.extend(rs_doc(doc, "", "///"));
     }
-    out.push(format!("pub struct {name}{} {{", if borrows { "<'a>" } else { "" }));
+    out.push(format!(
+        "pub struct {name}{} {{",
+        if borrows { "<'a>" } else { "" }
+    ));
     for f in fields {
         if let Some(doc) = &f.doc {
             out.extend(rs_doc(doc, "    ", "///"));
@@ -173,17 +213,29 @@ fn rs_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[Strin
         "    /// The children it is written as.".to_string(),
         format!("    pub const FIELDS: u32 = {};", fields.len()),
         String::new(),
-        format!("    pub fn write(&self, {}: &mut PacketWriter) {{", if fields.is_empty() { "_" } else { "w" }),
+        format!(
+            "    pub fn write(&self, {}: &mut PacketWriter) {{",
+            if fields.is_empty() { "_" } else { "w" }
+        ),
     ]);
     for f in fields {
-        out.extend(rs_write(spec, f)?.into_iter().map(|l| format!("        {l}")));
+        out.extend(
+            rs_write(spec, f)?
+                .into_iter()
+                .map(|l| format!("        {l}")),
+        );
     }
     out.extend(["    }".to_string(), "}".to_string()]);
     Ok(())
 }
 
 pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
-    let mut out = vec![format!("// {}/cmd.spec.rs", t.rs_logical), "//".into(), crate::spec::generated(t.json, t.json), "".into()];
+    let mut out = vec![
+        format!("// {}/cmd.spec.rs", t.rs_logical),
+        "//".into(),
+        crate::spec::generated(t.json, t.json),
+        "".into(),
+    ];
     out.extend(rs_doc(&spec.doc, "", "//!"));
     out.extend(
         [
@@ -201,8 +253,15 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         .map(String::from),
     );
     // A list of strings is read as xpute's `Strs`, named only where one is.
-    let strs = spec.commands()?.iter().flat_map(|c| c.packet.iter().chain(c.signal.iter()).flatten()).any(|f| f.list && f.ty == "str");
-    out.push(format!("use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};", if strs { "Strs, " } else { "" }));
+    let strs = spec
+        .commands()?
+        .iter()
+        .flat_map(|c| c.packet.iter().chain(c.signal.iter()).flatten())
+        .any(|f| f.list && f.ty == "str");
+    out.push(format!(
+        "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
+        if strs { "Strs, " } else { "" }
+    ));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
@@ -210,7 +269,10 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         if let Some(doc) = &e.doc {
             out.extend(rs_doc(doc, "", "///"));
         }
-        out.push(format!("#[derive(Clone, Copy, Debug, {}PartialEq, Eq)]", if e.default.is_some() { "Default, " } else { "" }));
+        out.push(format!(
+            "#[derive(Clone, Copy, Debug, {}PartialEq, Eq)]",
+            if e.default.is_some() { "Default, " } else { "" }
+        ));
         out.push("#[repr(u32)]".into());
         out.push(format!("pub enum {} {{", e.name));
         for entry in &e.entries {
@@ -236,12 +298,18 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 "    pub const ALL: [{}; {}] = [{}];",
                 e.name,
                 all.len(),
-                all.iter().map(|m| format!("{}::{}", e.name, m.name)).collect::<Vec<_>>().join(", ")
+                all.iter()
+                    .map(|m| format!("{}::{}", e.name, m.name))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
             String::new(),
             "    /// The member a number names, or none for a number nobody gave out.".to_string(),
             format!("    pub fn of(number: u32) -> Option<{}> {{", e.name),
-            format!("        {}::ALL.into_iter().find(|m| *m as u32 == number)", e.name),
+            format!(
+                "        {}::ALL.into_iter().find(|m| *m as u32 == number)",
+                e.name
+            ),
             "    }".to_string(),
             "}".to_string(),
         ]);
@@ -269,14 +337,25 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 }
                 out.push(format!("    pub {}: {},", f.name, rs_read_type(spec, f)?));
             }
-            out.extend(["}".to_string(), String::new(), format!("impl{lt} {name}{lt} {{")]);
-            out.push(format!("    pub fn read(pkt: &{}[u8]) -> Result<{name}{lt}, MarshalError> {{", if borrows { "'a " } else { "" }));
+            out.extend([
+                "}".to_string(),
+                String::new(),
+                format!("impl{lt} {name}{lt} {{"),
+            ]);
+            out.push(format!(
+                "    pub fn read(pkt: &{}[u8]) -> Result<{name}{lt}, MarshalError> {{",
+                if borrows { "'a " } else { "" }
+            ));
             out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
             out.push(format!("        Ok({name} {{"));
             for (i, f) in packet.iter().enumerate() {
                 out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
             }
-            out.extend(["        })".to_string(), "    }".to_string(), "}".to_string()]);
+            out.extend([
+                "        })".to_string(),
+                "    }".to_string(),
+                "}".to_string(),
+            ]);
         }
         if let Some(signal) = &c.signal {
             let doc = [format!("Command::{}'s signal.", c.name)];

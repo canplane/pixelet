@@ -104,5 +104,10 @@ pub fn alloc(bytes: u32) -> Option<Block> {
 /// `block` came from `alloc` and has not been given back.
 pub unsafe fn free((off, bytes): Block) {
     // SAFETY: the caller's; `alloc` made this layout for this address.
-    unsafe { std::alloc::dealloc(at(off), std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
+    unsafe {
+        std::alloc::dealloc(
+            at(off),
+            std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN),
+        )
+    }
 }

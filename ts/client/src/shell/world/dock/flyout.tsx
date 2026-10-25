@@ -33,7 +33,10 @@ function sizeMark(tier: u32): f64 {
 }
 
 /** Finest first, so the coarsest stands nearest the swatch. */
-const TIERS: readonly u32[] = Array.from({ length: OBJECT_TIERS }, (_, i) => OBJECT_TIERS - 1 - i);
+const TIERS: readonly u32[] = Array.from(
+  { length: OBJECT_TIERS },
+  (_, i) => OBJECT_TIERS - 1 - i,
+);
 
 /** A press on a swatch shows the sizes' seed; held, it grows into them. */
 export const enum Sizes {
@@ -58,16 +61,21 @@ export interface Flyout {
 /** `x` and `y` on the page. */
 function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.bar[0] - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.bar[1] - FLYOUT_LIFT_PX - (2 * FLYOUT_PAD_Y + OBJECT_TIERS * FLYOUT_PITCH - FLYOUT_GAP_PX);
+  const top = at.bar[1] - FLYOUT_LIFT_PX -
+    (2 * FLYOUT_PAD_Y + OBJECT_TIERS * FLYOUT_PITCH - FLYOUT_GAP_PX);
   const along = y - top - FLYOUT_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / FLYOUT_PITCH);
-  if (row >= OBJECT_TIERS || along - row * FLYOUT_PITCH > chrome.target) return null;
+  if (row >= OBJECT_TIERS || along - row * FLYOUT_PITCH > chrome.target) {
+    return null;
+  }
   return TIERS[row];
 }
 
 /** Where the flyout stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
-export function useFlyout(bar: React.RefObject<View | null>): { flyout: Flyout | null; sizes: Omit<SizeGesture, "tap"> } {
+export function useFlyout(
+  bar: React.RefObject<View | null>,
+): { flyout: Flyout | null; sizes: Omit<SizeGesture, "tap"> } {
   const [flyout, setFlyout] = useState<Flyout | null>(null);
   // A release can come before the swatch's place is measured.
   const pressing = useRef(false);
@@ -79,14 +87,26 @@ export function useFlyout(bar: React.RefObject<View | null>): { flyout: Flyout |
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
           if (!pressing.current) return;
-          setFlyout({ centerX: sx + sw / 2 - bx, bar: [bx, by], hover: null, sizes: Sizes.Seed });
+          setFlyout({
+            centerX: sx + sw / 2 - bx,
+            bar: [bx, by],
+            hover: null,
+            sizes: Sizes.Seed,
+          });
         });
       });
     },
     cue: (swatch, open) => {
       clearTimeout(cueTimer.current);
       swatch.measureInWindow((sx, _sy, sw) => {
-        bar.current?.measureInWindow((bx, by) => setFlyout({ centerX: sx + sw / 2 - bx, bar: [bx, by], hover: null, sizes: open ? Sizes.Open : Sizes.Seed }));
+        bar.current?.measureInWindow((bx, by) =>
+          setFlyout({
+            centerX: sx + sw / 2 - bx,
+            bar: [bx, by],
+            hover: null,
+            sizes: open ? Sizes.Open : Sizes.Seed,
+          })
+        );
       });
       cueTimer.current = setTimeout(() => setFlyout(null), CUE_MS);
     },
@@ -112,8 +132,23 @@ export function useFlyout(bar: React.RefObject<View | null>): { flyout: Flyout |
 /** The seed or the sizes over the swatch. Drawn from the bar, not the swatch, whose scrolling strip would clip it. */
 export function SizeFlyout({ flyout }: { flyout: Flyout }) {
   return (
-    <View style={[styles.flyoutAt, flyout.sizes === Sizes.Open ? styles.flyoutTakes : touches.block, { left: flyout.centerX - FLYOUT_WIDTH / 2 }]}>
-      {flyout.sizes === Sizes.Open ? <SizeMarks hover={flyout.hover} /> : <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.seed} />}
+    <View
+      style={[
+        styles.flyoutAt,
+        flyout.sizes === Sizes.Open ? styles.flyoutTakes : touches.block,
+        { left: flyout.centerX - FLYOUT_WIDTH / 2 },
+      ]}
+    >
+      {flyout.sizes === Sizes.Open
+        ? <SizeMarks hover={flyout.hover} />
+        : (
+          <Backing
+            fill={STRIP.ground}
+            material={material.flyout}
+            place={BackingPlace.OverMap}
+            style={styles.seed}
+          />
+        )}
     </View>
   );
 }
@@ -124,16 +159,31 @@ function SizeMarks({ hover }: { hover: u32 | null }) {
   const objectTier = useKernel((s) => s.holding.tier);
 
   return (
-    <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.flyout}>
+    <Backing
+      fill={STRIP.ground}
+      material={material.flyout}
+      place={BackingPlace.OverMap}
+      style={styles.flyout}
+    >
       {TIERS.map((tier) => {
         const mark = sizeMark(tier);
         return (
-          <View key={tier} accessibilityLabel={t("world.dock.object_size", { n: OBJECT_TIERS - tier })} style={styles.flyoutItem}>
+          <View
+            key={tier}
+            accessibilityLabel={t("world.dock.object_size", {
+              n: OBJECT_TIERS - tier,
+            })}
+            style={styles.flyoutItem}
+          >
             <Motion to={{ scale: hover === tier ? 1.25 : 1 }} transition={SNAP}>
               <View
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
-                  hover === tier ? styles.markHover : objectTier === tier ? styles.markHeld : styles.markIdle,
+                  hover === tier
+                    ? styles.markHover
+                    : objectTier === tier
+                    ? styles.markHeld
+                    : styles.markIdle,
                 ]}
               />
             </Motion>
@@ -153,7 +203,13 @@ const styles = StyleSheet.create({
   },
   // Takes the pointer whole, so the map under it draws no hover.
   flyoutTakes: { pointerEvents: "box-only" },
-  seed: { alignSelf: "center", width: SEED, height: SEED, borderRadius: SEED / 2, boxShadow: shadow.lift },
+  seed: {
+    alignSelf: "center",
+    width: SEED,
+    height: SEED,
+    borderRadius: SEED / 2,
+    boxShadow: shadow.lift,
+  },
   flyout: {
     alignItems: "center",
     gap: FLYOUT_GAP_PX,
@@ -161,8 +217,16 @@ const styles = StyleSheet.create({
     borderRadius: FLYOUT_WIDTH / 2,
     boxShadow: shadow.lift,
   },
-  flyoutItem: { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center" },
+  flyoutItem: {
+    width: chrome.target,
+    height: chrome.target,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   markIdle: { backgroundColor: alpha(STRIP.mark, 0.4) },
   markHeld: { backgroundColor: alpha(STRIP.mark, 0.8) },
-  markHover: { backgroundColor: STRIP.mark, boxShadow: `0 0 0 1px ${STRIP.mark}` },
+  markHover: {
+    backgroundColor: STRIP.mark,
+    boxShadow: `0 0 0 1px ${STRIP.mark}`,
+  },
 });

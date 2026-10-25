@@ -29,7 +29,10 @@ type R2Object = {
 type R2Head = Pick<R2Object, "httpEtag" | "writeHttpMetadata">;
 type R2Bucket = {
   get(key: string): Promise<R2Object | null>;
-  get(key: string, options: { onlyIf: Headers }): Promise<R2Object | R2Head | null>;
+  get(
+    key: string,
+    options: { onlyIf: Headers },
+  ): Promise<R2Object | R2Head | null>;
   head(key: string): Promise<R2Head | null>;
 };
 
@@ -61,7 +64,14 @@ export type Env = {
   GEO_ORIGIN: string;
 };
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_OBJECT, TILE_PREFIX, TILE_SPHERE } from "./route.spec.ts";
+import {
+  API_PREFIX,
+  ASSET_PREFIX,
+  GEO_PREFIX,
+  TILE_OBJECT,
+  TILE_PREFIX,
+  TILE_SPHERE,
+} from "./route.spec.ts";
 import { BASE_LAYERS } from "./published.spec.ts";
 
 /**
@@ -84,7 +94,8 @@ const SOURCE_KEY = "source";
 
 const KINDS = BASE_LAYERS.join("|");
 const KEY_RE = new RegExp(
-  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
+  String
+    .raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
@@ -114,7 +125,10 @@ const STORED_ENCODING = "x-pxl-stored-encoding";
  * browser's. Every variant was refused when it was tried, `*` and `zstd`
  * included. Whatever refuses a client for its encoding has to run where the
  * client's own header is still intact, which is not here. */
-function serve(body: ArrayBuffer | ReadableStream | null, from: Headers): Response {
+function serve(
+  body: ArrayBuffer | ReadableStream | null,
+  from: Headers,
+): Response {
   const headers = new Headers(from);
   const encoding = headers.get(STORED_ENCODING);
   if (encoding) {
@@ -143,38 +157,62 @@ async function declaration(request: Request, env: Env): Promise<Response> {
   // A precondition that failed leaves no body: the client holds the current one.
   if (!("body" in object)) return new Response(null, { status: 304, headers });
   // Whole, so its length is known, as `fetch` below reads a page.
-  return new Response(request.method === "HEAD" ? null : await object.arrayBuffer(), { headers });
+  return new Response(
+    request.method === "HEAD" ? null : await object.arrayBuffer(),
+    { headers },
+  );
 }
 
 /** A baked page's key: a kind, a version and a page name. */
 const BAKE_KEY = new RegExp(String.raw`^(?:${KINDS})\/`);
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<Response> {
     const url = new URL(request.url);
 
     // What the bucket answers, claimed first: the baked pages and the assets,
     // each under its own root. An asset's key *is* its path without the
     // leading slash — the root and the bucket's prefix are the same word —
     // where a page's key is its path with the tile root removed.
-    const bucket = url.pathname.startsWith(TILE_PREFIX) ? url.pathname.slice(TILE_PREFIX.length) : url.pathname.startsWith(ASSET_PREFIX) ? url.pathname.slice(1) : null;
+    const bucket = url.pathname.startsWith(TILE_PREFIX)
+      ? url.pathname.slice(TILE_PREFIX.length)
+      : url.pathname.startsWith(ASSET_PREFIX)
+      ? url.pathname.slice(1)
+      : null;
 
     // Everything else under a claimed root is reverse-proxied to that root's
     // origin, same path, host header rewritten for Caddy. Neither branch reads
     // past its prefix.
     if (bucket === null) {
-      const origin = url.pathname.startsWith(GEO_PREFIX) ? env.GEO_ORIGIN : url.pathname.startsWith(API_PREFIX) ? env.API_ORIGIN : null;
+      const origin = url.pathname.startsWith(GEO_PREFIX)
+        ? env.GEO_ORIGIN
+        : url.pathname.startsWith(API_PREFIX)
+        ? env.API_ORIGIN
+        : null;
       if (origin) {
         const target = new URL(url.pathname + url.search, origin);
         const headers = new Headers(request.headers);
         headers.set("host", target.host);
-        return fetch(new Request(target, { method: request.method, headers, body: request.body }));
+        return fetch(
+          new Request(target, {
+            method: request.method,
+            headers,
+            body: request.body,
+          }),
+        );
       }
       return env.ASSETS.fetch(request);
     }
 
     if (request.method !== "GET" && request.method !== "HEAD") {
-      return new Response("method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
+      return new Response("method not allowed", {
+        status: 405,
+        headers: { allow: "GET, HEAD" },
+      });
     }
 
     const key = bucket;
@@ -186,7 +224,12 @@ export default {
     // sea, or a child its parent already says — and so is answered empty,
     // never not found; 404 stays for what names nothing, an asset included.
     const page = BAKE_KEY.test(key);
-    const missing = () => page ? left() : new Response(request.method === "HEAD" ? null : "not found", { status: 404 });
+    const missing = () =>
+      page
+        ? left()
+        : new Response(request.method === "HEAD" ? null : "not found", {
+          status: 404,
+        });
     const cache = caches.default;
     if (request.method === "GET") {
       const cached = await cache.match(request);
@@ -237,7 +280,9 @@ export default {
     // `no-transform` so that nothing re-encodes what is already in its final
     // encoding, on the way out or out of the cache.
     const cc = headers.get("cache-control");
-    if (cc && !cc.includes("no-transform")) headers.set("cache-control", `${cc}, no-transform`);
+    if (cc && !cc.includes("no-transform")) {
+      headers.set("cache-control", `${cc}, no-transform`);
+    }
 
     const encoding = headers.get("content-encoding");
     if (encoding) {

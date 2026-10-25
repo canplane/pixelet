@@ -5,7 +5,11 @@
 
 import type { ComponentType } from "react";
 
-import { type SettingName, SETTINGS, settingsIn } from "@/shell/setting/schema.ts";
+import {
+  type SettingName,
+  SETTINGS,
+  settingsIn,
+} from "@/shell/setting/schema.ts";
 import { Fold } from "./fold.tsx";
 import { GizmoLegend } from "./gizmo-legend.tsx";
 import { ProfilerPanel } from "./profiler.tsx";
@@ -22,7 +26,8 @@ const PANEL = {
 /** A debug setting that has a panel, which its fold is named by (fold.tsx). */
 export type PanelName = keyof typeof PANEL;
 
-const isPanel = (name: SettingName): name is PanelName => Object.hasOwn(PANEL, name);
+const isPanel = (name: SettingName): name is PanelName =>
+  Object.hasOwn(PANEL, name);
 
 /** Nothing to say yet: the grid is on screen. */
 function CameraGizmo() {
@@ -32,7 +37,11 @@ function CameraGizmo() {
 
 /** Whether any panel is up, so the corner is the window's. */
 export function useDebugWindow(): boolean {
-  return useKernel((s) => settingsIn("debug").some((name) => isPanel(name) && s.settings[SETTINGS[name].key] === 1));
+  return useKernel((s) =>
+    settingsIn("debug").some((name) =>
+      isPanel(name) && s.settings[SETTINGS[name].key] === 1
+    )
+  );
 }
 
 export function DebugPanels() {

@@ -13,7 +13,10 @@ use fnv::FnvHashMap;
 use std::ptr::NonNull;
 use std::sync::{Mutex, OnceLock};
 
-use jni_sys::{jboolean, jbyteArray, jclass, jdouble, jint, jmethodID, jobject, jvalue, JNIEnv, JNINativeInterface_, JavaVM, JNI_ABORT, JNI_OK};
+use jni_sys::{
+    jboolean, jbyteArray, jclass, jdouble, jint, jmethodID, jobject, jvalue, JNIEnv,
+    JNINativeInterface_, JavaVM, JNI_ABORT, JNI_OK,
+};
 use ndk_sys::{ANativeWindow, ANativeWindow_fromSurface, ANativeWindow_release};
 use wgpu::rwh::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
 use xpute_kit::status::bug::OrBug;
@@ -35,7 +38,11 @@ unsafe fn jni<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
 
 /// A turn of `quota_ms`: the entry, xpute_intr (xpute-host native `native_abi!`, lib.rs).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_intr(_env: *mut JNIEnv, _class: jclass, quota_ms: jdouble) -> jdouble {
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_intr(
+    _env: *mut JNIEnv,
+    _class: jclass,
+    quota_ms: jdouble,
+) -> jdouble {
     crate::xpute_intr(quota_ms)
 }
 
@@ -44,11 +51,16 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_intr(_env: *mut JN
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_mem(env: *mut JNIEnv, _class: jclass) -> jobject {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_mem(
+    env: *mut JNIEnv,
+    _class: jclass,
+) -> jobject {
     let mut bytes = 0u32;
     // SAFETY: our own word.
     let at = unsafe { crate::xpute_mem(&raw mut bytes) };
-    let make = unsafe { jni(env) }.NewDirectByteBuffer.or_bug(Errno::ENOSYS);
+    let make = unsafe { jni(env) }
+        .NewDirectByteBuffer
+        .or_bug(Errno::ENOSYS);
     // SAFETY: the memory lives as long as the process, and is `bytes` long.
     unsafe { make(env, at.cast(), i64::from(bytes)) }
 }
@@ -57,7 +69,11 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_mem(env: *m
 ///
 /// # Safety
 /// `env` is the environment JNI called with, `packed` a live byte array.
-unsafe fn with_bytes<R>(env: *mut JNIEnv, packed: jbyteArray, f: impl FnOnce(*const u8, usize) -> R) -> R {
+unsafe fn with_bytes<R>(
+    env: *mut JNIEnv,
+    packed: jbyteArray,
+    f: impl FnOnce(*const u8, usize) -> R,
+) -> R {
     let jni = unsafe { jni(env) };
     let (length, elements, release) = (
         jni.GetArrayLength.or_bug(Errno::ENOSYS),
@@ -65,7 +81,12 @@ unsafe fn with_bytes<R>(env: *mut JNIEnv, packed: jbyteArray, f: impl FnOnce(*co
         jni.ReleaseByteArrayElements.or_bug(Errno::ENOSYS),
     );
     // SAFETY: the caller's array, read until it is released below.
-    let (len, at) = unsafe { (length(env, packed), elements(env, packed, core::ptr::null_mut())) };
+    let (len, at) = unsafe {
+        (
+            length(env, packed),
+            elements(env, packed, core::ptr::null_mut()),
+        )
+    };
     let r = f(at.cast_const().cast(), usize::try_from(len).unwrap_or(0));
     // SAFETY: the elements just taken, nothing written to them.
     unsafe { release(env, packed, at, JNI_ABORT) };
@@ -78,12 +99,22 @@ unsafe fn with_bytes<R>(env: *mut JNIEnv, packed: jbyteArray, f: impl FnOnce(*co
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(env: *mut JNIEnv, _class: jclass, packed: jbyteArray) -> jobject {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(
+    env: *mut JNIEnv,
+    _class: jclass,
+    packed: jbyteArray,
+) -> jobject {
     // SAFETY: JNI's array, its own length.
-    let Some(raw) = (unsafe { with_bytes(env, packed, |at, len| crate::unpack::decode(core::slice::from_raw_parts(at, len))) }) else {
+    let Some(raw) = (unsafe {
+        with_bytes(env, packed, |at, len| {
+            crate::unpack::decode(core::slice::from_raw_parts(at, len))
+        })
+    }) else {
         return core::ptr::null_mut();
     };
-    let Ok(size) = jint::try_from(raw.len()) else { return core::ptr::null_mut() };
+    let Ok(size) = jint::try_from(raw.len()) else {
+        return core::ptr::null_mut();
+    };
     let jni = unsafe { jni(env) };
     let (find, method, call, address) = (
         jni.FindClass.or_bug(Errno::ENOSYS),
@@ -98,13 +129,22 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(env:
         let allocate = if class.is_null() {
             core::ptr::null_mut()
         } else {
-            method(env, class, c"allocateDirect".as_ptr(), c"(I)Ljava/nio/ByteBuffer;".as_ptr())
+            method(
+                env,
+                class,
+                c"allocateDirect".as_ptr(),
+                c"(I)Ljava/nio/ByteBuffer;".as_ptr(),
+            )
         };
         if allocate.is_null() {
             return core::ptr::null_mut();
         }
         let out = call(env, class, allocate, &jvalue { i: size });
-        let at = if out.is_null() { core::ptr::null_mut() } else { address(env, out).cast::<u8>() };
+        let at = if out.is_null() {
+            core::ptr::null_mut()
+        } else {
+            address(env, out).cast::<u8>()
+        };
         if at.is_null() {
             return core::ptr::null_mut();
         }
@@ -136,15 +176,26 @@ static WAKE: OnceLock<Wake> = OnceLock::new();
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env: *mut JNIEnv, this: jobject) -> jboolean {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(
+    env: *mut JNIEnv,
+    this: jobject,
+) -> jboolean {
     let j = unsafe { jni(env) };
     let mut vm: *mut JavaVM = core::ptr::null_mut();
     // SAFETY: JNI's own calls on the environment it called with; the class
     // is held globally, so it outlives this call.
     unsafe {
         if j.GetJavaVM.or_bug(Errno::ENOSYS)(env, &raw mut vm) == JNI_OK {
-            let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(env, j.GetObjectClass.or_bug(Errno::ENOSYS)(env, this));
-            let method = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(env, class, c"wake".as_ptr(), c"()V".as_ptr());
+            let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(
+                env,
+                j.GetObjectClass.or_bug(Errno::ENOSYS)(env, this),
+            );
+            let method = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(
+                env,
+                class,
+                c"wake".as_ptr(),
+                c"()V".as_ptr(),
+            );
             if !method.is_null() {
                 let _ = WAKE.set(Wake { vm, class, method });
             }
@@ -159,7 +210,9 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env
 /// long as it does, and a daemon keeps no VM from exiting. Kotlin sends the
 /// app's event from there, which Expo carries to the JavaScript thread.
 pub fn wake() {
-    let Some(&Wake { vm, class, method }) = WAKE.get() else { return };
+    let Some(&Wake { vm, class, method }) = WAKE.get() else {
+        return;
+    };
     let mut env: *mut JNIEnv = core::ptr::null_mut();
     // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
     // class and method JNI gave while the device opened, the class held.
@@ -185,7 +238,12 @@ pub fn wake() {
 /// Called by JNI, with a live `android.view.Surface`, which its view keeps
 /// until it has unbound it.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind(env: *mut JNIEnv, _class: jclass, handle: jint, surface: jobject) -> jint {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind(
+    env: *mut JNIEnv,
+    _class: jclass,
+    handle: jint,
+    surface: jobject,
+) -> jint {
     let handle = handle as u32;
     // SAFETY: the environment and the surface the call was given; a window
     // made this way is ours until released.
@@ -195,18 +253,26 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind
     let at = window.as_ptr().expose_provenance();
     let made = move || wgpu::SurfaceTargetUnsafe::RawHandle {
         raw_display_handle: Some(RawDisplayHandle::Android(AndroidDisplayHandle::new())),
-        raw_window_handle: RawWindowHandle::AndroidNdk(AndroidNdkWindowHandle::new(NonNull::new(core::ptr::with_exposed_provenance_mut(at)).or_bug(Errno::EFAULT))),
+        raw_window_handle: RawWindowHandle::AndroidNdk(AndroidNdkWindowHandle::new(
+            NonNull::new(core::ptr::with_exposed_provenance_mut(at)).or_bug(Errno::EFAULT),
+        )),
     };
     // SAFETY: the window is held until the surface over it is unbound.
     let bound = unsafe { crate::surface::bind(handle, made) };
     let let_go = if bound == 0 {
-        WINDOWS.lock().or_bug(Errno::ENOTRECOVERABLE).get_or_insert_with(FnvHashMap::default).insert(handle, at)
+        WINDOWS
+            .lock()
+            .or_bug(Errno::ENOTRECOVERABLE)
+            .get_or_insert_with(FnvHashMap::default)
+            .insert(handle, at)
     } else {
         Some(at)
     };
     if let Some(old) = let_go {
         // SAFETY: a window this module acquired, whose surface is gone.
-        unsafe { ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(old)) };
+        unsafe {
+            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(old))
+        };
     }
     bound
 }
@@ -214,13 +280,23 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind
 /// Lets `handle`'s surface go, and the window it drew through
 /// (surface.rs `pxl_surface_unbind`).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceUnbind(_env: *mut JNIEnv, _class: jclass, handle: jint) {
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceUnbind(
+    _env: *mut JNIEnv,
+    _class: jclass,
+    handle: jint,
+) {
     let handle = handle as u32;
     crate::surface::pxl_surface_unbind(handle);
-    let window = WINDOWS.lock().or_bug(Errno::ENOTRECOVERABLE).as_mut().and_then(|w| w.remove(&handle));
+    let window = WINDOWS
+        .lock()
+        .or_bug(Errno::ENOTRECOVERABLE)
+        .as_mut()
+        .and_then(|w| w.remove(&handle));
     if let Some(at) = window {
         // SAFETY: a window this module acquired, whose surface is gone.
-        unsafe { ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(at)) };
+        unsafe {
+            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(at))
+        };
     }
 }
 
@@ -229,5 +305,11 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceUnbind(_env
 pub fn say(line: &str) {
     let line = std::ffi::CString::new(line.replace('\0', " ")).unwrap_or_default();
     // SAFETY: two strings, ours for the call.
-    unsafe { ndk_sys::__android_log_write(ndk_sys::android_LogPriority::ANDROID_LOG_ERROR.0 as i32, c"pxl".as_ptr(), line.as_ptr()) };
+    unsafe {
+        ndk_sys::__android_log_write(
+            ndk_sys::android_LogPriority::ANDROID_LOG_ERROR.0 as i32,
+            c"pxl".as_ptr(),
+            line.as_ptr(),
+        )
+    };
 }

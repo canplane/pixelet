@@ -11,15 +11,30 @@ import { Icon, type IconProps } from "@/shell/ui/icon.tsx";
  * applies it per stroke, so crossings showed darker. `struck` crosses it out,
  * so a state never rests on color alone.
  */
-export function Glyph({ struck = false, ...icon }: IconProps & { struck?: boolean }) {
+export function Glyph(
+  { struck = false, ...icon }: IconProps & { struck?: boolean },
+) {
   const [color, opacity] = opaque(icon.color);
   const drawn = { ...icon, color };
   return (
     <View style={{ width: icon.size, height: icon.size, opacity }}>
       <Icon {...drawn} />
       {struck && (
-        <Svg style={StyleSheet.absoluteFill} width={icon.size} height={icon.size} viewBox="0 0 24 24">
-          <Line x1={2} y1={2} x2={22} y2={22} stroke={color} strokeWidth={stroke(icon.weight)} strokeLinecap="round" />
+        <Svg
+          style={StyleSheet.absoluteFill}
+          width={icon.size}
+          height={icon.size}
+          viewBox="0 0 24 24"
+        >
+          <Line
+            x1={2}
+            y1={2}
+            x2={22}
+            y2={22}
+            stroke={color}
+            strokeWidth={stroke(icon.weight)}
+            strokeLinecap="round"
+          />
         </Svg>
       )}
     </View>

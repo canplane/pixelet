@@ -29,7 +29,11 @@ fn a_rewind_drops_nothing_so_a_slot_s_own_buffer_is_there_the_next_time() {
     for i in 0..4 {
         let slot = a.alloc().unwrap();
         assert_eq!(slot.mark, i, "a rewound slot was rebuilt rather than kept");
-        assert_eq!(slot.kept, vec![i, i + 1, i + 2], "a rewound slot lost what it owned");
+        assert_eq!(
+            slot.kept,
+            vec![i, i + 1, i + 2],
+            "a rewound slot lost what it owned"
+        );
     }
     let after: Vec<usize> = (0..4).map(|i| a.get(i).kept.capacity()).collect();
     assert_eq!(after, caps, "a rewind gave a slot's buffer back");

@@ -28,6 +28,10 @@ impl Role {
     }
 
     pub fn at(subclass: Option<&str>, rules: &Rules, at: f64) -> Role {
-        rules.at(at).and_then(|v| v.as_str()).or(subclass).map_or(Role::Way, Role::of)
+        rules
+            .at(at)
+            .and_then(|v| v.as_str())
+            .or(subclass)
+            .map_or(Role::Way, Role::of)
     }
 }

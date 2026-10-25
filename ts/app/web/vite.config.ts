@@ -1,6 +1,13 @@
 // @pxl/web/vite.config.ts
 
-import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions, type ViteDevServer } from "vite";
+import {
+  defineConfig,
+  type HmrContext,
+  loadEnv,
+  type Plugin,
+  type ProxyOptions,
+  type ViteDevServer,
+} from "vite";
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -10,8 +17,20 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "@pxl/client/namespace/route.spec.ts";
-import { DECL, enumAt, literal, type Members, readEnums, stale } from "@pxl/build/const-enum.ts";
+import {
+  API_PREFIX,
+  ASSET_PREFIX,
+  GEO_PREFIX,
+  TILE_PREFIX,
+} from "@pxl/client/namespace/route.spec.ts";
+import {
+  DECL,
+  enumAt,
+  literal,
+  type Members,
+  readEnums,
+  stale,
+} from "@pxl/build/const-enum.ts";
 import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,7 +51,11 @@ const apiBaseDefault = "http://127.0.0.1:3002";
  */
 function buildId(): string {
   try {
-    const git = (args: string) => execSync(`git ${args}`, { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    const git = (args: string) =>
+      execSync(`git ${args}`, {
+        cwd: __dirname,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).toString().trim();
     const dirty = git("status --porcelain") !== "" ? "-dirty" : "";
     return `${git("rev-parse --short HEAD")}${dirty}`;
   } catch {
@@ -54,7 +77,10 @@ function buildNumber(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;
   if (official) return `#${official}`;
   try {
-    const last = readFileSync(path.join(WORKSPACE, "client", ".build_number"), "utf8").trim();
+    const last = readFileSync(
+      path.join(WORKSPACE, "client", ".build_number"),
+      "utf8",
+    ).trim();
     return /^\d+$/.test(last) ? `#${last}-${id}` : id;
   } catch {
     return id;
@@ -104,7 +130,11 @@ function remoteConsole(): Plugin {
           // cannot see it. Appended rather than held, so `tail -f` works and
           // nothing here has to be flushed or closed.
           if (lines.length > 0) {
-            Deno.writeTextFileSync(CONSOLE_LOG, lines.map((l) => `${new Date().toISOString()} ${l}\n`).join(""), { append: true, create: true });
+            Deno.writeTextFileSync(
+              CONSOLE_LOG,
+              lines.map((l) => `${new Date().toISOString()} ${l}\n`).join(""),
+              { append: true, create: true },
+            );
           }
           res.statusCode = 204;
           res.end();
@@ -125,7 +155,9 @@ function buildStamp(): Plugin {
     load(source) {
       if (source !== resolved) return undefined;
       const id = buildId();
-      return `export const time = ${JSON.stringify(new Date().toISOString())};\n` +
+      return `export const time = ${
+        JSON.stringify(new Date().toISOString())
+      };\n` +
         `export const id = ${JSON.stringify(id)};\n` +
         `export const number = ${JSON.stringify(buildNumber(id))};\n`;
     },
@@ -145,7 +177,11 @@ function buildStamp(): Plugin {
       this.emitFile({
         type: "asset",
         fileName: "build.json",
-        source: JSON.stringify({ number: official ? Number(official) : null, id: buildId(), time: new Date().toISOString() }) + "\n",
+        source: JSON.stringify({
+          number: official ? Number(official) : null,
+          id: buildId(),
+          time: new Date().toISOString(),
+        }) + "\n",
       });
     },
   };
@@ -193,10 +229,14 @@ function constEnum(roots: string[]): Plugin {
   const sourceOf = (id: string) => {
     const plain = id.split("?")[0].split("#")[0];
     const at = plain.lastIndexOf("::");
-    return path.resolve(at < 0 ? plain : plain.slice(at + 2).replace(/^file:\/\//, ""));
+    return path.resolve(
+      at < 0 ? plain : plain.slice(at + 2).replace(/^file:\/\//, ""),
+    );
   };
-  const declares = (file: string) => table.exported.has(file) || table.local.has(file);
-  const IMPORT = /import\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g;
+  const declares = (file: string) =>
+    table.exported.has(file) || table.local.has(file);
+  const IMPORT =
+    /import\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g;
   const items = (clause: string) =>
     clause
       .split(",")
@@ -212,22 +252,37 @@ function constEnum(roots: string[]): Plugin {
     // Before the transpiler reaches the types: the declarations are still here.
     enforce: "pre",
     async resolveId(id, importer, options) {
-      const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
+      const resolved = await this.resolve(id, importer, {
+        ...options,
+        skipSelf: true,
+      });
       if (resolved === null || !resolved.id.startsWith("\0deno::")) return null;
       const file = sourceOf(resolved.id);
-      return /\.tsx?$/.test(file) && roots.some((r) => file.startsWith(r + path.sep)) ? file : null;
+      return /\.tsx?$/.test(file) &&
+          roots.some((r) => file.startsWith(r + path.sep))
+        ? file
+        : null;
     },
     transform(code, id) {
       const at = sourceOf(id);
       if (!/\.tsx?$/.test(at) || id.includes("node_modules")) return null;
-      if (declares(at) && code.search(DECL) < 0) throw new Error(`const-enum: ${at} reached the bundler with its enums already emitted (${id})`);
+      if (declares(at) && code.search(DECL) < 0) {
+        throw new Error(
+          `const-enum: ${at} reached the bundler with its enums already emitted (${id})`,
+        );
+      }
       for (const [, isExported, name] of code.matchAll(DECL)) {
-        if (!(isExported ? table.exported : table.local).get(at)?.has(name)) throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
+        if (!(isExported ? table.exported : table.local).get(at)?.has(name)) {
+          throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
+        }
       }
       // What each name in the file is: its own enums, and every enum an
       // import clause names, followed to the file that declares it — so an
       // alias is the enum it aliases, and two files' `Command` are two.
-      const bound = new Map<string, Members>([...(table.local.get(at) ?? []), ...(table.exported.get(at) ?? [])]);
+      const bound = new Map<string, Members>([
+        ...(table.local.get(at) ?? []),
+        ...(table.exported.get(at) ?? []),
+      ]);
       const imported = new Set<string>();
       for (const [, clause, from] of code.matchAll(IMPORT)) {
         for (const { orig, local } of items(clause)) {
@@ -245,7 +300,13 @@ function constEnum(roots: string[]): Plugin {
         // Whole names only: a member that is a prefix of another, as
         // INPUT_POSE is of INPUT_POSE_END, would otherwise leave `4361_END`
         // for the parser instead of a name the stale check below can say.
-        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)!) : whole));
+        out = out.replace(
+          new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"),
+          (
+            whole,
+            key: string,
+          ) => (members.has(key) ? literal(members.get(key)!) : whole),
+        );
         struck.push(name);
       }
       if (!struck.length) return null;
@@ -255,13 +316,26 @@ function constEnum(roots: string[]): Plugin {
       // export nobody declares.
       out = out.replace(IMPORT, (whole, clause: string, from: string) => {
         const all = items(clause);
-        const kept = all.filter((i) => !imported.has(i.local)).map((i) => i.item);
+        const kept = all.filter((i) => !imported.has(i.local)).map((i) =>
+          i.item
+        );
         if (kept.length === all.length) return whole;
         return kept.length ? `import { ${kept.join(", ")} } from ${from};` : "";
       });
       for (const name of struck) {
         const left = new RegExp(`\\b${name}\\.\\w`).exec(out);
-        if (left) throw new Error(`${stale(`${name}.${/\w+/.exec(out.slice(left.index + name.length + 1))![0]}`, restart)} (${id})`);
+        if (left) {
+          throw new Error(
+            `${
+              stale(
+                `${name}.${
+                  /\w+/.exec(out.slice(left.index + name.length + 1))![0]
+                }`,
+                restart,
+              )
+            } (${id})`,
+          );
+        }
       }
       return { code: out, map: null };
     },
@@ -284,7 +358,12 @@ export const DEV_PROXY_ROUTES = [
   { path: ASSET_PREFIX, tiles: true, published: true },
   { path: GEO_PREFIX, published: true },
   { path: API_PREFIX, app: true, published: true },
-] as const satisfies readonly { path: string; tiles?: boolean; app?: boolean; published?: boolean }[];
+] as const satisfies readonly {
+  path: string;
+  tiles?: boolean;
+  app?: boolean;
+  published?: boolean;
+}[];
 
 const remoteOriginDefault = "https://plei.me";
 
@@ -292,7 +371,15 @@ const remoteOriginDefault = "https://plei.me";
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first. The built module
 // is the page's own, beside the guest.ts that opens it.
-const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/ts/client/src/host/", "/ts/client/src/abi/", "/ts/client/src/namespace/", "/ts/client/src/shell/catalog/", "/ts/app/web/src/guest."];
+const corePathIncludes = [
+  "/xpute/ts/kit/",
+  "/xpute/ts/host/",
+  "/ts/client/src/host/",
+  "/ts/client/src/abi/",
+  "/ts/client/src/namespace/",
+  "/ts/client/src/shell/catalog/",
+  "/ts/app/web/src/guest.",
+];
 
 // One reload for a change that reaches both sides: while the kernel builds, a
 // core change waits for it, so the page never runs the shell generated from a
@@ -356,13 +443,18 @@ function fullReloadOnCoreChange() {
         // would fetch the same stale module again. The absolute path is
         // inside the virtual id, so matching on it is enough to find them.
         for (const mod of ctx.server.moduleGraph.idToModuleMap.values()) {
-          if (mod.id?.includes(file)) ctx.server.moduleGraph.invalidateModule(mod);
+          if (mod.id?.includes(file)) {
+            ctx.server.moduleGraph.invalidateModule(mod);
+          }
         }
         reloadOnce(ctx.server);
         // Vite prints "page reload" for the ones it decides itself and says
         // nothing about this one, so without a line here a core edit looks
         // exactly like a core edit that was never noticed.
-        ctx.server.config.logger.info(`core reload ${path.relative(REPO, file)}`, { timestamp: true });
+        ctx.server.config.logger.info(
+          `core reload ${path.relative(REPO, file)}`,
+          { timestamp: true },
+        );
         return [];
       }
       // Nothing returned, not `[]`: Vite takes any array — an empty one
@@ -398,10 +490,19 @@ function rebuildKernelOnRustChange(): Plugin {
         kernelBuild.running = true;
         do {
           again = false;
-          const done = await new Deno.Command("./script/build-wasm.py", { cwd: __dirname }).output();
-          const said = new TextDecoder().decode(done.success ? done.stdout : done.stderr).trim();
-          if (done.success) server.config.logger.info(said.split("\n").at(-1) ?? "", { timestamp: true });
-          else server.config.logger.error(`kernel build failed\n${said}`, { timestamp: true });
+          const done = await new Deno.Command("./script/build-wasm.py", {
+            cwd: __dirname,
+          }).output();
+          const said = new TextDecoder().decode(
+            done.success ? done.stdout : done.stderr,
+          ).trim();
+          if (done.success) {
+            server.config.logger.info(said.split("\n").at(-1) ?? "", {
+              timestamp: true,
+            });
+          } else {server.config.logger.error(`kernel build failed\n${said}`, {
+              timestamp: true,
+            });}
         } while (again);
         kernelBuild.running = false;
         sendHeldReload(server);
@@ -436,7 +537,9 @@ export default defineConfig(({ mode }) => {
   // on isDev alone would leave __APP_ENV__ reading "development" while the
   // debug section it implies is absent. One value, one rule.
   const rawAppEnv = env.VITE_APP_ENV || mode;
-  const appEnv = mode === "production" && rawAppEnv === "development" ? "production" : rawAppEnv;
+  const appEnv = mode === "production" && rawAppEnv === "development"
+    ? "production"
+    : rawAppEnv;
   const isDev = appEnv === "development";
 
   // Three local servers, one per root plus the tiles a deployment reads out of
@@ -456,7 +559,9 @@ export default defineConfig(({ mode }) => {
   const devSource = env.VITE_DEV_SOURCE || "delivery";
   const delivery = devSource === "delivery";
 
-  const remoteOrigin = delivery ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
+  const remoteOrigin = delivery
+    ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault)
+    : "";
   // What the proxy hands the page is never stored. The objects behind it are
   // `immutable` for a year, which a deployment means; here a restart of this
   // server cuts a body in flight, and a browser kept the empty one as the
@@ -469,7 +574,13 @@ export default defineConfig(({ mode }) => {
   const proxy = Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
     route.path,
     {
-      target: remoteOrigin && route.published ? remoteOrigin : route.tiles ? tileBase : route.app ? apiBase : geoBase,
+      target: remoteOrigin && route.published
+        ? remoteOrigin
+        : route.tiles
+        ? tileBase
+        : route.app
+        ? apiBase
+        : geoBase,
       changeOrigin: true,
       configure: noStore,
     },
@@ -484,7 +595,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       buildStamp(),
       remoteConsole(),
-      constEnum([path.resolve(__dirname, "src"), path.join(WORKSPACE, "client", "src"), path.join(REPO, "xpute", "ts")]),
+      constEnum([
+        path.resolve(__dirname, "src"),
+        path.join(WORKSPACE, "client", "src"),
+        path.join(REPO, "xpute", "ts"),
+      ]),
       deno(),
       react(),
 
@@ -505,19 +620,59 @@ export default defineConfig(({ mode }) => {
         // bundle reached through Deno's resolver never sees: the package
         // resolves to its CommonJS entry, whose native half reaches into
         // React Native's Flow sources. The web half is named instead.
-        { find: /^react-native-svg$/, replacement: path.join(WORKSPACE, "node_modules/react-native-svg/lib/module/ReactNativeSVG.web.js") },
+        {
+          find: /^react-native-svg$/,
+          replacement: path.join(
+            WORKSPACE,
+            "node_modules/react-native-svg/lib/module/ReactNativeSVG.web.js",
+          ),
+        },
         // Where a bundled image's address is kept: React Native's own
         // registry reads it off React Native, which the web does not run, and
         // react-native-web keeps the same registry under this name.
-        { find: /^@react-native\/assets-registry\/registry$/, replacement: path.join(WORKSPACE, "node_modules/react-native-web/dist/modules/AssetRegistry/index.js") },
+        {
+          find: /^@react-native\/assets-registry\/registry$/,
+          replacement: path.join(
+            WORKSPACE,
+            "node_modules/react-native-web/dist/modules/AssetRegistry/index.js",
+          ),
+        },
       ],
       // Inside such a library, a file per platform stands beside the shared
       // one (`elements.web.js` beside `elements.js`), and a bundler for a
       // platform is expected to prefer that platform's.
-      extensions: [".web.mjs", ".web.js", ".web.ts", ".web.tsx", ".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"],
+      extensions: [
+        ".web.mjs",
+        ".web.js",
+        ".web.ts",
+        ".web.tsx",
+        ".mjs",
+        ".js",
+        ".mts",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".json",
+      ],
     },
     optimizeDeps: {
-      rolldownOptions: { resolve: { extensions: [".web.mjs", ".web.js", ".web.ts", ".web.tsx", ".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"] } },
+      rolldownOptions: {
+        resolve: {
+          extensions: [
+            ".web.mjs",
+            ".web.js",
+            ".web.ts",
+            ".web.tsx",
+            ".mjs",
+            ".js",
+            ".mts",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".json",
+          ],
+        },
+      },
     },
 
     // .glb is not in Vite's default asset extensions: without this each

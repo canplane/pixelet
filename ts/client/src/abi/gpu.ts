@@ -12,7 +12,14 @@ export const enum Gpu {
 }
 
 /** A place's word for its GPU, as the host keeps it. */
-export const GPU_STATE: Readonly<Record<Parameters<GpuHeard["state"]>[0], Gpu>> = { present: Gpu.Present, waiting: Gpu.Waiting, missing: Gpu.Missing, lost: Gpu.Lost };
+export const GPU_STATE: Readonly<
+  Record<Parameters<GpuHeard["state"]>[0], Gpu>
+> = {
+  present: Gpu.Present,
+  waiting: Gpu.Waiting,
+  missing: Gpu.Missing,
+  lost: Gpu.Lost,
+};
 
 let state = Gpu.Present;
 const listeners = new Listeners();

@@ -84,7 +84,11 @@ fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
 }
 
 fn failed_with<S: Serve>(l: &mut RequestScheduler<S>, key: u64, errnum: Errno, at: f64) {
-    let fail = Failure { errnum, detail: 0, at: None };
+    let fail = Failure {
+        errnum,
+        detail: 0,
+        at: None,
+    };
     l.settle(key, Ended::Failed(fail), None, at);
 }
 
@@ -98,7 +102,10 @@ fn saying_the_same_set_again_changes_nothing() {
     for _ in 0..5 {
         l.declare(Stream::terrain, &want, 0.0);
         l.pump(0.0);
-        assert!(started(&mut l).is_empty(), "already out, so nothing is started again");
+        assert!(
+            started(&mut l).is_empty(),
+            "already out, so nothing is started again"
+        );
     }
 }
 
@@ -110,7 +117,10 @@ fn an_answer_is_asked_once() {
     let key = started(&mut l)[0];
     ok(&mut l, key, 0.0);
     l.pump(0.0);
-    assert!(started(&mut l).is_empty(), "an answered want was asked again");
+    assert!(
+        started(&mut l).is_empty(),
+        "an answered want was asked again"
+    );
     assert!(stopped(&mut l).is_empty());
     assert_eq!(l.stream_counts(Stream::terrain), (0, 0));
     l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 1.0);
@@ -129,11 +139,22 @@ fn a_failure_waits_rather_than_asking_straight_back() {
     for t in 0..5 {
         l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], t as f64);
         l.pump(t as f64);
-        assert!(started(&mut l).is_empty(), "held back, not re-asked every turn");
+        assert!(
+            started(&mut l).is_empty(),
+            "held back, not re-asked every turn"
+        );
     }
-    assert_eq!(l.stream_counts(Stream::terrain), (1, 0), "wanted, nothing out");
+    assert_eq!(
+        l.stream_counts(Stream::terrain),
+        (1, 0),
+        "wanted, nothing out"
+    );
     l.pump(2_000.0);
-    assert_eq!(started(&mut l).len(), 1, "and tried again once the wait is over");
+    assert_eq!(
+        started(&mut l).len(),
+        1,
+        "and tried again once the wait is over"
+    );
 }
 
 #[test]
@@ -148,11 +169,18 @@ fn an_object_that_fails_is_dropped_and_holds_nothing_else_back() {
     for t in 0..5 {
         l.declare(Stream::terrain, &want[..1], t as f64 * 1_000.0);
         l.pump(t as f64 * 1_000.0);
-        assert!(started(&mut l).is_empty(), "a missing object is not asked again");
+        assert!(
+            started(&mut l).is_empty(),
+            "a missing object is not asked again"
+        );
     }
     l.declare(Stream::terrain, &[(3, ask(Why::Demand, 0.0))], 5_000.0);
     l.pump(5_000.0);
-    assert_eq!(started(&mut l).len(), 1, "and the server is not held for it");
+    assert_eq!(
+        started(&mut l).len(),
+        1,
+        "and the server is not held for it"
+    );
 }
 
 #[test]
@@ -180,11 +208,19 @@ fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
     let both = [want[0], (2, ask(Why::Demand, 0.0))];
     l.declare(Stream::terrain, &both, 50_000.0);
     l.pump(50_000.0);
-    assert_eq!(started(&mut l).len(), 1, "and the server is not held for it");
+    assert_eq!(
+        started(&mut l).len(),
+        1,
+        "and the server is not held for it"
+    );
     RELEASES.fetch_add(1, Ordering::Relaxed);
     l.declare(Stream::terrain, &both, 50_000.0);
     l.pump(50_000.0);
-    assert_eq!(started(&mut l).len(), 1, "asked again once the heap gives some back");
+    assert_eq!(
+        started(&mut l).len(),
+        1,
+        "asked again once the heap gives some back"
+    );
     set_heap_stat(HeapStat::default);
 }
 
@@ -210,7 +246,11 @@ fn a_release_between_the_refusal_and_its_settling_is_not_waited_for_again() {
     l.settle(key, Ended::Refused(refused), None, 0.0);
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
-    assert_eq!(started(&mut l).len(), 1, "the release after the refusal already ends its wait");
+    assert_eq!(
+        started(&mut l).len(),
+        1,
+        "the release after the refusal already ends its wait"
+    );
     set_heap_stat(HeapStat::default);
 }
 
@@ -223,9 +263,16 @@ fn a_failing_server_holds_every_start_then_probes_one_then_is_given_up() {
     let out = started(&mut l);
     failed_with(&mut l, out[0], Errno::EACCES, 0.0);
     l.pump(1_000.0);
-    assert!(started(&mut l).is_empty(), "held: the credit freed starts nothing");
+    assert!(
+        started(&mut l).is_empty(),
+        "held: the credit freed starts nothing"
+    );
     l.pump(2_000.0);
-    assert_eq!(started(&mut l).len(), 0, "one out already: the other attempt is the probe");
+    assert_eq!(
+        started(&mut l).len(),
+        0,
+        "one out already: the other attempt is the probe"
+    );
     failed_with(&mut l, out[1], Errno::EACCES, 2_000.0);
     assert_eq!(l.strikes, 1, "out before the strike, so the same outage");
     let mut at = 2_000.0;
@@ -245,7 +292,11 @@ fn a_failing_server_holds_every_start_then_probes_one_then_is_given_up() {
 #[test]
 fn what_was_out_when_the_server_failed_counts_as_one_failure() {
     let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0)), (2, ask(Why::Demand, 1.0))], 0.0);
+    l.declare(
+        Stream::terrain,
+        &[(1, ask(Why::Demand, 0.0)), (2, ask(Why::Demand, 1.0))],
+        0.0,
+    );
     l.pump(0.0);
     for key in started(&mut l) {
         failed_with(&mut l, key, Errno::EACCES, 10.0);
@@ -262,14 +313,30 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
     let out = started(&mut l);
     assert_eq!(out.len(), 2);
     l.declare(Stream::terrain, &[(3, ask(Why::Demand, 0.0))], 0.0);
-    assert_eq!(l.stream_counts(Stream::terrain).0, 1, "the new want is representable with both credits spent");
+    assert_eq!(
+        l.stream_counts(Stream::terrain).0,
+        1,
+        "the new want is representable with both credits spent"
+    );
     l.pump(0.0);
     // What the camera left is stopped the turn it leaves, and its credits
     // start what is wanted now in the same turn.
-    assert_eq!(stopped(&mut l).len(), 2, "every obsolete attempt is told to stop");
-    assert_eq!(started(&mut l).len(), 1, "and the current want starts at once");
+    assert_eq!(
+        stopped(&mut l).len(),
+        2,
+        "every obsolete attempt is told to stop"
+    );
+    assert_eq!(
+        started(&mut l).len(),
+        1,
+        "and the current want starts at once"
+    );
     ok(&mut l, out[0], 0.0);
-    assert_eq!(l.stream_counts(Stream::terrain), (0, 1), "the late report neither frees nor ends anything");
+    assert_eq!(
+        l.stream_counts(Stream::terrain),
+        (0, 1),
+        "the late report neither frees nor ends anything"
+    );
 }
 
 #[test]
@@ -281,10 +348,20 @@ fn a_running_attempt_is_never_stopped_for_a_better_want() {
     let _ = started(&mut l);
     l.declare(Stream::terrain, &[(1, unseen(5.0)), (2, unseen(0.0))], 0.0);
     l.pump(0.0);
-    assert!(stopped(&mut l).is_empty(), "distance says which to start, not which to restart");
-    l.declare(Stream::terrain, &[(1, unseen(5.0)), (3, ask(Why::Demand, 9.0))], 0.0);
+    assert!(
+        stopped(&mut l).is_empty(),
+        "distance says which to start, not which to restart"
+    );
+    l.declare(
+        Stream::terrain,
+        &[(1, unseen(5.0)), (3, ask(Why::Demand, 9.0))],
+        0.0,
+    );
     l.pump(0.0);
-    assert!(stopped(&mut l).is_empty(), "a class better waits for a free credit");
+    assert!(
+        stopped(&mut l).is_empty(),
+        "a class better waits for a free credit"
+    );
     assert!(started(&mut l).is_empty(), "and starts nothing meanwhile");
 }
 
@@ -317,7 +394,9 @@ impl Serve for Restless {
 fn every_want_is_served_at_rest() {
     let mut l = RequestScheduler::new(Restless, BOUNDS);
     l.set_credits(2);
-    let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Demand, (k * 7 % 12) as f64))).collect();
+    let mut wanted: Vec<(u64, Ask)> = (0..12)
+        .map(|k| (k, ask(Why::Demand, (k * 7 % 12) as f64)))
+        .collect();
     let mut out: Vec<u64> = Vec::new();
     for turn in 0..200 {
         l.declare(Stream::place, &wanted, turn as f64);
@@ -346,8 +425,16 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.declare(Stream::asset, &[(7, Ask::PLAIN)], 0.0);
     l.pump(0.0);
-    assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the tiles");
-    assert_eq!(l.stream_counts(Stream::asset), (1, 0), "and it is what is waiting");
+    assert_eq!(
+        started(&mut l).len(),
+        1,
+        "one credit, one read — an asset does not go beside the tiles"
+    );
+    assert_eq!(
+        l.stream_counts(Stream::asset),
+        (1, 0),
+        "and it is what is waiting"
+    );
 }
 
 #[test]
@@ -359,7 +446,13 @@ fn a_want_whose_object_failed_says_so_while_it_is_wanted() {
     let key = started(&mut l)[0];
     assert!(!l.object_failed(Stream::terrain, 1));
     failed_with(&mut l, key, Errno::EBADMSG, 0.0);
-    assert!(l.object_failed(Stream::terrain, 1), "its object's failure holds it");
+    assert!(
+        l.object_failed(Stream::terrain, 1),
+        "its object's failure holds it"
+    );
     l.declare(Stream::terrain, &[], 0.0);
-    assert!(!l.object_failed(Stream::terrain, 1), "and nothing once it is no longer wanted");
+    assert!(
+        !l.object_failed(Stream::terrain, 1),
+        "and nothing once it is no longer wanted"
+    );
 }

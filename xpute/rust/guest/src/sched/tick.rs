@@ -121,7 +121,12 @@ impl<const N: usize> Tick<N> {
         xpute_kit::ensure!(self.len < N, ENOSPC, N);
         let id = self.next_id;
         self.next_id += 1;
-        self.registry[self.len] = Some(Registered { id, phase, step, name });
+        self.registry[self.len] = Some(Registered {
+            id,
+            phase,
+            step,
+            name,
+        });
         self.len += 1;
         id
     }
@@ -157,7 +162,9 @@ impl<const N: usize> Tick<N> {
 
     /// A full table drops the time.
     fn record(&mut self, phase: Phase, name: u32, ms: f64) {
-        let at = match (0..self.stats_len).find(|&k| self.stats[k].phase == phase && self.stats[k].name == name) {
+        let at = match (0..self.stats_len)
+            .find(|&k| self.stats[k].phase == phase && self.stats[k].name == name)
+        {
             Some(k) => k,
             None if self.stats_len < N => {
                 self.stats[self.stats_len] = StepStat::new(phase, name);

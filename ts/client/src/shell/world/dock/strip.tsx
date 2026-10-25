@@ -8,7 +8,15 @@
 
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
+import {
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type ViewStyle,
+} from "react-native";
 
 import type { f64, u8 } from "@xpute/kit/abi/word.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
@@ -20,11 +28,19 @@ import { openModal } from "@/shell/modal.tsx";
 import { holdTool, useDockStore, useInHand } from "@/shell/store/dock.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
-import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/shell/catalog/asset/swatch.tsx";
+import {
+  cubeLabel,
+  CubeSwatch,
+  decorGlyph,
+  decorLabel,
+  heldRing,
+} from "@/shell/catalog/asset/swatch.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
 /** A page's browser pans the strip, and holds and drags up reach the view's own gesture; on a device the responder system shares the finger. */
-const PAN_X: ViewStyle = Platform.OS === "web" ? ({ touchAction: "pan-x" } as ViewStyle) : {};
+const PAN_X: ViewStyle = Platform.OS === "web"
+  ? ({ touchAction: "pan-x" } as ViewStyle)
+  : {};
 
 const ITEM = 24;
 
@@ -75,8 +91,13 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
         hold = setTimeout(open, FLYOUT_HOLD_MS);
       },
       onPanResponderMove: (_e, s) => {
-        if (state === Gesture.Flyout) return handlers.current.move(s.moveX, s.moveY);
-        if (state === Gesture.Drag || (Math.abs(s.dx) < DRAG_PX && Math.abs(s.dy) < DRAG_PX)) return;
+        if (state === Gesture.Flyout) {
+          return handlers.current.move(s.moveX, s.moveY);
+        }
+        if (
+          state === Gesture.Drag ||
+          (Math.abs(s.dx) < DRAG_PX && Math.abs(s.dy) < DRAG_PX)
+        ) return;
         state = Gesture.Drag;
         stopHold();
         handlers.current.close();
@@ -99,14 +120,18 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   return responder.current.panHandlers;
 }
 
-function SwatchButton({ cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "tap"> }) {
+function SwatchButton(
+  { cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "tap"> },
+) {
   const { t } = useTranslation();
   const selectCube = useDockStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
   const swatchCue = useDockStore((s) => s.swatchCue);
   useEffect(() => {
-    if (swatchCue.cube === cube && ref.current) sizes.cue(ref.current, swatchCue.open);
+    if (swatchCue.cube === cube && ref.current) {
+      sizes.cue(ref.current, swatchCue.open);
+    }
   }, [swatchCue]);
 
   const handlers = useSizeGesture(ref, {
@@ -119,9 +144,20 @@ function SwatchButton({ cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "t
   });
 
   return (
-    <View ref={ref} {...handlers} accessibilityRole="button" accessibilityLabel={cubeLabel(t, cube)} style={[styles.slot, styles.swatchSlot]}>
+    <View
+      ref={ref}
+      {...handlers}
+      accessibilityRole="button"
+      accessibilityLabel={cubeLabel(t, cube)}
+      style={[styles.slot, styles.swatchSlot]}
+    >
       <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
-        <CubeSwatch cube={cube} size={ITEM} radius={ITEM / 2} style={selected ? styles.swatchSelected : styles.swatchIdle} />
+        <CubeSwatch
+          cube={cube}
+          size={ITEM}
+          radius={ITEM / 2}
+          style={selected ? styles.swatchSelected : styles.swatchIdle}
+        />
       </Motion>
     </View>
   );
@@ -133,10 +169,24 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
-    <Pressable onPress={() => selectDecor(kind)} accessibilityRole="button" accessibilityLabel={decorLabel(t, kind)} style={styles.slot}>
+    <Pressable
+      onPress={() => selectDecor(kind)}
+      accessibilityRole="button"
+      accessibilityLabel={decorLabel(t, kind)}
+      style={styles.slot}
+    >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
-        <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
-          <Glyph glyph={decorGlyph(kind)} size={16} color={active ? STRIP.glyphOn : STRIP.glyph} />
+        <View
+          style={[
+            styles.decorDisc,
+            active ? styles.swatchSelected : styles.swatchIdle,
+          ]}
+        >
+          <Glyph
+            glyph={decorGlyph(kind)}
+            size={16}
+            color={active ? STRIP.glyphOn : STRIP.glyph}
+          />
         </View>
       </Motion>
     </Pressable>
@@ -149,32 +199,71 @@ function MarkerButton() {
   const active = useInHand({ tool: ActiveTool.Marker });
 
   return (
-    <Pressable onPress={selectMarker} accessibilityRole="button" accessibilityLabel={t("blocks.pin")} style={styles.slot}>
+    <Pressable
+      onPress={selectMarker}
+      accessibilityRole="button"
+      accessibilityLabel={t("blocks.pin")}
+      style={styles.slot}
+    >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
-        <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
-          <Glyph glyph="bubble.left" size={16} color={active ? STRIP.glyphOn : STRIP.glyph} />
+        <View
+          style={[
+            styles.decorDisc,
+            active ? styles.swatchSelected : styles.swatchIdle,
+          ]}
+        >
+          <Glyph
+            glyph="bubble.left"
+            size={16}
+            color={active ? STRIP.glyphOn : STRIP.glyph}
+          />
         </View>
       </Motion>
     </Pressable>
   );
 }
 
-function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: GlyphName; active?: boolean; onPress: () => void }) {
+function ToolButton(
+  { label, glyph, active, onPress }: {
+    label: string;
+    glyph: GlyphName;
+    active?: boolean;
+    onPress: () => void;
+  },
+) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.slot}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={styles.slot}
+    >
       {
         /* Always mounted: Android, creating it once lit, drew its ground without
                 its corners. */
       }
-      <View collapsable={false} style={[styles.held, active && styles.toolActive]}>
-        <Glyph glyph={glyph} size={chrome.glyph} color={active ? STRIP.glyphOn : STRIP.glyph} />
+      <View
+        collapsable={false}
+        style={[styles.held, active && styles.toolActive]}
+      >
+        <Glyph
+          glyph={glyph}
+          size={chrome.glyph}
+          color={active ? STRIP.glyphOn : STRIP.glyph}
+        />
       </View>
     </Pressable>
   );
 }
 
 /** `span` is the bar's width, past which it never reaches; the picks scroll unless the sizes are open. */
-export function Strip({ span, scrolls, sizes }: { span: f64; scrolls: boolean; sizes: Omit<SizeGesture, "tap"> }) {
+export function Strip(
+  { span, scrolls, sizes }: {
+    span: f64;
+    scrolls: boolean;
+    sizes: Omit<SizeGesture, "tap">;
+  },
+) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.holding.tool);
   const recentPicks = useDockStore((s) => s.recentPicks);
@@ -182,8 +271,18 @@ export function Strip({ span, scrolls, sizes }: { span: f64; scrolls: boolean; s
   return (
     <View style={[styles.strip, { maxWidth: span }]}>
       <View style={styles.group}>
-        <ToolButton label={t("world.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => holdTool(ActiveTool.Pointer)} />
-        <ToolButton label={t("world.dock.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => holdTool(ActiveTool.Eraser)} />
+        <ToolButton
+          label={t("world.dock.pointer")}
+          glyph="hand.point.up.left"
+          active={activeTool === ActiveTool.Pointer}
+          onPress={() => holdTool(ActiveTool.Pointer)}
+        />
+        <ToolButton
+          label={t("world.dock.eraser")}
+          glyph="eraser"
+          active={activeTool === ActiveTool.Eraser}
+          onPress={() => holdTool(ActiveTool.Eraser)}
+        />
       </View>
 
       <View style={styles.divider} />
@@ -197,7 +296,13 @@ export function Strip({ span, scrolls, sizes }: { span: f64; scrolls: boolean; s
       >
         {recentPicks.map((pick) =>
           pick.tool === ActiveTool.Object
-            ? <SwatchButton key={cubeId(pick.cube)} cube={pick.cube} sizes={sizes} />
+            ? (
+              <SwatchButton
+                key={cubeId(pick.cube)}
+                cube={pick.cube}
+                sizes={sizes}
+              />
+            )
             : pick.tool === ActiveTool.Decor
             ? <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
             : <MarkerButton key="marker" />
@@ -207,7 +312,11 @@ export function Strip({ span, scrolls, sizes }: { span: f64; scrolls: boolean; s
       <View style={styles.divider} />
 
       <View style={styles.group}>
-        <ToolButton label={t("world.dock.drawer_tooltip")} glyph="archivebox" onPress={() => openModal("drawer")} />
+        <ToolButton
+          label={t("world.dock.drawer_tooltip")}
+          glyph="archivebox"
+          onPress={() => openModal("drawer")}
+        />
       </View>
     </View>
   );
@@ -224,20 +333,52 @@ export const STRIP = {
 };
 
 /** No wider than a target: past it, the later neighbor in the tree takes the tap. */
-export const SLOT: ViewStyle = { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center", flexShrink: 0 };
+export const SLOT: ViewStyle = {
+  width: chrome.target,
+  height: chrome.target,
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
 
 const styles = StyleSheet.create({
-  strip: { height: chrome.control, borderRadius: chrome.control / 2, flexDirection: "row", alignItems: "center" },
-  group: { flexDirection: "row", alignItems: "center", padding: (chrome.control - chrome.target) / 2, flexShrink: 0 },
+  strip: {
+    height: chrome.control,
+    borderRadius: chrome.control / 2,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  group: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: (chrome.control - chrome.target) / 2,
+    flexShrink: 0,
+  },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
-  picksContent: { alignItems: "center", paddingHorizontal: (chrome.control - chrome.target) / 2 },
+  picksContent: {
+    alignItems: "center",
+    paddingHorizontal: (chrome.control - chrome.target) / 2,
+  },
 
   slot: SLOT,
   swatchSlot: PAN_X,
-  held: { width: chrome.selection, height: chrome.selection, borderRadius: chrome.selection / 2, alignItems: "center", justifyContent: "center" },
+  held: {
+    width: chrome.selection,
+    height: chrome.selection,
+    borderRadius: chrome.selection / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   toolActive: { backgroundColor: STRIP.held },
-  decorDisc: { width: ITEM, height: ITEM, borderRadius: ITEM / 2, alignItems: "center", justifyContent: "center", backgroundColor: STRIP.held },
+  decorDisc: {
+    width: ITEM,
+    height: ITEM,
+    borderRadius: ITEM / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: STRIP.held,
+  },
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
   swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },
 });

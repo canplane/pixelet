@@ -4,7 +4,12 @@
 
 import { alpha, color, SECONDARY, SYSTEM } from "@/shell/ui/theme.ts";
 
-export const LABEL: { primary: string; secondary: string; tertiary: string; placeholder: string } = {
+export const LABEL: {
+  primary: string;
+  secondary: string;
+  tertiary: string;
+  placeholder: string;
+} = {
   primary: color.black,
   secondary: alpha(color.labelGray, SECONDARY),
   tertiary: alpha(color.labelGray, 0.3),

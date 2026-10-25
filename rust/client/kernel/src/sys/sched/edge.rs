@@ -47,7 +47,9 @@ pub fn request_world_tick() {
 /// host comes off its own next quota, never the tasks' turn.
 pub fn tasks_after_frame(paced_ms: f64) {
     use crate::sys::sched::param::{CONTENT_SHARE, QUANTUM_MARGIN_SHARE};
-    world_edge().extend_to(xpute_guest::clock::now() + CONTENT_SHARE * paced_ms * (1.0 - QUANTUM_MARGIN_SHARE));
+    world_edge().extend_to(
+        xpute_guest::clock::now() + CONTENT_SHARE * paced_ms * (1.0 - QUANTUM_MARGIN_SHARE),
+    );
 }
 
 /// The earliest asked wins; a wait still pending when its turn comes asks again.

@@ -45,5 +45,13 @@ pub mod key {
     /// The bit every key a program numbers for itself carries: xpute gives none of
     /// them a meaning, and a host that is not the program's passes over them.
     pub const PROGRAM: u32 = 2147483648;
-    pub const KEYS: &[&str] = &["SQ", "CQ", "MARGIN_SHARE", "BATCH_FRAMES", "SETTLE_MS", "SYS", "PROGRAM"];
+    pub const KEYS: &[&str] = &[
+        "SQ",
+        "CQ",
+        "MARGIN_SHARE",
+        "BATCH_FRAMES",
+        "SETTLE_MS",
+        "SYS",
+        "PROGRAM",
+    ];
 }

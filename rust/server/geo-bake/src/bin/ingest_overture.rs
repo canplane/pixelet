@@ -56,9 +56,18 @@ struct Type {
     indexes: &'static [&'static str],
 }
 
-const SUBTYPE: (&str, &str) = ("subtype", "TEXT GENERATED ALWAYS AS (properties->>'subtype') STORED");
-const CLASS: (&str, &str) = ("class", "TEXT GENERATED ALWAYS AS (properties->>'class') STORED");
-const NAME: (&str, &str) = ("name", "TEXT GENERATED ALWAYS AS (properties->'names'->>'primary') STORED");
+const SUBTYPE: (&str, &str) = (
+    "subtype",
+    "TEXT GENERATED ALWAYS AS (properties->>'subtype') STORED",
+);
+const CLASS: (&str, &str) = (
+    "class",
+    "TEXT GENERATED ALWAYS AS (properties->>'class') STORED",
+);
+const NAME: (&str, &str) = (
+    "name",
+    "TEXT GENERATED ALWAYS AS (properties->'names'->>'primary') STORED",
+);
 
 const TYPES: &[Type] = &[
     Type {
@@ -216,32 +225,59 @@ fn run() -> Result<(), String> {
             other => return Err(format!("unknown flag: {other}")),
         }
     }
-    if let Some(t) = types.iter().find(|t| !TYPES.iter().any(|ty| ty.overture == t.as_str())) {
+    if let Some(t) = types
+        .iter()
+        .find(|t| !TYPES.iter().any(|ty| ty.overture == t.as_str()))
+    {
         return Err(format!("{t}: no Overture type this ingests"));
     }
     let all: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
     if let Some(n) = named.iter().find(|n| !all.iter().any(|s| s.name == **n)) {
-        return Err(format!("{n}: no shard of the coverage (infra/geo/coverage.json)"));
+        return Err(format!(
+            "{n}: no shard of the coverage (infra/geo/coverage.json)"
+        ));
     }
     if whole && !named.is_empty() {
         return Err("--whole makes each table from every shard; it takes no --shard".into());
     }
-    let shards: Vec<&Shard> = all.iter().filter(|s| named.is_empty() || named.contains(&s.name)).collect();
-    let mut client = Client::connect(&std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?, NoTls).map_err(|e| e.to_string())?;
+    let shards: Vec<&Shard> = all
+        .iter()
+        .filter(|s| named.is_empty() || named.contains(&s.name))
+        .collect();
+    let mut client = Client::connect(
+        &std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?,
+        NoTls,
+    )
+    .map_err(|e| e.to_string())?;
     let (release, accessed_at) = (pinned("version")?, pinned("accessed_at")?);
-    println!("[ingest] release {release}, {} shards{}", shards.len(), if whole { ", whole" } else { "" });
+    println!(
+        "[ingest] release {release}, {} shards{}",
+        shards.len(),
+        if whole { ", whole" } else { "" }
+    );
     client
         .batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}"))
         .map_err(|e| e.to_string())?;
 
-    for ty in TYPES.iter().filter(|ty| types.is_empty() || types.iter().any(|t| t == ty.overture)) {
+    for ty in TYPES
+        .iter()
+        .filter(|ty| types.is_empty() || types.iter().any(|t| t == ty.overture))
+    {
         if !whole {
             // A shard is added to the table as it is; one of another shape is made anew only on --whole.
-            let exists: bool = client.query_one("SELECT to_regclass($1::text) IS NOT NULL", &[&ty.table]).map_err(|e| e.to_string())?.get(0);
+            let exists: bool = client
+                .query_one("SELECT to_regclass($1::text) IS NOT NULL", &[&ty.table])
+                .map_err(|e| e.to_string())?
+                .get(0);
             if exists && !keyed(&mut client, ty.table, &["gers_id"])? {
-                return Err(format!("{}: keyed otherwise than by gers_id; run with --whole", ty.table));
+                return Err(format!(
+                    "{}: keyed otherwise than by gers_id; run with --whole",
+                    ty.table
+                ));
             }
-            client.batch_execute(&format!("{}{}", table(ty, ty.table), indexes(ty, ty.table))).map_err(|e| e.to_string())?;
+            client
+                .batch_execute(&format!("{}{}", table(ty, ty.table), indexes(ty, ty.table)))
+                .map_err(|e| e.to_string())?;
         }
         let started = std::time::Instant::now();
         let extracts = download(ty, &groups(&shards), &release)?;
@@ -256,7 +292,9 @@ fn run() -> Result<(), String> {
         } else {
             add(&mut client, ty, &shards, &release, &accessed_at)?
         };
-        client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
+        client
+            .batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table))
+            .map_err(|e| e.to_string())?;
         println!(
             "[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching",
             ty.table,
@@ -297,7 +335,10 @@ fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
         row.sort_by_key(|s| s.at[0]);
         for run in row.chunk_by(|a, b| b.at[0] == a.at[0] + 1) {
             let cols = [run[0].at[0], run[run.len() - 1].at[0]];
-            match out.iter_mut().find(|(c, last, _)| *c == cols && *last == y - 1) {
+            match out
+                .iter_mut()
+                .find(|(c, last, _)| *c == cols && *last == y - 1)
+            {
                 Some((_, last, held)) => {
                     *last = y;
                     held.extend_from_slice(run);
@@ -317,16 +358,43 @@ fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
 /// CLI's own state file is its private format, not read. The type's other
 /// files, another release's or bbox's and that state beside them, are
 /// removed.
-fn download<'a>(ty: &Type, groups: &[Vec<&'a Shard>], release: &str) -> Result<Vec<(PathBuf, Vec<&'a Shard>)>, String> {
+fn download<'a>(
+    ty: &Type,
+    groups: &[Vec<&'a Shard>],
+    release: &str,
+) -> Result<Vec<(PathBuf, Vec<&'a Shard>)>, String> {
     std::fs::create_dir_all(EXTRACTS).map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for shards in groups {
         // What the shards hold, their aprons with them (`Shard::deg`), not their bare tiles.
-        let [w, s, e, n] = shards.iter().fold([f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY], |b, sh| {
-            [b[0].min(sh.deg[0]), b[1].min(sh.deg[1]), b[2].max(sh.deg[2]), b[3].max(sh.deg[3])]
-        });
-        let bbox = format!("{},{},{},{}", w - SLACK_DEG, s - SLACK_DEG, e + SLACK_DEG, n + SLACK_DEG);
-        let name = format!("{}.{release}.{:016x}.parquet", ty.overture, fnv1a(bbox.as_bytes()));
+        let [w, s, e, n] = shards.iter().fold(
+            [
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ],
+            |b, sh| {
+                [
+                    b[0].min(sh.deg[0]),
+                    b[1].min(sh.deg[1]),
+                    b[2].max(sh.deg[2]),
+                    b[3].max(sh.deg[3]),
+                ]
+            },
+        );
+        let bbox = format!(
+            "{},{},{},{}",
+            w - SLACK_DEG,
+            s - SLACK_DEG,
+            e + SLACK_DEG,
+            n + SLACK_DEG
+        );
+        let name = format!(
+            "{}.{release}.{:016x}.parquet",
+            ty.overture,
+            fnv1a(bbox.as_bytes())
+        );
         let extract = Path::new(EXTRACTS).join(&name);
         if !extract.exists() {
             let part = Path::new(EXTRACTS).join(format!("{name}.part"));
@@ -345,9 +413,14 @@ fn download<'a>(ty: &Type, groups: &[Vec<&'a Shard>], release: &str) -> Result<V
         }
         out.push((extract, shards.clone()));
     }
-    for entry in std::fs::read_dir(EXTRACTS).map_err(|e| e.to_string())?.flatten() {
+    for entry in std::fs::read_dir(EXTRACTS)
+        .map_err(|e| e.to_string())?
+        .flatten()
+    {
         let other = entry.file_name().to_string_lossy().to_string();
-        let kept = out.iter().any(|(p, _)| p.file_name().is_some_and(|n| n.to_string_lossy() == other));
+        let kept = out
+            .iter()
+            .any(|(p, _)| p.file_name().is_some_and(|n| n.to_string_lossy() == other));
         if !kept && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
             let path = entry.path();
             std::fs::remove_dir_all(&path)
@@ -367,34 +440,57 @@ fn staging(ty: &Type) -> String {
 /// own extract's rectangle it meets, so a feature two rectangles' bboxes
 /// both reach is staged once a shard; a feature with no id or geometry fails
 /// the run rather than being dropped.
-fn stage(client: &mut Client, ty: &Type, extracts: &[(PathBuf, Vec<&Shard>)]) -> Result<(), String> {
+fn stage(
+    client: &mut Client,
+    ty: &Type,
+    extracts: &[(PathBuf, Vec<&Shard>)],
+) -> Result<(), String> {
     let t = staging(ty);
     client
         .batch_execute(&format!(
             "DROP TABLE IF EXISTS {t}; CREATE UNLOGGED TABLE {t} (shard TEXT NOT NULL, gers_id TEXT NOT NULL, properties TEXT NOT NULL, wkb BYTEA NOT NULL)"
         ))
         .map_err(|e| e.to_string())?;
-    copy_extracts(client, &t, extracts.iter().map(|(p, s)| (p.as_path(), Some(s.as_slice()))))?;
+    copy_extracts(
+        client,
+        &t,
+        extracts
+            .iter()
+            .map(|(p, s)| (p.as_path(), Some(s.as_slice()))),
+    )?;
     client
-        .batch_execute(&format!("CREATE INDEX ON {t} (shard); CREATE INDEX ON {t} (gers_id)"))
+        .batch_execute(&format!(
+            "CREATE INDEX ON {t} (shard); CREATE INDEX ON {t} (gers_id)"
+        ))
         .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Extracts' rows into the staging table `t`, each under the shards it meets.
-fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item = (&'a Path, Option<&'a [&'a Shard]>)>) -> Result<(), String> {
+fn copy_extracts<'a>(
+    client: &mut Client,
+    t: &str,
+    extracts: impl Iterator<Item = (&'a Path, Option<&'a [&'a Shard]>)>,
+) -> Result<(), String> {
     let mut copy = BinaryCopyInWriter::new(
         client
-            .copy_in(&format!("COPY {t} (gers_id, properties, wkb, shard) FROM STDIN (FORMAT binary)"))
+            .copy_in(&format!(
+                "COPY {t} (gers_id, properties, wkb, shard) FROM STDIN (FORMAT binary)"
+            ))
             .map_err(|e| e.to_string())?,
         &[Pg::TEXT, Pg::TEXT, Pg::BYTEA, Pg::TEXT],
     );
     for (extract, shards) in extracts {
-        let file = std::fs::File::open(extract).map_err(|e| format!("{}: {e}", extract.display()))?;
-        let reader = ParquetRecordBatchReaderBuilder::try_new(file).map_err(|e| e.to_string())?.build().map_err(|e| e.to_string())?;
+        let file =
+            std::fs::File::open(extract).map_err(|e| format!("{}: {e}", extract.display()))?;
+        let reader = ParquetRecordBatchReaderBuilder::try_new(file)
+            .map_err(|e| e.to_string())?
+            .build()
+            .map_err(|e| e.to_string())?;
         for batch in reader {
             for (id, properties, wkb, node) in rows(&batch.map_err(|e| e.to_string())?, shards)? {
-                copy.write(&[&id, &properties, &wkb, &node]).map_err(|e| e.to_string())?;
+                copy.write(&[&id, &properties, &wkb, &node])
+                    .map_err(|e| e.to_string())?;
             }
         }
     }
@@ -411,7 +507,10 @@ fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item 
 fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Result<usize, String> {
     let t = staging(ty);
     let held = if live {
-        format!(" AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)", ty.table)
+        format!(
+            " AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)",
+            ty.table
+        )
     } else {
         String::new()
     };
@@ -423,7 +522,12 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
     let mut kept = Vec::new();
     let mut asked = FnvHashSet::default();
     loop {
-        let missing: Vec<String> = client.query(&missing_sql, &[]).map_err(|e| e.to_string())?.iter().map(|r| r.get(0)).collect();
+        let missing: Vec<String> = client
+            .query(&missing_sql, &[])
+            .map_err(|e| e.to_string())?
+            .iter()
+            .map(|r| r.get(0))
+            .collect();
         if missing.is_empty() {
             break;
         }
@@ -437,7 +541,14 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
             if !extract.exists() {
                 let part = extract.with_extension("parquet.part");
                 let out = cli()
-                    .args(["gers", id, "-f", "geoparquet", "-o", &part.to_string_lossy()])
+                    .args([
+                        "gers",
+                        id,
+                        "-f",
+                        "geoparquet",
+                        "-o",
+                        &part.to_string_lossy(),
+                    ])
                     .output()
                     .map_err(|e| format!("{TOOLS}: {e}"))?;
                 let said = String::from_utf8_lossy(&out.stderr);
@@ -446,7 +557,10 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
                 }
                 // The registry says the release it found the feature in, on stderr.
                 if !said.contains(&format!("in release {release}")) {
-                    return Err(format!("gers {id}: not found in release {release}: {}", said.trim()));
+                    return Err(format!(
+                        "gers {id}: not found in release {release}: {}",
+                        said.trim()
+                    ));
                 }
                 std::fs::rename(&part, &extract).map_err(|e| e.to_string())?;
             }
@@ -455,7 +569,10 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
         copy_extracts(client, &t, extracts.iter().map(|p| (p.as_path(), None)))?;
         kept.extend(extracts);
     }
-    for entry in std::fs::read_dir(EXTRACTS).map_err(|e| e.to_string())?.flatten() {
+    for entry in std::fs::read_dir(EXTRACTS)
+        .map_err(|e| e.to_string())?
+        .flatten()
+    {
         let name = entry.file_name().to_string_lossy().to_string();
         if name.starts_with(&prefix) && !name.starts_with(&format!("{prefix}{release}.")) {
             std::fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
@@ -478,9 +595,18 @@ fn features(ty: &Type, into: &str) -> String {
 /// Each shard's row, what it says read and never decided on: the release
 /// it holds, when it was ingested, and its features. A shard ingested again
 /// replaces its row.
-fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, accessed_at: &str) -> Result<(), postgres::Error> {
+fn catalog(
+    tx: &mut Transaction,
+    ty: &Type,
+    shards: &[&Shard],
+    release: &str,
+    accessed_at: &str,
+) -> Result<(), postgres::Error> {
     let counts: FnvHashMap<String, i64> = tx
-        .query(&format!("SELECT shard, count(*) FROM {} GROUP BY shard", staging(ty)), &[])?
+        .query(
+            &format!("SELECT shard, count(*) FROM {} GROUP BY shard", staging(ty)),
+            &[],
+        )?
         .iter()
         .map(|r| (r.get(0), r.get(1)))
         .collect();
@@ -498,16 +624,30 @@ fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, ac
 /// A whole run: the table built anew beside the live one, its readers
 /// answered from the live one meanwhile, then swapped in with the catalog in
 /// one short transaction. Its indexes are built after it is filled.
-fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, accessed_at: &str) -> Result<i64, String> {
+fn build_and_swap(
+    client: &mut Client,
+    ty: &Type,
+    shards: &[&Shard],
+    release: &str,
+    accessed_at: &str,
+) -> Result<i64, String> {
     let (t, next) = (ty.table, format!("{}_next", ty.table));
     let db = |e: postgres::Error| format!("{t}: {e}");
-    client.batch_execute(&format!("DROP TABLE IF EXISTS {next}; {}", table(ty, &next))).map_err(db)?;
+    client
+        .batch_execute(&format!(
+            "DROP TABLE IF EXISTS {next}; {}",
+            table(ty, &next)
+        ))
+        .map_err(db)?;
     let rows = client.execute(&features(ty, &next), &[]).map_err(db)? as i64;
     client.batch_execute(&indexes(ty, &next)).map_err(db)?;
     for attempt in 1..=SWAP_TRIES {
         let mut tx = client.transaction().map_err(db)?;
-        tx.batch_execute(&format!("SET LOCAL lock_timeout = '{SWAP_WAIT}'")).map_err(db)?;
-        match tx.batch_execute(&format!("DROP TABLE IF EXISTS {t}; ALTER TABLE {next} RENAME TO {t}")) {
+        tx.batch_execute(&format!("SET LOCAL lock_timeout = '{SWAP_WAIT}'"))
+            .map_err(db)?;
+        match tx.batch_execute(&format!(
+            "DROP TABLE IF EXISTS {t}; ALTER TABLE {next} RENAME TO {t}"
+        )) {
             Err(e) if e.code() == Some(&postgres::error::SqlState::LOCK_NOT_AVAILABLE) => {
                 println!("[ingest/{t}] a reader holds it; swap {attempt} of {SWAP_TRIES} waits");
                 continue;
@@ -525,20 +665,37 @@ fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &s
                 tx.batch_execute(&format!("ALTER INDEX {name} RENAME TO {t}{rest}")).map_err(db)?;
             }
         }
-        tx.execute("DELETE FROM overture_catalog WHERE table_name = $1", &[&t]).map_err(db)?;
+        tx.execute("DELETE FROM overture_catalog WHERE table_name = $1", &[&t])
+            .map_err(db)?;
         catalog(&mut tx, ty, shards, release, accessed_at).map_err(db)?;
         tx.commit().map_err(db)?;
         return Ok(rows);
     }
-    Err(format!("{t}: its readers held it through {SWAP_TRIES} tries; {next} is built and left beside it"))
+    Err(format!(
+        "{t}: its readers held it through {SWAP_TRIES} tries; {next} is built and left beside it"
+    ))
 }
 
 /// The shards added to the table as it is: a feature held already is left,
 /// with their catalog rows, in one transaction.
-fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, accessed_at: &str) -> Result<i64, String> {
+fn add(
+    client: &mut Client,
+    ty: &Type,
+    shards: &[&Shard],
+    release: &str,
+    accessed_at: &str,
+) -> Result<i64, String> {
     let db = |e: postgres::Error| format!("{}: {e}", ty.table);
     let mut tx = client.transaction().map_err(db)?;
-    let rows = tx.execute(&format!("{} ON CONFLICT (gers_id) DO NOTHING", features(ty, ty.table)), &[]).map_err(db)? as i64;
+    let rows = tx
+        .execute(
+            &format!(
+                "{} ON CONFLICT (gers_id) DO NOTHING",
+                features(ty, ty.table)
+            ),
+            &[],
+        )
+        .map_err(db)? as i64;
     catalog(&mut tx, ty, shards, release, accessed_at).map_err(db)?;
     tx.commit().map_err(db)?;
     Ok(rows)
@@ -580,8 +737,15 @@ impl Shard {
 
 /// Longitude to x is linear and latitude to y increasing, so the extremes' projections are the projected extremes.
 fn span_m(wkb: &[u8]) -> Result<[f64; 4], String> {
-    let mut deg = [f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
-    vertices(wkb, &mut 0, &mut |x, y| deg = [deg[0].min(x), deg[1].min(y), deg[2].max(x), deg[3].max(y)])?;
+    let mut deg = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    vertices(wkb, &mut 0, &mut |x, y| {
+        deg = [deg[0].min(x), deg[1].min(y), deg[2].max(x), deg[3].max(y)]
+    })?;
     if !deg[0].is_finite() {
         return Err("a geometry with no vertex".to_string());
     }
@@ -596,14 +760,30 @@ fn vertices(b: &[u8], at: &mut usize, each: &mut dyn FnMut(f64, f64)) -> Result<
     let le = *b.get(*at).ok_or_else(end)? == 1;
     *at += 1;
     let word = |at: &mut usize| -> Result<u32, String> {
-        let s: [u8; 4] = b.get(*at..*at + 4).ok_or_else(end)?.try_into().map_err(|_| end())?;
+        let s: [u8; 4] = b
+            .get(*at..*at + 4)
+            .ok_or_else(end)?
+            .try_into()
+            .map_err(|_| end())?;
         *at += 4;
-        Ok(if le { u32::from_le_bytes(s) } else { u32::from_be_bytes(s) })
+        Ok(if le {
+            u32::from_le_bytes(s)
+        } else {
+            u32::from_be_bytes(s)
+        })
     };
     let real = |at: &mut usize| -> Result<f64, String> {
-        let s: [u8; 8] = b.get(*at..*at + 8).ok_or_else(end)?.try_into().map_err(|_| end())?;
+        let s: [u8; 8] = b
+            .get(*at..*at + 8)
+            .ok_or_else(end)?
+            .try_into()
+            .map_err(|_| end())?;
         *at += 8;
-        Ok(if le { f64::from_le_bytes(s) } else { f64::from_be_bytes(s) })
+        Ok(if le {
+            f64::from_le_bytes(s)
+        } else {
+            f64::from_be_bytes(s)
+        })
     };
     let code = word(at)?;
     let dims = match code / 1000 {
@@ -648,9 +828,19 @@ fn vertices(b: &[u8], at: &mut usize, each: &mut dyn FnMut(f64, f64)) -> Result<
 /// are every column but the id, the geometry and the bbox, a null one left
 /// out; the geometry is the release's WKB, its doubles as written.
 fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, String> {
-    let id = cast(group.column_by_name("id").ok_or("no id column")?, &DataType::Utf8).map_err(|e| e.to_string())?;
+    let id = cast(
+        group.column_by_name("id").ok_or("no id column")?,
+        &DataType::Utf8,
+    )
+    .map_err(|e| e.to_string())?;
     let id = id.as_string::<i32>();
-    let geometry = cast(group.column_by_name("geometry").ok_or("no geometry column")?, &DataType::LargeBinary).map_err(|e| e.to_string())?;
+    let geometry = cast(
+        group
+            .column_by_name("geometry")
+            .ok_or("no geometry column")?,
+        &DataType::LargeBinary,
+    )
+    .map_err(|e| e.to_string())?;
     let geometry = geometry.as_binary::<i64>();
     let schema = group.schema();
     let properties: Vec<_> = schema
@@ -662,11 +852,18 @@ fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, Stri
     let mut out = Vec::new();
     for i in 0..group.num_rows() {
         if id.is_null(i) || geometry.is_null(i) {
-            return Err(format!("{}: a feature with no id or geometry", if id.is_null(i) { "?" } else { id.value(i) }));
+            return Err(format!(
+                "{}: a feature with no id or geometry",
+                if id.is_null(i) { "?" } else { id.value(i) }
+            ));
         }
         let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
         let nodes: Vec<&str> = match shards {
-            Some(shards) => shards.iter().filter(|s| s.meets(span)).map(|s| s.name.as_str()).collect(),
+            Some(shards) => shards
+                .iter()
+                .filter(|s| s.meets(span))
+                .map(|s| s.name.as_str())
+                .collect(),
             None => vec![ANCESTOR],
         };
         if nodes.is_empty() {
@@ -680,7 +877,12 @@ fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, Stri
         }
         let properties = Value::Object(object).to_string();
         for node in nodes {
-            out.push((id.value(i).to_string(), properties.clone(), geometry.value(i).to_vec(), node.to_string()));
+            out.push((
+                id.value(i).to_string(),
+                properties.clone(),
+                geometry.value(i).to_vec(),
+                node.to_string(),
+            ));
         }
     }
     Ok(out)
@@ -694,10 +896,21 @@ fn json(column: &dyn Array, i: usize) -> Result<Value, String> {
     let one = |to: &DataType| cast(&column.slice(i, 1), to).map_err(|e| e.to_string());
     Ok(match column.data_type() {
         DataType::Boolean => Value::Bool(column.as_boolean().value(i)),
-        DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => Value::from(one(&DataType::Int64)?.as_primitive::<Int64Type>().value(0)),
-        DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => Value::from(one(&DataType::UInt64)?.as_primitive::<UInt64Type>().value(0)),
+        DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
+            Value::from(one(&DataType::Int64)?.as_primitive::<Int64Type>().value(0))
+        }
+        DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => Value::from(
+            one(&DataType::UInt64)?
+                .as_primitive::<UInt64Type>()
+                .value(0),
+        ),
         // A float32 widens to a double, its value unchanged.
-        DataType::Float16 | DataType::Float32 | DataType::Float64 => Number::from_f64(one(&DataType::Float64)?.as_primitive::<Float64Type>().value(0)).map_or(Value::Null, Value::Number),
+        DataType::Float16 | DataType::Float32 | DataType::Float64 => Number::from_f64(
+            one(&DataType::Float64)?
+                .as_primitive::<Float64Type>()
+                .value(0),
+        )
+        .map_or(Value::Null, Value::Number),
         DataType::Utf8 => Value::from(column.as_string::<i32>().value(i)),
         DataType::LargeUtf8 => Value::from(column.as_string::<i64>().value(i)),
         DataType::Utf8View => Value::from(column.as_string_view().value(i)),
@@ -726,7 +939,10 @@ fn json(column: &dyn Array, i: usize) -> Result<Value, String> {
 }
 
 fn items(list: &dyn Array) -> Result<Value, String> {
-    (0..list.len()).map(|k| json(list, k)).collect::<Result<Vec<_>, _>>().map(Value::Array)
+    (0..list.len())
+        .map(|k| json(list, k))
+        .collect::<Result<Vec<_>, _>>()
+        .map(Value::Array)
 }
 
 /// A WKB value in EPSG:3857. Mercator ends short of the poles, where the
@@ -765,7 +981,9 @@ fn indexes(ty: &Type, t: &str) -> String {
         } else {
             format!("({index})")
         };
-        sql.push_str(&format!("CREATE INDEX IF NOT EXISTS {t}_{k} ON {t} {on};\n"));
+        sql.push_str(&format!(
+            "CREATE INDEX IF NOT EXISTS {t}_{k} ON {t} {on};\n"
+        ));
     }
     sql
 }
@@ -780,9 +998,17 @@ fn cli() -> Command {
 /// The official CLI by a public command: what it prints to stderr is shown
 /// as it runs, and a failure is the run's.
 fn overture(args: &[&str]) -> Result<Output, String> {
-    let out = cli().args(args).stderr(Stdio::inherit()).output().map_err(|e| format!("{TOOLS}: {e}"))?;
+    let out = cli()
+        .args(args)
+        .stderr(Stdio::inherit())
+        .output()
+        .map_err(|e| format!("{TOOLS}: {e}"))?;
     if !out.status.success() {
-        return Err(format!("overturemaps {} exited {}", args.join(" "), out.status.code().unwrap_or(-1)));
+        return Err(format!(
+            "overturemaps {} exited {}",
+            args.join(" "),
+            out.status.code().unwrap_or(-1)
+        ));
     }
     Ok(out)
 }
@@ -791,6 +1017,10 @@ fn overture(args: &[&str]) -> Result<Output, String> {
 fn pinned(field: &str) -> Result<String, String> {
     let path = Path::new(SOURCE);
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    meta["pin"][field].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.{field}", path.display()))
+    let meta: Value =
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    meta["pin"][field]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| format!("{}: no pin.{field}", path.display()))
 }

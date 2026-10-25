@@ -20,7 +20,10 @@ const GUEST_WASM_URL = new URL("./guest.wasm", import.meta.url);
 export async function open(plan: Plan): Promise<Guest> {
   const memory = reserve_memory([plan.bytes / plan.region], plan.region);
   // A cached module would run yesterday's guest under today's glue.
-  const bytes = await (await fetch(GUEST_WASM_URL, DEV_BUNDLE ? { cache: "no-store" } : undefined)).arrayBuffer();
+  const bytes = await (await fetch(
+    GUEST_WASM_URL,
+    DEV_BUNDLE ? { cache: "no-store" } : undefined,
+  )).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, {
     env: { memory, now: () => performance.now() },
   });

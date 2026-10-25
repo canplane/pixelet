@@ -50,7 +50,12 @@ impl<T: Copy, const N: usize> Default for Table<T, N> {
 
 impl<T: Copy, const N: usize> Table<T, N> {
     pub const fn new() -> Self {
-        const { assert!(N >= 2 && N <= 1 << SLOT_BITS, "a slot is 16 bits, and slot 0 is never handed out") };
+        const {
+            assert!(
+                N >= 2 && N <= 1 << SLOT_BITS,
+                "a slot is 16 bits, and slot 0 is never handed out"
+            )
+        };
         Table {
             slot: [const {
                 Slot {
@@ -90,17 +95,28 @@ impl<T: Copy, const N: usize> Table<T, N> {
 
     pub fn live(&self, handle: u32) -> bool {
         let s = handle_slot(handle) as usize;
-        s != 0 && s < N && self.slot[s].made != 0 && self.slot[s].generation as u32 == handle >> SLOT_BITS
+        s != 0
+            && s < N
+            && self.slot[s].made != 0
+            && self.slot[s].generation as u32 == handle >> SLOT_BITS
     }
 
     pub fn get(&self, handle: u32) -> Option<&T> {
         // SAFETY: a live slot's value is initialized.
-        self.live(handle).then(|| unsafe { self.slot[handle_slot(handle) as usize].value.assume_init_ref() })
+        self.live(handle).then(|| unsafe {
+            self.slot[handle_slot(handle) as usize]
+                .value
+                .assume_init_ref()
+        })
     }
 
     pub fn get_mut(&mut self, handle: u32) -> Option<&mut T> {
         // SAFETY: as `get`.
-        self.live(handle).then(|| unsafe { self.slot[handle_slot(handle) as usize].value.assume_init_mut() })
+        self.live(handle).then(|| unsafe {
+            self.slot[handle_slot(handle) as usize]
+                .value
+                .assume_init_mut()
+        })
     }
 
     pub fn remove(&mut self, handle: u32) -> Option<T> {
