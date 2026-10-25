@@ -203,7 +203,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                    |
 | `pxl-shader`    | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `script/shader-wgsl.ts` and checked in beside the renderer's shaders.                    |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                               |
-| `pxl-native`    | The guest on a device: a static library behind one C header (`include/pxl_native.h`), which runs every call on a thread of its own.                                      |
+| `pxl-native`    | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host, which runs every call on a thread of its own.            |
 | `apps/client`   | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).       |
 | `apps/web`      | The page's app: its entry; its bracket, what a browser tab gives the client and the guest module it instantiates; and the Cloudflare Worker that serves it all.          |
 | `apps/native`   | The device's app: its entry, and its bracket, what the app gives the client through its native module, which links the kernel.                                           |

@@ -8,7 +8,7 @@
 //! surface's window (android.rs): it binds the kernel's surface to it while
 //! it is in a window and has a surface to show, and unbinds it before it lets
 //! it go, so it is only ever drawn into while its view keeps it. The kernel's
-//! thread (thread.rs) makes every call here, whichever thread the view is on,
+//! thread (lib.rs `on_kernel`) makes every call here, whichever thread the view is on,
 //! and every frame is drawn and shown inside a turn. On an iPhone a surface
 //! is configured on the main thread instead, since that sets its layer's
 //! properties, which UIKit allows there alone.
@@ -23,9 +23,7 @@ use xpute_gpu::host::{ConfigureAt, GpuHost, Memory};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 
-use crate::thread::on_kernel;
-#[cfg(target_vendor = "apple")]
-use crate::thread::while_kernel_idle;
+use crate::on_kernel;
 
 /// An iPhone's layer is the main thread's, an Android window anyone's.
 #[cfg(target_vendor = "apple")]
@@ -62,7 +60,7 @@ fn configure_on_main() {
         fn dispatch_async_f(queue: *const c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
     }
     extern "C" fn work(_: *mut c_void) {
-        while_kernel_idle(|| {
+        crate::guest().while_idle(|| {
             if let Some(d) = device() {
                 d.host.configure_surfaces();
             }
@@ -150,7 +148,7 @@ pub fn before_turn(memory: &mut Memory<'_>) {
 /// The bracket's answer (pxl_kernel::door::Bracket::admit_frame): a frame
 /// while the host admits one (xpute-gpu host `GpuHost::admit`), so taking a
 /// layer's drawable never blocks the JavaScript thread, which waits for the
-/// turn (thread.rs).
+/// turn (lib.rs `on_kernel`).
 pub fn admit_frame() -> bool {
     device().is_some_and(|d| d.host.admit())
 }

@@ -1743,7 +1743,6 @@ version = "0.0.0"
 dependencies = [
  "fnv",
  "jni-sys 0.3.1",
- "libc",
  "ndk-sys",
  "pollster",
  "pxl-kernel",
@@ -1752,6 +1751,7 @@ dependencies = [
  "wgpu",
  "xpute-gpu",
  "xpute-guest",
+ "xpute-host",
  "xpute-kit",
 ]
 
@@ -3167,6 +3167,14 @@ version = "0.0.0"
 dependencies = [
  "indexmap",
  "xpute-kit",
+]
+
+[[package]]
+name = "xpute-host"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "xpute-guest",
 ]
 
 [[package]]

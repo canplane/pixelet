@@ -1,43 +1,62 @@
 // pxl-native/lib.rs
 
-//! The kernel on a device: pxl-kernel linked into the app. Its door
-//! (pxl_kernel::door) behind this bracket — the memory is a region this
-//! library takes from the system (memory.rs), the clock is the device's, and
-//! the calls the renderer records are run on wgpu by xpute's host inside this
-//! library (surface.rs).
+//! The kernel on a device: pxl-kernel linked into the app, a guest of
+//! xpute's native host (xpute-host native), which reserves its memory, runs
+//! every call into it on its own thread and keeps its blocks in its memory.
+//! What is pixelet's here: its numbers (mem.json's), the kernel's door
+//! (pxl_kernel::door) as the guest's entry, the device and the views' surfaces
+//! the renderer's calls are run on (surface.rs), the last words, and the
+//! transport's decoder (unpack.rs).
 //!
 //! Called from the app through the C ABI (include/pxl_native.h), one call at
-//! a time, and run on the kernel's own thread (thread.rs) — the single
-//! thread `Global` is sound for.
+//! a time, from more than one thread: the JavaScript's rings the doorbell,
+//! the main thread binds a view's layer. React Native's JavaScript thread
+//! has a 1 MiB stack, and a turn that draws through wgpu can take more
+//! (doc/minutes/archive/20260926-a-device-s-kernel-on-a-thread-of-its-own.md),
+//! so the kernel's thread has a stack of its own.
 
 #[cfg(target_os = "android")]
 mod android;
-mod memory;
 mod surface;
-mod thread;
 mod unpack;
 
-use thread::on_kernel;
-
-use core::ptr::NonNull;
 use std::sync::OnceLock;
-use std::time::Instant;
 
+use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::door::Bracket;
 use pxl_kernel::sys::io::host::Stop;
+use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
 use xpute_gpu::host::Memory;
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_guest::mem::heap::HeapStat;
+use xpute_host::native::{self, Alloc, Guest, Plan};
 
-/// The device's clock, in milliseconds from the first reading: a turn's quota
-/// is spent against it, and only differences are read.
-fn now() -> f64 {
-    static START: OnceLock<Instant> = OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+/// The library's one allocator: the kernel's blocks in its memory, so a
+/// `Vec` the kernel hands the shell lies in the memory the shell reads.
+#[global_allocator]
+static ALLOC: Alloc = Alloc;
+
+/// The kernel, booted on the first call: a phone's reservation (mem.json's),
+/// as a page on a phone reserves, its heap past the rings' front
+/// (GLOBAL_BASE, door/layout.rs) and `.fixed`, as the module's is; a stack
+/// of xpute's 8 MiB, since how deep wgpu's internals go has no bound this
+/// crate can state.
+fn guest() -> Guest {
+    static GUEST: OnceLock<Guest> = OnceLock::new();
+    *GUEST.get_or_init(|| {
+        native::boot(&Plan {
+            thread_name: "pxl-kernel",
+            ..Plan::new(PHONE_BYTES, heap_at(GLOBAL_BASE))
+        })
+    })
 }
 
-fn heap_stat() -> xpute_guest::mem::heap::HeapStat {
-    memory::ALLOC.stat()
+/// Runs `f` on the kernel's thread, the caller waiting.
+fn on_kernel<R: Send>(f: impl FnOnce() -> R + Send) -> R {
+    guest().run(f)
+}
+
+fn heap_stat() -> HeapStat {
+    guest().heap_stat()
 }
 
 /// The process's error stream, or Android's log where that stream goes
@@ -54,28 +73,27 @@ fn last_words(stop: Stop<'_>) {
     eprintln!("{line}");
 }
 
-/// What a device gives the kernel: the region, the clock, the allocator and
-/// the frames its surfaces admit (surface.rs).
+/// What a device gives the kernel: the memory, its data's end at the rings'
+/// front (a device's library keeps its statics where the linker put them),
+/// the clock, the allocator and the frames its surfaces admit (surface.rs).
 fn bracket() -> Bracket {
-    memory::region();
     Bracket {
-        given: memory::GIVEN,
-        data_end: memory::DATA_END,
-        clock: now,
+        given: guest().memory().1 as u32,
+        data_end: GLOBAL_BASE,
+        clock: native::now,
         heap_stat,
         admit_frame: surface::admit_frame,
         last_words: Some(last_words),
     }
 }
 
-/// The region as the GPU's host reads and writes it between turns.
-fn region_memory() -> Memory<'static> {
-    memory::region();
-    let base = NonNull::new(xpute_guest::mem::base::ptr_at::<u8>(0)).or_bug(Errno::EFAULT);
-    // SAFETY: the region, `GIVEN` bytes from its base, mapped for the
-    // process's life; between turns, on the kernel's thread, where nothing
-    // holds a reference into a range the kernel names.
-    unsafe { Memory::from_raw(base, memory::GIVEN as usize) }
+/// The memory as the GPU's host reads and writes it between turns.
+fn memory() -> Memory<'static> {
+    let (base, bytes) = guest().memory();
+    // SAFETY: the memory, reserved for the process's life; between turns, on
+    // the kernel's thread, where nothing holds a reference into a range the
+    // kernel names.
+    unsafe { Memory::from_raw(base, bytes) }
 }
 
 /// The doorbell (pxl_kernel::door::interrupt): a turn of `quota_ms`, and when
@@ -85,9 +103,9 @@ fn region_memory() -> Memory<'static> {
 #[no_mangle]
 pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
     on_kernel(move || {
-        surface::before_turn(&mut region_memory());
+        surface::before_turn(&mut memory());
         let wake = pxl_kernel::door::interrupt(quota_ms, bracket);
-        surface::after_turn(&mut region_memory());
+        surface::after_turn(&mut memory());
         wake
     })
 }
@@ -99,13 +117,10 @@ pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
 /// `bytes` is null or points at a `u32` the caller owns.
 #[no_mangle]
 pub unsafe extern "C" fn pxl_memory(bytes: *mut u32) -> *mut u8 {
-    let at = on_kernel(|| {
-        memory::region();
-        xpute_guest::mem::base::ptr_at::<u8>(0).expose_provenance()
-    });
-    if !bytes.is_null() {
-        // SAFETY: the caller's word.
-        unsafe { *bytes = memory::GIVEN };
+    let (at, n) = guest().memory();
+    // SAFETY: the caller's word, or none.
+    if let Some(bytes) = unsafe { bytes.as_mut() } {
+        *bytes = n as u32;
     }
-    core::ptr::with_exposed_provenance_mut(at)
+    at.as_ptr()
 }

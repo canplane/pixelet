@@ -13,7 +13,7 @@
 //   crates/client/kernel/src/door/layout.rs      the front — the rings and the directory
 //   crates/client-bracket/wasm/build.rs          the linker flags for the module
 //   apps/client/src/abi/boot.ts                  the reservation a tab makes, handed to the page
-//   crates/client-bracket/native/src/memory.rs   the region a device is given
+//   crates/client-bracket/native/src/lib.rs      the memory a device is given
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 

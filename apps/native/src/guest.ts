@@ -7,7 +7,7 @@ import type { Guest } from "@pxl/client/bracket.tsx";
 import { PLATFORM } from "./module.ts";
 
 /** The plan is not read here: the linked guest's memory is given in Rust
- * (memory.rs `GIVEN`), and its GPU stream played there (surface.rs). */
+ * (pxl-native lib.rs `guest`), and its GPU stream played there (surface.rs). */
 export function openGuest(): Promise<Guest> {
   const buffer = PLATFORM.memory();
   PLATFORM.interrupt(0);

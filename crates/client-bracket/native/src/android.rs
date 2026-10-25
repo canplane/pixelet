@@ -5,8 +5,8 @@
 //! declares these as `external` functions, and each is the C ABI's call an
 //! iPhone's Swift makes (lib.rs, surface.rs, unpack.rs) under the name JNI
 //! looks for. Only JNI's own values cross: a number, an array, the memory as
-//! a direct buffer over the region — which Kotlin hands JavaScript as it is,
-//! as Swift hands it the region — and a view's `Surface`, made the native
+//! a direct buffer over the memory — which Kotlin hands JavaScript as it is,
+//! as Swift hands it the memory — and a view's `Surface`, made the native
 //! window wgpu draws through.
 
 use fnv::FnvHashMap;
@@ -39,7 +39,7 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_interrupt(_env: *m
     crate::pxl_interrupt(quota_ms)
 }
 
-/// The memory, as a direct buffer over the whole region (lib.rs `pxl_memory`).
+/// The memory, as a direct buffer over the whole of it (lib.rs `pxl_memory`).
 ///
 /// # Safety
 /// Called by JNI.
@@ -49,7 +49,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_memory(env:
     // SAFETY: our own word.
     let at = unsafe { crate::pxl_memory(&raw mut bytes) };
     let make = unsafe { jni(env) }.NewDirectByteBuffer.or_bug(Errno::ENOSYS);
-    // SAFETY: the region lives as long as the process, and is `bytes` long.
+    // SAFETY: the memory lives as long as the process, and is `bytes` long.
     unsafe { make(env, at.cast(), i64::from(bytes)) }
 }
 

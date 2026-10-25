@@ -1,9 +1,10 @@
 // pxl-native/include/pxl_native.h
 
-// What the device app calls in the kernel (src/lib.rs), declared for its
-// Swift: the module map beside this makes it `import PxlNative`. Whatever
-// reaches the kernel runs on the kernel's own thread while the caller waits
-// (src/thread.rs), so the caller may be any thread, one call at a time.
+// What the device app calls in the guest linked into it (src/lib.rs),
+// declared for its Swift: the module map beside this makes it
+// `import PxlNative`. Whatever reaches the guest runs on the guest's own
+// thread while the caller waits (xpute-host native `Guest::run`), so the
+// caller may be any thread, one call at a time.
 
 #pragma once
 
