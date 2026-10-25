@@ -4,7 +4,12 @@ use super::*;
 
 #[test]
 fn a_module_imports_its_memory_and_puts_its_stack_first() {
-    assert_eq!(args(&Module::default()), ["--import-memory", "--stack-first", "-zstack-size=1048576"]);
+    let m = Module {
+        stack_bytes: 1 << 20,
+        global_base: None,
+        initial_bytes: None,
+    };
+    assert_eq!(args(&m), ["--import-memory", "--stack-first", "-zstack-size=1048576"]);
 }
 
 #[test]

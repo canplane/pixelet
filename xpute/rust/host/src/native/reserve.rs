@@ -2,48 +2,27 @@
 
 //! The core memory, reserved once from the system and never given back:
 //! mapped as a WebAssembly memory is, so its pages are zero until written and
-//! cost nothing until touched. Not through the system's allocator: C has no
-//! aligned calloc, so `System.alloc_zeroed` at this alignment allocates and
-//! then writes every byte to zero, the whole memory made resident at boot.
+//! cost nothing until touched, where the system's `alloc_zeroed` would write
+//! every byte and make the whole memory resident at boot.
 
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// The memory's alignment: a buddy block lies at an offset from the base that
-/// is a multiple of its size, so a base on a large boundary keeps every block
-/// aligned as far as anything asks.
-pub const ALIGN: usize = 1 << 16;
+use xpute_guest::mem::section::PAGE_BYTES;
 
 /// The memory's first byte, 0 until it is reserved, and its bytes.
 static AT: AtomicUsize = AtomicUsize::new(0);
 static BYTES: AtomicUsize = AtomicUsize::new(0);
 
-/// Maps `bytes` from the system, aligned to `ALIGN`: once, by `boot`, which
-/// is once a process. Its address and its bytes.
+/// Maps `bytes` from the system: once, by `boot`, which is once a process.
+/// A mapping lies on the system's page, at least the guest's, which is all
+/// the heap aligns to. Its address and its bytes.
 pub fn reserve(bytes: usize) -> (usize, usize) {
-    // Mapped a boundary's worth larger, and what lies outside the aligned
-    // memory given back: the system aligns a mapping to its page, not to
-    // this.
-    let span = bytes + ALIGN;
     // SAFETY: an anonymous private mapping, which touches nothing that exists.
-    let p = unsafe { libc::mmap(core::ptr::null_mut(), span, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_ANON, -1, 0) };
-    // No memory for the guest is no guest.
+    let p = unsafe { libc::mmap(core::ptr::null_mut(), bytes, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_ANON, -1, 0) };
     assert!(p != libc::MAP_FAILED, "the system would not map a guest's {bytes} bytes");
-    let p = p.cast::<u8>();
-    let head = p.addr().next_multiple_of(ALIGN) - p.addr();
-    let memory = p.wrapping_add(head);
-    // SAFETY: the two ends of the mapping just made, outside the memory.
-    unsafe {
-        if head > 0 {
-            libc::munmap(p.cast(), head);
-        }
-        if span - head > bytes {
-            libc::munmap(memory.wrapping_add(bytes).cast(), span - head - bytes);
-        }
-    }
-    let at = memory.expose_provenance();
-    // The bytes before the address: a reader that sees the address sees its
-    // span.
+    let at = p.cast::<u8>().expose_provenance();
+    assert!(at.is_multiple_of(PAGE_BYTES as usize), "the system mapped the memory off its page");
     BYTES.store(bytes, Ordering::Relaxed);
     AT.store(at, Ordering::Release);
     (at, bytes)

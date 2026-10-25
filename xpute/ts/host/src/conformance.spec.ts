@@ -35,6 +35,9 @@ export const STREAM_WORDS: u32 = 256 as number;
 /** The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them. */
 export const SYS_WORDS: u32 = 64 as number;
 
+/** The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile). */
+export const STACK_BYTES: u32 = 1048576 as number;
+
 /** The guest's heap, in its own range, since the memory a host hands a module never grows
  * and a guest takes nothing it was not given. */
 export const HEAP_BYTES: u32 = 65536 as number;

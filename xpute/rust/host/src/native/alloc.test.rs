@@ -5,23 +5,33 @@
 
 use std::sync::OnceLock;
 
+use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_host::native::{self, Alloc, Guest, Plan};
 
 #[global_allocator]
 static ALLOC: Alloc = Alloc;
 
 const MEMORY_BYTES: u32 = 8 << 20;
+const HEAP_AT: u32 = 16 * PAGE_BYTES;
 
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
-    *GUEST.get_or_init(|| native::boot(&Plan::new(MEMORY_BYTES, 1 << 16)))
+    *GUEST.get_or_init(|| {
+        native::boot(&Plan {
+            memory_bytes: MEMORY_BYTES,
+            heap_at: HEAP_AT,
+            stack_bytes: 1 << 20,
+            thread_name: "test-guest",
+            clock: native::now,
+        })
+    })
 }
 
 /// Whether `p` lies in the guest's heap.
 fn in_heap(p: *const u8) -> bool {
     let (at, bytes) = guest().memory();
     let at = at.as_ptr().addr();
-    (at + (1 << 16)..at + bytes).contains(&p.addr())
+    (at + HEAP_AT as usize..at + bytes).contains(&p.addr())
 }
 
 #[test]

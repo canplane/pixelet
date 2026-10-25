@@ -57,18 +57,28 @@ A guest built as a **WebAssembly module** links through `rust/link`, one call in
 ```rust
 // build.rs
 fn main() {
-    xpute_link::module(&xpute_link::Module::default()); // memory imported, a 1 MiB stack first
+    // memory imported, the stack first, its size the guest's
+    xpute_link::module(&xpute_link::Module { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
 }
 ```
 
-A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator and writes one `native_abi!` with its prefix, its numbers and the guest's entry, which boots the guest on the first call, installs the plan's clock (`native::now` by default) on the guest's thread, and exports `<prefix>_interrupt` and `<prefix>_memory` (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
+A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator and writes one `native_abi!` with its prefix, its numbers and the guest's entry, which boots the guest on the first call, installs the plan's clock on the guest's thread, and exports `<prefix>_interrupt` and `<prefix>_memory` (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
 
 ```rust
 #[global_allocator]
 static ALLOC: native::Alloc = native::Alloc;
 
-// memory, heap_at (a whole number of 4 KiB pages); the turn runs my_guest::interrupt
-xpute_host::native_abi!("demo", native::Plan::new(16 << 20, 1 << 16), my_guest::interrupt);
+xpute_host::native_abi!(
+    "demo",
+    native::Plan {
+        memory_bytes: 16 << 20,
+        heap_at: 16 * PAGE_BYTES, // a whole number of the guest's pages
+        stack_bytes: 1 << 20,
+        thread_name: "demo",
+        clock: native::now,
+    },
+    my_guest::interrupt
+);
 ```
 
 ## What it leaves to whoever uses it

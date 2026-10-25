@@ -35,6 +35,11 @@
 /// so no guard page: the wraparound is the whole of the protection.
 pub const STACK_BYTES: u32 = 1048576;
 
+/// The kernel's thread's stack on a device, where the kernel is a library on a thread
+/// of its own (rust/client-bracket/native): a main thread's 8 MiB, since React
+/// Native's JavaScript thread has 1 MiB and wgpu's depth has no bound to state.
+pub const THREAD_STACK_BYTES: u32 = 8388608;
+
 /// Messages the submission ring holds, and so payloads: one a slot
 /// (doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
 /// the ring checks, since a position is taken modulo it by masking.

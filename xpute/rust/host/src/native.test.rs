@@ -6,27 +6,32 @@
 use std::sync::OnceLock;
 
 use xpute_guest::global::{off_marked_thread, on_marked_thread};
+use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_host::native::{self, Guest, Plan};
 
 const MEMORY_BYTES: u32 = 4 << 20;
+const HEAP_AT: u32 = 16 * PAGE_BYTES;
+
+fn plan(heap_at: u32) -> Plan {
+    Plan {
+        memory_bytes: MEMORY_BYTES,
+        heap_at,
+        stack_bytes: 1 << 20,
+        thread_name: "test-guest",
+        clock: || 42.0,
+    }
+}
 
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
-    *GUEST.get_or_init(|| {
-        native::boot(&Plan {
-            thread_name: "test-guest",
-            stack_bytes: 1 << 20,
-            clock: || 42.0,
-            ..Plan::new(MEMORY_BYTES, 1 << 16)
-        })
-    })
+    *GUEST.get_or_init(|| native::boot(&plan(HEAP_AT)))
 }
 
 #[test]
 fn the_memory_is_aligned_zero_and_the_base() {
     let (at, bytes) = guest().memory();
     assert_eq!(bytes, MEMORY_BYTES as usize);
-    assert!(at.as_ptr().addr().is_multiple_of(1 << 16));
+    assert!(at.as_ptr().addr().is_multiple_of(PAGE_BYTES as usize));
     let base = guest().run(xpute_guest::mem::base::base);
     assert_eq!(base, at.as_ptr().addr());
     // SAFETY: the reserved memory, mapped for the process; nothing else reads
@@ -62,16 +67,16 @@ fn while_idle_runs_here() {
 #[test]
 fn a_second_boot_is_refused() {
     guest();
-    let again = std::panic::catch_unwind(|| native::boot(&Plan::new(MEMORY_BYTES, 1 << 16)));
+    let again = std::panic::catch_unwind(|| native::boot(&plan(HEAP_AT)));
     assert!(again.is_err());
 }
 
 #[test]
 fn a_heap_off_a_page_or_past_the_memory_is_refused_before_the_boot() {
-    // As `Plan::new(16 << 20, 100)` would be: the slab aligns a block by its
+    // A heap at 100: the slab aligns a block by its
     // offset from the heap's first byte, so that byte must lie on a page.
-    assert!(std::panic::catch_unwind(|| native::boot(&Plan::new(MEMORY_BYTES, 100))).is_err());
-    assert!(std::panic::catch_unwind(|| native::boot(&Plan::new(MEMORY_BYTES, MEMORY_BYTES))).is_err());
+    assert!(std::panic::catch_unwind(|| native::boot(&plan(100))).is_err());
+    assert!(std::panic::catch_unwind(|| native::boot(&plan(MEMORY_BYTES))).is_err());
     // Neither took the process's one boot.
     let (_, bytes) = guest().memory();
     assert_eq!(bytes, MEMORY_BYTES as usize);

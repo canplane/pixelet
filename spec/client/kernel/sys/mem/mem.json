@@ -31,6 +31,16 @@
     ]
   },
 
+  "THREAD_STACK_BYTES": {
+    "$value": 8388608,
+    "$type": "u32",
+    "$doc": [
+      "The kernel's thread's stack on a device, where the kernel is a library on a thread",
+      "of its own (rust/client-bracket/native): a main thread's 8 MiB, since React",
+      "Native's JavaScript thread has 1 MiB and wgpu's depth has no bound to state."
+    ]
+  },
+
   "SUBMISSION_CAPACITY": {
     "$value": 512,
     "$type": "u32",

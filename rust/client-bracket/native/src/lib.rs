@@ -20,7 +20,7 @@ mod unpack;
 use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::door::Bracket;
 use pxl_kernel::sys::io::host::Stop;
-use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
+use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
 use xpute_guest::mem::heap::HeapStat;
 use xpute_host::mem::Memory;
 use xpute_host::native::{self, Alloc, Plan};
@@ -29,13 +29,6 @@ use xpute_host::native::{self, Alloc, Plan};
 /// `Vec` the kernel hands the shell lies in the memory the shell reads.
 #[global_allocator]
 static ALLOC: Alloc = Alloc;
-
-/// The kernel's thread's stack. React Native's JavaScript thread has 1 MiB,
-/// and a turn that draws through wgpu can take more
-/// (doc/minutes/archive/20260926-a-device-s-kernel-on-a-thread-of-its-own.md);
-/// how deep wgpu's internals go has no bound this crate can state, so the
-/// kernel's thread has a main thread's 8 MiB.
-const KERNEL_STACK_BYTES: usize = 8 << 20;
 
 // The kernel, booted on the first call — a phone's reservation (mem.json's),
 // as a page on a phone reserves, its heap past the rings' front (GLOBAL_BASE,
@@ -46,9 +39,11 @@ const KERNEL_STACK_BYTES: usize = 8 << 20;
 xpute_host::native_abi!(
     "pxl",
     Plan {
+        memory_bytes: PHONE_BYTES,
+        heap_at: heap_at(GLOBAL_BASE),
+        stack_bytes: THREAD_STACK_BYTES as usize,
         thread_name: "pxl-kernel",
-        stack_bytes: KERNEL_STACK_BYTES,
-        ..Plan::new(PHONE_BYTES, heap_at(GLOBAL_BASE))
+        clock: native::now,
     },
     turn
 );

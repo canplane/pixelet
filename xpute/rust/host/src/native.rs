@@ -43,11 +43,6 @@ use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
 
-/// The guest's thread's stack unless the plan says otherwise: a main
-/// thread's on Linux and macOS. Not a module guest's, which its linker sizes
-/// (`xpute_link::MODULE_STACK_BYTES`).
-pub const THREAD_STACK_BYTES: usize = 8 << 20;
-
 /// The guest's numbers, which the host boots it with.
 pub struct Plan {
     /// The core memory's size, reserved once and never grown.
@@ -64,20 +59,6 @@ pub struct Plan {
     /// The clock the guest reads (`xpute_guest::clock`), installed on its
     /// thread before its first call.
     pub clock: fn() -> f64,
-}
-
-impl Plan {
-    /// A memory of `memory_bytes`, its heap from `heap_at`, on a thread
-    /// named `guest` with a stack of `THREAD_STACK_BYTES`, reading `now`.
-    pub const fn new(memory_bytes: u32, heap_at: u32) -> Plan {
-        Plan {
-            memory_bytes,
-            heap_at,
-            stack_bytes: THREAD_STACK_BYTES,
-            thread_name: "guest",
-            clock: now,
-        }
-    }
 }
 
 /// The booted guest: the only way to call into it. `boot` makes the one.

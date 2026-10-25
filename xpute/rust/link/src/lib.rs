@@ -5,7 +5,7 @@
 //!
 //! ```
 //! // a guest's build.rs, in its `main`
-//! xpute_link::module(&xpute_link::Module::default());
+//! xpute_link::module(&xpute_link::Module { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
 //! ```
 //!
 //! Cargo applies a `rustc-link-arg` only to the package whose script
@@ -26,9 +26,6 @@
 /// (`xpute_guest::mem::section::PAGE_BYTES`).
 pub const WASM_PAGE_BYTES: u32 = 1 << 16;
 
-/// The stack a module has unless it says otherwise: rustc's own for wasm32.
-pub const MODULE_STACK_BYTES: u32 = 1 << 20;
-
 /// A module guest's numbers.
 pub struct Module {
     /// The stack's size (`-z stack-size`), placed first (`--stack-first`).
@@ -39,18 +36,6 @@ pub struct Module {
     /// The least memory the module instantiates in (`--initial-memory`), so a
     /// host that hands it less fails at once. Whole pages.
     pub initial_bytes: Option<u32>,
-}
-
-impl Default for Module {
-    /// A stack of `MODULE_STACK_BYTES`, the linker's data where it puts it, and no
-    /// floor but the data's.
-    fn default() -> Module {
-        Module {
-            stack_bytes: MODULE_STACK_BYTES,
-            global_base: None,
-            initial_bytes: None,
-        }
-    }
 }
 
 /// Prints `m`'s link arguments, and nothing when the target is not wasm32,

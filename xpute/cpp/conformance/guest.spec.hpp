@@ -39,6 +39,9 @@ inline constexpr std::uint32_t STREAM_WORDS = 256u;
 // The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
 inline constexpr std::uint32_t SYS_WORDS = 64u;
 
+// The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile).
+inline constexpr std::uint32_t STACK_BYTES = 1048576u;
+
 // The guest's heap, in its own range, since the memory a host hands a module never grows
 // and a guest takes nothing it was not given.
 inline constexpr std::uint32_t HEAP_BYTES = 65536u;
