@@ -131,7 +131,7 @@ What runs across the trees is the Makefile's (`make -j8 check`, its trees in par
 | Script                               | Description                                                                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | `./script/usage.ts`                  | What the deployment has used of its free allowances, before a publish                                                    |
-| `./ts/app/web/script/publish.ts`     | Declare in the bucket which baked version of each kind clients read; nothing in the tree changes and nothing is deployed |
+| `./script/publish.py`     | Declare in the bucket which baked version of each kind clients read; nothing in the tree changes and nothing is deployed |
 | `./script/smoke.py <url>` | What a deployment must answer, against a running one                                                                     |
 | `./script/check-diff.ts`             | `check` and `test` over the working tree's changes                                                                       |
 
@@ -167,7 +167,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   │       ├── catalog/      #     the data screens show (cells, assets)
 │   │       └── config/       #     deployment config and routes
 │   ├── app/                  #   each app, a bracket that bundles the client
-│   │   ├── web/              #     the page's: its entry, its bracket (src/), its build and publish (script/)
+│   │   ├── web/              #     the page's: its entry, its bracket (src/), the guest module's build (script/)
 │   │   └── native/           #     the device's, through Expo and Metro
 │   │       ├── src/          #       its entry and its bracket: what the app gives the client, through its native module
 │   │       └── modules/      #       platform/, its native half: one module, the views, the linked kernel
@@ -193,7 +193,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ├── xpute/                    # The system under it, its own repository's root and workspaces:
 │                             #   rust/, ts/ and cpp/ by language: kit, guest, host; spec/ the contract
 ├── asset/                    # Shipped models, texture pack and sky, imported by nothing
-├── script/                   # the repository's own scripts, reading none of its code: the tree's checks, the shaders' WGSL, the usage report, the deployment's smoke
+├── script/                   # the repository's own scripts, reading none of its code: the tree's checks, the shaders' WGSL, the usage report, the bucket's publish, the deployment's smoke
 ├── infra/                    # local and production compose files, and what fills db-geo
 └── doc/                      # The record: backlog.md what is queued, minutes/ each meeting's
                               #   record (archive/ those retired), experiment/ measurements

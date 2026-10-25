@@ -11,7 +11,7 @@ arrived. What the bucket holds, and how the Worker serves it, is
 [bake-tiles](../bake-tiles/SKILL.md).
 
 The versions the client requests are the bucket's `source`, which
-`./ts/app/web/script/publish.ts` alone writes and the client reads at boot, so a publish is
+`./script/publish.py` alone writes and the client reads at boot, so a publish is
 never a commit or a deploy. An object's name carries no extension, so **its
 content-type and content-encoding are stored with it at upload**: a manual
 upload must set both.
@@ -28,9 +28,9 @@ aws configure --profile r2          # region: auto
 export R2=https://<account_id>.r2.cloudflarestorage.com
 ```
 
-`publish.ts` uses exactly that profile and `$R2`. A manual `aws s3 sync` needs
+`publish.py` uses exactly that profile and `$R2`. A manual `aws s3 sync` needs
 `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` too, since the CLI's checksum
-headers are refused by R2; `publish.ts` sets it for itself.
+headers are refused by R2; `publish.py` sets it for itself.
 
 ## Upload
 
@@ -48,13 +48,13 @@ old version is free.
 
 ```bash
 make bake-<kind> ARGS="--stage publish"    # terrain, place or division
-./ts/app/web/script/publish.ts <kind>
+./script/publish.py <kind>
 ```
 
 `publish` names the version, uploads the copy with the manifest's
 content-encoding, checks the stored count, then writes `source`.
-`./ts/app/web/script/publish.ts serve <kind> <version>` serves a version the bucket holds
-again, which is how to go back; `./ts/app/web/script/publish.ts override <shard> <kind>
+`./script/publish.py serve <kind> <version>` serves a version the bucket holds
+again, which is how to go back; `./script/publish.py override <shard> <kind>
 <version>` serves a version for one shard and the tiles under it, `-` dropping
 it.
 
@@ -70,7 +70,7 @@ error to repair.
 ```bash
 make download-earth
 make bake-earth
-./ts/app/web/script/publish.ts earth
+./script/publish.py earth
 ```
 
 ### Assets

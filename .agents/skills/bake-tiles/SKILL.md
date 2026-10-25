@@ -86,7 +86,7 @@ make bake-terrain ARGS="--stage fold --stage commit"
 ## Versions
 
 **Every bake is a new version name**, whatever made it, and a published version
-is never rewritten: going back is `./ts/app/web/script/publish.ts serve <kind> <version>`.
+is never rewritten: going back is `./script/publish.py serve <kind> <version>`.
 Only a change to how the client reads a tile — its format in `pxl-spec bake/` —
 bumps the kind's `FORMAT` (`spec/spec/bake/published.json`).
 
