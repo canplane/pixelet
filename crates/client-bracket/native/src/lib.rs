@@ -19,11 +19,15 @@ mod unpack;
 
 use thread::on_kernel;
 
+use core::ptr::NonNull;
 use std::sync::OnceLock;
 use std::time::Instant;
 
 use pxl_kernel::door::Bracket;
 use pxl_kernel::sys::io::host::Stop;
+use xpute_gpu::host::Memory;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// The device's clock, in milliseconds from the first reading: a turn's quota
 /// is spent against it, and only differences are read.
@@ -64,12 +68,14 @@ fn bracket() -> Bracket {
     }
 }
 
-/// The region as the host reads and writes it between turns.
-fn region_bytes() -> &'static mut [u8] {
+/// The region as the GPU's host reads and writes it between turns.
+fn region_memory() -> Memory<'static> {
     memory::region();
-    // SAFETY: the region, `GIVEN` bytes from its base; between turns nothing
-    // else holds a reference into it.
-    unsafe { core::slice::from_raw_parts_mut(xpute_guest::mem::base::ptr_at::<u8>(0), memory::GIVEN as usize) }
+    let base = NonNull::new(xpute_guest::mem::base::ptr_at::<u8>(0)).or_bug(Errno::EFAULT);
+    // SAFETY: the region, `GIVEN` bytes from its base, mapped for the
+    // process's life; between turns, on the kernel's thread, where nothing
+    // holds a reference into a range the kernel names.
+    unsafe { Memory::from_raw(base, memory::GIVEN as usize) }
 }
 
 /// The doorbell (pxl_kernel::door::interrupt): a turn of `quota_ms`, and when
@@ -79,9 +85,9 @@ fn region_bytes() -> &'static mut [u8] {
 #[no_mangle]
 pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
     on_kernel(move || {
-        surface::before_turn(region_bytes());
+        surface::before_turn(&mut region_memory());
         let wake = pxl_kernel::door::interrupt(quota_ms, bracket);
-        surface::after_turn(region_bytes());
+        surface::after_turn(&mut region_memory());
         wake
     })
 }

@@ -12,7 +12,9 @@
 //! guest finds its word at `ticket | DONE` a turn or more later, as on the
 //! web, and nothing here waits.
 
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::marker::PhantomData;
+use core::ptr::NonNull;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 
 use serde::de::value::{Error as NameError, StrDeserializer};
@@ -311,6 +313,19 @@ impl Frame {
     }
 }
 
+/// The frames a surface may have drawn and not yet finished on the GPU: what
+/// it is configured to queue (`desired_maximum_frame_latency`), and what
+/// `GpuHost::admit` lets stand. A surface keeps one texture more than this,
+/// so with this many unfinished one is still free, and taking it never
+/// blocks the thread that turns the guest.
+pub const FRAME_LATENCY: u32 = 2;
+
+/// The frames admitted and not yet done on the GPU. The queue's callback
+/// takes one off, run by the host's poll; it captures nothing, so handing it
+/// over allocates nothing each frame. One count for the process: two hosts
+/// that admit frames hold each other back, and neither miscounts.
+static UNFINISHED: AtomicU32 = AtomicU32::new(0);
+
 /// Where a stale surface is configured: configuring one sets its layer's
 /// properties, which some platforms allow on one thread alone. `Elsewhere`
 /// asks for it there, where the caller then runs `configure_surfaces`.
@@ -345,6 +360,8 @@ pub struct GpuHost {
     scratch: Vec<u32>,
     /// A submit's command buffers, gathered in place each time.
     finished: Vec<wgpu::CommandBuffer>,
+    /// This turn's frame was admitted, so it is counted once presented.
+    admitted: bool,
     /// Every buffer write goes through the belt, whose chunks are mapped once
     /// and reused, into `uploads`, which goes ahead of whatever is submitted
     /// next: `Queue::write_buffer` makes a Metal buffer and mapping a write.
@@ -356,16 +373,69 @@ pub struct GpuHost {
 /// a chunk of their own.
 const BELT_CHUNK_BYTES: u64 = 1 << 20;
 
-/// The guest's memory, as the host reads and writes it at the addresses the
-/// guest names.
-fn word_at(memory: &[u8], at: u32) -> u32 {
-    let a = at as usize;
-    u32::from_le_bytes([memory[a], memory[a + 1], memory[a + 2], memory[a + 3]])
+/// The guest's core memory, as the host reads and writes it: by the offsets
+/// the guest names, each read or write reaching only the range it names, and
+/// never one reference over the whole. The host's own blocks may lie in the
+/// same memory — a guest linked into the host's process allocates for both
+/// from one heap — and a `&mut [u8]` over all of it would claim them too.
+pub struct Memory<'a> {
+    base: NonNull<u8>,
+    bytes: usize,
+    of: PhantomData<&'a mut [u8]>,
 }
 
-fn set_word(memory: &mut [u8], at: u32, v: u32) {
-    let a = at as usize;
-    memory[a..a + 4].copy_from_slice(&v.to_le_bytes());
+impl<'a> Memory<'a> {
+    /// A memory the caller holds whole, as a test does.
+    pub fn of(bytes: &'a mut [u8]) -> Memory<'a> {
+        Memory {
+            bytes: bytes.len(),
+            base: NonNull::from(bytes).cast(),
+            of: PhantomData,
+        }
+    }
+
+    /// The memory at `base`, `bytes` long.
+    ///
+    /// # Safety
+    /// The `bytes` bytes at `base` are readable and writable for as long as
+    /// the value is used. While it is, the caller holds no reference into a
+    /// range the guest names, and no other thread reads or writes one: the
+    /// guest is between turns, and what else lies in the memory (the host's
+    /// own blocks among it) is reached only through its owners.
+    pub unsafe fn from_raw(base: NonNull<u8>, bytes: usize) -> Memory<'a> {
+        Memory { base, bytes, of: PhantomData }
+    }
+
+    /// The `n` bytes at `at`; past the memory's end is the guest's bug.
+    fn range(&self, at: usize, n: usize) -> *mut u8 {
+        let end = at.checked_add(n).filter(|&end| end <= self.bytes);
+        assert!(end.is_some(), "[gpu] {n} bytes at {at} run past the memory's {}", self.bytes);
+        // SAFETY: in bounds, as just checked.
+        unsafe { self.base.as_ptr().add(at) }
+    }
+
+    /// The bytes at `at`, borrowed while nothing is written.
+    fn read(&self, at: usize, n: usize) -> &[u8] {
+        // SAFETY: in the memory, which `from_raw`'s caller lets this read;
+        // `&self` keeps every write out while the slice lives.
+        unsafe { core::slice::from_raw_parts(self.range(at, n), n) }
+    }
+
+    fn write(&mut self, at: usize, from: &[u8]) {
+        let to = self.range(at, from.len());
+        // SAFETY: in the memory; `from` may lie in it too (the host's own
+        // blocks can), so the copy allows an overlap.
+        unsafe { core::ptr::copy(from.as_ptr(), to, from.len()) }
+    }
+
+    fn word(&self, at: u32) -> u32 {
+        let w = self.read(at as usize, 4);
+        u32::from_le_bytes([w[0], w[1], w[2], w[3]])
+    }
+
+    fn set_word(&mut self, at: u32, v: u32) {
+        self.write(at as usize, &v.to_le_bytes());
+    }
 }
 
 impl GpuHost {
@@ -406,6 +476,7 @@ impl GpuHost {
             decoding: std::collections::VecDeque::new(),
             scratch: Vec::new(),
             finished: Vec::new(),
+            admitted: false,
             uploads: None,
         }
     }
@@ -449,7 +520,7 @@ impl GpuHost {
                 width: s.size[0],
                 height: s.size[1],
                 present_mode: wgpu::PresentMode::Fifo,
-                desired_maximum_frame_latency: 2,
+                desired_maximum_frame_latency: FRAME_LATENCY,
                 alpha_mode,
                 view_formats: Vec::new(),
             };
@@ -534,12 +605,12 @@ impl GpuHost {
     }
 
     /// The device went: every object with it, and the guest told in its block.
-    fn lost(&mut self, memory: &mut [u8]) {
+    fn lost(&mut self, memory: &mut Memory<'_>) {
         self.objects.clear();
         self.pending.clear();
         self.decoding.clear();
         if let Some((address, words)) = self.block {
-            set_word(memory, address + 4 * (words - 1), STATUS::LOST);
+            memory.set_word(address + 4 * (words - 1), STATUS::LOST);
         }
     }
 
@@ -548,7 +619,7 @@ impl GpuHost {
     /// and the buffer unmapped; each done's word set where its ticket still
     /// stands.
     /// Run at the turn's edge, before the turn reads its words.
-    pub fn poll(&mut self, memory: &mut [u8]) {
+    pub fn poll(&mut self, memory: &mut Memory<'_>) {
         if self.gone.swap(false, Ordering::AcqRel) {
             self.lost(memory);
             return;
@@ -560,13 +631,12 @@ impl GpuHost {
                 if let Some((buffer, offset, size, address)) = &p.read {
                     let slice = buffer.slice(*offset..*offset + *size);
                     if let Ok(range) = slice.get_mapped_range() {
-                        let a = *address as usize;
-                        memory[a..a + range.len()].copy_from_slice(&range);
+                        memory.write(*address as usize, &range);
                     }
                     buffer.unmap();
-                    set_word(memory, p.word, p.ticket | DONE);
-                } else if word_at(memory, p.word) == p.ticket {
-                    set_word(memory, p.word, p.ticket | DONE);
+                    memory.set_word(p.word, p.ticket | DONE);
+                } else if memory.word(p.word) == p.ticket {
+                    memory.set_word(p.word, p.ticket | DONE);
                 }
                 false
             }
@@ -592,35 +662,52 @@ impl GpuHost {
             };
             self.queue.write_texture(d.to.info(), &image.rgba, layout, size);
             // In the queue ahead of anything the guest submits from here.
-            if word_at(memory, d.word) == d.ticket {
-                set_word(memory, d.word, d.ticket | DONE);
+            if memory.word(d.word) == d.ticket {
+                memory.set_word(d.word, d.ticket | DONE);
             }
         }
     }
 
-    /// Each surface's texture this turn drew, shown.
+    /// Whether this turn may draw a frame: while fewer than `FRAME_LATENCY`
+    /// admitted frames are unfinished, so each surface's next texture is free
+    /// and taking it does not block. Asked once a turn, before the turn draws;
+    /// on the web the browser paces frames and every one is admitted.
+    pub fn admit(&mut self) -> bool {
+        self.admitted = UNFINISHED.load(Ordering::Relaxed) < FRAME_LATENCY;
+        self.admitted
+    }
+
+    /// Each surface's texture this turn drew, shown. An admitted frame is
+    /// unfinished from here until the queue has done the work submitted with
+    /// it.
     pub fn present(&mut self) {
         for s in &mut self.surfaces {
             if let Some(Frame::Shown(frame)) = s.frame.take() {
                 self.queue.present(frame);
             }
         }
+        if core::mem::take(&mut self.admitted) {
+            UNFINISHED.fetch_add(1, Ordering::Relaxed);
+            self.queue.on_submitted_work_done(|| {
+                UNFINISHED.fetch_sub(1, Ordering::Relaxed);
+            });
+        }
     }
 
     /// Runs the stream at `at`, `head` words of head, as the turn left it:
     /// word 0 of the head the count of record words past it, each record its
     /// op, its count of words, then they.
-    pub fn run(&mut self, memory: &mut [u8], at: u32, head: u32) {
-        let end = word_at(memory, at);
+    pub fn run(&mut self, memory: &mut Memory<'_>, at: u32, head: u32) {
+        let end = memory.word(at);
         let first = at + 4 * head;
         let mut k = 0;
         while k + 2 <= end {
-            let code = word_at(memory, first + 4 * k);
-            let n = word_at(memory, first + 4 * (k + 1));
+            let code = memory.word(first + 4 * k);
+            let n = memory.word(first + 4 * (k + 1));
             let mut scratch = core::mem::take(&mut self.scratch);
             scratch.clear();
             let from = (first + 4 * (k + 2)) as usize;
-            scratch.extend(memory[from..from + 4 * n as usize].as_chunks::<4>().0.iter().map(|w| u32::from_le_bytes(*w)));
+            scratch.extend(memory.read(from, 4 * n as usize).as_chunks::<4>().0.iter().map(|w| u32::from_le_bytes(*w)));
             self.record(memory, code, &mut Words { w: &scratch, at: 0 });
             self.scratch = scratch;
             k += 2 + n;
@@ -775,7 +862,7 @@ impl GpuHost {
         }
     }
 
-    fn record(&mut self, memory: &mut [u8], code: u32, r: &mut Words) {
+    fn record(&mut self, memory: &mut Memory<'_>, code: u32, r: &mut Words) {
         match code {
             op::BUFFER => {
                 let id = r.u();
@@ -1000,7 +1087,7 @@ impl GpuHost {
             }
             op::WRITE_BUFFER_AT => {
                 let (id, offset, address, size) = (r.u(), u64::from(r.u()), r.u() as usize, r.u() as usize);
-                self.write(id, offset, &memory[address..address + size]);
+                self.write(id, offset, memory.read(address, size));
             }
             op::WRITE_TEXTURE | op::WRITE_TEXTURE_AT => {
                 let place = self.texture_place(r);
@@ -1015,7 +1102,7 @@ impl GpuHost {
                     self.queue.write_texture(place.info(), bytes, layout, size);
                 } else {
                     let (address, n) = (r.u() as usize, r.u() as usize);
-                    self.queue.write_texture(place.info(), &memory[address..address + n], layout, size);
+                    self.queue.write_texture(place.info(), memory.read(address, n), layout, size);
                 }
             }
             op::COPY_EXTERNAL_IMAGE => {
@@ -1026,7 +1113,7 @@ impl GpuHost {
                 // turn; decoded off the turn, so a large image costs none.
                 let job = self.decoder.next;
                 self.decoder.next += 1;
-                let _ = self.decoder.ask.send((job, memory[address..address + n].to_vec(), flip_y, premultiplied));
+                let _ = self.decoder.ask.send((job, memory.read(address, n).to_vec(), flip_y, premultiplied));
                 self.decoding.push_back(Decoding { job, to, word, ticket });
             }
             op::ENCODER => {
@@ -1238,7 +1325,7 @@ impl GpuHost {
                 self.block = Some((address, words));
                 let (limits, features) = (self.device.limits(), self.device.features());
                 for (k, name) in LIMIT_NAME.iter().enumerate() {
-                    set_word(memory, address + 4 * k as u32, limit(&limits, name));
+                    memory.set_word(address + 4 * k as u32, limit(&limits, name));
                 }
                 let mut bits = vec![0u32; FEATURE_NAME.len().div_ceil(32)];
                 for (k, name) in FEATURE_NAME.iter().enumerate() {
@@ -1248,17 +1335,16 @@ impl GpuHost {
                 }
                 let period_at = LIMIT_NAME.len() + bits.len();
                 for (k, w) in bits.into_iter().enumerate() {
-                    set_word(memory, address + 4 * (LIMIT_NAME.len() + k) as u32, w);
+                    memory.set_word(address + 4 * (LIMIT_NAME.len() + k) as u32, w);
                 }
                 // wgpu resolves timestamps in ticks of this many nanoseconds.
-                set_word(memory, address + 4 * period_at as u32, self.queue.get_timestamp_period().to_bits());
+                memory.set_word(address + 4 * period_at as u32, self.queue.get_timestamp_period().to_bits());
                 let preferred = self.names.texture_format.iter().position(|f| *f == Some(self.preferred));
-                set_word(
-                    memory,
+                memory.set_word(
                     address + 4 * (period_at + 1) as u32,
                     preferred.unwrap_or_else(|| panic!("[gpu] {:?} is no format the spec names", self.preferred)) as u32,
                 );
-                set_word(memory, address + 4 * (words - 1), STATUS::READY);
+                memory.set_word(address + 4 * (words - 1), STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }

@@ -16,11 +16,10 @@
 #[cfg(target_vendor = "apple")]
 use std::ffi::c_void;
 #[cfg(target_vendor = "apple")]
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pxl_render::api_spec::stream;
-use xpute_gpu::host::{ConfigureAt, GpuHost};
+use xpute_gpu::host::{ConfigureAt, GpuHost, Memory};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 
@@ -40,23 +39,9 @@ const PREFERRED: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 #[cfg(not(target_vendor = "apple"))]
 const PREFERRED: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-/// A layer keeps three drawables, so with two frames unfinished a third is
-/// always free, and taking it never blocks the JavaScript thread, which waits
-/// for the turn (thread.rs).
-const FRAMES_IN_FLIGHT: u32 = 2;
-
-/// The frames drawn and not yet done on the GPU. The queue's callback takes
-/// one off, run by the host's poll before a turn; it captures nothing, so
-/// handing it over allocates nothing.
-static UNFINISHED: AtomicU32 = AtomicU32::new(0);
-
 struct Device {
     instance: wgpu::Instance,
     host: GpuHost,
-    /// The host's queue, asked when a frame's work is done.
-    queue: wgpu::Queue,
-    /// This turn's frame was admitted, so it is drawn and counted.
-    admitted: bool,
     /// The kernel's handle bound under each surface slot: a slot outlives its
     /// handle, and unbinding an old one must not take the one bound since.
     bound: Vec<u32>,
@@ -138,14 +123,8 @@ fn open() -> bool {
     })) else {
         return false;
     };
-    let host = GpuHost::new(adapter, device, queue.clone(), PREFERRED, CONFIGURE_SURFACES, wake);
-    DEVICE.set(Some(Device {
-        instance,
-        host,
-        queue,
-        admitted: false,
-        bound: Vec::new(),
-    }));
+    let host = GpuHost::new(adapter, device, queue, PREFERRED, CONFIGURE_SURFACES, wake);
+    DEVICE.set(Some(Device { instance, host, bound: Vec::new() }));
     true
 }
 
@@ -162,34 +141,25 @@ pub extern "C" fn pxl_gpu_open() -> i32 {
 
 /// The turn's edge, on the kernel's thread: what the device has answered
 /// since, written into `memory` before the turn reads it.
-pub fn before_turn(memory: &mut [u8]) {
+pub fn before_turn(memory: &mut Memory<'_>) {
     if let Some(d) = device() {
         d.host.poll(memory);
     }
 }
 
 /// The bracket's answer (pxl_kernel::door::Bracket::admit_frame): a frame
-/// while the GPU has fewer than `FRAMES_IN_FLIGHT` unfinished, so the
-/// surface's drawable is free and taking it does not block.
+/// while the host admits one (xpute-gpu host `GpuHost::admit`), so taking a
+/// layer's drawable never blocks the JavaScript thread, which waits for the
+/// turn (thread.rs).
 pub fn admit_frame() -> bool {
-    device().is_some_and(|d| {
-        d.admitted = UNFINISHED.load(Ordering::Relaxed) < FRAMES_IN_FLIGHT;
-        d.admitted
-    })
+    device().is_some_and(|d| d.host.admit())
 }
 
-/// The turn's calls run on the device, and its frames shown; an admitted
-/// frame is unfinished until the queue has done the work submitted with it.
-pub fn after_turn(memory: &mut [u8]) {
+/// The turn's calls run on the device, and its frames shown.
+pub fn after_turn(memory: &mut Memory<'_>) {
     if let (Some(d), Some(at)) = (device(), pxl_render::gpu::api::stream_at()) {
         d.host.run(memory, at, stream::HEAD);
         d.host.present();
-        if core::mem::take(&mut d.admitted) {
-            UNFINISHED.fetch_add(1, Ordering::Relaxed);
-            d.queue.on_submitted_work_done(|| {
-                UNFINISHED.fetch_sub(1, Ordering::Relaxed);
-            });
-        }
     }
 }
 

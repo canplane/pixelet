@@ -33,11 +33,11 @@ fn every_record_reads_back_its_bytes_on_a_device() {
             let words = g.bytes(turn);
             memory[..words.len()].copy_from_slice(&words);
             let ticket = turn.rsplit('.').next().unwrap().parse::<u32>().unwrap() + 1;
-            set_word(&mut memory, done, ticket);
-            host.run(&mut memory, 0, head);
-            while word_at(&memory, done) & DONE == 0 {
+            Memory::of(&mut memory).set_word(done, ticket);
+            host.run(&mut Memory::of(&mut memory), 0, head);
+            while Memory::of(&mut memory).word(done) & DONE == 0 {
                 let _ = device.poll(wgpu::PollType::wait_indefinitely());
-                host.poll(&mut memory);
+                host.poll(&mut Memory::of(&mut memory));
             }
         });
         let want = g.bytes(&format!("{p}.readback"));
