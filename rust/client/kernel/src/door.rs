@@ -17,18 +17,15 @@ pub mod layout;
 use crate::domain::control::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
-use crate::sys::io::host::LastWords;
 use crate::sys::mem::section;
+use crate::sys::stop::LastWords;
 use xpute_gpu::admit::Admit;
 use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
-use xpute_guest::global::{off_marked_thread, Global};
+use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::{Door, DoorStat};
-use xpute_guest::ipc::ring::Ring;
 use xpute_guest::mem::{self, off_of_slice};
-use xpute_kit::collection::list::List;
-use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::PacketWriter;
 
 struct State {
@@ -72,10 +69,6 @@ fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
     door().raise(cmd as u32, count, f);
 }
 
-fn ring_address(ring: &Ring) -> u32 {
-    ring.at() as u32
-}
-
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
@@ -89,10 +82,6 @@ fn state() -> &'static mut State {
 /// host's stream and the GPU stream.
 const DIRECTORY_ENTRIES: usize = 7;
 
-/// A shell has booted. On a device the kernel outlives a JS reload, and the
-/// old shell's reads, surfaces, sensor watches and text requests will never
-/// be answered; a read left out keeps its credit forever, so all of it is
-/// let go here.
 /// A case lives on its surface, so it goes with it: a preview never closed
 /// held its actor for good.
 fn close_surface(handle: u32) {
@@ -102,6 +91,10 @@ fn close_surface(handle: u32) {
     crate::domain::scene::character::preview::preview_close(handle);
 }
 
+/// A shell has booted. On a device the kernel outlives a JS reload, and the
+/// old shell's reads, surfaces, sensor watches and text requests will never
+/// be answered; a read left out keeps its credit forever, so all of it is
+/// let go here.
 fn host_attached(s: &mut State) {
     crate::sys::io::request::reset();
     let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
@@ -115,81 +108,27 @@ fn host_attached(s: &mut State) {
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
 fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
-    crate::sys::io::host::set_boot(b);
-    crate::sys::io::host::set_last_words(last_words);
-    crate::sys::io::host::set_admit(admit);
+    crate::sys::boot::set(b);
+    crate::sys::boot::set_admit(admit);
     executor::install();
-    // Named invariants report through `bug!`; a core panic reports only its
-    // location. Both are process-wide, and on a device the app's other
-    // threads (a driver's callback, an image's decode) fail through them
-    // too: those are not the kernel's to report, and its state is its own
-    // thread's. Such a panic is told by the bracket's last words where it
-    // has them, since they are where a device's reports are read (Android's
-    // log), and by the hook this one replaced only where it has none, so
-    // std's own hook does not print it a second time; a bug there is not
-    // reported, and is told as the panic it then is (xpute_guest::global
-    // `off_marked_thread`).
-    xpute_kit::status::bug::set_report(|errnum, at, a, b| {
-        if !off_marked_thread() {
-            crate::sys::io::host::host_bug(errnum, at, a, b);
-        }
-    });
-    let theirs = std::panic::take_hook();
-    let say = last_words;
-    std::panic::set_hook(Box::new(move |info| {
-        if off_marked_thread() {
-            match say {
-                Some(say) => say(crate::sys::io::host::Stop::Panic(info)),
-                None => theirs(info),
-            }
-            return;
-        }
-        if crate::sys::io::host::stopped() {
-            return;
-        }
-        crate::sys::io::host::last_words(crate::sys::io::host::Stop::Panic(info));
-        if let Some(at) = info.location() {
-            crate::sys::io::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
-        }
-    }));
-    let gpu_stream = lay_out(&b);
+    crate::sys::stop::install(last_words);
+    let gpu_stream = layout::install(&b);
+    // A layer asks for no more tiles than its residency frames.
+    crate::sys::io::request::open(|c| crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames));
     crate::turn::boot();
     let [margin, batch, settle] = quantum_entries(&crate::sys::sched::tick::QUANTUM);
     let entries: [Entry; DIRECTORY_ENTRIES] = [
-        (key::SQ, ring_address(door().sq())),
-        (key::CQ, ring_address(door().cq())),
+        (key::SQ, door().sq().at() as u32),
+        (key::CQ, door().cq().at() as u32),
         margin,
         batch,
         settle,
-        (key::SYS, fixed_at(layout::Fixed::Host)),
+        (key::SYS, layout::range(layout::Fixed::Host).offset),
         (crate::door::directory::key::GPU_STREAM, gpu_stream),
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
     // bracket's data; the directory's alone.
     unsafe { write_directory(mem::core(), crate::sys::mem::spec::DIRECTORY_AT as usize, directory_words(DIRECTORY_ENTRIES), &entries) };
-}
-
-fn fixed_at(f: layout::Fixed) -> u32 {
-    layout::range(f).offset
-}
-
-/// Lays the memory map. Returns where GPU calls are
-/// recorded for the host, 0 where the kernel makes them itself.
-fn lay_out(b: &BootInfo) -> u32 {
-    // The map first: what lives in `.fixed` is handed its range from it.
-    section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
-    // Each range to its owner.
-    crate::domain::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
-    crate::domain::layer::division::RANGE.set(layout::range(layout::Fixed::Division));
-    // A layer asks for no more tiles than its residency frames.
-    crate::sys::io::request::open(|c| crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames));
-    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
-    // renderer's or the host's alone.
-    unsafe {
-        crate::sys::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
-        pxl_render::gpu::upload::set_uploads(fixed_at(layout::Fixed::Uploads), layout::MAX_LIVE_UPLOADS);
-        pxl_render::gpu::api::install(fixed_at(layout::Fixed::Gpu))
-    }
 }
 
 /// The entry (xpute_guest::entry `Entry`, with the bracket's last words and
@@ -206,7 +145,7 @@ pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastW
     }
     let s = state();
     let rise = now();
-    crate::sys::io::host::host_rise();
+    crate::sys::io::host::rise();
     crate::sys::sched::edge::world_edge().rise(quota_ms);
     // The device's loss, as its host wrote it into the device's block: before
     // the commands, as a device answering again among them asks that block anew.
@@ -225,9 +164,10 @@ pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastW
     let asked = core::mem::take(&mut s.asked);
     if take_world_drawn() || asked {
         post_shell(s);
+        crate::sys::io::dispatch::run();
     }
     pxl_render::gpu::api::gpu_publish();
-    crate::sys::io::host::host_fall();
+    crate::sys::io::host::fall();
     let fall = crate::sys::sched::edge::world_fall();
     // What the completion ring had no room for is still in the submission ring.
     let wake = if door().pending() { 0.0 } else { fall };
@@ -249,7 +189,6 @@ static SNAPSHOT: Global<Vec<u8>> = Global::new();
 fn post_shell(s: &mut State) {
     use crate::domain::control::sensor::device_orientation::{take_orientation_command, OrientationCommand};
     use crate::domain::control::sensor::geolocation::{take_geolocation_command, GeolocationCommand};
-    use crate::sys::io::request::{take_started, take_stops};
 
     let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorStartSignal::FIELDS, |w| SensorStartSignal { sensor }.write(w));
     if let Some(c) = take_geolocation_command() {
@@ -278,23 +217,5 @@ fn post_shell(s: &mut State) {
             len,
         };
         raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
-    }
-    // The key is an opaque handle to the shell.
-    take_started(|credit, stream, subject| match stream.bake() {
-        Some(_) => crate::sys::io::fetch::start(credit, stream, subject),
-        None => {
-            if let Some((_, load)) = crate::sys::io::loader::of_subject(subject) {
-                crate::sys::io::loader::open_asset(credit, load);
-            }
-        }
-    });
-    // Collected first: stopping a read settles it, which must not happen inside
-    // the request scheduler's own walk.
-    let mut stops = List::<u64, { crate::sys::io::param::MAX_CREDITS as usize }>::new();
-    take_stops(|key| stops.push(key));
-    for key in stops {
-        if !crate::sys::io::fetch::cancel(key) {
-            crate::sys::io::loader::cancel_asset(key);
-        }
     }
 }

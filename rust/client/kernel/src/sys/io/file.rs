@@ -17,10 +17,11 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64;
 use base64::Engine;
 
 use crate::sys::io::failure::Failure;
-use crate::sys::io::host::{answered, sys, turn, Refused};
+use crate::sys::io::host::{answered, sys, turn};
 use crate::sys::io::host_spec::{format, kept, root};
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::Credit;
+use crate::sys::io::room::Refused;
 use crate::sys::mem::spec::MIN_HEAP_BYTES;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;

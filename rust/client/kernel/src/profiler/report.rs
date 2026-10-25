@@ -45,7 +45,7 @@ pub fn set_host_frame(kind: FrameKind, gpu: GpuSample, device: DeviceSample) {
 
 /// The heap as its allocator states it, in its own bytes.
 fn heap_sample() -> HeapSample {
-    let h = crate::sys::io::host::heap_stat();
+    let h = crate::sys::boot::heap_stat();
     HeapSample {
         used_bytes: h.used as f64,
         live_bytes: h.live as f64,

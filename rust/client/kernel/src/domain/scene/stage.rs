@@ -157,7 +157,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         }),
         text: text_raster,
         sheet: sheet(),
-        admit: crate::sys::io::host::admit(),
+        admit: crate::sys::boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
     });

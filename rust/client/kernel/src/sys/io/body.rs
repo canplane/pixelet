@@ -27,7 +27,7 @@
 //! which the query and the controls read, fills with no frame drawn.
 //!
 //! A body is refused a slot in two cases, and its want waits on what can
-//! end it (sys/io/host.rs `Refused`): one that came for a read since stopped,
+//! end it (sys/io/room.rs `Refused`): one that came for a read since stopped,
 //! held a turn until it is dropped (sys/io/fetch.rs `fetch_task`), can find
 //! every slot out, and waits for one given back; and one that needs a run
 //! when the heap can give none waits for the heap's pages or a slot given
@@ -51,8 +51,8 @@ use xpute_guest::mem::heap::{alloc, free, Block};
 use xpute_guest::mem::section::PAGE_BYTES;
 
 use crate::sys::io::demand::Stream;
-use crate::sys::io::host::Refused;
 use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
+use crate::sys::io::room::Refused;
 
 /// The kinds whose bodies take a slot.
 const SLOTTED: [Stream; 2] = [Stream::terrain, Stream::earth];

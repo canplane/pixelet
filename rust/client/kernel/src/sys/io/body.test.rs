@@ -96,7 +96,7 @@ fn a_slot_costs_less_than_the_buddy_block_it_replaces() {
 
 #[test]
 fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
-    use crate::sys::io::host::set_heap_stat;
+    use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
@@ -122,7 +122,7 @@ fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
 #[test]
 fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
     let _g = crate::sys::serial();
-    let refused = crate::sys::io::host::Refused::run();
+    let refused = crate::sys::io::room::Refused::run();
     assert!(!refused.over());
     let block = take(Some(Stream::terrain), 1).unwrap();
     // SAFETY: from `take`, given back once.

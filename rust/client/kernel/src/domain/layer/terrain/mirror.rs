@@ -37,7 +37,7 @@ static MIRROR: Global<Mirror> = Global::new();
 
 /// Why a square's families were not laid: one lies past the pool's cap,
 /// which asking again never changes; or the heap refused a chunk, which a
-/// page given back may (pxl-kernel sys/io/host.rs `Refused`).
+/// page given back may (sys/io/room.rs `Refused`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unlaid {
     Cap,

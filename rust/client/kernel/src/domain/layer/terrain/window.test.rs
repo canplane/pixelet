@@ -354,7 +354,7 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
 
 #[test]
 fn a_square_waiting_on_the_heap_is_handed_again_once_a_page_is_given_back() {
-    use crate::sys::io::host::set_heap_stat;
+    use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);

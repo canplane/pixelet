@@ -6,10 +6,8 @@
 // its budget mid-turn.
 
 use core::panic::Location;
-use xpute_gpu::admit::Admit;
-use xpute_guest::entry::BootInfo;
-use xpute_guest::mem::heap::HeapStat;
 
+use xpute_guest::global::Global;
 use xpute_guest::ipc::stream::WORD;
 use xpute_guest::ipc::sys::{fd_turn_bytes, Sys};
 use xpute_guest::mem;
@@ -18,7 +16,6 @@ use xpute_kit::status::errno::Errno;
 use crate::sys::io::file::{Kept, PATH_BYTES};
 use crate::sys::io::host_spec::stream;
 use crate::sys::io::param::MAX_CREDITS;
-use xpute_guest::global::Global;
 
 static SYS: Global<Option<Sys>> = Global::new();
 
@@ -31,12 +28,12 @@ pub(crate) fn sys() -> Option<&'static mut Sys> {
 /// # Safety
 /// `at` must address `stream::BYTES` nothing else writes, 4-aligned, for as
 /// long as the module runs.
-pub unsafe fn set_host_stream(at: u32) {
+pub unsafe fn set_stream(at: u32) {
     // SAFETY: the caller's range.
     SYS.set(Some(unsafe { Sys::new(mem::core(), at as usize, stream::BYTES as usize / WORD) }));
 }
 
-pub fn host_rise() {
+pub fn rise() {
     *TURN.get(|| 0) += 1;
     if let Some(h) = sys() {
         h.rise();
@@ -55,7 +52,7 @@ const _: () = assert!(RESERVE < stream::BYTES as usize, "the calls that cannot w
 
 /// A request that can wait a turn: None where there is no host, false where
 /// the turn's stream has no room for it past `RESERVE`.
-pub fn host_offer(op: u32, args: &[u32], bytes: &[u8]) -> Option<bool> {
+pub fn offer(op: u32, args: &[u32], bytes: &[u8]) -> Option<bool> {
     Some(sys()?.try_call(op, args, bytes, RESERVE))
 }
 
@@ -66,162 +63,25 @@ pub fn turn() -> u64 {
     *TURN.get(|| 0)
 }
 
-pub fn host_fall() {
+pub fn fall() {
     if let Some(h) = sys() {
         h.fall();
     }
 }
 
 /// A broken invariant: published at once as the turn's only record, dropping
-/// the rest, since the kernel stops here. Also told to the bracket
-/// (`last_words`) where the process dies before a host could run it.
+/// the rest, since the kernel stops here (sys/stop.rs).
+pub fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
+    if let Some(h) = sys() {
+        h.abort(errnum, at, a, b);
+    }
+}
+
 /// A host's answer as one value: a count, or the errno it refused with. A code
 /// no errno names is the host breaking the protocol.
 pub fn answered(res: i32) -> Result<u32, Errno> {
     match u32::try_from(res) {
         Ok(n) => Ok(n),
         Err(_) => Err(Errno::of(res).unwrap_or(Errno::EPROTO)),
-    }
-}
-
-pub fn host_bug(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
-    STOPPED.set(true);
-    last_words(Stop::Bug { errnum, at, a, b });
-    if let Some(h) = sys() {
-        h.abort(errnum, at, a, b);
-    }
-}
-
-static STOPPED: Global<bool> = Global::new();
-
-/// Past its report a bug panics where it cannot trap, and that panic is its
-/// way out, not a second fault.
-pub fn stopped() -> bool {
-    *STOPPED.get(|| false)
-}
-
-static DEVELOPMENT: Global<bool> = Global::new();
-
-/// Development builds offer the settings schema.json marks `dev`.
-pub fn set_development(development: bool) {
-    DEVELOPMENT.set(development);
-}
-
-pub fn development() -> bool {
-    *DEVELOPMENT.get(|| false)
-}
-
-static WALL_MS: Global<f64> = Global::new();
-
-pub fn set_wall_now(unix_ms: f64) {
-    WALL_MS.set(unix_ms);
-}
-
-pub fn wall_now() -> f64 {
-    *WALL_MS.get(|| 0.0)
-}
-
-/// What the bracket's form handed the kernel as it booted (door.rs `boot`).
-static BOOT: Global<Option<BootInfo>> = Global::new();
-
-pub fn set_boot(boot: BootInfo) {
-    BOOT.set(Some(boot));
-}
-
-/// A test's heap reading, as a bracket would hand it.
-#[cfg(test)]
-pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
-    set_boot(BootInfo {
-        given: 0,
-        data_end: 0,
-        clock: || 0.0,
-        heap_stat,
-    });
-}
-
-/// Whether the GPU's host takes a frame now (xpute_gpu::admit), as the
-/// bracket hands it with the entry; every frame until it has.
-static ADMIT: Global<Admit> = Global::new();
-
-pub fn set_admit(admit: Admit) {
-    ADMIT.set(admit);
-}
-
-pub fn admit() -> Admit {
-    *ADMIT.get(|| xpute_gpu::admit::every)
-}
-
-/// Numbers only: formatting is the bracket's, so a module that reports
-/// nothing links none of it.
-pub enum Stop<'a> {
-    Bug { errnum: Errno, at: &'a Location<'a>, a: u64, b: u64 },
-    Panic(&'a std::panic::PanicHookInfo<'a>),
-}
-
-pub type LastWords = fn(Stop<'_>);
-
-static LAST_WORDS: Global<Option<LastWords>> = Global::new();
-
-pub fn set_last_words(say: Option<LastWords>) {
-    LAST_WORDS.set(say);
-}
-
-pub fn last_words(stop: Stop<'_>) {
-    if let Some(say) = *LAST_WORDS.get(|| None) {
-        say(stop);
-    }
-}
-
-pub fn heap_stat() -> HeapStat {
-    BOOT.get(|| None).map_or_else(HeapStat::default, |b| (b.heap_stat)())
-}
-
-/// A request refused room, by the heap or by the body slots (sys/io/body.rs),
-/// as what refused it counted its releases then: it waits until that gives
-/// some room back, never on a clock, since only a release can change the
-/// answer, and not on the other. A slot given back gives the heap nothing
-/// until its run is empty, which the heap's count then shows; the heap's
-/// pages given back give no slot. A body refused a run of slots waits on
-/// both, since a slot given back in a run held serves it as well.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Refused(Room, u32);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Room {
-    Heap,
-    Bodies,
-    /// A run of slots: the heap's or a slot.
-    Run,
-}
-
-impl Room {
-    fn released(self) -> u32 {
-        match self {
-            Room::Heap => heap_stat().releases,
-            Room::Bodies => crate::sys::io::body::releases(),
-            Room::Run => heap_stat().releases.wrapping_add(crate::sys::io::body::releases()),
-        }
-    }
-}
-
-impl Refused {
-    /// By the heap.
-    pub fn now() -> Refused {
-        Refused(Room::Heap, Room::Heap.released())
-    }
-
-    /// By the body slots, every one out.
-    pub fn bodies() -> Refused {
-        Refused(Room::Bodies, Room::Bodies.released())
-    }
-
-    /// By the heap, for a run of body slots, every run held full.
-    pub fn run() -> Refused {
-        Refused(Room::Run, Room::Run.released())
-    }
-
-    /// Whether room has been given back since, so asking again may be served.
-    pub fn over(self) -> bool {
-        self.0.released() != self.1
     }
 }

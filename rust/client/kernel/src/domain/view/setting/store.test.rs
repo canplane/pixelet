@@ -102,7 +102,7 @@ fn the_settings_are_read_from_their_slot_and_nothing_is_written_before() {
     assert!(held_after_a_change(), "nothing is written before the slot is read");
     file::kept_answered(Kept::Settings, Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])));
     assert!(!settings_load_step(), "taken from the next turn on");
-    crate::sys::io::host::host_rise();
+    crate::sys::io::host::rise();
     assert!(settings_load_step() && settings_loaded());
     assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
     assert!(!*UNKEPT.get(|| false), "what was read is not written back");
@@ -130,7 +130,7 @@ fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
     for answer in [Err(file::Opened::Failed { errnum: Errno::EFBIG, detail: 0 }), Ok(&br#"{"ao":"screen"}"#[..])] {
         opened();
         file::kept_answered(Kept::Settings, answer);
-        crate::sys::io::host::host_rise();
+        crate::sys::io::host::rise();
         assert!(settings_load_step() && settings_loaded(), "the world need not wait on it");
         assert_eq!(*settings_store(), Settings::DEFAULT);
         assert!(file::refused(Kept::Settings));

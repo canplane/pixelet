@@ -7,7 +7,7 @@ use core::panic::Location;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-use crate::sys::io::host::Refused;
+use crate::sys::io::room::Refused;
 
 pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 

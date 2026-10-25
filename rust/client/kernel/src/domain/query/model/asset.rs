@@ -15,8 +15,8 @@ use pxl_spec::space::coord::mat4;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 
-use crate::sys::io::host::Refused;
 use crate::sys::io::loader::{load_gltf, load_of};
+use crate::sys::io::room::Refused;
 use crate::sys::mem::section;
 use pxl_spec::asset::catalog::Slot;
 

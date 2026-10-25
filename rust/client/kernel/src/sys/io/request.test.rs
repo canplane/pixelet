@@ -157,7 +157,7 @@ fn an_object_that_fails_is_dropped_and_holds_nothing_else_back() {
 
 #[test]
 fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
-    use crate::sys::io::host::set_heap_stat;
+    use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
@@ -190,7 +190,7 @@ fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
 
 #[test]
 fn a_release_between_the_refusal_and_its_settling_is_not_waited_for_again() {
-    use crate::sys::io::host::set_heap_stat;
+    use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);

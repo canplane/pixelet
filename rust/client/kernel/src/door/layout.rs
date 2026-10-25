@@ -3,11 +3,13 @@
 //! The memory's layout. Its front, below GLOBAL_BASE: the rings'
 //! descriptors, their slot payloads and the directory's page, at fixed
 //! addresses from mem.json. And `.fixed`: which ranges it holds, each sized
-//! by its owner, and the heap after them.
+//! by its owner and handed to it at boot (`install`), and the heap after
+//! them.
 
+use xpute_guest::entry::BootInfo;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
-use crate::sys::mem::section::{fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
+use crate::sys::mem::section::{self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
 use crate::sys::mem::spec::{CQ_CAP, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES};
 use xpute_guest::mem::section::{Section, PAGE_BYTES};
 
@@ -159,6 +161,22 @@ pub fn heap_at(data_end: u32) -> u32 {
 pub fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
     map().or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE).fixed.nth(&FIXED, PAGE_BYTES, f as usize)
+}
+
+/// Lays the memory map and hands each range of `.fixed` to its owner.
+/// Returns where GPU calls are recorded for the host, 0 where the kernel
+/// makes them itself.
+pub fn install(b: &BootInfo) -> u32 {
+    section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
+    crate::domain::layer::terrain::fixed::RANGE.set(range(Fixed::Terrain));
+    crate::domain::layer::division::RANGE.set(range(Fixed::Division));
+    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
+    // renderer's or the host's alone.
+    unsafe {
+        crate::sys::io::host::set_stream(range(Fixed::Host).offset);
+        pxl_render::gpu::upload::set_uploads(range(Fixed::Uploads).offset, MAX_LIVE_UPLOADS);
+        pxl_render::gpu::api::install(range(Fixed::Gpu).offset)
+    }
 }
 
 #[cfg(test)]

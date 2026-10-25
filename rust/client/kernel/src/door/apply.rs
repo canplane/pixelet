@@ -65,7 +65,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             refuse_unless(p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(), Errno::EINVAL)?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
-            let last = crate::sys::io::host::wall_now();
+            let last = crate::turn::wall_now();
             let delta = if last > 0.0 { ((p.unix_ms - last) / 1000.0).max(0.0) } else { 0.0 };
             crate::turn::world_frame_asked(crate::turn::HostFrame {
                 width: p.width,
@@ -76,13 +76,13 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::sys::io::host::set_wall_now(p.unix_ms);
+            crate::turn::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
             let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
-            crate::sys::io::host::set_development(p.development);
+            crate::domain::view::setting::store::set_development(p.development);
             crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {
