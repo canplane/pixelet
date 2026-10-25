@@ -6,7 +6,7 @@
 //
 //   ./script/stage.ts   (from ts/server/edge)
 
-import { WORKSPACE } from "@pxl/client/script/import-map.ts";
+import { WORKSPACE } from "@pxl/build/import-map.ts";
 
 const WEB = `${WORKSPACE}/app/web`;
 const STAGED = new URL("../dist/", import.meta.url).pathname;

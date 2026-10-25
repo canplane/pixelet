@@ -4,7 +4,7 @@
  * The client is ts/client/src, the same files Vite bundles for the web,
  * with a device's own beside a default by React Native's suffixes (pill.ios.tsx
  * beside pill.tsx). Every prefix is the one the Deno import maps give the
- * importing file (ts/client/script/import-map.ts), so the client is read
+ * importing file (ts/build/import-map.ts), so the client is read
  * exactly as the type-check reads it.
  */
 
@@ -13,7 +13,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
 import { getDefaultConfig } from "expo/metro-config";
-import { mapped, REPO, WORKSPACE } from "../../client/script/import-map.ts";
+import { mapped, REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
 // The app's directory, from the workspace the import maps are read under: Expo
 // loads this file through its own transform, which takes no `import.meta`.

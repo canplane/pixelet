@@ -1,4 +1,4 @@
-// @pxl/client/script/const-enum.ts
+// @pxl/build/const-enum.ts
 
 /**
  * The tree's const enums, read once for both bundlers (Vite and Metro's

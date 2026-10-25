@@ -9,7 +9,7 @@
 //
 //   ./script/deploy.ts   (from ts/server/edge)
 
-import { WORKSPACE } from "@pxl/client/script/import-map.ts";
+import { WORKSPACE } from "@pxl/build/import-map.ts";
 
 const number = Deno.env.get("PXL_BUILD_NUMBER");
 /** The panics' `#n` → path table the page's build wrote beside its guest. */

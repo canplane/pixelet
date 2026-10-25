@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 
-import { DEV_PROXY_ROUTES } from "../../client/src/config/route.ts";
-import { DECL, enumAt, literal, type Members, readEnums, stale } from "../../client/script/const-enum.ts";
-import { mapped, REPO, WORKSPACE } from "../../client/script/import-map.ts";
+import { DEV_PROXY_ROUTES } from "@pxl/client/config/route.ts";
+import { DECL, enumAt, literal, type Members, readEnums, stale } from "@pxl/build/const-enum.ts";
+import { mapped, REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -151,7 +151,7 @@ function buildStamp(): Plugin {
  * as the type syntax it is, which leaves every importer bound to an export
  * that no longer exists.
  *
- * The table is ts/client/script/const-enum.ts's, shared with the device's Babel pass,
+ * The table is ts/build/const-enum.ts's, shared with the device's Babel pass,
  * and it refuses an enum it cannot inline rather than leave one. Here each
  * use is replaced by its value — a file's own enums in that file only — and
  * the declarations struck. An access left behind after a declaration went
@@ -363,7 +363,7 @@ function fullReloadOnCoreChange() {
 // missed.
 /**
  * The tree's own prefixes, as the importing file's import map gives them
- * (ts/client/script/import-map.ts), the reader Metro resolves through too.
+ * (ts/build/import-map.ts), the reader Metro resolves through too.
  * A file's platform variants (pill.ios.tsx beside pill.tsx) are a device's;
  * the page takes the default every import names.
  */

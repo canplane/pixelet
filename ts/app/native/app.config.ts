@@ -2,11 +2,11 @@
 
 /**
  * The app as Expo builds it. The icon is the client's brand, found from the
- * workspace the import maps are read under (ts/client/script/import-map.ts).
+ * workspace the import maps are read under (ts/build/import-map.ts).
  */
 
 import * as path from "node:path";
-import { WORKSPACE } from "../../client/script/import-map.ts";
+import { WORKSPACE } from "@pxl/build/import-map.ts";
 
 const icon = path.join(WORKSPACE, "client/brand/icon.png");
 

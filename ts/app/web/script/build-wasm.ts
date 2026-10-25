@@ -6,7 +6,7 @@
 
 import { fileURLToPath } from "node:url";
 
-import { REPO } from "@pxl/client/script/import-map.ts";
+import { REPO } from "@pxl/build/import-map.ts";
 
 const RUST = new URL(`file://${REPO}/rust/`);
 const TARGET = "wasm32-unknown-unknown";

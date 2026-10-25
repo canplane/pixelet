@@ -30,7 +30,7 @@ is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
 - A path out of a package is never a counted `../`. Code names another
   package through the workspace's map (`@pxl/client/`, `@xpute/kit/`). A
   config no import map reaches takes the workspace or the repository from
-  `ts/client/script/import-map.ts` (`WORKSPACE`, `REPO`), which finds them
+  `ts/build/import-map.ts` (`WORKSPACE`, `REPO`), which finds them
   from the workspace's manifest. A config that must read another package's
   output has its build step put it inside first
   (`ts/app/native/script/build-native.ts`, `ts/server/edge/script/stage.ts`).

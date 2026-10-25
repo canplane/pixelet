@@ -2,10 +2,13 @@
   // pixelet's TypeScript, one workspace as rust/ is one Cargo workspace: the
   // client, the shell and the host the same files on a page and on a device,
   // and each app, a bracket, that bundles it (app/web, app/native). A
-  // package's own scripts sit beside its src/ (client/script/, app/web/script/).
+  // package's own scripts sit beside its src/ (build/, app/web/script/).
   // What runs across the languages is the repository root's (../deno.jsonc).
   "workspace": [
     "client",
+    // What the bundlers and the build scripts read the workspace through:
+    // its import map and const enums, and where it and the repository are.
+    "build",
     "app/web",
     // A package.json member: Expo and Metro find packages the npm way.
     "app/native",
@@ -18,7 +21,7 @@
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check client/script/*.ts app/web/script/*.ts server/edge/script/*.ts",
+    "check": "deno fmt --check && deno lint && deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check build/*.ts app/web/script/*.ts server/edge/script/*.ts",
     "test": "deno task --cwd client test",
     "fmt": "deno fmt",
     "lint": "deno lint"
@@ -37,9 +40,7 @@
   // A package is named once, here, and reached by its name from every member.
   "imports": {
     "@pxl/client/": "./client/src/",
-    // The client's own scripts, which the apps' build scripts read the tree's
-    // layout from (import-map.ts `WORKSPACE`, `REPO`).
-    "@pxl/client/script/": "./client/script/",
+    "@pxl/build/": "./build/",
     // The client's ambient types, which each member's compilerOptions names.
     "@pxl/client/@types": "./client/@types/index.d.ts",
 

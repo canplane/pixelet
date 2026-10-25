@@ -23,7 +23,7 @@
 //   ./ts/app/web/script/publish.ts override <shard> <kind> <version|->
 
 import { tileObject } from "@pxl/client/config/route.spec.ts";
-import { REPO } from "@pxl/client/script/import-map.ts";
+import { REPO } from "@pxl/build/import-map.ts";
 
 const BUCKET = "pixelet-tiles";
 const KINDS = ["terrain", "place", "division", "earth"];

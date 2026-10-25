@@ -22,7 +22,7 @@
 // kernel's `dev` feature off, so an app built for release carries the kernel a
 // deployed page does; any other configuration keeps its dev settings.
 
-import { REPO } from "@pxl/client/script/import-map.ts";
+import { REPO } from "@pxl/build/import-map.ts";
 
 const RUST = new URL(`file://${REPO}/rust/`);
 

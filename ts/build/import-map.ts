@@ -1,4 +1,4 @@
-// @pxl/client/script/import-map.ts
+// @pxl/build/import-map.ts
 
 /**
  * The prefixes the Deno import maps give the tree's own directories, as the

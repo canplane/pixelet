@@ -11,12 +11,12 @@
 import * as path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { enumAt, readEnums, stale as staleIn } from "../../client/script/const-enum.ts";
-import { REPO, WORKSPACE } from "../../client/script/import-map.ts";
+import { enumAt, readEnums, stale as staleIn } from "@pxl/build/const-enum.ts";
+import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
 /**
  * The const enums of the shell, the xpute packages and this app, read by the
- * table both bundlers share (ts/client/script/const-enum.ts): a const enum is
+ * table both bundlers share (ts/build/const-enum.ts): a const enum is
  * a compile-time name for a number, and a bundle holds the number alone. A
  * transpiler that sees one file at a time cannot inline a name declared in
  * another, and Babel's TypeScript transform emits the enum as an object

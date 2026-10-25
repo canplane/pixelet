@@ -2,6 +2,10 @@
   "name": "@pxl/client",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
   "dependencies": {
     "@expo/ui": "~57.0.20",
     "expo": "57.0.25",
