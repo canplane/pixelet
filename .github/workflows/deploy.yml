@@ -96,7 +96,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      # wrangler, the bucket's CLI, runs on Deno (script/r2.py).
       # wrangler, Cloudflare's CLI, a program the steps call as any other.
       - name: Install wrangler
         run: npm install --global "wrangler@${WRANGLER_VERSION}"
