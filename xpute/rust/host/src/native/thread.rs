@@ -1,13 +1,7 @@
 // xpute-host/native/thread.rs
 
-//! The guest's own thread, started at boot. Every call into the guest is
-//! handed to it, and the caller waits: one of the two runs at a time, and
-//! the guest is single-threaded on its thread rather than on its callers'.
-//!
-//! The handoff is made once and used for every call: a turn a frame, and a
-//! call that made a job and a channel for its answer each time allocated
-//! twice a frame for nothing. Callers may be several threads, so they take
-//! the handoff in turn.
+//! The guest's own thread: every call is handed to it while the caller waits,
+//! through one handoff made at boot, which callers on several threads take in turn.
 
 use core::cell::Cell;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
@@ -15,8 +9,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use xpute_guest::global::on_marked_thread;
 
-/// A caller's work, borrowed: the caller waits until it has run, so what it
-/// points at outlives the run.
+/// A caller's work, borrowed: the caller waits until it has run.
 struct Job(*mut (dyn FnMut() + Send + 'static));
 
 // SAFETY: the closure it points at is `Send`, and only the guest's thread
@@ -31,13 +24,12 @@ struct Handoff {
 static HANDOFF: OnceLock<Mutex<Handoff>> = OnceLock::new();
 
 thread_local! {
-    /// This thread holds the handoff: a `run` or a `while_idle` is under way
-    /// on it, and another would wait for the first to let it go.
+    /// A `run` or `while_idle` is under way on this thread.
     #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion"))]
     static HOLDING: Cell<bool> = const { Cell::new(false) };
 }
 
-/// The handoff, held, with this thread marked its holder until it is let go.
+/// The handoff, held, this thread its holder until it is let go.
 struct Held(MutexGuard<'static, Handoff>);
 
 impl Drop for Held {
@@ -46,10 +38,8 @@ impl Drop for Held {
     }
 }
 
-/// The handoff, held. Refused to the guest's own thread, whose caller holds
-/// it while it runs, and to a thread that holds it already: either would wait
-/// for itself. A caller that panicked holding it left it as it was: the
-/// guest's thread had run its job or never got it.
+/// The handoff, refused where taking it would wait for itself: on the guest's
+/// thread, or on one that holds it. A poisoned lock is still whole.
 fn handoff() -> Held {
     assert!(!on_marked_thread(), "a call into the guest from its own thread would wait for itself");
     assert!(!HOLDING.with(Cell::get), "a call into the guest inside another on the same thread would wait for itself");
@@ -58,8 +48,7 @@ fn handoff() -> Held {
     held
 }
 
-/// Starts the guest's thread, named `name` with a stack of `stack_bytes`,
-/// and runs `first` there before anything else reaches it.
+/// Starts the guest's thread and runs `first` there before anything else.
 pub fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send) {
     let (jobs, next) = sync_channel::<Job>(1);
     let (finished, done) = sync_channel::<()>(1);
@@ -79,7 +68,7 @@ pub fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send
     run(first);
 }
 
-/// Runs `f` on the guest's thread and returns what it returns once it has.
+/// `f` on the guest's thread, returned once it has run.
 pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
     let h = handoff();
     let mut f = Some(f);
@@ -95,9 +84,7 @@ pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
     out.expect("the guest's thread ran the call")
 }
 
-/// Runs `f` on this thread while the guest's runs nothing: the handoff is
-/// held, so no call is on the guest's thread, and `f` is the only one
-/// touching the guest. Refused where `handoff` is.
+/// `f` on this thread, the handoff held so the guest's runs nothing meanwhile.
 pub fn while_idle<R>(f: impl FnOnce() -> R) -> R {
     let _h = handoff();
     f()
