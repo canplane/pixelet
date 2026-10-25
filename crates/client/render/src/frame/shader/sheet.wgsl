@@ -1,4 +1,4 @@
-// One marker sheet entry: shapes by signed distance, text as the platform's
+// One sticker on the marker sheet: shapes by signed distance, text as the platform's
 // pixels. Stored premultiplied; marker.wgsl divides it out.
 
 // kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text, 4 a text's halo.

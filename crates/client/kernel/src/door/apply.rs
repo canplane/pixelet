@@ -302,7 +302,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::CHAT_SEND => {
-            crate::domain::scene::marker::chat::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
+            crate::domain::scene::marker::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
             applied(s)
         }
         Command::PREVIEW_OPEN => {
@@ -395,15 +395,15 @@ enum MarkerTap {
 }
 
 /// A marker takes a tap before the ground under it: the pointer goes to it,
-/// the eraser takes away a marker someone put up, and the marker tool has the
-/// waiting marker stand there. None where no marker there takes it.
+/// the eraser takes away a pin someone put up, and the marker tool has the
+/// waiting pin stand there. None where no marker there takes it.
 fn marker_tap(x: f64, y: f64) -> Option<MarkerTap> {
     use crate::domain::control::interaction::ActiveTool;
-    use crate::domain::scene::marker::layout::Went;
-    match (crate::domain::control::interaction::holding().active_tool, crate::domain::scene::marker::layout::tap(x, y)?) {
-        (ActiveTool::Pointer, Went::To(at) | Went::Marker(_, at)) => Some(MarkerTap::Go(at)),
-        (ActiveTool::Eraser, Went::Marker(e, _)) => Some(MarkerTap::Remove(e)),
-        (ActiveTool::Marker, Went::Marker(e, _)) => Some(MarkerTap::Wait(e)),
+    use crate::domain::scene::marker::Went;
+    match (crate::domain::control::interaction::holding().active_tool, crate::domain::scene::marker::tap(x, y)?) {
+        (ActiveTool::Pointer, Went::To(at) | Went::Pin(_, at)) => Some(MarkerTap::Go(at)),
+        (ActiveTool::Eraser, Went::Pin(e, _)) => Some(MarkerTap::Remove(e)),
+        (ActiveTool::Marker, Went::Pin(e, _)) => Some(MarkerTap::Wait(e)),
         _ => None,
     }
 }

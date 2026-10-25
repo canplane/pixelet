@@ -38,7 +38,7 @@ pub fn instance(at: V3, size: [f64; 2], slot: u32, down: f64, region: f64) -> [f
 }
 
 /// The markers laid out, about an origin, in one heap block the renderer
-/// mirrors: the layout's (`layout.rs`).
+/// mirrors: the arrangement's (`arrangement.rs`).
 #[derive(Default)]
 pub struct Set {
     origin: V3,

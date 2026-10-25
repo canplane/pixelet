@@ -1,9 +1,9 @@
-// pxl-kernel/domain/scene/marker/batch.rs
+// pxl-kernel/domain/scene/marker/candidate.rs
 
 //! One frame's marker candidates, as lanes.
 
 #[derive(Clone, Debug, Default)]
-pub struct Batch {
+pub struct Candidates {
     pub count: u32,
 
     /// Relative to the local world frame's origin.
@@ -30,7 +30,7 @@ pub struct Batch {
     pub order: Vec<u32>,
 }
 
-impl Batch {
+impl Candidates {
     /// A high-water mark, not a limit.
     pub fn cap(&self) -> usize {
         self.local_x.len()

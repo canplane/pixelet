@@ -264,7 +264,7 @@ Decor is grown and drawn on the GPU each frame, a thread a candidate, never stor
 
 ## Markers
 
-A **marker** is what is drawn flat to the camera, a billboard, from a design on the sheet: a place, a marker someone put up, or the chat's line. Each source reads its own, and one layout gathers them over the eye's cubes (`domain/scene/marker/layout.rs`). Each stands at a cell's center, at the height of the surface drawn there.
+A **marker** is what is drawn flat to the camera, a billboard, from a design on the sheet: a place, a pin someone put up, or the chat's line. Each source reads its own, and one arrangement draws them together (`domain/scene/marker/arrangement.rs`). The places and the pins are read over the eye's cubes, each standing at its cell's center on the surface drawn there; the chat's line is read from no cube, and hangs over its speaker's head.
 
 A place is the place layer's marker (`domain/scene/marker/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`domain/scene/marker/place.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
 
@@ -379,13 +379,13 @@ Above it, altocumulus and cirrus are planes read where a ray meets them (`frame/
 
 ## Markers and the sheet
 
-A marker stands at a cell's center and is drawn flat to the camera; its records come from the view (Markers).
+A marker is drawn flat to the camera, where its source stands it (Markers).
 
 Markers are one instanced quad (`domain/scene/marker/set.rs`) over one texture packed shelf by shelf, the **sheet** (`pxl-render gpu/sheet/shelf.rs`). The pass (`frame/shader/marker.wgsl`) tests several points of each marker against the world's depth and drops the marker when most are hidden. It writes depth from an upright twin of the quad, so markers sort against the world along its up. The chat's bubble is a marker too, hung from the point over its speaker's head that the speaker hands over, and shown by its own rule (`domain/scene/marker/chat.rs` `hangs`).
 
-A sheet entry is found by its design, what it paints, never by who shows it: equal words, colors and look share one slot, let go once nothing shown or waiting uses it (`domain/scene/marker/design.rs` `Design`). What shows it is named apart, by its holder's key, which the old drawing kept until the new one is painted goes by (`domain/scene/marker/layout.rs` `Key`); where a tap on it goes is each instance's own (`Instance::tap`). An entry is drawn on the GPU only when what it shows changes (`gpu/sheet.rs`): its shapes as signed distances, its text as lines the platform drew. Asking the platform a line at a time leaves shaping, bidirectional text and emoji to each platform's own engine ([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
+A **sticker**, a design as the sheet holds it, is found by its design, what it paints, never by who shows it: equal words, colors and look share one slot, let go once nothing shown or waiting uses it (`domain/scene/marker/design.rs` `Design`). What shows it is named apart, by its holder's key, which the old drawing kept until the new one is painted goes by (`domain/scene/marker/arrangement.rs` `Key`); where a tap on it goes is each instance's own (`Instance::tap`). A sticker is drawn on the GPU only when what it shows changes (`gpu/sheet.rs`): its shapes as signed distances, its text as lines the platform drew. Asking the platform a line at a time leaves shaping, bidirectional text and emoji to each platform's own engine ([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
 
-Markers people put up are an object kind drawn by the same pass, whether or not places are on. Where several share a cell, the cell shows their count on a marker's pill in its colors turned over, counted afresh each time the cube is read (`spec/spec/block/marker.json`). Unlike places, markers are one kind, so their number means something. Each keeps its own words with its entry (`domain/layer/object/ext.rs` `Ext::MarkerText`).
+Pins, the markers people put up, are an object kind (`spec/spec/block/marker.json`) drawn by the same pass, whether or not places are on. Where several share a cell, the cell shows their count on a pin's pill in its colors turned over, counted afresh each time the cube is read. Unlike places, pins are one kind, so their number means something. Each keeps its own words with its entry (`domain/layer/object/ext.rs` `Ext::MarkerText`).
 
 ---
 

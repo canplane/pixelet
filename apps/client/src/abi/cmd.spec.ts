@@ -367,7 +367,7 @@ export interface Snapshot {
   camera_busy: boolean;
   /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
   zooming: boolean;
-  /** The pointer is over a marker a tap would act on with the tool held: a place to go to, or a marker to erase or word. */
+  /** The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word. */
   over_marker: boolean;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];

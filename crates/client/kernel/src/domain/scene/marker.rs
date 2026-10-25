@@ -2,16 +2,20 @@
 
 //! Markers: what is drawn flat to the camera over the world, a billboard,
 //! each from its own design on the one sheet. A place as Carto draws it, a
-//! marker someone put up and the chat's line are each read by their own
-//! source and laid out together (`layout.rs`).
+//! pin someone put up and the chat's line are each read by their own source
+//! and drawn together by one arrangement (`arrangement.rs`).
 
-pub mod batch;
-pub mod chat;
-pub mod design;
-pub mod layout;
+mod arrangement;
+mod candidate;
+mod chat;
+mod design;
 mod line;
 mod pin;
 mod place;
 mod selection;
-pub mod set;
-pub mod sheet;
+mod set;
+mod sheet;
+
+pub use arrangement::{draw, moved, step, tap, Went};
+pub use chat::{append_chat_line, speak_from};
+pub use sheet::sheet;

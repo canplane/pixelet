@@ -6,7 +6,7 @@
 //! category's label zoom. A place stands at its ground leaf cell's center on
 //! the surface a ray down meets first, and a tap on it goes there.
 
-use super::layout::{surface, Instance, Key, Went};
+use super::arrangement::{surface, Instance, Key, Went};
 use crate::domain::chunk::Chunk;
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::World;
@@ -18,7 +18,7 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows};
 
-/// What `read` read, as the layout takes it.
+/// What `read` read, as the arrangement takes it.
 pub(super) fn shown(read: &[(Chunk, Instance)]) -> impl Iterator<Item = Instance> + '_ {
     read.iter().map(|(_, s)| s.clone())
 }

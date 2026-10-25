@@ -696,7 +696,7 @@ pub struct Snapshot<'a> {
     pub camera_busy: bool,
     /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
     pub zooming: bool,
-    /// The pointer is over a marker a tap would act on with the tool held: a place to go to, or a marker to erase or word.
+    /// The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word.
     pub over_marker: bool,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one.
     pub settings: &'a [u32],

@@ -151,8 +151,8 @@ impl MarkerPass {
         }
     }
 
-    /// An entry whose text is not drawn yet is left for a later frame.
-    /// Whether the sheet changed: made again, or an entry drawn on it.
+    /// A sticker whose text is not drawn yet is left for a later frame.
+    /// Whether the sheet changed: made again, or a sticker drawn on it.
     pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, sheet: &mut Sheet, text: TextOf) -> bool {
         let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;

@@ -1,6 +1,6 @@
 // pxl-render/gpu/sheet.rs
 
-//! A marker sheet entry drawn on the device into a texture of its size and
+//! A sticker on the marker sheet drawn on the device into a texture of its size and
 //! copied into its rectangle. Sketches are in logical pixels, drawn at the
 //! sheet's scale.
 

@@ -3,7 +3,7 @@
 //! The (dev-only) map chat's latest line and who says it: a bubble hung from
 //! the point over its speaker's head that the scene hands over
 //! (`speak_from`), and shown by its own rule (`hangs`), not read from the
-//! chunks as a marker someone put up is. `layout.rs` lays both out.
+//! chunks as a pin someone put up is. `arrangement.rs` draws both.
 
 use std::rc::Rc;
 
@@ -66,8 +66,8 @@ pub fn speak_from(speaker: Option<(Q3, Q3)>) {
 
 /// Where a line hangs, over its speaker's head, while it shows there seen
 /// from `eye` at `tau`: as a marker shows (`marker_shows`), so a line reads
-/// where the markers about its speaker do. A marker someone put up is
-/// judged by the chunk the markers are read from; a line, which no chunk
+/// where the markers about its speaker do. A pin someone put up is
+/// judged by the chunk the pins are read from; a line, which no chunk
 /// holds, by the camera grid's cell where its speaker stands, the zoom such
 /// a chunk would be drawn at there.
 pub fn hangs(eye: V3, tau: Tau) -> Option<Q3> {

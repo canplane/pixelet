@@ -1430,7 +1430,7 @@
           "name": "over_marker",
           "type": "bool",
           "$doc": [
-            "The pointer is over a marker a tap would act on with the tool held: a place to go to, or a marker to erase or word."
+            "The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word."
           ]
         },
         {

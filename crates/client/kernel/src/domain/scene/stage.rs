@@ -27,7 +27,7 @@ use crate::domain::scene::character::preview::preview_rows;
 use crate::domain::scene::environment::cloud::cloud_groups;
 use crate::domain::scene::indicator::coverage_gizmo::coverage_gizmo_step;
 use crate::domain::scene::indicator::frame_gizmo::frame_gizmo_step;
-use crate::domain::scene::marker::sheet::sheet;
+use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
@@ -253,8 +253,8 @@ pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord:
         crate::domain::scene::decor::drawn::step(frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
         crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.budget);
     }
-    crate::domain::scene::marker::layout::step(ctx, &frame);
-    crate::domain::scene::marker::layout::draw(draw_list(), frame.eye);
+    crate::domain::scene::marker::step(ctx, &frame);
+    crate::domain::scene::marker::draw(draw_list(), frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

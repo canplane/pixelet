@@ -2,14 +2,14 @@
 
 //! Where each marker's bitmap lies in the sheet, one texture, so all markers draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
-//! doubles the sheet and replays each entry's `Paint`. Only dirty rectangles
+//! doubles the sheet and replays each sticker's `Paint`. Only dirty rectangles
 //! are uploaded: re-uploading the whole 4096 sheet cost a phone ~100 ms per frame.
 
 /// Slot rectangles are in canvas orientation (v0 top < v1 bottom) and move on a
 /// repack, so read them on every use; the slot index is what stays.
 pub const NO_SLOT: i32 = -1;
 
-/// What an entry paints, in logical pixels before the render scale.
+/// What a sticker paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Paint {
     /// Words alone on a pill in its fill and text colors (`ink`).
@@ -38,7 +38,7 @@ const HEIGHT_BUCKET: u32 = 16;
 pub const INITIAL_SIZE: u32 = 1024;
 
 /// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen markers (one per
-/// places cell); past the limit an entry waits unshown (`NO_SLOT`).
+/// places cell); past the limit a sticker waits unshown (`NO_SLOT`).
 const MAX_SIZE: u32 = 2048;
 
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
@@ -126,7 +126,7 @@ impl Shelves {
     }
 }
 
-/// Every entry's place on a sheet of `size`, planned on scratch shelves so a
+/// Every sticker's place on a sheet of `size`, planned on scratch shelves so a
 /// failed plan changes nothing.
 struct Plan {
     at: Vec<(u32, u32)>,
@@ -161,7 +161,7 @@ pub struct Sheet {
     h: Vec<u32>,
     cw: Vec<u32>,
     ch: Vec<u32>,
-    /// What drew each entry, kept so a repack can replay it.
+    /// What drew each sticker, kept so a repack can replay it.
     paints: Vec<Option<Paint>>,
 
     generation: u32,
@@ -313,7 +313,7 @@ impl Sheet {
     }
 
     /// Halves the sheet while every live entry still fits. Without it a sheet one
-    /// dense view grew stays that large, canvas and texture, for a dozen entries.
+    /// dense view grew stays that large, canvas and texture, for a dozen stickers.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
         while self.size > INITIAL_SIZE {

@@ -1,14 +1,14 @@
 // pxl-kernel/domain/scene/marker/pin.rs
 
-//! The markers someone put up, as the object store holds them: each its
-//! words on a pill at its own cell, or where more than one stands in a
-//! marker's cell (`marker_cell`), their count at the cell's middle on a
-//! marker's pill in its colors turned over, the markers' own rule
-//! (`block/marker.json`); the one waiting for its words wherever it is.
+//! The pins someone put up, as the object store holds them: each its words
+//! on a pill at its own cell, or where more than one stands in a pin's cell
+//! (`marker_cell`), their count at the cell's middle on a pin's pill in its
+//! colors turned over, the pins' own rule (`block/marker.json`); the one
+//! waiting for its words wherever it is.
 
 use core::hash::Hasher;
 
-use super::layout::{surface, Instance, Key, Went};
+use super::arrangement::{surface, Instance, Key, Went};
 use crate::domain::chunk::Chunk;
 use crate::domain::layer::object::preview::draft;
 use crate::domain::query::World;
@@ -22,7 +22,7 @@ use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
-/// What holds a marker's instance: its entry, or the marker's cell its
+/// What holds a pin's instance: its entry, or the pin's cell its
 /// count stands for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Held {
@@ -30,7 +30,7 @@ pub(super) enum Held {
     Cell((Zoom, [i32; 3])),
 }
 
-/// A marker read from a drawn chunk, in a run a marker's cell: its pill,
+/// A pin read from a drawn chunk, in a run a pin's cell: its pill,
 /// where it stands, and where the cell holds more than one, where their
 /// count stands and the count.
 #[derive(Clone)]
@@ -43,11 +43,11 @@ pub(super) struct Pin {
     count: Option<(Q3, Design)>,
 }
 
-/// A product choice: the length a one-line marker still reads as a name at.
+/// A product choice: the length a one-line pin still reads as a name at.
 /// Code points, so a non-BMP character is never cut in half.
 const SHOWN_CHARS: usize = 12;
 
-/// A marker's words, cut to `SHOWN_CHARS`, on its pill.
+/// A pin's words, cut to `SHOWN_CHARS`, on its pill.
 fn pill(words: &str) -> Design {
     let mut shown: String = words.chars().take(SHOWN_CHARS).collect();
     if words.chars().count() > SHOWN_CHARS {
@@ -60,7 +60,7 @@ fn pill(words: &str) -> Design {
     }
 }
 
-/// The count of `n` markers in one marker's cell, on a marker's pill in the
+/// The count of `n` pins in one pin's cell, on a pin's pill in the
 /// count's colors.
 fn count(n: usize) -> Design {
     Design::Pill {
@@ -70,19 +70,19 @@ fn count(n: usize) -> Design {
     }
 }
 
-/// One marker, taken to its entry, which the tool held decides what to do
+/// One pin, taken to its entry, which the tool held decides what to do
 /// with.
 fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
     Instance {
         key: Key::Pin(Held::One(at)),
         design,
         stands,
-        tap: Some(Went::Marker(at, stands)),
+        tap: Some(Went::Pin(at, stands)),
     }
 }
 
-/// The markers put up in `chunk`, by the chunk their base is in, a run a
-/// marker's cell: a cell nests in its chunk, so no run is another chunk's too.
+/// The pins put up in `chunk`, by the chunk their base is in, a run a
+/// pin's cell: a cell nests in its chunk, so no run is another chunk's too.
 pub(super) fn read(chunk: Chunk, pins: &mut Vec<Pin>) {
     let cell_zoom = chunk.cell_zoom();
     if !marker_shows(cell_zoom) {
@@ -95,7 +95,7 @@ pub(super) fn read(chunk: Chunk, pins: &mut Vec<Pin>) {
         if !object_value_is_marker(e.state) {
             return;
         }
-        let (stands, at) = marker_at(e.id());
+        let (stands, at) = pin_at(e.id());
         if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) {
             pins.push(Pin {
                 chunk,
@@ -118,11 +118,11 @@ pub(super) fn read(chunk: Chunk, pins: &mut Vec<Pin>) {
 }
 
 /// What `pins` show: the one waiting for its words, wherever it is, then a
-/// cell's markers but that one: one is itself, more their count, which a
+/// cell's pins but that one: one is itself, more their count, which a
 /// tap takes to where it stands.
 pub(super) fn shown(pins: &[Pin]) -> impl Iterator<Item = Instance> + '_ {
     let drafted = draft().map(|d| d.at);
-    let waiting = draft().map(|d| one(d.at, pill(&d.words), marker_at(d.at).0));
+    let waiting = draft().map(|d| one(d.at, pill(&d.words), pin_at(d.at).0));
     waiting.into_iter().chain(pins.chunk_by(|a, b| a.cell == b.cell).filter_map(move |run| {
         let mut left = run.iter().filter(|p| Some(p.at) != drafted);
         let first = left.next()?;
@@ -149,18 +149,18 @@ pub(super) fn drafted() -> Option<(EntryAt, u64)> {
     })
 }
 
-/// Where the count of a cell's markers stands: at its middle, half a marker
-/// at `marker` over what is drawn there first within it, or over its floor.
-fn crowd_at(zoom: Zoom, at: [i32; 3], marker: Zoom, detail: Zoom) -> Q3 {
+/// Where the count of a cell's pins stands: at its middle, half a pin at
+/// `pin` over what is drawn there first within it, or over its floor.
+fn crowd_at(zoom: Zoom, at: [i32; 3], pin: Zoom, detail: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
     let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2]), detail).unwrap_or(c.min[2]);
-    point(x, y, top + units(marker) / 2.0)
+    point(x, y, top + units(pin) / 2.0)
 }
 
-/// A marker at its own cell's center, half a cell over the floor it stands
+/// A pin at its own cell's center, half a cell over the floor it stands
 /// on, where the dot under its pill is drawn, and its base.
-fn marker_at(at: EntryAt) -> (Q3, V3) {
+fn pin_at(at: EntryAt) -> (Q3, V3) {
     let c = cube(at.zoom(), at.at());
     let [x, y, z] = c.center();
     (point(x, y, z), [x, y, c.min[2]])

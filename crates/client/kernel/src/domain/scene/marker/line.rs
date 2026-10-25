@@ -1,17 +1,17 @@
 // pxl-kernel/domain/scene/marker/line.rs
 
-//! The chat's line as the layout takes it (`chat.rs`): its bubble,
+//! The chat's line as the arrangement takes it (`chat.rs`): its bubble,
 //! hung from the point its speaker hands over, while its own rule shows it;
 //! no place a tap goes to.
 
-use super::layout::{Instance, Key};
+use super::arrangement::{Instance, Key};
 use crate::domain::scene::marker::chat::{hangs, shown_line};
 use crate::domain::scene::marker::design::Design;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 
-/// What the layout compares of the line, by value: its bubble while it is
+/// What the arrangement compares of the line, by value: its bubble while it is
 /// said, and where it hangs while it shows, seen from the eye.
 #[derive(Clone, PartialEq)]
 pub(super) struct Said {

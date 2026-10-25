@@ -1,19 +1,20 @@
-// pxl-kernel/domain/scene/marker/layout.rs
+// pxl-kernel/domain/scene/marker/arrangement.rs
 
-//! Where the markers are drawn, each by its own source: a place as Carto
-//! draws it, read from the tile that says its ground at the zoom the view
-//! is at there (`place.rs`); a marker someone put up, near enough
-//! (`pin.rs`); a line said, hung over its speaker's head where its own rule
-//! shows it (`line.rs`). Each source hands the layout an `Instance`, and the
-//! layout asks each the same: its design, its size, its slot and whether it
-//! is ready (`design.rs`), and where a tap on it goes.
+//! The markers' arrangement: where each is drawn, read by its own source: a
+//! place as Carto draws it, read from the tile that says its ground at the
+//! zoom the view is at there (`place.rs`); a pin someone put up, near
+//! enough (`pin.rs`); a line said, hung over its speaker's head where its
+//! own rule shows it (`line.rs`). Each source hands the arrangement an
+//! `Instance`, and the arrangement asks each the same: its design, its
+//! size, its slot and whether it is ready (`design.rs`), and where a tap on
+//! it goes.
 
 use super::selection::select_visible;
 use super::{line, pin, place};
 
 use crate::domain::chunk::Chunk;
 use crate::domain::query::{at_zoom, Ray, World};
-use crate::domain::scene::marker::batch::Batch;
+use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
 use crate::domain::view::frame::pose::ndc_to_px;
@@ -35,8 +36,8 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::Tile;
 
 #[derive(Default)]
-struct Placement {
-    batch: Batch,
+struct Arrangement {
+    candidates: Candidates,
     kept: Vec<u32>,
     set: Set,
     drawn: Vec<u32>,
@@ -83,7 +84,7 @@ struct Placement {
 
 /// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
 /// its view (the observation holds its frustum), the grid's τ, the places
-/// setting, the spacing names wrap to, the marker being written and the
+/// setting, the spacing names wrap to, the pin being written and the
 /// chat's line and where it hangs. A new input goes here or the step never sees
 /// it change.
 #[derive(Clone, PartialEq)]
@@ -97,9 +98,9 @@ struct Seen {
 }
 
 /// The name a holder calls what it shows by, from one run to the next, and
-/// none of what is painted (`design.rs`): a marker someone put up by its
-/// own (`pin::Held`), a place by its tile and its index there, the chat's line
-/// by its speaker, of whom there is one. The layout only tells one from
+/// none of what is painted (`design.rs`): a pin by its own
+/// (`pin::Held`), a place by its tile and its index there, the chat's line
+/// by its speaker, of whom there is one. The arrangement only tells one from
 /// another, to keep an instance's old drawing until its new one is painted;
 /// where a tap goes is the instance's own (`Instance::tap`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -109,7 +110,7 @@ pub(super) enum Key {
     Line,
 }
 
-/// What a source hands the layout: by its holder's key, the design it paints,
+/// What a source hands the arrangement: by its holder's key, the design it paints,
 /// where it stands, and where a tap on it goes, none where it takes none.
 #[derive(Clone)]
 pub(super) struct Instance {
@@ -119,7 +120,7 @@ pub(super) struct Instance {
     pub(super) tap: Option<Went>,
 }
 
-static PLACEMENT: Global<Placement> = Global::new();
+static ARRANGEMENT: Global<Arrangement> = Global::new();
 
 /// What `pins` and `places` were read from: the drawn chunks, and whether
 /// places were on.
@@ -130,7 +131,7 @@ struct Found {
 }
 
 pub fn moved(places: &[Tile]) {
-    let p = PLACEMENT.get(Placement::default);
+    let p = ARRANGEMENT.get(Arrangement::default);
     p.moved = true;
     p.moved_places.extend_from_slice(places);
 }
@@ -162,7 +163,7 @@ fn spacing_px() -> f64 {
 }
 
 pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
-    let p = PLACEMENT.get(Placement::default);
+    let p = ARRANGEMENT.get(Arrangement::default);
     if crate::domain::view::observation::eye().is_none() {
         if p.set.free(crate::domain::query::model::draw_list()) {
             ctx.invalidate();
@@ -256,7 +257,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         let now = core::mem::take(&mut p.now);
         p.now = p.found_for.replace(now).unwrap_or_default();
     }
-    p.batch.reset();
+    p.candidates.reset();
     let drawn_before = core::mem::take(&mut p.sized);
     let mut sized = core::mem::take(&mut p.spare);
     sized.clear();
@@ -285,7 +286,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         };
         let local = crate::domain::view::frame::coord::to_world(&s.stands);
         p.pending.extend(held.map(|held| (sized.len() as u32, held)));
-        p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, sized.len() as f64);
+        p.candidates.push(local[0], local[1], local[2], [width, height, region], anchor, sized.len() as f64);
         sized.push(Instance { design, ..s });
     }
     // The line's slot is kept while it is said, wherever its speaker is.
@@ -294,7 +295,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         .extend(sized.iter().map(|s| s.design.clone()).chain(p.pending.iter().map(|w| w.1.clone())).chain(seen.said.kept()));
     let freed = design::retain(&p.keep);
     (p.pins, p.places) = (pins, read_places);
-    select_visible(&mut p.batch, &mut p.kept);
+    select_visible(&mut p.candidates, &mut p.kept);
     // A design held for an instance seen asks its slot now, after the slots
     // let go are freed, so it is painted at render. Where the sheet has no
     // room for it, the hold is let go: the instance shows the new design,
@@ -329,24 +330,24 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         p.drawn.push(i);
     }
     // Farthest first: where two are both seen, the nearer is drawn over.
-    let batch = &p.batch;
+    let candidates = &p.candidates;
     p.drawn.sort_by(|&a, &b| {
-        batch.d2[b as usize]
-            .total_cmp(&batch.d2[a as usize])
-            .then(batch.tiebreak[a as usize].total_cmp(&batch.tiebreak[b as usize]))
+        candidates.d2[b as usize]
+            .total_cmp(&candidates.d2[a as usize])
+            .then(candidates.tiebreak[a as usize].total_cmp(&candidates.tiebreak[b as usize]))
     });
     p.hits.clear();
-    p.hits.extend(p.drawn.iter().rev().filter_map(|&i| Some((p.batch.screen[i as usize], sized[i as usize].tap?))));
+    p.hits.extend(p.drawn.iter().rev().filter_map(|&i| Some((p.candidates.screen[i as usize], sized[i as usize].tap?))));
     let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
     let about = crate::domain::view::frame::pose::sea_under_eye();
     for &i in &p.drawn {
         let i = i as usize;
-        let at = [p.batch.local_x[i] - about[0], p.batch.local_y[i] - about[1], p.batch.local_z[i] - about[2]];
+        let at = [p.candidates.local_x[i] - about[0], p.candidates.local_y[i] - about[1], p.candidates.local_z[i] - about[2]];
         let design = &sized[i].design;
         let [w, h, anchor] = design::size(design).or_bug(Errno::ENOTRECOVERABLE);
-        instances.extend_from_slice(&set::instance(at, [w, h], design::slot(design) as u32, anchor / h, f64::from(p.batch.region_px[i])));
+        instances.extend_from_slice(&set::instance(at, [w, h], design::slot(design) as u32, anchor / h, f64::from(p.candidates.region_px[i])));
     }
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
@@ -361,20 +362,19 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
 
 /// The markers the last step laid out, into the frame's list.
 pub fn draw(draw: &mut pxl_render::frame::draw::DrawList, eye: V3) {
-    PLACEMENT.get(Placement::default).set.draw(draw, eye);
+    ARRANGEMENT.get(Arrangement::default).set.draw(draw, eye);
 }
 
-/// Where a tap on a marker goes: to its place; a marker someone put up is
-/// its entry's, which the tool held decides what to do with.
+/// Where a tap on a marker goes: to its place; a pin is its entry's, which the tool held decides what to do with.
 #[derive(Clone, Copy)]
 pub enum Went {
     To(Q3),
-    Marker(EntryAt, Q3),
+    Pin(EntryAt, Q3),
 }
 
 /// `ndc` in [−1, 1], y up. The marker that took the tap, if any.
 pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
-    let hits = &PLACEMENT.get(Placement::default).hits;
+    let hits = &ARRANGEMENT.get(Arrangement::default).hits;
     hits.iter().find(|(r, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y)).map(|&(_, went)| went)
 }
