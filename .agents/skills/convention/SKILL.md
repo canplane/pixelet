@@ -13,6 +13,10 @@ is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
 - A structure is named by one word that maps to one path or component,
   never a loose phrase. A borrowed term names only what has its defining
   properties; else the project's own word.
+- The rule runs one way: one structure, one word. A word may still name
+  other things elsewhere, as a page frame, a stack frame and a display
+  frame share one, so a word in use for something else is no reason to
+  rename. A borrowed term is weighed by its defining properties alone.
 - Folders and files are singular, for what each one is; plural only where
   the ecosystem names a collection of independent units (`skills/`,
   Expo's `modules/`) or the word has no singular in its sense (`minutes/`).
