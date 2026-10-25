@@ -412,6 +412,53 @@ pub struct Plan {
     pub upload_chunk_bytes: u64,
 }
 
+/// What a program asks of the device it opens (`open`), every part its own.
+#[derive(Clone, Copy)]
+pub struct Ask {
+    /// The backends an adapter is looked for on.
+    pub backends: wgpu::Backends,
+    pub power_preference: wgpu::PowerPreference,
+    /// Asked for where the adapter offers them, and left out where it does
+    /// not: what the device has, the guest reads from its block (DEVICE).
+    pub features: wgpu::Features,
+    /// What the device is asked to hold, from the adapter it is asked of,
+    /// since an adapter refuses a device that asks past its own.
+    pub limits: fn(&wgpu::Adapter) -> wgpu::Limits,
+}
+
+/// A device opened as asked, and the instance a program makes its surfaces
+/// with (`GpuHost::bind`).
+pub struct Opened {
+    pub instance: wgpu::Instance,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+}
+
+/// Opens a device as `ask` says, for `GpuHost::new`: none where no adapter
+/// answers, or the adapter refuses the device. It waits out wgpu's futures,
+/// which a native backend resolves at once. The instance takes each
+/// surface's display handle with the surface (`SurfaceTargetUnsafe`), so it
+/// is made without one.
+pub fn open(ask: &Ask) -> Option<Opened> {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: ask.backends,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: ask.power_preference,
+        ..Default::default()
+    }))
+    .ok()?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_features: adapter.features() & ask.features,
+        required_limits: (ask.limits)(&adapter),
+        ..Default::default()
+    }))
+    .ok()?;
+    Some(Opened { instance, adapter, device, queue })
+}
+
 pub struct GpuHost {
     adapter: wgpu::Adapter,
     device: wgpu::Device,

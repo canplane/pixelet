@@ -22,9 +22,12 @@ serde = { version = "1", optional = true }
 png = { version = "0.18", optional = true }
 image-webp = { version = "0.2", optional = true }
 zune-jpeg = { version = "0.5", optional = true }
+# The adapter's and the device's futures waited out as a device opens
+# (`open`), which wgpu resolves at once on a native backend: no runtime.
+pollster = { version = "1", optional = true }
 
 [features]
-host = ["dep:xpute-host", "dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", "dep:zune-jpeg"]
+host = ["dep:xpute-host", "dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", "dep:zune-jpeg", "dep:pollster"]
 
 [dev-dependencies]
 # The golden records' reader, and a device asked for without a runtime.

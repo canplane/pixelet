@@ -19,7 +19,7 @@ use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pxl_render::api_spec::{device as numbers, stream};
-use xpute_gpu::host::{ConfigureAt, GpuHost, Plan};
+use xpute_gpu::host::{Ask, ConfigureAt, GpuHost, Opened, Plan};
 use xpute_guest::global::Global;
 use xpute_host::mem::Memory;
 
@@ -44,6 +44,17 @@ const PLAN: Plan = Plan {
     configure_at: CONFIGURE_SURFACES,
     frame_latency: numbers::FRAME_LATENCY,
     upload_chunk_bytes: numbers::UPLOAD_CHUNK_BYTES as u64,
+};
+
+/// The device the kernel asks for: the timestamps its spans are timed by
+/// where the adapter has them, and the adapter's own limits, since the
+/// simulator's Metal falls short of WebGPU's defaults and refuses a device
+/// that asks for them.
+const ASK: Ask = Ask {
+    backends: wgpu::Backends::PRIMARY,
+    power_preference: wgpu::PowerPreference::HighPerformance,
+    features: wgpu::Features::TIMESTAMP_QUERY,
+    limits: wgpu::Adapter::limits,
 };
 
 struct Device {
@@ -96,27 +107,12 @@ fn wake() {
 #[cfg(target_os = "android")]
 use crate::android::wake;
 
-/// Asks for the adapter's own limits: the simulator's Metal falls short of
-/// WebGPU's defaults and refuses a device that asks for them.
+/// The device opened as asked (xpute-gpu host `open`), once.
 fn open() -> bool {
     if device().is_some() {
         return true;
     }
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    });
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        ..Default::default()
-    })) else {
-        return false;
-    };
-    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_features: adapter.features() & wgpu::Features::TIMESTAMP_QUERY,
-        required_limits: adapter.limits(),
-        ..Default::default()
-    })) else {
+    let Some(Opened { instance, adapter, device, queue }) = xpute_gpu::host::open(&ASK) else {
         return false;
     };
     let host = GpuHost::new(adapter, device, queue, PLAN, wake);
