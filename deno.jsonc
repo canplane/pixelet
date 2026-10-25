@@ -10,7 +10,7 @@
   "nodeModulesDir": "auto",
 
   // Vite's deps cache and the trees of generated or downloaded data are no workspace source;
-  // xpute/ is its own workspace, reached through the import map below.
+  // xpute/ is a project of its own (xpute/Makefile), reached through the import map below.
   "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "infra/geo/elevation/warped/"],
 
   "tasks": {
@@ -68,7 +68,7 @@
     "check:script": "deno check script/*.ts apps/web/script/*.ts",
     // check:web never reaches the device's own modules.
     "check:native": "deno check apps/native/src && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings",
-    "check:xpute": "deno task --cwd xpute check",
+    "check:xpute": "make -C xpute -j8 check",
     // What ships: the kernel's module in both builds, and the servers with their tests' code.
     "check:rust": "cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-api -- -D warnings",
     // What runs here alone: the tests' code, the bakes (the tile server's
@@ -78,7 +78,7 @@
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
     "test": "deno task test:client && deno task test:xpute && deno task test:rust",
     "test:client": "deno task --cwd apps/client test",
-    "test:xpute": "deno task --cwd xpute test",
+    "test:xpute": "make -C xpute -j8 test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
     "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-spec -p pxl-spec-core -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
     "lint": "deno lint",
