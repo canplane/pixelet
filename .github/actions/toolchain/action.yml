@@ -19,13 +19,18 @@ inputs:
 runs:
   using: composite
   steps:
-    # No version, no components, no target: rust-toolchain.toml names all
-    # three and a bare install reads it. A step of its own rather than left
-    # to the first cargo command, so that a toolchain that cannot be fetched
-    # fails here, where the log says what happened.
+    # No version, no components, no target: rust/rust-toolchain.toml names
+    # all three and a bare install in rust/ reads it. A step of its own rather
+    # than left to the first cargo command, so that a toolchain that cannot be
+    # fetched fails here, where the log says what happened. The job then runs
+    # every cargo under it whatever its directory (RUSTUP_TOOLCHAIN): a cargo
+    # outside rust/ would otherwise take the runner's own stable.
     - name: Install the Rust toolchain
       shell: bash
-      run: rustup toolchain install
+      working-directory: rust
+      run: |
+        rustup toolchain install
+        echo "RUSTUP_TOOLCHAIN=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" >> "$GITHUB_ENV"
 
     - name: Install Binaryen
       shell: bash
@@ -40,14 +45,14 @@ runs:
     # which every run rebuilds anyway; keyed on the lockfile and the toolchain.
     - uses: Swatinem/rust-cache@v2
       with:
-        workspaces: crates -> target
+        workspaces: rust -> target
         shared-key: ${{ inputs.cache }}
 
     - uses: actions/cache@v5
       with:
         path: |
           ~/.cache/deno
-          node_modules
-          apps/web/node_modules
-        key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          ts/node_modules
+          ts/app/native/node_modules
+        key: deno-${{ runner.os }}-${{ hashFiles('ts/deno.lock') }}
         restore-keys: deno-${{ runner.os }}-

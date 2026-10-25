@@ -14,9 +14,11 @@ use crate::global::Global;
 #[cfg(not(target_arch = "wasm32"))]
 static MEMORY: Global<(usize, usize)> = Global::new();
 
-/// Once, before anything is allocated.
+/// Once, before anything is allocated, on the guest's thread: the base is a
+/// `Global`, and a thread marked as another's may not write it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn set_base(addr: usize, bytes: usize) {
+    assert!(!crate::global::off_marked_thread(), "the base is set on the guest's thread");
     MEMORY.set((addr, bytes));
 }
 

@@ -1,6 +1,11 @@
 // @xpute/kit/math/rng.64.test.ts
 
-/** Holds the TypeScript side to golden/math/rng.64.tsv, which every language's stream must match. */
+/**
+ * Holds the TypeScript side to golden/math/rng.64.tsv, which every language's
+ * stream must match. Its draws were computed apart from the three, in Python's
+ * exact integers masked to 64 bits, whose stream matches rand_xoshiro's
+ * SplitMix64 reference vector.
+ */
 
 import { assertEquals } from "@std/assert";
 

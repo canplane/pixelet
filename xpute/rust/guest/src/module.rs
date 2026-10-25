@@ -1,7 +1,8 @@
 // xpute-guest/module.rs
 
 //! What a guest built as one WebAssembly module reads of the module itself:
-//! where the linker stopped, the memory it was given, and the host's clock.
+//! where its stack ends and the linker stopped, the memory it was given, and
+//! the host's clock. It is linked as xpute-link links it.
 
 extern "C" {
     /// The end of `.rodata`, `.data` and `.bss`, where a guest may begin
@@ -10,6 +11,10 @@ extern "C" {
     /// is where the guest says.
     #[allow(non_upper_case_globals)]
     static __data_end: u8;
+    /// The top of the stack: `-z stack-size` past its start, which
+    /// `--stack-first` puts at the bottom of the memory. wasm-ld defines it.
+    #[allow(non_upper_case_globals)]
+    static __stack_high: u8;
 }
 
 // `wasm_import_module` makes this an import of `env`, the module the host
@@ -18,6 +23,11 @@ extern "C" {
 extern "C" {
     #[link_name = "now"]
     fn host_now() -> f64;
+}
+
+/// Where the stack ends, as an address: its size, with the stack first.
+pub fn stack_high() -> u32 {
+    core::ptr::addr_of!(__stack_high) as u32
 }
 
 /// Where the linker stopped, as an address.

@@ -41,8 +41,11 @@ pub const STREAM_WORDS: u32 = 256;
 /// The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
 pub const SYS_WORDS: u32 = 64;
 
-/// The guest's heap, in its own range: what its file table holds lies there, since the
-/// memory a host hands a module never grows and a guest takes nothing it was not given.
+/// The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile).
+pub const STACK_BYTES: u32 = 1048576;
+
+/// The guest's heap, in its own range, since the memory a host hands a module never grows
+/// and a guest takes nothing it was not given.
 pub const HEAP_BYTES: u32 = 65536;
 
 /// Slots in the guest's handle table, slot 0 never handed out.

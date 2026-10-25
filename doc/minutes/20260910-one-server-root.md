@@ -4,6 +4,12 @@
 routes for themselves, and fixing one of them exposed the question the split
 was avoiding: what, exactly, is allowed to know what the server serves.
 
+> Since split: there are four roots now, `/geo`, `/api`, `/tile` and
+> `/asset` (`spec/spec/route.json`), from
+> [the server in Rust](./20260918-the-server-in-rust-and-the-line-already-drawn.md)'s
+> "The URL roots" and "The frame". What still holds is the rule this
+> records: a relay reads a root or a branch and never a route name.
+
 ## The bug that started it
 
 `deno task dev:remote` asked the published deployment for
@@ -59,6 +65,9 @@ never reaches an address bar.
 
 ## Why a root rather than a tidy list
 
+> Its last paragraph is superseded: the bucket-served tiles have a root of
+> their own, `/tile` (see the note at the top).
+
 A list would have removed the duplication too. The root was chosen because
 **the shape of the interface is not settled.** A set of REST resources and a
 single RPC root — which is what WASM talking to WASM by command ID wants,
@@ -76,6 +85,16 @@ along; only the edge diverged, and the price of that divergence was the one
 per-route rewrite left in the dev proxy.
 
 ## What the shape is now
+
+> Superseded. Now `/geo/*` goes to pxl-geo and `/api/*` to pxl-api, both
+> relayed by the Worker; `/tile/*` and `/asset/*` are served from the bucket;
+> everything else is app assets. `run_worker_first` lists the four roots
+> (`ts/server/edge/wrangler.jsonc`), and pxl-tool (`rust/tool/src/bin/spec.rs`)
+> writes the roots and branches from `spec/spec/route.json` into
+> `ts/client/src/config/route.spec.ts`,
+> `ts/server/edge/route.spec.ts` and
+> `rust/spec/src/route.spec.rs`. `apps/api`, `src/lib/env/routes.ts`, `/io`
+> and `SOCKET_PATH` are gone.
 
     /api/tiles/<kind>/<version>/<page>   published bakes, bucket-served
     /api/<anything else>                 live API

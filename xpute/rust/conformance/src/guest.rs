@@ -87,7 +87,7 @@ unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
     // SAFETY: the caller's memory; the ranges are the layout's.
     let (door, stream, sys, directory) = unsafe {
         (
-            Door::init(mem, &layout, spec::MOST_RAISE, |_, _| {}),
+            Door::init(mem, &layout, spec::MOST_RAISE),
             Stream::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + STREAM_AT), spec::STREAM_WORDS as usize), 1),
             Sys::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + SYS_AT), spec::SYS_WORDS as usize)),
             core::slice::from_raw_parts_mut(at::<u32>(mem, range + DIRECTORY_AT), directory_words(4)),

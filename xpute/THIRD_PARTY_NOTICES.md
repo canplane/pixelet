@@ -8,7 +8,7 @@ This file covers copied source only. Crates and packages that are merely
 depended on are not listed: `rust/Cargo.toml` and the package manifests name
 them, and each carries its own license where it is published.
 
-## evanw/buddy-malloc — `rust/kit/src/alloc/buddy_tree.rs`, `cpp/kit/alloc/buddy_tree.hpp`
+## evanw/buddy-malloc — `rust/kit/src/alloc/buddy_tree.rs`, `cpp/xpute/kit/alloc/buddy_tree.hpp`
 
 Both files are [evanw/buddy-malloc][buddy] (MIT) line for line, the Rust and
 the C++ each in its language, and the notice is at the top of each.

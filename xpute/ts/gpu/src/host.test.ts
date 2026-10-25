@@ -5,13 +5,14 @@
  * on its WebGPU: each program's recorded turns, run as they were written,
  * read back the bytes the record holds, as the native host's do
  * (rust/gpu/src/host.test.rs). Turn K's ticket, K + 1, stands at the done
- * word as the guest left it, and the next turn waits for its DONE.
+ * word as the guest left it, and the next turn waits for its DONE. And a
+ * surface's handle holds its slot only while it is the one bound there.
  *
- * script/web-gpu.ts serves it to Chrome, and the page posts its outcome
+ * ts/gpu/script/browser.ts serves it to Chrome, and the page posts its outcome
  * back: "ok", or what failed.
  */
 
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
 
@@ -46,5 +47,28 @@ async function replay(): Promise<void> {
   device.destroy();
 }
 
-const outcome = await replay().then(() => "ok", (e: unknown) => (e instanceof Error ? `${e.message}\n${e.stack}` : String(e)));
+/** An old handle's late unbind lets go no newer surface in its slot, and a
+ * context taken from its slot is let go then. Binding reaches neither the
+ * device nor a canvas, so both are stand-ins that record what is let go. */
+function guard(): void {
+  const released: string[] = [];
+  const context = (name: string) => ({ unconfigure: () => released.push(name) }) as unknown as GPUCanvasContext;
+  const device = { lost: new Promise<never>(() => {}) } as unknown as GPUDevice;
+  const host = new GpuHost(device, () => new ArrayBuffer(0), () => {});
+  // Slot 3, generations 1 and 2 (`slot | generation << 16`).
+  const [old, newer] = [3 | (1 << 16), 3 | (2 << 16)];
+  host.bind(old, context("old"));
+  host.bind(newer, context("newer"));
+  assertEquals(released, ["old"], "the slot's old context let go as the newer took it");
+  assert(!host.bind(old, context("late")), "an old handle's late bind takes nothing back");
+  assertEquals(released, ["old"]);
+  assert(!host.unbind(old), "an old handle unbinds nothing");
+  assertEquals(released, ["old"]);
+  assert(host.unbind(newer), "the newer handle unbinds its own");
+  assertEquals(released, ["old", "newer"]);
+  assert(!host.unbind(newer), "and only once");
+  assert(!host.bind(old, context("late")), "the slot remembers the newer after it is let go");
+}
+
+const outcome = await replay().then(guard).then(() => "ok", (e: unknown) => (e instanceof Error ? `${e.message}\n${e.stack}` : String(e)));
 await fetch("/outcome", { method: "POST", body: outcome });

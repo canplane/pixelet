@@ -25,7 +25,7 @@ function padded(bytes: u32): u32 {
 }
 
 /** A power of two, so a position masks to its slot. */
-function isPowerOfTwo(n: u32): boolean {
+function is_pow2(n: u32): boolean {
   return n !== 0 && (n & (n - 1)) === 0;
 }
 
@@ -47,7 +47,7 @@ export class Ring {
   constructor(mem: ArrayBufferLike, at: u32) {
     const head = new Uint32Array(mem, at, HEADER_WORDS);
     const capacity = head[CAPACITY];
-    if (!isPowerOfTwo(capacity)) throw new InvariantError(Errno.EINVAL);
+    if (!is_pow2(capacity)) throw new InvariantError(Errno.EINVAL);
     this.capacity = capacity;
     this.slot_bytes = head[SLOT_BYTES];
     this.slot_base = head[SLOT_BASE];
@@ -59,8 +59,8 @@ export class Ring {
   }
 
   static init(mem: ArrayBufferLike, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32): Ring {
-    if (!isPowerOfTwo(capacity)) throw new InvariantError(Errno.EINVAL);
-    if (!isPowerOfTwo(slot_bytes) || slot_bytes % 8 !== 0) throw new InvariantError(Errno.EINVAL);
+    if (!is_pow2(capacity)) throw new InvariantError(Errno.EINVAL);
+    if (!is_pow2(slot_bytes) || slot_bytes % 8 !== 0) throw new InvariantError(Errno.EINVAL);
     new Uint8Array(mem as ArrayBuffer, at, ring_bytes(capacity)).fill(0);
     const head = new Uint32Array(mem, at, HEADER_WORDS);
     head[CAPACITY] = capacity;

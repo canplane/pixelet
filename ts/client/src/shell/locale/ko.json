@@ -1,0 +1,268 @@
+{
+  "close": "닫기",
+  "settings": {
+    "title": "설정",
+    "trigger_aria_label": "설정",
+    "tabs": {
+      "options": "옵션",
+      "info": "정보"
+    },
+    "language": {
+      "section_title": "언어"
+    },
+    "cost_legend": "LOW / MED / HIGH는 성능 부담 수준을 나타냅니다. 프레임이 끊기면 HIGH 항목부터 조정해 보세요.",
+    "display": {
+      "section_title": "화면",
+      "section_caption": "화면에 그리는 요소와 해상도를 설정합니다.",
+      "decor": {
+        "label": "데코",
+        "description": "지형에 자동으로 배치되는 나무·차량 등의 장식을 표시합니다. 직접 배치한 오브젝트에는 영향을 주지 않습니다."
+      },
+      "clouds": {
+        "label": "구름",
+        "description": "하늘에 떠 있는 뭉게구름과 그 위의 엷은 구름층을 표시합니다. 카메라가 높이 올라가면 점점 옅어지다 사라집니다."
+      },
+      "textures": {
+        "label": "텍스처",
+        "description": "큐브 표면에 단색 대신 텍스처를 표시합니다."
+      },
+      "resolution": {
+        "label": "해상도",
+        "auto": {
+          "label": "자동",
+          "description": "기기 해상도로 그리다가 버벅이면 잠시 낮추고, 여유가 생기면 되돌립니다."
+        },
+        "fixed": {
+          "label": "고정",
+          "description": "항상 기기 해상도로 그립니다. 가장 선명하지만 성능이 낮은 기기에서는 끊길 수 있습니다."
+        },
+        "low": {
+          "label": "저해상도",
+          "description": "낮은 해상도로 그려 배터리와 발열을 줄입니다. 조금 흐려 보입니다."
+        }
+      }
+    },
+    "camera": {
+      "section_title": "카메라",
+      "section_caption": "카메라의 회전과 3인칭 동작을 설정합니다.",
+      "tilt_lock": {
+        "label": "기울기 고정",
+        "description": "기울기를 고정하고 좌우로만 회전합니다."
+      },
+      "orbit_obstacle": {
+        "label": "3인칭 카메라 충돌",
+        "through": {
+          "label": "통과",
+          "description": "장애물을 무시하고 그대로 통과합니다."
+        },
+        "stop": {
+          "label": "멈춤",
+          "description": "장애물에 닿기 직전에서 카메라 조작을 멈춥니다."
+        },
+        "climb": {
+          "label": "타고 넘기",
+          "description": "장애물에 막히면 카메라를 세워 타고 넘습니다. 위쪽도 막혀 있으면 멈춥니다."
+        },
+        "description": "줌·회전·기울이기로 카메라를 움직일 때, 지형이나 오브젝트에 막히면 어떻게 처리할지 정합니다."
+      }
+    },
+    "lighting": {
+      "section_title": "조명과 그림자",
+      "section_caption": "빛과 그림자의 표현을 설정합니다.",
+      "edge_shade": {
+        "label": "큐브 외곽선",
+        "description": "허공과 맞닿은 모서리만 어둡게 하여 평지는 매끄럽게 이어지고, 높낮이가 바뀌는 곳만 선으로 드러나게 합니다."
+      },
+      "ao": {
+        "label": "음영",
+        "off": {
+          "label": "없음",
+          "description": "모든 면에 동일한 주변광을 적용합니다."
+        },
+        "corner": {
+          "label": "모서리",
+          "description": "큐브가 땅과 맞닿는 곳과 안쪽 모서리를 어둡게 해 땅에 놓인 느낌을 줍니다. 부담이 적습니다."
+        },
+        "screen": {
+          "label": "정밀 (SSAO)",
+          "description": "구석과 틈새까지 세밀한 음영을 더해 입체감을 높입니다. 화면 전체를 처리해 부담이 가장 큽니다."
+        }
+      },
+      "shadows": {
+        "label": "그림자",
+        "description": "지형, 오브젝트, 캐릭터가 햇빛을 받아 땅에 그림자를 드리웁니다."
+      },
+      "rim_light": {
+        "label": "림 라이트",
+        "description": "큐브와 데코, 캐릭터의 윤곽에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
+      }
+    },
+    "debug": {
+      "section_title": "디버그",
+      "section_caption": "화면이 어떻게 그려지고 있는지 살펴보는 진단 도구입니다.",
+      "view": {
+        "label": "뷰",
+        "description": "카메라와 포인터의 위치를 화면에 표시합니다. 카메라의 거리와 각도, 포인터가 가리키는 지점의 좌표를 볼 수 있습니다."
+      },
+      "profiler": {
+        "label": "프로파일러",
+        "description": "프레임마다 걸리는 시간과 GPU·네트워크·메모리 사용량을 보여 주고, 켜 두는 동안 기록합니다."
+      },
+      "world_gizmo": {
+        "label": "월드 기즈모",
+        "description": "화면 중심과 방향을 알려 주는 원을 그리고, 지형을 불러온 영역을 상태별 색으로 땅 위에 표시합니다. 색의 뜻은 함께 뜨는 범례에서 볼 수 있습니다."
+      },
+      "camera_gizmo": {
+        "label": "카메라 기즈모",
+        "description": "화면 중심을 둘러싼 고리 모양 격자를 겹쳐 보여 주고, 블록이 화면에서 차지하는 크기를 색으로 표시합니다. 격자 한 칸과 비슷하면 초록, 더 작으면 파랑, 더 크면 빨강입니다."
+      }
+    },
+    "disclaimer": {
+      "section_title": "유의사항",
+      "demo_notice": "본 서비스는 데모로 제공되며, 예고 없이 데이터가 삭제되거나 서비스가 중단될 수 있습니다.",
+      "coverage_notice": "현재 대한민국 지역만 지원하며, 그 외 지역은 바다로 표시됩니다.",
+      "storage_notice": "직접 놓은 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
+      "location_notice": "사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
+      "character_notice": "캐릭터와 데코에는 CC0 라이선스의 Kenney 에셋 팩을 사용합니다."
+    },
+    "attribution": {
+      "section_title": "출처"
+    },
+    "about": {
+      "section_title": "정보",
+      "tagline": "현실 세계를 캔버스 삼아 블록을 쌓습니다."
+    },
+    "navigation": {
+      "section_title": "화면 이동",
+      "section_caption": "화면을 끌어 중심을 옮길 때의 동작을 설정합니다."
+    }
+  },
+  "drawer": {
+    "title": "서랍",
+    "tabs": {
+      "cube": "큐브",
+      "decor": "데코",
+      "marker": "마커",
+      "character": "캐릭터"
+    },
+    "sections": {
+      "cube": {
+        "colors": "색",
+        "landcover": "땅",
+        "water": "물",
+        "water_features": "물가 시설",
+        "buildings": "건물",
+        "roads": "도로",
+        "aeroways": "공항",
+        "underground": "땅속"
+      },
+      "decor": {
+        "nature": "자연",
+        "vehicle": "탈것"
+      },
+      "marker": "마커"
+    },
+    "character": {
+      "person_label": "캐릭터",
+      "female_label": "여성",
+      "male_label": "남성",
+      "pet_label": "펫"
+    }
+  },
+  "device": {
+    "orientation": {
+      "permission_denied": "방향 센서 사용을 허용해 주세요.",
+      "permission_error": "방향 센서를 사용할 수 없습니다.",
+      "signal_lost": "방향을 확인할 수 없습니다."
+    },
+    "geolocation": {
+      "unsupported": "이 환경에서는 위치 정보를 사용할 수 없습니다.",
+      "permission_denied": "위치 정보 사용을 허용해 주세요.",
+      "generic_error": "현재 위치를 확인할 수 없습니다.",
+      "timeout": "위치를 확인하지 못했습니다. 다시 시도해 주세요."
+    }
+  },
+  "toast": {
+    "server_unstable": "서버 연결이 원활하지 않습니다.",
+    "source_refused": "이 버전은 세계 데이터를 읽을 수 없습니다. 새로고침해 보세요.",
+    "location_checking": "현재 위치를 확인하고 있습니다.",
+    "world_loading": "공간을 불러오고 있습니다.",
+    "world_ready": "공간을 불러왔습니다.",
+    "companion_loading": "동행을 준비하고 있습니다.",
+    "outside": "지원하지 않는 지역입니다.",
+    "network_unstable": "네트워크 연결이 원활하지 않습니다.",
+    "gpu_unstable": "WebGPU 연결이 원활하지 않습니다."
+  },
+  "world": {
+    "dock": {
+      "pointer": "포인터",
+      "eraser": "지우개",
+      "message_placeholder": "메시지 입력…",
+      "marker_placeholder": "이 마커에 쓸 말…",
+      "send": "전송",
+      "marker_done": "마커 세우기",
+      "drawer_tooltip": "서랍 열기",
+      "object_size": "크기 {{n}}"
+    },
+    "controls": {
+      "reset_orientation": "북쪽으로 정렬",
+      "move_to_location": "내 위치로 이동",
+      "start_compass_mode": "나침반 모드 시작",
+      "exit_compass_mode": "나침반 모드 종료",
+      "first_person": "1인칭으로 보기",
+      "third_person": "3인칭으로 보기",
+      "show_places": "장소 보기",
+      "hide_places": "장소 숨기기"
+    },
+    "sensors": {
+      "label": "내 위치 사용",
+      "turn_on": "켜기"
+    },
+    "search": {
+      "trigger_aria_label": "장소 검색",
+      "placeholder": "장소 검색…",
+      "clear_aria_label": "검색어 지우기",
+      "loading": "검색 중…",
+      "no_results": "검색 결과가 없습니다",
+      "section_elsewhere": "기타",
+      "focus": "현재 위치"
+    }
+  },
+  "halt": {
+    "web": {
+      "webgpu": {
+        "title": "WebGPU를 사용할 수 없습니다.",
+        "body": "브라우저를 최신 버전으로 업데이트하거나 다른 브라우저에서 열어 주세요."
+      },
+      "insecure": {
+        "title": "HTTPS 연결이 필요합니다.",
+        "body": "https:// 주소로 다시 접속해 주세요."
+      },
+      "gpu": {
+        "title": "WebGPU를 시작하지 못했습니다.",
+        "body": "브라우저 또는 기기 설정을 확인해 주세요."
+      }
+    },
+    "boot": {
+      "title": "일시적인 오류가 발생했습니다.",
+      "body": "잠시 후 다시 시도해 주세요."
+    },
+    "kernel_panic": {
+      "title": "앱이 중단되었습니다.",
+      "body": "페이지를 새로고침해 주세요."
+    },
+    "server_failed": {
+      "title": "서버 연결이 실패했습니다.",
+      "body": "잠시 후 다시 시도해 주세요."
+    },
+    "gpu_failed": {
+      "title": "WebGPU 연결이 실패했습니다.",
+      "body": "잠시 후 다시 시도해 주세요."
+    },
+    "gpu_lost": {
+      "title": "WebGPU 연결이 끊어졌습니다.",
+      "body": "페이지를 새로고침해 주세요."
+    },
+    "stop_code": "중지 코드: {{code}}"
+  }
+}

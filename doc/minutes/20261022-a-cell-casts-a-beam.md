@@ -6,11 +6,17 @@ were weighed.
 **Status (2026-10-23): changed in two ways.** The window is each cell's own,
 the slope at that cell's corner farthest from the axis, not the screen's
 edge's for every cell (`beam::cell_window`). And a pixel no longer walks
-from its cell's start: samples four a cell a side do (`sample_cs`), and a
-pixel takes the nearest of the blocks the 4 × 4 samples about it stopped at
-that its own ray enters, walking only where none is. The image is no longer
-held to the root walk's; the user ordered the cut, so "Sparser samples lose
-coverage" below is answered by the fallback walk, not avoided.
+from its cell's start: samples four a cell a side do (`beam::SAMPLE`,
+`sample_cs`), and a pixel takes the nearest of the blocks the 4 × 4 samples
+about it stopped at that its own ray enters, walking only where none is
+(`cast_cs`). The image is no longer held to the root walk's: the cut was
+taken, so "Sparser samples lose coverage" below is answered by the fallback
+walk, not avoided.
+
+_Superseded from here to As built where it says a pixel's block is the root
+walk's: by the Status above. The proof still holds for a walk from a cell's
+start, a sample's or a pixel's, not for the block a pixel takes from a
+sample._
 
 The cast walks the pyramid once per camera-grid cell, and each drawn pixel
 finishes only the last few nodes of its own ray from where its cell's walk
@@ -124,6 +130,11 @@ steps on.
 
 ## What a frame costs, by count
 
+_Since then the samples are a fourth count, and what the rays asked is kept
+between frames in the observed pyramid (pxl-spec-core observed.rs;
+[a visit reads one entry](./20261020-a-visit-reads-one-entry.md)), which
+decides how much is asked again, never what is drawn._
+
 - **Beam rays:** one a corner of the grid, each a full walk.
 - **The window:** a minimum over the corners about each cell, once a cell.
 - **Pixels:** each a descent from a node near its cell's beam to the blocks
@@ -134,6 +145,10 @@ the threads ran in, so the image is a function of the world and the eye
 (20261012, "Determinism").
 
 ## What changes
+
+_As built, pxl-shader runs `beam_cs`, `cells_cs`, `sample_cs` and
+`cast_cs`, and `miss_cs` after `cast_cs` for the pixels the observed
+pyramid could not finish._
 
 - **pxl-spec-core `cast`:** a beam stop rule beside `Until::Fills` and
   `Until::Air`; a walk that starts from a line's node at a distance, its

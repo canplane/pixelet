@@ -1,0 +1,15 @@
+// @pxl/native/text.ts
+
+/** Text through the system (Text.swift, Text.kt), called synchronously on the JS thread. */
+
+import type { f32, u32 } from "@xpute/kit/abi/word.ts";
+import { PLATFORM } from "./module.ts";
+
+export function width(weight: u32, px: f32, text: string): f32 {
+  return PLATFORM.textWidth(weight, px, text);
+}
+
+/** `rgba` is 0xRRGGBBAA; `out` is RGBA, top row first, not premultiplied. */
+export function raster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void {
+  PLATFORM.textRaster(weight, px, rgba, text, x, width, height, out);
+}

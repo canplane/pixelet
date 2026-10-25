@@ -1,10 +1,10 @@
 // xpute-gpu/programs.test.rs
 
 //! The programs spec/golden/gpu/programs.tsv records, as the Rust encoder
-//! writes them; cpp/gpu/encode.test.cpp writes the same calls in C++. Each
-//! turn ends through `turn` with a ticket at the done word, the turn's number
-//! from 1, which the next turn waits on; the last reads the result back to
-//! the record's place.
+//! writes them; cpp/xpute/gpu/encode.test.cpp writes the same calls in C++.
+//! Each turn ends through `turn` with a ticket at the done word, the turn's
+//! number from 1, which the next turn waits on; the last reads the result
+//! back to the record's place.
 
 use xpute_guest::ipc::stream::Stream;
 

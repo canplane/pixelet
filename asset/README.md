@@ -26,31 +26,37 @@ asset/
 
 ## What to run, and when
 
-Each is a binary of `pxl-tool` (`crates/tool`), run by a task, and
-`deno task check` clippies and tests every one with the rest.
+Each is a binary of `pxl-tool` (`rust/tool`), run by a task, and
+`make -j8 check` clippies and tests every one with the rest.
 
 ### After changing anything under `content/`
 
 ```sh
-deno task ingest:asset
+make ingest-asset
 ```
 
 It copies every file to `./out/asset/<sha256>.<ext>`, composes the texture
 tiles into one WebP sheet, measures every model's extent out of its glTF, and
-writes the two tables that name them, and draws `raw/place/symbol/` into the
-code that carries the place icons:
+writes the table that names them, `spec/spec/asset/ingested.json`, and draws
+`raw/place/symbol/` into the code that carries the place icons. Then it
+writes what the spec generates from the table:
 
-- `crates/spec/src/asset/ingested.spec.rs` — what the kernel compiles
-- `apps/client/src/catalog/asset/ingested.spec.ts` — what the shell compiles
+- `ts/client/src/catalog/asset/ingested.spec.ts` — the host's table, a key
+  for each file's number
+- `ts/client/src/catalog/asset/catalog.spec.ts` — the catalog the host plugs
+  in, which file each of the kernel's slots names
+- `rust/spec/src/asset/ingested.spec.rs` — the pack's layout, which the
+  renderer compiles
 
-**Commit both tables with the asset change, and upload before deploying.**
+**Commit the table and what it generates with the asset change, and upload
+before deploying.**
 The shipped palette reads that table, and a key it names that is not in the
 bucket is a 404 on the live site. Uploading is the `publish-bucket` skill.
 
 ### After changing which texture pack is used
 
 ```sh
-deno task download pack
+make download-pack
 ```
 
 It fetches each entry of `raw/cube/manifest.json` into `raw/cube/` at source
@@ -62,7 +68,7 @@ Run the ingest afterward: the sheet's key changes with any tile.
 ### After changing the Moon's map
 
 ```sh
-deno task download moon
+make download-moon
 ```
 
 It fetches the CGI Moon Kit's 1K color map into `raw/sky/moon/`, cuts the near

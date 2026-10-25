@@ -1,0 +1,51 @@
+[package]
+name = "pxl-native"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+# Linked into the device app's binary.
+# An Android app loads a shared library instead, which its build asks cargo
+# for by name (ts/app/native/script/build-native.py, `--crate-type cdylib`), so
+# no iPhone build links one it would not use.
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[dependencies]
+fnv.workspace = true
+xpute-kit = { workspace = true, features = ["std"] }
+xpute-guest.workspace = true
+# The kernel's memory, its thread and the allocator over both (src/lib.rs).
+xpute-host.workspace = true
+pxl-kernel.workspace = true
+pxl-render.workspace = true
+# The host that runs the renderer's stream on the device after each turn
+# (src/surface.rs), as the page's runs it on WebGPU.
+xpute-gpu = { workspace = true, features = ["host"] }
+# The device, and the view's layer or window made a surface on
+# (src/surface.rs).
+# Metal on an iPhone, Vulkan on Android; each backend compiles to nothing on
+# the other's system.
+wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl"] }
+# The bodies the app's fetch hands over still zstd (src/unpack.rs): a reader
+# of RFC 8878's frame, as a browser's decoder is, in Rust, so no target's
+# build needs a C compiler for it.
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+
+# What an Android app reaches the kernel through (src/android.rs): the NDK's
+# own headers — JNI, the native window a view's surface is, and the log —
+# as bindings and nothing over them.
+[target.'cfg(target_os = "android")'.dependencies]
+ndk-sys = "0.6"
+jni-sys = "0.3"
+
+[features]
+# Forwarded to the kernel: on for a build anyone works on.
+default = ["dev"]
+dev = ["pxl-kernel/dev"]
+
+[lints]
+workspace = true

@@ -1,7 +1,7 @@
 # The ground is a Carto palette
 
 **2026-10-05** — decided in the conversation; built on the `carto-standard`
-branch.
+branch, since merged into `main`.
 
 pixelet is a paint canvas in the shape of the world, so what a ground cell
 needs to say is which color of block stands there, not what the land is used
@@ -42,7 +42,12 @@ stacks them — landcover, water, buildings, roads by Carto's `z`, aeroways —
 and within each, the order its style draws. So one order is said once and read
 twice: what paints over what in the bake, and where a key sits in the drawer.
 The fold keeps its majority and its tie, the corner that alternates with the
-zoom (`pxl-spec bake/fold.rs` `majority`), now over the one value.
+zoom (`pxl-spec-core ground::majority`), now over the one value.
+
+_Since then a tile's cell holds the four looks it folds, `dx + 2·dy`, and its
+own look is their majority (`pxl-spec bake/tile/terrain.rs` `Ground`,
+`bake/fold.rs` `fold_ground`, pxl-spec-core `ground::own`), not one folded
+value._
 
 Carto has one water fill, so water is one key, river and lake alike. A
 wetland is filled by its `wetland` tag, which Overture does not carry, and
@@ -60,6 +65,13 @@ range is the same palette:
 | 255        | `unknown`: a byte no bake wrote | ground and objects |
 | 256 and up | `air`, the user's colors, decor | objects alone      |
 
+_Past the coverage is now `unknown`, not `void`: nothing is known there, sea
+or land, so it gives no surface, is drawn as nothing and leaves the planet's
+picture under it, and nothing is placed on or taken from it (`geo-bake
+terrain/absent.rs`; pxl-spec-core `cube.spec.rs` `sentinel`). `void` is
+nothing painted: the ground before a bake writes it, and an object cell no
+leaf holds._
+
 `void` is where the terrain gives no surface: past the source's coverage,
 where a page has no object and the fold reads it as void, and the column there
 draws no ground and stops no ray, while an object placed there stands as any
@@ -67,7 +79,14 @@ other does. Inside the coverage a page with no object is open sea, since only
 a page with nothing drawn in it is left unbaked; a coarser one is the fold of
 those under it, so absence folds as every page does and no shared ocean page
 is baked or published (`geo-bake terrain/absent.rs`). Whether a page has
-arrived is the query's to say (`world/access.rs`), never a cell's.
+arrived is the query's to say (pxl-kernel `domain/query.rs`, pxl-spec-core
+`answer.rs` `Kind::Lacks`), never a cell's.
+
+> Superseded. Now past the coverage is `unknown`, not `void`, as the note
+> above says: it gives no surface and nothing is placed there, so an object
+> no longer stands past the coverage. `void` is only nothing painted
+> (spec/spec/block/cube.json `sentinel`). Inside the coverage a missing page
+> is still open sea.
 
 The ground is the palette's subset an object can also be: placing a block of
 forest stores the forest's number, so a terrain-styled cube needs no encoding
@@ -79,12 +98,13 @@ as unknown, as a word the pack did not write did before.
 
 Carto is read at one commit, gravitystorm/openstreetmap-carto `1cc4b89`
 (2026-09-20; its styles are v6.1.0's), and each rule cites the style it comes
-from beside the code that applies it (`geo-bake overture/policy.rs`).
+from beside the code that applies it (`geo-bake
+terrain/pipeline/overture/policy.rs`).
 
 A cell shows one look, so painting is an order: every feature has a rank, a
 later rank paints over an earlier one, and only the parts of one source share
 a rank, which paint one look. The rank is Carto's sort, compared field by field
-(`terrain/pipeline/feature.rs` `Rank`):
+(`geo-bake terrain/pipeline/feature.rs` `Rank`):
 
 1. The layer, in the order `project.mml` stacks them: landcover, the
    cutlines (`landcover-line`), the waterways drawn as lines, the water
@@ -117,8 +137,9 @@ it.
 
 The order decides only what lies on the ground at one height. What stands
 over or under it is not painted: a bridge is a deck, a tunnel a bore, both
-lines the bake writes beside the ground (archive/20261001-ways-off-the-ground.md),
-and an indoor passage is left off. A road with none of those flags that
+lines the bake writes beside the ground
+([ways off the ground](./archive/20261001-ways-off-the-ground.md)), and an
+indoor passage is left off. A road with none of those flags that
 crosses a building's footprint is where the order speaks, and the building
 shows. For the same reason a bridge's own area (`man_made=bridge`, Carto's
 `bridge` layer) is not painted: the deck is drawn from the ways on it, and
