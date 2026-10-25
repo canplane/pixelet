@@ -46,8 +46,8 @@ built for wasm among them) and the crates'.
 
 Neither runs the GPU hosts: `make -C xpute test-gpu` needs a GPU and
 Chrome (`$CHROME`), and holds the native host on wgpu and the web host to
-`spec/golden/gpu`. Run it by hand before deploying a change to a GPU call —
-`spec/gpu/`, xpute's `gpu` crates and packages, or how pxl-render encodes.
+`xpute/spec/golden/gpu`. Run it by hand before deploying a change to a GPU call —
+`xpute/spec/gpu/`, xpute's `gpu` crates and packages, or how pxl-render encodes.
 
 A `deploy-web` that fails at `wrangler deploy` says in its last line whether
 plei.me serves the build anyway (wrangler can fail after the Worker went

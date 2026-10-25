@@ -155,7 +155,8 @@ free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
 that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
 Writes are outside it, and nothing configures a spending cap: a publish is a
-pyramid's worth of Class A operations, so the publish-bucket skill checks the month's count before one.
+pyramid's worth of Class A operations, so the publish-bucket skill checks the
+month's count before one.
 
 The bucket, `pixelet-tiles`, holds everything the client fetches that is not the app itself:
 
@@ -193,7 +194,7 @@ unnumbered.
 ```sh
 wrangler login           # once a machine
 make -j8 check && make -j8 test
-make deploy         # build, publish
+make deploy              # build, publish
 ./script/smoke.py https://plei.me
 ```
 
@@ -220,7 +221,7 @@ it is lives in the workflow's comments.
 | `number`        | every push to deploy  | takes a build number                                                                                    |
 | `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate` |
 | `deploy-web`    | after `deploy-server` | `make deploy` under the build number: builds, keeps the panic paths, publishes                          |
-| `smoke`         | after both deployed   | `./script/smoke.py https://plei.me`                                                          |
+| `smoke`         | after both deployed   | `./script/smoke.py https://plei.me`                                                                     |
 | `record`        | after either deployed | appends the build to the log                                                                            |
 
 A deploy is whole: the client and the servers go out from the one commit,

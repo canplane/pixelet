@@ -253,7 +253,7 @@ implemented.
   by use.
 
 > Since opened: xpute carries an MIT license (`xpute/LICENSE`), and
-> `xpute/script/export.ts` copies what git tracks under `xpute/` into its
+> `xpute/script/export.py` copies what git tracks under `xpute/` into its
 > own repository. Its scope is not the `ds/`, `ipc/`, `memory/`, `sched/`
 > proposed above but `kit` and the two ends, `guest` and `host`
 > (`xpute/README.md`).

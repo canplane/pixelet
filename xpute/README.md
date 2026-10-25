@@ -114,6 +114,7 @@ make -j8 test      # deno test, cargo test and the C++ tests, the golden records
                    # and the traces against every guest, native and WebAssembly, once build has made them
 make -j8 build     # the guest the traces drive, in Rust and C++, native and WebAssembly; test builds it first
 make -j8 test-gpu  # the GPU hosts against golden/gpu: the native one on wgpu, the web one in Chrome (installed, or $CHROME)
+make fmt           # deno fmt, cargo fmt
 make lint          # deno lint
 ```
 

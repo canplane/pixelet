@@ -241,6 +241,11 @@ the rays already play to the rays alone.
   decor and places, is gathered about the eye
   (`rust/client/kernel/src/domain/chunk.rs`, `domain/view/observation.rs` `cubes`).
 
+  > Since 2026-10-26, the rung is gone too: there is no chunk, not even as
+  > an address. Decor is grown and the markers are read over the eye's
+  > windows' squares (`rust/client/kernel/src/domain/view/observation.rs`
+  > `squares`, `domain/scene/marker/arrangement.rs`).
+
 **The floor.** Below these, five things remain, and removing any one brings
 its problem back: the tree, or the cost is linear in the world; the bound,
 or no empty space is skipped; the fold, or there is no level of detail;

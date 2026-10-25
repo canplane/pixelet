@@ -26,7 +26,7 @@ asset/
 
 ## What to run, and when
 
-Each is a binary of `pxl-tool` (`rust/tool`), run by a task, and
+Each is a binary of `pxl-tool` (`rust/tool`), run by make, and
 `make -j8 check` clippies and tests every one with the rest.
 
 ### After changing anything under `content/`

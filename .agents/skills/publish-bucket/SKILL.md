@@ -18,7 +18,7 @@ upload must set both.
 
 ## One-time setup
 
-In the Cloudflare dashboard: create the bucket, named as `wrangler.jsonc`'s
+In the Cloudflare dashboard: create the bucket, named as `ts/server/edge/wrangler.jsonc`'s
 `r2_buckets[0].bucket_name` and kept **private**; create an R2 API token (an
 S3-compatible key ID and secret); note the account ID. Then, in a profile of
 its own so a default AWS profile is left alone:
@@ -83,7 +83,7 @@ make ingest-asset
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-tiles/asset \
-    --profile r2 --endpoint-url $R2 \
+    --profile r2 \
     --exclude "*" --include "*.${t%%:*}" \
     --content-type ${t#*:} --cache-control "public, max-age=31536000, immutable"
 done
@@ -99,8 +99,8 @@ names that is not in the bucket is a 404 on the live site.
 ```bash
 # expect the manifest's ContentEncoding on a tile;
 # ContentType model/gltf-binary and no ContentEncoding on a glb
-aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2 --endpoint-url $R2
-aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profile r2 --endpoint-url $R2
+aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2
+aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profile r2
 ```
 
 ## Verify what is served

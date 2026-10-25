@@ -47,8 +47,10 @@ is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
   renamed is fixed with it, in the live minutes too, where a claim the code
   no longer holds gets a note under it. `doc/minutes/archive/` and
   `doc/experiment/` name the files of their day and are not kept up.
-- The tree's scripts are ES modules, TypeScript where a loader takes it:
-  no `.cjs` or `.cts`. Node runs only the native toolchain's own scripts.
+- A script is in the language its work takes and run by its path: Python
+  on its standard library alone, or sh. One in JavaScript is an ES module,
+  TypeScript where a loader takes it: no `.cjs` or `.cts`. Node runs only
+  the native toolchain's own scripts.
 
 ## Code
 
@@ -64,7 +66,7 @@ The same bits on every machine, in pixelet and xpute alike:
 The core memory is addressed by offset:
 
 - In the crates that do (xpute's guest and host, the kernel, the renderer,
-  both brackets — pxl-tool `bin/check_rules.rs` `OFFSET_CRATES`), an offset
+  the kernel's two brackets — pxl-tool `bin/check_rules.rs` `OFFSET_CRATES`), an offset
   becomes a pointer only through `xpute_guest::mem::base::ptr_at`, never
   `as *const` or `as *mut`.
 

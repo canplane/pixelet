@@ -16,11 +16,11 @@ at the end.
 > (`spec/spec/route.json`), the tiles under `TILE_ROOT`, `/tile`, and not
 > `/geo/tiles`; the routes are generated too (`SEARCH_URL`, `GEO_INTERNAL`
 > and `API_INTERNAL` in `pxl_spec::route`, `rust/spec/src/route.spec.rs`);
-> the generator is pxl-tool (`rust/tool/src/bin/spec.rs`, `deno task
-> spec`); the crates are under `rust/server/` (`geo`, `api`, `geo-bake`,
+> the generator is pxl-tool (`rust/tool/src/bin/spec.rs`, `make spec`);
+> the crates are under `rust/server/` (`geo`, `api`, `geo-bake`,
 > `geo-spec`); and the bakes are `bake_terrain`, `bake_place` and
-> `bake_division` (`./script/tool.ts bake <kind>`, `script/tool.ts`). `apps/api`
-> and `tool/` are gone.
+> `bake_division` (`make bake-<kind>`, rust/'s cargo aliases in
+> `rust/.cargo/config.toml`). `apps/api` and `tool/` are gone.
 
 ## What `apps/api` actually is
 
@@ -80,7 +80,7 @@ Which means Figma's own conclusion — keep the ordinary API on the old runtime
 touch `pxl-spec`, runs a few times a year, and gains nothing; not because it is
 "a normal web API".
 
-`@xpute/core/kit/word.ts` and `kit/lower.ts` have no Rust counterpart and need
+`@xpute/kit/abi/word.ts` and `wire/lower.ts` have no Rust counterpart and need
 none: branded integers, and a tuple↔object conversion the Rust does
 structurally.
 
@@ -88,7 +88,7 @@ structurally.
 
 **The crates are single-threaded by construction.** `xpute-core`'s
 `ArrayBuffer` is an `Rc<Storage>` (`kit/array.rs`), so every `U8Array`/`Bytes`
-is `!Send`; and `sys/global.rs` carries `unsafe impl<T> Sync for Global<T>`
+is `!Send`; and `xpute-guest global.rs` carries `unsafe impl<T> Sync for Global<T>`
 justified by "one thread, and no turn holds a reference across another" —
 sound in a WASM module, a data race in a worker pool. `pxl-spec` itself uses no
 `Global` (only `sched::task`'s executor does), so the live constraint is `Rc`:
@@ -97,6 +97,10 @@ sound in a WASM module, a data race in a worker pool. `pxl-spec` itself uses no
 - the boundary type is `Vec<u8>`, never `U8Array`;
 - `spawn_blocking` is fine — the closure captures `Send` input, returns
   `Vec<u8>`, and the `Rc`s live and die inside it.
+
+> Since changed: xpute's Rust has no `ArrayBuffer`, `U8Array` or `Bytes`,
+> and neither it nor `pxl-spec` holds an `Rc`; of the two premises' first,
+> what is left is `Global`'s one thread (`xpute-guest global.rs`).
 
 The temptation when the compiler refuses is to reach for `Arc`. That breaks
 the premise rather than satisfying it, and the premise is the same one
@@ -131,7 +135,7 @@ inherits = "release"      cargo run --profile server   → "drop ran", caught = 
 panic = "unwind"
 ```
 
-`apps/web/script/build_wasm.ts` builds with `--release`, so the module is
+`ts/app/web/script/build-wasm.py` builds with `--release`, so the module is
 untouched, and the two binaries never link together.
 
 ## Server-side WASM, and why not
@@ -182,7 +186,7 @@ is not a candidate for a server whose job will be pushing.
 `pxl-kernel` natively as the authority — the same simulation on both sides,
 each compiled for what it actually is — is Figma's shape and a headless game
 server's. The door is open and should stay open: only `pxl-wasm` is
-WASM-only, and `pxl-kernel` already builds on the host in `check:rust`. Do not
+WASM-only, and `pxl-kernel` already builds on the host in `check-rust`. Do not
 introduce WASM-only assumptions into `pxl-kernel`.
 
 ## Where the boundaries fall
@@ -231,6 +235,10 @@ ordinary work, so this binary is what one runs _while working on the bake_ —
 `deno.jsonc` already draws that line ("Not usable for bake work: a published
 tile prefix is frozen").
 
+> Since 2026-10-26, the root has no `deno.jsonc`: its tasks are the
+> `Makefile`'s, which draws the same line over `dev` ("not for bake work,
+> its tile prefix frozen").
+
 **`pxl-api` for the db-main half**, decided after `pxl-app` was rejected:
 `app` already means four things here, and one of them is the client —
 `wrangler.jsonc` contrasts `/api/*` with "the app". `pxl-api` carries its own
@@ -265,7 +273,7 @@ owner wants a dedicated thread regardless.
 ORM over a schema DSL and every query in this repo is raw PostGIS
 (`ST_Resample`, `ST_DumpValues`, `ST_Difference`) — nothing to gain. sqlx's
 headline feature is compile-time-checked queries, which needs a reachable
-database at build time or a checked-in offline cache; `check:rust` is a gate
+database at build time or a checked-in offline cache; `check-rust` is a gate
 that must pass with no geo DB up, and the Docker build has none either, so
 sqlx would be used with its selling point switched off. **tokio-postgres plus
 deadpool-postgres**: raw SQL is what exists, and per-connection prepared
@@ -344,6 +352,10 @@ The TypeScript pair stays too — `packages/pxl/shared/src/bake/*`,
 constants and types from them, `kernel.test.ts` builds its fixture packets with
 `encode_terrain`/`encode_poi_page`, and — the larger reason — the byte-for-byte
 verification below needs both sides alive to compare.
+
+> Since retired: the TypeScript pair went the next day
+> ([the last TypeScript that was not the shell](./archive/20260919-the-last-typescript-that-was-not-the-shell.md));
+> the formats are written in Rust alone.
 
 ## How the bake is verified
 
@@ -855,8 +867,9 @@ Verified end to end through vite with all four processes up:
 
 > As of 09-18. Now `serve_tiles` serves `/tile/*` and `/asset/*`
 > (`rust/server/geo-bake/src/bin/serve_tiles.rs`), and the four local
-> processes are `make dev-oven` or `dev:shelf`; `make dev` reads
-> the published deployment (`deno.jsonc`, `ts/app/web/vite.config.ts`).
+> processes are `make dev-oven` or `make dev-shelf`; `make dev` reads
+> the published deployment (`ts/app/web/deno.jsonc`,
+> `ts/app/web/vite.config.ts`).
 
 **The move is through, and the frame is in.** `crates/pxl/geo` answers `/geo/*`
 against db-geo, `crates/pxl/api` answers `/api/*` against db-main and has no

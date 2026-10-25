@@ -156,7 +156,7 @@ eight equal leaves are joined into their parent.
 The two ways of stopping are one rule. A node stops growing where it
 already says all of the ground under it, and a coarser cell of equal ones is the
 case where any summary loses nothing. The pyramid's tile says it in its
-occupancy (`bake/tile/terrain.rs` `Occupancy`), which children are tiles, written by
+occupancy (`bake/tile.rs` `Occupancy`), which children are tiles, written by
 the bake's fold: a tile of places marks a child none when no cell over it
 holds two places, so the tree of places is only as deep as a crowd needs,
 and terrain marks only a child that is the zero tile, its vote being lossy.
@@ -164,7 +164,7 @@ and terrain marks only a child that is the zero tile, its vote being lossy.
 They stay two because one is resident by tile and the other is not. Objects
 keep no coarse zoom: their query folds a node's leaves when it is asked. Were
 objects ever resident by tile, their branches would be a layer of the
-pyramid, and a block of equal leaves joined its occupancy.
+pyramid, and a family of equal leaves joined its occupancy.
 
 A reader that crosses two trees walks each its own way and puts the answers
 together (pxl-kernel domain/query/ray.rs `first_hit`). A ray reads the ground

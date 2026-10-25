@@ -2,7 +2,7 @@
 
 `db-geo` is a local copy of three public sources — Overture Maps, GEDTM30's
 elevation and OpenStreetMap's land polygons — in one PostGIS instance. The
-bakes read it to make every tile; forward search reads it live. Three scripts
+bakes read it to make every tile; forward search reads it live. Three ingests
 fill it, run by hand when a source or the coverage changes.
 
 What it holds is decided by two things a file pins:

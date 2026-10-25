@@ -9,6 +9,10 @@ screen's rays are cast on the GPU and paint the block each stops at
 (pxl-kernel domain/chunk.rs), so what this says of making chunks is superseded
 ("What is drawn").
 
+> Since 2026-10-26, not even an address is left: there is no chunk, and
+> what stands in the world is gathered over the eye's windows' squares
+> (pxl-kernel domain/view/observation.rs `squares`).
+
 ## The structure
 
 What is drawn is 1 × 1 × 1 blocks. What is in a block is one answer, laid

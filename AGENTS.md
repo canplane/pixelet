@@ -7,7 +7,7 @@
   memory and time, carries bytes, and dispatches the guest's calls by
   number; it decides nothing about what a number means.
 - **pixelet** fills those roles with its own parts. The kernel is its
-  guest, and its host is `ts/client/src/host/` plus a platform bracket,
+  guest, and its host is `ts/client/src/host/` plus the client's bracket,
   holding only what `@xpute/host` is handed; on a device, only what
   `xpute-host` is handed. What the kernel's numbers mean outside it, and
   the policy over them, are pixelet's: its commands, snapshot and boot in

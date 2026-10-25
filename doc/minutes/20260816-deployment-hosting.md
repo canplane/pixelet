@@ -106,7 +106,7 @@ so a 404 there is a genuine failure and must keep surfacing as one.
 > Superseded: `__TILE_BASE_URL__` is gone, and `VITE_TILE_BASE_URL` now
 > only points the dev server's proxy at a local tile server
 > (`ts/app/web/vite.config.ts`). Tile URLs are `/tile/<kind>/<version>/<name>`
-> (`tileUrl` in `ts/client/src/config/route.ts`), and which version is
+> (`tile_url` in `ts/client/src/config/route.ts`), and which version is
 > served is the bucket's `source` declaration (`spec/spec/bake/published.json`).
 > Immutable versions, never overwritten in place, still hold.
 
@@ -546,7 +546,7 @@ any future non-static path.
 > `spec/spec/route.json`). The reasoning below holds.
 
 The shape that shipped is one Cloudflare Worker serving both the built app and
-the tiles (`ts/server/edge/wrangler.jsonc`, `apps/web/worker/index.ts`), so tiles live
+the tiles (`ts/server/edge/wrangler.jsonc`, `ts/server/edge/index.ts`), so tiles live
 under `/tiles/` on the app's own hostname and are same-origin by construction.
 Two settings make that work together, and both matter:
 

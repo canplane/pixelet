@@ -2,7 +2,7 @@
 
 //! Fetches each `asset/raw/cube/manifest.json` entry not already cached there
 //! and normalizes it to a `TILE_SIZE` opaque PNG in `asset/content/cube/`.
-//! Follow with `ingest:asset`.
+//! Follow with `make ingest-asset`.
 //!
 //!   make download-pack
 

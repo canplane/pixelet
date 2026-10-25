@@ -7,8 +7,8 @@ takes the file of the device's platform, Vite the default, and every import
 names the default. An override re-exports the default and replaces only what it
 draws itself, and `ts/client/src/conform.ts` holds each to its default's
 exports. What only the place gives — the kernel's memory, the GPU, storage,
-text, the network, the sensors, the surfaces — is not here but the app's
-bracket (`ts/client/src/bracket.tsx`): the world's surface, for one, is a
+text, the network, the sensors, the surfaces — is not here but in the
+client's bracket, which each app hands it (`ts/client/src/bracket.tsx`): the world's surface, for one, is a
 canvas on the page (`ts/app/web/src/surface.tsx`) and a native view on a
 device (`ts/app/native/src/surface.tsx`). This page says each piece's
 implementation side by side, so where the platforms part shows in one
@@ -42,10 +42,10 @@ then `large` again.
 ## A control that takes a touch is UIKit's
 
 On an iPhone, a control that takes a touch inside React Native's views is
-UIKit's: React Native's own component, or a view of this module
-(`modules/platform/ios/`). SwiftUI, through `@expo/ui`, draws what is
-presented on its own (the sheet) and nothing a touch lands on inside React
-Native.
+UIKit's: React Native's own component, or a view of the platform module
+(`ts/app/native/modules/platform/ios/`). SwiftUI, through `@expo/ui`,
+draws what is presented on its own (the sheet) and nothing a touch lands on
+inside React Native.
 
 A SwiftUI Toggle in the settings sheet sat in SwiftUI under React Native's
 scroll view under SwiftUI again, and on a phone it took about three quick

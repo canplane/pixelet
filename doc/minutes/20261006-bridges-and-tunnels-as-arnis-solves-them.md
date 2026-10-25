@@ -34,7 +34,7 @@ surfaces was drafted and aborted the day before
   > where their rings saw different parts. Whether decks stand side by
   > side, a deck's axis and its course are judged on the ways whole. A deck
   > is solved in blocks of 16 cells along its way, each from what lies
-  > about the block (`pxl-geo-bake separation/arnis.rs` `DECK_BLOCK`,
+  > about the block (`pxl-geo-bake separation/solve/bridge.rs` `DECK_PANEL`,
   > `DECK_WINDOW`, `DECK_NEAR`), and a cell between two blocks is their
   > blend. The ground floors a deck and is no point of its line; a deck
   > with no end of its own in sight holds the highest it meets in sight,
@@ -72,7 +72,7 @@ Arnis's numbers are metres — a block is a metre upright on the Earth (its
 `celestial.rs`) — and each is taken into the page's cells by the page's
 scale, `u_per_m` at the page's south-west corner (`pxl-spec procedural.rs`
 `Frame::per_m`), rounded half to even (`pxl-spec-core` `cells_of_m`;
-`pxl-geo-bake separation/arnis.rs`). A deck's slab is Arnis's structure
+`pxl-geo-bake separation/solve.rs`). A deck's slab is Arnis's structure
 depth so taken (`pxl-spec-core ways.rs` `occupies`, `slab_depth`), and a
 bore's clear space is carried by its line (`pxl-spec bake/separation.rs`
 `clear`): its ceiling under cover, the whole height to the sky where the
@@ -129,7 +129,7 @@ draws nothing that is not in use.
   > lowest such floor within a tile, raised to whichever portal its page
   > sees, with no one valley: the straight run between its portals is not a
   > ring's to know, and is not looked for past it, which would cost every
-  > page reads it is not owed (`pxl-geo-bake separation/arnis.rs`, the
+  > page reads it is not owed (`pxl-geo-bake separation/solve.rs`, the
   > module's rules). It stands up to 2% above that straight run where it is
   > furthest from low cover: `c739a673…` runs from 39 up to 42 and down to
   > 27 where Arnis runs from 39 to 28. A road tunnel whose end lies along
@@ -138,7 +138,7 @@ draws nothing that is not in use.
   > 49 tunnel crossings differ (4 did, by up to 4 cells), and at Bukak
   > (126.9845 37.6025) 0 of 6 (4 did, by up to 14).
 
-It is the page bake's solve (`pxl-geo-bake separation/arnis.rs`); the
+It is the page bake's solve (`pxl-geo-bake separation/solve.rs`); the
 earlier one and the structures it kept between pages are gone.
 
 Measured at Namsan, nine pages each solved from its own ring: 0.08 to 0.41 s a page, of which the solve is 0.01 to 0.04 s

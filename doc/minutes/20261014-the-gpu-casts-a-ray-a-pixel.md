@@ -51,7 +51,7 @@ both compute:
 - the ray's descent (`cast::first`, generic over `Query`).
 
 pxl-spec re-exports it. rust-gpu compiles the same crate to WGSL
-(`script/shader-wgsl.ts`, in a Linux container), and the generated
+(`pxl-tool bin/shader_wgsl.rs`, in a Linux container), and the generated
 `rust/client/render/src/frame/shader/cast.gen.wgsl` is checked in. `--check`
 says whether it is current, so no everyday build needs rust-gpu.
 

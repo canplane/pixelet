@@ -12,7 +12,7 @@ already does is cited, and where it does not.
   (`spec/`) is where assets are declared.
 - An asset's **kind** is one of five: **cube**, **decor**, **marker**,
   **actor** and **sky**. An **asset id** is its kind over its shape, as
-  today's `spec/spec/block/id.json` calls a block's id. These are the
+  today's `spec/spec/asset/id.json` calls a block's id. These are the
   internal names; what the UI shows them as is the locale's (the drawer's
   "Character" is the actor kind).
   - A **marker** is any asset drawn flat to the camera from a design on the
@@ -74,7 +74,7 @@ wants.
      - the pins' clustering by marker cell (`markers`, and `step` where a
        cell's markers become a `Count`);
      - whether the chat line shows, by the marker kind's `MARKER_SHOWN_FROM`
-       and the chunk its speaker stands in (`block/marker.json`, `Label::at`);
+       and the chunk its speaker stands in (`asset/marker.json`, `Label::at`);
      - where a tap goes (`tap`).
    - The sheet's cache is keyed by `Label`, which carries the holder's key:
      a pin's address (`EntryAt`, its cube at its zoom) and a cluster's cell.
@@ -89,7 +89,7 @@ wants.
    > it paints, painted once however many show it (`design.rs`). A count is
    > a pin's pill in its colors turned over (`pin.rs`, pxl-render
    > `gpu/sheet/shelf.rs` `Paint::Pill`), the clustering the pins' own rule
-   > (`block/marker.json`, `marker_cell`), and the chat line shows by its
+   > (`asset/marker.json`, `marker_cell`), and the chat line shows by its
    > own rule (`chat.rs` `hangs`).
 2. **The chat line is in no frame.** Each tick the companion computes the
    point over its person's head and hands it over (`domain/scene/character/
@@ -122,7 +122,7 @@ wants.
 
    > Since fixed: `spec/spec/asset/sky.json` declares the cumulus and the
    > Moon's picture; the by-size draw is the clouds' own (`cloud.rs`
-   > `present_block`), the lanes `domain/scene/lane.rs`'s, the groups
+   > `present_patch`), the lanes `domain/scene/lane.rs`'s, the groups
    > numbered by pxl-spec-core's `scatter`.
 6. **The kernel knows which assets exist.** The number the socket takes is
    an index into the file table compiled into the kernel (`pxl-spec
@@ -132,7 +132,7 @@ wants.
    - the actors: `spec/client/kernel/domain/query/model/variant.json`, paired to files
      in `domain/scene/character/variant.rs`, apart from the block catalog, and
      named for its entries rather than its subject;
-   - the decors: `spec/spec/block/decor.json`;
+   - the decors: `spec/spec/asset/decor.json`;
    - the clouds: written in the kernel.
 
    The texture pack is one past the table's end (`sys/load.rs` `Load::Pack`,
@@ -144,6 +144,10 @@ wants.
    > texture pack is the file `cube.json`'s `pack` names, a row of the table
    > like any other, so `Load::Pack` and the host's special case are gone.
    > The table is still compiled in; see Open.
+   >
+   > Since 2026-10-26, it is not: the kernel reads the catalog through the
+   > asset root at boot, which fills each compiled slot with a file and its
+   > extent (`pxl-spec asset/catalog.rs`), and knows no file by name.
 7. **Control asks by kind** where it asks what a block occupies or hides:
    `domain/control/interaction/collision.rs` (markers), `edit.rs` (`hide_in`), and
    `ghost.rs` (`Ghost::Box` or `Ghost::Decor`), and `turn.rs` turns each
@@ -159,12 +163,12 @@ wants.
    > interface, not one behaviour. `PlacementTool`'s `zoom` and `room` stay
    > by kind, since the tool is the descriptor of the asset it places.
 8. **The top sums its owners' bounds by name** (`door/layout.rs`
-   `MODELS_MAX`, `SINGLE_BLOCKS`). `SINGLE_BLOCKS` is 4 for five owners — the
+   `MODELS_MAX`, `SINGLE_UPLOADS`). `SINGLE_UPLOADS` is 4 for five owners — the
    ghost, the puck, two debug line sets (`domain/scene.rs` `debug`, `coverage`) and
-   the billboards — and the doubling in render's `gpu/block.rs` `block_slots`
+   the billboards — and the doubling in render's `gpu/upload.rs` `slots_of`
    hides it.
 
-   > Since fixed: `SINGLE_BLOCKS` is 5, one for each owner
+   > Since fixed: `SINGLE_UPLOADS` is 5, one for each owner
    > (`door/layout.rs`). The top still sums its owners' bounds by name.
    >
    > Settled (2026-10-26): the sum stays the top's, which wires everything
@@ -182,7 +186,7 @@ wants.
    - The collector lists instances by their own keys, and each asset gives
      its design.
    - The pins' clustering is the pins' own rule, declared with the marker
-     kind in `block/marker.json` beside `MARKER_SCALE_STEPS`, whose cell it
+     kind in `asset/marker.json` beside `MARKER_SCALE_STEPS`, whose cell it
      already is.
    - `Label::Count`, `DrawSpec::Count`, `count_pill` and `Thing::Count` go.
 2. **Frames.** A person and a pet are each a frame, holding its actor's
@@ -275,15 +279,20 @@ kernel/src/
   > `.fixed`'s size as an argument, but the heap begins after it, and the
   > allocator asks for its first block before boot (`door/layout.rs`
   > `heap_at`), while reading a catalog needs the heap and the rings. The
-  > block slots (`BLOCK_SLOTS` from `MAX_LIVE_BLOCKS`, which sums the
+  > block slots (`slots_of` over `MAX_LIVE_UPLOADS`, which sums the
   > catalogs' `MODELS_MAX`), the turn's task pool (`sched/edge.rs` `TASKS`,
-  > a const generic over `load::LOADS`), the loader's tables and the
+  > a const generic over `load::LOAD_FILES`), the loader's tables and the
   > renderer's `gpu/pass/decor.rs` `GROUPS` are sized by the compiled
   > catalog, and `.fixed` is asserted against the phone's heap at compile
   > time. Laid at boot, each needs a bound of its own (a most models, a
   > most loads) or to move to the heap.
 - **The spec tree.** `spec/spec/block/` holds the one catalog; whether it
   becomes `spec/spec/asset/`, and what the file table is named then.
+
+  > Since 2026-10-26, the asset specs are `spec/spec/asset/`, and
+  > `spec/spec/block/` keeps only what a block carries beyond its id
+  > (`ext.json`). The file table is the catalog, its slots compiled
+  > (`pxl-spec asset/catalog.rs`).
 - **What the catalog decides.** It names files, not assets. Which assets
   exist, their kinds and how many files each references stay compiled, the
   world's rule; each reference is a slot the catalog fills, read through the

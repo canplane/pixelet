@@ -60,12 +60,12 @@ texture pack's load number, `variant.json`) are left out.
    the same lane layout by hand, and `5 * count` restates `drawn::LANES`. One
    home, under the clouds or named for what it is, its lanes from
    `drawn::LANES`.
-8. **Draw-group numbering written four times:** pxl-spec `block.rs`
+8. **Draw-group numbering written four times:** pxl-spec `asset.rs`
    `Decor::first_group`, pxl-spec-core `scatter.rs` `GROUPS`/`first_group`,
    `scene/environment/cloud.rs` `FIRST_GROUP`, and `scene/stage.rs`'s zip
    order. One source: `scatter.rs`.
 9. **The camera grid's cell reaches the GPU in two words:** the frame
-   uniform's `LOD_CELL` and the eye words' `TAU`/`GRID`. The camera gizmo draws
+   uniform's `CELL` and the eye words' `TAU`/`GRID`. The camera gizmo draws
    from one, the cast reads the other. One word.
 10. **`layer::Query` is described as every layer's seam and read generically
     by nothing:** two implementations, always called on their concrete types,
@@ -104,3 +104,10 @@ and are taken with that work. The rest stand alone.
 > `opened`. 5, decor registers through `model_of` alone. 7, the lanes are
 > `domain/scene/lane.rs`, the by-size draw the clouds'. 8, the groups are
 > numbered by `scatter.rs`.
+
+> Since 2026-10-26, 2 is taken: the settings slot is opened on the storage
+> root as the objects' is, and `WORLD_BOOT` carries no settings
+> (`door/apply.rs`, `view/setting/store.rs`). 3 in part: the client's read
+> of the source declaration draws its wait with full jitter
+> (`ts/client/src/namespace/source.ts`), but still never gives up, and its
+> numbers are its own.
