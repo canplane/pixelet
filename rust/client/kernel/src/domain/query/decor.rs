@@ -247,35 +247,6 @@ impl<'a> World<'a> {
         DECORS.iter().any(|decor| grown_at(&mut Asked::new(self), decor, cell).is_some_and(|i| each(decor, i)))
     }
 
-    /// A placed decor whose box shares room with `space`.
-    pub fn placed_claim(&self, space: &Aabb) -> Option<Instance> {
-        let mut met = None;
-        self.each_placed_claim(space, |_, i| {
-            met = Some(i);
-            true
-        });
-        met
-    }
-
-    /// Each placed decor whose box shares room with `space`, with that box,
-    /// until `each` says it has what it wants.
-    fn each_placed_claim(&self, space: &Aabb, mut each: impl FnMut(Aabb, Instance) -> bool) {
-        let r = reach();
-        let around = Aabb {
-            min: space.min.map(|v| v - r),
-            max: space.max,
-        };
-        let mut done = false;
-        self.objects.entries_in(&around, &mut |e| {
-            if done {
-                return;
-            }
-            if let Some((c, i)) = placed(e).and_then(|i| claim(&i).filter(|c| c.shares(*space)).map(|c| (c, i))) {
-                done = each(c, i);
-            }
-        });
-    }
-
     /// A decor the ground grows on the leaves whose box shares room with `space`.
     pub fn grown_claim(&self, space: &Aabb) -> Option<Instance> {
         let mut met = None;

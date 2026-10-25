@@ -1,6 +1,7 @@
 // pxl-kernel/domain/control/interaction/collision.rs
 
 use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::id::{kind_of, Kind};
 use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -11,7 +12,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use crate::domain::control::interaction::{ActiveTool, Holding};
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::size::{object_zoom_of, MARKER_ZOOM};
-use crate::domain::layer::object::store::{Asset, Entry};
+use crate::domain::layer::object::store::Entry;
 use crate::domain::query::World;
 
 /// What a placing tool puts down, each in the cube of its zoom.
@@ -33,6 +34,15 @@ impl PlacementTool {
             ActiveTool::Decor => Some(PlacementTool::Decor(ui.decor_id)),
             ActiveTool::Marker => Some(PlacementTool::Marker),
             ActiveTool::Pointer | ActiveTool::Eraser => None,
+        }
+    }
+
+    /// The kind of what it places.
+    pub fn kind(self) -> Kind {
+        match self {
+            PlacementTool::Object(_) => Kind::cube,
+            PlacementTool::Decor(_) => Kind::decor,
+            PlacementTool::Marker => Kind::marker,
         }
     }
 
@@ -79,18 +89,20 @@ pub fn placement_reads(tool: PlacementTool, corner: &Q3) -> [[f64; 2]; 2] {
 }
 
 /// The shared check for the placement commit and its hover preview: its room
-/// is where the world takes an edit (`World::editable`), and nothing placed,
-/// nor a placed decor's box, shares it. A decor or a marker is stood on
-/// nowhere, so neither is placed on one, grown or placed.
+/// is where the world takes an edit (`World::editable`), and nothing placed
+/// shares it, by its cell or by the room its kind occupies
+/// (`World::placed_occupying`). A decor or a marker is stood on nowhere
+/// (`Kind::stood_on`), so neither is placed on one, grown or placed.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
     let (world, room) = (World::now(), room(tool, corner));
-    let taken = !world.editable(&room) || world.placed_sharing(&room, |_| true).is_some() || world.placed_claim(&room).is_some();
+    let taken = !world.editable(&room) || world.placed_sharing(&room, |_| true).is_some() || world.placed_occupying(&room, |_| true).is_some();
     let under = Aabb {
         min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
         max: [room.max[0], room.max[1], room.min[2]],
     };
-    let on_instance = || world.placed_sharing(&under, |e| e.asset() == Asset::Marker).is_some() || world.placed_claim(&under).is_some() || world.grown_claim(&under).is_some();
-    taken || !matches!(tool, PlacementTool::Object(_)) && on_instance()
+    let stood_on = |e: &Entry| kind_of(e.state).is_none_or(Kind::stood_on);
+    let on_instance = || world.placed_occupying(&under, |e| !stood_on(e)).is_some() || world.grown_claim(&under).is_some();
+    taken || !tool.kind().stood_on() && on_instance()
 }
 
 /// The center of the cell a hover anchor (a min corner) points at: where a

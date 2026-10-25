@@ -7,8 +7,11 @@ use pxl_spec::block::object::object_value_is_air;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::Zoom;
 
+use super::decor::claim;
 use super::world::World;
+use crate::domain::layer::object::meta::placed;
 use crate::domain::layer::object::store::Entry;
+use crate::domain::query::decor::strike::reach;
 use pxl_spec::bake::constant::EntryAt;
 
 impl<'a> World<'a> {
@@ -49,5 +52,31 @@ impl<'a> World<'a> {
             }
         });
         met
+    }
+
+    /// What is placed whose own room shares `space`, air left out, that
+    /// `which` takes: the room its kind says it occupies (`occupies`).
+    pub fn placed_occupying(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
+        // A decor's box reaches past its cell's corner.
+        let around = Aabb {
+            min: space.min.map(|v| v - reach()),
+            max: space.max,
+        };
+        let mut met = None;
+        self.objects.entries_in(&around, &mut |e| {
+            if met.is_none() && !object_value_is_air(e.state) && which(e) && occupies(e).is_some_and(|room| room.shares(*space)) {
+                met = Some(*e);
+            }
+        });
+        met
+    }
+}
+
+/// The room a placed entry occupies, as its kind has it: a decor its box
+/// (`decor::claim`), anything else its cell.
+fn occupies(e: &Entry) -> Option<Aabb> {
+    match placed(e) {
+        Some(decor) => claim(&decor),
+        None => Some(e.cube()),
     }
 }

@@ -20,6 +20,14 @@ pub const fn asset_id(kind: Kind, shape: u32) -> AssetId {
     (kind as u32) << SHAPE_BITS | shape
 }
 
+impl Kind {
+    /// Whether anything stands on an instance of the kind: a cube; a decor or
+    /// a marker is stood on nowhere.
+    pub const fn stood_on(self) -> bool {
+        matches!(self, Kind::cube)
+    }
+}
+
 /// The kind an id is of; none past a u16 or for a kind the layout does not
 /// give out.
 pub fn kind_of(id: AssetId) -> Option<Kind> {
