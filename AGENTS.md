@@ -5,7 +5,9 @@
 - **xpute** is the floor a guest program runs on. Its words are host, guest
   and their contract, and they name no program. The host grants the guest
   memory and time, carries bytes, and dispatches the guest's calls by
-  number; it decides nothing about what a number means.
+  number; it decides nothing about what a number means. Its `kit` is a
+  library any program may link: a part no program here calls is kept, and
+  is never proposed for removal on that ground.
 - **pixelet** fills those roles with its own parts. The kernel is its
   guest, and its host is `ts/client/src/host/` plus the client's bracket:
   `@xpute/host` mounted (on a device, `xpute-host` beside it) with the one
