@@ -5,8 +5,12 @@ description: How the tree is written — names, where a thing goes, a file's hea
 
 # Convention
 
-How the tree is written. What its parts are and where their boundaries run
-is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
+System code — xpute, and pixelet's host, its brackets and the kernel's door
+and sys — is written as Unix V6 is, xv6 its reading today. Domain code, the
+world and the shell, is not held to it. What follows is that, branch by
+branch, and the few rules the code holds everywhere. What the parts are and
+where their boundaries run is `ARCHITECTURE.md`'s, and the host/guest
+boundary's roles `AGENTS.md`'s.
 
 ## Names
 
@@ -53,6 +57,9 @@ is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
   renamed is fixed with it, in the live minutes too, where a claim the code
   no longer holds gets a note under it. `doc/minutes/archive/` and
   `doc/experiment/` name the files of their day and are not kept up.
+- A comment says only what a reader would otherwise get wrong — an
+  invariant, a hazard, where a number comes from — in a sentence. It tells
+  no history and does not restate the code or a document.
 - A script is in the language its work takes and run by its path: Python
   on its standard library alone, or sh. One in JavaScript is an ES module,
   TypeScript where a loader takes it: no `.cjs` or `.cts`. Node runs only
