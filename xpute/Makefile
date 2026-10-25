@@ -6,8 +6,8 @@
 # is a target a tree for each verb, the aggregates over them, and two
 # orders: the traces run after the guests they drive, and cpp/'s tests,
 # which build those guests too, after build has, so two makes never write
-# one object at once. The documents and the spec are formatted by deno fmt
-# under deno.jsonc. GNU Make 3.81 is enough.
+# one object at once. Only code is formatted, each tree's by its own
+# formatter; the documents and the spec are not. GNU Make 3.81 is enough.
 #
 #   make -j8 check | test | build | test-gpu | fmt | lint
 #   make check-ts, make test-cpp, ...   one tree's
@@ -15,16 +15,14 @@
 # With -j the trees run in parallel; cpp/'s make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: check check-doc check-script check-ts check-cpp check-rust \
+.PHONY: check check-script check-ts check-cpp check-rust \
 	build build-cpp build-rust \
 	test test-ts test-cpp test-rust test-conformance \
 	test-gpu test-gpu-web test-gpu-native \
-	fmt fmt-doc fmt-script fmt-ts fmt-rust \
+	fmt fmt-script fmt-ts fmt-rust \
 	lint lint-script lint-ts
 
-check: check-doc check-script check-ts check-cpp check-rust
-check-doc:
-	deno fmt --check
+check: check-script check-ts check-cpp check-rust
 check-script:
 	deno task --cwd script check
 check-ts:
@@ -60,9 +58,7 @@ test-gpu-web:
 test-gpu-native:
 	+cd rust && cargo test-gpu
 
-fmt: fmt-doc fmt-script fmt-ts fmt-rust
-fmt-doc:
-	deno fmt
+fmt: fmt-script fmt-ts fmt-rust
 fmt-script:
 	deno task --cwd script fmt
 fmt-ts:
