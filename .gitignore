@@ -183,6 +183,9 @@ vite.config.ts.timestamp-*
 /target
 /rust/target
 
+# Scratch: notes, diffs and logs a session keeps while it works.
+/tmp/
+
 # The guest's module, built from rust/ by ts/app/web/script/build-wasm.ts
 ts/app/web/src/guest.wasm
 ts/app/web/src/guest.paths.json
