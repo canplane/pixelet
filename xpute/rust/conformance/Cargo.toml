@@ -2,7 +2,9 @@
 name = "xpute-conformance"
 edition.workspace = true
 version.workspace = true
-publish.workspace = true
+# The contract's proof, not what a program links: never published, whatever
+# the workspace's libraries come to be.
+publish = false
 
 # The traces are run by the host, not by a test in this crate.
 [lib]

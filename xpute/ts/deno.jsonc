@@ -1,7 +1,9 @@
 {
-  // xpute's TypeScript: the kit, the host end, the GPU host, the host that
-  // runs the traces, and the scripts over the trees, one workspace as rust/
-  // is one Cargo workspace. What runs
+  // xpute's TypeScript, one workspace as rust/ is one Cargo workspace. Three
+  // kinds of member: kit, host and gpu are what a program links, and get a
+  // name and exports the day they are published; conformance is the host
+  // that proves the contract against every guest; script runs over the
+  // trees. The last two are never published. What runs
   // across the languages is the root's (../deno.jsonc).
   "workspace": ["kit", "host", "gpu", "conformance", "script"],
   "nodeModulesDir": "auto",
