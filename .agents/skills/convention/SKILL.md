@@ -1,6 +1,6 @@
 ---
 name: convention
-description: How the tree is written — names (singular, short for systemic modules and whole for the domain's, one word a structure), a source file's path header, how code is cited, and the code's fixed rules (rounding half to even, libm and fnv in Rust, offsets through ptr_at, ES modules, @expo/ui only in the sheet). Use when naming, creating, moving or renaming a module, folder, file or type; when a doc or comment names a structure or cites code; and when writing rounding, float math, a map, a pointer from an offset, a script or an @expo/ui import.
+description: How the tree is written — names (singular, short for systemic modules and whole for the domain's, one word a structure), the layout (a root a language, src/ and script/ in a package, no counted ../ out of one, cargo from rust/), a source file's path header, how code is cited, and the code's fixed rules (rounding half to even, libm and fnv in Rust, offsets through ptr_at, ES modules, @expo/ui only in the sheet). Use when naming, creating, moving or renaming a module, folder, file or type; when a file names a path out of its package or runs cargo; when a doc or comment names a structure or cites code; and when writing rounding, float math, a map, a pointer from an offset, a script or an @expo/ui import.
 ---
 
 # Convention
@@ -20,6 +20,23 @@ host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
 - Systemic modules take their conventional abbreviation (`sys`, `io`, `mem`,
   `abi`, `sched`); domain modules take the full word (`domain`, `scene`,
   `control`, `query`).
+
+## Layout
+
+- The tree is grouped by language, each a root of its own tool: `rust/`
+  Cargo's, `ts/` Deno's workspace, `script/` the repository's own scripts,
+  `xpute/` Make's. The root only routes (`deno.jsonc` tasks). Within a
+  package, `src/` is its code and `script/` its own tools; a test sits
+  beside what it tests.
+- A path out of a package is never a counted `../`. Code names another
+  package through the workspace's map (`@pxl/client/`, `@xpute/kit/`). A
+  config no import map reaches takes the workspace or the repository from
+  `ts/client/script/import-map.ts` (`WORKSPACE`, `REPO`), which finds them
+  from the workspace's manifest. A config that must read another package's
+  output has its build step put it inside first
+  (`ts/app/native/script/build-native.ts`, `ts/server/edge/script/stage.ts`).
+- cargo runs from `rust/`, where rustup reads `rust-toolchain.toml`: the
+  root's tasks as `cd rust && cargo <alias>` (`rust/.cargo/config.toml`).
 
 ## Files
 
