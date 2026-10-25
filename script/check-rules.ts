@@ -65,8 +65,8 @@ const ROUNDING_NAMED = [
   "xpute/rust/kit/src/math/scalar.test.rs",
   "xpute/ts/kit/src/math/scalar.ts",
   "xpute/ts/kit/src/math/scalar.test.ts",
-  "xpute/cpp/kit/math/scalar.hpp",
-  "xpute/cpp/kit/math/scalar.test.cpp",
+  "xpute/cpp/xpute/kit/math/scalar.hpp",
+  "xpute/cpp/xpute/kit/math/scalar.test.cpp",
 ];
 const NOT_EVEN = [
   /\.round\(\)/,

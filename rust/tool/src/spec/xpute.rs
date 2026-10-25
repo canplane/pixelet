@@ -138,7 +138,7 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     // Lower case, as std::errc: EINVAL may be a <cerrno> macro already included.
-    let mut cpp = vec!["// cpp/kit/status/errno.spec.hpp".to_string()];
+    let mut cpp = vec!["// cpp/xpute/kit/status/errno.spec.hpp".to_string()];
     cpp.extend(head.iter().cloned());
     cpp.extend(
         [
@@ -210,6 +210,6 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     Ok(vec![
         Output::new("xpute/ts/kit/src/status/errno.spec.ts", file(&ts)),
         Output::new("xpute/rust/kit/src/status/errno.spec.rs", file(&rs)),
-        Output::new("xpute/cpp/kit/status/errno.spec.hpp", file(&cpp)),
+        Output::new("xpute/cpp/xpute/kit/status/errno.spec.hpp", file(&cpp)),
     ])
 }

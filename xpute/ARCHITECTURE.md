@@ -256,11 +256,11 @@ The contract describes one host and one guest. Several guests under one host, pa
 
 The implementations do not all stand in the same relation, and which relation decides what must match.
 
-- **`kit` is symmetric.** Rust (`rust/kit`), TypeScript (`ts/kit`) and C++ (`cpp/kit`) implement the same kit, held to each other by the golden records wherever bytes must match. TypeScript's has no `alloc`, since it has no linear heap of its own, and no `bug`, since a thrown error carries its stack.
+- **`kit` is symmetric.** Rust (`rust/kit`), TypeScript (`ts/kit`) and C++ (`cpp/xpute/kit`) implement the same kit, held to each other by the golden records wherever bytes must match. TypeScript's has no `alloc`, since it has no linear heap of its own, and no `bug`, since a thrown error carries its stack.
 - **The two ends face each other.** A host end and a guest end owe each other the contract and its formats, not matching module lists; a module with nothing facing it is not a gap.
-- **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++ (`cpp/guest`) are the same end, either plugged into any host, so what one gives a program the other gives too.
+- **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++ (`cpp/xpute/guest`) are the same end, either plugged into any host, so what one gives a program the other gives too.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`) reserves a module's memory, rings the doorbell, answers the system calls and paces the quantum. Rust's (`rust/host`) reads a guest's memory by offset on every platform (`mem`), and is the host for a guest linked into the host's own native process (`native`): it reserves the memory there, runs every call into the guest on the guest's own thread, since a guest's `Global`s are sound on one thread, and provides the allocator that keeps the guest's blocks in its memory and every other thread's out of it. They are one role, not one module list.
-- **The GPU's calls follow the same split.** Each guest language writes them (`rust/gpu`, `cpp/gpu`). The hosts run them in TypeScript on WebGPU (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
+- **The GPU's calls follow the same split.** Each guest language writes them (`rust/gpu`, `cpp/xpute/gpu`). The hosts run them in TypeScript on WebGPU (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
 - **A guest built as a module is linked one way.** Its memory is imported from the host and its stack goes first, at the bottom of the memory, so an overflow traps; its stack's size and any front it keeps below the linker's data are its own numbers. A Rust guest's build script prints the flags through `rust/link`, and the C++ guest's Makefile passes the same ones.
 
 `kit` asks nothing of a program: link it and call it. `guest` and `host` ask it to run xpute's way — memory granted once, work in turns, I/O by asking.

@@ -40,10 +40,10 @@ Golden records under `spec/golden/` hold the languages to each other wherever by
 `guest` and `host` are the arrangement above, named by the end each is. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `kit` does. The host end exists in TypeScript and in Rust too, and those are one role but not one module list: each holds what its platform needs. TypeScript's reserves a module's memory, rings the doorbell, answers the system calls and paces the quantum; Rust's hosts a guest linked into its own native program, reserving the memory there, running the guest on a thread of its own, and keeping the guest's blocks in its memory.
 
 ```text
-rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
-rust/guest  ·  cpp/guest  ·  ts/host           the guest end, in each language · the host end in TypeScript
+rust/kit  ·  ts/kit  ·  cpp/xpute/kit          the same kit, in each language
+rust/guest  ·  cpp/xpute/guest  ·  ts/host     the guest end, in each language · the host end in TypeScript
 rust/host                                      the host end in Rust: a guest's memory read by offset, and the host of a guest linked into its own native program
-rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs; ts/gpu/script runs the web host's test in Chrome
+rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu          WebGPU's calls, which a guest writes and a host runs; ts/gpu/script runs the web host's test in Chrome
 rust/link                                      how a Rust guest's build script links it as a WebAssembly module
 rust/conformance  ·  cpp/conformance           a guest in each, which the contract's traces drive; ts/host runs them (conformance.test.ts)
 script                                         the repository's own scripts, reading none of the trees' code; never shipped

@@ -3,10 +3,10 @@
 //! The guest's core memory as a host reads and writes it: by the offsets the
 //! guest names, each read or write reaching only the range it names, and
 //! never one reference over the whole, as C++'s `xpute::Memory`
-//! (cpp/guest/mem/memory.hpp) reads a word by offset. The host's own blocks
-//! may lie in the same memory — a guest linked into the host's process
-//! allocates for both from one heap (`native::Alloc`) — and a `&mut [u8]`
-//! over all of it would claim them too.
+//! (cpp/xpute/guest/mem/memory.hpp) reads a word by offset. The host's own
+//! blocks may lie in the same memory — a guest linked into the host's
+//! process allocates for both from one heap (`native::Alloc`) — and a
+//! `&mut [u8]` over all of it would claim them too.
 //!
 //! On every platform, not `native`'s alone: a host that holds a module's
 //! memory as bytes, a test among them, reads it the same way, and so does

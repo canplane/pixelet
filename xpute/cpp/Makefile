@@ -2,10 +2,12 @@
 #
 # xpute's C++, built with the platform's compiler ($CXX, or c++), and the
 # guest as a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH,
-# or /opt/wasi-sdk). Output goes under ../target/cpp/, where the traces look
-# for the guests; the tests open their golden records from the tree's root.
-# GNU Make 3.81, as macOS ships it, is enough. Run it from cpp/: the paths
-# below are this directory's.
+# or /opt/wasi-sdk). The library is xpute/, included from this directory by
+# its root ("xpute/kit/status/bug.hpp"); conformance/ is the guest the
+# traces drive, beside it and never shipped. Output goes under
+# ../target/cpp/, where the traces look for the guests; the tests open their
+# golden records from the tree's root. GNU Make 3.81, as macOS ships it, is
+# enough. Run it from cpp/: the paths below are this directory's.
 #
 #   make -C cpp check | test | guest | wasm      (-j for parallel compiles)
 
@@ -23,17 +25,18 @@ WASI_CXX := $(WASI_SDK_PATH)/bin/clang++
 # -Wno-missing-field-initializers: a designated initializer leaves the rest
 # at their defaults, which GCC's -Wextra calls missing and clang's does not.
 FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -Wno-missing-field-initializers -Werror -g
-# A source names itself as the root sees it (cpp/kit/...), in __FILE__ and
-# what a failed test prints, though it is compiled from here.
-PREFIX_MAP := $(foreach d,kit guest gpu conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
+# A file names itself as the root sees it (cpp/xpute/kit/...), in __FILE__
+# and what a failed test prints, though it is compiled from here, whether
+# named as a source or found under -I . as a header.
+PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
 # The guest's stack (spec/conformance/guest.json STACK_BYTES).
 STACK_BYTES := 1048576
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
 	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=xpute_conformance_interrupt
 
-SOURCES := $(sort $(patsubst ./%,%,$(shell find . -name '*.cpp')))
+SOURCES := $(sort $(shell find xpute conformance -name '*.cpp'))
 # What only the tests build: their own files, the runner and the golden reader.
-GUEST_SOURCES := $(filter-out %.test.cpp kit/test.cpp kit/golden.cpp,$(SOURCES))
+GUEST_SOURCES := $(filter-out %.test.cpp xpute/kit/test.cpp xpute/kit/golden.cpp,$(SOURCES))
 
 ifeq ($(OS),Windows_NT)
 LIBRARY := xpute_conformance.dll
@@ -85,14 +88,14 @@ $(OUT)/xpute_conformance.wasm: $(WASM_OBJECTS)
 # still print.
 $(OUT)/test/%.o: %.cpp Makefile $(COMPILERS)
 	@mkdir -p $(@D)
-	@$(CXX) $(FLAGS) $(PREFIX_MAP) -MMD -MP -c $< -o $@
+	@$(CXX) $(FLAGS) -I . $(PREFIX_MAP) -MMD -MP -c $< -o $@
 
 $(OUT)/guest/%.o: %.cpp Makefile $(COMPILERS)
 	@mkdir -p $(@D)
-	@$(CXX) $(FLAGS) $(PREFIX_MAP) -fPIC -MMD -MP -c $< -o $@
+	@$(CXX) $(FLAGS) -I . $(PREFIX_MAP) -fPIC -MMD -MP -c $< -o $@
 
 $(OUT)/wasm/%.o: %.cpp Makefile $(COMPILERS) | wasi
 	@mkdir -p $(@D)
-	@"$(WASI_CXX)" $(FLAGS) $(PREFIX_MAP) --target=wasm32-wasip1 -MMD -MP -c $< -o $@
+	@"$(WASI_CXX)" $(FLAGS) -I . $(PREFIX_MAP) --target=wasm32-wasip1 -MMD -MP -c $< -o $@
 
 -include $(TEST_OBJECTS:.o=.d) $(GUEST_OBJECTS:.o=.d) $(WASM_OBJECTS:.o=.d)

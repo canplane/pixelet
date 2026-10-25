@@ -108,7 +108,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/guest/ipc/directory.spec.hpp", "xpute::directory")),
+        cpp: Some(("xpute/cpp/xpute/guest/ipc/directory.spec.hpp", "xpute::directory")),
     },
     DataSpec {
         json: "xpute/spec/ipc/frame.json",
@@ -118,7 +118,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/guest/ipc/frame.spec.hpp", "xpute::frame")),
+        cpp: Some(("xpute/cpp/xpute/guest/ipc/frame.spec.hpp", "xpute::frame")),
     },
     DataSpec {
         json: "xpute/spec/ipc/ring.json",
@@ -128,7 +128,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/guest/ipc/ring.spec.hpp", "xpute::ring")),
+        cpp: Some(("xpute/cpp/xpute/guest/ipc/ring.spec.hpp", "xpute::ring")),
     },
     DataSpec {
         json: "xpute/spec/ipc/sys.json",
@@ -138,7 +138,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/guest/ipc/sys.spec.hpp", "xpute::sys")),
+        cpp: Some(("xpute/cpp/xpute/guest/ipc/sys.spec.hpp", "xpute::sys")),
     },
     DataSpec {
         json: "xpute/spec/gpu/api.json",
@@ -148,7 +148,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         module: Some("spec"),
         enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
         ts_names: None,
-        cpp: Some(("xpute/cpp/gpu/api.spec.hpp", "xpute::gpu")),
+        cpp: Some(("xpute/cpp/xpute/gpu/api.spec.hpp", "xpute::gpu")),
     },
     DataSpec {
         json: "xpute/spec/gpu/enum.json",
@@ -186,7 +186,7 @@ const DATA_SPECS: [DataSpec; 25] = [
             "LIMIT_NAME",
         ]),
         ts_names: None,
-        cpp: Some(("xpute/cpp/gpu/enum.spec.hpp", "xpute::gpu")),
+        cpp: Some(("xpute/cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu")),
     },
     DataSpec {
         json: "xpute/spec/sched/tick.json",
@@ -196,7 +196,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         module: Some("spec"),
         enums: Enums::Named(&["PHASES"]),
         ts_names: None,
-        cpp: Some(("xpute/cpp/guest/sched/tick.spec.hpp", "xpute")),
+        cpp: Some(("xpute/cpp/xpute/guest/sched/tick.spec.hpp", "xpute")),
     },
     DataSpec {
         json: "spec/client/kernel/door/directory.json",
