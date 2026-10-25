@@ -17,20 +17,21 @@ host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
 - Folders and files are singular, for what each one is; plural only where
   the ecosystem names a collection of independent units (`crates/`, `apps/`,
   `packages/`) or the word has no singular in its sense (`minutes/`).
-- Systemic modules take their conventional abbreviation (`io`, `mem`, `abi`,
-  `sched`); domain modules take the full word (`scene`, `control`, `query`).
+- Systemic modules take their conventional abbreviation (`sys`, `io`, `mem`,
+  `abi`, `sched`); domain modules take the full word (`domain`, `scene`,
+  `control`, `query`).
 
 ## Files
 
 - A source file opens with its own path as a comment: a crate's name and
-  the path under its `src/` (`// pxl-kernel/domain/scene/place.rs`), a package's
-  name and the path under its `src/` (`// @pxl/client/host/sys.ts`,
+  the path under its `src/` (`// pxl-kernel/domain/scene/place.rs`), a
+  package's name and the path under its `src/` (`// @pxl/client/host/sys.ts`,
   `// @xpute/host/ipc/doorbell.ts`). A file that is moved takes its new
   path.
 - Code is cited as its path and then its name in backticks
-  (`domain/scene/place.rs` `tap`). A citation that is moved or renamed is fixed with
-  it. `doc/minutes/` and `doc/experiment/` name the files of their day and
-  are not kept up.
+  (`domain/scene/place.rs` `tap`). A citation that is moved or renamed is
+  fixed with it. `doc/minutes/` and `doc/experiment/` name the files of
+  their day and are not kept up.
 
 ## Code
 
