@@ -19,6 +19,12 @@
 
   "js/ts.validate.enabled": false,
 
+  // Cargo's two workspaces, each its own root: rust-analyzer finds only a
+  // manifest at most one folder down, which reaches rust/ but not xpute/rust/.
+  // The shader's (rust/client/shader) is rust-gpu's, built in its container,
+  // and left out.
+  "rust-analyzer.linkedProjects": ["rust/Cargo.toml", "xpute/rust/Cargo.toml"],
+
   // Code is formatted on save by its tree's formatter, Deno's under each
   // tree's config and rustfmt by rust-analyzer; the documents and the data
   // are formatted by no one, so no other formatter takes them on save
