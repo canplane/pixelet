@@ -248,7 +248,12 @@ pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord:
     });
     {
         let edits = crate::domain::layer::object::preview::current();
-        crate::domain::scene::decor::drawn::step(frame.eye, edits.hide, edits.scattered);
+        // Decor's records leave out only a decor: hidden, anything else is
+        // the rays' to cut, and its walk is kept.
+        let hide = edits
+            .hide
+            .filter(|&at| crate::domain::query::World::now().placed(at).is_some_and(|e| pxl_spec::block::object::object_value_is_decor(e.state)));
+        crate::domain::scene::decor::drawn::step(frame.eye, hide, edits.scattered);
         crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.budget);
     }
     crate::domain::scene::marker::step(ctx, &frame);
