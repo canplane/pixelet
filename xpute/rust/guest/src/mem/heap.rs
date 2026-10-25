@@ -1,10 +1,9 @@
 // xpute-guest/mem/heap.rs
 
-//! The heap a guest installs, and blocks of it named by offset. The heap is
-//! a slab of size classes over a buddy of pages between the bounds the guest
-//! gives (`Bounds`); the slab borrows and returns whole runs of pages, so
-//! neither level starves while the other has room. A guest that installs
-//! another `#[global_allocator]` still gets its blocks here.
+//! The guest's heap, its blocks named by offset: a slab of size classes over
+//! a buddy of pages within the guest's `Bounds`, the slab borrowing and
+//! returning whole runs so neither level starves while the other has room.
+//! It serves its blocks whatever `#[global_allocator]` is installed.
 
 use core::marker::PhantomData;
 

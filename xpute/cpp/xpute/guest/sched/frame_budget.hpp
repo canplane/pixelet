@@ -18,7 +18,7 @@ namespace xpute {
 
 struct BudgetOpts {
     // Waived until a step completes.
-    double budget_ms = 0;
+    double budget_ms;
     // Never waived: a step may cost real time and still report false, and a run
     // of such deferrals once made a 4.7-second frame of steps each under 42 ms.
     std::optional<double> hard_budget_ms;

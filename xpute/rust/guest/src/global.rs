@@ -1,31 +1,12 @@
 // xpute-guest/global.rs
 
 //! One value for the module's life, made on first use. Handing out `&mut`
-//! from a static is sound only because the module runs on one thread and a
-//! turn never re-enters another.
-//!
-//! A module has one thread. A guest linked into a native process shares it
-//! with the host's other threads, so its host runs it on one of them and
-//! marks that one (`mark_thread`): what the guest does process-wide, such as
-//! a panic hook, can then tell its own thread from the others, and touch its
-//! `Global`s only there.
-//!
-//! Until a thread is marked, no thread is known to be the guest's or known
-//! not to be: `on_marked_thread` and `off_marked_thread` are both false. Each
-//! reader takes the unknown for what is safe where it stands, so the two read
-//! "no thread marked" in opposite ways:
-//!
-//! - a guest that asks whether it may touch its `Global`s
-//!   (`off_marked_thread`) takes every thread for its own, since a module
-//!   guest and a test never mark one, and the guest's own thread must not be
-//!   taken for another's;
-//! - a host that asks whether a block is the guest's (`on_marked_thread`,
-//!   as xpute-host's native allocator asks) takes no thread for the guest's,
-//!   since before boot there is no guest's memory to place a block in.
-//!
-//! One rule for both is unsound either way: a module guest whose own thread
-//! counted as another's would report nothing, and an allocator that placed a
-//! block before boot would place it in a memory not yet reserved.
+//! from a static is sound only because the guest runs on one thread and a
+//! turn never re-enters another. A native host marks that thread
+//! (`mark_thread`), and the two readers take "none marked" each the safe way:
+//! a guest asking whether it may touch a `Global` (`off_marked_thread`) takes
+//! every thread for its own, and an allocator asking whether a block is the
+//! guest's (`on_marked_thread`) takes none, there being no memory before boot.
 
 use core::cell::{Cell, UnsafeCell};
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -52,8 +33,7 @@ impl<T> Global<T> {
     }
 }
 
-/// A test touching a `Global` takes this first: the harness runs tests on
-/// several threads, and two in one `Global` at once is unsound.
+/// Taken first by a test touching a `Global`, since tests run on several threads.
 #[cfg(test)]
 pub fn serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -70,9 +50,7 @@ thread_local! {
     static ON_MARKED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Marks this thread as the one the guest runs on, before its first turn:
-/// once a process, by the host that runs the guest there. A second thread
-/// marked is a host's bug.
+/// Marks this thread as the guest's, once a process, before its first turn.
 pub fn mark_thread() {
     let again = MARKED.swap(true, Ordering::AcqRel);
     assert!(!again || on_marked_thread(), "a second thread marked as the guest's");
@@ -84,8 +62,7 @@ pub fn on_marked_thread() -> bool {
     ON_MARKED.with(Cell::get)
 }
 
-/// Whether a thread is marked as the guest's and this is another: where a
-/// `Global` must not be touched.
+/// A thread is marked and this is another: where a `Global` must not be touched.
 pub fn off_marked_thread() -> bool {
     MARKED.load(Ordering::Acquire) && !on_marked_thread()
 }

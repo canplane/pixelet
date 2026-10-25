@@ -26,9 +26,9 @@ namespace xpute {
 struct TickPolicy {
     // Hard ceiling over what is left, so a step that costs time and reports
     // nothing done cannot walk the whole list.
-    double hard_slack_ms = 0;
+    double hard_slack_ms;
     // The share of the budget held back from the visible phase for content.
-    double content_share = 0;
+    double content_share;
 };
 
 inline constexpr std::size_t OFFS_MAX = 8;
