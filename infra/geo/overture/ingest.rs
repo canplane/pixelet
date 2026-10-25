@@ -38,7 +38,7 @@ serde_json = "1"
 //! divisions are taken with their ancestors, each fetched by its id, so a
 //! name's chain never breaks at the coverage's edge.
 //!
-//!   ./infra/geo/overture/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
+//!   ./script/with-env.sh ./infra/geo/overture/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -177,7 +177,7 @@ fn run() -> Result<(), String> {
         return Err("--whole makes each table from every shard; it takes no --shard".into());
     }
     let shards: Vec<&Shard> = all.iter().filter(|s| named.is_empty() || named.contains(&s.name)).collect();
-    let mut client = Client::connect(&db_geo_url()?, NoTls).map_err(|e| e.to_string())?;
+    let mut client = Client::connect(&std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?, NoTls).map_err(|e| e.to_string())?;
     let (release, accessed_at) = (pinned("version")?, pinned("accessed_at")?);
     println!("[ingest] release {release}, {} shards{}", shards.len(), if whole { ", whole" } else { "" });
     client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
@@ -682,35 +682,5 @@ fn pinned(field: &str) -> Result<String, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     meta["pin"][field].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.{field}", path.display()))
-}
-/// `DB_GEO_URL` from the environment, or infra/local/.env with its `${...}` expanded.
-fn db_geo_url() -> Result<String, String> {
-    if let Ok(url) = std::env::var("DB_GEO_URL") {
-        return Ok(url);
-    }
-    let dotenv = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../local/.env");
-    let text = std::fs::read_to_string(&dotenv).map_err(|_| format!("env:DB_GEO_URL:missing, and no {}", dotenv.display()))?;
-    let mut vars: HashMap<&str, &str> = HashMap::new();
-    for line in text.lines() {
-        let line = line.trim();
-        let line = line.strip_prefix("export ").unwrap_or(line);
-        if line.starts_with('#') {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else { continue };
-        let value = value.trim();
-        vars.insert(key.trim(), value.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or(value));
-    }
-    let raw = vars.get("DB_GEO_URL").ok_or_else(|| format!("env:DB_GEO_URL:missing, and {} does not set it", dotenv.display()))?;
-    let mut out = String::with_capacity(raw.len());
-    let mut rest = *raw;
-    while let Some(at) = rest.find("${") {
-        out.push_str(&rest[..at]);
-        let Some(end) = rest[at..].find('}') else { break };
-        out.push_str(vars.get(&rest[at + 2..at + end]).copied().unwrap_or(""));
-        rest = &rest[at + end + 1..];
-    }
-    out.push_str(rest);
-    Ok(out)
 }
 
