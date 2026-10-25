@@ -30,7 +30,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use super::ray::Ray;
 use super::scatter::{grown_at, grown_of, Asked};
 use super::world::World;
-use crate::domain::layer::instance::{Instance, Meta};
+use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::meta::placed;
 use crate::domain::layer::object::store::tree_key;
 use crate::domain::layer::residency::Line;
@@ -407,8 +407,7 @@ impl<'a> World<'a> {
 
 /// The box a decor thing claims.
 pub(super) fn claim(i: &Instance) -> Option<Aabb> {
-    let Meta::Decor(m) = i.meta;
-    Some(Decor::of(DecorId::of(i.id)?).claim(i.at, &m))
+    Some(Decor::of(DecorId::of(i.id)?).claim(i.at, &i.meta))
 }
 
 fn meet(s: &mut Strike, ray: &Ray, i: Instance) {

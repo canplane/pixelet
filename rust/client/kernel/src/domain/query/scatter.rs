@@ -17,7 +17,7 @@ use pxl_spec_core::scatter::{self as core_scatter, Grounds, Grown};
 use pxl_spec_core::{overwrite, FRAC_W};
 
 use super::world::World;
-use crate::domain::layer::instance::{Instance, Meta, Source};
+use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
 
 /// The world as decor's growth asks it on the CPU (pxl-spec-core
@@ -76,16 +76,16 @@ pub fn instance(decor: &Decor, g: &Grown) -> Instance {
         id: decor.value(),
         at,
         source: Source::Ground([x, y, z]),
-        meta: Meta::Decor(meta),
+        meta,
     }
 }
 
 /// An instance the ground grows as pxl-spec-core's evaluation takes it back.
 pub fn grown_of(i: &Instance) -> Option<Grown> {
-    let (Source::Ground([x, y, z]), Meta::Decor(m)) = (i.source, i.meta) else { return None };
+    let Source::Ground([x, y, z]) = i.source else { return None };
     Some(Grown {
-        variant: m.variant,
-        turn: m.turn,
+        variant: i.meta.variant,
+        turn: i.meta.turn,
         at: [x, y, z],
         sink: libm::rint((f64::from(z) - i.at[2]) * f64::from(1u32 << FRAC_W)) as u32,
     })

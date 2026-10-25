@@ -17,7 +17,6 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::domain::control::interaction::edit::{pending, restores_scattered, Pending};
 use crate::domain::control::interaction::{holding, hover, ActiveTool};
-use crate::domain::layer::instance::Meta;
 use crate::domain::layer::object::meta::user_decor_pick;
 pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::layer::object::store::Asset;
@@ -80,10 +79,7 @@ pub fn ghost() -> Ghost {
     };
     // Where it would stand, and what it would carry.
     let decor_pick = match (decor, decor_corner, restored) {
-        (Some(_), _, Some(d)) => {
-            let Meta::Decor(m) = d.meta;
-            Some((d.at, m))
-        }
+        (Some(_), _, Some(d)) => Some((d.at, d.meta)),
         (Some(b), Some(c), None) => {
             let (variant, turn) = user_decor_pick(&c, b);
             Some(b.stand(q3::unpack(&c), variant, turn, 1.0))
@@ -92,7 +88,7 @@ pub fn ghost() -> Ghost {
     };
     let erase = active_tool == ActiveTool::Eraser;
     let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).and_then(|s| {
-        let (Meta::Decor(m), decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
+        let (m, decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
         Some(Ghost::Decor {
             at: s.at,
             decor,

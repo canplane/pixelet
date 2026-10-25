@@ -2,7 +2,7 @@
 
 //! A thing drawn as one instance of its shape, whichever layer answers it:
 //! its id is its kind over its shape (the asset catalog's), and `meta` is what
-//! its class carries. The ground grows its own; an object's is the placement's.
+//! its decor carries. The ground grows its own; an object's is the placement's.
 
 use pxl_spec::asset::decor::DecorMeta;
 use pxl_spec::space::coord::v3::V3;
@@ -15,7 +15,7 @@ pub struct Instance {
     /// Where it stands: its footprint's middle, at the height of its base.
     pub at: V3,
     pub source: Source,
-    pub meta: Meta,
+    pub meta: DecorMeta,
 }
 
 /// Which layer's record it is.
@@ -35,9 +35,4 @@ impl Instance {
             Source::Object(_) => None,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Meta {
-    Decor(DecorMeta),
 }

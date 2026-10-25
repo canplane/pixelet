@@ -10,7 +10,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
 use pxl_spec_core::scatter::placed_pose;
 
-use crate::domain::layer::instance::{Instance, Meta, Source};
+use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store::Entry;
 
 /// The variant and quarter turns placing `decor` with its corner at
@@ -33,6 +33,6 @@ pub fn placed(e: &Entry) -> Option<Instance> {
         id: decor.value(),
         at,
         source: Source::Object(e.id()),
-        meta: Meta::Decor(meta),
+        meta,
     })
 }
