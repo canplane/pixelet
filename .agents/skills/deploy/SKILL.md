@@ -36,7 +36,7 @@ What `check` runs, a task a tree, side by side:
   targets.
 - `check-rules` and `check-spec` — the tree's own rules, and the files made
   from `spec/` matching it.
-- `check-build` — the bundle and the Worker built as a deploy builds them.
+- `check-build` — the client's bundle as a deploy builds it; the Worker is bundled by the deploy in CI.
 - `check-xpute` — xpute's own workspace.
 
 `test` is every workspace's tests: the client's, the web app's (Tint's
