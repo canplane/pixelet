@@ -149,7 +149,7 @@ pub struct GroundSquares<'a> {
     /// (`GroundBuffers::grow`).
     pub pool: [u32; 2],
     /// The blocks each handed square's scratch holds a tree of, at first and
-    /// at most (pxl-kernel domain/layer/terrain/param.rs `WAYS_SCRATCH_BYTES`): it starts at the
+    /// at most (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_BYTES`): it starts at the
     /// first and doubles each time a build outgrows it, never past the most,
     /// nor `ways::tree::SQUARE_BLOCKS` (`GroundBuffers::grow_scratch`).
     pub scratch: [u32; 2],
