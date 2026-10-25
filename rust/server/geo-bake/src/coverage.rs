@@ -186,7 +186,7 @@ pub struct Overture {
     url: String,
 }
 
-const INGEST: &str = "run ./infra/geo/overture/ingest.rs";
+const INGEST: &str = "run make ingest-overture";
 
 impl Overture {
     /// For a bake whose statements are `reads` over the shards `need`.

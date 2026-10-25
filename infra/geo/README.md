@@ -31,8 +31,7 @@ infra/geo/
 │   ├── Dockerfile         every tool the ingests run, pinned
 │   └── run                a tool, run in that image
 ├── overture/
-│   ├── source.json        the release
-│   └── ingest.rs          every type, a table each
+│   └── source.json        the release; ingested by pxl-geo-bake's ingest_overture, every type a table
 ├── elevation/
 │   ├── source.json        the version
 │   └── ingest.sh
@@ -61,17 +60,15 @@ column a reader filters on is generated from `properties`.
 ## Run
 
 ```sh
-rustup toolchain install nightly        # ingest.rs is a cargo script
-
 docker compose -f infra/local/docker-compose.yml up -d db-geo
 
-./script/with-env.sh ./infra/geo/overture/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
+make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 ./infra/geo/elevation/ingest.sh
 ./infra/geo/coastline/ingest.sh
 ```
 
-Each reads `infra/local/.env`, the scripts themselves and `ingest.rs`
-through `script/with-env.sh`; no source needs a key. Every tool they
+Each reads `infra/local/.env`, the scripts themselves and the Overture
+ingest through `script/with-env.sh`; no source needs a key. Every tool they
 run — GDAL, PostGIS's raster loader, psql, Overture's CLI — is `tools/`'s
 image's, which `tools/run` builds from its Dockerfile before each call, so
 the host needs Docker and cargo alone. Ubuntu 24.04's are PostgreSQL 16 and

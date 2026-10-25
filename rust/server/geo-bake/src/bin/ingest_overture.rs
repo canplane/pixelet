@@ -1,17 +1,4 @@
-#!/usr/bin/env -S cargo +nightly -Zscript
----
-[package]
-edition = "2021"
-
-[dependencies]
-arrow = { version = "60", default-features = false }
-parquet = { version = "60", default-features = false, features = ["arrow", "snap", "zstd"] }
-postgres = "0.19"
-pxl-geo-bake = { path = "../../../rust/server/geo-bake" }
-pxl-spec = { path = "../../../rust/spec" }
-xpute-kit = { path = "../../../xpute/rust/kit" }
-serde_json = "1"
----
+// pxl-geo-bake/bin/ingest_overture.rs
 
 //! Every Overture type into db-geo, a shard at a time: a table a type, a row
 //! a feature, once, with its properties as the release holds them and its
@@ -38,9 +25,11 @@ serde_json = "1"
 //! divisions are taken with their ancestors, each fetched by its id, so a
 //! name's chain never breaks at the coverage's edge.
 //!
-//!   ./script/with-env.sh ./infra/geo/overture/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
+//!   make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+
+use fnv::{FnvHashMap, FnvHashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Output, Stdio};
 
@@ -72,8 +61,18 @@ const CLASS: (&str, &str) = ("class", "TEXT GENERATED ALWAYS AS (properties->>'c
 const NAME: (&str, &str) = ("name", "TEXT GENERATED ALWAYS AS (properties->'names'->>'primary') STORED");
 
 const TYPES: &[Type] = &[
-    Type { overture: "address", table: "overture_addresses", columns: &[], indexes: &[] },
-    Type { overture: "bathymetry", table: "overture_base_bathymetry", columns: &[SUBTYPE, CLASS], indexes: &[] },
+    Type {
+        overture: "address",
+        table: "overture_addresses",
+        columns: &[],
+        indexes: &[],
+    },
+    Type {
+        overture: "bathymetry",
+        table: "overture_base_bathymetry",
+        columns: &[SUBTYPE, CLASS],
+        indexes: &[],
+    },
     Type {
         overture: "building",
         table: "overture_buildings",
@@ -85,11 +84,31 @@ const TYPES: &[Type] = &[
         ],
         indexes: &["class"],
     },
-    Type { overture: "building_part", table: "overture_building_parts", columns: &[], indexes: &[] },
-    Type { overture: "division", table: "overture_divisions", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
+    Type {
+        overture: "building_part",
+        table: "overture_building_parts",
+        columns: &[],
+        indexes: &[],
+    },
+    Type {
+        overture: "division",
+        table: "overture_divisions",
+        columns: &[SUBTYPE, NAME],
+        indexes: &["subtype"],
+    },
     // `division_id` keyed, so a bake tests a division for an area by its id, not by a scan.
-    Type { overture: "division_area", table: "overture_division_areas", columns: &[SUBTYPE, NAME], indexes: &["subtype", "((properties->>'division_id'))"] },
-    Type { overture: "division_boundary", table: "overture_division_boundaries", columns: &[], indexes: &[] },
+    Type {
+        overture: "division_area",
+        table: "overture_division_areas",
+        columns: &[SUBTYPE, NAME],
+        indexes: &["subtype", "((properties->>'division_id'))"],
+    },
+    Type {
+        overture: "division_boundary",
+        table: "overture_division_boundaries",
+        columns: &[],
+        indexes: &[],
+    },
     Type {
         overture: "place",
         table: "overture_places",
@@ -112,12 +131,42 @@ const TYPES: &[Type] = &[
         ],
         indexes: &["(subtype, class)"],
     },
-    Type { overture: "connector", table: "overture_connectors", columns: &[], indexes: &[] },
-    Type { overture: "infrastructure", table: "overture_base_infrastructure", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
-    Type { overture: "land", table: "overture_base_land", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
-    Type { overture: "land_cover", table: "overture_base_land_cover", columns: &[SUBTYPE], indexes: &[] },
-    Type { overture: "land_use", table: "overture_base_land_use", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
-    Type { overture: "water", table: "overture_base_water", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
+    Type {
+        overture: "connector",
+        table: "overture_connectors",
+        columns: &[],
+        indexes: &[],
+    },
+    Type {
+        overture: "infrastructure",
+        table: "overture_base_infrastructure",
+        columns: &[SUBTYPE, CLASS],
+        indexes: &["class"],
+    },
+    Type {
+        overture: "land",
+        table: "overture_base_land",
+        columns: &[SUBTYPE, CLASS],
+        indexes: &["class"],
+    },
+    Type {
+        overture: "land_cover",
+        table: "overture_base_land_cover",
+        columns: &[SUBTYPE],
+        indexes: &[],
+    },
+    Type {
+        overture: "land_use",
+        table: "overture_base_land_use",
+        columns: &[SUBTYPE, CLASS],
+        indexes: &["class"],
+    },
+    Type {
+        overture: "water",
+        table: "overture_base_water",
+        columns: &[SUBTYPE, CLASS],
+        indexes: &["class"],
+    },
 ];
 
 /// What runs the official CLI, at the release `tools/Dockerfile` pins, and
@@ -154,6 +203,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
+    pxl_geo_bake::cli::enter()?;
     // `--type <type>`, repeated, for those types' tables alone; `--shard <name>`, repeated, for those
     // shards alone; `--whole` for each table made anew from every shard.
     let (mut types, mut named, mut whole) = (Vec::<String>::new(), Vec::<String>::new(), false);
@@ -180,7 +230,9 @@ fn run() -> Result<(), String> {
     let mut client = Client::connect(&std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?, NoTls).map_err(|e| e.to_string())?;
     let (release, accessed_at) = (pinned("version")?, pinned("accessed_at")?);
     println!("[ingest] release {release}, {} shards{}", shards.len(), if whole { ", whole" } else { "" });
-    client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
+    client
+        .batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}"))
+        .map_err(|e| e.to_string())?;
 
     for ty in TYPES.iter().filter(|ty| types.is_empty() || types.iter().any(|t| t == ty.overture)) {
         if !whole {
@@ -199,9 +251,18 @@ fn run() -> Result<(), String> {
             let fetched = ancestors(&mut client, ty, &release, !whole)?;
             println!("[ingest/{}] {fetched} ancestors past the shards", ty.table);
         }
-        let rows = if whole { build_and_swap(&mut client, ty, &shards, &release, &accessed_at)? } else { add(&mut client, ty, &shards, &release, &accessed_at)? };
+        let rows = if whole {
+            build_and_swap(&mut client, ty, &shards, &release, &accessed_at)?
+        } else {
+            add(&mut client, ty, &shards, &release, &accessed_at)?
+        };
         client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
-        println!("[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching", ty.table, shards.len(), started.elapsed().as_secs_f64());
+        println!(
+            "[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching",
+            ty.table,
+            shards.len(),
+            started.elapsed().as_secs_f64()
+        );
     }
     Ok(())
 }
@@ -226,12 +287,12 @@ fn keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, String
 /// the one under it when the two span the same columns. A full coverage is
 /// one rectangle.
 fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
-    let mut rows: BTreeMap<i64, Vec<&Shard>> = BTreeMap::new();
+    let mut rows: BTreeMap<i32, Vec<&Shard>> = BTreeMap::new();
     for &s in shards {
         rows.entry(s.at[1]).or_default().push(s);
     }
     // Each rectangle open: its columns, its last row, its shards.
-    let mut out: Vec<([i64; 2], i64, Vec<&Shard>)> = Vec::new();
+    let mut out: Vec<([i32; 2], i32, Vec<&Shard>)> = Vec::new();
     for (y, mut row) in rows {
         row.sort_by_key(|s| s.at[0]);
         for run in row.chunk_by(|a, b| b.at[0] == a.at[0] + 1) {
@@ -269,7 +330,16 @@ fn download<'a>(ty: &Type, groups: &[Vec<&'a Shard>], release: &str) -> Result<V
         let extract = Path::new(EXTRACTS).join(&name);
         if !extract.exists() {
             let part = Path::new(EXTRACTS).join(format!("{name}.part"));
-            let args = ["download", &format!("--bbox={bbox}"), "-f", "geoparquet", &format!("--type={}", ty.overture), &format!("--release={release}"), "-o", &part.to_string_lossy()];
+            let args = [
+                "download",
+                &format!("--bbox={bbox}"),
+                "-f",
+                "geoparquet",
+                &format!("--type={}", ty.overture),
+                &format!("--release={release}"),
+                "-o",
+                &part.to_string_lossy(),
+            ];
             overture(&args)?;
             std::fs::rename(&part, &extract).map_err(|e| e.to_string())?;
         }
@@ -280,7 +350,9 @@ fn download<'a>(ty: &Type, groups: &[Vec<&'a Shard>], release: &str) -> Result<V
         let kept = out.iter().any(|(p, _)| p.file_name().is_some_and(|n| n.to_string_lossy() == other));
         if !kept && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
             let path = entry.path();
-            std::fs::remove_dir_all(&path).or_else(|_| std::fs::remove_file(&path)).map_err(|e| format!("{}: {e}", path.display()))?;
+            std::fs::remove_dir_all(&path)
+                .or_else(|_| std::fs::remove_file(&path))
+                .map_err(|e| format!("{}: {e}", path.display()))?;
         }
     }
     Ok(out)
@@ -298,16 +370,25 @@ fn staging(ty: &Type) -> String {
 fn stage(client: &mut Client, ty: &Type, extracts: &[(PathBuf, Vec<&Shard>)]) -> Result<(), String> {
     let t = staging(ty);
     client
-        .batch_execute(&format!("DROP TABLE IF EXISTS {t}; CREATE UNLOGGED TABLE {t} (shard TEXT NOT NULL, gers_id TEXT NOT NULL, properties TEXT NOT NULL, wkb BYTEA NOT NULL)"))
+        .batch_execute(&format!(
+            "DROP TABLE IF EXISTS {t}; CREATE UNLOGGED TABLE {t} (shard TEXT NOT NULL, gers_id TEXT NOT NULL, properties TEXT NOT NULL, wkb BYTEA NOT NULL)"
+        ))
         .map_err(|e| e.to_string())?;
     copy_extracts(client, &t, extracts.iter().map(|(p, s)| (p.as_path(), Some(s.as_slice()))))?;
-    client.batch_execute(&format!("CREATE INDEX ON {t} (shard); CREATE INDEX ON {t} (gers_id)")).map_err(|e| e.to_string())?;
+    client
+        .batch_execute(&format!("CREATE INDEX ON {t} (shard); CREATE INDEX ON {t} (gers_id)"))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Extracts' rows into the staging table `t`, each under the shards it meets.
 fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item = (&'a Path, Option<&'a [&'a Shard]>)>) -> Result<(), String> {
-    let mut copy = BinaryCopyInWriter::new(client.copy_in(&format!("COPY {t} (gers_id, properties, wkb, shard) FROM STDIN (FORMAT binary)")).map_err(|e| e.to_string())?, &[Pg::TEXT, Pg::TEXT, Pg::BYTEA, Pg::TEXT]);
+    let mut copy = BinaryCopyInWriter::new(
+        client
+            .copy_in(&format!("COPY {t} (gers_id, properties, wkb, shard) FROM STDIN (FORMAT binary)"))
+            .map_err(|e| e.to_string())?,
+        &[Pg::TEXT, Pg::TEXT, Pg::BYTEA, Pg::TEXT],
+    );
     for (extract, shards) in extracts {
         let file = std::fs::File::open(extract).map_err(|e| format!("{}: {e}", extract.display()))?;
         let reader = ParquetRecordBatchReaderBuilder::try_new(file).map_err(|e| e.to_string())?.build().map_err(|e| e.to_string())?;
@@ -329,14 +410,18 @@ fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item 
 /// once.
 fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Result<usize, String> {
     let t = staging(ty);
-    let held = if live { format!(" AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)", ty.table) } else { String::new() };
+    let held = if live {
+        format!(" AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)", ty.table)
+    } else {
+        String::new()
+    };
     let missing_sql = format!(
         "SELECT DISTINCT p.id FROM (SELECT properties::jsonb->>'{}' AS id FROM {t}) p WHERE p.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {t} s WHERE s.gers_id = p.id){held} ORDER BY p.id",
         PARENT.1
     );
     let prefix = format!("{}-ancestor.", ty.overture);
     let mut kept = Vec::new();
-    let mut asked = std::collections::HashSet::new();
+    let mut asked = FnvHashSet::default();
     loop {
         let missing: Vec<String> = client.query(&missing_sql, &[]).map_err(|e| e.to_string())?.iter().map(|r| r.get(0)).collect();
         if missing.is_empty() {
@@ -351,7 +436,10 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
             let extract = Path::new(EXTRACTS).join(format!("{prefix}{release}.{id}.parquet"));
             if !extract.exists() {
                 let part = extract.with_extension("parquet.part");
-                let out = cli().args(["gers", id, "-f", "geoparquet", "-o", &part.to_string_lossy()]).output().map_err(|e| format!("{TOOLS}: {e}"))?;
+                let out = cli()
+                    .args(["gers", id, "-f", "geoparquet", "-o", &part.to_string_lossy()])
+                    .output()
+                    .map_err(|e| format!("{TOOLS}: {e}"))?;
                 let said = String::from_utf8_lossy(&out.stderr);
                 if !out.status.success() {
                     return Err(format!("gers {id}: {}", said.trim()));
@@ -391,7 +479,11 @@ fn features(ty: &Type, into: &str) -> String {
 /// it holds, when it was ingested, and its features. A shard ingested again
 /// replaces its row.
 fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, accessed_at: &str) -> Result<(), postgres::Error> {
-    let counts: HashMap<String, i64> = tx.query(&format!("SELECT shard, count(*) FROM {} GROUP BY shard", staging(ty)), &[])?.iter().map(|r| (r.get(0), r.get(1))).collect();
+    let counts: FnvHashMap<String, i64> = tx
+        .query(&format!("SELECT shard, count(*) FROM {} GROUP BY shard", staging(ty)), &[])?
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect();
     for s in shards {
         let count = counts.get(&s.name).copied().unwrap_or(0);
         tx.execute(
@@ -423,7 +515,12 @@ fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &s
             r => r.map_err(db)?,
         }
         // The indexes keep the names they were built under; schema() would add a second set.
-        for name in tx.query("SELECT indexrelid::regclass::text FROM pg_index WHERE indrelid = $1::text::regclass", &[&t]).map_err(db)?.iter().map(|r| r.get::<_, String>(0)) {
+        for name in tx
+            .query("SELECT indexrelid::regclass::text FROM pg_index WHERE indrelid = $1::text::regclass", &[&t])
+            .map_err(db)?
+            .iter()
+            .map(|r| r.get::<_, String>(0))
+        {
             if let Some(rest) = name.strip_prefix(&next) {
                 tx.batch_execute(&format!("ALTER INDEX {name} RENAME TO {t}{rest}")).map_err(db)?;
             }
@@ -453,7 +550,7 @@ fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, accesse
 struct Shard {
     name: String,
     /// Its place on the shard grid.
-    at: [i64; 2],
+    at: [i32; 2],
     m: [f64; 4],
     deg: [f64; 4],
 }
@@ -464,7 +561,12 @@ impl Shard {
         let [w, s, _] = epsg4326::from_mercator(&[m[0], m[1], 0.0]);
         let [e, n, _] = epsg4326::from_mercator(&[m[2], m[3], 0.0]);
         // The east edge at the seam reads back as -180.
-        Shard { name: node.name(), at: node.at, m, deg: [w, s, if e <= w { 180.0 } else { e }, n] }
+        Shard {
+            name: node.name(),
+            at: node.at,
+            m,
+            deg: [w, s, if e <= w { 180.0 } else { e }, n],
+        }
     }
 
     /// Whether a feature whose vertices span `[lo_x, lo_y, hi_x, hi_y]` in
@@ -551,7 +653,12 @@ fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, Stri
     let geometry = cast(group.column_by_name("geometry").ok_or("no geometry column")?, &DataType::LargeBinary).map_err(|e| e.to_string())?;
     let geometry = geometry.as_binary::<i64>();
     let schema = group.schema();
-    let properties: Vec<_> = schema.fields().iter().zip(group.columns()).filter(|(f, _)| !matches!(f.name().as_str(), "id" | "geometry" | "bbox")).collect();
+    let properties: Vec<_> = schema
+        .fields()
+        .iter()
+        .zip(group.columns())
+        .filter(|(f, _)| !matches!(f.name().as_str(), "id" | "geometry" | "bbox"))
+        .collect();
     let mut out = Vec::new();
     for i in 0..group.num_rows() {
         if id.is_null(i) || geometry.is_null(i) {
@@ -590,9 +697,7 @@ fn json(column: &dyn Array, i: usize) -> Result<Value, String> {
         DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => Value::from(one(&DataType::Int64)?.as_primitive::<Int64Type>().value(0)),
         DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => Value::from(one(&DataType::UInt64)?.as_primitive::<UInt64Type>().value(0)),
         // A float32 widens to a double, its value unchanged.
-        DataType::Float16 | DataType::Float32 | DataType::Float64 => {
-            Number::from_f64(one(&DataType::Float64)?.as_primitive::<Float64Type>().value(0)).map_or(Value::Null, Value::Number)
-        }
+        DataType::Float16 | DataType::Float32 | DataType::Float64 => Number::from_f64(one(&DataType::Float64)?.as_primitive::<Float64Type>().value(0)).map_or(Value::Null, Value::Number),
         DataType::Utf8 => Value::from(column.as_string::<i32>().value(i)),
         DataType::LargeUtf8 => Value::from(column.as_string::<i64>().value(i)),
         DataType::Utf8View => Value::from(column.as_string_view().value(i)),
@@ -609,7 +714,9 @@ fn json(column: &dyn Array, i: usize) -> Result<Value, String> {
             let entries = column.as_map().value(i);
             let mut object = Map::new();
             for k in 0..entries.len() {
-                let Value::String(key) = json(entries.column(0).as_ref(), k)? else { return Err("a map key that is not a string".to_string()) };
+                let Value::String(key) = json(entries.column(0).as_ref(), k)? else {
+                    return Err("a map key that is not a string".to_string());
+                };
                 object.insert(key, json(entries.column(1).as_ref(), k)?);
             }
             Value::Object(object)
@@ -653,7 +760,11 @@ fn table(ty: &Type, t: &str) -> String {
 fn indexes(ty: &Type, t: &str) -> String {
     let mut sql = format!("CREATE INDEX IF NOT EXISTS {t}_geom ON {t} USING GIST (geom);\n");
     for (k, index) in ty.indexes.iter().enumerate() {
-        let on = if index.starts_with("USING") || index.starts_with('(') { index.to_string() } else { format!("({index})") };
+        let on = if index.starts_with("USING") || index.starts_with('(') {
+            index.to_string()
+        } else {
+            format!("({index})")
+        };
         sql.push_str(&format!("CREATE INDEX IF NOT EXISTS {t}_{k} ON {t} {on};\n"));
     }
     sql
@@ -683,4 +794,3 @@ fn pinned(field: &str) -> Result<String, String> {
     let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     meta["pin"][field].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.{field}", path.display()))
 }
-

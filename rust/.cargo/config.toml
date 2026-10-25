@@ -9,7 +9,7 @@ lint-guest-published = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "p
 lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-api", "--", "-D", "warnings"]
 # What runs here alone: the tests' code, the bakes (the tile server's feature
 # with them, which only adds) and the tools.
-lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-spec-core", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve", "--", "-D", "warnings"]
+lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-spec-core", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve,pxl-geo-bake/ingest", "--", "-D", "warnings"]
 # The device's library, for an iPhone and an Android phone.
 lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-native", "--", "-D", "warnings"]
 lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-native", "--no-default-features", "--", "-D", "warnings"]
@@ -36,6 +36,8 @@ bake-division = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "b
 bake-earth = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_earth", "--"]
 bake-star = ["run", "-p", "pxl-geo-bake", "--bin", "bake_star", "--"]
 bake-geoid = ["run", "--profile", "release", "-p", "pxl-tool", "--bin", "bake_geoid", "--"]
+# Every Overture type into db-geo, a shard at a time (infra/geo/README.md).
+ingest-overture = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--features", "ingest", "--bin", "ingest_overture", "--"]
 download-pack = ["run", "-p", "pxl-tool", "--bin", "download_texture_pack", "--"]
 download-moon = ["run", "-p", "pxl-tool", "--bin", "download_moon", "--"]
 download-earth = ["run", "-p", "pxl-tool", "--bin", "download_earth", "--"]

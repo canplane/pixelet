@@ -11,6 +11,8 @@ doctest = false
 [features]
 # `serve_tiles` only; off by default so the bake tools skip axum.
 serve = ["dep:axum", "dep:tokio", "dep:pxl-server"]
+# `ingest_overture` only; off by default so the bakes skip Arrow and Parquet.
+ingest = ["dep:arrow", "dep:parquet"]
 
 [dependencies]
 fnv.workspace = true
@@ -36,8 +38,15 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 axum = { version = "0.8", optional = true }
 pxl-server = { workspace = true, optional = true }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "process", "time"], optional = true }
+# Overture's GeoParquet, read into db-geo (bin/ingest_overture.rs).
+arrow = { version = "60", default-features = false, optional = true }
+parquet = { version = "60", default-features = false, features = ["arrow", "snap", "zstd"], optional = true }
 
 # Declared because a feature gates it; the other bins are found in src/bin/.
 [[bin]]
 name = "serve_tiles"
 required-features = ["serve"]
+
+[[bin]]
+name = "ingest_overture"
+required-features = ["ingest"]

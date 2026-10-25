@@ -330,7 +330,7 @@ Both were settled the same day, in the other direction — see _The frame_ below
 ## What is not moving
 
 > Superseded: these moved to Rust after all — the Overture ingest is
-> `infra/geo/overture/ingest.rs`, and the asset ingest and the brand
+> pxl-geo-bake `bin/ingest_overture.rs`, and the asset ingest and the brand
 > renderer are `ingest_asset` and `render_brand` in `rust/tool/src/bin/`.
 
 The Overture ingests (`ingest_{base,buildings,divisions,places,transportation}.ts`),

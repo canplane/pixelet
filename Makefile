@@ -108,7 +108,7 @@ web-preview-shelf:
 #
 #   make bake-terrain ARGS="--shard 01033210 --stage leaf"
 #   make bake-geoid ARGS=egm2008-5.pgm
-TOOLS := bake-terrain bake-place bake-division bake-earth bake-star bake-geoid \
+TOOLS := bake-terrain bake-place bake-division bake-earth bake-star bake-geoid ingest-overture \
 	download-pack download-moon download-earth download-star ingest-asset render-brand \
 	serve-geo serve-api serve-tile
 $(TOOLS):

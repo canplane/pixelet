@@ -599,7 +599,7 @@ A shard's **leaves** are its z15 tiles, the ones baked from data, and the shard 
 
 ## The database
 
-The geo database holds the providers' data, and its catalog records which shards are in at which release. Three ingests fill it, none compiling the model: the Overture types, a table each; the elevation, one raster; and the coast, whole (`infra/geo/overture/ingest.rs` and its siblings). An Overture feature is one row however many shards it meets.
+The geo database holds the providers' data, and its catalog records which shards are in at which release. Three ingests fill it, none compiling the model: the Overture types, a table each; the elevation, one raster; and the coast, whole (pxl-geo-bake `bin/ingest_overture.rs`, and `infra/geo/`'s scripts for the other two). An Overture feature is one row however many shards it meets.
 
 A run adds the shards it is given; a whole run fills a new table and swaps it in ([infra/README.md](./infra/README.md) §2). The operator decides what to run. The elevation is warped onto one grid of blocks, so a block two aprons share is stored once. What the database holds, per table its release and counts plus the elevation, is its **holdings**. A bake starts only when every shard it needs is held.
 
