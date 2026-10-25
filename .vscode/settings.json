@@ -1,13 +1,10 @@
 {
-  "editor.tabSize": 2,
-  "editor.insertSpaces": true,
-  "editor.detectIndentation": false,
+  // Only what the editor alone is told: the trees' own configs say how
+  // their code is indented, formatted and linted.
 
   // Deno is the trees' alone; nothing at the root is Deno's, so outside them
   // it neither formats, lints nor types.
   "deno.enablePaths": ["ts", "xpute/ts"],
-  "deno.lint": true,
-  "deno.unstable": ["webgpu"],
   // No "deno.config" pin: each workspace member resolves its own import map
   // ("@/" in ts/client, ts/app/web and ts/app/native), and a pin makes every
   // file resolve against one config alone, where "@/" is unknown.
