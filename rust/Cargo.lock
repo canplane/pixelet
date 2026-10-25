@@ -2196,7 +2196,6 @@ dependencies = [
  "libm",
  "pxl-spec-core",
  "serde",
- "serde_json",
  "xpute-kit",
 ]
 

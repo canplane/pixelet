@@ -95,8 +95,8 @@ export type ErrnoResult<T> = [Errno, T | null];
 
 /** An errno as a reader is shown it: its name and what it means. The
  * strings are for a person to read; an error carries the number alone. */
-export function strerror(errno: Errno): string {
-  return STRERROR[errno] ?? `errno ${errno}`;
+export function strerror(errnum: Errno): string {
+  return STRERROR[errnum] ?? `errno ${errnum}`;
 }
 
 const STRERROR: Record<number, string> = {

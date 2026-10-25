@@ -9,7 +9,7 @@ use core::panic::Location;
 use xpute_guest::mem::heap::HeapStat;
 
 use xpute_guest::ipc::stream::WORD;
-use xpute_guest::ipc::sys::{descriptor_turn_bytes, Sys};
+use xpute_guest::ipc::sys::{fd_turn_bytes, Sys};
 use xpute_guest::mem;
 use xpute_kit::status::errno::Errno;
 
@@ -42,7 +42,7 @@ pub fn host_rise() {
 }
 
 /// The most one file records in a turn: its descriptor's.
-const FILE_TURN_BYTES: usize = descriptor_turn_bytes(PATH_BYTES);
+const FILE_TURN_BYTES: usize = fd_turn_bytes(PATH_BYTES);
 
 /// What the calls that cannot wait may record in one turn, all of them files:
 /// each credit's file answered and a new one opened on it, and each kept file
@@ -82,11 +82,11 @@ pub fn answered(res: i32) -> Result<u32, Errno> {
     }
 }
 
-pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
+pub fn host_bug(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
     STOPPED.set(true);
-    last_words(Stop::Bug { errno, at, a, b });
+    last_words(Stop::Bug { errnum, at, a, b });
     if let Some(h) = sys() {
-        h.abort(errno, at, a, b);
+        h.abort(errnum, at, a, b);
     }
 }
 
@@ -132,7 +132,7 @@ pub fn set_heap_stat(stat: fn() -> HeapStat) {
 /// Numbers only: formatting is the bracket's, so a module that reports
 /// nothing links none of it.
 pub enum Stop<'a> {
-    Bug { errno: Errno, at: &'a Location<'a>, a: u64, b: u64 },
+    Bug { errnum: Errno, at: &'a Location<'a>, a: u64, b: u64 },
     Panic(&'a std::panic::PanicHookInfo<'a>),
 }
 

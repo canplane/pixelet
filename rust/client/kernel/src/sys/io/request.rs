@@ -436,12 +436,12 @@ impl<S: Serve> RequestScheduler<S> {
         let wait = match self.serve.blame(failure) {
             Blame::Object => Wait::Object,
             Blame::Network => {
-                self.failing = Some(failure.errno);
+                self.failing = Some(failure.errnum);
                 self.held_until = at + self.serve.backoff(1, seed).unwrap_or(0.0);
                 return;
             }
             Blame::Server => {
-                self.failing = Some(failure.errno);
+                self.failing = Some(failure.errnum);
                 if started_ms <= self.struck_ms {
                     return;
                 }
@@ -490,7 +490,7 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
         };
         match ended {
             Ended::Failed(fail) => {
-                row.fail = f64::from(fail.errno as i32);
+                row.fail = f64::from(fail.errnum as i32);
                 row.detail = fail.detail as f64;
             }
             Ended::Refused(_) => row.fail = f64::from(Errno::ENOMEM as i32),

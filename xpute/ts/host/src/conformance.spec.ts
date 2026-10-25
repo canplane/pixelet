@@ -19,12 +19,12 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
  * stack and data — is the build's, and no number here. */
 export const MEMORY_BYTES: u32 = 262144 as number;
 
-/** Messages the submission ring holds. */
-export const SUBMISSION_CAPACITY: u32 = 16 as number;
+/** Frames the submission ring holds. */
+export const SQ_CAP: u32 = 16 as number;
 
-/** Messages the completion ring holds: fewer than eight commands raising MOST_RAISE
+/** Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
  * signals each leave, so a trace that sends those makes a turn's output outgrow it. */
-export const COMPLETION_CAPACITY: u32 = 128 as number;
+export const CQ_CAP: u32 = 128 as number;
 
 /** A ring slot's payload: a packet of one number fits. */
 export const SLOT_BYTES: u32 = 256 as number;

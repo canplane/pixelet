@@ -27,9 +27,9 @@ Three edges, and one call the other way: the guest reads the host's clock (`now`
 
 `intr` is the whole of the guest's life, the entry the floor names as a C runtime names `main`. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all. Its answer, `wake_ms`, is when it would like the next turn. A guest that asks for nothing is rung for nothing.
 
-Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a message of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again. Every file call goes to the program's one `SysHost.open`: xpute does not route by root, and the program dispatches by root to whatever it bound there.
+Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a frame of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again. Every file call goes to the program's one `SysHost.open`: xpute does not route by root, and the program dispatches by root to whatever it bound there.
 
-[ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the messages and the packets they carry, the turn, the handles, I/O and the GPU's calls, the contract either end must keep, and the records that hold the languages to it.
+[ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the frames and the packets they carry, the turn, the handles, I/O and the GPU's calls, the contract either end must keep, and the records that hold the languages to it.
 
 ## `kit`, `guest` and `host`
 
@@ -107,7 +107,7 @@ The line is drawn in the same place every time: xpute carries the mechanism, and
 - **It does not choose an allocator.** The heap is one door, and what answers behind it is the guest's choice.
 - **It is not a transport.** Nothing here leaves the machine; what carries bytes to another one is the host's business.
 - **It is not real time.** A quota is how long a turn should take, not a deadline. Nothing preempts: a turn that runs long is charged for it in the next one rather than cut off.
-- **It is not an RPC framework.** A message is four words, and the numbers in them are the program's own.
+- **It is not an RPC framework.** A frame is four words, and the numbers in them are the program's own.
 
 ## Running it
 

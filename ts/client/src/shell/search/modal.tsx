@@ -23,7 +23,7 @@ import { BackingPlace } from "@/shell/ui/backing.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { THEME } from "./place_theme.spec.ts";
 import { PLACE_SYMBOLS } from "./place-symbol.ts";
-import { assembleLabel, type DivisionPart, localName, primaryLanguage } from "@/shell/division/label.ts";
+import { assembleLabel, localName, type Name, primaryLanguage } from "@/shell/division/label.ts";
 import { useCenterCoordinates, useDivisionLabel } from "@/shell/division/focus.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
@@ -72,13 +72,13 @@ function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; 
 }
 
 /** The country a result is in, or is; null for one no country holds, at sea or past the divisions. */
-function countryOf(result: SearchResult): DivisionPart | null {
+function countryOf(result: SearchResult): Name | null {
   if (result.kind === "division" && result.category === "country") return { name: result.name, names: result.common };
   return result.context.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY) ?? null;
 }
 
 interface CountrySection {
-  country: DivisionPart | null;
+  country: Name | null;
   rows: SearchResult[];
 }
 

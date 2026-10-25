@@ -12,14 +12,14 @@ use xpute_kit::status::error::MarshalError;
 
 use super::frame::{self, cmd_of, cmd_word, flags_of, Frame};
 use crate::mem::Memory;
-use spec::{CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL};
+use spec::{CAP, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL};
 
-pub const fn ring_bytes(capacity: u32) -> u32 {
-    (HEADER_WORDS + capacity * frame::WORDS) * 4
+pub const fn ring_bytes(cap: u32) -> u32 {
+    (HEADER_WORDS + cap * frame::WORDS) * 4
 }
 
-pub const fn slots_bytes(capacity: u32, slot_bytes: u32) -> u32 {
-    capacity * slot_bytes
+pub const fn slots_bytes(cap: u32, slot_bytes: u32) -> u32 {
+    cap * slot_bytes
 }
 
 /// Payloads are padded to 8 bytes.
@@ -37,7 +37,7 @@ fn packet_bytes(u8: &[u8], at: usize) -> u64 {
 pub struct Ring {
     mem: Memory,
     at: usize,
-    pub capacity: u32,
+    pub cap: u32,
     pub slot_bytes: u32,
     mask: u32,
     slot_base: u32,
@@ -49,16 +49,16 @@ impl Ring {
     /// never move, for as long as the ring is used.
     pub unsafe fn new(mem: Memory, at: usize) -> Ring {
         let header = |word: u32| mem.word(at + 4 * word as usize);
-        let capacity = header(CAPACITY);
-        if !capacity.is_power_of_two() {
-            xpute_kit::bug!(EINVAL, capacity, at);
+        let cap = header(CAP);
+        if !cap.is_power_of_two() {
+            xpute_kit::bug!(EINVAL, cap, at);
         }
         Ring {
             mem,
             at,
-            capacity,
+            cap,
             slot_bytes: header(SLOT_BYTES),
-            mask: capacity - 1,
+            mask: cap - 1,
             slot_base: header(SLOT_BASE),
         }
     }
@@ -67,29 +67,29 @@ impl Ring {
     pub fn words(&self) -> &mut [u32] {
         // SAFETY: the memory outlives the ring, and each side writes only its
         // own words.
-        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), ring_bytes(self.capacity) as usize / 4) }
+        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), ring_bytes(self.cap) as usize / 4) }
     }
 
     #[allow(clippy::mut_from_ref)]
     fn slots(&self) -> &mut [u8] {
         // SAFETY: as `words`.
-        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u8>(self.slot_base as usize), slots_bytes(self.capacity, self.slot_bytes) as usize) }
+        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u8>(self.slot_base as usize), slots_bytes(self.cap, self.slot_bytes) as usize) }
     }
 
     /// # Safety
     /// As `new`.
-    pub unsafe fn init(mem: Memory, at: usize, capacity: u32, slot_base: u32, slot_bytes: u32) -> Ring {
-        if !capacity.is_power_of_two() {
-            xpute_kit::bug!(EINVAL, capacity);
+    pub unsafe fn init(mem: Memory, at: usize, cap: u32, slot_base: u32, slot_bytes: u32) -> Ring {
+        if !cap.is_power_of_two() {
+            xpute_kit::bug!(EINVAL, cap);
         }
         if !slot_bytes.is_power_of_two() || !slot_bytes.is_multiple_of(8) {
             xpute_kit::bug!(EINVAL, slot_bytes);
         }
         // SAFETY: the caller's memory, as `new` requires.
         unsafe {
-            core::slice::from_raw_parts_mut(mem.at::<u8>(at), ring_bytes(capacity) as usize).fill(0);
+            core::slice::from_raw_parts_mut(mem.at::<u8>(at), ring_bytes(cap) as usize).fill(0);
             let set_header = |word: u32, w: u32| mem.set_word(at + 4 * word as usize, w);
-            set_header(CAPACITY, capacity);
+            set_header(CAP, cap);
             set_header(SLOT_BYTES, slot_bytes);
             set_header(SLOT_BASE, slot_base);
             Ring::new(mem, at)
@@ -122,7 +122,7 @@ impl Ring {
     }
 
     pub fn push(&self, tag: u32, cmd: u32, flags: u32, result: i32, packet: Option<&[u8]>) -> Errno {
-        if self.len() >= self.capacity {
+        if self.len() >= self.cap {
             return Errno::EAGAIN;
         }
         let packet_at = match packet {
@@ -144,7 +144,7 @@ impl Ring {
     /// `write` fills the slot's payload and answers the packet's length, or
     /// none when it did not fit.
     pub fn push_in_place(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: impl FnOnce(&mut [u8]) -> Option<u32>) -> Errno {
-        if self.len() >= self.capacity {
+        if self.len() >= self.cap {
             return Errno::EAGAIN;
         }
         let start = self.slot_at(self.tail());

@@ -38,10 +38,10 @@ export function stop_code(): string | null {
   return code;
 }
 
-const abort: SysHost["abort"] = ({ errno, file, line, column, a, b }) => {
-  console.error(`[kernel] stopped: ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`);
+const abort: SysHost["abort"] = ({ errnum, file, line, column, a, b }) => {
+  console.error(`[kernel] stopped: ${strerror(errnum)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`);
   const where = `${file.split("/").pop()}:${line}`;
-  code = `${strerror(errno).split(":")[0]} · ${file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where}`;
+  code = `${strerror(errnum).split(":")[0]} · ${file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where}`;
 };
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {

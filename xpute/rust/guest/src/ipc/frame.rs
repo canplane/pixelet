@@ -1,6 +1,6 @@
 // xpute-guest/ipc/frame.rs
 
-//! A message's four words, laid out by spec/ipc/frame.json.
+//! A frame's four words, laid out by spec/ipc/frame.json.
 
 #[path = "frame.spec.rs"]
 mod spec;

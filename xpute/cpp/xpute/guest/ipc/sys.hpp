@@ -31,7 +31,7 @@ inline constexpr std::size_t CLOSE_ARGS = 1;
 
 // The most one descriptor records in a turn, its name `path` bytes long: its
 // open, a read or a write, and its close, twice where it is stopped.
-constexpr std::uint64_t descriptor_turn_bytes(std::uint64_t path) noexcept {
+constexpr std::uint64_t fd_turn_bytes(std::uint64_t path) noexcept {
     std::uint64_t moved = READ_ARGS > WRITE_ARGS ? READ_ARGS : WRITE_ARGS;
     return record_bytes(OPENAT_ARGS, path) + record_bytes(moved, std::nullopt) + 2 * record_bytes(CLOSE_ARGS, std::nullopt);
 }

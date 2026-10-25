@@ -23,12 +23,12 @@ namespace xpute::conformance {
 // stack and data — is the build's, and no number here.
 inline constexpr std::uint32_t MEMORY_BYTES = 262144u;
 
-// Messages the submission ring holds.
-inline constexpr std::uint32_t SUBMISSION_CAPACITY = 16u;
+// Frames the submission ring holds.
+inline constexpr std::uint32_t SQ_CAP = 16u;
 
-// Messages the completion ring holds: fewer than eight commands raising MOST_RAISE
+// Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
 // signals each leave, so a trace that sends those makes a turn's output outgrow it.
-inline constexpr std::uint32_t COMPLETION_CAPACITY = 128u;
+inline constexpr std::uint32_t CQ_CAP = 128u;
 
 // A ring slot's payload: a packet of one number fits.
 inline constexpr std::uint32_t SLOT_BYTES = 256u;

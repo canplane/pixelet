@@ -61,9 +61,9 @@ const SIGNALS: u32 = Sensor::ALL.len() as u32 + 1;
 // The shell reads the completion ring dry before it rings, so a ring with
 // room for a reply to every submission and the door's reserve past the last
 // (`Door::new`, SIGNALS + 1) never stops a drain partway (mem.json
-// COMPLETION_CAPACITY).
+// CQ_CAP).
 const _: () = assert!(
-    crate::sys::mem::spec::SUBMISSION_CAPACITY + SIGNALS < crate::sys::mem::spec::COMPLETION_CAPACITY,
+    crate::sys::mem::spec::SQ_CAP + SIGNALS < crate::sys::mem::spec::CQ_CAP,
     "a full submission ring's replies and the turn's signals do not fit the completion ring"
 );
 
@@ -130,9 +130,9 @@ fn boot(b: &BootInfo, last_words: Option<LastWords>) {
     // std's own hook does not print it a second time; a bug there is not
     // reported, and is told as the panic it then is (xpute_guest::global
     // `off_marked_thread`).
-    xpute_kit::status::bug::set_report(|errno, at, a, b| {
+    xpute_kit::status::bug::set_report(|errnum, at, a, b| {
         if !off_marked_thread() {
-            crate::sys::io::host::host_bug(errno, at, a, b);
+            crate::sys::io::host::host_bug(errnum, at, a, b);
         }
     });
     let theirs = std::panic::take_hook();
@@ -157,8 +157,8 @@ fn boot(b: &BootInfo, last_words: Option<LastWords>) {
     crate::turn::boot();
     let [margin, batch, settle] = quantum_entries(&crate::sys::sched::tick::QUANTUM);
     let entries: [Entry; DIRECTORY_ENTRIES] = [
-        (key::SUBMISSION, ring_address(door().submission())),
-        (key::COMPLETION, ring_address(door().completion())),
+        (key::SQ, ring_address(door().sq())),
+        (key::CQ, ring_address(door().cq())),
         margin,
         batch,
         settle,

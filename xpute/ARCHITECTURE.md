@@ -9,7 +9,7 @@ xpute comes in two layers. `kit` is generic code — collections, codecs, a wire
 Three things cross between the ends and nothing else does: one memory they share, one call in, one number out. The sections follow from that:
 
 1. the memory;
-2. what is written into it — the message and its packet, and the rings that queue messages;
+2. what is written into it — the frame and its packet, and the rings that queue frames;
 3. the call that makes it run, the turn;
 4. handles, which name objects across the boundary;
 5. I/O and a GPU's calls, which a guest asks of its host;
@@ -37,20 +37,20 @@ Since the guest places everything, the host has to be told where. The guest writ
 
 ---
 
-## The message, and the packet it carries
+## The frame, and the packet it carries
 
-Sharing a memory does not say what a request looks like, so xpute gives every request and every answer one shape.
+Sharing a memory does not say what a submission or its reply looks like, so xpute gives every submission, reply and signal one shape.
 
-A message is four words (`ipc/frame`):
+A frame is four words (`ipc/frame`):
 
 - `tag`, who asked;
 - `cmd`, what is asked, in the low 16 bits, with flags in the high 16;
 - `result`, what came back, a value or `-errno`;
-- where its **packet** lies — the data the message carries.
+- where its **packet** lies — the data the frame carries.
 
 An errno is one table's (`spec/status/errno.json`), and every language reads a code back into its member, or into none (`Errno::of` in Rust, `errno_of` in the others). A command number is `major << 8 | minor` (`kit abi/cmd`). The majors below `0x10` are xpute's own commands, and a program numbers its own from `0x10` in a table that names xpute's as its base, so no number is given out twice.
 
-Two flags decide what a message means. `ACKREQ`, set by whoever submits, asks for an answer. `RES`, set by whoever completes, says the message is an answer. A completion without `RES` is one the guest raised on its own, for whoever listens.
+Two flags decide what a frame means. `ACKREQ`, set by whoever submits, asks for a reply. `RES`, set by whoever completes, says the frame is a reply. A completion without `RES` is a signal, one the guest raised on its own, for whoever listens.
 
 Every packet has the same shape, **XTP**, the Xpute Tree Packet (`kit wire/xtp`). One decision explains the rest of it: nothing inside a packet records where the packet is. Every offset is counted from the branch that holds it, so the same bytes mean the same thing at any address.
 
@@ -83,35 +83,35 @@ The rest is layout: scalar leaves, typed-array sequences and branches, little-en
 
 ## The rings, the doorbell and the door
 
-Messages need a queue each way that neither side has to lock, and the ring is that queue.
+Frames need a queue each way that neither side has to lock, and the ring is that queue.
 
 A **ring** (`ipc/ring`) keeps the four-word descriptors in one place and the packets they point at in a separate range of the memory:
 
 ```text
 descriptors                                  payloads, elsewhere in memory
 ┌──────────────────────────────────────────┐  ┌────────┬────────┬───┬──────────┐
-│ header: capacity · head · tail ·         │  │ slot 0 │ slot 1 │ … │ slot n-1 │
-│                    ▲      ▲              │  └────▲───┴────────┴───┴──────────┘
-│      consumer ─────┘      └───── producer│       │
+│ header: cap · head · tail ·              │  │ slot 0 │ slot 1 │ … │ slot n-1 │
+│               ▲      ▲                   │  └────▲───┴────────┴───┴──────────┘
+│ consumer ─────┘      └───── producer     │       │
 │  one writer each, and no lock            │       │
 │       slot_bytes · slot_base · 3 reserved│       │
 ├──────────────────────────────────────────┤       │
-│ message n: tag                           │       │
-│            cmd (low 16) | flags (high 16)│       │
-│            result (value or -errno)      │       │
-│            packet address ───────────────┼───────┘  (slot n & (capacity-1))
+│ frame n: tag                             │       │
+│          cmd (low 16) | flags (high 16)  │       │
+│          result (value or -errno)        │       │
+│          packet address ─────────────────┼───────┘  (slot n & (cap-1))
 └──────────────────────────────────────────┘
 ```
 
 Keeping descriptors apart from payloads is what virtio's descriptor table and AF_XDP's UMEM do: the descriptors are small and stay hot, the payloads are large and do not.
 
-Positions only grow, so `tail - head` is how many messages wait. Message _n_ owns slot _n_, so a slot is free exactly when its message has been read, and nothing under the ring allocates. A push fails in two ways only. `EAGAIN` means the ring is full, and the producer waits. `EMSGSIZE` means the packet is bigger than a slot, and such a packet crosses by address instead, in a heap block. A packet the host wrote anywhere but the tail's slot is not a third way to fail but a bug, and its push stops on it (`ENOTRECOVERABLE`).
+Positions only grow, so `tail - head` is how many frames wait. Frame _n_ owns slot _n_, so a slot is free exactly when its frame has been read, and nothing under the ring allocates. A push fails in two ways only. `EAGAIN` means the ring is full, and the producer waits. `EMSGSIZE` means the packet is bigger than a slot, and such a packet crosses by address instead, in a heap block. A packet the host wrote anywhere but the tail's slot is not a third way to fail but a bug, and its push stops on it (`ENOTRECOVERABLE`).
 
 Two rings make a pair: one for what the host submits, one for what the guest completes. The host drives the pair through the **doorbell** (`ipc/doorbell.ts`):
 
 - it writes each command in place, into the submission ring's next slot (`writer`, `send`);
 - it rings the guest with a quota (`ring`), which is one whole turn;
-- it then reads the completion ring dry, handing each message to the call waiting for it or to whoever listens for signals.
+- it then reads the completion ring dry, handing each reply to the call waiting for it and each signal to whoever listens.
 
 Two ways in sit on top of that. A question the host needs answered at once is a `call`: submitted with `ACKREQ` and rung with no quota until its reply comes back. A command from outside the host's own code, such as a developer's console, is `cmd`: it takes the command's number and its arguments, writes each argument as the packet's next field, lowered as XTP lowers a value (`TreeView.set`), then sends and rings. A guest that traps is gone, and the doorbell rings it no more.
 
@@ -189,13 +189,13 @@ Every table is fixed at N slots, the one over what another side keeps (`HandleTa
 
 ## I/O, by asking
 
-A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the host (`ts/host`) hands the ask to the program and brings back what came of it — in a message, or into memory the request named. It does not route by root: every file call goes to the program's one `SysHost.open`, and the program dispatches by root to whatever it bound there. What a file is, where it lies and how it is fetched are the binding's; xpute only carries the call.
+A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the host (`ts/host`) hands the ask to the program and brings back what came of it — in a completion, or into memory the request named. It does not route by root: every file call goes to the program's one `SysHost.open`, and the program dispatches by root to whatever it bound there. What a file is, where it lies and how it is fetched are the binding's; xpute only carries the call.
 
-How much may be out at once, and which want goes first, xpute does not say: ordering demands needs to know what the program is for. A program that wants a bound passes one in its own messages.
+How much may be out at once, and which want goes first, xpute does not say: ordering demands needs to know what the program is for. A program that wants a bound passes one in its own commands.
 
 ### Streams
 
-Some requests come in thousands a turn — every call a renderer makes to a device it cannot reach. A message each would be a slot and a packet each, for calls that need neither a reply nor a tree. For those the guest writes a **stream** (`ipc/stream`): records laid end to end during a turn, which the host runs, all of them, after the turn returns.
+Some requests come in thousands a turn — every call a renderer makes to a device it cannot reach. A frame each would be a slot and a packet each, for calls that need neither a reply nor a tree. For those the guest writes a **stream** (`ipc/stream`): records laid end to end during a turn, which the host runs, all of them, after the turn returns.
 
 ```text
 0       END   how many words of records the turn wrote
@@ -239,14 +239,14 @@ The GPU's calls stand beside `kit` and the two ends: a program that never reache
 
 The contract is the part neither end may change; the rest of this document is how one end happens to be built.
 
-What cannot change is the rules below and the formats they travel in: the directory, the message's four words, the ring's layout and the stream's records. Each rule is one the other end could catch being broken.
+What cannot change is the rules below and the formats they travel in: the directory, the frame's four words, the ring's layout and the stream's records. Each rule is one the other end could catch being broken.
 
 0. **The directory.** The guest writes it in its first turn or in a boot call that returns its offset, and the host finds everything from the one offset it learns outside. A key appears at most once, an unknown key is passed over, and an unknown version is refused.
 1. **The core memory.** It never moves or grows while the guest lives, and every address that crosses is an offset into it.
 2. **The turn.** The guest runs only inside `intr`, and the two sides never run at once: the host touches nothing a turn writes until it has returned. The quota is advice, not a deadline. `wake_ms` is 0 for the next turn, a positive number for that many milliseconds from now, and negative (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the host needs answered at once is asked in one — but only of a command the guest answers from what it already holds; one that waits on anything outside is answered on a later turn.
-3. **The message.** Four words: `tag`, `cmd` with its flags, `result`, and the packet. With `ACKREQ` a message gets exactly one reply; without it, a reply only when it failed. A reply carries its message's `tag` and `cmd`, and `RES`.
-4. **What the host sends** is applied in order, each message once. The guest may leave some for a later turn, never out of order or skipped, and asks for the next turn while it does.
-5. **What a turn leaves** — messages, replies, stream records — is taken by the host before the next turn, none dropped. Order holds within one place a turn writes to, not between places, so a guest that needs one request run before another puts both in the same place. Running past the room set aside is a sizing mistake, not a state to handle.
+3. **The frame.** Four words: `tag`, `cmd` with its flags, `result`, and the packet. With `ACKREQ` a submission gets exactly one reply; without it, a reply only when it failed. A reply carries its submission's `tag` and `cmd`, and `RES`.
+4. **What the host sends** is applied in order, each submission once. The guest may leave some for a later turn, never out of order or skipped, and asks for the next turn while it does.
+5. **What a turn leaves** — signals, replies, stream records — is taken by the host before the next turn, none dropped. Order holds within one place a turn writes to, not between places, so a guest that needs one request run before another puts both in the same place. Running past the room set aside is a sizing mistake, not a state to handle.
 6. **Handles.** A handle is `slot | generation << 16`, 0 is never one, and the issuing side checks the generation.
 7. **The clock.** During a turn the guest reads the host's clock (`now`) in milliseconds. It never runs backward, and only differences mean anything.
 

@@ -42,7 +42,7 @@ Deno.test("tlv computes what the typescript computes", async () => {
       for (const _ of r) n++;
       stop = r.end() ?? "none";
     } catch (err) {
-      stop = `errno:${(err as FaultError).errno ?? Errno.OK}`;
+      stop = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
     }
     assertEquals(`${n}:${stop}`, v.s(`end.${k}.read`), `end.${k}`);
   }
@@ -53,7 +53,7 @@ Deno.test("tlv computes what the typescript computes", async () => {
   try {
     new TlvReader(hex_to_bytes(v.s("huge.packet"))).read_all();
   } catch (err) {
-    huge = `errno:${(err as FaultError).errno ?? Errno.OK}`;
+    huge = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
   }
   assertEquals(huge, v.s("huge.read"));
 });

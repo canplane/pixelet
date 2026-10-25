@@ -58,7 +58,7 @@ fn on_kernel<R: Send>(f: impl FnOnce() -> R + Send) -> R {
 /// report's record.
 fn last_words(stop: Stop<'_>) {
     let line = match stop {
-        Stop::Bug { errno, at, a, b } => format!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()),
+        Stop::Bug { errnum, at, a, b } => format!("[pxl] {errnum:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()),
         Stop::Panic(info) => format!("[pxl] {info}"),
     };
     #[cfg(target_os = "android")]

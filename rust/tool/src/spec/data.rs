@@ -354,7 +354,7 @@ const DATA_SPECS: [DataSpec; 26] = [
         rs_also: &[("rust/client-bracket/wasm/mem.spec.rs", "pxl-wasm/mem.spec.rs")],
         module: Some("spec"),
         enums: Enums::None,
-        ts_names: Some(&["DIRECTORY_AT", "DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "SUBMISSION_CAPACITY", "COMPLETION_CAPACITY"]),
+        ts_names: Some(&["DIRECTORY_AT", "DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "SQ_CAP", "CQ_CAP"]),
         cpp: None,
     },
 ];

@@ -39,11 +39,11 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
 // at all has found them through the directory.
 constexpr std::uint32_t DIRECTORY_AT = 0;
 constexpr std::uint32_t STREAM_AT = PAGE_BYTES;
-constexpr std::uint32_t COMPLETION_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 4);
-constexpr std::uint32_t SUBMISSION_DESC_AT = COMPLETION_DESC_AT + page_up(ring_bytes(COMPLETION_CAPACITY));
-constexpr std::uint32_t COMPLETION_SLOT_AT = SUBMISSION_DESC_AT + page_up(ring_bytes(SUBMISSION_CAPACITY));
-constexpr std::uint32_t SUBMISSION_SLOT_AT = COMPLETION_SLOT_AT + COMPLETION_CAPACITY * SLOT_BYTES;
-constexpr std::uint32_t SYS_AT = SUBMISSION_SLOT_AT + SUBMISSION_CAPACITY * SLOT_BYTES;
+constexpr std::uint32_t CQ_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 4);
+constexpr std::uint32_t SQ_DESC_AT = CQ_DESC_AT + page_up(ring_bytes(CQ_CAP));
+constexpr std::uint32_t CQ_SLOT_AT = SQ_DESC_AT + page_up(ring_bytes(SQ_CAP));
+constexpr std::uint32_t SQ_SLOT_AT = CQ_SLOT_AT + CQ_CAP * SLOT_BYTES;
+constexpr std::uint32_t SYS_AT = SQ_SLOT_AT + SQ_CAP * SLOT_BYTES;
 constexpr std::uint32_t STATE_AT = page_up(SYS_AT + SYS_WORDS * 4);
 
 struct State {
@@ -133,13 +133,13 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
 
 // Every offset written is the memory's, so the range's start is added to each.
 std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
-    Door door(Ring::init(m, range + SUBMISSION_DESC_AT, SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, SLOT_BYTES),
-              Ring::init(m, range + COMPLETION_DESC_AT, COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE);
+    Door door(Ring::init(m, range + SQ_DESC_AT, SQ_CAP, range + SQ_SLOT_AT, SLOT_BYTES),
+              Ring::init(m, range + CQ_DESC_AT, CQ_CAP, range + CQ_SLOT_AT, SLOT_BYTES), MOST_RAISE);
     new (m.at(range + STATE_AT)) State{
         .door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .sys = Sys(m, range + SYS_AT, SYS_WORDS), .files = {}, .handles = {}, .now = now};
     const std::array<Entry, 4> entries{{
-        {directory::key::SUBMISSION, range + SUBMISSION_DESC_AT},
-        {directory::key::COMPLETION, range + COMPLETION_DESC_AT},
+        {directory::key::SQ, range + SQ_DESC_AT},
+        {directory::key::CQ, range + CQ_DESC_AT},
         {key::STREAM, range + STREAM_AT},
         {directory::key::SYS, range + SYS_AT},
     }};

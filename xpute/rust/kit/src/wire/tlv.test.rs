@@ -60,7 +60,7 @@ fn tlv_computes_what_the_typescript_computes() {
             match r.next_value() {
                 Ok(Some(_)) => n += 1,
                 Ok(None) => break if r.end() == Some(TlvEnd::Closed) { "closed".to_string() } else { "unclosed".to_string() },
-                Err(e) => break format!("errno:{}", e.errno as i32),
+                Err(e) => break format!("errno:{}", e.errnum as i32),
             }
         };
         assert_eq!(format!("{n}:{stop}"), v.s(&format!("{k}.read")), "{k}");
@@ -68,5 +68,5 @@ fn tlv_computes_what_the_typescript_computes() {
 
     let huge_pkt = hex::decode(v.s("huge.packet")).unwrap();
     let huge = TlvReader::new(&huge_pkt).read_all();
-    assert_eq!(huge.map(|_| "ok".to_string()).unwrap_or_else(|e| format!("errno:{}", e.errno as i32)), v.s("huge.read"));
+    assert_eq!(huge.map(|_| "ok".to_string()).unwrap_or_else(|e| format!("errno:{}", e.errnum as i32)), v.s("huge.read"));
 }

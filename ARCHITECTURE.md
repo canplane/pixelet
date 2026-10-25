@@ -527,7 +527,7 @@ Once a turn, before the layers observe, the kernel says what moved (`turn.rs` `c
 
 This section is what crosses between the host and the kernel, and how the shell reads the kernel.
 
-The host and the kernel share xpute's two rings of small messages with page-sized payload slots. One carries what the host submits. The other carries what the kernel completes, and holds all one turn leaves; a turn short of room leaves the rest of the submissions for the next.
+The host and the kernel share xpute's two rings of small frames with page-sized payload slots. One carries what the host submits. The other carries what the kernel completes, and holds all one turn leaves; a turn short of room leaves the rest of the submissions for the next.
 
 The **commands** are listed in `spec/client/kernel/domain/control/cmd.json`, from which both sides' readers and writers are generated. A packet is an XTP tree, xpute's relocatable binary tree, and anything larger than a slot crosses in a heap block. The kernel also posts **signals** nobody asked for: a sensor to watch or let go (`SENSOR_START`, `SENSOR_STOP`) and a new snapshot (`WORLD_SNAPSHOT`). A read to open and its other calls go in its host stream (`sys/io/host.rs`).
 

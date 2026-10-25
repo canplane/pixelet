@@ -17,7 +17,7 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-/** Messages the submission ring holds, and so payloads: one a slot
+/** Frames the submission ring holds, and so payloads: one a slot
  * (doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
  * the ring checks, since a position is taken modulo it by masking.
  *
@@ -26,9 +26,9 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
  * `writer`, `submit`). And small because every slot ends up resident: a
  * position only grows, so each slot is written in turn, and a slot is a page
  * since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one. */
-export const SUBMISSION_CAPACITY: u32 = 512 as number;
+export const SQ_CAP: u32 = 512 as number;
 
-/** Messages the completion ring holds: everything one turn leaves, since the
+/** Frames the completion ring holds: everything one turn leaves, since the
  * shell reads it dry before it rings again. A turn leaves at most a reply to
  * each command it applies and its own signals after the drain (door.rs
  * `SIGNALS`), so a ring of the submission ring's capacity plus the door's
@@ -36,7 +36,7 @@ export const SUBMISSION_CAPACITY: u32 = 512 as number;
  * sizing, a power of two past that. Nothing is overrun if it is short: a
  * command whose signals and reply would not fit waits for the next turn
  * (xpute-guest ipc/door.rs). A power of two, as the submission ring's. */
-export const COMPLETION_CAPACITY: u32 = 1024 as number;
+export const CQ_CAP: u32 = 1024 as number;
 
 /** Where the kernel's directory is (xpute-guest ipc/directory.rs): the page under
  * GLOBAL_BASE, past the rings' payloads. At an address both sides are built with

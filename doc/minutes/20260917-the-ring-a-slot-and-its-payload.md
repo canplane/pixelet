@@ -19,7 +19,7 @@ Nothing here is new prior art. It is the prior art on file, applied.
 
 ## What was wrong, three faces of one thing
 
-A ring was one block: a header, `capacity` messages, and a bump area for the
+A ring was one block: a header, `cap` messages, and a bump area for the
 packets, all in 1 MiB taken from the heap.
 
 **The shared area was not a ring.** Its cursor rewound only when the producer found
@@ -47,7 +47,7 @@ say wherever the code above them last changed.
 
 ## A slot and its payload
 
-Message `n` takes slot `n & (capacity - 1)` and writes into that slot's
+Message `n` takes slot `n & (cap - 1)` and writes into that slot's
 payload. A slot holds one live message, so its payload is free exactly when
 the slot is; `entry_at` and `slot_at` answer the same `position`.
 
@@ -112,7 +112,7 @@ and past that it is bulk" is a sentence that can be said without looking at any
 command.
 
 _Superseded: there are two rings and no spill, and the completion ring is
-twice the submission's — `SUBMISSION_CAPACITY` 2,048, `COMPLETION_CAPACITY`
+twice the submission's — `SQ_CAP` 2,048, `CQ_CAP`
 4,096 (spec/client/kernel/sys/mem/mem.json), since a turn answers what it was sent
 and raises its own signals besides._
 

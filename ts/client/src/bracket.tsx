@@ -110,6 +110,11 @@ export interface LongFrame {
   renderMs: f64;
 }
 
+/** The CSS variable a page's `view.useVisualViewport` keeps on its root, every frame: how far the
+ * visual viewport's bottom stands above the layout viewport's, the keyboard's height, in px. Set by
+ * the place and read by the shell's CSS (shell/ui/above-keyboard.tsx); a place without CSS sets none. */
+export const VISUAL_VIEWPORT_BOTTOM = "--vv-bottom";
+
 export interface Bracket {
   /** Whether the device is held to a phone's ceilings. */
   device: { handheld: boolean };
@@ -144,6 +149,7 @@ export interface Bracket {
   view: {
     useSafeArea(): SafeArea;
     useWindowSize(): { width: f64; height: f64 };
+    /** Keeps `VISUAL_VIEWPORT_BOTTOM` while mounted. */
     useVisualViewport(): void;
     useViewportTop(): number;
   };

@@ -1,6 +1,6 @@
 // cpp/xpute/guest/ipc/frame.hpp
 
-// A message's four words, laid out by spec/ipc/frame.json.
+// A frame's four words, laid out by spec/ipc/frame.json.
 
 #pragma once
 

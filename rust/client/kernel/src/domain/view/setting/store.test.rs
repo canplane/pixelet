@@ -127,7 +127,7 @@ fn an_empty_slot_is_the_defaults() {
 #[test]
 fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
     let _g = crate::sys::serial();
-    for answer in [Err(file::Opened::Failed { errno: Errno::EFBIG, detail: 0 }), Ok(&br#"{"ao":"screen"}"#[..])] {
+    for answer in [Err(file::Opened::Failed { errnum: Errno::EFBIG, detail: 0 }), Ok(&br#"{"ao":"screen"}"#[..])] {
         opened();
         file::kept_answered(Kept::Settings, answer);
         crate::sys::io::host::host_rise();
@@ -148,7 +148,7 @@ fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
 fn an_unreadable_slot_is_never_written_over() {
     let _g = crate::sys::serial();
     opened();
-    file::kept_answered(Kept::Settings, Err(file::Opened::Failed { errno: Errno::EIO, detail: 0 }));
+    file::kept_answered(Kept::Settings, Err(file::Opened::Failed { errnum: Errno::EIO, detail: 0 }));
     assert!(settings_load_step());
     assert!(!file::refused(Kept::Settings));
     assert!(held_after_a_change());

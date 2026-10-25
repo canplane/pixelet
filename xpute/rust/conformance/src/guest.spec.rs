@@ -25,12 +25,12 @@
 /// stack and data — is the build's, and no number here.
 pub const MEMORY_BYTES: u32 = 262144;
 
-/// Messages the submission ring holds.
-pub const SUBMISSION_CAPACITY: u32 = 16;
+/// Frames the submission ring holds.
+pub const SQ_CAP: u32 = 16;
 
-/// Messages the completion ring holds: fewer than eight commands raising MOST_RAISE
+/// Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
 /// signals each leave, so a trace that sends those makes a turn's output outgrow it.
-pub const COMPLETION_CAPACITY: u32 = 128;
+pub const CQ_CAP: u32 = 128;
 
 /// A ring slot's payload: a packet of one number fits.
 pub const SLOT_BYTES: u32 = 256;

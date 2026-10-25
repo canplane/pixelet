@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
+import { VISUAL_VIEWPORT_BOTTOM } from "@pxl/client/bracket.tsx";
 
 const SETTLE_MS = 250;
 
@@ -54,9 +55,10 @@ const keyboard = (navigator as Navigator & { virtualKeyboard?: VirtualKeyboard }
 
 /**
  * Pins the overlays to the visual viewport: the top as `useViewportTop`, the
- * bottom as `--vv-bottom`. iOS Safari ignores `interactive-widget` and pans
- * the visual viewport instead; where the VirtualKeyboard API exists, the
- * keyboard overlays the page and reports its own height.
+ * bottom as the bracket's `VISUAL_VIEWPORT_BOTTOM`. iOS Safari ignores
+ * `interactive-widget` and pans the visual viewport instead; where the
+ * VirtualKeyboard API exists, the keyboard overlays the page and reports its
+ * own height.
  */
 export function useVisualViewport(): void {
   useEffect(() => {
@@ -74,7 +76,7 @@ export function useVisualViewport(): void {
 
       // Every frame, as a CSS variable so following it re-renders nothing.
       const bottom = keyboard ? keyboard.boundingRect.height : Math.max(0, root.clientHeight - (vv.offsetTop + vv.height));
-      root.style.setProperty("--vv-bottom", `${bottom}px`);
+      root.style.setProperty(VISUAL_VIEWPORT_BOTTOM, `${bottom}px`);
 
       // Top waits until the viewport settles: iOS overshoots while the keyboard
       // animates, and tracking it live made the top overlays bounce.
@@ -104,7 +106,7 @@ export function useVisualViewport(): void {
       vv.removeEventListener("scroll", schedule);
       keyboard?.removeEventListener("geometrychange", schedule);
       if (keyboard) keyboard.overlaysContent = false;
-      root.style.removeProperty("--vv-bottom");
+      root.style.removeProperty(VISUAL_VIEWPORT_BOTTOM);
       setTop(0);
     };
   }, []);

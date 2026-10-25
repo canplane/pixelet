@@ -8,12 +8,12 @@ import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 import * as frame from "./frame.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
-function ring(capacity: number, slot: number): Ring {
-  const slot_base = 8 + ring_bytes(capacity);
-  return Ring.init(new ArrayBuffer(slot_base + slots_bytes(capacity, slot)), 8, capacity, slot_base, slot);
+function ring(cap: number, slot: number): Ring {
+  const slot_base = 8 + ring_bytes(cap);
+  return Ring.init(new ArrayBuffer(slot_base + slots_bytes(cap, slot)), 8, cap, slot_base, slot);
 }
 
-Deno.test("ring - messages come out in order across the wrap, and a full ring refuses", () => {
+Deno.test("ring - frames come out in order across the wrap, and a full ring refuses", () => {
   const r = ring(4, 64);
   for (let round = 0; round < 3; round++) {
     for (let k = 0; k < 4; k++) assertEquals(r.push(round * 4 + k, 7, frame.ACKREQ, null, -(round * 4 + k)), Errno.OK);

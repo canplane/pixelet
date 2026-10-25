@@ -7,15 +7,15 @@ import { Errno, strerror } from "./errno.spec.ts";
  * class decides which, not the errno.
  */
 export class XputeError extends Error {
-  readonly errno: Errno;
+  readonly errnum: Errno;
 
-  constructor(errno: Errno) {
-    super(strerror(errno));
+  constructor(errnum: Errno) {
+    super(strerror(errnum));
 
     Object.setPrototypeOf(this, new.target.prototype);
     this.name = new.target.name;
 
-    this.errno = errno;
+    this.errnum = errnum;
 
     try {
       // deno-lint-ignore ban-types

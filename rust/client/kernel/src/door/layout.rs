@@ -8,20 +8,20 @@
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
 use crate::sys::mem::section::{fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
-use crate::sys::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
+use crate::sys::mem::spec::{CQ_CAP, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES};
 use xpute_guest::mem::section::{Section, PAGE_BYTES};
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.
 pub const RING_SLOT_BYTES: u32 = PAGE_BYTES;
 
-const SUBMISSION_DESC_AT: u32 = RING_DESC_AT;
-const COMPLETION_DESC_AT: u32 = SUBMISSION_DESC_AT + page_up(ring_bytes(SUBMISSION_CAPACITY));
-const DESC_END: u32 = COMPLETION_DESC_AT + page_up(ring_bytes(COMPLETION_CAPACITY));
+const SQ_DESC_AT: u32 = RING_DESC_AT;
+const CQ_DESC_AT: u32 = SQ_DESC_AT + page_up(ring_bytes(SQ_CAP));
+const DESC_END: u32 = CQ_DESC_AT + page_up(ring_bytes(CQ_CAP));
 
-const SUBMISSION_SLOT_AT: u32 = RING_SLOT_AT;
-const COMPLETION_SLOT_AT: u32 = SUBMISSION_SLOT_AT + slots_bytes(SUBMISSION_CAPACITY, RING_SLOT_BYTES);
-const SLOT_END: u32 = COMPLETION_SLOT_AT + slots_bytes(COMPLETION_CAPACITY, RING_SLOT_BYTES);
+const SQ_SLOT_AT: u32 = RING_SLOT_AT;
+const CQ_SLOT_AT: u32 = SQ_SLOT_AT + slots_bytes(SQ_CAP, RING_SLOT_BYTES);
+const SLOT_END: u32 = CQ_SLOT_AT + slots_bytes(CQ_CAP, RING_SLOT_BYTES);
 
 /// The door's two rings, submission and completion, laid out at their
 /// addresses in the module's memory.
@@ -34,8 +34,8 @@ pub unsafe fn rings() -> (Ring, Ring) {
     // SAFETY: the caller's.
     unsafe {
         (
-            Ring::init(mem, SUBMISSION_DESC_AT as usize, SUBMISSION_CAPACITY, SUBMISSION_SLOT_AT, RING_SLOT_BYTES),
-            Ring::init(mem, COMPLETION_DESC_AT as usize, COMPLETION_CAPACITY, COMPLETION_SLOT_AT, RING_SLOT_BYTES),
+            Ring::init(mem, SQ_DESC_AT as usize, SQ_CAP, SQ_SLOT_AT, RING_SLOT_BYTES),
+            Ring::init(mem, CQ_DESC_AT as usize, CQ_CAP, CQ_SLOT_AT, RING_SLOT_BYTES),
         )
     }
 }

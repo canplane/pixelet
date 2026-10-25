@@ -13,18 +13,18 @@ using namespace xpute;
 
 namespace {
 
-// A ring of `capacity` slots of `slot` bytes, its descriptors at 8 and its
+// A ring of `cap` slots of `slot` bytes, its descriptors at 8 and its
 // payloads past them, in a buffer of its own.
 struct Fixture {
     std::vector<std::uint64_t> buf;
     Ring ring;
 };
 
-Fixture fixture(std::uint32_t capacity, std::uint32_t slot) {
-    std::uint32_t slot_base = 8 + ring_bytes(capacity);
-    std::vector<std::uint64_t> buf((slot_base + slots_bytes(capacity, slot)) / 8 + 1);
+Fixture fixture(std::uint32_t cap, std::uint32_t slot) {
+    std::uint32_t slot_base = 8 + ring_bytes(cap);
+    std::vector<std::uint64_t> buf((slot_base + slots_bytes(cap, slot)) / 8 + 1);
     Memory mem(reinterpret_cast<std::uintptr_t>(buf.data()), buf.size() * 8);
-    Ring r = Ring::init(mem, 8, capacity, slot_base, slot);
+    Ring r = Ring::init(mem, 8, cap, slot_base, slot);
     return Fixture{std::move(buf), r};
 }
 
@@ -44,7 +44,7 @@ std::vector<std::uint8_t> packet_of(std::uint32_t n) {
 
 } // namespace
 
-XPUTE_TEST(ring_messages_come_out_in_order_across_the_wrap_and_a_full_ring_refuses) {
+XPUTE_TEST(ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses) {
     Fixture f = fixture(4, 64);
     const Ring &r = f.ring;
     for (std::uint32_t round = 0; round < 3; round++) {
@@ -69,7 +69,7 @@ XPUTE_TEST(ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a
     std::vector<std::uint8_t> want = packet_of(5);
     XPUTE_CHECK((std::vector<std::uint8_t>(got.begin(), got.end()) == want));
 
-    // The same packet is refused the same way with a message in the ring and
+    // The same packet is refused the same way with a frame in the ring and
     // with none: a slot is a slot.
     std::string long_text(200, 'x');
     auto too_long = [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {

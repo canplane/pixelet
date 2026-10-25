@@ -27,7 +27,7 @@ impl Serve for ByWhy {
     }
 
     fn blame(&self, failure: Failure) -> Blame {
-        match failure.errno {
+        match failure.errnum {
             Errno::ENETUNREACH => Blame::Network,
             Errno::EACCES => Blame::Server,
             _ => Blame::Object,
@@ -83,8 +83,8 @@ fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
     failed_with(l, key, Errno::ENETUNREACH, at);
 }
 
-fn failed_with<S: Serve>(l: &mut RequestScheduler<S>, key: u64, errno: Errno, at: f64) {
-    let fail = Failure { errno, detail: 0, at: None };
+fn failed_with<S: Serve>(l: &mut RequestScheduler<S>, key: u64, errnum: Errno, at: f64) {
+    let fail = Failure { errnum, detail: 0, at: None };
     l.settle(key, Ended::Failed(fail), None, at);
 }
 

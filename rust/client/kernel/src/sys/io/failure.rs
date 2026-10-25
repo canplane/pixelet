@@ -16,16 +16,16 @@ pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 /// rule a body broke.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Failure {
-    pub errno: Errno,
+    pub errnum: Errno,
     pub detail: u16,
     pub at: Option<&'static Location<'static>>,
 }
 
 impl From<Errno> for Failure {
     #[track_caller]
-    fn from(errno: Errno) -> Failure {
+    fn from(errnum: Errno) -> Failure {
         Failure {
-            errno,
+            errnum,
             detail: 0,
             at: Some(Location::caller()),
         }
@@ -35,7 +35,7 @@ impl From<Errno> for Failure {
 impl From<MarshalError> for Failure {
     fn from(err: MarshalError) -> Failure {
         Failure {
-            errno: err.errno,
+            errnum: err.errnum,
             detail: 0,
             at: Some(err.at),
         }

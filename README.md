@@ -67,7 +67,7 @@ filled by the bakes, offline
 
 The four roots are written in one file, `spec/spec/route.json`, and every relay reads them from there. A push to the `deploy` branch, once the checks and tests pass here, takes a build number, rebuilds the servers and publishes the client from its one commit, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
-One format was made here: **XTP**, xpute's relocatable binary tree, read without copying ([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md#the-message-and-the-packet-it-carries)).
+One format was made here: **XTP**, xpute's relocatable binary tree, read without copying ([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md#the-frame-and-the-packet-it-carries)).
 
 ---
 

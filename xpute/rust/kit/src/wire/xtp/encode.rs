@@ -45,7 +45,7 @@ impl TreeEncoder {
                     buf.truncate(n as usize);
                     return Ok(buf);
                 }
-                Err(e) if e.errno == Errno::EOVERFLOW && cap < max_cap => cap = if cap > max_cap / 2 { max_cap } else { cap * 2 },
+                Err(e) if e.errnum == Errno::EOVERFLOW && cap < max_cap => cap = if cap > max_cap / 2 { max_cap } else { cap * 2 },
                 Err(e) => return Err(e),
             }
         }
@@ -218,8 +218,8 @@ impl<'a> PacketWriter<'a> {
         self.buf[at + 4..at + 8].copy_from_slice(&hi.to_le_bytes());
     }
 
-    fn spoil(&mut self, errno: Errno) -> Option<u32> {
-        self.error.get_or_insert(errno);
+    fn spoil(&mut self, errnum: Errno) -> Option<u32> {
+        self.error.get_or_insert(errnum);
         None
     }
 

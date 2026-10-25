@@ -17,12 +17,12 @@ fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
 
 /// What the decoder cannot see, a value out of the range the kernel takes or a
 /// handle it does not hold, is refused here: past the door nothing checks it again.
-fn or_refuse<T>(v: Option<T>, errno: Errno) -> Result<T, MarshalError> {
-    v.ok_or_else(|| MarshalError::new(errno))
+fn or_refuse<T>(v: Option<T>, errnum: Errno) -> Result<T, MarshalError> {
+    v.ok_or_else(|| MarshalError::new(errnum))
 }
 
-fn refuse_unless(valid: bool, errno: Errno) -> Result<(), MarshalError> {
-    or_refuse(valid.then_some(()), errno)
+fn refuse_unless(valid: bool, errnum: Errno) -> Result<(), MarshalError> {
+    or_refuse(valid.then_some(()), errnum)
 }
 
 fn on_earth(lon: f64, lat: f64) -> bool {

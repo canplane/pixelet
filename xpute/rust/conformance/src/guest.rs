@@ -32,11 +32,11 @@ const fn page_up(bytes: u32) -> u32 {
 }
 
 const DIRECTORY_AT: u32 = 0;
-const SUBMISSION_DESC_AT: u32 = PAGE_BYTES;
-const COMPLETION_DESC_AT: u32 = SUBMISSION_DESC_AT + page_up(ring_bytes(spec::SUBMISSION_CAPACITY));
-const SUBMISSION_SLOT_AT: u32 = COMPLETION_DESC_AT + page_up(ring_bytes(spec::COMPLETION_CAPACITY));
-const COMPLETION_SLOT_AT: u32 = SUBMISSION_SLOT_AT + slots_bytes(spec::SUBMISSION_CAPACITY, spec::SLOT_BYTES);
-const STREAM_AT: u32 = COMPLETION_SLOT_AT + slots_bytes(spec::COMPLETION_CAPACITY, spec::SLOT_BYTES);
+const SQ_DESC_AT: u32 = PAGE_BYTES;
+const CQ_DESC_AT: u32 = SQ_DESC_AT + page_up(ring_bytes(spec::SQ_CAP));
+const SQ_SLOT_AT: u32 = CQ_DESC_AT + page_up(ring_bytes(spec::CQ_CAP));
+const CQ_SLOT_AT: u32 = SQ_SLOT_AT + slots_bytes(spec::SQ_CAP, spec::SLOT_BYTES);
+const STREAM_AT: u32 = CQ_SLOT_AT + slots_bytes(spec::CQ_CAP, spec::SLOT_BYTES);
 const SYS_AT: u32 = STREAM_AT + spec::STREAM_WORDS * 4;
 const STATE_AT: u32 = page_up(SYS_AT + spec::SYS_WORDS * 4);
 
@@ -74,8 +74,8 @@ unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
     // SAFETY: the caller's memory; the ranges are the layout's.
     let (sq, cq, stream, sys) = unsafe {
         (
-            Ring::init(mem, at(SUBMISSION_DESC_AT), spec::SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, spec::SLOT_BYTES),
-            Ring::init(mem, at(COMPLETION_DESC_AT), spec::COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, spec::SLOT_BYTES),
+            Ring::init(mem, at(SQ_DESC_AT), spec::SQ_CAP, range + SQ_SLOT_AT, spec::SLOT_BYTES),
+            Ring::init(mem, at(CQ_DESC_AT), spec::CQ_CAP, range + CQ_SLOT_AT, spec::SLOT_BYTES),
             Stream::new(mem, at(STREAM_AT), spec::STREAM_WORDS as usize, 1),
             Sys::new(mem, at(SYS_AT), spec::SYS_WORDS as usize),
         )
@@ -88,8 +88,8 @@ unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
             at(DIRECTORY_AT),
             directory_words(4),
             &[
-                (key::SUBMISSION, range + SUBMISSION_DESC_AT),
-                (key::COMPLETION, range + COMPLETION_DESC_AT),
+                (key::SQ, range + SQ_DESC_AT),
+                (key::CQ, range + CQ_DESC_AT),
                 (spec::key::STREAM, range + STREAM_AT),
                 (key::SYS, range + SYS_AT),
             ],

@@ -2,14 +2,14 @@
 
 import { DIVISION_SUBTYPE } from "./division.spec.ts";
 
-/** `name` is the provider's own, `names` the same by language tag where it has one. */
-export interface DivisionPart {
+/** A name as its provider gives it, a place's or a division's: `name` the provider's own, `names` the same by language tag where it has one. */
+export interface Name {
   name: string;
   names?: Record<string, string> | null;
 }
 
 /** A part of a name: its subtype (`DIVISION_SUBTYPE`) and whether an area holds the point. */
-export interface NamePart extends DivisionPart {
+export interface NamePart extends Name {
   subtype: number;
   area: boolean;
 }
@@ -28,8 +28,8 @@ export function primaryLanguage(tag: string): string {
   return tag.split("-")[0].toLowerCase();
 }
 
-export function localName(part: DivisionPart, lang: string): string {
-  return part.names?.[lang] ?? part.name;
+export function localName(name: Name, lang: string): string {
+  return name.names?.[lang] ?? name.name;
 }
 
 function joined(names: string[], lang: string): string {

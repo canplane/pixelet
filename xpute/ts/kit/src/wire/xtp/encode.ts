@@ -59,7 +59,7 @@ export class TreeEncoder {
       try {
         return buf.subarray(0, w.finished());
       } catch (e) {
-        if (!(e instanceof MarshalError) || e.errno !== Errno.EOVERFLOW || cap === max_cap) throw e;
+        if (!(e instanceof MarshalError) || e.errnum !== Errno.EOVERFLOW || cap === max_cap) throw e;
         cap = cap > max_cap / 2 ? max_cap : cap * 2;
       }
     }
@@ -220,8 +220,8 @@ export class PacketWriter {
     return this;
   }
 
-  private spoil(errno: Errno): -1 {
-    this.error ??= errno;
+  private spoil(errnum: Errno): -1 {
+    this.error ??= errnum;
     return -1;
   }
 

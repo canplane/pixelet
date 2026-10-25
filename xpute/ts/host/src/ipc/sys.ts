@@ -16,13 +16,13 @@ import { flag, HEAD, op } from "./sys.spec.ts";
 /** Why an open did not answer with a file: an errno, and whatever number the
  * host refused with (an HTTP status) for a reader to print. */
 export class FileError extends Error {
-  constructor(readonly errno: Errno, readonly detail: u32 = 0) {
-    super(detail === 0 ? strerror(errno) : `${strerror(errno)} (${detail})`);
+  constructor(readonly errnum: Errno, readonly detail: u32 = 0) {
+    super(detail === 0 ? strerror(errnum) : `${strerror(errnum)} (${detail})`);
   }
 }
 
 interface Abort {
-  errno: number;
+  errnum: number;
   file: string;
   line: u32;
   column: u32;
@@ -67,8 +67,8 @@ function open_file(files: Sys, host: SysHost, fd: u32, root: u32, flags: u32, pa
   };
   const failed = (err: unknown) => {
     if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
-    const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
-    answer(errno, detail);
+    const [errnum, detail] = err instanceof FileError ? [err.errnum, err.detail] : [Errno.EIO, 0];
+    answer(errnum, detail);
   };
   const read = (bytes: U8Array) => {
     if (files.open.get(fd) !== file) return;
@@ -135,7 +135,7 @@ export class Sys {
       }
       case op.ABORT: {
         const num = (i: u32) => BigInt(w[a + i]) | BigInt(w[a + i + 1]) << 32n;
-        this.host.abort({ errno: w[a] | 0, line: w[a + 1], column: w[a + 2], a: num(3), b: num(5), file: text_of(w, a + 7) });
+        this.host.abort({ errnum: w[a] | 0, line: w[a + 1], column: w[a + 2], a: num(3), b: num(5), file: text_of(w, a + 7) });
         break;
       }
       default:

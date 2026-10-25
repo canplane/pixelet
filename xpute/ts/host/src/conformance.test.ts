@@ -122,8 +122,8 @@ class Host {
     const mem = guest.memory;
     this.directory = new Directory(mem, guest.directory_at);
     this.reserved = new Uint32Array(mem, guest.directory_at, 4)[3];
-    this.sq = new Ring(mem, this.directory.get(directory_key.SUBMISSION));
-    this.cq = new Ring(mem, this.directory.get(directory_key.COMPLETION));
+    this.sq = new Ring(mem, this.directory.get(directory_key.SQ));
+    this.cq = new Ring(mem, this.directory.get(directory_key.CQ));
     this.stream_at = this.directory.get(key.STREAM);
   }
 
@@ -160,7 +160,7 @@ class Host {
 }
 
 function key_number(name: string): number {
-  const keys: Record<string, number> = { SUBMISSION: directory_key.SUBMISSION, COMPLETION: directory_key.COMPLETION, STREAM: key.STREAM };
+  const keys: Record<string, number> = { SQ: directory_key.SQ, CQ: directory_key.CQ, STREAM: key.STREAM };
   if (!(name in keys)) throw new Error(`no key ${name}`);
   return keys[name];
 }

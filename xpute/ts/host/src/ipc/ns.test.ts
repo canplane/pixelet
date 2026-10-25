@@ -18,7 +18,7 @@ Deno.test("a root answers by what is bound there, and refuses as nothing bound o
   assertEquals(new TextDecoder().decode(ns.open(1, "a/b", signal) as U8Array), "a/b");
   ns.commit(2, "c", new Uint8Array([7]));
   assertEquals(kept, [["c", new Uint8Array([7])]]);
-  const errno = (f: () => unknown) => (assertThrows(f, FileError) as FileError).errno;
-  assertEquals(errno(() => ns.open(3, "a", signal)), Errno.ENOENT);
-  assertEquals(errno(() => ns.commit(1, "a", new Uint8Array())), Errno.EROFS);
+  const errnum = (f: () => unknown) => (assertThrows(f, FileError) as FileError).errnum;
+  assertEquals(errnum(() => ns.open(3, "a", signal)), Errno.ENOENT);
+  assertEquals(errnum(() => ns.commit(1, "a", new Uint8Array())), Errno.EROFS);
 });

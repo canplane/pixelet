@@ -51,7 +51,7 @@ export interface Host {
 export function mount(guest: Guest, plan: Plan): Host {
   const directory = new Directory(guest.memory, plan.directory_at);
   const stream = directory.get(key.SYS);
-  const doorbell = new Doorbell(guest.memory, directory.get(key.SUBMISSION), directory.get(key.COMPLETION), (quota_ms) => {
+  const doorbell = new Doorbell(guest.memory, directory.get(key.SQ), directory.get(key.CQ), (quota_ms) => {
     let wake: f64;
     try {
       wake = guest.intr(quota_ms);

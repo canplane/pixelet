@@ -84,7 +84,7 @@ impl Serve for Policy {
     /// failure comes back the same however often it is asked: the bytes are
     /// fixed by the key within a version.
     fn blame(&self, failure: Failure) -> Blame {
-        match failure.errno {
+        match failure.errnum {
             // The browser says it is offline.
             Errno::ENETUNREACH => Blame::Network,
             // Any other status but 204 and 404, or no response while online. The

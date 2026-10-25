@@ -146,9 +146,9 @@ export class Doorbell implements PacketRoom {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
     if (this.trapped) return;
     for (;;) {
-      const errno = this.sq.push(tag, cmd, flags, pkt);
-      if (errno === Errno.OK) return;
-      if (errno !== Errno.EAGAIN) throw new Error(`[xpute/doorbell] command 0x${cmd.toString(16)} refused by the ring: ${errno}`);
+      const errnum = this.sq.push(tag, cmd, flags, pkt);
+      if (errnum === Errno.OK) return;
+      if (errnum !== Errno.EAGAIN) throw new Error(`[xpute/doorbell] command 0x${cmd.toString(16)} refused by the ring: ${errnum}`);
       this.ring(0);
     }
   }

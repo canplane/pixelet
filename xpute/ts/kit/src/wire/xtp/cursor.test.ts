@@ -31,7 +31,7 @@ function refused(hex: string): string {
     deep(new TreeReader(hex_to_bytes(hex)).root);
     return "ok";
   } catch (err) {
-    return `errno:${(err as FaultError).errno}`;
+    return `errno:${(err as FaultError).errnum}`;
   }
 }
 
@@ -61,7 +61,7 @@ Deno.test("the cursor reads what the typescript reads", async () => {
     try {
       got = `ok:${ALIGN(n, 8)}`;
     } catch (err) {
-      got = `errno:${(err as FaultError).errno}`;
+      got = `errno:${(err as FaultError).errnum}`;
     }
     assertEquals(got, v.s(`align.${j}`), `ALIGN(${n})`);
   });
@@ -72,7 +72,7 @@ Deno.test("the cursor reads what the typescript reads", async () => {
     try {
       return bytes_to_hex(new TreeEncoder().encode(t, { init_cap: 1 << 10, max_cap: cap }));
     } catch (err) {
-      return `errno:${(err as FaultError).errno}`;
+      return `errno:${(err as FaultError).errnum}`;
     }
   };
   [24, 32, 40, 48].forEach((cap, j) => assertEquals(at_cap("abcdefgh", cap), v.s(`caps.${j}`), `caps.${j} at ${cap}`));

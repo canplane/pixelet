@@ -213,7 +213,7 @@ fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
         },
         // Only its absence says nothing was kept.
         Opened::Absent => KeptRead::Read(KeptFile::None),
-        Opened::Failed { errno: Errno::EFBIG, .. } => KeptRead::Read(refuse(kept)),
+        Opened::Failed { errnum: Errno::EFBIG, .. } => KeptRead::Read(refuse(kept)),
         Opened::Failed { .. } => KeptRead::Read(KeptFile::Unreadable),
     };
     kept_read(kept, read);
@@ -338,7 +338,7 @@ pub enum Opened {
     /// No such file; the descriptor is closed.
     Absent,
     /// Every other failure; the descriptor is closed.
-    Failed { errno: Errno, detail: u32 },
+    Failed { errnum: Errno, detail: u32 },
 }
 
 impl Opened {
@@ -346,8 +346,8 @@ impl Opened {
     #[track_caller]
     pub fn failure(self) -> Failure {
         match self {
-            Opened::Failed { errno, detail } => Failure {
-                errno,
+            Opened::Failed { errnum, detail } => Failure {
+                errnum,
                 detail: detail as u16,
                 at: None,
             },
@@ -363,10 +363,10 @@ impl Opened {
 pub fn opened(fd: Fd, res: i32, detail: u32) {
     let Some(&owner) = files().owner(fd) else { return };
     let opened = match answered(res) {
-        Ok(n) if n > MIN_HEAP_BYTES => Opened::Failed { errno: Errno::EFBIG, detail },
+        Ok(n) if n > MIN_HEAP_BYTES => Opened::Failed { errnum: Errno::EFBIG, detail },
         Ok(n) => Opened::Bytes(n),
         Err(Errno::ENOENT) => Opened::Absent,
-        Err(errno) => Opened::Failed { errno, detail },
+        Err(errnum) => Opened::Failed { errnum, detail },
     };
     if !matches!(opened, Opened::Bytes(_)) {
         close(fd);

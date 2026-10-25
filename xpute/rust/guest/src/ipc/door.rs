@@ -40,10 +40,10 @@ impl Door {
     /// Over the two rings whoever laid them out built, the door's alone.
     /// `most_signals` is the most one command raises, or the turn once its
     /// drain is done: the program's bound.
-    pub fn new(submission: Ring, completion: Ring, most_signals: u32) -> Door {
+    pub fn new(sq: Ring, cq: Ring, most_signals: u32) -> Door {
         Door {
-            sq: submission,
-            cq: completion,
+            sq,
+            cq,
             reserve: most_signals + 1,
             stat: Cell::default(),
         }
@@ -60,11 +60,11 @@ impl Door {
         self.stat.set(s);
     }
 
-    pub fn submission(&self) -> &Ring {
+    pub fn sq(&self) -> &Ring {
         &self.sq
     }
 
-    pub fn completion(&self) -> &Ring {
+    pub fn cq(&self) -> &Ring {
         &self.cq
     }
 
@@ -94,7 +94,7 @@ impl Door {
     /// An unapplied command can wait in the submission ring; what it would
     /// raise could not wait anywhere, so room is checked before it starts.
     fn has_room(&self) -> bool {
-        self.cq.len() + self.reserve <= self.cq.capacity
+        self.cq.len() + self.reserve <= self.cq.cap
     }
 
     pub fn pending(&self) -> bool {
@@ -115,13 +115,13 @@ impl Door {
                 Ok(pkt) => match apply(f.cmd, &pkt) {
                     Ok(Some(value)) => Ok(value),
                     Ok(None) => Err(Errno::ENOSYS as i32),
-                    Err(e) => Err(e.errno as i32),
+                    Err(e) => Err(e.errnum as i32),
                 },
-                Err(e) => Err(e.errno as i32),
+                Err(e) => Err(e.errnum as i32),
             };
             self.sq.advance();
             if f.flags & frame::ACKREQ != 0 || result.is_err() {
-                self.post(f.tag, f.cmd, frame::RES, result.unwrap_or_else(|errno| errno));
+                self.post(f.tag, f.cmd, frame::RES, result.unwrap_or_else(|errnum| errnum));
             }
         }
         self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));
