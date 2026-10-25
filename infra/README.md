@@ -230,8 +230,9 @@ old client against a new server is safe and the reverse is not.
 Every build of `deploy` takes a number from a counter in
 the bucket, never reset; a published one is a line in `_meta/build-log.jsonl`
 with the subjects of the commits it carried, since main's shas do not
-survive its rewrites. `./script/build-log.py` reads it, newest first. A build
-CI did not number is labeled by its commit alone.
+survive its rewrites. `./script/build-log.py` reads it, newest first. A
+deployment states its own number at `/build.json`, which `make dev` caches
+(`script/build-number.py`) to label a build CI did not number after it.
 
 The secrets are GitHub's alone: `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` for wrangler and the counter; `VM_HOST`, `VM_USER`

@@ -204,6 +204,9 @@ asset/raw/sky/
 # already ignored, and this is the same thing with a number on it.
 out[0-9]*/
 
+# The number the deployment serves (script/build-number.py), which a dev build of either app is labeled after
+ts/client/.build_number
+
 # wrangler's local scratch: its simulated R2/KV, build state and temporaries.
 .wrangler/
 # The page's bundle, staged beside the Worker that serves it (script/deploy.py).

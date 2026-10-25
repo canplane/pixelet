@@ -16,6 +16,12 @@ A **Release** build embeds the JavaScript bundle and runs without Metro. A
 only one Metro can hold the port — check that the running one serves the tree
 you mean before trusting what a Debug build shows.
 
+Before a Release, bring the build number up to date:
+
+```bash
+make sync-build-number
+```
+
 ## iOS
 
 ### Once per machine

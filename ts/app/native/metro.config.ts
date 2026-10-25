@@ -30,9 +30,10 @@ const FROM_APP = path.join(here, "index.ts");
  * What this build is — when, from which source, under which number — as the
  * module `virtual:pxl-build` (config/deploy.ts reads it). The source is git's
  * short hash, `-dirty` where the tree had changes; the number is the one CI
- * handed the build, or else the source's id, since a build CI did not number
- * is not that build. Written once, when Metro starts: a dev server's stamp is
- * the one it started under.
+ * handed the build, or else `#<n>-<id>` from the number the deployment serves
+ * (ts/client/.build_number, script/build-number.py), since a build CI did not
+ * number is not that build. Written once, when Metro starts: a dev server's
+ * stamp is the one it started under.
  */
 function buildStamp(): string {
   let id = "unknown";
@@ -40,7 +41,14 @@ function buildStamp(): string {
     const git = (args: string) => execSync(`git ${args}`, { cwd: REPO, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
     id = `${git("rev-parse --short HEAD")}${git("status --porcelain") !== "" ? "-dirty" : ""}`;
   } catch { /* not a checkout */ }
-  const number = process.env.PXL_BUILD_NUMBER ? `#${process.env.PXL_BUILD_NUMBER}` : id;
+  let number = id;
+  if (process.env.PXL_BUILD_NUMBER) number = `#${process.env.PXL_BUILD_NUMBER}`;
+  else {
+    try {
+      const last = fs.readFileSync(path.join(WORKSPACE, "client/.build_number"), "utf8").trim();
+      if (/^\d+$/.test(last)) number = `#${last}-${id}`;
+    } catch { /* none seen yet */ }
+  }
   const file = path.join(here, ".expo/pxl-build.js");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(
