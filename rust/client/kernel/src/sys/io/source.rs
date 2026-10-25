@@ -26,14 +26,14 @@ struct Source {
     /// nine by its key (`area::shard_key`), none beside no served one.
     nine: Vec<u16>,
     /// The pyramid's nodes from zoom 0 to `SHARD_ZOOM`, each where its zoom
-    /// and its row and column address it (`node_of`): the finest shard over
-    /// it, one past its index (0 none), and whether a shard is at or under
-    /// it (`UNDER`).
-    nodes: Vec<u32>,
+    /// and its row and column address it (`node_of`): whether a shard is at
+    /// or over it (`OVER`), and at or under it (`UNDER`).
+    nodes: Vec<u8>,
 }
 
-/// A node's word's bit: a shard is at or under it.
-const UNDER: u32 = 1 << 16;
+/// A node's bits: a shard is at or over it, and at or under it.
+const OVER: u8 = 1;
+const UNDER: u8 = 2;
 
 /// Where the node `(zoom, at)`, no finer than `SHARD_ZOOM`, lies among
 /// `Source::nodes`: its zoom's first, then a row of its zoom's tiles south
@@ -51,8 +51,7 @@ static DECLARED: Global<Option<Source>> = Global::new();
 /// `format` is each kind's by its bake's number, and `shard` the shards'
 /// names, in any order. Refused whole for anything the client cannot follow:
 /// a zoom out of the pyramid, a name no shard or node over shards (pxl-spec
-/// bake/source.rs), a kind with no format or one it does not read, or more
-/// shards than a node's 16 bits can index.
+/// bake/source.rs), or a kind with no format or one it does not read.
 pub fn declare<'a>(top_zoom: u32, format: &[u32], shard: impl IntoIterator<Item = &'a str>) -> Result<(), Errno> {
     let declared = DECLARED.get(Default::default);
     if declared.is_some() {
@@ -107,14 +106,14 @@ pub fn nines() -> &'static [u16] {
 impl Source {
     /// `p`'s node among `nodes`: itself, or past `SHARD_ZOOM` the one over
     /// it there, which every shard over it is over too (no shard is finer).
-    fn node_over(&self, p: Tile) -> Option<u32> {
+    fn node_over(&self, p: Tile) -> Option<u8> {
         let z = p.zoom.min(SHARD_ZOOM);
         node_of(z, Tile::over(z, p.first_leaf()).at).map(|i| self.nodes[i])
     }
 
     /// A shard over `p`, or at or under it: one read.
     fn covers(&self, p: Tile) -> bool {
-        self.node_over(p).is_some_and(|w| w & 0xffff != 0 || p.zoom <= SHARD_ZOOM && w & UNDER != 0)
+        self.node_over(p).is_some_and(|w| w & OVER != 0 || p.zoom <= SHARD_ZOOM && w & UNDER != 0)
     }
 }
 
@@ -125,8 +124,6 @@ fn parse<'a>(top_zoom: u32, format: &[u32], names: impl IntoIterator<Item = &'a 
     for name in names {
         shard.push(key(name)?);
     }
-    // A node's word holds one past a shard's index in 16 bits.
-    (shard.len() <= 0xffff).then_some(())?;
     // Every cell a shard covers at `SHARD_ZOOM`, a key no finer (`key`),
     // served; then every cell it and each beside it, its nine laid once
     // where its key addresses it (`area::nine`). A row off the world has no
@@ -161,10 +158,10 @@ fn parse<'a>(top_zoom: u32, format: &[u32], names: impl IntoIterator<Item = &'a 
         }
     }
     // The pyramid's nodes to `SHARD_ZOOM`: a shard is at or under its own
-    // node and every node over it, and the finest shard over each node at
-    // or under its own; no two at a zoom are over one node.
-    let mut nodes = vec![0u32; ((1usize << (2 * (SHARD_ZOOM + 1))) - 1) / 3];
-    for (n, k) in shard.iter().enumerate() {
+    // node and every node over it, and at or over its own and every node
+    // under it.
+    let mut nodes = vec![0u8; ((1usize << (2 * (SHARD_ZOOM + 1))) - 1) / 3];
+    for k in &shard {
         let (zk, at) = (k.zoom, k.at);
         for z in 0..=zk {
             if let Some(i) = node_of(z, at.map(|v| v >> (zk - z))) {
@@ -175,10 +172,8 @@ fn parse<'a>(top_zoom: u32, format: &[u32], names: impl IntoIterator<Item = &'a 
             let d = z - zk;
             for j in 0..1 << d {
                 for i in 0..1 << d {
-                    let Some(at) = node_of(z, [(at[0] << d) + i, (at[1] << d) + j]) else { continue };
-                    let was = nodes[at] & 0xffff;
-                    if was == 0 || shard[was as usize - 1].zoom <= zk {
-                        nodes[at] = nodes[at] & UNDER | (n as u32 + 1);
+                    if let Some(at) = node_of(z, [(at[0] << d) + i, (at[1] << d) + j]) {
+                        nodes[at] |= OVER;
                     }
                 }
             }
