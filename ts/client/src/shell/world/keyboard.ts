@@ -5,7 +5,8 @@
  * movement keys' direction to the kernel; a digit, a tool, a size, the dock's
  * mode and the drawer to the shell's own stores. A key has no place on the screen to
  * route it as a pointer's has, so this is that routing: a sheet in front takes
- * every key but Escape, which closes it, and a field takes every key but Tab.
+ * every key but Escape, which closes it, and a field takes every key but Tab
+ * and Escape, which leaves the message for the palette, as Tab does.
  * Keys are named by `code`, the key's place, so any layout works the same.
  */
 
@@ -13,7 +14,7 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { kernel_keys } from "@/abi/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
-import { holdTool, RECENT_PICKS, useDockStore } from "@/shell/store/dock.ts";
+import { DockMode, holdTool, RECENT_PICKS, useDockStore } from "@/shell/store/dock.ts";
 
 const MOVE: Record<string, [i32, i32]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
 
@@ -55,8 +56,13 @@ function pickSlot(slot: number): void {
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */
 export function keyDown(code: string, { inField }: { inField: boolean }): boolean {
   if (code === "Escape") {
-    if (!modalOpen()) return false;
-    closeModal();
+    if (modalOpen()) {
+      closeModal();
+      return true;
+    }
+    const { dockMode, setDockMode } = useDockStore.getState();
+    if (dockMode !== DockMode.Message) return false;
+    setDockMode(DockMode.Palette);
     return true;
   }
   if (modalOpen()) return false;
