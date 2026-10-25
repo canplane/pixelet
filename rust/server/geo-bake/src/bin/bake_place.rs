@@ -20,6 +20,7 @@ use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::tile::Tile;
 
 fn run() -> Result<(), String> {
+    pxl_geo_bake::cli::enter()?;
     let run = Run::parse("place")?;
     let coverage = Coverage::of_source()?;
     if run.leaf {

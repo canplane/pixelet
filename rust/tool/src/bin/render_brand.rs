@@ -9,7 +9,7 @@
 //! PNG because the source was a 10-bit AVIF not every decoder reads.
 //!
 //!   deno task --cwd ts/app/web build:brand   the icons, the outline checked
-//!   ./script/tool.ts render brand                 the outline rewritten as well
+//!   make render-brand                        the outline rewritten as well
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -149,7 +149,7 @@ fn run() -> Result<(), String> {
         write(&symbol_path, module.as_bytes())?;
         println!("[brand] icons and og-image written to {}, the symbol's outline to {}", out.display(), symbol_path.display());
     } else if std::fs::read_to_string(&symbol_path).ok().as_deref() != Some(module.as_str()) {
-        return Err(format!("{} is not what symbol-mono.svg writes: run `./script/tool.ts render brand`", symbol_path.display()));
+        return Err(format!("{} is not what symbol-mono.svg writes: run `make render-brand`", symbol_path.display()));
     } else {
         println!("[brand] icons and og-image written to {}", out.display());
     }

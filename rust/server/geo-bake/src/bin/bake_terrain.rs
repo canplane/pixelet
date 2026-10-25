@@ -70,6 +70,7 @@ fn land(client: &mut Client, candidates: &[[i32; 2]]) -> Result<Vec<[i32; 2]>, S
 }
 
 fn run() -> Result<(), String> {
+    pxl_geo_bake::cli::enter()?;
     let run = Run::parse("terrain")?;
     if run.leaf {
         let (source, mut client) = Overture::reading(&leaf::READS, &run.shards.iter().copied().collect())?;

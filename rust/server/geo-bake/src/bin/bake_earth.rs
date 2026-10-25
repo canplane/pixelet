@@ -4,7 +4,7 @@
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles), as `infra/earth/source.json` names them and
-//! `./script/tool.ts download earth` keeps them. Each is averaged in linear light over what a
+//! `make download-earth` keeps them. Each is averaged in linear light over what a
 //! texel covers.
 //!  - The earth layer's tiles (pxl-spec bake/tile/earth.rs) at its top zoom, a
 //!    ground cell a texel, to its set, `./out/earth/<name>`, as every kind's is
@@ -18,7 +18,7 @@
 //! Credit: NASA's Earth Observatory (Reto Stöckli; Miguel Román and the Black
 //! Marble team).
 //!
-//!   ./script/tool.ts bake earth
+//!   make bake-earth
 
 use pxl_spec::space::layer::lattice::Cells;
 use std::path::{Path, PathBuf};
@@ -37,7 +37,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::tile_at;
 
-/// What it reads, and where `./script/tool.ts download earth` keeps it.
+/// What it reads, and where `make download-earth` keeps it.
 const SOURCE: &str = "infra/earth/source.json";
 const RAW: &str = "infra/earth/raw";
 const GLOBAL: (u32, u32) = (2048, 1024);
@@ -114,7 +114,7 @@ fn lights_byte(v: f32) -> u8 {
 /// A file `SOURCE` names, as `download earth` kept it.
 fn source(url: &str) -> Result<Vec<u8>, String> {
     let path = Path::new(RAW).join(url.rsplit('/').next().ok_or("a file name")?);
-    std::fs::read(&path).map_err(|e| format!("{}: {e} — run `./script/tool.ts download earth`", path.display()))
+    std::fs::read(&path).map_err(|e| format!("{}: {e} — run `make download-earth`", path.display()))
 }
 
 /// An equirectangular raster read in linear light.
@@ -249,6 +249,7 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 }
 
 fn run() -> Result<(), String> {
+    pxl_geo_bake::cli::enter()?;
     let out = PathBuf::from("./out/earth");
     let text = std::fs::read_to_string(SOURCE).map_err(|e| format!("{SOURCE}: {e}"))?;
     let named: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{SOURCE}: {e}"))?;

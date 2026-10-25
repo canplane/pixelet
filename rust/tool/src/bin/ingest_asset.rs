@@ -5,7 +5,7 @@
 //! changed file gets a new name, and where a file lies names nothing. What a
 //! catalog calls it, its path under `asset/content/`, is the table's to map.
 //!
-//!   ./script/tool.ts ingest asset
+//!   make ingest-asset
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

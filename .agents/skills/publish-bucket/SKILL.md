@@ -47,7 +47,7 @@ and set the object count `publish` prints against what is left. Deleting an
 old version is free.
 
 ```bash
-./script/tool.ts bake <kind> --stage publish    # terrain, place or division
+make bake-<kind> ARGS="--stage publish"    # terrain, place or division
 ./ts/app/web/script/publish.ts <kind>
 ```
 
@@ -68,15 +68,15 @@ error to repair.
 ### Earth
 
 ```bash
-./script/tool.ts download earth
-./script/tool.ts bake earth
+make download-earth
+make bake-earth
 ./ts/app/web/script/publish.ts earth
 ```
 
 ### Assets
 
 ```bash
-./script/tool.ts ingest asset
+make ingest-asset
 # -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingested.json and
 #    what the spec generates from it (the host's table, the catalog, the pack's layout)
 

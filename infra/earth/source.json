@@ -3,8 +3,8 @@
     "The Earth's picture, the earth layer's source: NASA's Blue Marble Next",
     "Generation, July 2004, by day, and the Black Marble's lights of 2016 by",
     "night, in NASA's tiling, a row a half of the world from the north and a",
-    "column a quarter from 180° W. `./script/tool.ts download earth` (pxl-tool",
-    "bin/download_earth.rs) fetches each into raw/; `./script/tool.ts bake earth`",
+    "column a quarter from 180° W. `make download-earth` (pxl-tool",
+    "bin/download_earth.rs) fetches each into raw/; `make bake-earth`",
     "(pxl-geo-bake bin/bake_earth.rs) reads them there, by the URL's last segment.",
     "Credit: NASA's Earth Observatory (Reto Stöckli; Miguel Román and the Black",
     "Marble team)."

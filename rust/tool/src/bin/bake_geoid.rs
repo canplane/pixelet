@@ -5,7 +5,7 @@
 //! height is the ellipsoid's and the terrain's is EGM2008's (GEDTM30, EPSG:3855);
 //! the geoid is between them.
 //!
-//!   ./script/tool.ts bake geoid egm2008-5.pgm
+//!   make bake-geoid ARGS=egm2008-5.pgm
 //!
 //! The grid is egm2008-5.tar.bz2 from
 //! https://sourceforge.net/projects/geographiclib/files/geoids-distrib/,
@@ -87,6 +87,8 @@ fn round(x: f64) -> f64 {
 }
 
 fn run() -> Result<(), String> {
+    // the grid's path is the checkout's, as a bake's paths are (pxl-geo-bake cli.rs `enter`)
+    std::env::set_current_dir(root()).map_err(|e| format!("{}: {e}", root().display()))?;
     let path = std::env::args().nth(1).ok_or("usage: bake_geoid <egm2008-5.pgm>")?;
     let fine = read(&path)?;
     let per = (fine.height - 1) / 180;

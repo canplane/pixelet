@@ -1,9 +1,9 @@
 // pxl-tool/bin/download_star.rs
 
 //! The Yale Bright Star Catalog (V/50, CDS) as CDS gives it, kept in
-//! `asset/raw/sky/star/`, for `./script/tool.ts bake star`.
+//! `asset/raw/sky/star/`, for `make bake-star`.
 //!
-//!   ./script/tool.ts download star
+//!   make download-star
 
 use std::process::ExitCode;
 

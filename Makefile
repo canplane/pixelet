@@ -12,6 +12,7 @@
 #   make -j8 check | test | fmt | lint
 #   make check-ts, make test-rust, ...   one tree's
 #   make dev | dev-oven | dev-shelf | dev-native | preview | spec | deploy
+#   make bake-terrain ARGS=…, make serve-geo, ...   a binary (TOOLS)
 #
 # With -j the trees run in parallel; xpute's make and cargo share its job
 # slots ($(MAKE), and + before cargo).
@@ -21,7 +22,7 @@
 	fmt fmt-script fmt-ts fmt-rust \
 	lint lint-script lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
-	serve-geo serve-api serve-tile serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
+	$(TOOLS) serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
 	sync-build-number deploy
 
 # `check` is everything, and with `test` what passes before a push to deploy,
@@ -94,14 +95,8 @@ preview-oven: sync-build-number
 preview-shelf: sync-build-number
 	$(MAKE) -j4 serve-geo serve-api serve-shelf web-preview-shelf
 
-serve-geo:
-	./script/tool.ts serve geo
-serve-api:
-	./script/tool.ts serve api
-serve-tile:
-	./script/tool.ts serve tile
 serve-shelf:
-	./script/tool.ts serve tile --shelf ./out
+	+cd rust && $(CURDIR)/script/with-env.sh cargo serve-tile --shelf ./out
 web-oven:
 	deno task --cwd ts/app/web dev:oven
 web-shelf:
@@ -110,6 +105,19 @@ web-preview-oven:
 	deno task --cwd ts/app/web preview:oven
 web-preview-shelf:
 	deno task --cwd ts/app/web preview:shelf
+
+# The binaries that make the repository's data and the dev servers, each
+# rust/'s `cargo <name>` (rust/.cargo/config.toml) under the local databases'
+# addresses and the servers' numbers (script/with-env.sh). Each works in the
+# checkout's root, so ./out and what ARGS names are the root's:
+#
+#   make bake-terrain ARGS="--shard 01033210 --stage leaf"
+#   make bake-geoid ARGS=egm2008-5.pgm
+TOOLS := bake-terrain bake-place bake-division bake-earth bake-star bake-geoid \
+	download-pack download-moon download-earth download-star ingest-asset render-brand \
+	serve-geo serve-api serve-tile
+$(TOOLS):
+	+cd rust && $(CURDIR)/script/with-env.sh cargo $@ $(ARGS)
 
 # ts/client/.build_number is written by any read of the build log, so it is
 # refreshed before vite reads it.

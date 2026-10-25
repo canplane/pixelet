@@ -1,9 +1,9 @@
 // pxl-tool/bin/download_earth.rs
 
 //! The Earth's picture as NASA gives it, each file `infra/earth/source.json`
-//! names fetched into `infra/earth/raw/`, for `./script/tool.ts bake earth`.
+//! names fetched into `infra/earth/raw/`, for `make bake-earth`.
 //!
-//!   ./script/tool.ts download earth
+//!   make download-earth
 
 use std::process::ExitCode;
 

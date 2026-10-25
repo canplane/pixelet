@@ -4,7 +4,7 @@
 //! and normalizes it to a `TILE_SIZE` opaque PNG in `asset/content/cube/`.
 //! Follow with `ingest:asset`.
 //!
-//!   ./script/tool.ts download pack
+//!   make download-pack
 
 use std::process::ExitCode;
 

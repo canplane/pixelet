@@ -24,6 +24,7 @@ use pxl_spec::bake::tile::division::{DivisionTile, DIVISION_LEAF};
 use pxl_spec::space::layer::tile::Tile;
 
 fn run() -> Result<(), String> {
+    pxl_geo_bake::cli::enter()?;
     let run = Run::parse("division")?;
     if run.leaf {
         let (source, _) = Overture::reading(&[&READS], &run.shards.iter().copied().collect())?;

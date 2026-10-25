@@ -12,16 +12,17 @@ ARCHITECTURE.md's "Making the data"; getting a set into the bucket is
 ## The bakes
 
 ```bash
-./script/tool.ts bake terrain    # Overture buildings/transportation/base, GEDTM30
-./script/tool.ts bake place      # Overture places
-./script/tool.ts bake division   # Overture divisions, leaves at z12
-./script/tool.ts download earth && ./script/tool.ts bake earth   # the Earth's picture, out/earth/
-./script/tool.ts bake star       # the Yale catalog's stars (./script/tool.ts download star first)
-./script/tool.ts bake geoid egm2008-5.pgm   # EGM2008, into spec/spec/space/geoid.json
+make bake-terrain    # Overture buildings/transportation/base, GEDTM30
+make bake-place      # Overture places
+make bake-division   # Overture divisions, leaves at z12
+make download-earth && make bake-earth   # the Earth's picture, out/earth/
+make bake-star       # the Yale catalog's stars (make download-star first)
+make bake-geoid ARGS=egm2008-5.pgm   # EGM2008, into spec/spec/space/geoid.json
 ```
 
 The first four write a tile set, `out/<kind>/`; star and geoid are not tile
-sets and are not published. The kinds `script/tool.ts` takes are its header's.
+sets and are not published. The binaries make runs are the Makefile's `TOOLS`, each
+rust/'s cargo alias of the same name.
 
 ## Before starting
 
@@ -45,8 +46,8 @@ run again, and `commit` refuses to run before `fold`. A change of source, code
 or coverage is a purge: `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`, then bake every shard.
 
 ```bash
-./script/tool.ts bake terrain --shard 01033210 --stage leaf
-./script/tool.ts bake terrain --stage fold --stage commit
+make bake-terrain ARGS="--shard 01033210 --stage leaf"
+make bake-terrain ARGS="--stage fold --stage commit"
 ```
 
 | Flag                | Meaning                                                                       |
@@ -63,7 +64,7 @@ or coverage is a purge: `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`,
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
    It bakes a missed tile with the same functions, but packs at zstd's quick
    level, so compare the decompressed packets, not the objects. Run
-   `./script/tool.ts serve tile` — not `dev`, which proxies every route to the live
+   `make serve-tile` — not `dev`, which proxies every route to the live
    deployment:
 
    ```bash

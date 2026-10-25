@@ -1,11 +1,11 @@
 // pxl-geo-bake/bin/bake_star.rs
 
 //! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), as
-//! `./script/tool.ts download star` keeps it in `asset/raw/sky/star/`, into the
+//! `make download-star` keeps it in `asset/raw/sky/star/`, into the
 //! records pxl-render's gpu/star.rs reads (pxl-spec asset/star.rs),
 //! brightest first.
 //!
-//!   ./script/tool.ts bake star
+//!   make bake-star
 
 use std::io::Read;
 use std::process::ExitCode;
@@ -20,7 +20,7 @@ const OUT: &str = "rust/client/render/src/frame/shader/bright-star.bin";
 const SOLAR_BV: f64 = 0.65;
 
 fn catalog() -> Result<String, String> {
-    let packed = std::fs::read(SOURCE).map_err(|e| format!("{SOURCE}: {e} — run `./script/tool.ts download star`"))?;
+    let packed = std::fs::read(SOURCE).map_err(|e| format!("{SOURCE}: {e} — run `make download-star`"))?;
     let mut text = String::new();
     GzDecoder::new(packed.as_slice()).read_to_string(&mut text).map_err(|e| format!("catalog: {e}"))?;
     Ok(text)
@@ -43,6 +43,7 @@ fn star(line: &str) -> Result<Option<Star>, String> {
 }
 
 fn run() -> Result<(), String> {
+    pxl_geo_bake::cli::enter()?;
     let text = catalog()?;
     let mut stars = Vec::new();
     for line in text.lines() {

@@ -207,6 +207,7 @@ async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Respons
 }
 
 fn run() -> Result<(), String> {
+    pxl_geo_bake::cli::enter()?;
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.first().is_some_and(|a| a == "--demand-job") {
         if argv.len() != 4 {

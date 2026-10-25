@@ -1,6 +1,7 @@
 # The workspace's own commands, run from rust/ as the root's tasks do, so
 # rustup reads rust-toolchain.toml beside them: what a check holds a change
-# to, what the tests run, and the generator.
+# to, what the tests run, the generator, and the binaries that make the data
+# and serve a dev run.
 [alias]
 # The module as it ships, in both builds, and the servers with their tests' code.
 lint-guest = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-spec", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-wasm", "--", "-D", "warnings"]
@@ -18,6 +19,32 @@ test-kernel-published = ["test", "-p", "pxl-kernel", "--no-default-features"]
 test-bake-serve = ["test", "-p", "pxl-geo-bake", "--features", "serve"]
 # The code generated from spec/: `cargo spec` says what is stale, `cargo spec --write` writes it.
 spec = ["run", "-q", "-p", "pxl-tool", "--bin", "spec", "--"]
+
+# The binaries that make the repository's data and the servers a dev run
+# starts, each with its profile and features: `server` where a debug build is
+# felt on every tile, `release` for one long run. Each works in the checkout's
+# root wherever it is started. The ones that read the databases or are servers
+# want the local environment, which the root's make gives them
+# (script/with-env.sh): `make bake-terrain ARGS="--stage leaf"`.
+bake-terrain = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_terrain", "--"]
+bake-place = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_place", "--"]
+bake-division = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_division", "--"]
+bake-earth = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_earth", "--"]
+bake-star = ["run", "-p", "pxl-geo-bake", "--bin", "bake_star", "--"]
+bake-geoid = ["run", "--profile", "release", "-p", "pxl-tool", "--bin", "bake_geoid", "--"]
+download-pack = ["run", "-p", "pxl-tool", "--bin", "download_texture_pack", "--"]
+download-moon = ["run", "-p", "pxl-tool", "--bin", "download_moon", "--"]
+download-earth = ["run", "-p", "pxl-tool", "--bin", "download_earth", "--"]
+download-star = ["run", "-p", "pxl-tool", "--bin", "download_star", "--"]
+# After any change under asset/content/.
+ingest-asset = ["run", "-p", "pxl-tool", "--bin", "ingest_asset", "--"]
+# The symbol's outline both apps bundle, when ts/client/brand's symbol changes;
+# the page's icons are made by its build (ts/app/web build:brand).
+render-brand = ["run", "-p", "pxl-tool", "--bin", "render_brand", "--", "--symbol"]
+serve-geo = ["run", "--profile", "server", "-p", "pxl-geo", "--bin", "pxl-geo", "--"]
+serve-api = ["run", "--profile", "server", "-p", "pxl-api", "--bin", "pxl-api", "--"]
+# The dev tile server, its sets baked on demand or off the shelf.
+serve-tile = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--features", "serve", "--bin", "serve_tiles", "--"]
 
 # The repository's root, for what a crate reads beyond its own directory: a
 # file is named from here, never counted out from where the crate is.
