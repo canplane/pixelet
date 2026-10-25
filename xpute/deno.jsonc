@@ -1,0 +1,9 @@
+{
+  // Deno takes nothing at xpute's root. Each tree is a root of its own with
+  // its own config (ts/, script/), and what lies outside them, the documents
+  // and the spec, is formatted by no one. Without this, deno fmt or deno lint
+  // run here would take every tree at Deno's defaults, the trees' configs
+  // unread. A config under a tree is its own, never this one's member.
+  "exclude": ["./"],
+  "lock": false
+}

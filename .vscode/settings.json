@@ -8,7 +8,7 @@
   "deno.unstable": ["webgpu"],
   // No "deno.config" pin: each workspace member resolves its own import map
   // ("@/" in ts/client, ts/app/web and ts/app/native), and a pin makes every
-  // file resolve against the root's alone, where "@/" is unknown.
+  // file resolve against the root's alone, which takes nothing (deno.jsonc).
 
   "deno.suggest.imports.hosts": {
     "https://deno.land": false,
@@ -17,7 +17,14 @@
 
   "js/ts.validate.enabled": false,
 
+  // Code is formatted on save by its tree's formatter, Deno's under each
+  // tree's config and none outside one (deno.jsonc), rustfmt by rust-analyzer;
+  // the documents and the data are formatted by no one, so no other
+  // formatter takes them on save (.prettierignore).
   "editor.formatOnSave": true,
+  "[markdown]": { "editor.formatOnSave": false },
+  "[yaml]": { "editor.formatOnSave": false },
+  "[xml]": { "editor.formatOnSave": false },
 
   "[javascript]": { "editor.defaultFormatter": "denoland.vscode-deno" },
   "[typescript]": { "editor.defaultFormatter": "denoland.vscode-deno" },
@@ -27,9 +34,5 @@
   "[jsonc]": { "editor.defaultFormatter": "denoland.vscode-deno" },
 
   "js/ts.preferences.importModuleSpecifier": "non-relative",
-  "js/ts.updateImportsOnFileMove.enabled": "never",
-
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "never"
-  }
+  "js/ts.updateImportsOnFileMove.enabled": "never"
 }
