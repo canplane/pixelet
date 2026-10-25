@@ -19,8 +19,9 @@ import { fps, type Gauge, profilerGaugeRead, profilerReportRead } from "./profil
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/abi/shell.ts";
+import { kernel_command } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
+import { useKernel } from "@/shell/store/system.ts";
 
 const enum Tint {
   Plain = 0,

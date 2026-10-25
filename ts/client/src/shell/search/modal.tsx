@@ -14,7 +14,7 @@ import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, textScale, textStyle, weight } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { Command, DevicePoseStatus, encode_input_go_to, type LonLat } from "@/abi/cmd.spec.ts";
-import { kernel_command, kernel_enable_location, kernel_room, kernel_snapshot, useKernel } from "@/abi/shell.ts";
+import { kernel_command, kernel_enable_location, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/shell/ui/text-field.tsx";
@@ -29,6 +29,7 @@ import { DIVISION_SUBTYPE } from "@/shell/world/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "@/shell/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 import { fixed } from "@/shell/fixed.ts";
+import { useKernel } from "@/shell/store/system.ts";
 
 const DEBOUNCE_MS = 300;
 

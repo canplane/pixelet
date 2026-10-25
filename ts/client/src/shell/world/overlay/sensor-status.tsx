@@ -5,12 +5,12 @@ import { StyleSheet, View } from "react-native";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
 import { DevicePoseStatus } from "@/abi/cmd.spec.ts";
-import { useKernel } from "@/abi/shell.ts";
 
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { haloGap, HaloIcon } from "@/shell/ui/halo.tsx";
 import { color } from "@/shell/ui/theme.ts";
 import { bracket } from "@/bracket.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
   [DevicePoseStatus.Idle]: { color: color.white, presence: 0.35 },

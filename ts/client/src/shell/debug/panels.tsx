@@ -5,12 +5,12 @@
 
 import type { ComponentType } from "react";
 
-import { useKernel } from "@/abi/shell.ts";
 import { type SettingName, SETTINGS, settingsIn } from "@/shell/setting/schema.ts";
 import { Fold } from "./fold.tsx";
 import { GizmoLegend } from "./gizmo-legend.tsx";
 import { ProfilerPanel } from "./profiler.tsx";
 import { ViewPanel } from "./view.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 const PANEL: Partial<Record<SettingName, ComponentType>> = {
   view: ViewPanel,

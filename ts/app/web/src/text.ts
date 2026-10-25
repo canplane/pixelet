@@ -9,7 +9,7 @@ import type { f32, u32 } from "@xpute/kit/abi/word.ts";
 
 let family: string | null = null;
 
-function cssFont(weight: u32, px: f32): string {
+function face(weight: u32, px: f32): string {
   family ??= globalThis.document ? getComputedStyle(document.body).fontFamily : "sans-serif";
   return `${weight} ${px}px ${family}`;
 }
@@ -24,7 +24,7 @@ function context(): OffscreenCanvasRenderingContext2D | null {
 export function width(weight: u32, px: f32, text: string): f32 {
   const ctx = context();
   if (ctx === null) return text.length * px * 0.6;
-  ctx.font = cssFont(weight, px);
+  ctx.font = face(weight, px);
   return ctx.measureText(text).width;
 }
 
@@ -36,7 +36,7 @@ export function raster(weight: u32, px: f32, rgba: u32, text: string, x: f32, wi
   if (c.width < width) c.width = width;
   if (c.height < height) c.height = height;
   ctx.clearRect(0, 0, width, height);
-  ctx.font = cssFont(weight, px);
+  ctx.font = face(weight, px);
   ctx.fillStyle = `rgba(${rgba >>> 24},${(rgba >>> 16) & 0xff},${(rgba >>> 8) & 0xff},${(rgba & 0xff) / 255})`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";

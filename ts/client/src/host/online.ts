@@ -1,30 +1,31 @@
 // @pxl/client/host/online.ts
 
-import { create } from "zustand";
-
 /** Whether the device says it is online: the host's to know, as the GPU is, and the guest's only as a read's failure. */
-const useOnlineStore = create(() => ({ online: true }));
-
-export function setOnline(online: boolean): void {
-  useOnlineStore.setState({ online });
-}
+let state = true;
+const listeners = new Set<() => void>();
 
 export function online(): boolean {
-  return useOnlineStore.getState().online;
+  return state;
+}
+
+export function set_online(online: boolean): void {
+  state = online;
+  for (const listener of listeners) listener();
+}
+
+export function watch_online(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 /** Resolved once the device says it is online: at once if it does, else on its word, with no timer. */
-export function whenOnline(): Promise<void> {
-  if (online()) return Promise.resolve();
+export function when_online(): Promise<void> {
+  if (state) return Promise.resolve();
   return new Promise((resolve) => {
-    const stop = useOnlineStore.subscribe((s) => {
-      if (!s.online) return;
+    const stop = watch_online(() => {
+      if (!state) return;
       stop();
       resolve();
     });
   });
-}
-
-export function useOnline(): boolean {
-  return useOnlineStore((s) => s.online);
 }

@@ -79,21 +79,21 @@ interface Watch {
   stopped: boolean;
 }
 
-function watchEnd(watch: Watch): void {
+function watch_end(watch: Watch): void {
   watch.stopped = true;
   watch.subscription?.remove();
   watch.subscription = null;
 }
 
 /** A subscription that arrives after its stop is let go at once. */
-function watchKeep(watch: Watch, subscription: Location.LocationSubscription): void {
+function watch_keep(watch: Watch, subscription: Location.LocationSubscription): void {
   if (watch.stopped) subscription.remove();
   else watch.subscription = subscription;
 }
 
 let geolocation: Watch | null = null;
 
-function geolocationFail(watch: Watch, error: "denied" | "other"): void {
+function geo_fail(watch: Watch, error: "denied" | "other"): void {
   if (geolocation !== watch) return;
   geo_stop();
   heard.positionError(error);
@@ -104,7 +104,7 @@ function geo_start(): void {
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
   void (async () => {
-    if (!(await permitted())) return geolocationFail(watch, "denied");
+    if (!(await permitted())) return geo_fail(watch, "denied");
     const subscription = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
@@ -117,21 +117,21 @@ function geo_start(): void {
       // iOS rides out locationUnknown as CoreLocation keeps trying, and ends
       // the stream on any other failure. An ended watch is said as one: the
       // kernel starts it again on a grant or a return to the foreground.
-      () => geolocationFail(watch, "other"),
+      () => geo_fail(watch, "other"),
     );
-    watchKeep(watch, subscription);
-  })().catch(() => geolocationFail(watch, "other"));
+    watch_keep(watch, subscription);
+  })().catch(() => geo_fail(watch, "other"));
 }
 
 function geo_stop(): void {
   if (geolocation === null) return;
-  watchEnd(geolocation);
+  watch_end(geolocation);
   geolocation = null;
 }
 
 let orientation: Watch | null = null;
 
-function orientationFail(watch: Watch, refused: boolean): void {
+function orient_fail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   orient_stop();
   if (refused) heard.permission("orientation", "denied");
@@ -143,7 +143,7 @@ function orient_start(): void {
   const watch: Watch = { subscription: null, stopped: false };
   orientation = watch;
   void (async () => {
-    if (!(await permitted())) return orientationFail(watch, true);
+    if (!(await permitted())) return orient_fail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
@@ -151,19 +151,19 @@ function orient_start(): void {
       },
       (reason) => {
         console.error("[sensor] heading:", reason);
-        orientationFail(watch, false);
+        orient_fail(watch, false);
       },
     );
-    watchKeep(watch, subscription);
+    watch_keep(watch, subscription);
   })().catch((err) => {
     console.error("[sensor] heading:", err);
-    orientationFail(watch, false);
+    orient_fail(watch, false);
   });
 }
 
 function orient_stop(): void {
   if (orientation === null) return;
-  watchEnd(orientation);
+  watch_end(orientation);
   orientation = null;
 }
 

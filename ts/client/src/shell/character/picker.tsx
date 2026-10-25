@@ -7,11 +7,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { alpha, chrome, color, hairline, textScale, textStyle, weight } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPreview } from "@/shell/character/preview.tsx";
-import { kernel_setting, useKernel } from "@/abi/shell.ts";
+import { kernel_setting } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { type CharacterVariant, type Gender, genderOf, GENDERS, personVariant, personVariantsOf, PET_VARIANTS, petVariant } from "@/shell/character/variant.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shell/ui/panel.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 // The chip one sees is 32; a press lands on 44 (doc/minutes/20260928-three-sizes-of-a-control.md).
 const CHIP_HEIGHT = 32;

@@ -11,10 +11,11 @@ import { LABEL } from "@/shell/ui/palette.ts";
 import { surface_role } from "@/abi/render/gpu/api.spec.ts";
 import { surface_driver } from "@/abi/render/surface.ts";
 import { Command, encode_preview_close, encode_preview_open } from "@/abi/cmd.spec.ts";
-import { kernel_command, kernel_room, useKernel } from "@/abi/shell.ts";
+import { kernel_command, kernel_room } from "@/abi/shell.ts";
 import type { CharacterVariant } from "@/shell/character/variant.ts";
 import { chrome } from "@/shell/ui/theme.ts";
 import { bracket } from "@/bracket.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 const CASE = surface_driver(surface_role.CASE);
 

@@ -4,11 +4,11 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { useTranslation } from "react-i18next";
 
 import type { DivisionPart, LonLat } from "@/abi/cmd.spec.ts";
-import { useKernel } from "@/abi/shell.ts";
 import { DIVISION_SUBTYPE } from "./division.spec.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 import { assembleLabel, primaryLanguage } from "./label.ts";
 import { fixed } from "@/shell/fixed.ts";
+import { useKernel } from "@/shell/store/system.ts";
 
 /** The focus's division, assembled per snapshot, so a language switch needs no refetch. */
 export function useDivisionLabel(): string | null {

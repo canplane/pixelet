@@ -22,7 +22,7 @@ let had = false;
 let heard: GpuHeard;
 
 /** A hidden page draws nothing, so it waits to be shown. */
-function askAgain(): void {
+function retry(): void {
   if (document.visibilityState === "visible") {
     setTimeout(ask, RETRY_MS);
     return;
@@ -45,7 +45,7 @@ function ask(): void {
   // asking again is the page's.
   const lost = () => {
     heard.state("waiting");
-    askAgain();
+    retry();
   };
   tries += 1;
   // A completion the device writes asks for the turn that reads it (`heard.wake`).
@@ -58,7 +58,7 @@ function ask(): void {
         return;
       }
       heard.state("waiting");
-      return askAgain();
+      return retry();
     }
     heard.state("present");
     had = true;

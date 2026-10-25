@@ -9,7 +9,7 @@ import { GUEST, GUEST_DOORBELL } from "@/host/mem.ts";
 import { ring_now, send_input } from "@/host/sched.ts";
 import { bracket } from "@/bracket.tsx";
 
-export { kernel_snapshot, useKernel } from "@/abi/snapshot.ts";
+export { kernel_snapshot } from "@/abi/snapshot.ts";
 export { kernel_hold, kernel_keys } from "@/abi/control/input.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */

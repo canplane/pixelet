@@ -22,11 +22,12 @@ import { touches } from "@/shell/ui/touch.ts";
 import { alpha, chrome, color, disabledContent, material, shadow } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
 import { cancelMarker, chatFits, DockMode, draftMarkerWords, holdTier, holdTool, markerTextFits, putMarker, useInHand, useUiStore } from "@/shell/store/ui.ts";
-import { kernel_snapshot, useKernel } from "@/abi/shell.ts";
+import { kernel_snapshot } from "@/abi/shell.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { type Cube, cubeId } from "@/catalog/asset/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/asset/swatch.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 /** A page's browser pans the strip, and holds and drags up reach the view's own gesture; on a device the responder system shares the finger. */
 const PAN_X: ViewStyle = Platform.OS === "web" ? ({ touchAction: "pan-x" } as ViewStyle) : {};

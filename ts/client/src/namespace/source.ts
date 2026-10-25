@@ -9,13 +9,11 @@
  * roots are bound to (tile.ts) and for what the settings show.
  */
 
-import { useSyncExternalStore } from "react";
-
 import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { send_next } from "@/host/sched.ts";
-import { online, whenOnline } from "@/host/online.ts";
+import { online, when_online } from "@/host/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
 import { type Declaration, declaration } from "@/namespace/tile.ts";
 import { bracket } from "@/bracket.tsx";
@@ -30,11 +28,13 @@ export function source_declared(): Declaration | null {
 }
 
 /** Each kind's own version as declared, empty until then. */
-export function useSourceVersions(): readonly { kind: BaseLayer; version: string }[] {
-  return useSyncExternalStore((listener) => {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  }, () => shown);
+export function source_versions(): readonly { kind: BaseLayer; version: string }[] {
+  return shown;
+}
+
+export function watch_source(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 /** The wait after a refused ask, doubled each time up to the most: a source
@@ -63,7 +63,7 @@ export async function declare_source(): Promise<void> {
     if (online()) {
       await new Promise((resolve) => setTimeout(resolve, wait_ms));
       wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
-    } else await whenOnline();
+    } else await when_online();
     source = await asked();
   }
   const read = declaration(source);

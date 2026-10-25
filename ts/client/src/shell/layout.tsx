@@ -4,14 +4,14 @@ import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { Message } from "@/abi/cmd.spec.ts";
-import { Gpu, useGpu } from "@/host/gpu.ts";
-import { useKernel } from "@/abi/shell.ts";
+import { Gpu } from "@/host/gpu.ts";
 import { Boot, useBoot, useStop } from "./boot.ts";
 import { Modals } from "./modal.tsx";
 import { BlueScreen, Halt } from "./halt.tsx";
 import { messageKey } from "@/shell/locale/message-key.ts";
 import { KeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { DockMode, useUiStore } from "@/shell/store/ui.ts";
+import { useGpu, useKernel } from "@/shell/store/system.ts";
 
 /** What ends the app before it ran, said in place of it: no GPU to start with, or a kernel that never started. */
 function haltOf(gpu: Gpu, boot: Boot): string | null {

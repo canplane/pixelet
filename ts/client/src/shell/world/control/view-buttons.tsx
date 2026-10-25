@@ -2,9 +2,10 @@
 
 import { useTranslation } from "react-i18next";
 
-import { kernel_setting, useKernel } from "@/abi/shell.ts";
+import { kernel_setting } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { ButtonStack } from "@/shell/ui/button-stack.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 const MODE = SETTINGS.camera_mode;
 const FREE = MODE.options.free;

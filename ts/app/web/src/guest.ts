@@ -30,8 +30,8 @@ export async function open(plan: Plan): Promise<Guest> {
   // The maximum is the initial size, so the buffer is never replaced.
   const buffer = memory.buffer as ArrayBuffer;
   const gpu = new Directory(buffer, plan.directory_at).get(plan.gpu_stream);
-  const interrupt = (quotaMs: f64) => {
-    const wake = turn(quotaMs);
+  const interrupt = (quota_ms: f64) => {
+    const wake = turn(quota_ms);
     webgpu.run(buffer, gpu, plan.gpu_head);
     return wake;
   };

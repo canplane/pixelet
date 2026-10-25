@@ -5,12 +5,12 @@ import { G, Path, Svg } from "react-native-svg";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { useKernel } from "@/abi/shell.ts";
 
 import { Presence } from "@/shell/ui/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/shell/ui/motion/transition.ts";
 import { HaloText } from "@/shell/ui/halo.tsx";
 import { color, halo, haloRings, textStyle, weight } from "@/shell/ui/theme.ts";
+import { useKernel } from "@/shell/store/system.ts";
 
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;

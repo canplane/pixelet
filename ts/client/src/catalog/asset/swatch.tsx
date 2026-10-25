@@ -8,9 +8,9 @@ import { type Cube, cubeHex, cubeId, decorName } from "@/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { assetUrl } from "@/config/route.ts";
-import { useKernel } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { bracket } from "@/bracket.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {
   const key = shippedTopTextureKey(cubeId(cube));

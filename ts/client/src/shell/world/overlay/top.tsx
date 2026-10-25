@@ -5,7 +5,6 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
 import { openModal } from "@/shell/modal.tsx";
-import { useKernel } from "@/abi/shell.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { Presence } from "@/shell/ui/motion/presence.tsx";
 import { LEAVE, SETTLE, SNAP } from "@/shell/ui/motion/transition.ts";
@@ -21,6 +20,7 @@ import { BusyDim } from "../busy-dim.tsx";
 import { useChromeTop } from "../chrome.ts";
 import { CircularButton } from "@/shell/ui/circular-button.tsx";
 import { bracket } from "@/bracket.tsx";
+import { useKernel } from "@/shell/store/system.ts";
 
 export function TopOverlays() {
   const { t } = useTranslation();

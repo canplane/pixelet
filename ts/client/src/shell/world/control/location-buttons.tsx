@@ -6,12 +6,13 @@ import { type GlyphName, Spinner } from "@/shell/ui/icon.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { Command, DevicePoseStatus, Tracking } from "@/abi/cmd.spec.ts";
-import { kernel_command, kernel_tracking, useKernel } from "@/abi/shell.ts";
+import { kernel_command, kernel_tracking } from "@/abi/shell.ts";
 import { CompassFace } from "@/shell/world/control/compass.tsx";
 import { ButtonStack } from "@/shell/ui/button-stack.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { SETTLE } from "@/shell/ui/motion/transition.ts";
 import { chrome, color } from "@/shell/ui/theme.ts";
+import { useKernel } from "@/shell/store/system.ts";
 
 /** MKUserTrackingButton's glyphs. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {

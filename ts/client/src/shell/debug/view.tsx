@@ -4,11 +4,11 @@
 
 import { useEffect, useState } from "react";
 
-import { useKernel } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { Fold, useOpenFold } from "./fold.tsx";
 import { ProfilerView } from "./profiler/gauge.tsx";
 import { type Gauge, profilerGaugeRead } from "./profiler/view.ts";
+import { useKernel } from "@/shell/store/system.ts";
 
 const POLL_MS = 500;
 

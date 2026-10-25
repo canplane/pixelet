@@ -28,24 +28,24 @@ import { start_sys } from "@/host/sys.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
 import { bytes_at } from "@/host/module.ts";
 import { bracket, type Plan } from "@/bracket.tsx";
-import { GPU_STATE, setGpu } from "@/host/gpu.ts";
-import { setOnline } from "@/host/online.ts";
+import { GPU_STATE, set_gpu } from "@/host/gpu.ts";
+import { set_online } from "@/host/online.ts";
 import { request_frame, send_next, start_sched, strobe } from "@/host/sched.ts";
 import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
 
-let stopCode: string | null = null;
+let code: string | null = null;
 
 /** The kernel's last report, short as a stop code: its errno's name and the
  * file and line, a published build's file a number its paths decode by. None
  * where it stopped without one. */
 export function stop_code(): string | null {
-  return stopCode;
+  return code;
 }
 
 const abort: SysHost["abort"] = ({ errno, file, line, column, a, b }) => {
   console.error(`[kernel] stopped: ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`);
   const where = `${file.split("/").pop()}:${line}`;
-  stopCode = `${strerror(errno).split(":")[0]} · ${file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where}`;
+  code = `${strerror(errno).split(":")[0]} · ${file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where}`;
 };
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
@@ -86,8 +86,8 @@ export async function boot(): Promise<void> {
   start_sched(submit_frame);
   bracket.sensor.hear(SENSOR_HEARD);
   GUEST_DOORBELL.signal = on_signal;
-  bracket.gpu.boot({ ready: () => send_next(Command.GPU_READY), state: (state) => setGpu(GPU_STATE[state]), wake: request_frame });
-  bracket.online.watch(setOnline);
+  bracket.gpu.boot({ ready: () => send_next(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: request_frame });
+  bracket.online.watch(set_online);
   const packet = (settings: string) =>
     encode_world_boot(
       GUEST_DOORBELL,

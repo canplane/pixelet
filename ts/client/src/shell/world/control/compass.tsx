@@ -3,11 +3,10 @@
 import { StyleSheet, View } from "react-native";
 import { Path, Svg } from "react-native-svg";
 
-import { useKernel } from "@/abi/shell.ts";
-
 import { LABEL, NORTH } from "@/shell/ui/palette.ts";
 import { chrome, SECONDARY } from "@/shell/ui/theme.ts";
 import type { f64 } from "@xpute/kit/abi/word.ts";
+import { useKernel } from "@/shell/store/system.ts";
 
 const NEEDLE_HALF = 16;
 const NEEDLE_WIDTH = 9;

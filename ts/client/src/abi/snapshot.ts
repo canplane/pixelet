@@ -1,7 +1,5 @@
 // @pxl/client/abi/snapshot.ts
 
-import { useSyncExternalStore } from "react";
-
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import { ActiveTool, DevicePoseStatus, GroundStatus, read_snapshot, type Snapshot } from "@/abi/cmd.spec.ts";
@@ -34,7 +32,7 @@ export function set_snapshot(bytes: U8Array): void {
   for (const listener of snapshot_listeners) listener();
 }
 
-function subscribe_snapshot(listener: () => void): () => void {
+export function watch_snapshot(listener: () => void): () => void {
   snapshot_listeners.add(listener);
   return () => snapshot_listeners.delete(listener);
 }
@@ -44,6 +42,3 @@ export function kernel_snapshot(): Snapshot {
 }
 
 /** `select` must return a primitive or an existing reference; a fresh object renders forever. */
-export function useKernel<T>(select: (s: Snapshot) => T): T {
-  return useSyncExternalStore(subscribe_snapshot, () => select(snapshot));
-}
