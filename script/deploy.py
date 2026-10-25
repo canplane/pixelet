@@ -3,12 +3,15 @@
 # from CI. Without a number it publishes unnumbered (`#<last>-<id>`,
 # ts/app/web/vite.config.ts `buildNumber`).
 #
-# Everything that can fail before the Worker goes out runs before it, so a
-# failure says truly what was published, and the last step is the publish
-# itself. wrangler runs through Deno at the version ts/deno.lock holds, from
-# this package, not npx, since it wants a newer Node than a system may have.
+# The deployment runs across the trees, so it is the repository's: the
+# page's bundle, built and staged beside the Worker (ts/server/edge
+# script/stage.sh); the panics' path table, kept in the bucket (r2.py); the
+# Worker, published by its own package (its `deploy` task, wrangler); and
+# the site read back. Everything that can fail before the Worker goes out
+# runs before it, so a failure says truly what was published, and the last
+# step is the publish itself.
 #
-#   ./script/deploy.py   (from ts/server/edge)
+#   ./script/deploy.py
 
 import os
 import re
@@ -18,27 +21,16 @@ import sys
 import urllib.request
 from pathlib import Path
 
-EDGE = Path(__file__).resolve().parent.parent
+import r2
 
-
-def repo_of(start):
-    """The repository over `start`: the nearest directory up holding the
-    TypeScript workspace's manifest, ts/deno.jsonc, as pxl-tool finds it by
-    its own manifest. It works in a tree copied without .git."""
-    for d in [start, *start.parents]:
-        if (d / "ts" / "deno.jsonc").is_file():
-            return d
-    sys.exit(f"no repository over {start}")
-
-
-REPO = repo_of(EDGE)
+REPO = Path(__file__).resolve().parent.parent
+EDGE = REPO / "ts/server/edge"
 NUMBER = os.environ.get("PXL_BUILD_NUMBER")
 # The panics' `#n` → path table the page's build wrote beside its guest.
 PATHS = REPO / "ts/app/web/src/guest.paths.json"
 BUILT = EDGE / "dist/index.html"
 # The custom domain the Worker answers on (wrangler.jsonc `routes`).
 SITE = "https://plei.me"
-WRANGLER = ["deno", "run", "-A", "--node-modules-dir=auto", "npm:wrangler"]
 
 
 def loads(html):
@@ -86,10 +78,15 @@ step("build", [str(EDGE / "script/stage.sh")])
 # never served. Before the publish: a table for a build that then failed to
 # go out is harmless, a live build without one is not.
 if NUMBER:
-    step("keep the paths", WRANGLER + ["r2", "object", "put", f"pixelet-tiles/_meta/paths/{NUMBER}.json", "--remote", "--file", str(PATHS), "--content-type", "application/json"])
+    print("[deploy] keep the paths", flush=True)
+    try:
+        r2.put(f"_meta/paths/{NUMBER}.json", PATHS.read_bytes(), "application/json")
+    except r2.Unreachable as e:
+        print(f"[deploy] keep the paths failed ({e}); nothing was published", file=sys.stderr)
+        sys.exit(1)
 
 print("[deploy] publish", flush=True)
-published = subprocess.run(WRANGLER + ["deploy"], cwd=EDGE).returncode
+published = subprocess.run(["deno", "task", "--cwd", str(EDGE), "deploy"]).returncode
 if published != 0:
     # wrangler can fail after the Worker went out (a route, a domain), so what
     # landed is read off the site, not off its exit.

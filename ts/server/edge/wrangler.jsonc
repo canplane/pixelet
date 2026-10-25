@@ -1,6 +1,6 @@
 {
   // Cloudflare Worker that serves both the built app and its terrain tiles.
-  // Deployed by `make deploy` (ts/server/edge/script/deploy.py): build, then
+  // Deployed by `make deploy` (script/deploy.py): build, then
   // wrangler through Deno.
   //
   // `name` becomes the *.workers.dev subdomain; a custom domain is attached

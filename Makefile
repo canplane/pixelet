@@ -119,7 +119,7 @@ $(TOOLS):
 sync-build-number:
 	@./script/build-log.py >/dev/null || echo "[build-number] not synced: this build is labeled from the cached number" >&2
 
-# The deployment: the client built and published with the Worker. Does not
-# upload what the bucket holds.
+# The deployment: the client built and published with the Worker
+# (script/deploy.py). Does not upload what the bucket holds.
 deploy:
-	deno task --cwd ts/server/edge deploy
+	./script/deploy.py
