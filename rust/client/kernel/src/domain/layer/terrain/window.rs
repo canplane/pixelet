@@ -68,7 +68,7 @@ struct Window {
 }
 
 /// Where a square of the ground is held: its row of the GPU's squares
-/// (pxl-render gpu/renderer.rs `GROUND_BYTES`) and its lane of cells back
+/// (pxl-render gpu/ray/ground.rs `GROUND_BYTES`) and its lane of cells back
 /// in `.fixed.terrain` (`cells`), one a square at a zoom however many
 /// windows want it. Windows at one zoom want a square in the same slot
 /// (`window::slot`), so it is held in one of that slot's berths, `WINDOWS`
@@ -436,7 +436,7 @@ fn show(w: &mut Windows, i: u32) {
 }
 
 /// A berth's ticket while its square's ways' tree is refused, the pool or
-/// the scratch at its cap (pxl-render gpu/renderer.rs `Short`), the square
+/// the scratch at its cap (pxl-render gpu/ray/ground.rs `Short`), the square
 /// past its own most or its blocks past the mirror's cap (`landed`), none
 /// of which asking again changes: never a fill's (`fill`), and not absent,
 /// so the square is not handed again every turn, nor its tile asked or kept

@@ -23,8 +23,6 @@ impl<'a> Memory<'a> {
         }
     }
 
-    /// The memory at `base`, `bytes` long.
-    ///
     /// # Safety
     /// The bytes are live while the value is used, and meanwhile nothing else
     /// holds a reference into a range the guest names: the guest is between turns.
@@ -32,7 +30,6 @@ impl<'a> Memory<'a> {
         Memory { base, bytes, of: PhantomData }
     }
 
-    /// Its bytes.
     pub fn bytes(&self) -> usize {
         self.bytes
     }
@@ -52,7 +49,6 @@ impl<'a> Memory<'a> {
         unsafe { core::slice::from_raw_parts(self.range(at, n), n) }
     }
 
-    /// `from` written at `at`.
     pub fn write(&mut self, at: usize, from: &[u8]) {
         let to = self.range(at, from.len());
         // SAFETY: in the memory; `from` may lie in it too, so the copy may overlap.
@@ -65,7 +61,6 @@ impl<'a> Memory<'a> {
         u32::from_le_bytes([w[0], w[1], w[2], w[3]])
     }
 
-    /// `v` written at `at` as a little-endian word.
     pub fn set_word(&mut self, at: u32, v: u32) {
         self.write(at as usize, &v.to_le_bytes());
     }

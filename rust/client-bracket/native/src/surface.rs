@@ -109,8 +109,7 @@ fn wake() {
 #[cfg(target_os = "android")]
 use crate::android::wake;
 
-/// The device opened as asked (xpute-gpu host `open`), once, and from then
-/// on the frames the kernel draws are the ones its host admits.
+/// The device opened as asked (xpute-gpu host `open`), once.
 fn open() -> bool {
     if device().is_some() {
         return true;
@@ -120,7 +119,6 @@ fn open() -> bool {
     };
     let host = GpuHost::new(adapter, device, queue, PLAN, wake);
     DEVICE.set(Some(Device { instance, host }));
-    xpute_gpu::admit::set(admit_frame);
     true
 }
 
@@ -143,12 +141,12 @@ pub fn before_turn(memory: &mut Memory<'_>) {
     }
 }
 
-/// The host's answer (xpute_gpu::admit, installed as the device opens): a
+/// The host's answer (xpute_gpu::admit), handed the kernel with its entry: a
 /// frame while the host admits one (xpute-gpu host `GpuHost::admit`), so
 /// taking a layer's drawable never blocks the JavaScript thread, which waits
-/// for the turn (lib.rs `on_kernel`).
-fn admit_frame() -> bool {
-    device().is_some_and(|d| d.host.admit())
+/// for the turn (lib.rs `on_kernel`); every frame before the device opens.
+pub fn admit() -> bool {
+    device().is_none_or(|d| d.host.admit())
 }
 
 /// The turn's calls run on the device, and its frames shown.

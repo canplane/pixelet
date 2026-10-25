@@ -10,7 +10,6 @@
 
 use crate::mem::Memory;
 
-/// A stream word's bytes.
 pub const WORD: usize = size_of::<u32>();
 
 /// A record's words: its op and count, `args`, and `bytes` as their count then words.
@@ -27,20 +26,25 @@ pub const fn record_bytes(args: usize, bytes: Option<usize>) -> usize {
     record_words(args, bytes) * WORD
 }
 
+/// Whether a transaction is open, where it began, and whether a record that
+/// did not fit has dropped it.
+#[derive(Clone, Copy, PartialEq)]
+enum Mark {
+    Off,
+    Open(usize),
+    Spilled(usize),
+}
+
 pub struct Stream {
     mem: Memory,
     at: usize,
     words: usize,
     head: usize,
     len: usize,
-    /// Where an open transaction began, and whether a record past the range
-    /// has dropped it.
-    mark: Option<usize>,
-    spilled: bool,
+    mark: Mark,
 }
 
 impl Stream {
-    /// The word that holds how many words of records the turn published.
     pub const END: usize = 0;
 
     /// The `words` at `at` in `mem`. A new stream has published nothing,
@@ -57,8 +61,7 @@ impl Stream {
             words,
             head,
             len: 0,
-            mark: None,
-            spilled: false,
+            mark: Mark::Off,
         };
         s.words()[Stream::END] = 0;
         s
@@ -70,7 +73,7 @@ impl Stream {
         unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), self.words) }
     }
 
-    /// Where the stream begins in its memory: its head's first word, `END`.
+    /// Where the stream's words begin in its memory, `END` first.
     pub fn head_at(&self) -> usize {
         self.at
     }
@@ -84,9 +87,8 @@ impl Stream {
         self.len = 0;
     }
 
-    /// Whether records of `bytes`, as their writers measure them
-    /// (`record_bytes`, xpute-gpu encode's `call::*_bytes`), would fit whole
-    /// with `leave` bytes still left after them.
+    /// Whether records of `bytes` (`record_bytes`, xpute-gpu encode's
+    /// `call::*_bytes`) fit with `leave` bytes left after them.
     pub fn fits(&self, bytes: usize, leave: usize) -> bool {
         self.left() >= bytes + leave
     }
@@ -106,28 +108,29 @@ impl Stream {
     /// The records from here to `commit` are one: one that does not fit drops
     /// them all, and those after it, where outside a transaction it is a bug.
     pub fn begin(&mut self) {
-        self.mark = Some(self.len);
-        self.spilled = false;
+        self.mark = Mark::Open(self.len);
     }
 
     /// False where the transaction did not fit: the stream is as at `begin`.
     pub fn commit(&mut self) -> bool {
-        let fit = !self.spilled;
-        if let Some(mark) = self.mark.take().filter(|_| !fit) {
-            self.len = mark;
+        let mark = core::mem::replace(&mut self.mark, Mark::Off);
+        if let Mark::Spilled(at) = mark {
+            self.len = at;
         }
-        self.spilled = false;
-        fit
+        !matches!(mark, Mark::Spilled(_))
     }
 
     /// A record of `n` words for its writer to fill; none where an open
-    /// transaction no longer fits it, which drops the transaction, as a
-    /// record past the range does.
+    /// transaction no longer fits it, which drops the transaction.
     #[track_caller]
     pub fn reserve(&mut self, op: u32, n: usize) -> Option<&mut [u32]> {
-        if self.mark.is_some() && (self.spilled || self.left() < (2 + n) * WORD) {
-            self.spilled = true;
-            return None;
+        match self.mark {
+            Mark::Spilled(_) => return None,
+            Mark::Open(at) if self.left() < (2 + n) * WORD => {
+                self.mark = Mark::Spilled(at);
+                return None;
+            }
+            _ => {}
         }
         Some(self.open(op, n))
     }

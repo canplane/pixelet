@@ -8,18 +8,11 @@
 //! xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
 //! ```
 //!
-//! Cargo applies a `rustc-link-arg` only to the package whose script
-//! prints it, so each guest's `build.rs` calls `link` with its own numbers.
-//!
-//! What is the same for every module guest: the host hands it its memory, so
-//! the memory is imported, never the module's own; and the stack goes first,
-//! at the bottom of the memory, so an overflow runs off address 0 and traps
-//! rather than writing over the data above it. The rest is the guest's: the
-//! stack's size, and, for a guest that keeps ranges of its own below the
-//! linker's data, where that data begins and the least memory it runs in.
-//!
-//! The C++ guest links with the same flags from its Makefile
-//! (`cpp/Makefile` `WASM_LINK`), which a Rust crate cannot reach.
+//! Cargo applies a `rustc-link-arg` only to the package whose script prints
+//! it, so each guest calls `link` itself. Every module guest imports its
+//! memory, and puts its stack first, so an overflow runs off address 0 and
+//! traps rather than writing over the data above it. The C++ guest links
+//! with the same flags (`cpp/Makefile` `WASM_LINK`).
 
 /// A WebAssembly page, the unit a memory is declared in: 64 KiB, not the
 /// 4 KiB page a guest places its ranges and its heap by

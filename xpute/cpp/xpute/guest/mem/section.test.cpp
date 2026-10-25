@@ -25,7 +25,7 @@ XPUTE_TEST(memory_ranges_laid_end_to_end_each_begin_on_the_unit_and_never_overla
 }
 
 XPUTE_TEST(memory_a_span_inside_a_section_is_reached_only_where_it_ends_by_the_section_s_end) {
-    const Section s{4 * PAGE, 2 * PAGE, PAGE};
+    const Section s{4 * PAGE, 2 * PAGE};
     XPUTE_CHECK(s.end() == 6 * PAGE);
     XPUTE_CHECK_EQ(s.at(0, 2 * PAGE), std::optional(4 * PAGE), "the whole of it");
     XPUTE_CHECK_EQ(s.at(PAGE, PAGE), std::optional(5 * PAGE), "its last page");
@@ -35,9 +35,9 @@ XPUTE_TEST(memory_a_span_inside_a_section_is_reached_only_where_it_ends_by_the_s
 }
 
 XPUTE_TEST(memory_a_range_laid_inside_a_section_ends_where_its_own_size_does) {
-    const Section s{8 * PAGE, 4 * PAGE, PAGE};
+    const Section s{8 * PAGE, 4 * PAGE};
     const std::array<std::uint32_t, 2> sizes{PAGE + 1, PAGE};
     Section second = s.nth(sizes, PAGE, 1);
-    XPUTE_CHECK((second == Section{10 * PAGE, PAGE, PAGE}));
+    XPUTE_CHECK((second == Section{10 * PAGE, PAGE}));
     XPUTE_CHECK_EQ(second.at(0, PAGE + 1), std::nullopt, "its own end, not the section's");
 }

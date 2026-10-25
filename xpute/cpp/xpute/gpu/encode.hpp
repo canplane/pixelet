@@ -1,14 +1,11 @@
 // cpp/xpute/gpu/encode.hpp
 
 // A guest's GPU calls written as a stream's records (ipc/stream), in the
-// words spec/gpu/api.json gives each op; rust/gpu/src/encode.rs writes the
-// same words for the same calls. Objects are handles from one table; a
-// record that does not fit an open transaction is not written, and an object
-// it would have made is handed back.
-//
-// Every record is written twice by the same function: once to count its
-// words, then into the room the stream reserved for them, so nothing is
-// built on the heap first.
+// words spec/gpu/api.json gives each op, as rust/gpu/src/encode.rs writes
+// them. Objects are handles from one table; a record that does not fit an
+// open transaction is not written, and an object it would have made is
+// handed back. Every record is written twice by the same function: once to
+// count its words, then into the room the stream reserved for them.
 
 #pragma once
 
@@ -150,8 +147,7 @@ struct PrimitiveState {
     bool unclipped_depth;
 };
 
-// Defaulted to what WebGPU defaults a face to: always, keep, keep, keep
-// (STENCIL_UNUSED in Rust).
+// WebGPU's default face: always, keep, keep, keep.
 struct StencilFaceState {
     CompareFunction compare = CompareFunction::always;
     StencilOperation fail = StencilOperation::keep;
@@ -172,8 +168,7 @@ struct DepthStencilState {
     float clamp;
 };
 
-// Defaulted to one sample, every sample's bit set (MULTISAMPLE_NONE in
-// Rust).
+// One sample, every sample's bit set.
 struct MultisampleState {
     std::uint32_t count = 1;
     std::uint32_t mask = UINT32_MAX;
@@ -328,8 +323,7 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
     return true;
 }
 
-// The bytes a record whose words `put` gives takes of a stream, as its room is
-// counted: measured as `emit` measures it, its op and count with.
+// What a record takes of a stream's room, measured as `emit` writes it.
 template <class F> std::uint64_t measured(F &&put) noexcept {
     Count count;
     put(count);
@@ -358,7 +352,8 @@ template <class S> void stencil_face(S &s, const StencilFaceState &f) noexcept {
 // a surface's current texture).
 inline constexpr std::size_t OBJECT_OPS = op::DESTROY;
 
-// The calls, over a table of `N` handles.
+// The calls, over a table of `N` handles, each holding the op that made it
+// where what it made lasts, 0 otherwise.
 template <std::size_t N> class Gpu {
   public:
     std::optional<Id> buffer(Stream &stream, const BufferDescriptor &d) noexcept {
@@ -542,21 +537,19 @@ template <std::size_t N> class Gpu {
     // and every handle taken since is free again, as the host never saw it.
     bool commit(Stream &stream) noexcept {
         bool fit = stream.commit();
-        if (!fit) handles_.rollback([this](Id id) { forget(id); });
+        if (!fit) handles_.rollback([this](Id, std::uint8_t op) { forget(op); });
         return fit;
     }
 
-    // Ends a pass: the host lets it go with the record, and its handle is
-    // free again, whether or not the record was written, since one dropped
-    // with its transaction left nothing on the host.
+    // Ends a pass. Its handle is free whether or not the record was written:
+    // one dropped with its transaction left nothing on the host.
     bool end(Stream &stream, Id pass) noexcept {
         bool sent = detail::emit(stream, op::END, [&](auto &s) { s.word(pass); });
         release(pass);
         return sent;
     }
 
-    // Each encoder finished and submitted, in order, and let go as `end`
-    // lets a pass go.
+    // Each encoder finished, submitted in order and let go, as `end` lets a pass go.
     bool submit(Stream &stream, std::span<const Id> encoders) noexcept {
         bool sent = detail::emit(stream, op::SUBMIT, [&](auto &s) {
             s.word(static_cast<std::uint32_t>(encoders.size()));
@@ -566,54 +559,45 @@ template <std::size_t N> class Gpu {
         return sent;
     }
 
-    // Lets the object go: the host destroys it, and its handle is free.
     void destroy(Stream &stream, Id id) noexcept {
         if (release(id)) detail::emit(stream, op::DESTROY, [&](auto &s) { s.word(id); });
     }
 
-    // Whether `id` is an object this encoder made and has not let go.
     bool live(Id id) const noexcept { return handles_.live(id); }
 
-    // The objects this encoder made and has not let go, by the op that made
-    // them (slot `op`, below DESTROY).
+    // The live objects by the op that made them (slot `op`, below DESTROY).
     const std::array<std::uint32_t, OBJECT_OPS> &objects() const noexcept { return objects_; }
 
   private:
     // An object's handle, written by `op` as the record's first word; none
     // where the table is full or the record did not fit.
     template <class F> std::optional<Id> make(Stream &stream, std::uint32_t op, F &&put) noexcept {
-        std::optional<std::uint32_t> id = handles_.acquire();
+        bool lasts = op < OBJECT_OPS;
+        std::optional<std::uint32_t> id = handles_.insert(lasts ? static_cast<std::uint8_t>(op) : 0);
         if (!id) return std::nullopt;
         if (!detail::emit(stream, op, [&](auto &s) {
                 s.word(*id);
                 put(s);
             })) {
-            handles_.release(*id);
+            handles_.remove(*id);
             return std::nullopt;
         }
-        if (op < OBJECT_OPS) {
-            made_by_[abi::handle_slot(*id)] = static_cast<std::uint8_t>(op);
-            objects_[op]++;
-        }
+        if (lasts) objects_[op]++;
         return id;
     }
 
     // `id` let go, where it was live.
     bool release(Id id) noexcept {
-        bool live = handles_.release(id);
-        if (live) forget(id);
-        return live;
+        std::optional<std::uint8_t> op = handles_.remove(id);
+        if (op) forget(*op);
+        return op.has_value();
     }
 
-    // Slot `id`'s object let go from the count of what made it.
-    void forget(Id id) noexcept {
-        std::uint8_t op = std::exchange(made_by_[abi::handle_slot(id)], 0);
+    void forget(std::uint8_t op) noexcept {
         if (op != 0) objects_[op]--;
     }
 
-    abi::HandleTable<N> handles_;
-    // The op that made each slot's live object, where it lasts; 0 otherwise.
-    std::array<std::uint8_t, N> made_by_{};
+    abi::Table<std::uint8_t, N> handles_;
     // The live objects by the op that made them, slot `op`.
     std::array<std::uint32_t, OBJECT_OPS> objects_{};
 };
@@ -623,16 +607,15 @@ template <std::size_t N> class Gpu {
 namespace call {
 
 bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
-// The bytes `write_buffer` of `bytes` takes of a stream, which Stream::fits
-// asks of its room: a caller writing several asks once.
+// What `write_buffer` takes of a stream's room (Stream::fits), so a caller
+// writing several asks once.
 std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
 // The bytes read where they lie in the guest's memory when the host runs the
 // stream, so they must stay until it has.
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout`: bytes per row, rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
-// As write_buffer_bytes, for write_texture: its words are the same whatever the
-// place, the layout and the size.
+// As write_buffer_bytes: the words are the same whatever the place, layout and size.
 std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
 // An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
@@ -661,10 +644,9 @@ bool draw_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noe
 bool draw_indexed_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
 bool dispatch(Stream &stream, Id pass, std::array<std::uint32_t, 3> workgroups) noexcept;
 bool dispatch_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
-// `buffer`, made MAP_READ | COPY_DST and copied into on an encoder submitted
-// before, mapped for reading: `into` the bytes' place in the guest's memory,
-// `word` the mapping's own, where `ticket | DONE` lands once they are there
-// and the buffer is unmapped again.
+// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted before)
+// read into the guest's memory at `into`; `ticket | DONE` lands at `word` once
+// the bytes are there and the buffer is unmapped.
 bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, std::uint32_t &word, std::uint32_t ticket) noexcept;
 // `ticket | DONE` at `word` once what was submitted before is done.
 bool queue_done(Stream &stream, std::uint32_t &word, std::uint32_t ticket) noexcept;

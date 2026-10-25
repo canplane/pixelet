@@ -9,9 +9,7 @@
 // (pxl-render paint.wgsl). A texture pack decorates these; it
 // does not replace them.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
+// Names as the spec spells them, so one record has one name on every side.
 
 use super::cube;
 use super::Swatch;

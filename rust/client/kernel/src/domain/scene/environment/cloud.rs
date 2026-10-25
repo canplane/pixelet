@@ -25,7 +25,7 @@ use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
-use xpute_guest::sched::frame_budget::FrameBudget;
+use xpute_guest::sched::pass::Pass;
 
 use crate::domain::query::model::asset::model_of;
 use crate::domain::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
@@ -148,7 +148,7 @@ pub fn clouds_shown() -> f64 {
 
 /// Takes the models as they arrive, keeps the patches the eye can see a cloud
 /// of, and lists them.
-pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
+pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let c = clouds();
     c.seen = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
@@ -200,7 +200,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     }
     let (patches, lanes) = (&mut c.patches, &mut c.lanes);
     c.wanted.retain(|k| !patches.contains_key(k));
-    budget.run(
+    pass.run(
         c.wanted.iter().copied(),
         |key| match build(key, base, lanes, draw) {
             Some(b) => {

@@ -282,7 +282,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     }));
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let read = ctx
-        .budget
+        .pass
         .run(
             entering.iter(),
             |&(_, square, columns)| {

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <new>
 #include <optional>
+#include <variant>
 #include <span>
 
 #include "xpute/kit/alloc/slab.hpp"
@@ -52,7 +53,7 @@ struct State {
     Sys sys;
     // Each for the owner its packet named.
     Files<std::uint32_t, HANDLES> files;
-    abi::HandleTable<HANDLES> handles;
+    abi::Table<std::monostate, HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
 };
@@ -107,12 +108,12 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
         s.stream.record(arg, {});
         return {};
     case cmd::ISSUE: {
-        std::optional<std::uint32_t> h = s.handles.acquire();
+        std::optional<std::uint32_t> h = s.handles.insert({});
         if (!h) return {.error = Errno::enfile};
         return {.value = static_cast<std::int32_t>(*h)};
     }
     case cmd::RELEASE:
-        return s.handles.release(arg) ? Applied{} : Applied{.error = Errno::ebadf};
+        return s.handles.remove(arg) ? Applied{} : Applied{.error = Errno::ebadf};
     case cmd::USE:
         return s.handles.live(arg) ? Applied{} : Applied{.error = Errno::ebadf};
     case cmd::MARK:

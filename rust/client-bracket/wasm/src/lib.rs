@@ -25,5 +25,5 @@ xpute_guest::wasm_abi!(Plan { heap_at, stack_bytes: STACK_BYTES }, kernel);
 /// so it has no last words to say; the browser paces its frames, so every
 /// one is admitted (xpute_gpu::admit).
 fn kernel(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
-    pxl_kernel::door::intr(quota_ms, boot_info, None)
+    pxl_kernel::door::intr(quota_ms, boot_info, None, xpute_gpu::admit::every)
 }

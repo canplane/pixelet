@@ -1,11 +1,10 @@
 // @xpute/host/host.ts
 
 /**
- * A host mounted on a guest its platform opened: the directory at the offset
- * learned outside it, a doorbell whose every turn runs the guest's host
- * stream as it ends (a trapped turn's too, so its report is read before the
- * doorbell hears it stop), the system calls answered through the program's
- * `SysHost`, an open by SYS_OPENED, and the strobe on the guest's quantum.
+ * A host mounted on a guest its platform opened: the directory, a doorbell
+ * whose every turn runs the guest's host stream as it ends (a trapped turn's
+ * too, so its report is read before the doorbell hears it stop), the system
+ * calls answered through the program's `SysHost`, and the strobe.
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";

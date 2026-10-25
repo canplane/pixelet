@@ -86,31 +86,4 @@ inline void free(Block block) noexcept {
     heap().free(mem::at(block.at), block.bytes, BLOCK_ALIGN);
 }
 
-// For work that can still fail after taking the block; `keep` hands it on.
-class BlockGuard {
-  public:
-    static std::optional<BlockGuard> alloc(std::uint32_t bytes) noexcept {
-        std::optional<Block> b = xpute::alloc(bytes);
-        if (!b) return std::nullopt;
-        return BlockGuard(*b);
-    }
-
-    BlockGuard(BlockGuard &&o) noexcept : block_(std::exchange(o.block_, std::nullopt)) {}
-    BlockGuard(const BlockGuard &) = delete;
-    BlockGuard &operator=(const BlockGuard &) = delete;
-    BlockGuard &operator=(BlockGuard &&) = delete;
-    ~BlockGuard() {
-        if (block_) xpute::free(*block_);
-    }
-
-    const Block &block() const noexcept { return *block_; }
-
-    Block keep() noexcept { return *std::exchange(block_, std::nullopt); }
-
-  private:
-    explicit BlockGuard(Block block) noexcept : block_(block) {}
-
-    std::optional<Block> block_;
-};
-
 } // namespace xpute

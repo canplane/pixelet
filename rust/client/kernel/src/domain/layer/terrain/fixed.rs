@@ -7,7 +7,7 @@
 //! the eye's windows' levels over their squares as the GPU folded them,
 //! once; then the room a fill works in, once. The squares' ways' trees are
 //! the heap's, grown as they are taken (mirror.rs), and so are a landing
-//! square's records, the renderer's (pxl-render gpu/renderer.rs
+//! square's records, the renderer's (pxl-render gpu/ray/ground.rs
 //! `GroundBuffers::room`).
 
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};

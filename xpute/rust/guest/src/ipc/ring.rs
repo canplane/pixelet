@@ -63,8 +63,13 @@ impl Ring {
         }
     }
 
+    /// Where the ring's words begin in its memory.
+    pub fn at(&self) -> usize {
+        self.at
+    }
+
     #[allow(clippy::mut_from_ref)]
-    pub fn words(&self) -> &mut [u32] {
+    fn words(&self) -> &mut [u32] {
         // SAFETY: the memory outlives the ring, and each side writes only its
         // own words.
         unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), ring_bytes(self.cap) as usize / 4) }
@@ -156,12 +161,10 @@ impl Ring {
         Errno::OK
     }
 
-    /// Zeroes the slot from the packet's end to its padded end.
     fn pad(&self, start: usize, len: usize) {
         self.slots()[start + len..start + padded(len)].fill(0);
     }
 
-    /// Writes the tail's frame and moves the tail past it.
     fn publish(&self, tag: u32, cmd: u32, flags: u32, result: i32, packet_at: u32) {
         let w = self.words();
         let at = self.entry_at(w[TAIL as usize]) as usize;

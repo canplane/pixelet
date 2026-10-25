@@ -393,11 +393,7 @@ pub fn line_comments(doc: &[String], indent: &str) -> Vec<String> {
     doc.iter().map(|l| if l.is_empty() { format!("{indent}//") } else { format!("{indent}// {l}") }).collect()
 }
 
-pub const RS_CASING_NOTE: [&str; 3] = [
-    "// Casing here is the spec's and not Rust's: a name is spelled as the JSON",
-    "// spells it, so that one record is indexed by one name on both sides. To",
-    "// case them the way Rust would is to rename the protocol.",
-];
+pub const RS_CASING_NOTE: [&str; 1] = ["// Names as the spec spells them, so one record has one name on every side."];
 
 pub fn casing_note() -> Vec<String> {
     RS_CASING_NOTE.iter().map(|l| l.to_string()).collect()

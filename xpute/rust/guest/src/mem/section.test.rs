@@ -20,11 +20,7 @@ fn memory_ranges_laid_end_to_end_each_begin_on_the_unit_and_never_overlap() {
 
 #[test]
 fn memory_a_span_inside_a_section_is_reached_only_where_it_ends_by_the_section_s_end() {
-    let s = Section {
-        offset: 4 * PAGE,
-        bytes: 2 * PAGE,
-        align: PAGE,
-    };
+    let s = Section { offset: 4 * PAGE, bytes: 2 * PAGE };
     assert_eq!(s.end(), 6 * PAGE);
     assert_eq!(s.at(0, 2 * PAGE), Some(4 * PAGE), "the whole of it");
     assert_eq!(s.at(PAGE, PAGE), Some(5 * PAGE), "its last page");
@@ -35,20 +31,9 @@ fn memory_a_span_inside_a_section_is_reached_only_where_it_ends_by_the_section_s
 
 #[test]
 fn memory_a_range_laid_inside_a_section_ends_where_its_own_size_does() {
-    let s = Section {
-        offset: 8 * PAGE,
-        bytes: 4 * PAGE,
-        align: PAGE,
-    };
+    let s = Section { offset: 8 * PAGE, bytes: 4 * PAGE };
     let sizes = [PAGE + 1, PAGE];
     let second = s.nth(&sizes, PAGE, 1);
-    assert_eq!(
-        second,
-        Section {
-            offset: 10 * PAGE,
-            bytes: PAGE,
-            align: PAGE
-        }
-    );
+    assert_eq!(second, Section { offset: 10 * PAGE, bytes: PAGE });
     assert_eq!(second.at(0, PAGE + 1), None, "its own end, not the section's");
 }

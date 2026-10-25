@@ -22,6 +22,10 @@
 //! of its own fields, and is how a block past a slot is laid out. An enum's
 //! `unknown` is the member a number it does not give out reads as; an enum
 //! without one refuses the packet.
+//!
+//! A command taken out leaves its number in the Command table's `$retired`, with
+//! the name it had, and the generator refuses a number given twice or one
+//! retired, so a number an older side still sends never comes to mean another.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table

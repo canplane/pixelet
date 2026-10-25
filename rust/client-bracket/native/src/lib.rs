@@ -34,8 +34,7 @@ static ALLOC: Alloc = Alloc;
 // the linker put them) and its heap past `.fixed`, as the module's is — and
 // the doorbell and the memory the shell reads the directory and the rings
 // through, exported under xpute's names as `xpute_intr` and `xpute_mem`
-// (include/pxl_native.h): `guest()`, `boot_info()`, `xpute_intr` and
-// `xpute_mem` here.
+// (include/pxl_native.h), and `guest()` here.
 xpute_host::native_abi!(
     Plan {
         memory_bytes: PHONE_BYTES,
@@ -83,7 +82,7 @@ fn view() -> Memory<'static> {
 /// the turn's calls run on it after (surface.rs), and the frames it admits.
 fn turn(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     surface::before_turn(&mut view());
-    let wake = pxl_kernel::door::intr(quota_ms, boot_info, Some(last_words));
+    let wake = pxl_kernel::door::intr(quota_ms, boot_info, Some(last_words), surface::admit);
     surface::after_turn(&mut view());
     wake
 }

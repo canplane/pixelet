@@ -124,7 +124,7 @@ const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
 /// longest other kind, each freed as it is decoded; the ways' pool's
 /// mirror at its cap (domain/layer/terrain/mirror.rs, domain/layer/terrain/param.rs `WAYS_POOL_BYTES`),
 /// the renderer's rooms for the squares' records, every read's at a
-/// square's most (pxl-render gpu/renderer.rs `GroundBuffers::room`), and
+/// square's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (profiler/record.rs), each
 /// in the buddy's blocks, a power of two. Each is refused past its cap, and
 /// waits or stays absent where the heap refuses it. The rest of the heap

@@ -42,7 +42,7 @@ pub trait Pool: Lanes {
 }
 
 /// A pool in one lane, its heap words, then its data words: the GPU's
-/// buffer (pxl-render gpu/renderer.rs) and a bake's.
+/// buffer (pxl-render gpu/ray/ground.rs) and a bake's.
 pub struct Lane<'a>(pub &'a mut [u32]);
 
 impl Lanes for Lane<'_> {
@@ -105,7 +105,7 @@ impl Of {
 /// tree's: a bake's set fits it wherever the eye is (pxl-spec
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
 /// The pool starts smaller and grows as a build runs out
-/// (pxl-render gpu/renderer.rs `GroundBuffers::grow`), up to the kernel's
+/// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`), up to the kernel's
 /// cap (pxl-kernel domain/layer/terrain/param.rs `WAYS_POOL_BYTES`), no more than this; a build
 /// past what it holds is refused (`fits`), its square left absent. Family 0
 /// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
@@ -134,7 +134,7 @@ pub const NONE: u32 = u32::MAX;
 /// record each, its family's id and its eight heap and eight data words,
 /// which the read-back carries to the CPU's mirror. A build takes no more
 /// than its scratch holds (`cramped`), so neither runs past its room. The
-/// renderer starts it small and grows it (pxl-render gpu/renderer.rs
+/// renderer starts it small and grows it (pxl-render gpu/ray/ground.rs
 /// `GroundBuffers::grow_scratch`), every square's alike, so a frame's
 /// scratch is `window::HANDED` of them and each square's length is a
 /// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
@@ -174,7 +174,7 @@ pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_FAMILIES);
 /// scratch holds (`cramped`), short of the square's own most: no record
 /// kept and its root word 0, which the renderer reads as the scratch's to
 /// grow, as a count of none is the pool's, and `NONE` the square's own
-/// most (pxl-render gpu/renderer.rs `Short`). Past any count of a square's.
+/// most (pxl-render gpu/ray/ground.rs `Short`). Past any count of a square's.
 pub const CRAMPED: u32 = NONE - 1;
 const _: () = assert!(CRAMPED > SQUARE_FAMILIES, "no count of records is the mark");
 
@@ -391,7 +391,7 @@ const _: () = assert!(RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_FAMILIE
 
 /// A square's records in bytes at their most: the most a read-back
 /// copies off its scratch, which copies what its room holds
-/// (pxl-render gpu/renderer.rs `GroundBuffers::record_bytes`).
+/// (pxl-render gpu/ray/ground.rs `GroundBuffers::record_bytes`).
 pub const RECORDS_BYTES: u32 = RECORDS_WORDS * 4;
 
 /// A square's records (`RECORDS_WORDS`) laid into `pool` at the slots they

@@ -128,7 +128,7 @@ impl ways::tree::Runs for Scratch<'_> {
 /// Where the square a frame hands `k`-th has its scratch in the frame's
 /// `scratch`, `window::HANDED` squares' alike, each a `HANDED`th of its
 /// length (`ways::tree::scratch_words`), which the renderer grows
-/// (pxl-render gpu/renderer.rs `GroundBuffers::grow_scratch`): taken from
+/// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`): taken from
 /// the buffer, as the pool's free stack takes its own (pxl-shader `pop`).
 /// A one square's scratch is the first's.
 pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
@@ -354,7 +354,7 @@ pub fn level(ground: &mut [u32], base: u32, runs: &impl ways::tree::Runs, cell: 
 }
 
 /// A square filled whole, its passes in a GPU's order (pxl-render
-/// gpu/renderer.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
+/// gpu/ray/ground.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
 /// its looks, samples and lines as handed, its words laid here; `lane` its
 /// words, and `scratch` its scratch (`ways::tree::SCRATCH_WORDS`); its cells
 /// at `cell`, lying at `place` in its tile, its first cell `first`; its

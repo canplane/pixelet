@@ -29,7 +29,6 @@ struct Applied {
 // How full the rings ran since the stat was last taken (`Door::take_stat`):
 // each figure the most it reached.
 struct DoorStat {
-    // The completion ring's length.
     std::uint32_t cq_peak = 0;
     // The submission ring's length as a drain started: how close it came to full.
     std::uint32_t sq_peak = 0;
@@ -48,7 +47,6 @@ class Door {
     const Ring &sq() const noexcept { return sq_; }
     const Ring &cq() const noexcept { return cq_; }
 
-    // The peaks since the last take, which starts the next from zero.
     DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
     void post(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result) const noexcept {

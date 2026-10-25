@@ -74,8 +74,7 @@ fn a_second_boot_is_refused() {
 
 #[test]
 fn a_heap_off_a_page_or_past_the_memory_is_refused_before_the_boot() {
-    // A heap at 100: the slab aligns a block by its
-    // offset from the heap's first byte, so that byte must lie on a page.
+    // The slab aligns a block by its offset from the heap's first byte.
     assert!(std::panic::catch_unwind(|| native::boot(&plan(100))).is_err());
     assert!(std::panic::catch_unwind(|| native::boot(&plan(MEMORY_BYTES))).is_err());
     // Neither took the process's one boot.
@@ -84,8 +83,9 @@ fn a_heap_off_a_page_or_past_the_memory_is_refused_before_the_boot() {
 }
 
 #[test]
-fn the_guests_thread_reads_the_plans_clock() {
-    assert_eq!(guest().run(xpute_guest::clock::now), 42.0);
+fn the_first_intr_installs_the_plans_clock() {
+    let boot = || guest().boot_info(&plan(HEAP_AT));
+    assert_eq!(guest().run(move || native::intr(0.0, boot, |_, _| xpute_guest::clock::now())), 42.0);
 }
 
 #[test]

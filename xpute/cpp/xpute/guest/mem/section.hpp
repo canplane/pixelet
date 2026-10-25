@@ -36,8 +36,6 @@ constexpr std::uint32_t nth_at(std::uint32_t base, std::span<const std::uint32_t
 struct Section {
     std::uint32_t offset = 0;
     std::uint32_t bytes = 0;
-    // Rounded up, so the next section begins past where this one's content ends.
-    std::uint32_t align = 0;
 
     bool operator==(const Section &) const = default;
 
@@ -54,7 +52,7 @@ struct Section {
     // What is laid must fit the section.
     constexpr Section nth(std::span<const std::uint32_t> sizes, std::uint32_t unit, std::size_t n) const noexcept {
         if (span_of(sizes, unit) > bytes) bug(Errno::einval, span_of(sizes, unit), bytes);
-        return Section{nth_at(offset, sizes, unit, n), sizes[n], unit};
+        return Section{nth_at(offset, sizes, unit, n), sizes[n]};
     }
 };
 

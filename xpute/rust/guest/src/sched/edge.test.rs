@@ -5,7 +5,7 @@ use core::pin::pin;
 use core::task::{Context, RawWaker, RawWakerVTable};
 
 use super::*;
-use crate::clock::set_clock;
+use crate::clock;
 use crate::global::{serial, Global};
 
 thread_local! {
@@ -37,7 +37,7 @@ fn edge() -> &'static mut Edge<2> {
 #[test]
 fn edge_a_spent_quota_parks_the_task_until_the_next_rising_edge() {
     let _g = serial();
-    set_clock(clock);
+    clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
     EDGE.set(Edge::new());
     WOKEN.with(|w| w.set(0));
@@ -59,7 +59,7 @@ fn edge_a_spent_quota_parks_the_task_until_the_next_rising_edge() {
 #[test]
 fn edge_the_falling_edge_asks_for_the_earliest_wait_or_for_nothing() {
     let _g = serial();
-    set_clock(clock);
+    clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
     EDGE.set(Edge::new());
     edge().rise(4.0);
@@ -81,7 +81,7 @@ fn notify() -> &'static mut Notify {
 #[test]
 fn edge_a_waiting_task_is_woken_by_its_notice_and_asks_for_no_turn() {
     let _g = serial();
-    set_clock(clock);
+    clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
     EDGE.set(Edge::new());
     NOTIFY.set(Notify::new());

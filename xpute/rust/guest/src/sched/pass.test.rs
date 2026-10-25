@@ -1,12 +1,11 @@
-// xpute-guest/sched/frame_budget.test.rs
+// xpute-guest/sched/pass.test.rs
 
 use core::cell::Cell;
 
 use super::*;
-use crate::clock::set_clock;
+use crate::clock;
 
-// A clock the test moves, per thread: on the wall clock the assertions had to
-// be loose enough to survive a busy machine.
+// A clock the test moves, per thread.
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
 }
@@ -19,26 +18,23 @@ fn burn(ms: f64) {
     CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
 
-fn opts(budget_ms: f64) -> BudgetOptions {
-    set_clock(clock);
+/// `budget_ms` left from now, and `hard_budget_ms` never waived.
+fn pass(budget_ms: f64, hard_budget_ms: Option<f64>) -> Pass {
+    clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
-    BudgetOptions {
-        budget_ms,
-        hard_budget_ms: None,
-        max_steps: None,
-    }
+    Pass::new(budget_ms, 0.0, hard_budget_ms.map_or(f64::INFINITY, |h| h - budget_ms))
 }
 
 #[test]
-fn run_under_budget_runs_everything_when_the_budget_is_ample() {
+fn runs_everything_when_the_budget_is_ample() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(1000.0, None).run(
         [1, 2, 3],
         |n| {
             seen.push(n);
             true
         },
-        opts(1000.0),
+        None,
     );
     assert_eq!(seen, [1, 2, 3]);
     assert_eq!(stats.ran, 3);
@@ -46,16 +42,16 @@ fn run_under_budget_runs_everything_when_the_budget_is_ample() {
 }
 
 #[test]
-fn run_under_budget_stops_once_the_time_budget_is_spent() {
+fn stops_once_the_time_budget_is_spent() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(10.0, None).run(
         [1, 2, 3, 4, 5],
         |n| {
             seen.push(n);
             burn(6.0);
             true
         },
-        opts(10.0),
+        None,
     );
     assert_eq!(seen, [1, 2]);
     assert!(stats.stopped_early);
@@ -63,16 +59,16 @@ fn run_under_budget_stops_once_the_time_budget_is_spent() {
 }
 
 #[test]
-fn run_under_budget_the_first_working_step_always_runs_even_past_budget() {
+fn the_first_working_step_always_runs_even_past_budget() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(0.0, None).run(
         [1, 2, 3],
         |n| {
             seen.push(n);
             burn(5.0);
             true
         },
-        opts(0.0),
+        None,
     );
     assert_eq!(seen, [1]);
     assert_eq!(stats.ran, 1);
@@ -80,15 +76,15 @@ fn run_under_budget_the_first_working_step_always_runs_even_past_budget() {
 }
 
 #[test]
-fn run_under_budget_max_steps_caps_completed_work() {
+fn max_steps_caps_completed_work() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(1000.0, None).run(
         [1, 2, 3, 4, 5],
         |n| {
             seen.push(n);
             true
         },
-        BudgetOptions { max_steps: Some(2), ..opts(1000.0) },
+        Some(2),
     );
     assert_eq!(seen, [1, 2]);
     assert_eq!(stats.ran, 2);
@@ -96,15 +92,15 @@ fn run_under_budget_max_steps_caps_completed_work() {
 }
 
 #[test]
-fn run_under_budget_a_no_op_step_neither_counts_nor_arms_the_guard() {
+fn a_no_op_step_neither_counts_nor_arms_the_guard() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(0.0, None).run(
         [1, 2, 3, 4],
         |n| {
             seen.push(n);
             n == 4
         },
-        BudgetOptions { max_steps: Some(1), ..opts(0.0) },
+        Some(1),
     );
     assert_eq!(seen, [1, 2, 3, 4]);
     assert_eq!(stats.ran, 1);
@@ -113,19 +109,16 @@ fn run_under_budget_a_no_op_step_neither_counts_nor_arms_the_guard() {
 }
 
 #[test]
-fn run_under_budget_hard_budget_ms_bounds_a_pass_of_expensive_no_ops() {
+fn the_hard_budget_bounds_a_pass_of_expensive_no_ops() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(4.0, Some(12.0)).run(
         0..40,
         |n| {
             seen.push(n);
             burn(3.0);
             false
         },
-        BudgetOptions {
-            hard_budget_ms: Some(12.0),
-            ..opts(4.0)
-        },
+        None,
     );
     assert_eq!(stats.ran, 0);
     assert!(stats.stopped_early);
@@ -134,35 +127,32 @@ fn run_under_budget_hard_budget_ms_bounds_a_pass_of_expensive_no_ops() {
 }
 
 #[test]
-fn run_under_budget_without_a_ceiling_expensive_no_ops_still_walk_the_whole_list() {
+fn without_a_ceiling_expensive_no_ops_still_walk_the_whole_list() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(1.0, None).run(
         0..6,
         |n| {
             seen.push(n);
             burn(3.0);
             false
         },
-        opts(1.0),
+        None,
     );
     assert_eq!(seen.len(), 6);
     assert!(!stats.stopped_early);
 }
 
 #[test]
-fn run_under_budget_the_first_item_is_attempted_even_under_a_zero_ceiling() {
+fn the_first_item_is_attempted_even_under_a_zero_ceiling() {
     let mut seen = Vec::new();
-    let stats = run_under_budget(
+    let stats = pass(0.0, Some(0.0)).run(
         [1, 2, 3],
         |n| {
             seen.push(n);
             burn(2.0);
             true
         },
-        BudgetOptions {
-            hard_budget_ms: Some(0.0),
-            ..opts(0.0)
-        },
+        None,
     );
     assert_eq!(seen, [1]);
     assert_eq!(stats.ran, 1);

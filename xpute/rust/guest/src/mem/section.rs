@@ -16,7 +16,6 @@ const _: () = assert!(PAGE_BYTES.is_power_of_two());
 pub struct Section {
     pub offset: u32,
     pub bytes: u32,
-    pub align: u32,
 }
 
 impl Section {
@@ -42,7 +41,6 @@ impl Section {
         Section {
             offset: nth_at(self.offset, sizes, unit, n),
             bytes: sizes[n],
-            align: unit,
         }
     }
 }

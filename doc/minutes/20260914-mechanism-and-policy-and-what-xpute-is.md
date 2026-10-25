@@ -74,6 +74,9 @@ pass                one list of steps within a phase's share
                                                          sched/frame_budget
 ```
 
+> `sched/frame_budget` is since `sched/pass` (`Pass`), the one word for the
+> mechanism.
+
 > Since split by end: the two are no longer one file in each language. The
 > host's half is TypeScript (`xpute/ts/host/src/sched`, the quantum and the
 > strobe) and the guest's is Rust and C++ (`xpute/rust/guest/src/sched`,

@@ -23,9 +23,9 @@ impl Core {
 
 static CORE: OnceLock<Core> = OnceLock::new();
 
-/// Maps the memory, once a process. A mapping lies on the system's page,
-/// which is all the heap aligns to.
-pub fn reserve(bytes: usize, heap_at: usize) -> Core {
+/// Once a process. A mapping lies on the system's page, which is all the
+/// heap aligns to.
+pub fn map(bytes: usize, heap_at: usize) -> Core {
     // SAFETY: an anonymous private mapping, which touches nothing that exists.
     let p = unsafe { libc::mmap(core::ptr::null_mut(), bytes, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_ANON, -1, 0) };
     assert!(p != libc::MAP_FAILED, "the system would not map a guest's {bytes} bytes");

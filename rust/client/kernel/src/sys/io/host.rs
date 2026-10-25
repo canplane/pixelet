@@ -6,6 +6,8 @@
 // its budget mid-turn.
 
 use core::panic::Location;
+use xpute_gpu::admit::Admit;
+use xpute_guest::entry::BootInfo;
 use xpute_guest::mem::heap::HeapStat;
 
 use xpute_guest::ipc::stream::WORD;
@@ -119,14 +121,34 @@ pub fn wall_now() -> f64 {
     *WALL_MS.get(|| 0.0)
 }
 
-static HEAP: Global<fn() -> HeapStat> = Global::new();
+/// What the bracket's form handed the kernel as it booted (door.rs `boot`).
+static BOOT: Global<Option<BootInfo>> = Global::new();
 
-fn no_heap() -> HeapStat {
-    HeapStat::default()
+pub fn set_boot(boot: BootInfo) {
+    BOOT.set(Some(boot));
 }
 
-pub fn set_heap_stat(stat: fn() -> HeapStat) {
-    HEAP.set(stat);
+/// A test's heap reading, as a bracket would hand it.
+#[cfg(test)]
+pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
+    set_boot(BootInfo {
+        given: 0,
+        data_end: 0,
+        clock: || 0.0,
+        heap_stat,
+    });
+}
+
+/// Whether the GPU's host takes a frame now (xpute_gpu::admit), as the
+/// bracket hands it with the entry; every frame until it has.
+static ADMIT: Global<Admit> = Global::new();
+
+pub fn set_admit(admit: Admit) {
+    ADMIT.set(admit);
+}
+
+pub fn admit() -> Admit {
+    *ADMIT.get(|| xpute_gpu::admit::every)
 }
 
 /// Numbers only: formatting is the bracket's, so a module that reports
@@ -151,7 +173,7 @@ pub fn last_words(stop: Stop<'_>) {
 }
 
 pub fn heap_stat() -> HeapStat {
-    (HEAP.get(|| no_heap))()
+    BOOT.get(|| None).map_or_else(HeapStat::default, |b| (b.heap_stat)())
 }
 
 /// A request refused room, by the heap or by the body slots (sys/io/body.rs),

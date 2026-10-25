@@ -4,8 +4,9 @@
 //! order against one budget, the host's quota counted from the rising edge.
 //! The interaction phase is unbudgeted and must stay O(1). The visible phase
 //! may not take `content_share`, or content starves while a load keeps it busy.
+//! A step keeps its own state.
 
-use super::frame_budget::FrameBudget;
+use super::pass::Pass;
 use crate::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -27,17 +28,16 @@ pub struct TickPolicy {
     pub content_share: f64,
 }
 
-pub struct TickContext<'a, S> {
-    pub state: &'a mut S,
+pub struct TickContext {
     pub delta: f64,
-    pub budget: FrameBudget,
+    pub pass: Pass,
     pub phase_ms: [f64; PHASE_COUNT],
     invalidated: bool,
     offs: [u32; OFFS_MAX],
     off_len: usize,
 }
 
-impl<S> TickContext<'_, S> {
+impl TickContext {
     /// The guest is strobed only when something asked for a turn.
     pub fn invalidate(&mut self) {
         self.invalidated = true;
@@ -50,7 +50,7 @@ impl<S> TickContext<'_, S> {
     }
 }
 
-pub type TickStep<S> = fn(&mut TickContext<S>);
+pub type TickStep = fn(&mut TickContext);
 
 /// Cumulative until reset; registrations sharing a phase and name share a row.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -82,24 +82,17 @@ pub struct TickReport {
     pub invalidated: bool,
 }
 
-struct Registered<S> {
+#[derive(Clone, Copy)]
+struct Registered {
     id: u32,
     phase: Phase,
-    step: TickStep<S>,
+    step: TickStep,
     name: u32,
 }
 
-impl<S> Clone for Registered<S> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<S> Copy for Registered<S> {}
-
-pub struct Tick<S, const N: usize> {
+pub struct Tick<const N: usize> {
     policy: TickPolicy,
-    registry: [Option<Registered<S>>; N],
+    registry: [Option<Registered>; N],
     len: usize,
     next_id: u32,
     stats: [StepStat; N],
@@ -108,7 +101,7 @@ pub struct Tick<S, const N: usize> {
     last_report: TickReport,
 }
 
-impl<S, const N: usize> Tick<S, N> {
+impl<const N: usize> Tick<N> {
     pub fn new(policy: TickPolicy) -> Self {
         Tick {
             policy,
@@ -124,7 +117,7 @@ impl<S, const N: usize> Tick<S, N> {
     }
 
     /// `name` is the caller's number the step's time is reported under.
-    pub fn on_tick(&mut self, phase: Phase, step: TickStep<S>, name: u32) -> u32 {
+    pub fn on_tick(&mut self, phase: Phase, step: TickStep, name: u32) -> u32 {
         xpute_kit::ensure!(self.len < N, ENOSPC, N);
         let id = self.next_id;
         self.next_id += 1;
@@ -179,7 +172,7 @@ impl<S, const N: usize> Tick<S, N> {
         stat.max_ms = stat.max_ms.max(ms);
     }
 
-    fn run_phase(&mut self, phase: Phase, ctx: &mut TickContext<S>) {
+    fn run_phase(&mut self, phase: Phase, ctx: &mut TickContext) {
         let start = now();
         // Index loop rather than an iterator: a step may unregister itself or a
         // sibling, and a snapshot would run something that just asked not to be.
@@ -207,12 +200,11 @@ impl<S, const N: usize> Tick<S, N> {
         ctx.phase_ms[phase as usize] = now() - start;
     }
 
-    pub fn run(&mut self, state: &mut S, delta: f64, quota_ms: f64, t0: f64) -> TickReport {
+    pub fn run(&mut self, delta: f64, quota_ms: f64, t0: f64) -> TickReport {
         let start = now();
         let mut ctx = TickContext {
-            state,
             delta,
-            budget: FrameBudget::new(quota_ms, t0, self.policy.hard_slack_ms),
+            pass: Pass::new(quota_ms, t0, self.policy.hard_slack_ms),
             phase_ms: [0.0; PHASE_COUNT],
             invalidated: false,
             offs: [0; OFFS_MAX],
@@ -220,15 +212,15 @@ impl<S, const N: usize> Tick<S, N> {
         };
 
         self.run_phase(Phase::interaction, &mut ctx);
-        ctx.budget.reserve_ms = ctx.budget.total_ms * self.policy.content_share;
+        ctx.pass.reserve_ms = ctx.pass.total_ms * self.policy.content_share;
         self.run_phase(Phase::visible, &mut ctx);
-        ctx.budget.reserve_ms = 0.0;
+        ctx.pass.reserve_ms = 0.0;
         for phase in [Phase::content, Phase::cosmetic, Phase::report] {
             self.run_phase(phase, &mut ctx);
         }
 
         self.last_report = TickReport {
-            budget_ms: ctx.budget.total_ms,
+            budget_ms: ctx.pass.total_ms,
             phase_ms: ctx.phase_ms,
             total_ms: now() - start,
             invalidated: ctx.invalidated,

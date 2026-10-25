@@ -690,9 +690,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             rs.push(String::new());
             rs.extend(casing_note());
             rs.extend([
-                "//".to_string(),
-                "// `dead_code` because a table is generated whole: an entry earns its".into(),
-                "// place in the JSON, not by having a caller in this crate.".into(),
+                "// A table is generated whole, whether or not this crate calls an entry.".to_string(),
                 format!(
                     "#![allow(non_upper_case_globals, non_snake_case, {}dead_code)]",
                     if matches!(d.enums, Enums::None) { "" } else { "non_camel_case_types, " }

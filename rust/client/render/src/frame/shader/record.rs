@@ -58,7 +58,7 @@ pub const PIPELINE_IMPOSTOR_BAKE: u32 = 26;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 27;
 /// The markers' regions, numbered, into a target of their own (pass/marker.rs).
 pub const PIPELINE_MARKER_REGION: u32 = 28;
-/// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
+/// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 29;
 /// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
 pub const PIPELINE_SCREEN_RAY: u32 = 30;

@@ -8,15 +8,13 @@
 mod program {
     use xpute_host::native::{self, Alloc, BootInfo, Plan};
 
-    /// The program's one allocator: what the guest's thread asks for lies in
-    /// the guest's memory, what any other thread asks for is the system's.
+    /// What the guest's thread asks for lies in its memory; any other
+    /// thread's is the system's.
     #[global_allocator]
     static ALLOC: Alloc = Alloc;
 
     const MEMORY_BYTES: u32 = 16 << 20;
 
-    // The guest booted with the program's numbers on the first call, and its
-    // C ABI under xpute's names: `xpute_intr` and `xpute_mem`.
     xpute_host::native_abi!(
         Plan {
             memory_bytes: MEMORY_BYTES,
@@ -29,9 +27,7 @@ mod program {
         turn
     );
 
-    /// The guest's own entry, as its crate exports it: a turn of `quota_ms`,
-    /// with what the host hands it, and when it wants the next (negative for
-    /// none).
+    /// The guest's entry (xpute_guest::entry `Entry`).
     fn turn(quota_ms: f64, boot: fn() -> BootInfo) -> f64 {
         assert_eq!(boot().given, MEMORY_BYTES);
         let held = vec![quota_ms; 8];

@@ -2230,6 +2230,7 @@ name = "pxl-wasm"
 version = "0.0.0"
 dependencies = [
  "pxl-kernel",
+ "xpute-gpu",
  "xpute-guest",
  "xpute-kit",
 ]

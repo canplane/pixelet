@@ -3,29 +3,35 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 0da4025bde52e52a732ab553de9f9f3311f9c1c1bcd3a8252f0d4bb834c7270a
-struct type_4 {
+// Inputs: 2ac345b693c0ad77ded99a8d2600e293e555c42c2778623d9920034def3d82de
+struct type_7 {
     member: array<u32>,
 }
 
-struct type_10 {
-    member: u32,
-    member_1: u32,
+struct type_12 {
+    member: array<vec4<i32>>,
 }
 
-struct type_14 {
-    member: array<vec4<i32>>,
+struct type_16 {
+    member: u32,
+    member_1: u32,
+    member_2: u32,
 }
 
 struct type_17 {
     member: u32,
+    member_1: u32,
+}
+
+struct type_20 {
+    member: u32,
     member_1: array<u32, 36>,
 }
 
-struct type_21 {
+struct type_23 {
     member: u32,
     member_1: u32,
-    member_2: array<type_17, 2>,
+    member_2: array<type_20, 2>,
     member_3: u32,
     member_4: array<u32, 8>,
     member_5: i32,
@@ -33,14 +39,8 @@ struct type_21 {
     member_7: array<array<u32, 3>, 9>,
 }
 
-struct type_23 {
-    member: array<type_21>,
-}
-
-struct type_26 {
-    member: u32,
-    member_1: u32,
-    member_2: u32,
+struct type_25 {
+    member: array<type_23>,
 }
 
 struct type_29 {
@@ -50,17 +50,17 @@ struct type_29 {
 var<private> global: vec3<u32>;
 var<private> global_1: vec3<u32>;
 @group(0) @binding(5)
-var<storage> global_2: type_14;
+var<storage> global_2: type_12;
 @group(0) @binding(0)
-var<storage> global_3: type_4;
+var<storage> global_3: type_7;
 @group(0) @binding(1)
-var<storage> global_4: type_23;
+var<storage> global_4: type_25;
 @group(0) @binding(2)
-var<storage> global_5: type_4;
+var<storage> global_5: type_7;
 @group(0) @binding(3)
 var<storage, read_write> global_6: type_29;
 @group(0) @binding(4)
-var<storage, read_write> global_7: type_4;
+var<storage, read_write> global_7: type_7;
 
 fn function_() {
     var phi_296_: u32;
@@ -74,9 +74,9 @@ fn function_() {
     var phi_564_: bool;
     var phi_565_: bool;
     var phi_268_: bool;
-    var phi_310_: type_10;
+    var phi_310_: type_17;
     var phi_315_: u32;
-    var phi_587_: type_26;
+    var phi_587_: type_16;
     var phi_398_: array<u32, 3>;
     var phi_316_: u32;
     var phi_602_: bool;
@@ -150,7 +150,7 @@ fn function_() {
                     phi_268_ = select(_e121, false, _e123);
                 }
                 let _e126 = phi_268_;
-                phi_310_ = type_10((_e42.x * 2070u), select(0u, select(2070u, _e89, (_e89 < 2070u)), _e126));
+                phi_310_ = type_17((_e42.x * 2070u), select(0u, select(2070u, _e89, (_e89 < 2070u)), _e126));
             } else {
                 let _e59 = ((_e42.x - 768u) * 64u);
                 if (7951872u < _e49) {
@@ -166,7 +166,7 @@ fn function_() {
                     phi_302_ = 0u;
                 }
                 let _e69 = phi_302_;
-                phi_310_ = type_10((1589760u + _e59), select(64u, _e69, (_e69 < 64u)));
+                phi_310_ = type_17((1589760u + _e59), select(64u, _e69, (_e69 < 64u)));
             }
             let _e133 = phi_310_;
             phi_315_ = _e43.x;
@@ -176,10 +176,10 @@ fn function_() {
                 if _e139 {
                     let _e140 = (_e133.member + _e138);
                     if (_e140 < 1589760u) {
-                        phi_587_ = type_26((3072u + (_e140 * 5u)), ((_e140 / 2070u) * 4u), (_e140 % 2070u));
+                        phi_587_ = type_16((3072u + (_e140 * 5u)), ((_e140 / 2070u) * 4u), (_e140 % 2070u));
                     } else {
                         let _e142 = (_e140 - 1589760u);
-                        phi_587_ = type_26((7951876u + (_e142 * 5u)), 7951872u, _e142);
+                        phi_587_ = type_16((7951876u + (_e142 * 5u)), 7951872u, _e142);
                     }
                     let _e153 = phi_587_;
                     let _e155 = (_e153.member + 4u);

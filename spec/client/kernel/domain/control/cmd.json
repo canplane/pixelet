@@ -19,7 +19,11 @@
     "or a packed array where the item is a number. A record crosses as a branch",
     "of its own fields, and is how a block past a slot is laid out. An enum's",
     "`unknown` is the member a number it does not give out reads as; an enum",
-    "without one refuses the packet."
+    "without one refuses the packet.",
+    "",
+    "A command taken out leaves its number in the Command table's `$retired`, with",
+    "the name it had, and the generator refuses a number given twice or one",
+    "retired, so a number an older side still sends never comes to mean another."
   ],
   "base": "xpute/spec/abi/cmd.json",
   "extern": [
@@ -653,6 +657,28 @@
     {
       "name": "Command",
       "format": "hex4",
+      "$retired": [
+        {
+          "name": "SENSOR_ERROR",
+          "value": 4612
+        },
+        {
+          "name": "SENSOR_ENABLE_LOCATION",
+          "value": 4615
+        },
+        {
+          "name": "SENSOR_OPEN",
+          "value": 4616
+        },
+        {
+          "name": "SENSOR_CLOSE",
+          "value": 4617
+        },
+        {
+          "name": "SENSOR_ORIENTATION_LOST",
+          "value": 4618
+        }
+      ],
       "entries": [
         {
           "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"

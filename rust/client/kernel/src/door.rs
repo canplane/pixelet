@@ -19,13 +19,14 @@ use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
 use crate::sys::io::host::LastWords;
 use crate::sys::mem::section;
+use xpute_gpu::admit::Admit;
 use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::{off_marked_thread, Global};
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::{Door, DoorStat};
 use xpute_guest::ipc::ring::Ring;
-use xpute_guest::mem::{self, off_of, off_of_slice};
+use xpute_guest::mem::{self, off_of_slice};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::PacketWriter;
@@ -72,7 +73,7 @@ fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
 }
 
 fn ring_address(ring: &Ring) -> u32 {
-    off_of(ring.words().as_ptr()) as u32
+    ring.at() as u32
 }
 
 static STATE: Global<State> = Global::new();
@@ -113,12 +114,10 @@ fn host_attached(s: &mut State) {
 }
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
-/// Whether a frame can be taken now is the GPU host's (xpute_gpu::admit),
-/// installed by a bracket that runs one.
-fn boot(b: &BootInfo, last_words: Option<LastWords>) {
-    xpute_guest::clock::set_clock(b.clock);
-    crate::sys::io::host::set_heap_stat(b.heap_stat);
+fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
+    crate::sys::io::host::set_boot(b);
     crate::sys::io::host::set_last_words(last_words);
+    crate::sys::io::host::set_admit(admit);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its
     // location. Both are process-wide, and on a device the app's other
@@ -153,7 +152,7 @@ fn boot(b: &BootInfo, last_words: Option<LastWords>) {
             crate::sys::io::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
     }));
-    let gpu_stream = lay_out(b);
+    let gpu_stream = lay_out(&b);
     crate::turn::boot();
     let [margin, batch, settle] = quantum_entries(&crate::sys::sched::tick::QUANTUM);
     let entries: [Entry; DIRECTORY_ENTRIES] = [
@@ -193,17 +192,17 @@ fn lay_out(b: &BootInfo) -> u32 {
     }
 }
 
-/// The entry (xpute_guest::entry `Entry`, with the bracket's last words): a
-/// turn applies waiting submissions, polls tasks on the quota, and returns
-/// when to wake next, in ms (0 for the next frame, NO_WAKE for none). The
-/// first turn boots, on what its host's form hands it (`boot_info`).
-/// `last_words` is where a bracket whose process dies with the kernel
-/// reports why: no host is left to run the record, and a panic's text is not
-/// in its numbers. None where the host outlives the kernel (a page).
-pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastWords>) -> f64 {
+/// The entry (xpute_guest::entry `Entry`, with the bracket's last words and
+/// its GPU host's admission): a turn applies waiting submissions, polls tasks
+/// on the quota, and returns when to wake next, in ms (0 for the next frame,
+/// NO_WAKE for none). The first turn boots, on what its host's form hands it
+/// (`boot_info`). `last_words` is where a bracket whose process dies with the
+/// kernel reports why: no host is left to run the record, and a panic's text
+/// is not in its numbers. None where the host outlives the kernel (a page).
+pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastWords>, admit: Admit) -> f64 {
     use crate::turn::{take_world_drawn, world_frame_waiting};
     if section::map().is_none() {
-        boot(&boot_info(), last_words);
+        boot(boot_info(), last_words, admit);
     }
     let s = state();
     let rise = now();

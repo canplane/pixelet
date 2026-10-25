@@ -67,7 +67,6 @@ void set(std::uintptr_t base, std::uintptr_t bytes = UINTPTR_MAX) noexcept;
 
 Memory core() noexcept;
 
-// Over `core`, for a program reading its own data.
 inline std::uint8_t *at(std::uint32_t off) noexcept {
     return core().at(off);
 }

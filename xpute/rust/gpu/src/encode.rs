@@ -9,7 +9,7 @@
 //! words, then into the room the stream reserved for them, so nothing is
 //! built on the heap first.
 
-use xpute_guest::abi::handle::{handle_slot, HandleTable};
+use xpute_guest::abi::handle::Table;
 use xpute_guest::ipc::stream::{Stream, WORD};
 use xpute_guest::mem::off_of_slice;
 
@@ -87,8 +87,7 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
     true
 }
 
-/// The bytes a record of `op` whose words `put` gives takes of a stream, as
-/// its room is counted: measured as `emit` measures it, its op and count with.
+/// What a record of `op` takes of a stream's room, measured as `emit` writes it.
 fn measured(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
@@ -358,19 +357,15 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
 /// pass, a surface's current texture).
 pub const OBJECT_OPS: usize = op::DESTROY as usize;
 
-/// The calls, over a table of `N` handles. All-zero bytes are one that has
-/// made nothing, as its table's are an empty table.
+/// The calls, over a table of `N` handles, each holding the op that made it
+/// where what it made lasts, 0 otherwise. All-zero bytes have made nothing.
 pub struct Gpu<const N: usize> {
-    handles: HandleTable<N>,
-    /// The op that made each slot's live object, where it lasts; 0 otherwise.
-    made_by: [u8; N],
+    handles: Table<u8, N>,
     /// The live objects by the op that made them, slot `op`.
     objects: [u32; OBJECT_OPS],
 }
 
-/// Slot `id`'s object let go from the count of what made it.
-fn forget(made_by: &mut [u8], objects: &mut [u32; OBJECT_OPS], id: Id) {
-    let op = core::mem::take(&mut made_by[handle_slot(id) as usize]);
+fn forget(objects: &mut [u32; OBJECT_OPS], op: u8) {
     if op != 0 {
         objects[op as usize] -= 1;
     }
@@ -385,8 +380,7 @@ impl<const N: usize> Default for Gpu<N> {
 impl<const N: usize> Gpu<N> {
     pub const fn new() -> Self {
         Gpu {
-            handles: HandleTable::new(),
-            made_by: [0; N],
+            handles: Table::new(),
             objects: [0; OBJECT_OPS],
         }
     }
@@ -394,16 +388,16 @@ impl<const N: usize> Gpu<N> {
     /// An object's handle, written by `op` as the record's first word; none
     /// where the table is full or the record did not fit.
     fn make(&mut self, stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> Option<Id> {
-        let id = self.handles.acquire()?;
+        let lasts = (op as usize) < OBJECT_OPS;
+        let id = self.handles.insert(if lasts { op as u8 } else { 0 })?;
         if !emit(stream, op, &|s| {
             s.word(id);
             put(s);
         }) {
-            self.handles.release(id);
+            self.handles.remove(id);
             return None;
         }
-        if (op as usize) < OBJECT_OPS {
-            self.made_by[handle_slot(id) as usize] = op as u8;
+        if lasts {
             self.objects[op as usize] += 1;
         }
         Some(id)
@@ -411,11 +405,11 @@ impl<const N: usize> Gpu<N> {
 
     /// `id` let go, where it was live.
     fn release(&mut self, id: Id) -> bool {
-        let live = self.handles.release(id);
-        if live {
-            forget(&mut self.made_by, &mut self.objects, id);
+        let made_by = self.handles.remove(id);
+        if let Some(op) = made_by {
+            forget(&mut self.objects, op);
         }
-        live
+        made_by.is_some()
     }
 
     pub fn buffer(&mut self, stream: &mut Stream, d: &BufferDescriptor) -> Option<Id> {
@@ -663,23 +657,21 @@ impl<const N: usize> Gpu<N> {
     pub fn commit(&mut self, stream: &mut Stream) -> bool {
         let fit = stream.commit();
         if !fit {
-            let (made_by, objects) = (&mut self.made_by, &mut self.objects);
-            self.handles.rollback(|id| forget(made_by, objects, id));
+            let objects = &mut self.objects;
+            self.handles.rollback(|_, op| forget(objects, op));
         }
         fit
     }
 
-    /// Ends a pass: the host lets it go with the record, and its handle is
-    /// free again, whether or not the record was written, since one dropped
-    /// with its transaction left nothing on the host.
+    /// Ends a pass. Its handle is free whether or not the record was written:
+    /// one dropped with its transaction left nothing on the host.
     pub fn end(&mut self, stream: &mut Stream, pass: Id) -> bool {
         let sent = emit(stream, op::END, &|s| s.word(pass));
         self.release(pass);
         sent
     }
 
-    /// Each encoder finished and submitted, in order, and let go as `end`
-    /// lets a pass go.
+    /// Each encoder finished, submitted in order and let go, as `end` lets a pass go.
     pub fn submit(&mut self, stream: &mut Stream, encoders: &[Id]) -> bool {
         let sent = emit(stream, op::SUBMIT, &|s| {
             s.word(encoders.len() as u32);
@@ -691,20 +683,17 @@ impl<const N: usize> Gpu<N> {
         sent
     }
 
-    /// Lets the object go: the host destroys it, and its handle is free.
     pub fn destroy(&mut self, stream: &mut Stream, id: Id) {
         if self.release(id) {
             emit(stream, op::DESTROY, &|s| s.word(id));
         }
     }
 
-    /// Whether `id` is an object this encoder made and has not let go.
     pub fn live(&self, id: Id) -> bool {
         self.handles.live(id)
     }
 
-    /// The objects this encoder made and has not let go, by the op that made
-    /// them (slot `op`, below DESTROY).
+    /// The live objects by the op that made them (slot `op`, below DESTROY).
     pub fn objects(&self) -> &[u32; OBJECT_OPS] {
         &self.objects
     }
@@ -728,8 +717,8 @@ pub mod call {
         emit(stream, op::WRITE_BUFFER, &|s| buffer_write(s, buffer, offset, bytes))
     }
 
-    /// The bytes `write_buffer` of `bytes` takes of a stream, which
-    /// `Stream::fits` asks of its room: a caller writing several asks once.
+    /// What `write_buffer` takes of a stream's room (`Stream::fits`), so a
+    /// caller writing several asks once.
     pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
         measured(&|s| buffer_write(s, 0, 0, bytes))
     }
@@ -754,9 +743,8 @@ pub mod call {
         })
     }
 
-    /// The bytes `write_texture` of `bytes` takes of a stream, as
-    /// `write_buffer_bytes` says a buffer's: its words are the same whatever
-    /// the place, the layout and the size.
+    /// As `write_buffer_bytes`: the words are the same whatever the place,
+    /// layout and size.
     pub fn write_texture_bytes(bytes: &[u8]) -> usize {
         let place = TexelCopyTexture {
             texture: 0,
@@ -888,10 +876,9 @@ pub mod call {
         words(stream, op::DISPATCH_INDIRECT, &[pass, buffer, offset])
     }
 
-    /// `buffer`, made MAP_READ | COPY_DST and copied into on an encoder
-    /// submitted before, mapped for reading: `into` the bytes' place in the
-    /// guest's memory, `word` the mapping's own, where `ticket | DONE` lands
-    /// once they are there and the buffer is unmapped again.
+    /// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted
+    /// before) read into the guest's memory at `into`; `ticket | DONE` lands
+    /// at `word` once the bytes are there and the buffer is unmapped.
     pub fn map_async(stream: &mut Stream, buffer: Id, offset: u32, into: &mut [u8], word: &mut u32, ticket: u32) -> bool {
         *word = ticket;
         words(

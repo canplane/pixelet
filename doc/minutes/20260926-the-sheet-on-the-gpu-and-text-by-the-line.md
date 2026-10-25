@@ -79,5 +79,5 @@ the boundary's shape.
 
 Built on both targets. Images decode where the device is: the browser's
 `createImageBitmap` on a page, the `png` and `image-webp` crates on a device
-(xpute-gpu `image.rs`). The sheet pass and the platform's lines draw every
+(xpute-gpu `host/image.rs`). The sheet pass and the platform's lines draw every
 badge and bubble on the page, the simulator and an iPhone.

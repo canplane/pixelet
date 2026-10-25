@@ -145,27 +145,19 @@ export class GpuHost {
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
 
-  /**
-   * `wake` asks the host's loop for a turn: a completion written into the
-   * guest's memory between turns is read only by a turn, so it asks for one,
-   * as an executor's pender asks for a poll (embassy-executor's `Pender`).
-   */
+  /** `wake` asks the host's loop for a turn: a completion written between
+   * turns is read only by a turn. */
   constructor(private readonly device: GPUDevice, private readonly memory: () => ArrayBufferLike, private readonly wake: () => void) {
-    // Its device's loss is its own to hear: the guest is told in its block,
-    // and a turn asked to read it. Nothing here destroys the device.
+    // The guest is told of the loss in its block; nothing here destroys the device.
     device.lost.then(() => {
       this.lost();
       this.wake();
     });
   }
 
-  /**
-   * The canvas's `context` for the guest's surface `handle`
-   * (`slot | generation << 16`, the contract's), which the guest names by its
-   * slot in CONFIGURE, RESIZE and CURRENT. It takes the slot from whatever
-   * was bound there, whose context is let go, unless a newer handle has bound
-   * it since: whether it was bound.
-   */
+  /** The canvas's `context` for the guest's surface `handle`, named by its
+   * slot in CONFIGURE, RESIZE and CURRENT; refused where a newer handle has
+   * bound the slot since. */
   bind(handle: u32, context: GPUCanvasContext): boolean {
     const slot = handle_slot(handle);
     const seen = this.seen.get(slot);
@@ -177,11 +169,8 @@ export class GpuHost {
     return true;
   }
 
-  /**
-   * Lets `handle`'s context go, if it is still the one bound under its slot:
-   * whether it was. An older handle of the slot lets nothing go, so a canvas
-   * that goes after a newer one took its slot does not unbind the newer.
-   */
+  /** Lets `handle`'s context go where it is still the one bound under its
+   * slot: an older handle unbinds no newer one. */
   unbind(handle: u32): boolean {
     const slot = handle_slot(handle);
     const bound = this.surfaces.get(slot);
@@ -657,10 +646,8 @@ export class GpuHost {
         const address = r.u();
         const word = r.u();
         const ticket = r.u();
-        // The word is the mapping's own: it lands whatever it holds. Where
-        // the device went since, its objects forgotten (`lost`), it lands
-        // nowhere, as the native host's pending reads are dropped: the guest
-        // lets the room and the word go once it hears of the loss.
+        // Where the device went since (`lost`) it lands nowhere, as the native
+        // host's pending reads are dropped.
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(() => {
           if (this.get<GPUBuffer>(id) !== buffer) return;
           this.bytesAt(address, size).set(new Uint8Array(buffer.getMappedRange(offset, size)));

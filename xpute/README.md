@@ -67,7 +67,7 @@ xpute_guest::wasm_abi!(
 );
 ```
 
-A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator and writes one `native_abi!` with its numbers and the guest's entry, which boots the guest on the first call, installs the plan's clock on the guest's thread, and exports `xpute_intr` and `xpute_mem` under xpute's names: a process holds one guest, so no program's prefix is needed (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
+A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator and writes one `native_abi!` with its numbers and the guest's entry, which boots the guest on the first call, installs the plan's clock on the guest's thread as the first `intr` runs, and exports `xpute_intr` and `xpute_mem` under xpute's names: a process holds one guest, so no program's prefix is needed (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
 
 ```rust
 #[global_allocator]

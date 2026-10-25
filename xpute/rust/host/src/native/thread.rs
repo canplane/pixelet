@@ -68,7 +68,6 @@ pub fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send
     run(first);
 }
 
-/// `f` on the guest's thread, returned once it has run.
 pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
     let h = handoff();
     let mut f = Some(f);

@@ -12,15 +12,16 @@
 #include <vector>
 
 #include "xpute/guest/abi/handle.hpp"
+#include "xpute/kit/status/bug.hpp"
 #include "sys.hpp"
 
 namespace xpute {
 
-// At most `N - 1` open at once (`Slots`).
+// At most `N - 1` open at once; one more is a bug.
 template <class O, std::size_t N> class Files {
   public:
     Fd open(Sys &sys, std::uint32_t root, std::string_view path, O owner) {
-        Fd fd = held_.insert(std::move(owner));
+        Fd fd = take(std::move(owner));
         sys.openat(fd, root, sys::flag::O_RDONLY, path);
         return fd;
     }
@@ -33,7 +34,7 @@ template <class O, std::size_t N> class Files {
 
     // Opened, written and closed in one turn, so no answer comes.
     void write_whole(Sys &sys, std::uint32_t root, std::string_view path, std::vector<std::uint8_t> bytes, O owner) {
-        Fd fd = held_.insert(std::move(owner));
+        Fd fd = take(std::move(owner));
         sys.openat(fd, root, sys::flag::O_WRONLY, path);
         sys.write(fd, std::move(bytes));
         close(sys, fd);
@@ -51,7 +52,13 @@ template <class O, std::size_t N> class Files {
     }
 
   private:
-    abi::Slots<O, N> held_;
+    Fd take(O owner) noexcept {
+        std::optional<Fd> fd = held_.insert(std::move(owner));
+        ensure(fd.has_value(), Errno::enospc, N);
+        return *fd;
+    }
+
+    abi::Table<O, N> held_;
 };
 
 } // namespace xpute

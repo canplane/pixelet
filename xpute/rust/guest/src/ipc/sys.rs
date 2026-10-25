@@ -37,8 +37,6 @@ pub struct Sys {
 }
 
 impl Sys {
-    /// The `words` at `at` in `mem`: the range the directory names under SYS.
-    ///
     /// # Safety
     /// As `Stream::new`.
     pub unsafe fn new(mem: Memory, at: usize, words: usize) -> Sys {

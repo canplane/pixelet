@@ -70,18 +70,12 @@ impl<const N: usize> Edge<N> {
         self.quota_ms
     }
 
-    pub fn remaining(&self) -> f64 {
-        (self.until - now()).max(0.0)
-    }
-
     pub fn spent(&self) -> bool {
         now() >= self.until
     }
 
-    /// The tasks yield no sooner than `at`, whatever the quota: a share the
-    /// guest keeps them past what ran before them, so what overran the quota
-    /// does not take the tasks' turn too. The share is the guest's policy;
-    /// the edge keeps only the deadline.
+    /// The tasks yield no sooner than `at`, whatever the quota, so what
+    /// overran it does not take the tasks' turn too.
     pub fn extend_to(&mut self, at: f64) {
         self.until = self.until.max(at);
     }

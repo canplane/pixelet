@@ -22,7 +22,7 @@ use crate::sys::io::fetch::{answer_settled, answered, body, next_answered, relea
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
-use xpute_guest::sched::frame_budget::FrameBudget;
+use xpute_guest::sched::pass::Pass;
 use xpute_kit::status::errno::Errno;
 
 use fnv::FnvHashMap;
@@ -355,7 +355,7 @@ impl<L: Observed> Demand<L> {
 /// tick's budget, so the visible phase's hold on the content share binds it,
 /// and at least one; each fetch settles here. What the pass leaves stays
 /// queued, and a turn is asked for it.
-pub fn admit_arrived(budget: &FrameBudget) {
+pub fn admit_arrived(pass: &Pass) {
     const OF: [Stream; LAYERS.len()] = {
         let mut of = [Stream::asset; LAYERS.len()];
         let mut k = 0;
@@ -365,7 +365,7 @@ pub fn admit_arrived(budget: &FrameBudget) {
         }
         of
     };
-    let pass = budget.run(
+    let stat = pass.run(
         0..answered(&OF),
         |_| {
             let Some(Answered {
@@ -396,7 +396,7 @@ pub fn admit_arrived(budget: &FrameBudget) {
         },
         None,
     );
-    if pass.stopped_early {
+    if stat.stopped_early {
         crate::sys::sched::edge::request_world_tick();
     }
 }

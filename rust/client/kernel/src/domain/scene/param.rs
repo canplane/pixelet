@@ -28,7 +28,7 @@ pub const AO_STRENGTH: f64 = 0.2;
 /// The ways' pool on the GPU at first, 1 MiB, 16 Ki families: a square with
 /// no ways holds its root family alone, so the 960 squares' roots and some
 /// ways. It doubles each time a build runs out (pxl-render
-/// gpu/renderer.rs `GroundBuffers::grow`), the square that ran out filled
+/// gpu/ray/ground.rs `GroundBuffers::grow`), the square that ran out filled
 /// again a turn later, so a dense view reaches 64 MiB in six. Not yet
 /// measured against a dense view.
 pub const WAYS_POOL_FIRST_BYTES: u32 = 1 << 20;
@@ -37,7 +37,7 @@ const _: () = assert!(WAYS_POOL_FIRST_BYTES <= crate::domain::layer::terrain::pa
 /// A square's ways' records' room in each of its reads at first, 16 KiB,
 /// 240 families': a square with no ways reads 72 B. Every read's room doubles
 /// past a square's records that outgrew it, that square filled again
-/// (pxl-render gpu/renderer.rs `GroundBuffers::room`), up to a square's
+/// (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), up to a square's
 /// most, `ways::tree::RECORDS_BYTES`: the GPU's read buffers and their
 /// rooms on the heap together, `window::READS` of each.
 pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
@@ -45,7 +45,7 @@ pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 /// The most the handed squares' scratch takes on the GPU, 15.54 MiB:
 /// `window::HANDED` squares' each for a tree of `ways::tree::SQUARE_FAMILIES`,
 /// the bake's bound on a square's, so at this no square of a baked set is
-/// refused for it (pxl-render gpu/renderer.rs `GroundBuffers::grow_scratch`).
+/// refused for it (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`).
 /// Less refuses a dense square its ways' tree, left absent to the coarser
 /// window (domain/layer/terrain/window.rs `REFUSED`), as the pool's cap does. The
 /// GPU's alone: its records are copied out in the frame they are built,

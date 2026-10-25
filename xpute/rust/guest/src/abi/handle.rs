@@ -2,10 +2,10 @@
 
 //! Generational handles: a slot and its generation, so a handle kept past its
 //! release names nothing that takes the slot after. 0 is never a handle.
-//! `HandleTable` is fixed at N slots for what another side keeps; `Slots`
-//! is fixed at N slots too, and holds values this side keeps.
 
-/// The rest is the generation, hence its `u16` lane. The host uses the same 16.
+use core::mem::MaybeUninit;
+
+/// The rest is the generation, hence its `u16`. The host uses the same 16.
 pub const SLOT_BITS: u32 = 16;
 const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
 
@@ -17,20 +17,23 @@ fn handle_of(slot: u32, generation: u16) -> u32 {
     slot | ((generation as u32) << SLOT_BITS)
 }
 
-/// Never 0, so no handle is 0.
-fn next_generation(generation: u16) -> u16 {
-    generation.wrapping_add(1).max(1)
+struct Slot<T> {
+    generation: u16,
+    /// One past the epoch the slot was taken in; 0 while free. A `u64`, so
+    /// no count of epochs a program lives through brings a stale one round.
+    made: u64,
+    /// A free slot's next free slot; 0, never handed out, ends the list.
+    next: u32,
+    /// Initialized while `made` is not 0.
+    value: MaybeUninit<T>,
 }
 
-/// All-zero bytes are an empty table, so one may live in memory that starts
-/// zeroed, or be emptied by zeroing it, and is never built and moved.
-pub struct HandleTable<const N: usize> {
-    generation: [u16; N],
-    /// One past the epoch a live slot was taken in; 0 for a free one. A `u64`
-    /// so no count of epochs a program lives through brings a stale one round.
-    made: [u64; N],
-    /// A free slot's next free slot; 0, which is never handed out, ends the list.
-    next: [u32; N],
+/// N slots, each holding a `T` while its handle is live; a slot given back is
+/// the next one taken. All-zero bytes are an empty table, so one may lie in
+/// memory that starts zeroed, or be emptied by zeroing it, never built and
+/// moved.
+pub struct Table<T: Copy, const N: usize> {
+    slot: [Slot<T>; N],
     /// Advanced by `begin`: the slots taken since are those made in it.
     epoch: u64,
     free: u32,
@@ -39,19 +42,24 @@ pub struct HandleTable<const N: usize> {
     count: u32,
 }
 
-impl<const N: usize> Default for HandleTable<N> {
+impl<T: Copy, const N: usize> Default for Table<T, N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<const N: usize> HandleTable<N> {
+impl<T: Copy, const N: usize> Table<T, N> {
     pub const fn new() -> Self {
         const { assert!(N >= 2 && N <= 1 << SLOT_BITS, "a slot is 16 bits, and slot 0 is never handed out") };
-        HandleTable {
-            generation: [0; N],
-            made: [0; N],
-            next: [0; N],
+        Table {
+            slot: [const {
+                Slot {
+                    generation: 0,
+                    made: 0,
+                    next: 0,
+                    value: MaybeUninit::uninit(),
+                }
+            }; N],
             epoch: 0,
             free: 0,
             top: 0,
@@ -59,10 +67,11 @@ impl<const N: usize> HandleTable<N> {
         }
     }
 
-    pub fn acquire(&mut self) -> Option<u32> {
+    /// None when every slot is taken.
+    pub fn insert(&mut self, value: T) -> Option<u32> {
         let slot = if self.free != 0 {
             let slot = self.free;
-            self.free = self.next[slot as usize];
+            self.free = self.slot[slot as usize].next;
             slot
         } else if (self.top as usize) + 1 < N {
             self.top += 1;
@@ -70,28 +79,39 @@ impl<const N: usize> HandleTable<N> {
         } else {
             return None;
         };
-        let s = slot as usize;
-        self.generation[s] = next_generation(self.generation[s]);
-        self.made[s] = self.epoch + 1;
+        let s = &mut self.slot[slot as usize];
+        // Never 0, so no handle is 0.
+        s.generation = s.generation.wrapping_add(1).max(1);
+        s.made = self.epoch + 1;
+        s.value = MaybeUninit::new(value);
         self.count += 1;
-        Some(handle_of(slot, self.generation[s]))
-    }
-
-    pub fn release(&mut self, handle: u32) -> bool {
-        if !self.live(handle) {
-            return false;
-        }
-        let slot = handle_slot(handle);
-        self.made[slot as usize] = 0;
-        self.next[slot as usize] = self.free;
-        self.free = slot;
-        self.count -= 1;
-        true
+        Some(handle_of(slot, s.generation))
     }
 
     pub fn live(&self, handle: u32) -> bool {
         let s = handle_slot(handle) as usize;
-        s != 0 && s < N && self.made[s] != 0 && self.generation[s] as u32 == handle >> SLOT_BITS
+        s != 0 && s < N && self.slot[s].made != 0 && self.slot[s].generation as u32 == handle >> SLOT_BITS
+    }
+
+    pub fn get(&self, handle: u32) -> Option<&T> {
+        // SAFETY: a live slot's value is initialized.
+        self.live(handle).then(|| unsafe { self.slot[handle_slot(handle) as usize].value.assume_init_ref() })
+    }
+
+    pub fn get_mut(&mut self, handle: u32) -> Option<&mut T> {
+        // SAFETY: as `get`.
+        self.live(handle).then(|| unsafe { self.slot[handle_slot(handle) as usize].value.assume_init_mut() })
+    }
+
+    pub fn remove(&mut self, handle: u32) -> Option<T> {
+        let value = *self.get(handle)?;
+        let slot = handle_slot(handle);
+        let s = &mut self.slot[slot as usize];
+        s.made = 0;
+        s.next = self.free;
+        self.free = slot;
+        self.count -= 1;
+        Some(value)
     }
 
     /// From here, what is taken is what `rollback` gives back.
@@ -99,14 +119,17 @@ impl<const N: usize> HandleTable<N> {
         self.epoch += 1;
     }
 
-    /// Every handle taken since `begin` and not yet released, released and
+    /// Every handle taken since `begin` and not yet removed, removed and
     /// handed to `gone`: what a transaction that did not commit made, which
     /// the other side never saw.
-    pub fn rollback(&mut self, mut gone: impl FnMut(u32)) {
-        for s in 1..=self.top {
-            let handle = handle_of(s, self.generation[s as usize]);
-            if self.made[s as usize] == self.epoch + 1 && self.release(handle) {
-                gone(handle);
+    pub fn rollback(&mut self, mut gone: impl FnMut(u32, T)) {
+        for slot in 1..=self.top {
+            let s = &self.slot[slot as usize];
+            let handle = handle_of(slot, s.generation);
+            if s.made == self.epoch + 1 {
+                if let Some(value) = self.remove(handle) {
+                    gone(handle, value);
+                }
             }
         }
     }
@@ -114,85 +137,12 @@ impl<const N: usize> HandleTable<N> {
     pub fn count(&self) -> u32 {
         self.count
     }
-}
-
-/// Fixed at N slots, slot 0 never handed out, as `HandleTable`; a slot
-/// given back is the next one taken.
-pub struct Slots<T, const N: usize> {
-    entries: [(u16, Option<T>); N],
-    /// A free slot's next free slot; 0, which is never handed out, ends the list.
-    next: [u32; N],
-    free: u32,
-    /// The highest slot handed out; those past it never have been.
-    top: u32,
-}
-
-impl<T, const N: usize> Default for Slots<T, N> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T, const N: usize> Slots<T, N> {
-    pub const fn new() -> Self {
-        const { assert!(N >= 2 && N <= 1 << SLOT_BITS, "a slot is 16 bits, and slot 0 is never handed out") };
-        Slots {
-            entries: [const { (0, None) }; N],
-            next: [0; N],
-            free: 0,
-            top: 0,
-        }
-    }
-
-    pub fn insert(&mut self, value: T) -> u32 {
-        let slot = if self.free != 0 {
-            let slot = self.free;
-            self.free = self.next[slot as usize];
-            slot
-        } else {
-            xpute_kit::ensure!((self.top as usize) + 1 < N, ENOSPC, N);
-            self.top += 1;
-            self.top
-        };
-        let entry = &mut self.entries[slot as usize];
-        entry.0 = next_generation(entry.0);
-        entry.1 = Some(value);
-        handle_of(slot, entry.0)
-    }
-
-    fn entry(&self, handle: u32) -> Option<&(u16, Option<T>)> {
-        let slot = handle_slot(handle);
-        (slot != 0 && slot <= self.top)
-            .then(|| &self.entries[slot as usize])
-            .filter(|(generation, value)| value.is_some() && *generation as u32 == handle >> SLOT_BITS)
-    }
-
-    pub fn get(&self, handle: u32) -> Option<&T> {
-        self.entry(handle)?.1.as_ref()
-    }
-
-    pub fn get_mut(&mut self, handle: u32) -> Option<&mut T> {
-        self.entry(handle)?;
-        self.entries[handle_slot(handle) as usize].1.as_mut()
-    }
-
-    pub fn remove(&mut self, handle: u32) -> Option<T> {
-        self.entry(handle)?;
-        let slot = handle_slot(handle);
-        self.next[slot as usize] = self.free;
-        self.free = slot;
-        self.entries[slot as usize].1.take()
-    }
 
     pub fn iter(&self) -> impl Iterator<Item = (u32, &T)> {
-        self.entries[..=self.top as usize]
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, (generation, value))| Some((handle_of(slot as u32, *generation), value.as_ref()?)))
-    }
-
-    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.entries[..=self.top as usize].iter_mut().filter_map(|(_, value)| value.as_mut())
+        (1..=self.top).filter_map(|slot| {
+            let handle = handle_of(slot, self.slot[slot as usize].generation);
+            Some((handle, self.get(handle)?))
+        })
     }
 }
 

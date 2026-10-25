@@ -35,45 +35,36 @@ class Stream {
 
     std::uint32_t head_at() const noexcept { return at_; }
 
-    // The memory the stream lies in, which a record naming the guest's bytes
-    // gives offsets of.
     Memory memory() const noexcept { return mem_; }
 
     std::uint32_t left() const noexcept { return (words_ - head_ - len_) * WORD; }
 
-    // Whether records of `bytes`, as their writers measure them (`record_bytes`,
-    // gpu/encode's `call::*_bytes`), would fit whole with `leave` bytes still
-    // left after them.
+    // Whether records of `bytes` (`record_bytes`, gpu/encode's `call::*_bytes`)
+    // fit with `leave` bytes left after them.
     bool fits(std::uint64_t bytes, std::uint32_t leave) const noexcept { return std::uint64_t{left()} >= bytes + leave; }
 
-    // Answers where the `n` words begin. Past the range is a bug: the guest asked
-    // more of a turn than it sized the range for, reported at the caller.
+    // Answers where the `n` words begin. Past the range is a bug, reported at
+    // the caller.
     std::uint32_t open(std::uint32_t op, std::uint32_t n, std::source_location at = std::source_location::current()) noexcept;
 
-    // A record of `n` words for its writer to fill, answered where they
-    // begin; none where an open transaction no longer fits it, which drops the
-    // transaction, as a record past the range does.
+    // A record of `n` words for its writer to fill; none where an open
+    // transaction no longer fits it, which drops the transaction.
     std::optional<std::uint32_t> reserve(std::uint32_t op, std::uint32_t n, std::source_location at = std::source_location::current()) noexcept;
 
     void record(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail = {},
                 std::optional<std::span<const std::uint8_t>> bytes = std::nullopt, std::source_location at = std::source_location::current()) noexcept;
 
-    // The next turn writes from the start.
     void publish() noexcept;
 
     // The records from here to `commit` are one: one that does not fit drops
     // them all, and those after it, where outside a transaction it is a bug.
-    void begin() noexcept {
-        mark_ = len_;
-        spilled_ = false;
-    }
+    void begin() noexcept { mark_ = {Mark::open, len_}; }
 
     // False where the transaction did not fit: the stream is as at `begin`.
     bool commit() noexcept {
-        bool fit = !spilled_;
-        if (mark_ && !fit) len_ = *mark_;
-        mark_.reset();
-        spilled_ = false;
+        bool fit = mark_.state != Mark::spilled;
+        if (!fit) len_ = mark_.at;
+        mark_ = {};
         return fit;
     }
 
@@ -83,8 +74,13 @@ class Stream {
     std::uint32_t words_;
     std::uint32_t head_;
     std::uint32_t len_ = 0;
-    std::optional<std::uint32_t> mark_;
-    bool spilled_ = false;
+    // Whether a transaction is open, where it began, and whether a record
+    // that did not fit has dropped it.
+    struct Mark {
+        enum State { off, open, spilled } state = off;
+        std::uint32_t at = 0;
+    };
+    Mark mark_;
 };
 
 } // namespace xpute

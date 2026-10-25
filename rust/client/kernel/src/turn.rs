@@ -95,7 +95,7 @@ fn demand_tick(ctx: &mut TickContext) {
     if pinned {
         TerrainTile::demand().moved();
     }
-    crate::domain::view::demand::admit_arrived(&ctx.budget);
+    crate::domain::view::demand::admit_arrived(&ctx.pass);
     changes_step();
     let tau = crate::domain::view::lens::tau();
     TerrainTile::demand().step(crate::domain::control::navigation::destination::tile(), crate::domain::layer::terrain::window::pinned(), tau);

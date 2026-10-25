@@ -1,15 +1,12 @@
 // xpute-conformance/guest.rs
 
-//! The Rust conformance guest. It exports the same two C calls as the C++
-//! guest, so one host drives both; `boot` answers the directory's offset.
-//! Natively the host hands it a region and a clock, and its turn is
-//! `xpute_conformance_intr`; as wasm it imports its memory and `env.now`, its
-//! range starts past what the linker placed, and its turn is the module's
-//! entry, `intr` (xpute_guest::wasm `wasm_abi!`). Its parts are laid over
-//! that memory by offset (`Memory`).
+//! The Rust conformance guest, exporting the C++ guest's two calls so one
+//! host drives both; `boot` answers the directory's offset. Natively the host
+//! hands it a region and a clock; as wasm it imports both, its range starts
+//! past the linker's data, and its turn is the module's `intr`.
 
 use xpute_guest::abi::cmd::{Command, SysOpened};
-use xpute_guest::abi::handle::HandleTable;
+use xpute_guest::abi::handle::Table;
 use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
 use xpute_guest::ipc::door::{Applied, Door};
 use xpute_guest::ipc::file::Files;
@@ -40,7 +37,7 @@ const STREAM_AT: u32 = CQ_SLOT_AT + slots_bytes(spec::CQ_CAP, spec::SLOT_BYTES);
 const SYS_AT: u32 = STREAM_AT + spec::STREAM_WORDS * 4;
 const STATE_AT: u32 = page_up(SYS_AT + spec::SYS_WORDS * 4);
 
-/// Used only as wasm; a native build allocates from the process.
+/// Only as wasm; a native build allocates from the process.
 const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Guest>() as u32);
 
 const _: () = assert!(HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEMORY_BYTES as usize, "the ranges run past the memory");
@@ -58,7 +55,7 @@ struct State {
     stream: Stream,
     sys: Sys,
     files: Files<u32, { spec::HANDLES as usize }>,
-    handles: HandleTable<{ spec::HANDLES as usize }>,
+    handles: Table<(), { spec::HANDLES as usize }>,
     now: Now,
     /// The clock at the last MARK.
     mark: f64,
@@ -101,7 +98,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
             stream,
             sys,
             files: Files::new(),
-            handles: HandleTable::new(),
+            handles: Table::new(),
             now,
             mark: 0.0,
         },
@@ -180,16 +177,14 @@ mod wasm {
 
     #[no_mangle]
     pub extern "C" fn xpute_conformance_boot() -> u32 {
-        let BootInfo { given, data_end, .. } = boot_info();
-        let range = range_at(data_end);
+        let range = range_at(xpute_guest::wasm::data_end());
         // A host that sized the memory for another guest.
-        xpute_kit::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given as u64, ENOMEM, range);
+        xpute_kit::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= xpute_guest::wasm::given(), ENOMEM, range);
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
         unsafe { boot(xpute_guest::mem::core(), range, now) }
     }
 
-    /// A turn; what the module hands the guest it read as it booted.
     fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
         // SAFETY: the module's memory, booted.
         unsafe { turn(xpute_guest::mem::core(), range_at(xpute_guest::wasm::data_end())) }
@@ -223,8 +218,8 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
             stream.record(arg(pkt)?, &[], &[], None);
             Ok(Some(0))
         }
-        spec::cmd::ISSUE => Ok(Some(handles.acquire().ok_or_else(|| MarshalError::new(Errno::ENFILE))? as i32)),
-        spec::cmd::RELEASE => handles.release(arg(pkt)?).then_some(Some(0)).ok_or_else(bad_handle),
+        spec::cmd::ISSUE => Ok(Some(handles.insert(()).ok_or_else(|| MarshalError::new(Errno::ENFILE))? as i32)),
+        spec::cmd::RELEASE => handles.remove(arg(pkt)?).map(|()| Some(0)).ok_or_else(bad_handle),
         spec::cmd::USE => handles.live(arg(pkt)?).then_some(Some(0)).ok_or_else(bad_handle),
         spec::cmd::MARK => {
             *mark = now();

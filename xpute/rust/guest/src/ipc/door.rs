@@ -20,7 +20,6 @@ pub type Applied = Result<Option<i32>, MarshalError>;
 /// each figure the most it reached.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DoorStat {
-    /// The completion ring's length.
     pub cq_peak: u32,
     /// The submission ring's length as a drain started: how close it came to full.
     pub sq_peak: u32,
@@ -37,7 +36,6 @@ pub struct Door {
 }
 
 impl Door {
-    /// Over the two rings whoever laid them out built, the door's alone.
     /// `most_signals` is the most one command raises, or the turn once its
     /// drain is done: the program's bound.
     pub fn new(sq: Ring, cq: Ring, most_signals: u32) -> Door {
@@ -49,7 +47,6 @@ impl Door {
         }
     }
 
-    /// The peaks since the last take, which starts the next from zero.
     pub fn take_stat(&self) -> DoorStat {
         self.stat.take()
     }

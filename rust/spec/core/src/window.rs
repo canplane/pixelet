@@ -61,7 +61,7 @@ pub const FILL_SHARE_MS: f32 = 4.0;
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 
 /// The read-backs a square's cells and its ways' records come back in
-/// (pxl-render gpu/renderer.rs `read_back`): two frames' fills, so one
+/// (pxl-render gpu/ray/ground.rs `read_back`): two frames' fills, so one
 /// frame's mappings are still landing while the next is copied.
 pub const READS: u32 = 2 * HANDED;
 
@@ -284,7 +284,7 @@ pub const fn laid_half(look: u32, gone: u32) -> u32 {
 /// A square's words on a GPU, what outlives its fill, its lanes in order:
 /// its columns, its levels, its cells as laid and its ways' tree's root. The
 /// windows' squares are one storage buffer bound whole, under WebGPU's
-/// floor (pxl-render gpu/renderer.rs `GROUND_BYTES`).
+/// floor (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const LAID_AT: u32 = LEVELS_AT + LEVEL_WORDS;

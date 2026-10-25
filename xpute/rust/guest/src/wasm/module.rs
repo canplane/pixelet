@@ -1,8 +1,6 @@
 // xpute-guest/wasm/module.rs
 
-//! What a guest built as one WebAssembly module reads of the module itself:
-//! where its stack ends and the linker stopped, the memory it was given, and
-//! the host's clock. It is linked as `link` links it.
+//! What a module guest reads of the module itself, linked as `link` links it.
 
 extern "C" {
     /// The end of `.rodata`, `.data` and `.bss`, where a guest may begin
@@ -25,12 +23,11 @@ extern "C" {
     fn host_now() -> f64;
 }
 
-/// Where the stack ends, as an address: its size, with the stack first.
+/// Its size, with the stack first.
 pub fn stack_high() -> u32 {
     core::ptr::addr_of!(__stack_high) as u32
 }
 
-/// Where the linker stopped, as an address.
 pub fn data_end() -> u32 {
     core::ptr::addr_of!(__data_end) as u32
 }
@@ -40,7 +37,6 @@ pub fn given() -> u64 {
     core::arch::wasm32::memory_size(0) as u64 * u64::from(super::WASM_PAGE_BYTES)
 }
 
-/// The host's clock, in milliseconds: what a turn's quota is spent against.
 pub fn now() -> f64 {
     // SAFETY: an import with no arguments.
     unsafe { host_now() }

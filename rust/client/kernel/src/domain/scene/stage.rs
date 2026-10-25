@@ -157,7 +157,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         }),
         text: text_raster,
         sheet: sheet(),
-        admit: xpute_gpu::admit::admitted,
+        admit: crate::sys::io::host::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
     });
@@ -239,7 +239,7 @@ pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord:
             .hide
             .filter(|&at| crate::domain::query::World::now().placed(at).is_some_and(|e| pxl_spec::block::object::object_value_is_decor(e.state)));
         crate::domain::scene::decor::drawn::step(frame.eye, hide, edits.scattered);
-        crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.budget);
+        crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.pass);
     }
     crate::domain::scene::marker::step(ctx, &frame);
     crate::domain::scene::marker::draw(draw_list(), frame.eye);

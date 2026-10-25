@@ -23,9 +23,7 @@
 // `index` is a place in a list kept elsewhere — the person and the pet are
 // by theirs in actor.json — and crosses as itself.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
+// Names as the spec spells them, so one record has one name on every side.
 #![allow(non_camel_case_types)]
 
 /// Which controller makes the camera's pose.

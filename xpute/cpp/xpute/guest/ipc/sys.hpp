@@ -38,10 +38,8 @@ constexpr std::uint64_t fd_turn_bytes(std::uint64_t path) noexcept {
 
 class Sys {
   public:
-    // `at` is a range nothing else writes, named under SYS in the directory.
     Sys(Memory mem, std::uint32_t at, std::uint32_t words) noexcept : mem_(mem), stream_(mem, at, words, sys::HEAD) {}
 
-    // What the host ran after the last turn is done, so what was kept for it goes.
     void rise() noexcept { held_.clear(); }
 
     void fall() noexcept { stream_.publish(); }

@@ -1,12 +1,8 @@
 // cpp/xpute/guest/wasm.hpp
 
 // The guest built as one WebAssembly module: what it reads of the module
-// itself — where the linker stopped and its stack ends, the memory it was
-// given, the host's clock — and its entry, `intr`, which the floor names as
-// a C runtime names `main` and the program defines. The module is linked as
-// every module guest is (cpp/Makefile `WASM_LINK`, as xpute-guest wasm
-// `link` prints for Rust): its memory imported, its stack first, `intr`
-// exported. Nothing here but on wasm.
+// itself, and its entry, `intr`, which the floor names and the program
+// defines. Linked as every module guest is (cpp/Makefile `WASM_LINK`).
 
 #pragma once
 
@@ -37,12 +33,11 @@ namespace xpute::wasm {
 // A WebAssembly page, the unit a memory is declared and grown in.
 inline constexpr std::uint64_t WASM_PAGE_BYTES = 1 << 16;
 
-// Where the linker stopped, as an address.
 inline std::uint32_t data_end() noexcept {
     return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__data_end));
 }
 
-// Where the stack ends, as an address: its size, with the stack first.
+// Its size, with the stack first.
 inline std::uint32_t stack_high() noexcept {
     return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__stack_high));
 }
@@ -52,7 +47,6 @@ inline std::uint64_t given() noexcept {
     return std::uint64_t{__builtin_wasm_memory_size(0)} * WASM_PAGE_BYTES;
 }
 
-// The host's clock, in milliseconds: what a turn's quota is spent against.
 inline double now() noexcept {
     return xpute_wasm_now();
 }

@@ -1,4 +1,4 @@
-// pxl-render/gpu/renderer.test.rs
+// pxl-render/gpu/ray/ground.test.rs
 
 use super::*;
 

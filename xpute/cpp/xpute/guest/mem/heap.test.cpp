@@ -40,12 +40,6 @@ XPUTE_TEST(heap_a_block_is_named_by_its_offset_and_a_guard_gives_back_what_it_di
     XPUTE_CHECK(mem::off_of(mem::at(b.at)) == b.at);
     free(b);
 
-    Block kept = BlockGuard::alloc(16)->keep();
-    XPUTE_CHECK(kept.bytes == 16);
-    std::size_t live = slab.live();
-    { std::optional<BlockGuard> g = BlockGuard::alloc(5000); }
-    XPUTE_CHECK_EQ(slab.live(), live, "what a guard did not keep goes back");
-    free(kept);
     XPUTE_CHECK_EQ(alloc(1u << (MAX + 1)), std::nullopt, "and a block past the range is none, not a bug");
 
     HeapStat stat = heap_stat(slab);

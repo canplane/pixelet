@@ -13,6 +13,7 @@ pub mod pack;
 pub mod pass;
 pub mod pipeline;
 pub mod put;
+pub mod ray;
 pub mod read;
 pub mod renderer;
 pub mod shadow;

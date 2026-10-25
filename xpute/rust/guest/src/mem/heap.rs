@@ -47,7 +47,6 @@ impl<B: Bounds> Range for Span<B> {
     }
 }
 
-/// The heap between `B`'s bounds, for `#[global_allocator]`.
 pub type Heap<B> = SlabMalloc<Span<B>>;
 
 /// One reading of a heap, so compared fields are from one moment.
@@ -106,30 +105,4 @@ pub fn alloc(bytes: u32) -> Option<Block> {
 pub unsafe fn free((off, bytes): Block) {
     // SAFETY: the caller's; `alloc` made this layout for this address.
     unsafe { std::alloc::dealloc(at(off), std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
-}
-
-/// Freed on drop unless `keep` hands it on.
-pub struct BlockGuard(Block);
-
-impl BlockGuard {
-    pub fn alloc(bytes: u32) -> Option<BlockGuard> {
-        alloc(bytes).map(BlockGuard)
-    }
-
-    pub fn block(&self) -> Block {
-        self.0
-    }
-
-    pub fn keep(self) -> Block {
-        let block = self.0;
-        core::mem::forget(self);
-        block
-    }
-}
-
-impl Drop for BlockGuard {
-    fn drop(&mut self) {
-        // SAFETY: a guard is made only by `BlockGuard::alloc`, and `keep` forgets it.
-        unsafe { free(self.0) }
-    }
 }

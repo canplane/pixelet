@@ -1,11 +1,9 @@
 // xpute-guest/mem.rs
 
-//! Every address a module names is an offset from a memory's base, never a
+//! Every address a guest names is an offset from a memory's base, never a
 //! pointer, so it means the same on every host and fits a `u32`. A part laid
-//! over a region (the rings, the streams, the directory) takes the `Memory`
-//! it lies in; a program reading its own data goes through `core`, the
-//! guest's own, whose base is 0 on wasm32 and in a native test, and a native
-//! build's region's start.
+//! over a region takes the `Memory` it lies in; a program reading its own data
+//! goes through `core`, whose base is 0 on wasm32 and in a native test.
 
 pub mod heap;
 pub mod section;
@@ -16,7 +14,6 @@ use xpute_kit::status::errno::Errno;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::global::Global;
 
-/// The memory both ends see: every address is an offset from its base.
 #[derive(Clone, Copy, Debug)]
 pub struct Memory {
     base: usize,
@@ -35,9 +32,8 @@ impl Memory {
         self.base
     }
 
-    /// Made from the address, not by `ptr::add` on the wasm base, which is UB:
-    /// a release build once dropped a ring's capacity word for it. `off_of`
-    /// exposed the provenance this recovers.
+    /// Made from the address with the provenance `off_of` exposed, never by
+    /// `ptr::add` on the wasm base (address 0), which is UB.
     pub fn at<T>(self, off: usize) -> *mut T {
         core::ptr::with_exposed_provenance_mut(self.base + off)
     }
@@ -51,7 +47,6 @@ impl Memory {
         unsafe { self.at::<u32>(off).read_unaligned() }
     }
 
-    /// As `word`.
     #[track_caller]
     pub fn set_word(self, off: usize, w: u32) {
         self.within(off, 4);
@@ -83,13 +78,10 @@ impl Memory {
     }
 }
 
-/// The guest's own memory.
 #[cfg(not(target_arch = "wasm32"))]
 static CORE: Global<Memory> = Global::new();
 
-/// The guest's own memory, set once, before anything is allocated, on the
-/// guest's thread: it is a `Global`, and a thread marked as another's may not
-/// write it.
+/// Once, before anything is allocated, on the guest's thread (a `Global`).
 ///
 /// # Safety
 /// As `Memory::new`'s, for the guest's whole life.
@@ -100,32 +92,27 @@ pub unsafe fn set(addr: usize, bytes: usize) {
     CORE.set(unsafe { Memory::new(addr, bytes) });
 }
 
-/// The guest's own memory: what `set` stored.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn core() -> Memory {
     // SAFETY: before `set`, a native test's guest addresses the process from 0.
     *CORE.get(|| unsafe { Memory::new(0, usize::MAX) })
 }
 
-/// The guest's own memory: the module's, from address 0.
 #[cfg(target_arch = "wasm32")]
 pub const fn core() -> Memory {
     // SAFETY: a module's memory begins at 0 and is all its own.
     unsafe { Memory::new(0, usize::MAX) }
 }
 
-/// `Memory::at` over `core`, for a program reading its own data.
 pub fn at<T>(off: usize) -> *mut T {
     core().at(off)
 }
 
-/// `Memory::off_of` over `core`.
 #[track_caller]
 pub fn off_of<T>(p: *const T) -> usize {
     core().off_of(p)
 }
 
-/// `Memory::off_of_slice` over `core`.
 #[track_caller]
 pub fn off_of_slice<T>(s: *const [T]) -> usize {
     core().off_of_slice(s)
