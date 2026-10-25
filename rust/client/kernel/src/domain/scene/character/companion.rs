@@ -6,11 +6,10 @@
 //! it instead glides at the world-scroll rate so the two cancel and it
 //! holds at screen center.
 //!
-//! The person and the pet are each a figure the walk moves (`Figure`), a
-//! holder of its actor's instance, which it stands where it is; the
-//! person's holds its chat line too, a marker over its head, and says
-//! whether it shows (`line_hangs`). Neither instance is anchored to the
-//! other.
+//! The person and the pet are each a frame the walk moves (`Figure`),
+//! holding its actor's instance at its origin; the person's holds its chat
+//! line too, a marker over its head, and says whether it shows
+//! (`line_hangs`). Neither instance is anchored to the other.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::domain::approach::damp_alpha;
@@ -20,7 +19,7 @@ use crate::domain::query::model::draw_list;
 use crate::domain::query::model::registry::Models;
 use crate::domain::query::World;
 use crate::domain::query::{cell_at, over, under, walks};
-use crate::domain::scene::actor::{Actor, Stance};
+use crate::domain::scene::actor::{Actor, Pose};
 use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
@@ -42,7 +41,7 @@ use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-/// The figures the companion holds, the person and the pet, each one
+/// The frames the companion holds, the person and the pet, each one
 /// actor's instance.
 pub const FIGURES: usize = Group::ALL.len();
 
@@ -80,13 +79,13 @@ struct Held {
     model: ModelHandle,
 }
 
-/// A person or a pet: a figure the walk moves, holding its actor's
-/// instance once its model and skin have landed.
+/// A person or a pet: a frame the walk moves, holding its actor's instance
+/// once its model and skin have landed.
 struct Figure {
     variant: CharacterVariant,
     held: Option<Held>,
     /// Where its actor stands, once held and placed.
-    stance: Option<Stance>,
+    pose: Option<Pose>,
     at: [f64; 2],
     heading: f64,
     actor_clip: Option<u32>,
@@ -108,7 +107,7 @@ impl Figure {
         Figure {
             variant: *variant,
             held: None,
-            stance: None,
+            pose: None,
             at: [0.0; 2],
             heading: 0.0,
             actor_clip: None,
@@ -130,7 +129,7 @@ impl Figure {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_image(Load::File(variant.skin))) else {
+        let (Some(model), Some(_)) = (model_of(variant.model as u32, Some(variant.height_u)), load_image(Load::Asset(variant.skin as u32))) else {
             return;
         };
         let Some(Some(actor)) = section::map().map(|_| Actor::new(draw_list(), crate::domain::query::model::models(), model.model)) else {
@@ -141,7 +140,7 @@ impl Figure {
     }
 
     fn release(&mut self) {
-        self.stance = None;
+        self.pose = None;
         if let Some(held) = self.held.take() {
             if section::map().is_some() {
                 held.actor.free(draw_list());
@@ -252,11 +251,13 @@ impl Figure {
         }
         self.at = at;
 
+        let floor = drawn_floor(&mut self.drawn, at, *stands, p);
         let Some(held) = &mut self.held else { return };
-        self.stance = Some(Stance {
-            at: [at[0], at[1], drawn_floor(&mut self.drawn, at, *stands, p)],
+        let scale = crate::domain::query::model::models().get(held.model.model).map_or(1.0, |m| m.scale());
+        self.pose = Some(Pose {
+            at: [at[0], at[1], floor],
             rotation_z: self.heading as f32,
-            scale: held.model.scale,
+            scale,
         });
         let clip = if is_walking { variant.move_clip } else { IDLE_CLIP };
         if self.actor_clip != Some(clip) {
@@ -268,8 +269,8 @@ impl Figure {
     }
 
     /// Its actor and where it stands, once both are.
-    fn drawn(&mut self) -> Option<(&mut Actor, Stance)> {
-        Some((&mut self.held.as_mut()?.actor, self.stance?))
+    fn drawn(&mut self) -> Option<(&mut Actor, Pose)> {
+        Some((&mut self.held.as_mut()?.actor, self.pose?))
     }
 }
 
@@ -382,8 +383,8 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
     let c = companion();
     let mut moved = false;
-    for (actor, stance) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
-        moved |= actor.tick(draw, models, frame, &stance);
+    for (actor, pose) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
+        moved |= actor.tick(draw, models, frame, &pose);
     }
     moved
 }
@@ -391,19 +392,18 @@ pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) ->
 /// Each figure's actor into the frame's list, where it stands.
 pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     let c = companion();
-    for (actor, stance) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
-        actor.draw(draw, models, &stance, eye);
+    for (actor, pose) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
+        actor.draw(draw, models, &pose, eye);
     }
 }
 
-/// Where the person's line hangs, over its head, while the person shows it,
-/// seen from `eye` at `tau`: while the person is drawn (its stance is set
-/// only while it holds its actor), and where the camera grid's cell at its
-/// feet is one a marker shows at (`marker_shows`), so a line reads where
-/// the markers about it do.
+/// Where the person's line hangs in its frame, over its head, while the
+/// frame shows it, seen from `eye` at `tau`: while the person is drawn, and
+/// where the camera grid's cell at its feet is one a marker shows at
+/// (`marker_shows`), so a line reads where the markers about it do.
 pub fn line_hangs(eye: V3, tau: Tau) -> Option<Q3> {
     let person = companion().person.as_ref()?;
-    let feet = person.stance?.at;
+    let (_, feet) = (person.held.as_ref()?, person.pose?.at);
     let over = [feet[0], feet[1], feet[2] + person.variant.height_u + HEAD_CLEARANCE_U];
     marker_shows(cell_at(eye, tau, feet)).then(|| world_to_canonical(&over))
 }
@@ -415,7 +415,7 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
     [&c.person, &c.pet]
         .into_iter()
         .flatten()
-        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::File(w.variant.skin))?)))
+        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin as u32))?)))
 }
 
 /// `world`'s step-slide from `from`, its floor at `stands`, toward `to`:

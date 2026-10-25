@@ -11,7 +11,6 @@ use fnv::FnvHashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
-use pxl_spec::asset::ingested::File;
 use pxl_spec::space::coord::mat4;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -26,8 +25,6 @@ pub struct ModelHandle {
     pub model: u32,
     /// One per animation in file order, so a clip's number is its animation's index.
     pub clip_count: u32,
-    /// What it is drawn at to stand the height it was registered at.
-    pub scale: f32,
 }
 
 const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
@@ -35,21 +32,23 @@ const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1
 /// A model as registered, or as the heap refused it room.
 type Registration = Result<ModelHandle, Refused>;
 
-/// Each file by the height it was asked at, its bits.
-static REGISTERED: Global<Vec<(File, Option<u64>, Registration)>> = Global::new();
+/// Each file, by its number below the asset root, by the height it was
+/// asked at, its bits.
+static REGISTERED: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
 /// `file` registered `height_u` units tall, or at its own size when None,
 /// once. None while it loads, and while the heap refuses it room: a refusal
 /// is a wait, not a failure, asked again once the heap gives some back.
-pub fn model_of(file: File, height_u: Option<f64>) -> Option<ModelHandle> {
-    let (registered, key) = (REGISTERED.get(Vec::new), height_u.map(f64::to_bits));
-    let at = row_of(file, height_u);
+pub fn model_of(file: u32, height_u: Option<f64>) -> Option<ModelHandle> {
+    let key = height_u.map(f64::to_bits);
+    let registered = REGISTERED.get(Vec::new);
+    let at = registered.iter().position(|(a, h, _)| *a == file && *h == key);
     match at.map(|at| &registered[at].2) {
         Some(Ok(handle)) => return Some(handle.clone()),
         Some(Err(refused)) if !refused.over() => return None,
         _ => {}
     }
-    let gltf = load_gltf(Load::File(file))?;
+    let gltf = load_gltf(Load::Asset(file))?;
     let entry = register_model(&gltf, height_u).ok_or_else(Refused::now);
     match at {
         Some(at) => registered[at].2 = entry.clone(),
@@ -61,14 +60,9 @@ pub fn model_of(file: File, height_u: Option<f64>) -> Option<ModelHandle> {
 /// `file` as `model_of` registered it at `height_u`, asking nothing: what a
 /// reader that must not load, such as the query, finds; none while it is
 /// not registered.
-pub fn registered(file: File, height_u: Option<f64>) -> Option<ModelHandle> {
-    REGISTERED.get(Vec::new)[row_of(file, height_u)?].2.clone().ok()
-}
-
-/// Where `file` at `height_u` is in the table, once asked.
-fn row_of(file: File, height_u: Option<f64>) -> Option<usize> {
+pub fn registered(file: u32, height_u: Option<f64>) -> Option<ModelHandle> {
     let key = height_u.map(f64::to_bits);
-    REGISTERED.get(Vec::new).iter().position(|(a, h, _)| *a == file && *h == key)
+    REGISTERED.get(Vec::new).iter().find(|(a, h, _)| *a == file && *h == key).and_then(|(_, _, entry)| entry.clone().ok())
 }
 
 /// At its own size when `height_u` is None; None when it has no mesh or the
@@ -241,7 +235,6 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         Some(ModelHandle {
             model,
             clip_count: gltf.animations.len() as u32,
-            scale,
         })
     })
 }

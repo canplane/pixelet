@@ -20,18 +20,18 @@ pub const MODELS_MAX: usize = pxl_spec_core::scatter::GROUPS as usize;
 /// rest, so arrivals are registered a variant a turn.
 pub fn decor_models_step() {
     let mut variants = DECORS.iter().flat_map(|decor| decor.variants.iter());
-    if variants.any(|v| registered(v.model, None).is_none() && model_of(v.model, None).is_some()) {
+    if variants.any(|v| registered(v.model as u32, None).is_none() && model_of(v.model as u32, None).is_some()) {
         request_world_tick();
     }
 }
 
 /// `decor`'s `variant`'s model as registered; none while it loads.
 pub fn decor_model(decor: &Decor, variant: usize) -> Option<u32> {
-    registered(decor.variants.get(variant)?.model, None).map(|h| h.model)
+    registered(decor.variants.get(variant)?.model as u32, None).map(|h| h.model)
 }
 
 /// A variant's skin as the renderer takes it (`load_image`); none while it
 /// loads.
 pub fn decor_skin(decor: &Decor, variant: usize) -> Option<(u32, &'static [u8])> {
-    load_image(Load::Asset(decor.variants.get(variant)?.skin))
+    load_image(Load::Asset(decor.variants.get(variant)?.skin as u32))
 }
