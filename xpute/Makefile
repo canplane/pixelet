@@ -1,8 +1,8 @@
 # Makefile
 #
-# Routes only. Each tree is a root of its own: ts/ as Deno's, and script/,
-# the repository's own scripts, as another; rust/ as Cargo's, its commands as
-# aliases in rust/.cargo/config.toml; and cpp/ as Make's (cpp/Makefile). Here
+# Routes only. Each tree is a root of its own: ts/ as Deno's; rust/ as
+# Cargo's, its commands as aliases in rust/.cargo/config.toml; and cpp/ as
+# Make's (cpp/Makefile). script/ is the repository's own, run by path. Here
 # is a target a tree for each verb, the aggregates over them, and two
 # orders: the traces run after the guests they drive, and cpp/'s tests,
 # which build those guests too, after build has, so two makes never write
@@ -15,16 +15,14 @@
 # With -j the trees run in parallel; cpp/'s make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: check check-script check-ts check-cpp check-rust \
+.PHONY: check check-ts check-cpp check-rust \
 	build build-cpp build-rust \
 	test test-ts test-cpp test-rust test-conformance \
 	test-gpu test-gpu-web test-gpu-native \
-	fmt fmt-script fmt-ts fmt-rust \
-	lint lint-script lint-ts
+	fmt fmt-ts fmt-rust \
+	lint lint-ts
 
-check: check-script check-ts check-cpp check-rust
-check-script:
-	deno task --cwd script check
+check: check-ts check-cpp check-rust
 check-ts:
 	deno task --cwd ts check
 check-cpp:
@@ -58,16 +56,12 @@ test-gpu-web:
 test-gpu-native:
 	+cd rust && cargo test-gpu
 
-fmt: fmt-script fmt-ts fmt-rust
-fmt-script:
-	deno task --cwd script fmt
+fmt: fmt-ts fmt-rust
 fmt-ts:
 	deno task --cwd ts fmt
 fmt-rust:
 	cd rust && cargo fmt --all
 
-lint: lint-script lint-ts
-lint-script:
-	deno task --cwd script lint
+lint: lint-ts
 lint-ts:
 	deno task --cwd ts lint

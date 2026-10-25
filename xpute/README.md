@@ -117,7 +117,7 @@ make -j8 test-gpu  # the GPU hosts against golden/gpu: the native one on wgpu, t
 make lint          # deno lint
 ```
 
-Each runs every tree's own target, in parallel with `-j`; `check-ts`, `check-cpp`, `check-rust` and the like run one tree's, as `deno task --cwd ts`, `make -C cpp` and `cargo` in `rust/` do. The copy to xpute's own repository is `./script/export.ts --to <its checkout>`.
+Each runs every tree's own target, in parallel with `-j`; `check-ts`, `check-cpp`, `check-rust` and the like run one tree's, as `deno task --cwd ts`, `make -C cpp` and `cargo` in `rust/` do. The copy to xpute's own repository is `./script/export.py --to <its checkout>` (Python 3.11 or newer).
 
 ## License
 

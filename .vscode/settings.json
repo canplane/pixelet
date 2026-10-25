@@ -5,7 +5,7 @@
 
   // Deno is the trees' alone; nothing at the root is Deno's, so outside them
   // it neither formats, lints nor types.
-  "deno.enablePaths": ["ts", "script", "xpute/ts", "xpute/script"],
+  "deno.enablePaths": ["ts", "script", "xpute/ts"],
   "deno.lint": true,
   "deno.unstable": ["webgpu"],
   // No "deno.config" pin: each workspace member resolves its own import map
