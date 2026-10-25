@@ -4,18 +4,21 @@
 //! on a pill at its own cell, or where more than one stands in a pin's cell
 //! (`marker_cell`), their count at the cell's middle on a pin's pill in its
 //! colors turned over, the pins' own rule (`asset/marker.json`); the one
-//! waiting for its words wherever it is.
+//! waiting for its words wherever it is. A pin is read with the square it
+//! stands in and shown at the camera grid's cell where it stands, its own
+//! point's, so it shows and is counted as the zoom drawn there says.
 
 use core::hash::Hasher;
 
-use super::arrangement::{cell_zoom, surface, Instance, Key, Square, Went};
+use super::arrangement::{surface, Instance, Key, Square, Went};
 use crate::domain::layer::object::preview::draft;
-use crate::domain::query::World;
+use crate::domain::query::{cell_at, World};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::block::object::object_value_is_marker;
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
@@ -23,25 +26,31 @@ use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
+/// A pin's cell (`marker_cell_of`): its zoom and place.
+type Cell = (Zoom, [i32; 3]);
+
 /// What holds a pin's instance: its entry, or the pin's cell its
 /// count stands for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Held {
     One(EntryAt),
-    Cell((Zoom, [i32; 3])),
+    Cell(Cell),
 }
 
-/// A pin read from a drawn square, in a run a pin's cell: its pill,
-/// where it stands, and where the cell holds more than one, where their
-/// count stands and the count.
+/// A pin read from a drawn square: its pill, where it stands and its base;
+/// and as the last run showed it, the camera grid's cell zoom at its base
+/// and its pin's cell, none where it did not show, and where its cell's
+/// count stood, of the cell it was then.
 #[derive(Clone)]
 pub(super) struct Pin {
     pub(super) square: Square,
     at: EntryAt,
     design: Design,
     stands: Q3,
-    cell: (Zoom, [i32; 3]),
-    count: Option<(Q3, Design)>,
+    base: V3,
+    grid: Zoom,
+    cell: Option<Cell>,
+    crowd: Option<(Cell, Q3)>,
 }
 
 /// A product choice: the length a one-line pin still reads as a name at.
@@ -82,62 +91,66 @@ fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
     }
 }
 
-/// The pins put up in `square`, whose world stands in `region`, by the
-/// square their base is in, a run a pin's cell: a cell nests in its square,
-/// so no run is another square's too.
-pub(super) fn read(square: Square, region: &Aabb, pins: &mut Vec<Pin>) {
-    let cell_zoom = cell_zoom(square);
-    if !marker_shows(cell_zoom) {
-        return;
-    }
+/// The pins put up over `square`, whose columns are `columns`, by the square
+/// their base is in, so no pin is another square's too.
+pub(super) fn read(square: Square, columns: &Aabb, pins: &mut Vec<Pin>) {
     let world = World::now();
-    let from = pins.len();
-    world.placed_in(region, &mut |e| {
+    world.placed_in(columns, &mut |e| {
         if !object_value_is_marker(e.state) {
             return;
         }
-        let (stands, at) = pin_at(e.id());
-        if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) {
+        let (stands, base) = pin_at(e.id());
+        if (0..3).all(|k| (columns.min[k]..columns.max[k]).contains(&base[k])) {
             pins.push(Pin {
                 square,
                 at: e.id(),
                 design: pill(world.words(e).unwrap_or_default()),
                 stands,
-                cell: marker_cell_of(cell_zoom, e.id()),
-                count: None,
+                base,
+                grid: 0,
+                cell: None,
+                crowd: None,
             });
         }
     });
-    let detail = GROUND.read_zoom(cell_zoom);
-    let mine = &mut pins[from..];
-    mine.sort_unstable_by_key(|p| p.cell);
-    for run in mine.chunk_by_mut(|a, b| a.cell == b.cell).filter(|run| run.len() > 1) {
-        let ((z, at), one) = (run[0].cell, run[0].at);
-        let counted = Some((crowd_at(z, at, one.zoom(), detail), count(run.len())));
-        run.iter_mut().for_each(|p| p.count.clone_from(&counted));
-    }
 }
 
-/// What `pins` show: the one waiting for its words, wherever it is, then a
-/// cell's pins but that one: one is itself, more their count, which a
-/// tap takes to where it stands.
-pub(super) fn shown(pins: &[Pin]) -> impl Iterator<Item = Instance> + '_ {
+/// What `pins` show seen from `eye` at `tau`, into `out`: the one waiting
+/// for its words, wherever it is, then each pin where its own point's cell
+/// shows a marker (`marker_shows`), a pin's cell's pins but that one
+/// together: one is itself, more their count, which a tap takes to where it
+/// stands. A cell lies in its square, finer than it, so a square's pins are
+/// counted among themselves.
+pub(super) fn show(pins: &mut [Pin], eye: V3, tau: Tau, out: &mut Vec<Instance>) {
     let drafted = draft().map(|d| d.at);
-    let waiting = draft().map(|d| one(d.at, pill(&d.words), pin_at(d.at).0));
-    waiting.into_iter().chain(pins.chunk_by(|a, b| a.cell == b.cell).filter_map(move |run| {
+    out.extend(draft().map(|d| one(d.at, pill(&d.words), pin_at(d.at).0)));
+    for p in pins.iter_mut() {
+        p.grid = cell_at(eye, tau, p.base);
+        p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
+    }
+    pins.sort_unstable_by_key(|p| (p.square, p.cell));
+    for run in pins.chunk_by_mut(|a, b| a.square == b.square && a.cell == b.cell) {
+        let Some(cell) = run[0].cell else { continue };
         let mut left = run.iter().filter(|p| Some(p.at) != drafted);
-        let first = left.next()?;
+        let Some(first) = left.next() else { continue };
         let n = 1 + left.count();
-        Some(match &first.count {
-            Some((at, counted)) if n > 1 => Instance {
-                key: Key::Pin(Held::Cell(first.cell)),
-                design: if n == run.len() { counted.clone() } else { count(n) },
-                stands: *at,
-                tap: Some(Went::To(*at)),
-            },
-            _ => one(first.at, first.design.clone(), first.stands),
-        })
-    }))
+        if n == 1 {
+            out.push(one(first.at, first.design.clone(), first.stands));
+            continue;
+        }
+        // Where the count stands, asked once the cell it stands for.
+        let at = match run.iter().find_map(|p| p.crowd.filter(|c| c.0 == cell)) {
+            Some((_, at)) => at,
+            None => crowd_at(cell, run[0].at.zoom(), GROUND.read_zoom(run[0].grid)),
+        };
+        run.iter_mut().for_each(|p| p.crowd = Some((cell, at)));
+        out.push(Instance {
+            key: Key::Pin(Held::Cell(cell)),
+            design: count(n),
+            stands: at,
+            tap: Some(Went::To(at)),
+        });
+    }
 }
 
 /// The one waiting for its words, as `Seen` compares it: its entry and its
@@ -150,9 +163,10 @@ pub(super) fn drafted() -> Option<(EntryAt, u64)> {
     })
 }
 
-/// Where the count of a cell's pins stands: at its middle, half a pin at
-/// `pin` over what is drawn there first within it, or over its floor.
-fn crowd_at(zoom: Zoom, at: [i32; 3], pin: Zoom, detail: Zoom) -> Q3 {
+/// Where the count of a pin's cell `(zoom, at)` stands: at its middle, half
+/// a pin at `pin` over what is drawn there first within it at `detail`, or
+/// over its floor.
+fn crowd_at((zoom, at): Cell, pin: Zoom, detail: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
     let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2]), detail).unwrap_or(c.min[2]);
