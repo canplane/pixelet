@@ -1,6 +1,6 @@
 ---
 name: collaboration
-description: How sessions running side by side work — optimistically, all in one checkout on main's tip, never waiting on another, each building into its own target. Use when another session works in the same tree, and before holding a path, waiting for a peer's landing, asking a peer to confirm, or building Rust.
+description: How sessions running side by side work — optimistically, all in one checkout on main's tip, pushing unchecked and checking once before a deploy, never waiting on another, each building into its own target. Use when another session works in the same tree, and before holding a path, waiting for a peer's landing, asking a peer to confirm, or building Rust.
 ---
 
 # Collaboration
@@ -12,8 +12,10 @@ so none of it waits:
 - All work in the one checkout, on main's tip; no worktrees.
 - No holds. A path is never reserved, and another session's announced work
   is no reason to stop yours.
-- Land small commits as soon as they pass, and rebase over whatever landed
-  meanwhile. Whoever lands second resolves the conflict.
+- Commit and push as you go, unchecked: a sync is `git pull --rebase` and
+  `git push`, nothing more. Whoever lands second resolves the conflict.
+- The checks and tests run once, at the end, before a deploy (the deploy
+  skill), never per commit or per push.
 - Say what landed after it lands, so the others rebase knowingly. Do not
   ask before you start, and do not wait for an answer to go on.
 - A review or a confirmation round runs beside the work, not in front of
