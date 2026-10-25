@@ -50,7 +50,7 @@ async function replay(): Promise<void> {
 /** An old handle's late unbind lets go no newer surface in its slot, and a
  * context taken from its slot is let go then. Binding reaches neither the
  * device nor a canvas, so both are stand-ins that record what is let go. */
-function guardsTheSlot(): void {
+function guard(): void {
   const released: string[] = [];
   const context = (name: string) => ({ unconfigure: () => released.push(name) }) as unknown as GPUCanvasContext;
   const device = { lost: new Promise<never>(() => {}) } as unknown as GPUDevice;
@@ -67,5 +67,5 @@ function guardsTheSlot(): void {
   assert(!host.unbind(newer), "and only once");
 }
 
-const outcome = await replay().then(guardsTheSlot).then(() => "ok", (e: unknown) => (e instanceof Error ? `${e.message}\n${e.stack}` : String(e)));
+const outcome = await replay().then(guard).then(() => "ok", (e: unknown) => (e instanceof Error ? `${e.message}\n${e.stack}` : String(e)));
 await fetch("/outcome", { method: "POST", body: outcome });

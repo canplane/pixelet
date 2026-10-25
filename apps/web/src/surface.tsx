@@ -10,7 +10,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
 import type { CaseSurfaceProps, InputDriver, PointerKind, PointerPhase, SurfaceDriver, WorldSurfaceProps } from "@pxl/client/bracket.tsx";
-import { bindSurface, unbindSurface } from "./webgpu.ts";
+import * as webgpu from "./webgpu.ts";
 
 /** A wheel line in CSS pixels: a page's default line height. */
 const LINE_PX = 16;
@@ -42,7 +42,7 @@ function onRatioChange(then: () => void): () => void {
 function openSurface(canvas: HTMLCanvasElement, surface: SurfaceDriver): { handle: u32; close: () => void } {
   const handle = surface.open();
   if (handle === 0) return { handle, close: () => {} };
-  bindSurface(handle, canvas);
+  webgpu.bind(handle, canvas);
   const send = (width: u32, height: u32) => surface.size(handle, width, height, dpr());
   const sendBox = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
   const observer = new ResizeObserver((entries) => {
@@ -64,7 +64,7 @@ function openSurface(canvas: HTMLCanvasElement, surface: SurfaceDriver): { handl
       stopRatio();
       observer.disconnect();
       surface.close(handle);
-      unbindSurface(handle);
+      webgpu.unbind(handle);
     },
   };
 }

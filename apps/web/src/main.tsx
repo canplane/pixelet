@@ -14,7 +14,7 @@ import { boot } from "@pxl/client/shell/boot.ts";
 import { AppRouter } from "@pxl/client/shell/router.tsx";
 import { Halt } from "@pxl/client/shell/halt.tsx";
 import { page } from "@/bracket.ts";
-import { whatIsMissing } from "@/webgpu.ts";
+import * as webgpu from "@/webgpu.ts";
 import "@pxl/client/shell/style/index.css";
 
 if (import.meta.env.DEV) (await import("@/remote-console.ts")).install();
@@ -22,7 +22,7 @@ if (import.meta.env.DEV) (await import("@/remote-console.ts")).install();
 bracket.set(page);
 
 try {
-  const missing = await whatIsMissing();
+  const missing = await webgpu.missing();
   if (missing) locale.boot();
   else boot();
 

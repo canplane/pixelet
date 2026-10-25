@@ -1,7 +1,7 @@
 // @pxl/web/gpu.ts
 
 import type { GpuHeard } from "@pxl/client/bracket.tsx";
-import { acquireDevice } from "./webgpu.ts";
+import * as webgpu from "./webgpu.ts";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
  * page keeps asking. The first retry waits too, or an adapter returning an
@@ -49,7 +49,7 @@ function ask(): void {
   };
   tries += 1;
   // A completion the device writes asks for the turn that reads it (`heard.wake`).
-  void acquireDevice(lost, () => heard.wake()).then((answered) => {
+  void webgpu.acquire(lost, () => heard.wake()).then((answered) => {
     if (!answered) {
       if (tries === 1) console.warn(`[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`);
       if (tries >= TRIES) {

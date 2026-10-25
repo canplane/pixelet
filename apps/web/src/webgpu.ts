@@ -15,7 +15,7 @@ import { DEV_BUNDLE } from "./bundle.ts";
 
 let host: GpuHost | null = null;
 /** The kernel's memory, which the host reads the stream from and writes answers into. */
-let moduleMemory: ArrayBuffer | null = null;
+let memory: ArrayBuffer | null = null;
 /** A canvas transfers once: an effect mounted again is handed the same one. */
 const transferred = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
 /** In the order they were bound, so a device acquired again binds each slot's newest last. */
@@ -29,10 +29,10 @@ export const enum Missing {
 
 /** `navigator.gpu` exists only in a secure context, so the LAN address over
  * http has none where localhost has it. */
-export async function whatIsMissing(): Promise<Missing | null> {
-  const missing = await missingOf();
-  if (missing !== null) console.error(`[gpu] cannot draw here: ${MISSING[missing]}`);
-  return missing;
+export async function missing(): Promise<Missing | null> {
+  const absent = await look();
+  if (absent !== null) console.error(`[gpu] cannot draw here: ${MISSING[absent]}`);
+  return absent;
 }
 
 const MISSING: Record<Missing, string> = {
@@ -41,7 +41,7 @@ const MISSING: Record<Missing, string> = {
   [Missing.Gpu]: "WebGPU is here but no adapter answered",
 };
 
-async function missingOf(): Promise<Missing | null> {
+async function look(): Promise<Missing | null> {
   if (!("gpu" in navigator)) return isSecureContext ? Missing.WebGpu : Missing.Insecure;
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   return adapter ? null : Missing.Gpu;
@@ -50,7 +50,7 @@ async function missingOf(): Promise<Missing | null> {
 /** False where no adapter answered. What the device is, the kernel reads from
  * the block its first call asks the host for. */
 /** `wake`: what a completion calls to ask the turn that reads it (xpute GpuHost). */
-export async function acquireDevice(lost: () => void, wake: () => void): Promise<boolean> {
+export async function acquire(lost: () => void, wake: () => void): Promise<boolean> {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) return false;
   const timestamps = adapter.features.has("timestamp-query");
@@ -74,7 +74,7 @@ export async function acquireDevice(lost: () => void, wake: () => void): Promise
         ].map(of).join(" "),
     );
   }
-  const h = new GpuHost(d, () => moduleMemory!, wake);
+  const h = new GpuHost(d, () => memory!, wake);
   d.lost.then((info) => {
     // Nothing here destroys the device, so a loss is always the browser's.
     console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);
@@ -88,7 +88,7 @@ export async function acquireDevice(lost: () => void, wake: () => void): Promise
   return true;
 }
 
-export function bindSurface(handle: u32, canvas: HTMLCanvasElement): void {
+export function bind(handle: u32, canvas: HTMLCanvasElement): void {
   let offscreen = transferred.get(canvas);
   if (!offscreen) {
     offscreen = canvas.transferControlToOffscreen();
@@ -99,13 +99,13 @@ export function bindSurface(handle: u32, canvas: HTMLCanvasElement): void {
   host?.bind(handle, offscreen.getContext("webgpu")!);
 }
 
-export function unbindSurface(handle: u32): void {
+export function unbind(handle: u32): void {
   canvases.delete(handle);
   host?.unbind(handle);
 }
 
 /** With no device the records are dropped: the kernel remakes everything on the next one. */
-export function runGpuStream(memory: ArrayBuffer, at: u32, head: u32): void {
-  moduleMemory = memory;
+export function run(of: ArrayBuffer, at: u32, head: u32): void {
+  memory = of;
   host?.run(at, head);
 }

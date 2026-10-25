@@ -11,7 +11,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { reserve_memory } from "@xpute/host/mem/reserve.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
 import type { Guest, Plan } from "@pxl/client/bracket.tsx";
-import { runGpuStream } from "./webgpu.ts";
+import * as webgpu from "./webgpu.ts";
 import { DEV_BUNDLE } from "./bundle.ts";
 
 const GUEST_WASM_URL = new URL("./guest.wasm", import.meta.url);
@@ -32,7 +32,7 @@ export async function open(plan: Plan): Promise<Guest> {
   const gpu = new Directory(buffer, plan.directory_at).get(plan.gpu_stream);
   const interrupt = (quotaMs: f64) => {
     const wake = turn(quotaMs);
-    runGpuStream(buffer, gpu, plan.gpu_head);
+    webgpu.run(buffer, gpu, plan.gpu_head);
     return wake;
   };
   return { buffer, interrupt };
