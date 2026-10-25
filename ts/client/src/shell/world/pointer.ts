@@ -8,11 +8,10 @@
  * hovers there and no tool shows what a tap would do.
  */
 
-import { Keyboard } from "react-native";
-
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
 import { kernel_pointer } from "@/abi/input.ts";
+import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { DockMode, useUiStore } from "@/shell/store/ui.ts";
 
 /** The pointers spent putting the typing away. */
@@ -30,7 +29,7 @@ export function worldPointer(phase: PointerPhase, pointerType: PointerType, id: 
   switch (phase) {
     case PointerPhase.Down:
       pressed.set(id, pointerType);
-      Keyboard.dismiss();
+      putKeyboardAway();
       if (typing) {
         spent.add(id);
         setDockMode(DockMode.Palette);

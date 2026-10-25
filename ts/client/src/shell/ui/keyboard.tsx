@@ -13,6 +13,11 @@ let kept = false;
  */
 export const KEEPS_KEYBOARD: ViewProps = { onStartShouldSetResponderCapture: () => keepKeyboard() };
 
+/** Puts the keyboard away, wherever it is up. */
+export function putKeyboardAway(): void {
+  Keyboard.dismiss();
+}
+
 /** For a view whose capture handler is already a PanResponder's. */
 export function keepKeyboard(): false {
   kept = true;
@@ -25,7 +30,7 @@ export function KeyboardAway({ children, onAway }: { children: ReactNode; onAway
     kept = false;
     queueMicrotask(() => {
       if (kept) return;
-      Keyboard.dismiss();
+      putKeyboardAway();
       onAway?.();
     });
     return false;

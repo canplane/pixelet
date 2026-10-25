@@ -18,9 +18,9 @@ import { KEEPS_KEYBOARD } from "@/shell/ui/keyboard.tsx";
 
 import { useChromeTop } from "./chrome.ts";
 import { BusyDim } from "./busy-dim.tsx";
-import { Dock } from "./dock.tsx";
+import { Dock } from "./dock/dock.tsx";
 import { TopOverlays } from "@/shell/world/top/top.tsx";
-import { DOCK_HEIGHT } from "./dock.tsx";
+import { DOCK_HEIGHT } from "./dock/card.tsx";
 import { ToastController } from "@/shell/world/toast/controller.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 

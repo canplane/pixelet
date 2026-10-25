@@ -27,7 +27,7 @@ export function Segmented<T extends string | number>({ segments, value, onChange
             aria-selected={on}
             style={styles.reach}
           >
-            {/* Always mounted, as dock.tsx `ToolButton` is. */}
+            {/* Always mounted, as dock/strip.tsx `ToolButton` is. */}
             <View collapsable={false} style={[styles.segment, on && styles.on]}>
               <Text maxFontSizeMultiplier={textScale.chrome} style={[styles.label, on && styles.labelOn]}>{s.label}</Text>
             </View>

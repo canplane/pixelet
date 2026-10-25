@@ -49,11 +49,11 @@ seen, not written in the HIG, which states only the 44 target.
 
 - `chrome.control` (48) is a map control's container (theme.ts `chrome`),
   `PANEL_CONTROL` (44, `chrome.target`) a sheet's (panel.tsx), and the strip's
-  slots are 44 (dock.tsx `slot`), with what is lit in one a
+  slots are 44 (dock/strip.tsx `SLOT`), with what is lit in one a
   `chrome.selection` (36) capsule inside it, as a segmented control's
   selection is.
 - `chrome.glyph` (20) is a control's glyph and the strip's tools'. The strip's
-  swatches are 24 (dock.tsx `ITEM`), and its decor and marker glyphs 16 in a
+  swatches are 24 (dock/strip.tsx `ITEM`), and its decor and marker glyphs 16 in a
   24 disc.
 - CircularButton (circular-button.tsx) takes `size` and `place`, defaulting
   to a map control's, so a sheet's close is the same control at
