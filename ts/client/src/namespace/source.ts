@@ -18,9 +18,27 @@ import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
 import { type Declaration, declaration } from "@/namespace/tile.ts";
 import { bracket } from "@/bracket.tsx";
 
+/** Where the declaration stands: asked, failing (refused or unanswered, and asked again), refused for good (one this client cannot read), or declared. */
+export const enum Source {
+  Asking = 0,
+  Failing = 1,
+  Refused = 2,
+  Declared = 3,
+}
+
+let state = Source.Asking;
 let declared: Declaration | null = null;
 let shown: readonly { kind: BaseLayer; version: string }[] = [];
 const listeners = new Set<() => void>();
+
+function set(next: Source): void {
+  state = next;
+  for (const listener of listeners) listener();
+}
+
+export function source_state(): Source {
+  return state;
+}
 
 /** The declaration handed to the kernel; none until then. */
 export function source_declared(): Declaration | null {
@@ -37,9 +55,10 @@ export function watch_source(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** The wait after a refused ask, doubled each time up to the most: a source
- * that does not answer is not asked again at a pace. Offline, nothing is
- * asked until the device says it is online. */
+/** The most wait after a refused ask, doubled each time up to the most, and
+ * the wait drawn below it (full jitter): clients one outage failed together
+ * do not come back together. Offline, nothing is asked until the device
+ * says it is online. */
 const ASK_AGAIN_MS = 2_000;
 const ASK_AGAIN_MOST_MS = 60_000;
 
@@ -61,7 +80,8 @@ export async function declare_source(): Promise<void> {
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
     if (online()) {
-      await new Promise((resolve) => setTimeout(resolve, wait_ms));
+      set(Source.Failing);
+      await new Promise((resolve) => setTimeout(resolve, Math.random() * wait_ms));
       wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
     } else await when_online();
     source = await asked();
@@ -69,16 +89,18 @@ export async function declare_source(): Promise<void> {
   const read = declaration(source);
   if (read === null) {
     console.error("[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards");
+    set(Source.Refused);
     return;
   }
   const shards = Object.keys(read.shard);
   const pkt = encode_world_source(GUEST_DOORBELL, read.top_zoom, BASE_LAYERS.map((kind) => read.format[kind]), shards);
   if (!GUEST_DOORBELL.fits(pkt)) {
     console.error(`[source] the declaration's ${shards.length} shards are more than a command carries`);
+    set(Source.Refused);
     return;
   }
   send_next(Command.WORLD_SOURCE, pkt);
   declared = read;
   shown = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
-  for (const listener of listeners) listener();
+  set(Source.Declared);
 }

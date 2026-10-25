@@ -6,9 +6,10 @@ import { useTranslation } from "react-i18next";
 import { messageKey } from "@/shell/locale/message-key.ts";
 import { DevicePoseStatus, GroundStatus, Message } from "@/abi/cmd.spec.ts";
 import { Gpu } from "@/host/gpu.ts";
+import { Source } from "@/namespace/source.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "@/shell/ui/toast/store.ts";
-import { useGpu, useKernel, useOnline } from "@/shell/store/system.ts";
+import { useGpu, useKernel, useOnline, useSource } from "@/shell/store/system.ts";
 
 /** Each report's toast; of one tone, by rank: a cause before what it holds
  * up, the device's before the server's, the world's before a sensor's. */
@@ -81,8 +82,10 @@ function gpuError(gpu: Gpu): Said | null {
   return gpu === Gpu.Waiting ? error("toast.gpu_unstable") : null;
 }
 
-/** The server's: it fails the reads that reach it. */
-function serverError(stall: Message | null): Said | null {
+/** The server's: the source's declaration refused for good or failing, or the reads that reach it failing. */
+function serverError(source: Source, stall: Message | null): Said | null {
+  if (source === Source.Refused) return error("toast.source_refused");
+  if (source === Source.Failing) return error("toast.server_unstable");
   return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
 }
 
@@ -107,7 +110,7 @@ export function ToastController() {
   const stall = useKernel((s) => s.stall);
   useSaid(Report.Gpu, gpuError(gpu));
   useSaid(Report.Network, useOnline() ? null : error("toast.network_unstable"));
-  useSaid(Report.Server, serverError(stall), SERVER_HOLD_MS);
+  useSaid(Report.Server, serverError(useSource(), stall), SERVER_HOLD_MS);
 
   const outside = useKernel((s) => s.focus.outside);
   const shown = useKernel((s) => s.focus.status === GroundStatus.Success);

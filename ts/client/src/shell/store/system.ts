@@ -8,7 +8,7 @@ import type { Snapshot } from "@/abi/cmd.spec.ts";
 import { kernel_snapshot, watch_snapshot } from "@/abi/snapshot.ts";
 import { type Gpu, gpu, watch_gpu } from "@/host/gpu.ts";
 import { online, watch_online } from "@/host/online.ts";
-import { source_versions, watch_source } from "@/namespace/source.ts";
+import { type Source, source_state, source_versions, watch_source } from "@/namespace/source.ts";
 
 export function useKernel<T>(select: (s: Snapshot) => T): T {
   return useSyncExternalStore(watch_snapshot, () => select(kernel_snapshot()));
@@ -24,4 +24,8 @@ export function useOnline(): boolean {
 
 export function useSourceVersions(): ReturnType<typeof source_versions> {
   return useSyncExternalStore(watch_source, source_versions);
+}
+
+export function useSource(): Source {
+  return useSyncExternalStore(watch_source, source_state);
 }

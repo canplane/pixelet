@@ -298,6 +298,7 @@
   },
   "toast": {
     "server_unstable": "Having trouble connecting to the server.",
+    "source_refused": "This version can't read the world's data. Try reloading.",
     "location_checking": "Checking your location…",
     "world_loading": "Loading area…",
     "world_ready": "Area loaded.",

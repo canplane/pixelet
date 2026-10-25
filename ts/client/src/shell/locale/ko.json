@@ -184,6 +184,7 @@
   },
   "toast": {
     "server_unstable": "서버 연결이 원활하지 않습니다.",
+    "source_refused": "이 버전은 세계 데이터를 읽을 수 없습니다. 새로고침해 보세요.",
     "location_checking": "현재 위치를 확인하고 있습니다.",
     "world_loading": "공간을 불러오고 있습니다.",
     "world_ready": "공간을 불러왔습니다.",
