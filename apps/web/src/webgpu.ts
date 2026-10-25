@@ -4,11 +4,11 @@
  * The page's WebGPU: the device, and xpute's host (@xpute/gpu/host.ts)
  * running on it the calls the kernel's renderer wrote in a turn. A wasm
  * module reaches WebGPU no other way. The canvases the shell hands over are
- * kept here, each bound to every device's host by its handle's slot.
+ * kept here by the kernel's handle, each bound to every device's host, which
+ * guards its slot (GpuHost `bind`, `unbind`).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { handle_slot } from "@xpute/host/abi/handle.ts";
 import { GpuHost } from "@xpute/gpu/host.ts";
 
 import { DEV_BUNDLE } from "./bundle.ts";
@@ -18,7 +18,8 @@ let host: GpuHost | null = null;
 let moduleMemory: ArrayBuffer | null = null;
 /** A canvas transfers once: an effect mounted again is handed the same one. */
 const transferred = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
-const canvases: (OffscreenCanvas | undefined)[] = [];
+/** In the order they were bound, so a device acquired again binds each slot's newest last. */
+const canvases = new Map<u32, OffscreenCanvas>();
 
 export const enum Missing {
   WebGpu = "web.webgpu",
@@ -82,9 +83,7 @@ export async function acquireDevice(lost: () => void, wake: () => void): Promise
     lost();
   });
   d.onuncapturederror = (e) => console.error(`[gpu] ${e.error.message}`);
-  canvases.forEach((canvas, slot) => {
-    if (canvas) h.bindSurface(slot, canvas.getContext("webgpu")!);
-  });
+  canvases.forEach((canvas, handle) => h.bind(handle, canvas.getContext("webgpu")!));
   host = h;
   return true;
 }
@@ -95,15 +94,14 @@ export function bindSurface(handle: u32, canvas: HTMLCanvasElement): void {
     offscreen = canvas.transferControlToOffscreen();
     transferred.set(canvas, offscreen);
   }
-  const slot = handle_slot(handle);
-  canvases[slot] = offscreen;
-  host?.bindSurface(slot, offscreen.getContext("webgpu")!);
+  canvases.delete(handle);
+  canvases.set(handle, offscreen);
+  host?.bind(handle, offscreen.getContext("webgpu")!);
 }
 
 export function unbindSurface(handle: u32): void {
-  const slot = handle_slot(handle);
-  canvases[slot] = undefined;
-  host?.unbindSurface(slot);
+  canvases.delete(handle);
+  host?.unbind(handle);
 }
 
 /** With no device the records are dropped: the kernel remakes everything on the next one. */

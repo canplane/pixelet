@@ -133,7 +133,8 @@ export class GpuHost {
   private readonly compute: GPUComputePassDescriptor = {};
   private readonly stamps: GPURenderPassTimestampWrites = { querySet: undefined as unknown as GPUQuerySet };
   private readonly finished: GPUCommandBuffer[] = [];
-  private readonly surfaces = new Map<u32, GPUCanvasContext>();
+  /** At the slot the guest names each by, with the guest's handle bound there. */
+  private readonly surfaces = new Map<u32, { handle: u32; context: GPUCanvasContext }>();
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
 
@@ -151,14 +152,31 @@ export class GpuHost {
     });
   }
 
-  /** A surface the guest names by `surface` in CONFIGURE, RESIZE and CURRENT. */
-  bindSurface(surface: u32, context: GPUCanvasContext): void {
-    this.surfaces.set(surface, context);
+  /**
+   * The canvas's `context` for the guest's surface `handle`
+   * (`slot | generation << 16`, the contract's), which the guest names by its
+   * slot in CONFIGURE, RESIZE and CURRENT. It takes the slot from whatever
+   * was bound there, whose context is let go.
+   */
+  bind(handle: u32, context: GPUCanvasContext): void {
+    const slot = handle_slot(handle);
+    const was = this.surfaces.get(slot);
+    if (was && was.context !== context) was.context.unconfigure();
+    this.surfaces.set(slot, { handle, context });
   }
 
-  unbindSurface(surface: u32): void {
-    this.surfaces.get(surface)?.unconfigure();
-    this.surfaces.delete(surface);
+  /**
+   * Lets `handle`'s context go, if it is still the one bound under its slot:
+   * whether it was. An older handle of the slot lets nothing go, so a canvas
+   * that goes after a newer one took its slot does not unbind the newer.
+   */
+  unbind(handle: u32): boolean {
+    const slot = handle_slot(handle);
+    const bound = this.surfaces.get(slot);
+    if (handle === 0 || bound?.handle !== handle) return false;
+    bound.context.unconfigure();
+    this.surfaces.delete(slot);
+    return true;
   }
 
   /** The device went: every object with it, and the guest told in its block. */
@@ -646,21 +664,21 @@ export class GpuHost {
         return;
       }
       case op.CONFIGURE: {
-        const context = this.surfaces.get(r.u());
+        const context = this.surfaces.get(r.u())?.context;
         const format = r.u();
         const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODE[r.u()]];
         context?.configure({ device: d, format: format === SURFACE_PREFERRED ? navigator.gpu.getPreferredCanvasFormat() : TEXTURE_FORMAT[format], usage, alphaMode });
         return;
       }
       case op.RESIZE: {
-        const canvas = this.surfaces.get(r.u())?.canvas;
+        const canvas = this.surfaces.get(r.u())?.context.canvas;
         const [width, height] = [r.u(), r.u()];
         if (canvas && (canvas.width !== width || canvas.height !== height)) [canvas.width, canvas.height] = [width, height];
         return;
       }
       case op.CURRENT: {
         const id = r.u();
-        const texture = this.surfaces.get(r.u())?.getCurrentTexture();
+        const texture = this.surfaces.get(r.u())?.context.getCurrentTexture();
         if (!texture) return;
         this.put(id, { view: texture.createView(), format: texture.format });
         return;
