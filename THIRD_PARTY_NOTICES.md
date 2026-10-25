@@ -21,8 +21,8 @@ How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 (Apache-2.0), its [element processing][processing] for bridges,
 highways and railways without the blocks it places
 ([decision](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)):
-the bake's solve in `separation/solve.rs`, its decks in `solve/deck.rs` and its
-bores in `solve/bore.rs`, each of whose heads carries the license notice,
+the bake's solve in `separation/solve.rs`, its bridges in `solve/bridge.rs` and
+its tunnels in `solve/tunnel.rs`, each of whose heads carries the license notice,
 and the piers in `procedural.rs`, which reach the client and are marked
 where they begin. Both read Overture's fields for OSM's tags and take their
 widths from the ground. Arnis's `NOTICE` asks that this be kept with them:

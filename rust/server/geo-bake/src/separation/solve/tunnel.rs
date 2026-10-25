@@ -1,4 +1,4 @@
-// pxl-geo-bake/separation/solve/bore.rs
+// pxl-geo-bake/separation/solve/tunnel.rs
 
 // Copyright (c) 2022-2026 Louis Erbkamm (louis-e)
 //
@@ -33,7 +33,7 @@ use crate::segment::{End, PartId};
 use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::{Drawn, Line};
 
-use super::deck::Bridges;
+use super::bridge::Bridges;
 use super::*;
 
 // ---- Arnis's numbers for a bore, in metres, under its names ----

@@ -613,7 +613,7 @@ Rows become features by Carto's mapping of their OpenStreetMap tags, for the cla
 
 The coastline is OSM's land polygons, and the sea is wherever they do not reach. A leaf is baked only where land, a building or a way reaches it.
 
-Bridges and tunnels are solved from a tile and as much of its 1-ring as its structures reach, and never further, starting from Arnis's rules (`separation/solve.rs`, the decks `solve/deck.rs`, the bores `solve/bore.rs`; [as Arnis solves them](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)). A height leans on nothing further than a tile, so neighbouring tiles agree where they meet; Arnis is the reference, the ring the bound. A deck is a line in the terrain tile, not an object ([ways off the ground](./doc/minutes/archive/20261001-ways-off-the-ground.md)).
+Bridges and tunnels are solved from a tile and as much of its 1-ring as its structures reach, and never further, starting from Arnis's rules (`separation/solve.rs`, the bridges `solve/bridge.rs`, the tunnels `solve/tunnel.rs`; [as Arnis solves them](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)). A height leans on nothing further than a tile, so neighbouring tiles agree where they meet; Arnis is the reference, the ring the bound. A deck is a line in the terrain tile, not an object ([ways off the ground](./doc/minutes/archive/20261001-ways-off-the-ground.md)).
 
 Polygons are filled even-odd and lines with a thickness kernel. Elevation is signed 16-bit cell units under one Mercator Z scale per tile, so the bake, the terrain and the object layer agree on a unit of height. A tile is written as XTP, xpute's tree, in the form the client reads.
 

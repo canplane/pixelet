@@ -1,4 +1,4 @@
-// pxl-geo-bake/separation/solve/deck.rs
+// pxl-geo-bake/separation/solve/bridge.rs
 
 // Copyright (c) 2022-2026 Louis Erbkamm (louis-e)
 //
@@ -997,5 +997,5 @@ pub(super) fn decks(src: &Source, runs: &[Run], ring: [[f64; 2]; 2], units: Unit
 }
 
 #[cfg(test)]
-#[path = "deck.test.rs"]
+#[path = "bridge.test.rs"]
 mod tests;

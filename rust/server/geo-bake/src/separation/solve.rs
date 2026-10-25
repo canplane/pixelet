@@ -16,7 +16,7 @@
 
 //! A tile's bridges and tunnels, solved: what it reads, the structures in
 //! scope, the stretches of them it sees (`Run`), and the lines it keeps; the
-//! decks are `deck`'s, the bores `bore`'s. It began as louis-e/arnis `c96872e`
+//! bridges are `bridge`'s, the tunnels `tunnel`'s. It began as louis-e/arnis `c96872e`
 //! ported, read for Overture's fields where Arnis reads OSM's tags, its widths
 //! the ground's, and its numbers, metres (a block a metre upright on the
 //! Earth, as its celestial bodies say), taken into the tile's cells, half to
@@ -27,7 +27,7 @@
 //! read past it, and nothing reads all of it where less will do. A tile draws
 //! only itself (`terrain/pipeline/separation.rs` keeps what lies in it), so
 //! what it computes past what bears on its own cells is spent for nothing. Two
-//! rules follow, and a change here or in `deck` or `bore` keeps both:
+//! rules follow, and a change here or in `bridge` or `tunnel` keeps both:
 //!
 //! - Where the ring cuts a piece is no end of it. A cut lies a tile from every
 //!   cell its tile draws, so a height that leans on nothing further than a
@@ -38,13 +38,13 @@
 //! - What only the whole piece can answer is not answered by reading past the
 //!   ring for it, which costs every tile reads it is not owed. A tile that
 //!   cannot see it does without it, by a rule that leans on what it sees
-//!   (a long bore, `bore::road_tunnels`; a deck, `deck::deck_block`).
+//!   (a long bore, `tunnel::road_tunnels`; a deck, `bridge::deck_block`).
 //!
 //! Arnis is where this solve started, not a bound on it: where its answer
 //! needs a structure whole, the ring wins and the answer is reworked.
 
-mod bore;
-mod deck;
+mod bridge;
+mod tunnel;
 
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::procedural::Frame;
@@ -194,14 +194,14 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     // draws, whether or not it touches the tile: the tunnels about the tile are asked for alone, as far
     // as the deepest one's approaches run, a reach well inside the ring, and only about a portal that
     // near are the ring's tiles read, as far as its approaches run
-    let reach_of = |level: i64| bore::approach_reach(level, units);
+    let reach_of = |level: i64| tunnel::approach_reach(level, units);
     let off = |p: [f64; 2]| {
         let d = [0, 1].map(|k| (own[0][k] - p[k]).max(p[k] - own[1][k]).max(0.0));
         libm::hypot(d[0], d[1])
     };
     // and never past the ring, whatever the reach comes to: the query is cut to the ring's box, as `load`
     // refuses a tile past it
-    let asked = grown(own, reach_of(bore::DEEPEST));
+    let asked = grown(own, reach_of(tunnel::DEEPEST));
     let asked = [[asked[0][0].max(lo[0]), asked[0][1].max(lo[1])], [asked[1][0].min(hi[0]), asked[1][1].min(hi[1])]];
     for p in portals_in(r.client, asked)? {
         let d = reach_of(p.level);
@@ -223,7 +223,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     if queue.is_empty() {
         return Ok(Solved::default());
     }
-    let reach = mer_from_u(f64::from(units.c(deck::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
+    let reach = mer_from_u(f64::from(units.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| (o.form == Form::Bridge || road_tunnel(o)) && o.way.points.iter().any(|p| ends.contains(&End::at([p[0], p[1]])));
@@ -263,8 +263,8 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
-    let decks = deck::decks(&src, &runs, [lo, hi], units, &mut lines);
-    bore::bores(&src, &runs, &decks, units, &mut lines);
+    let decks = bridge::decks(&src, &runs, [lo, hi], units, &mut lines);
+    tunnel::bores(&src, &runs, &decks, units, &mut lines);
     let mut out = Solved::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
