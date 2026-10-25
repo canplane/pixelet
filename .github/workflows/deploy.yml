@@ -101,7 +101,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: echo "value=$(./.github/script/build-counter.ts)" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(./.github/script/build-counter.sh)" >> "$GITHUB_OUTPUT"
 
   deploy-server:
     name: rebuild the servers on the VM
@@ -223,7 +223,7 @@ jobs:
 
   # The one thing the repository could not answer about itself: what went out
   # in a given build. The counter is an object in the bucket and deliberately
-  # outside git (.github/script/build-counter.ts), so `#18` existed with nothing to
+  # outside git (.github/script/build-counter.sh), so `#18` existed with nothing to
   # look it up by, and the question meant opening this workflow's run history.
   #
   # The record is the commit subjects and not a commit id, because main's
