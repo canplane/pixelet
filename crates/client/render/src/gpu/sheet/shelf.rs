@@ -95,7 +95,7 @@ fn bucket(v: f64, to: u32) -> u32 {
     (v / to as f64).ceil() as u32 * to
 }
 
-/// Every entry in a shelf takes the shelf's height.
+/// Every sticker in a shelf takes the shelf's height.
 #[derive(Default)]
 struct Shelves {
     y: Vec<u32>,
@@ -312,7 +312,7 @@ impl Sheet {
         (slots, ws, hs)
     }
 
-    /// Halves the sheet while every live entry still fits. Without it a sheet one
+    /// Halves the sheet while every live sticker still fits. Without it a sheet one
     /// dense view grew stays that large, canvas and texture, for a dozen stickers.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
