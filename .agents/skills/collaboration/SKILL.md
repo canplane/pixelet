@@ -14,8 +14,9 @@ so none of it waits:
   is no reason to stop yours.
 - Commit and push as you go, unchecked: a sync is `git pull --rebase` and
   `git push`, nothing more. Whoever lands second resolves the conflict.
-- The checks and tests run once, at the end, before a deploy (the deploy
-  skill), never per commit or per push.
+- No checks while working. The checks and tests run once, before a deploy
+  (the deploy skill); CI checks nothing, smoke-testing only what it
+  deployed.
 - Say what landed after it lands, so the others rebase knowingly. Do not
   ask before you start, and do not wait for an answer to go on.
 - A review or a confirmation round runs beside the work, not in front of
