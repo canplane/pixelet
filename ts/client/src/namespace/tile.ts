@@ -21,7 +21,7 @@ import { FileError } from "@xpute/host/ipc/sys.ts";
 import type { BaseLayer } from "@/config/published.spec.ts";
 import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { TILE_SPHERE, tileObject } from "@/config/route.spec.ts";
-import { tileUrl } from "@/config/route.ts";
+import { tile_url } from "@/config/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { get } from "@/namespace/read.ts";
 
@@ -116,7 +116,7 @@ function packed(body: U8Array): boolean {
 export async function read_object(declared: Declaration | null, bake: u32, number: bigint, signal: AbortSignal): Promise<U8Array> {
   const name = declared === null ? null : tile_object(declared, BASE_LAYERS[bake], number);
   if (name === null) throw new FileError(Errno.ENOENT);
-  const body = await get(tileUrl(BASE_LAYERS[bake], name), name, signal);
+  const body = await get(tile_url(BASE_LAYERS[bake], name), name, signal);
   if (body.byteLength > 0 && packed(body)) {
     // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
     console.warn(`[read] ${name}: the body arrived still packed, with no encoding to undo it`);

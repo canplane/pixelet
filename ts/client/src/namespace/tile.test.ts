@@ -3,7 +3,7 @@
 import { assertEquals } from "@std/assert";
 
 import type { BaseLayer } from "@/config/published.spec.ts";
-import { tileUrl } from "@/config/route.ts";
+import { tile_url } from "@/config/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { declaration, tile_name, tile_object } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };
@@ -13,9 +13,9 @@ const DECLARED = declaration(JSON.stringify(FIXTURE.source))!;
 Deno.test("tile_object - each kind's tile at each zoom, a shard's own version or not, is the URL the kernel made", () => {
   for (const { kind, subject, object } of FIXTURE.tiles) {
     const k = kind as BaseLayer;
-    assertEquals(tileUrl(k, tile_object(DECLARED, k, BigInt(subject))!), tileUrl(k, object), `${kind} ${subject}`);
+    assertEquals(tile_url(k, tile_object(DECLARED, k, BigInt(subject))!), tile_url(k, object), `${kind} ${subject}`);
   }
-  assertEquals(tileUrl("earth", tile_object(DECLARED, "earth", BigInt(SPHERE))!), tileUrl("earth", FIXTURE.sphere));
+  assertEquals(tile_url("earth", tile_object(DECLARED, "earth", BigInt(SPHERE))!), tile_url("earth", FIXTURE.sphere));
 });
 
 Deno.test("tile_object - a number that is no object's names none", () => {

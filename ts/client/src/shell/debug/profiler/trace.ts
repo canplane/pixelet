@@ -36,7 +36,7 @@ interface TraceEvent {
 }
 
 const us = (ms: f64) => round(ms * 1000);
-const fixed_n = (n: number, d: number) => +fixed(n, d);
+const fixedN = (n: number, d: number) => +fixed(n, d);
 
 function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, tid: u32, args?: Args): TraceEvent {
   return { name, cat, ph, ts, ...(dur === null ? {} : { dur }), pid: PID, tid, ...(args ? { args } : {}) };
@@ -49,7 +49,7 @@ function frameArgs(f: Frame): Args {
   const args: Args = {};
   for (const { name } of LANES) {
     if (!isList(name)) {
-      args[name] = fixed_n(f[name], 2);
+      args[name] = fixedN(f[name], 2);
       continue;
     }
     const names = LIST_NAMES[name];
@@ -58,7 +58,7 @@ function frameArgs(f: Frame): Args {
         args[`census_${names[i]}_draws`] = d;
         args[`census_${names[i]}_tris`] = t;
       });
-    } else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
+    } else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
   return args;
@@ -81,8 +81,8 @@ function profilerTraceJson(): string {
     // The outcome is the event's category, and the detail is in `fail`'s text.
     const args: Args = {
       priority: r.priority,
-      queuedMs: r.start_ms === null ? null : fixed_n(r.start_ms - r.enqueue_ms, 1),
-      ranMs: r.start_ms === null ? null : fixed_n(r.end_ms - r.start_ms, 1),
+      queuedMs: r.start_ms === null ? null : fixedN(r.start_ms - r.enqueue_ms, 1),
+      ranMs: r.start_ms === null ? null : fixedN(r.end_ms - r.start_ms, 1),
     };
     if (r.fail !== 0) {
       args.fail = failText(r.fail, r.detail);
@@ -107,7 +107,7 @@ function profilerTraceJson(): string {
   if (longs.length > 0) {
     events.push(threadName(TID_LONG, "long frames"));
     for (const l of longs) {
-      const args = { blockingMs: fixed_n(l.blockingMs, 1), scriptMs: fixed_n(l.scriptMs, 1), renderMs: fixed_n(l.renderMs, 1) };
+      const args = { blockingMs: fixedN(l.blockingMs, 1), scriptMs: fixedN(l.scriptMs, 1), renderMs: fixedN(l.renderMs, 1) };
       events.push(event(`${l.source} ${fixed(l.durationMs, 0)}ms`, l.source, "X", us(l.t), us(l.durationMs), TID_LONG, args));
     }
   }

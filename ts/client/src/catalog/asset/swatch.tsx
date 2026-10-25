@@ -7,14 +7,14 @@ import type { DecorId } from "@/catalog/asset/decor.spec.ts";
 import { type Cube, cubeHex, cubeId, decorName } from "@/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
-import { assetUrl } from "@/config/route.ts";
+import { asset_url } from "@/config/route.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {
   const key = shippedTopTextureKey(cubeId(cube));
-  return key ? `${bracket.origin.url}${assetUrl(key)}` : null;
+  return key ? `${bracket.origin.url}${asset_url(key)}` : null;
 }
 
 interface CubeSwatchProps {
