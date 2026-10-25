@@ -1,19 +1,18 @@
 {
   "description": "A kit, and a guest and a host end over it, for a program run inside another.",
 
-  // Routes only. Each tree is a root of its own: ts/ and script/ as Deno's,
-  // rust/ as Cargo's, its commands as aliases in rust/.cargo/config.toml, and
-  // cpp/ as Make's (cpp/Makefile). What is here is the documents and the spec,
-  // formatted below, a task a tree for each verb, and the aggregates over
-  // them, run in parallel; the one order said is the traces' after the
-  // guests they drive.
+  // Routes only. Each tree is a root of its own: ts/ as Deno's, its scripts
+  // among its members; rust/ as Cargo's, its commands as aliases in
+  // rust/.cargo/config.toml; and cpp/ as Make's (cpp/Makefile). What is here
+  // is the documents and the spec, formatted below, a task a tree for each
+  // verb, and the aggregates over them, run in parallel; the one order said
+  // is the traces' after the guests they drive.
   "workspace": [],
-  "exclude": ["ts/", "script/"],
+  "exclude": ["ts/"],
 
   "tasks": {
-    "check": { "dependencies": ["check:doc", "check:script", "check:ts", "check:cpp", "check:rust"] },
+    "check": { "dependencies": ["check:doc", "check:ts", "check:cpp", "check:rust"] },
     "check:doc": "deno fmt --check",
-    "check:script": "deno task --cwd script check",
     "check:ts": "deno task --cwd ts check",
     "check:cpp": "make -C cpp -j8 check",
     "check:rust": "cd rust && cargo fmt --all --check && cargo lint",
@@ -29,22 +28,20 @@
     "test:cpp": "make -C cpp -j8 test",
     "test:rust": "cd rust && cargo test --all",
     "test:conformance": { "command": "deno task --cwd ts test:conformance", "dependencies": ["build"] },
-    // What needs a GPU: the web host in Chrome (script/web-gpu.ts), and the native one on wgpu.
+    // What needs a GPU: the web host in Chrome (ts/script/web-gpu.ts), and the native one on wgpu.
     "test:gpu": { "dependencies": ["test:gpu:web", "test:gpu:native"] },
-    "test:gpu:web": "./script/web-gpu.ts",
+    "test:gpu:web": "./ts/script/web-gpu.ts",
     "test:gpu:native": "cd rust && cargo test-gpu",
 
-    "fmt": { "dependencies": ["fmt:doc", "fmt:script", "fmt:ts", "fmt:rust"] },
+    "fmt": { "dependencies": ["fmt:doc", "fmt:ts", "fmt:rust"] },
     "fmt:doc": "deno fmt",
-    "fmt:script": "deno task --cwd script fmt",
     "fmt:ts": "deno task --cwd ts fmt",
     "fmt:rust": "cd rust && cargo fmt --all",
 
-    "lint": { "dependencies": ["lint:script", "lint:ts"] },
-    "lint:script": "deno task --cwd script lint",
+    "lint": { "dependencies": ["lint:ts"] },
     "lint:ts": "deno task --cwd ts lint",
 
-    "export": "./script/export.ts"
+    "export": "./ts/script/export.ts"
   },
 
   "fmt": {

@@ -94,7 +94,7 @@
     "publish": "./script/publish.ts",
 
     // The rest.
-    "export:xpute": "./xpute/script/export.ts",
+    "export:xpute": "./xpute/ts/script/export.ts",
     // apps/client/.build_number is written by any read of the build log, so it is refreshed before vite reads it.
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'"
   },

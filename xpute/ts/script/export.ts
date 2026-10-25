@@ -7,7 +7,8 @@
 
 import { dirname, join, relative } from "@std/path";
 
-const XPUTE = dirname(dirname(new URL(import.meta.url).pathname));
+/** xpute's root, the repository the copy is of: two up from here. */
+const XPUTE = dirname(dirname(dirname(new URL(import.meta.url).pathname)));
 
 /** Neither written nor compared: build output and lock files, a lock or
  * node_modules/ in any tree, as .gitignore has them. */
