@@ -476,7 +476,7 @@ impl DevicePoseStatus {
 /// The kernel decides which message a state calls for and carries the number.
 /// It never carries the words: a string that exists to be read has no reason
 /// to sit in the kernel's memory, and the shell has the locale files already
-/// (apps/client/src/locale) — the same split `strerror` is on the other side of.
+/// (ts/client/src/locale) — the same split `strerror` is on the other side of.
 ///
 /// The number is the name here. A band is what a message is about, and a
 /// message keeps its number for as long as anything can be holding one: an
@@ -556,7 +556,7 @@ pub enum Command {
     WORLD_VISIBILITY = 0x1003,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
-    /// client (apps/client/src/namespace/source.ts) and handed over as numbers and names.
+    /// client (ts/client/src/namespace/source.ts) and handed over as numbers and names.
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
     WORLD_SOURCE = 0x1005,

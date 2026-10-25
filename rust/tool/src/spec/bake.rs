@@ -74,7 +74,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     rs.extend(formats.iter().map(|(k, _)| format!("            BaseLayer::{k} => self.{k},")));
     rs.extend(["        }", "    }", "}"].map(String::from));
     Ok(vec![
-        Output::new("apps/client/src/config/published.spec.ts", file(&ts)),
+        Output::new("ts/client/src/config/published.spec.ts", file(&ts)),
         Output::new("rust/spec/src/bake/published.spec.rs", file(&rs)),
     ])
 }
@@ -101,7 +101,7 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     rs.extend(rs_doc(&doc, "", "///"));
     rs.push(format!("pub const OBJECT_TIERS: usize = {tiers};"));
     Ok(vec![
-        Output::new("apps/client/src/config/object.spec.ts", file(&ts)),
+        Output::new("ts/client/src/config/object.spec.ts", file(&ts)),
         Output::new("rust/spec/src/bake/object.spec.rs", file(&rs)),
     ])
 }

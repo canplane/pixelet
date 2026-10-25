@@ -59,7 +59,7 @@ for (const f of files) {
 // rounds otherwise, or a floor of a half added, is refused in pixelet's code
 // and xpute's; xpute's scalar keeps its named variants, round_half_up and
 // round_half_away, as options a library offers.
-const ROUNDING_ROOTS = ["rust/", "apps/", "xpute/"];
+const ROUNDING_ROOTS = ["rust/", "ts/", "xpute/"];
 const ROUNDING_NAMED = [
   "xpute/rust/kit/src/math/scalar.rs",
   "xpute/rust/kit/src/math/scalar.test.rs",
@@ -74,7 +74,7 @@ const NOT_EVEN = [
   /\blibm::roundf?\(/,
   /\bMath\.round\(/,
   /\bstd::round\b/,
-  // A number's text rounds its last place half up: `fixed` (apps/client shell/fixed.ts) rounds it half to even.
+  // A number's text rounds its last place half up: `fixed` (ts/client shell/fixed.ts) rounds it half to even.
   /\.toFixed\(/,
   /\.toPrecision\(/,
   // A half added inside a floor's own parentheses, or before `.floor()`.

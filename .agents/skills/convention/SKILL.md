@@ -49,5 +49,5 @@ host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
 - The tree's scripts are ES modules, TypeScript where a loader takes it:
   no `.cjs` or `.cts`. Node runs only the native toolchain's own scripts.
 - `@expo/ui` is imported only by the sheet
-  (`apps/client/src/shell/ui/panel.ios.tsx`): a control that takes a touch
+  (`ts/client/src/shell/ui/panel.ios.tsx`): a control that takes a touch
   is UIKit's.

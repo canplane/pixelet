@@ -99,7 +99,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 # The name section is not stripped here. What is published is what Binaryen
-# finishes (apps/web/script/build-wasm.ts): it strips the name, producers and
+# finishes (ts/app/web/script/build-wasm.ts): it strips the name, producers and
 # target-features sections in one pass, and it has to read the target
 # features before it can take them off — which it cannot do if Cargo has
 # already thrown them away.
@@ -111,7 +111,7 @@ panic = "abort"
 # browser. The bake wraps each page so that one bad page out of tens of
 # thousands is counted rather than fatal, and there is nothing to catch under
 # `abort`; a request handler wrapped by the web framework is the same story.
-# The module is untouched — apps/web/script/build_wasm.ts builds `--release`,
+# The module is untouched — ts/app/web/script/build_wasm.ts builds `--release`,
 # and the two binaries never link together.
 #
 # `opt-level` is named again for the same reason `panic` is: what it inherits

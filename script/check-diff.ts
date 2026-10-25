@@ -105,17 +105,17 @@ const task = (name: string) => runs.push({ label: name, argv: ["deno", "task", n
 const cargo = (name: string) => {
   for (const argv of rust(name)) runs.push({ label: `${name}: ${argv.slice(0, 2).join(" ")}`, argv });
 };
-// apps/client imports xpute's TypeScript, and apps/web both.
+// ts/client imports xpute's TypeScript, and ts/app/web both.
 const xpute = under("xpute/");
-const client = under("apps/client/") || under("xpute/ts/");
-const web = client || under("apps/web/");
+const client = under("ts/client/") || under("xpute/ts/");
+const web = client || under("ts/app/web/");
 
 // What ships.
 if (web) task("check:web");
-if (under("script/") || under("apps/web/script/")) task("check:script");
+if (under("script/") || under("ts/app/web/script/")) task("check:script");
 cargo("check:rust");
 if (under("spec/") || changed.some((path) => path.includes(".spec.")) || touched.has("pxl-tool")) task("check:spec");
-if (web || touched.has("pxl-wasm")) runs.push({ label: "check:build", argv: ["deno", "task", "--cwd", "apps/web", "check:build"] });
+if (web || touched.has("pxl-wasm")) runs.push({ label: "check:build", argv: ["deno", "task", "--cwd", "ts/app/web", "check:build"] });
 
 // The rest of `check`.
 const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path));
@@ -123,7 +123,7 @@ if (formatted.length) runs.push({ label: "check:fmt", argv: ["deno", "fmt", "--c
 cargo("check:fmt");
 task("check:rules");
 task("lint");
-if (web || under("apps/native/")) runs.push({ label: "check:native", argv: ["deno", "check", "apps/native/src"] });
+if (web || under("ts/app/native/")) runs.push({ label: "check:native", argv: ["deno", "check", "ts/app/native/src"] });
 cargo("check:native");
 cargo("check:host");
 if (xpute) task("check:xpute");

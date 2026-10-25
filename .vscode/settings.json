@@ -7,7 +7,7 @@
   "deno.lint": true,
   "deno.unstable": ["webgpu"],
   // No "deno.config" pin: each workspace member resolves its own import map
-  // ("@/" in apps/client, apps/web and apps/native), and a pin makes every
+  // ("@/" in ts/client, ts/app/web and ts/app/native), and a pin makes every
   // file resolve against the root's alone, where "@/" is unknown.
 
   "deno.suggest.imports.hosts": {

@@ -1,0 +1,26 @@
+{
+  // The repository's own scripts, each standing alone and reading none of
+  // the trees' code: the tree's checks, the shaders' WGSL, the deployment's
+  // usage report and build log. A root of its own, beside the trees it runs
+  // over, as xpute's script/ is.
+  "workspace": [],
+
+  "imports": {
+    "@std/path": "jsr:@std/path@^1",
+    "@std/jsonc": "jsr:@std/jsonc@^1",
+
+    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (shader-wgsl.ts).
+    "webgpu": "npm:webgpu@0.6.2"
+  },
+
+  "tasks": {
+    "check": "deno fmt --check && deno lint && deno check *.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+
+  "fmt": {
+    "lineWidth": 200,
+    "proseWrap": "preserve"
+  }
+}

@@ -2,7 +2,7 @@
 
 //! The world's reads. The kernel opens a tile as its bake's object by its
 //! subject (sys/io/file.rs); its version, address and protocol are the
-//! client's (apps/client/src/namespace/tile.ts). What an absent object means is decided here per stream.
+//! client's (ts/client/src/namespace/tile.ts). What an absent object means is decided here per stream.
 //! Every body is a block (`sys/io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
 

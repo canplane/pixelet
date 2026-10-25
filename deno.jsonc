@@ -1,17 +1,15 @@
 {
   "description": "A droplet fades. A pixelet remains.",
 
-  "workspace": [
-    "apps/client",
-    "apps/web",
-    // A package.json member: Expo and Metro find packages the npm way.
-    "apps/native"
-  ],
-  "nodeModulesDir": "auto",
+  // Routes only. Each tree is a root of its own: ts/ the TypeScript
+  // workspace (ts/deno.jsonc), script/ the repository's own scripts, rust/
+  // Cargo's, and xpute/ a project of its own (xpute/Makefile). Here are the
+  // tasks that run over them, and the format of what is no tree's: the
+  // documents, spec/, infra/ and asset/.
+  "workspace": [],
+  "lock": false,
 
-  // Vite's deps cache and the trees of generated or downloaded data are no workspace source;
-  // xpute/ is a project of its own (xpute/Makefile), reached through the import map below.
-  "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "infra/geo/elevation/warped/"],
+  "exclude": ["ts/", "script/", "rust/", "xpute/", "out/", "infra/geo/elevation/warped/"],
 
   "tasks": {
     // Run here. Where the tiles come from, a bakery's three: `dev` has them
@@ -19,21 +17,21 @@
     // its tile prefix frozen; `dev:oven` bakes each on demand; `dev:shelf`
     // takes each kind's set under ./out. The two local ones run the three
     // servers beside the client.
-    "dev": { "command": "deno task --cwd apps/web dev", "dependencies": ["sync:build-number"] },
-    "dev:oven": { "command": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile) & (deno task --cwd apps/web dev:oven) & wait\"", "dependencies": ["sync:build-number"] },
+    "dev": { "command": "deno task --cwd ts/app/web dev", "dependencies": ["sync:build-number"] },
+    "dev:oven": { "command": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile) & (deno task --cwd ts/app/web dev:oven) & wait\"", "dependencies": ["sync:build-number"] },
     "dev:shelf": {
-      "command": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd apps/web dev:shelf) & wait\"",
+      "command": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd ts/app/web dev:shelf) & wait\"",
       "dependencies": ["sync:build-number"]
     },
     // The `server` profile: a debug build's rasterizer is felt on every page.
     "dev:geo": "./script/with-env.sh cargo run --manifest-path rust/Cargo.toml --profile server -p pxl-geo --",
     "dev:api": "./script/with-env.sh cargo run --manifest-path rust/Cargo.toml --profile server -p pxl-api --",
     "dev:tile": "./script/with-env.sh cargo run --manifest-path rust/Cargo.toml --profile server --features serve --bin serve_tiles --",
-    "dev:native": "deno task --cwd apps/native start",
+    "dev:native": "deno task --cwd ts/app/native start",
     // Measure the client here: the dev server's unbundled modules are not what ships.
-    "preview": "deno task --cwd apps/web preview",
-    "preview:oven": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile) & (deno task --cwd apps/web preview:oven) & wait\"",
-    "preview:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd apps/web preview:shelf) & wait\"",
+    "preview": "deno task --cwd ts/app/web preview",
+    "preview:oven": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile) & (deno task --cwd ts/app/web preview:oven) & wait\"",
+    "preview:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd ts/app/web preview:shelf) & wait\"",
     // A purge by command, after a re-ingest or a bake change: the oven's cache
     // whole; the shelf's sets, each kind named or all three, with what is staged.
     "clear:oven": "rm -rf out/oven",
@@ -46,13 +44,13 @@
     "download": "./script/tool.ts download",
     // After any change under asset/content/:
     "ingest:asset": "cargo run --manifest-path rust/Cargo.toml -p pxl-tool --bin ingest_asset",
-    // By hand, when apps/client/brand's symbol changes: its outline, which both
-    // apps bundle. The page's icons are made by its build (apps/web build:brand).
+    // By hand, when ts/client/brand's symbol changes: its outline, which both
+    // apps bundle. The page's icons are made by its build (ts/app/web build:brand).
     "render:brand": "cargo run --manifest-path rust/Cargo.toml -p pxl-tool --bin render_brand -- --symbol",
 
     // Made from the tree: the code generated from spec/, the kernel's module.
     "spec": "cargo run -q --manifest-path rust/Cargo.toml -p pxl-tool --bin spec -- --write",
-    "build:wasm": "deno task --cwd apps/web build:wasm",
+    "build:wasm": "deno task --cwd ts/app/web build:wasm",
 
     // `check` is everything, and with `test` what passes before a push to
     // deploy, since CI checks nothing (.agents/skills/deploy/SKILL.md).
@@ -60,15 +58,15 @@
     // bundle and the Worker's, as a deploy makes them) and is what its JSON
     // writes, and the scripts a deploy runs type-check.
     "check": "deno task check:style && deno task check:ship && deno task check:native && deno task check:host && deno task check:xpute",
-    "check:ship": "deno task check:web && deno task check:script && deno task check:rust && deno task check:spec && deno task --cwd apps/web check:build",
+    "check:ship": "deno task check:web && deno task check:script && deno task check:rust && deno task check:spec && deno task --cwd ts/app/web check:build",
     "check:style": "deno task check:fmt && deno task check:rules && deno task lint",
     "check:diff": "./script/check-diff.ts",
-    "check:fmt": "deno fmt --check && cargo fmt --manifest-path rust/Cargo.toml --all --check",
-    "check:web": "deno task --cwd apps/web check",
+    "check:fmt": "deno fmt --check && deno task --cwd ts fmt --check && deno task --cwd script fmt --check && cargo fmt --manifest-path rust/Cargo.toml --all --check",
+    "check:web": "deno task --cwd ts/app/web check",
     // The tree's own scripts, which `deno run` runs unchecked.
-    "check:script": "deno check script/*.ts apps/web/script/*.ts",
+    "check:script": "deno task --cwd script check && deno check --config ts/deno.jsonc ts/app/web/script/*.ts",
     // check:web never reaches the device's own modules.
-    "check:native": "deno check apps/native/src && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings",
+    "check:native": "deno task --cwd ts/app/native check && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings",
     "check:xpute": "make -C xpute -j8 check",
     // What ships: the kernel's module in both builds, and the servers with their tests' code.
     "check:rust": "cargo clippy --manifest-path rust/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-api -- -D warnings",
@@ -78,61 +76,33 @@
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path rust/Cargo.toml -p pxl-tool --bin spec",
     "test": "deno task test:client && deno task test:xpute && deno task test:rust",
-    "test:client": "deno task --cwd apps/client test",
+    "test:client": "deno task --cwd ts/client test",
     "test:xpute": "make -C xpute -j8 test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
     "test:rust": "cargo test --manifest-path rust/Cargo.toml -p pxl-spec -p pxl-spec-core -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path rust/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path rust/Cargo.toml -p pxl-geo-bake --features serve",
-    "lint": "deno lint",
-    "fmt": "deno fmt",
+    "lint": "deno task --cwd ts lint && deno task --cwd script lint",
+    "fmt": "deno fmt && deno task --cwd ts fmt && deno task --cwd script fmt",
 
     // The deployment. Does not upload what the bucket holds.
-    "deploy": "deno task --cwd apps/web deploy",
+    "deploy": "deno task --cwd ts/app/web deploy",
     // Against a running deployment, not a checkout.
-    "smoke": "./apps/web/script/smoke.ts",
+    "smoke": "./ts/app/web/script/smoke.ts",
     // Reads with wrangler's login and hcloud's context.
     "usage": "./script/usage.ts",
     // A bake's publish stage into the bucket under a new name; deploy after.
-    "publish": "./apps/web/script/publish.ts",
+    "publish": "./ts/app/web/script/publish.ts",
 
     // The rest.
     "export:xpute": "./xpute/script/export.ts",
-    // apps/client/.build_number is written by any read of the build log, so it is refreshed before vite reads it.
+    // ts/client/.build_number is written by any read of the build log, so it is refreshed before vite reads it.
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'"
-  },
-
-  "compilerOptions": {
-    "lib": ["deno.window", "deno.ns", "deno.unstable", "esnext"],
-    "verbatimModuleSyntax": true,
-    "noImplicitOverride": true,
-    "skipLibCheck": true,
-    "checkJs": false
-    // "noUncheckedIndexedAccess": true,
-    // "exactOptionalPropertyTypes": true,
-  },
-
-  "imports": {
-    "@xpute/kit/": "./xpute/ts/kit/src/",
-    "@xpute/host/": "./xpute/ts/host/src/",
-    "@xpute/gpu/": "./xpute/ts/gpu/src/",
-
-    "@std/path": "jsr:@std/path@^1",
-    "@std/jsonc": "jsr:@std/jsonc@^1",
-
-    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/shader-wgsl.ts).
-    "webgpu": "npm:webgpu@0.6.2"
   },
 
   "fmt": {
     "lineWidth": 200,
     "proseWrap": "preserve",
 
-    // The tests read the golden records byte for byte; Carto's symbols stay as Carto ships them.
-    "exclude": ["node_modules/", "dist/", "rust/**/golden/", "asset/raw/place/symbol/"]
-  },
-
-  "lint": {
-    "rules": { "tags": ["recommended"] },
-
-    "exclude": ["node_modules/", "dist/"]
+    // Carto's symbols stay as Carto ships them.
+    "exclude": ["asset/raw/place/symbol/"]
   }
 }

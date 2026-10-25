@@ -78,7 +78,7 @@ deno task publish earth
 ```bash
 deno task ingest:asset
 # -> ./out/asset/<sha256>.<ext>, and regenerates rust/spec/src/asset/ingested.spec.rs
-#    and apps/client/src/catalog/asset/ingested.spec.ts
+#    and ts/client/src/catalog/asset/ingested.spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-tiles/asset \

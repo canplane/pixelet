@@ -183,15 +183,15 @@ vite.config.ts.timestamp-*
 /target
 /rust/target
 
-# The guest's module, built from rust/ by apps/web/script/build-wasm.ts
-apps/web/src/guest.wasm
-apps/web/src/guest.paths.json
-# The page's icons and link preview, made from apps/client/brand by each web
+# The guest's module, built from rust/ by ts/app/web/script/build-wasm.ts
+ts/app/web/src/guest.wasm
+ts/app/web/src/guest.paths.json
+# The page's icons and link preview, made from ts/client/brand by each web
 # build (pxl-tool/bin/render_brand.rs).
-apps/web/public/brand/
+ts/app/web/public/brand/
 
 # The last build number this checkout saw (script/build-log.ts), which a dev build of either app is labeled from
-apps/client/.build_number
+ts/client/.build_number
 
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
@@ -204,22 +204,22 @@ asset/raw/sky/
 out[0-9]*/
 
 # wrangler's local scratch: its simulated R2/KV, build state and temporaries.
-apps/web/.wrangler/
+ts/app/web/.wrangler/
 
 # What a device posts to the dev server's /__console, for reading with tail.
-apps/web/.dev-console.log
+ts/app/web/.dev-console.log
 
 # Expo's per-machine state for the device app: the dev server's settings and
 # the types it generates.
-apps/native/.expo/
+ts/app/native/.expo/
 
 # A standalone WebGPU repro page is dev-only and not part of the app.
-apps/web/public/repro-*.html
+ts/app/web/public/repro-*.html
 
-# What `expo prebuild` generates, which is made again from app.json and the
+# What `expo prebuild` generates, which is made again from app.config.ts and the
 # modules rather than kept, and what the platform module's own Gradle build
 # leaves beside it.
-apps/native/modules/platform/android/build/
-apps/native/modules/platform/android/.gradle/
-apps/native/ios/
-apps/native/android/
+ts/app/native/modules/platform/android/build/
+ts/app/native/modules/platform/android/.gradle/
+ts/app/native/ios/
+ts/app/native/android/

@@ -25,7 +25,7 @@ Nothing now.
 - **A query over what is drawn, for an agent to read.** An agent debugging
   the view guesses a pixel's cause from its color in a screenshot. The
   profiler's half is answered: the console's `pxl.profiler.report()` gives
-  its window as text (`apps/client/src/shell/debug/console.ts`). What a
+  its window as text (`ts/client/src/shell/debug/console.ts`). What a
   screen point draws is not: the block its ray met, with its face, zoom and
   distance, and where that block was read from, asked of the running page
   and answered as text. The answer is the GPU's, the ray's words read back

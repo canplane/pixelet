@@ -173,7 +173,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
         rs.extend(["    }", "}"].map(String::from));
     }
     Ok(vec![
-        Output::new("apps/client/src/catalog/asset/color.spec.ts", file(&ts)),
+        Output::new("ts/client/src/catalog/asset/color.spec.ts", file(&ts)),
         Output::new("rust/spec/src/asset/color.spec.rs", file(&rs)),
     ])
 }
@@ -445,7 +445,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "}".into(),
     ]);
     Ok(vec![
-        Output::new("apps/client/src/catalog/asset/cube.spec.ts", file(&ts)),
+        Output::new("ts/client/src/catalog/asset/cube.spec.ts", file(&ts)),
         Output::new("rust/spec/core/src/cube.spec.rs", file(&unwrapped(rs, "pub mod cubes {"))),
     ])
 }
@@ -541,7 +541,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     );
     row.extend(portable);
     Ok(vec![
-        Output::new("apps/client/src/catalog/asset/decor.spec.ts", file(&ts)),
+        Output::new("ts/client/src/catalog/asset/decor.spec.ts", file(&ts)),
         Output::new("rust/spec/src/asset/decor.spec.rs", file(&unwrapped(rs, "pub mod decors {"))),
         Output::new("rust/spec/core/src/decor.spec.rs", file(&row)),
     ])

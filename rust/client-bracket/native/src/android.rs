@@ -1,7 +1,7 @@
 // pxl-native/android.rs
 
 //! The kernel as an Android app reaches it. Kotlin's `PxlGuest`
-//! (apps/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlGuest.kt)
+//! (ts/app/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlGuest.kt)
 //! declares these as `external` functions, and each is the C ABI's call an
 //! iPhone's Swift makes (lib.rs, surface.rs, unpack.rs) under the name JNI
 //! looks for. Only JNI's own values cross: a number, an array, the memory as

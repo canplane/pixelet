@@ -7,12 +7,12 @@ developed in this repository and keeps its own record of what it ported:
 [xpute/THIRD_PARTY_NOTICES.md](./xpute/THIRD_PARTY_NOTICES.md).
 
 This file covers copied source only. Crates and npm packages that are merely
-depended on are not listed: `rust/Cargo.toml` and `apps/web/deno.jsonc`
+depended on are not listed: `rust/Cargo.toml` and `ts/app/web/deno.jsonc`
 name them, and each carries its own license where it is published.
 
 Data sources have their own obligations and their own place:
 [infra/README.md](./infra/README.md) §6 records them, and
-`apps/client/src/shell/setting/section/attribution.tsx` is where the ones
+`ts/client/src/shell/setting/section/attribution.tsx` is where the ones
 that must reach a user are shown.
 
 ## louis-e/arnis — `rust/server/geo-bake/src/separation/arnis.rs`, `rust/spec/src/procedural.rs`
@@ -37,7 +37,7 @@ Version 2.0. See the LICENSE file for the full terms.
 
 The license is at <https://www.apache.org/licenses/LICENSE-2.0>, and the
 client shows the notice under Settings, Attribution
-(`apps/client/src/shell/setting/section/attribution.tsx`).
+(`ts/client/src/shell/setting/section/attribution.tsx`).
 
 [arnis]: https://github.com/louis-e/arnis
 [processing]: https://github.com/louis-e/arnis/tree/c96872e0fa21573402d1b731ea87f796e8caa1d2/src/element_processing

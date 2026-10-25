@@ -94,7 +94,7 @@ pub extern "C" fn pxl_wake_on(f: extern "C" fn()) {
 /// The app's loop asked for a turn, from whichever thread learned of a
 /// completion the host writes at the next turn's poll (xpute-gpu host
 /// `GpuHost::new`): the platform sends the app an event, and JavaScript asks
-/// the strobe for a frame (apps/native apps/native/src/gpu.ts).
+/// the strobe for a frame (ts/app/native ts/app/native/src/gpu.ts).
 #[cfg(target_vendor = "apple")]
 fn wake() {
     let f = WAKE.load(Ordering::Acquire);

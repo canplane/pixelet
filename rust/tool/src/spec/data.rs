@@ -33,7 +33,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
-        ts: Some("apps/client/src/config/earth.spec.ts"),
+        ts: Some("ts/client/src/config/earth.spec.ts"),
         rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -53,7 +53,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/spec/block/ext.json",
         uses: &[],
-        ts: Some("apps/client/src/catalog/block/ext.spec.ts"),
+        ts: Some("ts/client/src/catalog/block/ext.spec.ts"),
         rs: Some("rust/spec/src/block/ext.spec.rs"),
         module: Some("ext"),
         enums: Enums::All,
@@ -83,7 +83,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/spec/division.json",
         uses: &[],
-        ts: Some("apps/client/src/shell/world/division/division.spec.ts"),
+        ts: Some("ts/client/src/shell/world/division/division.spec.ts"),
         rs: Some("rust/spec/src/division.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -201,7 +201,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/door/directory.json",
         uses: &[],
-        ts: Some("apps/client/src/abi/directory.spec.ts"),
+        ts: Some("ts/client/src/abi/directory.spec.ts"),
         rs: Some("rust/client/kernel/src/door/directory.spec.rs"),
         module: Some("directory"),
         enums: Enums::None,
@@ -211,7 +211,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/spec/bake/place_theme.json",
         uses: &[],
-        ts: Some("apps/client/src/shell/search/place_theme.spec.ts"),
+        ts: Some("ts/client/src/shell/search/place_theme.spec.ts"),
         rs: None,
         module: None,
         enums: Enums::None,
@@ -221,7 +221,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/domain/query/model/variant.json",
         uses: &[],
-        ts: Some("apps/client/src/shell/character/variant.spec.ts"),
+        ts: Some("ts/client/src/shell/character/variant.spec.ts"),
         rs: Some("rust/client/kernel/src/domain/query/model/variant.spec.rs"),
         module: Some("variant_spec"),
         enums: Enums::All,
@@ -231,7 +231,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/domain/scene/indicator/gizmo.json",
         uses: &[],
-        ts: Some("apps/client/src/shell/debug/gizmo.spec.ts"),
+        ts: Some("ts/client/src/shell/debug/gizmo.spec.ts"),
         rs: Some("rust/client/kernel/src/domain/scene/indicator/gizmo.spec.rs"),
         module: Some("gizmo_spec"),
         enums: Enums::None,
@@ -241,7 +241,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/render/gpu/api.json",
         uses: &[],
-        ts: Some("apps/client/src/abi/render/gpu/api.spec.ts"),
+        ts: Some("ts/client/src/abi/render/gpu/api.spec.ts"),
         rs: Some("rust/client/render/src/gpu/api.spec.rs"),
         module: Some("api_spec"),
         enums: Enums::None,
@@ -251,7 +251,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/sys/io/host.json",
         uses: &[],
-        ts: Some("apps/client/src/abi/host.spec.ts"),
+        ts: Some("ts/client/src/abi/host.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/io/host.spec.rs"),
         module: Some("host_spec"),
         enums: Enums::None,
@@ -261,7 +261,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/sys/io/demand.json",
         uses: &[],
-        ts: Some("apps/client/src/abi/io/demand.spec.ts"),
+        ts: Some("ts/client/src/abi/io/demand.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/io/demand.spec.rs"),
         module: Some("demand_spec"),
         enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
@@ -271,7 +271,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/turn/step.json",
         uses: &[],
-        ts: Some("apps/client/src/abi/turn/step.spec.ts"),
+        ts: Some("ts/client/src/abi/turn/step.spec.ts"),
         rs: Some("rust/client/kernel/src/turn/step.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
@@ -281,7 +281,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/render/gpu/span.json",
         uses: &[],
-        ts: Some("apps/client/src/abi/render/gpu/span.spec.ts"),
+        ts: Some("ts/client/src/abi/render/gpu/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         module: Some("span_spec"),
         enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS"]),
@@ -297,7 +297,7 @@ const DATA_SPECS: [DataSpec; 25] = [
             "spec/client/render/gpu/span.json",
             "xpute/spec/gpu/api.json",
         ],
-        ts: Some("apps/client/src/shell/debug/profiler/profiler.spec.ts"),
+        ts: Some("ts/client/src/shell/debug/profiler/profiler.spec.ts"),
         rs: Some("rust/client/kernel/src/profiler/profiler.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["WAKES"]),
@@ -307,7 +307,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/sys/mem/mem.json",
         uses: &[],
-        ts: Some("apps/client/src/abi/mem/mem.spec.ts"),
+        ts: Some("ts/client/src/abi/mem/mem.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/mem/mem.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -571,7 +571,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         let names: Vec<&str> = spec.named().map(|(k, _)| k).collect();
         let head_doc = spec.lines_at("$doc");
         if let Some(ts_path) = d.ts {
-            let logical = [("apps/client/src/", "@pxl/client/"), ("xpute/ts/host/src/", "@xpute/host/"), ("xpute/ts/gpu/src/", "@xpute/gpu/")]
+            let logical = [("ts/client/src/", "@pxl/client/"), ("xpute/ts/host/src/", "@xpute/host/"), ("xpute/ts/gpu/src/", "@xpute/gpu/")]
                 .iter()
                 .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))
                 .unwrap_or(ts_path.to_string());

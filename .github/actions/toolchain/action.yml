@@ -48,6 +48,6 @@ runs:
         path: |
           ~/.cache/deno
           node_modules
-          apps/web/node_modules
+          ts/app/web/node_modules
         key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
         restore-keys: deno-${{ runner.os }}-

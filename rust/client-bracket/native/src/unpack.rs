@@ -2,7 +2,7 @@
 
 //! A body the app's fetch hands over still zstd, decoded before anything
 //! reads it: the device asks for zstd, as the bake stores its objects, and
-//! undoes it in its transport (apps/native/src/origin.ts), as a
+//! undoes it in its transport (ts/app/native/src/origin.ts), as a
 //! browser undoes it in its own. Any frame RFC 8878 allows decodes, a
 //! stored object's or one the edge made on the fly, which need not say its
 //! size: so the decoded bytes are the library's, handed out and let go by

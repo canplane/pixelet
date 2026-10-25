@@ -36,9 +36,9 @@ the GPU's cast            the CPU           the CPU
 
 The world lives in one Rust **kernel** (`pxl-kernel`, drawing through `pxl-render`). It runs as the guest of [xpute](./xpute/ARCHITECTURE.md), which runs one program inside another: the **host** owns the platform, grants the guest one memory once and a quota of time each turn, and does the outside work the guest asks for in that memory after each turn returns. xpute provides both ends and knows nothing of pixelet.
 
-What the host is made of depends on where the kernel runs, and a **bracket** plugs it in there. In a browser tab, `pxl-wasm` makes the kernel one WebAssembly module, and the page (`apps/web`) instantiates it and runs its GPU calls on the browser's WebGPU. On a device, `pxl-native` links the kernel into the app as a library that runs its own GPU calls on wgpu, and the app (`apps/native`) reaches it through one native module. Each app hands the rest of what its place gives — storage, text, the network, the sensors, the surfaces drawn into — to the client once, at its entry (`apps/client/src/bracket.tsx`).
+What the host is made of depends on where the kernel runs, and a **bracket** plugs it in there. In a browser tab, `pxl-wasm` makes the kernel one WebAssembly module, and the page (`ts/app/web`) instantiates it and runs its GPU calls on the browser's WebGPU. On a device, `pxl-native` links the kernel into the app as a library that runs its own GPU calls on wgpu, and the app (`ts/app/native`) reaches it through one native module. Each app hands the rest of what its place gives — storage, text, the network, the sensors, the surfaces drawn into — to the client once, at its entry (`ts/client/src/bracket.tsx`).
 
-The **client** (`apps/client`) is the same TypeScript in both: the host (`src/host/`, with the kernel's vocabulary and boot in `src/abi/` and its roots' backends in `src/namespace/`), which boots the kernel, submits each turn's frame and answers its reads, and the **shell** (`src/shell/`), the UI, which decides nothing about the world and changes it only by commands the kernel applies.
+The **client** (`ts/client`) is the same TypeScript in both: the host (`src/host/`, with the kernel's vocabulary and boot in `src/abi/` and its roots' backends in `src/namespace/`), which boots the kernel, submits each turn's frame and answers its reads, and the **shell** (`src/shell/`), the UI, which decides nothing about the world and changes it only by commands the kernel applies.
 
 Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked. [ARCHITECTURE.md](./ARCHITECTURE.md) follows the kernel part by part.
 
@@ -80,7 +80,7 @@ git clone git@github.com:canplane/pixelet.git
 cd pixelet
 
 cp .env.example .env
-cp apps/web/.env.example apps/web/.env
+cp ts/app/web/.env.example ts/app/web/.env
 
 deno task dev
 ```
@@ -116,12 +116,12 @@ deno task dev:oven
 | `deno task preview:{oven,shelf}` | The production bundle over `dev:oven`'s or `dev:shelf`'s servers                                                                                                                                                                                                 |
 | `deno task clear:oven`           | Empty `dev:oven`'s cache, after a re-ingest or a bake change                                                                                                                                                                                                     |
 | `deno task clear:shelf [kind…]`  | Delete the named kinds' sets under `./out` (all three when none), to bake them from nothing                                                                                                                                                                      |
-| `deno task build:wasm`           | Build the guest module into `apps/web/src/guest.wasm`                                                                                                                                                                                                            |
+| `deno task build:wasm`           | Build the guest module into `ts/app/web/src/guest.wasm`                                                                                                                                                                                                          |
 | `deno task dev:native`           | Metro, for the device app                                                                                                                                                                                                                                        |
 | `deno task bake <kind> [args…]`  | Make a kind's data (`script/tool.ts`): `terrain`, `place`, `division` from db-geo into `./out/<kind>/`; `earth` from `infra/earth/` into `./out/earth/`; `star` into the renderer's `bright-star.bin`; `geoid <egm2008-5.pgm>` into `spec/spec/space/geoid.json` |
 | `deno task download <what>`      | Fetch a source a tool reads: `pack`, the texture pack's; `moon`; `earth`                                                                                                                                                                                         |
 | `deno task ingest:asset`         | Hash `asset/content/` into `./out/asset`, compose the texture pack, regenerate the asset tables                                                                                                                                                                  |
-| `deno task render:brand`         | The symbol's outline both apps bundle, from `apps/client/brand/`; the page's icons and link preview are made by its build                                                                                                                                        |
+| `deno task render:brand`         | The symbol's outline both apps bundle, from `ts/client/brand/`; the page's icons and link preview are made by its build                                                                                                                                          |
 | `deno task spec`                 | Generate Rust and TypeScript from the JSON under `spec/`                                                                                                                                                                                                         |
 | `deno task usage`                | What the deployment has used of its free allowances, before a publish                                                                                                                                                                                            |
 | `deno task publish`              | Declare in the bucket which baked version of each kind clients read; nothing in the tree changes and nothing is deployed                                                                                                                                         |
@@ -135,13 +135,13 @@ deno task dev:oven
 
 db-geo is filled by each source's `ingest` under `infra/geo/`, run by path as [infra/geo/README.md](./infra/geo/README.md) says: they make a database's state rather than a file the tree keeps.
 
-To measure the client, use `preview` (`localhost:4173`): the bundle as a deploy builds it, without the dev server's unbundled modules and hooks or the settings only a development build offers. The `profiler` setting opens the profiler's panel and records while it is open (`apps/client/src/shell/debug/profiler.tsx` `ProfilerPanel`), in either build.
+To measure the client, use `preview` (`localhost:4173`): the bundle as a deploy builds it, without the dev server's unbundled modules and hooks or the settings only a development build offers. The `profiler` setting opens the profiler's panel and records while it is open (`ts/client/src/shell/debug/profiler.tsx` `ProfilerPanel`), in either build.
 
-A development page puts two things in the browser console once the kernel has booted (`apps/client/src/shell/debug/console.ts`, installed by `shell/boot.ts` under `__IS_DEV__`): `xpute`, the guest's doorbell, whose `cmd(command, ...args)` sends the kernel any command by its number with its arguments as the packet's fields, in order (`spec/client/kernel/domain/control/cmd.json` numbers them); and `pxl.profiler`, whose `report()` and `trace()` are the profiler panel's two exports.
+A development page puts two things in the browser console once the kernel has booted (`ts/client/src/shell/debug/console.ts`, installed by `shell/boot.ts` under `__IS_DEV__`): `xpute`, the guest's doorbell, whose `cmd(command, ...args)` sends the kernel any command by its number with its arguments as the packet's fields, in order (`spec/client/kernel/domain/control/cmd.json` numbers them); and `pxl.profiler`, whose `report()` and `trace()` are the profiler panel's two exports.
 
 ### On a device
 
-`apps/native` is the device's app: a React Native app, through Expo, that bundles the client, links the kernel in and takes every route from the live deployment. Its bracket is `src/` and the native module under `modules/platform/`. Its native projects are generated by `expo prebuild` from `app.json`, the config plugins and the module under `modules/platform/`, and are not kept. The kernel is built with the app, by a step of its native build (`apps/native/script/build-native.ts`): a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. `deno task dev:native` runs Metro, which a Debug build loads its bundle from. Setting a machine up, building, installing and what has gone wrong are the [device-build skill](./.agents/skills/device-build/SKILL.md).
+`ts/app/native` is the device's app: a React Native app, through Expo, that bundles the client, links the kernel in and takes every route from the live deployment. Its bracket is `src/` and the native module under `modules/platform/`. Its native projects are generated by `expo prebuild` from `app.json`, the config plugins and the module under `modules/platform/`, and are not kept. The kernel is built with the app, by a step of its native build (`ts/app/native/script/build-native.ts`): a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. `deno task dev:native` runs Metro, which a Debug build loads its bundle from. Setting a machine up, building, installing and what has gone wrong are the [device-build skill](./.agents/skills/device-build/SKILL.md).
 
 ---
 
@@ -151,21 +151,22 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 ```
 .
-├── apps/
-│   ├── client/               # The client, which both apps bundle
-│   │   ├── brand/            #   the icons and symbol both apps and the shell draw
+├── ts/                       # The TypeScript workspace (ts/deno.jsonc)
+│   ├── client/               #   the client, which both apps bundle
+│   │   ├── brand/            #     the icons and symbol both apps and the shell draw
 │   │   └── src/
-│   │       ├── bracket.tsx   #   what the client asks of the place it runs in
-│   │       ├── host/         #   the host, which runs the kernel: module, mem, sched, sys; the GPU and the network
-│   │       ├── abi/          #   the kernel's commands, snapshot, text calls and boot, its specs generated
-│   │       ├── namespace/    #   what each root is bound to: tiles, assets, storage, the source
-│   │       ├── shell/        #   the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
-│   │       ├── catalog/      #   the data screens show (cells, assets)
-│   │       └── config/       #   deployment config and routes
-│   ├── web/                  # The page's app: its entry, its bracket (src/), its build, deploy, publish and smoke (script/), the Cloudflare Worker
-│   └── native/               # The device's app, through Expo and Metro
-│       ├── src/              #   its entry and its bracket: what the app gives the client, through its native module
-│       └── modules/platform/ #   its native half: one module, the views, the linked kernel
+│   │       ├── bracket.tsx   #     what the client asks of the place it runs in
+│   │       ├── host/         #     the host, which runs the kernel: module, mem, sched, sys; the GPU and the network
+│   │       ├── abi/          #     the kernel's commands, snapshot, text calls and boot, its specs generated
+│   │       ├── namespace/    #     what each root is bound to: tiles, assets, storage, the source
+│   │       ├── shell/        #     the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
+│   │       ├── catalog/      #     the data screens show (cells, assets)
+│   │       └── config/       #     deployment config and routes
+│   └── app/                  #   each app, a bracket that bundles the client
+│       ├── web/              #     the page's: its entry, its bracket (src/), its build, deploy, publish and smoke (script/), the Cloudflare Worker
+│       └── native/           #     the device's, through Expo and Metro
+│           ├── src/          #       its entry and its bracket: what the app gives the client, through its native module
+│           └── modules/      #       platform/, its native half: one module, the views, the linked kernel
 ├── rust/                     # The Rust workspace, grouped by where a crate runs
 │   ├── spec/                 #   pxl-spec: the model every crate shares
 │   │   └── core/             #     pxl-spec-core: what the CPU and the GPU compute alike
@@ -193,7 +194,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
                               #   record (archive/ those retired), experiment/ measurements
 ```
 
-**What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The client is TypeScript because it decides nothing about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/client/src/**/*.spec.ts` from the same JSON the Rust is generated from.
+**What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The client is TypeScript because it decides nothing about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `ts/client/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
 | Crate / package | What it is                                                                                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -204,9 +205,9 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-shader`    | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `script/shader-wgsl.ts` and checked in beside the renderer's shaders.                    |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                               |
 | `pxl-native`    | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host, which runs every call on a thread of its own.            |
-| `apps/client`   | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).       |
-| `apps/web`      | The page's app: its entry; its bracket, what a browser tab gives the client and the guest module it instantiates; and the Cloudflare Worker that serves it all.          |
-| `apps/native`   | The device's app: its entry, and its bracket, what the app gives the client through its native module, which links the kernel.                                           |
+| `ts/client`     | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).       |
+| `ts/app/web`    | The page's app: its entry; its bracket, what a browser tab gives the client and the guest module it instantiates; and the Cloudflare Worker that serves it all.          |
+| `ts/app/native` | The device's app: its entry, and its bracket, what the app gives the client through its native module, which links the kernel.                                           |
 | `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                                              |
 | `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                 |
 | `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                                               |
@@ -229,7 +230,7 @@ A leaf sits under its lowest reader: the settings under `view`, the models and d
 
 One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
-The casing in the tree is not mixed by accident. The system's code — Rust, the xpute packages, the client's host, abi and namespace (`apps/client/src/{host,abi,namespace}/`), the brackets and the boot — shares one `snake_case` vocabulary across the boundary, a word under its namespace where it can be one: `len`, `new_len`, `bracket.gpu.boot`. The shell and the scripts are `camelCase`, as TypeScript is, and React's hooks and components keep React's names wherever they sit. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident. The system's code — Rust, the xpute packages, the client's host, abi and namespace (`ts/client/src/{host,abi,namespace}/`), the brackets and the boot — shares one `snake_case` vocabulary across the boundary, a word under its namespace where it can be one: `len`, `new_len`, `bracket.gpu.boot`. The shell and the scripts are `camelCase`, as TypeScript is, and React's hooks and components keep React's names wherever they sit. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
 ---
 

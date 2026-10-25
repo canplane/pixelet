@@ -375,6 +375,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     Ok(vec![
         Output::new("rust/client/kernel/src/domain/view/setting/schema.spec.rs", file(&rs)),
-        Output::new("apps/client/src/shell/setting/schema.spec.ts", file(&ts)),
+        Output::new("ts/client/src/shell/setting/schema.spec.ts", file(&ts)),
     ])
 }

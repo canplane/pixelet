@@ -37,7 +37,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .and_then(|(_, r)| r.str_at("object"))
         .ok_or(format!("{JSON}: TILE_ROOT has no object"))?;
     let segments: Vec<&str> = object.split('/').map(|s| s.strip_prefix('{').and_then(|s| s.strip_suffix('}')).unwrap_or_default()).collect();
-    // A version is a folder its tiles go up in whole (apps/web/script/publish.ts), so it comes first.
+    // A version is a folder its tiles go up in whole (ts/app/web/script/publish.ts), so it comes first.
     if segments != ["version", "name"] {
         return Err(format!("{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"));
     }
@@ -54,7 +54,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     // Every root, so none is answered by the static-asset fallback with
     // index.html, which reads as the app loading rather than as no route.
-    let wrangler_path = "apps/web/wrangler.jsonc";
+    let wrangler_path = "ts/app/web/wrangler.jsonc";
     let wrangler = std::fs::read_to_string(root().join(wrangler_path)).map_err(|e| format!("{wrangler_path}: {e}"))?;
     let claim = Regex::new(r#""run_worker_first"\s*:\s*\[[^\]]*\]"#).map_err(|e| e.to_string())?;
     if !claim.is_match(&wrangler) {
@@ -148,8 +148,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     Ok(vec![
         Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
-        Output::new("apps/client/src/config/route.spec.ts", ts.join("\n")),
-        Output::new("apps/web/cloudflare-worker/route.spec.ts", worker.join("\n")),
+        Output::new("ts/client/src/config/route.spec.ts", ts.join("\n")),
+        Output::new("ts/app/web/cloudflare-worker/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
     ])
 }

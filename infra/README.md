@@ -231,7 +231,7 @@ Every build of `deploy` takes a number from a counter in
 the bucket, never reset; a published one is a line in `_meta/build-log.jsonl`
 with the subjects of the commits it carried, since main's shas do not
 survive its rewrites. `./script/build-log.ts` reads it, newest first, and
-writes the last number into `apps/client/.build_number` for dev builds.
+writes the last number into `ts/client/.build_number` for dev builds.
 
 The secrets are GitHub's alone: `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` for wrangler and the counter; `VM_HOST`, `VM_USER`
@@ -241,7 +241,7 @@ optional, without which the deploy warns and trusts whatever answers.
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`apps/client/src/shell/setting/section/attribution.tsx`). Check the source
+(`ts/client/src/shell/setting/section/attribution.tsx`). Check the source
 before shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |

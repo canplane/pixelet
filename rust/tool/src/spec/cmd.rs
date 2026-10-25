@@ -861,7 +861,7 @@ const TARGETS: [Target; 2] = [
     },
     Target {
         json: "spec/client/kernel/domain/control/cmd.json",
-        ts: "apps/client/src/abi/cmd.spec.ts",
+        ts: "ts/client/src/abi/cmd.spec.ts",
         ts_logical: "@pxl/client/abi/cmd.spec.ts",
         rs_dir: "rust/client/kernel/src/domain/control",
         rs_logical: "pxl-kernel/domain/control",
