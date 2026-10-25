@@ -27,9 +27,9 @@ pub const MAX_CREDITS: u32 = 16;
 /// still absent (domain/layer/terrain/window.rs `fill`), the Earth's until its
 /// texels are taken. Sized to a moving eye, not to the worst.
 ///
-/// Each frame grants six credits (`NET_CREDITS` in the client's
-/// abi/input.ts), and the
-/// Earth keeps four frames at most. A window is a tile's cells a side
+/// Each frame grants six credits at most (the place's, the client's
+/// `bracket.origin.credits`: six on a page and on iOS, five on Android), and
+/// the Earth keeps four frames at most. A window is a tile's cells a side
 /// (pxl-spec-core `window::WINDOW`), so it wants four tiles at most, and
 /// the fill hands `HANDED` squares a frame, about a row of one window's: an
 /// eye that moves keeps the tiles of the few windows refilling at once,
