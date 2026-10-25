@@ -410,10 +410,12 @@ pub struct Plan {
     /// each mapped once and reused: as large as the writes the program's
     /// frames make, since a larger write takes a chunk of its own.
     pub upload_chunk_bytes: u64,
+    /// How a surface presents: `Fifo` waits for the display, as a canvas does.
+    pub present_mode: wgpu::PresentMode,
 }
 
 /// What a program asks of the device it opens (`open`), every part its own.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Ask {
     /// The backends an adapter is looked for on.
     pub backends: wgpu::Backends,
@@ -424,6 +426,14 @@ pub struct Ask {
     /// What the device is asked to hold, from the adapter it is asked of,
     /// since an adapter refuses a device that asks past its own.
     pub limits: fn(&wgpu::Adapter) -> wgpu::Limits,
+    pub memory_hints: wgpu::MemoryHints,
+}
+
+/// Why `open` opened no device.
+#[derive(Debug)]
+pub enum OpenError {
+    Adapter(wgpu::RequestAdapterError),
+    Device(wgpu::RequestDeviceError),
 }
 
 /// A device opened as asked, and the instance a program makes its surfaces
@@ -435,12 +445,12 @@ pub struct Opened {
     pub queue: wgpu::Queue,
 }
 
-/// Opens a device as `ask` says, for `GpuHost::new`: none where no adapter
-/// answers, or the adapter refuses the device. It waits out wgpu's futures,
+/// Opens a device as `ask` says, for `GpuHost::new`: an error where no
+/// adapter answers, or the adapter refuses the device. It waits out wgpu's futures,
 /// which a native backend resolves at once. The instance takes each
 /// surface's display handle with the surface (`SurfaceTargetUnsafe`), so it
 /// is made without one.
-pub fn open(ask: &Ask) -> Option<Opened> {
+pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: ask.backends,
         ..wgpu::InstanceDescriptor::new_without_display_handle()
@@ -449,14 +459,15 @@ pub fn open(ask: &Ask) -> Option<Opened> {
         power_preference: ask.power_preference,
         ..Default::default()
     }))
-    .ok()?;
+    .map_err(OpenError::Adapter)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_features: adapter.features() & ask.features,
         required_limits: (ask.limits)(&adapter),
+        memory_hints: ask.memory_hints.clone(),
         ..Default::default()
     }))
-    .ok()?;
-    Some(Opened { instance, adapter, device, queue })
+    .map_err(OpenError::Device)?;
+    Ok(Opened { instance, adapter, device, queue })
 }
 
 pub struct GpuHost {
@@ -492,6 +503,7 @@ pub struct GpuHost {
     unfinished: Arc<AtomicU32>,
     /// The frames it lets stand unfinished (`Plan::frame_latency`).
     frame_latency: u32,
+    present_mode: wgpu::PresentMode,
     /// Every buffer write goes through the belt, whose chunks are mapped once
     /// and reused, into `uploads`, which goes ahead of whatever is submitted
     /// next: `Queue::write_buffer` makes a Metal buffer and mapping a write.
@@ -540,6 +552,7 @@ impl GpuHost {
             admitted: false,
             unfinished: Arc::new(AtomicU32::new(0)),
             frame_latency: plan.frame_latency,
+            present_mode: plan.present_mode,
             uploads: None,
         }
     }
@@ -606,7 +619,7 @@ impl GpuHost {
                 color_space: wgpu::SurfaceColorSpace::Auto,
                 width: s.size[0],
                 height: s.size[1],
-                present_mode: wgpu::PresentMode::Fifo,
+                present_mode: self.present_mode,
                 desired_maximum_frame_latency: frame_latency,
                 alpha_mode,
                 view_formats: Vec::new(),

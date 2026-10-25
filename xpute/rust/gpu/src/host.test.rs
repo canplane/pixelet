@@ -21,6 +21,7 @@ fn plan(frame_latency: u32) -> Plan {
         configure_at: ConfigureAt::Here,
         frame_latency,
         upload_chunk_bytes: 1 << 16,
+        present_mode: wgpu::PresentMode::Fifo,
     }
 }
 

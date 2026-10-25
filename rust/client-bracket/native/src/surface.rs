@@ -44,6 +44,7 @@ const PLAN: Plan = Plan {
     configure_at: CONFIGURE_SURFACES,
     frame_latency: numbers::FRAME_LATENCY,
     upload_chunk_bytes: numbers::UPLOAD_CHUNK_BYTES as u64,
+    present_mode: wgpu::PresentMode::Fifo,
 };
 
 /// The device the kernel asks for: the timestamps its spans are timed by
@@ -55,6 +56,7 @@ const ASK: Ask = Ask {
     power_preference: wgpu::PowerPreference::HighPerformance,
     features: wgpu::Features::TIMESTAMP_QUERY,
     limits: wgpu::Adapter::limits,
+    memory_hints: wgpu::MemoryHints::Performance,
 };
 
 struct Device {
@@ -112,7 +114,7 @@ fn open() -> bool {
     if device().is_some() {
         return true;
     }
-    let Some(Opened { instance, adapter, device, queue }) = xpute_gpu::host::open(&ASK) else {
+    let Ok(Opened { instance, adapter, device, queue }) = xpute_gpu::host::open(&ASK) else {
         return false;
     };
     let host = GpuHost::new(adapter, device, queue, PLAN, wake);
