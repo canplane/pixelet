@@ -24,7 +24,6 @@ import { SENSOR_HEARD } from "@/abi/control/sensor.ts";
 import { submit_frame } from "@/abi/control/input.ts";
 import { text_call } from "@/abi/text.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
-import { bytes_at } from "@/host/module.ts";
 import { bracket, type Plan } from "@/bracket.tsx";
 import { GPU_STATE, set_gpu } from "@/host/gpu.ts";
 import { set_online } from "@/host/online.ts";
@@ -50,7 +49,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     case Command.WORLD_SNAPSHOT: {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
-      set_snapshot(bytes_at(GUEST.memory, at, len));
+      set_snapshot(new Uint8Array(GUEST.memory, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
       follow_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => HOST.send(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot))));
       return;
