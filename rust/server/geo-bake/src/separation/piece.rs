@@ -4,13 +4,13 @@
 
 use pxl_spec::bake::separation::Form;
 
-use crate::segment::{PartId, Segment};
+use crate::segment::{Part, PartId};
 use crate::terrain::pipeline::overture::width::width_u;
 
 /// A part of a way that is a bridge or a tunnel, whole.
 #[derive(Clone)]
 pub struct Piece {
-    pub way: Segment,
+    pub way: Part,
     pub form: Form,
 }
 
@@ -39,7 +39,7 @@ impl Piece {
 /// (`is_bridge_way`) nor along a tunnel, no road tunnel indoors
 /// (`renders_as_highway_tunnel`); a subway runs underground wherever it is no
 /// bridge (`wants_rail_tunnel`).
-pub fn piece_of(way: &Segment) -> Option<Piece> {
+pub fn piece_of(way: &Part) -> Option<Piece> {
     let t = way.tags;
     let form = if t.bridge && !t.tunnel && !t.indoor {
         Form::Bridge

@@ -12,7 +12,7 @@ use crate::terrain::pipeline::overture::between::{cell_of, Line, Rules};
 use crate::terrain::pipeline::overture::role::Role;
 use crate::wkb::wkb_to_geometries;
 
-/// The columns of `overture_transportation t` a [`Segment`] is read from.
+/// The columns of `overture_transportation t` a [`Part`] is read from.
 #[macro_export]
 macro_rules! segment_columns {
     () => {
@@ -42,7 +42,7 @@ pub type PartId = (String, u64);
 
 /// A part of a segment over which every rule it carries holds one value.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct Segment {
+pub struct Part {
     pub gers_id: String,
     /// Where it lies on its segment, as fractions of the segment's length.
     pub span: [f64; 2],
@@ -85,9 +85,9 @@ impl End {
     }
 }
 
-impl Segment {
+impl Part {
     /// A row's parts, in order along it; none of a row with no line.
-    pub fn of(r: &postgres::Row) -> Vec<Segment> {
+    pub fn of(r: &postgres::Row) -> Vec<Part> {
         let (gers_id, subtype, class, subclass): (String, String, Option<String>, Option<String>) = (r.get("gers_id"), r.get("subtype"), r.get("class"), r.get("subclass"));
         let [flags, levels, subclasses] = ["flags", "levels", "subclasses"].map(|c| Rules::of(r.get::<_, Option<&str>>(c)));
         let Some(g) = wkb_to_geometries(r.get::<_, &[u8]>("geom_wkb")).into_iter().next() else {
@@ -129,7 +129,7 @@ impl Segment {
                 _ => runs.push(([w[0], w[1]], here)),
             }
         }
-        let part = |(span, tags): ([f64; 2], Tags), points: Vec<G3857>| Segment {
+        let part = |(span, tags): ([f64; 2], Tags), points: Vec<G3857>| Part {
             gers_id: gers_id.clone(),
             span,
             segment_length: length,

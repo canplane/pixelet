@@ -35,7 +35,7 @@ pub fn bake_surface(tile_idx: [i32; 2], source: TileSource, drawn: &[Drawn]) -> 
     let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut features: Vec<Feature> = Vec::new();
     features.extend(source.building_rows.iter().flat_map(|row| buildings(row, tile_min)));
-    features.extend(source.segment_rows.iter().flat_map(|row| ways(row, drawn, tile_min)));
+    features.extend(source.parts.iter().flat_map(|row| ways(row, drawn, tile_min)));
     features.extend(source.base_rows.iter().flat_map(|row| bases(row, tile_min)));
 
     let ground = bake_ground(&features, &coast_of(&source.coast_rows, tile_min));

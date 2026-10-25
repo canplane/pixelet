@@ -12,7 +12,7 @@ use pxl_spec::space::coord::adapter::epsg3857;
 
 use pxl_spec::bake::separation::Form;
 
-use crate::segment::Segment;
+use crate::segment::Part;
 use crate::separation::piece::piece_of;
 use crate::terrain::repository::TerrainRepository;
 use crate::util::{pack, unpack, write_atomic, Level};
@@ -41,7 +41,7 @@ const WATER_SQL: &str = "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FR
 /// One tile's rows, as a tile's other rows are read: whatever overlaps it.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct TileRows {
-    ways: Vec<Segment>,
+    ways: Vec<Part>,
     water: Vec<(String, Option<String>, Vec<u8>)>,
     /// Its elevation, flat where the raster does not reach.
     ele: Vec<i16>,
@@ -49,7 +49,7 @@ pub struct TileRows {
 
 impl TileRows {
     /// Every way it overlaps, the bridges and tunnels among them.
-    pub fn ways(&self) -> &[Segment] {
+    pub fn ways(&self) -> &[Part] {
         &self.ways
     }
 
@@ -84,7 +84,7 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> R
     let water = read(client, WATER_SQL)?;
     let ele = repo.ele(client, tile).map_err(|e| e.to_string())?;
     Ok(TileRows {
-        ways: ways.iter().flat_map(Segment::of).collect(),
+        ways: ways.iter().flat_map(Part::of).collect(),
         water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),
         ele,
     })
@@ -144,7 +144,7 @@ pub fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Po
     let env: [&(dyn ToSql + Sync); 4] = [&lo[0], &lo[1], &hi[0], &hi[1]];
     let rows = client.query(TUNNELS_SQL, &env).map_err(|e| e.to_string())?;
     Ok(TileRows {
-        ways: rows.iter().flat_map(Segment::of).collect(),
+        ways: rows.iter().flat_map(Part::of).collect(),
         water: Vec::new(),
         ele: Vec::new(),
     }

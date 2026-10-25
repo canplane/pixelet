@@ -8,7 +8,7 @@ use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, BBox3
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::elevation::Raster;
-use crate::segment::Segment;
+use crate::segment::Part;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, LAND, WIDEST_LINE};
 use crate::terrain::pipeline::overture::width::carto_u;
 
@@ -110,7 +110,7 @@ pub struct CoastRow {
 pub struct TileSource {
     pub ele: Vec<i16>,
     pub building_rows: Vec<BuildingRow>,
-    pub segment_rows: Vec<Segment>,
+    pub parts: Vec<Part>,
     pub base_rows: Vec<BaseRow>,
     pub coast_rows: Vec<CoastRow>,
 }
@@ -164,7 +164,7 @@ impl TerrainRepository {
                     geom_wkb: wkb(row),
                 })
                 .collect(),
-            segment_rows: client.query(&self.segments, &bbox)?.iter().flat_map(Segment::of).collect(),
+            parts: client.query(&self.segments, &bbox)?.iter().flat_map(Part::of).collect(),
             base_rows: client
                 .query(&self.base, &[bbox[0], bbox[1], bbox[2], bbox[3], &self.infrastructure, &self.land])?
                 .iter()

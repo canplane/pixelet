@@ -57,7 +57,7 @@ use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_fro
 use pxl_spec_core::ways;
 use xpute_kit::math::scalar::round;
 
-use crate::segment::{End, PartId, Segment};
+use crate::segment::{End, Part, PartId};
 use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::piece::{piece_of, Piece};
 use crate::separation::source::{portals_in, ring, Store};
@@ -432,7 +432,7 @@ fn disk(reach: f32) -> Vec<[i64; 2]> {
 }
 
 /// A way's width, in u.
-fn way_width(row: &Segment) -> f64 {
+fn way_width(row: &Part) -> f64 {
     width_u(&row.subtype, row.class.as_deref(), row.tags.role)
 }
 

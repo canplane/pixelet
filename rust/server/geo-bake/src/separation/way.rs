@@ -2,7 +2,7 @@
 
 //! A way as read, and the line it runs along.
 
-use crate::segment::Segment;
+use crate::segment::Part;
 
 type P = [f64; 2];
 
@@ -38,12 +38,12 @@ impl Polyline {
 
 /// A way as read: its row and its line.
 pub struct Way {
-    pub row: Segment,
+    pub row: Part,
     pub line: Polyline,
 }
 
 impl Way {
-    pub fn of(row: Segment) -> Option<Way> {
+    pub fn of(row: Part) -> Option<Way> {
         (row.points.len() >= 2).then(|| Way {
             line: Polyline::of(row.points.iter().map(|p| [p[0], p[1]])),
             row,

@@ -11,7 +11,7 @@ use pxl_spec::asset::cube::ground as g;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
-use crate::segment::Segment;
+use crate::segment::Part;
 use crate::separation::Drawn;
 use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
@@ -254,7 +254,7 @@ pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
 /// route or a strait's label line, nor of a crossing, a line over a road the
 /// road already shows; and not where a line draws it, cut square there, so
 /// the paint ends where the line begins.
-pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
+pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
     if row.subtype == "water" || row.tags.tunnel || row.tags.indoor || row.tags.role == Role::Crossing {
         return Vec::new();
     }
