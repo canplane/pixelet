@@ -3,7 +3,6 @@
 import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions, type ViteDevServer } from "vite";
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,24 +40,14 @@ function buildId(): string {
 }
 
 /**
- * Which build this is: `#<n>` where CI handed the build its number, and
- * `#<n>-<id>` — the last number this checkout saw published, then what this
- * one actually is — where it did not. A build with no number from CI is not
- * that build whatever it was built from, so the source says so itself rather
- * than a sign meaning "after"; before any number is cached, the id alone.
- * The count lives in the bucket and is taken by CI's number job
- * (script/build-log.py --take); ts/client/.build_number is only this checkout's cache of
- * it, written by any read of `./script/build-log.py`.
+ * Which build this is: `#<n>` where CI handed the build its number (taken
+ * by CI's number job, script/build-log.py --take), and the source's id where
+ * it did not: a build CI did not number is not that build, whatever it was
+ * built from.
  */
 function buildNumber(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;
-  if (official) return `#${official}`;
-  try {
-    const last = readFileSync(path.join(WORKSPACE, "client", ".build_number"), "utf8").trim();
-    return /^\d+$/.test(last) ? `#${last}-${id}` : id;
-  } catch {
-    return id;
-  }
+  return official ? `#${official}` : id;
 }
 
 /**

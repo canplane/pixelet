@@ -24,7 +24,7 @@
 	lint lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
 	$(TOOLS) serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
-	sync-build-number deploy
+	deploy
 
 # `check` is everything, and with `test` what passes before a push to deploy,
 # since CI checks nothing (.agents/skills/deploy/SKILL.md). `check-build` is
@@ -75,19 +75,19 @@ spec:
 # kind's set under ./out. The two local ones run the three servers beside the
 # client, each its own job, so Ctrl-C stops them all. `preview` is the bundle
 # a deploy builds, to measure the client by.
-dev: sync-build-number
+dev:
 	deno task --cwd ts/app/web dev
-dev-oven: sync-build-number
+dev-oven:
 	$(MAKE) -j4 serve-geo serve-api serve-tile web-oven
-dev-shelf: sync-build-number
+dev-shelf:
 	$(MAKE) -j4 serve-geo serve-api serve-shelf web-shelf
 dev-native:
 	deno task --cwd ts/app/native start
-preview: sync-build-number
+preview:
 	deno task --cwd ts/app/web preview
-preview-oven: sync-build-number
+preview-oven:
 	$(MAKE) -j4 serve-geo serve-api serve-tile web-preview-oven
-preview-shelf: sync-build-number
+preview-shelf:
 	$(MAKE) -j4 serve-geo serve-api serve-shelf web-preview-shelf
 
 serve-shelf:
@@ -113,11 +113,6 @@ TOOLS := bake-terrain bake-place bake-division bake-earth bake-star bake-geoid \
 	serve-geo serve-api serve-tile
 $(TOOLS):
 	+cd rust && $(CURDIR)/script/with-env.sh cargo $@ $(ARGS)
-
-# ts/client/.build_number is written by any read of the build log, so it is
-# refreshed before vite reads it.
-sync-build-number:
-	@./script/build-log.py >/dev/null || echo "[build-number] not synced: this build is labeled from the cached number" >&2
 
 # The deployment: the client built and published with the Worker
 # (script/deploy.py). Does not upload what the bucket holds.

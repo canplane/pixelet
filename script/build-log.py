@@ -25,7 +25,6 @@ import r2
 ROOT = Path(__file__).resolve().parent.parent
 KEY = "_meta/build-log.jsonl"
 COUNTER = "_meta/build-counter"
-CACHE = ROOT / "ts/client/.build_number"
 
 
 def die(message: str):
@@ -81,9 +80,6 @@ def read() -> tuple[str, list[dict]]:
             entries.append(json.loads(line))
         except json.JSONDecodeError:
             die(f"{KEY} holds a line that is not a record: {json.dumps(line[:60])}")
-    # Refreshes the gitignored cache of the last published number.
-    if entries:
-        CACHE.write_text(f"{entries[-1]['n']}\n")
     return raw, entries
 
 
