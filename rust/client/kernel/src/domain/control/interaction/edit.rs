@@ -8,7 +8,6 @@ use crate::domain::control::interaction::{holding, hover, ActiveTool};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::domain::layer::object::size::MARKER_ZOOM;
-use crate::domain::layer::object::store::Asset;
 use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::asset::decor_num_id;
 use pxl_spec::asset::marker::MARKER;
@@ -237,10 +236,8 @@ pub fn pending_step() -> RenderEdits {
     };
     // The real object's hide lands a tick or more after the ghost, accepted.
     let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
-    let asset = hidden.map(|o| o.asset());
     let edits = RenderEdits {
         hide: hidden.map(|o| o.id()),
-        hide_in: (!matches!(asset, Some(Asset::Decor { .. })), !matches!(asset, Some(Asset::Cube { .. }))),
         // The never-written AIR entry injected into the drawn build where
         // the eraser hovers bare terrain: what is one voxel below shows
         // through the ghost.

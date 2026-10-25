@@ -15,10 +15,10 @@ use xpute_guest::global::Global;
 /// into a hole not dug. No revision moves, so saves do not see the hover.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RenderEdits {
-    /// The placed object hidden, and whether it is drawn in tiers, decor, or
-    /// (already gone) either.
+    /// The placed object hidden, by its key, whatever its kind: the rays
+    /// cut it and decor's records leave it out, each meeting it only where
+    /// it holds it.
     pub hide: Option<EntryAt>,
-    pub hide_in: (bool, bool),
     /// An AIR entry over bare terrain, which has no leaf to hide.
     pub carve: Option<EntryAt>,
     /// The scattered decor hidden, by the cell it stands in.

@@ -250,7 +250,7 @@ pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord:
     });
     {
         let edits = crate::domain::layer::object::preview::current();
-        crate::domain::scene::decor::drawn::step(frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
+        crate::domain::scene::decor::drawn::step(frame.eye, edits.hide, edits.scattered);
         crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.budget);
     }
     crate::domain::scene::marker::step(ctx, &frame);
