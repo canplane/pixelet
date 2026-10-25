@@ -40,7 +40,7 @@ What `check` runs, each a task of its own:
 `test` is every workspace's tests: the client's, xpute's (its C++ guest
 built for wasm among them) and the crates'.
 
-Neither runs the GPU hosts: `deno task --cwd xpute test:gpu` needs a GPU and
+Neither runs the GPU hosts: `make -C xpute test-gpu` needs a GPU and
 Chrome (`$CHROME`), and holds the native host on wgpu and the web host to
 `spec/golden/gpu`. Run it by hand before deploying a change to a GPU call —
 `spec/gpu/`, xpute's `gpu` crates and packages, or how pxl-render encodes.
