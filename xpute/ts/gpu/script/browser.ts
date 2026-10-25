@@ -12,7 +12,7 @@ import { dirname, fromFileUrl, join } from "@std/path";
 /** xpute's root, three up: the spec it serves and the target it bundles into. */
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "../../..");
 const TEST = "ts/gpu/src/host.test.ts";
-const BUNDLE = join(ROOT, "target/web-gpu/host.test.js");
+const BUNDLE = join(ROOT, "target/browser/host.test.js");
 const CHROME = Deno.env.get("CHROME") ?? (Deno.build.os === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 const SECONDS = 60;
 
@@ -37,7 +37,7 @@ async function main(): Promise<number> {
     if (path.startsWith("/spec/") && !path.includes("..")) return new Response(await Deno.readFile(join(ROOT, path)));
     return new Response(null, { status: 404 });
   });
-  const profile = await Deno.makeTempDir({ prefix: "xpute-web-gpu-" });
+  const profile = await Deno.makeTempDir({ prefix: "xpute-browser-" });
   const chrome = new Deno.Command(CHROME, {
     args: ["--headless=new", "--no-first-run", "--no-default-browser-check", "--enable-unsafe-webgpu", `--user-data-dir=${profile}`, `http://127.0.0.1:${server.addr.port}/`],
     stdout: "null",
@@ -46,7 +46,7 @@ async function main(): Promise<number> {
   try {
     const late = new Promise<string>((_, reject) => setTimeout(() => reject(new Error(`no outcome from Chrome in ${SECONDS} s`)), SECONDS * 1000));
     const said = await Promise.race([outcome, late]);
-    console.log(said === "ok" ? `web-gpu: ${TEST} ok in Chrome` : `web-gpu: ${TEST} failed in Chrome:\n${said}`);
+    console.log(said === "ok" ? `browser: ${TEST} ok in Chrome` : `browser: ${TEST} failed in Chrome:\n${said}`);
     return said === "ok" ? 0 : 1;
   } finally {
     chrome.kill();

@@ -13,8 +13,8 @@
     // The host's run of the contract's traces against every guest, which the
     // root's test builds first.
     "test:conformance": "deno test -A host/src/conformance.test.ts",
-    // The web host's test where it runs, in Chrome (gpu/script/web-gpu.ts).
-    "test:gpu:web": "./gpu/script/web-gpu.ts",
+    // The web host's test where it runs, in Chrome (gpu/script/browser.ts).
+    "test:gpu:web": "./gpu/script/browser.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

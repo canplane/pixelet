@@ -8,7 +8,7 @@
  * word as the guest left it, and the next turn waits for its DONE. And a
  * surface's handle holds its slot only while it is the one bound there.
  *
- * ts/gpu/script/web-gpu.ts serves it to Chrome, and the page posts its outcome
+ * ts/gpu/script/browser.ts serves it to Chrome, and the page posts its outcome
  * back: "ok", or what failed.
  */
 

@@ -52,7 +52,7 @@ test-rust:
 test-conformance: build
 	deno task --cwd ts test:conformance
 
-# What needs a GPU: the web host in Chrome (ts/gpu/script/web-gpu.ts), and the
+# What needs a GPU: the web host in Chrome (ts/gpu/script/browser.ts), and the
 # native one on wgpu.
 test-gpu: test-gpu-web test-gpu-native
 test-gpu-web:
