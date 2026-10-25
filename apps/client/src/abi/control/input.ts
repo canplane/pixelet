@@ -1,8 +1,10 @@
 // @pxl/client/abi/control/input.ts
 
-/** Input as the kernel's commands: drivers translate their events into these. */
+/** Input as the kernel's commands, which drivers translate their events
+ * into, and what each frame the strobe grants submits with the viewport. */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { Grant } from "@xpute/host/sched/quantum.ts";
 import {
   type ActiveTool,
   Command,
@@ -11,13 +13,36 @@ import {
   encode_input_pointer,
   encode_input_rect,
   encode_input_wheel,
+  encode_world_frame,
   encode_world_visibility,
   type PointerPhase,
   type PointerType,
 } from "@/abi/cmd.spec.ts";
 import { permissionFollow } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
-import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/host/sched.ts";
+import { request_frame, ring_now, send_input, strobe } from "@/host/sched.ts";
+
+export interface Viewport {
+  width: f64;
+  height: f64;
+  dpr: f64;
+}
+
+/** Asked every frame, so a resize needs no event of its own. */
+let driver: (() => Viewport) | null = null;
+
+/** A browser's ~6 connections per origin, so the kernel's queue, not the socket pool, orders the work. */
+const NET_CREDITS = 6;
+
+/** What each frame the strobe grants submits: the viewport, the display's
+ * pacing, whether it is interactive, the reads allowed out and the clock. */
+export function submit_frame(grant: Grant): void {
+  if (driver === null) return;
+  const { width: w, height: h } = driver();
+  const width = Math.max(1, w);
+  const height = Math.max(1, h);
+  GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, grant.refresh_ms, grant.paced_ms, grant.interactive, NET_CREDITS, Date.now()));
+}
 
 export function kernel_pointer(phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): void {
   send_input(Command.INPUT_POINTER, encode_input_pointer(GUEST_DOORBELL, phase, pointer_type, id, button, x, y));
@@ -40,7 +65,7 @@ export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
 }
 
 export function kernel_open(viewport: () => Viewport): () => void {
-  set_driver(viewport);
+  driver = viewport;
   ring_now(Command.SENSOR_OPEN);
   strobe.start();
   const unfollow = permissionFollow();
@@ -48,7 +73,7 @@ export function kernel_open(viewport: () => Viewport): () => void {
     unfollow();
     strobe.stop();
     ring_now(Command.SENSOR_CLOSE);
-    set_driver(null);
+    driver = null;
   };
 }
 

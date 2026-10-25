@@ -9,7 +9,7 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { reserve_memory } from "@xpute/host/mem/reserve.ts";
-import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@pxl/client/abi/mem/mem.spec.ts";
+import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "@pxl/client/abi/mem/mem.spec.ts";
 import { key } from "@pxl/client/abi/directory.spec.ts";
 import { directory, type Guest } from "@pxl/client/host/module.ts";
 import { runGpuStream } from "./webgpu.ts";
@@ -34,7 +34,7 @@ export async function openGuest(): Promise<Guest> {
   turn(0);
   // The maximum is the initial size, so the buffer is never replaced.
   const buffer = memory.buffer as ArrayBuffer;
-  const gpu = directory(buffer).get(key.GPU_STREAM);
+  const gpu = directory(buffer, DIRECTORY_AT).get(key.GPU_STREAM);
   const interrupt = (quotaMs: f64) => {
     const wake = turn(quotaMs);
     runGpuStream(buffer, gpu);

@@ -4,7 +4,8 @@
  * The guest's namespace: each root it opens files below (host.json `root`)
  * bound to the backend that answers it, as Plan 9 binds a name. Bound once,
  * at boot, and sealed: no root is bound after. `@xpute/host` hands every
- * open and write to the host's one opener (host/sys.ts), which dispatches here by root.
+ * open and write to `open_root` and `commit_root`, which the boot gives the
+ * host (abi/boot.ts), and they dispatch here by root.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";

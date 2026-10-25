@@ -9,22 +9,21 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
 
-import { DIRECTORY_AT } from "@/abi/mem/mem.spec.ts";
-
 /** The memory never moves or grows. */
 export interface Guest {
   buffer: ArrayBuffer;
-  /** Returns when the kernel wants its next turn, in ms. A guest that records
+  /** Returns when the guest wants its next turn, in ms. A guest that records
    * GPU calls runs them here, before the turn is over. */
   interrupt(quota_ms: f64): f64;
 }
 
-/** The directory the kernel writes on its first turn, at mem.json's DIRECTORY_AT. */
-export function directory(memory: ArrayBuffer): Directory {
-  return new Directory(memory, DIRECTORY_AT);
+/** The directory the guest writes on its first turn, at the one offset the
+ * host learns outside it. */
+export function directory(memory: ArrayBuffer, at: u32): Directory {
+  return new Directory(memory, at);
 }
 
-/** Valid until the kernel reuses the range; copy to keep. */
+/** Valid until the guest reuses the range; copy to keep. */
 export function bytes_at(memory: ArrayBuffer, at: u32, len: u32): U8Array {
   return new Uint8Array(memory, at, len);
 }

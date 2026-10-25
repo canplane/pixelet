@@ -1,11 +1,12 @@
 // @pxl/client/host/mem.ts
 
 /**
- * The opened guest and its doorbell. What lies where in the buffer is the
- * kernel's alone; the shell holds addresses the kernel handed out.
+ * The opened guest, its directory and its doorbell. What lies where in the
+ * buffer is the guest's alone; others hold only addresses it handed out.
  */
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { Directory } from "@xpute/host/ipc/directory.ts";
 import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import { openGuest } from "@/bracket.tsx";
 import { key } from "@xpute/host/ipc/directory.spec.ts";
@@ -19,11 +20,18 @@ export let GUEST: Guest;
 /** A trapped turn leaves its errno and place in the host stream. */
 export let GUEST_DOORBELL: Doorbell;
 
-export async function load_guest(): Promise<void> {
+/** Where the guest says its rings and streams are, and its quantum. */
+export let GUEST_DIRECTORY: Directory;
+
+/** Opens the guest, whose directory is at `directory_at`. Each turn the
+ * doorbell rings runs its host stream as it ends, a trapped one's too, so its
+ * report is read before the doorbell hears it stop. */
+export async function load_guest(directory_at: u32): Promise<void> {
   const guest = await openGuest();
-  const dir = directory(guest.buffer);
+  const dir = directory(guest.buffer, directory_at);
   const host_stream = dir.get(key.SYS);
   GUEST = guest;
+  GUEST_DIRECTORY = dir;
   GUEST_DOORBELL = new Doorbell(guest.buffer, dir.get(key.SUBMISSION), dir.get(key.COMPLETION), (quota_ms) => {
     let wake: f64;
     try {

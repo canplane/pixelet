@@ -3,8 +3,7 @@
 import { create } from "zustand";
 
 import { installConsole } from "@/shell/debug/console.ts";
-import { boot_kernel, on_kernel_stop } from "@/abi/boot.ts";
-import { stop_code } from "@/host/sys.ts";
+import { boot_kernel, on_kernel_stop, stop_code } from "@/abi/boot.ts";
 import { bootstrapI18n } from "@/shell/locale/i18n.ts";
 
 export const enum Boot {

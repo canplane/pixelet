@@ -1,7 +1,7 @@
 {
   "$doc": [
     "The kernel's own system calls, beside xpute's in the same stream (xpute/spec/ipc/",
-    "sys.json, pxl-kernel io/host.rs, apps/client/src/host/sys.ts), and the range and the",
+    "sys.json, pxl-kernel io/host.rs, apps/client/src/abi/text.ts), and the range and the",
     "files it keeps them in."
   ],
   "stream": {

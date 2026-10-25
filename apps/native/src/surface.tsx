@@ -17,7 +17,8 @@ import { kernel_open, kernel_rect, kernel_visible } from "@pxl/client/abi/contro
 import { worldPointer } from "@pxl/client/shell/store/pointer.ts";
 import { surface_role } from "@pxl/client/abi/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@pxl/client/abi/render/surface.ts";
-import { request_frame, type Viewport } from "@pxl/client/host/sched.ts";
+import { request_frame } from "@pxl/client/host/sched.ts";
+import type { Viewport } from "@pxl/client/abi/control/input.ts";
 
 interface SurfaceProps extends ViewProps {
   surface: u32;
