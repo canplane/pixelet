@@ -1,12 +1,10 @@
 // @pxl/client/shell/setting/modal.tsx
 
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Panel } from "@/shell/ui/panel.tsx";
-import { PanelBar, PanelBody, PanelScroll } from "@/shell/ui/panel.tsx";
-import { Segmented } from "@/shell/ui/segmented.tsx";
+import { PanelTabs } from "@/shell/ui/panel-tabs.tsx";
 import { hairline } from "@/shell/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
 import { settingText } from "./row.tsx";
@@ -26,46 +24,39 @@ function Separator() {
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SettingsTab>(SettingsTab.Options);
 
   return (
     <Panel label={t("settings.title")} onClose={onClose}>
-      <PanelBody
-        bar={
-          <PanelBar onClose={onClose}>
-            <Segmented
-              value={tab}
-              onChange={setTab}
-              segments={[
-                { value: SettingsTab.Options, label: t("settings.tabs.options") },
-                { value: SettingsTab.Info, label: t("settings.tabs.info") },
-              ]}
-            />
-          </PanelBar>
-        }
+      <PanelTabs
+        onClose={onClose}
+        tabs={[
+          { value: SettingsTab.Options, label: t("settings.tabs.options") },
+          { value: SettingsTab.Info, label: t("settings.tabs.info") },
+        ]}
       >
-        {tab === SettingsTab.Options
-          ? (
-            <PanelScroll key={SettingsTab.Options}>
-              <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
-              <Separator />
-              <SettingsSection section="display" />
-              <SettingsSection section="navigation" />
-              <SettingsSection section="camera" />
-              <SettingsSection section="lighting" />
-              <SettingsSection section="debug" />
-            </PanelScroll>
-          )
-          : (
-            <PanelScroll key={SettingsTab.Info}>
-              <LanguageSection />
-              <Separator />
-              <DisclaimerSection />
-              <AttributionSection />
-              <AboutSection />
-            </PanelScroll>
-          )}
-      </PanelBody>
+        {(tab) =>
+          tab === SettingsTab.Options
+            ? (
+              <>
+                <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
+                <Separator />
+                <SettingsSection section="display" />
+                <SettingsSection section="navigation" />
+                <SettingsSection section="camera" />
+                <SettingsSection section="lighting" />
+                <SettingsSection section="debug" />
+              </>
+            )
+            : (
+              <>
+                <LanguageSection />
+                <Separator />
+                <DisclaimerSection />
+                <AttributionSection />
+                <AboutSection />
+              </>
+            )}
+      </PanelTabs>
     </Panel>
   );
 }

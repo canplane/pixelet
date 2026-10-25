@@ -14,7 +14,7 @@ import { LABEL } from "@/shell/ui/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shell/ui/panel.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 
-// The chip one sees is 32; a press lands on 44 (doc/minutes/20260928-three-sizes-of-a-control.md).
+// The chip one sees is 32; a press lands on 44, a box laid out around it (doc/minutes/20260928-three-sizes-of-a-control.md).
 const CHIP_HEIGHT = 32;
 const PREVIEW = 96;
 const CHIP_GAP_X = 8;
