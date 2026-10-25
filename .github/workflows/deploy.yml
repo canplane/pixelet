@@ -187,9 +187,6 @@ jobs:
         with:
           deno-version-file: ts/.tool-versions
 
-      # wrangler, Cloudflare's CLI, a program the steps call as any other.
-      - name: Install wrangler
-        run: npm install --global "wrangler@${WRANGLER_VERSION}"
 
       # Its own cargo cache: the module and what builds it.
       - uses: ./.github/actions/toolchain

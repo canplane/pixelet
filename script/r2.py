@@ -1,16 +1,18 @@
 # One object of the bucket at a time, read or written through wrangler,
 # Cloudflare's CLI for it: the build counter, the build log and the deploy's
-# path tables. wrangler is a program on the PATH, as aws and git are, and
-# takes its credential as it does anywhere: CI's CLOUDFLARE_API_TOKEN and
-# CLOUDFLARE_ACCOUNT_ID, or a machine's own login.
+# path tables. wrangler takes its credential as it does anywhere: CI's
+# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, or a machine's own login.
 # A whole set's upload is the AWS CLI's (publish.py), which syncs a directory.
 
 import os
+import shutil
 import subprocess
 import tempfile
 
 BUCKET = "pixelet-tiles"
-WRANGLER = ["wrangler"]
+# wrangler as installed on the machine; where it is not, Deno runs its npm
+# release, so a machine that runs the client needs nothing more.
+WRANGLER = ["wrangler"] if shutil.which("wrangler") else ["deno", "run", "-A", "npm:wrangler"]
 
 
 class Unreachable(Exception):

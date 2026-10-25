@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # What the deployment has used against its free allowances: R2's writes and
 # Hetzner traffic, which the free Workers plan does not bound. Uses
-# wrangler's credential and hcloud's active context, both programs on the
-# PATH.
+# wrangler's credential and hcloud's active context.
 #
 #   ./script/usage.py
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -22,7 +22,9 @@ signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 WORKER = "pixelet"
 BUCKET = "pixelet-tiles"
 SERVER = "pixelet-prod"
-WRANGLER = ["wrangler"]
+# wrangler as installed on the machine; where it is not, Deno runs its npm
+# release, so a machine that runs the client needs nothing more.
+WRANGLER = ["wrangler"] if shutil.which("wrangler") else ["deno", "run", "-A", "npm:wrangler"]
 
 WORKER_REQUESTS_PER_DAY = 100_000
 R2_STORAGE_BYTES = 10e9
