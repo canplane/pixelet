@@ -1,20 +1,24 @@
 // pxl-kernel/domain/scene/character/preview.rs
 
 //! Display cases for the variant picker: a character idling and spinning in
-//! place, drawn into the case's own canvas from far below the world. The
-//! model is registered again at one unit tall, since the cases compare
-//! silhouettes, not scale.
+//! place, drawn into the case's own canvas from far below the world. A case
+//! is a frame, holding its actor's instance. The model is registered again
+//! at one unit tall, since the cases compare silhouettes, not scale.
 
 use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
+use crate::domain::query::model::registry::Models;
 use crate::domain::query::model::variant_spec::IDLE_CLIP;
+use crate::domain::scene::actor::{Actor, Pose};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
-use crate::domain::scene::scene;
+use crate::domain::scene::frame::Frame;
 use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
+use pxl_render::frame::draw::DrawList;
+use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
@@ -24,7 +28,9 @@ const CASE_DEPTH_U: f64 = 100_000.0;
 struct Case {
     id: u32,
     variant: CharacterVariant,
-    actor: Option<u32>,
+    actor: Option<Actor>,
+    /// Where its actor stands, once held.
+    pose: Option<Pose>,
     model: Option<ModelHandle>,
     spin: f64,
 }
@@ -52,6 +58,7 @@ pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
         id,
         variant,
         actor: None,
+        pose: None,
         model: None,
         spin: 0.0,
     });
@@ -66,7 +73,7 @@ pub fn preview_close(id: u32) -> bool {
     let case = c.cases.remove(pos);
     if let Some(actor) = case.actor {
         if section::map().is_some() {
-            scene().actors.remove_actor(draw_list(), actor);
+            actor.free(draw_list());
         }
     }
     true
@@ -92,30 +99,52 @@ pub fn preview_step(ctx: &mut TickContext) {
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {
                 let id = model.model;
-                case.actor = section::map().and_then(|_| scene().actors.new_actor(draw_list(), crate::domain::query::model::models(), id));
-                if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
-                    scene().actors.play(actor, IDLE_CLIP, 0.0);
+                case.actor = section::map().and_then(|_| Actor::new(draw_list(), crate::domain::query::model::models(), id));
+                if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_count) {
+                    actor.play(IDLE_CLIP, 0.0);
                 }
             }
         }
-        let Some(actor) = case.actor else { continue };
+        let (Some(_), Some(model)) = (&case.actor, &case.model) else { continue };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
-        if let Some(a) = scene().actors.actor(actor) {
-            a.at = at;
-            a.rotation_z = case.spin as f32;
-            a.visible = true;
-            turned = true;
-        }
+        let scale = crate::domain::query::model::models().get(model.model).map_or(1.0, |m| m.scale());
+        case.pose = Some(Pose {
+            at,
+            rotation_z: case.spin as f32,
+            scale,
+        });
+        turned = true;
     }
     if turned {
         ctx.invalidate();
     }
 }
 
+/// Each case's actor advanced where it stands; whether one the eye can see
+/// moved (`Actor::tick`).
+pub fn preview_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
+    let mut moved = false;
+    for case in &mut cases().cases {
+        if let (Some(actor), Some(pose)) = (case.actor.as_mut(), case.pose) {
+            moved |= actor.tick(draw, models, frame, &pose);
+        }
+    }
+    moved
+}
+
+/// Each case's actor into the frame's list, where it stands.
+pub fn preview_draw(draw: &mut DrawList, models: &Models, eye: V3) {
+    for case in &cases().cases {
+        if let (Some(actor), Some(pose)) = (&case.actor, case.pose) {
+            actor.draw(draw, models, &pose, eye);
+        }
+    }
+}
+
 /// (case, model, skin image), the image as the loader has it now.
 pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> {
     let c: &'static _ = cases();
-    c.cases.iter().filter_map(|case| match (&case.model, case.actor) {
+    c.cases.iter().filter_map(|case| match (&case.model, &case.actor) {
         (Some(model), Some(_)) => Some((case.id, model.model, load_image(Load::Asset(case.variant.skin))?)),
         _ => None,
     })

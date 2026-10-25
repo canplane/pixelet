@@ -5,19 +5,25 @@
 //! focus is a ~1 Hz GPS stream that never rests, or steered by the keys,
 //! it instead glides at the world-scroll rate so the two cancel and it
 //! holds at screen center.
+//!
+//! The person and the pet are each a frame the walk moves (`Figure`),
+//! holding its actor's instance at its origin; the person's holds its chat
+//! line too, a marker over its head, and says whether it shows
+//! (`line_hangs`). Neither instance is anchored to the other.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::domain::approach::damp_alpha;
 use crate::domain::query::changed::Asked;
 use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
+use crate::domain::query::model::registry::Models;
 use crate::domain::query::model::variant_spec::IDLE_CLIP;
 use crate::domain::query::World;
-use crate::domain::query::{over, under, walks};
+use crate::domain::query::{cell_at, over, under, walks};
+use crate::domain::scene::actor::{Actor, Pose};
 use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
-use crate::domain::scene::marker::speak_from;
-use crate::domain::scene::scene;
+use crate::domain::scene::frame::Frame;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::load_image;
@@ -25,14 +31,19 @@ use crate::sys::load::Load;
 use crate::sys::mem::section;
 use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::tick::TickContext;
+use pxl_render::frame::draw::DrawList;
+use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-pub const ACTORS_MAX: usize = Group::ALL.len();
+/// The frames the companion holds, the person and the pet, each one
+/// actor's instance.
+pub const FIGURES: usize = Group::ALL.len();
 
 // Arbitrary, so the pet does not share the person's footprint.
 const PET_OFFSET: [f64; 2] = [-0.6, -0.6];
@@ -64,13 +75,17 @@ const WALK_EPS: f64 = 0.03;
 const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
 struct Held {
-    actor: u32,
+    actor: Actor,
     model: ModelHandle,
 }
 
+/// A person or a pet: a frame the walk moves, holding its actor's instance
+/// once its model and skin have landed.
 struct Figure {
     variant: CharacterVariant,
     held: Option<Held>,
+    /// Where its actor stands, once held and placed.
+    pose: Option<Pose>,
     at: [f64; 2],
     heading: f64,
     actor_clip: Option<u32>,
@@ -92,6 +107,7 @@ impl Figure {
         Figure {
             variant: *variant,
             held: None,
+            pose: None,
             at: [0.0; 2],
             heading: 0.0,
             actor_clip: None,
@@ -116,7 +132,7 @@ impl Figure {
         let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_image(Load::Asset(variant.skin))) else {
             return;
         };
-        let Some(Some(actor)) = section::map().map(|_| scene().actors.new_actor(draw_list(), crate::domain::query::model::models(), model.model)) else {
+        let Some(Some(actor)) = section::map().map(|_| Actor::new(draw_list(), crate::domain::query::model::models(), model.model)) else {
             return;
         };
         self.held = Some(Held { actor, model });
@@ -124,9 +140,10 @@ impl Figure {
     }
 
     fn release(&mut self) {
+        self.pose = None;
         if let Some(held) = self.held.take() {
             if section::map().is_some() {
-                scene().actors.remove_actor(draw_list(), held.actor);
+                held.actor.free(draw_list());
             }
         }
     }
@@ -234,20 +251,26 @@ impl Figure {
         }
         self.at = at;
 
-        let Some(held) = &self.held else { return };
-        let sched = scene();
-        if let Some(a) = sched.actors.actor(held.actor) {
-            a.at = [at[0], at[1], drawn_floor(&mut self.drawn, at, *stands, p)];
-            a.rotation_z = self.heading as f32;
-            a.visible = true;
-        }
+        let floor = drawn_floor(&mut self.drawn, at, *stands, p);
+        let Some(held) = &mut self.held else { return };
+        let scale = crate::domain::query::model::models().get(held.model.model).map_or(1.0, |m| m.scale());
+        self.pose = Some(Pose {
+            at: [at[0], at[1], floor],
+            rotation_z: self.heading as f32,
+            scale,
+        });
         let clip = if is_walking { variant.move_clip } else { IDLE_CLIP };
         if self.actor_clip != Some(clip) {
             if clip < held.model.clip_count {
-                sched.actors.play(held.actor, clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
+                held.actor.play(clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
             }
             self.actor_clip = Some(clip);
         }
+    }
+
+    /// Its actor and where it stands, once both are.
+    fn drawn(&mut self) -> Option<(&mut Actor, Pose)> {
+        Some((&mut self.held.as_mut()?.actor, self.pose?))
     }
 }
 
@@ -325,7 +348,6 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
                 w.release();
             }
         }
-        speak_from(None);
         return;
     };
     let settings = settings_store();
@@ -341,10 +363,6 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     if let Some((target, z)) = p.floor.map(|z| (person_target, z)).or_else(|| hold(person)) {
         person.step(ctx, target, z, &p);
     }
-    // The person speaks from where it is drawn, its line over its head.
-    let actors = section::map().map(|_| &scene().actors);
-    let drawn = person.held.as_ref().and_then(|h| actors?.actor_ref(h.actor)).filter(|a| a.visible).map(|a| a.at);
-    speak_from(drawn.map(|at| (world_to_canonical(&at), world_to_canonical(&[at[0], at[1], at[2] + person_variant.height_u + HEAD_CLEARANCE_U]))));
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
@@ -361,6 +379,36 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     if let Some((target, z)) = p.floor.map(|z| (pet_target, walked(z))).or_else(|| hold(pet)) {
         pet.step(ctx, target, z, &p);
     }
+}
+
+/// Each figure's actor advanced where it stands; whether one the eye can
+/// see moved (`Actor::tick`).
+pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
+    let c = companion();
+    let mut moved = false;
+    for (actor, pose) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
+        moved |= actor.tick(draw, models, frame, &pose);
+    }
+    moved
+}
+
+/// Each figure's actor into the frame's list, where it stands.
+pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
+    let c = companion();
+    for (actor, pose) in [&mut c.person, &mut c.pet].into_iter().flatten().filter_map(Figure::drawn) {
+        actor.draw(draw, models, &pose, eye);
+    }
+}
+
+/// Where the person's line hangs in its frame, over its head, while the
+/// frame shows it, seen from `eye` at `tau`: while the person is drawn, and
+/// where the camera grid's cell at its feet is one a marker shows at
+/// (`marker_shows`), so a line reads where the markers about it do.
+pub fn line_hangs(eye: V3, tau: Tau) -> Option<Q3> {
+    let person = companion().person.as_ref()?;
+    let (_, feet) = (person.held.as_ref()?, person.pose?.at);
+    let over = [feet[0], feet[1], feet[2] + person.variant.height_u + HEAD_CLEARANCE_U];
+    marker_shows(cell_at(eye, tau, feet)).then(|| world_to_canonical(&over))
 }
 
 /// (model, image handle) for the shell's skinned pass: the image as the

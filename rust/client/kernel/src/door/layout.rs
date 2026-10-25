@@ -73,13 +73,17 @@ const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX +
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
 const SINGLE_BLOCKS: usize = 5;
 
+/// An actor's palette, one for each frame that holds one: the companion's
+/// figures and the display cases.
+const ACTOR_BLOCKS: usize = crate::domain::scene::character::companion::FIGURES + crate::domain::scene::character::preview::CASES_MAX;
+
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
 /// blocks within their reach, the actors, the singles), so overflowing the
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's blocks before taking its uploads, so it never
 /// holds more.
-const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::BLOCKS_MAX + crate::domain::scene::actor::ACTORS_MAX + SINGLE_BLOCKS;
+const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::BLOCKS_MAX + ACTOR_BLOCKS + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::block::block_slots(MAX_LIVE_BLOCKS);
 

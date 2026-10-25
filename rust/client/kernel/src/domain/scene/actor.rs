@@ -1,21 +1,19 @@
 // pxl-kernel/domain/scene/actor.rs
 
-//! The actors that play registered models. Each tick advances every actor's
-//! clips, cross-fades as three's mixer did, and writes the joint palette into
-//! the actor's block.
+//! The actor kind's behaviour: an instance of a registered model that plays
+//! its clips. What is its own alone is its clips' times and its joint
+//! palette, in a block of its own; where it stands is its frame's, which
+//! holds it and hands its pose in (`Pose`). Each tick advances its clips,
+//! cross-fades as three's mixer did, and writes the palette into its block.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::v3::{self, V3};
-use xpute_guest::abi::handle::Slots;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
 use crate::domain::query::model::registry::{blend, Models};
 use crate::domain::scene::frame::Frame;
-
-/// The companion's and the display cases'.
-pub const ACTORS_MAX: usize = crate::domain::scene::character::companion::ACTORS_MAX + crate::domain::scene::character::preview::CASES_MAX;
 
 #[derive(Clone, Copy)]
 struct Playing {
@@ -23,12 +21,17 @@ struct Playing {
     time: f32,
 }
 
-pub struct Actor {
-    model: u32,
-    /// In units, and its turn about Z.
+/// Where a frame stands its actor: in units, its turn about Z, and the
+/// scale its model is drawn at.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pose {
     pub at: V3,
     pub rotation_z: f32,
-    pub visible: bool,
+    pub scale: f32,
+}
+
+pub struct Actor {
+    model: u32,
     current: Option<Playing>,
     previous: Option<Playing>,
     fade: f32,
@@ -38,19 +41,17 @@ pub struct Actor {
     palette_handle: u32,
     local: Vec<[f32; 10]>,
     global: Vec<[f32; 16]>,
+    /// The fade's source pose, its room kept.
+    from: Vec<[f32; 10]>,
     /// Its palette shows its clips at their clocks: posed again only where
     /// it moves where it is seen, or where it does not show them.
     posed: bool,
 }
 
-#[derive(Default)]
-pub struct Actors {
-    actors: Slots<Actor, { ACTORS_MAX + 1 }>,
-    from: Vec<[f32; 10]>,
-}
-
-impl Actors {
-    pub fn new_actor(&mut self, draw: &mut DrawList, models: &Models, model: u32) -> Option<u32> {
+impl Actor {
+    /// An instance of `model`, its palette's block taken from the heap; none
+    /// where the model is not registered or the heap refuses.
+    pub fn new(draw: &mut DrawList, models: &Models, model: u32) -> Option<Actor> {
         let joints = models.get(model)?.joints();
         let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;
@@ -65,11 +66,8 @@ impl Actors {
             }
         }
         let palette_handle = draw.upload(palette_at as u32, palette_bytes, 0, 0);
-        let actor = Actor {
+        Some(Actor {
             model,
-            at: [0.0; 3],
-            rotation_z: 0.0,
-            visible: false,
             current: None,
             previous: None,
             fade: 0.0,
@@ -79,125 +77,109 @@ impl Actors {
             palette_handle,
             local: vec![[0.0; 10]; joints],
             global: vec![[0.0; 16]; joints],
+            from: Vec::new(),
             posed: false,
-        };
-        Some(self.actors.insert(actor))
+        })
     }
 
-    pub fn actor(&mut self, id: u32) -> Option<&mut Actor> {
-        self.actors.get_mut(id)
-    }
-
-    pub fn actor_ref(&self, id: u32) -> Option<&Actor> {
-        self.actors.get(id)
+    /// The handle of its palette's block, which names its draw.
+    pub fn palette(&self) -> u32 {
+        self.palette_handle
     }
 
     /// A clip already playing is left alone.
-    pub fn play(&mut self, id: u32, clip: u32, fade_s: f32) {
-        let Some(a) = self.actor(id) else { return };
-        if a.current.is_some_and(|c| c.clip == clip) {
+    pub fn play(&mut self, clip: u32, fade_s: f32) {
+        if self.current.is_some_and(|c| c.clip == clip) {
             return;
         }
-        a.previous = a.current;
-        a.current = Some(Playing { clip, time: 0.0 });
-        a.posed = false;
-        a.fade = 0.0;
-        a.fade_len = if a.previous.is_some() { fade_s.max(0.0) } else { 0.0 };
+        self.previous = self.current;
+        self.current = Some(Playing { clip, time: 0.0 });
+        self.posed = false;
+        self.fade = 0.0;
+        self.fade_len = if self.previous.is_some() { fade_s.max(0.0) } else { 0.0 };
     }
 
-    pub fn remove_actor(&mut self, draw: &mut DrawList, id: u32) {
-        if let Some(a) = self.actors.remove(id) {
-            draw.free(a.palette_handle);
-            // SAFETY: the block this asset took and has not given back.
-            unsafe { free((a.palette_at, a.palette_bytes)) };
-        }
+    /// Its block given back.
+    pub fn free(self, draw: &mut DrawList) {
+        draw.free(self.palette_handle);
+        // SAFETY: the block this instance took and has not given back.
+        unsafe { free((self.palette_at, self.palette_bytes)) };
     }
 
-    /// Whether any actor plays a clip of some length: the only thing that asks
-    /// for the next frame.
-    /// Every actor's clock advanced; true where one the eye can see moves: in
-    /// the view and a cell of the camera grid across or more, as the rays
-    /// observe nothing smaller, and its clip moving it a cell or more, or
-    /// fading into the next. So a frame is asked only for what can be seen to
-    /// change. A clip moving it less holds its time and its pose until the eye
-    /// comes close enough to see it move.
-    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
+    /// Its clock advanced, standing at `pose`; true where the eye can see it
+    /// move: in the view and a cell of the camera grid across or more, as
+    /// the rays observe nothing smaller, and its clip moving it a cell or
+    /// more, or fading into the next. So a frame is asked only for what can
+    /// be seen to change. A clip moving it less holds its time and its pose
+    /// until the eye comes close enough to see it move.
+    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame, pose: &Pose) -> bool {
         let dt = frame.delta_s as f32;
-        let mut animating = false;
-        let Actors { actors, from } = self;
-        for a in actors.values_mut() {
-            let Some(m) = models.get(a.model) else { continue };
-            let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
-            let (about, r) = (v3::sub(&a.at, &frame.anchor), f64::from(m.radius() * m.scale()));
-            // What spans a camera cell at the actor's distance is observed.
-            let cell_there = crate::domain::view::lens::cell_there(v3::len(&v3::sub(&about, &frame.camera)));
-            let seen = a.visible && frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
-            // A clip of some length plays, or one fades into the next.
-            let playing = a.current.filter(|p| length(p).is_some());
-            let moving = playing.is_some() || a.previous.is_some();
-            let moves = seen && (a.previous.is_some() || playing.is_some_and(|p| f64::from(m.motion(p.clip) * m.scale()) >= cell_there));
-            animating |= moves;
-            let wrap = |p: &mut Playing| {
-                p.time += dt;
-                if let Some(d) = length(p) {
-                    p.time %= d;
-                }
-            };
-            // Seen, its clip holds where its motion is too small to see.
-            let runs = moves || !seen;
-            if runs {
-                if let Some(p) = a.current.as_mut() {
-                    wrap(p);
-                }
-                if let Some(p) = a.previous.as_mut() {
-                    wrap(p);
-                }
-                if a.previous.is_some() {
-                    a.fade += dt;
-                    if a.fade >= a.fade_len {
-                        a.previous = None;
-                    }
+        let Some(m) = models.get(self.model) else { return false };
+        let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
+        let (about, r) = (v3::sub(&pose.at, &frame.anchor), f64::from(m.radius() * pose.scale));
+        // What spans a camera cell at the actor's distance is observed.
+        let cell_there = crate::domain::view::lens::cell_there(v3::len(&v3::sub(&about, &frame.camera)));
+        let seen = frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
+        // A clip of some length plays, or one fades into the next.
+        let playing = self.current.filter(|p| length(p).is_some());
+        let moving = playing.is_some() || self.previous.is_some();
+        let moves = seen && (self.previous.is_some() || playing.is_some_and(|p| f64::from(m.motion(p.clip) * pose.scale) >= cell_there));
+        let wrap = |p: &mut Playing| {
+            p.time += dt;
+            if let Some(d) = length(p) {
+                p.time %= d;
+            }
+        };
+        // Seen, its clip holds where its motion is too small to see.
+        let runs = moves || !seen;
+        if runs {
+            if let Some(p) = self.current.as_mut() {
+                wrap(p);
+            }
+            if let Some(p) = self.previous.as_mut() {
+                wrap(p);
+            }
+            if self.previous.is_some() {
+                self.fade += dt;
+                if self.fade >= self.fade_len {
+                    self.previous = None;
                 }
             }
-            let joints = m.joints();
-            if joints == 0 {
-                continue;
-            }
-            // Unseen, its clocks run on and its palette waits for it to be
-            // seen; held, its pose stands as it was.
-            if !moves && (a.posed || !seen) {
-                a.posed &= !(moving && runs);
-                continue;
-            }
-            a.posed = true;
-            m.pose(a.current.map(|p| (p.clip, p.time)), &mut a.local);
-            if let Some(prev) = a.previous {
-                from.resize(joints, [0.0; 10]);
-                m.pose(Some((prev.clip, prev.time)), from);
-                let w = if a.fade_len > 0.0 { (a.fade / a.fade_len).clamp(0.0, 1.0) } else { 1.0 };
-                for (to, from) in a.local.iter_mut().zip(from.iter()) {
-                    *to = blend(from, to, w);
-                }
-            }
-            // SAFETY: the actor's own palette block, one mat4 a joint.
-            let palette = unsafe { core::slice::from_raw_parts_mut(ptr_at::<f32>(a.palette_at), joints * 16) };
-            m.palette(&a.local, &mut a.global, palette);
-            draw.rewrite(a.palette_handle, a.palette_at as u32, a.palette_bytes);
         }
-        animating
+        let joints = m.joints();
+        if joints == 0 {
+            return moves;
+        }
+        // Unseen, its clocks run on and its palette waits for it to be
+        // seen; held, its pose stands as it was.
+        if !moves && (self.posed || !seen) {
+            self.posed &= !(moving && runs);
+            return moves;
+        }
+        self.posed = true;
+        m.pose(self.current.map(|p| (p.clip, p.time)), &mut self.local);
+        if let Some(prev) = self.previous {
+            self.from.resize(joints, [0.0; 10]);
+            m.pose(Some((prev.clip, prev.time)), &mut self.from);
+            let w = if self.fade_len > 0.0 { (self.fade / self.fade_len).clamp(0.0, 1.0) } else { 1.0 };
+            for (to, from) in self.local.iter_mut().zip(self.from.iter()) {
+                *to = blend(from, to, w);
+            }
+        }
+        // SAFETY: the actor's own palette block, one mat4 a joint.
+        let palette = unsafe { core::slice::from_raw_parts_mut(ptr_at::<f32>(self.palette_at), joints * 16) };
+        m.palette(&self.local, &mut self.global, palette);
+        draw.rewrite(self.palette_handle, self.palette_at as u32, self.palette_bytes);
+        moves
     }
 
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, eye: V3) {
-        for (_, a) in self.actors.iter() {
-            if !a.visible {
-                continue;
-            }
-            let Some(m) = models.get(a.model) else { continue };
-            if m.handle() == 0 {
-                continue;
-            }
-            let t = DrawList::translation(a.at, eye);
-            draw.draw_scaled(PIPELINE_SKINNED, m.handle(), a.palette_handle, a.model, t, a.rotation_z, 1.0, m.scale());
+    /// Into the frame's list, standing at `pose`.
+    pub fn draw(&self, draw: &mut DrawList, models: &Models, pose: &Pose, eye: V3) {
+        let Some(m) = models.get(self.model) else { return };
+        if m.handle() == 0 {
+            return;
         }
+        let t = DrawList::translation(pose.at, eye);
+        draw.draw_scaled(PIPELINE_SKINNED, m.handle(), self.palette_handle, self.model, t, pose.rotation_z, 1.0, pose.scale);
     }
 }

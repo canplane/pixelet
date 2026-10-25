@@ -19,7 +19,8 @@ use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 
 use crate::domain::query::model::registry::Models;
-use crate::domain::scene::actor::Actors;
+use crate::domain::scene::character::companion::{companion_animate, companion_draw};
+use crate::domain::scene::character::preview::{preview_animate, preview_draw};
 use crate::domain::scene::environment::EnvironmentDraw;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::indicator::debug_line::DebugLines;
@@ -36,7 +37,6 @@ pub fn scene() -> &'static mut Scene {
 #[derive(Default)]
 pub struct Scene {
     pub ghost: GhostDraw,
-    pub actors: Actors,
     pub puck: LocationPuck,
     pub environment: EnvironmentDraw,
     pub debug: DebugLines,
@@ -47,14 +47,15 @@ pub struct Scene {
 impl Scene {
     /// Advances what animates; whether anything did.
     pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-        self.actors.tick(draw, models, frame) | self.puck.tick(frame) | self.environment.tick(frame)
+        companion_animate(draw, models, frame) | preview_animate(draw, models, frame) | self.puck.tick(frame) | self.environment.tick(frame)
     }
 
     /// Begins the frame's list with the scene's own layers.
     pub fn begin(&mut self, draw: &mut DrawList, models: &Models, eye: V3) {
         draw.begin_frame();
         self.ghost.draw(draw, eye);
-        self.actors.draw(draw, models, eye);
+        companion_draw(draw, models, eye);
+        preview_draw(draw, models, eye);
         self.puck.draw(draw, eye);
         self.debug.draw(draw, eye);
         self.coverage.draw(draw, eye);

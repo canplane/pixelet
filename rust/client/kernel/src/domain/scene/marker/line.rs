@@ -1,11 +1,13 @@
 // pxl-kernel/domain/scene/marker/line.rs
 
-//! The chat's line as the arrangement takes it (`chat.rs`): its bubble,
-//! hung from the point its speaker hands over, while its own rule shows it;
-//! no place a tap goes to.
+//! The chat's line as the arrangement takes it (`chat.rs`): its bubble, hung
+//! in its speaker's frame over its head while that frame shows it
+//! (pxl-kernel domain/scene/character/companion.rs `line_hangs`); no place a
+//! tap goes to.
 
 use super::arrangement::{Instance, Key};
-use crate::domain::scene::marker::chat::{hangs, shown_line};
+use crate::domain::scene::character::companion::line_hangs;
+use crate::domain::scene::marker::chat::shown_line;
 use crate::domain::scene::marker::design::Design;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
@@ -23,7 +25,7 @@ pub(super) struct Said {
 pub(super) fn said(eye: V3, tau: Tau) -> Said {
     Said {
         line: shown_line(),
-        hangs: hangs(eye, tau),
+        hangs: line_hangs(eye, tau),
     }
 }
 
