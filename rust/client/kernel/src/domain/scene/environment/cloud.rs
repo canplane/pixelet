@@ -16,7 +16,6 @@ use fnv::FnvHashMap;
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
-use pxl_spec::asset::decor::DECORS;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -44,15 +43,9 @@ const VARIANTS: [Asset; cumulus::models.len()] = cumulus::models;
 
 pub const MODELS_MAX: usize = VARIANTS.len();
 
-/// Its draw groups follow the decors' variants.
-const FIRST_GROUP: usize = {
-    let (mut n, mut k) = (0, 0);
-    while k < DECORS.len() {
-        n += DECORS[k].variants.len();
-        k += 1;
-    }
-    n
-};
+/// Its draw groups follow the decors' variants, which number the groups
+/// before it (pxl-spec-core scatter.rs `GROUPS`).
+const FIRST_GROUP: usize = pxl_spec_core::scatter::GROUPS as usize;
 const _: () = assert!(FIRST_GROUP + VARIANTS.len() <= GROUPS, "a draw group each variant");
 
 /// A cell holds a cloud or none: 2^12 units, about 8 km at mid latitudes.

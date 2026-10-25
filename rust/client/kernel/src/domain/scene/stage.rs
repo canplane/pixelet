@@ -93,15 +93,14 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     }
     let lists = draw_list().take();
     let models = crate::domain::query::model::models();
+    // Each decor variant at its draw group (pxl-spec-core scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
-    let variants = pxl_spec::asset::decor::DECORS.iter().flat_map(|decor| {
-        decor.variants.iter().enumerate().map(move |(v, variant)| {
-            let extent = variant.model.ingested().extent.unwrap_or([0.0; 3]);
-            (decor_model(decor, v), decor_skin(decor, v), extent.map(|e| e as f32))
-        })
-    });
-    for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {
-        *slot = (model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle), image, extent);
+    for d in &pxl_spec::asset::decor::DECORS {
+        for (v, variant) in d.variants.iter().enumerate() {
+            let extent = variant.model.ingested().extent.unwrap_or([0.0; 3]).map(|e| e as f32);
+            let mesh = decor_model(d, v).and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
+            decor[d.first_group() as usize + v] = (mesh, decor_skin(d, v), extent);
+        }
     }
     for (group, mesh, image, extent) in cloud_groups() {
         decor[group] = (mesh, image, extent);

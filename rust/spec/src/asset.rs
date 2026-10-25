@@ -105,9 +105,11 @@ impl decor::Decor {
         }
     }
 
-    /// Where its variants are numbered from: the variants of the decors before it.
+    /// Where its variants are numbered from as draw groups, as the GPU's
+    /// decor numbers them (pxl-spec-core scatter.rs `first_group`).
     pub fn first_group(&self) -> u32 {
-        decor::DECORS.iter().take_while(|d| d.id != self.id).map(|d| d.row.variants).sum()
+        let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
+        pxl_spec_core::scatter::first_group(&pxl_spec_core::decor::DECORS, kind as u32)
     }
 
     /// The generator writes one entry a decor, so every id has one.
