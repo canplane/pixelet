@@ -12,7 +12,7 @@ fn a_front_and_a_floor_follow_the_stack() {
     let m = Module {
         stack_bytes: 1 << 20,
         global_base: Some(1 << 21),
-        initial_bytes: Some(4 * PAGE_BYTES),
+        initial_bytes: Some(4 * WASM_PAGE_BYTES),
     };
     assert_eq!(args(&m)[3..], ["--global-base=2097152", "--initial-memory=262144"]);
 }
@@ -23,6 +23,6 @@ fn a_floor_is_whole_pages() {
     args(&Module {
         stack_bytes: 1 << 20,
         global_base: None,
-        initial_bytes: Some(PAGE_BYTES + 1),
+        initial_bytes: Some(WASM_PAGE_BYTES + 1),
     });
 }

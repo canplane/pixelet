@@ -21,11 +21,13 @@
 //! The C++ guest links with the same flags from its Makefile
 //! (`cpp/Makefile` `WASM_LINK`), which a Rust crate cannot reach.
 
-/// A WebAssembly page, the unit a memory is declared in.
-pub const PAGE_BYTES: u32 = 1 << 16;
+/// A WebAssembly page, the unit a memory is declared in: 64 KiB, not the
+/// 4 KiB page a guest places its ranges and its heap by
+/// (`xpute_guest::mem::section::PAGE_BYTES`).
+pub const WASM_PAGE_BYTES: u32 = 1 << 16;
 
 /// The stack a module has unless it says otherwise: rustc's own for wasm32.
-pub const STACK_BYTES: u32 = 1 << 20;
+pub const MODULE_STACK_BYTES: u32 = 1 << 20;
 
 /// A module guest's numbers.
 pub struct Module {
@@ -40,11 +42,11 @@ pub struct Module {
 }
 
 impl Default for Module {
-    /// A stack of `STACK_BYTES`, the linker's data where it puts it, and no
+    /// A stack of `MODULE_STACK_BYTES`, the linker's data where it puts it, and no
     /// floor but the data's.
     fn default() -> Module {
         Module {
-            stack_bytes: STACK_BYTES,
+            stack_bytes: MODULE_STACK_BYTES,
             global_base: None,
             initial_bytes: None,
         }
@@ -69,7 +71,7 @@ pub fn args(m: &Module) -> Vec<String> {
         args.push(format!("--global-base={at}"));
     }
     if let Some(bytes) = m.initial_bytes {
-        assert!(bytes.is_multiple_of(PAGE_BYTES), "a memory is declared in WebAssembly pages, not {bytes} bytes");
+        assert!(bytes.is_multiple_of(WASM_PAGE_BYTES), "a memory is declared in WebAssembly pages, not {bytes} bytes");
         args.push(format!("--initial-memory={bytes}"));
     }
     args
