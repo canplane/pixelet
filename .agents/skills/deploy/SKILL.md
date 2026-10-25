@@ -27,14 +27,18 @@ Push only if both pass:
 git push origin main:deploy        # --force once main has been rewritten
 ```
 
-What `check` runs, each a task of its own:
+What `check` runs, a task a tree, side by side:
 
-- `check:style` — `deno fmt` and `cargo fmt`, check:rules, `deno lint`.
-- `check:ship` — the web entry and the Worker type-check, the scripts
-  type-check, the shipped crates pass clippy, the files made from `spec/`
-  match, and the bundle and the Worker build as a deploy builds them.
-- `check:native` — the device's modules and both device targets.
-- `check:host` — clippy over the tests' code, the bakes and the tools.
+- `check:doc` — the documents' format.
+- `check:script` — the repository's scripts: format, lint, types.
+- `check:ts` — the TypeScript workspace: format, lint, and the types of
+  the page, the device's modules, the Worker and their scripts.
+- `check:rust` — `cargo fmt`, and clippy over the module in both builds,
+  the servers, the tests' code, the bakes and the tools, and both device
+  targets.
+- `check:rules` and `check:spec` — the tree's own rules, and the files made
+  from `spec/` matching it.
+- `check:build` — the bundle and the Worker built as a deploy builds them.
 - `check:xpute` — xpute's own workspace.
 
 `test` is every workspace's tests: the client's, xpute's (its C++ guest

@@ -53,35 +53,35 @@
     "build:wasm": "deno task --cwd ts/app/web build:wasm",
 
     // `check` is everything, and with `test` what passes before a push to
-    // deploy, since CI checks nothing (.agents/skills/deploy/SKILL.md).
-    // `check:ship` is what ships: it type-checks, lints, builds (the client's
-    // bundle and the Worker's, as a deploy makes them) and is what its JSON
-    // writes, and the scripts a deploy runs type-check.
-    "check": "deno task check:style && deno task check:ship && deno task check:native && deno task check:host && deno task check:xpute",
-    "check:ship": "deno task check:web && deno task check:script && deno task check:rust && deno task check:spec && deno task --cwd ts/server/edge check:build",
-    "check:style": "deno task check:fmt && deno task check:rules && deno task lint",
-    "check:diff": "./script/check-diff.ts",
-    "check:fmt": "deno fmt --check && deno task --cwd ts fmt --check && deno task --cwd script fmt --check && cd rust && cargo fmt --all --check",
-    "check:web": "deno task --cwd ts/app/web check",
-    // The tree's own scripts, which `deno run` runs unchecked.
-    "check:script": "deno task --cwd script check && deno check --config ts/deno.jsonc ts/app/web/script/*.ts ts/server/edge/script/*.ts",
-    // check:web never reaches the device's own modules.
-    "check:native": "deno task --cwd ts/app/native check && cd rust && cargo lint-ios && cargo lint-android",
-    "check:xpute": "make -C xpute -j8 check",
-    // What ships: the kernel's module in both builds, and the servers with their tests' code.
-    "check:rust": "cd rust && cargo lint-guest && cargo lint-guest-published && cargo lint-server",
-    // What runs here alone: the tests' code, the bakes (the tile server's
-    // feature with them, which only adds) and the tools.
-    "check:host": "cd rust && cargo lint-host",
+    // deploy, since CI checks nothing (.agents/skills/deploy/SKILL.md). Each
+    // is a task a tree, run by its own entry point, and the aggregates run
+    // them side by side. `check:build` is what ships, made as a deploy makes
+    // it without publishing: the client's bundle and the Worker beside it.
+    "check": { "dependencies": ["check:doc", "check:script", "check:ts", "check:rust", "check:rules", "check:spec", "check:build", "check:xpute"] },
+    "check:doc": "deno fmt --check",
+    "check:script": "deno task --cwd script check",
+    "check:ts": "deno task --cwd ts check",
+    // The module as it ships in both builds, the servers, what runs here alone
+    // (the tests' code, the bakes, the tools) and both device targets.
+    "check:rust": "cd rust && cargo fmt --all --check && cargo lint-guest && cargo lint-guest-published && cargo lint-server && cargo lint-host && cargo lint-ios && cargo lint-android",
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cd rust && cargo spec",
-    "test": "deno task test:client && deno task test:xpute && deno task test:rust",
-    "test:client": "deno task --cwd ts/client test",
-    "test:xpute": "make -C xpute -j8 test",
+    "check:build": "deno task --cwd ts/server/edge check:build",
+    "check:xpute": "make -C xpute -j8 check",
+    "check:diff": "./script/check-diff.ts",
+    "test": { "dependencies": ["test:ts", "test:rust", "test:xpute"] },
+    "test:ts": "deno task --cwd ts test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
     "test:rust": "cd rust && cargo test-host && cargo test-kernel-published && cargo test-bake-serve",
-    "lint": "deno task --cwd ts lint && deno task --cwd script lint",
-    "fmt": "deno fmt && deno task --cwd ts fmt && deno task --cwd script fmt",
+    "test:xpute": "make -C xpute -j8 test",
+    "lint": { "dependencies": ["lint:ts", "lint:script"] },
+    "lint:ts": "deno task --cwd ts lint",
+    "lint:script": "deno task --cwd script lint",
+    "fmt": { "dependencies": ["fmt:doc", "fmt:ts", "fmt:script", "fmt:rust"] },
+    "fmt:doc": "deno fmt",
+    "fmt:ts": "deno task --cwd ts fmt",
+    "fmt:script": "deno task --cwd script fmt",
+    "fmt:rust": "cd rust && cargo fmt --all",
 
     // The deployment. Does not upload what the bucket holds.
     "deploy": "deno task --cwd ts/server/edge deploy",

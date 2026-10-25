@@ -70,10 +70,23 @@ while (grew) {
 const members = new Set(packages.map((p) => p.name));
 const tasks = (parse(await Deno.readTextFile(join(root, "deno.jsonc"))) as { tasks: Record<string, string> }).tasks;
 
+/** rust/.cargo/config.toml's aliases, each the arguments it stands for: one
+ * array of strings a line, as the file writes them. */
+const aliases = new Map<string, string[]>();
+for (const line of (await Deno.readTextFile(join(root, "rust/.cargo/config.toml"))).split("\n")) {
+  const m = line.match(/^([a-z-]+) = (\[.*\])$/);
+  if (m) aliases.set(m[1], JSON.parse(m[2]));
+}
+
+/** A root task's cargo commands, each with an alias spelled out and its
+ * packages narrowed to the touched ones; none that names no touched one. */
 function rust(name: string): string[][] {
   const out: string[][] = [];
   for (const command of tasks[name].split("&&")) {
-    const args = command.trim().split(/\s+/);
+    let args = command.trim().split(/\s+/);
+    if (args[0] !== "cargo") continue;
+    const alias = aliases.get(args[1]);
+    if (alias) args = ["cargo", ...alias, ...args.slice(2)];
     const kept: string[] = [];
     let any = false;
     for (let i = 0; i < args.length; i++) {
@@ -99,44 +112,39 @@ function rust(name: string): string[][] {
   return out;
 }
 
-const runs: { label: string; argv: string[] }[] = [];
+const runs: { label: string; argv: string[]; cwd?: string }[] = [];
 const task = (name: string) => runs.push({ label: name, argv: ["deno", "task", name] });
 
 const cargo = (name: string) => {
-  for (const argv of rust(name)) runs.push({ label: `${name}: ${argv.slice(0, 2).join(" ")}`, argv });
+  for (const argv of rust(name)) runs.push({ label: `${name}: ${argv.slice(0, 2).join(" ")}`, argv, cwd: join(root, "rust") });
 };
-// ts/client imports xpute's TypeScript, and ts/app/web both.
+// ts/client imports xpute's TypeScript, and every app and the Worker the client.
 const xpute = under("xpute/");
-const client = under("ts/client/") || under("xpute/ts/");
-const web = client || under("ts/app/web/");
+const ts = under("ts/") || under("xpute/ts/");
 
-// What ships.
-if (web) task("check:web");
-if (under("script/") || under("ts/app/web/script/")) task("check:script");
+if (ts) task("check:ts");
+if (under("script/")) task("check:script");
 cargo("check:rust");
 if (under("spec/") || changed.some((path) => path.includes(".spec.")) || touched.has("pxl-tool")) task("check:spec");
-if (web || touched.has("pxl-wasm")) runs.push({ label: "check:build", argv: ["deno", "task", "--cwd", "ts/app/web", "check:build"] });
-
-// The rest of `check`.
-const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path));
-if (formatted.length) runs.push({ label: "check:fmt", argv: ["deno", "fmt", "--check", ...formatted] });
-cargo("check:fmt");
+if (under("ts/client/") || under("ts/app/web/") || under("ts/server/edge/") || under("xpute/ts/") || touched.has("pxl-wasm")) task("check:build");
+// Each formatted file under the root that formats it: ts/ and script/ their own, the documents the root's.
+const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path) && !path.startsWith("xpute/"));
+for (const tree of ["ts/", "script/", ""]) {
+  const own = formatted.filter((path) => path.startsWith(tree) && (tree !== "" || !/^(ts|script)\//.test(path)));
+  if (own.length) runs.push({ label: `fmt ${tree || "doc"}`, argv: ["deno", "fmt", "--check", ...own.map((path) => path.slice(tree.length))], cwd: join(root, tree) });
+}
 task("check:rules");
-task("lint");
-if (web || under("ts/app/native/")) runs.push({ label: "check:native", argv: ["deno", "check", "ts/app/native/src"] });
-cargo("check:native");
-cargo("check:host");
 if (xpute) task("check:xpute");
 
 // The tests of what the same selection reached.
-if (client) task("test:client");
+if (under("ts/client/") || under("xpute/ts/")) task("test:ts");
 if (xpute) task("test:xpute");
 cargo("test:rust");
 
 console.log(`check-diff: ${changed.length} changed file(s); crates ${[...touched].join(", ") || "none"}`);
-for (const { label, argv } of runs) {
+for (const { label, argv, cwd } of runs) {
   console.log(`check-diff: ${label}`);
-  const status = await new Deno.Command(argv[0], { args: argv.slice(1), cwd: root }).spawn().status;
+  const status = await new Deno.Command(argv[0], { args: argv.slice(1), cwd: cwd ?? root }).spawn().status;
   if (!status.success) {
     console.error(`check-diff: ${label} failed`);
     Deno.exit(status.code || 1);

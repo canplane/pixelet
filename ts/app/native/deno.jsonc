@@ -1,7 +1,8 @@
 {
-  // What the device's own files are type-checked against (root deno.jsonc's
-  // check:native): its own `@/`, and the client as `@pxl/client/`. Metro bundles the app and reads none of this (metro.config.ts); its
-  // npm packages are package.json's.
+  // What the device's own files are type-checked against (`check`, which
+  // ts/'s check runs): its own `@/`, and the client as `@pxl/client/`. Metro
+  // bundles the app and reads none of this (metro.config.ts); its npm
+  // packages are package.json's.
   "tasks": {
     "check": "deno check src"
   },
