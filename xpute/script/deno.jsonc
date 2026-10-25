@@ -1,0 +1,12 @@
+{
+  // The scripts that run across the languages: the C++ build, the web GPU
+  // test in Chrome, and the export. What they import is said here.
+  "imports": {
+    "@std/path": "jsr:@std/path@^1"
+  },
+
+  "tasks": {
+    "check": "deno lint && deno check *.ts",
+    "lint": "deno lint"
+  }
+}

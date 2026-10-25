@@ -9,10 +9,14 @@ import { dirname, join, relative } from "@std/path";
 
 const XPUTE = dirname(dirname(new URL(import.meta.url).pathname));
 
-/** Neither written nor compared: build output and lock files. */
-const UNMANAGED = ["rust/target/", "target/", "node_modules/", "rust/Cargo.lock", "deno.lock"];
+/** Neither written nor compared: build output and lock files, a lock or
+ * node_modules/ in any tree, as .gitignore has them. */
+const UNMANAGED = ["rust/target/", "target/", "rust/Cargo.lock"];
+const UNMANAGED_ANYWHERE = ["deno.lock", "node_modules"];
 
-const unmanaged = (path: string) => UNMANAGED.some((u) => (u.endsWith("/") ? path.startsWith(u) : path === u));
+const unmanaged = (path: string) =>
+  UNMANAGED.some((u) => (u.endsWith("/") ? path.startsWith(u) : path === u)) ||
+  path.split("/").some((name) => UNMANAGED_ANYWHERE.includes(name));
 
 function git(args: string[], cwd = XPUTE): string {
   const out = new Deno.Command("git", { args, cwd, stdout: "piped", stderr: "piped" }).outputSync();

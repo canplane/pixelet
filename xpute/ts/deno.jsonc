@@ -1,0 +1,41 @@
+{
+  // xpute's TypeScript: the kit, the host end, the GPU host and the host that
+  // runs the traces, one workspace as rust/ is one Cargo workspace. What runs
+  // across the languages is the root's (../deno.jsonc).
+  "workspace": ["kit", "host", "gpu", "conformance"],
+  "nodeModulesDir": "auto",
+
+  "tasks": {
+    "check": "deno fmt --check && deno lint && deno check kit/src/**/*.ts && deno check host/src/**/*.ts && deno check gpu/src/**/*.ts && deno check conformance/src/**/*.ts",
+    "test": "deno test -A kit/src && deno test -A host/src",
+    // The traces run against guests the root's test builds first.
+    "test:conformance": "deno test -A conformance/src",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.ns", "deno.unstable", "esnext"],
+    "verbatimModuleSyntax": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "checkJs": false
+  },
+
+  "imports": {
+    "@xpute/kit/": "./kit/src/",
+    "@xpute/host/": "./host/src/",
+    "@xpute/gpu/": "./gpu/src/",
+    "@xpute/conformance/": "./conformance/src/",
+    "@std/assert": "jsr:@std/assert@^1",
+    "@std/path": "jsr:@std/path@^1"
+  },
+
+  "fmt": {
+    "lineWidth": 200,
+    "proseWrap": "preserve",
+    "exclude": ["node_modules/"]
+  },
+
+  "lint": { "rules": { "tags": ["recommended"] }, "exclude": ["node_modules/"] }
+}

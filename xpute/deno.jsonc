@@ -1,34 +1,27 @@
 {
   "description": "A kit, and a guest and a host end over it, for a program run inside another.",
 
-  "workspace": ["ts/kit", "ts/host", "ts/gpu", "ts/conformance"],
-  "nodeModulesDir": "auto",
+  // What runs across the languages, and the files that are no one language's:
+  // the documents and the spec, formatted here with the scripts. Each tree
+  // keeps its own manifest:
+  // ts/deno.jsonc, rust/Cargo.toml, script/deno.jsonc, and cpp/ built by
+  // script/cpp.ts.
+  "exclude": ["ts/"],
+  // The scripts are its one member, which makes this the workspace root
+  // where a checkout holds the tree inside another workspace.
+  "workspace": ["script"],
 
   "tasks": {
-    "check": "deno fmt --check && deno check ts/kit/src/**/*.ts && deno check ts/host/src/**/*.ts && deno check ts/gpu/src/**/*.ts && deno check ts/conformance/src/**/*.ts && cargo fmt --manifest-path rust/Cargo.toml --all --check && cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings && ./script/cpp.ts check",
-    "test": "deno test -A ts/kit/src && deno test -A ts/host/src && cargo test --manifest-path rust/Cargo.toml --all && ./script/cpp.ts test && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno test -A ts/conformance/src",
+    // Routes only: each tree checks, tests and formats itself. The order of
+    // test is the one thing said here: the traces run against the guests the
+    // Rust and the C++ trees build first.
+    "check": "deno fmt --check && deno task --cwd script check && deno task --cwd ts check && cargo fmt --manifest-path rust/Cargo.toml --all --check && cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings && ./script/cpp.ts check",
+    "test": "deno task --cwd ts test && cargo test --manifest-path rust/Cargo.toml --all && ./script/cpp.ts test && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno task --cwd ts test:conformance",
     // What needs a GPU: the native host on wgpu, and the web host in Chrome (script/web-gpu.ts).
     "test:gpu": "cargo test --manifest-path rust/Cargo.toml -p xpute-gpu --features host && ./script/web-gpu.ts",
-    "fmt": "deno fmt && cargo fmt --manifest-path rust/Cargo.toml --all",
-    "lint": "deno lint",
+    "fmt": "deno fmt && deno task --cwd ts fmt && cargo fmt --manifest-path rust/Cargo.toml --all",
+    "lint": "deno task --cwd script lint && deno task --cwd ts lint",
     "export": "./script/export.ts"
-  },
-
-  "compilerOptions": {
-    "lib": ["deno.window", "deno.ns", "deno.unstable", "esnext"],
-    "verbatimModuleSyntax": true,
-    "noImplicitOverride": true,
-    "skipLibCheck": true,
-    "checkJs": false
-  },
-
-  "imports": {
-    "@xpute/kit/": "./ts/kit/src/",
-    "@xpute/host/": "./ts/host/src/",
-    "@xpute/gpu/": "./ts/gpu/src/",
-    "@xpute/conformance/": "./ts/conformance/src/",
-    "@std/assert": "jsr:@std/assert@^1",
-    "@std/path": "jsr:@std/path@^1"
   },
 
   "fmt": {
@@ -37,8 +30,6 @@
 
     // The golden records are committed as they were written and read byte
     // for byte by the tests; formatting them would break that.
-    "exclude": ["node_modules/", "spec/golden/", "rust/target/", "target/"]
-  },
-
-  "lint": { "rules": { "tags": ["recommended"] }, "exclude": ["node_modules/", "rust/target/", "target/"] }
+    "exclude": ["spec/golden/", "rust/target/", "target/"]
+  }
 }

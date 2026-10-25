@@ -16,7 +16,8 @@ const CHROME = Deno.env.get("CHROME") ?? (Deno.build.os === "darwin" ? "/Applica
 const SECONDS = 60;
 
 async function bundle(): Promise<void> {
-  const out = await new Deno.Command(Deno.execPath(), { args: ["bundle", "--platform", "browser", "-o", BUNDLE, TEST], cwd: ROOT, stdout: "inherit", stderr: "inherit" }).output();
+  const out = await new Deno.Command(Deno.execPath(), { args: ["bundle", "--platform", "browser", "-o", BUNDLE, join(ROOT, TEST)], cwd: join(ROOT, "ts"), stdout: "inherit", stderr: "inherit" })
+    .output();
   if (!out.success) throw new Error(`bundling ${TEST} failed`);
 }
 
