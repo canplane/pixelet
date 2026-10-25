@@ -14,3 +14,7 @@ crate-type = ["cdylib"]
 [dependencies]
 xpute-kit = { path = "../kit" }
 xpute-guest = { path = "../guest" }
+
+# Its link flags as a module (build.rs).
+[build-dependencies]
+xpute-link = { path = "../link" }

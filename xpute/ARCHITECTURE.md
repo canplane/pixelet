@@ -258,6 +258,7 @@ The implementations do not all stand in the same relation, and which relation de
 - **The two ends face each other.** A host end and a guest end owe each other the contract and its formats, not matching module lists; a module with nothing facing it is not a gap.
 - **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++ (`cpp/guest`) are the same end, either plugged into any host, so what one gives a program the other gives too. The host end is TypeScript (`ts/host`).
 - **The GPU's calls follow the same split.** Each guest language writes them (`rust/gpu`, `cpp/gpu`). The hosts run them in TypeScript on WebGPU (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
+- **A guest built as a module is linked one way.** Its memory is imported from the host and its stack goes first, at the bottom of the memory, so an overflow traps; its stack's size and any front it keeps below the linker's data are its own numbers. A Rust guest's build script prints the flags through `rust/link`, and the C++ guest's Makefile passes the same ones.
 
 `kit` asks nothing of a program: link it and call it. `guest` and `host` ask it to run xpute's way — memory granted once, work in turns, I/O by asking.
 

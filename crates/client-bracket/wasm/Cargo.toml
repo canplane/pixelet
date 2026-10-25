@@ -26,3 +26,7 @@ dev = ["pxl-kernel/dev"]
 
 [lints]
 workspace = true
+
+# The module's link flags, with mem.json's numbers (build.rs).
+[build-dependencies]
+xpute-link = { path = "../../../xpute/rust/link" }

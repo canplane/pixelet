@@ -2,12 +2,13 @@
 # links it may use; `guest` asks to be run its way — a turn on a doorbell, a
 # quota measured from the frame, I/O asked of the host — and depends on
 # `kit`, never the reverse. `gpu` is WebGPU's vocabulary for a guest's
-# calls to a device it cannot reach, beside both. `conformance` is the guest
-# the contract's traces drive (spec/conformance/).
+# calls to a device it cannot reach, beside both. `link` is how a guest's
+# build script links it as a module. `conformance` is the guest the
+# contract's traces drive (spec/conformance/).
 
 [workspace]
 resolver = "2"
-members = ["kit", "guest", "gpu", "conformance"]
+members = ["kit", "guest", "gpu", "link", "conformance"]
 
 [workspace.dependencies]
 # A set whose position is the value: insert appends, swap_remove moves the

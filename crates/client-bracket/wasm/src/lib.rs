@@ -14,14 +14,7 @@
 use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::door::Bracket;
 use xpute_guest::mem::heap::{Bounds, Heap, HeapStat};
-use xpute_guest::module::{data_end, given, now};
-
-extern "C" {
-    /// The top of the stack: `-z stack-size` past its start, which
-    /// `--stack-first` puts at the bottom of the memory. wasm-ld defines it.
-    #[allow(non_upper_case_globals)]
-    static __stack_high: u8;
-}
+use xpute_guest::module::{data_end, given, now, stack_high};
 
 /// Where the module's heap lies: from the page past the last fixed range to
 /// the end of the memory, ascending. Everything before it is settled before
@@ -56,8 +49,8 @@ fn admit_frame() -> bool {
 /// linker's end of its data, the page's clock, the allocator and the frames
 /// it admits.
 fn bracket() -> Bracket {
-    let stack_high = core::ptr::addr_of!(__stack_high) as u32;
-    xpute_kit::ensure!(stack_high == pxl_kernel::sys::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
+    let high = stack_high();
+    xpute_kit::ensure!(high == pxl_kernel::sys::mem::spec::STACK_BYTES, ENOTRECOVERABLE, high);
     let given = given();
     Bracket {
         given: given.min(u32::MAX as u64) as u32,

@@ -1827,6 +1827,7 @@ dependencies = [
  "pxl-kernel",
  "xpute-guest",
  "xpute-kit",
+ "xpute-link",
 ]
 
 [[package]]
@@ -3170,6 +3171,10 @@ dependencies = [
 
 [[package]]
 name = "xpute-kit"
+version = "0.0.0"
+
+[[package]]
+name = "xpute-link"
 version = "0.0.0"
 
 [[package]]
