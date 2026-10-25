@@ -27,7 +27,7 @@ FROM overture_places WHERE name <> '' AND name ILIKE '%' || $1 || '%'
     };
 }
 
-const SEARCH_SQL: &str = concat!(places_matching!(), "ORDER BY similarity(name, $1) DESC, name\nLIMIT $2");
+const SEARCH_SQL: &str = concat!(places_matching!(), "ORDER BY similarity(name, $1) DESC, name, gers_id\nLIMIT $2");
 
 /// The country division `near` (`$3`, `$4`) lies in; null at sea or past the
 /// divisions.
@@ -51,7 +51,7 @@ const SEARCH_NEAR_SQL: &str = concat!(
     places_matching!(),
     "ORDER BY EXISTS (SELECT 1 FROM home WHERE ST_Intersects(home.geom, overture_places.geom)) DESC,
   round(similarity(name, $1)::numeric, 2) DESC,
-  geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857) ASC
+  geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857) ASC, gers_id
 LIMIT $2"
 );
 
