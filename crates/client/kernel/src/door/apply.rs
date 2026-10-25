@@ -99,7 +99,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
-            refuse_unless(crate::sys::io::source::declare(p.source).is_ok(), Errno::EINVAL)?;
+            refuse_unless(crate::sys::io::source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(), Errno::EINVAL)?;
             Ok(Some(0))
         }
         Command::WORLD_KEPT_EMPTIED => {

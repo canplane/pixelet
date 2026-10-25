@@ -3,9 +3,10 @@
 /**
  * The tile source's declaration (apps/web/script/publish.ts writes the bucket's), asked of the
  * tile root until it answers: the published bake's out of the bucket, or a dev
- * tile server's. The kernel is handed it unread and observes nothing until
- * then; its versions are read here alone, for the objects the bakes' roots are
- * bound to (tile.ts) and for what the settings show.
+ * tile server's. It is read here once: the kernel is handed what is its own,
+ * the top zoom, each kind's format and the shards (WORLD_SOURCE), and observes
+ * nothing until then; the versions stay here, for the objects the bakes'
+ * roots are bound to (tile.ts) and for what the settings show.
  */
 
 import { useSyncExternalStore } from "react";
@@ -67,12 +68,13 @@ export async function declare_source(): Promise<void> {
   }
   const read = declaration(source);
   if (read === null) {
-    console.error("[source] the declaration leaves a kind unversioned, or names a version no URL segment");
+    console.error("[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards");
     return;
   }
-  const pkt = encode_world_source(GUEST_DOORBELL, source);
+  const shards = Object.keys(read.shard);
+  const pkt = encode_world_source(GUEST_DOORBELL, read.top_zoom, BASE_LAYERS.map((kind) => read.format[kind]), shards);
   if (!GUEST_DOORBELL.fits(pkt)) {
-    console.error(`[source] the declaration, ${source.length} bytes, is more than a command carries`);
+    console.error(`[source] the declaration's ${shards.length} shards are more than a command carries`);
     return;
   }
   send_next(Command.WORLD_SOURCE, pkt);

@@ -896,17 +896,36 @@
           "name": "WORLD_SOURCE",
           "value": 4101,
           "$doc": [
-            "What the tile source declares of itself, once the shell has it: the tile root's",
-            "`source`, the published one out of the bucket or the dev tile server's. Until it",
-            "comes nothing is observed: the floor is held at the zoom it names, and no tile is",
-            "asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
+            "What the tile source declares of itself, once the client has it: the tile root's",
+            "`source`, the published one out of the bucket or the dev tile server's, read by the",
+            "client (apps/client/src/namespace/source.ts) and handed over as numbers and names.",
+            "Until it comes nothing is observed: the floor is held at the zoom it names, and no",
+            "tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
           ],
           "packet": [
             {
-              "name": "source",
-              "type": "str",
+              "name": "top_zoom",
+              "type": "u32",
               "$doc": [
-                "The declaration as the source serves it, handed over unread."
+                "The coarsest zoom the source supplies whole."
+              ]
+            },
+            {
+              "name": "format",
+              "type": "u32",
+              "list": true,
+              "$doc": [
+                "Each kind's format, one a kind, indexed by its bake's number",
+                "(pxl-spec bake/published.spec.rs)."
+              ]
+            },
+            {
+              "name": "shard",
+              "type": "str",
+              "list": true,
+              "$doc": [
+                "The shards it serves, by name. Their order means nothing: no two at a zoom",
+                "are over one node, and the finer wins."
               ]
             }
           ]

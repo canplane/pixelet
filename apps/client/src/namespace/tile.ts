@@ -5,9 +5,10 @@
  * (host.json `root`), made the object the source serves (spec/spec/route.json `object`): a tile's
  * subject its name, under the version the declaration gives it, its finest
  * shard's own where one names one; or the Earth's sphere (`SPHERE`), under
- * the earth's own version. The kernel reads the declaration for what is its
- * own, the zooms, the shards and the formats, and never its versions:
- * which object a number is, is the client's to say.
+ * the earth's own version. The client reads the declaration once and hands
+ * the kernel what is its own, the top zoom, the formats and the shards
+ * (namespace/source.ts); the versions stay here: which object a number is,
+ * is the client's to say.
  * tile.fixture.json holds what the kernel made of these when it named
  * them itself, and tile.test.ts that this makes the same; the object is
  * read from the edge (`read_object`).
@@ -24,8 +25,11 @@ import { tileUrl } from "@/config/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { get } from "@/namespace/read.ts";
 
-/** What of a declaration this side reads: each kind's version, and a shard's own. */
+/** What of a declaration this side reads: the top zoom and each kind's
+ * format, for the kernel; each kind's version, and a shard's own. */
 export interface Declaration {
+  top_zoom: number;
+  format: Record<BaseLayer, number>;
   version: Record<BaseLayer, string>;
   shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
 }
@@ -34,8 +38,10 @@ export interface Declaration {
 const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
 /** The declaration's text, where every kind has a version and every version
- * is a URL's segment; none where it is not, and the kernel, never handed it,
- * observes nothing. The rest is the kernel's to refuse (pxl-kernel sys/io/source.rs). */
+ * is a URL's segment, the top zoom and each kind's format are u32s, and the
+ * shards are named; none where it is not, and the kernel, never handed it,
+ * observes nothing. Which zooms, formats and shard names it follows is the
+ * kernel's to refuse (pxl-kernel sys/io/source.rs). */
 export function declaration(text: string): Declaration | null {
   let d: unknown;
   try {
@@ -48,7 +54,11 @@ export function declaration(text: string): Declaration | null {
     Object.entries(v).every(([k, s]) => (BASE_LAYERS as readonly string[]).includes(k) && typeof s === "string" && VERSION.test(s)) &&
     (!every || BASE_LAYERS.every((k) => k in v));
   if (typeof d !== "object" || d === null || !("version" in d) || !versions(d.version, true)) return null;
-  const shard = "shard" in d ? d.shard : {};
+  const whole = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
+  if (!("top_zoom" in d) || !whole(d.top_zoom)) return null;
+  if (!("format" in d) || typeof d.format !== "object" || d.format === null || !BASE_LAYERS.every((k) => whole((d.format as Record<string, unknown>)[k]))) return null;
+  if (!("shard" in d)) return null;
+  const shard = d.shard;
   if (typeof shard !== "object" || shard === null || Array.isArray(shard)) return null;
   for (const s of Object.values(shard)) {
     if (typeof s !== "object" || s === null || ("version" in s && !versions(s.version, false))) return null;

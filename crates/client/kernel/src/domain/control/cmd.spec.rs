@@ -33,7 +33,7 @@ use core::fmt::Display;
 
 use xpute_guest::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{PacketWriter, Strs, TreeReader};
 
 /// What a command is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -554,10 +554,11 @@ pub enum Command {
     /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
     /// page gets no frame and hiding is the save's last sure moment.
     WORLD_VISIBILITY = 0x1003,
-    /// What the tile source declares of itself, once the shell has it: the tile root's
-    /// `source`, the published one out of the bucket or the dev tile server's. Until it
-    /// comes nothing is observed: the floor is held at the zoom it names, and no tile is
-    /// asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
+    /// What the tile source declares of itself, once the client has it: the tile root's
+    /// `source`, the published one out of the bucket or the dev tile server's, read by the
+    /// client (apps/client/src/namespace/source.ts) and handed over as numbers and names.
+    /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
+    /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
     WORLD_SOURCE = 0x1005,
     /// A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
     /// set aside by the host: the kernel reads it again, and writes it from then on.
@@ -1098,14 +1099,24 @@ impl WorldVisibility {
 /// Command::WORLD_SOURCE's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldSource<'a> {
-    /// The declaration as the source serves it, handed over unread.
-    pub source: &'a str,
+    /// The coarsest zoom the source supplies whole.
+    pub top_zoom: u32,
+    /// Each kind's format, one a kind, indexed by its bake's number
+    /// (pxl-spec bake/published.spec.rs).
+    pub format: &'a [u32],
+    /// The shards it serves, by name. Their order means nothing: no two at a zoom
+    /// are over one node, and the finer wins.
+    pub shard: Strs<'a>,
 }
 
 impl<'a> WorldSource<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<WorldSource<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldSource { source: f.at(0)?.get_str_ref()? })
+        Ok(WorldSource {
+            top_zoom: integer::<u32>(f.at(0)?.get_number()?)?,
+            format: f.at(1)?.get_array::<u32>()?,
+            shard: f.at(2)?.get_strs()?,
+        })
     }
 }
 

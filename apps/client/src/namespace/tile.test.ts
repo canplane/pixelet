@@ -24,14 +24,21 @@ Deno.test("tile_object - a number that is no object's names none", () => {
   assertEquals(tile_name(1n << 1n), null, "an odd count of digits is no tile's");
 });
 
-Deno.test("declaration - one with a kind unversioned or a version no URL segment is not handed over", () => {
-  const { version, shard } = FIXTURE.source;
+Deno.test("declaration - one this client cannot read is not handed over", () => {
+  const whole = FIXTURE.source;
+  const { version } = whole;
+  assertEquals(declaration(JSON.stringify(whole)) !== null, true, "the fixture's own is read");
+  const { shard: _, ...unsharded } = whole;
   for (
     const bad of [
-      { version: { ...version, terrain: "a/b" }, shard },
-      { version: { terrain: version.terrain, place: version.place, division: version.division }, shard },
-      { version, shard: { "0103300": { version: { place: "" } } } },
-      { version, shard: [] as unknown },
+      { ...whole, version: { ...version, terrain: "a/b" } },
+      { ...whole, version: { terrain: version.terrain, place: version.place, division: version.division } },
+      { ...whole, shard: { "0103300": { version: { place: "" } } } },
+      { ...whole, shard: [] as unknown },
+      unsharded,
+      { ...whole, top_zoom: 2 ** 32 + 4 },
+      { ...whole, top_zoom: 4.5 },
+      { ...whole, format: { ...whole.format, terrain: -1 } },
     ]
   ) assertEquals(declaration(JSON.stringify(bad)), null, JSON.stringify(bad));
   assertEquals(declaration("not json"), null);

@@ -2,11 +2,12 @@
 
 //! The tile source's declaration, read once at boot: the published bake's
 //! `source` out of the bucket (apps/web/script/publish.ts), or the dev tile server's
-//! answer in its shape. It says the zoom the floor is held at, the
-//! shards served and the format each kind is in: a tile no served shard is
-//! over or under is never asked for. The versions it names are the
-//! client's, which reads a tile under the one that serves it
-//! (apps/client/src/namespace/source.ts).
+//! answer in its shape. The client reads its text and hands over what is the
+//! kernel's (apps/client/src/namespace/source.ts, `WORLD_SOURCE`): the zoom
+//! the floor is held at, the format each kind is in, and the shards served,
+//! so a tile no served shard is over or under is never asked for. The
+//! versions it names are the client's, which reads a tile under the one that
+//! serves it.
 
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{key, sharded};
@@ -17,7 +18,6 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use pxl_spec_core::area::{self, Area};
 use xpute_guest::global::Global;
-use xpute_kit::codec::json::{read_json, JsonType, JsonValue};
 use xpute_kit::status::errno::Errno;
 
 struct Source {
@@ -48,15 +48,17 @@ fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
 static DECLARED: Global<Option<Source>> = Global::new();
 
 /// Declared once, at boot: what it says is read as long as the kernel runs.
-/// Refused whole for anything the client cannot follow: a zoom out of the
-/// pyramid, a key no shard or node over shards (pxl-spec bake/source.rs), or
-/// a kind with no format or one it does not read.
-pub fn declare(text: &str) -> Result<(), Errno> {
+/// `format` is each kind's by its bake's number, and `shard` the shards'
+/// names, in any order. Refused whole for anything the client cannot follow:
+/// a zoom out of the pyramid, a name no shard or node over shards (pxl-spec
+/// bake/source.rs), a kind with no format or one it does not read, or more
+/// shards than a node's 16 bits can index.
+pub fn declare<'a>(top_zoom: u32, format: &[u32], shard: impl IntoIterator<Item = &'a str>) -> Result<(), Errno> {
     let declared = DECLARED.get(Default::default);
     if declared.is_some() {
         return Err(Errno::EEXIST);
     }
-    *declared = Some(parse(text).ok_or(Errno::EINVAL)?);
+    *declared = Some(parse(top_zoom, format, shard).ok_or(Errno::EINVAL)?);
     Ok(())
 }
 
@@ -115,15 +117,15 @@ impl Source {
     }
 }
 
-fn parse(text: &str) -> Option<Source> {
-    let o = read_json(text).filter(|v| v.type_of() == JsonType::Object)?;
-    let pyramid = f64::from(TOP_ZOOM)..=f64::from(LEAF_ZOOM);
-    let top_zoom = o.get("top_zoom")?.as_f64().filter(|z| z.fract() == 0.0 && pyramid.contains(z))? as Zoom;
-    read_format(o.get("format")?)?;
+fn parse<'a>(top_zoom: u32, format: &[u32], names: impl IntoIterator<Item = &'a str>) -> Option<Source> {
+    let top_zoom: Zoom = Some(top_zoom).filter(|z| (TOP_ZOOM..=LEAF_ZOOM).contains(z))?;
+    reads_every(format)?;
     let mut shard = Vec::new();
-    for (name, _) in o.get("shard").filter(|v| v.type_of() == JsonType::Object)?.fields() {
-        shard.push(key(name.as_plain()?)?);
+    for name in names {
+        shard.push(key(name)?);
     }
+    // A node's word holds one past a shard's index in 16 bits.
+    (shard.len() <= 0xffff).then_some(())?;
     // Every cell a shard covers at `SHARD_ZOOM`, a key no finer (`key`),
     // served; then every cell it and each beside it, its nine laid once
     // where its key addresses it (`area::nine`). A row off the world has no
@@ -159,7 +161,7 @@ fn parse(text: &str) -> Option<Source> {
     }
     // The pyramid's nodes to `SHARD_ZOOM`: a shard is at or under its own
     // node and every node over it, and the finest shard over each node at
-    // or under its own, the last of the finest as declared.
+    // or under its own; no two at a zoom are over one node.
     let mut nodes = vec![0u32; ((1usize << (2 * (SHARD_ZOOM + 1))) - 1) / 3];
     for (n, k) in shard.iter().enumerate() {
         let (zk, at) = (k.zoom, k.at);
@@ -184,10 +186,9 @@ fn parse(text: &str) -> Option<Source> {
     Some(Source { top_zoom, nine, nodes })
 }
 
-/// Every kind is in the format this client reads it in.
-fn read_format(v: JsonValue<'_>) -> Option<()> {
-    let reads = |l: BaseLayer| v.get(l.name())?.as_f64().filter(|&n| n == f64::from(FORMAT.of(l)));
-    (v.type_of() == JsonType::Object && BaseLayer::ALL.into_iter().all(|l| reads(l).is_some())).then_some(())
+/// Every kind is in the format this client reads it in, by its bake's number.
+fn reads_every(format: &[u32]) -> Option<()> {
+    (format.len() == BaseLayer::ALL.len() && BaseLayer::ALL.into_iter().all(|l| format[l as usize] == FORMAT.of(l))).then_some(())
 }
 
 #[cfg(test)]

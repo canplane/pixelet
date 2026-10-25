@@ -168,6 +168,13 @@ fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
 
 fn ts_write(spec: &Spec, f: &Field, value: &str) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
+    if f.list && kind == Kind::Number {
+        packed(f)?;
+        return Ok(format!(".array(SequenceType.U32_ARRAY, Uint32Array.from({value}))"));
+    }
+    if f.list && kind == Kind::Str {
+        return Ok(format!(".strs({value})"));
+    }
     if f.list || kind == Kind::Record {
         return Err(format!("cmd.json: the shell writes no {} ({})", if f.list { "list" } else { "record" }, f.name));
     }
@@ -214,13 +221,14 @@ impl TsUses {
         }
     }
 
-    /// The word and array types `fields` are spelled with.
-    fn note(&mut self, spec: &Spec, fields: &[Field]) -> Result<(), String> {
+    /// The word and array types `fields` are spelled with; a packet's list
+    /// is handed in as a plain array, so names no array type (`read`).
+    fn note(&mut self, spec: &Spec, fields: &[Field], read: bool) -> Result<(), String> {
         for f in fields {
             if NUMBERS.contains(&f.ty.as_str()) {
                 TsUses::add(&mut self.words, f.ty.clone());
             }
-            if f.list && NUMBERS.contains(&f.ty.as_str()) {
+            if read && f.list && NUMBERS.contains(&f.ty.as_str()) {
                 TsUses::add(&mut self.arrays, format!("{}Array", f.ty.to_uppercase()));
             }
             if spec.kind(&f.ty)? == Kind::Extern {
@@ -231,7 +239,7 @@ impl TsUses {
     }
 
     fn field_lines(&mut self, spec: &Spec, fields: &[Field]) -> Result<Vec<String>, String> {
-        self.note(spec, fields)?;
+        self.note(spec, fields, true)?;
         let mut out = Vec::new();
         for f in fields {
             if let Some(doc) = &f.doc {
@@ -279,7 +287,7 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
         let name = pascal(&c.name);
         if let Some(packet) = &c.packet {
             // Written in place, its fields handed over as they are: no record is made for it.
-            uses.note(spec, packet)?;
+            uses.note(spec, packet, false)?;
             let mut doc = vec![format!("Command.{}'s packet, written in place into `to`.", c.name)];
             for f in packet {
                 if let Some(d) = &f.doc {
@@ -340,6 +348,10 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
         if !names.is_empty() {
             out.push(format!("import type {{ {} }} from \"@xpute/kit/{from}\";", names.join(", ")));
         }
+    }
+    // A packed list is written by its sequence type, a value rather than a type.
+    if reads(&tail, "SequenceType.") {
+        out.push("import { SequenceType } from \"@xpute/kit/wire/xtp/mod.ts\";".to_string());
     }
     for e in &spec.enums {
         out.push(String::new());
@@ -546,6 +558,9 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     if f.list && kind == Kind::Number {
         return Ok(format!("&'a [{}]", f.ty));
     }
+    if f.list && kind == Kind::Str {
+        return Ok("Strs<'a>".to_string());
+    }
     if f.list || kind == Kind::Record {
         return Err(format!("cmd.json: the kernel reads no {} ({})", if f.list { "list" } else { "record" }, f.name));
     }
@@ -560,6 +575,9 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
 
 fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
+    if f.list && kind == Kind::Str {
+        return Ok(format!("{c}.get_strs()?"));
+    }
     if f.list {
         return Ok(format!("{c}.get_array::<{}>()?", f.ty));
     }
@@ -704,10 +722,12 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
             "use core::fmt::Display;",
             "",
             "use xpute_kit::status::error::MarshalError;",
-            "use xpute_kit::wire::xtp::{PacketWriter, TreeReader};",
         ]
         .map(String::from),
     );
+    // A list of strings is read as xpute's `Strs`, named only where one is.
+    let strs = spec.commands()?.iter().flat_map(|c| c.packet.iter().chain(c.signal.iter()).flatten()).any(|f| f.list && f.ty == "str");
+    out.push(format!("use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};", if strs { "Strs, " } else { "" }));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();

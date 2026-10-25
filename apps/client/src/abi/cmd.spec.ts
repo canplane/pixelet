@@ -28,6 +28,7 @@
 import type { BranchCursor, NodeCursor, PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
+import { SequenceType } from "@xpute/kit/wire/xtp/mod.ts";
 
 /** What a command is about. */
 export const enum Major {
@@ -264,10 +265,11 @@ export const enum Command {
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
   WORLD_VISIBILITY = 0x1003,
-  /** What the tile source declares of itself, once the shell has it: the tile root's
-   * `source`, the published one out of the bucket or the dev tile server's. Until it
-   * comes nothing is observed: the floor is held at the zoom it names, and no tile is
-   * asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
+  /** What the tile source declares of itself, once the client has it: the tile root's
+   * `source`, the published one out of the bucket or the dev tile server's, read by the
+   * client (apps/client/src/namespace/source.ts) and handed over as numbers and names.
+   * Until it comes nothing is observed: the floor is held at the zoom it names, and no
+   * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
   WORLD_SOURCE = 0x1005,
   /** A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
    * set aside by the host: the kernel reads it again, and writes it from then on. */
@@ -570,9 +572,11 @@ export function encode_world_visibility(to: PacketRoom, visible: boolean): Packe
 
 /** Command.WORLD_SOURCE's packet, written in place into `to`.
  *
- * @param source The declaration as the source serves it, handed over unread. */
-export function encode_world_source(to: PacketRoom, source: string): PacketWriter {
-  return to.writer(1).str(source);
+ * @param top_zoom The coarsest zoom the source supplies whole.
+ * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/published.spec.rs).
+ * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
+export function encode_world_source(to: PacketRoom, top_zoom: u32, format: u32[], shard: string[]): PacketWriter {
+  return to.writer(3).u32(top_zoom).array(SequenceType.U32_ARRAY, Uint32Array.from(format)).strs(shard);
 }
 
 /** Command.WORLD_KEPT_EMPTIED's packet, written in place into `to`.
