@@ -2,7 +2,8 @@
 # Copies what git tracks under xpute/ into xpute's own repository byte for
 # byte, its root being this directory, and beside it the C++ library in two
 # files, which cpp/Makefile's `amalgamation` makes. Prints a commit message
-# naming the pixelet commit it came from, for `git commit -F -` there.
+# naming the commit it came from, as <repository>@<sha>, for `git commit -F -`
+# there.
 #
 #   ./script/export.py --to ../xpute [--check]
 
@@ -53,14 +54,17 @@ def git(args: list[str], cwd: Path = XPUTE) -> str:
 
 
 def stamp() -> str:
+    """The repository this tree is developed in, by its checkout's name, and its commit."""
+    source = Path(git(["rev-parse", "--show-toplevel"])).name
     dirty = "-dirty" if git(["status", "--porcelain", "--", "."]) else ""
-    return f"pixelet@{git(['rev-parse', '--short', 'HEAD'])}{dirty}"
+    return f"{source}@{git(['rev-parse', '--short', 'HEAD'])}{dirty}"
 
 
 def draft(to: Path, at: str) -> str:
     """The stamp, then the subjects since the one the repository's last commit names, when that still resolves."""
     last = run(["git", "log", "-1", "--format=%B"], to)
-    found = re.search(r"pixelet@([0-9a-f]+)", last.stdout.decode()) if last.returncode == 0 else None
+    # The stamp is the message's first word; a subject below may hold an `@` of its own.
+    found = re.match(r"\S+@([0-9a-f]+)", last.stdout.decode()) if last.returncode == 0 else None
     previous = found and found.group(1)
     resolves = previous is not None and run(["git", "cat-file", "-e", f"{previous}^{{commit}}"]).returncode == 0
     subjects = [s for s in git(["log", "--format=%s", f"{previous}..HEAD", "--", "."]).split("\n") if s] if resolves else []
