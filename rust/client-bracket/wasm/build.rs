@@ -1,7 +1,7 @@
 // pxl-wasm/build.rs
 
-// The module is linked as every module guest of xpute is (xpute-link): its
-// memory imported, which the central scheduler gives it
+// The module is linked as every module guest of xpute is (xpute_guest::wasm
+// `link`): its memory imported, which the central scheduler gives it
 // (@xpute/host/mem/reserve.ts's reserve_memory), and its stack first. The
 // kernel lays out everything inside that memory (pxl_kernel::sys::mem, over
 // xpute_guest::mem).
@@ -33,7 +33,7 @@ const MIN_MEMORY_BYTES: u32 = PHONE_BYTES;
 fn main() {
     const { assert!(MIN_MEMORY_BYTES <= DESKTOP_BYTES, "the module asks for more than the larger of the two reservations") };
 
-    xpute_link::module(&xpute_link::Module {
+    xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan {
         stack_bytes: STACK_BYTES,
         global_base: Some(GLOBAL_BASE),
         initial_bytes: Some(MIN_MEMORY_BYTES),

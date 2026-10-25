@@ -14,7 +14,7 @@ import { FileError } from "@xpute/host/ipc/sys.ts";
 import { CATALOG } from "@/abi/host.spec.ts";
 import { CATALOG_HEX } from "@/namespace/catalog.spec.ts";
 import { INGESTED } from "@/namespace/ingested.spec.ts";
-import { asset_url } from "@/config/route.ts";
+import { asset_url } from "@/namespace/route.ts";
 import { get } from "@/namespace/read.ts";
 
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);

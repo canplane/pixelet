@@ -94,7 +94,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/spec/division.json",
         uses: &[],
-        ts: Some("ts/client/src/shell/world/division/division.spec.ts"),
+        ts: Some("ts/client/src/shell/division/division.spec.ts"),
         rs: Some("rust/spec/src/division.spec.rs"),
         rs_also: &[],
         module: Some("spec"),

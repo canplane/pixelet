@@ -2,8 +2,8 @@
 
 import { assertEquals } from "@std/assert";
 
-import type { BaseLayer } from "@/config/published.spec.ts";
-import { tile_url } from "@/config/route.ts";
+import type { BaseLayer } from "./published.spec.ts";
+import { tile_url } from "@/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { declaration } from "./source.ts";
 import { tile_name, tile_object } from "./tile.ts";

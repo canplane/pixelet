@@ -15,6 +15,6 @@ crate-type = ["cdylib"]
 xpute-kit.workspace = true
 xpute-guest.workspace = true
 
-# Its link flags as a module (build.rs).
+# Its link flags as a module (build.rs, xpute_guest::wasm `link`).
 [build-dependencies]
-xpute-link.workspace = true
+xpute-guest.workspace = true

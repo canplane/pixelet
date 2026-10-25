@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { GlyphName } from "@/shell/ui/icon.tsx";
-import { ToggleRow } from "@/shell/ui/toggle-row.tsx";
+import { ToggleRow } from "./toggle-row.tsx";
 
 import type { SettingCost } from "@/shell/setting/schema.ts";
 import { Glyph } from "@/shell/ui/glyph.tsx";

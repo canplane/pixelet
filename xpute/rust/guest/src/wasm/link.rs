@@ -1,15 +1,15 @@
-// xpute-link/lib.rs
+// xpute-guest/wasm/link.rs
 
 //! How a guest built as one WebAssembly module is linked, for its build
-//! script:
+//! script, which runs on the build machine and so takes this with no cfg:
 //!
 //! ```
 //! // a guest's build.rs, in its `main`
-//! xpute_link::module(&xpute_link::Module { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
+//! xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
 //! ```
 //!
 //! Cargo applies a `rustc-link-arg` only to the package whose script
-//! prints it, so each guest's `build.rs` calls `module` with its own numbers.
+//! prints it, so each guest's `build.rs` calls `link` with its own numbers.
 //!
 //! What is the same for every module guest: the host hands it its memory, so
 //! the memory is imported, never the module's own; and the stack goes first,
@@ -23,11 +23,11 @@
 
 /// A WebAssembly page, the unit a memory is declared in: 64 KiB, not the
 /// 4 KiB page a guest places its ranges and its heap by
-/// (`xpute_guest::mem::section::PAGE_BYTES`).
+/// (`crate::mem::section::PAGE_BYTES`).
 pub const WASM_PAGE_BYTES: u32 = 1 << 16;
 
-/// A module guest's numbers.
-pub struct Module {
+/// A module guest's link numbers.
+pub struct LinkPlan {
     /// The stack's size (`-z stack-size`), placed first (`--stack-first`).
     pub stack_bytes: u32,
     /// Where the linker's own data begins (`--global-base`), for a guest that
@@ -38,24 +38,24 @@ pub struct Module {
     pub initial_bytes: Option<u32>,
 }
 
-/// Prints `m`'s link arguments, and nothing when the target is not wasm32,
-/// where a guest is linked as the platform links any library.
-pub fn module(m: &Module) {
+/// Prints `plan`'s link arguments, and nothing when the target is not
+/// wasm32, where a guest is linked as the platform links any library.
+pub fn link(plan: &LinkPlan) {
     if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("wasm32") {
         return;
     }
-    for arg in args(m) {
+    for arg in args(plan) {
         println!("cargo:rustc-link-arg={arg}");
     }
 }
 
 /// The arguments, in the order the linker is given them.
-pub fn args(m: &Module) -> Vec<String> {
-    let mut args = vec!["--import-memory".to_string(), "--stack-first".to_string(), format!("-zstack-size={}", m.stack_bytes)];
-    if let Some(at) = m.global_base {
+fn args(plan: &LinkPlan) -> Vec<String> {
+    let mut args = vec!["--import-memory".to_string(), "--stack-first".to_string(), format!("-zstack-size={}", plan.stack_bytes)];
+    if let Some(at) = plan.global_base {
         args.push(format!("--global-base={at}"));
     }
-    if let Some(bytes) = m.initial_bytes {
+    if let Some(bytes) = plan.initial_bytes {
         assert!(bytes.is_multiple_of(WASM_PAGE_BYTES), "a memory is declared in WebAssembly pages, not {bytes} bytes");
         args.push(format!("--initial-memory={bytes}"));
     }
@@ -63,5 +63,5 @@ pub fn args(m: &Module) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "lib.test.rs"]
+#[path = "link.test.rs"]
 mod test;

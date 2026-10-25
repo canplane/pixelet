@@ -14,7 +14,7 @@ import { type Bound, Namespace } from "@xpute/host/ipc/ns.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import { root } from "@/abi/host.spec.ts";
-import { BASE_LAYERS } from "@/config/published.spec.ts";
+import { BASE_LAYERS } from "./published.spec.ts";
 import { read_asset } from "@/namespace/asset.ts";
 import { source_declared } from "@/namespace/source.ts";
 import { commit_storage, open_storage } from "@/namespace/storage.ts";

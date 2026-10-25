@@ -15,6 +15,7 @@ const HEAP_AT: u32 = 16 * PAGE_BYTES;
 fn plan(heap_at: u32) -> Plan {
     Plan {
         memory_bytes: MEMORY_BYTES,
+        data_end: 0,
         heap_at,
         stack_bytes: 1 << 20,
         thread_name: "test-guest",

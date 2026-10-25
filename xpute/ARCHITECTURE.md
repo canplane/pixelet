@@ -123,7 +123,9 @@ The guest's end is the **door** (`ipc/door`). It applies the submissions in orde
 
 The turn is when the guest runs at all.
 
-It runs inside one call, `interrupt(quota_ms)`, and when that call returns it is not running. The call has two edges, like a clock's. On the rising edge the host calls in with a quota, and the guest drains the submission ring, does its work and posts what it has. On the falling edge it returns `wake_ms`, when it would like the next turn: `0` for the next frame, `n` for a time, `NO_WAKE` for none. The host learns nothing else about what ran.
+It runs inside one call, `intr(quota_ms)`, and when that call returns it is not running. The call has two edges, like a clock's. On the rising edge the host calls in with a quota, and the guest drains the submission ring, does its work and posts what it has. On the falling edge it returns `wake_ms`, when it would like the next turn: `0` for the next frame, `n` for a time, `NO_WAKE` for none. The host learns nothing else about what ran.
+
+The floor names that call, as a C runtime names the `main` and `_start` it calls and Windows the `DllMain`: the program implements it and never renames it (`guest` `entry`). A guest built as a module exports `intr`; a guest linked into a native program exports `xpute_intr`, and its memory as `xpute_mem`, under xpute's name and no program's. No prefix is needed to tell two apart, because there are never two: the native host admits one guest a process, with one reservation and one `Core` (`rust/host` `native`). What the guest's form hands it there is the floor's as well (`BootInfo`): the memory it was given, where its own ranges may begin, the host's clock and its heap's reading.
 
 How long a turn may take, and how that time is spent, are settled at three levels, from the outside in.
 
@@ -147,7 +149,7 @@ quantum  a quota, from the frame it
          measured rather than assumed
 
 commands ─────── submission ring ───────▶  drained on the rising edge
-doorbell ═════ interrupt(quota_ms) ═════▶  ┌ tick   phases in a fixed order
+doorbell ═══════ intr(quota_ms) ════════▶  ┌ tick   phases in a fixed order
                                            │ tasks  that yield when
                                            │        the quota is spent
                                            │ asks   what it wants done outside
@@ -241,7 +243,7 @@ What cannot change is the rules below and the formats they travel in: the direct
 
 0. **The directory.** The guest writes it in its first turn or in a boot call that returns its offset, and the host finds everything from the one offset it learns outside. A key appears at most once, an unknown key is passed over, and an unknown version is refused.
 1. **The core memory.** It never moves or grows while the guest lives, and every address that crosses is an offset into it.
-2. **The turn.** The guest runs only inside `interrupt`, and the two sides never run at once: the host touches nothing a turn writes until it has returned. The quota is advice, not a deadline. `wake_ms` is 0 for the next turn, a positive number for that many milliseconds from now, and negative (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the host needs answered at once is asked in one — but only of a command the guest answers from what it already holds; one that waits on anything outside is answered on a later turn.
+2. **The turn.** The guest runs only inside `intr`, and the two sides never run at once: the host touches nothing a turn writes until it has returned. The quota is advice, not a deadline. `wake_ms` is 0 for the next turn, a positive number for that many milliseconds from now, and negative (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the host needs answered at once is asked in one — but only of a command the guest answers from what it already holds; one that waits on anything outside is answered on a later turn.
 3. **The message.** Four words: `tag`, `cmd` with its flags, `result`, and the packet. With `ACKREQ` a message gets exactly one reply; without it, a reply only when it failed. A reply carries its message's `tag` and `cmd`, and `RES`.
 4. **What the host sends** is applied in order, each message once. The guest may leave some for a later turn, never out of order or skipped, and asks for the next turn while it does.
 5. **What a turn leaves** — messages, replies, stream records — is taken by the host before the next turn, none dropped. Order holds within one place a turn writes to, not between places, so a guest that needs one request run before another puts both in the same place. Running past the room set aside is a sizing mistake, not a state to handle.
@@ -263,7 +265,7 @@ The implementations do not all stand in the same relation, and which relation de
 - **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++ (`cpp/xpute/guest`) are the same end, either plugged into any host, so what one gives a program the other gives too.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`) reserves a module's memory, rings the doorbell, answers the system calls and paces the quantum, and mounts all three on a guest its platform opened (`host`, `mount`). Rust's (`rust/host`) reads a guest's memory by offset on every platform (`mem`), and is the host for a guest linked into the host's own native process (`native`): it reserves the memory there, runs every call into the guest on the guest's own thread, since a guest's `Global`s are sound on one thread, and provides the allocator that keeps the guest's blocks in its memory and every other thread's out of it. They are one role, not one module list.
 - **The GPU's calls follow the same split.** Each guest language writes them (`rust/gpu`, `cpp/xpute/gpu`). The hosts run them in TypeScript on WebGPU (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
-- **A guest built as a module is linked one way.** Its memory is imported from the host and its stack goes first, at the bottom of the memory, so an overflow traps; its stack's size and any front it keeps below the linker's data are its own numbers. A Rust guest's build script prints the flags through `rust/link`, and the C++ guest's Makefile passes the same ones.
+- **A guest built as a module is linked one way.** Its memory is imported from the host and its stack goes first, at the bottom of the memory, so an overflow traps; its stack's size and any front it keeps below the linker's data are its own numbers. A guest's form is a place in its end, not a layer of its own: a Rust module guest's whole form is `rust/guest`'s `wasm` — the flags its build script prints (`link`), what the module reads of itself, and `wasm_abi!`, which defines its allocator over the heap its plan names and exports `intr` — as a native one's is `rust/host`'s `native` and its `native_abi!`. The C++ guest's Makefile passes the same flags, and `cpp/xpute/guest/wasm.hpp` holds its module's reads and the entry.
 
 `kit` asks nothing of a program: link it and call it. `guest` and `host` ask it to run xpute's way — memory granted once, work in turns, I/O by asking.
 

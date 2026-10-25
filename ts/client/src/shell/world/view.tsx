@@ -8,20 +8,20 @@ import { bracket, type InputDriver } from "@/bracket.tsx";
 import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/control/input.ts";
 import { surface_role } from "@/abi/render/gpu/api.spec.ts";
 import { surface_driver } from "@/abi/render/surface.ts";
-import { keyDown, keyUp, releaseKeys } from "@/shell/store/keyboard.ts";
-import { releasePointers, worldPointer } from "@/shell/store/pointer.ts";
+import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
+import { releasePointers, worldPointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
 import { bottomRest } from "@/shell/ui/bottom-rest.ts";
-import { Toaster } from "@/shell/ui/toast/stack.tsx";
+import { Toaster } from "@/shell/world/toast/stack.tsx";
 import { chrome, layer } from "@/shell/ui/theme.ts";
 import { KEEPS_KEYBOARD } from "@/shell/ui/keyboard.tsx";
 
 import { useChromeTop } from "./chrome.ts";
 import { BusyDim } from "./busy-dim.tsx";
-import { Dock } from "./overlay/dock.tsx";
-import { TopOverlays } from "./overlay/top.tsx";
-import { DOCK_HEIGHT } from "./overlay/dock.tsx";
-import { ToastController } from "./toast-controller.tsx";
+import { Dock } from "./dock.tsx";
+import { TopOverlays } from "@/shell/world/top/top.tsx";
+import { DOCK_HEIGHT } from "./dock.tsx";
+import { ToastController } from "@/shell/world/toast/controller.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 import { HOST } from "@/host/mem.ts";
 

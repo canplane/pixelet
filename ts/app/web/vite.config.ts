@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 
-import { DEV_PROXY_ROUTES } from "@pxl/client/config/route.ts";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "@pxl/client/config/route.spec.ts";
 import { DECL, enumAt, literal, type Members, readEnums, stale } from "@pxl/build/const-enum.ts";
 import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
@@ -275,6 +275,18 @@ function constEnum(roots: string[]): Plugin {
 // this constant is only for a checkout that has not copied .env.example to
 // .env yet. A domain that is retired at the Cloudflare edge answers 404 to
 // everything, and nothing here would say why.
+/**
+ * Prefixes a dev server forwards, split as the Worker splits them: `tiles` to
+ * the tile server, the rest to the search server. `published` ones go to the
+ * published deployment under `dev`.
+ */
+export const DEV_PROXY_ROUTES = [
+  { path: TILE_PREFIX, tiles: true, published: true },
+  { path: ASSET_PREFIX, tiles: true, published: true },
+  { path: GEO_PREFIX, published: true },
+  { path: API_PREFIX, app: true, published: true },
+] as const satisfies readonly { path: string; tiles?: boolean; app?: boolean; published?: boolean }[];
+
 const remoteOriginDefault = "https://plei.me";
 
 // anti-HMR. The client's host, abi and io are here too: their modules hold the one

@@ -9,7 +9,7 @@ import { PLATFORM } from "./module.ts";
 /** The plan is not read here: the linked guest's memory is given in Rust
  * (pxl-native lib.rs `guest`), and its GPU stream played there (surface.rs). */
 export function open(): Promise<Guest> {
-  const buffer = PLATFORM.memory();
-  PLATFORM.interrupt(0);
-  return Promise.resolve({ memory: buffer, interrupt: (quota_ms: f64) => PLATFORM.interrupt(quota_ms) });
+  const buffer = PLATFORM.mem();
+  PLATFORM.intr(0);
+  return Promise.resolve({ memory: buffer, intr: (quota_ms: f64) => PLATFORM.intr(quota_ms) });
 }

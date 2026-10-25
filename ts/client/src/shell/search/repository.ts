@@ -2,8 +2,8 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { SEARCH_URL } from "@/config/route.spec.ts";
-import type { DivisionPart, NamePart } from "@/shell/world/division/label.ts";
-import { DIVISION_SUBTYPE } from "@/shell/world/division/division.spec.ts";
+import type { DivisionPart, NamePart } from "@/shell/division/label.ts";
+import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { bracket } from "@/bracket.tsx";
 
 /** A part as the API writes it: Overture's subtype by its word, and `approx` where no area holds the point. */

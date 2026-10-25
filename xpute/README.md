@@ -11,7 +11,7 @@ It was written for a program driven by TypeScript: compiled to one WebAssembly m
 ```text
 ┌─ host ── TypeScript ───┐                        ┌─ guest ──────────────────┐
 │ owns the clock, the    │                        │ computes, and owns       │
-│ memory, the I/O        │ ═ interrupt(quota) ═▶  │ nothing                  │
+│ memory, the I/O        │ ═══ intr(quota) ════▶  │ nothing                  │
 │                        │                        │                          │
 │                        │  ◀═══ wake_ms ═══════  │                          │
 └───────────┬────────────┘                        └────────────┬─────────────┘
@@ -25,7 +25,7 @@ It was written for a program driven by TypeScript: compiled to one WebAssembly m
 
 Three edges, and one call the other way: the guest reads the host's clock (`now`), because it spends its quota against that clock in the middle of a turn, when the host cannot run. There is no second entry point, no other callback, and nothing either side holds a pointer to on the other.
 
-`interrupt` is the whole of the guest's life. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all. Its answer, `wake_ms`, is when it would like the next turn. A guest that asks for nothing is rung for nothing.
+`intr` is the whole of the guest's life, the entry the floor names as a C runtime names `main`. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all. Its answer, `wake_ms`, is when it would like the next turn. A guest that asks for nothing is rung for nothing.
 
 Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a message of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again. Every file call goes to the program's one `SysHost.open`: xpute does not route by root, and the program dispatches by root to whatever it bound there.
 
@@ -44,7 +44,6 @@ rust/kit  ·  ts/kit  ·  cpp/xpute/kit          the same kit, in each language
 rust/guest  ·  cpp/xpute/guest  ·  ts/host     the guest end, in each language · the host end in TypeScript
 rust/host                                      the host end in Rust: a guest's memory read by offset, and the host of a guest linked into its own native program
 rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu          WebGPU's calls, which a guest writes and a host runs; ts/gpu/script runs the web host's test in Chrome
-rust/link                                      how a Rust guest's build script links it as a WebAssembly module
 rust/conformance  ·  cpp/conformance           a guest in each, which the contract's traces drive; ts/host runs them (conformance.test.ts)
 script                                         the repository's own scripts, reading none of the trees' code; never shipped
 spec                                           numbers all of them are generated from
@@ -52,32 +51,38 @@ spec                                           numbers all of them are generated
 
 ## Embedding a guest
 
-A guest built as a **WebAssembly module** links through `rust/link`, one call in its `build.rs`, and reads what the module itself says through `xpute_guest::module`. The host hands it its memory and rings its export (`rust/conformance` is one, whole):
+A guest built as a **WebAssembly module** takes its whole form from `xpute_guest::wasm`: one call in its `build.rs`, which takes `xpute-guest` as a build dependency too, and one `wasm_abi!` in the guest, which defines its allocator over the heap its plan names and exports its entry, `intr`. It reads what the module itself says through the same module, and the host hands it its memory and rings `intr` (`rust/conformance` is one, whole):
 
 ```rust
 // build.rs
 fn main() {
     // memory imported, the stack first, its size the guest's
-    xpute_link::module(&xpute_link::Module { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
+    xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
 }
+
+// lib.rs: the heap from the page past the linker's data to the memory's end
+xpute_guest::wasm_abi!(
+    xpute_guest::wasm::Plan { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
+    my_guest::intr // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
+);
 ```
 
-A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator and writes one `native_abi!` with its prefix, its numbers and the guest's entry, which boots the guest on the first call, installs the plan's clock on the guest's thread, and exports `<prefix>_interrupt` and `<prefix>_memory` (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
+A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator and writes one `native_abi!` with its numbers and the guest's entry, which boots the guest on the first call, installs the plan's clock on the guest's thread, and exports `xpute_intr` and `xpute_mem` under xpute's names: a process holds one guest, so no program's prefix is needed (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
 
 ```rust
 #[global_allocator]
 static ALLOC: native::Alloc = native::Alloc;
 
 xpute_host::native_abi!(
-    "demo",
     native::Plan {
         memory_bytes: 16 << 20,
+        data_end: 0,              // no front of the program's own
         heap_at: 16 * PAGE_BYTES, // a whole number of the guest's pages
         stack_bytes: 1 << 20,
         thread_name: "demo",
         clock: native::now,
     },
-    my_guest::interrupt
+    my_guest::intr
 );
 ```
 

@@ -39,8 +39,11 @@ PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute conformance,-fmacro-p
 AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/conformance/
 # The guest's stack (spec/conformance/guest.json STACK_BYTES).
 STACK_BYTES := 1048576
+# A module guest's link, as xpute-guest wasm `link` prints it for a Rust
+# one: its memory imported and its stack first; and its exports, the entry
+# the floor names, `intr`, beside the guest's own boot.
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
-	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=xpute_conformance_interrupt
+	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=intr
 
 SOURCES := $(sort $(shell find xpute conformance -name '*.cpp'))
 # What only the tests build: their own files, the runner and the golden reader.

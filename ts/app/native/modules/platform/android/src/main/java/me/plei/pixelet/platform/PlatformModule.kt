@@ -38,9 +38,9 @@ class PlatformModule : Module() {
 
     // The region is the guest's for the app's life: nothing is let go when
     // the buffer is.
-    Function("memory") { NativeArrayBuffer(PxlGuest.memory()) }
+    Function("mem") { NativeArrayBuffer(PxlGuest.mem()) }
 
-    Function("interrupt") { quotaMs: Double -> PxlGuest.interrupt(quotaMs) }
+    Function("intr") { quotaMs: Double -> PxlGuest.intr(quotaMs) }
 
     /** Whether the device opened; what it is, the kernel reads from the host. */
     Function("gpuOpen") { PxlGuest.gpuOpen() }

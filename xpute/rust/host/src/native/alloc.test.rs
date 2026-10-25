@@ -19,6 +19,7 @@ fn guest() -> Guest {
     *GUEST.get_or_init(|| {
         native::boot(&Plan {
             memory_bytes: MEMORY_BYTES,
+            data_end: 0,
             heap_at: HEAP_AT,
             stack_bytes: 1 << 20,
             thread_name: "test-guest",

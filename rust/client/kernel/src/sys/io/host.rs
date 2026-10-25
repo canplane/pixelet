@@ -129,22 +129,6 @@ pub fn set_heap_stat(stat: fn() -> HeapStat) {
     HEAP.set(stat);
 }
 
-static ADMIT_FRAME: Global<fn() -> bool> = Global::new();
-
-fn every_frame() -> bool {
-    true
-}
-
-pub fn set_admit_frame(admit: fn() -> bool) {
-    ADMIT_FRAME.set(admit);
-}
-
-/// The bracket's answer (door::Bracket::admit_frame); a kernel no bracket
-/// booted admits every frame.
-pub fn admit_frame() -> bool {
-    (ADMIT_FRAME.get(|| every_frame))()
-}
-
 /// Numbers only: formatting is the bracket's, so a module that reports
 /// nothing links none of it.
 pub enum Stop<'a> {

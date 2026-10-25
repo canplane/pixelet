@@ -1,7 +1,7 @@
-// @pxl/client/config/route.ts
+// @pxl/client/namespace/route.ts
 
 // By path, not alias: vite.config.ts imports this and its bundler knows no aliases.
-import type { BaseLayer } from "./published.spec.ts";
+import type { BaseLayer } from "@/namespace/published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 

@@ -159,6 +159,10 @@ against WASI, and need sockets. Making both WASM does not make them symmetric;
 it makes the server inherit the client's constraints on a machine that has
 none of them.
 
+> Since 2026-10-26, `pxl-wasm` exports one entry, `intr`, which xpute's
+> `wasm_abi!` (xpute-guest `wasm`) makes; the kernel lays its memory out on
+> the first.
+
 **The adoption picture, as of this conversation** (knowledge to 2026-05, not
 searched): server-side WASM won where the code is _someone else's_ — untrusted
 or user-supplied code (Shopify Functions, Zed extensions, Envoy/Istio

@@ -14,6 +14,9 @@ fnv.workspace = true
 libm.workspace = true
 xpute-guest.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
+# Whether the GPU's host takes a frame now (xpute_gpu::admit), which the
+# renderer is told each frame (domain/scene/stage.rs).
+xpute-gpu.workspace = true
 pxl-spec.workspace = true
 pxl-spec-core.workspace = true
 pxl-render.workspace = true

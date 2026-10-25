@@ -10,10 +10,10 @@ import { Segmented } from "@/shell/ui/segmented.tsx";
 import { hairline } from "@/shell/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
 import { settingText } from "./row.tsx";
-import { LanguageSection } from "./section/language.tsx";
-import { DisclaimerSection } from "./section/disclaimer.tsx";
-import { AboutSection } from "./section/about.tsx";
-import { AttributionSection } from "./section/attribution.tsx";
+import { LanguageSection } from "@/shell/setting/info/language.tsx";
+import { DisclaimerSection } from "@/shell/setting/info/disclaimer.tsx";
+import { AboutSection } from "@/shell/setting/info/about.tsx";
+import { AttributionSection } from "@/shell/setting/info/attribution.tsx";
 
 const enum SettingsTab {
   Options = 0,

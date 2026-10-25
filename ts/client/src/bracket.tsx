@@ -1,9 +1,10 @@
 // @pxl/client/bracket.tsx
 
 /**
- * What the client asks of the place it runs in, as pxl-kernel's door asks its
- * bracket (pxl_kernel::door::Bracket): the page's (ts/app/web) or the device's
- * (ts/app/native), set once by the app's entry before the client boots.
+ * What the client asks of the place it runs in, as pxl-kernel's door is
+ * handed its place by its bracket (pxl_kernel::door `intr`): the page's
+ * (ts/app/web) or the device's (ts/app/native), set once by the app's entry
+ * before the client boots.
  */
 
 import type { ComponentType } from "react";

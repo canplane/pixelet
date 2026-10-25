@@ -2,7 +2,9 @@
 
 //! The kernel's side of the doorbell, which a bracket (pxl-wasm, pxl-native)
 //! hands each turn to: the directory, commands applied, signals raised. The
-//! rings are xpute's (`xpute_guest::ipc::door`).
+//! rings are xpute's (`xpute_guest::ipc::door`), and so is the entry the
+//! kernel implements (`intr`, xpute_guest::entry) and what its host's form
+//! hands it (`BootInfo`).
 
 mod apply;
 pub(crate) use apply::over_marker;
@@ -15,35 +17,18 @@ pub mod layout;
 use crate::domain::control::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
+use crate::sys::io::host::LastWords;
 use crate::sys::mem::section;
 use xpute_guest::clock::now;
+use xpute_guest::entry::BootInfo;
 use xpute_guest::global::{off_marked_thread, Global};
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::{Door, DoorStat};
 use xpute_guest::ipc::ring::Ring;
-use xpute_guest::mem::heap::HeapStat;
 use xpute_guest::mem::{self, off_of, off_of_slice};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::PacketWriter;
-
-pub struct Bracket {
-    pub given: u32,
-    /// End of the bracket's own data (stack and ring fronts below it); the kernel's ranges go past it.
-    pub data_end: u32,
-    pub clock: fn() -> f64,
-    pub heap_stat: fn() -> HeapStat,
-    /// Whether the surfaces take a frame now without blocking; one admitted
-    /// is drawn this turn, and the bracket counts it until the GPU has done
-    /// it. A page's always: the browser paces its frames. A device's while
-    /// fewer than two are unfinished, since taking a drawable there blocks
-    /// the thread that waits for the turn.
-    pub admit_frame: fn() -> bool,
-    /// Where a bracket whose process dies with the kernel reports why: no host
-    /// is left to run the record, and a panic's text is not in its numbers.
-    /// None where the host outlives the kernel (a page).
-    pub last_words: Option<crate::sys::io::host::LastWords>,
-}
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
@@ -128,11 +113,12 @@ fn host_attached(s: &mut State) {
 }
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
-fn boot(b: &Bracket) {
+/// Whether a frame can be taken now is the GPU host's (xpute_gpu::admit),
+/// installed by a bracket that runs one.
+fn boot(b: &BootInfo, last_words: Option<LastWords>) {
     xpute_guest::clock::set_clock(b.clock);
     crate::sys::io::host::set_heap_stat(b.heap_stat);
-    crate::sys::io::host::set_admit_frame(b.admit_frame);
-    crate::sys::io::host::set_last_words(b.last_words);
+    crate::sys::io::host::set_last_words(last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its
     // location. Both are process-wide, and on a device the app's other
@@ -150,7 +136,7 @@ fn boot(b: &Bracket) {
         }
     });
     let theirs = std::panic::take_hook();
-    let say = b.last_words;
+    let say = last_words;
     std::panic::set_hook(Box::new(move |info| {
         if off_marked_thread() {
             match say {
@@ -190,7 +176,7 @@ fn fixed_at(f: layout::Fixed) -> u32 {
 
 /// Lays the memory map. Returns where GPU calls are
 /// recorded for the host, 0 where the kernel makes them itself.
-fn lay_out(b: &Bracket) -> u32 {
+fn lay_out(b: &BootInfo) -> u32 {
     // The map first: what lives in `.fixed` is handed its range from it.
     section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
     // Each range to its owner.
@@ -207,13 +193,17 @@ fn lay_out(b: &Bracket) -> u32 {
     }
 }
 
-/// A turn: applies waiting submissions, polls tasks on the quota, and
-/// returns when to wake next, in ms (0 for the next frame, NO_WAKE for
-/// none). The first turn boots.
-pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
+/// The entry (xpute_guest::entry `Entry`, with the bracket's last words): a
+/// turn applies waiting submissions, polls tasks on the quota, and returns
+/// when to wake next, in ms (0 for the next frame, NO_WAKE for none). The
+/// first turn boots, on what its host's form hands it (`boot_info`).
+/// `last_words` is where a bracket whose process dies with the kernel
+/// reports why: no host is left to run the record, and a panic's text is not
+/// in its numbers. None where the host outlives the kernel (a page).
+pub fn intr(quota_ms: f64, boot_info: fn() -> BootInfo, last_words: Option<LastWords>) -> f64 {
     use crate::turn::{take_world_drawn, world_frame_waiting};
     if section::map().is_none() {
-        boot(&bracket());
+        boot(&boot_info(), last_words);
     }
     let s = state();
     let rise = now();

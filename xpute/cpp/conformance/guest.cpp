@@ -24,16 +24,9 @@
 #include "xpute/guest/ipc/sys.hpp"
 #include "xpute/guest/mem.hpp"
 #include "xpute/guest/mem/section.hpp"
+#include "xpute/guest/sched/quantum.hpp"
+#include "xpute/guest/wasm.hpp"
 #include "guest.spec.hpp"
-
-#ifdef __wasm__
-extern "C" {
-// Defined by wasm-ld: where the linker stopped placing stack and data.
-extern const std::uint8_t __heap_base;
-
-__attribute__((import_module("env"), import_name("now"))) double xpute_conformance_host_now(void);
-}
-#endif
 
 namespace xpute::conformance {
 namespace {
@@ -154,13 +147,13 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
     return range + DIRECTORY_AT;
 }
 
-double interrupt(Memory m, std::uint32_t range) {
+double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     s.sys.rise();
     s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> packet) { return apply(s, cmd, packet); });
     s.stream.publish();
     s.sys.fall();
-    return s.door.pending() ? 0.0 : -1.0;
+    return s.door.pending() ? 0.0 : NO_WAKE;
 }
 
 #ifdef __wasm__
@@ -168,11 +161,11 @@ double interrupt(Memory m, std::uint32_t range) {
 // The range starts past where the linker stopped, so how large the stack or
 // data is decides nothing a host reads.
 std::uint32_t range_at() {
-    return page_up(static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__heap_base)));
+    return page_up(wasm::data_end());
 }
 
 double host_now() {
-    return xpute_conformance_host_now();
+    return wasm::now();
 }
 
 #endif
@@ -227,14 +220,16 @@ void operator delete(void *p, std::align_val_t) noexcept {
 }
 
 extern "C" std::uint32_t xpute_conformance_boot(void) {
+    // The stack the module was linked with is the one the guest declares.
+    ensure(wasm::stack_high() == STACK_BYTES, Errno::enotrecoverable, wasm::stack_high());
     std::uint32_t range = range_at();
     // A range past the memory's end is a host that sized it for another guest.
-    ensure(std::uint64_t{range} + MEMORY_BYTES <= std::uint64_t{__builtin_wasm_memory_size(0)} * 65536, Errno::enomem, range);
+    ensure(std::uint64_t{range} + MEMORY_BYTES <= wasm::given(), Errno::enomem, range);
     return boot(mem::core(), range, host_now);
 }
 
-extern "C" double xpute_conformance_interrupt(double) {
-    return interrupt(mem::core(), range_at());
+extern "C" double intr(double) {
+    return turn(mem::core(), range_at());
 }
 
 #else
@@ -245,6 +240,6 @@ Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::u
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) { return boot(given(mem), 0, now); }
 
-extern "C" double xpute_conformance_interrupt(std::uint8_t *mem, double) { return interrupt(given(mem), 0); }
+extern "C" double xpute_conformance_intr(std::uint8_t *mem, double) { return turn(given(mem), 0); }
 
 #endif

@@ -27,6 +27,7 @@ dev = ["pxl-kernel/dev"]
 [lints]
 workspace = true
 
-# The module's link flags, with mem.json's numbers (build.rs).
+# The module's link flags, with mem.json's numbers (build.rs, xpute_guest::wasm
+# `link`).
 [build-dependencies]
-xpute-link.workspace = true
+xpute-guest.workspace = true

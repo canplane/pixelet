@@ -11,11 +11,11 @@ import { createRoot } from "react-dom/client";
 import * as bracket from "@pxl/client/bracket.tsx";
 import * as locale from "@pxl/client/shell/locale/i18n.ts";
 import { boot } from "@pxl/client/shell/boot.ts";
-import { AppRouter } from "@pxl/client/shell/router.tsx";
+import { AppRouter } from "./router.tsx";
 import { Halt } from "@pxl/client/shell/halt.tsx";
 import { page } from "@/bracket.ts";
 import * as webgpu from "@/webgpu.ts";
-import "@pxl/client/shell/style/index.css";
+import "./document.css";
 
 if (import.meta.env.DEV) (await import("@/remote-console.ts")).install();
 

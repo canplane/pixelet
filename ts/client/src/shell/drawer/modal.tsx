@@ -15,7 +15,7 @@ import { PanelBar, PanelBody, PanelScroll } from "@/shell/ui/panel.tsx";
 import { Segmented } from "@/shell/ui/segmented.tsx";
 import { chrome, color, hairline, textStyle } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
-import { CharacterPicker } from "@/shell/character/picker.tsx";
+import { CharacterPicker } from "@/shell/drawer/character/picker.tsx";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/shell/catalog/asset/swatch.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { useKernel } from "@/shell/store/system.ts";

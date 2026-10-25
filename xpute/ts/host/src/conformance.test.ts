@@ -32,7 +32,7 @@ function library(dir: string, name: string): string {
 
 const SYMBOLS = {
   xpute_conformance_boot: { parameters: ["buffer", "function"], result: "u32" },
-  xpute_conformance_interrupt: { parameters: ["buffer", "f64"], result: "f64" },
+  xpute_conformance_intr: { parameters: ["buffer", "f64"], result: "f64" },
 } as const;
 
 /** Room past the guest's range for the module's own stack and data, which the build decides. */
@@ -59,7 +59,7 @@ function native(path: string): Opener {
       const memory = new Float64Array(MEMORY_BYTES / 8).buffer;
       const bytes = new Uint8Array(memory);
       const directory_at = lib.symbols.xpute_conformance_boot(bytes, now.pointer);
-      return { memory, directory_at, interrupt: (quota) => lib.symbols.xpute_conformance_interrupt(bytes, quota) };
+      return { memory, directory_at, intr: (quota) => lib.symbols.xpute_conformance_intr(bytes, quota) };
     },
     close() {
       now.close();
@@ -77,9 +77,9 @@ function module(path: string): Opener {
       const pages = MODULE_BYTES >> 16;
       const memory = new WebAssembly.Memory({ initial: pages, maximum: pages });
       const instance = new WebAssembly.Instance(compiled, { env: { memory, now: () => clock_ms } });
-      const exports = instance.exports as { xpute_conformance_boot(): number; xpute_conformance_interrupt(quota_ms: number): number };
+      const exports = instance.exports as { xpute_conformance_boot(): number; intr(quota_ms: number): number };
       const directory_at = exports.xpute_conformance_boot() >>> 0;
-      return { memory: memory.buffer as ArrayBuffer, directory_at, interrupt: (quota) => exports.xpute_conformance_interrupt(quota) };
+      return { memory: memory.buffer as ArrayBuffer, directory_at, intr: (quota) => exports.intr(quota) };
     },
     close() {},
   };
@@ -138,7 +138,7 @@ class Host {
   }
 
   ring(quota_ms: number): Turn {
-    const wake = this.guest.interrupt(quota_ms);
+    const wake = this.guest.intr(quota_ms);
     const stream: number[] = [];
     each_record(this.guest.memory, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];

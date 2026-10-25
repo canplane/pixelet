@@ -5,7 +5,7 @@ it, as React Native names them: `pill.tsx` is the page's and Android's,
 `pill.ios.tsx` an iPhone's; `motion/motion.native.tsx` both devices'. Metro
 takes the file of the device's platform, Vite the default, and every import
 names the default. An override re-exports the default and replaces only what it
-draws itself, and `ts/client/src/conform.ts` holds each to its default's
+draws itself, and `ts/client/src/shell/ui/conform.ts` holds each to its default's
 exports. What only the place gives — the kernel's memory, the GPU, storage,
 text, the network, the sensors, the surfaces — is not here but in the
 client's bracket, which each app hands it (`ts/client/src/bracket.tsx`): the world's surface, for one, is a

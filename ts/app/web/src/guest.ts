@@ -24,16 +24,16 @@ export async function open(plan: Plan): Promise<Guest> {
   const { instance } = await WebAssembly.instantiate(bytes, {
     env: { memory, now: () => performance.now() },
   });
-  const turn = instance.exports.interrupt as Guest["interrupt"];
+  const turn = instance.exports.intr as Guest["intr"];
   // The first turn lays the memory out and writes the directory.
   turn(0);
   // The maximum is the initial size, so the buffer is never replaced.
   const buffer = memory.buffer as ArrayBuffer;
   const gpu = new Directory(buffer, plan.directory_at).get(plan.gpu_stream);
-  const interrupt = (quota_ms: f64) => {
+  const intr = (quota_ms: f64) => {
     const wake = turn(quota_ms);
     webgpu.run(buffer, gpu, plan.gpu_head);
     return wake;
   };
-  return { memory: buffer, interrupt };
+  return { memory: buffer, intr };
 }

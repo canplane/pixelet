@@ -33,21 +33,21 @@ unsafe fn jni<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
     unsafe { &**env }
 }
 
-/// A turn of `quota_ms` (lib.rs `interrupt`, exported as pxl_interrupt).
+/// A turn of `quota_ms`: the entry, xpute_intr (xpute-host native `native_abi!`, lib.rs).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_interrupt(_env: *mut JNIEnv, _class: jclass, quota_ms: jdouble) -> jdouble {
-    crate::interrupt(quota_ms)
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_intr(_env: *mut JNIEnv, _class: jclass, quota_ms: jdouble) -> jdouble {
+    crate::xpute_intr(quota_ms)
 }
 
-/// The memory, as a direct buffer over the whole of it (lib.rs `memory`, exported as pxl_memory).
+/// The memory, as a direct buffer over the whole of it: xpute_mem (lib.rs).
 ///
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_memory(env: *mut JNIEnv, _class: jclass) -> jobject {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_mem(env: *mut JNIEnv, _class: jclass) -> jobject {
     let mut bytes = 0u32;
     // SAFETY: our own word.
-    let at = unsafe { crate::memory(&raw mut bytes) };
+    let at = unsafe { crate::xpute_mem(&raw mut bytes) };
     let make = unsafe { jni(env) }.NewDirectByteBuffer.or_bug(Errno::ENOSYS);
     // SAFETY: the memory lives as long as the process, and is `bytes` long.
     unsafe { make(env, at.cast(), i64::from(bytes)) }

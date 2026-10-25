@@ -10,9 +10,10 @@
 # main thread and each worker instantiate for themselves
 # (doc/minutes/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
 # into a device's app, which draws with wgpu where the page's host draws with
-# the browser's WebGPU. A bracket is no domain: it is xpute's mechanism
-# (xpute-link, xpute-host, xpute-gpu) booted with pixelet's numbers, the
-# kernel's door as the guest's entry, and what is pixelet's own. The server end is native
+# the browser's WebGPU. A bracket is no domain: it is xpute's mechanism for
+# its form (xpute-guest's wasm, xpute-host's native, xpute-gpu) booted with
+# pixelet's numbers, the kernel's door as the guest's entry, and what is
+# pixelet's own. The server end is native
 # (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
 # and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
 # rather than answered, and pxl-geo-spec where the two geo halves read the
@@ -65,7 +66,6 @@ xpute-kit = { path = "../xpute/rust/kit", default-features = false }
 xpute-guest = { path = "../xpute/rust/guest" }
 xpute-gpu = { path = "../xpute/rust/gpu" }
 xpute-host = { path = "../xpute/rust/host" }
-xpute-link = { path = "../xpute/rust/link" }
 pxl-spec-core = { path = "spec/core" }
 pxl-spec = { path = "spec" }
 pxl-render = { path = "client/render" }

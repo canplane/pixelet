@@ -2,9 +2,11 @@
 
 //! The Rust conformance guest. It exports the same two C calls as the C++
 //! guest, so one host drives both; `boot` answers the directory's offset.
-//! Natively the host hands it a region and a clock; as wasm it imports its
-//! memory and `env.now`, and its range starts past what the linker placed.
-//! Its parts are laid over that memory by offset (`Memory`).
+//! Natively the host hands it a region and a clock, and its turn is
+//! `xpute_conformance_intr`; as wasm it imports its memory and `env.now`, its
+//! range starts past what the linker placed, and its turn is the module's
+//! entry, `intr` (xpute_guest::wasm `wasm_abi!`). Its parts are laid over
+//! that memory by offset (`Memory`).
 
 use xpute_guest::abi::cmd::{Command, SysOpened};
 use xpute_guest::abi::handle::HandleTable;
@@ -112,7 +114,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
 
 /// # Safety
 /// `boot` laid a guest out there.
-unsafe fn interrupt(mem: Memory, range: u32) -> f64 {
+unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
     state.sys.rise();
@@ -140,9 +142,9 @@ pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now) -> u32 {
 /// `mem` is a memory `xpute_conformance_boot` laid a guest out over.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
-pub unsafe extern "C" fn xpute_conformance_interrupt(mem: *mut u8, _quota_ms: f64) -> f64 {
+pub unsafe extern "C" fn xpute_conformance_intr(mem: *mut u8, _quota_ms: f64) -> f64 {
     // SAFETY: the caller's memory, booted.
-    unsafe { interrupt(given(mem), 0) }
+    unsafe { turn(given(mem), 0) }
 }
 
 /// The memory a native host hands over, `spec::MEMORY_BYTES` from `mem`.
@@ -153,48 +155,44 @@ fn given(mem: *mut u8) -> Memory {
 }
 
 #[cfg(target_arch = "wasm32")]
-mod module {
+mod wasm {
     use super::*;
-    use xpute_guest::mem::heap::{Bounds, Heap};
-    use xpute_guest::module::{data_end, given};
+    use xpute_guest::entry::BootInfo;
+    use xpute_guest::wasm::Plan;
 
-    /// The heap is the range's last part, `HEAP_BYTES` from `HEAP_AT`.
-    struct Range;
-
-    impl Bounds for Range {
-        fn base() -> usize {
-            (range_at() + HEAP_AT) as usize
-        }
-        fn end() -> usize {
-            Self::base() + spec::HEAP_BYTES as usize
-        }
-    }
-
-    #[global_allocator]
-    static ALLOC: Heap<Range> = Heap::new();
+    // The heap is the range's last part, from `HEAP_AT` to the memory's end.
+    xpute_guest::wasm_abi!(
+        Plan {
+            heap_at: |data_end| range_at(data_end) + HEAP_AT,
+            stack_bytes: spec::STACK_BYTES,
+        },
+        entry
+    );
 
     extern "C" fn now() -> f64 {
-        xpute_guest::module::now()
+        xpute_guest::wasm::now()
     }
 
-    fn range_at() -> u32 {
-        page_up(data_end())
+    /// The range starts past where the linker stopped.
+    fn range_at(data_end: u32) -> u32 {
+        page_up(data_end)
     }
 
     #[no_mangle]
     pub extern "C" fn xpute_conformance_boot() -> u32 {
-        let range = range_at();
+        let BootInfo { given, data_end, .. } = boot_info();
+        let range = range_at(data_end);
         // A host that sized the memory for another guest.
-        xpute_kit::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given(), ENOMEM, range);
+        xpute_kit::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given as u64, ENOMEM, range);
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
         unsafe { boot(xpute_guest::mem::core(), range, now) }
     }
 
-    #[no_mangle]
-    pub extern "C" fn xpute_conformance_interrupt(_quota_ms: f64) -> f64 {
+    /// A turn; what the module hands the guest it read as it booted.
+    fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
         // SAFETY: the module's memory, booted.
-        unsafe { interrupt(xpute_guest::mem::core(), range_at()) }
+        unsafe { turn(xpute_guest::mem::core(), range_at(xpute_guest::wasm::data_end())) }
     }
 }
 

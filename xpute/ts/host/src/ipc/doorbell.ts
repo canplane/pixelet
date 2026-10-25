@@ -21,7 +21,7 @@ const NOWHERE_VIEW = new DataView(NOWHERE.buffer);
 /** Valid only inside the call. */
 type SignalListener = (tag: u32, cmd: u32, f: BranchCursor | null) => void;
 
-type Interrupt = (quota_ms: f64) => f64;
+type Intr = (quota_ms: f64) => f64;
 
 export class Doorbell implements PacketRoom {
   private readonly sq: Ring;
@@ -40,7 +40,7 @@ export class Doorbell implements PacketRoom {
   /** Told once, as the guest traps. */
   stopped: (() => void) | null = null;
 
-  constructor(mem: ArrayBufferLike, sq_at: u32, cq_at: u32, private readonly interrupt: Interrupt) {
+  constructor(mem: ArrayBufferLike, sq_at: u32, cq_at: u32, private readonly intr: Intr) {
     this.sq = new Ring(mem, sq_at);
     this.cq = new Ring(mem, cq_at);
   }
@@ -81,7 +81,7 @@ export class Doorbell implements PacketRoom {
     if (this.trapped) return NO_WAKE;
     let wake: f64;
     try {
-      wake = this.interrupt(quota_ms);
+      wake = this.intr(quota_ms);
     } catch (err) {
       // Printed here, once: what a caller catches next is only the stop.
       console.error("[xpute/doorbell] the guest trapped:", err);

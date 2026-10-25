@@ -19,10 +19,11 @@ import type { Grant } from "@xpute/host/sched/quantum.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
 
 /** The guest as its platform opened it: its memory, which never moves or
- * grows, and its turn, which returns when it wants the next, in ms. */
+ * grows, and its entry, `intr`, a turn that returns when it wants the next,
+ * in ms. The floor names the entry, as a C runtime names `main`. */
 export interface Guest {
   memory: ArrayBuffer;
-  interrupt(quota_ms: f64): f64;
+  intr(quota_ms: f64): f64;
 }
 
 /** What the program mounts its guest with. */
@@ -53,7 +54,7 @@ export function mount(guest: Guest, plan: Plan): Host {
   const doorbell = new Doorbell(guest.memory, directory.get(key.SUBMISSION), directory.get(key.COMPLETION), (quota_ms) => {
     let wake: f64;
     try {
-      wake = guest.interrupt(quota_ms);
+      wake = guest.intr(quota_ms);
     } finally {
       sys.run(guest.memory, stream);
     }

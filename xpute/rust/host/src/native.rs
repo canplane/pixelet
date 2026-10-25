@@ -4,7 +4,9 @@
 //! core memory (`reserve`), runs every call into the guest on the guest's own
 //! thread, where its `Global`s are sound (`thread`), and keeps the guest's
 //! blocks in its memory (`Alloc`). One guest a process, since its base is
-//! one. Unlike the conformance guest's native form, whose host hands it a
+//! one — one reserve, one core — so its C ABI is xpute's own names,
+//! `xpute_intr` and `xpute_mem`, with no program's prefix (`native_abi!`).
+//! Unlike the conformance guest's native form, whose host hands it a
 //! memory, here the memory is the process's to reserve.
 
 mod alloc;
@@ -19,11 +21,16 @@ use xpute_guest::mem::heap::HeapStat;
 use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
+pub use xpute_guest::entry::{BootInfo, Entry};
 
 /// The guest's numbers, which the host boots it with.
 pub struct Plan {
     /// Reserved once, never grown.
     pub memory_bytes: u32,
+    /// Where the guest's own ranges may begin (`BootInfo::data_end`): the
+    /// library's statics are the process's, so this is the end of whatever
+    /// front the program keeps at the memory's bottom, 0 for none.
+    pub data_end: u32,
     /// The heap's offset, a whole number of pages; it runs to the memory's end.
     pub heap_at: u32,
     pub stack_bytes: usize,
@@ -77,6 +84,17 @@ impl Guest {
     pub fn heap_stat(self) -> HeapStat {
         alloc::stat()
     }
+
+    /// What the host hands the guest booted with `plan`: the memory it
+    /// reserved, the plan's front and clock, and the allocator's reading.
+    pub fn boot_info(self, plan: &Plan) -> BootInfo {
+        BootInfo {
+            given: self.memory().1 as u32,
+            data_end: plan.data_end,
+            clock: plan.clock,
+            heap_stat: alloc::stat,
+        }
+    }
 }
 
 /// The process's clock in milliseconds, from its first reading.
@@ -85,27 +103,35 @@ pub fn now() -> f64 {
     START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-/// Boots the guest with `plan` on the first call and exports its turn and its
-/// memory under the program's prefix: `<prefix>_interrupt(double quota_ms) ->
-/// double` and `<prefix>_memory(uint32_t *bytes) -> uint8_t *`, `bytes` null
-/// or written with the memory's size. `guest()` is the program's for its own calls.
+/// Boots the guest with `plan` on the first call and exports its entry and
+/// its memory under xpute's names: `xpute_intr(double quota_ms) -> double`,
+/// which calls `entry` (`Entry`) on the guest's thread, and
+/// `xpute_mem(uint32_t *bytes) -> uint8_t *`, `bytes` null or written with
+/// the memory's size. `guest()` and `boot_info()` are the program's for its
+/// own calls.
 #[macro_export]
 macro_rules! native_abi {
-    ($prefix:literal, $plan:expr, $entry:expr $(,)?) => {
+    ($plan:expr, $entry:expr $(,)?) => {
         pub fn guest() -> $crate::native::Guest {
             static GUEST: ::std::sync::OnceLock<$crate::native::Guest> = ::std::sync::OnceLock::new();
             *GUEST.get_or_init(|| $crate::native::boot(&$plan))
         }
 
-        #[unsafe(export_name = concat!($prefix, "_interrupt"))]
-        pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
-            guest().run(move || ($entry)(quota_ms))
+        /// What the host hands the guest (xpute_guest::entry `BootInfo`).
+        pub fn boot_info() -> $crate::native::BootInfo {
+            guest().boot_info(&$plan)
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_intr(quota_ms: f64) -> f64 {
+            let entry: $crate::native::Entry = $entry;
+            guest().run(move || entry(quota_ms, boot_info))
         }
 
         /// # Safety
         /// `bytes` is null or points at a `u32` the caller owns.
-        #[unsafe(export_name = concat!($prefix, "_memory"))]
-        pub unsafe extern "C" fn memory(bytes: *mut u32) -> *mut u8 {
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_mem(bytes: *mut u32) -> *mut u8 {
             let (at, n) = guest().memory();
             // SAFETY: the caller's word, or none.
             if let Some(bytes) = unsafe { bytes.as_mut() } {
