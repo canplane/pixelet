@@ -215,11 +215,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - uses: denoland/setup-deno@v2
+      - uses: actions/setup-python@v6
         with:
-          deno-version-file: .tool-versions
+          python-version-file: .tool-versions
       - name: Smoke-test the published routes
-        run: ./script/smoke.ts https://plei.me
+        run: ./script/smoke.py https://plei.me
 
   # The one thing the repository could not answer about itself: what went out
   # in a given build. The counter is an object in the bucket and deliberately

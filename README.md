@@ -132,7 +132,7 @@ What runs across the trees is the Makefile's (`make -j8 check`, its trees in par
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | `./script/usage.ts`                  | What the deployment has used of its free allowances, before a publish                                                    |
 | `./ts/app/web/script/publish.ts`     | Declare in the bucket which baked version of each kind clients read; nothing in the tree changes and nothing is deployed |
-| `./script/smoke.ts <url>` | What a deployment must answer, against a running one                                                                     |
+| `./script/smoke.py <url>` | What a deployment must answer, against a running one                                                                     |
 | `./script/check-diff.ts`             | `check` and `test` over the working tree's changes                                                                       |
 
 The oven's cache and the shelf's sets are files under `./out`, emptied by hand after a re-ingest or a bake change: `rm -rf out/oven`, or `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish` to bake a kind from nothing.

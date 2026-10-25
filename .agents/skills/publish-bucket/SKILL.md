@@ -109,7 +109,7 @@ served bytes, and CI runs it after every deploy; run it by hand after a
 publish, which is not a deploy:
 
 ```bash
-./script/smoke.ts https://plei.me
+./script/smoke.py https://plei.me
 ```
 
 It fails on a tile packed twice (the Worker's `Response` lost

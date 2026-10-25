@@ -4,3 +4,7 @@
 # Deno has no rustup: without one of those this is a number to upgrade to
 # rather than one that arrives.
 deno 2.9.7
+
+# The repository's Python scripts take the standard library alone, and
+# tomllib from 3.11.
+python 3.12
