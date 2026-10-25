@@ -10,9 +10,15 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@pxl/client/abi/cmd.spec.ts";
-import { kernel_orientation, kernel_orientation_lost, kernel_permission, kernel_position, kernel_position_error } from "@pxl/client/abi/control/sensor.ts";
+import type { SensorHeard } from "@pxl/client/bracket.tsx";
 import { PLATFORM } from "./module.ts";
+
+/** Set once at boot, before any sensor starts. */
+let heard: SensorHeard;
+
+export function sensorsHear(given: SensorHeard): void {
+  heard = given;
+}
 
 export function geolocationSupported(): boolean {
   return true;
@@ -63,8 +69,8 @@ function recheck(): void {
   void Location.getForegroundPermissionsAsync().then(({ status }) => {
     if (granted !== false || status !== Location.PermissionStatus.GRANTED) return;
     granted = true;
-    kernel_permission(Sensor.Geolocation, PermissionAnswer.Granted);
-    kernel_permission(Sensor.Orientation, PermissionAnswer.Granted);
+    heard.permission("geolocation", "granted");
+    heard.permission("orientation", "granted");
   });
 }
 
@@ -87,10 +93,10 @@ function watchKeep(watch: Watch, subscription: Location.LocationSubscription): v
 
 let geolocation: Watch | null = null;
 
-function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
+function geolocationFail(watch: Watch, error: "denied" | "other"): void {
   if (geolocation !== watch) return;
   geolocationStop();
-  kernel_position_error(code);
+  heard.positionError(error);
 }
 
 export function geolocationStart(): void {
@@ -98,23 +104,23 @@ export function geolocationStart(): void {
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
   void (async () => {
-    if (!(await permitted())) return geolocationFail(watch, GeolocationErrorCode.PermissionDenied);
+    if (!(await permitted())) return geolocationFail(watch, "denied");
     const subscription = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, altitudeAccuracy, accuracy, heading } = pos.coords;
         // An altitude with no accuracy is none measured.
-        kernel_position(longitude, latitude, known(altitudeAccuracy) === null ? null : altitude, known(accuracy), known(heading));
+        heard.position(longitude, latitude, known(altitudeAccuracy) === null ? null : altitude, known(accuracy), known(heading));
       },
       // Android's watch never ends on its own (expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request);
       // iOS rides out locationUnknown as CoreLocation keeps trying, and ends
       // the stream on any other failure. An ended watch is said as one: the
       // kernel starts it again on a grant or a return to the foreground.
-      () => geolocationFail(watch, GeolocationErrorCode.Other),
+      () => geolocationFail(watch, "other"),
     );
     watchKeep(watch, subscription);
-  })().catch(() => geolocationFail(watch, GeolocationErrorCode.Other));
+  })().catch(() => geolocationFail(watch, "other"));
 }
 
 export function geolocationStop(): void {
@@ -128,8 +134,8 @@ let orientation: Watch | null = null;
 function orientationFail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   orientationRemove();
-  if (refused) kernel_permission(Sensor.Orientation, PermissionAnswer.Denied);
-  else kernel_orientation_lost();
+  if (refused) heard.permission("orientation", "denied");
+  else heard.orientationLost();
 }
 
 export function orientationListen(): void {
@@ -141,7 +147,7 @@ export function orientationListen(): void {
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        kernel_orientation(heading, null, null, null);
+        heard.orientation(heading, null, null, null);
       },
       (reason) => {
         console.error("[sensor] heading:", reason);

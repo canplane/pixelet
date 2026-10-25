@@ -12,7 +12,6 @@ import { handle_slot } from "@xpute/host/abi/handle.ts";
 import { GpuHost } from "@xpute/gpu/host.ts";
 
 import { DEV_BUNDLE } from "@pxl/client/config/bundle.ts";
-import { stream } from "@pxl/client/abi/render/gpu/api.spec.ts";
 
 let host: GpuHost | null = null;
 /** The kernel's memory, which the host reads the stream from and writes answers into. */
@@ -108,7 +107,7 @@ export function unbindSurface(handle: u32): void {
 }
 
 /** With no device the records are dropped: the kernel remakes everything on the next one. */
-export function runGpuStream(memory: ArrayBuffer, at: u32): void {
+export function runGpuStream(memory: ArrayBuffer, at: u32, head: u32): void {
   moduleMemory = memory;
-  host?.run(at, stream.HEAD);
+  host?.run(at, head);
 }

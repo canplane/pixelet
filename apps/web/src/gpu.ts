@@ -1,8 +1,7 @@
 // @pxl/web/gpu.ts
 
-import { Command } from "@pxl/client/abi/cmd.spec.ts";
 import { acquireDevice } from "./webgpu.ts";
-import { request_frame, send_next } from "@pxl/client/host/sched.ts";
+import { request_frame } from "@pxl/client/host/sched.ts";
 import { Gpu, setGpu } from "@pxl/client/host/gpu.ts";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
@@ -20,21 +19,29 @@ let tries = 0;
 /** A device answered once: giving up after it is losing the GPU, not lacking one. */
 let had = false;
 
+/** Told each time a device answers; kept for the asks after a loss. */
+let ready: () => void = () => {};
+
 /** A hidden page draws nothing, so it waits to be shown. */
 function askAgain(): void {
   if (document.visibilityState === "visible") {
-    setTimeout(gpuBoot, RETRY_MS);
+    setTimeout(ask, RETRY_MS);
     return;
   }
   const shown = () => {
     if (document.visibilityState !== "visible") return;
     document.removeEventListener("visibilitychange", shown);
-    gpuBoot();
+    ask();
   };
   document.addEventListener("visibilitychange", shown);
 }
 
-export function gpuBoot(): void {
+export function gpuBoot(told: () => void): void {
+  ready = told;
+  ask();
+}
+
+function ask(): void {
   // The kernel hears of the loss from the device's host (xpute GpuHost);
   // asking again is the page's.
   const lost = () => {
@@ -58,7 +65,7 @@ export function gpuBoot(): void {
     had = true;
     if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
     tries = 0;
-    send_next(Command.GPU_READY);
+    ready();
   }, (err) => {
     console.error("[gpu] the device request failed; nothing can be drawn:", err);
     setGpu(had ? Gpu.Lost : Gpu.Missing);

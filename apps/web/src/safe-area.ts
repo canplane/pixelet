@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { SafeArea } from "@pxl/client/shell/ui/bottom-rest.ts";
+import type { SafeArea } from "@pxl/client/bracket.tsx";
 
 /** `env(safe-area-inset-*)` is only given to a style, so it is read back off an element. */
 function measure(): SafeArea {

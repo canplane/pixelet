@@ -2,12 +2,7 @@
 
 import type { ReactNode } from "react";
 
-export interface SafeArea {
-  top: number;
-  bottom: number;
-  /** The part of `bottom` that takes a touch: Android's navigation buttons, never a gesture area. */
-  tappable: number;
-}
+import type { SafeArea } from "@/bracket.tsx";
 
 export interface AboveKeyboardProps {
   inset: number;

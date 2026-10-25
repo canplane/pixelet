@@ -5,8 +5,14 @@
  * behind a prompt that must be raised inside the gesture.
  */
 
-import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@pxl/client/abi/cmd.spec.ts";
-import { kernel_orientation, kernel_permission, kernel_position, kernel_position_error } from "@pxl/client/abi/control/sensor.ts";
+import type { SensorHeard } from "@pxl/client/bracket.tsx";
+
+/** Set once at boot, before any sensor starts. */
+let heard: SensorHeard;
+
+export function sensorsHear(given: SensorHeard): void {
+  heard = given;
+}
 
 interface IosOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
@@ -43,21 +49,16 @@ export function geolocationStart(): void {
     (pos) => {
       const { latitude, longitude, altitude, altitudeAccuracy, accuracy, heading } = pos.coords;
       // An altitude with no accuracy is none measured: a desktop's location gives 0.
-      kernel_position(longitude, latitude, altitudeAccuracy === null ? null : altitude, accuracy, heading);
+      heard.position(longitude, latitude, altitudeAccuracy === null ? null : altitude, accuracy, heading);
     },
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
       // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
       // so it is left running on any other; the kernel shows the failure until a fix lands.
       if (err.code === err.PERMISSION_DENIED) geolocationStop();
-      const code = err.code === err.PERMISSION_DENIED
-        ? GeolocationErrorCode.PermissionDenied
-        : err.code === err.POSITION_UNAVAILABLE
-        ? GeolocationErrorCode.PositionUnavailable
-        : err.code === err.TIMEOUT
-        ? GeolocationErrorCode.Timeout
-        : GeolocationErrorCode.Other;
-      kernel_position_error(code);
+      heard.positionError(
+        err.code === err.PERMISSION_DENIED ? "denied" : err.code === err.POSITION_UNAVAILABLE ? "unavailable" : err.code === err.TIMEOUT ? "timeout" : "other",
+      );
     },
     // No timeout: one would raise TIMEOUT on a clock while no fix comes
     // (PositionOptions.timeout, Infinity by default), each a turn for nothing.
@@ -69,7 +70,7 @@ let orientationEvent: string | null = null;
 
 function onOrientation(e: Event): void {
   const o = e as IosOrientationEvent;
-  kernel_orientation(o.webkitCompassHeading ?? null, o.alpha, o.beta, o.gamma);
+  heard.orientation(o.webkitCompassHeading ?? null, o.alpha, o.beta, o.gamma);
 }
 
 function listenOrientation(name: string): void {
@@ -86,7 +87,7 @@ export function orientationListen(): void {
 export function permissionFollow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;
-  const onChange = () => kernel_permission(Sensor.Geolocation, status?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied);
+  const onChange = () => heard.permission("geolocation", status?.state === "granted" ? "granted" : "denied");
   navigator.permissions?.query({ name: "geolocation" }).then((s) => {
     if (stopped) return;
     status = s;
@@ -102,17 +103,17 @@ export function permissionFollow(): () => void {
 export function orientationPermit(): Promise<boolean> {
   if (!orientationNeedsPermission() || orientationEvent !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IosOrientationEventCtor).requestPermission!();
-  kernel_permission(Sensor.Orientation, PermissionAnswer.Asking);
+  heard.permission("orientation", "asking");
   return prompt.then(
     (permission) => {
       const granted = permission === "granted";
       if (granted) listenOrientation("deviceorientation");
-      kernel_permission(Sensor.Orientation, granted ? PermissionAnswer.Granted : PermissionAnswer.Denied);
+      heard.permission("orientation", granted ? "granted" : "denied");
       return granted;
     },
     (err) => {
       console.error("[kernel] orientation permission error:", err);
-      kernel_permission(Sensor.Orientation, PermissionAnswer.Failed);
+      heard.permission("orientation", "failed");
       return false;
     },
   );

@@ -6,7 +6,13 @@ import { StyleSheet, View } from "react-native";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { useSafeArea } from "@/bracket.tsx";
 import { useVisualViewport } from "@/bracket.tsx";
-import { WorldSurface } from "@/bracket.tsx";
+import { type InputDriver, WorldSurface } from "@/bracket.tsx";
+import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/control/input.ts";
+import { surface_role } from "@/abi/render/gpu/api.spec.ts";
+import { surface_driver } from "@/abi/render/surface.ts";
+import { useKernel } from "@/abi/shell.ts";
+import { keyDown, keyUp, releaseKeys } from "@/shell/store/keyboard.ts";
+import { releasePointers, worldPointer } from "@/shell/store/pointer.ts";
 import { Corner } from "./corner.tsx";
 import { bottomRest } from "@/shell/ui/bottom-rest.ts";
 import { Toaster } from "@/shell/ui/toast/stack.tsx";
@@ -23,6 +29,29 @@ import { ToastController } from "./toast-controller.tsx";
 const TOAST_LIFT_PX = chrome.inset + 20;
 
 const PANEL_GAP_PX = 12;
+
+const WORLD = surface_driver(surface_role.WORLD);
+
+/** The place's input as the world takes it: pointers and keys through the
+ * shell's own stores first (`worldPointer`, `keyDown`), the box, the wheel and
+ * the visibility to the kernel. */
+const INPUT: InputDriver = {
+  open: kernel_open,
+  rect: kernel_rect,
+  pointer: (phase, kind, id, button, x, y) => worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
+  wheel: kernel_wheel,
+  keyDown,
+  keyUp,
+  releaseKeys,
+  releasePointers,
+  visible: kernel_visible,
+};
+
+/** Alone, so a badge under the pointer re-renders only the surface. */
+function World() {
+  const overBadge = useKernel((s) => s.over_badge);
+  return <WorldSurface surface={WORLD} input={INPUT} overBadge={overBadge} />;
+}
 
 /** The room a panel may fill between the settings button and the dock. */
 function BetweenChrome({ children }: { children: ReactNode }) {
@@ -56,7 +85,7 @@ export function WorldView() {
 
       {/* The world's own pointer puts the keyboard away (`worldPointer`). */}
       <View {...KEEPS_KEYBOARD} style={StyleSheet.absoluteFill}>
-        <WorldSurface />
+        <World />
       </View>
 
       {

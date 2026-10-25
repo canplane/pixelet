@@ -12,13 +12,8 @@ import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
 
-import { PointerPhase, PointerType } from "@pxl/client/abi/cmd.spec.ts";
-import { kernel_open, kernel_rect, kernel_visible } from "@pxl/client/abi/control/input.ts";
-import { worldPointer } from "@pxl/client/shell/store/pointer.ts";
-import { surface_role } from "@pxl/client/abi/render/gpu/api.spec.ts";
-import { surface_close, surface_open, surface_size } from "@pxl/client/abi/render/surface.ts";
+import type { CaseSurfaceProps, PointerPhase, SurfaceDriver, Viewport, WorldSurfaceProps } from "@pxl/client/bracket.tsx";
 import { request_frame } from "@pxl/client/host/sched.ts";
-import type { Viewport } from "@pxl/client/abi/control/input.ts";
 
 interface SurfaceProps extends ViewProps {
   surface: u32;
@@ -28,7 +23,7 @@ interface SurfaceProps extends ViewProps {
 
 const SurfaceView: ComponentType<SurfaceProps> = requireNativeView("PxlPlatform");
 
-function useSurface(role: u32, key: string, opened?: (surface: u32) => () => void) {
+function useSurface(driver: SurfaceDriver, key: string, opened?: (surface: u32) => () => void) {
   const [handle, setHandle] = useState<u32>(0);
   const size = useRef<Viewport>({ width: 0, height: 0, dpr: PixelRatio.get() });
   const bound = useRef<u32>(0);
@@ -39,17 +34,17 @@ function useSurface(role: u32, key: string, opened?: (surface: u32) => () => voi
     const surface = bound.current;
     if (surface === 0) return;
     const { width, height, dpr } = size.current;
-    surface_size(surface, round(width * dpr), round(height * dpr), dpr);
+    driver.size(surface, round(width * dpr), round(height * dpr), dpr);
   };
 
   useEffect(() => {
-    const surface = surface_open(role);
+    const surface = driver.open();
     setHandle(surface);
     const close = surface !== 0 && open.current ? open.current(surface) : () => {};
     return () => {
       close();
       setHandle(0);
-      if (surface !== 0) surface_close(surface);
+      if (surface !== 0) driver.close(surface);
     };
   }, [key]);
 
@@ -70,12 +65,12 @@ function useSurface(role: u32, key: string, opened?: (surface: u32) => () => voi
   return { size, props };
 }
 
-export function WorldSurface() {
-  const { size, props } = useSurface(surface_role.WORLD, "world");
+export function WorldSurface({ surface: driver, input }: WorldSurfaceProps) {
+  const { size, props } = useSurface(driver, "world");
 
   useEffect(() => {
-    const close = kernel_open(() => size.current);
-    const visibility = AppState.addEventListener("change", (state) => kernel_visible(state === "active"));
+    const close = input.open(() => size.current);
+    const visibility = AppState.addEventListener("change", (state) => input.visible(state === "active"));
     return () => {
       visibility.remove();
       close();
@@ -84,12 +79,12 @@ export function WorldSurface() {
 
   const onLayout = (e: LayoutChangeEvent) => {
     props.onLayout?.(e);
-    kernel_rect(0, 0, e.nativeEvent.layout.width, e.nativeEvent.layout.height);
+    input.rect(0, 0, e.nativeEvent.layout.width, e.nativeEvent.layout.height);
     request_frame();
   };
 
   const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
-    for (const t of e.nativeEvent.changedTouches) worldPointer(phase, PointerType.Touch, Number(t.identifier), 0, t.locationX, t.locationY);
+    for (const t of e.nativeEvent.changedTouches) input.pointer(phase, "touch", Number(t.identifier), 0, t.locationX, t.locationY);
   };
 
   return (
@@ -97,15 +92,15 @@ export function WorldSurface() {
       {...props}
       style={StyleSheet.absoluteFill}
       onLayout={onLayout}
-      onTouchStart={touches(PointerPhase.Down)}
-      onTouchMove={touches(PointerPhase.Move)}
-      onTouchEnd={touches(PointerPhase.Up)}
-      onTouchCancel={touches(PointerPhase.Cancel)}
+      onTouchStart={touches("down")}
+      onTouchMove={touches("move")}
+      onTouchEnd={touches("up")}
+      onTouchCancel={touches("cancel")}
     />
   );
 }
 
-export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () => void; openKey: string }) {
-  const { props } = useSurface(surface_role.CASE, openKey, onOpen);
+export function CaseSurface({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
+  const { props } = useSurface(driver, openKey, onOpen);
   return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;
 }

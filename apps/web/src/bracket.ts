@@ -22,6 +22,7 @@ import {
   orientationSilenceIsLoss,
   orientationSupported,
   permissionFollow,
+  sensorsHear,
 } from "./sensor.ts";
 import { storageGet, storageSet } from "./storage.ts";
 import { textRaster, textWidth } from "./text.ts";
@@ -49,6 +50,7 @@ export const PAGE: Bracket = {
   geolocationStop,
   orientationListen,
   orientationRemove,
+  sensorsHear,
   saveFile,
   copyText,
   preferredLanguages,

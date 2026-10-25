@@ -9,14 +9,8 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
-import { PointerPhase, PointerType } from "@pxl/client/abi/cmd.spec.ts";
-import { kernel_open, kernel_rect, kernel_visible, kernel_wheel } from "@pxl/client/abi/control/input.ts";
-import { releasePointers, worldPointer } from "@pxl/client/shell/store/pointer.ts";
-import { keyDown, keyUp, releaseKeys } from "@pxl/client/shell/store/keyboard.ts";
-import { surface_role } from "@pxl/client/abi/render/gpu/api.spec.ts";
-import { surface_close, surface_open, surface_size } from "@pxl/client/abi/render/surface.ts";
+import type { CaseSurfaceProps, InputDriver, PointerKind, PointerPhase, SurfaceDriver, WorldSurfaceProps } from "@pxl/client/bracket.tsx";
 import { request_frame } from "@pxl/client/host/sched.ts";
-import { useKernel } from "@pxl/client/abi/shell.ts";
 import { bindSurface, unbindSurface } from "./webgpu.ts";
 
 /** A wheel line in CSS pixels: a page's default line height. */
@@ -46,11 +40,11 @@ function onRatioChange(then: () => void): () => void {
  * sliding drawer passes through. Safari reports no device pixels, so the CSS
  * box times the ratio stands in, and a change of ratio alone is watched for.
  */
-function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close: () => void } {
-  const handle = surface_open(role);
+function openSurface(canvas: HTMLCanvasElement, surface: SurfaceDriver): { handle: u32; close: () => void } {
+  const handle = surface.open();
   if (handle === 0) return { handle, close: () => {} };
   bindSurface(handle, canvas);
-  const send = (width: u32, height: u32) => surface_size(handle, width, height, dpr());
+  const send = (width: u32, height: u32) => surface.size(handle, width, height, dpr());
   const sendBox = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
   const observer = new ResizeObserver((entries) => {
     const entry = entries[entries.length - 1];
@@ -70,7 +64,7 @@ function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close
     close: () => {
       stopRatio();
       observer.disconnect();
-      surface_close(handle);
+      surface.close(handle);
       unbindSurface(handle);
     },
   };
@@ -82,21 +76,22 @@ function inField(e: KeyboardEvent): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select") !== null);
 }
 
-function pointerKind(e: PointerEvent): PointerType {
-  return e.pointerType === "touch" ? PointerType.Touch : e.pointerType === "pen" ? PointerType.Pen : PointerType.Mouse;
+function pointerKind(e: PointerEvent): PointerKind {
+  return e.pointerType === "touch" ? "touch" : e.pointerType === "pen" ? "pen" : "mouse";
 }
 
-function drive(canvas: HTMLCanvasElement): () => void {
+function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
+  const { keyDown, keyUp, releaseKeys, releasePointers } = input;
   const sendRect = () => {
     const r = canvas.getBoundingClientRect();
-    kernel_rect(r.left, r.top, r.width, r.height);
+    input.rect(r.left, r.top, r.width, r.height);
   };
-  const pointer = (phase: PointerPhase) => (e: PointerEvent) => worldPointer(phase, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
-  const onMove = pointer(PointerPhase.Move);
-  const onUp = pointer(PointerPhase.Up);
-  const onCancel = pointer(PointerPhase.Cancel);
-  const onLeave = pointer(PointerPhase.Out);
-  const down = pointer(PointerPhase.Down);
+  const pointer = (phase: PointerPhase) => (e: PointerEvent) => input.pointer(phase, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
+  const onMove = pointer("move");
+  const onUp = pointer("up");
+  const onCancel = pointer("cancel");
+  const onLeave = pointer("out");
+  const down = pointer("down");
   const onDown = (e: PointerEvent) => {
     sendRect();
     down(e);
@@ -104,7 +99,7 @@ function drive(canvas: HTMLCanvasElement): () => void {
   const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) e.preventDefault();
     const per = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? LINE_PX : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? globalThis.innerHeight : 1;
-    kernel_wheel(e.deltaY * per);
+    input.wheel(e.deltaY * per);
   };
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
   const onResize = () => {
@@ -122,9 +117,9 @@ function drive(canvas: HTMLCanvasElement): () => void {
       releaseKeys();
       releasePointers();
     }
-    kernel_visible(document.visibilityState === "visible");
+    input.visible(document.visibilityState === "visible");
   };
-  const onPageHide = () => kernel_visible(false);
+  const onPageHide = () => input.visible(false);
 
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("pointermove", onMove);
@@ -147,7 +142,7 @@ function drive(canvas: HTMLCanvasElement): () => void {
   sendRect();
   // One viewport, filled again each frame it is asked for.
   const viewport = { width: 0, height: 0, dpr: 1 };
-  const close = kernel_open(() => {
+  const close = input.open(() => {
     viewport.width = canvas.clientWidth;
     viewport.height = canvas.clientHeight;
     viewport.dpr = dpr();
@@ -175,26 +170,25 @@ function drive(canvas: HTMLCanvasElement): () => void {
   };
 }
 
-export function WorldSurface() {
+export function WorldSurface({ surface: driver, input, overBadge }: WorldSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
-  // A badge a tap acts on reads as a link does.
-  const overBadge = useKernel((s) => s.over_badge);
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const surface = openSurface(canvas, surface_role.WORLD);
-    const stop = drive(canvas);
+    const surface = openSurface(canvas, driver);
+    const stop = drive(canvas, input);
     return () => {
       stop();
       surface.close();
     };
   }, []);
 
+  // A badge a tap acts on reads as a link does.
   return <canvas ref={ref} style={{ ...FILL, touchAction: "none", cursor: overBadge ? "pointer" : undefined }} />;
 }
 
-export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () => void; openKey: string }) {
+export function CaseSurface({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const open = useRef(onOpen);
   open.current = onOpen;
@@ -202,7 +196,7 @@ export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const surface = openSurface(canvas, surface_role.CASE);
+    const surface = openSurface(canvas, driver);
     const close = surface.handle !== 0 ? open.current(surface.handle) : () => {};
     return () => {
       close();

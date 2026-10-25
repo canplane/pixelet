@@ -1,7 +1,7 @@
 // @pxl/client/abi/control/input.ts
 
-/** Input as the kernel's commands, which drivers translate their events
- * into, and what each frame the strobe grants submits with the viewport. */
+/** Input as the kernel's commands, from the place's words (`POINTER_PHASE`,
+ * `POINTER_KIND`), and what each frame the strobe grants submits with the viewport. */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Grant } from "@xpute/host/sched/quantum.ts";
@@ -15,18 +15,12 @@ import {
   encode_input_wheel,
   encode_world_frame,
   encode_world_visibility,
-  type PointerPhase,
-  type PointerType,
+  PointerPhase,
+  PointerType,
 } from "@/abi/cmd.spec.ts";
-import { permissionFollow } from "@/bracket.tsx";
+import { permissionFollow, type PointerKind, type PointerPhase as PlacePhase, type Viewport } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { request_frame, ring_now, send_input, strobe } from "@/host/sched.ts";
-
-export interface Viewport {
-  width: f64;
-  height: f64;
-  dpr: f64;
-}
 
 /** Asked every frame, so a resize needs no event of its own. */
 let driver: (() => Viewport) | null = null;
@@ -86,3 +80,19 @@ export function kernel_visible(visible: boolean): void {
     request_frame();
   } else strobe.stop();
 }
+
+/** A place's pointer phase, as the kernel numbers it. */
+export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
+  down: PointerPhase.Down,
+  move: PointerPhase.Move,
+  up: PointerPhase.Up,
+  cancel: PointerPhase.Cancel,
+  out: PointerPhase.Out,
+};
+
+/** A place's pointer kind, as the kernel numbers it. */
+export const POINTER_KIND: Readonly<Record<PointerKind, PointerType>> = {
+  mouse: PointerType.Mouse,
+  touch: PointerType.Touch,
+  pen: PointerType.Pen,
+};

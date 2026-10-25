@@ -1,10 +1,11 @@
 // @pxl/client/abi/boot.ts
 
 /**
- * Boots the kernel: fills the host's slots with what pixelet's numbers mean
- * (the roots, the program's calls, the stop report, each frame's submission
- * and the signals), then hands the completion ring's signals to whoever runs
- * them.
+ * Boots the kernel: hands the place the guest's plan, the sensors' sink and
+ * what to call when a GPU answers; fills the host's slots with what pixelet's
+ * numbers mean (the roots, the program's calls, the stop report, each frame's
+ * submission and the signals); then hands the completion ring's signals to
+ * whoever runs them.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
@@ -27,13 +28,16 @@ import { bind_roots, commit_root, open_root } from "@/namespace/roots.ts";
 import { kept_refused, migrate_kept, read_kept } from "@/namespace/storage.ts";
 import { GUEST, GUEST_DOORBELL, load_guest } from "@/host/mem.ts";
 import { kept } from "@/abi/host.spec.ts";
-import { DIRECTORY_AT } from "@/abi/mem/mem.spec.ts";
+import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "@/abi/mem/mem.spec.ts";
+import { key } from "@/abi/directory.spec.ts";
+import { stream } from "@/abi/render/gpu/api.spec.ts";
+import { SENSOR_HEARD } from "@/abi/control/sensor.ts";
 import { submit_frame } from "@/abi/control/input.ts";
 import { text_call } from "@/abi/text.ts";
 import { start_sys } from "@/host/sys.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
 import { bytes_at } from "@/host/module.ts";
-import { gpuBoot } from "@/bracket.tsx";
+import { gpuBoot, type GuestPlan, HANDHELD, sensorsHear } from "@/bracket.tsx";
 import { onlineWatch } from "@/bracket.tsx";
 import { send_next, start_sched, strobe } from "@/host/sched.ts";
 import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
@@ -78,11 +82,20 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
 /** Called once from shell/bootstrap.ts, so boot order is explicit, not import order. */
 export async function boot_kernel(): Promise<void> {
   start_sys({ open: open_root, commit: commit_root, program: text_call, abort });
-  await load_guest(DIRECTORY_AT);
+  // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
+  const plan: GuestPlan = {
+    bytes: HANDHELD ? PHONE_BYTES : DESKTOP_BYTES,
+    region: REGION_BYTES,
+    directory_at: DIRECTORY_AT,
+    gpu_stream: key.GPU_STREAM,
+    gpu_head: stream.HEAD,
+  };
+  await load_guest(plan);
   bind_roots();
   start_sched(submit_frame);
+  sensorsHear(SENSOR_HEARD);
   GUEST_DOORBELL.signal = on_signal;
-  gpuBoot();
+  gpuBoot(() => send_next(Command.GPU_READY));
   onlineWatch();
   const boot = (settings: string) =>
     encode_world_boot(
