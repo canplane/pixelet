@@ -22,12 +22,12 @@
 //! (xpute_guest::mem::base): `boot` runs once with the guest's numbers, and
 //! only what it returns reaches the guest.
 //!
-//! What a program writes is its allocator, its boot with its numbers, and
-//! its C ABI under its own prefix, one line over `Guest` each, as the
-//! crate's example shows. The C symbols are the program's to write out: they
-//! carry its prefix, since a process has one symbol namespace, and
-//! `macro_rules!` cannot join a prefix to a name, so a macro would be handed
-//! every whole name and save no line.
+//! What a program writes is its allocator and one `native_abi!` with its
+//! prefix, its numbers and its guest's entry, as the crate's example shows:
+//! the macro boots the guest on the first call and exports the two calls
+//! every such guest has, a turn and its memory, under the prefix, since a
+//! process has one symbol namespace. What else the program's app calls is
+//! the program's to export, over the `guest()` the macro defines.
 
 mod alloc;
 mod reserve;
@@ -143,4 +143,53 @@ impl Guest {
 pub fn now() -> f64 {
     static START: OnceLock<Instant> = OnceLock::new();
     START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
+/// A guest's boot and the C ABI every native guest has, under the program's
+/// prefix: what a program would otherwise copy from guest to guest.
+///
+/// `native_abi!("demo", plan, entry)` defines, where it is written:
+///
+/// - `guest()`, the `Guest` booted with `plan` (a `Plan` expression,
+///   evaluated once) on the first call, from whichever thread makes it;
+/// - `interrupt`, exported as `demo_interrupt(double quota_ms) -> double`:
+///   `entry(quota_ms)` run on the guest's thread, a turn of `quota_ms` and
+///   when the guest wants the next;
+/// - `memory`, exported as `demo_memory(uint32_t *bytes) -> uint8_t *`: the
+///   memory's first byte, with its bytes written through `bytes`, which may
+///   be null.
+///
+/// The prefix is the program's, since a process has one symbol namespace;
+/// the Rust names are the macro's, for the program's own calls over them.
+#[macro_export]
+macro_rules! native_abi {
+    ($prefix:literal, $plan:expr, $entry:expr $(,)?) => {
+        /// The guest, booted with the program's plan on the first call, from
+        /// whichever thread makes it.
+        pub fn guest() -> $crate::native::Guest {
+            static GUEST: ::std::sync::OnceLock<$crate::native::Guest> = ::std::sync::OnceLock::new();
+            *GUEST.get_or_init(|| $crate::native::boot(&$plan))
+        }
+
+        /// A turn of `quota_ms` on the guest's thread, and when the guest
+        /// wants the next.
+        #[unsafe(export_name = concat!($prefix, "_interrupt"))]
+        pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
+            guest().run(move || ($entry)(quota_ms))
+        }
+
+        /// The memory's first byte, with its bytes written through `bytes`.
+        ///
+        /// # Safety
+        /// `bytes` is null or points at a `u32` the caller owns.
+        #[unsafe(export_name = concat!($prefix, "_memory"))]
+        pub unsafe extern "C" fn memory(bytes: *mut u32) -> *mut u8 {
+            let (at, n) = guest().memory();
+            // SAFETY: the caller's word, or none.
+            if let Some(bytes) = unsafe { bytes.as_mut() } {
+                *bytes = n as u32;
+            }
+            at.as_ptr()
+        }
+    };
 }

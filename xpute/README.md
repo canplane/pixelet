@@ -37,7 +37,7 @@ Everything else is written into the memory while a turn runs. The host's command
 
 Golden records under `spec/golden/` hold the languages to each other wherever bytes cross.
 
-`guest` and `host` are the arrangement above, named by the end each is. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `kit` does. So does the host end, in TypeScript and in Rust, and those differ by what each platform needs, not by role: TypeScript's reserves a module's memory, rings the doorbell, answers the system calls and paces the quantum; Rust's hosts a guest linked into its own native program, reserving the memory there, running the guest on a thread of its own, and keeping the guest's blocks in its memory.
+`guest` and `host` are the arrangement above, named by the end each is. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `kit` does. The host end exists in TypeScript and in Rust too, and those are one role but not one module list: each holds what its platform needs. TypeScript's reserves a module's memory, rings the doorbell, answers the system calls and paces the quantum; Rust's hosts a guest linked into its own native program, reserving the memory there, running the guest on a thread of its own, and keeping the guest's blocks in its memory.
 
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
@@ -62,21 +62,14 @@ fn main() {
 }
 ```
 
-A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator, boots once with its numbers, and writes its C ABI under its own prefix over the `Guest` boot returns, one line each (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
+A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator and writes one `native_abi!` with its prefix, its numbers and the guest's entry, which boots the guest on the first call, installs the plan's clock (`native::now` by default) on the guest's thread, and exports `<prefix>_interrupt` and `<prefix>_memory` (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
 
 ```rust
 #[global_allocator]
 static ALLOC: native::Alloc = native::Alloc;
 
-fn guest() -> native::Guest {
-    static GUEST: OnceLock<native::Guest> = OnceLock::new();
-    *GUEST.get_or_init(|| native::boot(&native::Plan::new(16 << 20, 1 << 16))) // memory, heap_at
-}
-
-#[no_mangle]
-pub extern "C" fn demo_interrupt(quota_ms: f64) -> f64 {
-    guest().run(move || my_guest::interrupt(quota_ms))
-}
+// memory, heap_at (a whole number of 4 KiB pages); the turn runs my_guest::interrupt
+xpute_host::native_abi!("demo", native::Plan::new(16 << 20, 1 << 16), my_guest::interrupt);
 ```
 
 ## What it leaves to whoever uses it
