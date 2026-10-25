@@ -155,7 +155,7 @@ free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
 that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
 Writes are outside it, and nothing configures a spending cap: a publish is a
-pyramid's worth of Class A operations, so `./script/usage.py` comes before one.
+pyramid's worth of Class A operations, so the publish-bucket skill checks the month's count before one.
 
 The bucket, `pixelet-tiles`, holds everything the client fetches that is not the app itself:
 

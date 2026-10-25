@@ -3,7 +3,7 @@
 # Hetzner traffic, which the free Workers plan does not bound. Uses
 # wrangler's credential and hcloud's active context.
 #
-#   ./script/usage.py
+#   ./.agents/skills/publish-bucket/usage.py
 
 import json
 import os
