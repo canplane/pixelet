@@ -18,18 +18,20 @@ The kernel is one order of dependency, a DAG rather than a pipeline: an edge may
   domain/               the world and the eye, two heads over one trunk
 
   asks                                                         answers
-    │   scene/     a head: what this frame draws                  ▲
-    │   control/   a head: moves the eye, asks the query          │
-    │   chunk.rs   a cube about the eye, by address, for now      │
-    │   view/      the trunk: the pose, the lens, demand          │
-    │   query/     the trunk: the only seam                       │
-    │   layer/     the trunk: the base and the object             │
+    │   scene/       a head: what this frame draws                ▲
+    │   control/     a head: moves the eye, asks the query        │
+    │   chunk.rs     a cube about the eye, by address, for now    │
+    │   approach.rs  the easing both heads share                  │
+    │   param.rs     the tuned number both heads share            │
+    │   view/        the trunk: the pose, the lens, demand        │
+    │   query/       the trunk: the only seam                     │
+    │   layer/       the trunk: the base and the object           │
   ──┼─────────────────────────────────────────────────────────────┼─────
   sys/                  what all of it stands on                  │
-    ▼   io/        reads, credits, the host's end                 │
-        sched/     a turn's edge and its phases
-        mem/       the core memory's sections
-        load.rs    what the kernel loads, which io and sched read
+    ▼   io/          reads, credits, the host's end               │
+        sched/       a turn's edge and its phases
+        mem/         the core memory's sections
+        load.rs      what the kernel loads, which io and sched read
 
   leaves   under their lowest reader: the settings in view/, the models
            and decor in query/, the billboards in scene/, each knob in

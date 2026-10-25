@@ -9,6 +9,7 @@ pub mod approach;
 pub mod chunk;
 pub mod control;
 pub mod layer;
+pub mod param;
 pub mod query;
 pub mod scene;
 pub mod view;

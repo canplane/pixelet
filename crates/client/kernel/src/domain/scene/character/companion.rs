@@ -43,7 +43,7 @@ const SETTLE_DELAY_S: f64 = 0.15;
 
 // The world scroll's own rate: the two cancel, holding the character at
 // screen center, so this is the only position smoothing while following.
-const FOLLOW_LERP_K: f64 = crate::domain::approach::POS_DAMP;
+const FOLLOW_LERP_K: f64 = crate::domain::param::POS_DAMP;
 
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;

@@ -6,12 +6,13 @@
 
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::domain::approach::{approach_angle, approach_vec, POS_DAMP};
+use crate::domain::approach::{approach_angle, approach_vec};
 use crate::domain::control::camera::controller::look_domain;
 use crate::domain::control::camera::controller::{camera, eye_world, focus, set_eye_world};
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::navigation::support::target;
 use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
+use crate::domain::param::POS_DAMP;
 use xpute_guest::global::Global;
 
 /// Canonical, so it holds still as the eye goes round the world. None until first put.

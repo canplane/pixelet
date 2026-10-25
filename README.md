@@ -215,14 +215,14 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
 
-| Where                   | `pxl-kernel` modules                       |
-| ----------------------- | ------------------------------------------ |
-| the top                 | `turn` `door` `shell`                      |
-| `domain`, the two heads | `scene` `control`                          |
-| `domain`, the trunk     | `view` `query` `layer`                     |
-| `domain`, at its root   | `approach`, which both heads read; `chunk` |
-| `sys`, under everyone   | `io` `sched` `mem` `load`                  |
-| beside                  | `profiler`                                 |
+| Where                   | `pxl-kernel` modules                               |
+| ----------------------- | -------------------------------------------------- |
+| the top                 | `turn` `door` `shell`                              |
+| `domain`, the two heads | `scene` `control`                                  |
+| `domain`, the trunk     | `view` `query` `layer`                             |
+| `domain`, at its root   | `approach` `param`, which both heads read; `chunk` |
+| `sys`, under everyone   | `io` `sched` `mem` `load`                          |
+| beside                  | `profiler`                                         |
 
 A leaf sits under its lowest reader: the settings under `view`, the models and decor under `query`, the billboards under `scene`, and each tuned number in a `param` beside the lowest part that reads it.
 

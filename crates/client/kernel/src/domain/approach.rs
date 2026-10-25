@@ -7,9 +7,6 @@
 
 use xpute_kit::math::scalar::wrap;
 
-/// The rate a position eases at, the camera's and the companion's alike.
-pub const POS_DAMP: f64 = 10.0;
-
 /// `1 - e^(-k·delta)`: the same curve at any frame rate.
 pub fn damp_alpha(k: f64, delta: f64) -> f64 {
     1.0 - libm::exp(-k * delta)

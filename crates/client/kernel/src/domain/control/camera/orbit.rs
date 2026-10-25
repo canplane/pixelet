@@ -12,7 +12,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_kit::math::scalar::clamp;
 
-use crate::domain::approach::{approach_angle, approach_vec, POS_DAMP};
+use crate::domain::approach::{approach_angle, approach_vec};
 use crate::domain::control::camera::controller::{camera, focus, focus_world, look_dir, look_domain, set_eye_world};
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
@@ -20,6 +20,7 @@ use crate::domain::control::navigation::support::target;
 use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
 use crate::domain::control::param::{MAX_DIST, MIN_DIST};
+use crate::domain::param::POS_DAMP;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use terrain_gate::{allowed_view, climb_polar};
 use xpute_guest::global::Global;
