@@ -156,6 +156,9 @@ struct Run {
     at: Vec<[f64; 2]>,
     cell: Vec<[f64; 2]>,
     terrain: Vec<i32>,
+    /// The piece's line whole, in the ring's cell coordinates: its geometry is
+    /// every tile's alike, wherever its ring cuts it, though its ground is not.
+    whole: Polyline,
     ends: [End; 2],
     /// Whether an end is where the ring cut the piece.
     clipped: [bool; 2],
@@ -479,6 +482,7 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
                 piece: s.piece.clone(),
                 k0,
                 cell: at.iter().map(|p| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U]).collect(),
+                whole: Polyline::of(s.piece.way.points.iter().map(|p| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U])),
                 at,
                 terrain,
                 ends,
@@ -677,8 +681,10 @@ fn cell_key(c: [f64; 2]) -> (i64, i64) {
     (c[0].floor() as i64, c[1].floor() as i64)
 }
 
+/// The way's heading end to end, whole, not as far as the ring cut it.
 fn heading_of(r: &Run) -> Option<f64> {
-    let (s, e) = (r.cell[0], r.cell[r.cell.len() - 1]);
+    let p = &r.whole.points;
+    let (s, e) = (p[0], p[p.len() - 1]);
     let d = [e[0] - s[0], e[1] - s[1]];
     (d != [0.0, 0.0]).then(|| libm::atan2(d[1], d[0]).to_degrees())
 }
@@ -703,10 +709,12 @@ fn cells_box(cells: &[[f64; 2]]) -> [[f64; 2]; 2] {
 }
 
 fn lateral(p: [f64; 2], r: &Run) -> f64 {
-    r.cell.windows(2).map(|w| dist_to_segment(p, w[0], w[1])).fold(f64::INFINITY, f64::min)
+    r.whole.points.windows(2).map(|w| dist_to_segment(p, w[0], w[1])).fold(f64::INFINITY, f64::min)
 }
 
-/// Arnis `side_by_side`: parallel decks forming one, across layers only when they touch.
+/// Arnis `side_by_side`: parallel decks forming one, across layers only when they touch. Weighed
+/// on the ways whole, as Arnis weighs an OSM way, so two tiles that see both decide alike wherever
+/// their rings cut them.
 fn side_by_side(a: &Run, b: &Run, units: Units) -> bool {
     let (Some(ha), Some(hb)) = (heading_of(a), heading_of(b)) else { return false };
     if !parallel(ha, hb) {
@@ -717,9 +725,8 @@ fn side_by_side(a: &Run, b: &Run, units: Units) -> bool {
     let reach = |r: &Run| f64::from(ways::reach((r.width_u / CELL_U) as f32));
     let touching = reach(a) + reach(b) + f64::from(units.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same { touching.max(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M))) } else { touching };
-    let (short, long) = if a.cell.len() <= b.cell.len() { (a, b) } else { (b, a) };
-    let n = short.cell.len() - 1;
-    let offsets: Vec<f64> = [0.0, 0.25, 0.5, 0.75, 1.0].iter().map(|f| lateral(short.cell[round(f * n as f64) as usize], long)).collect();
+    let (short, long) = if a.whole.length() <= b.whole.length() { (a, b) } else { (b, a) };
+    let offsets: Vec<f64> = [0.0, 0.25, 0.5, 0.75, 1.0].iter().map(|f| lateral(short.whole.at(f * short.whole.length()), long)).collect();
     let alongside = offsets.iter().filter(|&&d| d <= max).count();
     if same {
         alongside * 2 > offsets.len()
@@ -851,7 +858,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
     }
     // two decks whose cells lie further apart than any deck beside another (`side_by_side`'s
     // farthest) are not weighed
-    let boxes: Vec<[[f64; 2]; 2]> = road.iter().map(|&q| cells_box(&runs[q].cell)).collect();
+    let boxes: Vec<[[f64; 2]; 2]> = road.iter().map(|&q| cells_box(&runs[q].whole.points)).collect();
     let reach = |q: usize| f64::from(ways::reach((runs[q].width_u / CELL_U) as f32));
     let farthest = |a: usize, b: usize| (reach(a) + reach(b) + f64::from(units.c(SIDE_DECK_EDGE_GAP_M))).max(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M)));
     for i in 0..road.len() {
@@ -889,7 +896,8 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             }
             group_nodes.extend(seen);
         }
-        let is_boundary = |n: &End| node_members.get(n).copied().unwrap_or(0) <= 1;
+        // an end the ring cut is none (the module's rules): no anchor, no free end, no ramp
+        let is_boundary = |n: &End| !matches!(n, End::Ring(..)) && node_members.get(n).copied().unwrap_or(0) <= 1;
         let joins_other = |n: &End| bridge_nodes.get(n).is_some_and(|qs| qs.iter().any(|q| !g.contains(q)));
         let max_layer = g.iter().filter_map(|&q| runs[q].piece.way.tags.level).map(|l| l.max(0)).max().unwrap_or(0);
         let terrain_max = g.iter().flat_map(|&q| runs[q].terrain.iter().copied()).max().unwrap_or(0);
@@ -926,8 +934,14 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         }
         let anchors_end = |n: &End| is_boundary(n) && !ramp_ends.contains(n) && !joins_other(n);
 
-        // the profile's axis: the two member ends furthest apart
-        let end_points: Vec<[f64; 2]> = g.iter().flat_map(|&q| [runs[q].cell[0], runs[q].cell[runs[q].cell.len() - 1]]).collect();
+        // the profile's axis: the two member ends furthest apart, the ways' own ends, not where the ring cut them
+        let end_points: Vec<[f64; 2]> = g
+            .iter()
+            .flat_map(|&q| {
+                let p = &runs[q].whole.points;
+                [p[0], p[p.len() - 1]]
+            })
+            .collect();
         let mut axis = (end_points[0], end_points[0]);
         let mut best = 0.0;
         for (i, a) in end_points.iter().enumerate() {
@@ -949,7 +963,11 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             .iter()
             .map(|&q| runs[q].cell.iter().map(|c| (c[0] - axis.0[0]) * dir[0] + (c[1] - axis.0[1]) * dir[1]).collect())
             .collect();
-        let follows_axis = axis_len >= 1.0 && us.iter().all(|u| is_monotonic(u, f64::from(units.c(PROFILE_MONOTONIC_TOLERANCE_M))));
+        // whether each way runs along it, judged on the way whole
+        let along = |c: &[f64; 2]| (c[0] - axis.0[0]) * dir[0] + (c[1] - axis.0[1]) * dir[1];
+        let follows_axis = axis_len >= 1.0
+            && g.iter()
+                .all(|&q| is_monotonic(&runs[q].whole.points.iter().map(along).collect::<Vec<f64>>(), f64::from(units.c(PROFILE_MONOTONIC_TOLERANCE_M))));
 
         // what the deck must meet or clear, as (axis position, height)
         let mut reqs: Vec<(f64, f64)> = Vec::new();
