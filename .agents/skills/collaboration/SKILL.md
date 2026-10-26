@@ -1,6 +1,6 @@
 ---
 name: collaboration
-description: How sessions running side by side share one checkout — on main's tip, no worktrees, no holds, each committing its own paths and pushing main as it is, each building into its own target. Use when another session works in the same tree, and before holding a path, waiting for a peer, committing or pushing main, or building Rust.
+description: How sessions running side by side share one checkout — on main's tip, no worktrees, no holds, each building into its own target. Use when another session works in the same tree, and before holding a path, waiting for a peer, or building Rust.
 ---
 
 # Collaboration
@@ -13,11 +13,6 @@ none of it waits:
   the repository.
 - No holds. A path is never reserved, and another session's announced work is
   no reason to stop yours.
-- The index is shared: commit your own paths, `git commit -- <paths>`, never
-  the staged set, which may hold another session's.
-- Push main as it is, other sessions' commits included, and nothing is run
-  before such a push: a check is for sending a line out (deploy skill), not
-  for syncing.
 - When two collide, the one whose session id (`$CLAUDE_CODE_SESSION_ID`) sorts
   first resolves it.
 

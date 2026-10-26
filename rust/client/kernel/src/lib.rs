@@ -6,6 +6,7 @@
 
 pub mod domain;
 pub mod door;
+pub mod pointer;
 pub mod profiler;
 pub mod shell;
 pub mod sys;

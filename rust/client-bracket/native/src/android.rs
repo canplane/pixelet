@@ -1,15 +1,16 @@
 // pxl-native/android.rs
 
-//! The kernel as an Android app reaches it. Kotlin's `PxlGuest`
-//! (ts/app/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlGuest.kt)
+//! The kernel as an Android app reaches it. Kotlin's `PxlNative`
+//! (ts/app/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlNative.kt)
 //! declares these as `external` functions, and each is the C ABI's call an
-//! iPhone's Swift makes (lib.rs, surface.rs, unpack.rs) under the name JNI
-//! looks for. Only JNI's own values cross: a number, an array, the memory as
-//! a direct buffer over the memory — which Kotlin hands JavaScript as it is,
-//! as Swift hands it the memory — and a view's `Surface`, made the native
-//! window wgpu draws through.
+//! iPhone's Swift makes (include/pxl_native.h) under the name JNI looks for.
+//! Only JNI's own values cross: a number, an array, the memory as a direct
+//! buffer over the memory — which Kotlin hands JavaScript as it is, as Swift
+//! hands it the memory — and a view's `Surface`, made the native window wgpu
+//! draws through (`target`).
 
 use fnv::FnvHashMap;
+use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::{Mutex, OnceLock};
 
@@ -38,7 +39,7 @@ unsafe fn jni<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
 
 /// A turn of `quota_ms`: the entry, xpute_intr (xpute-host native `native_abi!`, lib.rs).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_intr(
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_intr(
     _env: *mut JNIEnv,
     _class: jclass,
     quota_ms: jdouble,
@@ -51,7 +52,7 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_intr(
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_mem(
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_mem(
     env: *mut JNIEnv,
     _class: jclass,
 ) -> jobject {
@@ -99,7 +100,7 @@ unsafe fn with_bytes<R>(
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
     env: *mut JNIEnv,
     _class: jclass,
     packed: jbyteArray,
@@ -153,7 +154,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(
     }
 }
 
-/// The VM, `PxlGuest`'s class held past the call, and its static `wake`:
+/// The VM, `PxlNative`'s class held past the call, and its static `wake`:
 /// what a completion calls to ask a turn (`wake`). Taken as the device opens,
 /// on a thread Java made, since a thread the host made finds no class of the
 /// app's by name.
@@ -170,13 +171,14 @@ unsafe impl Sync for Wake {}
 
 static WAKE: OnceLock<Wake> = OnceLock::new();
 
-/// Opens the device: whether it opened (surface.rs `pxl_gpu_open`). `this` is
-/// `PxlGuest`, a Kotlin object, whose calls are its instance's.
+/// Opens the device, `wake` what a completion calls: whether it opened
+/// (`xpute_gpu_open`, `xpute_gpu_wake_on`). `this` is `PxlNative`, a Kotlin
+/// object, whose calls are its instance's.
 ///
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_gpuOpen(
     env: *mut JNIEnv,
     this: jobject,
 ) -> jboolean {
@@ -201,15 +203,17 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(
             }
         }
     }
-    jboolean::from(crate::surface::pxl_gpu_open() == 0)
+    crate::surface::xpute_gpu_wake_on(wake);
+    jboolean::from(crate::surface::xpute_gpu_open() == 0)
 }
 
-/// `PxlGuest.wake`, from whichever thread learned of a completion (surface.rs
-/// `wake`). JNI may be called only from a thread attached to the VM, so the
-/// caller is attached, for good and as a daemon: the host's threads live as
-/// long as it does, and a daemon keeps no VM from exiting. Kotlin sends the
-/// app's event from there, which Expo carries to the JavaScript thread.
-pub fn wake() {
+/// `PxlNative.wake`, from whichever thread learned of a completion
+/// (xpute-gpu host native `wake_on`). JNI may be called only from a thread
+/// attached to the VM, so the caller is attached, for good and as a daemon:
+/// the host's threads live as long as it does, and a daemon keeps no VM from
+/// exiting. Kotlin sends the app's event from there, which Expo carries to
+/// the JavaScript thread.
+extern "C" fn wake() {
     let Some(&Wake { vm, class, method }) = WAKE.get() else {
         return;
     };
@@ -232,13 +236,14 @@ pub fn wake() {
 
 /// Binds the kernel's surface `handle` to a view's `surface`, through the
 /// native window it is: 0, -2 when no device is open, -3 when the system
-/// would not make a surface of it (surface.rs `bind`).
+/// would not make a surface of it, -4 when a newer handle has bound its slot
+/// since (`xpute_gpu_surface_bind`).
 ///
 /// # Safety
 /// Called by JNI, with a live `android.view.Surface`, which its view keeps
 /// until it has unbound it.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind(
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBind(
     env: *mut JNIEnv,
     _class: jclass,
     handle: jint,
@@ -251,14 +256,8 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind
         return -3;
     };
     let at = window.as_ptr().expose_provenance();
-    let made = move || wgpu::SurfaceTargetUnsafe::RawHandle {
-        raw_display_handle: Some(RawDisplayHandle::Android(AndroidDisplayHandle::new())),
-        raw_window_handle: RawWindowHandle::AndroidNdk(AndroidNdkWindowHandle::new(
-            NonNull::new(core::ptr::with_exposed_provenance_mut(at)).or_bug(Errno::EFAULT),
-        )),
-    };
     // SAFETY: the window is held until the surface over it is unbound.
-    let bound = unsafe { crate::surface::bind(handle, made) };
+    let bound = unsafe { crate::surface::xpute_gpu_surface_bind(handle, window.as_ptr().cast()) };
     let let_go = if bound == 0 {
         WINDOWS
             .lock()
@@ -278,15 +277,15 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind
 }
 
 /// Lets `handle`'s surface go, and the window it drew through
-/// (surface.rs `pxl_surface_unbind`).
+/// (`xpute_gpu_surface_unbind`).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceUnbind(
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
     _env: *mut JNIEnv,
     _class: jclass,
     handle: jint,
 ) {
     let handle = handle as u32;
-    crate::surface::pxl_surface_unbind(handle);
+    crate::surface::xpute_gpu_surface_unbind(handle);
     let window = WINDOWS
         .lock()
         .or_bug(Errno::ENOTRECOVERABLE)
@@ -297,6 +296,15 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceUnbind(
         unsafe {
             ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(at))
         };
+    }
+}
+
+/// What a view's native window is made for wgpu to draw through
+/// (xpute-gpu host native `bind`).
+pub fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
+    wgpu::SurfaceTargetUnsafe::RawHandle {
+        raw_display_handle: Some(RawDisplayHandle::Android(AndroidDisplayHandle::new())),
+        raw_window_handle: RawWindowHandle::AndroidNdk(AndroidNdkWindowHandle::new(window)),
     }
 }
 

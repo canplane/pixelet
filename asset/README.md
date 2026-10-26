@@ -16,7 +16,7 @@ from. Data, not code — nothing in the repository imports a file from here.
 asset/
 ├── content/
 │   ├── actor/   character and companion models (Kenney)
-│   ├── cube/    the texture pack's tiles: terrain/ and block/ at 256²
+│   ├── cube/    the texture pack's tiles: terrain/ and object/ at 256²
 │   ├── decor/   trees, boats, cars, trains (Kenney)
 │   └── sky/     the Moon's near side (NASA), cloud/: the cumulus (Quaternius, CC0)
 └── raw/

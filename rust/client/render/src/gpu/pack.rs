@@ -8,13 +8,13 @@
 
 use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
 use pxl_spec::asset::ingested::{CubeFace, PACK};
-use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
+use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_usage, bytes, release, texture_usage, Format, Gpu, Image};
 use crate::gpu::mip::{mip_levels, Mips};
-use crate::mesh::paint::palette::{palette, LAYERS};
+use crate::mesh::paint::palette::{palette, LAYERS, SENTINELS};
 
 pub const LAYER_TEX_SZ: u32 = PACK.cell;
 
@@ -53,6 +53,14 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
                 slot_of(&mut slots, bottom),
             )
         })
+        .collect::<Vec<u32>>();
+    // A sentinel drawn wears its one tile on every face.
+    let table = table
+        .into_iter()
+        .chain(SENTINELS.iter().map(|&s| {
+            let n = slot_of(&mut slots, shipped_sentinel_tile(s));
+            slot_word(n, n, n)
+        }))
         .collect();
     (slots, table)
 }

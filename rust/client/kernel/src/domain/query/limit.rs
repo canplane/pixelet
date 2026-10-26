@@ -3,8 +3,9 @@
 //! Where the world ends for what moves in it: the service area, the shards
 //! its source serves (sys/io/source.rs), which a walker does not leave, and where
 //! a block may be placed in or taken from, over ground the world knows
-//! between its bedrock and its ceiling. Every walk and every edit asks these,
-//! and nothing else decides them.
+//! between its bedrock and its ceiling. Every walker's walk and every edit
+//! asks these, and nothing else decides them; the camera is no walker and
+//! asks none (query/support.rs `step_slide`).
 
 use pxl_spec::block::limit::{at_edge, bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;

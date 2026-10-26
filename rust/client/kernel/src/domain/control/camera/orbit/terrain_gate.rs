@@ -63,7 +63,9 @@ fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     );
     // Near, the eye's way walks the leaves; far, it is a map and goes through.
     // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
-    let walked = access.step_slide(&from, &eye, &eye, false).unwrap_or(eye);
+    let walked = access
+        .step_slide(&from, &eye, &eye, false, false)
+        .unwrap_or(eye);
     if i64::from(walked[0]) != i64::from(eye[0]) || i64::from(walked[1]) != i64::from(eye[1]) {
         return None;
     }

@@ -7,7 +7,9 @@
 //! setting's and its value as it crosses (a choice's option by its number),
 //! each pair two unsigned LEB128s, in its kept slot (sys/io/file.rs `Kept`, which
 //! checks the slot's format). schema.json gives a number out once, so what
-//! was kept never reads as another setting.
+//! was kept never reads as another setting. A setting schema.json marks
+//! `kept` false is the session's: neither written nor read, so it starts at
+//! its default.
 
 pub use crate::domain::view::setting::schema_spec::{
     AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings,
@@ -48,7 +50,9 @@ impl Settings {
         if !self.set(key, value) {
             return None;
         }
-        *UNKEPT.get(|| false) = true;
+        if key.kept() {
+            *UNKEPT.get(|| false) = true;
+        }
         Some(true)
     }
 
@@ -56,7 +60,7 @@ impl Settings {
         let mut bytes = Vec::new();
         for key in SettingKey::ALL {
             let value = self.get(key);
-            if !is_offered(key, value) || value == Settings::DEFAULT.get(key) {
+            if !key.kept() || !is_offered(key, value) || value == Settings::DEFAULT.get(key) {
                 continue;
             }
             leb(&mut bytes, key as u32);
@@ -166,13 +170,15 @@ pub fn settings_keep_step() {
     }
 }
 
-/// A number no setting has is passed over, as is a value its setting cannot
-/// hold, and a pair cut short ends it.
+/// A number no setting has is passed over, as is a session's setting and a
+/// value its setting cannot hold, and a pair cut short ends it.
 fn read_kept(bytes: &[u8]) -> Settings {
     let mut s = Settings::DEFAULT;
     let mut at = 0;
     while let (Some(number), Some(value)) = (unleb(bytes, &mut at), unleb(bytes, &mut at)) {
-        if let Some(key) = SettingKey::of(number).filter(|&key| is_offered(key, value)) {
+        if let Some(key) =
+            SettingKey::of(number).filter(|&key| key.kept() && is_offered(key, value))
+        {
             s.set(key, value);
         }
     }

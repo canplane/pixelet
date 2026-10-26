@@ -230,9 +230,8 @@ impl Atmosphere {
         ]
         .map(|id| pipelines.build(g, id, Format::rgba16float));
         let n = AIR_FROXELS;
-        // A slice past the air's, which holds each column's span (atmos_froxel.wgsl).
         let volume = g.volume_view(g.volume(
-            [n, n, n + 1],
+            [n, n, n],
             Format::rgba16float,
             texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
         ));

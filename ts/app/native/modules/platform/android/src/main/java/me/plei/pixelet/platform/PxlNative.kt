@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlGuest.kt
+// @pxl/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlNative.kt
 
 package me.plei.pixelet.platform
 
@@ -9,11 +9,12 @@ import java.nio.ByteBuffer
  * The kernel as this app calls it: the guest (rust/client-bracket/native),
  * loaded as the shared library the app's build puts beside it, and reached
  * through the functions its src/android.rs names for JNI — the same calls an
- * iPhone's Swift makes through the C ABI. Whatever reaches the kernel runs on
+ * iPhone's Swift makes through the C ABI (include/pxl_native.h), which it
+ * imports as the module of this one's name. Whatever reaches the kernel runs on
  * the kernel's own thread while the caller waits, so any thread may call, one
  * call at a time.
  */
-object PxlGuest {
+object PxlNative {
   init {
     System.loadLibrary("pxl_native")
   }
@@ -40,7 +41,8 @@ object PxlGuest {
 
   /** Binds the kernel's surface `handle` to `surface`, which the caller
    * keeps until it has unbound it: 0, -2 when no device is open, -3 when the
-   * system would not make a surface of it. */
+   * system would not make a surface of it, -4 when a newer handle has bound
+   * its slot since. */
   external fun surfaceBind(handle: Int, surface: Surface): Int
 
   /** Lets `handle`'s surface go. */

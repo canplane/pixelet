@@ -19,7 +19,9 @@ pub mod sentinel {
 // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
 // the order Carto paints (doc/minutes/20261005-the-ground-is-a-carto-palette.md).
 // `transport` marks a way: decor faces along it and no pier stands on it;
-// every look stands at its sampled height.
+// every look stands at its sampled height. The byte's values: 1 to 63
+// Carto's looks, in its paint order; from 64 pixelet's own, the
+// underground, which Carto paints nothing of; 0 and 255 the sentinels.
 pub mod ground {
 
     // ---- landcover ----
@@ -153,11 +155,11 @@ pub mod ground {
     // ---- underground ----
 
     /// under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it
-    pub const soil: u8 = 56;
+    pub const soil: u8 = 64;
     /// under sand's filler: Minecraft Beta's sandstone
-    pub const sandstone: u8 = 57;
+    pub const sandstone: u8 = 65;
     /// under the filler: Minecraft Beta's stone
-    pub const stone: u8 = 58;
+    pub const stone: u8 = 66;
 
     pub const ENTRIES: &[(&str, u8)] = &[
         ("land", land),
@@ -308,9 +310,9 @@ pub enum Ground {
     monorail = 53,
     rail = 54,
     aeroway = 55,
-    soil = 56,
-    sandstone = 57,
-    stone = 58,
+    soil = 64,
+    sandstone = 65,
+    stone = 66,
 }
 
 impl Ground {
@@ -434,9 +436,9 @@ impl Ground {
             53 => Some(Ground::monorail),
             54 => Some(Ground::rail),
             55 => Some(Ground::aeroway),
-            56 => Some(Ground::soil),
-            57 => Some(Ground::sandstone),
-            58 => Some(Ground::stone),
+            64 => Some(Ground::soil),
+            65 => Some(Ground::sandstone),
+            66 => Some(Ground::stone),
             _ => None,
         }
     }
@@ -444,7 +446,7 @@ impl Ground {
     /// Whether a look read into a word, as a GPU has it with no byte, is one `of`
     /// names.
     pub const fn grounds(value: u32) -> bool {
-        matches!(value, 1..=58)
+        matches!(value, 1..=55 | 64..=66)
     }
 
     /// A way: decor faces along it and no pier stands on it.

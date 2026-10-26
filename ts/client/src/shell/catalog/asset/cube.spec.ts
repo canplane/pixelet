@@ -27,7 +27,9 @@ export const cube = {
   // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
   // the order Carto paints (doc/minutes/20261005-the-ground-is-a-carto-palette.md).
   // `transport` marks a way: decor faces along it and no pier stands on it;
-  // every look stands at its sampled height.
+  // every look stands at its sampled height. The byte's values: 1 to 63
+  // Carto's looks, in its paint order; from 64 pixelet's own, the
+  // underground, which Carto paints nothing of; 0 and 255 the sentinels.
   ground: {
     // ---- landcover ----
 
@@ -160,11 +162,11 @@ export const cube = {
     // ---- underground ----
 
     /** under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it */
-    soil: 56,
+    soil: 64,
     /** under sand's filler: Minecraft Beta's sandstone */
-    sandstone: 57,
+    sandstone: 65,
     /** under the filler: Minecraft Beta's stone */
-    stone: 58,
+    stone: 66,
   },
   // What only an object can be: past a byte, so no ground cell holds it. An
   // object's value is a u16 whose byte range is the ground's palette.
@@ -248,9 +250,9 @@ export const cube_section: Readonly<Record<number, CubeSection>> = {
   53: "roads",
   54: "roads",
   55: "aeroways",
-  56: "underground",
-  57: "underground",
-  58: "underground",
+  64: "underground",
+  65: "underground",
+  66: "underground",
   257: "colors",
   258: "colors",
   259: "colors",

@@ -4,8 +4,9 @@
 // declared for its Swift: the module map beside this makes it
 // `import PxlNative`. Whatever reaches the guest runs on the guest's own
 // thread while the caller waits (xpute-host native `Guest::run`), so the
-// caller may be any thread, one call at a time. The first two are xpute's,
-// under the names the floor gives them (xpute-host native `native_abi!`);
+// caller may be any thread, one call at a time. The entry and the memory,
+// and the GPU's host, are xpute's, under the names the floor gives them
+// (xpute-host native `native_abi!`, xpute-gpu host native `native_abi!`);
 // the rest are the app's.
 
 #pragma once
@@ -23,20 +24,20 @@ uint8_t *xpute_mem(uint32_t *bytes);
 
 // Opens the device: 0 when it is open, -1 when the system has none. What it
 // is, the kernel reads from the block its first call asks the host for.
-int32_t pxl_gpu_open(void);
+int32_t xpute_gpu_open(void);
 
 // `f` is what the device's host calls to ask a turn, from whichever thread
 // learned of a completion (an image decoded): it sends the app an event, and
 // JavaScript asks for the turn that reads it.
-void pxl_wake_on(void (*f)(void));
+void xpute_gpu_wake_on(void (*f)(void));
 
-// Binds the kernel's surface `handle` to `layer`, a view's CAMetalLayer,
-// which the view keeps until it has unbound it: 0, or -2 when no device is
-// open, -3 when the system would not make a surface of the layer, -4 when a
-// newer handle has bound its slot since.
-int32_t pxl_surface_bind(uint32_t handle, void *layer);
-// Lets `handle`'s layer go, if it is still the one bound under its slot.
-void pxl_surface_unbind(uint32_t handle);
+// Binds the kernel's surface `handle` to `window`, on an iPhone a view's
+// CAMetalLayer (src/surface.rs `target`), which the view keeps until it has
+// unbound it: 0, or -2 when no device is open, -3 when the system would not
+// make a surface of it, -4 when a newer handle has bound its slot since.
+int32_t xpute_gpu_surface_bind(uint32_t handle, void *window);
+// Lets `handle`'s window go, if it is still the one bound under its slot.
+void xpute_gpu_surface_unbind(uint32_t handle);
 
 // A body the app's fetch hands over still zstd (src/unpack.rs), which never
 // reaches the kernel and so runs on the caller's thread, off the JavaScript

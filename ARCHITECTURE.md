@@ -305,8 +305,9 @@ The **pose** is the eye and the turn from the world's axes to the camera's. The
 world stays in its own axes, in doubles; what turns is the observer. Every draw
 uploads its point less the eye, subtracted in doubles before it is narrowed.
 
-The pointer is apart from the camera: the tool held, what is under it and what a
-tap does belong to `domain/control/interaction.rs`.
+The pointer is apart from the camera: the tool held and what a tap does belong
+to `domain/control/interaction.rs`, and what is under it to `pointer.rs` alone,
+a marker a tap would act on first, then what the eye's ray meets first.
 
 ## The camera grid
 
@@ -368,7 +369,9 @@ placed there, so it stands on what is placed (`domain/query/support.rs`).
 The world ends in bedrock, laid as a bowl: a bottom under the ground, and a wall
 just inside the **service area**, the shards the source serves. Walking and
 editing stay inside it, and an edit goes only over known ground, between the
-bedrock and a ceiling (`domain/query/limit.rs` `World::editable`).
+bedrock and a ceiling (`domain/query/limit.rs` `World::editable`). The camera is
+no walker: it goes anywhere a position can be, past the area over the Earth
+(`step_slide`'s `walled`).
 
 A ray descends the pyramid
 ([a ray asks the world whether a node is empty](./doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)).
@@ -709,15 +712,19 @@ medium, a centre and a radius.
 
 The air between the eye and what is drawn comes from the **air's volume**,
 Hillaire's aerial-perspective volume (`gpu/atmosphere.rs` `froxel`). A compute
-pass marches a grid of screen columns through froxels, which cover only the air
-each ray crosses, spaced by depth cubed so the near view gets most. A drawn
-point mixes the four columns about it, each read at the point's own distance
-(`atmos_air.wgsl` `air_before`).
+pass marches each of a grid of screen columns once, by stretches between
+froxels spaced alike in every column by depth cubed, joined from the eye, so
+every froxel is one integral's to its depth. A froxel holds the light the air
+scatters per share of what it takes, which the air's thickness cancels from.
+A drawn point reads that by a cubic B-spline in all three axes, and scales it
+by its own ray's share taken, exact from the transmittance table
+(`atmos_air.wgsl` `air_before`), so neither the columns nor the slices show.
 
 The **clouds** are three layers on one wind (`pxl-spec-core cloud.rs`). The
 cumulus is models drawn like decor but claiming no cell, so a tower stands
 through it (`domain/scene/environment/cloud.rs`). Each sits by a hash in a
-lattice of its own, a model, a sprite or nothing by its size on screen.
+lattice of its own, a model, a sprite or nothing by its size on screen, and
+thinned as drawn, a quarter of them each octave farther (`THIN_FROM`).
 
 Above it, altocumulus and cirrus are planes read where a ray meets them
 (`frame/shader/cloud.wgsl` `sheet_t`), laid over the world without depth. From
@@ -821,10 +828,18 @@ numbers, the kernel as the entry and what is pixelet's own.
 - `pxl-native` links the kernel into the device app as a guest of xpute's native
   host (`xpute/rust/host`), which reserves its memory, runs each call on the
   kernel's own thread, keeps its blocks in its memory and exports its entry and
-  memory as `xpute_intr` and `xpute_mem` (`xpute_host::native` `native_abi!`);
-  pixelet's part is its numbers, its last words and the stream played on wgpu
-  into a view's surface, whose host admits the frames
-  (`rust/client-bracket/native/src/surface.rs`). The kernel's thread is for
+  memory as `xpute_intr` and `xpute_mem` (`xpute_host::native` `native_abi!`).
+  Beside it xpute's GPU host holds the device, binds a view's window to a
+  surface and lets it go, and calls what asks a turn when a completion lands,
+  exported as `xpute_gpu_open`, `xpute_gpu_surface_bind`,
+  `xpute_gpu_surface_unbind` and `xpute_gpu_wake_on`
+  (`xpute_gpu::host::native` `native_abi!`). pixelet's part is its numbers,
+  its last words, what a view hands over (an iPhone's layer, an Android
+  window) and the stream played on wgpu into a view's surface, whose host
+  admits the frames (`rust/client-bracket/native/src/surface.rs`). The app
+  reaches the library as `PxlNative`, Swift's module and Kotlin's object
+  alike, through one C header (`include/pxl_native.h`), Android's under the
+  names JNI looks for (`src/android.rs`). The kernel's thread is for
   React Native's sake: its JavaScript thread has a 1 MiB stack, which a turn
   that draws through wgpu outgrows, and the app calls in from more than one
   thread.
@@ -921,11 +936,11 @@ an empty slot (`ts/client/src/namespace/storage.ts`).
 Only the client knows a file's address and protocol (`sys/io/file.rs`). The type
 says which of three answers came back:
 
-| `Opened`             | What it means                        | The descriptor |
-| -------------------- | ------------------------------------ | -------------- |
-| `Bytes(size)`        | the file is there, `size` bytes long | the owner's    |
-| `Absent`             | no such file                         | closed         |
-| `Failed { errno … }` | anything else                        | closed         |
+| `Opened`              | What it means                        | The descriptor |
+| --------------------- | ------------------------------------ | -------------- |
+| `Bytes(size)`         | the file is there, `size` bytes long | the owner's    |
+| `Absent`              | no such file                         | closed         |
+| `Failed { errnum … }` | anything else                        | closed         |
 
 Each descriptor has an owner, and an answer reaches only that owner.
 
@@ -976,16 +991,17 @@ copies it into a texture through the GPU stream (`COPY_EXTERNAL_IMAGE`, the host
 decoding it); once the texture lands the file goes, and a device lost reads it
 again (`images_lost`).
 
-The settings and the placed objects are kept on the device, each in a slot the
-kernel opens by its number (`host.json` `kept`, `sys/io/file.rs` `Kept`). A kept
-file begins with its slot's format byte; the kernel refuses one of another
-format, as a driver refuses a superblock it does not know, and names it in the
-snapshot. A kept file the kernel cannot read is never written over. Which
-storage key a slot is, and what becomes of a refused file, are the client's: it
-sets the file aside under a key of its own, empties the slot and says so
-(`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots, once
-(`ts/client/src/namespace/storage.ts`). Text is asked of the platform a line at
-a time, widths then pixels (`sys/io/text.rs`).
+The settings, but for those a session holds alone (`kept` false: the camera
+mode, the places' markers), and the placed objects are kept on the device, each
+in a slot the kernel opens by its number (`host.json` `kept`, `sys/io/file.rs`
+`Kept`). A kept file begins with its slot's format byte; the kernel refuses one
+of another format, as a driver refuses a superblock it does not know, and names
+it in the snapshot. A kept file the kernel cannot read is never written over.
+Which storage key a slot is, and what becomes of a refused file, are the
+client's: it sets the file aside under a key of its own, empties the slot and
+says so (`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots,
+once (`ts/client/src/namespace/storage.ts`). Text is asked of the platform a
+line at a time, widths then pixels (`sys/io/text.rs`).
 
 ## When something goes wrong
 

@@ -50,10 +50,15 @@ struct Manifest {
     ground: Ground,
     /// The object's colors, each a top.
     object: BTreeMap<String, Entry>,
+    /// A sentinel the world draws, the bedrock's `unknown`, a top worn on
+    /// every face.
+    #[serde(default)]
+    sentinel: BTreeMap<String, Entry>,
 }
 
 /// Which cube face an entry is, by the manifest's keys: a top is of the
-/// catalog's group (`ground` or `object`), a side and a bottom the ground's.
+/// catalog's group (`ground`, `object` or `sentinel`), a side and a bottom
+/// the ground's.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Slot {
     Top { group: String, ty: String },
@@ -133,6 +138,16 @@ pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
             format!("object.{ty}"),
             Slot::Top {
                 group: "object".into(),
+                ty: ty.clone(),
+            },
+            entry,
+        );
+    }
+    for (ty, entry) in &manifest.sentinel {
+        push(
+            format!("sentinel.{ty}"),
+            Slot::Top {
+                group: "sentinel".into(),
                 ty: ty.clone(),
             },
             entry,

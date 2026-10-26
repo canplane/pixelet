@@ -11,47 +11,75 @@
 
 /* the air before a point */
 
-// Column `c` of the volume `d` units from the eye, as deep as its own span
-// puts it (atmos_froxel.wgsl `column_span`): Hillaire 2020's
-// aerial-perspective volume, 32 a side and 32 deep, as Unreal's
-// SkyAtmosphere lays it out (frame/shader/word.rs `AIR_FROXELS`), its
-// slices' texels at depths 0 to 1 of the span and the span in the slice past
-// them.
-fn air_column(c: vec2u, d: f32) -> vec4f {
-  let n = f32(AIR_FROXELS);
-  let span = air_span_of(textureLoad(air_volume, vec3u(c, AIR_FROXELS), 0).xy);
-  let k = air_slice(span, d);
-  return textureSampleLevel(air_volume, atmos_sampler, vec3f((vec2f(c) + 0.5) / n, (0.5 + k) / (n + 1.0)), 0.0);
+// The cubic B-spline about texel coordinate `x` along one axis as two
+// linear reads (Sigg and Hadwiger 2005): their places, texels with centres
+// at whole numbers, then their weights.
+fn bspline_taps(x: f32) -> vec4f {
+  let i = floor(x);
+  let f = x - i;
+  let f2 = f * f;
+  let f3 = f2 * f;
+  let w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+  let w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+  let w3 = f3 / 6.0;
+  let g0 = w0 + w1;
+  let g1 = 1.0 - g0;
+  return vec4f(i - 1.0 + w1 / g0, i + 1.0 + w3 / max(g1, 1e-6), g0, g1);
 }
 
-// The volume at `uv` across, `d` units from the eye: the four columns about
-// it, each read at that distance by its own span. Read at one depth in all
-// four, as one filtered sample would, a column whose span runs far past its
-// neighbour's — toward the horizon, where the sea's plane runs off — gave a
-// point the air of another distance, a line along the horizon.
-fn air_before(uv: vec2f, d: f32) -> vec4f {
-  let last = vec2f(f32(AIR_FROXELS - 1u));
-  let at = clamp(uv * f32(AIR_FROXELS) - 0.5, vec2f(0.0), last);
-  let c0 = vec2u(floor(at));
-  let c1 = vec2u(min(floor(at) + 1.0, last));
-  let w = at - floor(at);
-  let top = mix(air_column(c0, d), air_column(vec2u(c1.x, c0.y), d), w.x);
-  let bottom = mix(air_column(vec2u(c0.x, c1.y), d), air_column(c1, d), w.x);
-  return mix(top, bottom, w.y);
+// The volume at `uv` across and slice `k` deep by the cubic B-spline in all
+// three: smooth to its second derivative across every column and slice,
+// eight trilinear reads. It smooths what it reads by a sixth of the square
+// of a texel's step times its curvature, which the slow light per share
+// taken has little of.
+fn air_held_at(uv: vec2f, k: f32) -> vec3f {
+  let n = f32(AIR_FROXELS);
+  let x = bspline_taps(uv.x * n - 0.5);
+  let y = bspline_taps(uv.y * n - 0.5);
+  let z = bspline_taps(k);
+  var sum = vec3f(0.0);
+  for (var c = 0u; c < 8u; c++) {
+    let at = vec3f(select(x.x, x.y, (c & 1u) != 0u), select(y.x, y.y, (c & 2u) != 0u), select(z.x, z.y, (c & 4u) != 0u));
+    let weight = select(x.z, x.w, (c & 1u) != 0u) * select(y.z, y.w, (c & 2u) != 0u) * select(z.z, z.w, (c & 4u) != 0u);
+    sum += weight * textureSampleLevel(air_volume, atmos_sampler, (at + 0.5) / n, 0.0).rgb;
+  }
+  return sum;
+}
+
+// The volume `d` units from the eye along `dir`, at `uv` across
+// (Hillaire 2020's aerial-perspective volume, 32 a side and deep,
+// frame/shader/word.rs `AIR_FROXELS`). What the air lets through is this
+// ray's own, e^-τ(d), per channel, taken as the march takes it
+// (atmos_march.wgsl `gather`): from where the ray enters the air to the
+// ground at the latest. What it scatters is that ray's 1 - e^-τ(d) times the
+// light per share taken (atmos_view.wgsl `air_held`), read off the volume
+// smooth (`air_held_at`). Only that slow factor is read off the grid; the
+// fast one is the pixel's own.
+fn air_before(uv: vec2f, dir: vec3f, d: f32) -> vec4f {
+  let held = air_held_at(uv, air_slice(d));
+  let km = atmos_km_per_u();
+  let r = camera_r();
+  let mu = dot(frame_up(), dir);
+  let end = short_of_ground(r, mu, d * km);
+  let low = ray_low(r, mu, end);
+  let a = min(to_sphere(r, mu, atmos_top_radius()), end);
+  let through = exp(-max(depth_along(r, mu, low, end) - depth_along(r, mu, low, a), vec3f(0.0)));
+  return vec4f(held * (vec3f(1.0) - through), dot(through, LUMA));
 }
 
 // The air before a point as the volume holds it at the point's place on the
 // screen and its distance: what the eye's view projects it to, so a point
 // off the screen or behind the eye reads the volume's nearest edge. A point
-// past a column's span, under the sea or past the air's ground, reads the
-// air to its end. The lights at a point are the point's own, read where it
+// past the air's reach reads the air to its end. The lights at a point are the point's own, read where it
 // stands (atmos_view.wgsl `light_of`): they turn with its height, and a
 // froxel stands higher or lower than what is drawn in it.
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let clip = frame_view_proj() * vec4f(world_pos, 1.0);
   let w = max(clip.w, 1e-6);
   let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
-  let air = air_before(uv, length(world_pos - frame_camera_pos()));
+  let to = world_pos - frame_camera_pos();
+  let d = length(to);
+  let air = air_before(uv, to / max(d, 1e-6), d);
   var s: Seen;
   s.scattered = air.rgb;
   s.through = air.a;
