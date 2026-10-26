@@ -392,10 +392,12 @@ fn put_runs(
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
 /// its runs write, as its fill wrote them (`runs`; `ground::Bounds`); a
 /// higher one over the level under it,
-/// written before (`window::join`). A bore's air counts, as the ways write
-/// it: the blocks of the square's ways tree lie in the bound
-/// (`ways::tree`), and a node it splits more holds only air or void there,
-/// a bore lying under its column's face.
+/// written before (`window::join`). A bore's air counts as far as the
+/// column's top, as the ways write it: the blocks of the square's ways tree
+/// under it lie in the bound (`ways::tree`), and a node it splits more holds
+/// only air or void there. Over the top it is air whatever writes it; a
+/// bound reaching up there, past a tunnel's mouth where the ground falls
+/// away under its clear height, split every node over it.
 pub fn level(
     ground: &mut [u32],
     base: u32,
@@ -415,8 +417,13 @@ pub fn level(
         while r + 1 < to {
             let (z, value) = ways::run_of(runs.run(r));
             if value != ways::NOTHING {
-                let end = ways::run_of(runs.run(r + 1)).0;
-                (lo, hi) = (lo.min(z * s), hi.max(end * s));
+                // A bore's air (`ways::lined`) counts only as far as the
+                // column's top: over it, it is air whatever writes it.
+                let end = ways::run_of(runs.run(r + 1)).0 * s;
+                let end = if value == ways::AIR { end.min(top) } else { end };
+                if z * s < end {
+                    (lo, hi) = (lo.min(z * s), hi.max(end));
+                }
             }
             r += 1;
         }
