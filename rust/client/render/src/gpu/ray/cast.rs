@@ -854,14 +854,15 @@ impl RaysPass {
                 g.set_pipeline(pass, built.pipeline);
                 g.dispatch_indirect(pass, p.args, word_bytes(3 * r as usize));
             }
-            for (built, group, r) in [
-                (&p.pixels, p.groups[2], proxied::PIXELS),
-                (&p.miss, p.groups[3], proxied::PIXELS_MISS),
-            ] {
-                g.set_bind_group(pass, 0, group, &[]);
-                g.set_pipeline(pass, built.pipeline);
-                g.dispatch_indirect(pass, p.args, word_bytes(3 * r as usize));
-            }
+            g.set_bind_group(pass, 0, p.groups[2], &[]);
+            g.set_pipeline(pass, p.pixels.pipeline);
+            g.dispatch_indirect(pass, p.args, word_bytes(3 * proxied::PIXELS as usize));
+            g.end(pass);
+            // The pixels the pyramid could not answer, timed apart.
+            let pass = g.compute_pass(encoder, stamps[GpuSpanName::proxied_miss as usize].pass());
+            g.set_bind_group(pass, 0, p.groups[3], &[]);
+            g.set_pipeline(pass, p.miss.pipeline);
+            g.dispatch_indirect(pass, p.args, word_bytes(3 * proxied::PIXELS_MISS as usize));
             g.end(pass);
             if counting {
                 // Untimed: the eye's walk it makes is no part of the cast.
@@ -1147,14 +1148,19 @@ impl Proxied {
                     buffer_entry(6, overwrites),
                     buffer_entry(7, pool),
                     buffer_entry(9, seen),
+                    buffer_entry(12, data),
                 ],
             ),
             g.bind_group(
                 self.check.layouts[0],
                 &[
                     buffer_entry(0, eye),
+                    buffer_entry(1, window),
+                    buffer_entry(2, ground),
                     view_entry(3, rays),
-                    buffer_entry(9, seen),
+                    buffer_entry(5, shards),
+                    buffer_entry(6, overwrites),
+                    buffer_entry(7, pool),
                     buffer_entry(10, checks),
                     buffer_entry(11, counts),
                     buffer_entry(12, data),

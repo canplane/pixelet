@@ -32,7 +32,8 @@ pub const fn proxied(r: u32) -> bool {
 /// walk stops in (a hole in the boxes), the stops the eye's walk makes
 /// otherwise, the eye's walks that lacked, the starts past where the eye's
 /// walk stops (a box not conservative), the starts held over their box's
-/// node, and the visits.
+/// node, the visits, and the pixels the observed pyramid could not answer,
+/// walked again.
 pub const STOPS: u32 = 0;
 pub const SKY: u32 = 1;
 pub const HOLES: u32 = 2;
@@ -41,4 +42,5 @@ pub const EYE_LACKED: u32 = 4;
 pub const LATE: u32 = 5;
 pub const HELD: u32 = 6;
 pub const VISITS: u32 = 7;
-pub const COUNTS: u32 = 8;
+pub const MISSED: u32 = 8;
+pub const COUNTS: u32 = 9;

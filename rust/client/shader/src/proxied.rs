@@ -9,21 +9,21 @@
 //! from the eye writing it (`proxied_miss_cs`), and, with the steps shown,
 //! each checked against the eye's own walk (`proxied_check_cs`).
 
-use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
+use pxl_spec_core::cast::{self, Detail, Ends, Query, Until};
+use pxl_spec_core::world::At;
 use pxl_spec_core::{at, observed, proxied, proxy, ray, ways};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 use spirv_std::{spirv, Image};
 
 use crate::cast::{entered, located, pixel_tan, same, shows_steps, word, written, Climbed, Rays};
 use crate::eye::{eye_origin, eye_ray, Eye};
-use crate::observed::{seen_at, Reading, Seen, Writing};
+use crate::observed::{seen_at, Reading, Seen, Writ, Writing};
 use crate::world::{Unlooked, World};
 
 /// The raster's front-most box at each drawn pixel, its number plus one, 0
-/// where none covers it, and its depth there, reversed, as f32 bits
-/// (pxl-spec-core `proxy::bound`; pxl-render gpu/ray/proxy.rs), read as an
-/// array of one layer. [naga] The depth comes in this colour, not its depth
-/// target: naga's SPIR-V front takes no depth image.
+/// where none covers it (pxl-render gpu/ray/proxy.rs), read as an array of
+/// one layer; its depth there, its second word, is not read: a walk starts
+/// at its box's node's own entry (`begun`).
 type Index = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// A box's planes in units from the eye, grown as the raster drew them
@@ -84,27 +84,19 @@ fn left(direction: [f32; 3], lo: [f32; 3], hi: [f32; 3], reach: f32) -> f32 {
 
 /// Where a pixel's walk starts, as the proxy has it: from the eye to where
 /// the ray leaves the last box about the eye it enters (`eyed`, the
-/// header's `COUNT_EYE`), none where it enters none; then the raster's
-/// front-most box (`boxed`, its number, none where it drew none) from the
-/// nearer of its depth there (`proxy::bound`), where the ray enters that
-/// box and where it leaves the eye's coarsest window (`COUNT_COVER`), past
-/// which nothing is held; where no box covers it, from where it leaves that
-/// window, and nowhere (the sky) where it leaves it past its reach.
+/// header's `COUNT_EYE`), 0 where it enters none; then the raster's
+/// front-most box (`boxed`, its number, none where it drew none); and
+/// where the ray leaves the eye's coarsest window (`cover`, `COUNT_COVER`),
+/// past which nothing is held; the sky where no box covers it and it leaves
+/// that window past its reach.
 struct Start {
     eyed: f32,
     boxed: u32,
-    t: f32,
+    cover: f32,
     sky: bool,
 }
 
-fn started(
-    counts: &[u32],
-    data: &[u32],
-    index: &Index,
-    p: UVec3,
-    ray: &cast::Ray,
-    cos: f32,
-) -> Start {
+fn started(counts: &[u32], data: &[u32], index: &Index, p: UVec3, ray: &cast::Ray) -> Start {
     let d = ray.direction;
     let c = proxy::COUNT_COVER;
     let cover = left(d, floats(counts, c), floats(counts, c + 3), ray.reach);
@@ -127,103 +119,77 @@ fn started(
     // only among the module's types, and the eye's zooms make a u32 pair.
     let kept: UVec4 = index.fetch(UVec3::new(p.x, p.y, 0));
     let boxed = kept.x;
-    let bound = proxy::bound(f32::from_bits(kept.y), cos);
-    let mut t = cover;
-    if boxed != 0 {
-        let (lo, hi) = planes(data, boxed - 1);
-        let enter = entered(d, lo, hi);
-        if enter < t {
-            t = enter;
-        }
-        if bound < t {
-            t = bound;
-        }
-        if t < 0.0 {
-            t = 0.0;
-        }
-    }
     Start {
         eyed,
         boxed,
-        t,
+        cover,
         sky: boxed == 0 && cover >= ray.reach,
     }
 }
 
-/// A pixel's walk down the observed pyramid (`Reading`) from its start
-/// (`started`): from the eye over the boxes about it, where it enters one,
-/// then from the start in the node over its box's that holds the ray there
-/// (`cast::holding`), its box's entry where that is the box's own and found
-/// down its parents else (`located`), what is over it read only where the
-/// walk climbs out (`Climbed`); from the world's root there where no box
-/// covers it. Whether the start was held over its box's node.
-fn walked(
-    seen: &Seen,
-    data: &[u32],
+/// The node a pixel's walk past the boxes about the eye starts in, and
+/// where: where the ray enters its box as the raster drew it (the record's
+/// planes, grown and clipped to its slab), no nearer than the eye's boxes'
+/// end. That box is the front-most of the grown boxes at the pixel, and a
+/// stop lies a grown margin past its own box's front, far past the raster's
+/// rounding, so nothing the ray meets lies before it; the entry into the
+/// box's ungrown node may (a neighbour met within the margin). In the box's
+/// node where that point lies within its own planes, else in the node over
+/// it that holds the ray there (`cast::holding`), and whether it was held
+/// so: where the ray enters the box through its margin. The world's root,
+/// from where the ray leaves the eye's coarsest window, where no box covers
+/// it or that is nearer.
+fn begun(
     origin: [i32; 3],
-    ray: &cast::Ray,
     detail: Detail,
+    ray: &cast::Ray,
+    data: &[u32],
     s: &Start,
-) -> (Met<u32>, bool) {
-    let mut q = Reading { seen };
-    let mut before = 0;
-    if s.eyed > 0.0 {
-        let near = cast::Ray::new(ray.direction, s.eyed);
-        let met = cast::rooted(&mut q, origin, &near, detail, Until::Fills, &mut ());
-        if met.ends != Ends::On {
-            return (met, false);
-        }
-        before = met.visits;
+) -> (cast::Node, f32, bool) {
+    if s.boxed == 0 {
+        return (cast::Node::ROOT, later(s.cover, s.eyed), false);
     }
-    let t = if s.t > s.eyed { s.t } else { s.eyed };
-    let (mut met, held) = if s.boxed != 0 {
-        let b = node_of(data, s.boxed - 1);
-        let start = cast::holding(origin, ray, b, t);
-        let held = start.zoom != b.zoom;
-        let entry = if held {
-            located(seen, origin, start)
-        } else {
-            at(data, proxy::box_at(s.boxed - 1) + proxy::BOX_ENTRY)
-        };
-        let met = cast::walk(
-            &mut q,
-            origin,
-            ray,
-            detail,
-            Until::Fills,
-            (start, entry, t),
-            &Climbed {
-                seen,
-                origin,
-                start,
-            },
-            &mut (),
-        );
-        (met, held)
+    let b = node_of(data, s.boxed - 1);
+    let d = ray.direction;
+    let (lo, hi) = planes(data, s.boxed - 1);
+    let enter = entered(d, lo, hi);
+    let t = later(if enter > 0.0 { enter } else { 0.0 }, s.eyed);
+    let (_, own, _) = proxy::asked(origin, detail, 0, &b);
+    let (from, to) = (
+        entered(d, own.lo, own.hi),
+        left(d, own.lo, own.hi, ray.reach),
+    );
+    if s.cover < t {
+        (cast::Node::ROOT, later(s.cover, s.eyed), false)
+    } else if from <= t && t < to {
+        (b, t, false)
     } else {
-        let root = q.root(cast::Node::ROOT.index(origin));
-        let met = cast::walk(
-            &mut q,
-            origin,
-            ray,
-            detail,
-            Until::Fills,
-            (cast::Node::ROOT, root, t),
-            &cast::Rooted(root),
-            &mut (),
-        );
-        (met, false)
-    };
-    met.visits += before;
-    (met, held)
+        (cast::holding(origin, ray, b, t), t, true)
+    }
 }
 
-/// The cosine of the ray through drawn pixel `p` with the eye's forward,
-/// as `proxy::bound` reads the raster's depth by.
-fn cos_of(eye: &Eye, ray: &cast::Ray) -> f32 {
-    let f = eye.forward_far;
-    ray.direction[0] * f.x + ray.direction[1] * f.y + ray.direction[2] * f.z
+/// The later of `t` and `u`. [naga] Not a closure over the start: one
+/// holding a reference is a value naga takes no pointer in.
+fn later(t: f32, u: f32) -> f32 {
+    if t > u {
+        t
+    } else {
+        u
+    }
 }
+
+/// How a pixel `proxied_cs` could not finish is marked in its words for
+/// `proxied_miss_cs`: its first word `ray::MISS`, then where it starts
+/// again, f32 bits, then its box's number plus one, none from the world's
+/// root, then whether its start was held over the box's node (`HELD_START`)
+/// or it lacked within the boxes about the eye (`EYED_LACK`).
+const HELD_START: u32 = 1;
+const EYED_LACK: u32 = 2;
+
+/// What the steps show of a pixel `proxied_miss_cs` walked again: its
+/// visits with this bit, the top of the steps' ramp; the check counts and
+/// strips it.
+const MISSED: u32 = 1 << 31;
 
 /// Each box of the frame's cut, a thread a box: its node's entry in the
 /// observed pyramid as this frame's forgetting left it, found down its
@@ -250,15 +216,19 @@ pub fn proxied_entry_cs(
 
 /// Which of the cast's dispatches the frame runs (pxl-spec-core `proxied`),
 /// a thread for the whole: the proxied cast's where the cut stands, its
-/// counts saying nothing was dropped and the eye is in the open; the cast
-/// as built else; each the workgroups `sizes` gives it, the others none.
+/// counts saying nothing was dropped, the eye is in the open and the eye's
+/// coarsest window is laid out; the cast as built else; each the workgroups `sizes` gives it, the others none.
 #[spirv(compute(threads(1, 1, 1), entry_point_name = "proxied_route_cs"))]
 pub fn proxied_route_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] counts: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 15)] sizes: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
 ) {
-    let stands = at(counts, proxy::COUNT_DROPPED) == 0 && at(counts, proxy::COUNT_SHUT) == 0;
+    // A window not laid out yet has no planes, and the cut holds nothing.
+    let c = proxy::COUNT_COVER;
+    let laid = at(counts, c) != at(counts, c + 3);
+    let stands =
+        at(counts, proxy::COUNT_DROPPED) == 0 && at(counts, proxy::COUNT_SHUT) == 0 && laid;
     let mut r = 0;
     while r < proxied::ROUTES {
         let on = proxied::proxied(r) == stands;
@@ -280,12 +250,16 @@ pub fn proxied_route_cs(
 }
 
 /// Each drawn pixel's ray walked from where the proxy starts it
-/// (`started`, `walked`), reading the observed pyramid alone, its binding
-/// read-only: its words where it held every node asked, what lies about the
-/// face asked of the world's query, as no sample hands it over
+/// (`started`, `begun`), reading the observed pyramid alone (`Reading`),
+/// its binding read-only: first from the eye over the boxes about it,
+/// where it enters one, then from its start, its box's entry where the
+/// start is the box's node, found down its parents where it was held over
+/// it (`located`), what is over it read only where the walk climbs out
+/// (`Climbed`). Its words where it held every node asked, what lies about
+/// the face asked of the world's query, as no sample hands it over
 /// (`World::faced`); none (the sky) where no box covers it and the window
-/// holds it to its reach; else its first word the mark `proxied_miss_cs`
-/// walks it again by (pxl-spec-core `ray::MISS`).
+/// holds it to its reach; else the mark `proxied_miss_cs` walks it again
+/// by, with where it starts.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "proxied_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn proxied_cs(
@@ -308,15 +282,79 @@ pub fn proxied_cs(
     }
     let (origin, detail) = eye_origin(eye);
     let ray = eye_ray(eye, pixel_tan(eye, id, size));
-    let s = started(counts, data, index, id, &ray, cos_of(eye, &ray));
+    let s = started(counts, data, index, id, &ray);
     if s.sky && s.eyed <= 0.0 {
         written(rays, id, [0, 0, 0, 0]);
         return;
     }
-    let (met, _) = walked(seen, data, origin, &ray, detail, &s);
+    let mut q = Reading { seen };
+    let mut before = 0;
+    if s.eyed > 0.0 {
+        let near = cast::Ray::new(ray.direction, s.eyed);
+        let met = cast::rooted(&mut q, origin, &near, detail, Until::Fills, &mut ());
+        if met.ends == Ends::Lacks {
+            written(rays, id, [ray::MISS, 0, 0, EYED_LACK]);
+            return;
+        }
+        if met.ends == Ends::Stop {
+            let mut world = World {
+                window,
+                ground,
+                looks: Unlooked(0),
+                shards,
+                overwrites,
+                eye,
+                pool: ways::tree::Read(pool),
+            };
+            let faces = world.faced(origin, &ray, &met);
+            written(rays, id, word(&ray, met, shows_steps(eye), faces));
+            return;
+        }
+        before = met.visits;
+    }
+    let (start, t, held) = begun(origin, detail, &ray, data, &s);
+    let mut met = if start.zoom == 0 && s.boxed == 0 {
+        let root = q.root(start.index(origin));
+        cast::walk(
+            &mut q,
+            origin,
+            &ray,
+            detail,
+            Until::Fills,
+            (start, root, t),
+            &cast::Rooted(root),
+            &mut (),
+        )
+    } else {
+        let entry = if held {
+            located(seen, origin, start)
+        } else {
+            at(data, proxy::box_at(s.boxed - 1) + proxy::BOX_ENTRY)
+        };
+        cast::walk(
+            &mut q,
+            origin,
+            &ray,
+            detail,
+            Until::Fills,
+            (start, entry, t),
+            &Climbed {
+                seen,
+                origin,
+                start,
+            },
+            &mut (),
+        )
+    };
+    met.visits += before;
     if met.ends == Ends::Lacks {
-        // SAFETY: within the rays, bounded by their size above.
-        unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
+        let boxed = if start.zoom == 0 && s.boxed == 0 {
+            0
+        } else {
+            s.boxed
+        };
+        let how = if held { HELD_START } else { 0 };
+        written(rays, id, [ray::MISS, t.to_bits(), boxed, how]);
         return;
     }
     let mut world = World {
@@ -328,18 +366,38 @@ pub fn proxied_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    written(
-        rays,
-        id,
-        word(&ray, met, shows_steps(eye), world.faced(origin, &ray, &met)),
-    );
+    let faces = world.faced(origin, &ray, &met);
+    written(rays, id, word(&ray, met, shows_steps(eye), faces));
 }
 
-/// Each pixel `proxied_cs` marked, its ray again from the eye, writing what
-/// it asks into the observed pyramid (`Writing`), and what lies about the
-/// face it stopped on (`World::faced`): from the eye, not from its box, as
-/// these are few and a start from a box would bind more than a pass may.
-/// Each but the marked returns at once.
+/// Over a writing walk started at a node, what was handed each node over
+/// it: no entry, so nothing over the start is written again, and what the
+/// world's query hands a node with nothing handed down (`world::At::of`),
+/// which is what a descent hands it. Read only where the walk climbs out.
+struct ClimbedWriting<'a> {
+    world: World<'a, &'a [u32]>,
+    origin: [i32; 3],
+    start: cast::Node,
+}
+
+impl cast::Over<Writ> for ClimbedWriting<'_> {
+    fn over(&self, zoom: u32) -> Writ {
+        let n = crate::cast::ancestor(&self.start, zoom);
+        Writ {
+            entry: observed::NONE,
+            at: At::of(&self.world, (zoom, n.index(self.origin))),
+        }
+    }
+}
+
+/// Each pixel `proxied_cs` marked, its ray again from where that one
+/// started it (its marked words), writing what it asks into the observed
+/// pyramid (`Writing`): from the eye where it lacked within the boxes about
+/// the eye, from the world's root where no box started it, else in the node
+/// it started in with what the world's query hands that node
+/// (`world::At::of`) and its entry; and what lies about the face it
+/// stopped on (`World::faced`). With the steps shown, its visits carry
+/// `MISSED`. Each but the marked returns at once.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "proxied_miss_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn proxied_miss_cs(
@@ -353,6 +411,7 @@ pub fn proxied_miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] data: &[u32],
 ) {
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
@@ -362,6 +421,9 @@ pub fn proxied_miss_cs(
     if first != ray::MISS {
         return;
     }
+    let t = f32::from_bits(rays.read(UVec3::new(id.x, id.y, 1)));
+    let boxed: u32 = rays.read(UVec3::new(id.x, id.y, 2));
+    let how: u32 = rays.read(UVec3::new(id.x, id.y, ray::FACES));
     let (origin, detail) = eye_origin(eye);
     let ray = eye_ray(eye, pixel_tan(eye, id, size));
     let tag = observed::tag(seen_at(seen, observed::FRAME), 2);
@@ -374,19 +436,54 @@ pub fn proxied_miss_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let met = cast::rooted(
-        &mut Writing { world, seen, tag },
-        origin,
-        &ray,
-        detail,
-        Until::Fills,
-        &mut (),
-    );
-    written(
-        rays,
-        id,
-        word(&ray, met, shows_steps(eye), world.faced(origin, &ray, &met)),
-    );
+    let met = if how == EYED_LACK || boxed == 0 {
+        let from = if how == EYED_LACK { 0.0 } else { t };
+        let mut w = Writing { world, seen, tag };
+        let root = w.root(cast::Node::ROOT.index(origin));
+        cast::walk(
+            &mut w,
+            origin,
+            &ray,
+            detail,
+            Until::Fills,
+            (cast::Node::ROOT, root, from),
+            &cast::Rooted(root),
+            &mut (),
+        )
+    } else {
+        let b = node_of(data, boxed - 1);
+        let (start, entry) = if how == HELD_START {
+            let start = cast::holding(origin, &ray, b, t);
+            (start, located(seen, origin, start))
+        } else {
+            (b, at(data, proxy::box_at(boxed - 1) + proxy::BOX_ENTRY))
+        };
+        let writ = Writ {
+            entry,
+            at: At::of(&world, (start.zoom, start.index(origin))),
+        };
+        let mut w = Writing { world, seen, tag };
+        cast::walk(
+            &mut w,
+            origin,
+            &ray,
+            detail,
+            Until::Fills,
+            (start, writ, t),
+            &ClimbedWriting {
+                world,
+                origin,
+                start,
+            },
+            &mut (),
+        )
+    };
+    let steps = shows_steps(eye);
+    let mut w = word(&ray, met, steps, world.faced(origin, &ray, &met));
+    if steps {
+        w[2] |= MISSED;
+    }
+    written(rays, id, w);
 }
 
 /// Count `k` of the check (pxl-spec-core `proxied`) by `v`, past the
@@ -396,19 +493,24 @@ fn checked(checks: &mut [u32], k: u32, v: u32) {
 }
 
 /// With the steps shown, after the proxied cast, each drawn pixel checked
-/// against the eye's own walk, the world's root at 0 (`cast::rooted`), into
-/// the oracle's counts past its own (pxl-spec-core `proxied::STOPS` on):
-/// the stops, those left to the sky, those of them the eye's walk stops in,
-/// the stops the eye's walk makes otherwise, its walks that lacked, the
-/// starts past where it stops, the starts held over their box's node, and
-/// the visits (`ray::WORDS`' third, the steps').
+/// against the eye's own walk through the world's one query (`World`),
+/// which lacks nothing the windows hold, into the oracle's counts past its
+/// own (pxl-spec-core `proxied::STOPS` on): the stops, those left to the
+/// sky, those of them the eye's walk stops in, the stops the eye's walk
+/// makes otherwise, its walks that lacked, the starts past where it stops,
+/// the starts held over their box's node, the visits (`ray::WORDS`' third,
+/// the steps'), and the pixels `proxied_miss_cs` walked again (`MISSED`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "proxied_check_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn proxied_check_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] checks: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] counts: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] data: &[u32],
@@ -420,19 +522,24 @@ pub fn proxied_check_cs(
     }
     let first: u32 = rays.read(UVec3::new(id.x, id.y, 0));
     let t = f32::from_bits(rays.read(UVec3::new(id.x, id.y, 1)));
-    let visits: u32 = rays.read(UVec3::new(id.x, id.y, 2));
+    let steps: u32 = rays.read(UVec3::new(id.x, id.y, 2));
     let (origin, detail) = eye_origin(eye);
     let ray = eye_ray(eye, pixel_tan(eye, id, size));
-    let s = started(counts, data, index, id, &ray, cos_of(eye, &ray));
-    let truth = cast::rooted(
-        &mut Reading { seen },
-        origin,
-        &ray,
-        detail,
-        Until::Fills,
-        &mut (),
-    );
-    checked(checks, proxied::VISITS, visits);
+    let s = started(counts, data, index, id, &ray);
+    let mut world = World {
+        window,
+        ground,
+        looks: Unlooked(0),
+        shards,
+        overwrites,
+        eye,
+        pool: ways::tree::Read(pool),
+    };
+    let truth = cast::rooted(&mut world, origin, &ray, detail, Until::Fills, &mut ());
+    checked(checks, proxied::VISITS, steps & !MISSED);
+    if steps & MISSED != 0 {
+        checked(checks, proxied::MISSED, 1);
+    }
     if truth.ends == Ends::Lacks {
         checked(checks, proxied::EYE_LACKED, 1);
     }
@@ -448,14 +555,11 @@ pub fn proxied_check_cs(
     if truth.ends != Ends::Lacks && !same(word(&ray, truth, false, 0)[0], truth.stop.t, first, t) {
         checked(checks, proxied::UNLIKE_EYE, 1);
     }
-    let start = if s.t > s.eyed { s.t } else { s.eyed };
-    if stops && s.boxed != 0 && start > truth.stop.t {
+    let (_, start, held) = begun(origin, detail, &ray, data, &s);
+    if stops && start > truth.stop.t {
         checked(checks, proxied::LATE, 1);
     }
-    if s.boxed != 0 {
-        let b = node_of(data, s.boxed - 1);
-        if cast::holding(origin, &ray, b, start).zoom != b.zoom {
-            checked(checks, proxied::HELD, 1);
-        }
+    if held {
+        checked(checks, proxied::HELD, 1);
     }
 }

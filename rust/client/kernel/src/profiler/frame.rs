@@ -182,8 +182,8 @@ pub struct OracleSample {
 /// pxl-spec-core `proxied`), its frames the oracle's: the pixels it
 /// stopped, those it left to the sky, those of them the eye's walk stops
 /// in, the stops the eye's walk makes otherwise, its walks that lacked, the
-/// starts past where it stops, the starts held over their box's node, and
-/// the visits.
+/// starts past where it stops, the starts held over their box's node, the
+/// visits, and the pixels walked again.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ProxiedSample {
@@ -195,6 +195,7 @@ pub struct ProxiedSample {
     pub late: f64,
     pub held: f64,
     pub visits: f64,
+    pub missed: f64,
 }
 
 /// The `ray_proxy` cut's sums since boot, as the renderer keeps them
@@ -267,6 +268,7 @@ words!(FrameSample, FRAME::WORDS,
     proxied.late => FRAME::proxied_late,
     proxied.held => FRAME::proxied_held,
     proxied.visits => FRAME::proxied_visits,
+    proxied.missed => FRAME::proxied_missed,
     proxy.frames => FRAME::proxy_frames, proxy.boxes => FRAME::proxy_boxes,
     proxy.nodes => FRAME::proxy_nodes, proxy.dropped => FRAME::proxy_dropped,
     proxy.shut => FRAME::proxy_shut, proxy.dropped_boxes => FRAME::proxy_dropped_boxes,

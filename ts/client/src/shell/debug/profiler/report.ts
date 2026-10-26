@@ -50,7 +50,7 @@ const oracleText = (f: Frame) =>
  * where any frame's counts were read back. */
 const proxiedText = (f: Frame) =>
   f.proxied_stops + f.proxied_sky === 0 ? [] : [
-    `  proxied ${f.proxied_stops} stops, ${f.proxied_sky} sky (${f.proxied_holes} holes) over ${f.oracle_frames} frames since boot   the walk's not the eye's ${f.proxied_unlike_eye}   the eye's lacked ${f.proxied_eye_lacked}   started past the eye's stop ${f.proxied_late}   held over the box ${f.proxied_held}   visits ${
+    `  proxied ${f.proxied_stops} stops, ${f.proxied_sky} sky (${f.proxied_holes} holes) over ${f.oracle_frames} frames since boot   the walk's not the eye's ${f.proxied_unlike_eye}   the eye's lacked ${f.proxied_eye_lacked}   started past the eye's stop ${f.proxied_late}   held over the box ${f.proxied_held}   walked again ${f.proxied_missed}   visits ${
       n1(f.proxied_visits / f.proxied_stops)
     } a stop`,
   ];
