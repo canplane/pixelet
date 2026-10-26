@@ -138,6 +138,15 @@ xpute_host::native_abi!(
 );
 ```
 
+A native guest that draws has the GPU's host beside it, exported the same way:
+one `xpute_gpu::native_abi!` with the guest (the first macro's `guest`), the
+device it asks for (`host::Ask`), its plan (`host::Plan`, its surfaces
+configured where `host::native::CONFIGURE_AT` says) and how a window the
+platform hands over becomes a surface's target, which exports `xpute_gpu_open`,
+`xpute_gpu_surface_bind`, `xpute_gpu_surface_unbind` and `xpute_gpu_wake_on`.
+Around each turn the program polls the host and runs its stream on it
+(`host::native::host`).
+
 A **C++ program** takes the library as SQLite ships its own, in two files:
 `xpute.hpp`, every header, and `xpute.cpp`, every source over it. They are at
 `cpp/amalgamation/` in xpute's own repository, and `make -C cpp amalgamation`

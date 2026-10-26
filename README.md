@@ -317,7 +317,7 @@ of the model — catalogs, ABI enums, routes — is generated into
 | `pxl-kernel`     | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                         |
 | `pxl-shader`     | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `cargo shader-wgsl` (pxl-tool) and checked in beside the renderer's shaders.                  |
 | `pxl-wasm`       | The guest in a tab: one module in xpute's module form (`wasm_abi!`), its memory's front kept from the linker (`global_base`) and the kernel as its entry, `intr`.             |
-| `pxl-native`     | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host (`native_abi!`), which runs every call on a thread of its own. |
+| `pxl-native`     | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host and its GPU's (`native_abi!`), each call on its own thread.    |
 | `ts/client`      | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).            |
 | `ts/app/web`     | The page's app: its entry, and the client's bracket (`src/bracket.ts`), what a browser tab gives the client, the guest it instantiates included.                              |
 | `ts/app/native`  | The device's app: its entry, and the client's bracket (`src/bracket.ts`), what it gives the client through its native module, which links the kernel.                         |

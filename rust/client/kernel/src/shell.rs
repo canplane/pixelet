@@ -123,7 +123,7 @@ fn shown() -> Shown {
         is_follow_mode: following(),
         camera_busy: dragging(),
         zooming: crate::domain::control::camera::controller::zooming(),
-        over_marker: crate::door::over_marker(),
+        over_marker: crate::pointer::over_marker(),
         settings: settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOTS];
             for key in SettingKey::ALL {

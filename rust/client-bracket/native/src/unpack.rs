@@ -8,7 +8,7 @@
 //! size: so the decoded bytes are the library's, handed out and let go by
 //! the caller. Called from the module's queue, never the JavaScript thread
 //! or the kernel's: it touches only the caller's bytes and its own, so it
-//! takes no handoff (lib.rs `on_kernel`).
+//! takes no handoff (xpute-host native `Guest::run`).
 
 use ruzstd::decoding::errors::{FrameDecoderError, ReadFrameHeaderError};
 use ruzstd::decoding::{BlockDecodingStrategy, FrameDecoder};

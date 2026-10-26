@@ -60,12 +60,13 @@ pub fn pack_path() -> Result<String, String> {
         .ok_or(format!("{CUBE_JSON}: no pack"))
 }
 
-/// The catalog's two groups of placeable cubes, the ground's looks and the
-/// object's colors, which a texture is filed under.
+/// The catalog's groups a texture is filed under: the ground's looks, the
+/// object's colors, and the sentinels, of which the world draws the bedrock.
 pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     let spec = read(CUBE_JSON)?;
     let ground = entries(spec.get("ground").ok_or("no ground")?, "ground")?;
     let object = entries(spec.get("object").ok_or("no object")?, "object")?;
+    let sentinel = entries(spec.get("sentinel").ok_or("no sentinel")?, "sentinel")?;
     Ok(vec![
         (
             "ground".into(),
@@ -77,6 +78,10 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
                 .filter(|e| is_color(e))
                 .map(|e| e.name.to_string())
                 .collect(),
+        ),
+        (
+            "sentinel".into(),
+            named(&sentinel).map(|e| e.name.to_string()).collect(),
         ),
     ])
 }

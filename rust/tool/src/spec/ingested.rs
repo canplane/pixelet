@@ -198,12 +198,13 @@ pub enum CubeFace {
 }
 
 /// The texture pack as one image: `columns` tiles of `cell` pixels per row,
-/// tile n at column n % columns and row n / columns, and `tiles` the cube
-/// face each tile is.
+/// tile n at column n % columns and row n / columns, `tiles` the cube face
+/// each tile is, and `sentinels` the tile a sentinel the world draws wears.
 pub struct Pack {
     pub cell: u32,
     pub columns: u32,
     pub tiles: &'static [(Cube, CubeFace, u32)],
+    pub sentinels: &'static [(u8, u32)],
     /// What each tile reads as from far enough away that the tile itself is
     /// gone: its own mean color, taken in linear light. A mesh that
     /// summarizes a patch of ground takes its color from here rather than
@@ -218,7 +219,7 @@ pub const PACK: Pack = Pack {"##
         format!("    columns: {},", pack.columns),
         "    tiles: &[".to_string(),
     ];
-    for (group, ty, face, tile) in &pack.faces {
+    for (group, ty, face, tile) in pack.faces.iter().filter(|f| f.0 != "sentinel") {
         let variant = if group == "object" {
             "Object"
         } else {
@@ -234,6 +235,14 @@ pub const PACK: Pack = Pack {"##
             "        (Cube::{variant}(cube::{variant}::{ty}), CubeFace::{face}, {tile}),"
         ));
     }
+    out.push("    ],".to_string());
+    out.push("    sentinels: &[".to_string());
+    out.extend(
+        pack.faces
+            .iter()
+            .filter(|f| f.0 == "sentinel")
+            .map(|(_, ty, _, tile)| format!("        (cube::sentinel::{ty}, {tile}),")),
+    );
     out.push("    ],".to_string());
     out.push("    means: &[".to_string());
     out.extend(

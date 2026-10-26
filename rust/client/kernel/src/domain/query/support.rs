@@ -281,12 +281,23 @@ impl<'a> World<'a> {
     /// ground's own cells, seen from `eye`, this is a map, not a walk: it goes
     /// to `to` and stands there. That is decided where it starts, and by the
     /// criterion's τ so that the quality a device draws at moves no wall.
-    /// It never leaves the service area (`within`), sliding along its edge.
+    /// Where it is `walled`, as what walks in the world is, it never leaves
+    /// the service area (`within`), sliding along its edge, and one already
+    /// past it is not walled until it is back in; the camera is not, and goes anywhere a position
+    /// can be, past the area over the Earth, which holds nothing above sea
+    /// level.
     /// It stops at the edge of a leaf on the way not held, keeping its walk up
     /// to there; none where the leaf under `from`, or a map's `to`, is not
     /// held, when its caller goes on with the height unknown. `from` is a
     /// center whose height is known.
-    pub fn step_slide(&self, from: &Q3, to: &Q3, eye: &Q3, falls: bool) -> Option<Q3> {
+    pub fn step_slide(
+        &self,
+        from: &Q3,
+        to: &Q3,
+        eye: &Q3,
+        falls: bool,
+        walled: bool,
+    ) -> Option<Q3> {
         let [sx, sy, sz] =
             [i64::from(from[0]), i64::from(from[1]), i64::from(from[2])].map(q3::to_real);
         let mut floor = under(sz);
@@ -300,7 +311,7 @@ impl<'a> World<'a> {
         let [tx, ty] = [i64::from(to[0]), i64::from(to[1])].map(q3::to_real);
         if !walks(from, eye) {
             let at = world::at(i64::from(to[0]), i64::from(to[1]), i64::from(from[2]));
-            if !self.within(&at) {
+            if walled && !self.within(&at) && self.within(from) {
                 return Some(*from);
             }
             let stands = if falls {
@@ -361,7 +372,7 @@ impl<'a> World<'a> {
             into[k] += way[k].signum();
             // Short of the edge by less than a position's fraction, so the cell it ends in is this one.
             let short = edge(k) - way[k].signum() * s * 1e-6;
-            match self.step(center(at), floor, center(into), falls) {
+            match self.step(center(at), floor, center(into), falls, walled) {
                 Some(Some(top)) => (at, floor) = (into, top),
                 // Slid along: this axis stays in its cell, the other goes on.
                 Some(None) => (end[k], blocked[k]) = (short, true),
@@ -382,9 +393,19 @@ impl<'a> World<'a> {
     /// cell left's ceiling stops it, the outer none where `to` or the cell
     /// left is not held at the leaf. The ceiling is asked only as high as the
     /// climb, never past it.
-    fn step(&self, from: [f64; 2], floor: f64, to: [f64; 2], falls: bool) -> Option<Option<f64>> {
-        // Past the service area is a wall, slid along as any.
-        if !self.within(&world::at(q3::from_real(to[0]), q3::from_real(to[1]), 0)) {
+    fn step(
+        &self,
+        from: [f64; 2],
+        floor: f64,
+        to: [f64; 2],
+        falls: bool,
+        walled: bool,
+    ) -> Option<Option<f64>> {
+        // Past the service area is a wall, slid along as any, to what is
+        // `walled` and within it; one already past it walks out of there.
+        let within =
+            |p: [f64; 2]| self.within(&world::at(q3::from_real(p[0]), q3::from_real(p[1]), 0));
+        if walled && !within(to) && within(from) {
             return Some(None);
         }
         let cell = units(GROUND.cell());

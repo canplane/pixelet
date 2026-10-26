@@ -4,8 +4,6 @@
 
 use super::State;
 use crate::domain::control::cmd::{self as abi, Command};
-use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::q3::Q3;
 use xpute_guest::abi::cmd as xpute_cmd;
 use xpute_guest::mem::{off_of, off_of_slice};
 use xpute_kit::status::errno::Errno;
@@ -155,7 +153,7 @@ pub(super) fn apply(
                 abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
                 abi::PointerPhase::Up => {
                     if let Some([x, y]) = camera_pointer_up(p.pointer_type, p.id) {
-                        tap_at(x, y);
+                        crate::pointer::tap(x, y);
                     }
                 }
                 abi::PointerPhase::Out => camera_pointer_out(),
@@ -488,41 +486,3 @@ fn profiler_rings() -> u32 {
 #[cfg(test)]
 #[path = "apply.test.rs"]
 mod test;
-
-/// What a tap on a marker does with the tool held.
-enum MarkerTap {
-    Go(Q3),
-    Remove(EntryAt),
-    Wait(EntryAt),
-}
-
-/// A marker takes a tap before the ground under it: the pointer goes to it,
-/// the eraser takes away a pin someone put up, and the marker tool has the
-/// waiting pin stand there. None where no marker there takes it.
-fn marker_tap(x: f64, y: f64) -> Option<MarkerTap> {
-    use crate::domain::control::interaction::ActiveTool;
-    use crate::domain::scene::marker::Went;
-    match (
-        crate::domain::control::interaction::holding().active_tool,
-        crate::domain::scene::marker::tap(x, y)?,
-    ) {
-        (ActiveTool::Pointer, Went::To(at) | Went::Pin(_, at)) => Some(MarkerTap::Go(at)),
-        (ActiveTool::Eraser, Went::Pin(e, _)) => Some(MarkerTap::Remove(e)),
-        (ActiveTool::Marker, Went::Pin(e, _)) => Some(MarkerTap::Wait(e)),
-        _ => None,
-    }
-}
-
-/// Whether the pointer is over a marker a tap would act on.
-pub(crate) fn over_marker() -> bool {
-    crate::domain::control::interaction::pointed().is_some_and(|[x, y]| marker_tap(x, y).is_some())
-}
-
-fn tap_at(x: f64, y: f64) {
-    match marker_tap(x, y) {
-        Some(MarkerTap::Go(at)) => crate::domain::control::navigation::destination::go_to_place(at),
-        Some(MarkerTap::Remove(e)) => crate::domain::control::interaction::edit::remove(e),
-        Some(MarkerTap::Wait(e)) => crate::domain::control::interaction::edit::wait_at(e),
-        None => crate::domain::control::interaction::tap(x, y, crate::domain::view::lens::tau()),
-    }
-}

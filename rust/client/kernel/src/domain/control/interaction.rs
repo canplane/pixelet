@@ -104,6 +104,13 @@ pub fn pointed() -> Option<[f64; 2]> {
     interaction().pointed
 }
 
+/// The pointer stands at `ndc_x`, `ndc_y` over something the world's pick
+/// does not reach (pxl-kernel pointer.rs): nothing in the world is picked.
+pub(crate) fn point_at(ndc_x: f64, ndc_y: f64) {
+    interaction().pointed = Some([ndc_x, ndc_y]);
+    interaction().hover = Hover::default();
+}
+
 /// A gesture under way points at nothing to place.
 pub(crate) fn clear_hover_coord() {
     interaction().hover.coord = None;

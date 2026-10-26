@@ -73,17 +73,22 @@ pub const PATCHES_MAX: usize = {
 /// field, the cumulus gathered in clumps with bare country between.
 const SHARE: f64 = 0.5;
 const SALT: u32 = 0x0c0c;
-/// The fewest camera cells a cell of the field spans: past where it spans
-/// fewer, each octave farther keeps a quarter of the clouds, the same quarter
-/// of those kept nearer, so the clouds a camera cell holds stay as many as
-/// the ground's cells do. Kept whole, the field ran to the horizon a cloud a
-/// cell, a band of dots. Set by eye.
+/// The fewest camera cells a cell of the field spans as it is drawn: past
+/// where it spans fewer, each octave farther shows a quarter of the clouds,
+/// the same quarter at every distance, so a cloud seen nearer stays. Whole,
+/// the field ran to the horizon a cloud a cell, a band of dots. Set by eye.
 const SPACING_CELLS: f64 = 32.0;
 
-/// How many octaves the field is thinned `d` units from the eye.
-fn thinned(d: f64) -> u32 {
-    let spans = CELL * pxl_spec::space::camera::grid::SPLIT / d;
-    libm::ceil(libm::log2(SPACING_CELLS / spans)).max(0.0) as u32
+/// How far from the eye the thinning starts, in units: where a cell spans
+/// `SPACING_CELLS` camera cells.
+const THIN_FROM: f64 = CELL * pxl_spec::space::camera::grid::SPLIT / SPACING_CELLS;
+
+/// Whether the cloud whose middle lies at `local` about its patch's corner
+/// shows `d2` square units from the eye: its hash under (THIN_FROM / d)²,
+/// asked as a product, so a cloud costs a multiply. Decided as it is drawn,
+/// never built: a patch built again as the eye moved made the zoom stall.
+fn shows(local: [f32; 2], d2: f64) -> bool {
+    f64::from(lattice_hash(local.map(f32::to_bits), SALT + 6)) * d2 < THIN_FROM * THIN_FROM
 }
 
 struct Patch {
@@ -92,8 +97,6 @@ struct Patch {
     handle: u32,
     index: u32,
     heights: [f32; 2],
-    /// Its octaves thinned (`thinned`), where it was built.
-    thinned: u32,
 }
 
 #[derive(Default)]
@@ -101,7 +104,7 @@ struct Clouds {
     models: [Option<u32>; VARIANTS.len()],
     patches: FnvHashMap<[i64; 2], Patch>,
     /// Kept so a settled turn asks the heap for nothing.
-    wanted: Vec<([i64; 2], u32)>,
+    wanted: Vec<[i64; 2]>,
     gone: Vec<[i64; 2]>,
     lanes: [Vec<[f32; 5]>; VARIANTS.len()],
     sprites: Vec<u32>,
@@ -221,23 +224,17 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                     decor_sprite_px() as f32,
                 ) != drawn::GONE
             {
-                c.wanted.push(([x, y], thinned(d)));
+                c.wanted.push([x, y]);
             }
         }
     }
     c.wanted.sort_unstable();
     c.gone.clear();
-    let wanted = &c.wanted;
-    let kept = |k: &[i64; 2], b: &Patch| {
-        wanted
-            .binary_search_by_key(k, |w| w.0)
-            .is_ok_and(|i| wanted[i].1 == b.thinned)
-    };
     c.gone.extend(
         c.patches
-            .iter()
-            .filter(|(k, b)| !kept(k, b))
-            .map(|(k, _)| *k),
+            .keys()
+            .copied()
+            .filter(|k| c.wanted.binary_search(k).is_err()),
     );
     for k in c.gone.drain(..) {
         if let Some(b) = c.patches.remove(&k) {
@@ -247,10 +244,10 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let (patches, lanes) = (&mut c.patches, &mut c.lanes);
-    c.wanted.retain(|(k, _)| !patches.contains_key(k));
+    c.wanted.retain(|k| !patches.contains_key(k));
     pass.run(
         c.wanted.iter().copied(),
-        |(key, thinned)| match build(key, thinned, base, lanes, draw) {
+        |key| match build(key, base, lanes, draw) {
             Some(b) => {
                 patches.insert(key, b);
                 true
@@ -342,10 +339,8 @@ struct Cloud {
     scale: f64,
 }
 
-/// The patch's clouds: a cell a cloud where the field's hash says one is,
-/// a quarter of them each octave `thinned`.
-fn clouds_of(key: [i64; 2], thinned: u32, base: f64) -> impl Iterator<Item = Cloud> {
-    let share = SHARE / f64::from(1u32 << (2 * thinned.min(15)));
+/// The patch's clouds: a cell a cloud where the field's hash says one is.
+fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
     (0..PATCH_CELLS)
         .flat_map(move |j| (0..PATCH_CELLS).map(move |i| (i, j)))
         .filter_map(move |(i, j)| {
@@ -355,7 +350,7 @@ fn clouds_of(key: [i64; 2], thinned: u32, base: f64) -> impl Iterator<Item = Clo
             ];
             let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
             let hash = |salt: u32| f64::from(lattice_hash(at, salt));
-            if hash(SALT) >= share {
+            if hash(SALT) >= SHARE {
                 return None;
             }
             let jitter = [hash(SALT + 1), hash(SALT + 2)];
@@ -410,7 +405,6 @@ fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
 /// none where the heap refused.
 fn build(
     key: [i64; 2],
-    thinned: u32,
     base: f64,
     lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()],
     draw: &mut DrawList,
@@ -419,7 +413,7 @@ fn build(
         l.clear();
     }
     let mut heights = [f32::INFINITY, f32::NEG_INFINITY];
-    for c in clouds_of(key, thinned, base) {
+    for c in clouds_of(key, base) {
         heights = [
             heights[0].min((c.z - c.width / 2.0) as f32),
             heights[1].max((c.z + c.width / 2.0) as f32),
@@ -467,7 +461,6 @@ fn build(
         handle,
         index,
         heights: if instances == 0 { [0.0; 2] } else { heights },
-        thinned,
     })
 }
 
@@ -521,6 +514,8 @@ fn present_patch(
         core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4)
     };
     let (lanes_of, list) = words.split_at_mut(b.index as usize / 4);
+    // A patch all within THIN_FROM shows every cloud, and asks none.
+    let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
     for ((offset, count), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
         let lane = GroupLanes {
@@ -535,14 +530,23 @@ fn present_patch(
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }
+            let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
+            let gap = [x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]];
+            let d2 = if thin || !modeled {
+                v3::dot(&gap, &gap)
+            } else {
+                0.0
+            };
+            if thin && !shows([f(0) as f32, f(1) as f32], d2) {
+                continue;
+            }
             if modeled {
                 changed |= list[at] != i as u32;
                 list[at] = i as u32;
                 at += 1;
                 continue;
             }
-            let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
-            let d = v3::len(&[x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]]).max(1e-3);
+            let d = libm::sqrt(d2).max(1e-3);
             let t = tier(extent * f(4) / units_per_px_at(d));
             if t == drawn::MODEL {
                 changed |= list[at] != i as u32;

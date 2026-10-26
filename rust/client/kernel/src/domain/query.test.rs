@@ -475,7 +475,7 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
     let east = world::point(x + 1.5, y + 0.5, 0.0);
     {
         let access = World::new(&residency, &store);
-        let to = access.step_slide(&from, &east, &from, true).unwrap();
+        let to = access.step_slide(&from, &east, &from, true, true).unwrap();
         assert_eq!(
             (q3::to_real(i64::from(to[0])), floor(to)),
             (x + 1.5, 8.0),
@@ -485,7 +485,7 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
     // A roof over the walker two cells up: the climb meets it first.
     write(&mut store, [x, y, 7.0], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
-    let to = access.step_slide(&from, &east, &from, true).unwrap();
+    let to = access.step_slide(&from, &east, &from, true, true).unwrap();
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
         "stopped at the wall"
@@ -493,7 +493,13 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
     assert_eq!(floor(to), 5.0);
     // Going north-east, the east is slid along and the north is walked.
     let to = access
-        .step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), &from, true)
+        .step_slide(
+            &from,
+            &world::point(x + 1.5, y + 1.5, 0.0),
+            &from,
+            true,
+            true,
+        )
         .unwrap();
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
@@ -550,6 +556,7 @@ fn a_reading_reports_the_columns_its_queries_read() {
             &from,
             &world::point(at[0] + 3.0 * cell, at[1], 0.0),
             &from,
+            true,
             true,
         )
         .unwrap();

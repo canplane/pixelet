@@ -84,6 +84,47 @@ fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
     );
 }
 
+/// A setting schema.json marks `kept` false is the session's: it is not in
+/// what is kept, a change to it alone asks for no write, and one found in
+/// the slot reads as its default.
+#[test]
+fn a_session_s_setting_is_neither_kept_nor_read() {
+    let _g = crate::sys::serial();
+    let session: Vec<SettingKey> = SettingKey::ALL.into_iter().filter(|k| !k.kept()).collect();
+    assert!(
+        session.contains(&SettingKey::place) && session.contains(&SettingKey::camera_mode),
+        "places shown and the camera mode are the session's"
+    );
+    let other = |key: SettingKey| match key.kind() {
+        SettingKind::Choice => (0..=u32::from(u8::MAX))
+            .find(|&v| v != Settings::DEFAULT.get(key) && Settings::DEFAULT.clone().set(key, v))
+            .expect("a second option"),
+        _ => 1 - Settings::DEFAULT.get(key),
+    };
+    let mut s = Settings::DEFAULT;
+    for &key in &session {
+        assert!(s.set(key, other(key)));
+    }
+    assert!(s.kept().is_empty(), "nothing of {session:?} is kept");
+    let back = read_kept(&kept_of(
+        &session
+            .iter()
+            .map(|&key| (key as u32, other(key)))
+            .collect::<Vec<_>>(),
+    ));
+    assert_eq!(back, Settings::DEFAULT, "nothing of {session:?} is read");
+    opened();
+    file::kept_answered(Kept::Settings, Err(file::Opened::Absent));
+    assert!(settings_load_step());
+    for &key in &session {
+        assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
+    }
+    assert!(
+        !*UNKEPT.get(|| false),
+        "a session's change asks for no write"
+    );
+}
+
 /// What storage holds of the slot, as the host hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     use base64::Engine;

@@ -11,7 +11,9 @@
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
-// the table without them, in SETTINGS' place.
+// the table without them, in SETTINGS' place. A setting whose `kept` is
+// false is the session's alone: the store neither writes it to its kept
+// slot nor reads it from there, so every session starts it at its default.
 //
 // A setting carries its `number` (the kernel's SettingKey), and a choice's
 // `options` names one of the lists below, which numbers each option. The
@@ -284,6 +286,12 @@ impl SettingKey {
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
         }
+    }
+
+    /// Written to the settings' kept slot and read from it; one schema.json
+    /// marks `kept` false is held for the session alone.
+    pub fn kept(self) -> bool {
+        !matches!(self, SettingKey::place | SettingKey::camera_mode)
     }
 
     /// Offered by a development build only.

@@ -4,9 +4,10 @@
 //! xpute's native host (xpute-host native), which reserves its memory, runs
 //! every call into it on its own thread and keeps its blocks in its memory.
 //! What is pixelet's here: its numbers (mem.json's and the thread's), the
-//! kernel's door (pxl_kernel::door) as the guest's entry, the device and the
-//! views' surfaces the renderer's calls are run on (surface.rs), the last
-//! words, and the transport's decoder (unpack.rs).
+//! kernel's door (pxl_kernel::door) as the guest's entry, the device the
+//! renderer's calls are run on and what the views hand it to draw into, on
+//! xpute's GPU host (surface.rs), the last words, and the transport's
+//! decoder (unpack.rs).
 //!
 //! Called from the app through the C ABI (include/pxl_native.h), one call at
 //! a time, from more than one thread: the JavaScript's rings the doorbell,
@@ -46,11 +47,6 @@ xpute_host::native_abi!(
     },
     turn
 );
-
-/// Runs `f` on the kernel's thread, the caller waiting.
-fn on_kernel<R: Send>(f: impl FnOnce() -> R + Send) -> R {
-    guest().run(f)
-}
 
 /// The process's error stream, or Android's log where that stream goes
 /// nowhere: the kernel stops with the app, before the shell could run the

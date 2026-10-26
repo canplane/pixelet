@@ -25,7 +25,7 @@ import expo.modules.kotlin.typedarray.Uint8Array
  * guest took — no copy, so a ring the shell writes is the ring the kernel
  * reads. The shell calls on the JavaScript thread, one call at a time; the
  * guest runs each on its own thread while this one waits
- * (rust/client-bracket/native/src/lib.rs `on_kernel`), and an image's decode runs off both.
+ * (xpute-host native `Guest::run`), and an image's decode runs off both.
  */
 class PlatformModule : Module() {
   private val context: Context
@@ -38,12 +38,12 @@ class PlatformModule : Module() {
 
     // The region is the guest's for the app's life: nothing is let go when
     // the buffer is.
-    Function("mem") { NativeArrayBuffer(PxlGuest.mem()) }
+    Function("mem") { NativeArrayBuffer(PxlNative.mem()) }
 
-    Function("intr") { quotaMs: Double -> PxlGuest.intr(quotaMs) }
+    Function("intr") { quotaMs: Double -> PxlNative.intr(quotaMs) }
 
     /** Whether the device opened; what it is, the kernel reads from the host. */
-    Function("gpuOpen") { PxlGuest.gpuOpen() }
+    Function("gpuOpen") { PxlNative.gpuOpen() }
 
     // ---- the kernel's turns (platform/gpu.ts) ----
 
@@ -53,16 +53,16 @@ class PlatformModule : Module() {
      * JavaScript thread itself. */
     Events("onWake")
 
-    OnCreate { PxlGuest.woken = { sendEvent("onWake") } }
+    OnCreate { PxlNative.woken = { sendEvent("onWake") } }
 
-    OnDestroy { PxlGuest.woken = null }
+    OnDestroy { PxlNative.woken = null }
 
     // ---- the transport (platform/origin.ts) ----
 
     /** A body fetched still zstd, decoded off the JavaScript thread on the
      * module's queue, into a direct buffer JavaScript takes without a copy. */
     AsyncFunction("unpack") { packed: ByteArray ->
-      NativeArrayBuffer(PxlGuest.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
+      NativeArrayBuffer(PxlNative.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
     }
 
     // ---- storage (platform/storage.ts) ----

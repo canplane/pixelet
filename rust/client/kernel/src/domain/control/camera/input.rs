@@ -1,12 +1,11 @@
 // pxl-kernel/domain/control/camera/input.rs
 
-//! The pointer's gestures: pan, rotate, pinch/twist/tilt and wheel; hover
-//! and tap go to interaction.rs. Store writes are coalesced to once a frame
-//! (`camera_input_step`).
+//! The pointer's gestures: pan, rotate, pinch/twist/tilt and wheel; what the
+//! pointer is over, its hover and its tap, is pxl-kernel pointer.rs's. Store
+//! writes are coalesced to once a frame (`camera_input_step`).
 //! What the pointer holds comes with each event; when it changes under a
 //! still pointer, the shell resends the move to re-resolve hover.
 
-use pxl_spec::space::camera::grid::Tau;
 use std::collections::BTreeMap;
 
 use crate::domain::control::param::{
@@ -18,7 +17,7 @@ use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
 use crate::domain::control::cmd::{InputRect, PointerType};
-use crate::domain::control::interaction::{clear_hover, clear_hover_coord, hover_at};
+use crate::domain::control::interaction::{clear_hover, clear_hover_coord};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::view::frame::pose::view;
@@ -464,8 +463,9 @@ pub fn camera_keys(x: i32, y: i32) {
     request_world_tick();
 }
 
-/// `drawn` is the τ the frame draws at, which the hover strikes decor by.
-pub fn camera_input_step(drawn: Tau) {
+/// Where the pointer is to be picked again, the camera standing where this
+/// step leaves it; what it is over is pxl-kernel pointer.rs's to decide.
+pub fn camera_input_step() -> Option<[f64; 2]> {
     let s = input();
     if s.keys != [0.0; 2] {
         let at = now();
@@ -476,12 +476,7 @@ pub fn camera_input_step(drawn: Tau) {
         by_hand(|| crate::domain::control::camera::controller::pan_across(way[0], way[1]));
         request_world_tick();
     }
-    if s.hover_pending {
-        s.hover_pending = false;
-        if s.drag_mode == DragMode::None {
-            hover_at(s.pointer_x, s.pointer_y, drawn);
-        }
-    }
+    let rehover = core::mem::take(&mut s.hover_pending) && s.drag_mode == DragMode::None;
     if s.drag_pending {
         s.drag_pending = false;
         match s.drag_mode {
@@ -499,6 +494,7 @@ pub fn camera_input_step(drawn: Tau) {
     if let Some(delta_y) = s.pending_wheel_delta_y.take() {
         crate::domain::control::camera::controller::wheel(delta_y);
     }
+    rehover.then_some([s.pointer_x, s.pointer_y])
 }
 
 pub fn pinching() -> bool {

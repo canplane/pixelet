@@ -407,6 +407,20 @@
         "file": "terrain/bottom_land.png",
         "paletteHex": null,
         "style": "cute-painted-fantasy-v1"
+      },
+      "sandstone": {
+        "sourceCreationId": "185674bf-5f00-4e92-951e-afaaf38e33b6",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/e97cce52-d566-48f8-b02c-70fafc76d759.png",
+        "file": "terrain/bottom_sand.png",
+        "paletteHex": null,
+        "style": "cute-painted-fantasy-v1"
+      },
+      "stone": {
+        "sourceCreationId": "6c0aa90f-0710-4316-aa1b-b4ddfa4a89d2",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261007/143575/a5f8bc50-cd24-4fc1-a698-1ae9a382e573/ae29421a-f051-4635-a536-1959f97c8edc.png",
+        "file": "terrain/land_quarry.png",
+        "paletteHex": null,
+        "style": "cute-painted-fantasy-v1"
       }
     },
     "side": {
@@ -558,7 +572,7 @@
     "white": {
       "sourceCreationId": "3d09245c-44b0-4e28-aee4-e486ca502373",
       "url": "https://image-assets.jianhua.art/public/1788315172961_9vlmc0.png",
-      "file": "block/block_white.png",
+      "file": "object/white.png",
       "paletteHex": "#f7f7f7",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -566,7 +580,7 @@
     "grey": {
       "sourceCreationId": "9fca7c3f-06c5-48ac-ae3d-41864559da0e",
       "url": "https://image-assets.jianhua.art/public/1788315269172_djslb9.png",
-      "file": "block/block_grey.png",
+      "file": "object/grey.png",
       "paletteHex": "#8d8d8d",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -574,7 +588,7 @@
     "dark_grey": {
       "sourceCreationId": "b69889bb-a4f0-47b2-ba3a-b14878ab3d87",
       "url": "https://image-assets.jianhua.art/public/1788315261438_7t0ont.png",
-      "file": "block/block_dark_grey.png",
+      "file": "object/dark_grey.png",
       "paletteHex": "#3f3f3f",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -582,7 +596,7 @@
     "black": {
       "sourceCreationId": "f70cd657-ac8e-46e5-b410-0f51a64fd036",
       "url": "https://image-assets.jianhua.art/public/1788315263138_89p6kz.png",
-      "file": "block/block_black.png",
+      "file": "object/black.png",
       "paletteHex": "#191919",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -590,7 +604,7 @@
     "red": {
       "sourceCreationId": "1e6afa59-0844-4229-9ccf-97901f311fd5",
       "url": "https://image-assets.jianhua.art/public/1788315170220_v1eec5.png",
-      "file": "block/block_red.png",
+      "file": "object/red.png",
       "paletteHex": "#b01313",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -598,7 +612,7 @@
     "pink": {
       "sourceCreationId": "c3ec2969-7bca-4859-b164-69e1bcd2a4eb",
       "url": "https://image-assets.jianhua.art/public/1788315260133_qfhnz0.png",
-      "file": "block/block_pink.png",
+      "file": "object/pink.png",
       "paletteHex": "#ff8787",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -606,7 +620,7 @@
     "brown": {
       "sourceCreationId": "cba0d230-c167-4840-bec7-49a2fa9136c2",
       "url": "https://image-assets.jianhua.art/public/1788315261073_6zmq29.png",
-      "file": "block/block_brown.png",
+      "file": "object/brown.png",
       "paletteHex": "#572b00",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -614,7 +628,7 @@
     "orange": {
       "sourceCreationId": "db2c73b0-cf2f-4a3e-905b-7643c3d831ab",
       "url": "https://image-assets.jianhua.art/public/1788315266431_jhpb9n.png",
-      "file": "block/block_orange.png",
+      "file": "object/orange.png",
       "paletteHex": "#d44e14",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -622,7 +636,7 @@
     "yellow": {
       "sourceCreationId": "f18e4a30-33ef-4715-9e2e-8f39b5f357e5",
       "url": "https://image-assets.jianhua.art/public/1788315259054_7il26e.png",
-      "file": "block/block_yellow.png",
+      "file": "object/yellow.png",
       "paletteHex": "#ffe611",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -630,7 +644,7 @@
     "green": {
       "sourceCreationId": "6384c139-3357-411f-bc86-08b2be5c2652",
       "url": "https://image-assets.jianhua.art/public/1788315259272_sbdvbc.png",
-      "file": "block/block_green.png",
+      "file": "object/green.png",
       "paletteHex": "#60dc1e",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -638,7 +652,7 @@
     "dark_green": {
       "sourceCreationId": "54538df5-8b96-4cb8-a885-f4609daf6b4a",
       "url": "https://image-assets.jianhua.art/public/1788315265190_yojiv3.png",
-      "file": "block/block_dark_green.png",
+      "file": "object/dark_green.png",
       "paletteHex": "#206700",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -646,7 +660,7 @@
     "cyan": {
       "sourceCreationId": "5ebdff86-4f80-4637-8367-6cda140f3d11",
       "url": "https://image-assets.jianhua.art/public/1788315263432_jolcy2.png",
-      "file": "block/block_cyan.png",
+      "file": "object/cyan.png",
       "paletteHex": "#008c94",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -654,7 +668,7 @@
     "blue": {
       "sourceCreationId": "c040ea65-bdd8-4b5a-92af-abf51d0e3a8a",
       "url": "https://image-assets.jianhua.art/public/1788315306087_xh2umr.png",
-      "file": "block/block_blue.png",
+      "file": "object/blue.png",
       "paletteHex": "#004791",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -662,7 +676,7 @@
     "violet": {
       "sourceCreationId": "d9a5592c-8488-4ebe-9365-8ae894fa2608",
       "url": "https://image-assets.jianhua.art/public/1788315305638_x5znqn.png",
-      "file": "block/block_violet.png",
+      "file": "object/violet.png",
       "paletteHex": "#57039f",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
@@ -670,10 +684,19 @@
     "magenta": {
       "sourceCreationId": "6dcb92ea-a98d-4556-a517-fba5587347a3",
       "url": "https://image-assets.jianhua.art/public/1788315308387_rozdg7.png",
-      "file": "block/block_magenta.png",
+      "file": "object/magenta.png",
       "paletteHex": "#c9036d",
       "style": "cute-painted-fantasy-v1",
       "material": "generic-painted-plaster-stucco-v1"
+    }
+  },
+  "sentinel": {
+    "unknown": {
+      "sourceCreationId": "a57fb713-ce0e-41f1-8373-d5ef8b4619de",
+      "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/c47e06e9-3f02-4272-b2ab-8cbab1c3ee5c.png",
+      "file": "terrain/bottom_industrial.png",
+      "paletteHex": null,
+      "style": "cute-painted-fantasy-v1"
     }
   }
 }

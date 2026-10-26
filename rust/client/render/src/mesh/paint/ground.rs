@@ -10,7 +10,7 @@ use pxl_spec::asset::cube::sentinel;
 use crate::frame::shader::word::NO_LAYER;
 use crate::look::color::linear;
 use crate::mesh::paint::object::PAINTER;
-use crate::mesh::paint::palette::{layer_mean, rgb255};
+use crate::mesh::paint::palette::{layer_mean, rgb255, sentinel_layer};
 
 /// The ground's bytes, which every value under them is one of.
 const BYTES: usize = u8::MAX as usize + 1;
@@ -30,7 +30,7 @@ const BYTES: usize = u8::MAX as usize + 1;
 pub fn look_words() -> Vec<[u32; 4]> {
     let unknown = (
         color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb)),
-        NO_LAYER as u8,
+        sentinel_layer(sentinel::unknown).unwrap_or(NO_LAYER) as u8,
     );
     let unit = |v: u8| (linear(v) * f64::from(u16::MAX)).round_ties_even() as u32;
     let pair = |a: u8, b: u8| unit(a) | unit(b) << 16;

@@ -130,7 +130,7 @@ fn run() -> Result<(), String> {
         .iter()
         .filter(|r| {
             r.path.ends_with(".png")
-                && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/"))
+                && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/object/"))
         })
         .map(|r| r.path.clone())
         .collect();

@@ -19,12 +19,13 @@ pub enum CubeFace {
 }
 
 /// The texture pack as one image: `columns` tiles of `cell` pixels per row,
-/// tile n at column n % columns and row n / columns, and `tiles` the cube
-/// face each tile is.
+/// tile n at column n % columns and row n / columns, `tiles` the cube face
+/// each tile is, and `sentinels` the tile a sentinel the world draws wears.
 pub struct Pack {
     pub cell: u32,
     pub columns: u32,
     pub tiles: &'static [(Cube, CubeFace, u32)],
+    pub sentinels: &'static [(u8, u32)],
     /// What each tile reads as from far enough away that the tile itself is
     /// gone: its own mean color, taken in linear light. A mesh that
     /// summarizes a patch of ground takes its color from here rather than
@@ -65,6 +66,7 @@ pub const PACK: Pack = Pack {
             CubeFace::Bottom,
             22,
         ),
+        (Cube::Ground(cube::Ground::sandstone), CubeFace::Top, 23),
         (Cube::Ground(cube::Ground::sand), CubeFace::Bottom, 23),
         (
             Cube::Ground(cube::Ground::societal_amenities),
@@ -100,6 +102,7 @@ pub const PACK: Pack = Pack {
         ),
         (Cube::Ground(cube::Ground::power), CubeFace::Top, 48),
         (Cube::Ground(cube::Ground::quarry), CubeFace::Top, 49),
+        (Cube::Ground(cube::Ground::stone), CubeFace::Top, 49),
         (Cube::Ground(cube::Ground::residential), CubeFace::Top, 50),
         (Cube::Ground(cube::Ground::retail), CubeFace::Top, 51),
         (Cube::Ground(cube::Ground::sand), CubeFace::Top, 52),
@@ -161,6 +164,7 @@ pub const PACK: Pack = Pack {
         (Cube::Ground(cube::Ground::trunk), CubeFace::Top, 88),
         (Cube::Ground(cube::Ground::water), CubeFace::Top, 89),
     ],
+    sentinels: &[(cube::sentinel::unknown, 18)],
     means: &[
         [47, 47, 46],
         [7, 77, 165],
