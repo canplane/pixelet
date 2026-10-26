@@ -397,9 +397,12 @@ pub fn flipped(right: [f32; 3], up: [f32; 3], forward: [f32; 3]) -> bool {
 }
 
 /// The most zooms a node over the cut is descended by in one of the GPU's
-/// rounds (`steps`): its descendants that many zooms finer queued at once,
-/// so the rounds, each as slow as its slowest node, are a third as many.
-pub const SKIP: Zoom = 3;
+/// rounds (`steps`): its descendants that many zooms finer queued at once.
+/// One: three, a third of the rounds, asked three times the nodes, the
+/// zooms between no longer pruning by their own slabs, and the pass took
+/// half again as long (c6b3d4991, on the fixed path: 122k nodes and 15.6 ms
+/// against 41.8k and 10.4).
+pub const SKIP: Zoom = 1;
 
 /// The zooms the node `n` from the origin `o` may be descended by at once,
 /// one to `SKIP`: to the cut's zoom at its farthest point (`cut`), which no

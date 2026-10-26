@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: f48ea77c3a41e1c6c29ee9c309a61f77313038fa9899cbb3d60907691e7a8da4
+// Inputs: 7aaadcdf18b35c9a7c406efca6f88bbdd1d47c5f767c8c6e2684ae34f9ad6c43
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -6707,8 +6707,8 @@ fn function_() {
                                     let _e6385 = phi_8763_;
                                     let _e6387 = select(_e6385, 23u, (_e6385 >= 24u));
                                     let _e6388 = local_3.member_1;
-                                    if (_e6387 >= (_e6388 + 3u)) {
-                                        phi_8787_ = 3u;
+                                    if (_e6387 >= (_e6388 + 1u)) {
+                                        phi_8787_ = 1u;
                                     } else {
                                         let _e6391 = local_3.member_1;
                                         if (_e6387 > (_e6391 + 1u)) {
