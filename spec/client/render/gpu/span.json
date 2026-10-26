@@ -20,6 +20,11 @@
     "sraster",
     "pixel",
     "miss",
+    "sun_beam",
+    "sun_sample",
+    "sun_raster",
+    "sun_pick",
+    "sun_walk",
     "grow",
     "shadow",
     "faces"

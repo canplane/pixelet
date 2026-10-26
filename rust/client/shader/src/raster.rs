@@ -9,23 +9,22 @@
 use pxl_spec_core::cast::{Ends, Met, Stop};
 use pxl_spec_core::{beam, cast, raster, ways};
 use spirv_std::glam::{IVec4, UVec3};
-use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
-use crate::add;
-use crate::beam::{node_at, Beams};
+use crate::beam::{node_at, Beams, Words};
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::observed::{seen_at, seen_put};
 use crate::world::{Unlooked, World};
+use crate::{add, most};
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in
 /// every word a pixel reads of them: the node, the block, whether it lacks
 /// and the axis entered across, so what lies about its face is alike too
 /// (world.rs `World::faced`, its face the axis's turned to the eye).
-fn alike(beams: &Beams, a: u32, b: u32) -> bool {
+fn alike<W: Words + ?Sized>(w: &W, a: u32, b: u32) -> bool {
     let mut k = 0;
     while k < beam::SAMPLE_FACES {
-        if seen_at(beams, a + k) != seen_at(beams, b + k) {
+        if w.word(a + k) != w.word(b + k) {
             return false;
         }
         k += 1;
@@ -40,28 +39,89 @@ fn put(s: &mut [u32], i: u32, v: u32) {
     }
 }
 
-/// Word `i` of `s` raised to `v` where it is less, none past `s`.
-fn most(s: &mut [u32], i: u32, v: u32) {
-    if (i as usize) < s.len() {
-        // SAFETY: just bounded by the slice's own length.
-        unsafe {
-            spirv_std::arch::atomic_u_max::<
-                u32,
-                { Scope::QueueFamily as u32 },
-                { Semantics::NONE.bits() },
-            >(s.get_unchecked_mut(i as usize), v)
-        };
+/// No sample before it (`boxed`).
+pub(crate) const NONE: u32 = u32::MAX;
+
+/// The sample at word `k` of `w`, numbered `sample`, written as a box for
+/// the raster's draw, the eye's and the sun's alike: its box as the cast
+/// stops on it (`cast::drawn`) from `origin`, appended to `boxes`, counted
+/// in `args` (`raster::ARGS_INSTANCES`), its number and its axis,
+/// `raster::EYED` where it lies about the eye at the screen's tangents
+/// `tan` (`raster::eyed`), where `eyed` asks (the sun's has none); none
+/// where it went on to its reach, or where a sample at `before`, the one
+/// across or up, `NONE` where there is none, stopped alike (`alike`), which
+/// some sample before it in turn draws. Its place among the boxes, `NONE`
+/// where it wrote none.
+pub(crate) fn boxed<W: Words + ?Sized>(
+    w: &W,
+    k: u32,
+    before: [u32; 2],
+    origin: [i32; 3],
+    sample: u32,
+    (eyed, tan): (bool, [f32; 2]),
+    boxes: &mut [u32],
+    args: &mut [u32],
+) -> u32 {
+    if w.word(k + beam::SAMPLE_NODE + beam::NODE_ZOOM) == beam::SAMPLE_NONE {
+        return NONE;
     }
+    if before[0] != NONE && alike(w, k, before[0]) {
+        return NONE;
+    }
+    if before[1] != NONE && alike(w, k, before[1]) {
+        return NONE;
+    }
+    let node = node_at(w, k + beam::SAMPLE_NODE);
+    let (lo, hi) = cast::drawn(origin, &node, w.word(k + beam::SAMPLE_BLOCK));
+    let lacks = w.word(k + beam::SAMPLE_LACKS) != 0;
+    let eyed = eyed && raster::eyed(lo, hi, tan);
+    let box_at = add(args, raster::ARGS_INSTANCES, 1);
+    let at = box_at * raster::BOX_WORDS;
+    put(boxes, at + raster::BOX_LO, lo[0].to_bits());
+    put(boxes, at + raster::BOX_LO + 1, lo[1].to_bits());
+    put(boxes, at + raster::BOX_LO + 2, lo[2].to_bits());
+    put(boxes, at + raster::BOX_HI, hi[0].to_bits());
+    put(boxes, at + raster::BOX_HI + 1, hi[1].to_bits());
+    put(boxes, at + raster::BOX_HI + 2, hi[2].to_bits());
+    put(boxes, at + raster::BOX_ID, raster::id_of(sample, lacks));
+    put(
+        boxes,
+        at + raster::BOX_AXIS,
+        w.word(k + beam::SAMPLE_AXIS) | if eyed { raster::EYED } else { 0 },
+    );
+    box_at
+}
+
+/// The block a ray from `origin` takes off the raster's pick, the sample at
+/// word `k` of `w`: where the ray enters it (`cast::entry`) across the axis
+/// the sample entered by, the eye's pixels and the sun's slots alike, and
+/// whether it does.
+pub(crate) fn picked<W: Words + ?Sized>(
+    w: &W,
+    k: u32,
+    origin: [i32; 3],
+    ray: &cast::Ray,
+) -> (cast::Stop<u32>, bool) {
+    let node = node_at(w, k + beam::SAMPLE_NODE);
+    let block = [
+        w.word(k + beam::SAMPLE_BLOCK),
+        w.word(k + beam::SAMPLE_BLOCK + 1),
+    ];
+    let (enter, axis, enters) = cast::entry(origin, ray, &node, block[0]);
+    let stop = cast::Stop {
+        t: enter,
+        axis,
+        node,
+        at: 0u32,
+        block,
+    };
+    (stop, enters && axis == w.word(k + beam::SAMPLE_AXIS))
 }
 
 /// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a
-/// thread each: where it stopped, its box as the cast stops on it
-/// (`cast::drawn`), appended to the boxes for the raster's draw, counted in
-/// its args (`raster::ARGS_INSTANCES`), the dispatch that asks its face
-/// raised to hold it (`raster::ARGS_FACES`), its number and its axis,
-/// `raster::EYED` where it lies about the eye (`raster::eyed`); none where
-/// it went on to its reach, or where the sample before it across or up
-/// stopped alike (`alike`), which some sample before it in turn draws.
+/// thread each: written as a box for the raster's draw (`boxed`), the one
+/// across and up before it, and the dispatch that asks its face raised to
+/// hold it (`raster::ARGS_FACES`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "boxes_cs"))]
 pub fn boxes_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -74,40 +134,32 @@ pub fn boxes_cs(
     if id.x >= g.samples[0] || id.y >= g.samples[1] {
         return;
     }
-    let k = g.sample_at([id.x, id.y]);
-    if seen_at(beams, k + beam::SAMPLE_NODE + beam::NODE_ZOOM) == beam::SAMPLE_NONE {
-        return;
-    }
-    if id.x > 0 && alike(beams, k, g.sample_at([id.x - 1, id.y])) {
-        return;
-    }
-    if id.y > 0 && alike(beams, k, g.sample_at([id.x, id.y - 1])) {
-        return;
-    }
+    let before = [
+        if id.x > 0 {
+            g.sample_at([id.x - 1, id.y])
+        } else {
+            NONE
+        },
+        if id.y > 0 {
+            g.sample_at([id.x, id.y - 1])
+        } else {
+            NONE
+        },
+    ];
     let (origin, _) = eye_origin(eye);
-    let node = node_at(beams, k + beam::SAMPLE_NODE);
-    let (lo, hi) = cast::drawn(origin, &node, seen_at(beams, k + beam::SAMPLE_BLOCK));
-    let lacks = seen_at(beams, k + beam::SAMPLE_LACKS) != 0;
-    let eyed = raster::eyed(lo, hi, [eye.tan.x, eye.tan.y]);
-    let box_at = add(args, raster::ARGS_INSTANCES, 1);
-    most(args, raster::ARGS_FACES, box_at / raster::FACES_LANES + 1);
-    let at = box_at * raster::BOX_WORDS;
-    put(boxes, at + raster::BOX_LO, lo[0].to_bits());
-    put(boxes, at + raster::BOX_LO + 1, lo[1].to_bits());
-    put(boxes, at + raster::BOX_LO + 2, lo[2].to_bits());
-    put(boxes, at + raster::BOX_HI, hi[0].to_bits());
-    put(boxes, at + raster::BOX_HI + 1, hi[1].to_bits());
-    put(boxes, at + raster::BOX_HI + 2, hi[2].to_bits());
-    put(
+    let box_at = boxed(
+        beams,
+        g.sample_at([id.x, id.y]),
+        before,
+        origin,
+        id.y * g.samples[0] + id.x,
+        (true, [eye.tan.x, eye.tan.y]),
         boxes,
-        at + raster::BOX_ID,
-        raster::id_of(id.y * g.samples[0] + id.x, lacks),
+        args,
     );
-    put(
-        boxes,
-        at + raster::BOX_AXIS,
-        seen_at(beams, k + beam::SAMPLE_AXIS) | if eyed { raster::EYED } else { 0 },
-    );
+    if box_at != NONE {
+        most(args, raster::ARGS_FACES, box_at / raster::FACES_LANES + 1);
+    }
 }
 
 /// Each box `boxes_cs` wrote, a thread each, `raster::FACES_LANES` a

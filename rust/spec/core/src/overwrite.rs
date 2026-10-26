@@ -197,6 +197,9 @@ pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
     [at[0] & (1u32 << zoom).wrapping_sub(1) as i32, at[1], at[2]]
 }
 
+/// A family's slots, a node's children, each at its `slot_of`.
+pub const FAMILY: u32 = 8;
+
 /// A node's slot in its parent's family: X's low bit, then Y's, then Z's.
 fn slot_of(at: [i32; 3]) -> u32 {
     (at[0] & 1 | (at[1] & 1) << 1 | (at[2] & 1) << 2) as u32

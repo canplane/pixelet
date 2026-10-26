@@ -24,6 +24,24 @@ const pastText = (
   : `off-turn ${n1(f.interval_ms - f.busy_ms)}`);
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
+/** The `sun_counts` setting's sums since boot as the last frame holds them
+ * (profiler.json FRAME's sun lanes), where any frame's counts were read
+ * back: how many of the sun's map's slots took the raster's pick, and the
+ * boxes it drew. */
+const sunText = (f: Frame) => {
+  if (f.sun_frames === 0) return [];
+  const texels = Math.max(1, f.sun_texels);
+  const share = (n: number) => `${fixed((100 * n) / texels, 2)}%`;
+  const walked = f.sun_texels - f.sun_picked;
+  const perCast = (n: number) => n1(n / Math.max(1, f.sun_cast_frames));
+  return [
+    `  sun     cast in ${f.sun_cast_frames} of ${f.sun_frames} frames since boot   picked ${
+      share(f.sun_picked)
+    } of slots  walked ${share(walked)}   boxes ${
+      perCast(f.sun_boxes)
+    } a frame`,
+  ];
+};
 
 export function failText(fail: u32, detail: u32): string {
   const name = strerror(fail as Errno).split(":")[0];
@@ -131,6 +149,7 @@ function windowSection(r: ProfilerReport): string[] {
       } ms   (over the ${f.gpu_read} frames a read landed with)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
+    ...sunText(last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,
     `  heap used Δ ${

@@ -544,6 +544,7 @@ fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::c
             tau: 1.0,
             range: [cell, cell],
             eye: [0.0; 3],
+            beam: 0.0,
         },
     )
 }

@@ -225,6 +225,14 @@ export const SETTINGS = {
     section: "debug",
     dev: true,
   },
+  /** How the sun's shadow map is cast — the slots that took the raster's pick, what the rest walked, the samples, boxes and beams — counted on the GPU and summed since boot into the profiler's sun lanes (rust/client/render/src/gpu/ray/tally.rs, rust/client/shader/src/sun.rs). The counting's atomics run in the sun's spans, so time them with it off. */
+  sun_counts: {
+    key: 20 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+    dev: true,
+  },
 } as const;
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */

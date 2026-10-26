@@ -31,7 +31,7 @@ pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
 pub use raster::{boxes_cs, faces_cs};
-pub use sun::{sun_cs, sun_mark_cs, SunMoved};
+pub use sun::{sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_miss_cs, sun_sample_cs};
 pub use ways::{ways_cs, ways_free_cs, ways_freed_cs, ways_tree_cs};
 pub use world::{Looks, Unlooked, World};
 
@@ -53,5 +53,19 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
         }
     } else {
         0
+    }
+}
+
+/// Word `i` of `s` raised to `v` where it is less, none past `s`.
+fn most(s: &mut [u32], i: u32, v: u32) {
+    if (i as usize) < s.len() {
+        // SAFETY: just bounded by the slice's own length.
+        unsafe {
+            spirv_std::arch::atomic_u_max::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+            >(s.get_unchecked_mut(i as usize), v)
+        };
     }
 }

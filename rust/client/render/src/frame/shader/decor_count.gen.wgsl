@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 4fa691d75624439354d9aadfd60ca04381acb6f295314f31a3e913b9a48be690
+// Inputs: 414bfe7a596339ec9b72dea6bb3508d9bad75470e671896b6656e5ba48b6c697
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -22,11 +22,11 @@ struct type_13 {
 }
 
 struct type_16 {
-    member: array<u32>,
+    member: array<vec4<i32>>,
 }
 
-struct type_24 {
-    member: array<vec4<i32>>,
+struct type_19 {
+    member: array<u32>,
 }
 
 struct type_28 {
@@ -69,15 +69,15 @@ var<uniform> global: type_13;
 var<private> global_1: vec3<u32>;
 var<private> global_2: vec3<u32>;
 @group(0) @binding(1)
-var<storage> global_3: type_16;
+var<storage> global_3: type_19;
 @group(0) @binding(2)
 var<storage> global_4: type_37;
 @group(0) @binding(3)
-var<storage, read_write> global_5: type_16;
+var<storage, read_write> global_5: type_19;
 @group(0) @binding(4)
 var<storage, read_write> global_6: type_41;
 @group(0) @binding(5)
-var<storage> global_7: type_24;
+var<storage> global_7: type_16;
 
 fn function_() {
     var phi_299_: u32;

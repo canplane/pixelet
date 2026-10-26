@@ -54,7 +54,7 @@ use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::RaysPass;
+use crate::gpu::ray::{RaysPass, SUN_SUMS};
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
@@ -200,6 +200,9 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
+    /// Whether what the sun's cast walked and took is counted
+    /// (gpu/ray/tally.rs).
+    pub sun_counts: bool,
 }
 
 /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
@@ -248,6 +251,9 @@ pub struct FrameStat {
     /// draws and triangles.
     pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
+    /// The sun's and the eye's recast's counts, summed since boot
+    /// (gpu/ray/tally.rs `SUN_SUMS`).
+    pub sun: [f64; SUN_SUMS],
 }
 
 /// A frame's GPU time: its spans' sum, the passes timed. The span from the
@@ -676,6 +682,7 @@ impl Renderer {
         // only the room left.
         if cast.is_some() {
             self.screen.make(g, &mut self.pipelines);
+            self.screen.sun_made(g, &mut self.pipelines, self.shadows);
         }
         self.screen.hand(g, &mut self.pipelines, &mut input.ground);
         let tiles = input.earth_tiles;
@@ -776,7 +783,7 @@ impl Renderer {
             cast,
             &meshes,
             (world.rays_view, [world.width, world.height]),
-            (self.shadow.world, self.shadow.frame),
+            (self.shadow.world, self.shadow.frame, self.shadow.starts()),
         );
         // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
@@ -810,6 +817,7 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
+        self.screen.tally_back(g);
         if read.read(self.clouds.words()) {
             self.clouds.write(g);
         }
@@ -1115,6 +1123,7 @@ impl Renderer {
             pack_bytes: self.pack.bytes as f64,
             census,
             gpu_spans,
+            sun: self.screen.tally_sums(),
         }
     }
 }

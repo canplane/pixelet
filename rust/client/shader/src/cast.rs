@@ -8,11 +8,12 @@
 use pxl_spec_core::cast::{self, Ends, Met};
 use pxl_spec_core::{beam, observed, raster, ray, ways};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
-use spirv_std::memory::{Scope, Semantics};
+
 use spirv_std::{spirv, Image};
 
-use crate::add;
-use crate::beam::{node_at, resumed, started, Beams};
+use crate::beam::{resumed, started, Beams};
+use crate::raster::picked;
+use crate::{add, most};
 use crate::eye::{eye_origin, grid, Eye};
 use crate::observed::{seen_at, seen_put, Reading, Seen, Writing, MISSED};
 use crate::world::{face_of, Unlooked, World};
@@ -129,20 +130,9 @@ pub fn cast_cs(
     if pick != 0 && pick & raster::LACK == 0 {
         let s = raster::sample_of(pick);
         let k = g.sample_at([s % g.samples[0], s / g.samples[0]]);
-        let node = node_at(beams, k + beam::SAMPLE_NODE);
-        let block = [
-            seen_at(beams, k + beam::SAMPLE_BLOCK),
-            seen_at(beams, k + beam::SAMPLE_BLOCK + 1),
-        ];
-        let (enter, axis, enters) = cast::entry(origin, &ray, &node, block[0]);
-        if enters && axis == seen_at(beams, k + beam::SAMPLE_AXIS) {
-            hit = cast::Stop {
-                t: enter,
-                axis,
-                node,
-                at: 0u32,
-                block,
-            };
+        let (stop, enters) = picked(beams, k, origin, &ray);
+        if enters {
+            hit = stop;
             faces = seen_at(beams, k + beam::SAMPLE_FACES);
         }
     }
@@ -164,21 +154,22 @@ pub fn cast_cs(
         );
         return;
     }
-    let met = resumed(&mut Reading { seen: &*seen }, origin, &ray, detail, t, &line);
+    let met = resumed(
+        &mut Reading { seen: &*seen },
+        origin,
+        &ray,
+        detail,
+        t,
+        &line,
+        line.node(),
+    );
     if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
         // SAFETY: within the rays, bounded by their size above.
         unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
-        let at = add(marks, ray::MISS_ARGS_COUNT, 1);
+        let whole = [size.x.div_ceil(8), size.y.div_ceil(8)];
+        let at = listed(marks, observed::MARKS, whole);
         if at < observed::MARKS {
             seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
-            most(
-                marks,
-                ray::MISS_ARGS_LIST + 1,
-                at / (ray::MISS_LANES * ray::MISS_ACROSS) + 1,
-            );
-        } else {
-            most(marks, ray::MISS_ARGS_WHOLE, size.x.div_ceil(8));
-            most(marks, ray::MISS_ARGS_WHOLE + 1, size.y.div_ceil(8));
         }
     } else {
         let mut world = World {
@@ -198,18 +189,26 @@ pub fn cast_cs(
     }
 }
 
-/// Word `i` of `s` raised to `v` where it is less, none past `s`.
-fn most(s: &mut [u32], i: u32, v: u32) {
-    if (i as usize) < s.len() {
-        // SAFETY: just bounded by the slice's own length.
-        unsafe {
-            spirv_std::arch::atomic_u_max::<
-                u32,
-                { Scope::QueueFamily as u32 },
-                { Semantics::NONE.bits() },
-            >(s.get_unchecked_mut(i as usize), v)
-        };
+/// One more missed ray listed for its walk again, the eye's pixels and the
+/// sun's slots alike (pxl-shader sun.rs `sun_cs`): its place off the count
+/// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_COUNT`),
+/// the rows the list fills raised to hold it (`ray::MISS_ARGS_LIST`); one
+/// past the list's `room` has the walk over `whole` workgroups dispatched
+/// instead (`ray::MISS_ARGS_WHOLE`). Its place, which the caller writes
+/// where it is under `room`.
+pub(crate) fn listed(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
+    let at = add(args, ray::MISS_ARGS_COUNT, 1);
+    if at < room {
+        most(
+            args,
+            ray::MISS_ARGS_LIST + 1,
+            at / (ray::MISS_LANES * ray::MISS_ACROSS) + 1,
+        );
+    } else {
+        most(args, ray::MISS_ARGS_WHOLE, whole[0]);
+        most(args, ray::MISS_ARGS_WHOLE + 1, whole[1]);
     }
+    at
 }
 
 /// Pixel `id`'s ray again from its cell's start, writing what it asks into
@@ -233,7 +232,7 @@ fn missed(
     let g = grid(eye);
     let px = pixel_tan(eye, id, size);
     let (ray, t, line) = started(eye, &g, beams, g.cell(px), px);
-    let tag = observed::tag(seen_at(seen, observed::FRAME), 2);
+    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::MISSED_PASS);
     let mut world = World {
         window,
         ground,
@@ -244,12 +243,18 @@ fn missed(
         pool: ways::tree::Read(pool),
     };
     let met = resumed(
-        &mut Writing { world, seen, tag },
+        &mut Writing {
+            world,
+            seen,
+            tag,
+            blocks: true,
+        },
         origin,
         &ray,
         detail,
         t,
         &line,
+        line.node(),
     );
     word(
         &ray,
@@ -334,3 +339,4 @@ pub fn miss_list_cs(
     );
     written(rays, id, w);
 }
+

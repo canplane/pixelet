@@ -43,6 +43,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
         tau: 1.0,
         range: [z, z],
         eye: [0.0; 3],
+        beam: 0.0,
     }
 }
 
@@ -56,6 +57,7 @@ pub fn held() -> Detail {
         tau: 1.0,
         range: [finest, finest],
         eye: [0.0; 3],
+        beam: 0.0,
     }
 }
 
@@ -67,6 +69,7 @@ pub fn by_distance(tau: Tau) -> Detail {
         tau: tau.scale() as f32,
         range: asked(),
         eye: [0.0; 3],
+        beam: 0.0,
     }
 }
 
