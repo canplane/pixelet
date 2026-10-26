@@ -31,6 +31,9 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_SAMPLE => "sample_cs",
         SHADER_SUN => "sun_cs",
         SHADER_SUN_MARK => "sun_mark_cs",
+        SHADER_BOXES => "boxes_cs",
+        SHADER_MISS_LIST => "miss_list_cs",
+        SHADER_FACES => "faces_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -68,7 +71,10 @@ pub const PIPELINE_DECOR_DEPTH: u32 = 31;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 32;
 pub const PIPELINE_SUN_MAP: u32 = 33;
 pub const PIPELINE_SCREEN_PREPASS: u32 = 34;
-pub const PIPELINES: u32 = 35;
+/// The samples' boxes, the nearest face a pixel's ray enters kept with its
+/// sample (gpu/ray/raster.rs).
+pub const PIPELINE_RASTER: u32 = 35;
+pub const PIPELINES: u32 = 36;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -83,7 +89,7 @@ pub const NONE: u32 = 0;
 /// declares them (build.rs `compute`): `CAST_GROUP`, `CAST_WORKGROUP` and
 /// so on, by the stem of the entry's file.
 pub mod compute {
-    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM};
+    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM};
     include!(concat!(env!("OUT_DIR"), "/compute.rs"));
 }
 
@@ -551,6 +557,20 @@ const fn plan_of(id: u32) -> Plan {
             },
             &[],
             &[&SCREEN_GROUP],
+        ),
+        // Every box's faces turned to the eye, the nearest a pixel's ray
+        // enters kept, reversed: its sample's number into a target of its
+        // own (gpu/ray/raster.rs). The vertex stage draws only the faces
+        // turned to the eye, so none is culled by its winding.
+        PIPELINE_RASTER => plan(
+            Head {
+                depth_write: true,
+                depth_compare: GREATER,
+                blend: OPAQUE,
+                ..blended(SHADER_RASTER, CULL_NONE)
+            },
+            &[],
+            &[&[[0, UNIFORM], [1, STORAGE]]],
         ),
         // Only where the opaque world left the far plane, so covered pixels never run it.
         PIPELINE_SKY => plan(

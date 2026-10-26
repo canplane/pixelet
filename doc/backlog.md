@@ -14,14 +14,7 @@ Nothing now.
 
 ## P1
 
-- **Where the raster's work ends and the ray's begins, surveyed before
-  built.** The proxy that only started the ray was measured and not taken: it
-  saved the march but not the descent and pyramid writing a cell's pixels
-  share. The next split must hand the raster that shared work (a tile's or a
-  brick's own traversal, local to what is drawn) and is weighed first on
-  paper, against the cast as built on the fixed path (p95 79 ms) —
-  [20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md),
-  "Resolved".
+Nothing now.
 
 ## P2
 

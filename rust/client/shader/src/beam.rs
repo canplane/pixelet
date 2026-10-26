@@ -253,11 +253,11 @@ pub fn cells_cs(
 /// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a thread each:
 /// its ray resumed from its cell's start as a pixel's is, walked to the
 /// block that fills through the observed pyramid writing what it asks
-/// (`Writing`), and the node and block it stopped at left for the pixels
-/// about it (`beam::SAMPLE_WORDS`), `beam::SAMPLE_NONE` where it went on
-/// to its reach, whether what it stopped at lacks, and what lies about the
-/// face it entered (`World::faced`), asked here once for every pixel that
-/// takes the block.
+/// (`Writing`), and the node and block it stopped at left for the raster
+/// (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where it went on
+/// to its reach, and whether what it stopped at lacks. What lies about the
+/// face it entered is asked only of a sample that draws a box, the one
+/// whose words a pixel reads (raster.rs `faces_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sample_cs(
@@ -286,7 +286,7 @@ pub fn sample_cs(
         g.sample([id.x, id.y]),
     );
     let tag = observed::tag(seen_at(seen, observed::FRAME), 1);
-    let mut world = World {
+    let world = World {
         window,
         ground,
         looks,
@@ -303,7 +303,6 @@ pub fn sample_cs(
         t,
         &line,
     );
-    let faces = world.faced(origin, &ray, &met);
     let base = g.sample_at([id.x, id.y]);
     let stop = met.stop;
     node_put(beams, base + beam::SAMPLE_NODE, &stop.node);
@@ -322,5 +321,4 @@ pub fn sample_cs(
     seen_put(beams, base + beam::SAMPLE_BLOCK, stop.block[0]);
     seen_put(beams, base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
     seen_put(beams, base + beam::SAMPLE_AXIS, stop.axis);
-    seen_put(beams, base + beam::SAMPLE_FACES, faces);
 }

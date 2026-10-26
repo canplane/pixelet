@@ -398,13 +398,20 @@ pub fn top(o: [i32; 3], n: &Node, block: u32) -> (i32, f32) {
     (n.index(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), block).1[2])
 }
 
+/// The block `block` at the node `n` as drawn from the origin `o`, in units
+/// from it (`bounds`, `kept_bounds`): the box `entry` asks a ray into, as
+/// the samples' boxes are drawn (`raster`).
+pub fn drawn(o: [i32; 3], n: &Node, block: u32) -> ([f32; 3], [f32; 3]) {
+    kept_bounds(bounds(n, grid_of(o)), block)
+}
+
 /// Where `ray` from the origin `o` enters the block `block` (a block's word,
 /// `answer`) at the node `n`, and whether it does within its reach: its span
-/// in the block as drawn from the origin (`kept_bounds`, `spans`), and
+/// in the block as drawn from the origin (`drawn`, `spans`), and
 /// where that span begins (`entered`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
 pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, block: u32) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, kept_bounds(bounds(n, grid_of(o)), block), 0.0);
+    let (x, y, z) = spans(ray, drawn(o, n, block), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
         lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),

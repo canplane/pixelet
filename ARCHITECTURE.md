@@ -549,20 +549,28 @@ holds them. The block it stops on is the pixel's
 Once a frame the kernel hands the GPU the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), so every pass reads one grid.
 
-Neighbouring rays share most of their descent, so the cast walks that part once,
-in four steps (`pxl-shader beam.rs` `beam_cs`;
-[a cell casts a beam](./doc/minutes/20261022-a-cell-casts-a-beam.md)):
+Neighbouring rays share most of their descent, so the cast walks that part once
+and hands the rest to the rasterizer, in five steps (`pxl-shader beam.rs`
+`beam_cs`; [a cell casts a beam](./doc/minutes/20261022-a-cell-casts-a-beam.md)):
 
 1. A **beam ray** at each corner of a camera grid cell walks the descent the
    cell's pixels share, and stops before a node too narrow to share.
 2. Each cell starts at the least of the beam rays about it.
 3. **Samples**, four a cell a side, walk on to the blocks they stop at.
-4. A pixel takes the nearest sample block about it that its own ray enters, and
-   walks itself only where none is.
+4. Each block a sample stopped at is drawn as a box
+   (`pxl-render gpu/ray/raster.rs`, `frame/shader/raster.wgsl`). It draws only
+   the face its sample's ray came in through, and a pixel keeps that face only
+   where its own ray enters the block through it. The depth test keeps the
+   nearest, so each pixel holds the nearest sampled block its ray enters.
+5. The pixel takes that block (`pxl-shader cast.rs` `cast_cs`), and walks itself
+   only where it holds none, or where the nearest is a node a sample could not
+   answer.
 
-A face thinner than the samples' spacing can be missed, which
-[the 20261024 minute](./doc/minutes/20261024-a-proxy-only-starts-the-ray.md)
-leaves open.
+The block can come from any sample on the screen, not only the ones about the
+pixel, and a block no sample stopped at is not drawn. A pixel whose ray first
+meets such a block shows the drawn one behind it, a cost
+[the raster picks](./doc/experiment/20261026-the-raster-picks.md) measured
+against each pixel's own walk.
 
 What the rays asked of each node is kept between frames in the **observed
 pyramid** (`pxl-spec-core observed.rs`), forgotten only over squares that moved.
@@ -671,8 +679,8 @@ the clouds by a pixel at the nearest cloud. A frame too large for the stream is
 dropped whole, and the next turn draws again.
 
 Shaders and pipelines are `pxl-render`'s (`frame/shader/`). The compute entries
-are `pxl-shader`'s, a module each by what it computes (`beam.rs`, `cast.rs`,
-`observed.rs`, `sun.rs`, `ground.rs`, `ways.rs`, `decor.rs`), each keeping the
+are `pxl-shader`'s, a module each by what it computes (`beam.rs`, `raster.rs`,
+`cast.rs`, `observed.rs`, `sun.rs`, `ground.rs`, `ways.rs`, `decor.rs`), each keeping the
 name the build reads it by (pxl-tool `shader.rs` `ENTRIES`), built to WGSL and
 checked in beside the rest (`*.gen.wgsl`). The renderer's build validates each
 shader with naga and takes each pipeline's binding stages from it (pxl-render
@@ -781,7 +789,7 @@ holds.
   block tinted by the share of a cell its face shows the eye (`screen_lit.wgsl`
   `cell_share`).
 - `ray_steps`, in a development build: each pixel coloured by the nodes its own
-  ray walked, grey where it took a sample's block.
+  ray walked, grey where it took the block the raster kept.
 
 ---
 

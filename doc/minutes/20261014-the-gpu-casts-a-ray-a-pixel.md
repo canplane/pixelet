@@ -15,6 +15,10 @@ down at once, and a step up waits until the step above fits for
 domain/view/param.rs); the frame is upscaled within itself. The `rays` setting
 below is gone, and the overwrites run on the GPU (One kind, one side).
 
+_Since 2026-10-26 a pixel's block is the raster's pick, not the samples about
+it: the nearest block any sample stopped at that its ray enters (pxl-shader
+cast.rs `cast_cs`; [the raster picks](../experiment/20261026-the-raster-picks.md))._
+
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md)),
 and a ray reaches it by asking the world whether a node is empty

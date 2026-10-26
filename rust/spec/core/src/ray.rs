@@ -45,6 +45,22 @@ const _: () = assert!(KEPT_SHIFT + KEPT_BITS < 32);
 pub const MISS: u32 = u32::MAX;
 const _: () = assert!(MISS >> (KEPT_SHIFT + KEPT_BITS) != 0);
 
+/// The walk again's dispatches, as the reading walk counts what it marks
+/// (pxl-shader `cast_cs`): over the marked pixels listed
+/// (`observed::MARKS_AT`), `MISS_LANES` a workgroup, `MISS_ACROSS`
+/// workgroups a row and a row each `MISS_LANES * MISS_ACROSS` listed
+/// (`MISS_ARGS_LIST`); over every pixel, 8 × 8 a workgroup, where any
+/// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the
+/// count listed or not (`MISS_ARGS_COUNT`). Each frame's start
+/// (`MISS_ARGS_EMPTY`) dispatches neither.
+pub const MISS_LANES: u32 = 64;
+pub const MISS_ACROSS: u32 = 64;
+pub const MISS_ARGS_LIST: u32 = 0;
+pub const MISS_ARGS_WHOLE: u32 = 3;
+pub const MISS_ARGS_COUNT: u32 = 6;
+pub const MISS_ARGS_WORDS: usize = 7;
+pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0];
+
 /// The first word of a stop at `block`, a block's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.
 pub const fn first_word(block: u32, face: u32, zoom: Zoom) -> u32 {

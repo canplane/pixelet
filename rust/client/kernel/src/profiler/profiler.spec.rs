@@ -71,31 +71,31 @@ pub mod FRAME {
     pub const wake_in_ms: u32 = 21;
     pub const gpu_read: u32 = 22;
     pub const gpu_spans: u32 = 23;
-    pub const gpu_px: u32 = 34;
-    pub const scale: u32 = 35;
-    pub const census: u32 = 36;
-    pub const uploads: u32 = 56;
-    pub const uploads_bytes: u32 = 57;
-    pub const depth_bytes: u32 = 58;
-    pub const pack_bytes: u32 = 59;
-    pub const gpu_objects: u32 = 60;
-    pub const zoom_tiles: u32 = 71;
-    pub const tiles_place: u32 = 95;
-    pub const heap_used_bytes: u32 = 96;
-    pub const heap_live_bytes: u32 = 97;
-    pub const heap_run_bytes: u32 = 98;
-    pub const heap_slot_bytes: u32 = 99;
-    pub const heap_range_bytes: u32 = 100;
-    pub const heap_largest_free_bytes: u32 = 101;
-    pub const heap_refusals: u32 = 102;
-    pub const ring_cq_peak: u32 = 103;
-    pub const ring_sq_peak: u32 = 104;
-    pub const ring_held_peak: u32 = 105;
-    pub const body_slots_peak: u32 = 106;
-    pub const waiting: u32 = 107;
-    pub const out: u32 = 112;
-    pub const cap_terrain_refused: u32 = 117;
-    pub const WORDS: u32 = 118;
+    pub const gpu_px: u32 = 41;
+    pub const scale: u32 = 42;
+    pub const census: u32 = 43;
+    pub const uploads: u32 = 63;
+    pub const uploads_bytes: u32 = 64;
+    pub const depth_bytes: u32 = 65;
+    pub const pack_bytes: u32 = 66;
+    pub const gpu_objects: u32 = 67;
+    pub const zoom_tiles: u32 = 78;
+    pub const tiles_place: u32 = 102;
+    pub const heap_used_bytes: u32 = 103;
+    pub const heap_live_bytes: u32 = 104;
+    pub const heap_run_bytes: u32 = 105;
+    pub const heap_slot_bytes: u32 = 106;
+    pub const heap_range_bytes: u32 = 107;
+    pub const heap_largest_free_bytes: u32 = 108;
+    pub const heap_refusals: u32 = 109;
+    pub const ring_cq_peak: u32 = 110;
+    pub const ring_sq_peak: u32 = 111;
+    pub const ring_held_peak: u32 = 112;
+    pub const body_slots_peak: u32 = 113;
+    pub const waiting: u32 = 114;
+    pub const out: u32 = 119;
+    pub const cap_terrain_refused: u32 = 124;
+    pub const WORDS: u32 = 125;
 }
 
 /// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it.
@@ -136,9 +136,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 118;
-    pub const prev: u32 = 119;
-    pub const WORDS: u32 = 237;
+    pub const has_prev: u32 = 125;
+    pub const prev: u32 = 126;
+    pub const WORDS: u32 = 251;
 }
 
 pub mod SPREAD {
@@ -199,19 +199,19 @@ pub mod SUMMARY {
         pub const gpu: u32 = 18;
         pub const phases_p95: u32 = 21;
         pub const gpu_spans_p95: u32 = 26;
-        pub const kinds: u32 = 37;
-        pub const wakes: u32 = 45;
-        pub const heap_used_delta_bytes: u32 = 48;
-        pub const last: u32 = 49;
-        pub const WORDS: u32 = 167;
+        pub const kinds: u32 = 44;
+        pub const wakes: u32 = 52;
+        pub const heap_used_delta_bytes: u32 = 55;
+        pub const last: u32 = 56;
+        pub const WORDS: u32 = 181;
     }
     pub mod tasks {
-        pub const AT: u32 = 170;
+        pub const AT: u32 = 184;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 290;
+        pub const AT: u32 = 304;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -220,7 +220,7 @@ pub mod SUMMARY {
     /// The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_distance`).
     /// The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: u32 = 451;
+        pub const AT: u32 = 465;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -246,7 +246,7 @@ pub mod SUMMARY {
         pub const blocked: u32 = 22;
         pub const WORDS: u32 = 23;
     }
-    pub const WORDS: u32 = 474;
+    pub const WORDS: u32 = 488;
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.

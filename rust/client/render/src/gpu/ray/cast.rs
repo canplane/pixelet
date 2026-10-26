@@ -6,14 +6,15 @@
 
 use pxl_spec_core::scatter::GROUPS;
 use pxl_spec_core::window::{self, FRESH_CELL, FRESH_FIRST};
-use pxl_spec_core::{beam, eye, observed, sun};
+use pxl_spec_core::{beam, eye, observed, ray, sun};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use super::raster::Raster;
 use super::RaysPass;
 use crate::frame::shader::record::{
     compute, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
-    SHADER_MISS, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
+    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
@@ -44,9 +45,13 @@ pub(super) struct CastBuffers {
     grid: beam::Grid,
     beam_room: u32,
     /// The observed pyramid (pxl-spec-core `observed`): its buffer, no
-    /// pixel's; the pixels the cast's reading walk missed walked again
-    /// (`miss_cs`, a thread a drawn pixel), each told by the mark its own
-    /// first ray word holds (pxl-spec-core `ray::MISS`); the pyramid forgotten (`forget_cs`) where
+    /// pixel's; the pixels the cast's reading walk missed walked again, a
+    /// thread each of their list (`miss_list_cs`, pxl-spec-core
+    /// `observed::MARKS_AT`), or where it was full a thread a drawn pixel
+    /// (`miss_cs`), each told by the mark its own first ray word holds
+    /// (pxl-spec-core `ray::MISS`), both dispatched off the words the
+    /// reading walk counts them in (`marks`, pxl-spec-core
+    /// `ray::MISS_ARGS_WORDS`); the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's windows' slots that moved
     /// (`moved`, a bit a slot, against the slots as `slots` last held them);
@@ -54,6 +59,8 @@ pub(super) struct CastBuffers {
     /// `observed::FORGETS`). `frame` numbers the casts since it was last
     /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_built: Built,
+    miss_list_built: Built,
+    marks: u32,
     forget_built: Built,
     seen: u32,
     frame: u32,
@@ -119,6 +126,14 @@ pub(super) struct CastBuffers {
     /// same: the rays and the decor grown over them stand, and nothing is
     /// cast.
     read: Read,
+    /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
+    /// pick at each pixel the pixels read (`cast_cs`), over a group of
+    /// their own (`pixel_group`): the world's group's bindings and the
+    /// raster's picks (`pixel_bound`), made again exactly when one of them
+    /// is another.
+    raster: Raster,
+    pixel_group: u32,
+    pixel_bound: [u32; 11],
 }
 
 /// The nodes the world's query answers otherwise this frame, as the sun's
@@ -161,15 +176,17 @@ const _: () = assert!(
     within(compute::JOINED_GROUP, compute::MISS_GROUP)
         && within(compute::BEAM_GROUP, compute::MISS_GROUP)
         && within(compute::CELLS_GROUP, compute::MISS_GROUP)
-        && within(compute::CAST_GROUP, compute::MISS_GROUP)
-        && within(compute::FORGET_GROUP, compute::MISS_GROUP),
-    "the fold, the beam, the cells, the reading cast and the forgetting bind the group the missed pixels' cast binds whole"
+        && within(compute::SAMPLE_GROUP, compute::MISS_GROUP)
+        && within(compute::FORGET_GROUP, compute::MISS_GROUP)
+        && within(compute::MISS_LIST_GROUP, compute::MISS_GROUP),
+    "the fold, the beam, the cells, the samples, the forgetting and the list's walk bind the group the missed pixels' cast binds whole"
 );
-/// The cast's one group, every kernel's over the cast's world bar the
-/// sun's: the one the missed pixels' cast binds whole. The sun's cast binds
-/// its world and its clipmap (`SUN_GROUP`), past the floor's storage
-/// buffers were they one group.
-const CAST_GROUP: [u32; compute::MISS_GROUP.len()] = compute::MISS_GROUP;
+/// The cast's world's group, every kernel's over it bar the sun's and the
+/// pixels': the one the missed pixels' cast binds whole. The sun's cast
+/// binds its world and its clipmap (`SUN_GROUP`), past the floor's storage
+/// buffers were they one group; the pixels' (`cast_cs`) read the raster's
+/// picks beside the world, read-only (`pixel_group`).
+const WORLD_GROUP: [u32; compute::MISS_GROUP.len()] = compute::MISS_GROUP;
 
 impl RaysPass {
     /// The cast pass's pipelines and buffers, made once, where the frame
@@ -180,17 +197,19 @@ impl RaysPass {
         if self.cast.is_some() {
             return;
         }
-        // One group for every kernel over the cast's world.
-        let group = &CAST_GROUP;
-        let built = pipelines.build_compute(g, SHADER_CAST, group);
+        // One group for every kernel over the cast's world but the pixels'.
+        let group = &WORLD_GROUP;
+        let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
         let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
         let cells_built = pipelines.build_compute(g, SHADER_CELLS, group);
         let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
         let joined_built = pipelines.build_compute(g, SHADER_JOINED, group);
         let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
+        let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, group);
         let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
         let sun_built = pipelines.build_compute(g, SHADER_SUN, &compute::SUN_GROUP);
         let sun_mark_built = pipelines.build_compute(g, SHADER_SUN_MARK, &compute::SUN_MARK_GROUP);
+        let raster = Raster::new(g, pipelines);
         let buffer = |size: u32, usage: u32| g.buffer(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
@@ -202,6 +221,11 @@ impl RaysPass {
             grid: beam::Grid::of_words([0.0; 2], [0; eye::GRID_WORDS]),
             beam_room: 0,
             miss_built,
+            miss_list_built,
+            marks: buffer(
+                word_bytes(ray::MISS_ARGS_WORDS),
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            ),
             forget_built,
             seen: buffer(word_bytes(observed::WORDS as usize), storage),
             frame: 0,
@@ -252,6 +276,9 @@ impl RaysPass {
             overwrite_revision: None,
             grown: Grown::new(g, pipelines),
             read: Read::default(),
+            raster,
+            pixel_group: 0,
+            pixel_bound: [0; 11],
         };
         self.cast = Some(c);
     }
@@ -563,6 +590,7 @@ impl RaysPass {
                 observed::FRAME as usize
             };
             g.write_buffer(c.seen, word_bytes(from), bytes(&head[from..]));
+            g.write_buffer(c.marks, 0, bytes(&ray::MISS_ARGS_EMPTY));
             (c.forget, c.moved) = (false, [0; observed::MOVED_WORDS as usize]);
         }
         let bound = [
@@ -579,8 +607,26 @@ impl RaysPass {
         ];
         if bound != c.bound {
             release(c.group);
-            c.group = cast_group(g, &c.built, bound);
+            c.group = cast_group(g, &c.miss_built, bound);
             c.bound = bound;
+        }
+        if self.kind == FrameKind::cast {
+            c.raster.prepare(
+                g,
+                &cast.eye,
+                c.size,
+                &c.grid,
+                [c.eye, c.beams],
+                [c.window, ground, c.shards, c.overwrites, pool],
+            );
+            let mut pixel_bound = [0; 11];
+            pixel_bound[..10].copy_from_slice(&bound);
+            pixel_bound[10] = c.raster.picks_array;
+            if pixel_bound != c.pixel_bound {
+                release(c.pixel_group);
+                c.pixel_group = pixel_group(g, &c.built, pixel_bound, c.marks);
+                c.pixel_bound = pixel_bound;
+            }
         }
         let sun_bound = [
             c.eye,
@@ -664,12 +710,17 @@ impl RaysPass {
         if self.kind == FrameKind::cast {
             // The observed pyramid forgotten first where it is; then the
             // beam rays writing it, a corner each; each cell's start off them;
-            // the samples writing it, each from its cell's start; the pixels
-            // off the samples about them, or reading it from their cell's
-            // start, marking the pixels that missed; and those again,
+            // the samples writing it, each from its cell's start; their
+            // blocks drawn as boxes, each pixel's nearest kept; the pixels
+            // off that, or reading it from their cell's start, marking the
+            // pixels that missed; and those again,
             // writing it, a thread a drawn pixel, each but the marked
             // returning at once. One pass, a dispatch each, each
             // reading what the ones before wrote (pxl-spec-core `observed`).
+            // A pass a dispatch, each timed in its own span, so the cast's
+            // parts are read apart: `cast` holds the forgetting alone; the
+            // samples' boxes drawn between the samples and the pixels, which
+            // take the raster's pick (ray/raster.rs, span `sraster`).
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::cast as usize].pass());
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != observed::FORGETS_NONE {
@@ -681,16 +732,58 @@ impl RaysPass {
                     1,
                 );
             }
-            for (built, [x, y], w) in [
-                (&c.beam_built, c.grid.corners, compute::BEAM_WORKGROUP),
-                (&c.cells_built, c.grid.span, compute::CELLS_WORKGROUP),
-                (&c.sample_built, c.grid.samples, compute::SAMPLE_WORKGROUP),
-                (&c.built, c.size, compute::CAST_WORKGROUP),
-                (&c.miss_built, c.size, compute::MISS_WORKGROUP),
+            g.end(pass);
+            for (span, built, [x, y], w) in [
+                (
+                    GpuSpanName::beam,
+                    &c.beam_built,
+                    c.grid.corners,
+                    compute::BEAM_WORKGROUP,
+                ),
+                (
+                    GpuSpanName::cells,
+                    &c.cells_built,
+                    c.grid.span,
+                    compute::CELLS_WORKGROUP,
+                ),
+                (
+                    GpuSpanName::sample,
+                    &c.sample_built,
+                    c.grid.samples,
+                    compute::SAMPLE_WORKGROUP,
+                ),
+                (
+                    GpuSpanName::pixel,
+                    &c.built,
+                    c.size,
+                    compute::CAST_WORKGROUP,
+                ),
             ] {
+                let mut group = c.group;
+                if span == GpuSpanName::pixel {
+                    c.raster.draw(g, encoder, stamps, &c.grid);
+                    group = c.pixel_group;
+                }
+                let pass = g.compute_pass(encoder, stamps[span as usize].pass());
+                g.set_bind_group(pass, 0, group, &[]);
                 g.set_pipeline(pass, built.pipeline);
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+                g.end(pass);
             }
+            // The marked pixels' count where their walk reads it, then that
+            // walk over their list, and over every pixel where it was full.
+            g.copy_buffer(
+                encoder,
+                (c.marks, word_bytes(ray::MISS_ARGS_COUNT as usize)),
+                (c.seen, word_bytes(observed::MARKS_COUNT as usize)),
+                4,
+            );
+            let pass = g.compute_pass(encoder, stamps[GpuSpanName::miss as usize].pass());
+            g.set_bind_group(pass, 0, c.group, &[]);
+            g.set_pipeline(pass, c.miss_list_built.pipeline);
+            g.dispatch_indirect(pass, c.marks, word_bytes(ray::MISS_ARGS_LIST as usize));
+            g.set_pipeline(pass, c.miss_built.pipeline);
+            g.dispatch_indirect(pass, c.marks, word_bytes(ray::MISS_ARGS_WHOLE as usize));
             g.end(pass);
         }
         if c.sun_cast {
@@ -770,6 +863,28 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 10]) -> u32 {
         buffer_entry(7, pool),
         buffer_entry(8, beams),
         buffer_entry(9, seen),
+    ];
+    g.bind_group(built.layouts[0], &entries)
+}
+
+/// The pixels' group 0 over `bound`: the world's group's (`cast_group`),
+/// read-only bar the pyramid, which the marked pixels are listed in, the
+/// raster's picks, a one-layer array, and the words the marked are counted
+/// in (`marks`).
+fn pixel_group(g: &Gpu, built: &Built, bound: [u32; 11], marks: u32) -> u32 {
+    let [eye, window, ground, rays, _looks, shards, overwrites, pool, beams, seen, picks] = bound;
+    let entries = [
+        buffer_entry(0, eye),
+        buffer_entry(1, window),
+        buffer_entry(2, ground),
+        view_entry(3, rays),
+        buffer_entry(5, shards),
+        buffer_entry(6, overwrites),
+        buffer_entry(7, pool),
+        buffer_entry(8, beams),
+        buffer_entry(9, seen),
+        view_entry(13, picks),
+        buffer_entry(14, marks),
     ];
     g.bind_group(built.layouts[0], &entries)
 }

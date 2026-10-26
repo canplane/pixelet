@@ -100,7 +100,19 @@ pub const SHADER_SUN_MARK: u32 = 47;
 pub const SHADER_SCREEN_DEPTH: u32 = 48;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 49;
-pub const SHADERS: u32 = 50;
+/// The samples' stops handed to the rasterizer (pxl-spec-core `raster`):
+/// their boxes written, a compute entry; and the boxes drawn, the nearest
+/// face a pixel's ray enters kept with its sample (raster.wgsl), which the
+/// cast's pixels read (`SHADER_CAST`).
+pub const SHADER_BOXES: u32 = 50;
+pub const SHADER_RASTER: u32 = 51;
+/// The pixels the cast's reading walk missed, walked again from their list
+/// (pxl-spec-core `observed::MARKS_AT`), a thread each: a compute entry.
+pub const SHADER_MISS_LIST: u32 = 52;
+/// What lies about each box's face, asked once a box (pxl-spec-core
+/// `raster::ARGS_FACES`): a compute entry.
+pub const SHADER_FACES: u32 = 53;
+pub const SHADERS: u32 = 54;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -304,4 +316,12 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "camera_grid"],
+    // SHADER_BOXES
+    &["boxes.gen"],
+    // SHADER_RASTER
+    &["raster_box", "raster"],
+    // SHADER_MISS_LIST
+    &["miss_list.gen"],
+    // SHADER_FACES
+    &["faces.gen"],
 ];

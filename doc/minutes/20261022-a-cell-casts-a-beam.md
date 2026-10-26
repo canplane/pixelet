@@ -12,6 +12,10 @@ own ray enters, walking only where none is (`cast_cs`). The image is no longer
 held to the root walk's: the cut was taken, so "Sparser samples lose coverage"
 below is answered by the fallback walk, not avoided.
 
+_Since 2026-10-26 a pixel takes the nearest block any sample stopped at that
+its ray enters, which the raster picks, not only the 4 × 4 about it
+([the raster picks](../experiment/20261026-the-raster-picks.md))._
+
 _Superseded from here to As built where it says a pixel's block is the root
 walk's: by the Status above. The proof still holds for a walk from a cell's
 start, a sample's or a pixel's, not for the block a pixel takes from a sample._

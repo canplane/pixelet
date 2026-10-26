@@ -15,7 +15,7 @@
     dead_code
 )]
 
-pub const GPU_SPAN_NAMES: usize = 11;
+pub const GPU_SPAN_NAMES: usize = 18;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -28,13 +28,20 @@ pub enum GpuSpanName {
     case = 6,
     fill = 7,
     cast = 8,
-    grow = 9,
-    shadow = 10,
+    beam = 9,
+    cells = 10,
+    sample = 11,
+    sraster = 12,
+    pixel = 13,
+    miss = 14,
+    grow = 15,
+    shadow = 16,
+    faces = 17,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 11] = [
+    pub const ALL: [GpuSpanName; 18] = [
         GpuSpanName::air,
         GpuSpanName::prepass,
         GpuSpanName::ao,
@@ -44,8 +51,15 @@ impl GpuSpanName {
         GpuSpanName::case,
         GpuSpanName::fill,
         GpuSpanName::cast,
+        GpuSpanName::beam,
+        GpuSpanName::cells,
+        GpuSpanName::sample,
+        GpuSpanName::sraster,
+        GpuSpanName::pixel,
+        GpuSpanName::miss,
         GpuSpanName::grow,
         GpuSpanName::shadow,
+        GpuSpanName::faces,
     ];
 
     /// The member a number names, or none for a number the set does not
