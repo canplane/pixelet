@@ -1,15 +1,17 @@
 // pxl-shader/cast.rs
 
 //! Each drawn pixel's ray (`cast_cs`) off the samples about it or down the
-//! observed pyramid, and those that missed it walked again (`miss_cs`).
+//! observed pyramid, and those that missed it walked again (`miss_cs`); in
+//! the oracle's measurement, each stop walked again from the root
+//! (`oracle_cs`).
 
-use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{beam, observed, ray, ways};
+use pxl_spec_core::cast::{self, Ends, Met, Query, Until};
+use pxl_spec_core::{beam, eye, observed, ray, ways};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::{spirv, Image};
 
 use crate::beam::{node_at, resumed, started, Beams};
-use crate::eye::{eye_origin, grid, Eye};
+use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::observed::{seen_at, Reading, Seen, Writing, MISSED};
 use crate::world::{face_of, Unlooked, World};
 
@@ -147,7 +149,7 @@ pub fn cast_cs(
         }
         j += 1;
     }
-    let steps = eye.origin.w != 0;
+    let steps = shows_steps(eye);
     if hit.t < ray.reach && hit.t < lack {
         written(
             rays,
@@ -242,11 +244,84 @@ pub fn miss_cs(
     written(
         rays,
         id,
-        word(
-            &ray,
-            met,
-            eye.origin.w != 0,
-            world.faced(origin, &ray, &met),
-        ),
+        word(&ray, met, shows_steps(eye), world.faced(origin, &ray, &met)),
     );
+}
+
+/// Whether each ray reports the nodes its descent asked (pxl-spec-core
+/// `eye::SHOW_STEPS`).
+fn shows_steps(eye: &Eye) -> bool {
+    eye.origin.w as u32 & eye::SHOW_STEPS != 0
+}
+
+/// How far short of its stop the oracle starts a pixel's walk, a share of
+/// the stop's distance: about a drawn pixel's width there, nearer than any
+/// proxy's face could start it.
+const SHORT: f32 = 1.0 / 4096.0;
+
+/// The oracle's counts (pxl-render gpu/ray/cast.rs `Oracle`), by word.
+const STOPS: u32 = 0;
+const DIFFERED: u32 = 1;
+const LACKED: u32 = 2;
+const VISITS: u32 = 3;
+
+/// Where the eye's words ask for it (pxl-spec-core `eye::ORACLE`), after the
+/// cast's pass, in a pass timed apart: each pixel the cast stopped walked
+/// again down the observed pyramid from the world's root (`Reading`,
+/// `cast::Rooted`), started `SHORT` of its stop, the start a perfect proxy
+/// would hand it, with no line handed over it; that walk's words written in
+/// place of the cast's, what lies about the face kept. A pixel that met
+/// nothing walks nothing, as no proxy box would lie under it. A walk that
+/// lacks a node the pyramid holds no answer for keeps the cast's words.
+/// With the steps shown, each stop counted, and those whose walk stopped
+/// on another word or another distance, those that lacked, and the visits.
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "oracle_cs"))]
+pub fn oracle_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 10)] counts: &mut [u32],
+) {
+    let size: UVec3 = rays.query_size();
+    if id.x >= size.x || id.y >= size.y {
+        return;
+    }
+    let first: u32 = rays.read(UVec3::new(id.x, id.y, 0));
+    if first == 0 {
+        return;
+    }
+    let t = f32::from_bits(rays.read(UVec3::new(id.x, id.y, 1)));
+    let faces: u32 = rays.read(UVec3::new(id.x, id.y, ray::FACES));
+    let (origin, detail) = eye_origin(eye);
+    let ray = eye_ray(eye, pixel_tan(eye, id, size));
+    let mut q = Reading { seen };
+    let at = q.root(cast::Node::ROOT.index(origin));
+    let met = cast::walk(
+        &mut q,
+        origin,
+        &ray,
+        detail,
+        Until::Fills,
+        (cast::Node::ROOT, at, t - t * SHORT),
+        &cast::Rooted(at),
+        &mut (),
+    );
+    let steps = shows_steps(eye);
+    let w = word(&ray, met, steps, faces);
+    let lacked = met.ends == Ends::Lacks;
+    if !lacked {
+        written(rays, id, w);
+    }
+    if steps {
+        let d = met.stop.t - t;
+        let off = d > t * SHORT || -d > t * SHORT;
+        crate::add(counts, STOPS, 1);
+        if lacked {
+            crate::add(counts, LACKED, 1);
+        } else if w[0] != first || off {
+            crate::add(counts, DIFFERED, 1);
+        }
+        crate::add(counts, VISITS, met.visits);
+    }
 }

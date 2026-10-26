@@ -24,6 +24,15 @@ const pastText = (
   : `off-turn ${n1(f.interval_ms - f.busy_ms)}`);
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
+/** The `ray_oracle` measurement's sums since boot as the last frame holds
+ * them (profiler.json FRAME's oracle lanes), where any frame's counts were
+ * read back. */
+const oracleText = (f: Frame) =>
+  f.oracle_frames === 0 ? [] : [
+    `  oracle  ${f.oracle_stops} stops over ${f.oracle_frames} frames since boot   differed ${f.oracle_differed}   lacked ${f.oracle_lacked}   visits ${
+      n1(f.oracle_visits / f.oracle_stops)
+    } a stop`,
+  ];
 
 export function failText(fail: u32, detail: u32): string {
   const name = strerror(fail as Errno).split(":")[0];
@@ -131,6 +140,7 @@ function windowSection(r: ProfilerReport): string[] {
       } ms   (over the ${f.gpu_read} frames a read landed with)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
+    ...oracleText(last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,
     `  heap used Δ ${

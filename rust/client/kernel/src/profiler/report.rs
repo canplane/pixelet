@@ -13,7 +13,7 @@ use xpute_guest::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
 use crate::profiler::frame::{
-    DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample,
+    DeviceSample, FrameSample, GpuSample, HeapSample, OracleSample, RingSample, TileSample,
 };
 use crate::profiler::record::{profiler_record_frame, profiler_recording};
 use crate::sys::io::demand::Stream;
@@ -87,6 +87,14 @@ pub struct FrameTurn {
     pub task_ms: f64,
 }
 
+/// The renderer's oracle sums as it last stated them: sums since boot, so
+/// kept, not taken, by a turn that draws none.
+static ORACLE: Global<OracleSample> = Global::new();
+
+pub fn set_oracle(o: OracleSample) {
+    ORACLE.set(o);
+}
+
 /// The frame turn's record, once its frame is drawn.
 pub fn profiler_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
@@ -125,6 +133,7 @@ pub fn profiler_frame(t: FrameTurn) {
         waiting: counts.map(|c| f64::from(c.0)),
         out: counts.map(|c| f64::from(c.1)),
         terrain_refused,
+        oracle: *ORACLE.get(OracleSample::default),
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };

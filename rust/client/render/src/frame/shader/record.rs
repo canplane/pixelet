@@ -27,6 +27,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_BEAM => "beam_cs",
         SHADER_CELLS => "cells_cs",
         SHADER_MISS => "miss_cs",
+        SHADER_ORACLE => "oracle_cs",
         SHADER_FORGET => "forget_cs",
         SHADER_SAMPLE => "sample_cs",
         SHADER_SUN => "sun_cs",

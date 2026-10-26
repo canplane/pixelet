@@ -51,7 +51,10 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// zoom (pxl-spec-core `eye`). None without a screen.
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
-    lens::gpu_cast(o, lens::tau(), settings_store().ray_steps, &mut words)?;
+    let s = settings_store();
+    let steps =
+        (u32::from(s.ray_steps) * eye::SHOW_STEPS) | (u32::from(s.ray_oracle) * eye::ORACLE);
+    lens::gpu_cast(o, lens::tau(), steps, &mut words)?;
     let edits = preview::current();
     let cut = |e: Option<EntryAt>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {

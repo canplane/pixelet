@@ -15,7 +15,7 @@
     dead_code
 )]
 
-pub const GPU_SPAN_NAMES: usize = 11;
+pub const GPU_SPAN_NAMES: usize = 12;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -28,13 +28,14 @@ pub enum GpuSpanName {
     case = 6,
     fill = 7,
     cast = 8,
-    grow = 9,
-    shadow = 10,
+    oracle = 9,
+    grow = 10,
+    shadow = 11,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 11] = [
+    pub const ALL: [GpuSpanName; 12] = [
         GpuSpanName::air,
         GpuSpanName::prepass,
         GpuSpanName::ao,
@@ -44,6 +45,7 @@ impl GpuSpanName {
         GpuSpanName::case,
         GpuSpanName::fill,
         GpuSpanName::cast,
+        GpuSpanName::oracle,
         GpuSpanName::grow,
         GpuSpanName::shadow,
     ];

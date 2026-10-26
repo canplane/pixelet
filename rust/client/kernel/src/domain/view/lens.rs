@@ -81,8 +81,8 @@ impl Lens {
 
 /// What a GPU's cast of the screen's rays reads of the eye (pxl-spec-core
 /// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
-/// the world where it stands there (pxl-spec `world::origin`), and whether each ray
-/// reports the nodes its descent asked, not what it met; the unit forward
+/// the world where it stands there (pxl-spec `world::origin`), and `steps`, what
+/// each ray reports (pxl-spec-core `eye::STEPS`); the unit forward
 /// and the reach; the unit right and τ; the unit up; the tangents of the
 /// screen's half-angles across and up and the zooms a block is asked at;
 /// the camera grid the cast lays over the screen off them, once. A
@@ -91,7 +91,7 @@ impl Lens {
 pub fn gpu_cast(
     o: &Observation,
     tau: Tau,
-    steps: bool,
+    steps: u32,
     words: &mut [u32; eye::WORDS],
 ) -> Option<()> {
     let lens = Lens::of(o)?;
@@ -99,7 +99,7 @@ pub fn gpu_cast(
     let w = |v: f64| (v as f32).to_bits();
     let mut put = |at: usize, v: &[u32]| words[at..at + v.len()].copy_from_slice(v);
     put(eye::ORIGIN, &q.map(|v| v as u32));
-    put(eye::STEPS, &[u32::from(steps)]);
+    put(eye::STEPS, &[steps]);
     put(eye::FORWARD, &lens.forward.map(w));
     put(eye::REACH, &[w(o.reach)]);
     put(eye::RIGHT, &lens.right.map(w));

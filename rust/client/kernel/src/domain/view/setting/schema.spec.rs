@@ -226,10 +226,12 @@ pub enum SettingKey {
     pet = 18,
     /// Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (rust/client/render/src/frame/shader/screen_ray.wgsl).
     ray_steps = 19,
+    /// A measurement the proxy of doc/minutes/20261024-a-proxy-only-starts-the-ray.md is weighed by: every pixel the cast stopped walks again from the world's root, started just short of what it stopped on, as a perfect proxy would start it, in a pass timed apart (span `oracle`), and that walk's stop is what is drawn; with `ray_steps` on, its visits are coloured and counted, and the stops that differ from the cast's (rust/client/shader/src/cast.rs `oracle_cs`).
+    ray_oracle = 20,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 20] = [
+    pub const ALL: [SettingKey; 21] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -250,11 +252,12 @@ impl SettingKey {
         SettingKey::person,
         SettingKey::pet,
         SettingKey::ray_steps,
+        SettingKey::ray_oracle,
     ];
 
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a retired number's stays 0.
-    pub const SLOTS: usize = 20;
+    pub const SLOTS: usize = 21;
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
@@ -285,6 +288,7 @@ impl SettingKey {
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
+            SettingKey::ray_oracle => SettingKind::Toggle,
         }
     }
 
@@ -296,7 +300,10 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::ray_steps)
+        matches!(
+            self,
+            SettingKey::surface_follow | SettingKey::ray_steps | SettingKey::ray_oracle
+        )
     }
 
     /// A choice's option a development build only offers.
@@ -331,6 +338,7 @@ pub struct Settings {
     pub person: u8,
     pub pet: u8,
     pub ray_steps: bool,
+    pub ray_oracle: bool,
 }
 
 impl Settings {
@@ -356,6 +364,7 @@ impl Settings {
         person: 1,
         pet: 5,
         ray_steps: false,
+        ray_oracle: false,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -382,6 +391,7 @@ impl Settings {
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
+            SettingKey::ray_oracle => self.ray_oracle as u32,
         }
     }
 
@@ -427,6 +437,7 @@ impl Settings {
                 Err(_) => return false,
             },
             SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
+            SettingKey::ray_oracle if value <= 1 => self.ray_oracle = value == 1,
             _ => return false,
         }
         true

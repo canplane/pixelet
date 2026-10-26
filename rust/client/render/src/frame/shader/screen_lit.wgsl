@@ -15,7 +15,7 @@ fn fs(v: VertexOut) -> FragOut {
   let uv = box_uv(h);
   let ddx = dpdx(uv);
   let ddy = dpdy(uv);
-  if (eye_word(EYE_STEPS) != 0u) {
+  if ((eye_word(EYE_STEPS) & EYE_SHOW_STEPS) != 0u) {
     // A ray that met nothing at the end of what the eye observes, nearer than
     // the far plane's 0 the sky stands at.
     let t = select(bitcast<f32>(eye_word(EYE_REACH)), bitcast<f32>(c.y), met);

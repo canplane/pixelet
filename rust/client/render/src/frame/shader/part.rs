@@ -100,7 +100,11 @@ pub const SHADER_SUN_MARK: u32 = 47;
 pub const SHADER_SCREEN_DEPTH: u32 = 48;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 49;
-pub const SHADERS: u32 = 50;
+/// Each stop the cast made walked again from the world's root, started just
+/// short of it, where the eye asks for the oracle's measurement
+/// (pxl-spec-core `eye::ORACLE`): a compute entry.
+pub const SHADER_ORACLE: u32 = 50;
+pub const SHADERS: u32 = 51;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -304,4 +308,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "camera_grid"],
+    // SHADER_ORACLE
+    &["oracle.gen"],
 ];

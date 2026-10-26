@@ -13,7 +13,7 @@ use xpute_kit::status::errno::Errno;
 use super::RaysPass;
 use crate::frame::shader::record::{
     compute, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
-    SHADER_MISS, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
+    SHADER_MISS, SHADER_ORACLE, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
@@ -25,6 +25,7 @@ use crate::gpu::read::Read;
 use crate::gpu::renderer::{Cast, Overwrites};
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName};
+use xpute_guest::mem::off_of;
 
 /// What the GPU's cast reads; it writes the world surface's rays.
 pub(super) struct CastBuffers {
@@ -119,6 +120,34 @@ pub(super) struct CastBuffers {
     /// same: the rays and the decor grown over them stand, and nothing is
     /// cast.
     read: Read,
+    oracle: Oracle,
+}
+
+/// The counts `oracle_cs` keeps: the stops, those its walk stopped
+/// otherwise, those it lacked a node for, and its visits.
+pub const ORACLE_COUNTS: usize = 4;
+
+/// The oracle's measurement, where the eye asks for it (pxl-spec-core
+/// `eye::ORACLE`, pxl-shader cast.rs `oracle_cs`): its pipeline, its group
+/// over the eye, the rays and the observed pyramid (`bound`) and its
+/// counts, made again exactly when one of them is another. The counts are
+/// cleared each frame it runs with the steps shown, copied into `read`
+/// where no mapping of it is out (`copied`), mapped back into `landed`
+/// (`mapped`), and summed into `sums` as they land: the frames read, then
+/// each count, since boot.
+struct Oracle {
+    built: Built,
+    group: u32,
+    bound: [u32; 3],
+    on: bool,
+    steps: bool,
+    counts: u32,
+    read: u32,
+    landed: Box<[u32; ORACLE_COUNTS]>,
+    mapping: Box<u32>,
+    copied: bool,
+    mapped: bool,
+    sums: [f64; ORACLE_COUNTS + 1],
 }
 
 /// The nodes the world's query answers otherwise this frame, as the sun's
@@ -193,6 +222,23 @@ impl RaysPass {
         let sun_mark_built = pipelines.build_compute(g, SHADER_SUN_MARK, &compute::SUN_MARK_GROUP);
         let buffer = |size: u32, usage: u32| g.buffer(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
+        let oracle = Oracle {
+            built: pipelines.build_compute(g, SHADER_ORACLE, &compute::ORACLE_GROUP),
+            group: 0,
+            bound: [0; 3],
+            on: false,
+            steps: false,
+            counts: buffer(word_bytes(ORACLE_COUNTS), storage | buffer_usage::COPY_SRC),
+            read: buffer(
+                word_bytes(ORACLE_COUNTS),
+                buffer_usage::MAP_READ | buffer_usage::COPY_DST,
+            ),
+            landed: Box::new([0; ORACLE_COUNTS]),
+            mapping: Box::new(DONE),
+            copied: false,
+            mapped: false,
+            sums: [0.0; ORACLE_COUNTS + 1],
+        };
         let c = CastBuffers {
             built,
             beam_built,
@@ -252,6 +298,7 @@ impl RaysPass {
             overwrite_revision: None,
             grown: Grown::new(g, pipelines),
             read: Read::default(),
+            oracle,
         };
         self.cast = Some(c);
     }
@@ -582,6 +629,24 @@ impl RaysPass {
             c.group = cast_group(g, &c.built, bound);
             c.bound = bound;
         }
+        let o = &mut c.oracle;
+        o.on = cast.eye[eye::STEPS] & eye::ORACLE != 0;
+        o.steps = cast.eye[eye::STEPS] & eye::SHOW_STEPS != 0;
+        let oracle_bound = [c.eye, rays.0, c.seen];
+        if oracle_bound != o.bound {
+            release(o.group);
+            let [eye, rays, seen] = oracle_bound;
+            o.group = g.bind_group(
+                o.built.layouts[0],
+                &[
+                    buffer_entry(0, eye),
+                    view_entry(3, rays),
+                    buffer_entry(9, seen),
+                    buffer_entry(10, o.counts),
+                ],
+            );
+            o.bound = oracle_bound;
+        }
         let sun_bound = [
             c.eye,
             c.window,
@@ -659,8 +724,9 @@ impl RaysPass {
     /// so what each costs is read apart; the sun's in the shadow's, with
     /// the map's pass, which is not drawn at the world's pixels
     /// (`PER_PIXEL`).
-    pub fn dispatch(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
-        let Some(c) = self.cast.as_ref() else { return };
+    pub fn dispatch(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
+        let grows = self.grows();
+        let Some(c) = self.cast.as_mut() else { return };
         if self.kind == FrameKind::cast {
             // The observed pyramid forgotten first where it is; then the
             // beam rays writing it, a corner each; each cell's start off them;
@@ -692,6 +758,25 @@ impl RaysPass {
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             }
             g.end(pass);
+            let o = &mut c.oracle;
+            if o.on {
+                // Counted only with the steps shown, so the span it is timed
+                // in holds no atomic.
+                if o.steps {
+                    g.write_buffer(o.counts, 0, bytes(&[0u32; ORACLE_COUNTS]));
+                }
+                let pass = g.compute_pass(encoder, stamps[GpuSpanName::oracle as usize].pass());
+                g.set_bind_group(pass, 0, o.group, &[]);
+                g.set_pipeline(pass, o.built.pipeline);
+                let w = compute::ORACLE_WORKGROUP;
+                g.dispatch(pass, c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1]), 1);
+                g.end(pass);
+                if o.steps && !o.copied && !o.mapped {
+                    let size = word_bytes(ORACLE_COUNTS);
+                    g.copy_buffer(encoder, (o.counts, 0), (o.read, 0), size);
+                    o.copied = true;
+                }
+            }
         }
         if c.sun_cast {
             // The tiles a slot of which walks again listed, a thread a tile;
@@ -707,11 +792,40 @@ impl RaysPass {
             g.dispatch_indirect(pass, c.sun_list, 0);
             g.end(pass);
         }
-        if self.grows() {
+        if grows {
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::grow as usize].pass());
             c.grown.dispatch(g, pass);
             g.end(pass);
         }
+    }
+
+    /// The oracle's counts copied last frame mapped back, and those that
+    /// landed summed: after the frame that copied them was submitted.
+    pub fn oracle_back(&mut self, g: &Gpu) {
+        let Some(o) = self.cast.as_mut().map(|c| &mut c.oracle) else {
+            return;
+        };
+        if o.mapped && *o.mapping & DONE != 0 {
+            o.sums[0] += 1.0;
+            for k in 0..ORACLE_COUNTS {
+                o.sums[k + 1] += f64::from(o.landed[k]);
+            }
+            o.mapped = false;
+        }
+        if o.copied && *o.mapping & DONE != 0 {
+            let address = off_of(o.landed.as_ptr()) as u32;
+            let size = word_bytes(ORACLE_COUNTS);
+            g.map_read(o.read, 0, size, address, &mut o.mapping, 1);
+            (o.copied, o.mapped) = (false, true);
+        }
+    }
+
+    /// The oracle's sums since boot (`Oracle`): the frames read, then each
+    /// count.
+    pub fn oracle_sums(&self) -> [f64; ORACLE_COUNTS + 1] {
+        self.cast
+            .as_ref()
+            .map_or([0.0; ORACLE_COUNTS + 1], |c| c.oracle.sums)
     }
 
     pub fn sun_casts(&self) -> bool {
@@ -730,6 +844,8 @@ impl RaysPass {
     /// image hold older ones.
     pub fn dropped(&mut self) {
         if let Some(c) = self.cast.as_mut() {
+            // Its copy was in the encoder dropped with it.
+            c.oracle.copied = false;
             c.read.forget();
             c.sun_read.forget();
             c.grown.dropped();

@@ -6,7 +6,7 @@
 @fragment
 fn fs(v: VertexOut) -> @builtin(frag_depth) f32 {
   let p = pixel_ray(v.clip.xy);
-  if (!p.met || eye_word(EYE_STEPS) != 0u) {
+  if (!p.met || (eye_word(EYE_STEPS) & EYE_SHOW_STEPS) != 0u) {
     discard;
   }
   let clip = frame_view_proj() * vec4f(p.h.at, 1.0);

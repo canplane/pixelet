@@ -54,7 +54,7 @@ use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::RaysPass;
+use crate::gpu::ray::{RaysPass, ORACLE_COUNTS};
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
@@ -248,6 +248,8 @@ pub struct FrameStat {
     /// draws and triangles.
     pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
+    /// The oracle's sums since boot (gpu/ray/cast.rs `Oracle`).
+    pub oracle: [f64; ORACLE_COUNTS + 1],
 }
 
 /// A frame's GPU time: its spans' sum, the passes timed. The span from the
@@ -804,6 +806,7 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
+        self.screen.oracle_back(g);
         if read.read(self.clouds.words()) {
             self.clouds.write(g);
         }
@@ -1109,6 +1112,7 @@ impl Renderer {
             pack_bytes: self.pack.bytes as f64,
             census,
             gpu_spans,
+            oracle: self.screen.oracle_sums(),
         }
     }
 }

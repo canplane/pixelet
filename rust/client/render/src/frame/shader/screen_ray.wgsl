@@ -22,7 +22,8 @@
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
 // The eye the rays left (pxl-spec-core `eye`): its Q3 steps (`EYE_ORIGIN`),
 // FRAC_W bits a unit and wrapping, a block's place on the lattice read off
-// their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
+// their low bits; whether a ray reports its steps (`EYE_SHOW_STEPS` of
+// `EYE_STEPS`); its reach;
 // and the axes and tangents each ray's direction is formed of.
 @group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;
 

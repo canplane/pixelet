@@ -227,6 +227,14 @@ export const SETTINGS = {
     section: "debug",
     dev: true,
   },
+  /** A measurement the proxy of doc/minutes/20261024-a-proxy-only-starts-the-ray.md is weighed by: every pixel the cast stopped walks again from the world's root, started just short of what it stopped on, as a perfect proxy would start it, in a pass timed apart (span `oracle`), and that walk's stop is what is drawn; with `ray_steps` on, its visits are coloured and counted, and the stops that differ from the cast's (rust/client/shader/src/cast.rs `oracle_cs`). */
+  ray_oracle: {
+    key: 20 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+    dev: true,
+  },
 } as const;
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */

@@ -16,6 +16,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
+pub use cast::ORACLE_COUNTS;
 use ground::GroundBuffers;
 
 pub struct RaysPass {

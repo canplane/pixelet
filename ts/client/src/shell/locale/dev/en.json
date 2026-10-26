@@ -10,6 +10,10 @@
       "ray_steps": {
         "label": "Ray steps",
         "description": "Colors each point on screen by how much work it took to draw: blue for little, red for a lot. Points that borrowed a nearby result and skipped the work are grey."
+      },
+      "ray_oracle": {
+        "label": "Ray oracle",
+        "description": "Walks every point again from the top of the world, started just short of what it shows, and times that walk on its own. With ray steps on, colors and counts that walk."
       }
     }
   },
