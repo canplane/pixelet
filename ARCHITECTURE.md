@@ -566,9 +566,9 @@ and hands the rest to the rasterizer, in five steps (`pxl-shader beam.rs`
    the face its sample's ray came in through, and a pixel keeps that face only
    where its own ray enters the block through it. The depth test keeps the
    nearest, so each pixel holds the nearest sampled block its ray enters.
-5. The pixel takes that block (`pxl-shader cast.rs` `cast_cs`), and walks itself
-   only where it holds none, or where the nearest is a node a sample could not
-   answer.
+5. The pixel takes that block (`pxl-shader cast.rs` `cast_cs`), or the sky where
+   no sample about it met anything, and walks itself only where it holds none,
+   or where the nearest is a node a sample could not answer.
 
 The block can come from any sample on the screen, not only the ones about the
 pixel, and a block no sample stopped at is not drawn. A pixel whose ray first
@@ -577,8 +577,12 @@ meets such a block shows the drawn one behind it, a cost
 against each pixel's own walk.
 
 What the rays asked of each node is kept between frames in the **observed
-pyramid** (`pxl-spec-core observed.rs`), forgotten only over squares that moved.
-A pixel needing a node it lacks walks the world again in the same pass.
+pyramid** (`pxl-spec-core observed.rs`), a table keyed by the node. It is
+forgotten only where what a node read changed: the squares that moved, the boxes
+an edit or a preview changed, and the parts of what is placed an edit wrote
+(`pxl-shader observed.rs` `forget_cs`). A pixel only reads it; one needing a node
+it lacks is listed and walked again, asking the world, in the pass after
+(`cast.rs` `miss_list_cs`).
 
 A ray leaves four words (`pxl-spec-core ray.rs`): the block it met, with its
 face, zoom and kept eighths; how far; the looks a coarse block folds; and which
@@ -624,12 +628,16 @@ Three settings shade a block beyond its light
 The **sun's map** is a square box of the light about the eye (`gpu/shadow.rs`).
 Its texels are fixed in the world, each in a slot by its index modulo the map's
 side (`pxl-spec-core sun.rs` `Sun`), so the map follows the eye a texel at a
-time, and a texel that stays is not cast again.
+time.
 
-A slot's ray runs along the sun through the query, again only where the box
-moved onto it, the eye asks its stop at another zoom, or a node it passes
-changed. A step of the sun casts the whole map. Decor and the actors are drawn
-into it each frame.
+It is cast as the eye's rays are (`pxl-shader sun.rs`): beam rays along the sun,
+samples a few texels apart, their blocks drawn from the sun as boxes, and each
+texel taking the nearest its ray enters, walking only where none is. The walks
+read and write the eye's observed pyramid. The whole map is cast again only in
+a frame where what it reads moved: the light's frame or box, the eye's place,
+quality or zooms, or the world under it (`gpu/ray/cast.rs`). A standing frame,
+or one where only the eye's look turned, casts none. Decor and the actors are
+drawn into it each frame.
 
 A receiver compares nine taps, each moved by its own plane's slope
 (`shadow.wgsl` `sun_lit`). Casters are pushed by the same formula, so a plane

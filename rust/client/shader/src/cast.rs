@@ -12,11 +12,11 @@ use spirv_std::glam::{IVec4, UVec3, UVec4};
 use spirv_std::{spirv, Image};
 
 use crate::beam::{resumed, started, Beams};
-use crate::raster::picked;
-use crate::{add, most};
 use crate::eye::{eye_origin, grid, Eye};
 use crate::observed::{seen_at, seen_put, Reading, Seen, Writing, MISSED};
+use crate::raster::picked;
 use crate::world::{face_of, Unlooked, World};
+use crate::{add, most};
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
 /// pxl-spec-core `ray`): the cast writes them.
@@ -62,6 +62,16 @@ fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
     let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
+}
+
+/// Whether the four samples about the screen's point at the tangents `px`
+/// each went on to its reach (`beam::SAMPLE_NONE`), meeting nothing.
+fn sky(beams: &Beams, g: &beam::Grid, px: [f32; 2]) -> bool {
+    let [i, j] = g.sample_before(px);
+    let none = |s: [u32; 2]| {
+        seen_at(beams, g.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM) == beam::SAMPLE_NONE
+    };
+    none([i, j]) && none([i + 1, j]) && none([i, j + 1]) && none([i + 1, j + 1])
 }
 
 /// A ray's words written into the rays at pixel `p`.
@@ -122,8 +132,10 @@ pub fn cast_cs(
         at: 0u32,
         block: MISSED,
     };
-    // What lies about its face, the sample's.
+    // What lies about its face, the sample's, and the nodes the sample's
+    // walk visited, which the steps view shows as this pixel's.
     let mut faces = 0;
+    let mut visits = 0;
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = picks.fetch(UVec3::new(id.x, id.y, 0));
     let pick = kept.x;
@@ -134,9 +146,37 @@ pub fn cast_cs(
         if enters {
             hit = stop;
             faces = seen_at(beams, k + beam::SAMPLE_FACES);
+            visits = seen_at(beams, k + beam::SAMPLE_VISITS);
         }
     }
     let steps = eye.origin.w != 0;
+    // No sample about it met anything: the sky, taken without a walk of its
+    // own, as a thing thinner than the samples' spacing between them goes
+    // unseen.
+    if pick == 0 && sky(beams, &g, px) {
+        written(
+            rays,
+            id,
+            word(
+                &ray,
+                Met {
+                    ends: Ends::On,
+                    stop: hit,
+                    visits: if steps {
+                        seen_at(
+                            beams,
+                            g.sample_at(g.sample_before(px)) + beam::SAMPLE_VISITS,
+                        )
+                    } else {
+                        0
+                    },
+                },
+                steps,
+                0,
+            ),
+        );
+        return;
+    }
     if hit.t < ray.reach {
         written(
             rays,
@@ -146,7 +186,7 @@ pub fn cast_cs(
                 Met {
                     ends: Ends::Stop,
                     stop: hit,
-                    visits: 0,
+                    visits,
                 },
                 steps,
                 faces,
@@ -181,11 +221,12 @@ pub fn cast_cs(
             eye,
             pool: ways::tree::Read(pool),
         };
-        written(
-            rays,
-            id,
-            word(&ray, met, steps, world.faced(origin, &ray, &met)),
-        );
+        let faces = world.faced(origin, &ray, &met);
+        let met = Met {
+            visits: met.visits + line.visits(),
+            ..met
+        };
+        written(rays, id, word(&ray, met, steps, faces));
     }
 }
 
@@ -256,12 +297,12 @@ fn missed(
         &line,
         line.node(),
     );
-    word(
-        &ray,
-        met,
-        eye.origin.w != 0,
-        world.faced(origin, &ray, &met),
-    )
+    let faces = world.faced(origin, &ray, &met);
+    let met = Met {
+        visits: met.visits + line.visits(),
+        ..met
+    };
+    word(&ray, met, eye.origin.w != 0, faces)
 }
 
 /// Each pixel `cast_cs` marked missed and could not list, its ray again
@@ -339,4 +380,3 @@ pub fn miss_list_cs(
     );
     written(rays, id, w);
 }
-

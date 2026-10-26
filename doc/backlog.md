@@ -14,7 +14,12 @@ Nothing now.
 
 ## P1
 
-Nothing now.
+- **What made it smooth, measured, and the whole cost against 9/26.** Once
+  the structure's work is done and the code tidied: which commits and which
+  reuse made moving smooth, each by its "off", and the frame against
+  e78eeec55, so the gain of rays with the raster only handing out is known
+  and a regression of it is seen —
+  [20261026-what-made-it-smooth.md](./experiment/20261026-what-made-it-smooth.md).
 
 ## P2
 

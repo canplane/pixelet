@@ -62,11 +62,19 @@ decision record, not a rule each change is held to.
 
 ## Open
 
-- **The sun's map** takes the eye's division: beams, samples a few texels apart,
-  their blocks drawn from the sun and each texel taking the nearest it enters,
-  and walks only where none is entered. The policy that kept its clipmap between
-  frames (pxl-shader sun.rs `sun_mark_cs`, pxl-spec-core sun.rs `kept`,
-  `stands`, `over`) goes with it, and a frame where nothing it reads moved casts
-  nothing. Open: whether it reaches the line above.
-- **The beams** reuse the descent the observed pyramid already holds, rather
-  than walking from the root each frame.
+Nothing now. What was open here, settled the same day:
+
+- **The sun's map took the eye's division** (e04a3a855): beams, samples a few
+  texels apart, their blocks drawn from the sun and each texel taking the
+  nearest it enters, walks only where none is entered. The policy that kept its
+  clipmap between frames went with it, and a frame where nothing it reads moved
+  casts nothing. Its walks read and write the eye's observed pyramid through
+  the eye's line machinery (1c5455121).
+- **The beams reuse the descent through the pyramid and their passes**
+  (8d5d3980e, 2f6436d03): a node is asked of the world once a frame by the
+  coarsest pass reaching it, and read after. A start below the root was built
+  and not taken: the nodes holding the eye, asked once a frame and every beam
+  ray resumed under them, measured no lighter on the fixed path (`beam` p95
+  5.5 to 6.9 ms against 5.1, rough, one load each). Those nodes are the same
+  few entries for every ray, read hot, and a ray to the sky climbs back through
+  the nodes a walk from the root passes whole.

@@ -319,7 +319,7 @@ pub fn sun_boxes_cs(
 /// plane (`sun::Starts`), walked from the world's root to the first block
 /// that fills or lacks or the first split narrower than `2√2` of the
 /// beam's spacing (`cast::Until::Beam`, `cast::Detail::beam`), its line
-/// left for the texels about it (`SunLeaving`) and how far they may start
+/// left for the texels about it (`Leaving`) and how far they may start
 /// from it, its stop less `sun::margin`.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_beam_cs"))]
 #[allow(clippy::too_many_arguments)]

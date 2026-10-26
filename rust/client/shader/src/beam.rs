@@ -42,6 +42,12 @@ impl<W: Words + ?Sized> Beamed<'_, W> {
         node_at(self.0, self.1 + beam::LINE_NODE)
     }
 
+    /// The nodes the beam ray's walk visited (`beam::LINE_VISITS`), the
+    /// eye's: the start of every walk resumed from it, in the steps view.
+    pub(crate) fn visits(self) -> u32 {
+        self.0.word(self.1 + beam::LINE_VISITS)
+    }
+
     /// What was handed the line's node of `zoom`.
     fn at(self, zoom: u32) -> At {
         let (w, k) = (self.0, self.1 + beam::LINE_AT + beam::LINE_STEP * zoom);
@@ -138,12 +144,16 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A
     let stop = &met.stop;
     node_put(w, base + beam::SAMPLE_NODE, &stop.node);
     if met.ends == Ends::On {
-        w.set(base + beam::SAMPLE_NODE + beam::NODE_ZOOM, beam::SAMPLE_NONE);
+        w.set(
+            base + beam::SAMPLE_NODE + beam::NODE_ZOOM,
+            beam::SAMPLE_NONE,
+        );
     }
     w.set(base + beam::SAMPLE_LACKS, (met.ends == Ends::Lacks) as u32);
     w.set(base + beam::SAMPLE_BLOCK, stop.block[0]);
     w.set(base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
     w.set(base + beam::SAMPLE_AXIS, stop.axis);
+    w.set(base + beam::SAMPLE_VISITS, met.visits);
 }
 
 /// Where the ray at the screen's tangents `tan` starts from the screen's
@@ -187,7 +197,11 @@ where
     let (h, held) = node.over(cast::point_at(origin, ray, t));
     let h = cast::holding(origin, ray, h, t);
     let from = if held {
-        (h, <Beamed<'a, W> as cast::Over<Q::At>>::over(line, h.zoom), t)
+        (
+            h,
+            <Beamed<'a, W> as cast::Over<Q::At>>::over(line, h.zoom),
+            t,
+        )
     } else {
         (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t)
     };
@@ -252,6 +266,7 @@ pub fn beam_cs(
         &mut Leaving(beams, base),
     );
     seen_put(beams, base + beam::LINE_T, g.handed(met.stop.t).to_bits());
+    seen_put(beams, base + beam::LINE_VISITS, met.visits);
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -377,5 +392,9 @@ pub fn sample_cs(
         &line,
         line.node(),
     );
+    let met = Met {
+        visits: met.visits + line.visits(),
+        ..met
+    };
     sample_put(beams, g.sample_at([id.x, id.y]), &met);
 }

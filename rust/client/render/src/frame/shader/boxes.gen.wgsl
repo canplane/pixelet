@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 414bfe7a596339ec9b72dea6bb3508d9bad75470e671896b6656e5ba48b6c697
+// Inputs: 9b89e3352ce1c19807d6aad9ff36dc4ad94cf5cb32ac99142fe6fc3dde112bb0
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -89,13 +89,13 @@ fn function_() {
                 if (_e44.y >= _e58) {
                 } else {
                     if (_e44.x > 0u) {
-                        phi_491_ = (_e63 + (((_e44.y * _e53) + (_e44.x - 1u)) * 12u));
+                        phi_491_ = (_e63 + (((_e44.y * _e53) + (_e44.x - 1u)) * 13u));
                     } else {
                         phi_491_ = 4294967295u;
                     }
                     let _e83 = phi_491_;
                     if (_e44.y > 0u) {
-                        phi_502_ = (_e63 + ((((_e44.y - 1u) * _e53) + _e44.x) * 12u));
+                        phi_502_ = (_e63 + ((((_e44.y - 1u) * _e53) + _e44.x) * 13u));
                     } else {
                         phi_502_ = 4294967295u;
                     }
@@ -104,7 +104,7 @@ fn function_() {
                     let _e99 = global_1.member.member[1u];
                     let _e103 = global_1.member.member[2u];
                     let _e105 = ((_e44.y * _e53) + _e44.x);
-                    let _e107 = (_e63 + (_e105 * 12u));
+                    let _e107 = (_e63 + (_e105 * 13u));
                     let _e110 = global_4.member[_e107];
                     if (_e110 == 4294967295u) {
                         phi_953_ = u32();

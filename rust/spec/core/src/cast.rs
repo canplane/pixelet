@@ -575,20 +575,6 @@ fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
 }
 
-/// The zooms the node `n` from the origin `o` is asked at under `detail`,
-/// as a walk asks it (`asked`, `reach`): what a check of a stop reads.
-pub fn asked_of(o: [i32; 3], detail: Detail, n: &Node) -> [Zoom; 2] {
-    let (lo, hi) = bounds(n, grid_of(o));
-    let e = detail.eye;
-    asked(
-        detail,
-        reach(
-            [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
-            [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
-        ),
-    )
-}
-
 /// A vector's length squared.
 fn squared(v: [f32; 3]) -> f32 {
     v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
@@ -735,6 +721,29 @@ pub fn walk<Q: Query>(
             // The planes the ray enters where it stops: the node's, or the
             // box a block keeping less than its cube is.
             let mut near = [x.0, y.0, z.0];
+            // ESVO's contour (Laine & Karras 2010): whether the ray's span in
+            // a split node meets the slab along z its content lies in,
+            // widened by `w` above and below, its planes a face's own
+            // (`level`).
+            let meets_slab = |w: f32| {
+                let [lo, hi] = slab_of(i.block[0]);
+                let level = |v: i32| {
+                    let root = v >> UNIT_ZOOM;
+                    units(
+                        ((v - (root << UNIT_ZOOM)) as u32) << FRAC_W,
+                        og[2],
+                        root - r0[2],
+                    )
+                };
+                let (bottom, top) = planes(
+                    ray.direction[2],
+                    ray.inverse[2],
+                    level(lo) - w,
+                    level(hi) + w,
+                    (t0, t1),
+                );
+                greater(t0, bottom) < lesser(t1, top)
+            };
             let ends = match i.kind {
                 Kind::Lacks => Ends::Lacks,
                 // A block keeping less than its cube is the box its share
@@ -769,49 +778,39 @@ pub fn walk<Q: Query>(
                     Ends::Stop
                 }
                 Kind::Block => Ends::On,
-                // A beam ray stops at a split it may not share with the
-                // grid's rays about it, and enters every other whatever its
-                // slab, as Laine and Karras's coarse pass turns contours off.
+                // A beam ray passes whole a split whose slab it clears by
+                // `2√2` of the grid's width there, as the grid's rays about
+                // it clear it too; else it stops at one it may not share with
+                // them, and enters every other.
                 Kind::Split if until == Until::Beam => {
-                    // Parallel rays `detail.beam` apart: a split narrower
-                    // than `2√2` of that may lie between them
-                    // (pxl-spec-core `sun::BEAM`).
+                    // Parallel rays `detail.beam` apart, or the grid's
+                    // `s · d` at the node's far corner: a split narrower than
+                    // `2√2` of that may lie between them (pxl-spec-core
+                    // `sun::BEAM`, `beam::narrow`).
+                    let width = if detail.beam > 0.0 {
+                        detail.beam
+                    } else {
+                        s * libm::sqrtf(reach[0])
+                    };
                     let narrow = if detail.beam > 0.0 {
-                        side * side < 8.0 * detail.beam * detail.beam
+                        side * side < 8.0 * width * width
                     } else {
                         crate::beam::narrow(side * side, reach[0], s)
                     };
-                    into = !narrow;
-                    if narrow {
+                    let meets = meets_slab(2.0 * core::f32::consts::SQRT_2 * width);
+                    into = meets && !narrow;
+                    if meets && narrow {
                         Ends::Stop
                     } else {
                         Ends::On
                     }
                 }
-                // ESVO's contour (Laine & Karras 2010): the ray's span in the
-                // node clipped to the slab along z its content lies in, its
-                // planes a face's own (`level`); a span wholly out of it, or
-                // touching it alone, meets nothing that fills, and a walk to
-                // what fills passes the node whole. A walk to air goes in: its
-                // stop is where that span begins.
+                // A span wholly out of the slab, or touching it alone, meets
+                // nothing that fills, and a walk to what fills passes the
+                // node whole. A walk to air goes in: its stop is where that
+                // span begins.
                 Kind::Split => {
-                    let [lo, hi] = slab_of(i.block[0]);
-                    let level = |v: i32| {
-                        let root = v >> UNIT_ZOOM;
-                        units(
-                            ((v - (root << UNIT_ZOOM)) as u32) << FRAC_W,
-                            og[2],
-                            root - r0[2],
-                        )
-                    };
-                    let (bottom, top) = planes(
-                        ray.direction[2],
-                        ray.inverse[2],
-                        level(lo),
-                        level(hi),
-                        (t0, t1),
-                    );
-                    into = until == Until::Air || greater(t0, bottom) < lesser(t1, top);
+                    into = until == Until::Air || meets_slab(0.0);
                     Ends::On
                 }
             };

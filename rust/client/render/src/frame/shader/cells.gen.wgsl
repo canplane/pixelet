@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 414bfe7a596339ec9b72dea6bb3508d9bad75470e671896b6656e5ba48b6c697
+// Inputs: 9b89e3352ce1c19807d6aad9ff36dc4ad94cf5cb32ac99142fe6fc3dde112bb0
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -97,7 +97,7 @@ fn function_() {
             let _e126 = (_e124 - _e123);
             let _e127 = (_e125 - _e123);
             let _e129 = ((_e127 * _e54) + _e126);
-            let _e133 = global_2.member[(_e129 * 173u)];
+            let _e133 = global_2.member[(_e129 * 174u)];
             phi_258_ = _e127;
             phi_261_ = bitcast<f32>(_e133);
             phi_263_ = _e129;
@@ -121,7 +121,7 @@ fn function_() {
                         let _e152 = (_e145 <= ((_e124 + 1u) + _e123));
                         if _e152 {
                             let _e154 = ((_e136 * _e54) + _e145);
-                            let _e158 = global_2.member[(_e154 * 173u)];
+                            let _e158 = global_2.member[(_e154 * 174u)];
                             let _e159 = bitcast<f32>(_e158);
                             let _e160 = (_e159 < _e147);
                             phi_276_ = (_e145 + 1u);
