@@ -1,0 +1,12 @@
+# Generated files, kept out of the language stats: rust-gpu's WGSL
+# (pxl-tool bin/shader_wgsl.rs) and what pxl-tool writes from spec/.
+*.gen.wgsl linguist-generated=true
+*.spec.rs linguist-generated=true
+*.spec.ts linguist-generated=true
+
+# Tests and the golden records are not the product: out of the stats too.
+*.test.rs linguist-detectable=false
+*.test.ts linguist-detectable=false
+*.test.cpp linguist-detectable=false
+spec/golden/** linguist-generated=true
+rust/spec/golden/** linguist-generated=true

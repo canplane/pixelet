@@ -30,9 +30,29 @@ fn show(v: &TlvValue) -> String {
 fn tlv_computes_what_the_typescript_computes() {
     let v = Golden::load(GOLDEN);
     let mut w = TlvWriter::new(4);
-    w.u8(200).unwrap().i8(-3).unwrap().u16(65535).unwrap().i16(-2).unwrap().u32(4000000000).unwrap().i32(-7).unwrap();
-    w.u64(1 << 63).unwrap().i64(-(1 << 40)).unwrap().f32(0.25).unwrap().f64(-1.5).unwrap().bool(true).unwrap();
-    w.str("한글").unwrap().bytes(&[9, 8, 7]).unwrap();
+    w.u8(200)
+        .unwrap()
+        .i8(-3)
+        .unwrap()
+        .u16(65535)
+        .unwrap()
+        .i16(-2)
+        .unwrap()
+        .u32(4000000000)
+        .unwrap()
+        .i32(-7)
+        .unwrap();
+    w.u64(1 << 63)
+        .unwrap()
+        .i64(-(1 << 40))
+        .unwrap()
+        .f32(0.25)
+        .unwrap()
+        .f64(-1.5)
+        .unwrap()
+        .bool(true)
+        .unwrap();
+    w.str("€€").unwrap().bytes(&[9, 8, 7]).unwrap();
     w.write_all(&[
         TlvValue::Bool(true),
         TlvValue::I32(5),
@@ -48,8 +68,15 @@ fn tlv_computes_what_the_typescript_computes() {
     .unwrap();
     let packet = w.finish();
     assert_eq!(hex::encode(packet), v.s("packet"));
-    let read: Vec<String> = TlvReader::new(packet).read_all().unwrap().iter().map(show).collect();
-    let want: Vec<&str> = (0..v.len("read")).map(|j| v.s(&format!("read.{j}"))).collect();
+    let read: Vec<String> = TlvReader::new(packet)
+        .read_all()
+        .unwrap()
+        .iter()
+        .map(show)
+        .collect();
+    let want: Vec<&str> = (0..v.len("read"))
+        .map(|j| v.s(&format!("read.{j}")))
+        .collect();
     assert_eq!(read, want);
 
     v.each("end", |k| {
@@ -59,8 +86,14 @@ fn tlv_computes_what_the_typescript_computes() {
         let stop = loop {
             match r.next_value() {
                 Ok(Some(_)) => n += 1,
-                Ok(None) => break if r.end() == Some(TlvEnd::Closed) { "closed".to_string() } else { "unclosed".to_string() },
-                Err(e) => break format!("errno:{}", e.errno as i32),
+                Ok(None) => {
+                    break if r.end() == Some(TlvEnd::Closed) {
+                        "closed".to_string()
+                    } else {
+                        "unclosed".to_string()
+                    }
+                }
+                Err(e) => break format!("errno:{}", e.errnum as i32),
             }
         };
         assert_eq!(format!("{n}:{stop}"), v.s(&format!("{k}.read")), "{k}");
@@ -68,5 +101,9 @@ fn tlv_computes_what_the_typescript_computes() {
 
     let huge_pkt = hex::decode(v.s("huge.packet")).unwrap();
     let huge = TlvReader::new(&huge_pkt).read_all();
-    assert_eq!(huge.map(|_| "ok".to_string()).unwrap_or_else(|e| format!("errno:{}", e.errno as i32)), v.s("huge.read"));
+    assert_eq!(
+        huge.map(|_| "ok".to_string())
+            .unwrap_or_else(|e| format!("errno:{}", e.errnum as i32)),
+        v.s("huge.read")
+    );
 }

@@ -7,7 +7,14 @@ import { assertEquals } from "@std/assert";
 import { Golden } from "@xpute/kit/golden.ts";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
 import type { FaultError } from "@xpute/kit/status/error.ts";
-import { ALIGN, type NodeCursor, type NodeValue, TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
+import {
+  ALIGN,
+  type NodeCursor,
+  type NodeValue,
+  TreeEncoder,
+  TreeReader,
+  TreeView,
+} from "@xpute/kit/wire/xtp/mod.ts";
 
 const te = new TextEncoder();
 
@@ -16,7 +23,9 @@ function show(v: NodeValue): string {
   if (Array.isArray(v)) return `[${v.map(show).join(",")}]`;
   if (ArrayBuffer.isView(v)) {
     const name = v.constructor.name;
-    return `${name}(${Array.from(v as unknown as ArrayLike<number | bigint>).join(" ")})`;
+    return `${name}(${
+      Array.from(v as unknown as ArrayLike<number | bigint>).join(" ")
+    })`;
   }
   if (typeof v === "string") return `string:${bytes_to_hex(te.encode(v))}`;
   return `${typeof v}:${v}`;
@@ -31,7 +40,7 @@ function refused(hex: string): string {
     deep(new TreeReader(hex_to_bytes(hex)).root);
     return "ok";
   } catch (err) {
-    return `errno:${(err as FaultError).errno}`;
+    return `errno:${(err as FaultError).errnum}`;
   }
 }
 
@@ -43,9 +52,13 @@ Deno.test("the cursor reads what the typescript reads", async () => {
     assertEquals(root.type, v.u32(`${k}.type`), `${k}.type`);
     assertEquals(show(deep(root)), v.s(`${k}.deep`), `${k}.deep`);
     if (root.is_branch()) {
-      const got = root.children().map((c) => `${c.type}:${c.is_branch() ? "branch" : show(c.get())}`);
+      const got = root.children().map((c) =>
+        `${c.type}:${c.is_branch() ? "branch" : show(c.get())}`
+      );
       const want: string[] = [];
-      if (v.has(`${k}.shallow.0`)) v.each(`${k}.shallow`, (j) => want.push(v.s(j)));
+      if (v.has(`${k}.shallow.0`)) {
+        v.each(`${k}.shallow`, (j) => want.push(v.s(j)));
+      }
       assertEquals(got, want, `${k}.shallow`);
     }
   });
@@ -54,14 +67,17 @@ Deno.test("the cursor reads what the typescript reads", async () => {
   assertEquals(refused(good.slice(0, 20)), v.s("malformed.truncated_header"));
   assertEquals(refused(`00${good.slice(2)}`), v.s("malformed.bad_magic"));
   assertEquals(refused(good.slice(0, 40)), v.s("malformed.truncated_payload"));
-  v.each("refused", (k) => assertEquals(refused(v.s(`${k}.packet`)), v.s(`${k}.read`), k));
+  v.each(
+    "refused",
+    (k) => assertEquals(refused(v.s(`${k}.packet`)), v.s(`${k}.read`), k),
+  );
 
   [0x7ffffff9, 0xfffffff8, 0xfffffff9].forEach((n, j) => {
     let got: string;
     try {
       got = `ok:${ALIGN(n, 8)}`;
     } catch (err) {
-      got = `errno:${(err as FaultError).errno}`;
+      got = `errno:${(err as FaultError).errnum}`;
     }
     assertEquals(got, v.s(`align.${j}`), `ALIGN(${n})`);
   });
@@ -70,11 +86,25 @@ Deno.test("the cursor reads what the typescript reads", async () => {
     const t = new TreeView();
     t.str(s);
     try {
-      return bytes_to_hex(new TreeEncoder().encode(t, { max_cap: cap }));
+      return bytes_to_hex(
+        new TreeEncoder().encode(t, { init_cap: 1 << 10, max_cap: cap }),
+      );
     } catch (err) {
-      return `errno:${(err as FaultError).errno}`;
+      return `errno:${(err as FaultError).errnum}`;
     }
   };
-  [24, 32, 40, 48].forEach((cap, j) => assertEquals(at_cap("abcdefgh", cap), v.s(`caps.${j}`), `caps.${j} at ${cap}`));
-  [24, 32, 40].forEach((cap, j) => assertEquals(at_cap("한글한", cap), v.s(`caps_utf8.${j}`), `caps_utf8.${j} at ${cap}`));
+  [24, 32, 40, 48].forEach((cap, j) =>
+    assertEquals(
+      at_cap("abcdefgh", cap),
+      v.s(`caps.${j}`),
+      `caps.${j} at ${cap}`,
+    )
+  );
+  [24, 32, 40].forEach((cap, j) =>
+    assertEquals(
+      at_cap("€€€", cap),
+      v.s(`caps_utf8.${j}`),
+      `caps_utf8.${j} at ${cap}`,
+    )
+  );
 });

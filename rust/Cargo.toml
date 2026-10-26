@@ -1,0 +1,165 @@
+# The project's Rust, both ends of it, grouped by which end a crate is on:
+# client/ reaches the browser and the device, server/ does not, and spec/ is
+# what both follow.
+# `server` is what geo and api are called together, so pxl-server — what
+# either needs before it can answer anything — is the group's own directory,
+# and the two processes sit inside it.
+#
+# The client is one core, pxl-render and pxl-kernel, and client-bracket/ is
+# how it is plugged into a place to run: pxl-wasm, the one WebAssembly module the
+# main thread and each worker instantiate for themselves
+# (doc/minutes/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
+# into a device's app, which draws with wgpu where the page's host draws with
+# the browser's WebGPU. A bracket is no domain: it is xpute's mechanism for
+# its form (xpute-guest's wasm, xpute-host's native, xpute-gpu) booted with
+# pixelet's numbers, the kernel's door as the guest's entry, and what is
+# pixelet's own. The server end is native
+# (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
+# and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
+# rather than answered, and pxl-geo-spec where the two geo halves read the
+# same tables.
+#
+# spec/ is what both ends follow, and xpute (../xpute/rust/, its own
+# workspace) what both are built on.
+# Nothing else crosses: a third-party dependency in either ships every byte
+# to the client and is read as this tree's own code, so each one below is
+# there because it was held to what it replaced and did not differ — and
+# nothing in the client's crates may assume WebAssembly; pxl-wasm, a bracket,
+# is the one crate that does.
+
+[workspace]
+resolver = "2"
+members = [
+  "spec",
+  "spec/core",
+  "client/render",
+  "client/kernel",
+  "client-bracket/wasm",
+  "client-bracket/native",
+  "server",
+  "server/geo-spec",
+  "server/geo",
+  "server/api",
+  "server/geo-bake",
+  "tool",
+]
+
+[workspace.dependencies]
+# The transcendental functions, FreeBSD msun's as the libm crate carries
+# them, so a double is the same bits on the server, in the module and in a
+# test, whichever libm the platform has.
+libm = "=0.2.16"
+# FNV-1a, 64 bits: what a places page keys a record by (id_hash), the kernel
+# keys a demand by, and every hash map hashes with, so an order read off one
+# is the same on every run (clippy.toml). Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
+fnv = "1"
+# base64url without padding: the blob a placement set is kept under in the
+# shell's storage.
+base64 = "0.23"
+# What a test reads a golden packet's bytes back as.
+hex = "0.4"
+
+# The workspace's own crates and xpute's, each by its path once, so a crate
+# names another by name. pxl-kernel and xpute-kit default to nothing here: a
+# crate that wants their defaults says so.
+xpute-kit = { path = "../xpute/rust/kit", default-features = false }
+xpute-guest = { path = "../xpute/rust/guest" }
+xpute-gpu = { path = "../xpute/rust/gpu" }
+xpute-host = { path = "../xpute/rust/host" }
+pxl-spec-core = { path = "spec/core" }
+pxl-spec = { path = "spec" }
+pxl-render = { path = "client/render" }
+pxl-kernel = { path = "client/kernel", default-features = false }
+pxl-server = { path = "server" }
+pxl-geo-spec = { path = "server/geo-spec" }
+
+# The client's crates name the kernel's memory by offsets from one base
+# (xpute-guest mem.rs), and an offset cast straight to a pointer
+# reads the wrong memory wherever the base is not 0 — on a device, where the
+# kernel faulted reading a terrain page from address 92 MB. `as` spells that
+# cast and every harmless one alike, so the harmless ones are made to say
+# what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
+# any `as *const` or `as *mut` left is an offset made a pointer, which
+# pxl-tool's check_rules refuses. A crate takes these with `[lints]
+# workspace = true`; xpute-guest, in its own workspace, spells them itself.
+[workspace.lints.clippy]
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+borrow_as_ptr = "warn"
+ref_as_ptr = "warn"
+
+[workspace.package]
+edition = "2021"
+version = "0.0.0"
+publish = false
+
+# The module's profile, and only the module's — `server` below builds on it
+# but does not take this line.
+#
+# A byte here is a byte every visitor downloads, and `3` is Cargo's answer for
+# a program that is already on the machine. Measured on this module, gzipped:
+# `3` is 439,124, `2` is 427,853, `s` is 365,493 and `z` is 357,360. The two
+# nearest things anyone ships — rerun's wgpu viewer and Bevy, both real-time
+# renderers in the browser — pick `z` as well, and egui's profile says of `3`
+# outright that it is "unnecessarily large wasm for no performance gain".
+#
+# What `z` usually costs, this target does not pay. It gives up
+# vectorization, and there is none to give up: `simd128` is not in the target
+# features and no v128 instruction is in the module. It prefers a memcpy call
+# over an unrolled copy, and on WebAssembly that call is `memory.copy`, one
+# instruction the engine implements itself.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+# The name section is not stripped here. What is published is what Binaryen
+# finishes (ts/app/web/script/build-wasm.py): it strips the name, producers and
+# target-features sections in one pass, and it has to read the target
+# features before it can take them off — which it cannot do if Cargo has
+# already thrown them away.
+
+# What the server and the bake tools are built with. `panic` is a profile
+# setting and a profile is the root manifest's alone, so a member cannot ask
+# for one; the release profile above aborts because unwinding costs the module
+# code size and a trap ends the client anyway, and neither reason holds off the
+# browser. The bake wraps each page so that one bad page out of tens of
+# thousands is counted rather than fatal, and there is nothing to catch under
+# `abort`; a request handler wrapped by the web framework is the same story.
+# The module is untouched — ts/app/web/script/build_wasm.ts builds `--release`,
+# and the two binaries never link together.
+#
+# `opt-level` is named again for the same reason `panic` is: what it inherits
+# is chosen for a download, and nothing here is downloaded. A bake walks tens
+# of thousands of pages and a handler answers a request, so both want the
+# faster code and neither cares what it weighs.
+[profile.server]
+inherits = "release"
+opt-level = 3
+panic = "unwind"
+
+# What the device app links (pxl-native). The release profile's `z` is for a
+# download, and an app is installed once and then runs every frame on a
+# phone's battery, so it takes the faster code; it aborts as the module does,
+# since a trap ends the client either way.
+[profile.native]
+inherits = "release"
+opt-level = 3
+
+# naga's Metal backend writes a `let` of a loop's body that `break if` reads
+# in `continuing` as its expression again after the counter moved, so the
+# loop ends an iteration early (gfx-rs/wgpu#4558). rust-gpu emits that shape
+# throughout the generated shaders: on wgpu/Metal heights_cs differed from
+# ground::height in 3791 of a square's 4096 cells, 0 with the fix. Its fix,
+# gfx-rs/wgpu#10459, sits on trunk, whose naga-types wgpu 30.0.1 no longer
+# matches, so wgpu's crates move to the same rev. Drop when a wgpu release
+# carries it.
+[patch.crates-io]
+naga = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+naga-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-core = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-core-deps-apple = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-hal = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-naga-bridge = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }

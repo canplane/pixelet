@@ -1,12 +1,35 @@
 // @xpute/kit/wire/xtp/encode.ts
 
-import { BOOL, type f32, type f64, FIELD_SET, type i16, type i32, type i64, type i8, type u16, type u32, type u64, type u8 } from "@xpute/kit/abi/word.ts";
-import type { BigTypedArray, TypedArray, U8Array } from "@xpute/kit/abi/array.ts";
+import {
+  BOOL,
+  type f32,
+  type f64,
+  FIELD_SET,
+  type i16,
+  type i32,
+  type i64,
+  type i8,
+  type u16,
+  type u32,
+  type u64,
+  type u8,
+} from "@xpute/kit/abi/word.ts";
+import type {
+  BigTypedArray,
+  TypedArray,
+  U8Array,
+} from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 
-import type { AlignUnit, BranchNode, EncodingState, GraftNode, Node, NodeType, ScalarNode, SequenceNode } from "./spec.ts";
+import type {
+  AlignUnit,
+  Node,
+  NodeType,
+  ScalarNode,
+  SequenceNode,
+} from "./spec.ts";
 import {
   ALIGN,
   ALIGN_SZ,
@@ -20,8 +43,8 @@ import {
   MAX_PKT_SZ,
   NODE_IS_BRANCH,
   NODE_IS_GRAFT,
-  NODE_IS_LEAF,
   NODE_IS_NIL,
+  NODE_IS_SCALAR,
   NODE_IS_SEQ,
   NONE,
   RESERVED,
@@ -36,307 +59,520 @@ import type { NodeView } from "./view.ts";
 const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
 export interface TreeEncoderOptions {
-  init_cap?: u32;
+  /** The first buffer's size; it doubles where the tree overflows it. */
+  init_cap: u32;
   max_cap?: u32; // hard packet size limit
 }
 
+/**
+ * A tree walked onto `PacketWriter`, the one writer of the layout, as the C++
+ * encoder does (cpp kit wire/xtp/view.hpp `encode`): into a fixed buffer,
+ * walked again on one twice as large where it overflowed, up to the cap.
+ */
 export class TreeEncoder {
-  max_cap!: u32;
-
-  buf!: U8Array;
-  buf_view!: DataView<ArrayBuffer>;
-
-  private _ensure(new_cap: u32): u32 {
-    const cap: u32 = this.buf.byteLength;
-    if (new_cap <= cap) return cap;
-
-    // Doubling stops at the cap, so what the cap refuses is a packet that
-    // does not fit and never a growth step past it.
-    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
-    new_cap = Math.min(Math.max(cap * 2, new_cap), this.max_cap);
-
-    const new_buf: U8Array = new Uint8Array(new_cap);
-    new_buf.set(this.buf);
-
-    this.buf = new_buf;
-    this.buf_view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
-    return this.buf.byteLength;
-  }
-
-  encode(view: NodeView, opts: TreeEncoderOptions = {}): U8Array {
-    const { node } = view;
-
-    const { init_cap: _init_cap = 1 << 10, max_cap = MAX_PKT_SZ } = opts;
-    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) throw new MarshalError(Errno.EINVAL);
-    this.max_cap = max_cap;
-
-    const init_cap: u32 = Math.max(HDR_SZ, Math.min(_init_cap, this.max_cap));
-    this.buf = new Uint8Array(init_cap);
-    this.buf_view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
-
-    SET_WORD(this.buf_view, 0, MAGIC, RESERVED);
-
-    const st: EncodingState = { base: HDR_SZ, lim: HDR_SZ, type: node.type };
-    this._node(node, st);
-
-    // A grafted root takes the type its packet's header carries.
-    const payload_sz: u32 = st.lim - HDR_SZ;
-    const desc: u32 = FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, st.type);
-    SET_WORD(this.buf_view, WORD_SZ, payload_sz, desc);
-
-    const pkt_nbyte: u32 = ALIGN(HDR_SZ + payload_sz, WORD_SZ);
-    this._ensure(pkt_nbyte);
-    return this.buf.subarray(0, pkt_nbyte);
-  }
-
-  private _node(node: Node, st: EncodingState): void {
-    if (NODE_IS_LEAF(node)) {
-      if (NODE_IS_SEQ(node)) return this._seq(node, st);
-      return this._scalar(node, st);
+  /** EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past the cap. */
+  encode(view: NodeView, opts: TreeEncoderOptions): U8Array {
+    const { init_cap, max_cap = MAX_PKT_SZ } = opts;
+    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) {
+      throw new MarshalError(Errno.EINVAL);
     }
-
-    if (NODE_IS_BRANCH(node)) return this._branch(node, st);
-    if (NODE_IS_GRAFT(node)) return this._graft(node, st);
-    if (NODE_IS_NIL(node)) return;
-    throw new MarshalError(Errno.EBADMSG);
-  }
-
-  // Only the grafted packet's root payload is copied, so it lays out as the inline subtree would.
-  private _graft(node: GraftNode, st: EncodingState): void {
-    const { val: pkt } = node;
-
-    if (pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
-    const hdr_view = new DataView(pkt.buffer, pkt.byteOffset, HDR_SZ);
-
-    if (GET_LEN(hdr_view, 0) !== MAGIC) throw new MarshalError(Errno.EBADMSG);
-
-    const [payload_sz, type] = GET_DESC(hdr_view, WORD_SZ, DESC_REG);
-    if (payload_sz > pkt.byteLength - HDR_SZ) throw new MarshalError(Errno.EBADMSG);
-    st.type = type;
-
-    if (payload_sz === 0) return;
-
-    const align_sz: AlignUnit = ALIGN_SZ(st.type);
-    if (payload_sz % align_sz) throw new MarshalError(Errno.EBADMSG);
-
-    st.base = ALIGN(st.base, align_sz);
-
-    if (payload_sz > this.max_cap - st.base) throw new MarshalError(Errno.EOVERFLOW);
-    this._ensure(st.lim = st.base + payload_sz);
-    this.buf.set(pkt.subarray(HDR_SZ, HDR_SZ + payload_sz), st.base);
-  }
-
-  private _branch(node: BranchNode, st: EncodingState): void {
-    const { val: children } = node;
-    if (children === null) return;
-
-    st.base = ALIGN(st.base, WORD_SZ);
-    const table_start: u32 = st.base + WORD_SZ;
-
-    const len: u32 = children.length;
-    if (len > (this.max_cap >>> 3)) throw new MarshalError(Errno.EOVERFLOW);
-
-    this._ensure(st.lim = table_start + len * WORD_SZ);
-
-    SET_WORD(this.buf_view, st.base, len, RESERVED);
-
-    let table_off: u32 = table_start;
-    const child_st: EncodingState = { base: st.lim, lim: st.lim, type: SpecialType.NIL };
-    for (const child of children) {
-      child_st.base = child_st.lim;
-      child_st.type = child.type;
-
-      this._node(child, child_st);
-      const rel_off = child_st.base === child_st.lim ? 0 : child_st.base - st.base;
-
-      SET_WORD(this.buf_view, table_off, rel_off, FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, child_st.type));
-
-      table_off += WORD_SZ;
-    }
-    this._ensure(st.lim = ALIGN(child_st.lim, WORD_SZ));
-  }
-
-  private _scalar(node: ScalarNode, st: EncodingState): void {
-    const { type, val } = node;
-    if (val === null) return;
-
-    let elem_sz: AlignUnit;
-    let set_payload: (off: u32) => void;
-
-    switch (type) {
-      case ScalarType.U8:
-        elem_sz = 1;
-        set_payload = (off: u32): void => this.buf_view.setUint8(off, val as u8);
-        break;
-      case ScalarType.I8:
-        elem_sz = 1;
-        set_payload = (off: u32): void => this.buf_view.setInt8(off, val as i8);
-        break;
-      case ScalarType.U16:
-        elem_sz = 2;
-        set_payload = (off: u32): void => this.buf_view.setUint16(off, val as u16, LE);
-        break;
-      case ScalarType.I16:
-        elem_sz = 2;
-        set_payload = (off: u32): void => this.buf_view.setInt16(off, val as i16, LE);
-        break;
-      case ScalarType.U32:
-        elem_sz = 4;
-        set_payload = (off: u32): void => this.buf_view.setUint32(off, val as u32, LE);
-        break;
-      case ScalarType.I32:
-        elem_sz = 4;
-        set_payload = (off: u32): void => this.buf_view.setInt32(off, val as i32, LE);
-        break;
-      case ScalarType.U64:
-        elem_sz = 8;
-        set_payload = (off: u32): void => this.buf_view.setBigUint64(off, val as u64, LE);
-        break;
-      case ScalarType.I64:
-        elem_sz = 8;
-        set_payload = (off: u32): void => this.buf_view.setBigInt64(off, val as i64, LE);
-        break;
-      case ScalarType.F32:
-        elem_sz = 4;
-        set_payload = (off: u32): void => this.buf_view.setFloat32(off, val as f32, LE);
-        break;
-      case ScalarType.F64:
-        elem_sz = 8;
-        set_payload = (off: u32): void => this.buf_view.setFloat64(off, val as f64, LE);
-        break;
-
-      case ScalarType.BOOL:
-        elem_sz = 1;
-        set_payload = (off: u32): void => this.buf_view.setUint8(off, BOOL(val));
-        break;
-
-      default:
-        throw new MarshalError(Errno.EBADMSG);
-    }
-
-    st.base = ALIGN(st.base, elem_sz);
-
-    this._ensure(st.lim = st.base + elem_sz);
-    set_payload(st.base);
-  }
-
-  private _seq(node: SequenceNode, st: EncodingState): void {
-    const { type, val } = node;
-    if (val === null) return;
-
-    st.base = ALIGN(st.base, WORD_SZ);
-    const payload_start: u32 = st.base + WORD_SZ;
-
-    let later: boolean = false;
-
-    let len: u32 = 0;
-    let payload_sz: u32 = 0;
-    let set_payload: () => void;
-
-    switch (type) {
-      case SequenceType.U8_ARRAY:
-      case SequenceType.I8_ARRAY:
-      case SequenceType.U16_ARRAY:
-      case SequenceType.I16_ARRAY:
-      case SequenceType.U32_ARRAY:
-      case SequenceType.I32_ARRAY:
-      case SequenceType.U64_ARRAY:
-      case SequenceType.I64_ARRAY:
-      case SequenceType.F32_ARRAY:
-      case SequenceType.F64_ARRAY: {
-        const arr = val as TypedArray | BigTypedArray;
-        len = arr.length;
-        payload_sz = len * arr.BYTES_PER_ELEMENT;
-
-        set_payload = (): void => this.buf.set(new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength), payload_start);
-        break;
+    let cap: u32 = Math.max(HDR_SZ, Math.min(init_cap, max_cap));
+    for (;;) {
+      const buf: U8Array = new Uint8Array(cap);
+      const w = new PacketWriter().root(buf, new DataView(buf.buffer), 0, cap);
+      walk(w, view.node);
+      try {
+        return buf.subarray(0, w.finished());
+      } catch (e) {
+        if (
+          !(e instanceof MarshalError) || e.errnum !== Errno.EOVERFLOW ||
+          cap === max_cap
+        ) throw e;
+        cap = cap > max_cap / 2 ? max_cap : cap * 2;
       }
-
-      case SequenceType.BITSET: {
-        const arr = val as U8Array;
-        len = arr.length;
-        payload_sz = Math.floor((len + 7) / 8);
-
-        // bit packing: bit i -> byte[i >> 3], bit position (i & 7), LSB-first within each byte
-        set_payload = (): void => {
-          this.buf.fill(0, payload_start, payload_start + payload_sz);
-
-          for (let i = 0; i < len; i++) {
-            if (arr[i]) {
-              this.buf[payload_start + (i >>> 3)] |= 1 << (i & 7);
-            }
-          }
-        };
-        break;
-      }
-
-      // encodeInto() the free tail first, and on overflow reserve the worst case (3 bytes a UTF-16 unit) and retry once.
-      case SequenceType.STR: {
-        const s = val as string;
-
-        later = true;
-        set_payload = (): void => {
-          const min_needed: u32 = s.length;
-          if (min_needed > this.max_cap - payload_start) throw new MarshalError(Errno.EOVERFLOW);
-
-          if (this.buf.byteLength - payload_start < min_needed) {
-            this._ensure(payload_start + min_needed);
-          }
-
-          let view = this.buf.subarray(payload_start);
-          let res = encoding.te.encodeInto(s, view);
-
-          if (res.read < s.length) {
-            const payload_lim: u32 = payload_start + Math.min(3 * s.length, this.max_cap - payload_start);
-            this._ensure(payload_lim);
-
-            view = this.buf.subarray(payload_start, payload_lim);
-            res = encoding.te.encodeInto(s, view);
-            if (res.read < s.length) throw new MarshalError(Errno.EOVERFLOW);
-          }
-
-          len = res.written;
-          payload_sz = len + 1; // wire payload includes trailing NUL for C-friendly reads
-
-          this._ensure(payload_start + payload_sz);
-          this.buf[payload_start + len] = 0;
-        };
-        break;
-      }
-
-      // `len` + 1 offsets into the UTF-8 after them, then that UTF-8.
-      case SequenceType.STRS: {
-        const items = (val as string[]).map((s) => encoding.te.encode(s));
-        len = items.length;
-        const lane: u32 = 4 * (len + 1);
-        payload_sz = lane + items.reduce((n, b) => n + b.byteLength, 0);
-        set_payload = (): void => {
-          let off: u32 = 0;
-          this.buf_view.setUint32(payload_start, 0, true);
-          items.forEach((b, i) => {
-            this.buf.set(b, payload_start + lane + off);
-            off += b.byteLength;
-            this.buf_view.setUint32(payload_start + 4 * (i + 1), off, true);
-          });
-        };
-        break;
-      }
-
-      default:
-        throw new MarshalError(Errno.EBADMSG);
     }
-
-    // set_payload may grow and replace buf_view, so the len word is written after it.
-    if (later) {
-      set_payload();
-      this._ensure(st.lim = payload_start + ALIGN(payload_sz, WORD_SZ));
-    } else {
-      if (payload_sz > this.max_cap - payload_start) throw new MarshalError(Errno.EOVERFLOW);
-      this._ensure(st.lim = payload_start + ALIGN(payload_sz, WORD_SZ));
-      set_payload();
-    }
-    SET_WORD(this.buf_view, st.base, len, RESERVED);
   }
 }
 
 export const encoder = new TreeEncoder();
+
+/** A node written as the entry the writer is at. */
+function walk(w: PacketWriter, node: Node): void {
+  if (NODE_IS_NIL(node)) {
+    w.nil();
+  } else if (NODE_IS_BRANCH(node)) {
+    const children = node.val;
+    if (children === null) w.no_branch();
+    else w.branch(children.length, (b) => children.forEach((c) => walk(b, c)));
+  } else if (NODE_IS_GRAFT(node)) {
+    w.graft(node.val);
+  } else if (NODE_IS_SEQ(node)) {
+    seq_into(w, node);
+  } else if (NODE_IS_SCALAR(node)) {
+    scalar_into(w, node);
+  } else {
+    throw new MarshalError(Errno.EBADMSG);
+  }
+}
+
+function scalar_into(w: PacketWriter, node: ScalarNode): void {
+  const v = node.val;
+  switch (node.type) {
+    case ScalarType.U8:
+      w.u8(v as u8 | null);
+      return;
+    case ScalarType.I8:
+      w.i8(v as i8 | null);
+      return;
+    case ScalarType.U16:
+      w.u16(v as u16 | null);
+      return;
+    case ScalarType.I16:
+      w.i16(v as i16 | null);
+      return;
+    case ScalarType.U32:
+      w.u32(v as u32 | null);
+      return;
+    case ScalarType.I32:
+      w.i32(v as i32 | null);
+      return;
+    case ScalarType.U64:
+      w.u64(v as u64 | null);
+      return;
+    case ScalarType.I64:
+      w.i64(v as i64 | null);
+      return;
+    case ScalarType.F32:
+      w.f32(v as f32 | null);
+      return;
+    case ScalarType.F64:
+      w.f64(v as f64 | null);
+      return;
+    case ScalarType.BOOL:
+      w.bool(v === null ? null : BOOL(v) === 1);
+      return;
+    default:
+      throw new MarshalError(Errno.EBADMSG);
+  }
+}
+
+function seq_into(w: PacketWriter, node: SequenceNode): void {
+  const v = node.val;
+  switch (node.type) {
+    case SequenceType.STR:
+      w.str(v as string | null);
+      return;
+    case SequenceType.STRS:
+      w.strs(v as string[] | null);
+      return;
+    case SequenceType.BITSET:
+      w.bitset(v as U8Array | null);
+      return;
+    case SequenceType.U8_ARRAY:
+    case SequenceType.I8_ARRAY:
+    case SequenceType.U16_ARRAY:
+    case SequenceType.I16_ARRAY:
+    case SequenceType.U32_ARRAY:
+    case SequenceType.I32_ARRAY:
+    case SequenceType.U64_ARRAY:
+    case SequenceType.I64_ARRAY:
+    case SequenceType.F32_ARRAY:
+    case SequenceType.F64_ARRAY:
+      w.array(node.type, v as TypedArray | BigTypedArray | null);
+      return;
+    default:
+      throw new MarshalError(Errno.EBADMSG);
+  }
+}
+
+/** Where a packet is written in place: a writer begun over the room for a
+ * root branch of `count` children. */
+export interface PacketRoom {
+  writer(count: u32): PacketWriter;
+}
+
+/** The table a writer's entries go in: a branch's, or the root's, a branch of
+ * one whose entry is the header. */
+interface Frame {
+  base: u32;
+  count: u32;
+  written: u32;
+  root: boolean;
+}
+
+const word_up = (n: number): number => Math.ceil(n / WORD_SZ) * WORD_SZ;
+
+/**
+ * Writes a packet in place, into bytes the caller holds, with no tree built
+ * first: the one writer of the layout, which `TreeEncoder` walks its tree onto
+ * (rust/kit/src/wire/xtp/encode.rs `PacketWriter`, cpp kit wire/xtp/encode.hpp).
+ * A branch declares its child count up front; a child that does not fit makes
+ * `finish` refuse, and a miscount throws. One writer serves every packet its
+ * room hands out, begun again for each.
+ */
+export class PacketWriter {
+  private bytes: U8Array = new Uint8Array(0);
+  private view: DataView = new DataView(new ArrayBuffer(0));
+  /** Where the packet begins in `bytes`, and the bytes it may take. */
+  start: u32 = 0;
+  private cap: u32 = 0;
+  private frame: Frame = { base: 0, count: 1, written: 0, root: true };
+  private root_type: NodeType = SpecialType.NIL;
+  /** The packet's end so far, from `start`. */
+  private lim: u32 = HDR_SZ;
+  /** The first reason only. */
+  private error: Errno | null = null;
+
+  /** A packet of one root, any node. `bytes` and `view` see the same memory
+   * from the same offset; `cap` is at most MAX_PKT_SZ. */
+  root(bytes: U8Array, view: DataView, start: u32, cap: u32): this {
+    this.bytes = bytes;
+    this.view = view;
+    this.start = start;
+    this.cap = Math.min(cap, MAX_PKT_SZ);
+    this.frame = { base: 0, count: 1, written: 0, root: true };
+    this.root_type = SpecialType.NIL;
+    this.lim = HDR_SZ;
+    this.error = null;
+    if (this.cap < HDR_SZ) this.spoil(Errno.EINVAL);
+    else bytes.fill(0, start, start + HDR_SZ);
+    return this;
+  }
+
+  /** A packet whose root is a branch of `count`, its children written next. */
+  begin(
+    bytes: U8Array,
+    view: DataView,
+    start: u32,
+    cap: u32,
+    count: u32,
+  ): this {
+    this.root(bytes, view, start, cap);
+    const at = this.branch_open(count);
+    this.root_type = SpecialType.BRANCH;
+    this.frame = { base: at < 0 ? HDR_SZ : at, count, written: 0, root: false };
+    return this;
+  }
+
+  private spoil(errnum: Errno): -1 {
+    this.error ??= errnum;
+    return -1;
+  }
+
+  /** Where `bytes` aligned to `unit` begin, zeroed from the end so far; -1 past the room. */
+  private reserve(unit: AlignUnit, bytes: number): number {
+    if (this.error !== null) return -1;
+    const base: u32 = ALIGN(this.lim, unit);
+    const end: number = base + bytes;
+    if (end > this.cap) return this.spoil(Errno.EOVERFLOW);
+    this.bytes.fill(0, this.start + this.lim, this.start + end);
+    this.lim = end;
+    return base;
+  }
+
+  private entry(at: number, type: NodeType): this {
+    const f = this.frame;
+    if (f.written >= f.count) throw new InvariantError(Errno.ENOSPC);
+    if (f.root) this.root_type = type;
+    else if (this.error === null) {
+      SET_WORD(
+        this.view,
+        this.start + f.base + WORD_SZ * (1 + f.written),
+        at < 0 ? 0 : at - f.base,
+        FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type),
+      );
+    }
+    f.written++;
+    return this;
+  }
+
+  private scalar(
+    type: ScalarType,
+    unit: AlignUnit,
+    set: ((at: u32) => void) | null,
+  ): this {
+    const at = set === null ? -1 : this.reserve(unit, unit);
+    if (at >= 0) set!(this.start + at);
+    return this.entry(at, type);
+  }
+
+  /** A sequence's length word and `bytes` of payload after it, filled by `fill` at the payload's place in `bytes`. */
+  private seq(
+    type: SequenceType,
+    len: u32,
+    bytes: number,
+    fill: (payload: number) => void,
+  ): this {
+    const at = this.reserve(WORD_SZ, WORD_SZ + word_up(bytes));
+    if (at >= 0) {
+      SET_WORD(this.view, this.start + at, len, RESERVED);
+      fill(this.start + at + WORD_SZ);
+    }
+    return this.entry(at, type);
+  }
+
+  nil(): this {
+    return this.entry(-1, SpecialType.NIL);
+  }
+
+  u8(v: u8 | null): this {
+    return this.scalar(
+      ScalarType.U8,
+      1,
+      v === null ? null : (at) => this.view.setUint8(at, v),
+    );
+  }
+
+  i8(v: i8 | null): this {
+    return this.scalar(
+      ScalarType.I8,
+      1,
+      v === null ? null : (at) => this.view.setInt8(at, v),
+    );
+  }
+
+  u16(v: u16 | null): this {
+    return this.scalar(
+      ScalarType.U16,
+      2,
+      v === null ? null : (at) => this.view.setUint16(at, v, LE),
+    );
+  }
+
+  i16(v: i16 | null): this {
+    return this.scalar(
+      ScalarType.I16,
+      2,
+      v === null ? null : (at) => this.view.setInt16(at, v, LE),
+    );
+  }
+
+  u32(v: u32 | null): this {
+    return this.scalar(
+      ScalarType.U32,
+      4,
+      v === null ? null : (at) => this.view.setUint32(at, v, LE),
+    );
+  }
+
+  i32(v: i32 | null): this {
+    return this.scalar(
+      ScalarType.I32,
+      4,
+      v === null ? null : (at) => this.view.setInt32(at, v, LE),
+    );
+  }
+
+  u64(v: u64 | null): this {
+    return this.scalar(
+      ScalarType.U64,
+      8,
+      v === null ? null : (at) => this.view.setBigUint64(at, v, LE),
+    );
+  }
+
+  i64(v: i64 | null): this {
+    return this.scalar(
+      ScalarType.I64,
+      8,
+      v === null ? null : (at) => this.view.setBigInt64(at, v, LE),
+    );
+  }
+
+  f32(v: f32 | null): this {
+    return this.scalar(
+      ScalarType.F32,
+      4,
+      v === null ? null : (at) => this.view.setFloat32(at, v, LE),
+    );
+  }
+
+  f64(v: f64 | null): this {
+    return this.scalar(
+      ScalarType.F64,
+      8,
+      v === null ? null : (at) => this.view.setFloat64(at, v, LE),
+    );
+  }
+
+  bool(v: boolean | null): this {
+    return this.scalar(
+      ScalarType.BOOL,
+      1,
+      v === null ? null : (at) => this.view.setUint8(at, BOOL(v)),
+    );
+  }
+
+  /** An array of `type`, its elements as they lie in `a`, little-endian. */
+  array(type: SequenceType, a: TypedArray | BigTypedArray | null): this {
+    if (a === null) return this.entry(-1, type);
+    return this.seq(
+      type,
+      a.length,
+      a.byteLength,
+      (payload) =>
+        this.bytes.set(
+          new Uint8Array(a.buffer, a.byteOffset, a.byteLength),
+          payload,
+        ),
+    );
+  }
+
+  /** One byte a bit, packed low bit first. */
+  bitset(bits: U8Array | null): this {
+    if (bits === null) return this.entry(-1, SequenceType.BITSET);
+    return this.seq(
+      SequenceType.BITSET,
+      bits.length,
+      Math.ceil(bits.length / 8),
+      (payload) => {
+        bits.forEach((b, i) => {
+          if (b) this.bytes[payload + (i >>> 3)] |= 1 << (i & 7);
+        });
+      },
+    );
+  }
+
+  /** UTF-8 as `TextEncoder` writes it, a NUL after it that its length leaves out. */
+  str(s: string | null): this {
+    if (s === null || this.error !== null) {
+      return this.entry(-1, SequenceType.STR);
+    }
+    const base: u32 = ALIGN(this.lim, WORD_SZ);
+    const payload: u32 = base + WORD_SZ;
+    const res = payload < this.cap
+      ? encoding.te.encodeInto(
+        s,
+        this.bytes.subarray(this.start + payload, this.start + this.cap),
+      )
+      : null;
+    const end: number = res === null ? 0 : payload + word_up(res.written + 1);
+    if (res === null || res.read < s.length || end > this.cap) {
+      return this.entry(this.spoil(Errno.EOVERFLOW), SequenceType.STR);
+    }
+    this.bytes.fill(0, this.start + this.lim, this.start + payload);
+    this.bytes.fill(0, this.start + payload + res.written, this.start + end);
+    SET_WORD(this.view, this.start + base, res.written, RESERVED);
+    this.lim = end;
+    return this.entry(base, SequenceType.STR);
+  }
+
+  /** `len` + 1 offsets into the UTF-8 after them. */
+  strs(items: string[] | null): this {
+    if (items === null) return this.entry(-1, SequenceType.STRS);
+    const utf8 = items.map((s) => encoding.te.encode(s));
+    const lane: u32 = 4 * (utf8.length + 1);
+    return this.seq(
+      SequenceType.STRS,
+      utf8.length,
+      lane + utf8.reduce((n, b) => n + b.byteLength, 0),
+      (payload) => {
+        let off: u32 = 0;
+        this.view.setUint32(payload, 0, LE);
+        utf8.forEach((b, i) => {
+          this.bytes.set(b, payload + lane + off);
+          off += b.byteLength;
+          this.view.setUint32(payload + 4 * (i + 1), off, LE);
+        });
+      },
+    );
+  }
+
+  private branch_open(count: u32): number {
+    const at = this.reserve(WORD_SZ, WORD_SZ * (1 + count));
+    if (at >= 0) SET_WORD(this.view, this.start + at, count, RESERVED);
+    return at;
+  }
+
+  /** A branch ends on a word, so what follows it starts where the encoder starts it. */
+  private branch_close(at: number): number {
+    if (at < 0 || this.error !== null) return at;
+    const end: u32 = ALIGN(this.lim, WORD_SZ);
+    if (end > this.cap) return this.spoil(Errno.EOVERFLOW);
+    this.bytes.fill(0, this.start + this.lim, this.start + end);
+    this.lim = end;
+    return at;
+  }
+
+  /** Writing a different number of children than `count` throws. */
+  branch(count: u32, fill: (w: this) => void): this {
+    const at = this.branch_open(count);
+    // A branch that did not fit still counts its children, against a base nothing is written at.
+    const outer = this.frame;
+    this.frame = { base: at < 0 ? HDR_SZ : at, count, written: 0, root: false };
+    fill(this);
+    if (this.frame.written !== this.frame.count) {
+      throw new InvariantError(Errno.ENOTRECOVERABLE);
+    }
+    this.frame = outer;
+    return this.entry(this.branch_close(at), SpecialType.BRANCH);
+  }
+
+  no_branch(): this {
+    return this.entry(-1, SpecialType.BRANCH);
+  }
+
+  /** Its root's payload copied, placed as its root's type places it. */
+  graft(packet: U8Array): this {
+    let payload_sz: u32, type: NodeType;
+    try {
+      if (packet.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
+      const hdr = new DataView(packet.buffer, packet.byteOffset, HDR_SZ);
+      if (GET_LEN(hdr, 0) !== MAGIC) throw new MarshalError(Errno.EBADMSG);
+      [payload_sz, type] = GET_DESC(hdr, WORD_SZ, DESC_REG);
+    } catch (e) {
+      if (!(e instanceof MarshalError)) throw e;
+      return this.entry(this.spoil(Errno.EBADMSG), SpecialType.NIL);
+    }
+    if (payload_sz > packet.byteLength - HDR_SZ) {
+      return this.entry(this.spoil(Errno.EBADMSG), type);
+    }
+    if (payload_sz === 0) return this.entry(-1, type);
+    let unit: AlignUnit;
+    try {
+      unit = ALIGN_SZ(type);
+    } catch (e) {
+      if (!(e instanceof MarshalError)) throw e;
+      return this.entry(this.spoil(Errno.EBADMSG), type);
+    }
+    if (payload_sz % unit) return this.entry(this.spoil(Errno.EBADMSG), type);
+    const at = this.reserve(unit, payload_sz);
+    if (at >= 0) {
+      this.bytes.set(
+        packet.subarray(HDR_SZ, HDR_SZ + payload_sz),
+        this.start + at,
+      );
+    }
+    return this.entry(at, type);
+  }
+
+  /** The length, header included and to the word; throws why it was refused. */
+  finished(): u32 {
+    const f = this.frame;
+    if (f.written !== f.count) throw new InvariantError(Errno.ENOTRECOVERABLE);
+    // The root branch `begin` opened, closed as `branch` closes one.
+    if (!f.root) this.branch_close(f.base);
+    if (this.error !== null) throw new MarshalError(this.error);
+    const end: u32 = ALIGN(this.lim, WORD_SZ);
+    if (end > this.cap) throw new MarshalError(Errno.EOVERFLOW);
+    this.bytes.fill(0, this.start + this.lim, this.start + end);
+    SET_WORD(this.view, this.start, MAGIC, RESERVED);
+    SET_WORD(
+      this.view,
+      this.start + WORD_SZ,
+      this.lim - HDR_SZ,
+      FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, this.root_type),
+    );
+    return end;
+  }
+
+  /** The packet's length, or -1 when a child did not fit: for a room that fits a packet or not. */
+  finish(): number {
+    try {
+      return this.finished();
+    } catch (e) {
+      if (e instanceof MarshalError) return -1;
+      throw e;
+    }
+  }
+}

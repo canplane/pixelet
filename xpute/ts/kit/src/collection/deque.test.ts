@@ -7,7 +7,8 @@ import { assertEquals } from "@std/assert";
 import { Golden } from "@xpute/kit/golden.ts";
 import { Deque } from "@xpute/kit/collection/deque.ts";
 
-const show = (x: number | undefined): string => x === undefined ? "none" : `${x}`;
+const show = (x: number | undefined): string =>
+  x === undefined ? "none" : `${x}`;
 
 Deno.test("deque holds what the record holds", async () => {
   const v = await Golden.load("golden/collection/deque.tsv");

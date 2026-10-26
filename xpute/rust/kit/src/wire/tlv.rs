@@ -214,7 +214,11 @@ pub struct TlvReader<'a> {
 
 impl<'a> TlvReader<'a> {
     pub fn new(buf: &'a [u8]) -> TlvReader<'a> {
-        TlvReader { buf, off: 0, end: None }
+        TlvReader {
+            buf,
+            off: 0,
+            end: None,
+        }
     }
 
     /// None while values remain, and after a fault.

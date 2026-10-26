@@ -23,12 +23,12 @@ namespace xpute::conformance {
 // stack and data — is the build's, and no number here.
 inline constexpr std::uint32_t MEMORY_BYTES = 262144u;
 
-// Messages the submission ring holds.
-inline constexpr std::uint32_t SUBMISSION_CAPACITY = 16u;
+// Frames the submission ring holds.
+inline constexpr std::uint32_t SQ_CAP = 16u;
 
-// Messages the completion ring holds: fewer than eight commands raising MOST_RAISE
+// Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
 // signals each leave, so a trace that sends those makes a turn's output outgrow it.
-inline constexpr std::uint32_t COMPLETION_CAPACITY = 128u;
+inline constexpr std::uint32_t CQ_CAP = 128u;
 
 // A ring slot's payload: a packet of one number fits.
 inline constexpr std::uint32_t SLOT_BYTES = 256u;
@@ -39,8 +39,11 @@ inline constexpr std::uint32_t STREAM_WORDS = 256u;
 // The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
 inline constexpr std::uint32_t SYS_WORDS = 64u;
 
-// The guest's heap, in its own range: what its file table holds lies there, since the
-// memory a host hands a module never grows and a guest takes nothing it was not given.
+// The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile).
+inline constexpr std::uint32_t STACK_BYTES = 1048576u;
+
+// The guest's heap, in its own range, since the memory a host hands a module never grows
+// and a guest takes nothing it was not given.
 inline constexpr std::uint32_t HEAP_BYTES = 65536u;
 
 // Slots in the guest's handle table, slot 0 never handed out.

@@ -6,16 +6,24 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
+import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 
 import * as frame from "./frame.ts";
-import { CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL } from "./ring.spec.ts";
+import {
+  CAP,
+  HEAD,
+  HEADER_WORDS,
+  SLOT_BASE,
+  SLOT_BYTES,
+  TAIL,
+} from "./ring.spec.ts";
 
-export function ring_bytes(capacity: u32): u32 {
-  return (HEADER_WORDS + capacity * frame.WORDS) * 4;
+export function ring_bytes(cap: u32): u32 {
+  return (HEADER_WORDS + cap * frame.WORDS) * 4;
 }
 
-export function slots_bytes(capacity: u32, slot_bytes: u32): u32 {
-  return capacity * slot_bytes;
+export function slots_bytes(cap: u32, slot_bytes: u32): u32 {
+  return cap * slot_bytes;
 }
 
 /** Payloads are padded to 8 bytes. */
@@ -24,43 +32,62 @@ function padded(bytes: u32): u32 {
 }
 
 /** A power of two, so a position masks to its slot. */
-function isPowerOfTwo(n: u32): boolean {
+function is_pow2(n: u32): boolean {
   return n !== 0 && (n & (n - 1)) === 0;
 }
 
 /** A packet's 16-byte header plus the payload its second word names. */
 function packet_bytes(u8: U8Array, at: u32): u32 {
-  const payload = u8[at + 8] | (u8[at + 9] << 8) | (u8[at + 10] << 16) | (u8[at + 11] << 24);
+  const payload = u8[at + 8] | (u8[at + 9] << 8) | (u8[at + 10] << 16) |
+    (u8[at + 11] << 24);
   return padded(16 + (payload >>> 0));
 }
 
 export class Ring {
   readonly words: Uint32Array;
-  readonly capacity: u32;
+  readonly cap: u32;
   readonly slot_bytes: u32;
   private readonly mask: u32;
   private readonly slots: U8Array;
+  private readonly slot_view: DataView;
   private readonly slot_base: u32;
 
   constructor(mem: ArrayBufferLike, at: u32) {
     const head = new Uint32Array(mem, at, HEADER_WORDS);
-    const capacity = head[CAPACITY];
-    if (!isPowerOfTwo(capacity)) throw new InvariantError(Errno.EINVAL);
-    this.capacity = capacity;
+    const cap = head[CAP];
+    if (!is_pow2(cap)) throw new InvariantError(Errno.EINVAL);
+    this.cap = cap;
     this.slot_bytes = head[SLOT_BYTES];
     this.slot_base = head[SLOT_BASE];
-    this.mask = capacity - 1;
-    this.words = new Uint32Array(mem, at, ring_bytes(capacity) / 4);
+    this.mask = cap - 1;
+    this.words = new Uint32Array(mem, at, ring_bytes(cap) / 4);
     // Never a SharedArrayBuffer here, and the tree reader takes an ArrayBuffer view.
-    this.slots = new Uint8Array(mem as ArrayBuffer, this.slot_base, slots_bytes(capacity, this.slot_bytes));
+    this.slots = new Uint8Array(
+      mem as ArrayBuffer,
+      this.slot_base,
+      slots_bytes(cap, this.slot_bytes),
+    );
+    this.slot_view = new DataView(
+      mem as ArrayBuffer,
+      this.slot_base,
+      slots_bytes(cap, this.slot_bytes),
+    );
   }
 
-  static init(mem: ArrayBufferLike, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32): Ring {
-    if (!isPowerOfTwo(capacity)) throw new InvariantError(Errno.EINVAL);
-    if (!isPowerOfTwo(slot_bytes) || slot_bytes % 8 !== 0) throw new InvariantError(Errno.EINVAL);
-    new Uint8Array(mem as ArrayBuffer, at, ring_bytes(capacity)).fill(0);
+  static init(
+    mem: ArrayBufferLike,
+    at: u32,
+    cap: u32,
+    slot_base: u32,
+    slot_bytes: u32,
+  ): Ring {
+    if (!is_pow2(cap)) throw new InvariantError(Errno.EINVAL);
+    if (!is_pow2(slot_bytes) || slot_bytes % 8 !== 0) {
+      throw new InvariantError(Errno.EINVAL);
+    }
+    new Uint8Array(mem as ArrayBuffer, at, ring_bytes(cap)).fill(0);
     const head = new Uint32Array(mem, at, HEADER_WORDS);
-    head[CAPACITY] = capacity;
+    head[CAP] = cap;
     head[SLOT_BYTES] = slot_bytes;
     head[SLOT_BASE] = slot_base;
     return new Ring(mem, at);
@@ -86,21 +113,37 @@ export class Ring {
     return ((position & this.mask) >>> 0) * this.slot_bytes;
   }
 
-  /** EAGAIN, writing nothing, when full; EMSGSIZE when the packet exceeds a slot. */
-  /** Whether `packet` fits a slot: one that does not is refused, never split. */
-  fits(packet: U8Array): boolean {
-    return padded(packet.byteLength) <= this.slot_bytes;
+  /** Begins `w` over the tail's slot, a packet of `count` children written
+   * in place; false, beginning nothing, when the ring is full. */
+  write(w: PacketWriter, count: u32): boolean {
+    if (this.len >= this.cap) return false;
+    w.begin(
+      this.slots,
+      this.slot_view,
+      this.slot_at(this.tail),
+      this.slot_bytes,
+      count,
+    );
+    return true;
   }
 
-  push(tag: u32, cmd: u32, flags: u32 = 0, packet: U8Array | null = null, result: i32 = 0): Errno {
-    if (this.len >= this.capacity) return Errno.EAGAIN;
+  /** EAGAIN, writing nothing, when full; EMSGSIZE when the packet a writer wrote
+   * in the tail's slot (`write`) exceeds it: refused, never split. */
+  push(
+    tag: u32,
+    cmd: u32,
+    flags: u32 = 0,
+    packet: PacketWriter | null = null,
+    result: i32 = 0,
+  ): Errno {
+    if (this.len >= this.cap) return Errno.EAGAIN;
     let packet_at = 0;
     if (packet !== null) {
-      if (!this.fits(packet)) return Errno.EMSGSIZE;
-      const need = padded(packet.byteLength);
       const start = this.slot_at(this.tail);
-      this.slots.set(packet, start);
-      this.slots.fill(0, start + packet.byteLength, start + need);
+      if (packet.start !== start) {
+        throw new InvariantError(Errno.ENOTRECOVERABLE);
+      }
+      if (packet.finish() < 0) return Errno.EMSGSIZE;
       packet_at = this.slot_base + start;
     }
     const w = this.words;
@@ -139,7 +182,9 @@ export class Ring {
     const packet_at = this.words[at + frame.PACKET];
     if (packet_at === 0) return null;
     const off = packet_at - this.slot_base;
-    if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (
+      off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength
+    ) throw new MarshalError(Errno.EBADMSG);
     const len = packet_bytes(this.slots, off);
     if (len > this.slot_bytes) throw new MarshalError(Errno.EBADMSG);
     return this.slots.subarray(off, off + len);

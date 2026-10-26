@@ -5,9 +5,15 @@
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
-import { type Element, heapsort, MaxHeap, MinHeap } from "@xpute/kit/collection/heap.ts";
+import {
+  type Element,
+  heapsort,
+  MaxHeap,
+  MinHeap,
+} from "@xpute/kit/collection/heap.ts";
 
-const show = (e: Element<number, number> | undefined): string => e === undefined ? "none" : `${e.key}:${e.val}`;
+const show = (e: Element<number, number> | undefined): string =>
+  e === undefined ? "none" : `${e.key}:${e.val}`;
 
 Deno.test("heaps pop what the record holds", async () => {
   const v = await Golden.load("golden/collection/heap.tsv");

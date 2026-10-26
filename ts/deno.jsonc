@@ -1,0 +1,61 @@
+{
+  // pixelet's TypeScript, one workspace as rust/ is one Cargo workspace: the
+  // client, the shell and the host the same files on a page and on a device,
+  // and each app, which bundles it with the guest and hands it its bracket
+  // (app/web, app/native). A package's own scripts sit beside its src/
+  // (build/, app/web/script/).
+  // What runs across the languages is the repository root's (../Makefile).
+  "workspace": [
+    "client",
+    // What the bundlers and the build scripts read the workspace through:
+    // its import map and const enums, and where it and the repository are.
+    "build",
+    "app/web",
+    // A package.json member: Expo and Metro find packages the npm way.
+    "app/native",
+    // The Worker in front of it all, beside the servers in rust/server/.
+    "server/edge"
+  ],
+  "nodeModulesDir": "auto",
+
+  // Vite's deps cache and the built bundle are no workspace source.
+  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
+
+  "tasks": {
+    "check": "deno fmt --check && deno lint && deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check client/src build/*.ts",
+    "test": "deno task --cwd client test && deno task --cwd app/web test",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.ns", "deno.unstable", "esnext"],
+    "verbatimModuleSyntax": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "checkJs": false
+    // "noUncheckedIndexedAccess": true,
+    // "exactOptionalPropertyTypes": true,
+  },
+
+  // A package is named once, here, and reached by its name from every member.
+  "imports": {
+    "@pxl/client/": "./client/src/",
+    "@pxl/build/": "./build/",
+    // The client's ambient types, which each member's compilerOptions names.
+    "@pxl/client/@types": "./client/@types/index.d.ts",
+
+    "@xpute/kit/": "../xpute/ts/kit/src/",
+    "@xpute/host/": "../xpute/ts/host/src/",
+    "@xpute/gpu/": "../xpute/ts/gpu/src/"
+  },
+
+  "fmt": {
+    "exclude": ["node_modules/", "dist/"]
+  },
+
+  "lint": {
+    "rules": { "tags": ["recommended"] },
+    "exclude": ["node_modules/", "dist/"]
+  }
+}

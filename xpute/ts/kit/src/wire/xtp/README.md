@@ -1,6 +1,13 @@
 # XTP: Xpute Tree Packet
 
-A small **relocatable binary tree packet** format, implemented in each of xpute's languages and held to each other: this directory in TypeScript, `rust/kit/src/wire/xtp/` in Rust and `cpp/kit/wire/xtp/` in C++. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the others mirror in their own languages' shapes. The Rust and the C++ also write a packet in place, into bytes the caller holds, with no tree built first (`PacketWriter`), giving the bytes the tree encoder gives.
+A small **relocatable binary tree packet** format, implemented in each of
+xpute's languages and held to each other: this directory in TypeScript,
+`rust/kit/src/wire/xtp/` in Rust and `cpp/xpute/kit/wire/xtp/` in C++. The wire
+format is the contract between them; the walkthrough below is the TypeScript
+API, which the others mirror in their own languages' shapes. Each also writes a
+packet in place, into bytes the caller holds, with no tree built first
+(`PacketWriter`), giving the bytes the tree encoder gives; the TypeScript one
+writes a root branch of scalars and strings, what the host sends.
 
 It is designed to stay simple at the surface:
 
@@ -12,19 +19,24 @@ It is designed to stay simple at the surface:
 
 You can think of it like this:
 
-> JSON-like usage for scalars, arrays, strings, and typed arrays, stored as a compact binary tree with lazy reads.
+> JSON-like usage for scalars, arrays, strings, and typed arrays, stored as a
+> compact binary tree with lazy reads.
 
-This layer is **not** a schema system by itself.
-It provides only the binary tree packet layer; higher layers define field meaning, ordering, compatibility, and validation.
+This layer is **not** a schema system by itself. It provides only the binary
+tree packet layer; higher layers define field meaning, ordering, compatibility,
+and validation.
 
-XTP stands for **Xpute Tree Packet**. In the rest of this document, it is described simply as a **tree packet**.
+XTP stands for **Xpute Tree Packet**. In the rest of this document, it is
+described simply as a **tree packet**.
 
 ## Wire-format notes
 
 - byte order is **little-endian**
 - branch child offsets are relative to the **enclosing branch base**
-- `str` stores UTF-8 bytes with a trailing NUL on wire, while its stored `len` excludes that terminator
-- `strs` stores many strings as one leaf: `len` + 1 u32 offsets, each no less than the one before, then the UTF-8 they index
+- `str` stores UTF-8 bytes with a trailing NUL on wire, while its stored `len`
+  excludes that terminator
+- `strs` stores many strings as one leaf: `len` + 1 u32 offsets, each no less
+  than the one before, then the UTF-8 they index
 - root presence is encoded through `root_payload_sz`
 - branch-child presence is encoded through `child_rel_off`
 
@@ -50,7 +62,7 @@ import { TreeEncoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 const tree = new TreeView();
 tree.set([42, "hello", true]);
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 
 console.log(packet.byteLength > 0);
 // true
@@ -69,8 +81,8 @@ console.log(out);
 ```
 
 `read_branch()` is a convenience entry for packets whose root is known to be a
-branch. If the root kind is not known ahead of time, use `read()` first and
-then inspect or cast the returned cursor.
+branch. If the root kind is not known ahead of time, use `read()` first and then
+inspect or cast the returned cursor.
 
 ---
 
@@ -86,7 +98,8 @@ This tree packet format is a good fit when you want:
 - large payloads you do not want to fully decode up front
 - a lower-level binary substrate that higher layers can build on
 
-It is best understood as a **binary tree packet layer** — one piece of a larger serialization stack.
+It is best understood as a **binary tree packet layer** — one piece of a larger
+serialization stack.
 
 ---
 
@@ -119,14 +132,15 @@ Branch
 └─ Sequence(f64[]) = [1.1, 2.2, 3.3]
 ```
 
-You usually do **not** need to build that shape manually.
-Generic lowering does it for you.
+You usually do **not** need to build that shape manually. Generic lowering does
+it for you.
 
 ---
 
 ## Default Lowering Rules
 
-`TreeView.set()` and values written inside `tree.branch((b) => ...)` follow this contract:
+`TreeView.set()` and values written inside `tree.branch((b) => ...)` follow this
+contract:
 
 - `null` -> `NIL`
 - `number` -> `i32` if it fits, otherwise `f64`
@@ -134,16 +148,22 @@ Generic lowering does it for you.
 - `boolean` -> `bool`
 - `string` -> `str`
 - `TypedArray` / `BigTypedArray` -> matching packed sequence leaf
-- `Array` -> branch node, an array of strings among them; one leaf of many strings is `strs(items)`, written explicitly
+- `Array` -> branch node, an array of strings among them; one leaf of many
+  strings is `strs(items)`, written explicitly
 
 Notes:
 
-- The `number -> i32 | f64` split is a **JS-side lowering policy**, not a wire-level requirement.
-- Generic lowering treats unsupported input or out-of-contract generic bigint input as **programr error** and throws.
-- Explicit scalar writers such as `u8()`, `i32()`, `u64()`, `f32()` are **caller-chosen constructors** and normalize through the word cast helpers.
-- Generic `set(null)` / `put(null)` are intentionally distinct from typed optional null such as `str(null)` or `u32(null)`.
+- The `number -> i32 | f64` split is a **JS-side lowering policy**, not a
+  wire-level requirement.
+- Generic lowering treats unsupported input or out-of-contract generic bigint
+  input as **programr error** and throws.
+- Explicit scalar writers such as `u8()`, `i32()`, `u64()`, `f32()` are
+  **caller-chosen constructors** and normalize through the word cast helpers.
+- Generic `set(null)` / `put(null)` are intentionally distinct from typed
+  optional null such as `str(null)` or `u32(null)`.
 
-That gives you a generic path that feels close to normal JS data entry, while still producing a compact binary layout.
+That gives you a generic path that feels close to normal JS data entry, while
+still producing a compact binary layout.
 
 ---
 
@@ -169,7 +189,8 @@ tree.u32(null);
 tree.branch(null);
 ```
 
-These preserve the original node kind while making the payload physically absent.
+These preserve the original node kind while making the payload physically
+absent.
 
 The encoding model is:
 
@@ -198,7 +219,7 @@ tree.branch((b) =>
     .branch(null)
 );
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const root = new TreeReader(packet).read_branch();
 
 console.log(root.at(0).get<number>()); // 1
@@ -231,7 +252,7 @@ const data = [
 const tree = new TreeView();
 tree.set(data);
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const value = new TreeReader(packet).read_branch().get_deep<typeof data>();
 
 console.log(value[1]); // "Hello xpute!"
@@ -262,7 +283,7 @@ tree.branch((b) =>
     .f32(99.9)
 );
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const b = new TreeReader(packet).read_branch();
 
 const level = b.at(0).get<number>();
@@ -279,7 +300,8 @@ Use this style when you want:
 - predictable binary layout
 - no ambiguity about what gets encoded
 
-Explicit writers are also the path to use when you want unsigned 64-bit scalar values:
+Explicit writers are also the path to use when you want unsigned 64-bit scalar
+values:
 
 ```ts
 const tree = new TreeView();
@@ -301,7 +323,7 @@ tree.branch((b) =>
     .u8_array(null)
 );
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const b = new TreeReader(packet).read_branch();
 
 const id = b.at(0).get<number>();
@@ -379,13 +401,15 @@ const child = root.get(0);
 - branch child -> `BranchCursor`
 - null child -> `null`
 
-This makes it possible to keep structure lazy while still reading leaf values directly.
+This makes it possible to keep structure lazy while still reading leaf values
+directly.
 
 ---
 
 ## Use Case 6: Compose Subtrees with `subtree()`
 
-A common real-world pattern is to build subtrees separately and then assemble them into one root packet.
+A common real-world pattern is to build subtrees separately and then assemble
+them into one root packet.
 
 ```ts
 import { encoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
@@ -433,8 +457,8 @@ This pattern is useful when:
 - another subtree is produced by another stage
 - the final packet layout still wants everything under one root branch
 
-`subtree()` appends an already-built in-memory subtree.
-Unlike `graft()`, it does **not** splice an already-encoded packet.
+`subtree()` appends an already-built in-memory subtree. Unlike `graft()`, it
+does **not** splice an already-encoded packet.
 
 ---
 
@@ -494,10 +518,9 @@ Explicit scalar writers normalize through cast helpers:
 
 ### `BranchView`
 
-Mutable child-appending façade used during branch construction.
-Most users do not instantiate or reference `BranchView` directly.
-The normal entry path is `TreeView`, which exposes branch construction through
-`tree.branch((b) => ...)`.
+Mutable child-appending façade used during branch construction. Most users do
+not instantiate or reference `BranchView` directly. The normal entry path is
+`TreeView`, which exposes branch construction through `tree.branch((b) => ...)`.
 
 ```ts
 tree.branch((b) => {
@@ -535,10 +558,12 @@ Encodes a built tree into an immutable packet.
 
 ```ts
 const encoder = new TreeEncoder();
-const packet = encoder.encode(tree);
+const packet = encoder.encode(tree, { init_cap: 1024 });
 ```
 
-`encode()` uses throwing semantics on malformed input or packet-cap overflow.
+`encode()` writes into a buffer of `init_cap` bytes, doubled where the tree
+overflows it, up to `max_cap` (the packet format's most when none is given). It
+throws on malformed input or a tree past the cap.
 
 ### `TreeReader`
 
@@ -601,21 +626,23 @@ for (const child of b) {
 - `b.get()` -> shallow read of the whole branch
 - `b.get(idx)` -> shallow read of one child
 
-`BranchCursor.get_deep()` recursively materializes the whole branch as `NodeValue[]`.
+`BranchCursor.get_deep()` recursively materializes the whole branch as
+`NodeValue[]`.
 
 ---
 
 ## Object-Like Data
 
-Plain objects are not auto-lowered in the generic path, because object lowering immediately raises schema questions this layer leaves to a higher one:
+Plain objects are not auto-lowered in the generic path, because object lowering
+immediately raises schema questions this layer leaves to a higher one:
 
 - are keys encoded?
 - in what order?
 - are missing fields allowed?
 - what does compatibility mean?
 
-If you want object-like data today, use explicit tuple mapping in a higher layer.
-If your higher layer already owns field order, tuples are usually enough.
+If you want object-like data today, use explicit tuple mapping in a higher
+layer. If your higher layer already owns field order, tuples are usually enough.
 For quick-and-dirty usage, `Object.entries()` can also be acceptable, but
 `to_tuple()` / `from_tuple()` are the recommended schema-owned path.
 
@@ -636,9 +663,11 @@ const keys = ["a", "b", "c"] as const;
 const tree = new TreeView();
 tree.set(to_tuple(obj, keys));
 
-const packet = new TreeEncoder().encode(tree);
+const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 
-const out_tuple = new TreeReader(packet).read_branch().get_deep<[number, number, string]>();
+const out_tuple = new TreeReader(packet).read_branch().get_deep<
+  [number, number, string]
+>();
 const out = from_tuple<typeof obj>(out_tuple, keys);
 
 console.log(out);
@@ -658,7 +687,9 @@ long-term path once field order is owned by a schema layer.
 This is still just a user-level convention that lowers to an array-of-pairs
 branch shape. XTP itself does not define object semantics.
 
-> **Note:** A higher-level schema and type-mapping layer can sit on top of this tree packet layer. That layer can handle plain objects, key encoding, and schema evolution while preserving the core packet layer.
+> **Note:** A higher-level schema and type-mapping layer can sit on top of this
+> tree packet layer. That layer can handle plain objects, key encoding, and
+> schema evolution while preserving the core packet layer.
 
 ---
 
@@ -672,25 +703,28 @@ import { TreeEncoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 const child = new TreeView();
 child.set([1, 2, 3]);
 
-const child_packet = new TreeEncoder().encode(child);
+const child_packet = new TreeEncoder().encode(child, { init_cap: 1024 });
 
 const parent = new TreeView();
 parent.graft(child_packet);
 
-const parent_packet = new TreeEncoder().encode(parent);
+const parent_packet = new TreeEncoder().encode(parent, { init_cap: 1024 });
 ```
 
-`graft()` expects a packet intended for this tree format, not an arbitrary byte blob.
+`graft()` expects a packet intended for this tree format, not an arbitrary byte
+blob.
 
 Important detail:
 
-- at the **view** layer, `graft()` only enforces construction-boundary checks such as `WORD_SZ` alignment
+- at the **view** layer, `graft()` only enforces construction-boundary checks
+  such as `WORD_SZ` alignment
 - full packet validation is deferred to **encode/read time**
 
-A grafted root may also be physically absent.
-In that case, root type metadata is still preserved.
+A grafted root may also be physically absent. In that case, root type metadata
+is still preserved.
 
-Conceptually, graft lets you reuse a pre-encoded subtree as part of a larger packet.
+Conceptually, graft lets you reuse a pre-encoded subtree as part of a larger
+packet.
 
 ---
 
@@ -761,11 +795,11 @@ Branch child rules:
 
 - child offsets are relative to the enclosing branch base
 - `child_rel_off == 0` means physical absence while preserving child type
-- a node's extent holds its children's: a present child starts past the
-  child table and before the next present sibling, and runs no further than
-  that sibling's start, or its parent's end; the root's end is
-  `HDR_SZ + root_payload_sz`. No two nodes share bytes, so a packet's nodes
-  are bounded by its size, and a reader refuses a packet that breaks it
+- a node's extent holds its children's: a present child starts past the child
+  table and before the next present sibling, and runs no further than that
+  sibling's start, or its parent's end; the root's end is
+  `HDR_SZ + root_payload_sz`. No two nodes share bytes, so a packet's nodes are
+  bounded by its size, and a reader refuses a packet that breaks it
 
 That relative-offset design is what enables:
 
@@ -809,7 +843,8 @@ Generic write methods use throwing semantics.
 - unsupported generic input -> throws
 - generic `bigint` outside `i64` range -> throws
 
-This keeps the generic lowering path strict, while explicit writers remain caller-directed constructors.
+This keeps the generic lowering path strict, while explicit writers remain
+caller-directed constructors.
 
 ---
 

@@ -1,0 +1,32 @@
+// cpp/xpute/kit/status/bug.cpp
+
+#include "bug.hpp"
+
+#include <atomic>
+#include <cstdlib>
+
+namespace xpute {
+
+namespace {
+std::atomic<Report> installed_report{nullptr};
+}
+
+void set_report(Report report) noexcept {
+    Report none = nullptr;
+    installed_report.compare_exchange_strong(none, report);
+}
+
+void bug(Errno errnum, std::uint64_t a, std::uint64_t b, std::source_location at) noexcept {
+    if (Report report = installed_report.load()) report(errnum, at, a, b);
+    std::abort();
+}
+
+} // namespace xpute
+
+#ifdef __wasm__
+// libc++'s own definition prints to stderr, which on wasm imports WASI's file
+// calls, a second way to the host beside the contract.
+void std::__libcpp_verbose_abort(char const *, ...) noexcept {
+    xpute::bug(xpute::Errno::enotrecoverable);
+}
+#endif

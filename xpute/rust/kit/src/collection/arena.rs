@@ -10,12 +10,6 @@ pub struct ArenaOptions {
     pub max_cap: u32,
 }
 
-impl Default for ArenaOptions {
-    fn default() -> ArenaOptions {
-        ArenaOptions { init_cap: 1 << 10, max_cap: 1 << 24 }
-    }
-}
-
 /// `truncate` drops nothing: a slot comes back in whatever state its last
 /// user left it, buffers still allocated, and the caller reinitializes it.
 pub struct Arena<T: Default> {
@@ -105,7 +99,10 @@ pub struct ArenaGuard<'a, T: Default> {
 
 impl<'a, T: Default> ArenaGuard<'a, T> {
     fn new(arena: &'a mut Arena<T>) -> ArenaGuard<'a, T> {
-        ArenaGuard { mark: arena.len(), arena }
+        ArenaGuard {
+            mark: arena.len(),
+            arena,
+        }
     }
 }
 

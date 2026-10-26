@@ -15,7 +15,12 @@
 // type is long to spell and is spelled once, here, for each. A table
 // with no signal or no enum read off the wire leaves a writer or a
 // number's check unused.
-#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]
+#![allow(
+    non_camel_case_types,
+    clippy::type_complexity,
+    unused_imports,
+    dead_code
+)]
 
 use core::fmt::Display;
 

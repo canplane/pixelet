@@ -3,3 +3,4 @@
 -fno-exceptions
 -fno-rtti
 -ffp-contract=off
+-I.

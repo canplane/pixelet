@@ -29,7 +29,7 @@ fn executor() -> Option<&'static dyn Executor> {
     *EXECUTOR.get(|| None)
 }
 
-pub fn set_executor(executor: &'static dyn Executor) {
+pub fn set(executor: &'static dyn Executor) {
     EXECUTOR.set(Some(executor));
 }
 

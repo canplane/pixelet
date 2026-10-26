@@ -12,12 +12,8 @@
 // knows and passes over the rest, the way a process reads its ELF auxiliary vector, so
 // a directory that grows an entry is still read by a host that predates it.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// "XPUT" as four bytes read little-endian: what tells a directory from memory nothing wrote.
@@ -35,9 +31,9 @@ pub const QUANTUM_SCALE: u32 = 1000;
 /// What an entry's value is.
 pub mod key {
     /// Where the submission ring's words begin.
-    pub const SUBMISSION: u32 = 1;
+    pub const SQ: u32 = 1;
     /// Where the completion ring's words begin.
-    pub const COMPLETION: u32 = 2;
+    pub const CQ: u32 = 2;
     /// The quantum policy's margin share (sched/quantum.rs), in QUANTUM_SCALE.
     pub const MARGIN_SHARE: u32 = 3;
     /// The quantum policy's batch frames, in QUANTUM_SCALE.
@@ -49,5 +45,13 @@ pub mod key {
     /// The bit every key a program numbers for itself carries: xpute gives none of
     /// them a meaning, and a host that is not the program's passes over them.
     pub const PROGRAM: u32 = 2147483648;
-    pub const KEYS: &[&str] = &["SUBMISSION", "COMPLETION", "MARGIN_SHARE", "BATCH_FRAMES", "SETTLE_MS", "SYS", "PROGRAM"];
+    pub const KEYS: &[&str] = &[
+        "SQ",
+        "CQ",
+        "MARGIN_SHARE",
+        "BATCH_FRAMES",
+        "SETTLE_MS",
+        "SYS",
+        "PROGRAM",
+    ];
 }

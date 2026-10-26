@@ -5,7 +5,16 @@ use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 pub const EPS: f64 = 1e-5;
 
 /// What these functions take: `f64`, and `f32` where a value lives as one.
-pub trait Float: Copy + PartialOrd + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + Rem<Output = Self> + Neg<Output = Self> {
+pub trait Float:
+    Copy
+    + PartialOrd
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Div<Output = Self>
+    + Rem<Output = Self>
+    + Neg<Output = Self>
+{
     const EPS: Self;
     const HALF: Self;
     fn abs(self) -> Self;

@@ -1,0 +1,16 @@
+{
+  "$doc": [
+    "The kernel's own entries in its directory (xpute-guest ipc/directory.rs), each a",
+    "key with xpute's PROGRAM bit set: the memory the host reads besides the rings and",
+    "the system calls (pxl-kernel door.rs, ts/client/src/abi/boot.ts)."
+  ],
+
+  "key": {
+    "$type": "u32",
+    "$doc": ["What an entry's value is."],
+    "GPU_STREAM": {
+      "$value": 2147483650,
+      "$doc": ["Where the renderer's stream is, run after every turn; 0 where the kernel draws itself."]
+    }
+  }
+}

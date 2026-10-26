@@ -7,7 +7,7 @@
 # own idle footprint is small enough that two containers costs nothing
 # real on a 4GB box). db-geo only ever holds overture_places/
 # overture_division_areas/overture_divisions — see
-# decision/20260908-overture-poi-adoption.md and the divisions/search
+# doc/minutes/archive/20260908-overture-poi-adoption.md and the divisions/search
 # provider files for why terrain's own ingestion tables (overture_buildings/
 # overture_transportation/overture_base_*/elevation_raster) never
 # belong here at all (terrain is baked offline, already static on R2 —
@@ -48,14 +48,14 @@ services:
     networks:
       - pixelet
 
-  # crates/geo, the world's data server
-  # (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
+  # rust/geo, the world's data server
+  # (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
   # service is still called `api` because that is the hostname Caddy proxies to
   # and renaming it is a restart of the stack for a word.
   api:
     build:
       context: ../..
-      dockerfile: crates/server/geo/Dockerfile
+      dockerfile: rust/server/geo/Dockerfile
     container_name: pixelet-api
     restart: unless-stopped
     depends_on:
@@ -69,14 +69,14 @@ services:
     networks:
       - pixelet
 
-  # crates/api. It answers nothing yet and is here for the same reason the
+  # rust/api. It answers nothing yet and is here for the same reason the
   # TypeScript's own db-main pool was: the shape a first route arrives into —
   # the root, the origin, the container and the secret — rather than one to be
   # assembled on the day it is written.
   app:
     build:
       context: ../..
-      dockerfile: crates/server/api/Dockerfile
+      dockerfile: rust/server/api/Dockerfile
     container_name: pixelet-app
     restart: unless-stopped
     depends_on:

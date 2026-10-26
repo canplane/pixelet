@@ -4,6 +4,8 @@
 //! posted in place. The host reads the completion ring dry before it rings
 //! again, so overrunning it is a sizing bug, not a state to wait out.
 
+use core::cell::Cell;
+
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
@@ -11,90 +13,96 @@ use xpute_kit::wire::xtp::PacketWriter;
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
-pub struct RingLayout {
-    pub capacity: u32,
-    pub desc_at: u32,
-    pub slot_at: u32,
-}
-
-pub struct DoorLayout {
-    pub slot_bytes: u32,
-    pub submission: RingLayout,
-    pub completion: RingLayout,
-}
-
-/// Answers the packet's length, or none when it did not fit a slot.
-pub type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
-
 /// None for an unknown command, which replies ENOSYS.
 pub type Applied = Result<Option<i32>, MarshalError>;
+
+/// How full the rings ran since the stat was last taken (`Door::take_stat`):
+/// each figure the most it reached.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DoorStat {
+    pub cq_peak: u32,
+    /// The submission ring's length as a drain started: how close it came to full.
+    pub sq_peak: u32,
+    /// The submissions a drain left for lack of room.
+    pub left_peak: u32,
+}
 
 pub struct Door {
     sq: Ring,
     cq: Ring,
     /// What one command may leave: its signals, or the turn's after the drain, and its reply.
     reserve: u32,
-    /// Told the completion ring's length and the submissions left unapplied.
-    note: fn(u32, u32),
+    stat: Cell<DoorStat>,
 }
 
 impl Door {
-    /// # Safety
-    /// `mem` stays valid and never moves for as long as the door is used, and
-    /// the ranges `layout` names are the door's alone. `most_signals` is the most
-    /// one command raises, or the turn once its drain is done: the program's bound.
-    pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, most_signals: u32, note: fn(u32, u32)) -> Door {
-        let ring = |r: &RingLayout| {
-            // SAFETY: the caller's memory and ranges.
-            unsafe { Ring::init(mem, r.desc_at, r.capacity, r.slot_at, layout.slot_bytes) }
-        };
+    /// `most_signals` is the most one command raises, or the turn once its
+    /// drain is done: the program's bound.
+    pub fn new(sq: Ring, cq: Ring, most_signals: u32) -> Door {
         Door {
-            sq: ring(&layout.submission),
-            cq: ring(&layout.completion),
+            sq,
+            cq,
             reserve: most_signals + 1,
-            note,
+            stat: Cell::default(),
         }
     }
 
-    pub fn submission(&self) -> &Ring {
+    pub fn take_stat(&self) -> DoorStat {
+        self.stat.take()
+    }
+
+    fn keep(&self, f: impl FnOnce(&mut DoorStat)) {
+        let mut s = self.stat.get();
+        f(&mut s);
+        self.stat.set(s);
+    }
+
+    pub fn sq(&self) -> &Ring {
         &self.sq
     }
 
-    pub fn completion(&self) -> &Ring {
+    pub fn cq(&self) -> &Ring {
         &self.cq
     }
 
-    pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: Option<Write<'_>>) {
-        let e = match write {
-            Some(w) => self.cq.push_in_place(tag, cmd, flags, result, w),
-            None => self.cq.push(tag, cmd, flags, None, result),
-        };
-        (self.note)(self.cq.len(), 0);
+    pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32) {
+        self.posted(cmd, self.cq.push(tag, cmd, flags, result, None));
+    }
+
+    /// `write` fills the slot's payload and answers the packet's length, or
+    /// none when it did not fit.
+    pub fn post_in_place(
+        &self,
+        tag: u32,
+        cmd: u32,
+        flags: u32,
+        result: i32,
+        write: impl FnOnce(&mut [u8]) -> Option<u32>,
+    ) {
+        self.posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
+    }
+
+    fn posted(&self, cmd: u32, e: Errno) {
+        self.keep(|s| s.cq_peak = s.cq_peak.max(self.cq.len()));
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
     pub fn raise(&self, cmd: u32, count: u32, f: impl Fn(&mut PacketWriter)) {
-        self.post(
-            0,
-            cmd,
-            0,
-            0,
-            Some(&|out: &mut [u8]| {
-                let mut w = PacketWriter::new(out, count);
-                f(&mut w);
-                w.finish()
-            }),
-        );
+        self.post_in_place(0, cmd, 0, 0, |out: &mut [u8]| {
+            let mut w = PacketWriter::new(out, count);
+            f(&mut w);
+            w.fitted()
+        });
     }
 
     /// An unapplied command can wait in the submission ring; what it would
     /// raise could not wait anywhere, so room is checked before it starts.
     fn has_room(&self) -> bool {
-        self.cq.len() + self.reserve <= self.cq.capacity
+        self.cq.len() + self.reserve <= self.cq.cap
     }
 
     pub fn pending(&self) -> bool {
-        self.sq.peek() >= 0
+        !self.sq.is_empty()
     }
 
     /// Applies submissions in order while there is room; the rest waits for
@@ -102,30 +110,30 @@ impl Door {
     /// many completions it made.
     pub fn drain(&self, mut apply: impl FnMut(u32, &Option<&[u8]>) -> Applied) -> u32 {
         let tail = self.cq.tail();
-        loop {
-            if !self.has_room() {
+        self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
+        while self.has_room() {
+            let Some(f) = self.sq.peek() else {
                 break;
-            }
-            let at = self.sq.peek();
-            if at < 0 {
-                break;
-            }
-            let at = at as u32;
-            let (tag, number, flags) = (self.sq.tag(at), self.sq.cmd(at), self.sq.flags(at));
-            let result = match self.sq.packet(at) {
-                Ok(pkt) => match apply(number, &pkt) {
+            };
+            let result = match self.sq.packet(&f) {
+                Ok(pkt) => match apply(f.cmd, &pkt) {
                     Ok(Some(value)) => Ok(value),
                     Ok(None) => Err(Errno::ENOSYS as i32),
-                    Err(e) => Err(e.errno as i32),
+                    Err(e) => Err(e.errnum as i32),
                 },
-                Err(e) => Err(e.errno as i32),
+                Err(e) => Err(e.errnum as i32),
             };
             self.sq.advance();
-            if flags & frame::ACKREQ != 0 || result.is_err() {
-                self.post(tag, number, frame::RES, result.unwrap_or_else(|errno| errno), None);
+            if f.flags & frame::ACKREQ != 0 || result.is_err() {
+                self.post(
+                    f.tag,
+                    f.cmd,
+                    frame::RES,
+                    result.unwrap_or_else(|errnum| errnum),
+                );
             }
         }
-        (self.note)(self.cq.len(), self.sq.len());
+        self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));
         self.cq.tail().wrapping_sub(tail)
     }
 }

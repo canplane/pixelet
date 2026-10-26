@@ -4,12 +4,8 @@
 //! sections at `ALIGN(n)` boundaries. The memory never grows, so a view over
 //! it stays valid for the module's life.
 
-/// What every range in a guest's memory begins on, and the smallest block
-/// its heap's buddy hands out. A borrowed analogy, not a hardware number: a
-/// guest is handed one fixed range, addresses it with 32-bit offsets and has
-/// no MMU, as a 32-bit machine was, and 4 KiB is what that settled on; the
-/// host's own page (16 KiB, 4 KiB, a WebAssembly page's 64 KiB) acts on
-/// nothing decided here.
+/// What every range begins on and the buddy's smallest block: a 32-bit
+/// machine's page with no MMU, as a guest is; the host's own page decides nothing here.
 pub const PAGE_BYTES: u32 = 4096;
 
 // The buddy's leaf is its log2; any other page would be a smaller leaf than
@@ -20,7 +16,6 @@ const _: () = assert!(PAGE_BYTES.is_power_of_two());
 pub struct Section {
     pub offset: u32,
     pub bytes: u32,
-    pub align: u32,
 }
 
 impl Section {
@@ -46,7 +41,6 @@ impl Section {
         Section {
             offset: nth_at(self.offset, sizes, unit, n),
             bytes: sizes[n],
-            align: unit,
         }
     }
 }

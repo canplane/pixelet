@@ -1,17 +1,10 @@
-# Repo-root .dockerignore — crates/server/geo/Dockerfile builds from this context
-# (see that file's own top comment on why the context is the whole repo,
-# not just crates/).
+# The servers' images (rust/server/geo/Dockerfile, rust/server/api/Dockerfile)
+# build from the repository's root, the one directory holding both trees they
+# copy: rust/ and the xpute crates it links by path, xpute/rust/. Docker reads
+# this file only at the context's root, so it lives here, and lets in those two
+# trees alone.
 
-.git
-node_modules
-**/node_modules
-out
-dist
-**/dist
-**/.vite
-.env
-.env.*
-!.env.example
-cache
-infra/geo/**/warped
+*
+!rust
+!xpute/rust
 **/target

@@ -1,69 +1,144 @@
 # Architecture — pixelet
 
-[pixelet](./README.md) turns geographic data and player-built blocks into one voxel world and draws it in a browser tab or a device app. It is an application written over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel that runs as xpute's guest, the TypeScript around it — its host, which is xpute's, and its shell, the UI — and Rust servers and bakes that share the kernel's model. The memory, the rings and the turn are xpute's and described there; this document is what pixelet builds on them.
+pixelet draws the real Earth as blocks you can build on, in a browser tab or a
+device app, and what it draws is what is walked on. Both follow from one
+function. A pixel's ray, a walker's step, the pointer and an edit all ask the
+same question of a **node**, a cube of space at a zoom: what fills it, at the
+zoom its distance from the eye asks. One function answers
+(`pxl-spec-core world.rs` `node`). It lays the ground's grid, each cell a block
+at its height with the caves carved under its face, and then writes the ways off
+the ground and what players placed over it.
 
-The whole kernel is one chain, and every part below is a step of it. The eye asks what it can tell apart; that question goes down — through the chunks drawn for it, the view that decides what is observed, the query that answers for every layer, the layers that store the world, to the reads that bring a tile in — and each answer comes back up the same way. Nothing on the chain names what is above it.
+No reader asks block by block. It descends (`pxl-spec-core cast.rs` `first`),
+passing whole a node in which nothing fills and splitting only one that may hold
+something. The function and the descent are one source compiled for the CPU and,
+through rust-gpu, for the GPU, so the block a pixel shows and the block a foot
+stands on are one answer.
+
+How finely the world is drawn is the other half, and it is one rule too: the
+view is a grid of angular cells about the eye, and a block is drawn at the zoom
+whose block spans at least a cell at its distance (`pxl-spec-core grid.rs`
+`cell_at`). What a zoom folds away is not there at that zoom, to draw, to walk
+on or to miss, and nothing finer is fetched to keep it.
+
+A kind of thing is drawn wholly on one side. The GPU's rays find the world's
+blocks, a player's cubes among them, and the GPU grows the ground's decor and
+draws it with a player's, which the kernel hands it as records, each where it is
+drawn. Everything else the kernel decides to draw, it lists: the actors, the
+cumulus, the puck, the ghosts, the markers. The renderer draws the list and
+decides nothing but color. Control is headless: the walk, the pointer and the
+camera's clearance ask the same query on the CPU and draw nothing.
+
+pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel
+that runs as xpute's guest, the TypeScript around it, and Rust servers and bakes
+that share the kernel's model. The memory, the rings and the turn are xpute's
+and described there; this document is what pixelet builds on them.
+
+The kernel is one order of dependency, a DAG rather than a pipeline: an edge may
+skip a step but never points up, and a reader reaches what it reads directly.
+Its folders are that order (`rust/client/kernel/src/`). The top wires
+everything. The domain, the world and the eye, is two heads, the scene and
+control, over one trunk, the view, the query and the layers, and neither head
+names the other. What all of it stands on, the reads, the turn's mechanics and
+the memory, is the system below it. The eye asks what it can tell apart, and the
+question goes down from a head through the trunk to the reads that bring a tile
+in. Each answer comes back up the same way, and nothing names what is above it.
+A leaf sits under its lowest reader, so its edges point down too. The figure is
+a map; each name in it is defined where its part begins.
 
 ```text
-  turn · door · shell   wire everything; nothing below names them
-  ──────────────────────────────────────────────────────────────
-  control ──▶ view      moves the eye; the turn hands on the rest
+  turn · door · shell   the top: wires everything; nothing below names it
+  ──────────────────────────────────────────────────────────────────────
+  domain/               the world and the eye, two heads over one trunk
 
-  asks                                                     answers
-    │   scene  what this frame draws             scene/       ▲
-    │   chunk  what is drawn, from the query     chunk/       │
-    │   view   the pose, sight, demand           view/        │
-    │   query  the only seam                     query.rs     │
-    │   layer  the base and the object           layer/       │
-    ▼   io     reads, credits, the host's end    io/          │
+  asks                                                         answers
+    │   scene/       a head: what this frame draws                ▲
+    │   control/     a head: moves the eye, asks the query        │
+    │   approach.rs  the easing both heads share                  │
+    │   param.rs     the tuned number both heads share            │
+    │   view/        the trunk: the pose, the lens, demand        │
+    │   query/       the trunk: the only seam                     │
+    │   layer/       the trunk: the base and the object           │
+  ──┼─────────────────────────────────────────────────────────────┼─────
+  sys/                  what all of it stands on                  │
+    ▼   io/          reads, credits, the host's end               │
+        sched/       a turn's edge and its phases
+        mem/         the core memory's sections
+        load.rs      what the kernel loads, which io and sched read
 
-  leaves   settings, models, decor, billboards, under their readers
-  beside   the profiler: reads anything; no decision reads it
+  leaves   under their lowest reader: the settings in view/, the models
+           and decor in query/, the markers in scene/, each knob in
+           a param.rs beside the lowest part that reads it
+  beside   profiler/: reads anything; no decision reads it
 ```
 
-The parts follow the chain. **The model** is what the chain carries: what a size and a position are, and what each layer stores. **The view** is the chain from the eye down to the layers. **Below the view** is what the chain stands on: the reads, the turn, the memory. **Drawing what the view chose** is the last step up, from the list the kernel makes to a frame. **Making the data** is a second chain, run ahead of the view, that ends where the first one reads.
+The parts follow that order. **The world** is what the kernel carries: sizes,
+positions, layers and what fills a block. **The eye** goes from the eye down to
+the layers. **Drawing** is the last step up, from the eye's rays and the
+kernel's list to a frame. **Below the view** is what all of it stands on, `sys/`
+and the top that wires it: the reads, the turn, the memory. **Making the data**
+is a chain of its own, run ahead of the view, that ends where the view reads.
 
 ---
 
-# The model
+# The world
 
 ## Every size is a zoom
 
-The X lane of a position is one world of 2^24 units, so a thing the world over 2^z wide is at zoom z — z is 24 less the log of its side in units, a bigger zoom is finer, and one zoom finer is half as wide (`pxl-spec space/coord/zoom.rs`). Sizes had been said three ways, a zoom for a tile, a scale for a cell and a fixed tier for the rest, and the conversions between them were where facts went double; one number for all of them leaves nothing to convert ([every size is a zoom](./decision/20261006-every-size-is-a-zoom.md)).
+Every size in the world is one number, its zoom. The world is 2^24 units round,
+and a thing whose side is the world's over 2^z is at zoom z: one zoom finer is
+half as wide (`pxl-spec space/coord/zoom.rs`).
 
-| Zoom | Side   | What it sizes                                            |
-| ---- | ------ | -------------------------------------------------------- |
-| z27  | `1/8u` | a placed object's finest cell                            |
-| z24  | `1u`   | a ground cell, the unit a position names                 |
-| z15  | `512u` | a leaf tile: the finest terrain is fetched and stored at |
-| z5   |        | the coarsest tile, where the pyramid stops for now       |
+| Zoom | Side   | What it sizes                                                                  |
+| ---- | ------ | ------------------------------------------------------------------------------ |
+| z27  | `1/8u` | a placed object's finest cell                                                  |
+| z24  | `1u`   | a ground cell, the unit a position names                                       |
+| z15  | `512u` | a leaf tile: the finest terrain is fetched and stored at                       |
+| top  |        | the coarsest tile, where the pyramid stops (`pxl-spec-core lib.rs` `TOP_ZOOM`) |
 
-The words for what is sized build on one another. A **cell** is the granule at a zoom, named and possibly empty: a **pixel** is a cell carrying a 2D sample, a **voxel** a cell carrying a material. A **tile** is what is fetched and stored as one: a layer's tile holds a count of its cells a side that is the layer's own and the same at every zoom (`pxl-spec space/layer/lattice.rs` `Lattice`), so a tile's zoom is its cells' less a constant — terrain's tile is 512 cells, its z24 cells making z15 tiles. The tiles of every zoom make one tree, the **pyramid**: a tile at z covers the 2 × 2 under it at z + 1, and its name, a 2D Morton key a digit a zoom (`space/hierarchy/morton.rs`), is a prefix of theirs. A **chunk** is what is built and drawn as one, the view's unit, and the view defines it. A **block** is a thing placed, never a size. A lattice address goes to its cell at any zoom and back by the same two operations (`zoom.rs` `idx`, `from_idx`). A tile's zoom is a web map's tile zoom, and a z24 cell a web map's z16 pixel, which only the 3857 adapter says (`web_zoom_of`).
+The words for what is sized:
 
-## A position — PVF3
+- A **cell** is the granule at a zoom, possibly empty. A **voxel** is a cell
+  carrying a material.
+- A **tile** is what is fetched and stored as one. A layer's tile has the same
+  number of cells a side at every zoom (`pxl-spec space/layer/lattice.rs`).
+  Terrain's is 512, so its z24 cells make z15 tiles.
+- The **pyramid** is the tree of all tiles: a tile at z covers the 2 × 2 under
+  it at z + 1, and its Morton key is a prefix of theirs
+  (`space/hierarchy/morton.rs`).
+- A **block** is what stands in a cell, grown by the ground or placed: a cube, a
+  decor or a marker (`domain/layer/object/store.rs` `Entry`).
 
-A position is **PVF3**, a Packed 3-Vector with Fixed-point arithmetic: 96 bits of fixed point, in two words, which unit cell and where inside it. A point and a displacement share the form, but only a displacement adds to a point.
+A tile's zoom is a web map's, and a z24 cell is a web map's z16 pixel; only the
+3857 adapter knows it (`adapter/3857.rs` `cell_zoom_of`).
 
-```text
-IVec, one 64-bit word                 FVec, one 32-bit word
-┌───────────┬───────────┬────────┐    ┌──────┬──────┬──────┬──────┐
-│     X     │     Y     │   Z    │    │      │  X   │  Y   │  Z   │
-│  24 bits  │  24 bits  │   16   │    │unused│  8   │  8   │  8   │
-│   63..40  │   39..16  │  15..0 │    │31..24│23..16│ 15..8│  7..0│
-└───────────┴───────────┴────────┘    └──────┴──────┴──────┴──────┘
-signed; X is cyclic, so the world     unsigned residues:
-wraps at the longitude seam           1/256 of a unit on each axis
-```
+## A position
 
-Each field is a **lane** of its word. The arithmetic is integer — a lane is computed as `i64` and packed back — so a coordinate is the same bits on every machine. There is one implementation of the packing, and it stays one because the shell reads coordinates through the kernel rather than decoding them itself.
+A position is a **`Q3`**: three `i32` counting 256ths of a unit, so it is the
+same bits on every machine (`pxl-spec space/coord/q3.rs`). Above the fraction,
+an axis holds 24 bits across, 24 up the map and 16 in height
+(`space/coord/world.rs` `EXTENT`). The shell reads coordinates only through the
+kernel.
 
-The Web Mercator adapter (EPSG:3857) gives the unit its meaning: `1u` is a z24 cell's side, about 2.389 Mercator meters at the equator. Distortion and the tile-constant vertical scale live in the adapter. PVF3 is a plane: it follows 3857 and leaves the poles out (`space/coord/adapter/4326.rs` `CLAMP_LAT`), and the pyramid never leaves it. The planet around it is a sphere, a second domain and not a copy of this one; what is drawn there is Drawing's.
+X wraps as its `i32` does, once round the world, and so does the short way
+between two positions (`world.rs` `between`). Y and Z are held at their ends as
+a position enters the world. A displacement is never a position.
+
+Web Mercator (EPSG:3857) gives the unit its meaning, about 2.389 meters at the
+equator. Its plane leaves out the poles (`adapter/4326.rs` `CLAMP_LAT`), and the
+pyramid never leaves it. The planet around it is a sphere, which Drawing covers.
 
 ## The layers
 
-The world is stored as layers, each in its own shape, and a layer is a payload and a one-zoom fold and nothing else: what a tile at z holds is folded from the tiles at z + 1 under it, by the layer's own rule, and its cells are the layer's lattice (`layer.rs` `LATTICE`). Which tiles are wanted, held and fetched is the view's and the reads', never a layer's.
+The world is stored as **layers**. A layer is a payload and a one-zoom fold: a
+tile at z is folded from the tiles at z + 1 under it, by the layer's own rule
+(`domain/layer.rs` `LATTICE`). Which tiles are fetched is never a layer's
+choice.
 
-The layers fall on one line, what changes. The **base** is the basemap baked from the sources — terrain, place, division and earth: a tile's content is fixed by its name within a version, and changes only when another version answers it. The **object** layer is what people author, and changes under its keys. That is the line between them, not dimension: the base holds 3D things too, and an object may never move.
+The layers split on what changes. The **base** is baked from the sources:
+terrain, place, division and earth. A base tile is fixed by its name within a
+version. The **object** layer is what people author, and changes under its keys.
+The line is not dimension or motion.
 
 | Side   | Layer    | Stores                                                    | Shape                         | Folds by                          |
 | ------ | -------- | --------------------------------------------------------- | ----------------------------- | --------------------------------- |
@@ -73,17 +148,54 @@ The layers fall on one line, what changes. The **base** is the basemap baked fro
 | base   | earth    | the planet's picture                                      | a raster tile, top zoom only  | —                                 |
 | object | object   | what players place                                        | a sparse octree a shard       | majority                          |
 
-**Terrain** is the base's ground: a **surface**, which is 2.5D, and its **separation** above and below it, which is not. A tile is a raster of ground and one of elevation, padded so that bicubic sampling can reach past its edge, and the tile's separation. A ground cell is one byte, a look from OpenStreetMap Carto: `forest`, `residential_road`, `building`, each Carto's color, numbered in the order Carto paints (`spec/spec/block/cube.json`). `0` is void and `255` unknown — the ground past the coverage, which no source here describes, and what memory filled with `0xFF` reads as — and neither gives a surface. Each look carries the kind the renderer draws it as: land, water, transport or a structure. Its **separation** is the ways at another grade than the surface — a bridge, a tunnel and the approaches between — each kept as a line with a top along it, a width and the type its surface shows (`pxl-spec bake/separation.rs`): sparse, and nothing on a tile that has none. Beside the surface a tile carries its **index**: the lowest and highest anything under it stands and which of its children exist, so it is read the moment it is resident, with nothing over it required. How a tile is made is Making the data's.
+**Terrain** is the ground. A tile holds ground cells, their elevation, and its
+**separation**: the ways at another grade, such as bridges and tunnels, each a
+line with a top and a width (`pxl-spec bake/separation.rs`). A tile also says
+which of its children exist, so it is read as soon as it lands.
 
-**Objects** are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps only its record: each leaf's catalog value at its node, in one sparse tree a shard, over its 3D roots (`pxl-spec space/hierarchy/sparse_tree.rs`), whose branches hold nothing but the way down. What a node at any zoom shows — a leaf's value, or its eight folded by majority (`fold_cell`) — is read from the leaves over and under it, never kept. Besides the catalog's ids the store knows three values: `VOID`, nothing written; `AIR`, a leaf that erases what a lower layer would show; and `UNKNOWN`. A leaf may also carry an **extension**, what its id holds beyond itself — a marker's words — kept in a pool of its **class**, the ids of one kind whose extensions have one shape (`spec/spec/block/ext.json`, `pxl-spec block/ext.rs` `class_of`); the leaf names its record by its place in that pool (`layer/object/ext.rs`), so a record is placed and erased with its leaf, and a leaf carrying one is never joined with its neighbours. A write splits a leaf over its node, frees what is under it, and joins eight equal leaves into their parent, so one picture has one tree; a write is `<key, id>` (`space/hierarchy/morton.rs` `key_of`). It persists to the platform's storage — `localStorage` in a tab, `UserDefaults` on an iPhone, `SharedPreferences` on Android — under a key that carries the layout's version; a layout that changes takes a new key and leaves the old one unread.
+A ground cell is one byte, a **look** from OpenStreetMap Carto, numbered in the
+order Carto paints (`spec/spec/asset/cube.json`). Each look is drawn as land,
+water, transport or a structure. `0` is void and `255` the unknown past the
+coverage, and neither gives a surface.
 
-**Places** are tiles of the same name and zoom as the ground tile they lie over, each holding what OpenStreetMap Carto draws of it at the web map's zoom of the same number, the leaf every zoom past it through Carto's last (`pxl-spec bake/tile/place.rs`). A place's kind is Overture's `basic_category` (`spec/spec/bake/place_category.json`), and what Carto draws for a kind — a dot or its icon, its name, their colors, from which zoom — is one table taken from Carto's own rules (`spec/spec/bake/place_theme.json`); a kind with no row is not drawn, nor carried. Where icons would meet, a cell an icon wide keeps one place, the first by the zoom its kind shows from and then its id, so each place carries one number, the zoom it is shown from, what is shown only grows with the zoom, and a parent is its children with what shows from its zoom on (decision/20261009-places-follow-carto.md). A child is a tile only where it holds more (`pxl-spec bake/tile/terrain.rs` `Occupancy`). The layer is a setting.
+Heights are made on the GPU and read back, never sent (`pxl-spec-core ground.rs`
+`height`). Every rounding in pixelet and xpute is half to even, and check-rules
+(pxl-tool `bin/check_rules.rs`) refuses any other.
 
-The **earth** layer is the planet's picture, baked at its top zoom only (`pxl-spec bake/tile/earth.rs`); what it answers past the pyramid is Drawing's.
+**Objects** are client-local. Their store is one sparse tree, each leaf a
+catalog value at its node and each branch its eight children folded
+(`pxl-kernel domain/layer/object/store.rs`). A write splits leaves only on its
+path, joins eight equal leaves into one, and folds its path again. So one
+picture has one tree. A leaf of `AIR` erases what a lower layer would show.
 
-## What is drawn as one thing
+A leaf may carry an **extension**, such as a marker's words, kept in a pool per
+**class** of ids (`pxl-spec block/ext.rs` `class_of`). It is placed and erased
+with its leaf, which is never joined or split. The store persists in a kept slot
+whose format byte is its layout's version (`host.json` `format`).
 
-What stands in one cell is a **block**, drawn on two axes that do not depend on each other. Its **kind** is how it is drawn — a cube, a decor model, a marker drawn flat to the camera — and it is the block catalog's: an id is its kind over its shape (`spec/spec/block/id.json`, `SHAPE_BITS`), so a test for decor is a test of the kind. Its **source** is which side holds it: the base, whose ground grows it, or the object layer, where a player placed it. So decor is no layer: a tree the ground grows and a tree a player places are one kind from two sources, and both arrive as the same record, `layer/instance.rs` `Instance` — its id, where it stands, its source and what its class carries (a decor's variant, heading and scale). The ground grows decor by evaluating, never storing: what stands in a leaf cell is a function of the cell, a seed and the ground's face as the world answers it (`query/scatter.rs` `grown_at`), reading no tile, and a region scattered at the leaves is its cells scattered alone (`pxl-spec procedural.test.rs`). A decor's box, which every cell in is its own, is the catalog's (`pxl-spec block.rs` `Decor::claim`); two the ground grows never share a cell.
+**Places** are tiles named like the ground tiles under them, each holding what
+Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`). What
+Carto draws for each Overture category is one table from its rules
+(`spec/spec/bake/place_theme.json`). A cell one icon wide keeps one place, so
+each place carries the zoom it shows from, and a parent is its children with
+what shows from its zoom on (doc/minutes/20261009-places-follow-carto.md).
+Places are a setting.
+
+The **earth** layer is the planet's picture, baked at its top zoom only
+(`pxl-spec bake/tile/earth.rs`).
+
+## What fills a block
+
+What stands in one cell is a block. It has two independent axes:
+
+- Its **kind** is its asset's, how it is drawn: a cube, a decor model, or a
+  marker facing the viewer. The object layer stores it as its asset's id, the
+  kind over its shape (`spec/spec/asset/id.json` `SHAPE_BITS`).
+- Its **source** is which side holds it: the base, whose ground grows it, or the
+  object layer.
+
+So decor is no layer. A grown tree and a placed tree are one kind from two
+sources, arriving as one record (`domain/layer/instance.rs` `Instance`).
 
 | Kind   | Base                                | Object          |
 | ------ | ----------------------------------- | --------------- |
@@ -91,69 +203,25 @@ What stands in one cell is a **block**, drawn on two axes that do not depend on 
 | decor  | what the ground grows               | a placed decor  |
 | marker | a place, Carto's icon and its name  | a placed marker |
 
-Every cube's color, every decor kind's models, seed and density are catalog entries, compiled into both sides and never sent (Catalogs and assets).
+The ground grows decor by evaluating, never storing: what stands in a leaf cell
+is a function of the cell, a seed and the ground's face
+(`domain/query/scatter.rs` `grown_at`). Two grown decors never share a cell.
+Seeds, densities and colors are compiled into both sides, and a variant's model
+is a slot the catalog fills (Catalogs and assets).
 
 ---
 
-# The view
+A block coarser than a leaf cell is what its zoom holds. The ground's coarse
+cell stands at its folded height, its look the majority of those it folds
+([doc/minutes/20261005-the-ground-is-a-carto-palette.md](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)).
+Its top block is filled to the share its height reaches (`ground.rs` `top`).
+What is placed and the ways fold to the kind most of their fill is
+(`overwrite.rs` `fold`).
 
-**The world is stored in its own shape, and the view keeps only what an observer can tell apart.** Looking farther shows nothing more: what reaches the screen is its area, a direction answers with the first thing it meets, and how far that is chooses how finely it is drawn. So what the view holds and does is bounded by the screen, not by the world under it — a mountain range, a city or two hundred towers stacked behind a ridge cost what the screen they cover costs ([what is drawn is what the screen covers](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md)).
-
-## The camera
-
-What looks is one camera (`control/camera/controller.rs` `Camera`): an **eye** and a **look** in spherical coordinates about the world's Z, θ = polar from straight down and φ = azimuth from north toward east, which every controller moves and nothing else keeps a copy of. The free camera (`free.rs`) is first person: it turns about its eye and walks it. The orbit (`orbit.rs`) is third person: it turns about a point `dist` ahead of the eye along the look, and its distance is the only state it adds. That point is the **focus** — the eye itself first person, the tracked eye while a tracker holds the pose (`INPUT_POSE`) — derived from the camera and never kept (`focus`). It is where the character stands, half a cell over the floor as a cell's center stands over its ground (`Cell::center`). A change of person moves the camera about the focus and never the focus; a navigation command puts the camera so the focus is where it says, once the ground there is known exactly (`control/navigation/destination.rs`). The **anchor** is where the world is laid on the planet: the eye's longitude and latitude (`view/frame/pose.rs` `anchor`), which the sky and the Earth read. Nothing else reads a controller's words; what is generic reads the eye, the look and the focus.
-
-The orbit's three controls — `dist`, `polar`, `azimuth` — are written only through one funnel (`control/camera/orbit.rs` `ask`), and terrain may ask one question in it: would this state put the eye inside the ground (`control/camera/orbit/terrain_gate.rs` `allowed_view`). `Settings > Camera` picks the answer: `through` ignores terrain, `stop` takes a control as far as it can, `climb` raises the drawn pitch instead where the eye gets there through the air. A pan, the companion and the orbit's climb move by one rule (`query/support.rs` `step_slide`). Where the camera grid, at the criterion's τ so that no device's quality moves a wall, draws the ground coarser than its own cells, the world is a map, not a place to walk: the focus goes where it is moved, and its height is the leaf's there, unknown until that leaf is held. Where the grid draws the leaves, it walks them a column at a time, by a step-slide after Quake III's: it climbs what blocks it for as long as its own column is open overhead, settles on the floor, and slides along an axis a ceiling stops. With no jump, no step height bounds the climb but the ceiling's: under the open sky over anything, under a roof, a deck or a cave's rock on its layer. A walker is a ground cell wide, so what is held finer anywhere in a cell fills it, and the walk stops at the edge of a leaf not yet held, keeping what it walked. Its floor is the leaves' alone; while that is not known, the focus and the companion are drawn on the finest ground known there (`control/navigation/support.rs` `floor_seen`), and the companion is drawn on the ground the world composes at the camera grid's zoom for its distance, as a chunk is (`scene/character/companion.rs` `drawn_floor`); a coarse chunk's folded box, only a summary, can stand off it by up to a grid cell.
-
-The **pose** (`view/frame/pose.rs`) is the eye and the turn from the world's axes to the camera's, and the matrices made from it. The world stays in its own axes, in doubles whose X runs on past the seam, a canonical point entering them on the lap nearest the eye (`view/frame/coord.rs` `to_world`); what turns is the observer. Every draw uploads its point less the eye, subtracted in doubles before it is narrowed (`pxl-render frame/draw.rs` `translation`), so nothing is kept against an origin of its own. What the pointer picks and edits — the tool held, what is under it, what a tap does — is `control/interaction.rs`'s, apart from the camera.
-
-## The eye's cells
-
-What the eye sees is quantized into **cells**, each the least the observer promises to tell apart: a solid angle on the sphere about the eye, the same wherever on the sphere it lies, so no coordinates on the sphere enter it. A screen only calibrates it — a cell spans about twelve logical pixels at the optical axis (`pxl-spec space/camera/grid.rs` `SPLIT`, `target_cell_px`), never device pixels — and a perspective screen draws the same solid angle wider toward its edges. Inside a cell nothing is promised: drawn finer, exact, averaged or some other shape altogether, as long as the approximation does not leak into a neighbouring cell by more than the area measure allows; a cube seen along a face's diagonal spans 2^¼ of a cell on one axis.
-
-That is the one rule of detail: a piece of the world is refined where it contributes to some cell and its error shows the eye more than a cell's area, the silhouette of its error box seen from its nearest distance (`view/sight.rs` `Lens::error`). Height is not special: storage may be anisotropic, but the rule measures the area that reaches the eye, every face of the error box alike. A far pole thinner than a cell is folded into what is around it; what is hidden contributes to no cell and is never refined. The rule is not yet closed by area. The error box is a cube judged from a piece's nearest point, and a flat top seen grazing shows the eye far less than the cube's silhouette, so ground there is drawn at a quarter of its cell's area or less across the far half of a wide view; how the bound is closed is BACKLOG.md's P1.
-
-How far away a cell of a zoom begins is the **camera grid**: one factor, τ, on the distance each zoom splits at (`grid.rs` `Tau`, `Tau::cell_at`), and the ground's tile zoom a distance wants follows from it (`space/layer/lattice.rs` `z_at`). τ = 1 is `SPLIT`, the finest cell everything is sized for, and a screen that asks finer is held there. A screen holds at most `GRID_CELLS_MAX` cells (`param/view.rs`), so a large window grows its cells rather than what it draws.
-
-## The query, the only seam
-
-The query is the only place a layer's shape is known. Every layer answers one question of a **node** — a tile or a cube, by zoom and index — at a cell zoom the asker states (`layer/query.rs` `Query`): its **bound** (`bounds`), nothing known, empty, or inside a conservative box with the finest zoom held under it (`Bound`'s `finest`); and its **records**, a view over what holds the node's cells, never a copy. A descent carries a **cursor** from a node to its children, so each step is answered from its parent and never asked again from the top. Each answer says what it lacked: exact, coarser with the tile it would have needed, or nothing and that tile (`layer/answer.rs` `Answer`). The query fetches nothing, holds nothing and keeps no copy.
-
-The **world** composes the layers into one answer (`query/world.rs` `World`). Its record for a chunk column is the ground the column is read from and what is placed in it (`query/block.rs` `Column`), and what is in each block is composed from that once, for drawing and for control alike (`pxl-spec block/stand.rs` `compose`): the ground, then its bridges and tunnels, then what is placed, air included, each block filling its cell or not (`Block::fills`). A chunk draws the column it composes; a point or a ray asked of the world (`query/support.rs`, `query/ray.rs` `first_hit`) is answered from the same column, composed at the zoom what is placed there is held at, so where a chunk draws a cell as held, what control meets there is what is drawn. Control never asks a folded cell, which is a summary. The query composes only the cell it is asked of, and keeps nothing: a tile's ways are found through the box tree it carries (`pxl-spec bake/separation.rs` `crossing_grid`), so composing costs what is asked, not what the tile holds. What the ground grows stands where its footing is: a void block over ground it grows on (`World::grows`). The world ends in bedrock, the catalog's `unknown`, laid as a bowl — a floor under the ground and a wall one cell past the service area — and what walks or is edited stays in the service area, `World::within`, and an edit goes only where `World::editable` (`query/limit.rs`) says, over ground the world knows, between that floor and a ceiling (`pxl-spec block/limit.rs`, [decision/20261012-the-world-is-a-bowl-of-bedrock.md](./decision/20261012-the-world-is-a-bowl-of-bedrock.md)). A ray walks the ground region by region: where it stays above a region's index bound it passes, decided by the index and never by the surface a coarse tile draws, which averages away the peaks under it; elsewhere it walks cell columns. Objects are found first, so ground is walked only up to them. The pointer's ray also strikes decor, as the walk passes it: each leaf column strikes the decor standing near it against its model, and only where the detail rule at the τ the chunks draw with holds decor as it is (`query/decor.rs`), so what is struck is what is drawn there; it follows that rule, not the chunk the view chose. The pointer, the camera's clearance, the focus's footing and the view's own observations all ask the world; none reads a layer.
-
-## Chunks
-
-A **chunk** is what is built and drawn as one: a cube of the camera grid's cells, 32 a side, so its zoom is its cells' less five (`grid.rs` `CHUNK_STEPS`), addressed by zoom and x, y and z (`chunk.rs`). A cube that holds nothing is no chunk. It is never seen: one cell of it is one thing drawn, and what lies inside a cell is its layer's to fold.
-
-**Materialization** makes what is drawn. Its goal is all around the eye, refined only where the screen's cells observe. The screen is cut into **patches**, the camera grid's cells at a coarser τ (`param/view.rs` `OBSERVED_TAU`), each casting its corner rays, and the stretch of world between their hits is what the finer cells under a patch touch. A chunk splits into its eight children while their error crosses a cell and something under it is held finer, as the query's bound says (`chunk/domain.rs`): the ground stops at a leaf's cells, the object layer at its finest held. A chunk hands off where one of its cells would project to about twelve pixels, so the cells drawn step `1/2/4/8/16/32/64` units and on. What is drawn is a **frontier** moved toward that goal in whole moves (`chunk/frontier.rs` `plan`): a piece is replaced by the pieces under or over it only once every one of them is built, and a move starts only when every arena slot it takes is free. Waiting for a tile, a build or a slot is always waiting with a coarser piece on the screen, never a hole. When the arena cannot hold the goal at all, the **quality** is chosen coarser — the finest step of τ that fits, coarser at once when the view needs it and finer a step at a time once there is room — and read by demand and the pick alike, handed down by the turn (`chunk/quality.rs`).
-
-**The table** (`chunk/table.rs`) is one slot per mounted chunk: its role in the frontier, flags, distances, bounding sphere, pending-since, retained bytes. A tick refreshes each against the frustum, rechecks whether what it was built from still answers, takes the frontier's step (`materialize`) and commits a layout whose mesh is in hand. What to build next is one priority (`priority`): the chunk whose build is in flight first, then what the view sees nearest the eye, then what it does not.
-
-**A build** is where the layers meet, once. A chunk asks the query for its column's records and composes them (`query/block.rs` `Column::compose`). The ground's are sampled a column a cell: its look and height, and its bridges and tunnels standing off the column. Past the leaves each column is the leaf column it lies in, so nothing finer than the ground is invented (`pxl-spec block/sample.rs` `ChunkSample::refine`). The object layer's are folded to the same columns by majority, with a cell of apron around, as the edits' previews show them (`Cells::fold`, `Cells::carve`). What is laid later wins a cell: the ground, then its separation, then what is placed, air included. Each column becomes its **runs**, one span per stretch that holds a single material, in a heap block exactly the size the writer counted (`pxl-render mesh/run.rs`); the chunks of one column bake their parts of one set, and then it is let go. A chunk is remade only where what answers its node changed: the tile that answered, the objects written where it draws, or the edits' previews (`chunk/source.rs`).
-
-```text
-terrain tile ──▶ sample, a column a cell ──────────────┐
-                                                        ├─▶ column runs ─▶ mesh
-object store ──▶ folded to the chunk's cells ──────────┘
-```
-
-**A mesh is its boxes, and lives on the device.** It is held in slots of the fixed buffers the renderer keeps (`pxl-render gpu/arena.rs`); any chunk takes any free slot of its pool (`chunk/mesh_slot.rs`), all it needs at once or none, and gives them back the moment it is not drawn. A mesh is never cut, since a box left out is a hole, and never baked coarser to fit, since which chunks are drawn is the quality's to choose. A box is its corner, size, color, texture layers and face mask, unfolded into a cube by the vertex shader (`frame/shader/chunk.wgsl`). A run that is not its column's top and whose four neighbors are solid across its exact `z0..z1` span emits nothing, a chunk's edge columns exempt; adjacent columns holding the same run merge into one box, so a plateau is one box.
-
-A chunk draws its decor beside its mesh: the instances the ground grows in it and those placed, as one block of lanes a group of kind and variant (`chunk/decor/build.rs`). A kind is drawn as a model down to its own size on screen and as a sprite below it (`param/chunk.rs` `DECOR_MODEL_PX`, `DECOR_SPRITE_PX`). Culling uses the exact union of the mesh's bounds; until a chunk is measured, its bounds are what the query said of its cube.
-
-## Demand and residency
-
-**Demand** is what an observation requires — the ground at the resolution its distance chooses — before it is any tile; the layer's storage maps the requirement to its tiles (`view/demand.rs` `observe`). The exact requirement depends on what the world holds, so it is estimated from what is known: the ground the patches reach, at each zoom whose band of distance some of it lies in, and what their rays read coarser than asked (`view/observation.rs` `ByFootprints`). Where the rays met coarse ground they name what they lacked, and once it comes the patches over it are cast again, so the requirement grows to what the exact records make it. A tile of the requirement that is not resident is a miss, asked for at the zoom it wants. Every layer of the pyramid is asked the same way, so the place layer has no residency, schedule or key of its own.
-
-**Residency** holds a tile hard for the floor, for the demand while it is demanded, or as cache; only the hard set is correctness. Every reader of the ground takes the floor's answer where the exact tile is not resident. The **floor** is a law — every observation has an answer — kept by holding the coarsest zoom the source supplies whole, all around the eye (`layer/residency/floor.rs`); the source declares that zoom, the published version in its metadata and the dev tile server at `/tile/source`. Capacity is two asserts on its frames (`Residency::FRAMES`): one frame for everything held hard and one to land in, and everything demand can name at once besides. A tile that arrives takes a free frame or one nothing holds hard and the view does not read, the farthest first. A region is unresolved until the floor lands over it, then covered coarse, then as finely as it is observed, and it never goes back.
-
-A version is never changed once written, so a tile never changes under its key (how a version is made and named is Making the data's); what changes is which tile answers a node, and that is the one change the chunks are told.
-
-**Nothing is prefetched.** A view converges to exact on its misses alone — a miss, a coarser answer meanwhile, a fetch, a refinement — so a prefetch would be a policy and part of no meaning, bought only as latency where it is measured to be needed.
-
-## Inside a cell
-
-A cell drawn coarser than a leaf's (`lod_step > 1`) is the `lod_step²` columns under it summarized, one zoom finer (`pxl-spec space/layer/lattice.rs` `Lattice::fold`), and the ground and what stands on it are summarized apart (`pxl-render mesh/chunk.rs`). The ground is a height field, so only its footprint coarsens: one run from the lowest floor to the columns' mean top, its color the mean of their top surfaces. What objects add above it is a volume: its `lod_step³` voxels to one box whose fill is coverage over the cube, shrunk about the cell center by the cube root of the fill so its volume is the fill's. Heights are units at every zoom, so no ground is ever a cell part full.
+A coarse block's fill is how much of its cube the ground and what is written
+over it cover (`answer.rs` `cover`). It keeps that fill in eighths, floored: its
+**kept eighths**. It is drawn as its cube shrunk about its center by the cube
+root of that, so its volume is its fill (`cast.rs` `kept_bounds`).
 
 ```text
    eight voxels, one solid            the box that replaces them
@@ -167,84 +235,803 @@ A cell drawn coarser than a leaf's (`lod_step > 1`) is the `lod_step²` columns 
                                             half the side, an eighth the volume
 ```
 
-Flat ground at a distance therefore reads as separated cubes rather than a sheet — the cost of a rule that treats every axis alike, taken over rules where orientation would decide whether a thing exists. What is folded is a summary, not what is held: nothing in a folded cell is struck, hidden or cut by a preview (`chunk/build.rs` `draws_as_held`, `control/interaction.rs` `folded_at`), and nothing in one is pointed at.
+The box holds to a few rules:
+
+- Nothing is drawn where a block keeps none, and the block under a shrunk top is
+  ground no cave takes.
+- A ray stops where it enters the box and passes it where it misses. The eye's,
+  the sun's and the pointer's rays do alike (`cast.rs` `entry`).
+- A shrunk block closes no edge of a block beside it.
+- The ray carries the kept eighths, so the pass that colors the screen draws the
+  box (`ray.rs` `KEPT_SHIFT`).
+- A leaf's block keeps its cube whole, so nothing walked or edited at the leaves
+  changes.
+
+So flat ground far away reads as separate cubes rather than a sheet: every axis
+is treated alike. What is folded is a summary, so nothing in a folded cell is
+struck, hidden, cut by a preview or pointed at (`domain/control/interaction.rs`
+`Picked`).
+
+---
+
+# The eye
+
+This part is how the view decides what to hold and draw: only what an observer
+can tell apart. A direction answers with the first thing it meets, and how far
+that is chooses how finely it is drawn. So the view's work is bounded by the
+screen, not the world: a city or two hundred towers behind a ridge cost what the
+screen they cover costs.
+
+## The camera
+
+One **camera** looks, and every controller moves it
+(`domain/control/camera/controller.rs` `Camera`). It is an **eye** and a
+**look**, in spherical coordinates about the world's Z. θ is the polar angle
+from straight down and φ the azimuth from north toward east. Nothing else keeps
+a copy.
+
+- The free camera is first person: it turns about its eye and walks it.
+- The orbit is third person: it turns about a point a distance ahead of the eye
+  along the look, and that distance is the only state it adds.
+
+The point a camera turns about is the **focus**: the eye itself in first person,
+the point ahead in the orbit. It is derived, never kept, and it is where the
+**companion**, the character, stands. A change of person moves the camera about
+the focus, never the focus.
+
+The **anchor** is the eye's longitude and latitude, which the sky is seen from
+(`domain/view/frame/pose.rs` `anchor`). Generic code reads the eye, the look and
+the focus, never a controller's own words.
+
+The orbit's controls are written only through one funnel
+(`domain/control/camera/orbit.rs` `ask`). There terrain may ask whether a state
+puts the eye inside the ground (`domain/control/camera/orbit/terrain_gate.rs`).
+The camera setting answers: through ignores terrain, stop takes a control as far
+as it can, and climb raises the drawn pitch instead.
+
+A pan, the companion and the orbit's climb move by one rule
+(`domain/query/support.rs` `step_slide`). Where the camera grid draws the ground
+coarser than its own cells, the world is a map, and the focus goes where it is
+moved. Where the grid draws the leaves, the focus walks them a cell at a time, a
+step-slide after Quake III's. It climbs what blocks it while its cell is open
+overhead, and slides along an axis a ceiling stops. With no jump, only the
+ceiling bounds a climb.
+
+A walker meets its cells as they fold at its zoom, so what folds away is not
+met. It stops at the edge of a leaf not yet held. Until its footing is known, it
+is drawn on the finest ground known there.
+
+The **pose** is the eye and the turn from the world's axes to the camera's. The
+world stays in its own axes, in doubles; what turns is the observer. Every draw
+uploads its point less the eye, subtracted in doubles before it is narrowed.
+
+The pointer is apart from the camera: the tool held and what a tap does belong
+to `domain/control/interaction.rs`, and what is under it to `pointer.rs` alone,
+a marker a tap would act on first, then what the eye's ray meets first.
+
+## The camera grid
+
+The camera grid sets how finely each part of the view is drawn. Each of its
+angular cells is the least the observer promises to tell apart: a solid angle
+about the eye, the same wherever it lies. A screen only calibrates it, to about
+twelve drawn pixels at the optical axis. Inside a cell nothing is promised, as
+long as nothing leaks into a neighbouring cell beyond what the area measure
+allows.
+
+That gives the one rule of detail: what is drawn is what the eye's rays reach. A
+ray goes down the pyramid and stops at the first block that fills at the zoom
+its distance asks. That block is what its pixels show; nothing no ray stops on
+is drawn. The GPU casts one ray a drawn pixel (Drawing).
+
+Height is not special: the distance is to the block met, every axis alike. The
+rule is not yet closed by area: a flat top seen grazing is drawn finer than it
+shows (doc/backlog.md, P1).
+
+**τ** is one factor on the distance each zoom splits at
+(`pxl-spec space/camera/grid.rs` `Tau`), and the ground's tile zoom for a
+distance follows from it (`space/layer/lattice.rs` `z_at`). τ = 1 is the finest
+cell, stated at the finest device pixel ratio, so what is sized at τ = 1 holds
+at every ratio. τ is the screen's alone (`domain/view/lens.rs`).
+
+## The query, the only seam
+
+The query is the only place a layer's shape is known. The terrain and the object
+store answer one question of a node, a tile or a cube, at a cell zoom the asker
+states, in the form they share (`domain/layer/query.rs` `Query`); places,
+divisions and the Earth answer none.
+
+- Its **bound** is nothing known, empty, or inside a conservative box.
+- A descent carries a **cursor** from a node to its children, so each step is
+  answered from its parent and never again from the top.
+- Each **answer** says what it lacked: exact, coarser with the tile it needed,
+  or nothing and that tile (`domain/layer/answer.rs` `Answer`).
+
+The query fetches and keeps nothing, so reading costs what is asked, not what a
+tile holds.
+
+The **world** composes the layers into one answer (`domain/query/world.rs`
+`World`). What is in a block is one rule, for drawing and for control alike
+(`pxl-spec-core world.rs` `node`):
+
+1. the ground's grid, each cell a block shifted up to its height;
+2. the caves' air under its face, from a hash pyramid asked only at the blocks a
+   reader asks for (`pxl-spec procedural.rs`);
+3. the ways off the ground, where each crossing of a line over the column is a
+   deck and its pier, a bore, an embankment or a cutting
+   (`pxl-spec-core ways.rs`);
+4. then what is placed, air included.
+
+A ray asked of the world reads that rule at the zoom the eye's rays draw there
+(`domain/query/ray.rs` `first_hit`), so what control meets is what is drawn. A
+walker casts the same ray up or down its cell's columns, at the finest zoom
+placed there, so it stands on what is placed (`domain/query/support.rs`).
+
+The world ends in bedrock, laid as a bowl: a bottom under the ground, and a wall
+just inside the **service area**, the shards the source serves. Walking and
+editing stay inside it, and an edit goes only over known ground, between the
+bedrock and a ceiling (`domain/query/limit.rs` `World::editable`). The camera is
+no walker: it goes anywhere a position can be, past the area over the Earth
+(`step_slide`'s `walled`).
+
+A ray descends the pyramid
+([a ray asks the world whether a node is empty](./doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)).
+A node coarser than the zoom its distance asks is not what is drawn there. So it
+is asked only whether anything under it fills at the zooms the ray asks; what
+those zooms fold away is not there to miss.
+
+```
+a node coarser than the zoom its distance asks
+   +-- nothing under it fills ---------> passed whole
+   +-- something may, or not held -----> split; children asked in
+                                         the order the ray meets
+                                         them, each handed what its
+                                         parent found
+a block at the zoom its distance asks
+   +-- fills --------------------------> met: its pixels show it
+   +-- not known ----------------------> the ray stops there
+```
+
+One query answers both (`domain/query/node.rs` `World::node`), and each source
+answers from what it keeps:
+
+- the ground, by the bound the GPU made over its held cells, or where a cave may
+  take it;
+- the ways, by a bound of their own beside the ground's;
+- the caves, by their hash node, hollow and drawing nothing again under it;
+- what is placed, by nothing held under the node in the objects' tree.
+
+The pointer's ray also strikes decor against its model, but only where the rays
+draw decor as it is, so what is struck is what is drawn
+(`domain/query/decor.rs`).
+
+The pointer, the camera's clearance, the walk and the view's observations all
+ask the world; none reads a layer. The descent is one function
+(`pxl-spec-core cast.rs`), which the GPU's cast compiles (Drawing). The CPU asks
+it one ray at a time, for control, never for the screen.
+
+## Windows and squares
+
+The GPU holds the ground's cells too, but only where a ray can reach them. A ray
+observes a zoom's cells only within a fixed reach of the eye
+(`pxl-spec-core window.rs`). So a **window** about the eye holds every cell it
+can observe at that zoom.
+
+A window is a few **squares** of cells a side, each held in a slot its place
+names. It follows its centre a square at a time, and no held cell moves. The eye
+has one at every zoom drawn, the focus two, and a destination being gone to one
+(`domain/layer/terrain/window.rs`). Windows at one zoom want a square in the
+same slot, so a square is held once, in a **berth** of that slot, however many
+windows want it, and kept while any does. The focus's two windows are at the
+eye's finest zooms, so where they overlap the eye's they take no berth more. A
+window takes its own berth where it is free, but after two windows have
+overlapped and parted, one may hold its squares in the other's.
+
+A square is filled on the GPU as its tile lands. Compute passes make each cell's
+**column**, its ground's top and the runs its ways write over it along z
+(`heights_cs`, `ways_cs`). They fold a bound over the columns into **levels**
+(`bound_cs`). Both are read back, so the CPU's query and the cast meet the same
+bridge or tunnel.
+
+Its ways are built into a tree of families, a node's eight children each, from
+one pool every square shares, on the GPU, and its families read back into the
+CPU's mirror of the pool. Both grow as the trees take families, up to a cap
+(`domain/layer/terrain/param.rs` `WAYS_POOL_BYTES`). A square whose tree the
+pool at its cap cannot hold, or past a square's own most, or whose families lie
+past the mirror's cap, stays absent while a window wants it. One whose families
+the heap refuses the mirror waits until the heap gives a page back, and is
+filled again.
+
+Where a square is not present, both read the coarser window's. A square that
+enters asks its tile again, and the browser's cache answers.
+
+## Demand and residency
+
+Demand is what the view asks for, and residency what it keeps. **Demand** is
+what an observation requires, the ground at the resolution its distance chooses,
+before it is any tile; the layer's storage maps it to tiles
+(`domain/view/demand.rs` `observe`).
+
+Demand is a function of the eye alone: at each zoom, every tile within the band
+of distance that zoom is drawn at (`domain/view/observation.rs` `ByEye`). It
+never depends on what the rays met. A tile it requires that is not held is a
+miss. Every layer is asked this way, the place layer too, and holds what it is
+asked for in a residency of its own.
+
+The **floor** is a law: every observation has an answer. It is kept by holding
+the coarsest zoom the source supplies whole, all around the eye
+(`domain/layer/residency/floor.rs`).
+
+**Residency** holds a tile hard for the floor, for demand while it is demanded,
+or as cache; only the hard set is correctness. Its capacity is asserted on its
+**frames**, the slots tiles are held in (`Residency::FRAMES`): 76 for terrain,
+649 for places, 9 for divisions and 4 for the Earth. A tile that arrives takes a
+free frame, or else the farthest one nothing holds hard and the view does not
+read. A region goes from unresolved to coarse to as fine as it is observed, and
+never back.
+
+The view is loading until something has reached the screen and every tile
+demanded shows, exact or coarser (`domain/layer/residency.rs`
+`Residency::shown`). A version is never rewritten, so a tile never changes under
+its key; what changes is which tile answers a node. **Nothing is prefetched**: a
+view converges to exact on its misses alone.
+
+## What stands over the squares
+
+What stands beside the ground, decor and the markers, is gathered over the eye's
+windows' squares. The GPU grows decor in every window's squares and draws each
+where the rays ask the zoom it was grown at.
+
+The markers read the squares as one partition of the ground
+(`domain/view/observation.rs` `squares`). A square splits into its four while
+its nearest point is nearer than its cells' split distance, as a ray's descent
+does, and each square left is read at its window's zoom, between the heights the
+world stands at in it. The partition never depends on what a ray met.
+
+Decor is grown and drawn on the GPU each frame, a thread a candidate, never
+stored (`pxl-render gpu/grown.rs`). Placed decor is handed in beside it as
+records (`domain/scene/decor/drawn.rs`). A kind is drawn as a model down to its
+own size on screen, and as a sprite below it.
+
+## Markers
+
+A **marker** is what is drawn flat to the camera, a billboard, from a design on
+the sheet: a place, a pin someone put up, or the chat's line. Each source reads
+its own, and one arrangement draws them together
+(`domain/scene/marker/arrangement.rs`). The places and the pins are read over
+the windows' squares, each standing at its cell's center on the surface drawn
+there; the chat's line is read from no square, and hangs where its speaker, the
+person, holds it, over its head.
+
+A place is the place layer's marker (`domain/scene/marker/place.rs`). Each
+square in view reads its place tiles, and each place shows what Carto shows at
+the zoom the camera grid's cell where it stands is: a dot or an icon, named from
+its kind's label zoom (`domain/scene/marker/place.rs` `point_of`). A place
+stands on what a ray down its cell meets first at the detail drawn there, and
+where nothing is drawn there is no place. A tap on one is the place's before the
+ground's.
+
+---
 
 ## Each concern's bound
 
-Taken together, the view is six concerns between the world and the screen, each with its own bound and its own contract:
+Taken together, the view is six concerns between the world and the screen, each
+with its own bound:
 
-| Concern         | Asks                                          | Bounded by                           | Where                                              |
-| --------------- | --------------------------------------------- | ------------------------------------ | -------------------------------------------------- |
-| Storage         | a layer's records, in the layer's own shape   | nothing of the view                  | a layer; the bucket                                |
-| Query           | what a node holds, a point, or first on a ray | —; it holds nothing                  | `query.rs`                                         |
-| Materialization | what is drawn from what is held               | the arena                            | `chunk/domain.rs`, `chunk/frontier.rs`             |
-| Demand          | which records an observation requires         | 3 × 3 tiles a zoom (`REACH_TILES`)   | `pxl-spec space/layer/demand.rs`, `view/demand.rs` |
-| Residency       | which records are held, and why               | its frames, asserted at compile time | `layer/residency.rs`                               |
-| Scheduling      | which waiting work runs now                   | the turn's quota and the credits     | `io/request.rs`, `io/policy.rs`                    |
+| Concern    | Asks                                          | Bounded by                                   | Where                                                     |
+| ---------- | --------------------------------------------- | -------------------------------------------- | --------------------------------------------------------- |
+| Storage    | a layer's records, in the layer's own shape   | nothing of the view                          | a layer; the bucket                                       |
+| Query      | what a node holds, a point, or first on a ray | —; it holds nothing                          | `domain/query.rs`                                         |
+| Drawing    | what each pixel's ray meets                   | the screen's rays                            | `domain/scene/cast.rs`, `pxl-render gpu/ray/cast.rs`      |
+| Demand     | which records an observation requires         | 2 × 2 ground tiles a zoom, 8 × 8 place tiles | `pxl-spec space/layer/demand.rs`, `domain/view/demand.rs` |
+| Residency  | which records are held, and why               | its frames, asserted at compile time         | `domain/layer/residency.rs`                               |
+| Scheduling | which waiting work runs now                   | the turn's quota and the credits             | `sys/io/request.rs`, `sys/io/policy.rs`                   |
 
-Every number a person would tune — τ's target, the patch, the arena, the quality's step and wait, the per-frame caps — is named once in `pxl-kernel param.rs`, grouped by the policy it tunes, with its reason.
+Every number a person would tune, such as τ's target, the screen's cells and
+decor's tiers, is named once, with its reason, in a `param.rs` beside the lowest
+part that reads it (`pxl-kernel domain/view/param.rs`, `sys/io/param.rs`). None
+is a correctness bound: set to its least, the view still converges, only coarser
+or later.
 
-## Marks
+---
 
-A mark stands at a cell's center (`Cell::center`, `pxl-spec space/layer/tile.rs`), at the height of the surface drawn there. A place is the place layer's mark (`chunk/place.rs`): each drawn chunk reads the tiles whose cells are its grid's cells, an icon wide, each from the tile that says it exactly, and shows what Carto shows at the zoom those cells are drawn at — a place from the zoom it is shown from, as a dot or its icon by its kind's zooms, named from its kind's label zoom once it was shown a zoom before (`billboard/badge.rs` `Label::at`, `layer/place.rs` `carto_zoom`). A place stands on what a ray down through its cell's center meets first at the zoom the view draws there (`first_hit`), and where nothing is drawn there is none. A tap on one is its before the ground's (`chunk/place.rs` `tap`). How it is drawn is Drawing's.
+# Drawing
+
+This part turns the eye's rays and the kernel's list into a frame: the GPU draws
+the world from the rays and the decor it grows and is handed, the kernel lists
+everything else, and the renderer executes both and decides nothing but color.
+
+## A ray a pixel
+
+Each drawn pixel is one ray on the GPU. It walks the same descent the CPU runs,
+over the ground's windows, the caves, the ways and the objects' tree as the GPU
+holds them. The block it stops on is the pixel's
+([the GPU casts a ray a pixel](./doc/minutes/20261014-the-gpu-casts-a-ray-a-pixel.md)).
+Once a frame the kernel hands the GPU the eye and the camera grid's layout
+(`domain/view/lens.rs` `gpu_cast`), so every pass reads one grid.
+
+Neighbouring rays share most of their descent, so the cast walks that part once,
+in four steps (`pxl-shader beam.rs` `beam_cs`;
+[a cell casts a beam](./doc/minutes/20261022-a-cell-casts-a-beam.md)):
+
+1. A **beam ray** at each corner of a camera grid cell walks the descent the
+   cell's pixels share, and stops before a node too narrow to share.
+2. Each cell starts at the least of the beam rays about it.
+3. **Samples**, four a cell a side, walk on to the blocks they stop at.
+4. A pixel takes the nearest sample block about it that its own ray enters, and
+   walks itself only where none is.
+
+A face thinner than the samples' spacing can be missed, which
+[the 20261024 minute](./doc/minutes/20261024-a-proxy-only-starts-the-ray.md)
+leaves open.
+
+What the rays asked of each node is kept between frames in the **observed
+pyramid** (`pxl-spec-core observed.rs`), forgotten only over squares that moved.
+A pixel needing a node it lacks walks the world again in the same pass.
+
+A ray leaves four words (`pxl-spec-core ray.rs`): the block it met, with its
+face, zoom and kept eighths; how far; the looks a coarse block folds; and which
+of the face's edges and corners meet the air or a rising block.
+
+The **screen pass** reads those words (`frame/shader/screen_ray.wgsl`
+`pixel_ray`) and paints the block with the one function every lit face uses
+(`frame/shader/paint.wgsl` `paint`): its swatch or image, shaded edges, light,
+and the air before it. Its depth is set back by a share of the face's slope
+across a pixel, so what lies on a face, like the location puck, wins with no
+bias of its own.
+
+The one mesh left is the **ghost**, the box an edit is about to place
+(`pxl-render mesh/ghost.rs`). The CPU draws nothing of the world; it runs the
+query for control and decides what the GPU is handed.
+
+## The render resolution
+
+The render resolution sets how many pixels the cast draws
+(`pxl-kernel domain/view/frame/resolution.rs`). It is the display's device
+pixels per CSS pixel, capped, times a scale the `resolution` setting picks:
+full, one device pixel a CSS pixel, or, by default, auto.
+
+Auto judges moving frames by their GPU time against the paced interval. It steps
+down at once when over budget, and up only after a run of windows the higher
+step would fit; without GPU timing it counts missed frames instead. The camera
+grid is laid by the display's ratio, not the drawn one, so a block's zoom and
+what is fetched never follow the load.
+
+## Light on the blocks
+
+Three settings shade a block beyond its light
+(`spec/client/kernel/domain/view/setting/schema.json`):
+
+- **Edges** draw a line along every crease, an edge meeting the air or a rising
+  block. It has one width in units at every block size, so only perspective
+  thins it.
+- **Corners** either darken a face along each edge and corner a block rises
+  across, tinted warm (`screen_ray.wgsl` `creases`), or run N8AO over the rays'
+  depth and the grown decor (`gpu/ao.rs`).
+- **Shadows** read the sun's map, below.
+
+The **sun's map** is a square box of the light about the eye (`gpu/shadow.rs`).
+Its texels are fixed in the world, each in a slot by its index modulo the map's
+side (`pxl-spec-core sun.rs` `Sun`), so the map follows the eye a texel at a
+time, and a texel that stays is not cast again.
+
+A slot's ray runs along the sun through the query, again only where the box
+moved onto it, the eye asks its stop at another zoom, or a node it passes
+changed. A step of the sun casts the whole map. Decor and the actors are drawn
+into it each frame.
+
+A receiver compares nine taps, each moved by its own plane's slope
+(`shadow.wgsl` `sun_lit`). Casters are pushed by the same formula, so a plane
+does not shadow itself.
+
+## The frame
+
+Each turn ends with a **draw list** (`pxl-render frame/draw.rs`), one for the
+kernel's life, kept beside the models whose meshes it uploads
+(`domain/query/model.rs` `draw_list`): entries tagged by the pipeline that draws
+them, each with its block and uniform. It holds the cumulus (instanced as decor
+is, or as an **impostor** sprite where a model is drawn too small to be worth
+it), the actors, the location puck, an edit's ghosts, the markers and the debug
+lines. The rays and the GPU's decor are not in it; they are the cast and the
+grown decor (`gpu/grown.rs`).
+
+The kernel writes the frame's uniforms into one lane of doubles
+(`frame/stage.rs`) and calls the renderer (`gpu/renderer.rs` `render_frame`)
+with the list, the models, the markers' sheet, the earth's tiles, the windows'
+squares and the cast. It draws every open surface, the world and the character
+picker's display case, and reports the cost and whether it wants another turn.
+Its passes are modules by what they draw: the rays, cast over the squares the
+GPU fills (`gpu/ray/`), and each pass beside the world, the decor, impostors,
+models, markers, the puck, the gizmos and the display case (`gpu/pass/`).
+
+A frame runs in this order:
+
+```text
+ahead       impostor sheets, fresh tiles, the atmosphere's tables,
+            the air's volume
+cast        the screen's rays; the sun's map; the occlusion prepass
+world pass  grown decor → rays at their depth → grown impostors
+            → sky and stars at the far plane → listed actors,
+            cumulus, impostors → high cloud planes → puck, ghosts
+over        markers → debug lines → display cases
+```
+
+The calls are WebGPU's, written through xpute's encoder (`gpu/api.rs`) into one
+stream in the kernel's memory. The page runs it on WebGPU after the turn returns
+(`ts/app/web/src/webgpu.ts`); the device app runs it on wgpu inside its turn, on
+the kernel's thread (`rust/client-bracket/native/src/surface.rs`). Every GPU
+object is an xpute handle, and a test links no GPU.
+
+A frame stands where nothing it reads moved. The rays are cast again only when
+the eye, the windows, the shards or the overwrites moved, or a square came in
+fresh; decor alone casts no ray. Where everything else also reads as before,
+nothing is submitted and the canvas keeps its frame.
+
+So a still view draws nothing, and a clock steps the sky by a display level and
+the clouds by a pixel at the nearest cloud. A frame too large for the stream is
+dropped whole, and the next turn draws again.
+
+Shaders and pipelines are `pxl-render`'s (`frame/shader/`). The compute entries
+are `pxl-shader`'s, a module each by what it computes (`beam.rs`, `cast.rs`,
+`observed.rs`, `sun.rs`, `ground.rs`, `ways.rs`, `decor.rs`), each keeping the
+name the build reads it by (pxl-tool `shader.rs` `ENTRIES`), built to WGSL and
+checked in beside the rest (`*.gen.wgsl`). The renderer's build validates each
+shader with naga and takes each pipeline's binding stages from it (pxl-render
+`build.rs` `assemble`), and the web app's test compiles each generated one with
+Tint, the compiler a browser runs (`ts/app/web/src/shader.test.ts`). What a
+shader shares with the host has no padding, and a uniform block is read a field
+at a time, never rebuilt as a struct; a phone's Vulkan and Safari's WebGPU each
+broke on one. A fact the GPU needs has one home, such as the frame uniform's
+cell angle.
+
+Depth is reversed float, near at 1, so far coplanar faces do not fight. On
+device loss the uploads' bytes are still in memory and are uploaded again from
+the same addresses.
+
+## Past the pyramid: the sky and the sphere
+
+The pyramid is planar and leaves the poles out, but the sky and the ground past
+the terrain must be drawn too. A thing becomes a layer only if there is
+something to hold:
+
+- **Stored data** has extent and resolutions, so it is a layer, refined by the
+  eye's rule. The earth's picture is one.
+- **An evaluated model** is computed per pixel from a few parameters: the sun,
+  moon and stars from the clock and the anchor, the scattering from its tables,
+  the clouds from their field.
+
+The earth layer is reflectance with city lights in alpha, a ground cell a texel
+(`pxl-spec bake/tile/earth.rs`). Only the floor's tiles are held
+(`domain/layer/earth.rs` `earth_window`), so it adds no demand. Where none is
+held, a global picture eight times coarser answers by latitude and longitude.
+
+The sky is drawn at the far plane, so only pixels no ray met run it
+(`frame/shader/sky.wgsl`). Where such a ray falls to the land, it shows flat
+land past the terrain, shaded from the earth layer and lit as the terrain is, so
+the edge is no seam (`atmos_air.wgsl` `beyond`). The planet is only the air's
+medium, a centre and a radius.
+
+The air between the eye and what is drawn comes from the **air's volume**,
+Hillaire's aerial-perspective volume (`gpu/atmosphere.rs` `froxel`). A compute
+pass marches each of a grid of screen columns once, by stretches between
+froxels spaced alike in every column by depth cubed, joined from the eye, so
+every froxel is one integral's to its depth. A froxel holds the light the air
+scatters per share of what it takes, which the air's thickness cancels from.
+A drawn point reads that by a cubic B-spline in all three axes, and scales it
+by its own ray's share taken, exact from the transmittance table
+(`atmos_air.wgsl` `air_before`), so neither the columns nor the slices show.
+
+The **clouds** are three layers on one wind (`pxl-spec-core cloud.rs`). The
+cumulus is models drawn like decor but claiming no cell, so a tower stands
+through it (`domain/scene/environment/cloud.rs`). Each sits by a hash in a
+lattice of its own, a model, a sprite or nothing by its size on screen, and
+thinned as drawn, a quarter of them each octave farther (`THIN_FROM`).
+
+Above it, altocumulus and cirrus are planes read where a ray meets them
+(`frame/shader/cloud.wgsl` `sheet_t`), laid over the world without depth. From
+below they fill only the sky and from above they cover everything, so a peak
+above one is knowingly wrong. Every layer fades out as the eye climbs toward
+where the clouds are gone (`domain/scene/environment/cloud.rs` `clouds_shown`).
+
+## Markers and the sheet
+
+A marker is drawn flat to the camera, where its source stands it (Markers).
+
+Markers are one instanced quad (`domain/scene/marker/set.rs`) over one texture
+packed shelf by shelf, the **sheet** (`pxl-render gpu/sheet/shelf.rs`). The pass
+(`frame/shader/marker.wgsl`) tests several points of each marker against the
+world's depth and drops the marker when most are hidden. It writes depth from an
+upright twin of the quad, so markers sort against the world along its up. The
+chat's bubble is a marker too, which the person holds over its head and says
+whether it shows (`domain/scene/character/companion.rs` `line_hangs`).
+
+A **sticker**, a design as the sheet holds it, is found by its design, what it
+paints, never by who shows it: equal words, colors and look share one slot, let
+go once nothing shown or waiting uses it (`domain/scene/marker/design.rs`
+`Design`). What shows it is named apart, by its holder's key, which the old
+drawing kept until the new one is painted goes by
+(`domain/scene/marker/arrangement.rs` `Key`); where a tap on it goes is each
+instance's own (`Instance::tap`). A sticker is drawn on the GPU only when what
+it shows changes (`gpu/sheet.rs`): its shapes as signed distances, its text as
+lines the platform drew. Asking the platform a line at a time leaves shaping,
+bidirectional text and emoji to each platform's own engine
+([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
+
+Pins, the markers people put up, are an object kind
+(`spec/spec/asset/marker.json`) drawn by the same pass, whether or not places
+are on. Where several share a cell, the cell shows their count on a pin's pill
+in its colors turned over, counted afresh each time the cube is read. Unlike
+places, pins are one kind, so their number means something. Each keeps its own
+words with its entry (`domain/layer/object/ext.rs` `Ext::MarkerText`).
+
+---
+
+## Debug views
+
+Five debug settings show what the view does, drawn from what the frame already
+holds.
+
+- `view`: where the camera and the pointer are, in a panel.
+- `profiler`: the profiler's panel (Below the view).
+- `world_gizmo`: the focus, its cell and rings about it
+  (`domain/scene/indicator/frame_gizmo.rs`), and over the ground the eye's
+  windows' squares by how they stand, with their tiles and shards
+  (`coverage_gizmo.rs`).
+- `camera_gizmo`: the camera grid over the screen, rings a cell apart cut into
+  cells of one solid angle (`frame/shader/camera_grid.wgsl`), and each pixel's
+  block tinted by the share of a cell its face shows the eye (`screen_lit.wgsl`
+  `cell_share`).
+- `ray_steps`, in a development build: each pixel coloured by the nodes its own
+  ray walked, grey where it took a sample's block.
 
 ---
 
 # Below the view
 
-Everything the view asks for has to arrive, be paid for in time and memory, and fail in a way that leaves what is drawn alone. That is what the chain stands on: the host's end and the reads it carries, the turn that gives each step its share of a frame, the memory every range lives in. None of it names anything above it. A layer asks io for a tile; io never asks what a tile is for.
+This part is what the view stands on, `sys/`, and the top that wires the kernel
+to its host: how what it asks for arrives, what it costs in time and memory, and
+how a failure leaves what is drawn alone. Nothing in `sys/` names anything above
+it: a layer asks io for a tile, and io never asks what the tile is for.
 
-## The kernel, its host and its shell
+## The kernel, its host, its brackets and the client
 
-The kernel is the process: it holds the world and decides everything about it, and it owns no device. The TypeScript around it is two things to it. Its **host** is what an operating system is to a process — xpute's host — and its **shell** is the UI, a program that talks to the kernel as one process talks to another.
+This section says where the kernel runs and what plugs it in.
 
-The host is most of `apps/web/src/kernel/`. It opens the kernel: in a tab it reserves the memory and instantiates the module over it (`mem.ts`, `module.ts`); on a device it asks the app's native module for the linked kernel's memory (`platform/guest.ts`, `apps/native/modules/platform/`). It rings the doorbell once per animation frame when something asked for one, which runs the kernel's `interrupt` (`pxl_interrupt` on a device), whose first turn boots it. It forwards pointer, wheel, sensor and visibility events as commands (`control/input.ts`), does the I/O the kernel asks for into blocks the kernel chose, and holds the GPU: in a tab it runs the renderer's recorded calls against WebGPU after each turn, on a device it binds a view's Metal layer or `SurfaceView` to a surface and the kernel draws into it directly.
+The kernel is the process: it holds the world and decides everything about it,
+but owns no device. Like any guest of xpute, it asks its **host** for the rest.
+The host grants it one memory once and a share of time on each call, and runs
+what the call recorded after it returns. One such call is a **turn**. That
+mechanism is xpute's and names nothing of pixelet
+([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md)). The kernel runs like a
+library OS over its host: the host grants memory, time and access to the
+outside, and the kernel owns the abstractions and the policy built over them.
+The split follows the exokernel/library-OS division, and xpute does not enforce
+those grants. The rings borrow their structure from virtio and io_uring, and the
+roots and files borrow Plan 9's file namespace.
 
-The shell (`apps/web/src/app/`, `feature/`) is React over the snapshot the kernel writes, and every control is a command the kernel applies. Its end of the channel is `shell.ts`, `snapshot.ts` and `render/surface.ts` in `apps/web/src/kernel/`. It hands the kernel the surfaces it draws into, each named by a handle — a canvas transferred once to an `OffscreenCanvas` in a tab, a view on a device. Nothing in it computes a coordinate, a tile or a draw; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is.
+The kernel's **bracket** plugs the kernel into a platform. The kernel implements
+xpute's entry, `intr` (`door.rs` `intr`), and what the bracket's form hands it
+there is xpute's too: the memory, where its own ranges may begin, the clock and
+the allocator's reading (`xpute_guest::entry` `BootInfo`), which the kernel
+keeps from its first turn (`sys/boot.rs`); xpute installs the clock itself as
+that turn begins. Whether a frame can be taken now is the GPU host's answer, a
+function (`xpute_gpu::admit` `Admit`): on a page every frame (`every`), on a
+device while its host admits one. Where to report what stopped the kernel is
+pixelet's (`sys/stop.rs` `LastWords`); the bracket hands both with the entry.
+Without a bracket, the kernel runs under `cargo test`. The mechanism under each
+is xpute's, booted with pixelet's numbers (mem.json's), so a bracket holds those
+numbers, the kernel as the entry and what is pixelet's own.
 
-A **bracket** is what gives the kernel a place to run: `pxl-wasm` in a tab, `pxl-native` on a device (with `android.rs` for its JNI). It hands in the memory, the clock, the allocator's reading and where to say what stopped the kernel (`door.rs` `Bracket`), and the kernel asks everything else of the host. So the kernel also runs under `cargo test`, with no bracket at all.
+- `pxl-wasm` makes the kernel a WebAssembly module, linked and exported as
+  xpute's module form does one (`xpute_guest::wasm` `link`, `wasm_abi!`), which
+  the page runs over a reserved memory, playing its recorded GPU stream on
+  WebGPU (`ts/app/web/src/guest.ts`).
+- `pxl-native` links the kernel into the device app as a guest of xpute's native
+  host (`xpute/rust/host`), which reserves its memory, runs each call on the
+  kernel's own thread, keeps its blocks in its memory and exports its entry and
+  memory as `xpute_intr` and `xpute_mem` (`xpute_host::native` `native_abi!`).
+  Beside it xpute's GPU host holds the device, binds a view's window to a
+  surface and lets it go, and calls what asks a turn when a completion lands,
+  exported as `xpute_gpu_open`, `xpute_gpu_surface_bind`,
+  `xpute_gpu_surface_unbind` and `xpute_gpu_wake_on`
+  (`xpute_gpu::host::native` `native_abi!`). pixelet's part is its numbers,
+  its last words, what a view hands over (an iPhone's layer, an Android
+  window) and the stream played on wgpu into a view's surface, whose host
+  admits the frames (`rust/client-bracket/native/src/surface.rs`). The app
+  reaches the library as `PxlNative`, Swift's module and Kotlin's object
+  alike, through one C header (`include/pxl_native.h`), Android's under the
+  names JNI looks for (`src/android.rs`). The kernel's thread is for
+  React Native's sake: its JavaScript thread has a 1 MiB stack, which a turn
+  that draws through wgpu outgrows, and the app calls in from more than one
+  thread.
+
+The brackets are named for the guest's form, xpute's word (`wasm`, `native`),
+and the apps for the host's platform, React Native's (`web`, `native`). Native
+means the same on both: the device's own machine and system rather than a
+browser's sandbox, so the web app carries the wasm guest and the native app the
+native one.
+
+Each app hands the client, once, a bracket of its own, what its platform gives:
+the guest, the GPU, storage, text, the network and the reads it runs at once,
+the sensors, its own long frames and the surfaces (`ts/client/src/bracket.tsx`
+`Bracket`, made in each app's `src/bracket.ts`). Neither app names the other,
+and neither app's TypeScript reaches the client but through that contract, its
+entry mounting the shell aside, so none names the kernel's numbers: what a place
+needs of the client is handed it there (the guest's plan, a surface's and the
+input's drivers, where to tell of a GPU and of being online), and what it hears
+it says in the platform's words (`SensorHeard`, `GpuHeard`, a pointer's phase
+and kind), which the client takes in: `ts/client/src/abi/` numbers them for the
+kernel and keeps the GPU's state (`abi/gpu.ts`), and `namespace/online.ts` keeps
+the network's, which its reads decide by.
+
+**Pixelet's host** is its common host side, `ts/client/src/host/`, plus the
+client's bracket an app hands it (`ts/app/*/src/bracket.ts`), built on
+`@xpute/host`. `ts/client/src/host/` is the same TypeScript over either bracket.
+It mounts xpute's host on the guest the bracket opened (`host/mount.ts`
+`open_host`, `@xpute/host/host.ts` `mount`), one name, `HOST`, through which the
+guest and its doorbell are reached (`HOST.guest`, `HOST.doorbell`): the
+doorbell, whose every turn runs the kernel's calls as it ends, the system calls
+answered through xpute's `Sys`, and the strobe that rings the kernel each frame
+it grants. What a frame submits, what an open, a write or a program call means,
+and what the stop report says are handed in by the client's boot
+(`ts/client/src/abi/boot.ts`); `ts/client/src/host/` names none of pixelet's
+numbers: the Plan it mounts with is built in `abi/boot.ts` from
+`abi/mem.spec.ts`. The kernel's generated vocabulary, the commands' senders, the
+snapshot and the boot are in `ts/client/src/abi/`; what answers the kernel's
+opens and writes is in `ts/client/src/namespace/`.
+
+The **shell** (`ts/client/src/shell/`) is the UI: React over the snapshot the
+kernel writes, where every control is a command. It hands the kernel the
+surfaces to draw into, each named by a handle. It computes no coordinate, tile
+or draw; what it needs of the model is generated from the same JSON as the Rust.
+The host, `abi/`, `io/` and the shell are one package, `ts/client`. Which
+technology draws each piece of the shell on each platform is in
+[ts/client/src/shell/ui/README.md](./ts/client/src/shell/ui/README.md).
 
 ## The host's end
 
-Everything the kernel needs from outside it asks of its host, as calls it records during a turn and the host runs after the turn returns, so each is done before the next turn begins (`io/host.rs`). Only the clock is called directly, since a turn measures its own budget while it runs. An answer comes back on the next turn as a number the host wrote, and it is read once, into a count or an errno: `answered` turns the raw result into `Ok(u32)` or one of xpute's `Errno` members, and a code no member names is the host breaking the protocol, `EPROTO`. No reader compares a raw number's sign again.
+This section is how the kernel's calls to the outside are made and answered.
 
-What the host tells of itself sits beside the calls: the wall clock, whether the device is handheld, whether the build is a development one, the allocator's reading, and the bracket's way of saying why the kernel stopped. The door, at the top, only hands these in at boot; everything below reads them here.
+The kernel records its calls during a turn, and the host runs them after it
+returns, so each is done before the next turn begins (`sys/io/host.rs`). Only
+what the bracket hands over is called directly: the clock, because a turn
+measures its own budget, and the allocator's reading (`xpute_guest::entry`
+`BootInfo`), whether a frame can be taken now (`xpute_gpu::admit`), and where to
+report what stopped the kernel (`door.rs` `intr`'s last words). An answer comes
+back as a number, read once by `answered` into a count or one of xpute's `Errno`
+members. A code no member names is the host breaking the protocol.
+
+What the host tells of itself comes with its commands: whether the build is a
+development one and which sensors it has in `WORLD_BOOT`, and the wall clock
+with each `WORLD_FRAME`.
 
 ## Reads, and the one scheduler
 
-A read is a file, in xpute's sense: the kernel names an object and opens it, and the host alone knows the address and the protocol (`io/file.rs`). An open answers one of three things, and the type says which, so no caller tells them apart by a number:
+This section is how a read is named, answered and paced.
 
-| `Opened`             | What it means                        | The descriptor |
-| -------------------- | ------------------------------------ | -------------- |
-| `Bytes(size)`        | the file is there, `size` bytes long | the owner's    |
-| `Absent`             | no such file                         | closed         |
-| `Failed { errno … }` | anything else                        | closed         |
+A read is a file in xpute's sense
+([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)):
+the kernel names a root by its number and an object below it by its number, the
+path's one name, and the client binds each root to what each number is
+(`ts/client/src/namespace/roots.ts`), `@xpute/host` carrying the open and the
+write there. The binds are one table, bound once at boot and sealed
+(`ts/client/src/namespace/roots.ts` `ROOTS`). The roots are
+`spec/client/kernel/sys/io/host.json` `root`'s:
 
-Each descriptor has an owner, so an answer reaches the one that opened it and an answer for a closed descriptor reaches no one.
+| Root               | The kernel's path                                              | What the client binds it to                                                                                  |
+| ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
+| `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`namespace/asset.ts`)                                         |
+| `STORAGE`          | a kept slot's number, in decimal (`kept`)                      | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
 
-The world's reads are fetches (`io/fetch.rs`): a tile named by its bake and its name in it (`DemandName`), opened as a file. An absent object is an answer with no body, whose meaning its owner decides — no ground tile is ground its parent already says — while an empty read is no object at all (`EBADMSG`). A body is a heap block, handed to its owner in an `Answered` and released by the command that decodes it unless a store keeps it. Answers queue until their owner takes them, each owner taking only its own categories (`next_answered`), and an answer settles its fetch once the owner has taken it in or refused it (`answer_settled`).
+So the kernel names no URL, no version, no storage key and no platform: a path
+is a number. Where a file lies, what key or address it has, which version serves
+a tile, and what to do with a file the kernel refuses are the client's. The
+client reads the source's declaration once: it hands the kernel the top zoom,
+each kind's format and the shards (`WORLD_SOURCE`), and keeps the versions,
+which it shows in the settings too. A kept file starts with its slot's `format`,
+which the kernel checks as a driver checks a superblock, and a file of another
+format is refused and never written over; the client sets it aside and plugs in
+an empty slot (`ts/client/src/namespace/storage.ts`).
 
-How many reads are out at once is bounded by **credits**, which the host grants each turn, and one place spends them: the request scheduler (`io/request.rs`). What it holds to is that the demand of a camera that has just moved is representable however much old work is still draining. That follows from its shape. A producer says only what it wants — the subjects it wants read, each with a rank, replacing whatever it said last turn — and never that an attempt should start, stop or be retried; what is wanted and what is running are two tables of fixed size. So an attempt ending answers nothing about the demand that outlived it: an answer ends its want, a failure ends only its attempt and waits rather than asking straight back. A running attempt is never preempted, and stops only when nobody wants it any more.
+Only the client knows a file's address and protocol (`sys/io/file.rs`). The type
+says which of three answers came back:
 
-The scheduler is the mechanism and orders nothing itself. A serve policy (`io/policy.rs`) ranks each want: by layer in the order a view builds up — terrain, then the assets decor is drawn with, then the place layer — and within a layer seen before unseen, nearer first, and of tiles as near the finer first, so the leaf under the eye is not asked after the coarse tiles over it. The policy changes how soon the view is right, never what it is. A model or a texture is a read like any other, spending the same credits as a tile rather than bidding against it from a second scheduler (`io/load.rs`): fetched and parsed at most once, retried if the read did not arrive, final if the bytes do not parse, since asking again returns the same bytes. Images are decoded by the host under a handle the kernel issued and never cross into the kernel.
+| `Opened`              | What it means                        | The descriptor |
+| --------------------- | ------------------------------------ | -------------- |
+| `Bytes(size)`         | the file is there, `size` bytes long | the owner's    |
+| `Absent`              | no such file                         | closed         |
+| `Failed { errnum … }` | anything else                        | closed         |
 
-Two files are kept on the device, the settings and the placed objects (`Kept`). Reading one back answers `KeptFile`: `None` when nothing was kept, the `Bytes`, or `Unreadable` — there, but larger than any heap a device is given, or failing with an error other than its absence. An unreadable file must not be written over, so what keeps it writes nothing until it has loaded. A read the heap refuses waits for the heap's next release and opens again (`take_kept`).
+Each descriptor has an owner, and an answer reaches only that owner.
 
-Text is asked of the platform a line at a time (`io/text.rs`): the kernel asks for a text's lines and widths and then for each line's pixels, through the same recorded calls, and keeps only the answers the frame before read. How it is drawn is Drawing's.
+The world's reads fetch tiles by their bake and subject (`sys/io/fetch.rs`
+`start`). An absent tile is an answer with no body, and its owner decides what
+it means: no ground tile means the parent's ground stands. An empty read is an
+error (`EBADMSG`). A body is a heap block, which the command that decodes it
+releases unless a store keeps it; terrain's and the Earth's, whose packets run
+just past a mebibyte, are slots of their longest packet's pages, seven to a run
+the heap gives and takes back once it is empty, rather than the buddy's block of
+twice that (`sys/io/body.rs`). The slots out at once, on a credit or kept, are
+at most `sys/io/param.rs` `BODY_SLOTS`, a moving eye's typical number. Terrain
+keeps a packet only while a window wants one of its squares, and keeps at most
+`BODY_SLOTS` less the most credits granted and the Earth's four frames
+(`domain/layer/terrain/tile.rs` `most_kept`), so a body on a credit finds a slot
+even while no frame is drawn to give kept packets back; a body past the slots is
+refused, and its want waits for one given back.
+
+How many reads are out at once is bounded by **credits**, which each frame
+carries, as many as the place's network runs at once
+(`ts/client/src/bracket.tsx` `origin`'s `credits`: a browser's six, five through
+Android's OkHttp), and the kernel takes at most 16 of (`sys/io/param.rs`
+`MAX_CREDITS`). One **request scheduler** spends them (`sys/io/request.rs`). It
+promises that a camera that has just moved can always state its demand, however
+much old work is still draining.
+
+That follows from its shape. A producer states only what it wants, each with a
+rank, replacing last turn's list. It never starts, stops or retries an attempt.
+Wants and running attempts are two tables of fixed size. An answer ends its
+want; a failure ends only its attempt. An object that failed is not asked again
+while it is wanted, and a body refused room waits until what refused it, the
+heap or the body slots, gives some back. A network or server failure holds every
+start, longer with each server failure in a row, and after `RETRY_ATTEMPTS` (6)
+of them the reads are given up. A running attempt is never preempted, and stops
+only when nobody wants it.
+
+A **serve policy** ranks the wants (`sys/io/policy.rs`). Terrain comes first,
+then the assets, then places and the Earth; divisions, and any want asked last
+(`Order::LAST`), come after everything. Within a layer, seen comes before unseen
+and nearer before farther; among equally near tiles the finer comes first, so
+the leaf under the eye is not asked after the coarse tiles over it. The policy
+changes how soon the view is right, never what it is.
+
+Models and textures spend the same credits (`sys/io/loader.rs`). Each is fetched
+and parsed at most once, retried if it did not arrive and final if it does not
+parse. An image's file is read into the heap and handed to the renderer, which
+copies it into a texture through the GPU stream (`COPY_EXTERNAL_IMAGE`, the host
+decoding it); once the texture lands the file goes, and a device lost reads it
+again (`images_lost`).
+
+The settings, but for those a session holds alone (`kept` false: the camera
+mode, the places' markers), and the placed objects are kept on the device, each
+in a slot the kernel opens by its number (`host.json` `kept`, `sys/io/file.rs`
+`Kept`). A kept file begins with its slot's format byte; the kernel refuses one
+of another format, as a driver refuses a superblock it does not know, and names
+it in the snapshot. A kept file the kernel cannot read is never written over.
+Which storage key a slot is, and what becomes of a refused file, are the
+client's: it sets the file aside under a key of its own, empties the slot and
+says so (`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots,
+once (`ts/client/src/namespace/storage.ts`). Text is asked of the platform a
+line at a time, widths then pixels (`sys/io/text.rs`).
 
 ## When something goes wrong
 
-Two kinds of trouble, and they never mix.
+There are two kinds of trouble, and they never mix.
 
-A run that does not succeed **ended**, and how is one value: `Ended { Ok, Aborted, Failed(Failure) }` (`io/failure.rs`), so a run that ended well carries no failure and a failed one always does. A `Failure` is an errno, a detail and, where the kernel made it, the source location, since `EBADMSG` alone does not say which rule a body broke. A failed fetch waits and is asked again; a failed parse is final. Neither touches what is drawn.
+A run that does not succeed has **ended**, either aborted or failed with an
+errno, a detail and the source location (`sys/io/failure.rs` `Ended`). A failed
+fetch is asked again later, and a failed parse is final. Neither touches what is
+drawn.
 
-A broken invariant is a **bug**, and it ends the module. `bug!` reports the errno and the place to the host (`host_bug`), and where the bracket's process dies with the kernel — a device — the kernel's last words say why (`Stop::Bug`, `Stop::Panic`), as numbers, since formatting is the bracket's and a module that reports nothing links none of it. A page's host outlives the kernel and reads the report itself; the turn that traps is the kernel's last (xpute's `ipc/doorbell.ts` `stopped`), and the shell puts a blue screen in place of the app with the report's errno and place as its stop code (`apps/web/src/app/halt.tsx` `BlueScreen`), as it does for a GPU lost for good and reads given up; a place the app cannot run at all is said plainly instead.
+A broken invariant is a **bug**, and it ends the module. `bug!` reports the
+errno and place to the host (`sys/stop.rs` `bug`). On a device the process dies
+with the kernel, so its last words say why, as numbers. In a page the host
+outlives the kernel, and the shell shows a blue screen with the errno and place
+as its stop code (`ts/client/src/shell/halt.tsx` `BlueScreen`). It does the same
+when the GPU is lost for good or reads are given up.
 
-Memory pressure is neither. What memory being full means decides how each piece is sized, and AGENTS.md holds the rule: must-fit state sized from a bound the structure proves, a bounded flow full by its owner's policy, a workspace that asks first and waits when refused. Where each lives is the memory map's, below.
+Memory pressure is neither. Must-fit state is sized from a bound the structure
+proves. A bounded flow is full by its owner's policy, and the flows at their
+worst together are checked at compile time against the heap a phone is
+guaranteed (`door/layout.rs` `HEAP_FLOWS_BYTES`): a body is at most its kind's
+packet (pxl-spec `bake::tile::max_packet_bytes`), and one longer is refused
+before the heap is asked. A workspace asks first, and waits when refused.
 
 ## The turn
 
-The turn is xpute's, and so is the quota: the host rings once, the guest spends what it was given, and the falling edge says when to ring again ([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) is the mechanism). What pixelet decides is what fills it.
+The turn and its quota are xpute's: the host rings, the guest spends what it was
+given, and the falling edge says when to ring again
+([the turn](./xpute/ARCHITECTURE.md#the-turn)). Pixelet decides what fills a
+turn.
 
 ```text
                          the rising edge
@@ -254,134 +1041,182 @@ The turn is xpute's, and so is the quota: the host rings once, the guest spends 
 │ the frame task                                                 │
 │                                                                │
 │   effects  each compares the world with what it last saw:      │
-│            navigation, the view, the fetchers, the object      │
-│            store, the hover, the puck                          │
+│            navigation, the bootstrap, the orientation, the     │
+│            following, the destination, decor's models, the     │
+│            object store, an edit, the hover, the puck, the     │
+│            settings                                            │
 │   tick     interaction → visible → content → cosmetic → report │
 │   pump     start the reads this turn's credits bought          │
 │   stage    the frame's uniforms and its draw list              │
+│   profile  what the turn cost                                  │
 │                                                                │
-│ five tasks beside it, polled on what the tick left             │
+│ two tasks beside it, and one a load file being read, polled    │
+│ on a share kept past the frame                                 │
 │                                                                │
-│   fetch · glTF · build · decor assets · the object store       │
+│   fetch · the object store · arrival                           │
 └────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
                         the falling edge  ──▶  wake_ms
 ```
 
-The host submits one `WORLD_FRAME` before it rings — the viewport, the gap since the last turn, and how many reads this turn's credits allow to be out — and reads the completion ring after.
+Before each turn the strobe grants a frame, one `WORLD_FRAME` is submitted
+(`ts/client/src/abi/input.ts` `submit_frame`): the viewport, the display's
+pacing, whether the turn is interactive, how many reads are allowed out, and the
+wall clock. A turn rung for a command alone carries none, and draws nothing. The
+quota's values are the kernel's (`sys/sched/tick.rs` `QUANTUM`). The kernel's
+boot writes them, and where the rings are, into the kernel's **directory**,
+which the host reads at boot (`host/mount.ts`, `@xpute/host/host.ts` `mount`).
+The tasks keep a share of the paced frame past the frame task, whatever it
+overran (`sys/sched/edge.rs` `tasks_after_frame`).
 
-**The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`), and reaches the host in the kernel's directory, which the first turn writes for the host to read once. The frame is the 25th percentile of recent gaps between frames, ignoring any gap over 50 ms. A turn is interactive when input arrived within `settle_ms`, or when the kernel asked for it on its last falling edge; an interactive turn gets that frame less a margin, every other turn `batch_frames` frames.
+The phases are xpute's, in the order that is their priority:
 
-**The phases** are xpute's, in the order that is their priority:
+| Phase         | What pixelet runs in it                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `interaction` | the controller, input, the camera, the environment, the companion, the character's preview                                                |
+| `visible`     | demand, the scene's pass, handed the camera's focus, which lays the world gizmo first; `content_share` of the budget is held back from it |
+| `content`     | nothing; the share held back from `visible` goes unspent here, and the tasks keep one of their own past the frame                         |
+| `cosmetic`    | nothing yet                                                                                                                               |
+| `report`      | nothing; the profiler records the turn after the stage (`turn.rs` `world_frame`)                                                          |
 
-| Phase         | What pixelet runs in it                                           |
-| ------------- | ----------------------------------------------------------------- |
-| `interaction` | the controller, input, the camera, the environment, the companion |
-| `visible`     | the sight, the goal, demand, the chunks' pass                     |
-| `content`     | nothing yet; it is guaranteed `content_share` of the budget       |
-| `cosmetic`    | the world gizmo                                                   |
-| `report`      | the profiler, last, so it sees everything                         |
+The frame is a task, so the order above is its own and not the executor's.
 
-The tasks run on `embassy-executor`'s raw executor, which the module installs. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor polls them in.
-
-**What moved** is said once a turn, after arrivals are admitted and before the layers observe or the chunks compare their sources (`turn.rs` `changes_step`): the tiles whose answer moved, as identities, and the regions the object store wrote (`layer/object/store.rs` `take_written`). A tile's identity fixes its content, so a list of identities is all a reader needs; the store calls nothing above it, and its regions move on a write and on nothing else.
+Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
+`changes_step`): the tiles whose answer moved, and the regions the object store
+wrote. A tile's identity fixes its content, so a list of identities is all a
+reader needs.
 
 ## The channel and the snapshot
 
-The host and the kernel share the two rings xpute describes, of four-word messages with page-sized payload slots: 2048 for what the host submits — its own commands and the shell's, which go through it — and 4096 for what the kernel completes (`mem.json`). The completion ring holds everything one turn leaves, since the host reads it dry before it rings again; a turn short of room for what one more command might raise leaves the rest of the submissions for the next turn, in order, and asks for it.
+This section is what crosses between the host and the kernel, and how the shell
+reads the kernel.
 
-The commands are `spec/client/kernel/abi/cmd.json`'s, numbered from `0x10` past xpute's own (`xpute/spec/abi/cmd.json`, the fetches among them): each one's number and its packet's fields, from which both sides' readers and writers are generated, so no field is found by its position anywhere else. A packet is an XTP tree, xpute's relocatable binary tree, and anything larger than a slot crosses in a heap block the kernel hands out. The kernel also posts messages nobody asked for — a fetch to start or cancel, an image to decode, a sensor to watch, a new snapshot — and those are its signals.
+The host and the kernel share xpute's two rings of small frames with page-sized
+payload slots. One carries what the host submits. The other carries what the
+kernel completes, and holds all one turn leaves; a turn short of room leaves the
+rest of the submissions for the next.
 
-The shell reads the kernel through one **snapshot**, written after a turn that changed it and replaced whole, posted only when its bytes differ from the last (`door.rs` `post_shell`). It carries what the kernel owns and nothing chosen for a presentation: the focus (`FocusState`: whether the view shows any ground yet, `GroundStatus`; whether the focus has wandered off the device; where it is; whether the source holds nothing under it), the device's location and heading, the camera's azimuth and motion, the settings, the meters a logical pixel spans at the focus, and the place it is in. A length rounded for a scale bar, how deep a place is named, when a toast speaks are the shell's, derived where read.
+The **commands** are listed in `spec/client/kernel/domain/control/cmd.json`,
+from which both sides' readers and writers are generated. A command taken out
+keeps its number in the table's `$retired`, and the generator refuses that
+number or one given twice, so a number an older side sends never comes to mean
+another (pxl-tool `spec/cmd.rs`). A packet is an XTP tree, xpute's relocatable
+binary tree, and anything larger than a slot crosses in a heap block. The kernel
+also posts **signals** nobody asked for: a sensor to watch or let go
+(`SENSOR_START`, `SENSOR_STOP`) and a new snapshot (`WORLD_SNAPSHOT`). Which
+sensors to watch is the kernel's: it watches one only while the page is seen and
+the world view is up, as the shell tells it (`WORLD_VISIBILITY`, `WORLD_VIEW`),
+and hears a watch that ended in failure as `SENSOR_FAILED`, the location card's
+press as `INPUT_LOCATE`. A read to open and its other calls go in its host
+stream (`sys/io/host.rs`).
+
+The shell reads the kernel through one **snapshot**, replaced whole after a turn
+only when what it is made of moved (`shell.rs` `Shown`). It carries only what
+the kernel owns:
+
+- the focus, whether the view shows ground there yet, and whether it has
+  wandered from the device or past the service area;
+- the state of the device's location and heading, the camera's azimuth, whether
+  it follows the device, and whether it is dragged or zooming;
+- the companion's readiness, the tool held and a marker waiting for its words,
+  the display cases, and the settings by their numbers once their slot is read;
+- the meters a pixel spans at the focus, the divisions it is in, whether the
+  pointer is over a marker, the kept slots it refused, and a server's stall.
+
+What is rounded or timed for presentation, such as a scale bar's length or a
+toast, is the shell's.
 
 ## The memory map
 
-The client's state is xpute's [core memory](./xpute/ARCHITECTURE.md#the-core-memory-placed-once): in a tab a `WebAssembly.Memory`, 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`; on a device one region of 512 MiB the library takes from the system on the first call (`pxl-native memory.rs`). Since it never moves, a ring keeps its words and a table is read where it lies for the guest's whole life. A phone's tab gets half because JavaScriptCore counts the whole reservation as the tab's JavaScript memory, committed or not.
+This section is where every range of the client's state lives.
 
-Every address the kernel names is an offset from the memory's first byte (xpute's `mem/base.rs`), so the map holds on both targets and the shell reads the same numbers either way. On a device the stack and the library's data are where the system put them, outside the region, and the two ranges the map keeps for them stand empty.
+The client's state is xpute's
+[core memory](./xpute/ARCHITECTURE.md#the-core-memory-placed-once), placed once
+and never moved. In a tab it is a `WebAssembly.Memory` of `DESKTOP_BYTES`, or
+`PHONE_BYTES` where the pointer is coarse, since a phone's JavaScriptCore counts
+the whole reservation against the tab (`mem.json`, `ts/app/web/src/device.ts`
+`handheld`). On a device it is always one region of `PHONE_BYTES` the library
+takes, and the kernel's data is the process's, so its ranges begin at
+`GLOBAL_BASE` (`pxl-native lib.rs`). Every address is an offset from the first
+byte, so the map holds on both.
 
 ```text
 address      range               bytes                  placed by
 ──────────────────────────────────────────────────────────────────────
-0            .stack              1 MiB                  rustc
-1 MiB        .ring.desc          36 KiB + 68 KiB        mem.json
-2 MiB        .ring.slot          8 MiB + 16 MiB         mem.json
-32 MiB−4KiB  the directory       4 KiB                  mem.json
-32 MiB       .rodata .data .bss  ~0.7 MiB               wasm-ld
+0            .stack              1 MiB                  wasm-ld
+1 MiB        .ring.desc          12 KiB + 20 KiB        mem.json
+1.5 MiB      .ring.slot          2 MiB + 4 MiB          mem.json
+8 MiB−4KiB   the directory       4 KiB                  mem.json
+8 MiB        .rodata .data .bss  ~2.5 MiB               wasm-ld
 D            .fixed              each owner's range     door/layout.rs
 D + .fixed   .heap               the rest               the allocator
-end          512 MiB or 1 GiB
+end          PHONE_BYTES or DESKTOP_BYTES
 ──────────────────────────────────────────────────────────────────────
-             D: __data_end rounded up to a page, about 32.7 MiB
+             D: __data_end rounded up to a page, about 10.5 MiB;
+                GLOBAL_BASE on a device
+             sizes as mem.json sets them
 ```
 
-The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. `.stack` is first so that an overflow wraps below zero and traps — there is no MMU, so the wraparound is the only guard — and the bracket asserts at boot that the linker's `__stack_high` is where `mem.json` says. The rings and the directory sit at fixed addresses from `spec/client/kernel/mem/mem.json`, which `build.rs` also turns into `--global-base`, so the linker cannot place `.data` over them. The directory is xpute's (`ipc/directory.rs`): the first turn writes it, and the host reads from it once where the rings are and what the quota's policy says. The same file holds the heap a phone is guaranteed (`MIN_HEAP_BYTES`), past which a kept file is refused as larger than any device's heap.
+The map is `pxl-kernel sys/mem/section.rs`'s. `.stack` is first so an overflow
+wraps below zero and traps, the only guard without an MMU. The rings and the
+directory sit at addresses from `spec/client/kernel/sys/mem/mem.json`, which
+also tells the linker where its data may begin.
 
-`.fixed` is what the kernel places once, sizes at compile time and never frees: the resident terrain's frames (`.fixed.terrain`, `layer/terrain/fixed.rs`, one frame a tile, as many as residency's capacity), the one open mesh bake (`.fixed.bake`), the chunk table, the renderer's live blocks, the GPU call stream, the host stream, the profiler's rings. Each owner says its size; the roof sums them and lays the ranges in order (`door/layout.rs` `Fixed`, `FIXED_BYTES`), handing each owner its range at boot, which the owner holds (`mem/fixed.rs` `Held`), so the memory's mechanism names no tenant. The live blocks' bound is each owner's count summed, every one a count the structure fixes, so the renderer's table cannot fill. Every range is read through its `Section`, which checks what is asked against the range's end. A thing belongs here when it is in the kernel's own format and its size is settled at compile time.
+`.fixed` holds what the kernel places once, sizes at compile time and never
+frees, and only what is mostly in use whenever it runs or is the host's
+reservation: the terrain's room, the resident divisions' cells, the renderer's
+live uploads, the GPU and host streams. Each owner states its size, and the door
+lays the ranges in order and hands each its own at boot (`door/layout.rs`
+`FIXED_BYTES`). The terrain's and the divisions' ranges are read through a
+`Section`, which checks every access against its end; the others are handed
+their first byte, which the renderer and the streams write from.
 
-`.heap` is everything else, under xpute's slab over buddy: what is asked for, refused and given back, and what another format sizes — a glTF, a PNG — whose bound nothing here can predict. A refused request is a wait, not a failure: a chunk's build, its decor and a model keep their place and ask again after the heap's next release (`chunk/build.rs` `refuse`).
+`.heap` is everything else, under xpute's slab over buddy, including what
+another format sizes, such as a glTF or a PNG. A refused request is a wait, not
+a failure: the asker tries again on a later turn, the mirror's chunk once the
+heap gives a page back, its square filled again. What is held only at times, or
+far below its worst most of the time, is a heap flow with a cap, grown as it is
+used and refused past the cap, each counted at its worst, in the buddy's blocks,
+against the heap a phone is guaranteed (`door/layout.rs` `HEAP_FLOWS_BYTES`):
+the bodies on their way, the CPU's mirror of the ways' pool and the squares'
+records read back (`domain/layer/terrain/mirror.rs`,
+`pxl-render gpu/ray/ground.rs` `GroundBuffers`), and the profiler's rings while
+its setting is on.
 
-What the renderer reads each frame is laid out as **column lanes**, structure-of-arrays: terrain planes, column runs, a mesh per chunk, the chunk table, decor instances, every registry. A table whose columns move together is one struct of lanes with one length, and a lane set has one owner that a consumer borrows for one call. The JavaScript heap holds only glue: React, the WebGPU objects behind the kernel's handles in a tab, and a file's bytes until the kernel reads them.
+What the renderer reads each frame is the kernel's **draw list**, records of
+uploads, rewrites, draws and frees (`pxl-render frame/draw.rs`), its uploads'
+and frees' lanes in `.fixed.uploads`. What an upload names is a heap block laid
+out in lanes, structure-of-arrays: a model's positions, normals, UVs, joints and
+weights each its own. The JavaScript heap holds only glue.
 
 ## Settings and the profiler
 
-Every setting is one entry of one schema (`spec/client/kernel/setting/schema.json`): default, kind, section. It is a leaf: anything reads it, it reads nothing. The store keeps only the user's overrides, by the setting's name, so moving a setting between sections keeps what the user chose. An entry marked `dev` is offered by a development build only; a published one leaves it out of the shell's table and holds it at its default.
+This section covers the settings, which sit under the view
+(`domain/view/setting/`), the lowest part that reads them, and are read by every
+part above it, and the profiler, which reads anything.
 
-The **profiler** (`profiler/`) sits beside the axis rather than on it: it reads anything, and production reaches it only where it records. It keeps what each frame and each task cost — pacing, per-phase time, the GPU's, heap gauges, LOD pressure, a census of draws, per-read waits — in rings laid out by `spec/client/kernel/profiler/profiler.json`, which the shell reads in place (`PROFILER_READ`, `PROFILER_TAKE`) and prints as a report or exports as a Chrome trace. Nothing schedules by what it records.
+Every setting is one entry of one schema
+(`spec/client/kernel/domain/view/setting/schema.json`). The store keeps only the
+user's overrides, by number: each setting and each option has one in the schema,
+given out once, a retired one kept in `$retired`, and the kept file is a format
+byte and `(number, value)` pairs (`domain/view/setting/store.rs`). An entry
+marked `dev` is offered only by a development build.
 
-## The device app
-
-The device app (`apps/native`) runs the same TypeScript as the page and adds only what a device does. What differs is behind one import prefix, `@platform/`, which the page resolves to `apps/web/src/platform/web/` and Metro to `apps/native/src/platform/`; a check fails the gate if a device's module lacks a name the page's has (`apps/native/src/platform/conform.ts`). The kernel is not a module there but a library linked into the app (`pxl-native`), reached through one native module; it runs every call on a thread of its own while the caller waits, and draws through wgpu into a view's Metal layer or `SurfaceView` directly ([a device's kernel on a thread of its own](./decision/20260926-a-device-s-kernel-on-a-thread-of-its-own.md)). On an iPhone, any control a touch lands on is UIKit's, since a SwiftUI switch inside React Native's views missed quick taps; which technology draws each piece is [apps/native/src/platform/README.md](./apps/native/src/platform/README.md).
-
----
-
-# Drawing what the view chose
-
-The kernel decides and lists what to draw; the renderer executes the list and decides nothing. Everything below is the second half: how one list becomes one frame, and what is drawn that no chunk holds — the sky, the planet past the pyramid, the badges.
-
-## The draw list and the renderer
-
-Each turn ends with a **draw list** (`pxl-render frame/draw.rs`): entries tagged by the pipeline that draws them, each with the block it reads and its uniform. In it: the chunk meshes, fine and coarse; decor, instanced, one model at many placements, and as an impostor sprite where a kind is drawn smaller than its own model is worth; the actors, skinned; the location puck; the ghosts of an edit about to land; the badges; the debug lines. An entry's presence is its meaning: what is drawn is what is listed, and nothing beside the list says it again.
-
-The kernel writes the frame's uniforms into the stage lane (`frame/stage.rs`) — the matrices, the viewport, the camera grid's cell angle, the light's settings — and calls `render_frame` (`gpu/renderer.rs`) with a `FrameInput`: the list, the environment, the models and their skins, the badge sheet, the Earth's tiles, and the surfaces. The renderer draws into every open surface — the world's and the character picker's display case — and reports what the frame cost and whether it wants another turn.
-
-A frame runs in this order. What outlives the frame — the atmosphere's tables, redrawn only when the light or the camera's altitude moves — is drawn and submitted ahead of it. Then the sun's shadow map and the screen-space occlusion's prepass where it is on. Then one world pass: the opaque chunks, decor and the cumulus drawn as it, their impostors; the sky at the far plane, so only empty pixels run it; the stars and the cloud sheets over it; the puck, the ghosts and the debug lines last. The badges follow in a pass of their own, over the world, and the display cases after.
-
-Its calls are WebGPU's, and how they are made is the build's (`gpu/api.rs`). A module cannot reach WebGPU itself, so they are records the page makes once the turn has returned (`api/record.rs` ↔ `apps/web/src/platform/web/webgpu.ts`); the device app turns on the renderer's `device` feature and the same calls go through wgpu as they are asked for (`api/device.rs`). A test is built without it and links no GPU. A call carries numbers and the address and length of what it names, the same words to both, and every GPU object is one of xpute's handles.
-
-Shaders and pipelines are the kernel's (`frame/shader/`). A pipeline is a record of words — shaders, vertex lanes, bind group layouts, primitive, depth and blend state — that the page turns into a WebGPU descriptor and a device into wgpu's. `cargo test` compiles every shader with naga and checks each record against its shader. What a shader shares with the host has no room inside it — 4-byte scalars and `vec4`s, and arrays and structs of them with no gap — so the host's words and every driver's layout agree, since a phone's Vulkan read a padded field and a matrix array in storage its own way ([a matrix the driver reads its own way](./decision/20260927-a-matrix-the-driver-reads-its-own-way.md)). A uniform block is bound as `array<vec4f, N>` and each field read from its word by a function of its own, never by one that builds the struct back, with which Safari's WebGPU lost its GPU process. A fact the GPU needs has one home there: the cell angle is the frame uniform's `cell`, which every pass that needs it reads.
-
-Two choices outlive a frame. Depth is reversed float, near at 1, so precision falls where perspective needs it and far coplanar faces do not fight. And on device loss the blocks are still in memory, so everything is re-uploaded from the addresses it already had.
-
-## Past the pyramid: the sky and the sphere
-
-The pyramid ends where PVF3 does: it is planar, follows 3857, and leaves the poles out. The planet is larger than that plane, and something has to be drawn past every tile — the sky, the sun and moon, and the ground beyond what the terrain reaches. What decides whether a thing of that kind is a layer is not where it is but whether there is anything to hold.
-
-- **Stored data** has extent and is held at resolutions, so it is a layer of the pyramid, refined by the eye's rule like any other. The Earth's picture is one.
-- **An evaluated model** is computed per pixel from a few parameters, and has nothing to hold at a resolution: the sun, the moon and the stars by the wall clock and the anchor, the scattering by its tables, the clouds by their field. None of them needs a pyramid.
-
-The **earth** layer is the planet's picture, reflectance with its cities' lights in alpha (`pxl-spec bake/tile/earth.rs`). Only its top zoom is baked, a ground cell a texel, and only the floor's tiles about the eye are held (`layer/earth.rs`), so it brings no demand, zoom or schedule of its own. Where no tile is held, a global picture answers, eight times coarser, read at the point's latitude and longitude. The two are not copies of one fact but two domains, the plane and the sphere around it, and the one rule for which answers is the window the kernel hands the GPU: a tile's layer where one is held, zero where the global picture answers (`earth_window`).
-
-The **atmosphere pass** draws the air as the frame shows it (`frame/shader/atmos_view.wgsl`): the sky, the ground past the terrain, and the aerial perspective over both, in one pass. Ground past the terrain is where a view ray meets the analytic sphere (`meets_land`), not a mesh, so the horizon and the curvature are exact. It is shaded from the earth layer, a held tile taking over from the global picture over the octave where a pixel goes from two ground cells to one, and lit by the terrain's own light so the drawn edge is no seam; the ground's bounce into the sky takes the mean albedo, not the tiles. The terrain, nearer, is the voxels' alone, and the two meet over the octave at the earth layer's reach.
-
-The **clouds** are three layers over the planet, carried by one wind (`pxl-render look/cloud.rs`). The cumulus is models drawn as decor is and held as decor is not (`scene/environment/cloud.rs`): it claims no cell, so a tower stands through it, and no chunk holds it. A cell of the clouds' own lattice holds one by its hash alone, so they lie even across the country; a block of cells is built once and drawn moved by the wind, each instance a model, a sprite or nothing by its size on the screen, by decor's own rule (`chunk/decor/cell.rs` `present_block`), out to the horizon over the layer. Over it, altocumulus and cirrus are sheets read once where a ray meets them, from a field the GPU bakes into a tile, laid over the opaque world without depth: from below they fill only the sky, from above they cover everything, so a peak above a sheet is wrong either way, a cost taken knowingly. Every layer fades out over the upper half of the climb to where the clouds are gone (`look/cloud.rs` `shown`), the cumulus blended while it does.
-
-## Badges and the sheet
-
-A badge is a billboard: it stands at a cell's center in the world and is drawn flat to the camera. Where its records come from is the view's (Marks); how it is drawn is this.
-
-Badges are one instanced quad (`billboard/field.rs`) drawn from one sheet (`pxl-render gpu/sheet/shelf.rs`, one texture the badges are packed into shelf by shelf): anchor, size and sheet rectangle per instance, the fit to screen pixels and the anchor's pinning in the vertex shader. Occlusion is all or nothing per badge: the pass (`frame/shader/badge.wgsl`) binds the world's depth as a texture, reprojects several points up each badge through it, and discards the badge when most are behind something. The same pass writes the fragment's depth (`@builtin(frag_depth)`) from an upright twin of the quad, so badges sort against the world along world-up. Chat bubbles are drawn by the same pass.
-
-An entry of the sheet is drawn on the GPU once, when what it shows changes (`gpu/sheet.rs`, `frame/shader/sheet.wgsl`): its shapes — rounded rectangles, circles, rings, a bubble's tail — as signed distances, and its text as lines the platform drew, into a texture of the entry's size copied into its rectangle. Text is asked of the platform a line at a time (Below the view), so kerning, joining, bidirectional runs, fallback and emoji are the platform engine's on every target: a tab's canvas, an iPhone's CoreText, Android's `Canvas` ([the sheet on the GPU, and text by the line](./decision/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
-
-A marker someone puts up is drawn by the same pass, beside the places: the object layer's marker kind (`spec/spec/block/id.json`), read through their query in each drawn chunk and shown whether or not the place layer is on. Its words are one for every marker until each keeps its own ([BACKLOG.md](./BACKLOG.md)).
+The **profiler** (`profiler/`) is reached by production only where it records.
+It keeps what each frame and task cost in rings laid out by
+`spec/client/kernel/profiler/profiler.json`, which the client reads in place and
+decodes (`ts/client/src/abi/profiler.ts`), and the shell prints as a report,
+beside the place's own long frames (`ts/client/src/bracket.tsx` `longFrame`), or
+exports as a Chrome trace. Nothing schedules by what it records.
 
 ---
 
 # Making the data
 
-Everything the view reads of the world arrives as a published version of baked tiles, and every tile in a version is a function of two things: the data the database held when it was baked and the code that baked it. This part follows the data down one chain, each stage reading only the one before it: a provider's release into the geo database, the database into leaves, the leaves into the pyramid, the pyramid into a version, the version into the bucket the client fetches from.
+Everything the view reads of the world is a published version of baked tiles,
+made from what the database held and the code that baked it. This part follows
+the data down one chain, each stage reading only the one before it.
 
 ```text
 provider release ──ingest──▶ db-geo (+ catalog) ──leaf bake──▶ z15 leaves
@@ -393,89 +1228,187 @@ client residency ◀── bucket (Worker) ◀── publish ◀── version (
 
 ## A shard is the unit
 
-The world is ingested, baked and grown a **shard** at a time: a z8 tile of the pyramid (`SHARD_ZOOM`), named by its Morton key. The coverage is the set of shards the bakes publish (`infra/geo/coverage.json`, read by `pxl-geo-bake coverage.rs`). A shard holds everything a leaf inside it reads, so a shard's leaves bake from it alone: what a leaf reads past its own edge — a structure's neighbours, the widest drawn line, the elevation's pad, and what it reads through a neighbour's own derived data — stays within the 2-ring, and every bake reads no farther past its leaf than one **reach** (`BAKE_REACH`, a z13 tile); that reach and a ground cell for rounding are the shard's **apron** (`SHARD_APRON`). How the databases hold shards is [infra/geo/README.md](./infra/geo/README.md); what matters here is that every stage below names its work by shards and never by a hand-drawn box.
+Every stage names its work by shards, never by a hand-drawn box. A **shard** is
+a z8 tile of the pyramid, named by its Morton key, and the world is ingested,
+baked and grown a shard at a time. The coverage is the set of shards the bakes
+publish (`infra/geo/coverage.json`).
+
+A shard's **leaves** are its z15 tiles, the ones baked from data, and the shard
+holds everything they read. What a leaf reads past its edge stays within one
+**reach**, a z13 tile (`pxl-geo-bake coverage.rs` `BAKE_REACH`). The reach plus
+a ground cell for rounding is the shard's **apron**. How the databases hold
+shards is [infra/geo/README.md](./infra/geo/README.md).
 
 ## The database
 
-Three sources go in by three ingests, none compiling the model: the Overture types, a table each, the elevation, one raster, and the coast, whole (`infra/geo/overture/ingest.rs`, `infra/geo/elevation/ingest.sh`, `infra/geo/coastline/ingest.sh`). An Overture feature is one row, keyed by its `gers_id`, however many shards it meets, and the catalog alone says which shards are in and at which release. A run adds the shards it is given and leaves what a table holds already; a whole run (`--whole`) is filled beside the table and swapped in, never emptied first ([infra/README.md](./infra/README.md) §2). Which to run, and when, is the operator's to say: the catalog records each shard's release and when it was ingested, and decides nothing. The elevation is warped a shard at a time onto one grid of blocks, its apron taken out to whole blocks, so a block two aprons share is the same samples and is stored once.
+The geo database holds the providers' data, and its catalog records which shards
+are in at which release. Three ingests fill it: the Overture types, a table
+each; the elevation, one raster; and the coast, whole. The Overture ingest reads
+the shards of the coverage, so it is a binary of pxl-geo-bake
+(`bin/ingest_overture.rs`); the other two are scripts under `infra/geo/` and
+compile nothing. An Overture feature is one row however many shards it meets.
 
-What the database holds at a moment is its **holdings**: per table the catalog's release and its counts, and the elevation (`coverage.rs` `holdings`); a set's manifest says it once. A bake refuses to start unless the catalog holds every shard it needs, none past the coverage.
+A run adds the shards it is given; a whole run fills a new table and swaps it in
+([infra/README.md](./infra/README.md) §2). The operator decides what to run. The
+elevation is warped onto one grid of blocks, so a block two aprons share is
+stored once. What the database holds, per table its release and counts plus the
+elevation, is its **holdings**. A bake starts only when every shard it needs is
+held.
 
 ## A leaf
 
-A leaf is baked from its shard's rows and nothing else (`terrain/leaf.rs` `bake_leaf`). What is read is what the paint policy consumes: the policy's own tables name the classes a read asks for (`overture/policy.rs` `LAND`, `INFRASTRUCTURE`), and the deck solve asks only for the waterways it clears, so a large island polygon the policy drops is never fetched. Rows become features as Carto maps the OpenStreetMap tag each class comes from, and are painted in Carto's order — its layers, landcover, water, highway areas, roads, aeroways, but buildings over the roads; within a layer its own sort, a larger area first or a road's `z`; then the source's id, so no row order decides a cell (`terrain/pipeline/feature.rs` `Rank`). A cell is painted by what covers its center, and only what is seen from above: a tunnel, an indoor passage, a way not built or gone and a ferry's route are left off it. Why a cell is a Carto look and not channels of what the land is used for is [the ground is a Carto palette](./decision/20261005-the-ground-is-a-carto-palette.md). The coastline is OSM's land polygons, not a provider's water, and it alone says where the sea is: the sea is painted where they do not reach, landcover never paints it, and a leaf is baked only where they, a building or a way reach it (`terrain/repository.rs`, `terrain/leaf.rs` `has_ground`).
+A leaf is baked from its shard's rows alone (`terrain/leaf.rs` `bake_leaf`).
+Each cell gets a **look**, the class of ground it is drawn as.
 
-Bridges and tunnels are solved as Arnis solves them, structure by structure, from a tile and as much of the eight around it as its structures reach (`pxl-geo-bake separation/arnis.rs`, [as Arnis solves them](./decision/20261006-bridges-and-tunnels-as-arnis-solves-them.md)); why a deck is a line in the terrain tile and not a lane or an object is [ways off the ground](./decision/20261001-ways-off-the-ground.md).
+Rows become features by Carto's mapping of their OpenStreetMap tags, for the
+classes the paint policy consumes (`overture/policy.rs` `LAND`). They are
+painted in Carto's order, ties broken by the source's id
+(`terrain/pipeline/feature.rs` `Rank`). A cell takes what covers its center as
+seen from above, so a tunnel is left off
+([the ground is a Carto palette](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)).
 
-Rasterizing is the bulk of a leaf: polygons are filled even-odd with holes, and lines are drawn with a thickness kernel. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per tile, which is what makes the bake, the terrain and the object layer agree on what a unit of height is. A tile is written as XTP, xpute's tree, in the form the client reads where it lands, so nothing is translated on arrival.
+The coastline is OSM's land polygons, and the sea is wherever they do not reach.
+A leaf is baked only where land, a building or a way reaches it.
 
-The elevation lane is sampled from the raster at the leaf's resolution, its pad included: the apron reaches past every pad, so a pad is always the source and `0` is the source's own sea, never a shard nobody ingested. The interpolant the client draws, its bound and the separation's footing are one function the bake calls too, so a leaf's index lane bounds exactly what will be drawn ([the pad at a shard's edge](./decision/20261007-the-pad-at-a-shard-s-edge.md)).
+Bridges and tunnels are solved from a tile and as much of its 1-ring as its
+structures reach, and never further, starting from Arnis's rules
+(`separation/solve.rs`, the bridges `solve/bridge.rs`, the tunnels
+`solve/tunnel.rs`;
+[as Arnis solves them](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)).
+A height leans on nothing further than a tile, so neighbouring tiles agree where
+they meet; Arnis is the reference, the ring the bound. A deck is a line in the
+terrain tile, not an object
+([ways off the ground](./doc/minutes/archive/20261001-ways-off-the-ground.md)).
+
+Polygons are filled even-odd and lines with a thickness kernel. Elevation is
+signed 16-bit cell units under one Mercator Z scale per tile, so the bake, the
+terrain and the object layer agree on a unit of height. A tile is written as
+XTP, xpute's tree, in the form the client reads.
+
+The elevation is sampled at the leaf's resolution, its pad included. The apron
+reaches past every pad, so a zero there is the source's sea, never a missing
+shard. One interpolant reads the cells' heights and the separation's footing off
+the samples (`pxl-spec-core ground.rs` `bicubic`). The bake reads the footing
+and the GPU the cells, which the CPU reads back.
 
 ## The pyramid
 
-Every tile above the leaves is folded from the zoom below with no database in the loop, by the layer's one-zoom fold (`pxl-spec bake/fold.rs`): the ground by majority, the elevation by an average whose pad reads the neighbours' inner samples, the index by joining the children's lowest and highest, the place layer by keeping what shows from the parent's zoom on. A tile beside the four being folded, whose inner samples a pad reads, lends nothing until it is baked; the pad repeats the edge until then.
+Every tile above the leaves is folded from the four under it, with no database
+in the loop (`pxl-spec bake/fold.rs` `fold_terrain`). The ground folds by
+majority, one rule with the client's (`ground.rs` `own`), and the elevation by
+the average of the samples. The place layer keeps what shows from the parent's
+zoom on.
 
-Not every tile is an object. A leaf with nothing drawn in it is never baked, and a tile the bucket lacks is drawn from the one over it, so open ocean costs nothing. A tile with no object folds as what it stands for (`pxl-geo-bake terrain/absent.rs`): sea inside the coverage, and past it unknown, sea or land, which gives no surface, so the planet's picture is seen under it as it is past the pyramid.
+A leaf with nothing drawn is never baked, and a missing tile is drawn from the
+one over it, so open ocean costs nothing. A missing tile folds as sea inside the
+coverage and as unknown past it, where the planet's picture shows.
 
-A bake folds again only what its shards change: at each zoom the parents whose sources read a changed tile, each staged only where its content differs, until a zoom changes nothing (`pyramid.rs` `fold`).
+A bake folds again only what its shards change, zoom by zoom, until a zoom
+changes nothing (`pyramid.rs` `fold`).
 
 ## A version
 
-A bake keeps one **set** a kind, every zoom of the pyramid flat under the tiles' names and never pruned, with a manifest of what it was made from, and changes it a shard at a time, as the ingest does (`pxl-geo-bake tile/shard.rs`): the named shards' leaves are staged beside it, each marked whole with the leaves it no longer makes; only what they change is folded again, a neighbour's edge band included, up to a zoom where nothing changed; and the staged tiles are moved in only once folded, each step able to stop and run again. A change of source, code or coverage is a purge by command. A **version** is the set uploaded under a name of its format and the day (`spec/spec/bake/published.json`), immutable once written, less where a layer is pruned the tiles no reader asks for. Which shards to bake, and when, is the operator's to say.
+A bake keeps one **set** per kind: every zoom of the pyramid flat under the
+tiles' names, with a manifest of its holdings. It changes the set a shard at a
+time (`tile/shard.rs`):
+
+1. The named shards' leaves are staged beside the set.
+2. Only what they change is folded again.
+3. The staged tiles are moved in once folded.
+
+Each step can stop and run again, and a change of source, code or coverage is a
+purge by command. A **version** is a set uploaded under a name of its format and
+the day, immutable once written (`spec/spec/bake/published.json`). A pruned
+layer leaves out the tiles no reader asks for.
 
 ## The dev tile server
 
-In development the same bake runs on demand (`pxl-geo-bake demand/`), every pyramid layer the same way (`demand/pyramid.rs`): a leaf baked when it is first asked for, a tile above folded as the offline bake folds, no more than `--folds` zooms over the leaves, the one guard every layer shares. Its cache is kept across restarts, a kind a directory; a re-ingest or a bake change is a purge by command. With `--shelf` it serves each kind's set as it is, so a bake is looked at before it is published. The development tasks are named for where the tiles come from, as a bakery's bread is: `dev:oven` bakes them on demand, `dev:shelf` takes the last bakes, and `dev` has them delivered from the published deployment.
+In development the same bake runs on demand, every layer the same way
+(`demand/pyramid.rs`). A leaf is baked when first asked for, and a tile above is
+folded at most `--folds` zooms over the leaves. The cache lasts until a purge.
+With `--shelf` the server serves each kind's set, so a bake is seen before it is
+published. The make targets are named like a bakery's bread:
+
+| Target      | Tiles                         |
+| ----------- | ----------------------------- |
+| `dev-oven`  | baked on demand               |
+| `dev-shelf` | the last bakes                |
+| `dev`       | from the published deployment |
 
 ## Publishing
 
-A version reaches the client through one private bucket read only by the Worker (`.agents/skills/publish-bucket/SKILL.md`, [deployment hosting](./decision/20260816-deployment-hosting.md)). The client asks for the published version's tiles by name.
+A version reaches the client through one private bucket that only the Worker
+reads ([deployment hosting](./doc/minutes/20260816-deployment-hosting.md)). The
+client asks for the published version's tiles by name.
 
 ## Catalogs and assets
 
-Everything a build ships is decided at build time, as JSON under `spec/` grouped the way `crates/` is. `pxl-tool` writes a Rust module from each file and, where the shell reads it, a TypeScript one; `deno task spec` writes them and `check:spec` fails when the tree disagrees with the JSON. That covers the commands and their packets, the cell catalogs, the memory map, the GPU API's enums, the profiler's layout, the settings schema, the decor and character catalogs, the routes and the published versions.
+Everything a build ships is decided at build time, as JSON under `spec/`, from
+the commands and catalogs to the settings schema and the published versions.
+`pxl-tool` writes a Rust module from each file, and a TypeScript one where the
+shell reads it; `check-spec` fails when the tree disagrees.
 
-A catalog is never sent. Both sides compile it, so a message carrying it would be a program telling itself what it already knows. Where bytes do cross — a published tile, a saved blob — the layout is the model's and the version is in the envelope: the path, or the storage key.
+Which assets exist is compiled on both sides: the world's rule, which the CPU,
+the GPU, the bakes and the stores agree on. Which file each references is the
+one catalog the host plugs in, read through the asset root like any file
+(`pxl-spec asset/catalog.rs`). Where bytes cross, as a tile or a saved blob, the
+layout is the model's, and the version is in a tile's URL, which the client
+picks from the declaration, or a kept file's format byte.
 
-- **Cubes and decors** are numbers in `spec/spec/block/` (`cube.json`, `color.json`, `decor.json`), and the number is what the object store writes.
-- **Models** are named by path under `asset/` in the catalog that uses them — each decor kind's variants, a model and a skin each (`spec/spec/block/decor.json`), each character group's `keys`, `models`, `skin` and `size` (`spec/client/kernel/scene/character/variant.json`). A path resolves to a bucket key and a measured extent through the asset table `pxl-tool`'s ingest writes (`pxl-spec asset/ingested.spec.rs`, `apps/web/src/catalog/asset/ingested.spec.ts`), naming every model, skin and texture by its own path with a hash of its bytes in the stem — `asset/actor/kenney_cube_pets/beaver-20f91809e69c.glb`, the way a bundler names a chunk. Nothing imports a model or an image; the client fetches a key, the same key from `./out/asset` in development and from R2 in production.
-- **The texture pack** is one table (`pxl-spec asset.rs`: which image a cube wears on which face) and one WebP image in the bucket. A look's color is `color.json`'s; a textured look is drawn from afar as its tile's mean, so the ingest draws each top toward its look's color as it composes the pack (`pxl-tool asset/pack.rs` `TOWARD_CARTO`), and the map reads as Carto's either way.
+- **Cubes and decors** are numbers in `spec/spec/asset/`, and the object store
+  writes the number.
+- **A file reference** is a path under `asset/content/` in the spec that makes
+  it, compiled as a slot: the kernel knows "the cumulus' skin", never which file
+  it is. The catalog fills each slot with a file's number below the asset root
+  and what the ingest measured of it, and until it is read every slot reads as
+  loading. Its count bounds the files the kernel loads at once, so no memory
+  waits on the catalog.
+- **Asset keys** come from the table `pxl-tool`'s ingest writes
+  (`spec/spec/asset/ingested.json`), which numbers each file, the host binding a
+  number to its key. Each file is keyed by the SHA-256 of its bytes, so moving
+  it changes no key.
+- **The texture pack** is one table of which image a cube wears on which face,
+  and one WebP image, the file the cube kind's definition names
+  (`spec/spec/asset/cube.json` `pack`), which the ingest composes and ships as a
+  row of the table like any other. A textured look is drawn from afar as its
+  tile's mean, so the ingest draws each top toward its look's color
+  (`pxl-tool asset/pack.rs` `TOWARD_CARTO`).
 
 # Prior art
 
-What the tree took from work done before it, or found it had arrived at: each line names the precedent, where the tree follows it, and what it takes. A link is given where the tree records the source; the rest are named as the code names them.
+What the tree took from work done before it, or found it had arrived at: each
+line names the precedent, where the tree follows it, and what it takes. A link
+is given where the tree records the source; the rest are named as the code names
+them.
 
-| Precedent                                                                                                                                     | Where                                                                                                         | What is taken                                                                                                                            |
-| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Google Earth and the web map's tile pyramid                                                                                                   | the pyramid (`pxl-spec space/`)                                                                               | Structure, storage, tiling and invalidation across zooms                                                                                 |
-| Cesium 3D Tiles, `skipLevelOfDetail` and `preloadAncestors`                                                                                   | `pxl-kernel io/demand.rs`                                                                                     | A tile tree whose nodes arrive out of order; a held ancestor shown at once                                                               |
-| Morton order                                                                                                                                  | tile and shard names (`pxl-spec space/hierarchy/morton.rs`)                                                   | One base-4 digit a zoom, coarsest first                                                                                                  |
-| Web Mercator (EPSG:3857), WGS 84                                                                                                              | `pxl-spec space/coord/`                                                                                       | The plane PVF3 follows; the sphere's radius                                                                                              |
-| Mapbox's globe                                                                                                                                | `pxl-spec space/coord/globe.rs`                                                                               | Mercator laid on the sphere in the center's frame                                                                                        |
-| Cozzi and Ring's horizon cull                                                                                                                 | `pxl-kernel chunk/table.rs`                                                                                   | A point is over the horizon while E·P ≥ r²                                                                                               |
-| Earth Engine's `MODE` pyramiding                                                                                                              | `pxl-spec bake/fold.rs`                                                                                       | A 2 × 2 majority fold of the zoom under it                                                                                               |
-| Distant Horizons                                                                                                                              | `pxl-render mesh/paint/palette.rs`                                                                            | A distant cell drawn as the mean of what it folds                                                                                        |
-| Minecraft's `cube_all`, `cube_bottom_top`                                                                                                     | `pxl-render gpu/layers.rs`                                                                                    | Which face image a cube wears: its own side and bottom where the pack ships them, its top on every face where not                        |
-| Minecraft Beta's `replaceBlocksForBiome` ([decision/20261011-the-ground-under-its-face.md](./decision/20261011-the-ground-under-its-face.md)) | `pxl-spec block/sample.rs` `strata`                                                                           | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
-| Minecraft's map colors                                                                                                                        | `spec/spec/block/color.json` underground                                                                      | The colors of soil, sandstone and stone                                                                                                  |
-| Minecraft 1.18's noise caves; Ken Perlin's improved noise (SIGGRAPH 2002)                                                                     | `pxl-spec procedural.rs` `hollow`, `perlin`                                                                   | Tunnels where two noises meet zero, caverns where one is high; the fade and gradients                                                    |
-| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c))        | `pxl-kernel query/support.rs` `step_slide`                                                                    | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
-| Amanatides and Woo's voxel traversal                                                                                                          | `pxl-kernel query/ray.rs`, `query/support.rs`                                                                 | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
-| OpenStreetMap Carto                                                                                                                           | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/block/`                                        | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
-| Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                       | `pxl-render gpu/pass/badges.rs`                                                                               | A label's line pitch                                                                                                                     |
-| OpenMapTiles' schema                                                                                                                          | `spec/spec/block/marker.json`                                                                                 | A marker shows from z14, as its `poi` layer does                                                                                         |
-| [Arnis](https://github.com/louis-e/arnis)                                                                                                     | `pxl-geo-bake separation/arnis.rs`                                                                            | Bridges and tunnels solved structure by structure: clearances, ramps, decks, pillars                                                     |
-| osm2streets, osm2lanes                                                                                                                        | the bake's way rules ([decision/20261001-ways-off-the-ground.md](./decision/20261001-ways-off-the-ground.md)) | Lane and buffer widths                                                                                                                   |
-| Overture's schema                                                                                                                             | `pxl-spec division.rs`, `pxl-geo-bake terrain/pipeline/overture/between.rs`                                   | Places and divisions read as the schema defines them                                                                                     |
-| Stable shadow maps, PCF                                                                                                                       | `pxl-render gpu/shadow.rs`, `frame/shader/shadow.wgsl`                                                        | Texels snapped to a grid fixed in the world; a 3 × 3 filtered edge                                                                       |
-| Bruneton; Hillaire (EGSR 2020)                                                                                                                | `pxl-render look/atmosphere.rs`                                                                               | The atmosphere's tables: transmittance and irradiance; multiple scattering and the sky view                                              |
-| Unreal's SkyAtmosphere, OPAC, Cornette–Shanks                                                                                                 | `pxl-render look/atmosphere.rs`, `frame/shader/atmos_medium.wgsl`                                             | The Earth's scattering numbers, the haze, the Mie phase                                                                                  |
-| ACES as Stephen Hill fits it                                                                                                                  | `pxl-render frame/shader/finish.wgsl`                                                                         | One tone curve for every pass                                                                                                            |
-| N8AO                                                                                                                                          | `pxl-render gpu/ao.rs`                                                                                        | Screen-space ambient occlusion, ported to WGSL                                                                                           |
-| Kasten and Young; Ballesteros                                                                                                                 | `pxl-render frame/shader/stars.wgsl`, `gpu/stars.rs`                                                          | Airmass at the horizon; a star's color from B−V                                                                                          |
-| Duffett-Smith                                                                                                                                 | `pxl-kernel scene/environment/celestial_position.rs`                                                          | The sun's, the moon's and the stars' positions                                                                                           |
-| Stöckli et al. (Blue Marble)                                                                                                                  | `pxl-geo-bake bin/bake_earth.rs`                                                                              | The imagery's bytes read back as reflectance                                                                                             |
-| three.js                                                                                                                                      | `pxl-kernel scene/actor.rs`, `pxl-render frame/shader/atmos_view.wgsl`                                        | A clip's cross-fade; Lambert as its standard material                                                                                    |
-| Howard Hinnant's date algorithm                                                                                                               | `pxl-geo-bake util.rs`                                                                                        | A civil date from a day count                                                                                                            |
-| Figma                                                                                                                                         | [decision/20260912-why-the-destination-is-wasm.md](./decision/20260912-why-the-destination-is-wasm.md)        | A compiled engine in the page over one memory                                                                                            |
-| iOS's interface guidelines, Material's motion, SF Symbols                                                                                     | `apps/web/src/shared/ui/theme.ts`, `shared/ui/motion/transition.ts`, `platform/web/icon.tsx`                  | Touch targets and type scale, easing, the icons' names                                                                                   |
+| Precedent                                                                                                                                                           | Where                                                                                                                               | What is taken                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Google Earth and the web map's tile pyramid                                                                                                                         | the pyramid (`pxl-spec space/`)                                                                                                     | Structure, storage, tiling and invalidation across zooms                                                                                 |
+| Cesium 3D Tiles, `skipLevelOfDetail` and `preloadAncestors`                                                                                                         | `pxl-kernel sys/io/demand.rs`                                                                                                       | A tile tree whose nodes arrive out of order; a held ancestor shown at once                                                               |
+| Morton order                                                                                                                                                        | tile and shard names (`pxl-spec space/hierarchy/morton.rs`)                                                                         | One base-4 digit a zoom, coarsest first                                                                                                  |
+| Web Mercator (EPSG:3857), WGS 84                                                                                                                                    | `pxl-spec space/coord/`                                                                                                             | The plane a position follows; the sphere's radius                                                                                        |
+| Mapbox's globe                                                                                                                                                      | `pxl-spec space/coord/globe.rs`                                                                                                     | The air's planet under the eye: its radius as the map is stretched there                                                                 |
+| Earth Engine's `MODE` pyramiding                                                                                                                                    | `pxl-spec bake/fold.rs`                                                                                                             | A 2 × 2 majority fold of the zoom under it                                                                                               |
+| Distant Horizons                                                                                                                                                    | `pxl-render mesh/paint/palette.rs`                                                                                                  | A distant cell drawn as the mean of what it folds                                                                                        |
+| Minecraft's `cube_all`, `cube_bottom_top`                                                                                                                           | `pxl-render gpu/pack.rs`                                                                                                            | Which face image a cube wears: its own side and bottom where the pack ships them, its top on every face where not                        |
+| Minecraft Beta's `replaceBlocksForBiome` ([doc/minutes/archive/20261011-the-ground-under-its-face.md](./doc/minutes/archive/20261011-the-ground-under-its-face.md)) | `pxl-spec-core ground.rs` `Cell::block`                                                                                             | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
+| Minecraft's map colors                                                                                                                                              | `spec/spec/asset/color.json` underground                                                                                            | The colors of soil, sandstone and stone                                                                                                  |
+| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c))                              | `pxl-kernel domain/query/support.rs` `step_slide`                                                                                   | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
+| Amanatides and Woo's voxel traversal                                                                                                                                | `pxl-kernel domain/query/ray.rs`, `domain/query/support.rs`                                                                         | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
+| OpenStreetMap Carto                                                                                                                                                 | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/asset/`                                                              | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
+| Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/marker.rs`                                                                                                         | A marker's line pitch                                                                                                                    |
+| OpenMapTiles' schema                                                                                                                                                | `spec/spec/asset/marker.json`                                                                                                       | A marker shows from z14, as its `poi` layer does                                                                                         |
+| [Arnis](https://github.com/louis-e/arnis)                                                                                                                           | `pxl-geo-bake separation/solve.rs`, `solve/`                                                                                        | Bridges and tunnels: clearances, ramps, decks, pillars                                                                                   |
+| osm2streets, osm2lanes                                                                                                                                              | the bake's way rules ([doc/minutes/archive/20261001-ways-off-the-ground.md](./doc/minutes/archive/20261001-ways-off-the-ground.md)) | Lane and buffer widths                                                                                                                   |
+| Overture's schema                                                                                                                                                   | `pxl-spec division.rs`, `pxl-geo-bake terrain/pipeline/overture/between.rs`                                                         | Places and divisions read as the schema defines them                                                                                     |
+| Bruneton; Hillaire (EGSR 2020)                                                                                                                                      | `pxl-render look/atmosphere.rs`                                                                                                     | The atmosphere's tables: transmittance and irradiance; multiple scattering and the sky view                                              |
+| Unreal's SkyAtmosphere, OPAC, Cornette–Shanks                                                                                                                       | `pxl-render look/atmosphere.rs`, `frame/shader/atmos_medium.wgsl`                                                                   | The Earth's scattering numbers, the haze, the Mie phase                                                                                  |
+| ACES as Stephen Hill fits it                                                                                                                                        | `pxl-render frame/shader/finish.wgsl`                                                                                               | One tone curve for every pass                                                                                                            |
+| N8AO                                                                                                                                                                | `pxl-render gpu/ao.rs`                                                                                                              | Screen-space ambient occlusion, ported to WGSL                                                                                           |
+| Kasten and Young; Ballesteros                                                                                                                                       | `pxl-render frame/shader/star.wgsl`, `gpu/star.rs`                                                                                  | Airmass at the horizon; a star's color from B−V                                                                                          |
+| Duffett-Smith                                                                                                                                                       | `pxl-kernel domain/scene/environment/celestial_position.rs`                                                                         | The sun's, the moon's and the stars' positions                                                                                           |
+| Stöckli et al. (Blue Marble)                                                                                                                                        | `pxl-geo-bake bin/bake_earth.rs`                                                                                                    | The imagery's bytes read back as reflectance                                                                                             |
+| three.js                                                                                                                                                            | `pxl-kernel domain/scene/actor.rs`, `pxl-render frame/shader/atmos_view.wgsl`                                                       | A clip's cross-fade; Lambert as its standard material                                                                                    |
+| Howard Hinnant's date algorithm                                                                                                                                     | `pxl-geo-bake util.rs`                                                                                                              | A civil date from a day count                                                                                                            |
+| Figma                                                                                                                                                               | [doc/minutes/20260912-why-the-destination-is-wasm.md](./doc/minutes/20260912-why-the-destination-is-wasm.md)                        | A compiled engine in the page over one memory                                                                                            |
+| iOS's interface guidelines, Material's motion, SF Symbols                                                                                                           | `ts/client/src/shell/ui/theme.ts`, `shell/ui/motion/transition.ts`, `shell/ui/icon.tsx`                                             | Touch targets and type scale, easing, the icons' names                                                                                   |

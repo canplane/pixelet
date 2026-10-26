@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "navigation": {
+      "surface_follow": {
+        "label": "Follow surfaces",
+        "description": "Dragging moves the view center along terrain and object surfaces. Turn it off to keep the current height and pass through obstacles."
+      }
+    },
+    "debug": {
+      "ray_steps": {
+        "label": "Ray steps",
+        "description": "Colors each point on screen by how much work it took to draw: blue for little, red for a lot. Points that borrowed a nearby result and skipped the work are grey."
+      }
+    }
+  },
+  "world": {
+    "chat": {
+      "self_label": "Me"
+    }
+  }
+}

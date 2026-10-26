@@ -34,7 +34,10 @@ struct Run {
     inuse: u32,
 }
 
-const _: () = assert!(1 << MIN_CLASS_LOG2 >= core::mem::size_of::<*mut u8>(), "a free slot holds the address of the next");
+const _: () = assert!(
+    1 << MIN_CLASS_LOG2 >= core::mem::size_of::<*mut u8>(),
+    "a free slot holds the address of the next"
+);
 
 const fn class_log2(c: usize) -> usize {
     MIN_CLASS_LOG2 + c
@@ -81,10 +84,16 @@ impl<R: Range> SlabMalloc<R> {
     }
 
     const CHECK: () = {
-        assert!(Self::CLASS_COUNT <= MAX_CLASSES, "a range's smallest block asks for more classes than there are heads");
+        assert!(
+            Self::CLASS_COUNT <= MAX_CLASSES,
+            "a range's smallest block asks for more classes than there are heads"
+        );
         let mut c = 0;
         while c < Self::CLASS_COUNT {
-            assert!(Self::head_slots(c) < Self::slots(c), "a run has a slot to hand out past the ones its header takes");
+            assert!(
+                Self::head_slots(c) < Self::slots(c),
+                "a run has a slot to hand out past the ones its header takes"
+            );
             c += 1;
         }
     };
@@ -130,8 +139,9 @@ impl<R: Range> SlabMalloc<R> {
         self.buddy.range_bytes()
     }
 
-    /// Page-level releases only: a slot returning to its run frees nothing
-    /// another request could use.
+    /// Page-level releases only. A slot returning to a run that stays in use
+    /// is not counted: it could serve a request of its own class refused
+    /// before, which this count misses, so such a request waits for a page.
     pub fn releases(&self) -> u32 {
         self.buddy.releases()
     }

@@ -6,7 +6,7 @@
 /// No next edge: the guest waits on an input or an arrival.
 pub const NO_WAKE: f64 = -1.0;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct QuantumPolicy {
     /// The frame's share left for the host's own work and misestimates.
     pub margin_share: f64,

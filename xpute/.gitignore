@@ -27,8 +27,8 @@ jspm_packages/
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
 
-# Build output: the Rust workspace's, and the C++'s (script/cpp.ts).
-rust/target/
+# Build output: each language's own target/, beside its tree's root (rust/,
+# cpp/'s Makefile, ts/'s browser bundle).
 target/
 
 # A library's locks are its consumer's to keep.

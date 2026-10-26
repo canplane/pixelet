@@ -7,7 +7,10 @@
 
 use crate::status::error::MarshalError;
 
-use super::spec::{Array, BranchNode, GraftNode, Node, NodeValue, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, NIL_NODE};
+use super::spec::{
+    Array, BranchNode, GraftNode, Node, NodeValue, Numeric, ScalarNode, ScalarType, SequenceNode,
+    SequenceType, SequenceVal, NIL_NODE,
+};
 
 fn scalar<'a>(type_: ScalarType, val: Option<Numeric>) -> Node<'a> {
     Node::Scalar(ScalarNode { type_, val })
@@ -18,8 +21,13 @@ fn seq<'a>(type_: SequenceType, val: Option<SequenceVal<'a>>) -> Node<'a> {
 fn array<'a, T: Copy>(type_: SequenceType, arr: Option<&'a [T]>) -> Option<SequenceVal<'a>> {
     arr.map(|a| {
         // SAFETY: plain numbers read back as their bytes.
-        let bytes = unsafe { core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a)) };
-        SequenceVal::Array(Array { type_, bytes: bytes.into() })
+        let bytes = unsafe {
+            core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a))
+        };
+        SequenceVal::Array(Array {
+            type_,
+            bytes: bytes.into(),
+        })
     })
 }
 
@@ -34,7 +42,8 @@ const I64_NODE: fn(Option<i64>) -> Node<'static> = |i| scalar(ScalarType::I64, i
 const F32_NODE: fn(Option<f32>) -> Node<'static> = |f| scalar(ScalarType::F32, f.map(Numeric::F32));
 const F64_NODE: fn(Option<f64>) -> Node<'static> = |f| scalar(ScalarType::F64, f.map(Numeric::F64));
 
-const BOOL_NODE: fn(Option<bool>) -> Node<'static> = |b| scalar(ScalarType::BOOL, b.map(|b| Numeric::U8(b as u8)));
+const BOOL_NODE: fn(Option<bool>) -> Node<'static> =
+    |b| scalar(ScalarType::BOOL, b.map(|b| Numeric::U8(b as u8)));
 
 fn ARRAY_NODE<'a, T: Copy>(type_: SequenceType, arr: Option<&'a [T]>) -> Node<'a> {
     seq(type_, array(type_, arr))
@@ -43,10 +52,17 @@ fn BITSET_NODE<'a>(arr: Option<&'a [u8]>) -> Node<'a> {
     seq(SequenceType::BITSET, array(SequenceType::BITSET, arr))
 }
 fn STR_NODE<'a>(s: Option<&str>) -> Node<'a> {
-    seq(SequenceType::STR, s.map(|s| SequenceVal::Str(s.to_string())))
+    seq(
+        SequenceType::STR,
+        s.map(|s| SequenceVal::Str(s.to_string())),
+    )
 }
 fn STRS_NODE<'a, S: AsRef<str>>(items: Option<&[S]>) -> Node<'a> {
-    seq(SequenceType::STRS, items.map(|items| SequenceVal::Strs(items.iter().map(|s| s.as_ref().to_string()).collect())))
+    seq(
+        SequenceType::STRS,
+        items
+            .map(|items| SequenceVal::Strs(items.iter().map(|s| s.as_ref().to_string()).collect())),
+    )
 }
 
 pub type ViewValue<'a> = NodeValue<'a, Node<'a>>;
@@ -171,7 +187,9 @@ pub trait NodeView<'a> {
     }
 
     fn branch(&mut self, f: Option<&mut dyn FnMut(&mut BranchViewImpl<'a>)>) -> &mut Self {
-        let Some(f) = f else { return self.write(Node::Branch(BranchNode { val: None })) };
+        let Some(f) = f else {
+            return self.write(Node::Branch(BranchNode { val: None }));
+        };
 
         let mut branch = BranchViewImpl::new();
         f(&mut branch);
@@ -242,13 +260,17 @@ impl Default for BranchViewImpl<'_> {
 impl<'a> BranchViewImpl<'a> {
     pub fn new() -> BranchViewImpl<'a> {
         BranchViewImpl {
-            node: Node::Branch(BranchNode { val: Some(Vec::new()) }),
+            node: Node::Branch(BranchNode {
+                val: Some(Vec::new()),
+            }),
         }
     }
 
     fn children(&mut self) -> &mut Vec<Node<'a>> {
         match &mut self.node {
-            Node::Branch(BranchNode { val: Some(children) }) => children,
+            Node::Branch(BranchNode {
+                val: Some(children),
+            }) => children,
             _ => crate::bug!(ENOTRECOVERABLE),
         }
     }

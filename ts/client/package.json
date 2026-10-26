@@ -1,0 +1,22 @@
+{
+  "name": "@pxl/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@expo/ui": "~57.0.20",
+    "expo": "57.0.25",
+    "expo-glass-effect": "~57.0.4",
+    "expo-symbols": "~57.0.3",
+    "i18next": "^26.4.2",
+    "phosphor-react-native": "^3.0.6",
+    "react": "19.2.3",
+    "react-i18next": "^17.0.14",
+    "react-native": "0.86.3",
+    "react-native-svg": "15.15.4",
+    "zustand": "^5.0.15"
+  }
+}

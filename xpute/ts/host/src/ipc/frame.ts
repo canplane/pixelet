@@ -1,6 +1,6 @@
 // @xpute/host/ipc/frame.ts
 
-/** A message's four words, laid out by spec/ipc/frame.json. */
+/** A frame's four words, laid out by spec/ipc/frame.json. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { FLAG_SHIFT } from "./frame.spec.ts";

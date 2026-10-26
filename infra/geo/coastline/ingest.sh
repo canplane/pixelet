@@ -14,9 +14,10 @@ set -o pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$ROOT/../../.." && pwd)"
 DATA_DIR="$ROOT/raw"
+TOOLS="$REPO_ROOT/infra/geo/tools/run"
 
-set -a; . "$REPO_ROOT/.env"; set +a
-psql_geo() { psql "$DB_GEO_URL" -v ON_ERROR_STOP=1 "$@"; }
+set -a; . "$REPO_ROOT/infra/local/.env"; set +a
+psql_geo() { "$TOOLS" psql "$DB_GEO_URL" -v ON_ERROR_STOP=1 "$@"; }
 
 URL=$(jq -r '.provider.url' "$ROOT/source.json")
 TABLE=osm_land_polygons
@@ -40,7 +41,7 @@ SHP=$(unzip -Z1 "$ZIP" | grep '\.shp$')
 unzip -o -q "$ZIP" -d "$DATA_DIR"
 
 NEXT="${TABLE}_next"
-ogr2ogr -f PostgreSQL "PG:$DB_GEO_URL" "$DATA_DIR/$SHP" \
+"$TOOLS" ogr2ogr -f PostgreSQL "PG:$DB_GEO_URL" "$DATA_DIR/$SHP" \
     -overwrite -nln "$NEXT" -nlt PROMOTE_TO_MULTI -lco GEOMETRY_NAME=geom -lco SPATIAL_INDEX=GIST -a_srs EPSG:3857
 psql_geo -c "ANALYZE $NEXT;" > /dev/null
 # One short transaction: the old table dropped, the new one and its indexes

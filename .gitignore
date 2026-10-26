@@ -165,7 +165,7 @@ vite.config.ts.timestamp-*
 # AI coding tools
 # Assistant-specific directories stay untracked: the committed, vendor-neutral
 # content lives in AGENTS.md and .agents/, and these are expected to be local
-# symlinks into it (see AGENTS.md "Skills").
+# symlinks into it.
 # NOTE: git has no inline comments in .gitignore — a trailing `# ...` becomes
 # part of the pattern, so these must each sit on their own line.
 .claude/
@@ -181,42 +181,54 @@ vite.config.ts.timestamp-*
 
 # Rust workspace build output
 /target
-/crates/target
+/rust/target
 
-# The guest's module, built from crates/ by apps/web/script/build-wasm.ts
-apps/web/src/kernel/guest.wasm
-apps/web/src/kernel/guest.paths.json
+# Scratch: notes, diffs and logs a session keeps while it works.
+/tmp/
 
-# The last build number this checkout published (apps/web/script/deploy.ts)
-apps/web/.build_number
+# The guest's module, built from rust/ by ts/app/web/script/build-wasm.py
+ts/app/web/src/guest.wasm
+ts/app/web/src/guest.paths.json
+# The page's icons and link preview, made from ts/client/brand by each web
+# build (pxl-tool/bin/render_brand.rs).
+ts/app/web/public/brand/
+
 
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
 
-# dev:oven's demand bakes and decode_tile's checks.
-cache/
+# What a tool fetches for itself from where it surely stays, fetched again by running it.
+asset/raw/sky/
 
 # A bake set kept beside the current one while the new one is made: `out` is
 # already ignored, and this is the same thing with a number on it.
 out[0-9]*/
 
+# The number the deployment serves (script/build-number.py), which a dev build of either app is labeled after
+ts/client/.build_number
+
 # wrangler's local scratch: its simulated R2/KV, build state and temporaries.
-apps/web/.wrangler/
+.wrangler/
+# The page's bundle, staged beside the Worker that serves it (script/deploy.py).
+ts/server/edge/dist/
 
 # What a device posts to the dev server's /__console, for reading with tail.
-apps/web/.dev-console.log
+ts/app/web/.dev-console.log
 
 # Expo's per-machine state for the device app: the dev server's settings and
 # the types it generates.
-apps/native/.expo/
+ts/app/native/.expo/
 
 # A standalone WebGPU repro page is dev-only and not part of the app.
-apps/web/public/repro-*.html
+ts/app/web/public/repro-*.html
 
-# What `expo prebuild` generates, which is made again from app.json and the
+# What `expo prebuild` generates, which is made again from app.config.ts and the
 # modules rather than kept, and what the platform module's own Gradle build
 # leaves beside it.
-apps/native/modules/platform/android/build/
-apps/native/modules/platform/android/.gradle/
-apps/native/ios/
-apps/native/android/
+ts/app/native/modules/platform/android/build/
+ts/app/native/modules/platform/android/.gradle/
+ts/app/native/ios/
+ts/app/native/android/
+
+# What Python compiles of a script it imports.
+__pycache__/

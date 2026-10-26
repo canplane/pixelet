@@ -1,0 +1,30 @@
+{
+  "name": "@pxl/native",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "engines": {
+    "node": "^22.18.0 || >=23.6.0"
+  },
+  "scripts": {
+    "start": "EXPO_NO_TYPESCRIPT_SETUP=1 deno run -A npm:expo@57.0.25 start"
+  },
+  "dependencies": {
+    "@expo/ui": "~57.0.20",
+    "expo": "57.0.25",
+    "expo-file-system": "~57.0.7",
+    "expo-glass-effect": "~57.0.4",
+    "expo-horizon-core": "~57.0.2",
+    "expo-horizon-location": "~57.0.2",
+    "expo-symbols": "~57.0.3",
+    "i18next": "^26.4.2",
+    "phosphor-react-native": "^3.0.6",
+    "react": "19.2.3",
+    "react-i18next": "^17.0.14",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
+    "zustand": "^5.0.15"
+  }
+}

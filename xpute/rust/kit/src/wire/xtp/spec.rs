@@ -264,13 +264,6 @@ pub const LE: bool = true;
 
 pub const MAGIC: u32 = 0x00505458; // "XTP\0" little-endian word
 
-#[derive(Clone, Copy, Debug)]
-pub struct EncodingState {
-    pub base: u32,
-    pub lim: u32,
-    pub type_: NodeType,
-}
-
 pub const DESC_TYPE_W: u32 = 8;
 pub const DESC_TYPE_SHAMT: u32 = 0;
 pub const DESC_TYPE_MASK: u32 = (1 << DESC_TYPE_W) - 1;
@@ -317,7 +310,9 @@ pub fn GET_LEN(buf: &[u8], off: u32) -> Result<u32, MarshalError> {
 pub fn GET_DESC(buf: &[u8], off: u32) -> Result<(u32, NodeType), MarshalError> {
     let [lo, desc] = GET_WORD(buf, off, &mut [0; 2]);
     let type_ = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
-    if desc != field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type_ as u32) || !TYPE_IS_KNOWN(type_) {
+    if desc != field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type_ as u32)
+        || !TYPE_IS_KNOWN(type_)
+    {
         return Err(MarshalError::new(Errno::EBADMSG));
     }
     Ok((lo, type_))
@@ -341,9 +336,15 @@ pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
 /// A BITSET's value is one byte a bit before it is packed.
 pub fn ELEM_SZ(type_: SequenceType) -> AlignUnit {
     match type_ {
-        SequenceType::U8_ARRAY | SequenceType::I8_ARRAY | SequenceType::BITSET | SequenceType::STR => 1,
+        SequenceType::U8_ARRAY
+        | SequenceType::I8_ARRAY
+        | SequenceType::BITSET
+        | SequenceType::STR => 1,
         SequenceType::U16_ARRAY | SequenceType::I16_ARRAY => 2,
-        SequenceType::U32_ARRAY | SequenceType::I32_ARRAY | SequenceType::F32_ARRAY | SequenceType::STRS => 4,
+        SequenceType::U32_ARRAY
+        | SequenceType::I32_ARRAY
+        | SequenceType::F32_ARRAY
+        | SequenceType::STRS => 4,
         SequenceType::U64_ARRAY | SequenceType::I64_ARRAY | SequenceType::F64_ARRAY => 8,
     }
 }

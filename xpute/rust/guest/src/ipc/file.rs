@@ -4,27 +4,31 @@
 //! descriptor is a generational handle, so an answer to one already closed
 //! reaches no one; that is the whole of stale-answer handling.
 
-use crate::abi::handle::Slots;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
+
+use crate::abi::handle::Table;
 use crate::ipc::sys::spec::flag;
 use crate::ipc::sys::{Fd, Sys};
 
-pub struct Files<O> {
-    held: Slots<O>,
+/// At most `N - 1` open at once; one more is a bug.
+pub struct Files<O: Copy, const N: usize> {
+    held: Table<O, N>,
 }
 
-impl<O> Default for Files<O> {
+impl<O: Copy, const N: usize> Default for Files<O, N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<O> Files<O> {
+impl<O: Copy, const N: usize> Files<O, N> {
     pub const fn new() -> Self {
-        Files { held: Slots::new() }
+        Files { held: Table::new() }
     }
 
     pub fn open(&mut self, sys: &mut Sys, root: u32, path: &str, owner: O) -> Fd {
-        let fd = self.held.insert(owner);
+        let fd = self.held.insert(owner).or_bug(Errno::ENOSPC);
         sys.openat(fd, root, flag::O_RDONLY, path.as_bytes());
         fd
     }
@@ -36,7 +40,7 @@ impl<O> Files<O> {
 
     /// Opened, written and closed in one turn; no answer comes.
     pub fn write_whole(&mut self, sys: &mut Sys, root: u32, path: &str, bytes: Vec<u8>, owner: O) {
-        let fd = self.held.insert(owner);
+        let fd = self.held.insert(owner).or_bug(Errno::ENOSPC);
         sys.openat(fd, root, flag::O_WRONLY, path.as_bytes());
         sys.write(fd, bytes);
         self.close(sys, fd);

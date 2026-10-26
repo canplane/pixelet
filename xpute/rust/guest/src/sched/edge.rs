@@ -16,6 +16,9 @@ use crate::clock::now;
 pub struct Edge<const N: usize> {
     edge_at: f64,
     quota_ms: f64,
+    /// When the turn's tasks yield: the quota's end, or later where the guest
+    /// kept them a share past what ran before them (`extend_to`).
+    until: f64,
     parked: [Option<Waker>; N],
     parked_len: usize,
     asked: bool,
@@ -27,6 +30,7 @@ impl<const N: usize> Edge<N> {
         Edge {
             edge_at: 0.0,
             quota_ms: 0.0,
+            until: 0.0,
             parked: [const { None }; N],
             parked_len: 0,
             asked: false,
@@ -37,6 +41,7 @@ impl<const N: usize> Edge<N> {
     pub fn rise(&mut self, quota_ms: f64) {
         self.edge_at = now();
         self.quota_ms = quota_ms;
+        self.until = self.edge_at + quota_ms;
         for waker in self.parked[..self.parked_len].iter_mut() {
             if let Some(w) = waker.take() {
                 w.wake();
@@ -65,12 +70,14 @@ impl<const N: usize> Edge<N> {
         self.quota_ms
     }
 
-    pub fn remaining(&self) -> f64 {
-        (self.edge_at + self.quota_ms - now()).max(0.0)
+    pub fn spent(&self) -> bool {
+        now() >= self.until
     }
 
-    pub fn spent(&self) -> bool {
-        now() >= self.edge_at + self.quota_ms
+    /// The tasks yield no sooner than `at`, whatever the quota, so what
+    /// overran it does not take the tasks' turn too.
+    pub fn extend_to(&mut self, at: f64) {
+        self.until = self.until.max(at);
     }
 
     pub fn ask_next(&mut self) {
@@ -99,7 +106,9 @@ impl<const N: usize> Default for Edge<N> {
     }
 }
 
-pub fn yield_if_spent<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Future<Output = ()> {
+pub fn yield_if_spent<const N: usize>(
+    edge: fn() -> &'static mut Edge<N>,
+) -> impl Future<Output = ()> {
     park_if(edge, Edge::spent)
 }
 
@@ -109,7 +118,10 @@ pub fn next_turn<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Fut
 
 /// Parked until the next rise when `wait` says so. `edge` is a fn so no
 /// borrow is held across the await.
-fn park_if<const N: usize>(edge: fn() -> &'static mut Edge<N>, wait: fn(&Edge<N>) -> bool) -> impl Future<Output = ()> {
+fn park_if<const N: usize>(
+    edge: fn() -> &'static mut Edge<N>,
+    wait: fn(&Edge<N>) -> bool,
+) -> impl Future<Output = ()> {
     let mut parked = false;
     poll_fn(move |cx| {
         if parked || !wait(edge()) {
@@ -130,7 +142,10 @@ pub struct Notify {
 
 impl Notify {
     pub const fn new() -> Notify {
-        Notify { waker: None, notified: false }
+        Notify {
+            waker: None,
+            notified: false,
+        }
     }
 
     pub fn notify(&mut self) {

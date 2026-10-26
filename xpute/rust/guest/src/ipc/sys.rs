@@ -10,7 +10,7 @@ use core::panic::Location;
 use xpute_kit::status::errno::Errno;
 
 use crate::ipc::stream::{record_bytes, Stream};
-use crate::mem::base::off_of_slice;
+use crate::mem::{off_of_slice, Memory};
 
 #[path = "sys.spec.rs"]
 pub mod spec;
@@ -25,9 +25,15 @@ pub const CLOSE_ARGS: usize = 1;
 
 /// The most one descriptor records in a turn, its name `path` bytes long: its
 /// open, a read or a write, and its close, twice where it is stopped.
-pub const fn descriptor_turn_bytes(path: usize) -> usize {
-    let moved = if READ_ARGS > WRITE_ARGS { READ_ARGS } else { WRITE_ARGS };
-    record_bytes(OPENAT_ARGS, Some(path)) + record_bytes(moved, None) + 2 * record_bytes(CLOSE_ARGS, None)
+pub const fn fd_turn_bytes(path: usize) -> usize {
+    let moved = if READ_ARGS > WRITE_ARGS {
+        READ_ARGS
+    } else {
+        WRITE_ARGS
+    };
+    record_bytes(OPENAT_ARGS, Some(path))
+        + record_bytes(moved, None)
+        + 2 * record_bytes(CLOSE_ARGS, None)
 }
 
 pub struct Sys {
@@ -37,10 +43,12 @@ pub struct Sys {
 }
 
 impl Sys {
-    /// `words` is the range the directory names under SYS.
-    pub fn new(words: &'static mut [u32]) -> Sys {
+    /// # Safety
+    /// As `Stream::new`.
+    pub unsafe fn new(mem: Memory, at: usize, words: usize) -> Sys {
         Sys {
-            stream: Stream::new(words, spec::HEAD as usize),
+            // SAFETY: the caller's range.
+            stream: unsafe { Stream::new(mem, at, words, spec::HEAD as usize) },
             held: Vec::new(),
         }
     }
@@ -68,7 +76,11 @@ impl Sys {
     }
 
     pub fn write(&mut self, fd: Fd, bytes: Vec<u8>) {
-        let args: [u32; WRITE_ARGS] = [fd, off_of_slice(bytes.as_slice()) as u32, bytes.len() as u32];
+        let args: [u32; WRITE_ARGS] = [
+            fd,
+            off_of_slice(bytes.as_slice()) as u32,
+            bytes.len() as u32,
+        ];
         self.stream.record(spec::op::WRITE, &args, &[], None);
         self.held.push(bytes);
     }
@@ -88,7 +100,10 @@ impl Sys {
     /// `call` where it fits with `reserve` bytes left after it; false, and
     /// nothing recorded, where it does not, for the caller to ask again a later turn.
     pub fn try_call(&mut self, op: u32, args: &[u32], bytes: &[u8], reserve: usize) -> bool {
-        if !self.stream.fits(args.len(), Some(bytes.len()), reserve) {
+        if !self
+            .stream
+            .fits(record_bytes(args.len(), Some(bytes.len())), reserve)
+        {
             return false;
         }
         self.call(op, args, bytes);
@@ -96,10 +111,19 @@ impl Sys {
     }
 
     /// Drops the turn's other calls and publishes the report alone, at once.
-    pub fn abort(&mut self, errno: Errno, at: &Location<'_>, a: u64, b: u64) {
+    pub fn abort(&mut self, errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
         self.stream.publish();
-        let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
-        self.stream.record(spec::op::ABORT, &args, &[], Some(at.file().as_bytes()));
+        let args = [
+            errnum as i32 as u32,
+            at.line(),
+            at.column(),
+            a as u32,
+            (a >> 32) as u32,
+            b as u32,
+            (b >> 32) as u32,
+        ];
+        self.stream
+            .record(spec::op::ABORT, &args, &[], Some(at.file().as_bytes()));
         self.stream.publish();
     }
 }

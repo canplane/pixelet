@@ -13,7 +13,11 @@
 
 import type { numeric, primitive, u32, u8 } from "@xpute/kit/abi/word.ts";
 import { FIELD_GET, FIELD_SET } from "@xpute/kit/abi/word.ts";
-import type { BigTypedArray, TypedArray, U8Array } from "@xpute/kit/abi/array.ts";
+import type {
+  BigTypedArray,
+  TypedArray,
+  U8Array,
+} from "@xpute/kit/abi/array.ts";
 import type { Nullable } from "@xpute/kit/lang/type.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
@@ -42,17 +46,25 @@ const CLASS_R: u8 = (3 << CLASS_SHAMT) as u8;
 
 export const TYPE_ARG_OF = (type: u8): u8 => (type & ARG_MASK) as u8;
 
-export const TYPE_IS_LEAF = (type: u8): type is LeafType => (type & BIT_LEAF) !== 0;
-export const TYPE_IS_SPECIAL = (type: u8): type is SpecialType => (type & BIT_LEAF) === 0;
+export const TYPE_IS_LEAF = (type: u8): type is LeafType =>
+  (type & BIT_LEAF) !== 0;
+export const TYPE_IS_SPECIAL = (type: u8): type is SpecialType =>
+  (type & BIT_LEAF) === 0;
 
-export const TYPE_IS_SCALAR = (type: u8): type is ScalarType => TYPE_IS_LEAF(type) && (type & BIT_SEQ) === 0;
-export const TYPE_IS_SEQ = (type: u8): type is SequenceType => TYPE_IS_LEAF(type) && (type & BIT_SEQ) !== 0;
+export const TYPE_IS_SCALAR = (type: u8): type is ScalarType =>
+  TYPE_IS_LEAF(type) && (type & BIT_SEQ) === 0;
+export const TYPE_IS_SEQ = (type: u8): type is SequenceType =>
+  TYPE_IS_LEAF(type) && (type & BIT_SEQ) !== 0;
 
-export const TYPE_IS_NONNUM = (type: u8): boolean => TYPE_IS_LEAF(type) && (type & CLASS_MASK) === CLASS_R;
-export const TYPE_IS_FLOAT = (type: u8): boolean => TYPE_IS_LEAF(type) && (type & CLASS_MASK) === CLASS_F;
-export const TYPE_IS_SIGNED = (type: u8): boolean => TYPE_IS_LEAF(type) && (type & CLASS_MASK) === CLASS_I;
+export const TYPE_IS_NONNUM = (type: u8): boolean =>
+  TYPE_IS_LEAF(type) && (type & CLASS_MASK) === CLASS_R;
+export const TYPE_IS_FLOAT = (type: u8): boolean =>
+  TYPE_IS_LEAF(type) && (type & CLASS_MASK) === CLASS_F;
+export const TYPE_IS_SIGNED = (type: u8): boolean =>
+  TYPE_IS_LEAF(type) && (type & CLASS_MASK) === CLASS_I;
 
-export const I = (w: u32, sign: 1 | 0): u8 => (BIT_LEAF | ((sign ? CLASS_I : CLASS_U) | (w & ARG_MASK))) as u8;
+export const I = (w: u32, sign: 1 | 0): u8 =>
+  (BIT_LEAF | ((sign ? CLASS_I : CLASS_U) | (w & ARG_MASK))) as u8;
 export const F = (w: u32): u8 => (BIT_LEAF | (CLASS_F | (w & ARG_MASK))) as u8;
 
 export const R = (x: u32): u8 => (BIT_LEAF | (CLASS_R | (x & ARG_MASK))) as u8;
@@ -147,14 +159,21 @@ export interface NilNode {
 
 export const NIL_NODE: NilNode = { type: SpecialType.NIL, val: null } as const;
 
-export const NODE_IS_LEAF = (node: Node): node is LeafNode => TYPE_IS_LEAF(node.type);
-export const NODE_IS_SCALAR = (node: Node): node is ScalarNode => TYPE_IS_SCALAR(node.type);
-export const NODE_IS_SEQ = (node: Node): node is SequenceNode => TYPE_IS_SEQ(node.type);
+export const NODE_IS_LEAF = (node: Node): node is LeafNode =>
+  TYPE_IS_LEAF(node.type);
+export const NODE_IS_SCALAR = (node: Node): node is ScalarNode =>
+  TYPE_IS_SCALAR(node.type);
+export const NODE_IS_SEQ = (node: Node): node is SequenceNode =>
+  TYPE_IS_SEQ(node.type);
 
-export const NODE_IS_SPECIAL = (node: Node): node is SpecialNode => TYPE_IS_SPECIAL(node.type);
-export const NODE_IS_NIL = (node: Node): node is NilNode => node.type === SpecialType.NIL;
-export const NODE_IS_BRANCH = (node: Node): node is BranchNode => node.type === SpecialType.BRANCH;
-export const NODE_IS_GRAFT = (node: Node): node is GraftNode => node.type === SpecialType.GRAFT;
+export const NODE_IS_SPECIAL = (node: Node): node is SpecialNode =>
+  TYPE_IS_SPECIAL(node.type);
+export const NODE_IS_NIL = (node: Node): node is NilNode =>
+  node.type === SpecialType.NIL;
+export const NODE_IS_BRANCH = (node: Node): node is BranchNode =>
+  node.type === SpecialType.BRANCH;
+export const NODE_IS_GRAFT = (node: Node): node is GraftNode =>
+  node.type === SpecialType.GRAFT;
 
 export const NONE = 0 as const;
 
@@ -164,23 +183,26 @@ export const LE = true as const;
 
 export const MAGIC = 0x00505458 as const; // "XTP\0" little-endian word
 
-export interface EncodingState {
-  base: u32;
-  lim: u32;
-  type: NodeType;
-}
-
 export const DESC_TYPE_W: u32 = 8;
 export const DESC_TYPE_SHAMT: u32 = 0;
 export const DESC_TYPE_MASK: u32 = (1 << DESC_TYPE_W) - 1;
 
 export const WORD_SZ: AlignUnit = 8;
 
-export const SET_WORD = (buf_view: DataView, off: u32, lo32: u32, hi32: u32): void => {
+export const SET_WORD = (
+  buf_view: DataView,
+  off: u32,
+  lo32: u32,
+  hi32: u32,
+): void => {
   buf_view.setUint32(off, lo32, LE);
   buf_view.setUint32(off + 4, hi32, LE);
 };
-export const GET_WORD = (buf_view: DataView, off: u32, out: [u32, u32]): [u32, u32] => {
+export const GET_WORD = (
+  buf_view: DataView,
+  off: u32,
+  out: [u32, u32],
+): [u32, u32] => {
   out[0] = buf_view.getUint32(off, LE);
   out[1] = buf_view.getUint32(off + 4, LE);
   return out;
@@ -189,7 +211,10 @@ export const GET_WORD = (buf_view: DataView, off: u32, out: [u32, u32]): [u32, u
 /** A type the wire carries: the untyped null, a branch, or a leaf of a width its class has. */
 export const TYPE_IS_KNOWN = (type: u8): boolean => {
   if (type === SpecialType.NIL || type === SpecialType.BRANCH) return true;
-  if (!TYPE_IS_LEAF(type) || (type & ~(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK))) return false;
+  if (
+    !TYPE_IS_LEAF(type) ||
+    (type & ~(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK))
+  ) return false;
   const arg = TYPE_ARG_OF(type);
   switch (type & CLASS_MASK) {
     case CLASS_F:
@@ -203,15 +228,24 @@ export const TYPE_IS_KNOWN = (type: u8): boolean => {
 
 /** A read slot whose high half is reserved, zero on the wire: a len, a size, the magic. */
 export const GET_LEN = (buf_view: DataView, off: u32): u32 => {
-  if (buf_view.getUint32(off + 4, LE) !== RESERVED) throw new MarshalError(Errno.EBADMSG);
+  if (buf_view.getUint32(off + 4, LE) !== RESERVED) {
+    throw new MarshalError(Errno.EBADMSG);
+  }
   return buf_view.getUint32(off, LE);
 };
 
 /** A read child entry or root word: its offset or size, and a known type with the rest reserved. */
-export const GET_DESC = (buf_view: DataView, off: u32, out: [u32, NodeType]): [u32, NodeType] => {
+export const GET_DESC = (
+  buf_view: DataView,
+  off: u32,
+  out: [u32, NodeType],
+): [u32, NodeType] => {
   const desc = buf_view.getUint32(off + 4, LE);
   const type = FIELD_GET(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
-  if (desc !== FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type) || !TYPE_IS_KNOWN(type)) throw new MarshalError(Errno.EBADMSG);
+  if (
+    desc !== FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type) ||
+    !TYPE_IS_KNOWN(type)
+  ) throw new MarshalError(Errno.EBADMSG);
   out[0] = buf_view.getUint32(off, LE);
   out[1] = type;
   return out;
@@ -220,7 +254,9 @@ export const GET_DESC = (buf_view: DataView, off: u32, out: [u32, NodeType]): [u
 export type AlignUnit = 1 | 2 | 4 | 8;
 
 export const ALIGN = (nbyte: u32, unit: AlignUnit): u32 => {
-  if ((unit & (unit - 1)) || unit > WORD_SZ) throw new MarshalError(Errno.EINVAL);
+  if ((unit & (unit - 1)) || unit > WORD_SZ) {
+    throw new MarshalError(Errno.EINVAL);
+  }
 
   const mask = unit - 1;
   // `&` works in int32: past 2^31 the aligned size came out negative.

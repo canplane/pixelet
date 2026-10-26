@@ -21,17 +21,17 @@
     ]
   },
 
-  "SUBMISSION_CAPACITY": {
+  "SQ_CAP": {
     "$value": 16,
     "$type": "u32",
-    "$doc": ["Messages the submission ring holds."]
+    "$doc": ["Frames the submission ring holds."]
   },
 
-  "COMPLETION_CAPACITY": {
+  "CQ_CAP": {
     "$value": 128,
     "$type": "u32",
     "$doc": [
-      "Messages the completion ring holds: fewer than eight commands raising MOST_RAISE",
+      "Frames the completion ring holds: fewer than eight commands raising MOST_RAISE",
       "signals each leave, so a trace that sends those makes a turn's output outgrow it."
     ]
   },
@@ -54,12 +54,18 @@
     "$doc": ["The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them."]
   },
 
+  "STACK_BYTES": {
+    "$value": 1048576,
+    "$type": "u32",
+    "$doc": ["The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile)."]
+  },
+
   "HEAP_BYTES": {
     "$value": 65536,
     "$type": "u32",
     "$doc": [
-      "The guest's heap, in its own range: what its file table holds lies there, since the",
-      "memory a host hands a module never grows and a guest takes nothing it was not given."
+      "The guest's heap, in its own range, since the memory a host hands a module never grows",
+      "and a guest takes nothing it was not given."
     ]
   },
 
