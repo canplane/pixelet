@@ -21,11 +21,7 @@
 //! or a packed array where the item is a number. A record crosses as a branch
 //! of its own fields, and is how a block past a slot is laid out. An enum's
 //! `unknown` is the member a number it does not give out reads as; an enum
-//! without one refuses the packet.
-//!
-//! A command taken out leaves its number in the Command table's `$retired`, with
-//! the name it had, and the generator refuses a number given twice or one
-//! retired, so a number an older side still sends never comes to mean another.
+//! without one refuses the packet. The generator refuses a number given twice.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
@@ -519,11 +515,7 @@ impl DevicePoseStatus {
 /// to sit in the kernel's memory, and the shell has the locale files already
 /// (ts/client/src/locale) — the same split `strerror` is on the other side of.
 ///
-/// The number is the name here. A band is what a message is about, and a
-/// message keeps its number for as long as anything can be holding one: an
-/// old shell reads a number a new kernel sends, so a number that has meant
-/// something must never come to mean another thing. Retire one by leaving
-/// the gap.
+/// The number is the name here, and a band is what a message is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Message {

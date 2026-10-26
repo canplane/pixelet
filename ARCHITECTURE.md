@@ -1106,11 +1106,10 @@ kernel completes, and holds all one turn leaves; a turn short of room leaves the
 rest of the submissions for the next.
 
 The **commands** are listed in `spec/client/kernel/domain/control/cmd.json`,
-from which both sides' readers and writers are generated. A command taken out
-keeps its number in the table's `$retired`, and the generator refuses that
-number or one given twice, so a number an older side sends never comes to mean
-another (pxl-tool `spec/cmd.rs`). A packet is an XTP tree, xpute's relocatable
-binary tree, and anything larger than a slot crosses in a heap block. The kernel
+from which both sides' readers and writers are generated, and the generator
+refuses a number given twice (pxl-tool `spec/cmd.rs`). A packet is an XTP
+tree, xpute's relocatable binary tree, and anything larger than a slot crosses
+in a heap block. The kernel
 also posts **signals** nobody asked for: a sensor to watch or let go
 (`SENSOR_START`, `SENSOR_STOP`) and a new snapshot (`WORLD_SNAPSHOT`). Which
 sensors to watch is the kernel's: it watches one only while the page is seen and
@@ -1207,9 +1206,9 @@ part above it, and the profiler, which reads anything.
 Every setting is one entry of one schema
 (`spec/client/kernel/domain/view/setting/schema.json`). The store keeps only the
 user's overrides, by number: each setting and each option has one in the schema,
-given out once, a retired one kept in `$retired`, and the kept file is a format
-byte and `(number, value)` pairs (`domain/view/setting/store.rs`). An entry
-marked `dev` is offered only by a development build.
+given out once, and the kept file is a format byte and `(number, value)` pairs
+(`domain/view/setting/store.rs`). An entry marked `dev` is offered only by a
+development build.
 
 The **profiler** (`profiler/`) is reached by production only where it records.
 It keeps what each frame and task cost in rings laid out by

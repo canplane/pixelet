@@ -18,12 +18,10 @@
 // A setting carries its `number` (the kernel's SettingKey), and a choice's
 // `options` names one of the lists below, which numbers each option. The
 // numbers are what crosses and what storage keeps; the names are the
-// shell's alone, for its rows and the locale. A number is given out once: a
-// setting or an option taken out leaves its number in its table's
-// `$retired`, and the generator refuses a number given twice or one
-// retired, so a number stored or sent never comes to mean another. An
-// `index` is a place in a list kept elsewhere — the person and the pet are
-// by theirs in actor.json — and crosses as itself.
+// shell's alone, for its rows and the locale. A number is given out once;
+// the generator refuses one given twice. An `index` is a place in a list
+// kept elsewhere — the person and the pet are by theirs in actor.json — and
+// crosses as itself.
 
 // Names as the spec spells them, so one record has one name on every side.
 #![allow(non_camel_case_types)]
@@ -253,7 +251,7 @@ impl SettingKey {
     ];
 
     /// One past the highest number: the length of a list of every
-    /// setting's value at its number, where a retired number's stays 0.
+    /// setting's value at its number, where a number not given out stays 0.
     pub const SLOTS: usize = 20;
 
     /// The setting a number names, or none for a number the table does not give out.

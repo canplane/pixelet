@@ -82,7 +82,7 @@ pub struct Shown {
     camera_busy: bool,
     zooming: bool,
     over_marker: bool,
-    /// By each setting's number, a retired number's 0; none until they are
+    /// By each setting's number, one not given out 0; none until they are
     /// read, as the shell holds none before its first snapshot.
     settings: Option<[u32; SettingKey::SLOTS]>,
     /// The view's scale at the focus, as the units a logical pixel spans.
