@@ -6,7 +6,7 @@
 //! node over it (`oracle_cs`).
 
 use pxl_spec_core::cast::{self, Ends, Met, Query, Until};
-use pxl_spec_core::{beam, eye, observed, proxy, ray, ways};
+use pxl_spec_core::{beam, eye, ground, observed, proxy, ray, ways};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::{spirv, Image};
 
@@ -318,8 +318,10 @@ impl cast::Over<u32> for Climbed<'_> {
 }
 
 /// Where a ray along `direction` enters the box `lo` to `hi`, planes in
-/// units from its origin: the last of its near planes, the least f32 on an
-/// axis it does not move along, as WGSL writes no infinity.
+/// units from its origin: the last of its near planes, 0 on an axis it does
+/// not move along. Its reader holds it to 0 and up, so that 0 is the
+/// unbounded plane's, and no extreme is written that a shader's literal
+/// could not name.
 fn entered(direction: [f32; 3], lo: [f32; 3], hi: [f32; 3]) -> f32 {
     let near = |d: f32, lo: f32, hi: f32| {
         if d > 0.0 {
@@ -327,7 +329,7 @@ fn entered(direction: [f32; 3], lo: [f32; 3], hi: [f32; 3]) -> f32 {
         } else if d < 0.0 {
             hi / d
         } else {
-            -f32::MAX
+            0.0
         }
     };
     let (x, y, z) = (
@@ -418,7 +420,7 @@ pub fn oracle_cs(
         }
         let mut at = located(seen, origin, start);
         let i = q.node(&mut at, start.zoom, start.index(origin), asked, 0.0);
-        let b = proxy::of(origin, &start, node, cut, i);
+        let b = proxy::of(origin, &start, node, cut, i, ground::UNBOUNDED[0]);
         let enter = entered(ray.direction, b.lo, b.hi);
         let t0 = if enter < 0.0 {
             0.0
