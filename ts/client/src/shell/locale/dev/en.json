@@ -13,7 +13,38 @@
       },
       "ray_oracle": {
         "label": "Ray oracle",
-        "description": "Walks every point again from the top of the world, started just short of what it shows, and times that walk on its own. With ray steps on, colors and counts that walk."
+        "off": {
+          "label": "Off",
+          "description": "Draws as usual."
+        },
+        "root": {
+          "label": "From the root",
+          "description": "Walks every point again from the top of the world, started just short of what it shows, and times that walk on its own."
+        },
+        "cut_1": {
+          "label": "From the proxy box, 1 coarser",
+          "description": "Walks every point again from the box a proxy would draw over it, 1 sizes coarser than the camera grid asks, and times that walk on its own."
+        },
+        "cut_2": {
+          "label": "From the proxy box, 2 coarser",
+          "description": "Walks every point again from the box a proxy would draw over it, 2 sizes coarser than the camera grid asks, and times that walk on its own."
+        },
+        "cut_3": {
+          "label": "From the proxy box, 3 coarser",
+          "description": "Walks every point again from the box a proxy would draw over it, 3 sizes coarser than the camera grid asks, and times that walk on its own."
+        },
+        "cut_4": {
+          "label": "From the proxy box, 4 coarser",
+          "description": "Walks every point again from the box a proxy would draw over it, 4 sizes coarser than the camera grid asks, and times that walk on its own."
+        },
+        "cut_6": {
+          "label": "From the proxy box, 6 coarser",
+          "description": "Walks every point again from the box a proxy would draw over it, 6 sizes coarser than the camera grid asks, and times that walk on its own."
+        },
+        "cut_8": {
+          "label": "From the proxy box, 8 coarser",
+          "description": "Walks every point again from the box a proxy would draw over it, 8 sizes coarser than the camera grid asks, and times that walk on its own."
+        }
       }
     }
   },

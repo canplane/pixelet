@@ -229,13 +229,15 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    let [frames, stops, differed, lacked, visits] = stat.oracle;
+    let [frames, stops, differed, lacked, visits, located, left] = stat.oracle;
     set_oracle(OracleSample {
         frames,
         stops,
         differed,
         lacked,
         visits,
+        located,
+        left,
     });
     set_host_frame(
         out.kind,

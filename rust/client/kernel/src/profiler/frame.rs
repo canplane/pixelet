@@ -144,9 +144,9 @@ pub struct FrameSample {
 
 /// The `ray_oracle` measurement's sums since boot, as the renderer keeps
 /// them (pxl-render gpu/ray/cast.rs `Oracle`): the frames whose counts were
-/// read back, the pixels the cast stopped, those the walk from just short
-/// of the stop stopped otherwise, those it lacked a node for, and its
-/// visits.
+/// read back, the pixels the cast stopped, those the walk again stopped
+/// otherwise, those it lacked a node for, its visits, the reads that found
+/// the node it started at, and those whose walk left that node.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct OracleSample {
@@ -155,6 +155,8 @@ pub struct OracleSample {
     pub differed: f64,
     pub lacked: f64,
     pub visits: f64,
+    pub located: f64,
+    pub left: f64,
 }
 
 /// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
@@ -186,7 +188,8 @@ words!(FrameSample, FRAME::WORDS,
     terrain_refused => FRAME::cap_terrain_refused,
     oracle.frames => FRAME::oracle_frames, oracle.stops => FRAME::oracle_stops,
     oracle.differed => FRAME::oracle_differed, oracle.lacked => FRAME::oracle_lacked,
-    oracle.visits => FRAME::oracle_visits,
+    oracle.visits => FRAME::oracle_visits, oracle.located => FRAME::oracle_located,
+    oracle.left => FRAME::oracle_left,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

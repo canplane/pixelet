@@ -227,11 +227,21 @@ export const SETTINGS = {
     section: "debug",
     dev: true,
   },
-  /** A measurement the proxy of doc/minutes/20261024-a-proxy-only-starts-the-ray.md is weighed by: every pixel the cast stopped walks again from the world's root, started just short of what it stopped on, as a perfect proxy would start it, in a pass timed apart (span `oracle`), and that walk's stop is what is drawn; with `ray_steps` on, its visits are coloured and counted, and the stops that differ from the cast's (rust/client/shader/src/cast.rs `oracle_cs`). */
+  /** A measurement the proxy of doc/minutes/20261024-a-proxy-only-starts-the-ray.md is weighed by: every pixel the cast stopped walks again, from where ORACLE_STARTS says, as a perfect proxy would start it, in a pass timed apart (span `oracle`), and that walk's stop is what is drawn; with `ray_steps` on, its visits are coloured and counted, and the stops that differ from the cast's (rust/client/shader/src/cast.rs `oracle_cs`). */
   ray_oracle: {
     key: 20 as number,
-    kind: "toggle",
-    default: false,
+    kind: "choice",
+    default: "off",
+    options: {
+      off: 0 as number,
+      root: 1 as number,
+      cut_1: 2 as number,
+      cut_2: 3 as number,
+      cut_3: 4 as number,
+      cut_4: 5 as number,
+      cut_6: 6 as number,
+      cut_8: 7 as number,
+    },
     section: "debug",
     dev: true,
   },

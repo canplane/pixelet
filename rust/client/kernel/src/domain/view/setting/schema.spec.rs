@@ -145,6 +145,44 @@ impl ResolutionMode {
     }
 }
 
+/// Where the oracle starts each stopped pixel's walk again (rust/client/shader/src/cast.rs `oracle_cs`).
+///
+///   off    — it does not.
+///   root   — at the world's root, just short of the stop.
+///   cut_n  — at the box over the stop that the proxy's cut draws, `coarser`
+///            n (rust/spec/core/src/proxy.rs `cut`), from where the ray
+///            enters it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum OracleStart {
+    off = 0,
+    root = 1,
+    cut_1 = 2,
+    cut_2 = 3,
+    cut_3 = 4,
+    cut_4 = 5,
+    cut_6 = 6,
+    cut_8 = 7,
+}
+
+impl OracleStart {
+    pub const ALL: [OracleStart; 8] = [
+        OracleStart::off,
+        OracleStart::root,
+        OracleStart::cut_1,
+        OracleStart::cut_2,
+        OracleStart::cut_3,
+        OracleStart::cut_4,
+        OracleStart::cut_6,
+        OracleStart::cut_8,
+    ];
+
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<OracleStart> {
+        OracleStart::ALL.into_iter().find(|o| *o as u32 == number)
+    }
+}
+
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -226,7 +264,7 @@ pub enum SettingKey {
     pet = 18,
     /// Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (rust/client/render/src/frame/shader/screen_ray.wgsl).
     ray_steps = 19,
-    /// A measurement the proxy of doc/minutes/20261024-a-proxy-only-starts-the-ray.md is weighed by: every pixel the cast stopped walks again from the world's root, started just short of what it stopped on, as a perfect proxy would start it, in a pass timed apart (span `oracle`), and that walk's stop is what is drawn; with `ray_steps` on, its visits are coloured and counted, and the stops that differ from the cast's (rust/client/shader/src/cast.rs `oracle_cs`).
+    /// A measurement the proxy of doc/minutes/20261024-a-proxy-only-starts-the-ray.md is weighed by: every pixel the cast stopped walks again, from where ORACLE_STARTS says, as a perfect proxy would start it, in a pass timed apart (span `oracle`), and that walk's stop is what is drawn; with `ray_steps` on, its visits are coloured and counted, and the stops that differ from the cast's (rust/client/shader/src/cast.rs `oracle_cs`).
     ray_oracle = 20,
 }
 
@@ -288,7 +326,7 @@ impl SettingKey {
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
-            SettingKey::ray_oracle => SettingKind::Toggle,
+            SettingKey::ray_oracle => SettingKind::Choice,
         }
     }
 
@@ -338,7 +376,7 @@ pub struct Settings {
     pub person: u8,
     pub pet: u8,
     pub ray_steps: bool,
-    pub ray_oracle: bool,
+    pub ray_oracle: OracleStart,
 }
 
 impl Settings {
@@ -364,7 +402,7 @@ impl Settings {
         person: 1,
         pet: 5,
         ray_steps: false,
-        ray_oracle: false,
+        ray_oracle: OracleStart::off,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -437,7 +475,10 @@ impl Settings {
                 Err(_) => return false,
             },
             SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
-            SettingKey::ray_oracle if value <= 1 => self.ray_oracle = value == 1,
+            SettingKey::ray_oracle => match OracleStart::of(value) {
+                Some(o) => self.ray_oracle = o,
+                None => return false,
+            },
             _ => return false,
         }
         true

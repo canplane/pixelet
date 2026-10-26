@@ -124,11 +124,12 @@ pub(super) struct CastBuffers {
 }
 
 /// The counts `oracle_cs` keeps: the stops, those its walk stopped
-/// otherwise, those it lacked a node for, and its visits.
-pub const ORACLE_COUNTS: usize = 4;
+/// otherwise, those it lacked a node for, its visits, the reads that found
+/// the node it started at, and those whose walk left that node.
+pub const ORACLE_COUNTS: usize = 6;
 
 /// The oracle's measurement, where the eye asks for it (pxl-spec-core
-/// `eye::ORACLE`, pxl-shader cast.rs `oracle_cs`): its pipeline, its group
+/// `eye::oracle`, pxl-shader cast.rs `oracle_cs`): its pipeline, its group
 /// over the eye, the rays and the observed pyramid (`bound`) and its
 /// counts, made again exactly when one of them is another. The counts are
 /// cleared each frame it runs with the steps shown, copied into `read`
@@ -630,7 +631,7 @@ impl RaysPass {
             c.bound = bound;
         }
         let o = &mut c.oracle;
-        o.on = cast.eye[eye::STEPS] & eye::ORACLE != 0;
+        o.on = eye::oracle(cast.eye[eye::STEPS]) != eye::ORACLE_OFF;
         o.steps = cast.eye[eye::STEPS] & eye::SHOW_STEPS != 0;
         let oracle_bound = [c.eye, rays.0, c.seen];
         if oracle_bound != o.bound {

@@ -9,11 +9,22 @@
 /// The eye's position in Q3 steps, X, Y and Z.
 pub const ORIGIN: usize = 0;
 /// Bits: each ray reports the nodes its descent asked, not what it met
-/// (`SHOW_STEPS`); each stop is walked again from the root, started just
-/// short of it (`ORACLE`, pxl-shader cast.rs `oracle_cs`).
+/// (`SHOW_STEPS`); and from `ORACLE_SHIFT`, where each stop is walked again
+/// from (pxl-shader cast.rs `oracle_cs`, `oracle`): not at all
+/// (`ORACLE_OFF`), the world's root (`ORACLE_ROOT`), or, `ORACLE_CUT` and
+/// past it, the box over the stop that the proxy's cut draws, `coarser`
+/// (pxl-spec-core `proxy::cut`) one for each past `ORACLE_CUT`.
 pub const STEPS: usize = 3;
 pub const SHOW_STEPS: u32 = 1;
-pub const ORACLE: u32 = 2;
+pub const ORACLE_SHIFT: u32 = 8;
+pub const ORACLE_OFF: u32 = 0;
+pub const ORACLE_ROOT: u32 = 1;
+pub const ORACLE_CUT: u32 = 2;
+
+/// Where the oracle starts, off the steps' word (`STEPS`).
+pub const fn oracle(steps: u32) -> u32 {
+    steps >> ORACLE_SHIFT & 0xff
+}
 /// The unit forward, X, Y and Z, then the reach, f32 bits.
 pub const FORWARD: usize = 4;
 pub const REACH: usize = 7;

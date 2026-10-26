@@ -12,7 +12,8 @@
 //! its default.
 
 pub use crate::domain::view::setting::schema_spec::{
-    AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings,
+    AoMode, CameraMode, OracleStart, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind,
+    Settings,
 };
 use crate::sys::io::file::{self, Kept, KeptFile};
 use xpute_guest::global::Global;

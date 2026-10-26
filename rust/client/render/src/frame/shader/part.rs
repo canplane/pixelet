@@ -102,7 +102,7 @@ pub const SHADER_SCREEN_DEPTH: u32 = 48;
 pub const SHADER_CAMERA_GRID: u32 = 49;
 /// Each stop the cast made walked again from the world's root, started just
 /// short of it, where the eye asks for the oracle's measurement
-/// (pxl-spec-core `eye::ORACLE`): a compute entry.
+/// (pxl-spec-core `eye::oracle`): a compute entry.
 pub const SHADER_ORACLE: u32 = 50;
 pub const SHADERS: u32 = 51;
 

@@ -31,7 +31,9 @@ const oracleText = (f: Frame) =>
   f.oracle_frames === 0 ? [] : [
     `  oracle  ${f.oracle_stops} stops over ${f.oracle_frames} frames since boot   differed ${f.oracle_differed}   lacked ${f.oracle_lacked}   visits ${
       n1(f.oracle_visits / f.oracle_stops)
-    } a stop`,
+    } a stop   located ${
+      n1(f.oracle_located / f.oracle_stops)
+    } a stop   left ${f.oracle_left}`,
   ];
 
 export function failText(fail: u32, detail: u32): string {

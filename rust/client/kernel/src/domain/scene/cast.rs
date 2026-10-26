@@ -19,7 +19,7 @@ use crate::domain::layer::terrain::tile::kept;
 use crate::domain::layer::terrain::window::{self, Handed};
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
-use crate::domain::view::setting::store::settings_store;
+use crate::domain::view::setting::store::{settings_store, OracleStart};
 use pxl_spec::bake::constant::EntryAt;
 
 /// The service area's index as the GPU reads it, and whether a declared
@@ -52,8 +52,17 @@ pub fn shards() -> &'static [[i32; 4]] {
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     let s = settings_store();
-    let steps =
-        (u32::from(s.ray_steps) * eye::SHOW_STEPS) | (u32::from(s.ray_oracle) * eye::ORACLE);
+    let oracle = match s.ray_oracle {
+        OracleStart::off => eye::ORACLE_OFF,
+        OracleStart::root => eye::ORACLE_ROOT,
+        OracleStart::cut_1 => eye::ORACLE_CUT + 1,
+        OracleStart::cut_2 => eye::ORACLE_CUT + 2,
+        OracleStart::cut_3 => eye::ORACLE_CUT + 3,
+        OracleStart::cut_4 => eye::ORACLE_CUT + 4,
+        OracleStart::cut_6 => eye::ORACLE_CUT + 6,
+        OracleStart::cut_8 => eye::ORACLE_CUT + 8,
+    };
+    let steps = (u32::from(s.ray_steps) * eye::SHOW_STEPS) | (oracle << eye::ORACLE_SHIFT);
     lens::gpu_cast(o, lens::tau(), steps, &mut words)?;
     let edits = preview::current();
     let cut = |e: Option<EntryAt>| {
