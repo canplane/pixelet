@@ -100,6 +100,10 @@
           "label": "Build and draw the cut, 3 coarser",
           "description": "Builds the boxes a proxy would draw every frame, 3 sizes coarser than the camera grid asks, draws them at every pixel, and times the drawing on its own; nothing reads them yet."
         }
+      },
+      "ray_proxied": {
+        "label": "Proxied cast",
+        "description": "Starts every point's ray at the proxy box drawn in front of it, instead of off the beam samples. Needs the proxy raster on."
       }
     }
   },

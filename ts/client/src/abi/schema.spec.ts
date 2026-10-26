@@ -268,6 +268,14 @@ export const SETTINGS = {
     section: "debug",
     dev: true,
   },
+  /** The cast a rasterized proxy starts (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), where `ray_proxy` draws its cut: each pixel walked from the front-most box the raster kept there, the beam rays, cells and samples not run, the cast as built where the cut does not stand; timed in the cast's span. With `ray_steps` on, each pixel is also checked against the eye's own walk (rust/client/shader/src/proxied.rs). */
+  ray_proxied: {
+    key: 22 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+    dev: true,
+  },
 } as const;
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */

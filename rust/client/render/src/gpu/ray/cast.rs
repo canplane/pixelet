@@ -6,14 +6,15 @@
 
 use pxl_spec_core::scatter::GROUPS;
 use pxl_spec_core::window::{self, FRESH_CELL, FRESH_FIRST};
-use pxl_spec_core::{beam, eye, observed, sun};
+use pxl_spec_core::{beam, eye, observed, proxied, proxy, sun};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use super::RaysPass;
+use super::{ProxyBindings, RaysPass};
 use crate::frame::shader::record::{
     compute, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
-    SHADER_MISS, SHADER_ORACLE, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
+    SHADER_MISS, SHADER_ORACLE, SHADER_PROXIED, SHADER_PROXIED_CHECK, SHADER_PROXIED_ENTRY,
+    SHADER_PROXIED_MISS, SHADER_PROXIED_ROUTE, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
@@ -121,11 +122,36 @@ pub(super) struct CastBuffers {
     /// cast.
     read: Read,
     oracle: Oracle,
+    proxied: Proxied,
+}
+
+/// The cast a rasterized proxy starts (pxl-spec-core `proxied`, pxl-shader
+/// proxied.rs), where the eye asks for it (`eye::PROXIED`) and the proxy's
+/// raster ran this frame (ray/proxy.rs): each box's entry found, the
+/// frame's route laid, and the proxied cast's or the cast as built's
+/// dispatches run off `args` as the route laid them, each the workgroups
+/// `sizes` gives it; and with the steps shown, the check against the eye's
+/// walk, into the oracle's counts past its own. Its groups, over `bound`,
+/// made again exactly when one of them is another.
+struct Proxied {
+    entry: Built,
+    route: Built,
+    pixels: Built,
+    miss: Built,
+    check: Built,
+    groups: [u32; 5],
+    bound: [u32; 14],
+    sizes: u32,
+    args: u32,
+    wanted: bool,
 }
 
 /// The counts `oracle_cs` keeps, by its words (pxl-shader cast.rs `STOPS`
-/// on): the stops, how its walk again went, and the walk from the eye.
-pub const ORACLE_COUNTS: usize = 21;
+/// on): the stops, how its walk again went, and the walk from the eye; then
+/// the proxied cast's check's (pxl-spec-core `proxied::STOPS` on).
+pub const ORACLE_COUNTS: usize = ORACLE_OWN + proxied::COUNTS as usize;
+/// The oracle's own counts (pxl-shader cast.rs `ORACLE_BASE`).
+const ORACLE_OWN: usize = 21;
 
 /// The oracle's measurement, where the eye asks for it (pxl-spec-core
 /// `eye::oracle`, pxl-shader cast.rs `oracle_cs`): its pipeline, its group
@@ -249,6 +275,21 @@ impl RaysPass {
             mapped: false,
             sums: [0.0; ORACLE_COUNTS + 1],
         };
+        let proxied = Proxied {
+            entry: pipelines.build_compute(g, SHADER_PROXIED_ENTRY, &compute::PROXIED_ENTRY_GROUP),
+            route: pipelines.build_compute(g, SHADER_PROXIED_ROUTE, &compute::PROXIED_ROUTE_GROUP),
+            pixels: pipelines.build_compute(g, SHADER_PROXIED, &compute::PROXIED_GROUP),
+            miss: pipelines.build_compute(g, SHADER_PROXIED_MISS, &compute::PROXIED_MISS_GROUP),
+            check: pipelines.build_compute(g, SHADER_PROXIED_CHECK, &compute::PROXIED_CHECK_GROUP),
+            groups: [0; 5],
+            bound: [0; 14],
+            sizes: buffer(word_bytes(proxied::ROUTE_WORDS as usize), storage),
+            args: buffer(
+                word_bytes(proxied::ROUTE_WORDS as usize),
+                buffer_usage::STORAGE | buffer_usage::INDIRECT,
+            ),
+            wanted: false,
+        };
         let c = CastBuffers {
             built,
             beam_built,
@@ -309,6 +350,7 @@ impl RaysPass {
             grown: Grown::new(g, pipelines),
             read: Read::default(),
             oracle,
+            proxied,
         };
         self.cast = Some(c);
     }
@@ -643,6 +685,31 @@ impl RaysPass {
         let o = &mut c.oracle;
         o.on = eye::oracle(cast.eye[eye::STEPS]) != eye::ORACLE_OFF;
         o.steps = cast.eye[eye::STEPS] & eye::SHOW_STEPS != 0;
+        c.proxied.wanted = cast.eye[eye::STEPS] & eye::PROXIED != 0;
+        if c.proxied.wanted && self.kind == FrameKind::cast {
+            // Each route's workgroups, the cast as built's off the frame's
+            // grid, the proxied cast's off the drawn pixels.
+            let w = |[x, y]: [u32; 2], g: [u32; 3]| [x.div_ceil(g[0]), y.div_ceil(g[1]), 1];
+            let mut sizes = [0u32; proxied::ROUTE_WORDS as usize];
+            for (r, s) in [
+                (proxied::BEAM, w(c.grid.corners, compute::BEAM_WORKGROUP)),
+                (proxied::CELLS, w(c.grid.span, compute::CELLS_WORKGROUP)),
+                (
+                    proxied::SAMPLE,
+                    w(c.grid.samples, compute::SAMPLE_WORKGROUP),
+                ),
+                (proxied::CAST, w(c.size, compute::CAST_WORKGROUP)),
+                (proxied::MISS, w(c.size, compute::MISS_WORKGROUP)),
+                (proxied::PIXELS, w(c.size, compute::PROXIED_WORKGROUP)),
+                (
+                    proxied::PIXELS_MISS,
+                    w(c.size, compute::PROXIED_MISS_WORKGROUP),
+                ),
+            ] {
+                sizes[3 * r as usize..3 * r as usize + 3].copy_from_slice(&s);
+            }
+            g.write_buffer(c.proxied.sizes, 0, bytes(&sizes));
+        }
         let oracle_bound = [c.eye, rays.0, c.seen];
         if oracle_bound != o.bound {
             release(o.group);
@@ -737,8 +804,75 @@ impl RaysPass {
     /// (`PER_PIXEL`).
     pub fn dispatch(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
         let grows = self.grows();
+        let raster = self.proxy.bindings();
         let Some(c) = self.cast.as_mut() else { return };
-        if self.kind == FrameKind::cast {
+        let proxied = c.proxied.wanted && raster.rastered && raster.index_array != 0;
+        if proxied {
+            c.proxied.regroup(g, c.bound, c.oracle.counts, raster);
+        }
+        let o = &c.oracle;
+        let counting = self.kind == FrameKind::cast && o.steps && (o.on || proxied);
+        if counting {
+            g.write_buffer(o.counts, 0, bytes(&[0u32; ORACLE_COUNTS]));
+        }
+        if self.kind == FrameKind::cast && proxied {
+            // The observed pyramid forgotten first where it is; then each
+            // box's entry in it, as the forgetting left it; the frame's
+            // route off the cut's counts; and the dispatches it laid, the
+            // cast as built's or the proxied cast's, the others none.
+            let p = &c.proxied;
+            let pass = g.compute_pass(encoder, stamps[GpuSpanName::cast as usize].pass());
+            g.set_bind_group(pass, 0, c.group, &[]);
+            if c.forgets != observed::FORGETS_NONE {
+                g.set_pipeline(pass, c.forget_built.pipeline);
+                g.dispatch(
+                    pass,
+                    observed::ENTRIES.div_ceil(compute::FORGET_WORKGROUP[0]),
+                    1,
+                    1,
+                );
+            }
+            g.set_bind_group(pass, 0, p.groups[0], &[]);
+            g.set_pipeline(pass, p.entry.pipeline);
+            g.dispatch(
+                pass,
+                proxy::BOXES.div_ceil(compute::PROXIED_ENTRY_WORKGROUP[0]),
+                1,
+                1,
+            );
+            g.set_bind_group(pass, 0, p.groups[1], &[]);
+            g.set_pipeline(pass, p.route.pipeline);
+            g.dispatch(pass, 1, 1, 1);
+            g.set_bind_group(pass, 0, c.group, &[]);
+            for (built, r) in [
+                (&c.beam_built, proxied::BEAM),
+                (&c.cells_built, proxied::CELLS),
+                (&c.sample_built, proxied::SAMPLE),
+                (&c.built, proxied::CAST),
+                (&c.miss_built, proxied::MISS),
+            ] {
+                g.set_pipeline(pass, built.pipeline);
+                g.dispatch_indirect(pass, p.args, word_bytes(3 * r as usize));
+            }
+            for (built, group, r) in [
+                (&p.pixels, p.groups[2], proxied::PIXELS),
+                (&p.miss, p.groups[3], proxied::PIXELS_MISS),
+            ] {
+                g.set_bind_group(pass, 0, group, &[]);
+                g.set_pipeline(pass, built.pipeline);
+                g.dispatch_indirect(pass, p.args, word_bytes(3 * r as usize));
+            }
+            g.end(pass);
+            if counting {
+                // Untimed: the eye's walk it makes is no part of the cast.
+                let pass = g.compute_pass(encoder, None);
+                g.set_bind_group(pass, 0, p.groups[4], &[]);
+                g.set_pipeline(pass, p.check.pipeline);
+                let w = compute::PROXIED_CHECK_WORKGROUP;
+                g.dispatch(pass, c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1]), 1);
+                g.end(pass);
+            }
+        } else if self.kind == FrameKind::cast {
             // The observed pyramid forgotten first where it is; then the
             // beam rays writing it, a corner each; each cell's start off them;
             // the samples writing it, each from its cell's start; the pixels
@@ -769,24 +903,23 @@ impl RaysPass {
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             }
             g.end(pass);
+        }
+        if self.kind == FrameKind::cast {
             let o = &mut c.oracle;
+            // Counted only with the steps shown, so the span the oracle is
+            // timed in holds no atomic.
             if o.on {
-                // Counted only with the steps shown, so the span it is timed
-                // in holds no atomic.
-                if o.steps {
-                    g.write_buffer(o.counts, 0, bytes(&[0u32; ORACLE_COUNTS]));
-                }
                 let pass = g.compute_pass(encoder, stamps[GpuSpanName::oracle as usize].pass());
                 g.set_bind_group(pass, 0, o.group, &[]);
                 g.set_pipeline(pass, o.built.pipeline);
                 let w = compute::ORACLE_WORKGROUP;
                 g.dispatch(pass, c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1]), 1);
                 g.end(pass);
-                if o.steps && !o.copied && !o.mapped {
-                    let size = word_bytes(ORACLE_COUNTS);
-                    g.copy_buffer(encoder, (o.counts, 0), (o.read, 0), size);
-                    o.copied = true;
-                }
+            }
+            if counting && !o.copied && !o.mapped {
+                let size = word_bytes(ORACLE_COUNTS);
+                g.copy_buffer(encoder, (o.counts, 0), (o.read, 0), size);
+                o.copied = true;
             }
         }
         if c.sun_cast {
@@ -937,4 +1070,98 @@ fn sun_groups(
         g.bind_group(mark.layouts[0], &of(&compute::SUN_MARK_GROUP)),
         g.bind_group(walk.layouts[0], &of(&compute::SUN_GROUP)),
     ]
+}
+
+impl Proxied {
+    /// Its groups over the cast's bindings (`cast_group`'s `bound`), the
+    /// oracle's counts and the proxy's (`ProxyBindings`), made again
+    /// exactly when one of them is another.
+    fn regroup(&mut self, g: &Gpu, cast: [u32; 10], checks: u32, raster: ProxyBindings) {
+        let [eye, window, ground, rays, looks, shards, overwrites, pool, _, seen] = cast;
+        let bound = [
+            eye,
+            window,
+            ground,
+            rays,
+            looks,
+            shards,
+            overwrites,
+            pool,
+            seen,
+            checks,
+            raster.counts,
+            raster.data,
+            raster.index_array,
+            self.sizes,
+        ];
+        if bound == self.bound {
+            return;
+        }
+        for group in self.groups {
+            release(group);
+        }
+        let (counts, data, index) = (raster.counts, raster.data, raster.index_array);
+        self.groups = [
+            g.bind_group(
+                self.entry.layouts[0],
+                &[
+                    buffer_entry(0, eye),
+                    buffer_entry(9, seen),
+                    buffer_entry(11, counts),
+                    buffer_entry(12, data),
+                ],
+            ),
+            g.bind_group(
+                self.route.layouts[0],
+                &[
+                    buffer_entry(11, counts),
+                    buffer_entry(15, self.sizes),
+                    buffer_entry(16, self.args),
+                ],
+            ),
+            g.bind_group(
+                self.pixels.layouts[0],
+                &[
+                    buffer_entry(0, eye),
+                    buffer_entry(1, window),
+                    buffer_entry(2, ground),
+                    view_entry(3, rays),
+                    buffer_entry(5, shards),
+                    buffer_entry(6, overwrites),
+                    buffer_entry(7, pool),
+                    buffer_entry(9, seen),
+                    buffer_entry(11, counts),
+                    buffer_entry(12, data),
+                    view_entry(13, index),
+                ],
+            ),
+            g.bind_group(
+                self.miss.layouts[0],
+                &[
+                    buffer_entry(0, eye),
+                    buffer_entry(1, window),
+                    buffer_entry(2, ground),
+                    view_entry(3, rays),
+                    buffer_entry(4, looks),
+                    buffer_entry(5, shards),
+                    buffer_entry(6, overwrites),
+                    buffer_entry(7, pool),
+                    buffer_entry(9, seen),
+                ],
+            ),
+            g.bind_group(
+                self.check.layouts[0],
+                &[
+                    buffer_entry(0, eye),
+                    view_entry(3, rays),
+                    buffer_entry(9, seen),
+                    buffer_entry(10, checks),
+                    buffer_entry(11, counts),
+                    buffer_entry(12, data),
+                    view_entry(13, index),
+                ],
+            ),
+        ];
+        self.bound = bound;
+    }
 }

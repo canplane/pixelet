@@ -15,7 +15,7 @@ use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{DeviceSample, GpuSample, OracleSample, ProxySample};
+use crate::profiler::frame::{DeviceSample, GpuSample, OracleSample, ProxiedSample, ProxySample};
 use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
@@ -30,7 +30,7 @@ use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_oracle, set_proxy};
+use crate::profiler::report::{set_host_frame, set_oracle, set_proxied, set_proxy};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -230,8 +230,18 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    let [frames, stops, differed, lacked, visits, located, left, differed_word, differed_nearer, differed_true, differed_left, differed_clamped, differed_coarser, coarser, untrue, truth_lacked, clamped_low, clamped_low_true, clamped_high, clamped_high_true, unlike_eye, held] =
+    let [frames, stops, differed, lacked, visits, located, left, differed_word, differed_nearer, differed_true, differed_left, differed_clamped, differed_coarser, coarser, untrue, truth_lacked, clamped_low, clamped_low_true, clamped_high, clamped_high_true, unlike_eye, held, p_stops, p_sky, p_holes, p_unlike_eye, p_eye_lacked, p_late, p_held, p_visits] =
         stat.oracle;
+    set_proxied(ProxiedSample {
+        stops: p_stops,
+        sky: p_sky,
+        holes: p_holes,
+        unlike_eye: p_unlike_eye,
+        eye_lacked: p_eye_lacked,
+        late: p_late,
+        held: p_held,
+        visits: p_visits,
+    });
     set_oracle(OracleSample {
         frames,
         stops,

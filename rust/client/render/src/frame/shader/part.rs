@@ -111,7 +111,16 @@ pub const SHADER_PROXY_ARGS: u32 = 52;
 /// The cut's boxes drawn at the eye's rays' pixels, their nearest face's
 /// box and depth kept (proxy_raster.wgsl).
 pub const SHADER_PROXY_RASTER: u32 = 53;
-pub const SHADERS: u32 = 54;
+/// The cast a rasterized proxy starts (pxl-spec-core `proxied`): each
+/// box's observed entry, the frame's route between it and the cast as
+/// built, its pixels, those they missed, and the check against the eye's
+/// own walk: a compute entry each.
+pub const SHADER_PROXIED_ENTRY: u32 = 54;
+pub const SHADER_PROXIED_ROUTE: u32 = 55;
+pub const SHADER_PROXIED: u32 = 56;
+pub const SHADER_PROXIED_MISS: u32 = 57;
+pub const SHADER_PROXIED_CHECK: u32 = 58;
+pub const SHADERS: u32 = 59;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -323,4 +332,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["proxy_args.gen"],
     // SHADER_PROXY_RASTER
     &["proxy_box", "proxy_raster"],
+    // SHADER_PROXIED_ENTRY
+    &["proxied_entry.gen"],
+    // SHADER_PROXIED_ROUTE
+    &["proxied_route.gen"],
+    // SHADER_PROXIED
+    &["proxied.gen"],
+    // SHADER_PROXIED_MISS
+    &["proxied_miss.gen"],
+    // SHADER_PROXIED_CHECK
+    &["proxied_check.gen"],
 ];

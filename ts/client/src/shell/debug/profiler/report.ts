@@ -28,7 +28,7 @@ const spread = (s: Spread) =>
  * them (profiler.json FRAME's oracle lanes), where any frame's counts were
  * read back. */
 const oracleText = (f: Frame) =>
-  f.oracle_frames === 0 ? [] : [
+  f.oracle_stops === 0 ? [] : [
     `  oracle  ${f.oracle_stops} stops over ${f.oracle_frames} frames since boot   differed ${f.oracle_differed}   lacked ${f.oracle_lacked}   visits ${
       n1(f.oracle_visits / f.oracle_stops)
     } a stop   located ${
@@ -45,6 +45,15 @@ const oracleText = (f: Frame) =>
 /** The `ray_proxy` cut's sums since boot as the last frame holds them
  * (profiler.json FRAME's proxy lanes), where any frame's counts were read
  * back. */
+/** The `ray_proxied` cast's check against the eye's own walk, summed since
+ * boot as the last frame holds them (profiler.json FRAME's proxied lanes),
+ * where any frame's counts were read back. */
+const proxiedText = (f: Frame) =>
+  f.proxied_stops + f.proxied_sky === 0 ? [] : [
+    `  proxied ${f.proxied_stops} stops, ${f.proxied_sky} sky (${f.proxied_holes} holes) over ${f.oracle_frames} frames since boot   the walk's not the eye's ${f.proxied_unlike_eye}   the eye's lacked ${f.proxied_eye_lacked}   started past the eye's stop ${f.proxied_late}   held over the box ${f.proxied_held}   visits ${
+      n1(f.proxied_visits / f.proxied_stops)
+    } a stop`,
+  ];
 const proxyText = (f: Frame) =>
   f.proxy_frames === 0 ? [] : [
     `  proxy   ${
@@ -161,6 +170,7 @@ function windowSection(r: ProfilerReport): string[] {
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     ...oracleText(last),
+    ...proxiedText(last),
     ...proxyText(last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,

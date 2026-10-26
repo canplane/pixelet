@@ -140,6 +140,7 @@ pub struct FrameSample {
     pub out: [f64; STREAMS],
     pub terrain_refused: f64,
     pub oracle: OracleSample,
+    pub proxied: ProxiedSample,
     pub proxy: ProxySample,
 }
 
@@ -174,6 +175,26 @@ pub struct OracleSample {
     pub clamped_high_true: f64,
     pub unlike_eye: f64,
     pub held: f64,
+}
+
+/// The `ray_proxied` cast's check against the eye's own walk, summed since
+/// boot as the renderer keeps them (pxl-render gpu/ray/cast.rs `Proxied`;
+/// pxl-spec-core `proxied`), its frames the oracle's: the pixels it
+/// stopped, those it left to the sky, those of them the eye's walk stops
+/// in, the stops the eye's walk makes otherwise, its walks that lacked, the
+/// starts past where it stops, the starts held over their box's node, and
+/// the visits.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ProxiedSample {
+    pub stops: f64,
+    pub sky: f64,
+    pub holes: f64,
+    pub unlike_eye: f64,
+    pub eye_lacked: f64,
+    pub late: f64,
+    pub held: f64,
+    pub visits: f64,
 }
 
 /// The `ray_proxy` cut's sums since boot, as the renderer keeps them
@@ -238,6 +259,14 @@ words!(FrameSample, FRAME::WORDS,
     oracle.clamped_high_true => FRAME::oracle_clamped_high_true,
     oracle.unlike_eye => FRAME::oracle_unlike_eye,
     oracle.held => FRAME::oracle_held,
+    proxied.stops => FRAME::proxied_stops,
+    proxied.sky => FRAME::proxied_sky,
+    proxied.holes => FRAME::proxied_holes,
+    proxied.unlike_eye => FRAME::proxied_unlike_eye,
+    proxied.eye_lacked => FRAME::proxied_eye_lacked,
+    proxied.late => FRAME::proxied_late,
+    proxied.held => FRAME::proxied_held,
+    proxied.visits => FRAME::proxied_visits,
     proxy.frames => FRAME::proxy_frames, proxy.boxes => FRAME::proxy_boxes,
     proxy.nodes => FRAME::proxy_nodes, proxy.dropped => FRAME::proxy_dropped,
     proxy.shut => FRAME::proxy_shut, proxy.dropped_boxes => FRAME::proxy_dropped_boxes,

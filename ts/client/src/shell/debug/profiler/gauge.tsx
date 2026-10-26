@@ -205,6 +205,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     ),
     cap: null,
     oracle: null,
+    proxied: null,
     proxy: null,
     requests: failing.length > 0 && (
       <>

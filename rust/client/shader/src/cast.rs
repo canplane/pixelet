@@ -282,6 +282,9 @@ const CLAMPED_HIGH: u32 = 17;
 const CLAMPED_HIGH_TRUE: u32 = 18;
 const UNLIKE_EYE: u32 = 19;
 const HELD: u32 = 20;
+/// Where the proxied cast's check counts begin among these (pxl-spec-core
+/// `proxied::STOPS` on).
+pub(crate) const ORACLE_BASE: u32 = 21;
 
 /// What the steps view shows of a pixel whose walk again stopped otherwise
 /// than the cast: the top of its ramp (screen_ray.wgsl).

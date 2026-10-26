@@ -30,6 +30,11 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_ORACLE => "oracle_cs",
         SHADER_PROXY => "proxy_cs",
         SHADER_PROXY_ARGS => "proxy_args_cs",
+        SHADER_PROXIED_ENTRY => "proxied_entry_cs",
+        SHADER_PROXIED_ROUTE => "proxied_route_cs",
+        SHADER_PROXIED => "proxied_cs",
+        SHADER_PROXIED_MISS => "proxied_miss_cs",
+        SHADER_PROXIED_CHECK => "proxied_check_cs",
         SHADER_FORGET => "forget_cs",
         SHADER_SAMPLE => "sample_cs",
         SHADER_SUN => "sun_cs",
@@ -88,7 +93,7 @@ pub const NONE: u32 = 0;
 /// declares them (build.rs `compute`): `CAST_GROUP`, `CAST_WORKGROUP` and
 /// so on, by the stem of the entry's file.
 pub mod compute {
-    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM};
+    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM};
     include!(concat!(env!("OUT_DIR"), "/compute.rs"));
 }
 

@@ -20,6 +20,7 @@ mod decor;
 mod eye;
 mod ground;
 mod observed;
+mod proxied;
 mod proxy;
 mod sun;
 mod ways;
@@ -31,6 +32,9 @@ pub use decor::{decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_pl
 pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
+pub use proxied::{
+    proxied_check_cs, proxied_cs, proxied_entry_cs, proxied_miss_cs, proxied_route_cs,
+};
 pub use proxy::{proxy_args_cs, proxy_cs};
 pub use sun::{sun_cs, sun_mark_cs, SunMoved};
 pub use ways::{ways_cs, ways_free_cs, ways_freed_cs, ways_tree_cs};

@@ -319,10 +319,12 @@ pub enum SettingKey {
     ray_oracle = 20,
     /// The cut a rasterized proxy would draw (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), built on the GPU every frame from the eye over what it holds, as PROXY_CUTS says, in a pass timed apart (span `proxy`): its boxes written and counted, drawn by nothing, and how a pixel starts unchanged (rust/client/shader/src/proxy.rs `proxy_cs`).
     ray_proxy = 21,
+    /// The cast a rasterized proxy starts (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), where `ray_proxy` draws its cut: each pixel walked from the front-most box the raster kept there, the beam rays, cells and samples not run, the cast as built where the cut does not stand; timed in the cast's span. With `ray_steps` on, each pixel is also checked against the eye's own walk (rust/client/shader/src/proxied.rs).
+    ray_proxied = 22,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 22] = [
+    pub const ALL: [SettingKey; 23] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -345,11 +347,12 @@ impl SettingKey {
         SettingKey::ray_steps,
         SettingKey::ray_oracle,
         SettingKey::ray_proxy,
+        SettingKey::ray_proxied,
     ];
 
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a retired number's stays 0.
-    pub const SLOTS: usize = 22;
+    pub const SLOTS: usize = 23;
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
@@ -382,6 +385,7 @@ impl SettingKey {
             SettingKey::ray_steps => SettingKind::Toggle,
             SettingKey::ray_oracle => SettingKind::Choice,
             SettingKey::ray_proxy => SettingKind::Choice,
+            SettingKey::ray_proxied => SettingKind::Toggle,
         }
     }
 
@@ -399,6 +403,7 @@ impl SettingKey {
                 | SettingKey::ray_steps
                 | SettingKey::ray_oracle
                 | SettingKey::ray_proxy
+                | SettingKey::ray_proxied
         )
     }
 
@@ -436,6 +441,7 @@ pub struct Settings {
     pub ray_steps: bool,
     pub ray_oracle: OracleStart,
     pub ray_proxy: ProxyCut,
+    pub ray_proxied: bool,
 }
 
 impl Settings {
@@ -463,6 +469,7 @@ impl Settings {
         ray_steps: false,
         ray_oracle: OracleStart::off,
         ray_proxy: ProxyCut::off,
+        ray_proxied: false,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -491,6 +498,7 @@ impl Settings {
             SettingKey::ray_steps => self.ray_steps as u32,
             SettingKey::ray_oracle => self.ray_oracle as u32,
             SettingKey::ray_proxy => self.ray_proxy as u32,
+            SettingKey::ray_proxied => self.ray_proxied as u32,
         }
     }
 
@@ -544,6 +552,7 @@ impl Settings {
                 Some(o) => self.ray_proxy = o,
                 None => return false,
             },
+            SettingKey::ray_proxied if value <= 1 => self.ray_proxied = value == 1,
             _ => return false,
         }
         true

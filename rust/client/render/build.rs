@@ -208,6 +208,8 @@ fn compute(dir: &Path) -> String {
                     "STORAGE"
                 } else if var.contains("texture_storage_2d_array<r32uint,read_write>") {
                     "STORAGE_TEXTURE_RW"
+                } else if var.contains("texture_2d_array<u32>") {
+                    "TEXTURE_UINT_ARRAY"
                 } else {
                     panic!("{name}: binding {binding} is of no kind a layout names: {var}");
                 };
