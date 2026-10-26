@@ -1183,16 +1183,23 @@ impl Proxied {
         }
         let (counts, data, index, header) =
             (raster.counts, raster.data, raster.index_array, self.header);
-        let group = |b: &Built, entries: &[crate::gpu::api::Entry]| {
+        // Each group binds only what its module declares (`layout`, a
+        // binding, its stages and its kind a triple): naga drops a binding
+        // an entry never reads, and a group naming one is no group.
+        let group = |b: &Built, layout: &[u32], entries: &[crate::gpu::api::Entry]| {
             if b.pipeline == 0 {
-                0
-            } else {
-                g.bind_group(b.layouts[0], entries)
+                return 0;
             }
+            let declared =
+                |e: &&crate::gpu::api::Entry| layout.chunks(3).any(|d| d[0] == e.binding);
+            let entries: Vec<crate::gpu::api::Entry> =
+                entries.iter().filter(declared).copied().collect();
+            g.bind_group(b.layouts[0], &entries)
         };
         self.groups = [
             group(
                 &self.entry,
+                &compute::PROXIED_ENTRY_GROUP,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1208,6 +1215,7 @@ impl Proxied {
             ),
             group(
                 &self.route,
+                &compute::PROXIED_ROUTE_GROUP,
                 &[
                     buffer_entry(11, counts),
                     buffer_entry(15, self.sizes),
@@ -1216,6 +1224,7 @@ impl Proxied {
             ),
             group(
                 &self.pixels,
+                &compute::PROXIED_GROUP,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1232,6 +1241,7 @@ impl Proxied {
             ),
             group(
                 &self.miss,
+                &compute::PROXIED_MISS_GROUP,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1247,6 +1257,7 @@ impl Proxied {
             ),
             group(
                 &self.check,
+                &compute::PROXIED_CHECK_GROUP,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1263,6 +1274,7 @@ impl Proxied {
             ),
             group(
                 &self.write,
+                &compute::PROXIED_WRITE_GROUP,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1280,6 +1292,7 @@ impl Proxied {
             ),
             group(
                 &self.beam,
+                &compute::PROXIED_BEAM_GROUP,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
