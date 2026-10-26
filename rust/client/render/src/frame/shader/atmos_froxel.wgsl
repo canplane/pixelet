@@ -4,10 +4,10 @@
 // and Production Ready Sky and Atmosphere Rendering Technique", its
 // aerial-perspective volume): a column of froxels a workgroup and a froxel
 // a thread, `AIR_FROXELS` across the screen each way and deep, its depth laid
-// over the air its ray crosses (`column_span`, atmos_view.wgsl `air_reach`),
-// the march to each froxel written (atmos_view.wgsl `air_held`): what the air
-// scatters toward the eye and what it lets through. A slice past them holds
-// each column's span, which its reader reads it by (atmos_air.wgsl).
+// by one law for every column (atmos_view.wgsl `air_reach`), the march to
+// the column marched once and each froxel written (atmos_view.wgsl
+// `air_held`): what the air scatters toward the eye per share of the light
+// it takes.
 
 @group(0) @binding(1) var air_out: texture_storage_3d<rgba16float, write>;
 
@@ -19,32 +19,42 @@ fn column_dir(c: vec2f) -> vec3f {
   return normalize(sky_ray() * vec3f(ndc, 1.0));
 }
 
-// Column `c`'s span: the spans of it and the columns about it, whole
-// (atmos_view.wgsl `air_span`). A point between columns is read off each at
-// its own distance, so each column reaches as far as its neighbours' do:
-// toward the horizon the sea's plane runs off fast, and a column reaching
-// only to its own would leave a point nearer the horizon past its end. As
-// the span is held (`air_span_held`), so the march and its reader agree.
-fn column_span(c: vec2u) -> vec2f {
-  var span = vec2f(3.0e38, 0.0);
-  for (var y = -1; y <= 1; y++) {
-    for (var x = -1; x <= 1; x++) {
-      let s = air_span(column_dir(vec2f(c) + vec2f(f32(x), f32(y))));
-      span = vec2f(min(span.x, s.x), max(span.y, s.y));
-    }
-  }
-  return air_span_of(air_span_held(span));
-}
+var<workgroup> column_through: array<vec3f, AIR_FROXELS>;
+var<workgroup> column_scattered: array<vec3f, AIR_FROXELS>;
+var<workgroup> column_held: array<vec4f, AIR_FROXELS>;
 
-// The first froxel stands where the column's span starts and the last where
-// it ends.
+// A column marched once: each thread its stretch from the slice before to
+// its own (atmos_view.wgsl `air_stretch`), then the stretches joined from
+// the eye in five doublings, so every froxel is the one integral's to its
+// depth and no slice errs apart from the next.
+//
+// A froxel before its ray enters the air takes nothing and holds nothing:
+// it holds the light of the first froxel past it in its column instead, so
+// the volume runs on smooth into the air and its read does not blur a step
+// from naught there (atmos_air.wgsl `air_held_at`). What the pixel scatters
+// before the air is naught still, by its own 1 - T.
 @compute @workgroup_size(1, 1, AIR_FROXELS)
 fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
-  let span = column_span(id.xy);
-  let z = f32(id.z) / f32(AIR_FROXELS - 1u);
-  let dir = column_dir(vec2f(id.xy));
-  textureStore(air_out, id, air_held(frame_camera_pos() + dir * air_reach(span, z)));
-  if (id.z == 0u) {
-    textureStore(air_out, vec3u(id.xy, AIR_FROXELS), vec4f(air_span_held(span), 0.0, 0.0));
+  let last = f32(AIR_FROXELS - 1u);
+  let k = id.z;
+  let t0 = select(0.0, air_reach((f32(k) - 1.0) / last), k > 0u);
+  var v = air_stretch(column_dir(vec2f(id.xy)), t0, air_reach(f32(k) / last));
+  for (var step = 1u; step < AIR_FROXELS; step <<= 1u) {
+    column_through[k] = v.through;
+    column_scattered[k] = v.scattered;
+    workgroupBarrier();
+    if (k >= step) {
+      let before = column_through[k - step];
+      v = Veil(before * v.through, column_scattered[k - step] + before * v.scattered);
+    }
+    workgroupBarrier();
   }
+  let held = air_held(v);
+  column_held[k] = held;
+  workgroupBarrier();
+  var out = held;
+  for (var j = k; j < AIR_FROXELS && all(out.rgb == vec3f(0.0)); j++) {
+    out = column_held[j];
+  }
+  textureStore(air_out, id, out);
 }

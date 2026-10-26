@@ -712,10 +712,13 @@ medium, a centre and a radius.
 
 The air between the eye and what is drawn comes from the **air's volume**,
 Hillaire's aerial-perspective volume (`gpu/atmosphere.rs` `froxel`). A compute
-pass marches a grid of screen columns through froxels, which cover only the air
-each ray crosses, spaced by depth cubed so the near view gets most. A drawn
-point mixes the four columns about it, each read at the point's own distance
-(`atmos_air.wgsl` `air_before`).
+pass marches each of a grid of screen columns once, by stretches between
+froxels spaced alike in every column by depth cubed, joined from the eye, so
+every froxel is one integral's to its depth. A froxel holds the light the air
+scatters per share of what it takes, which the air's thickness cancels from.
+A drawn point reads that by a cubic B-spline in all three axes, and scales it
+by its own ray's share taken, exact from the transmittance table
+(`atmos_air.wgsl` `air_before`), so neither the columns nor the slices show.
 
 The **clouds** are three layers on one wind (`pxl-spec-core cloud.rs`). The
 cumulus is models drawn like decor but claiming no cell, so a tower stands

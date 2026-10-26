@@ -16,10 +16,12 @@ fn up_at(world_pos: vec3f) -> vec3f {
   return normalize(world_pos - planet_center());
 }
 
-// From the eye's radius: the frame's units are exact near it.
+// A point's radius in the air, by its height on the flat map: the eye's
+// radius and the point's height over it, its z. Measured from the air's
+// centre instead, flat ground d out stood d²/2R up — 7 km at 300 km — and
+// its light swept the tables' radius rows, a band at each.
 fn radius_of(world_pos: vec3f) -> f32 {
-  let c = planet_center();
-  return max(camera_r() + (length(world_pos - c) - length(frame_camera_pos() - c)) * atmos_km_per_u(), atmos_bottom_radius());
+  return max(camera_r() + (world_pos.z - frame_camera_pos().z) * atmos_km_per_u(), atmos_bottom_radius());
 }
 
 
@@ -61,16 +63,6 @@ fn air_segments(dir: vec3f, d: vec3f) -> array<Veil, 3> {
   return v;
 }
 
-fn air_to(world_pos: vec3f) -> Veil {
-  let to = world_pos - frame_camera_pos();
-  let du = length(to);
-  if (du < 1e-4) {
-    return Veil(vec3f(1.0), vec3f(0.0));
-  }
-  let v = air_segments(to / du, vec3f(du * atmos_km_per_u()))[2];
-  return Veil(v.through, v.scattered * exposure());
-}
-
 // The air before a point: what it lets through, what it scatters toward
 // the eye, and the lights there. The air's two vary slowly across the view,
 // which is what lets the air's volume hold them (atmos_air.wgsl); the lights
@@ -99,81 +91,51 @@ fn air_near() -> f32 {
   return max(atmos_camera_altitude() / atmos_km_per_u() - top, 0.0);
 }
 
-// How far from the eye the air along `dir` ends, in units: where the march
-// stops, at the air's ground (`to_ground`, the sea's radius), past which a
-// point's air is the air to there; else the volume's whole reach.
-fn air_ground(dir: vec3f) -> f32 {
-  let r = camera_r();
-  let mu = dot(frame_up(), dir);
-  return select(air_far(), to_ground(r, mu) / atmos_km_per_u(), meets_ground(r, mu));
+// The volume's depth, one law for every column: slice z, 0 to 1, lies
+// `air_reach(z)` units out, the cube of z over the span from the nearest
+// anything is drawn (`air_near`) to the farthest the air reaches
+// (`air_far`). A cube puts the near view, where most of what is drawn lies,
+// in most of the slices and keeps a far slice a tenth or so past the one
+// before. Where a slice lies depends on the eye alone, never on the column,
+// so the screen's depth is continuous across it.
+fn air_ends() -> vec2f {
+  let near = air_near();
+  return vec2f(near, max(air_far(), near + 1.0));
 }
 
-// Where along `dir` the air's volume lays its slices, in units, nearest and
-// farthest: from where the air begins that anything drawn may lie in — past
-// `air_near`, and past the air's top for an eye over it — to the sea's
-// plane, the world's z = 0, under which little is drawn; where the ray never
-// falls to it, the air's ground or its far edge (`air_ground`). Laid from the
-// air's top to the sea, an eye high over the world spends no slice on the
-// space before the air or past the sea, which had left the air a ray crosses
-// a few slices tens of km thick and the sea read between them, banded a
-// slice at a time about the point under the eye. A column of the volume
-// takes its neighbours' too (atmos_froxel.wgsl `column_span`).
-fn air_span(dir: vec3f) -> vec2f {
-  let r = camera_r();
-  let mu = dot(frame_up(), dir);
-  let near = max(air_near(), to_sphere(r, mu, atmos_top_radius()) / atmos_km_per_u());
-  let sea = atmos_camera_altitude() / atmos_km_per_u() / max(-dir.z, 1e-6);
-  let far = select(air_ground(dir), min(sea, air_far()), dir.z < 0.0 && atmos_camera_altitude() > 0.0);
-  return vec2f(near, max(far, near * (1.0 + 1e-6) + 1e-6));
+fn air_reach(z: f32) -> f32 {
+  let e = air_ends();
+  return e.x + (e.y - e.x) * z * z * z;
 }
 
-// A span as the volume holds it, in a 16-bit float a side: its ends' log2
-// past one, and one more so a 16-bit float holds it at full precision, which
-// keeps a span of metres and one of thousands of km alike to a percent.
-// Rounded here to the 10 bits of mantissa the texel keeps, so the column's
-// maker marches the span its reader reads and the froxels are read where
-// they were made.
-fn air_span_held(span: vec2f) -> vec2f {
-  let v = log2(span + 1.0) + 1.0;
-  return bitcast<vec2f>((bitcast<vec2u>(v) + vec2u(0x1000u)) & vec2u(0xffffe000u));
+// Where a point `d` units out lies among the slices, 0 to the last: the
+// law's inverse, smooth in `d` across every slice.
+fn air_slice(d: f32) -> f32 {
+  let e = air_ends();
+  return pow(clamp((d - e.x) / (e.y - e.x), 0.0, 1.0), 1.0 / 3.0) * f32(AIR_FROXELS - 1u);
 }
 
-fn air_span_of(held: vec2f) -> vec2f {
-  return exp2(held - 1.0) - 1.0;
+// Knots to a stretch between two of the volume's slices: four, for its far
+// slabs, a hundred km and more down into the ozone and the Earth's shadow.
+const AIR_STRETCH_KNOTS: i32 = 4;
+
+// The air from `t0` to `t1` units along `dir` from the eye, exposed: one
+// stretch of the volume's column march (atmos_froxel.wgsl).
+fn air_stretch(dir: vec3f, t0: f32, t1: f32) -> Veil {
+  let km = atmos_km_per_u();
+  let v = gather_between(camera_r(), frame_up(), dir, t0 * km, t1 * km, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), AIR_STRETCH_KNOTS);
+  return Veil(v.through, v.scattered * atmos_white() * exposure());
 }
 
-// How far from the eye a froxel `z` deep reaches along a ray whose slices lie
-// over `span`, in units: its depth cubed of the span. A slice's reach grows
-// with its depth, so the near view, where most of what is drawn lies, takes
-// most of the slices — from the ground looking out level, the first ~4 m,
-// the second ~116 m, the ninth ~21 km — and the last ends where the span
-// does, so what is drawn there, the sea from high, reads the march to it
-// whole (atmos_froxel.wgsl, atmos_air.wgsl).
-fn air_reach(span: vec2f, z: f32) -> f32 {
-  return span.x + (span.y - span.x) * z * z * z;
-}
-
-// Where a point `d` units from the eye lies among the slices, 0 to the last:
-// the slice before it, and its share of the way to the next by distance, not
-// by depth. The air before a point runs near straight with its distance, so
-// cubed with depth, and read straight by depth it bowed between slices by a
-// few percent a slice, a line across the sea at each.
-fn air_slice(span: vec2f, d: f32) -> f32 {
-  let last = f32(AIR_FROXELS - 1u);
-  let z = pow(clamp((d - span.x) / max(span.y - span.x, 1e-6), 0.0, 1.0), 1.0 / 3.0);
-  let k = min(floor(z * last), last - 1.0);
-  let a = air_reach(span, k / last);
-  let b = air_reach(span, (k + 1.0) / last);
-  return k + clamp((d - a) / max(b - a, 1e-6), 0.0, 1.0);
-}
-
-// The march to a point, the volume's one maker (atmos_froxel.wgsl): what
-// the air scatters toward the eye, and in alpha what it lets through. An
-// authored color is dimmed alike at every wavelength: by wavelength, a light
-// sea's blue went and its green stayed.
-fn air_held(world_pos: vec3f) -> vec4f {
-  let v = air_to(world_pos);
-  return vec4f(v.scattered, dot(v.through, LUMA));
+// What a froxel holds of the air from the eye to it: what it scatters
+// toward the eye per share of the light it takes, per channel, S / (1 - T).
+// The air's thickness cancels from it, so it turns slowly across columns and
+// slices however fast the air thickens, and a pixel scales it by its own
+// ray's 1 - T (atmos_air.wgsl `air_before`). Before the air takes anything
+// it holds none.
+fn air_held(v: Veil) -> vec4f {
+  let taken = vec3f(1.0) - v.through;
+  return vec4f(select(vec3f(0.0), v.scattered / taken, taken > vec3f(1e-6)), 1.0);
 }
 
 
