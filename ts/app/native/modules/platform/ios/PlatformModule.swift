@@ -14,9 +14,9 @@ import UIKit
 /// guest took — no copy, so a ring the shell writes is the ring the kernel
 /// reads. The shell calls on the JavaScript thread, one call at a time; the
 /// guest runs each on its own thread while this one waits
-/// (rust/client-bracket/native/src/lib.rs `on_kernel`), and an image's decode runs off both.
+/// (xpute-host native `Guest::run`), and an image's decode runs off both.
 public class PlatformModule: Module {
-  /// The module `pxl_wake_on`'s function sends through.
+  /// The module `xpute_gpu_wake_on`'s function sends through.
   nonisolated(unsafe) static weak var current: PlatformModule?
 
   public func definition() -> ModuleDefinition {
@@ -30,7 +30,7 @@ public class PlatformModule: Module {
       // A C function captures nothing, so it reaches the module through the
       // static. Called from the thread that learned of a completion: Expo's
       // sendEvent schedules the event onto the JavaScript thread itself.
-      pxl_wake_on { PlatformModule.current?.sendEvent("onWake") }
+      xpute_gpu_wake_on { PlatformModule.current?.sendEvent("onWake") }
     }
     OnDestroy {
       ViewModifierRegistry.unregister(contentScrollsModifier)
@@ -59,7 +59,7 @@ public class PlatformModule: Module {
 
     /// Whether the device opened; what it is, the kernel reads from the host.
     Function("gpuOpen") { () -> Bool in
-      pxl_gpu_open() == 0
+      xpute_gpu_open() == 0
     }
 
     // ---- the transport (platform/origin.ts) ----

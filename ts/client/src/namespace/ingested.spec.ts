@@ -241,77 +241,77 @@ export const INGESTED: Readonly<Record<string, IngestedFile>> = {
     bytes: 249388,
     extent: [0.77, 0.34, 0.67],
   },
-  "cube/block/block_black.png": {
+  "cube/object/black.png": {
     key:
       "asset/8588d28543564e2214138851a8aa240e255dd87a193270188b6d9489fefcae07.png",
     bytes: 80903,
   },
-  "cube/block/block_blue.png": {
+  "cube/object/blue.png": {
     key:
       "asset/1c4c8d35d392032f3ef6806bd8dafca4ab53b69b5567ed52a42443c4d4e70b96.png",
     bytes: 91859,
   },
-  "cube/block/block_brown.png": {
+  "cube/object/brown.png": {
     key:
       "asset/93bc8ca2327278d4dedf3877163b988c96a7fe9e37717fdaf0cec35a904ce0fa.png",
     bytes: 91351,
   },
-  "cube/block/block_cyan.png": {
+  "cube/object/cyan.png": {
     key:
       "asset/d66816120e900a38bb468aac934c586d4d5b3a7aebda492c8626a6dd452848a1.png",
     bytes: 85804,
   },
-  "cube/block/block_dark_green.png": {
+  "cube/object/dark_green.png": {
     key:
       "asset/7c2391210d4018f43a7695ce30fbb5b602e2b9106ab0c5f468dcf33d8ce5e94f.png",
     bytes: 91753,
   },
-  "cube/block/block_dark_grey.png": {
+  "cube/object/dark_grey.png": {
     key:
       "asset/55c1809e6cf955ff4f22c26c1b724273e035c1aff6884608e05aae531427ab32.png",
     bytes: 77560,
   },
-  "cube/block/block_green.png": {
+  "cube/object/green.png": {
     key:
       "asset/1d0cb4d20a4f3b80a4be789fc33ae8f71b2691f21703494118c09a2862bea2b0.png",
     bytes: 89240,
   },
-  "cube/block/block_grey.png": {
+  "cube/object/grey.png": {
     key:
       "asset/26ada63041722a22b838f5537d2c1eb27f4e267e75917c6ac36a43fd36ffc836.png",
     bytes: 85778,
   },
-  "cube/block/block_magenta.png": {
+  "cube/object/magenta.png": {
     key:
       "asset/7a90030363341d053e9d3073f8294f6db232e000ae10550f062500bf3d326589.png",
     bytes: 89635,
   },
-  "cube/block/block_orange.png": {
+  "cube/object/orange.png": {
     key:
       "asset/ab18e5a48827773262c0629dafac6c51422c230a2c66ffd5931d2b83165c7efc.png",
     bytes: 85799,
   },
-  "cube/block/block_pink.png": {
+  "cube/object/pink.png": {
     key:
       "asset/682694624b5ec9c80b6d41412f9b16748ac16da8d5efc4dce5d041e7c28bb9ee.png",
     bytes: 95817,
   },
-  "cube/block/block_red.png": {
+  "cube/object/red.png": {
     key:
       "asset/0c40388632f043b5e47e24e03e84e11a37347057f71ad275d4966e9b875cd5a7.png",
     bytes: 84310,
   },
-  "cube/block/block_violet.png": {
+  "cube/object/violet.png": {
     key:
       "asset/b08576ec1a70440b8b0b59d3e01a9c1e6f12518a4a610d4cb69cac061421a874.png",
     bytes: 91559,
   },
-  "cube/block/block_white.png": {
+  "cube/object/white.png": {
     key:
       "asset/6da2cf5f8dd2c146ff9addd9d45416087bd1e8ab5ccf75d65c37c06bdbe6d039.png",
     bytes: 78320,
   },
-  "cube/block/block_yellow.png": {
+  "cube/object/yellow.png": {
     key:
       "asset/383731be87d80f67be4f25b8bc40ca921c034e359e4e9e15cc42dfc34b3f524d.png",
     bytes: 88054,
@@ -892,21 +892,21 @@ export const PACK = {
   cell: 256,
   columns: 8,
   tiles: [
-    "cube/block/block_black.png",
-    "cube/block/block_blue.png",
-    "cube/block/block_brown.png",
-    "cube/block/block_cyan.png",
-    "cube/block/block_dark_green.png",
-    "cube/block/block_dark_grey.png",
-    "cube/block/block_green.png",
-    "cube/block/block_grey.png",
-    "cube/block/block_magenta.png",
-    "cube/block/block_orange.png",
-    "cube/block/block_pink.png",
-    "cube/block/block_red.png",
-    "cube/block/block_violet.png",
-    "cube/block/block_white.png",
-    "cube/block/block_yellow.png",
+    "cube/object/black.png",
+    "cube/object/blue.png",
+    "cube/object/brown.png",
+    "cube/object/cyan.png",
+    "cube/object/dark_green.png",
+    "cube/object/dark_grey.png",
+    "cube/object/green.png",
+    "cube/object/grey.png",
+    "cube/object/magenta.png",
+    "cube/object/orange.png",
+    "cube/object/pink.png",
+    "cube/object/red.png",
+    "cube/object/violet.png",
+    "cube/object/white.png",
+    "cube/object/yellow.png",
     "cube/terrain/bottom_apron.png",
     "cube/terrain/bottom_commercial.png",
     "cube/terrain/bottom_forest.png",
@@ -1003,11 +1003,13 @@ export const PACK = {
     ["ground", "commercial", "bottom", 16],
     ["ground", "forest", "bottom", 17],
     ["ground", "industrial", "bottom", 18],
+    ["sentinel", "unknown", "top", 18],
     ["ground", "soil", "top", 19],
     ["ground", "land", "bottom", 19],
     ["ground", "park", "bottom", 20],
     ["ground", "pitch", "bottom", 21],
     ["ground", "residential", "bottom", 22],
+    ["ground", "sandstone", "top", 23],
     ["ground", "sand", "bottom", 23],
     ["ground", "societal_amenities", "bottom", 24],
     ["ground", "allotments", "top", 25],
@@ -1035,6 +1037,7 @@ export const PACK = {
     ["ground", "place_of_worship", "top", 47],
     ["ground", "power", "top", 48],
     ["ground", "quarry", "top", 49],
+    ["ground", "stone", "top", 49],
     ["ground", "residential", "top", 50],
     ["ground", "retail", "top", 51],
     ["ground", "sand", "top", 52],

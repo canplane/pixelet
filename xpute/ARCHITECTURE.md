@@ -459,6 +459,16 @@ no other; and a frame is taken off its count as the callback holding it ends,
 called or let go uncalled with a device that went, so a gone device's frames do
 not stand forever.
 
+Beside a guest linked into its own process, the GPU's host is exported as the
+entry is, under xpute's names (`rust/gpu` `host/native`, `native_abi!`):
+`xpute_gpu_open` opens the device and holds it, `xpute_gpu_surface_bind` makes
+a surface of a window the platform hands over and binds it under the guest's
+handle, `xpute_gpu_surface_unbind` lets it go, and `xpute_gpu_wake_on` takes the
+function a completion calls to ask a turn. Each runs on the guest's thread
+(`Guest::run`), so a process holds one, as it holds one guest. What kind of
+window an address is — a layer, a native window — the program says, as it says
+where its surfaces are configured, a native guest's as `CONFIGURE_AT` offers.
+
 The GPU's calls stand beside `kit` and the two ends: a program that never
 reaches a GPU links none of it. What a program builds over them, such as a
 shorthand for its pipelines, stays the program's.
@@ -544,7 +554,8 @@ decides what must match.
   list.
 - **The GPU's calls follow the same split.** Each guest language writes them
   (`rust/gpu`, `cpp/xpute/gpu`). The hosts run them in TypeScript on WebGPU
-  (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
+  (`ts/gpu`), and in Rust on wgpu behind the `host` feature, exported beside a
+  native guest by its own `native_abi!`.
 - **A guest built as a module is linked one way.** Its memory is imported from
   the host and its stack goes first, at the bottom of the memory, so an overflow
   traps; its stack's size and any front it keeps below the linker's data are its

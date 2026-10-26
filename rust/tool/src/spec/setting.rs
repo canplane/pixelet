@@ -5,6 +5,7 @@
 //! `$retired`. The kernel's table carries the numbers and no names, which
 //! are the shell's, for its rows and the locale. The shell gets a separate
 //! production table without the `dev` settings so the bundler drops them.
+//! A setting whose `kept` is false the kernel's store neither keeps nor reads.
 
 use super::data::ts_literal;
 use super::{
@@ -28,6 +29,14 @@ impl Setting<'_> {
     }
     fn flag(&self, name: &str) -> bool {
         self.spec.get(name) == Some(&Node::Bool(true))
+    }
+    /// Kept unless marked `"kept": false`; anything else there is refused.
+    fn kept(&self) -> Result<bool, String> {
+        match self.spec.get("kept") {
+            None | Some(Node::Bool(true)) => Ok(true),
+            Some(Node::Bool(false)) => Ok(false),
+            Some(_) => Err(format!("{JSON}: {}'s kept is not a bool", self.key)),
+        }
     }
     fn default(&self) -> &Node {
         self.spec
@@ -281,8 +290,24 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             pascal(s.kind())
         )
     }));
+    let mut session = Vec::new();
+    for s in &settings {
+        if !s.kept()? {
+            session.push(format!("SettingKey::{}", s.key));
+        }
+    }
     rs.extend([
         "        }".to_string(),
+        "    }".into(),
+        String::new(),
+        "    /// Written to the settings' kept slot and read from it; one schema.json".into(),
+        "    /// marks `kept` false is held for the session alone.".into(),
+        "    pub fn kept(self) -> bool {".into(),
+        if session.is_empty() {
+            "        true".to_string()
+        } else {
+            format!("        !matches!(self, {})", session.join(" | "))
+        },
         "    }".into(),
         String::new(),
         "    /// Offered by a development build only.".into(),

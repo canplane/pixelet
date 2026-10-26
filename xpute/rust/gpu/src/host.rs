@@ -8,11 +8,16 @@
 //! What finishes after a turn, a read back or the queue's work done, lands
 //! at a later turn's `poll`: the guest finds `ticket | DONE` a turn or more
 //! later, as on the web, and nothing here waits.
+//!
+//! Beside a guest linked into its own process, `native` holds the host and
+//! exports it under xpute's names (`native_abi!`).
 
 mod admit;
 mod configure;
 mod image;
 mod name;
+#[cfg(unix)]
+pub mod native;
 mod object;
 mod open;
 mod pending;

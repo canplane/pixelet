@@ -7,7 +7,6 @@
 //! hands it (`BootInfo`).
 
 mod apply;
-pub(crate) use apply::over_marker;
 /// The directory's keys, generated from directory.json.
 #[path = "door/directory.spec.rs"]
 pub mod directory;

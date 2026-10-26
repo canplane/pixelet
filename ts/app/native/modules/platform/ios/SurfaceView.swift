@@ -37,13 +37,13 @@ class SurfaceView: ExpoView {
     let wanted = window == nil ? 0 : surface
     if bound == wanted { return }
     if bound != 0 {
-      pxl_surface_unbind(bound)
+      xpute_gpu_surface_unbind(bound)
       bound = 0
       onDetach()
     }
     guard wanted != 0, let window else { return }
     layer.contentsScale = window.screen.scale
-    if pxl_surface_bind(wanted, Unmanaged.passUnretained(layer).toOpaque()) == 0 {
+    if xpute_gpu_surface_bind(wanted, Unmanaged.passUnretained(layer).toOpaque()) == 0 {
       bound = wanted
       onAttach(["surface": wanted])
     }

@@ -11,7 +11,9 @@
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
-// the table without them, in SETTINGS' place.
+// the table without them, in SETTINGS' place. A setting whose `kept` is
+// false is the session's alone: the store neither writes it to its kept
+// slot nor reads it from there, so every session starts it at its default.
 //
 // A setting carries its `number` (the kernel's SettingKey), and a choice's
 // `options` names one of the lists below, which numbers each option. The
@@ -73,6 +75,7 @@ export const SETTINGS = {
     default: false,
     section: "world",
     cost: "low",
+    kept: false,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a view from above is expected to
@@ -96,6 +99,7 @@ export const SETTINGS = {
       free: 1 as number,
     },
     section: "world",
+    kept: false,
   },
   /** The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
   surface_follow: {
@@ -276,6 +280,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "world",
     cost: "low",
+    kept: false,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a view from above is expected to
@@ -299,6 +304,7 @@ export const SETTINGS_SHIPPED = {
       free: 1 as number,
     },
     section: "world",
+    kept: false,
   },
   /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
   orbit_obstacle: {

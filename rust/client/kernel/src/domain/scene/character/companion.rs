@@ -486,7 +486,7 @@ fn walk_to(
     p: &CompanionProps,
 ) -> Option<([f64; 2], f64)> {
     let [a, b] = [from, to].map(|[x, y]| world_to_canonical(&[x, y, over(stands)]));
-    let at = to_world(&world.step_slide(&a, &b, &p.eye, true)?);
+    let at = to_world(&world.step_slide(&a, &b, &p.eye, true, true)?);
     Some(([at[0], at[1]], under(at[2])))
 }
 

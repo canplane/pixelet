@@ -301,6 +301,25 @@ fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
 }
 
 #[test]
+fn new_words_on_a_standing_marker_change_its_cube() {
+    use pxl_spec::asset::marker::MARKER;
+    let mut store = Store::default();
+    let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
+    let put = |store: &mut Store, text: &str| {
+        store.write([Write {
+            key: key(zoom, at),
+            id: MARKER,
+            ext: words(text),
+        }])
+    };
+    assert_eq!(put(&mut store, "cafe").len(), 1);
+    // The old record's slot is the one kept, so the word is the same.
+    assert_eq!(put(&mut store, "bar").len(), 1);
+    let e = store.read((zoom, at)).placed().expect("placed");
+    assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
+}
+
+#[test]
 fn eight_markers_filling_a_cell_stay_eight() {
     use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();

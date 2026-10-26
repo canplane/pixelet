@@ -145,6 +145,6 @@ pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
         return *from;
     }
     World::now()
-        .step_slide(from, &to, eye, true)
+        .step_slide(from, &to, eye, true, false)
         .unwrap_or_else(|| unknown_z(&to))
 }

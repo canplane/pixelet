@@ -37,7 +37,9 @@
       "The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in",
       "the order Carto paints (doc/minutes/20261005-the-ground-is-a-carto-palette.md).",
       "`transport` marks a way: decor faces along it and no pier stands on it;",
-      "every look stands at its sampled height."
+      "every look stands at its sampled height. The byte's values: 1 to 63",
+      "Carto's looks, in its paint order; from 64 pixelet's own, the",
+      "underground, which Carto paints nothing of; 0 and 255 the sentinels."
     ],
     "entries": [
       { "section": "landcover" },
@@ -298,21 +300,21 @@
       { "section": "underground" },
       {
         "name": "soil",
-        "value": 56,
+        "value": 64,
         "$doc": [
           "under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it"
         ]
       },
       {
         "name": "sandstone",
-        "value": 57,
+        "value": 65,
         "$doc": [
           "under sand's filler: Minecraft Beta's sandstone"
         ]
       },
       {
         "name": "stone",
-        "value": 58,
+        "value": 66,
         "$doc": [
           "under the filler: Minecraft Beta's stone"
         ]

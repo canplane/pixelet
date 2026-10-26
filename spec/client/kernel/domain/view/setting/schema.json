@@ -9,7 +9,9 @@
     "differs from its neighbors'; an empty string is no badge. A `dev` setting",
     "is in the kernel's table in every build and offered only under a",
     "development one; the shell's production bundle carries SETTINGS_SHIPPED,",
-    "the table without them, in SETTINGS' place.",
+    "the table without them, in SETTINGS' place. A setting whose `kept` is",
+    "false is the session's alone: the store neither writes it to its kept",
+    "slot nor reads it from there, so every session starts it at its default.",
     "",
     "A setting carries its `number` (the kernel's SettingKey), and a choice's",
     "`options` names one of the lists below, which numbers each option. The",
@@ -135,7 +137,8 @@
       "kind": "toggle",
       "default": false,
       "section": "world",
-      "cost": "low"
+      "cost": "low",
+      "kept": false
     },
     "tilt_lock": {
       "number": 4,
@@ -159,7 +162,8 @@
       "kind": "choice",
       "default": "orbit",
       "options": "CAMERA_MODES",
-      "section": "world"
+      "section": "world",
+      "kept": false
     },
     "surface_follow": {
       "number": 6,

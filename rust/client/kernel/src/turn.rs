@@ -135,7 +135,9 @@ fn scene_tick(ctx: &mut TickContext) {
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    camera_input_step(crate::domain::view::lens::tau());
+    if let Some([x, y]) = camera_input_step() {
+        crate::pointer::hover(x, y, crate::domain::view::lens::tau());
+    }
 }
 
 /// The camera's last writer, then the view composed where it stands: after

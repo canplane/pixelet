@@ -201,19 +201,43 @@ fn tile_of(cube: Cube, face: CubeFace) -> Option<u32> {
         .map(|&(_, _, n)| n)
 }
 
+/// The pack tile a sentinel the world draws wears on every face; None where
+/// the pack has none.
+fn sentinel_tile_of(sentinel: u8) -> Option<u32> {
+    PACK.sentinels
+        .iter()
+        .find(|(s, _)| *s == sentinel)
+        .map(|&(_, n)| n)
+}
+
 /// The tile's mean color in linear light, seen from far enough that the tile
 /// is gone.
 pub fn shipped_tile_mean(cube: Cube, face: CubeFace) -> Option<[u8; 3]> {
     PACK.means.get(tile_of(cube, face)? as usize).copied()
 }
 
-/// The tile's pixel origin in the pack's image.
-pub fn shipped_texture_tile(cube: Cube, face: CubeFace) -> Option<TileOrigin> {
-    let n = tile_of(cube, face)?;
-    Some(TileOrigin {
+/// A sentinel's tile's, as `shipped_tile_mean`.
+pub fn shipped_sentinel_mean(sentinel: u8) -> Option<[u8; 3]> {
+    PACK.means
+        .get(sentinel_tile_of(sentinel)? as usize)
+        .copied()
+}
+
+fn origin(n: u32) -> TileOrigin {
+    TileOrigin {
         x: (n % PACK.columns) * PACK.cell,
         y: (n / PACK.columns) * PACK.cell,
-    })
+    }
+}
+
+/// The tile's pixel origin in the pack's image.
+pub fn shipped_texture_tile(cube: Cube, face: CubeFace) -> Option<TileOrigin> {
+    tile_of(cube, face).map(origin)
+}
+
+/// A sentinel's tile's, as `shipped_texture_tile`.
+pub fn shipped_sentinel_tile(sentinel: u8) -> Option<TileOrigin> {
+    sentinel_tile_of(sentinel).map(origin)
 }
 
 /// The width and height a PNG's or a WebP's header gives; none for any other file.

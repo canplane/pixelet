@@ -3,16 +3,26 @@
 //! Every color a cell can be, numbered once. Object colors follow the ground
 //! layers, so one number reaches both.
 
+use pxl_spec::asset::color;
 use pxl_spec::asset::cube::cube_rgb;
-use pxl_spec::asset::cube::{Cube, ALL_CUBES};
+use pxl_spec::asset::cube::{sentinel, Cube, ALL_CUBES};
 use pxl_spec::asset::cube::{Ground, Object};
 use pxl_spec::asset::ingested::CubeFace;
-use pxl_spec::asset::shipped_tile_mean;
+use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};
 use std::sync::LazyLock;
 
+/// The sentinels the world draws, each a layer past the cubes': the bedrock.
+pub const SENTINELS: [u8; 1] = [sentinel::unknown];
+
 /// The texture array's layers, one a placeable cube in the catalog's order, so
-/// a cube of a look is drawn as its ground is.
-pub const LAYERS: usize = Object::ALL.len() + Ground::ALL.len();
+/// a cube of a look is drawn as its ground is, then one a sentinel drawn.
+pub const LAYERS: usize = Object::ALL.len() + Ground::ALL.len() + SENTINELS.len();
+
+/// A drawn sentinel's layer, past every cube's.
+pub fn sentinel_layer(s: u8) -> Option<u32> {
+    let k = SENTINELS.iter().position(|&x| x == s)?;
+    Some((ALL_CUBES.len() + k) as u32)
+}
 
 pub fn palette() -> impl Iterator<Item = Cube> {
     ALL_CUBES.iter().copied()
@@ -42,6 +52,10 @@ pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(|| {
             shipped_tile_mean(cube, CubeFace::Top)
                 .unwrap_or_else(|| rgb255(cube_rgb(cube).unwrap_or(0)))
         })
+        .chain(SENTINELS.iter().map(|&s| {
+            shipped_sentinel_mean(s)
+                .unwrap_or_else(|| color::sentinel(s).map_or([0; 3], |c| rgb255(c.rgb)))
+        }))
         .collect()
 });
 

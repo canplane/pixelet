@@ -407,7 +407,10 @@ impl Store {
     }
 
     /// Applies every write; the cubes that changed. A write whose record its
-    /// pool has no room for is left out, as if never sent.
+    /// pool has no room for is left out, as if never sent. A write with a
+    /// record changes its cube whatever its word: the record it replaces is
+    /// freed first, so its slot is the one kept, and new words under the old
+    /// handle leave the word as it was.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
         let mut changed = Vec::new();
         for Write { key: k, id, ext } in writes {
@@ -437,12 +440,12 @@ impl Store {
                 ext: handle,
             }
             .word();
-            if self
+            let set = self
                 .tree
                 .set(depth(zoom), path(zoom, at), value, |tree, family, d| {
                     fold(tree, family, d - 1)
-                })
-            {
+                });
+            if set || handle != NONE {
                 changed.push(cube(zoom, at));
                 self.revision = self.revision.wrapping_add(1);
             }
