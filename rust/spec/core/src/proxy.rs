@@ -454,6 +454,57 @@ pub fn flipped(right: [f32; 3], up: [f32; 3], forward: [f32; 3]) -> bool {
     x[0] * forward[0] + x[1] * forward[1] + x[2] * forward[2] > 0.0
 }
 
+/// Whether the box `p`, in units from the eye, may hold something the eye
+/// sees: its nearest point within `reach`, and some of it inside each of
+/// the four planes the screen's edges and the eye make, the eye's `axes`
+/// its right, up and forward and `tan` the tangents of the screen's
+/// half-angles, each tested at the box's corner farthest inside it.
+pub fn visible(p: &Proxy, axes: [[f32; 3]; 3], tan: [f32; 2], reach: f32) -> bool {
+    let near = |a: usize| {
+        let v = if p.lo[a] > 0.0 {
+            p.lo[a]
+        } else if p.hi[a] < 0.0 {
+            p.hi[a]
+        } else {
+            0.0
+        };
+        v * v
+    };
+    if near(0) + near(1) + near(2) > reach * reach {
+        return false;
+    }
+    let [r, u, f] = axes;
+    let inside = |n: [f32; 3]| {
+        let most = |a: usize| {
+            let (lo, hi) = (n[a] * p.lo[a], n[a] * p.hi[a]);
+            if lo > hi {
+                lo
+            } else {
+                hi
+            }
+        };
+        most(0) + most(1) + most(2) >= 0.0
+    };
+    let plane = |t: f32, e: [f32; 3], s: f32| {
+        [
+            t * f[0] + s * e[0],
+            t * f[1] + s * e[1],
+            t * f[2] + s * e[2],
+        ]
+    };
+    inside(plane(tan[0], r, -1.0))
+        && inside(plane(tan[0], r, 1.0))
+        && inside(plane(tan[1], u, -1.0))
+        && inside(plane(tan[1], u, 1.0))
+}
+
+/// The node `n`'s planes from the origin `o`, in units, as the walk holds
+/// them (`cast::bounds`).
+pub fn planes(o: [i32; 3], n: &Node) -> Proxy {
+    let (lo, hi) = bounds(n, grid_of(o));
+    Proxy { says: BOX, lo, hi }
+}
+
 /// The most zooms a node over the cut is descended by in one of the GPU's
 /// rounds (`steps`): its descendants that many zooms finer queued at once.
 /// One: three, a third of the rounds, asked three times the nodes, the

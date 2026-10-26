@@ -573,7 +573,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..blended(SHADER_PROXY_RASTER, CULL_BACK)
             },
             &[],
-            &[&[[0, UNIFORM], [1, STORAGE]]],
+            &[&[[0, UNIFORM], [1, STORAGE], [2, STORAGE]]],
         ),
         // Only where the opaque world left the far plane, so covered pixels never run it.
         PIPELINE_SKY => plan(

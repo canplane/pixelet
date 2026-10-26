@@ -87,7 +87,9 @@ fn main() {
     // Where the cut's boxes lie in its scratch and how one is laid
     // (pxl-spec-core proxy.rs), as the raster reads them.
     {
-        use pxl_spec_core::proxy::{box_at, corner, BOX_FLAGS, BOX_HI, BOX_LO, BOX_WORDS, EYED};
+        use pxl_spec_core::proxy::{
+            box_at, corner, BOXES, BOX_FLAGS, BOX_HI, BOX_LO, BOX_WORDS, COUNT_BOXES, EYED,
+        };
         let at = box_at(0);
         // A box's 36 corners as `corner` winds them, then wound the other way.
         let corners: Vec<String> = (0..72)
@@ -98,7 +100,7 @@ fn main() {
             "const PROXY_CORNERS = array<vec3f, 72>({});\n",
             corners.join(", ")
         );
-        let proxy = corners + &format!("const PROXY_BOX_AT: u32 = {at}u;\nconst PROXY_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst PROXY_BOX_LO: u32 = {BOX_LO}u;\nconst PROXY_BOX_HI: u32 = {BOX_HI}u;\nconst PROXY_BOX_FLAGS: u32 = {BOX_FLAGS}u;\nconst PROXY_EYED: u32 = {EYED}u;\n");
+        let proxy = corners + &format!("const PROXY_BOX_AT: u32 = {at}u;\nconst PROXY_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst PROXY_BOX_LO: u32 = {BOX_LO}u;\nconst PROXY_BOX_HI: u32 = {BOX_HI}u;\nconst PROXY_BOX_FLAGS: u32 = {BOX_FLAGS}u;\nconst PROXY_EYED: u32 = {EYED}u;\nconst PROXY_BOXES: u32 = {BOXES}u;\nconst PROXY_COUNT_BOXES: u32 = {COUNT_BOXES}u;\n");
         std::fs::write(out.join("proxy_box.wgsl"), proxy).expect("the proxy's boxes' shader");
     }
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its

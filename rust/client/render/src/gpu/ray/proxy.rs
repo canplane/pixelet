@@ -55,6 +55,8 @@ pub struct ProxyFrame {
     origin: [i32; 3],
     axes: [[f32; 3]; 3],
     tan: [f32; 2],
+    /// How far the eye's rays reach.
+    reach: f32,
     first: [i32; 2],
     laid: bool,
     pub size: [u32; 2],
@@ -74,6 +76,7 @@ impl ProxyFrame {
             origin: [e[eye::ORIGIN], e[eye::ORIGIN + 1], e[eye::ORIGIN + 2]].map(|w| w as i32),
             axes: [v(eye::RIGHT), v(eye::UP), v(eye::FORWARD)],
             tan: [f32::from_bits(e[eye::TAN]), f32::from_bits(e[eye::TAN + 1])],
+            reach: f32::from_bits(e[eye::FORWARD + 3]),
             first: [w(0), w(1)],
             laid: w(2) != 0,
             size,
@@ -205,7 +208,11 @@ impl ProxyBuffers {
             );
             self.raster_group = g.bind_group(
                 self.raster_built.layouts[0],
-                &[buffer_entry(0, self.uniform), buffer_entry(1, self.data)],
+                &[
+                    buffer_entry(0, self.uniform),
+                    buffer_entry(1, self.data),
+                    buffer_entry(2, self.counts),
+                ],
             );
         }
         if bound != self.bound {
@@ -232,8 +239,18 @@ impl ProxyBuffers {
             self.bound = bound;
         }
         let o = frame.origin;
+        // The seeds the eye may see, culled here as the GPU culls every node
+        // after them (`proxy::visible`): the costliest it asks.
+        let mut seeds = Vec::with_capacity((SEEDS * NODE_WORDS) as usize);
+        for k in 0..SEEDS {
+            let n = proxy::seed(o, frame.first, k);
+            if proxy::visible(&proxy::planes(o, &n), frame.axes, frame.tan, frame.reach) {
+                seeds.extend_from_slice(&proxy::node_words(&n));
+            }
+        }
+        let sown = (seeds.len() / NODE_WORDS as usize) as u32;
         let mut counts = [0u32; COUNTS as usize];
-        counts[COUNT_QUEUE as usize] = SEEDS;
+        counts[COUNT_QUEUE as usize] = sown;
         counts[COUNT_COARSER as usize] = frame.coarser;
         let c = proxy::coverage(o, frame.first);
         for a in 0..3 {
@@ -242,18 +259,11 @@ impl ProxyBuffers {
         }
         counts[COUNT_PIXEL as usize] = frame.pixel().to_bits();
         g.write_buffer(self.counts, 0, bytes(&counts));
-        let mut seeds = vec![0u32; (SEEDS * NODE_WORDS) as usize];
-        for k in 0..SEEDS {
-            let at = (k * NODE_WORDS) as usize;
-            seeds[at..at + NODE_WORDS as usize].copy_from_slice(&proxy::node_words(&proxy::seed(
-                o,
-                frame.first,
-                k,
-            )));
+        if !seeds.is_empty() {
+            g.write_buffer(self.data, 0, bytes(&seeds));
         }
-        g.write_buffer(self.data, 0, bytes(&seeds));
         let mut args = [0u32; ARGS_WORDS as usize];
-        args[..3].copy_from_slice(&[SEEDS.div_ceil(proxy::WORKGROUP), 1, 1]);
+        args[..3].copy_from_slice(&[sown.div_ceil(proxy::WORKGROUP), 1, 1]);
         args[ARGS_DRAW as usize] = BOX_VERTICES;
         g.write_buffer(self.args, 0, bytes(&args));
         let pass = g.compute_pass(encoder, stamps[GpuSpanName::proxy as usize].pass());

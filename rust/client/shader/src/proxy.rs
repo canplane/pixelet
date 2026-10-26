@@ -41,42 +41,15 @@ fn put(data: &mut [u32], i: u32, v: u32) {
     pxl_spec_core::fill::put(data, i, v);
 }
 
-/// Whether the box `p`, in units from the eye, may hold something the eye
-/// sees: its nearest point within the eye's reach, and some of it inside
-/// each of the four planes the screen's edges and the eye make, each
-/// tested at the box's corner farthest inside it.
+/// Whether the box `p` may hold something the eye sees (`proxy::visible`).
 fn seen(eye: &Eye, p: &Proxy) -> bool {
-    let near = |a: usize| {
-        let v = if p.lo[a] > 0.0 {
-            p.lo[a]
-        } else if p.hi[a] < 0.0 {
-            p.hi[a]
-        } else {
-            0.0
-        };
-        v * v
-    };
-    let reach = eye.forward_far.w;
-    if near(0) + near(1) + near(2) > reach * reach {
-        return false;
-    }
-    let (f, r, u) = (eye.forward_far, eye.right_tau, eye.up);
-    let inside = |n: [f32; 3]| {
-        let most = |a: usize| {
-            let (lo, hi) = (n[a] * p.lo[a], n[a] * p.hi[a]);
-            if lo > hi {
-                lo
-            } else {
-                hi
-            }
-        };
-        most(0) + most(1) + most(2) >= 0.0
-    };
-    let plane = |t: f32, e: Vec4, s: f32| [t * f.x + s * e.x, t * f.y + s * e.y, t * f.z + s * e.z];
-    inside(plane(eye.tan.x, r, -1.0))
-        && inside(plane(eye.tan.x, r, 1.0))
-        && inside(plane(eye.tan.y, u, -1.0))
-        && inside(plane(eye.tan.y, u, 1.0))
+    let v = |e: Vec4| [e.x, e.y, e.z];
+    proxy::visible(
+        p,
+        [v(eye.right_tau), v(eye.up), v(eye.forward_far)],
+        [eye.tan.x, eye.tan.y],
+        eye.forward_far.w,
+    )
 }
 
 /// Node `k` of queue `q` in the cut's scratch (pxl-spec-core

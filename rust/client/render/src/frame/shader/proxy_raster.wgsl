@@ -5,7 +5,10 @@
 // them, the faces turned away culled, at its planes as the cut wrote them,
 // grown already (`inflated`); a pixel keeps the nearest face its middle's
 // ray meets, its box plus one and that face's depth. A box about the eye
-// (`eyed`) is drawn nowhere: a reader walks it from the eye.
+// (`eyed`) is drawn nowhere: a reader walks it from the eye. The boxes are
+// drawn last written first: the cut writes a far box in an earlier round
+// than a near one, so they are drawn about front to back, and a face behind
+// one drawn is mostly tested out before it is shaded.
 
 struct Raster {
   // The eye's unit right and the tangent of the screen's half-angle across,
@@ -21,6 +24,7 @@ struct Raster {
 
 @group(0) @binding(0) var<uniform> raster: Raster;
 @group(0) @binding(1) var<storage, read> data: array<u32>;
+@group(0) @binding(2) var<storage, read> counts: array<u32>;
 
 struct RasterOut {
   @builtin(position) clip: vec4f,
@@ -33,9 +37,10 @@ fn plane(w: u32) -> f32 {
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> RasterOut {
-  let w = PROXY_BOX_AT + ii * PROXY_BOX_WORDS;
+  let k = min(counts[PROXY_COUNT_BOXES], PROXY_BOXES) - 1u - ii;
+  let w = PROXY_BOX_AT + k * PROXY_BOX_WORDS;
   var o: RasterOut;
-  o.index = ii + 1u;
+  o.index = k + 1u;
   if ((data[w + PROXY_BOX_FLAGS] & PROXY_EYED) != 0u) {
     o.clip = vec4f(0.0, 0.0, -1.0, 1.0);
     return o;
