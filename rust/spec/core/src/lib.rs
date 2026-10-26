@@ -29,6 +29,7 @@ pub mod ground;
 pub mod lattice;
 pub mod observed;
 pub mod overwrite;
+pub mod proxied;
 pub mod proxy;
 pub mod ray;
 pub mod scatter;

@@ -17,14 +17,14 @@ use crate::world::{face_of, Unlooked, World};
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
 /// pxl-spec-core `ray`): the cast writes them.
-type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
+pub(crate) type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on and the
 /// face it entered through, then how far as f32 bits, then the four looks
 /// the ground's block is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
 /// face (`World::faced`); where it met nothing, the first two zero.
-fn word<A: Copy>(
+pub(crate) fn word<A: Copy>(
     ray: &cast::Ray,
     met: Met<A>,
     steps: bool,
@@ -50,14 +50,14 @@ const _: () = assert!(
 /// The tangents across and up of the middle of drawn pixel `p` of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
-fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
+pub(crate) fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
     let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
 }
 
 /// A ray's words written into the rays at pixel `p`.
-fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
+pub(crate) fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
     let mut k = 0;
     while k < ray::WORDS {
         // SAFETY: within the rays, bounded by their size where `p` was.
@@ -250,7 +250,7 @@ pub fn miss_cs(
 
 /// Whether each ray reports the nodes its descent asked (pxl-spec-core
 /// `eye::SHOW_STEPS`).
-fn shows_steps(eye: &Eye) -> bool {
+pub(crate) fn shows_steps(eye: &Eye) -> bool {
     eye.origin.w as u32 & eye::SHOW_STEPS != 0
 }
 
@@ -258,7 +258,7 @@ fn shows_steps(eye: &Eye) -> bool {
 /// root, a share of the stop's distance: about a drawn pixel's width there,
 /// nearer than any proxy's face could start it; and how far past it the
 /// point lies that names the stop's node.
-const SHORT: f32 = 1.0 / 4096.0;
+pub(crate) const SHORT: f32 = 1.0 / 4096.0;
 
 /// The oracle's counts (pxl-render gpu/ray/cast.rs `Oracle`), by word.
 const STOPS: u32 = 0;
@@ -289,7 +289,7 @@ const DIFFERED_STEPS: u32 = 1024;
 
 /// Whether two stops are one: the same first word, at distances within
 /// `SHORT` of the first's.
-fn same(w: u32, t: f32, w2: u32, t2: f32) -> bool {
+pub(crate) fn same(w: u32, t: f32, w2: u32, t2: f32) -> bool {
     let d = t2 - t;
     w == w2 && d <= t * SHORT && -d <= t * SHORT
 }
@@ -298,7 +298,7 @@ fn same(w: u32, t: f32, w2: u32, t2: f32) -> bool {
 /// none, down its parents from its root as `Reading` steps them: `n.zoom`
 /// reads of a children's word. [naga] `n` by value: read through a
 /// reference within the loop, it lowers to a local naga refuses.
-fn located(seen: &Seen, o: [i32; 3], n: cast::Node) -> u32 {
+pub(crate) fn located(seen: &Seen, o: [i32; 3], n: cast::Node) -> u32 {
     let root = cast::Node {
         corner: [0; 3],
         zoom: 0,
@@ -324,17 +324,17 @@ fn located(seen: &Seen, o: [i32; 3], n: cast::Node) -> u32 {
 }
 
 /// `n`'s ancestor at zoom `z`, no finer than `n`.
-fn ancestor(n: &cast::Node, z: u32) -> cast::Node {
+pub(crate) fn ancestor(n: &cast::Node, z: u32) -> cast::Node {
     cast::Node { zoom: z, ..*n }.over((n.corner, n.roots)).0
 }
 
 /// Over a walk started at a node, what was handed each node over it, read
 /// off the observed pyramid only when the walk climbs past its start
 /// (`located`).
-struct Climbed<'a> {
-    seen: &'a Seen,
-    origin: [i32; 3],
-    start: cast::Node,
+pub(crate) struct Climbed<'a> {
+    pub(crate) seen: &'a Seen,
+    pub(crate) origin: [i32; 3],
+    pub(crate) start: cast::Node,
 }
 
 impl cast::Over<u32> for Climbed<'_> {
@@ -348,7 +348,7 @@ impl cast::Over<u32> for Climbed<'_> {
 /// not move along. Its reader holds it to 0 and up, so that 0 is the
 /// unbounded plane's, and no extreme is written that a shader's literal
 /// could not name.
-fn entered(direction: [f32; 3], lo: [f32; 3], hi: [f32; 3]) -> f32 {
+pub(crate) fn entered(direction: [f32; 3], lo: [f32; 3], hi: [f32; 3]) -> f32 {
     let near = |d: f32, lo: f32, hi: f32| {
         if d > 0.0 {
             lo / d
