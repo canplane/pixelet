@@ -142,12 +142,22 @@ pixel walks several times the rays. A pixel that walks also misses the observed
 pyramid more often and walks again in `miss_cs`; that is in the number. A
 comparison, not a profile: one load each, its first casts among the frames.
 
+## Measured again, 2026-10-26: on a fixed path
+
+A standing view has no cast that moving asks for. The cast as built is now
+measured on one scripted path every load repeats — zoom out, zoom in, once
+round — at dpr 2 with the resolution fixed
+([the cast on a fixed path](../experiment/20261026-the-cast-on-a-fixed-path/README.md)):
+cast p95 79 ms, three loads within a millisecond, where the same build standing
+still casts 56.2 ms. That is the baseline a proxy's cast is weighed against, run
+on the same path.
+
 ## Recommended: the samples go with the proxy, not before it
 
 Recommended by the reduce session, not ordered.
 
 - **The samples' answer is not removed on its own.** The cast already stands
-  about four times over the gate of
+  four to five times over the gate of
   [20261020](./20261020-a-visit-reads-one-entry.md) (p95 ≤ 16.7 ms), and a
   pixel's own walk from its cell's start multiplies it again.
 - **Cause 1 and the walk's cost have one answer: a shorter walk.** That is the
@@ -155,8 +165,9 @@ Recommended by the reduce session, not ordered.
   decides the pixel. A pixel starts at its box's front face, near the block it
   stops on, not at its cell's start. So "For 1" is measured together with the
   proxy, as one cast: the boxes drawn, every pixel walking from its box, no
-  samples' answer. If that cast is under the one as built, both are taken; if
-  not, the samples stay and the shimmer is answered another way.
+  samples' answer. If that cast, on the fixed path above, is under the one as
+  built, both are taken; if not, the samples stay and the shimmer is answered
+  another way.
 - **Until then the steps view shows a path the frame does not run.** It should
   show the frame's own: a pixel that took a sample's block reports that sample's
   visits, recorded beside the sample's block. That waits for the beam layout in
