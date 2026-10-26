@@ -19,3 +19,6 @@ export CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/rust/target/session/$C
 
 Set it in the same command as the cargo or make it is for: a shell's variables
 do not outlive the command.
+
+What a change runs while working is the verify-change skill's
+([verify-change](../verify-change/SKILL.md)).
