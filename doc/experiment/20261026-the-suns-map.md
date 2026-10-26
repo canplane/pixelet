@@ -135,9 +135,9 @@ test), so a rate from one load is not a rate.
 
 ## The eye's split, every frame
 
-Branch `experiment/20261026-sun-raster`, on main past this one's base. The
-keep policy is gone and the map is cast as the eye's rays are, every slot
-each frame it is cast:
+On main (e04a3a855, then 1c5455121 and 403ddd70d). The keep policy is
+gone and the map is cast as the eye's rays are, every slot each frame it is
+cast:
 
 - The beam as above, always. Then a sample every 4 slots (`sun::SAMPLE`),
   walked off it into the eye's sample words (`sun_sample_cs`,
@@ -150,6 +150,10 @@ each frame it is cast:
   `picked`). The rest are listed by the eye's `listed` into the eye's
   dispatch layout (`ray::MISS_ARGS_*`) and walked apart (`sun_miss_cs`), as
   the eye's `cast_cs` and `miss_list_cs` split.
+- The sun's beam rays, samples and missed slots walk the observed pyramid
+  as the eye's walks do, in passes of their own, through the eye's lines
+  and resume (1c5455121): a node the eye's rays or an earlier frame asked
+  at the same zooms is read, not asked again.
 - A frame casts the map only where what it reads moved: the light's frame
   or box, the eye's place, quality or zooms, or the world. The eye's look
   alone casts nothing, nor does a standing frame. In the orbit camera a
@@ -174,11 +178,14 @@ What the first cuts showed (rough, single loads):
 - **Correctness.** Against a walk under the same rule, measured with the
   check before it was taken out: stop differs on 65 of 33.5M texels, depth
   on 0.38%.
-- **Speed.** Not yet a gain. With the walk in the pick pass, the 12% left
-  walking sat in nearly every 8 × 8 workgroup: `sun_walk` p95 28–48 ms,
-  `sun_sample` 3–7, `sun_raster` 1–3. And every moving frame now casts the
-  whole map, where the kept map cast about a quarter of it. The miss split
-  is the eye's answer to the first. It is built and not yet measured.
+- **Speed.** Before the miss split, not a gain: the 12% left walking sat in
+  nearly every 8 × 8 workgroup, `sun_walk` p95 28–48 ms, `sun_sample` 3–7,
+  `sun_raster` 1–3, and every moving frame cast the whole map where the
+  kept map cast about a quarter of it. With the misses walked apart and the
+  sun's walks on the pyramid, on the start view 96.9% of slots took the
+  pick and each of `sun_beam`, `sun_sample`, `sun_raster`, `sun_pick` and
+  `sun_walk` was under 1.5 ms at p95 (1c5455121's single load). The user
+  judges it smooth while moving; it was not measured on the fixed path.
 - **Against 9/26 (e78eeec55), read off the code.** That shadow pass drew the
   chunk meshes' boxes, which the mesher had built once per chunk, again from
   the light. It paid no ray. Here the boxes are found each frame by the

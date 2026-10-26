@@ -211,6 +211,18 @@ impl Grid {
         ]
     }
 
+    /// The sample at or before the screen's point at the tangents `[tx,
+    /// ty]`, across and up, from the screen's left and top `NEAR` samples
+    /// past it: with the next across, down and both, the four about it.
+    pub fn sample_before(&self, [tx, ty]: [f32; 2]) -> [u32; 2] {
+        let d = self.s / SAMPLE as f32;
+        let at = |v: f32, n: u32| (libm::floorf(v / d).max(0.0) as u32 + NEAR).min(n - 2);
+        [
+            at(tx + self.tan[0], self.samples[0]),
+            at(self.tan[1] - ty, self.samples[1]),
+        ]
+    }
+
     /// The screen's cell sample `[i, j]` starts from: the one holding it, or
     /// the nearest where it lies past the screen, as only the screen's cells
     /// have a start.
@@ -295,14 +307,17 @@ pub const NODE_ROOTS: u32 = 4;
 pub const NODE_WORDS: u32 = 7;
 
 /// What a beam ray leaves for the pixels about it, in words: how far it
-/// hands on (`Grid::handed`), f32 bits, then the node it stopped at
+/// hands on (`Grid::handed`), f32 bits, the nodes its walk visited, which
+/// the steps view counts into every walk resumed from it, then the node it
+/// stopped at
 /// (`NODE_WORDS`), then, for every node from the root to it, what was
 /// handed it (`world::At::words`), `LINE_STEP` words a zoom, its own at its
 /// zoom. A node's entry in the observed pyramid is its key's
 /// (`observed::entry_of`), so a line holds none. The sun's beam rays leave
 /// the same, their origin after it (pxl-spec-core `sun::LINE_ORIGIN`).
 pub const LINE_T: u32 = 0;
-pub const LINE_NODE: u32 = 1;
+pub const LINE_VISITS: u32 = 1;
+pub const LINE_NODE: u32 = 2;
 pub const LINE_AT: u32 = LINE_NODE + NODE_WORDS;
 pub const LINE_STEP: u32 = crate::world::AT_WORDS;
 pub const LINE_WORDS: u32 = LINE_AT + LINE_STEP * crate::cast::DEPTH as u32;
@@ -330,13 +345,17 @@ pub const NEAR: u32 = 2;
 /// before any block walks itself, and the axis the sample entered it
 /// across: a face its ray reached through air, so one a pixel may show only
 /// where it enters across the same; what lies about that face
-/// (`faces::word`), asked once here for every pixel that shows it.
+/// (`faces::word`), asked once here for every pixel that shows it; and the
+/// nodes visited from the eye to it, its beam ray's and its own, which a
+/// pixel that takes its block reports in the steps view as the walk it
+/// took.
 pub const SAMPLE_NODE: u32 = 0;
 pub const SAMPLE_BLOCK: u32 = SAMPLE_NODE + NODE_WORDS;
 pub const SAMPLE_LACKS: u32 = SAMPLE_BLOCK + 2;
 pub const SAMPLE_AXIS: u32 = SAMPLE_LACKS + 1;
 pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
-pub const SAMPLE_WORDS: u32 = SAMPLE_FACES + 1;
+pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
+pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 
 #[cfg(test)]

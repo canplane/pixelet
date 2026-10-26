@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 414bfe7a596339ec9b72dea6bb3508d9bad75470e671896b6656e5ba48b6c697
+// Inputs: 9b89e3352ce1c19807d6aad9ff36dc4ad94cf5cb32ac99142fe6fc3dde112bb0
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -67,7 +67,7 @@ fn function_() {
             } else {
                 let _e34 = (_e20 + 11u);
                 let _e36 = ((_e15.y * _e34) + _e15.x);
-                let _e37 = (_e36 * 176u);
+                let _e37 = (_e36 * 177u);
                 if (_e37 < _e17) {
                     let _e41 = global_2.member[_e37];
                     phi_154_ = _e41;
@@ -98,7 +98,7 @@ fn function_() {
                             let _e58 = (_e53 < 12u);
                             if _e58 {
                                 let _e62 = ((((_e15.y + _e46) * _e34) + _e15.x) + _e53);
-                                let _e63 = (_e62 * 176u);
+                                let _e63 = (_e62 * 177u);
                                 if (_e63 < _e17) {
                                     let _e67 = global_2.member[_e63];
                                     phi_206_ = _e67;
@@ -148,7 +148,7 @@ fn function_() {
                         break if !(_e51);
                     }
                 }
-                let _e95 = (((_e34 * _e34) * 176u) + (((_e15.y * _e20) + _e15.x) * 2u));
+                let _e95 = (((_e34 * _e34) * 177u) + (((_e15.y * _e20) + _e15.x) * 2u));
                 let _e97 = local;
                 if (_e95 < _e17) {
                     global_2.member[_e95] = bitcast<u32>(_e97);
