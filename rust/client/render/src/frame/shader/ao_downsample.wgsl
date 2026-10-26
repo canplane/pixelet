@@ -7,6 +7,30 @@ fn depth_at(p: vec2i) -> f32 {
   return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(frame_viewport()) - 1), 0);
 }
 
+// From the neighbor with the smaller second difference on each axis, so an
+// edge pixel takes its own surface's side (N8AO's computeNormal).
+fn view_normal(p: vec2i, res: vec2f, uv: vec2f) -> vec3f {
+  let c0 = depth_at(p);
+  let l2 = depth_at(p - vec2i(2, 0));
+  let l1 = depth_at(p - vec2i(1, 0));
+  let r1 = depth_at(p + vec2i(1, 0));
+  let r2 = depth_at(p + vec2i(2, 0));
+  let b2 = depth_at(p - vec2i(0, 2));
+  let b1 = depth_at(p - vec2i(0, 1));
+  let t1 = depth_at(p + vec2i(0, 1));
+  let t2 = depth_at(p + vec2i(0, 2));
+  let dl = abs((2.0 * l1 - l2) - c0);
+  let dr = abs((2.0 * r1 - r2) - c0);
+  let db = abs((2.0 * b1 - b2) - c0);
+  let dt = abs((2.0 * t1 - t2) - c0);
+  let ce = view_pos(c0, uv);
+  let px = vec2f(1.0 / res.x, 0.0);
+  let py = vec2f(0.0, 1.0 / res.y);
+  let dpdx = select(view_pos(r1, uv + px) - ce, ce - view_pos(l1, uv - px), dl < dr);
+  let dpdy = select(view_pos(t1, uv + py) - ce, ce - view_pos(b1, uv - py), db < dt);
+  return normalize(cross(dpdy, dpdx));
+}
+
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let hp = vec2i(i.clip.xy);
