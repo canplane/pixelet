@@ -14,7 +14,10 @@ pub const ORIGIN: usize = 0;
 /// (`ORACLE_OFF`), the world's root (`ORACLE_ROOT`), or, `ORACLE_CUT` and
 /// past it, the box over the stop that the proxy's cut draws, `coarser`
 /// (pxl-spec-core `proxy::cut`) one for each past `ORACLE_CUT`; with
-/// `ORACLE_LOCATE`, that box only found, not walked from.
+/// `ORACLE_LOCATE`, that box only found, not walked from; with
+/// `ORACLE_LOOSE`, walked from its front as it is, not from just short of
+/// it in the node that holds the ray there; with `ORACLE_FROM_EYE`, the box
+/// over the stop the eye's own walk makes, not the cast's.
 pub const STEPS: usize = 3;
 pub const SHOW_STEPS: u32 = 1;
 pub const ORACLE_SHIFT: u32 = 8;
@@ -22,6 +25,8 @@ pub const ORACLE_OFF: u32 = 0;
 pub const ORACLE_ROOT: u32 = 1;
 pub const ORACLE_CUT: u32 = 2;
 pub const ORACLE_LOCATE: u32 = 1 << 16;
+pub const ORACLE_LOOSE: u32 = 1 << 17;
+pub const ORACLE_FROM_EYE: u32 = 1 << 18;
 
 /// Where the oracle starts, off the steps' word (`STEPS`).
 pub const fn oracle(steps: u32) -> u32 {

@@ -152,7 +152,11 @@ impl ResolutionMode {
 ///   cut_n  — at the box over the stop that the proxy's cut draws, `coarser`
 ///            n (rust/spec/core/src/proxy.rs `cut`), from where the ray
 ///            enters it.
-///   locate_n — cut_n's box found, and nothing walked from it.
+///   locate_n — cut_n's start found, and nothing walked from it.
+///   loose_n  — cut_n walked from the box's front in the box's node, as
+///              first built, not from just short of it in the node that
+///              holds the ray there.
+///   eye_n    — cut_n over the stop the eye's own walk makes, not the cast's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum OracleStart {
@@ -166,10 +170,14 @@ pub enum OracleStart {
     cut_8 = 7,
     locate_1 = 8,
     locate_2 = 9,
+    loose_1 = 10,
+    loose_2 = 11,
+    eye_1 = 12,
+    eye_2 = 13,
 }
 
 impl OracleStart {
-    pub const ALL: [OracleStart; 10] = [
+    pub const ALL: [OracleStart; 14] = [
         OracleStart::off,
         OracleStart::root,
         OracleStart::cut_1,
@@ -180,6 +188,10 @@ impl OracleStart {
         OracleStart::cut_8,
         OracleStart::locate_1,
         OracleStart::locate_2,
+        OracleStart::loose_1,
+        OracleStart::loose_2,
+        OracleStart::eye_1,
+        OracleStart::eye_2,
     ];
 
     /// The option a number names, or none for a number the list does not give out.

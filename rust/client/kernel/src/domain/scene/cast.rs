@@ -75,6 +75,10 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
         OracleStart::cut_8 => (eye::ORACLE_CUT + 8, 0),
         OracleStart::locate_1 => (eye::ORACLE_CUT + 1, eye::ORACLE_LOCATE),
         OracleStart::locate_2 => (eye::ORACLE_CUT + 2, eye::ORACLE_LOCATE),
+        OracleStart::loose_1 => (eye::ORACLE_CUT + 1, eye::ORACLE_LOOSE),
+        OracleStart::loose_2 => (eye::ORACLE_CUT + 2, eye::ORACLE_LOOSE),
+        OracleStart::eye_1 => (eye::ORACLE_CUT + 1, eye::ORACLE_FROM_EYE),
+        OracleStart::eye_2 => (eye::ORACLE_CUT + 2, eye::ORACLE_FROM_EYE),
     };
     let steps = (u32::from(s.ray_steps) * eye::SHOW_STEPS) | (oracle << eye::ORACLE_SHIFT) | locate;
     lens::gpu_cast(o, lens::tau(), steps, &mut words)?;

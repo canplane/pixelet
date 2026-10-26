@@ -125,7 +125,7 @@ pub(super) struct CastBuffers {
 
 /// The counts `oracle_cs` keeps, by its words (pxl-shader cast.rs `STOPS`
 /// on): the stops, how its walk again went, and the walk from the eye.
-pub const ORACLE_COUNTS: usize = 15;
+pub const ORACLE_COUNTS: usize = 21;
 
 /// The oracle's measurement, where the eye asks for it (pxl-spec-core
 /// `eye::oracle`, pxl-shader cast.rs `oracle_cs`): its pipeline, its group

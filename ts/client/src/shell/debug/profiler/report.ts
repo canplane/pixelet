@@ -39,6 +39,7 @@ const oracleText = (f: Frame) =>
     `          differed: word ${f.oracle_differed_word}   nearer ${f.oracle_differed_nearer}   as the eye's walk ${f.oracle_differed_true}   left ${f.oracle_differed_left}   clamped ${f.oracle_differed_clamped}   coarser ${
       n1(f.oracle_differed_coarser / f.oracle_differed)
     } a stop   the cast's not the eye's ${f.oracle_untrue}   the eye's lacked ${f.oracle_truth_lacked}`,
+    `          clamped: low ${f.oracle_clamped_low} (${f.oracle_clamped_low_true} as the eye's)   high ${f.oracle_clamped_high} (${f.oracle_clamped_high_true} as the eye's)   the walk's not the eye's ${f.oracle_unlike_eye}   held over the box ${f.oracle_held}`,
   ];
 
 /** The `ray_proxy` cut's sums since boot as the last frame holds them

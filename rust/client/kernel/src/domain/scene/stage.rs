@@ -230,7 +230,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    let [frames, stops, differed, lacked, visits, located, left, differed_word, differed_nearer, differed_true, differed_left, differed_clamped, differed_coarser, coarser, untrue, truth_lacked] =
+    let [frames, stops, differed, lacked, visits, located, left, differed_word, differed_nearer, differed_true, differed_left, differed_clamped, differed_coarser, coarser, untrue, truth_lacked, clamped_low, clamped_low_true, clamped_high, clamped_high_true, unlike_eye, held] =
         stat.oracle;
     set_oracle(OracleSample {
         frames,
@@ -249,6 +249,12 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         coarser,
         untrue,
         truth_lacked,
+        clamped_low,
+        clamped_low_true,
+        clamped_high,
+        clamped_high_true,
+        unlike_eye,
+        held,
     });
     let [frames, boxes, nodes, dropped, shut] = stat.proxy;
     set_proxy(ProxySample {

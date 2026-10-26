@@ -52,6 +52,22 @@
         "locate_2": {
           "label": "Find the proxy box only, 2 coarser",
           "description": "Finds the box a proxy would draw over every point, 2 sizes coarser than the camera grid asks, without walking from it, and times that on its own."
+        },
+        "loose_1": {
+          "label": "From the proxy box as first built, 1 coarser",
+          "description": "Starts at the box front in the box itself, as first built, to compare against the fixed start."
+        },
+        "eye_1": {
+          "label": "From the proxy box over the true hit, 1 coarser",
+          "description": "Takes the box over what each point's own ray truly meets, not what the cast drew."
+        },
+        "loose_2": {
+          "label": "From the proxy box as first built, 2 coarser",
+          "description": "Starts at the box front in the box itself, as first built, to compare against the fixed start."
+        },
+        "eye_2": {
+          "label": "From the proxy box over the true hit, 2 coarser",
+          "description": "Takes the box over what each point's own ray truly meets, not what the cast drew."
         }
       },
       "ray_proxy": {

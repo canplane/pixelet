@@ -276,6 +276,12 @@ const DIFFERED_COARSER: u32 = 11;
 const COARSER: u32 = 12;
 const UNTRUE: u32 = 13;
 const TRUTH_LACKED: u32 = 14;
+const CLAMPED_LOW: u32 = 15;
+const CLAMPED_LOW_TRUE: u32 = 16;
+const CLAMPED_HIGH: u32 = 17;
+const CLAMPED_HIGH_TRUE: u32 = 18;
+const UNLIKE_EYE: u32 = 19;
+const HELD: u32 = 20;
 
 /// What the steps view shows of a pixel whose walk again stopped otherwise
 /// than the cast: the top of its ramp (screen_ray.wgsl).
@@ -373,25 +379,35 @@ fn entered(direction: [f32; 3], lo: [f32; 3], hi: [f32; 3]) -> f32 {
 /// proxy's cut draws (pxl-spec-core `proxy`), `coarser` as the eye's
 /// words say: the coarsest of the stop's ancestors at its cut's zoom or
 /// finer (`proxy::asked`), clipped to its slab by its answer the pyramid
-/// holds (`proxy::of`), from where the ray enters that box; its entry found
-/// down its parents (`located`) and what is over it read only where the
-/// walk climbs out (`Climbed`). Where the eye's words say `ORACLE_LOCATE`,
-/// the box is found and nothing walked. That walk's words are written in
-/// place of the cast's, what lies about the face kept. A pixel that met
-/// nothing walks nothing, as no proxy box would lie under it. A walk that
-/// lacks a node the pyramid holds no answer for keeps the cast's words.
+/// holds (`proxy::of`). The walk starts `SHORT` short of where the ray
+/// enters that box, no later than the stop, in the node over the box's that
+/// holds the ray there (`cast::holding`): the box is found off a point the
+/// float put past the stop, which where the ray but grazes the stop's block
+/// lies in a node beside it, and a walk started in a node the ray is not in
+/// passes what it should meet. `ORACLE_LOOSE` starts it at the front, in
+/// the box's node, as it was; `ORACLE_FROM_EYE` takes the box over the
+/// stop the eye's own walk makes. The start's entry is found down its
+/// parents (`located`) and what is over it read only where the walk climbs
+/// out (`Climbed`). Where the eye's words say `ORACLE_LOCATE`, the start is
+/// found and nothing walked. That walk's words are written in place of the
+/// cast's, what lies about the face kept. A pixel that met nothing walks
+/// nothing, as no proxy box would lie under it. A walk that lacks a node
+/// the pyramid holds no answer for keeps the cast's words.
 ///
 /// With the steps shown, each stop is also walked from the eye, the
 /// world's root at 0 (`cast::rooted`), the stop the pixel's own ray truly
 /// makes, and counted: each stop, those whose walk again stopped otherwise
-/// (`same`), those that lacked, the visits, the reads that found the box
-/// and its answer, and those whose walk left the box's node; of those that
-/// stopped otherwise, those on another word, those nearer, those the walk
-/// from the eye agrees with, those that left the box, those whose start
-/// was held to [0, t], and how much coarser their box was than the stop,
-/// as it is summed over every stop; and the stops the cast made that the
-/// walk from the eye does not, and the walks from the eye that lacked. A
-/// pixel that stopped otherwise shows the top of the steps' ramp.
+/// (`same`), those that lacked, the visits, the reads that found the start
+/// and the box's answer, and those whose walk left the start's node; of
+/// those that stopped otherwise, those on another word, those nearer,
+/// those the walk from the eye agrees with, those that left, those whose
+/// front was held to [0, t], below and above, each with those of them the
+/// eye's walk agrees with, and how much coarser their box was than the
+/// stop, as it is summed over every stop; the stops the cast made that the
+/// walk from the eye does not, the walks from the eye that lacked, the
+/// walks again that stopped otherwise than the eye's, and the starts held
+/// in a node over the box's. A pixel whose walk again stopped otherwise
+/// than the cast shows the top of the steps' ramp.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "oracle_cs"))]
 pub fn oracle_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -414,10 +430,36 @@ pub fn oracle_cs(
     let ray = eye_ray(eye, pixel_tan(eye, id, size));
     let words = eye.origin.w as u32;
     let from = eye::oracle(words);
-    let hit = first >> ray::ZOOM_SHIFT & ((1 << ray::ZOOM_BITS) - 1);
+    let steps = shows_steps(eye);
     let mut q = Reading { seen };
-    let mut clamped = false;
-    let (met, start) = if from == eye::ORACLE_ROOT {
+    // The eye's own walk, where it is counted against or the box is taken
+    // over its stop.
+    let truth = if steps || words & eye::ORACLE_FROM_EYE != 0 {
+        cast::rooted(&mut q, origin, &ray, detail, Until::Fills, &mut ())
+    } else {
+        Met {
+            ends: Ends::Lacks,
+            stop: cast::Stop {
+                t: 0.0,
+                axis: 0,
+                node: cast::Node::ROOT,
+                at: observed::NONE,
+                block: MISSED,
+            },
+            visits: 0,
+        }
+    };
+    let true_word = word(&ray, truth, false, 0)[0];
+    let truth_lacked = truth.ends == Ends::Lacks;
+    // The stop the box is taken over: the cast's, or the eye's walk's.
+    let (over, over_t) = if words & eye::ORACLE_FROM_EYE != 0 && truth.ends == Ends::Stop {
+        (true_word, truth.stop.t)
+    } else {
+        (first, t)
+    };
+    let hit = over >> ray::ZOOM_SHIFT & ((1 << ray::ZOOM_BITS) - 1);
+    let (mut low, mut high, mut held) = (false, false, false);
+    let (met, start, coarser) = if from == eye::ORACLE_ROOT {
         let at = q.root(cast::Node::ROOT.index(origin));
         let met = cast::walk(
             &mut q,
@@ -429,10 +471,10 @@ pub fn oracle_cs(
             &cast::Rooted(at),
             &mut (),
         );
-        (met, cast::Node::ROOT)
+        (met, cast::Node::ROOT, hit)
     } else {
         let coarser = from - eye::ORACLE_CUT;
-        let (p, roots) = cast::point_at(origin, &ray, t + t * SHORT);
+        let (p, roots) = cast::point_at(origin, &ray, over_t + over_t * SHORT);
         let leaf = cast::Node {
             corner: p,
             zoom: pxl_spec_core::FINEST_ZOOM,
@@ -441,26 +483,37 @@ pub fn oracle_cs(
         // The box: the first of its ancestors down from the root at its
         // cut's zoom or finer, the stop's own at the latest.
         let mut z = 0;
-        let (mut start, mut asked, mut node, mut cut) = (leaf, [0, 0], leaf_proxy(), 0);
+        let (mut boxed, mut asked, mut node, mut cut) = (leaf, [0, 0], leaf_proxy(), 0);
         while z <= hit {
-            start = ancestor(&leaf, z);
-            (asked, node, cut) = proxy::asked(origin, detail, coarser, &start);
+            boxed = ancestor(&leaf, z);
+            (asked, node, cut) = proxy::asked(origin, detail, coarser, &boxed);
             if z >= cut {
                 break;
             }
             z += 1;
         }
-        let mut at = located(seen, origin, start);
-        let i = q.node(&mut at, start.zoom, start.index(origin), asked, 0.0);
-        let b = proxy::of(origin, &start, node, cut, i, ground::UNBOUNDED[0]);
+        let mut at = located(seen, origin, boxed);
+        let i = q.node(&mut at, boxed.zoom, boxed.index(origin), asked, 0.0);
+        let b = proxy::of(origin, &boxed, node, cut, i, ground::UNBOUNDED[0]);
         let enter = entered(ray.direction, b.lo, b.hi);
-        clamped = !(enter >= 0.0 && enter <= t);
-        let t0 = if enter < 0.0 {
+        (low, high) = (enter < 0.0, enter > over_t);
+        let front = if low {
             0.0
-        } else if enter > t {
-            t
+        } else if high {
+            over_t
         } else {
             enter
+        };
+        let (start, t0) = if words & eye::ORACLE_LOOSE != 0 {
+            (boxed, front)
+        } else {
+            let t0 = front - front * SHORT;
+            let start = cast::holding(origin, &ray, boxed, t0);
+            if start.zoom != boxed.zoom {
+                held = true;
+                at = located(seen, origin, start);
+            }
+            (start, t0)
         };
         if words & eye::ORACLE_LOCATE != 0 {
             // Found and not walked; written only where no box is, so what it
@@ -484,9 +537,8 @@ pub fn oracle_cs(
             },
             &mut (),
         );
-        (met, start)
+        (met, start, hit - boxed.zoom)
     };
-    let steps = shows_steps(eye);
     let mut w = word(&ray, met, steps, faces);
     let lacked = met.ends == Ends::Lacks;
     let differed = !lacked && !same(first, t, w[0], met.stop.t);
@@ -507,21 +559,26 @@ pub fn oracle_cs(
             && a.corner[0] == start.corner[0]
             && a.corner[1] == start.corner[1]
             && a.corner[2] == start.corner[2]);
-        let coarser = hit - start.zoom;
         crate::add(counts, COARSER, coarser);
         if from != eye::ORACLE_ROOT {
             crate::add(counts, LOCATED, start.zoom + 1);
             if left {
                 crate::add(counts, LEFT, 1);
             }
+            if held {
+                crate::add(counts, HELD, 1);
+            }
         }
-        let truth = cast::rooted(&mut q, origin, &ray, detail, Until::Fills, &mut ());
-        let true_word = word(&ray, truth, false, 0)[0];
-        let truth_lacked = truth.ends == Ends::Lacks;
+        let eyes = !truth_lacked && !lacked && same(true_word, truth.stop.t, w[0], met.stop.t);
         if truth_lacked {
             crate::add(counts, TRUTH_LACKED, 1);
-        } else if !same(true_word, truth.stop.t, first, t) {
-            crate::add(counts, UNTRUE, 1);
+        } else {
+            if !same(true_word, truth.stop.t, first, t) {
+                crate::add(counts, UNTRUE, 1);
+            }
+            if !lacked && !eyes {
+                crate::add(counts, UNLIKE_EYE, 1);
+            }
         }
         if lacked {
             crate::add(counts, LACKED, 1);
@@ -533,14 +590,26 @@ pub fn oracle_cs(
             if met.stop.t < t {
                 crate::add(counts, DIFFERED_NEARER, 1);
             }
-            if !truth_lacked && same(true_word, truth.stop.t, w[0], met.stop.t) {
+            if eyes {
                 crate::add(counts, DIFFERED_TRUE, 1);
             }
             if left {
                 crate::add(counts, DIFFERED_LEFT, 1);
             }
-            if clamped {
+            if low || high {
                 crate::add(counts, DIFFERED_CLAMPED, 1);
+            }
+            if low {
+                crate::add(counts, CLAMPED_LOW, 1);
+                if eyes {
+                    crate::add(counts, CLAMPED_LOW_TRUE, 1);
+                }
+            }
+            if high {
+                crate::add(counts, CLAMPED_HIGH, 1);
+                if eyes {
+                    crate::add(counts, CLAMPED_HIGH_TRUE, 1);
+                }
             }
             crate::add(counts, DIFFERED_COARSER, coarser);
         }
