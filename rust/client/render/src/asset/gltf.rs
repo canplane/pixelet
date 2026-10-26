@@ -2,8 +2,17 @@
 
 //! A glTF 2.0 parser for what the shipped models use, output in the file's own
 //! frame. It awaits `pause` between units (an accessor slice, a node, a skin, a
-//! channel), so a file's size never bounds how long one poll runs.
+//! channel), so no decode runs long in one poll. The document is checked whole
+//! before the first pause, so that poll is bounded only by the file's size,
+//! which whatever accepts the file must bound.
+//!
+//! The bytes are not trusted. A file that reaches past its buffers, names an
+//! index out of range, gives a node two parents or a cycle, would decode more
+//! than `COMPONENTS_PER_BYTE` of its size, or draws more than the `MAX_SCENE_*`
+//! is refused as malformed or too large, and one that needs what is not read (a
+//! sparse accessor, a required extension) as unsupported; none panics.
 
+use core::cell::Cell;
 use core::future::Future;
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -12,6 +21,7 @@ use xpute_kit::codec::json::{read_json, JsonValue};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
+/// Every attribute has the position's vertex count, and every index is below it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GltfPrimitive {
     pub position: Vec<f32>,
@@ -67,6 +77,8 @@ pub struct GltfAnimation {
     pub channels: Vec<GltfChannel>,
 }
 
+/// Every index names an element that is there. The nodes are a forest: one
+/// parent at most, no cycle, and `roots` distinct and parentless.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Gltf {
     pub nodes: Vec<GltfNode>,
@@ -80,28 +92,47 @@ const GLB_MAGIC: u32 = 0x4654_6c67;
 const CHUNK_JSON: u32 = 0x4e4f_534a;
 const CHUNK_BIN: u32 = 0x004e_4942;
 
-fn component_size(t: u32) -> usize {
+/// Decoded components a file may yield for each byte it and its buffers hold.
+/// An accessor read twice is decoded twice, so without a bound a small file
+/// names many times its size; the shipped models yield about one.
+const COMPONENTS_PER_BYTE: usize = 4;
+
+/// The most the scene may draw, a mesh counted at every node that draws it: a
+/// mesh is decoded once but laid out for each. Far above the shipped models
+/// (3,836 vertices, 7,422 indices and 7 primitives at most); what an upload
+/// may claim is for whatever accepts it to bound tighter.
+pub const MAX_SCENE_VERTICES: u32 = 1 << 20;
+pub const MAX_SCENE_INDICES: u32 = 1 << 22;
+pub const MAX_SCENE_PRIMITIVES: u32 = 1 << 12;
+
+fn component_size(t: usize) -> Option<usize> {
     match t {
-        5120 | 5121 => 1,
-        5122 | 5123 => 2,
-        _ => 4,
+        5120 | 5121 => Some(1),
+        5122 | 5123 => Some(2),
+        5125 | 5126 => Some(4),
+        _ => None,
     }
 }
 
-fn type_size(t: &str) -> usize {
+fn type_size(t: &str) -> Option<usize> {
     match t {
-        "SCALAR" => 1,
-        "VEC2" => 2,
-        "VEC3" => 3,
-        "VEC4" | "MAT2" => 4,
-        "MAT3" => 9,
-        "MAT4" => 16,
-        _ => 1,
+        "SCALAR" => Some(1),
+        "VEC2" => Some(2),
+        "VEC3" => Some(3),
+        "VEC4" | "MAT2" => Some(4),
+        "MAT3" => Some(9),
+        "MAT4" => Some(16),
+        _ => None,
     }
 }
 
 fn u32_le(b: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
+}
+
+#[track_caller]
+fn malformed() -> MarshalError {
+    MarshalError::new(Errno::EBADMSG)
 }
 
 /// Bounds one accessor slice between pauses.
@@ -112,6 +143,10 @@ pub async fn parse_gltf<P: Future<Output = ()>>(
     external_buffers: &[&[u8]],
     pause: impl Fn() -> P,
 ) -> Result<Gltf, MarshalError> {
+    let budget = external_buffers
+        .iter()
+        .fold(bytes.len(), |n, b| n.saturating_add(b.len()))
+        .saturating_mul(COMPONENTS_PER_BYTE);
     if bytes.len() >= 12 && u32_le(bytes, 0) == GLB_MAGIC {
         let length = (u32_le(bytes, 8) as usize).min(bytes.len());
         let mut at = 12;
@@ -120,24 +155,27 @@ pub async fn parse_gltf<P: Future<Output = ()>>(
         while at + 8 <= length {
             let chunk_length = u32_le(bytes, at) as usize;
             let chunk_type = u32_le(bytes, at + 4);
-            let end = (at + 8 + chunk_length).min(bytes.len());
+            let end = (at + 8)
+                .checked_add(chunk_length)
+                .filter(|&end| end <= length)
+                .ok_or_else(malformed)?;
             let data = &bytes[at + 8..end];
             if chunk_type == CHUNK_JSON {
                 text = core::str::from_utf8(data).ok();
             } else if chunk_type == CHUNK_BIN && bin.is_none() {
                 bin = Some(data);
             }
-            at += 8 + chunk_length;
+            at = end;
         }
-        let text = text.ok_or(MarshalError::new(Errno::EBADMSG))?;
-        let json = read_json(text).ok_or(MarshalError::new(Errno::EBADMSG))?;
+        let text = text.ok_or_else(malformed)?;
+        let json = read_json(text).ok_or_else(malformed)?;
         let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
         buffers.extend_from_slice(external_buffers);
-        read_document(json, &buffers, &pause).await
+        read_document(json, &buffers, &pause, budget).await
     } else {
-        let text = core::str::from_utf8(bytes).map_err(|_| MarshalError::new(Errno::EBADMSG))?;
-        let json = read_json(text).ok_or(MarshalError::new(Errno::EBADMSG))?;
-        read_document(json, external_buffers, &pause).await
+        let text = core::str::from_utf8(bytes).map_err(|_| malformed())?;
+        let json = read_json(text).ok_or_else(malformed)?;
+        read_document(json, external_buffers, &pause, budget).await
     }
 }
 
@@ -164,116 +202,241 @@ fn floats<const N: usize>(v: Option<JsonValue>, default: [f64; N]) -> [f64; N] {
     out
 }
 
+/// `v` as an index below `len`; none for a fraction, a negative, NaN or one
+/// past it.
+fn index_below(v: f64, len: usize) -> Option<usize> {
+    let i = v as usize;
+    (v >= 0.0 && i as f64 == v && i < len).then_some(i)
+}
+
+/// A field that is an index below `len`, None when absent; malformed when it
+/// is anything else.
+fn index_of(v: Option<JsonValue>, len: usize) -> Result<Option<usize>, MarshalError> {
+    match v {
+        None => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .and_then(|v| index_below(v, len))
+            .map(Some)
+            .ok_or_else(malformed),
+    }
+}
+
+/// A field that must be an index below `len`.
+fn index_in(v: Option<JsonValue>, len: usize) -> Result<usize, MarshalError> {
+    index_of(v, len)?.ok_or_else(malformed)
+}
+
+/// A count or a byte offset, `default` when absent.
+fn size(v: Option<JsonValue>, default: usize) -> Result<usize, MarshalError> {
+    Ok(index_of(v, usize::MAX)?.unwrap_or(default))
+}
+
+/// An accessor's fields, each looked up once: a lookup rescans the object, and
+/// one accessor may be read for any number of primitives.
+#[derive(Clone, Copy)]
+struct AccessorFields<'a> {
+    kind: Option<&'a str>,
+    count: Option<JsonValue<'a>>,
+    view: Option<JsonValue<'a>>,
+    offset: Option<JsonValue<'a>>,
+    component_type: Option<JsonValue<'a>>,
+    normalized: bool,
+    sparse: bool,
+}
+
+impl<'a> AccessorFields<'a> {
+    fn of(a: JsonValue<'a>) -> Self {
+        AccessorFields {
+            kind: plain(a.get("type")),
+            count: a.get("count"),
+            view: a.get("bufferView"),
+            offset: a.get("byteOffset"),
+            component_type: a.get("componentType"),
+            normalized: a.get("normalized").and_then(|n| n.as_bool()) == Some(true),
+            sparse: a.get("sparse").is_some(),
+        }
+    }
+}
+
+/// A buffer view's fields, each looked up once, as an accessor's are.
+#[derive(Clone, Copy)]
+struct ViewFields<'a> {
+    buffer: Option<JsonValue<'a>>,
+    offset: Option<JsonValue<'a>>,
+    length: Option<JsonValue<'a>>,
+    stride: Option<JsonValue<'a>>,
+}
+
+impl<'a> ViewFields<'a> {
+    fn of(v: JsonValue<'a>) -> Self {
+        ViewFields {
+            buffer: v.get("buffer"),
+            offset: v.get("byteOffset"),
+            length: v.get("byteLength"),
+            stride: v.get("byteStride"),
+        }
+    }
+}
+
+/// A sampler's fields, each looked up once: any number of channels share one.
+#[derive(Clone, Copy)]
+struct SamplerFields<'a> {
+    input: Option<JsonValue<'a>>,
+    output: Option<JsonValue<'a>>,
+    interpolation: &'a str,
+}
+
+impl<'a> SamplerFields<'a> {
+    fn of(s: JsonValue<'a>) -> Self {
+        SamplerFields {
+            input: s.get("input"),
+            output: s.get("output"),
+            interpolation: plain(s.get("interpolation")).unwrap_or("LINEAR"),
+        }
+    }
+}
+
 struct Reader<'a, F> {
-    json: JsonValue<'a>,
+    accessors: Vec<AccessorFields<'a>>,
+    views: Vec<ViewFields<'a>>,
     buffers: &'a [&'a [u8]],
     pause: &'a F,
+    /// Components the file may still decode.
+    budget: Cell<usize>,
 }
 
 impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
+    fn spend(&self, components: usize) -> Result<(), MarshalError> {
+        let left = self
+            .budget
+            .get()
+            .checked_sub(components)
+            .ok_or_else(|| MarshalError::new(Errno::EFBIG))?;
+        self.budget.set(left);
+        Ok(())
+    }
+
+    /// Accessor `index`, which must be of `kind`, its components converted.
     async fn read<T: Copy + Default>(
         &self,
         index: usize,
+        kind: &str,
         convert: fn(f64) -> T,
     ) -> Result<Vec<T>, MarshalError> {
         (self.pause)().await;
-        let a = self
-            .json
-            .get("accessors")
-            .and_then(|x| x.at(index))
-            .ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
-        let count = num(a.get("count")).unwrap_or(0.0) as usize;
-        let width = type_size(plain(a.get("type")).unwrap_or("SCALAR"));
-        let mut out = vec![T::default(); count * width];
-        if let Some(bv_index) = num(a.get("bufferView")) {
-            let bv = self
-                .json
-                .get("bufferViews")
-                .and_then(|x| x.at(bv_index as usize))
-                .ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
-            let buffer_index = num(bv.get("buffer")).unwrap_or(0.0) as usize;
-            let buffer = *self
-                .buffers
-                .get(buffer_index)
-                .ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
-            let component_type = num(a.get("componentType")).unwrap_or(5126.0) as u32;
-            let comp = component_size(component_type);
-            let stride = num(bv.get("byteStride")).map_or(comp * width, |s| s as usize);
-            let base = num(bv.get("byteOffset")).unwrap_or(0.0) as usize
-                + num(a.get("byteOffset")).unwrap_or(0.0) as usize;
-            let norm = a.get("normalized").and_then(|n| n.as_bool()) == Some(true);
-            for e in 0..count {
-                if e > 0 && e % ELEMENTS_PER_PAUSE == 0 {
-                    (self.pause)().await;
-                }
-                for c in 0..width {
-                    let at = base + e * stride + c * comp;
-                    let v = match component_type {
-                        5120 => {
-                            let v = buffer[at] as i8 as f64;
-                            if norm {
-                                (v / 127.0).max(-1.0)
-                            } else {
-                                v
-                            }
-                        }
-                        5121 => {
-                            let v = buffer[at] as f64;
-                            if norm {
-                                v / 255.0
-                            } else {
-                                v
-                            }
-                        }
-                        5122 => {
-                            let v = i16::from_le_bytes([buffer[at], buffer[at + 1]]) as f64;
-                            if norm {
-                                (v / 32767.0).max(-1.0)
-                            } else {
-                                v
-                            }
-                        }
-                        5123 => {
-                            let v = u16::from_le_bytes([buffer[at], buffer[at + 1]]) as f64;
-                            if norm {
-                                v / 65535.0
-                            } else {
-                                v
-                            }
-                        }
-                        5125 => u32_le(buffer, at) as f64,
-                        _ => f32::from_le_bytes([
-                            buffer[at],
-                            buffer[at + 1],
-                            buffer[at + 2],
-                            buffer[at + 3],
-                        ]) as f64,
-                    };
-                    out[e * width + c] = convert(v);
-                }
+        let a = *self.accessors.get(index).ok_or_else(malformed)?;
+        if a.sparse {
+            return Err(MarshalError::new(Errno::ENOTSUP));
+        }
+        if a.kind != Some(kind) {
+            return Err(malformed());
+        }
+        let width = type_size(kind).ok_or_else(malformed)?;
+        let count = index_in(a.count, usize::MAX)?;
+        let len = count.checked_mul(width).ok_or_else(malformed)?;
+        self.spend(len)?;
+        let mut out = vec![T::default(); len];
+        // An accessor with no view is all zeros.
+        let Some(bv_index) = index_of(a.view, self.views.len())? else {
+            return Ok(out);
+        };
+        let bv = self.views[bv_index];
+        let buffer = self.buffers[index_in(bv.buffer, self.buffers.len())?];
+        let view_offset = size(bv.offset, 0)?;
+        let view_length = index_in(bv.length, usize::MAX)?;
+        let view = view_offset
+            .checked_add(view_length)
+            .and_then(|end| buffer.get(view_offset..end))
+            .ok_or_else(malformed)?;
+        let component_type = index_in(a.component_type, usize::MAX)?;
+        let comp = component_size(component_type).ok_or_else(malformed)?;
+        let element = comp * width;
+        let stride = size(bv.stride, element)?;
+        if stride < element {
+            return Err(malformed());
+        }
+        let base = size(a.offset, 0)?;
+        // The last element ends within the view, so no read below leaves it.
+        if let Some(last) = count.checked_sub(1) {
+            let end = last
+                .checked_mul(stride)
+                .and_then(|at| at.checked_add(base))
+                .and_then(|at| at.checked_add(element));
+            if end.is_none_or(|end| end > view.len()) {
+                return Err(malformed());
             }
         }
-        // Sparse accessors read as their dense base; the shipped models have none.
+        let norm = a.normalized;
+        for e in 0..count {
+            if e > 0 && e % ELEMENTS_PER_PAUSE == 0 {
+                (self.pause)().await;
+            }
+            for c in 0..width {
+                let at = base + e * stride + c * comp;
+                let v = match component_type {
+                    5120 => {
+                        let v = view[at] as i8 as f64;
+                        if norm {
+                            (v / 127.0).max(-1.0)
+                        } else {
+                            v
+                        }
+                    }
+                    5121 => {
+                        let v = view[at] as f64;
+                        if norm {
+                            v / 255.0
+                        } else {
+                            v
+                        }
+                    }
+                    5122 => {
+                        let v = i16::from_le_bytes([view[at], view[at + 1]]) as f64;
+                        if norm {
+                            (v / 32767.0).max(-1.0)
+                        } else {
+                            v
+                        }
+                    }
+                    5123 => {
+                        let v = u16::from_le_bytes([view[at], view[at + 1]]) as f64;
+                        if norm {
+                            v / 65535.0
+                        } else {
+                            v
+                        }
+                    }
+                    5125 => u32_le(view, at) as f64,
+                    _ => f32::from_le_bytes([view[at], view[at + 1], view[at + 2], view[at + 3]])
+                        as f64,
+                };
+                out[e * width + c] = convert(v);
+            }
+        }
         Ok(out)
     }
 
-    async fn f32s(&self, index: usize) -> Result<Vec<f32>, MarshalError> {
-        self.read(index, |v| v as f32).await
+    async fn f32s(&self, index: usize, kind: &str) -> Result<Vec<f32>, MarshalError> {
+        self.read(index, kind, |v| v as f32).await
     }
 
-    async fn u32s(&self, index: usize) -> Result<Vec<u32>, MarshalError> {
-        self.read(index, |v| v as u32).await
-    }
-
-    async fn u16s(&self, index: usize) -> Result<Vec<u16>, MarshalError> {
-        self.read(index, |v| v as u16).await
-    }
-
-    async fn f32s_of(&self, index: Option<usize>) -> Result<Option<Vec<f32>>, MarshalError> {
-        match index {
-            Some(i) => self.f32s(i).await.map(Some),
-            None => Ok(None),
+    /// A vertex attribute, `count` elements as the position has.
+    async fn attribute<T: Copy + Default>(
+        &self,
+        index: Option<usize>,
+        kind: &str,
+        count: usize,
+        convert: fn(f64) -> T,
+    ) -> Result<Option<Vec<T>>, MarshalError> {
+        let Some(index) = index else {
+            return Ok(None);
+        };
+        let values = self.read(index, kind, convert).await?;
+        if Some(values.len()) != type_size(kind).map(|w| w * count) {
+            return Err(malformed());
         }
+        Ok(Some(values))
     }
 }
 
@@ -281,11 +444,17 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     json: JsonValue<'_>,
     buffers: &[&[u8]],
     pause: &F,
+    budget: usize,
 ) -> Result<Gltf, MarshalError> {
+    if arr(json.get("extensionsRequired")).next().is_some() {
+        return Err(MarshalError::new(Errno::ENOTSUP));
+    }
     let r = Reader {
-        json,
+        accessors: arr(json.get("accessors")).map(AccessorFields::of).collect(),
+        views: arr(json.get("bufferViews")).map(ViewFields::of).collect(),
         buffers,
         pause,
+        budget: Cell::new(budget),
     };
 
     let mut meshes = Vec::new();
@@ -293,32 +462,44 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
         let mut prims = Vec::new();
         for p in arr(m.get("primitives")) {
             let attributes = p.get("attributes");
-            let attr = |name: &str| {
-                attributes
-                    .and_then(|a| num(a.get(name)))
-                    .map(|v| v as usize)
-            };
+            let attr =
+                |name: &str| index_of(attributes.and_then(|a| a.get(name)), r.accessors.len());
             if num(p.get("mode")).unwrap_or(4.0) != 4.0 {
                 continue;
             }
-            let Some(position_at) = attr("POSITION") else {
+            let Some(position_at) = attr("POSITION")? else {
                 continue;
             };
-            let position = r.f32s(position_at).await?;
+            let position = r.f32s(position_at, "VEC3").await?;
             let count = position.len() / 3;
-            let index = match num(p.get("indices")) {
-                Some(i) => r.u32s(i as usize).await?,
-                None => (0..count as u32).collect(),
+            let index = match index_of(p.get("indices"), r.accessors.len())? {
+                Some(i) => r.read(i, "SCALAR", |v| v as u32).await?,
+                None => {
+                    r.spend(count)?;
+                    (0..u32::try_from(count).map_err(|_| malformed())?).collect()
+                }
             };
-            let joints = match attr("JOINTS_0") {
-                Some(i) => Some(r.u16s(i).await?),
-                None => None,
-            };
+            for (k, slice) in index.chunks(ELEMENTS_PER_PAUSE).enumerate() {
+                if k > 0 {
+                    pause().await;
+                }
+                if slice.iter().any(|&i| i as usize >= count) {
+                    return Err(malformed());
+                }
+            }
             prims.push(GltfPrimitive {
-                normal: r.f32s_of(attr("NORMAL")).await?,
-                uv: r.f32s_of(attr("TEXCOORD_0")).await?,
-                joints,
-                weights: r.f32s_of(attr("WEIGHTS_0")).await?,
+                normal: r
+                    .attribute(attr("NORMAL")?, "VEC3", count, |v| v as f32)
+                    .await?,
+                uv: r
+                    .attribute(attr("TEXCOORD_0")?, "VEC2", count, |v| v as f32)
+                    .await?,
+                joints: r
+                    .attribute(attr("JOINTS_0")?, "VEC4", count, |v| v as u16)
+                    .await?,
+                weights: r
+                    .attribute(attr("WEIGHTS_0")?, "VEC4", count, |v| v as f32)
+                    .await?,
                 position,
                 index,
                 material: num(p.get("material")).map_or(-1, |v| v as i32),
@@ -328,34 +509,53 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     }
 
     let raw_nodes: Vec<JsonValue> = arr(json.get("nodes")).collect();
-    let mut parents = vec![-1i32; raw_nodes.len()];
-    for (i, n) in raw_nodes.iter().enumerate() {
-        for c in arr(n.get("children")) {
-            if let Some(c) = c.as_f64() {
-                parents[c as usize] = i as i32;
-            }
-        }
+    let n = raw_nodes.len();
+    if n > i32::MAX as usize {
+        return Err(malformed());
     }
-    let mut nodes = Vec::with_capacity(raw_nodes.len());
-    for (i, n) in raw_nodes.iter().enumerate() {
+    let skin_count = arr(json.get("skins")).count();
+    let mut parents = vec![-1i32; n];
+    let mut children = Vec::with_capacity(n);
+    for (i, node) in raw_nodes.iter().enumerate() {
+        let mut own = Vec::new();
+        for c in arr(node.get("children")) {
+            let c = index_in(Some(c), n)?;
+            if c == i || parents[c] >= 0 {
+                return Err(malformed());
+            }
+            parents[c] = i as i32;
+            own.push(c as u32);
+        }
+        children.push(own);
+    }
+    // With one parent each, a node is on a cycle exactly when no walk down from
+    // a parentless node reaches it.
+    let mut reached = 0;
+    let mut stack: Vec<usize> = (0..n).filter(|&i| parents[i] < 0).collect();
+    while let Some(i) = stack.pop() {
+        reached += 1;
+        stack.extend(children[i].iter().map(|&c| c as usize));
+    }
+    if reached != n {
+        return Err(malformed());
+    }
+    let mut nodes = Vec::with_capacity(n);
+    for (i, (node, children)) in raw_nodes.iter().zip(children).enumerate() {
         pause().await;
-        let translation = floats(n.get("translation"), [0.0; 3]);
-        let rotation = floats(n.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
-        let scale = floats(n.get("scale"), [1.0; 3]);
+        let translation = floats(node.get("translation"), [0.0; 3]);
+        let rotation = floats(node.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
+        let scale = floats(node.get("scale"), [1.0; 3]);
         let mut local = mat4::new();
-        if n.get("matrix").is_some() {
-            local = floats(n.get("matrix"), local);
+        if node.get("matrix").is_some() {
+            local = floats(node.get("matrix"), local);
         } else {
             compose_trs(&mut local, &translation, &rotation, &scale);
         }
         nodes.push(GltfNode {
             parent: parents[i],
-            children: arr(n.get("children"))
-                .filter_map(|c| c.as_f64())
-                .map(|c| c as u32)
-                .collect(),
-            mesh: num(n.get("mesh")).map_or(-1, |v| v as i32),
-            skin: num(n.get("skin")).map_or(-1, |v| v as i32),
+            children,
+            mesh: index_of(node.get("mesh"), meshes.len())?.map_or(-1, |m| m as i32),
+            skin: index_of(node.get("skin"), skin_count)?.map_or(-1, |s| s as i32),
             local,
             translation,
             rotation,
@@ -366,21 +566,30 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     let mut skins = Vec::new();
     for s in arr(json.get("skins")) {
         pause().await;
-        let joints: Vec<u32> = arr(s.get("joints"))
-            .filter_map(|j| j.as_f64())
-            .map(|j| j as u32)
-            .collect();
-        let inverse_bind = match num(s.get("inverseBindMatrices")) {
-            Some(i) => r.f32s(i as usize).await?,
-            None => joints
-                .iter()
-                .flat_map(|_| {
-                    [
-                        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-                        1.0,
-                    ]
-                })
-                .collect(),
+        let joints = arr(s.get("joints"))
+            .map(|j| index_in(Some(j), n).map(|j| j as u32))
+            .collect::<Result<Vec<u32>, _>>()?;
+        let inverse_bind = match index_of(s.get("inverseBindMatrices"), r.accessors.len())? {
+            Some(i) => {
+                let matrices = r.f32s(i, "MAT4").await?;
+                // Each joint has its matrix; any past them are unread.
+                if matrices.len() < joints.len() * 16 {
+                    return Err(malformed());
+                }
+                matrices
+            }
+            None => {
+                r.spend(joints.len() * 16)?;
+                joints
+                    .iter()
+                    .flat_map(|_| {
+                        [
+                            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                            0.0, 1.0,
+                        ]
+                    })
+                    .collect()
+            }
         };
         skins.push(GltfSkin {
             joints,
@@ -390,6 +599,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
 
     let mut animations = Vec::new();
     for a in arr(json.get("animations")) {
+        let samplers: Vec<SamplerFields> = arr(a.get("samplers")).map(SamplerFields::of).collect();
         let mut duration = 0.0f64;
         let mut channels = Vec::new();
         for c in arr(a.get("channels")) {
@@ -397,7 +607,8 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
             let Some(target) = c.get("target") else {
                 continue;
             };
-            let Some(node) = num(target.get("node")) else {
+            // A channel with no node animates what an extension names.
+            let Some(node) = index_of(target.get("node"), n)? else {
                 continue;
             };
             let path = match plain(target.get("path")) {
@@ -406,20 +617,19 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                 Some("scale") => GltfPath::Scale,
                 _ => continue,
             };
-            let Some(sampler) = a
-                .get("samplers")
-                .and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize))
-            else {
-                continue;
+            let sampler = samplers[index_in(c.get("sampler"), samplers.len())?];
+            let (width, kind) = if path == GltfPath::Rotation {
+                (4, "VEC4")
+            } else {
+                (3, "VEC3")
             };
             let mut times = r
-                .f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)
+                .f32s(index_in(sampler.input, r.accessors.len())?, "SCALAR")
                 .await?;
             let mut values = r
-                .f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)
+                .f32s(index_in(sampler.output, r.accessors.len())?, kind)
                 .await?;
-            let width = if path == GltfPath::Rotation { 4 } else { 3 };
-            let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
+            let interpolation = sampler.interpolation;
             if interpolation == "CUBICSPLINE" {
                 // In-tangent, value, out-tangent: keep the value.
                 values = (0..times.len())
@@ -446,24 +656,60 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
         animations.push(GltfAnimation { duration, channels });
     }
 
-    let scene_index = num(json.get("scene")).unwrap_or(0.0) as usize;
-    let scene = json.get("scenes").and_then(|s| s.at(scene_index));
-    let roots = match scene.and_then(|s| s.get("nodes")) {
-        Some(n) => arr(Some(n))
-            .filter_map(|v| v.as_f64())
-            .map(|v| v as u32)
-            .collect(),
-        None => (0..raw_nodes.len() as u32)
-            .filter(|&i| parents[i as usize] < 0)
-            .collect(),
+    let scenes: Vec<JsonValue> = arr(json.get("scenes")).collect();
+    let scene = match index_of(json.get("scene"), scenes.len())? {
+        Some(s) => Some(scenes[s]),
+        None => scenes.first().copied(),
     };
-    Ok(Gltf {
+    let roots = match scene.and_then(|s| s.get("nodes")) {
+        Some(list) => {
+            let mut listed = vec![false; n];
+            let mut roots = Vec::new();
+            for v in arr(Some(list)) {
+                let i = index_in(Some(v), n)?;
+                // Parentless and listed once, so no node is walked twice.
+                if parents[i] >= 0 || listed[i] {
+                    return Err(malformed());
+                }
+                listed[i] = true;
+                roots.push(i as u32);
+            }
+            roots
+        }
+        None => (0..n as u32).filter(|&i| parents[i as usize] < 0).collect(),
+    };
+    let gltf = Gltf {
         nodes,
         meshes,
         skins,
         animations,
         roots,
-    })
+    };
+    // Each mesh summed once, so a node costs one addition however many
+    // primitives its mesh has.
+    let per_mesh: Vec<[usize; 3]> = gltf
+        .meshes
+        .iter()
+        .map(|prims| {
+            prims.iter().fold([0, 0, prims.len()], |[v, i, p], prim| {
+                [v + prim.position.len() / 3, i + prim.index.len(), p]
+            })
+        })
+        .collect();
+    let mut drawn = [0usize; 3];
+    for i in scene_nodes(&gltf) {
+        let mesh = gltf.nodes[i as usize].mesh;
+        if mesh >= 0 {
+            for (sum, add) in drawn.iter_mut().zip(per_mesh[mesh as usize]) {
+                *sum = sum.saturating_add(add);
+            }
+        }
+    }
+    let most = [MAX_SCENE_VERTICES, MAX_SCENE_INDICES, MAX_SCENE_PRIMITIVES];
+    if drawn.iter().zip(most).any(|(&d, m)| d > m as usize) {
+        return Err(MarshalError::new(Errno::EFBIG));
+    }
+    Ok(gltf)
 }
 
 /// T × R × S, column-major, from a translation, a unit quaternion and a scale.
@@ -506,40 +752,37 @@ pub fn compose_trs<'a>(
     out
 }
 
-/// Every node's world matrix at rest, parents before children.
+/// Every node's world matrix at rest; identity for a node off the scene.
 pub fn world_matrices(gltf: &Gltf) -> Vec<Mat4> {
-    fn visit(gltf: &Gltf, out: &mut [Mat4], i: usize, parent: Option<Mat4>) {
-        match parent {
-            Some(p) => {
-                let mut m = mat4::new();
-                mat4::mul(&mut m, &p, &gltf.nodes[i].local);
-                out[i] = m;
-            }
-            None => out[i] = gltf.nodes[i].local,
-        }
-        let here = out[i];
-        for &c in &gltf.nodes[i].children {
-            visit(gltf, out, c as usize, Some(here));
-        }
-    }
     let mut out = vec![mat4::new(); gltf.nodes.len()];
-    for &r in &gltf.roots {
-        visit(gltf, &mut out, r as usize, None);
+    // Parents come first, so a parent's world is in place for its children.
+    for i in scene_nodes(gltf) {
+        let node = &gltf.nodes[i as usize];
+        out[i as usize] = match node.parent {
+            p if p >= 0 => {
+                let mut m = mat4::new();
+                mat4::mul(&mut m, &out[p as usize], &node.local);
+                m
+            }
+            _ => node.local,
+        };
     }
     out
 }
 
-/// The nodes reachable from the scene's roots, parents before children.
+/// The nodes reachable from the scene's roots, parents before children, each
+/// before its next sibling's subtree. Walked on a stack of its own, so a deep
+/// chain cannot overflow the module's fixed one.
 pub fn scene_nodes(gltf: &Gltf) -> Vec<u32> {
-    fn visit(gltf: &Gltf, out: &mut Vec<u32>, i: u32) {
-        out.push(i);
-        for &c in &gltf.nodes[i as usize].children {
-            visit(gltf, out, c);
-        }
-    }
     let mut out = Vec::new();
-    for &r in &gltf.roots {
-        visit(gltf, &mut out, r);
+    let mut stack: Vec<u32> = gltf.roots.iter().rev().copied().collect();
+    while let Some(i) = stack.pop() {
+        out.push(i);
+        stack.extend(gltf.nodes[i as usize].children.iter().rev());
     }
     out
 }
+
+#[cfg(test)]
+#[path = "gltf.test.rs"]
+mod test;
