@@ -139,6 +139,34 @@ pub struct FrameSample {
     pub waiting: [f64; STREAMS],
     pub out: [f64; STREAMS],
     pub terrain_refused: f64,
+    pub sun: SunSample,
+}
+
+/// The `sun_counts` setting's sums since boot, as the renderer keeps them
+/// (pxl-render gpu/ray/tally.rs `SUN_SUMS`), in profiler.json FRAME's sun
+/// lanes' order.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SunSample {
+    pub frames: f64,
+    pub cast_frames: f64,
+    pub texels: f64,
+    pub picked: f64,
+    pub boxes: f64,
+}
+
+impl SunSample {
+    /// The renderer's sums (`SUN_SUMS`), in their order.
+    pub fn of(s: [f64; pxl_render::gpu::ray::SUN_SUMS]) -> SunSample {
+        let [frames, cast_frames, texels, picked, boxes] = s;
+        SunSample {
+            frames,
+            cast_frames,
+            texels,
+            picked,
+            boxes,
+        }
+    }
 }
 
 /// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
@@ -168,6 +196,11 @@ words!(FrameSample, FRAME::WORDS,
     body_slots_peak => FRAME::body_slots_peak,
     waiting => FRAME::waiting, out => FRAME::out,
     terrain_refused => FRAME::cap_terrain_refused,
+    sun.frames => FRAME::sun_frames,
+    sun.cast_frames => FRAME::sun_cast_frames,
+    sun.texels => FRAME::sun_texels,
+    sun.picked => FRAME::sun_picked,
+    sun.boxes => FRAME::sun_boxes,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

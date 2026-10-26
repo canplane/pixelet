@@ -7,13 +7,16 @@ written and nothing beyond it. The checks below came back with their counts.
 observed.rs). It is filled where the rays asked: the beam rays, the samples, and
 the pixels whose reading walk missed (`ray::MISS`), walked again from their
 cell's start in the same pass (pxl-shader cast.rs `miss_list_cs`, off the list
-`cast_cs` makes of them). An entry's key is
-its walk's tag and the zooms asked (`key(tag, [far, near])`); entries are kept
-between frames and forgotten over the squares that moved (`forgets`), or whole
-where what every node is asked of moved (`FORGETS_ALL`). It is not the
-open-addressed Morton table sketched under The structure: nodes are kept in
-tiles of eight siblings under the world's roots (`keeps`), each entry naming its
-children's tile.
+`cast_cs` makes of them). An entry's key is its walk's tag and the zooms asked
+(`key(tag, [far, near])`); entries are kept between frames and forgotten over
+the squares that moved (`forgets`), or whole where what every node is asked of
+moved (`FORGETS_ALL`). It is not the open-addressed Morton table sketched under
+The structure: nodes are kept in tiles of eight siblings under the world's roots
+(`keeps`), each entry naming its children's tile. _Since 2026-10-26 it is a
+keyed table after all: a bucket of four slots by the hash of the node's zoom and
+index (`entry_of`), the node's words in the entry telling it from another of the
+same bucket, one finding no free slot taking one over (`victim`); no tiles, no
+stack, no children's word, and no larger than the tiles were._
 
 A ray asks the world whether a node is empty
 ([a ray asks the world](./20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)),

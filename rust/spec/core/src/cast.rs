@@ -47,12 +47,16 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 /// The distance is the eye's, `eye` units from the walk's origin: none for
 /// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
-/// at the zooms the eye's rays ask it (`reach`).
+/// at the zooms the eye's rays ask it (`reach`). `beam` is how far apart a
+/// beam of parallel rays lies, in units, the sun's map's (pxl-spec-core
+/// `sun::BEAM`), which a beam ray's narrow split is judged by (`Until::Beam`);
+/// 0 for the eye's, whose rays part by an angle (`beam::narrow`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
     pub tau: f32,
     pub range: [Zoom; 2],
     pub eye: [f32; 3],
+    pub beam: f32,
 }
 
 impl Detail {
@@ -180,6 +184,32 @@ impl Node {
             node,
             self.roots[0] == roots[0] && self.roots[1] == roots[1] && self.roots[2] == roots[2],
         )
+    }
+
+    /// The node a walk from the origin `from` holds as `self`, as a walk
+    /// from `to` holds it: its corner is the Q3 itself modulo a root's side
+    /// whatever the origin, and its roots move by the roots the two origins
+    /// lie apart, the short way round as an i32 wraps on X, where the
+    /// origins lie within a root of each other.
+    pub fn moved(&self, from: [i32; 3], to: [i32; 3]) -> Node {
+        let k = |a: usize| {
+            let d = from[a].wrapping_sub(to[a]);
+            let og = from[a] as u32;
+            // `to`'s position on the finest grid is `from`'s less `d`: a
+            // root the more where that borrows, a root the less where it
+            // carries.
+            if d >= 0 {
+                self.roots[a] + (og < d as u32) as i32
+            } else {
+                self.roots[a] - (og.wrapping_add(d.unsigned_abs()) < og) as i32
+            }
+        };
+        // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+        Node {
+            corner: self.corner,
+            zoom: self.zoom,
+            roots: [k(0), k(1), k(2)],
+        }
     }
 
     /// The world's node it is from the origin `o`, X named as the world
@@ -545,6 +575,20 @@ fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
 }
 
+/// The zooms the node `n` from the origin `o` is asked at under `detail`,
+/// as a walk asks it (`asked`, `reach`): what a check of a stop reads.
+pub fn asked_of(o: [i32; 3], detail: Detail, n: &Node) -> [Zoom; 2] {
+    let (lo, hi) = bounds(n, grid_of(o));
+    let e = detail.eye;
+    asked(
+        detail,
+        reach(
+            [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
+            [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
+        ),
+    )
+}
+
 /// A vector's length squared.
 fn squared(v: [f32; 3]) -> f32 {
     v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
@@ -729,7 +773,14 @@ pub fn walk<Q: Query>(
                 // grid's rays about it, and enters every other whatever its
                 // slab, as Laine and Karras's coarse pass turns contours off.
                 Kind::Split if until == Until::Beam => {
-                    let narrow = crate::beam::narrow(side * side, reach[0], s);
+                    // Parallel rays `detail.beam` apart: a split narrower
+                    // than `2√2` of that may lie between them
+                    // (pxl-spec-core `sun::BEAM`).
+                    let narrow = if detail.beam > 0.0 {
+                        side * side < 8.0 * detail.beam * detail.beam
+                    } else {
+                        crate::beam::narrow(side * side, reach[0], s)
+                    };
                     into = !narrow;
                     if narrow {
                         Ends::Stop
@@ -889,6 +940,37 @@ pub fn walk<Q: Query>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A node held from one origin is the same world node held from
+    /// another a little off, across a root's edge and X's seam alike.
+    #[test]
+    fn a_node_moves_to_another_origin() {
+        let edges = [0i32, -1, 5, i32::MAX - 3, i32::MIN + 2, 1 << 20];
+        for &a in &edges {
+            for d in [-700i32, -1, 0, 1, 700] {
+                // Y and Z do not go round: about their roots' edge at 0.
+                let near = |v: i32| (v % 1000).wrapping_sub(500);
+                let from = [a, near(a.wrapping_add(13)), near(a.wrapping_sub(29))];
+                let to = from.map(|v| v.wrapping_add(d));
+                for zoom in [1, 9, 20, 30] {
+                    let ray = Ray::new([0.6, -0.48, 0.64], 1000.0);
+                    let p = point_at(from, &ray, 2.5);
+                    let (n, _) = Node {
+                        corner: [0; 3],
+                        zoom,
+                        roots: [0; 3],
+                    }
+                    .over(p);
+                    let n = Node {
+                        zoom: n.zoom.min(zoom),
+                        ..n
+                    };
+                    let m = n.moved(from, to);
+                    assert_eq!(m.index(to), n.index(from), "{a} {d} {zoom}");
+                }
+            }
+        }
+    }
     use crate::answer::{kept_word, slab_word, ANY, EIGHTHS};
     use crate::cube::ground::stone;
     use crate::overwrite::{AIR, FULL};
@@ -942,6 +1024,7 @@ mod tests {
             tau: 1.0,
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
+            beam: 0.0,
         };
         first(&mut One { kept }, o, &ray, detail, Until::Fills)
     }

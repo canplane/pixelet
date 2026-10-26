@@ -224,10 +224,12 @@ pub enum SettingKey {
     pet = 18,
     /// Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (rust/client/render/src/frame/shader/screen_ray.wgsl).
     ray_steps = 19,
+    /// How the sun's shadow map is cast — the slots that took the raster's pick, what the rest walked, the samples, boxes and beams — counted on the GPU and summed since boot into the profiler's sun lanes (rust/client/render/src/gpu/ray/tally.rs, rust/client/shader/src/sun.rs). The counting's atomics run in the sun's spans, so time them with it off.
+    sun_counts = 20,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 20] = [
+    pub const ALL: [SettingKey; 21] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -248,11 +250,12 @@ impl SettingKey {
         SettingKey::person,
         SettingKey::pet,
         SettingKey::ray_steps,
+        SettingKey::sun_counts,
     ];
 
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a number not given out stays 0.
-    pub const SLOTS: usize = 20;
+    pub const SLOTS: usize = 21;
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
@@ -283,6 +286,7 @@ impl SettingKey {
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
+            SettingKey::sun_counts => SettingKind::Toggle,
         }
     }
 
@@ -294,7 +298,10 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::ray_steps)
+        matches!(
+            self,
+            SettingKey::surface_follow | SettingKey::ray_steps | SettingKey::sun_counts
+        )
     }
 
     /// A choice's option a development build only offers.
@@ -329,6 +336,7 @@ pub struct Settings {
     pub person: u8,
     pub pet: u8,
     pub ray_steps: bool,
+    pub sun_counts: bool,
 }
 
 impl Settings {
@@ -354,6 +362,7 @@ impl Settings {
         person: 1,
         pet: 5,
         ray_steps: false,
+        sun_counts: false,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -380,6 +389,7 @@ impl Settings {
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
+            SettingKey::sun_counts => self.sun_counts as u32,
         }
     }
 
@@ -425,6 +435,7 @@ impl Settings {
                 Err(_) => return false,
             },
             SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
+            SettingKey::sun_counts if value <= 1 => self.sun_counts = value == 1,
             _ => return false,
         }
         true

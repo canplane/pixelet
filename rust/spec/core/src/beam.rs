@@ -247,6 +247,44 @@ impl Grid {
     pub fn size(&self) -> u32 {
         self.samples_at + self.samples[0] * self.samples[1] * SAMPLE_WORDS
     }
+
+    /// The threads the beam rays' pass `level` takes across and up (`LEVELS`):
+    /// a corner every `stride(level)`.
+    pub fn level_span(&self, level: u32) -> [u32; 2] {
+        let s = stride(level);
+        [self.corners[0].div_ceil(s), self.corners[1].div_ceil(s)]
+    }
+
+    /// The corner the beam rays' pass `level` casts as its thread `[i, j]`,
+    /// and whether it casts it: one among the corners that no coarser pass
+    /// casts, so each corner is cast once.
+    pub fn level_corner(&self, level: u32, [i, j]: [u32; 2]) -> ([u32; 2], bool) {
+        let s = stride(level);
+        let c = [i * s, j * s];
+        let coarser = level < LEVELS && i % (1 << LEVEL_SHIFT) == 0 && j % (1 << LEVEL_SHIFT) == 0;
+        (
+            c,
+            c[0] < self.corners[0] && c[1] < self.corners[1] && !coarser,
+        )
+    }
+}
+
+/// The beam rays are cast in `LEVELS` passes, the coarsest first: pass
+/// `level`, from 1 the finest, casts the corners every `stride(level)`
+/// across and up that no coarser pass casts (`Grid::level_corner`). A walk
+/// trusts no entry of the observed pyramid its own pass is writing, which is
+/// not whole until the pass ends, so a node no earlier frame holds is asked
+/// of the world by every beam ray of a pass that reaches it; a pass reads
+/// what the ones before it wrote (`observed::beam_pass`), so the nodes the
+/// rays about many corners share are asked once, by the coarser pass that
+/// reaches them, and what a corner's walk meets is the query's answer
+/// whichever asked it.
+pub const LEVELS: u32 = 3;
+pub const LEVEL_SHIFT: u32 = 2;
+
+/// The corners apart, across and up, that the beam rays' pass `level` casts.
+pub const fn stride(level: u32) -> u32 {
+    1 << (LEVEL_SHIFT * (level - 1))
 }
 
 /// A node as a beam ray's line and a sample's stop each hold it, in words:
@@ -258,14 +296,15 @@ pub const NODE_WORDS: u32 = 7;
 
 /// What a beam ray leaves for the pixels about it, in words: how far it
 /// hands on (`Grid::handed`), f32 bits, then the node it stopped at
-/// (`NODE_WORDS`), then, for every node from the root to it, its
-/// entry in the observed pyramid (`observed`, `observed::NONE` where none
-/// keeps it) and what was handed it (`world::At::words`), `LINE_STEP` words
-/// a zoom, its own at its zoom.
+/// (`NODE_WORDS`), then, for every node from the root to it, what was
+/// handed it (`world::At::words`), `LINE_STEP` words a zoom, its own at its
+/// zoom. A node's entry in the observed pyramid is its key's
+/// (`observed::entry_of`), so a line holds none. The sun's beam rays leave
+/// the same, their origin after it (pxl-spec-core `sun::LINE_ORIGIN`).
 pub const LINE_T: u32 = 0;
 pub const LINE_NODE: u32 = 1;
 pub const LINE_AT: u32 = LINE_NODE + NODE_WORDS;
-pub const LINE_STEP: u32 = 1 + crate::world::AT_WORDS;
+pub const LINE_STEP: u32 = crate::world::AT_WORDS;
 pub const LINE_WORDS: u32 = LINE_AT + LINE_STEP * crate::cast::DEPTH as u32;
 
 /// What a cell hands its pixels, in words: where they start, f32 bits, and
@@ -312,5 +351,28 @@ mod tests {
         let up = 0.466_307_67;
         let words = Grid::of([up * 4112.0 / 2338.0, up], 1.0).size();
         assert!(words <= 33_554_432, "{words} words");
+    }
+
+    #[test]
+    fn the_beam_passes_cast_each_corner_once() {
+        for tan in [[0.8, 0.466], [0.1, 0.05], [1.4, 0.9]] {
+            let g = Grid::of(tan, 1.0);
+            for y in 0..g.corners[1] {
+                for x in 0..g.corners[0] {
+                    // The passes whose lattice holds the corner, and which of
+                    // them cast it.
+                    let casts = (1..=LEVELS)
+                        .filter(|&l| x % stride(l) == 0 && y % stride(l) == 0)
+                        .filter(|&l| {
+                            let [w, h] = g.level_span(l);
+                            let at = [x / stride(l), y / stride(l)];
+                            assert!(at[0] < w && at[1] < h);
+                            g.level_corner(l, at) == ([x, y], true)
+                        })
+                        .count();
+                    assert_eq!(casts, 1, "corner {x}, {y} of {:?}", g.corners);
+                }
+            }
+        }
     }
 }

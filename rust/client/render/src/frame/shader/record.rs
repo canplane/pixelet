@@ -30,10 +30,14 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_FORGET => "forget_cs",
         SHADER_SAMPLE => "sample_cs",
         SHADER_SUN => "sun_cs",
-        SHADER_SUN_MARK => "sun_mark_cs",
+        SHADER_SUN_MISS => "sun_miss_cs",
         SHADER_BOXES => "boxes_cs",
         SHADER_MISS_LIST => "miss_list_cs",
         SHADER_FACES => "faces_cs",
+        SHADER_SUN_BEAM => "sun_beam_cs",
+        SHADER_SUN_CELLS => "sun_cells_cs",
+        SHADER_SUN_SAMPLE => "sun_sample_cs",
+        SHADER_SUN_BOXES => "sun_boxes_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

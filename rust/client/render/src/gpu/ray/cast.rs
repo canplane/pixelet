@@ -6,21 +6,23 @@
 
 use pxl_spec_core::scatter::GROUPS;
 use pxl_spec_core::window::{self, FRESH_CELL, FRESH_FIRST};
-use pxl_spec_core::{beam, eye, observed, ray, sun};
+use pxl_spec_core::{beam, eye, observed, overwrite, ray, sun};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
+use super::tally::{self, Tally};
 use super::RaysPass;
 use crate::frame::shader::record::{
-    compute, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
-    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
+    compute, source, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
+    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_BEAM, SHADER_SUN_CELLS,
+    SHADER_SUN_MISS,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
     Stamp, DONE,
 };
-use crate::gpu::grown::{Drawn, Grown, Grows};
+use crate::gpu::grown::{cut_boxes, hold, Drawn, Grown, Grows};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::renderer::{Cast, Overwrites};
@@ -54,9 +56,13 @@ pub(super) struct CastBuffers {
     /// `ray::MISS_ARGS_WORDS`); the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's windows' slots that moved
-    /// (`moved`, a bit a slot, against the slots as `slots` last held them);
-    /// as this frame's cast does (`forgets`, pxl-spec-core
-    /// `observed::FORGETS`). `frame` numbers the casts since it was last
+    /// (`moved`, a bit a slot, against the slots as `slots` last held them)
+    /// and over the boxes of what is placed or cut that changed (`boxes`,
+    /// `holding` of them, as decor's growth holds them, gpu/grown.rs
+    /// `hold`), and those handed a slot of a family of what is placed that
+    /// was written (`written`, `writes` of them); as this frame's cast does
+    /// (`forgets`, pxl-spec-core `observed::FORGETS`), and what it sent, put
+    /// back where its frame is dropped (`sent`). `frame` numbers the casts since it was last
     /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_built: Built,
     miss_list_built: Built,
@@ -66,6 +72,11 @@ pub(super) struct CastBuffers {
     frame: u32,
     forget: bool,
     moved: [u32; observed::MOVED_WORDS as usize],
+    boxes: [[i32; 4]; observed::BOXES as usize],
+    holding: usize,
+    written: [u32; observed::WRITTEN as usize],
+    writes: usize,
+    sent: Option<Forgot>,
     slots: Vec<i32>,
     forgets: u32,
     cuts: [u32; eye::CUTS],
@@ -80,25 +91,34 @@ pub(super) struct CastBuffers {
     /// The world's depth from the sun, a texel of the sun's map each
     /// (`sun_cs`), cast with the eye's rays where the shadows are on.
     sun_built: Built,
-    sun_mark_built: Built,
+    /// The slots that took no pick walked apart (`sun_miss_cs`).
+    sun_miss_built: Built,
+    /// The sun's beam rays and its cells' starts (pxl-spec-core `sun::BEAM`),
+    /// made where shadows are first cast, one a turn where the stream has
+    /// room (`sun_made`).
+    sun_beam_built: Built,
+    sun_cells_built: Built,
     /// The sun's mark's group and its cast's (`sun_groups`), and the
     /// buffers they bind: made again exactly when one of them is another.
-    sun_groups: [u32; 2],
+    sun_groups: [u32; 6],
     sun_bound: [u32; 7],
-    /// The tiles the mark lists, and the cast's dispatch over them
-    /// (pxl-spec-core `sun::LIST_AT`).
+    /// Whether all the sun's cast is made (`sun_made`): its list, its beam's
+    /// pipelines and its raster; before then no sun's map is cast.
+    sun_ready: bool,
+    /// The beam's lines, the samples and the misses (pxl-spec-core
+    /// `sun::list_words`), made where shadows are first cast.
     sun_list: u32,
-    /// What the sun's cast last read beside the eye (`Read`): the light's
-    /// frame (`Shadow::frame`) and whether the world under it moved past
-    /// the nodes it names, where its clipmap keeps nothing; the eye's
-    /// place, quality and zooms and the light box, where it is cast keeping
-    /// what stands (`sun_at`); the box's corner the clipmap holds the world at;
-    /// and whether this frame casts it.
+    sun_list_whole: bool,
+    /// The misses' walk's dispatch and count, as the eye's are
+    /// (pxl-spec-core `ray::MISS_ARGS_WORDS`).
+    sun_misses: u32,
+    /// What the sun's cast last read (`Read`): the light's frame
+    /// (`Shadow::frame`), whether shadows are cast, the light box, the eye's
+    /// place, quality and zooms, and whether the world under it moved; and
+    /// whether this frame casts it, every slot.
     sun_read: Read,
-    sun_at: Read,
-    sun_kept: Option<[i32; 2]>,
-    /// The nodes the world's query answers otherwise since the sun's map was
-    /// last cast, as its cast binds them (pxl-spec-core `sun::MOVED_WORDS`).
+    /// What it is handed beside the eye's words (pxl-spec-core
+    /// `sun::MOVED_WORDS`).
     sun_moved: u32,
     sun_cast: bool,
     pub(super) joined_read: u32,
@@ -134,42 +154,38 @@ pub(super) struct CastBuffers {
     raster: Raster,
     pixel_group: u32,
     pixel_bound: [u32; 11],
+    /// What the sun's cast and the eye's recast, counted where the setting
+    /// asks (ray/tally.rs).
+    tally: Tally,
+    /// The counts, the list and the beam's pipelines the sun's groups were
+    /// made over, made again where one is another.
+    sun_grouped: [u32; 6],
 }
 
-/// The nodes the world's query answers otherwise this frame, as the sun's
-/// cast binds them (pxl-spec-core `sun::MOVED_WORDS`): their count, then
-/// each X, Y and its zoom; past `sun::MOVED`, or a slot with no square held
-/// before, `whole`, and the world is cast again whole.
-struct Nodes {
-    words: [u32; sun::MOVED_WORDS],
-    len: usize,
-    whole: bool,
+/// What a cast's head handed the pyramid's forgetting (pxl-spec-core
+/// `observed::HEAD_WORDS`): whether all of it, the slots that moved, the
+/// boxes and the families written; put back where its frame is dropped.
+struct Forgot {
+    all: bool,
+    moved: [u32; observed::MOVED_WORDS as usize],
+    boxes: [[i32; 4]; observed::BOXES as usize],
+    holding: usize,
+    written: [u32; observed::WRITTEN as usize],
+    writes: usize,
 }
 
-impl Default for Nodes {
-    fn default() -> Nodes {
-        Nodes {
-            words: [0; sun::MOVED_WORDS],
-            len: 0,
-            whole: false,
-        }
+/// Family `first` of what is placed noted written among the `writes` of
+/// `written`, once; whether it found room.
+fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
+    if written[..*writes].contains(&first) {
+        return true;
     }
-}
-
-impl Nodes {
-    fn push(&mut self, [x, y]: [i32; 2], zoom: u32) {
-        let node = [x as u32, y as u32, zoom, 0];
-        if (0..self.len).any(|k| self.words[4 + 4 * k..8 + 4 * k] == node) {
-            return;
-        }
-        if self.len == sun::MOVED {
-            self.whole = true;
-            return;
-        }
-        self.words[4 + 4 * self.len..8 + 4 * self.len].copy_from_slice(&node);
-        self.len += 1;
-        self.words[0] = self.len as u32;
+    if *writes == written.len() {
+        return false;
     }
+    written[*writes] = first;
+    *writes += 1;
+    true
 }
 
 const _: () = assert!(
@@ -208,8 +224,9 @@ impl RaysPass {
         let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, group);
         let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
         let sun_built = pipelines.build_compute(g, SHADER_SUN, &compute::SUN_GROUP);
-        let sun_mark_built = pipelines.build_compute(g, SHADER_SUN_MARK, &compute::SUN_MARK_GROUP);
+        let sun_miss_built = pipelines.build_compute(g, SHADER_SUN_MISS, &compute::SUN_MISS_GROUP);
         let raster = Raster::new(g, pipelines);
+        let tally = Tally::new(g);
         let buffer = |size: u32, usage: u32| g.buffer(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
@@ -231,24 +248,32 @@ impl RaysPass {
             frame: 0,
             forget: true,
             moved: [0; observed::MOVED_WORDS as usize],
+            boxes: [[0; 4]; observed::BOXES as usize],
+            holding: 0,
+            written: [0; observed::WRITTEN as usize],
+            writes: 0,
+            sent: None,
             slots: Vec::new(),
             forgets: observed::FORGETS_NONE,
             cuts: [0; eye::CUTS],
             joined_built,
             sun_built,
-            sun_mark_built,
-            sun_groups: [0; 2],
+            sun_miss_built,
+            sun_beam_built: Built::default(),
+            sun_cells_built: Built::default(),
+            sun_groups: [0; 6],
             sun_bound: [0; 7],
-            sun_list: buffer(
-                word_bytes(sun::LIST_AT + (shadow::SIZE / sun::TILE).pow(2) as usize),
-                storage | buffer_usage::INDIRECT,
+            sun_ready: false,
+            sun_list: sun_list(g, false),
+            sun_list_whole: false,
+            sun_misses: buffer(
+                word_bytes(ray::MISS_ARGS_WORDS),
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             sun_read: Read::default(),
-            sun_at: Read::default(),
-            sun_kept: None,
             sun_moved: buffer(
                 word_bytes(sun::MOVED_WORDS),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
             ),
             sun_cast: false,
             joined_read: buffer(
@@ -279,6 +304,8 @@ impl RaysPass {
             raster,
             pixel_group: 0,
             pixel_bound: [0; 11],
+            tally,
+            sun_grouped: [0; 6],
         };
         self.cast = Some(c);
     }
@@ -292,12 +319,12 @@ impl RaysPass {
         cast: Option<Cast>,
         meshes: &[u32; GROUPS as usize],
         rays: (u32, [u32; 2]),
-        sun_map: (u32, u32),
+        sun_map: (u32, u32, sun::Starts),
     ) {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
         // made once.
-        let (Some(mut cast), Some((ground, looks, pool))) = (
+        let (Some(cast), Some((ground, looks, pool))) = (
             cast,
             self.ground
                 .as_ref()
@@ -330,8 +357,10 @@ impl RaysPass {
                     since: _,
                     written: _,
                 },
-            decor: _,
+            decor,
+            sun_counts,
         } = &cast;
+        let sun_counts = *sun_counts;
         let r = &mut c.read;
         r.begin();
         // The sun's words are its cast's alone (below).
@@ -421,7 +450,17 @@ impl RaysPass {
             // each, where the stream has room for them all; else both lanes
             // whole, read where they live, two records however large.
             fn family(lane: &[u32], first: u32) -> &[u32] {
-                &lane[first as usize..first as usize + 8]
+                &lane[first as usize..(first + overwrite::FAMILY) as usize]
+            }
+            // The families written since the revision the pyramid was asked
+            // at, which the nodes handed one of their slots read again; past
+            // the room, or where revisions went by unseen, all of it.
+            if c.overwrite_revision == Some(o.since) {
+                for &first in o.written {
+                    c.forget |= !note(&mut c.written, &mut c.writes, first);
+                }
+            } else {
+                c.forget = true;
             }
             let listed = |lane: &[u32]| {
                 o.written
@@ -457,49 +496,36 @@ impl RaysPass {
         let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
             .try_into()
             .or_bug(Errno::ENOTRECOVERABLE);
-        c.forget |= shards_moved
+        let world_moved = window_moved
+            || fresh != 0
+            || shards_moved
             || shards_grow
             || overwrites_moved
-            || cuts != c.cuts
+            || cuts != c.cuts;
+        // What is placed and a preview's cuts forget the nodes over the boxes
+        // they changed, as decor's growth is asked over them (gpu/grown.rs):
+        // every write of what is placed names its box (`DecorFrame::edits`);
+        // one that names none, or the lanes made again, forgets all.
+        let edits = decor.edits;
+        for &b in edits {
+            hold(&mut c.boxes, &mut c.holding, b);
+        }
+        cut_boxes(&c.cuts, &cuts, |b| hold(&mut c.boxes, &mut c.holding, b));
+        c.forget |= shards_moved
+            || shards_grow
+            || overwrites_grow
+            || (overwrites_moved && edits.is_empty())
             || c.frame >= observed::FRAMES;
         // The eye's windows' slots that hold another square, or whose square
-        // the turn handed: what is over them is asked again; the sun's map
-        // casts again what passes over the square they held and the one they
-        // hold, and over a preview's cuts where they moved.
-        let mut nodes = Nodes::default();
-        for at in [0, eye::CUT_WORDS] {
-            let (was, is) = (
-                &c.cuts[at..at + eye::CUT_WORDS],
-                &cuts[at..at + eye::CUT_WORDS],
-            );
-            if was != is {
-                for cut in [was, is] {
-                    if cut[3] != eye::NO_CUT {
-                        nodes.push([cut[0] as i32, cut[1] as i32], cut[3]);
-                    }
-                }
-            }
-        }
+        // the turn handed: what is over them is asked again.
         c.cuts = cuts;
         let eye_rows = (window::EYE_WINDOWS * window::SLOTS) as usize;
-        let square = |row: &[i32], k: usize| {
-            (
-                [row[0], row[1]],
-                window::squares_zoom(window::eye_cell((k / window::SLOTS as usize) as u32)),
-            )
-        };
         if window_moved {
             let rows = &cast.window[..4 * eye_rows];
             for k in 0..eye_rows {
                 let row = &rows[4 * k..4 * k + 4];
-                let was = c.slots.get(4 * k..4 * k + 4);
-                if was != Some(row) {
+                if c.slots.get(4 * k..4 * k + 4) != Some(row) {
                     c.moved[k / 32] |= 1 << (k % 32);
-                    match was {
-                        Some(was) => nodes.push(square(was, k).0, square(was, k).1),
-                        None => nodes.whole = true,
-                    }
-                    nodes.push(square(row, k).0, square(row, k).1);
                 }
             }
             c.slots.clear();
@@ -515,51 +541,44 @@ impl RaysPass {
                 );
                 let w = cell.wrapping_sub(window::FIRST_CELL);
                 let k = (w * window::SLOTS + window::slot(q)) as usize;
-                if w < window::EYE_WINDOWS && square(&cast.window[4 * k..4 * k + 4], k).0 == q {
+                let row = &cast.window[4 * k..4 * k + 4];
+                if w < window::EYE_WINDOWS && [row[0], row[1]] == q {
                     c.moved[k / 32] |= 1 << (k % 32);
-                    nodes.push(q, window::squares_zoom(cell));
                 }
             }
         }
-        // The sun's cast reads the world as the eye's rays do, from the
-        // eye's place at its zooms, but not its look: a turn of the eye
-        // alone casts it no ray again. Its clipmap keeps what it holds while
-        // the light's frame and the world under it read as they did
-        // (`sun_read`); then the eye's place, quality or zooms or the box
-        // moved (`sun_at`), or the nodes under it (`nodes`), casts only the
-        // texels the box moved onto, those whose stop the eye now asks at
-        // another zoom and those whose ray passes over a node moved, each
-        // judged where it lies (pxl-spec-core `sun`). None where no shadow is
-        // cast.
+        // The sun's map is cast whole, every slot, as the eye's rays are
+        // (pxl-spec-core `sun`), where what it reads moved: the light's frame
+        // or box, the eye's place, quality or zooms, which the zooms its rays
+        // ask follow, or the world under it. The eye's look alone casts it
+        // no ray, and a standing frame none. Nothing it cast is kept for
+        // the next. None where no shadow is cast, nor before all its cast is
+        // made (`sun_made`), its read let go until then.
         let shadows = cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS]
             .iter()
             .any(|&w| w != 0);
         let r = &mut c.sun_read;
         r.begin();
         r.read(&[sun_map.1, u32::from(shadows)]);
-        r.mark(shards_moved || shards_grow || overwrites_moved || nodes.whole);
-        let whole = !r.end();
-        let a = &mut c.sun_at;
-        a.begin();
-        a.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
-        a.read(&cast.eye[eye::TAU..eye::TAU + 1]);
-        a.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
-        a.read(&cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS]);
-        let moved = !a.end();
-        c.sun_cast = shadows && (whole || moved || nodes.len != 0);
+        r.read(&cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS]);
+        r.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
+        r.read(&cast.eye[eye::TAU..eye::TAU + 1]);
+        r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
+        r.mark(world_moved);
+        let sun_moved = !r.end();
+        if !c.sun_ready {
+            c.sun_read.forget();
+        }
+        c.sun_cast = shadows && sun_moved && c.sun_ready;
         if c.sun_cast {
-            // What the map holds, written over the kept corner's words, which
-            // keep nothing as the box is aimed (`Sun::of`).
-            if let (false, Some(kept)) = (whole, c.sun_kept) {
-                for (k, w) in sun::KEPT.into_iter().zip(kept) {
-                    cast.eye[eye::SUN + k] = w as u32;
-                }
-            }
-            c.sun_kept = Some(sun::CORNER.map(|k| cast.eye[eye::SUN + k] as i32));
-            let len = if whole { 0 } else { nodes.len };
-            nodes.words[0] = len as u32;
-            g.write_buffer(c.sun_moved, 0, bytes(&nodes.words[..4 + 4 * len]));
-            g.write_buffer(c.sun_list, 0, bytes(&sun::LIST_EMPTY));
+            // The head (pxl-spec-core `sun::MOVED_WORDS`).
+            let mut head = [0u32; sun::MOVED_WORDS];
+            head[sun::MOVED_COUNTED] = u32::from(sun_counts);
+            let at = 4 * sun::STARTS_AT;
+            head[at..at + 4 * sun::STARTS_VEC4S].copy_from_slice(&sun_map.2.words());
+            g.write_buffer(c.sun_moved, 0, bytes(&head));
+            g.write_buffer(c.sun_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
+            c.raster.sun_prepare(g, &cast.eye, shadow::SIZE);
         }
         if eye_moved || c.sun_cast {
             g.write_buffer(c.eye, 0, bytes(&cast.eye));
@@ -567,14 +586,13 @@ impl RaysPass {
         if self.kind == FrameKind::cast {
             c.forgets = if c.forget {
                 observed::FORGETS_ALL
-            } else if c.moved.iter().any(|&m| m != 0) {
+            } else if c.moved.iter().any(|&m| m != 0) || c.holding != 0 || c.writes != 0 {
                 observed::FORGETS_MOVED
             } else {
                 observed::FORGETS_NONE
             };
             // The head before the frame's dispatches: what it forgets and over
-            // which slots; forgotten whole, no tile taken and its first frame,
-            // else the next frame.
+            // which slots; forgotten whole, its first frame, else the next.
             let mut head = [0u32; observed::HEAD_WORDS as usize];
             c.frame = if c.forgets == observed::FORGETS_ALL {
                 1
@@ -583,16 +601,36 @@ impl RaysPass {
             };
             head[observed::FRAME as usize] = c.frame;
             head[observed::FORGETS as usize] = c.forgets;
-            head[observed::MOVED_AT as usize..].copy_from_slice(&c.moved);
-            let from = if c.forgets == observed::FORGETS_ALL {
-                0
-            } else {
-                observed::FRAME as usize
-            };
-            g.write_buffer(c.seen, word_bytes(from), bytes(&head[from..]));
+            let boxes = observed::BOXES_AT as usize;
+            head[observed::MOVED_AT as usize..boxes].copy_from_slice(&c.moved);
+            head[boxes] = c.holding as u32;
+            for (k, b) in c.boxes[..c.holding].iter().enumerate() {
+                let at = boxes + 1 + 4 * k;
+                head[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
+            }
+            let written = observed::WRITTEN_AT as usize;
+            head[written] = c.writes as u32;
+            head[written + 1..written + 1 + c.writes].copy_from_slice(&c.written[..c.writes]);
+            g.write_buffer(c.seen, 0, bytes(&head));
             g.write_buffer(c.marks, 0, bytes(&ray::MISS_ARGS_EMPTY));
+            c.sent = Some(Forgot {
+                all: c.forgets == observed::FORGETS_ALL,
+                moved: c.moved,
+                boxes: c.boxes,
+                holding: c.holding,
+                written: c.written,
+                writes: c.writes,
+            });
             (c.forget, c.moved) = (false, [0; observed::MOVED_WORDS as usize]);
+            (c.holding, c.writes) = (0, 0);
+        } else {
+            c.sent = None;
         }
+        let frame = tally::Frame {
+            sun: c.sun_cast,
+            texels: shadow::SIZE * shadow::SIZE,
+        };
+        c.tally.begin(g, sun_counts, frame);
         let bound = [
             c.eye,
             c.window,
@@ -637,16 +675,40 @@ impl RaysPass {
             pool,
             sun_map.0,
         ];
-        if sun_bound != c.sun_bound {
+        let grouped = [
+            c.tally.counts,
+            c.sun_list,
+            c.sun_beam_built.pipeline,
+            c.sun_cells_built.pipeline,
+            c.raster.sun_picks(),
+            c.raster.sun.boxes,
+        ];
+        if sun_bound != c.sun_bound || grouped != c.sun_grouped {
             for group in c.sun_groups {
                 release(group);
             }
+            c.sun_grouped = grouped;
             c.sun_groups = sun_groups(
                 g,
-                [&c.sun_mark_built, &c.sun_built],
+                [
+                    &c.sun_built,
+                    &c.sun_beam_built,
+                    &c.sun_cells_built,
+                    &c.raster.sun.sample_built,
+                    &c.raster.sun.boxes_built,
+                    &c.sun_miss_built,
+                ],
                 sun_bound,
-                c.sun_moved,
-                c.sun_list,
+                [
+                    c.seen,
+                    c.sun_moved,
+                    c.sun_list,
+                    c.tally.counts,
+                    c.raster.sun.boxes,
+                    c.raster.sun_picks(),
+                    c.raster.sun.args,
+                    c.sun_misses,
+                ],
             );
             c.sun_bound = sun_bound;
         }
@@ -705,11 +767,13 @@ impl RaysPass {
     /// so what each costs is read apart; the sun's in the shadow's, with
     /// the map's pass, which is not drawn at the world's pixels
     /// (`PER_PIXEL`).
-    pub fn dispatch(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
-        let Some(c) = self.cast.as_ref() else { return };
+    pub fn dispatch(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
+        let grows = self.grows();
+        let Some(c) = self.cast.as_mut() else { return };
         if self.kind == FrameKind::cast {
             // The observed pyramid forgotten first where it is; then the
-            // beam rays writing it, a corner each; each cell's start off them;
+            // beam rays writing it, a corner each, a lattice of them a
+            // dispatch, the coarsest first; each cell's start off them;
             // the samples writing it, each from its cell's start; their
             // blocks drawn as boxes, each pixel's nearest kept; the pixels
             // off that, or reading it from their cell's start, marking the
@@ -767,7 +831,16 @@ impl RaysPass {
                 let pass = g.compute_pass(encoder, stamps[span as usize].pass());
                 g.set_bind_group(pass, 0, group, &[]);
                 g.set_pipeline(pass, built.pipeline);
-                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+                if span == GpuSpanName::beam {
+                    // A pass of the beam rays a dispatch, the coarsest first,
+                    // its pass the dispatch's depth (`beam_cs`).
+                    for level in (1..=beam::LEVELS).rev() {
+                        let [x, y] = c.grid.level_span(level);
+                        g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), level);
+                    }
+                } else {
+                    g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+                }
                 g.end(pass);
             }
             // The marked pixels' count where their walk reads it, then that
@@ -787,24 +860,112 @@ impl RaysPass {
             g.end(pass);
         }
         if c.sun_cast {
-            // The tiles a slot of which walks again listed, a thread a tile;
-            // then the walks, a workgroup a tile listed (pxl-spec-core
-            // `sun::TILE`), so a slot that stands holds no lane of a walk's.
-            let pass = g.compute_pass(encoder, stamps[GpuSpanName::shadow as usize].pass());
-            g.set_bind_group(pass, 0, c.sun_groups[0], &[]);
-            g.set_pipeline(pass, c.sun_mark_built.pipeline);
-            let tiles = (shadow::SIZE / sun::TILE).pow(2);
-            g.dispatch(pass, tiles.div_ceil(compute::SUN_MARK_WORKGROUP[0]), 1, 1);
+            // The beam, the samples, their boxes drawn, the slots taking
+            // their pick, a workgroup a tile (pxl-spec-core `sun::TILE`),
+            // and the rest walked off their list as the eye's missed pixels
+            // are: each a pass timed in its own span.
+            let stamp = stamps[GpuSpanName::sun_beam as usize].pass();
+            let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
+            g.set_pipeline(pass, c.sun_beam_built.pipeline);
+            let n = sun::beam_across(shadow::SIZE);
+            let w = compute::SUN_BEAM_WORKGROUP;
+            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            g.set_bind_group(pass, 0, c.sun_groups[2], &[]);
+            g.set_pipeline(pass, c.sun_cells_built.pipeline);
+            let n = sun::cells_across(shadow::SIZE);
+            let w = compute::SUN_CELLS_WORKGROUP;
+            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            g.end(pass);
+            let n = shadow::SIZE / sun::SAMPLE;
+            let stamp = stamps[GpuSpanName::sun_sample as usize].pass();
+            let pass = g.compute_pass(encoder, stamp);
+            g.set_bind_group(pass, 0, c.sun_groups[3], &[]);
+            g.set_pipeline(pass, c.raster.sun.sample_built.pipeline);
+            let w = compute::SUN_SAMPLE_WORKGROUP;
+            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            g.end(pass);
+            let stamp = &mut stamps[GpuSpanName::sun_raster as usize];
+            let pass = g.compute_pass(encoder, stamp.pass());
+            g.set_bind_group(pass, 0, c.sun_groups[4], &[]);
+            g.set_pipeline(pass, c.raster.sun.boxes_built.pipeline);
+            let w = compute::SUN_BOXES_WORKGROUP;
+            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            g.end(pass);
+            c.raster.sun_draw(g, encoder, stamp);
+            let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_pick as usize].pass());
+            g.set_bind_group(pass, 0, c.sun_groups[0], &[]);
             g.set_pipeline(pass, c.sun_built.pipeline);
-            g.dispatch_indirect(pass, c.sun_list, 0);
+            let tiles = shadow::SIZE / sun::TILE;
+            g.dispatch(pass, tiles, tiles, 1);
+            g.end(pass);
+            // Their count where their walk reads it, then that walk.
+            g.copy_buffer(
+                encoder,
+                (c.sun_misses, word_bytes(ray::MISS_ARGS_COUNT as usize)),
+                (
+                    c.sun_list,
+                    word_bytes(sun::misses_count(shadow::SIZE) as usize),
+                ),
+                4,
+            );
+            let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_walk as usize].pass());
+            g.set_bind_group(pass, 0, c.sun_groups[5], &[]);
+            g.set_pipeline(pass, c.sun_miss_built.pipeline);
+            let list = word_bytes(ray::MISS_ARGS_LIST as usize);
+            g.dispatch_indirect(pass, c.sun_misses, list);
             g.end(pass);
         }
-        if self.grows() {
+        c.tally.copy(g, encoder);
+        if grows {
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::grow as usize].pass());
             c.grown.dispatch(g, pass);
             g.end(pass);
         }
+    }
+
+    /// The sun's cast made where `wanted`, shadows first cast, before the
+    /// frame: its list grown (`sun::list_words`), then its beam's pipelines
+    /// and its raster's (`Raster::sun_made`), one a turn where the stream
+    /// has room for its module; ready once all are (`sun_ready`).
+    pub fn sun_made(&mut self, g: &Gpu, pipelines: &mut Pipelines, wanted: bool) {
+        let Some(c) = self.cast.as_mut() else { return };
+        if !wanted || c.sun_ready {
+            return;
+        }
+        if !c.sun_list_whole {
+            release(c.sun_list);
+            c.sun_list = sun_list(g, true);
+            c.sun_list_whole = true;
+        }
+        let room = |kind: u32| crate::gpu::api::room(source(kind).len() + 4096);
+        if c.sun_beam_built.pipeline == 0 {
+            if room(SHADER_SUN_BEAM) {
+                c.sun_beam_built =
+                    pipelines.build_compute(g, SHADER_SUN_BEAM, &compute::SUN_BEAM_GROUP);
+            }
+        } else if c.sun_cells_built.pipeline == 0 {
+            if room(SHADER_SUN_CELLS) {
+                c.sun_cells_built =
+                    pipelines.build_compute(g, SHADER_SUN_CELLS, &compute::SUN_CELLS_GROUP);
+            }
+        } else {
+            c.sun_ready = c.raster.sun_made(g, pipelines, true, shadow::SIZE);
+        }
+    }
+
+    /// The counts copied last frame mapped back (`Tally::back`).
+    pub fn tally_back(&mut self, g: &Gpu) {
+        if let Some(c) = self.cast.as_mut() {
+            c.tally.back(g);
+        }
+    }
+
+    /// The counts' sums since boot (ray/tally.rs `SUN_SUMS`).
+    pub fn tally_sums(&self) -> [f64; tally::SUN_SUMS] {
+        self.cast
+            .as_ref()
+            .map_or([0.0; tally::SUN_SUMS], |c| c.tally.sums())
     }
 
     pub fn sun_casts(&self) -> bool {
@@ -823,9 +984,25 @@ impl RaysPass {
     /// image hold older ones.
     pub fn dropped(&mut self) {
         if let Some(c) = self.cast.as_mut() {
+            // What it was to forget, it did not: the next cast forgets it
+            // too, every box and family as sent, as decor's growth holds
+            // its edits again (`unconsumed`).
+            if let Some(f) = c.sent.take() {
+                c.forget |= f.all;
+                for (m, was) in c.moved.iter_mut().zip(f.moved) {
+                    *m |= was;
+                }
+                for &b in &f.boxes[..f.holding] {
+                    hold(&mut c.boxes, &mut c.holding, b);
+                }
+                for &first in &f.written[..f.writes] {
+                    c.forget |= !note(&mut c.written, &mut c.writes, first);
+                }
+            }
             c.read.forget();
             c.sun_read.forget();
             c.grown.dropped();
+            c.tally.dropped();
         }
     }
 
@@ -840,6 +1017,9 @@ impl RaysPass {
     /// held for the next that is.
     pub fn unconsumed(&mut self, edits: &[[i32; 4]]) {
         if let Some(c) = self.cast.as_mut() {
+            for &b in edits {
+                hold(&mut c.boxes, &mut c.holding, b);
+            }
             c.grown.unconsumed(edits);
         }
     }
@@ -889,17 +1069,35 @@ fn pixel_group(g: &Gpu, built: &Built, bound: [u32; 11], marks: u32) -> u32 {
     g.bind_group(built.layouts[0], &entries)
 }
 
-/// The sun's mark's group 0 and its cast's, over `bound`: the eye, the
-/// window, the tiles' frames, the service area's index, the overwrites and
-/// the ways' pool, the cast's alone; the clipmap; the nodes moved under it
-/// (`moved`) and the tiles listed (`list`).
+/// The sun's list, a word before shadows are cast, or `whole`: the beam's
+/// lines and the cells' starts, the raster's samples and the misses past
+/// them (`sun::list_words`).
+fn sun_list(g: &Gpu, whole: bool) -> u32 {
+    let words = if whole {
+        sun::list_words(shadow::SIZE) as usize
+    } else {
+        4
+    };
+    g.buffer(
+        word_bytes(words),
+        buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::INDIRECT,
+    )
+}
+
+/// The sun's cast's groups 0, over `bound`: the eye, the window, the
+/// tiles' frames, the service area's index, the overwrites and the ways'
+/// pool, the cast's alone; the observed pyramid, which the sun's walks read
+/// and write as the eye's do; the clipmap; its head (`moved`), the beam's
+/// lines, the samples and the misses (`list`), the counts (ray/tally.rs),
+/// the raster's boxes, picks and args, and the misses' dispatch; the
+/// slots', the beam's, the cells', the samples', the boxes' and the
+/// misses' walk's, each none before its pipeline and buffers are made.
 fn sun_groups(
     g: &Gpu,
-    [mark, walk]: [&Built; 2],
+    [walk, beam, cells, sample, boxes_built, miss]: [&Built; 6],
     bound: [u32; 7],
-    moved: u32,
-    list: u32,
-) -> [u32; 2] {
+    [seen, moved, list, counts, boxes, picks, args, misses]: [u32; 8],
+) -> [u32; 6] {
     let [eye, window, ground, shards, overwrites, pool, sun] = bound;
     let entries = [
         (0, buffer_entry(0, eye)),
@@ -908,12 +1106,17 @@ fn sun_groups(
         (5, buffer_entry(5, shards)),
         (6, buffer_entry(6, overwrites)),
         (7, buffer_entry(7, pool)),
+        (9, buffer_entry(9, seen)),
         (10, view_entry(10, sun)),
         (11, buffer_entry(11, moved)),
         (12, buffer_entry(12, list)),
+        (13, buffer_entry(13, counts)),
+        (14, buffer_entry(14, boxes)),
+        (15, view_entry(15, picks)),
+        (16, buffer_entry(16, args)),
+        (17, buffer_entry(17, misses)),
     ];
-    // Each the entries its layout declares (build.rs `compute`): the mark
-    // reads the clipmap and the nodes moved alone.
+    // Each the entries its layout declares (build.rs `compute`).
     let of = |declared: &[u32]| {
         entries
             .iter()
@@ -921,8 +1124,28 @@ fn sun_groups(
             .map(|&(_, e)| e)
             .collect::<Vec<_>>()
     };
+    let made = |b: &Built, declared: &[u32]| {
+        if b.pipeline == 0 {
+            0
+        } else {
+            g.bind_group(b.layouts[0], &of(declared))
+        }
+    };
     [
-        g.bind_group(mark.layouts[0], &of(&compute::SUN_MARK_GROUP)),
         g.bind_group(walk.layouts[0], &of(&compute::SUN_GROUP)),
+        made(beam, &compute::SUN_BEAM_GROUP),
+        made(cells, &compute::SUN_CELLS_GROUP),
+        // The raster's once its buffers are made, a turn after its pipelines.
+        if boxes == 0 {
+            0
+        } else {
+            made(sample, &compute::SUN_SAMPLE_GROUP)
+        },
+        if boxes == 0 {
+            0
+        } else {
+            made(boxes_built, &compute::SUN_BOXES_GROUP)
+        },
+        g.bind_group(miss.layouts[0], &of(&compute::SUN_MISS_GROUP)),
     ]
 }

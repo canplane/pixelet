@@ -10,6 +10,10 @@
       "ray_steps": {
         "label": "Ray steps",
         "description": "Colors each point on screen by how much work it took to draw: blue for little, red for a lot. Points that borrowed a nearby result and skipped the work are grey."
+      },
+      "sun_counts": {
+        "label": "Sun map counts",
+        "description": "Counts how the sun's shadow map is drawn each frame, for the profiler. For measuring; leave it off when timing."
       }
     }
   },

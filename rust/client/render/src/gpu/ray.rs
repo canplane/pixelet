@@ -9,6 +9,7 @@
 mod cast;
 mod ground;
 mod raster;
+mod tally;
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
 use crate::gpu::api::{
@@ -19,6 +20,7 @@ use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
+pub use tally::SUN_SUMS;
 
 pub struct RaysPass {
     built: Built,
