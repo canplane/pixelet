@@ -241,11 +241,14 @@ pub fn miss_cs(
         t,
         &line,
     );
-    written(
-        rays,
-        id,
-        word(&ray, met, shows_steps(eye), world.faced(origin, &ray, &met)),
-    );
+    let steps = shows_steps(eye);
+    let mut w = word(&ray, met, steps, world.faced(origin, &ray, &met));
+    // Counted by the proxied cast's check where it runs (pxl-shader
+    // proxied.rs `MISSED`).
+    if steps && eye.origin.w as u32 & eye::PROXIED != 0 {
+        w[2] |= crate::proxied::MISSED;
+    }
+    written(rays, id, w);
 }
 
 /// Whether each ray reports the nodes its descent asked (pxl-spec-core

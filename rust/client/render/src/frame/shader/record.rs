@@ -35,6 +35,8 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_PROXIED => "proxied_cs",
         SHADER_PROXIED_MISS => "proxied_miss_cs",
         SHADER_PROXIED_CHECK => "proxied_check_cs",
+        SHADER_PROXIED_WRITE => "proxied_write_cs",
+        SHADER_PROXIED_BEAM => "proxied_beam_cs",
         SHADER_FORGET => "forget_cs",
         SHADER_SAMPLE => "sample_cs",
         SHADER_SUN => "sun_cs",

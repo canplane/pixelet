@@ -837,6 +837,80 @@ fn floored(
     pxl_spec_core::proxy::floor(&mut held, &lanes, o, detail, n)
 }
 
+/// The proxy's boxes taken off the held ground alone (pxl-spec-core
+/// `proxy::column`): each present square of each of the eye's windows
+/// boxed at the coarsest level that is at the cut's zoom or under it
+/// (`proxy::column_fits`), its entries there each a column where the cast
+/// reads that window; and what is placed, off the objects' tree alone,
+/// each node of it holding anything at the cut's zoom its slab
+/// (`overwrite::slab`). All of them about the eye, the frustum aside.
+fn held_columns(
+    q: &mut Asking,
+    o: [i32; 3],
+    detail: pxl_spec_core::cast::Detail,
+    coarser: Zoom,
+) -> Vec<pxl_spec_core::proxy::Proxy> {
+    use pxl_spec_core::proxy::{self, BOX};
+    use pxl_spec_core::window::{FIRST_CELL, LEVELS, SLOTS};
+    let w = &crate::domain::layer::terrain::window::Windowed;
+    let mut out = Vec::new();
+    for cell in FIRST_CELL..=pxl_spec_core::LEAF_CELL {
+        for slot in 0..SLOTS {
+            let (sq, here) = pxl_spec_core::window::Squares::square(w, cell, slot);
+            if !here {
+                continue;
+            }
+            // Down the square's levels, the first that fits boxed.
+            let mut todo = vec![(LEVELS, [0u32; 2])];
+            while let Some((j, at)) = todo.pop() {
+                if proxy::column_fits(o, detail, coarser, cell, sq, j, at) {
+                    let p = proxy::column(w, o, detail, cell, sq, j, at);
+                    if p.says == BOX {
+                        out.push(p);
+                    }
+                } else {
+                    for k in 0..4 {
+                        todo.push((j - 1, [2 * at[0] + k % 2, 2 * at[1] + k / 2]));
+                    }
+                }
+            }
+        }
+    }
+    // What is placed: its tree's nodes holding anything, down to the cut.
+    let lanes = q.world.objects.lanes();
+    let (first, _) = proxy::covered(w);
+    let mut todo: Vec<_> = (0..proxy::SEEDS)
+        .map(|k| proxy::seed(o, first, k))
+        .collect();
+    while let Some(n) = todo.pop() {
+        let c = n.index(o);
+        let held = q.world.start((n.zoom, c)).handed.placed;
+        if !held.holds() {
+            continue;
+        }
+        let (_, node, cut) = proxy::asked(o, detail, coarser, &n);
+        if n.zoom >= cut {
+            let [lo, hi] = pxl_spec_core::overwrite::slab(&lanes, held, n.zoom, c);
+            // In units from the eye, as a node's planes are.
+            let z = |v: i32| {
+                node.lo[2]
+                    + (v - (c[2]
+                        << (pxl_spec_core::LEAF_CELL - n.zoom.min(pxl_spec_core::LEAF_CELL))))
+                        as f32
+            };
+            let mut p = node;
+            if n.zoom <= pxl_spec_core::LEAF_CELL {
+                p.lo[2] = z(lo);
+                p.hi[2] = z(hi);
+            }
+            out.push(p);
+        } else {
+            todo.extend((0..8).map(|k| proxy::child(&n, k)));
+        }
+    }
+    out
+}
+
 /// A sorted sample's share `p` (0 to 1), none of none.
 fn quantile(v: &[f64], p: f64) -> f64 {
     if v.is_empty() {
@@ -1019,6 +1093,10 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
             let (mut stops, mut lacks, mut sky) = (0, 0, 0);
             let mut visits = [0u64; 2];
             let mut empty = [0u32; COARSER.len()];
+            // The boxes taken off the held ground alone, columns of the
+            // windows' level entries, and what is placed, at 2 coarser.
+            let columns = held_columns(&mut q, o, detail, 2);
+            let mut column_gaps: Vec<f64> = Vec::new();
             for r in 0..RAYS {
                 let az = random() * std::f64::consts::TAU;
                 let el = -1.3 + 1.35 * random();
@@ -1044,6 +1122,32 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
                     Ends::Stop => stops += 1,
                     Ends::Lacks => lacks += 1,
                     Ends::On => sky += 1,
+                }
+                {
+                    let mut best = columns
+                        .iter()
+                        .filter_map(|p| enters(&ray, p))
+                        .fold(f64::INFINITY, f64::min);
+                    if let Some(t) = leaves(&ray, &cover) {
+                        best = best.min(t);
+                    }
+                    if best.is_infinite() {
+                        assert_eq!(
+                            met.ends,
+                            Ends::On,
+                            "{name} +{over}, {d:?}: no column on a ray that stops"
+                        );
+                    } else if met.ends != Ends::On {
+                        let stop = f64::from(met.stop.t);
+                        assert!(
+                            best <= stop + 1e-4 * stop.max(1.0),
+                            "{name} +{over}, {d:?}: the column at {best} past the stop at {stop}, {:?}",
+                            met.stop.node
+                        );
+                        if met.ends == Ends::Stop {
+                            column_gaps.push(stop - best);
+                        }
+                    }
                 }
                 for (k, &coarser) in COARSER.iter().enumerate() {
                     let mut best = f64::INFINITY;
@@ -1111,6 +1215,14 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
                 "{name} +{over}: {stops} stop, {lacks} lack, {sky} nothing; visits from the eye {:.1}, from the box 2 coarser {:.1}",
                 visits[0] as f64 / stops.max(1) as f64,
                 visits[1] as f64 / stops.max(1) as f64,
+            );
+            column_gaps.sort_by(f64::total_cmp);
+            eprintln!(
+                "  columns 2 coarser: {} boxes; gap p50 {:.2} p90 {:.2} max {:.2} units",
+                columns.len(),
+                quantile(&column_gaps, 0.5),
+                quantile(&column_gaps, 0.9),
+                quantile(&column_gaps, 1.0),
             );
             if over == 20.0 {
                 let mut boxes = [[0u32; 2]; COARSER.len()];

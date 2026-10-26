@@ -50,6 +50,19 @@
       "  raster_n  — that, and its boxes drawn at the rays' pixels, timed apart (span `raster`)."
     ]
   },
+  "PROXIED_MODES": {
+    "$value": { "off": 0, "read": 1, "write": 2, "beam": 3 },
+    "$doc": [
+      "How the proxied cast walks a pixel (rust/client/shader/src/proxied.rs).",
+      "",
+      "  off   — it does not: the cast as built.",
+      "  read  — reading the observed pyramid, the pixels it could not answer",
+      "          walked again writing it (`proxied_cs`, `proxied_miss_cs`).",
+      "  write — writing it as it goes, one walk a pixel (`proxied_write_cs`).",
+      "  beam  — the cast as built with no sample, each pixel walked from its",
+      "          cell's beam line no sooner than its box (`proxied_beam_cs`)."
+    ]
+  },
   "RESOLUTION_MODES": {
     "$value": { "auto": 0, "fixed": 1, "low": 2 },
     "$doc": [
@@ -337,10 +350,11 @@
     "ray_proxied": {
       "number": 22,
       "$doc": [
-        "The cast a rasterized proxy starts (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), where `ray_proxy` draws its cut: each pixel walked from the front-most box the raster kept there, the beam rays, cells and samples not run, the cast as built where the cut does not stand; timed in the cast's span. With `ray_steps` on, each pixel is also checked against the eye's own walk (rust/client/shader/src/proxied.rs)."
+        "The cast a rasterized proxy starts (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), where `ray_proxy` draws its cut: each pixel walked from the front-most box the raster kept there, the beam rays, cells and samples not run, the cast as built where the cut does not stand; timed in the cast's span, as PROXIED_MODES says. With `ray_steps` on, each pixel is also checked against the eye's own walk (rust/client/shader/src/proxied.rs)."
       ],
-      "kind": "toggle",
-      "default": false,
+      "kind": "choice",
+      "default": "off",
+      "options": "PROXIED_MODES",
       "section": "debug",
       "dev": true
     }

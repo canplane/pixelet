@@ -33,7 +33,8 @@ pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
 pub use proxied::{
-    proxied_check_cs, proxied_cs, proxied_entry_cs, proxied_miss_cs, proxied_route_cs,
+    proxied_beam_cs, proxied_check_cs, proxied_cs, proxied_entry_cs, proxied_miss_cs,
+    proxied_route_cs, proxied_write_cs,
 };
 pub use proxy::{proxy_args_cs, proxy_cs};
 pub use sun::{sun_cs, sun_mark_cs, SunMoved};

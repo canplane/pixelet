@@ -12,8 +12,8 @@
 //! its default.
 
 pub use crate::domain::view::setting::schema_spec::{
-    AoMode, CameraMode, OracleStart, OrbitObstacleMode, ProxyCut, ResolutionMode, SettingKey,
-    SettingKind, Settings,
+    AoMode, CameraMode, OracleStart, OrbitObstacleMode, ProxiedMode, ProxyCut, ResolutionMode,
+    SettingKey, SettingKind, Settings,
 };
 use crate::sys::io::file::{self, Kept, KeptFile};
 use xpute_guest::global::Global;

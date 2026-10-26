@@ -19,7 +19,7 @@ use crate::domain::layer::terrain::tile::kept;
 use crate::domain::layer::terrain::window::{self, Handed};
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
-use crate::domain::view::setting::store::{settings_store, OracleStart, ProxyCut};
+use crate::domain::view::setting::store::{settings_store, OracleStart, ProxiedMode, ProxyCut};
 use pxl_spec::bake::constant::EntryAt;
 
 /// The cut a proxy draws, as the setting asks for it: its `coarser`
@@ -87,7 +87,12 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let steps = (u32::from(s.ray_steps) * eye::SHOW_STEPS)
         | (oracle << eye::ORACLE_SHIFT)
         | locate
-        | (u32::from(s.ray_proxied) * eye::PROXIED);
+        | match s.ray_proxied {
+            ProxiedMode::off => 0,
+            ProxiedMode::read => eye::PROXIED,
+            ProxiedMode::write => eye::PROXIED | eye::PROXIED_WRITE,
+            ProxiedMode::beam => eye::PROXIED | eye::PROXIED_BEAM,
+        };
     lens::gpu_cast(o, lens::tau(), steps, &mut words)?;
     let edits = preview::current();
     let cut = |e: Option<EntryAt>| {

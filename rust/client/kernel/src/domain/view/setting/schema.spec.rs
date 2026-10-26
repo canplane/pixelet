@@ -234,6 +234,37 @@ impl ProxyCut {
     }
 }
 
+/// How the proxied cast walks a pixel (rust/client/shader/src/proxied.rs).
+///
+///   off   — it does not: the cast as built.
+///   read  — reading the observed pyramid, the pixels it could not answer
+///           walked again writing it (`proxied_cs`, `proxied_miss_cs`).
+///   write — writing it as it goes, one walk a pixel (`proxied_write_cs`).
+///   beam  — the cast as built with no sample, each pixel walked from its
+///           cell's beam line no sooner than its box (`proxied_beam_cs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ProxiedMode {
+    off = 0,
+    read = 1,
+    write = 2,
+    beam = 3,
+}
+
+impl ProxiedMode {
+    pub const ALL: [ProxiedMode; 4] = [
+        ProxiedMode::off,
+        ProxiedMode::read,
+        ProxiedMode::write,
+        ProxiedMode::beam,
+    ];
+
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<ProxiedMode> {
+        ProxiedMode::ALL.into_iter().find(|o| *o as u32 == number)
+    }
+}
+
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -319,7 +350,7 @@ pub enum SettingKey {
     ray_oracle = 20,
     /// The cut a rasterized proxy would draw (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), built on the GPU every frame from the eye over what it holds, as PROXY_CUTS says, in a pass timed apart (span `proxy`): its boxes written and counted, drawn by nothing, and how a pixel starts unchanged (rust/client/shader/src/proxy.rs `proxy_cs`).
     ray_proxy = 21,
-    /// The cast a rasterized proxy starts (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), where `ray_proxy` draws its cut: each pixel walked from the front-most box the raster kept there, the beam rays, cells and samples not run, the cast as built where the cut does not stand; timed in the cast's span. With `ray_steps` on, each pixel is also checked against the eye's own walk (rust/client/shader/src/proxied.rs).
+    /// The cast a rasterized proxy starts (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), where `ray_proxy` draws its cut: each pixel walked from the front-most box the raster kept there, the beam rays, cells and samples not run, the cast as built where the cut does not stand; timed in the cast's span, as PROXIED_MODES says. With `ray_steps` on, each pixel is also checked against the eye's own walk (rust/client/shader/src/proxied.rs).
     ray_proxied = 22,
 }
 
@@ -385,7 +416,7 @@ impl SettingKey {
             SettingKey::ray_steps => SettingKind::Toggle,
             SettingKey::ray_oracle => SettingKind::Choice,
             SettingKey::ray_proxy => SettingKind::Choice,
-            SettingKey::ray_proxied => SettingKind::Toggle,
+            SettingKey::ray_proxied => SettingKind::Choice,
         }
     }
 
@@ -441,7 +472,7 @@ pub struct Settings {
     pub ray_steps: bool,
     pub ray_oracle: OracleStart,
     pub ray_proxy: ProxyCut,
-    pub ray_proxied: bool,
+    pub ray_proxied: ProxiedMode,
 }
 
 impl Settings {
@@ -469,7 +500,7 @@ impl Settings {
         ray_steps: false,
         ray_oracle: OracleStart::off,
         ray_proxy: ProxyCut::off,
-        ray_proxied: false,
+        ray_proxied: ProxiedMode::off,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -552,7 +583,10 @@ impl Settings {
                 Some(o) => self.ray_proxy = o,
                 None => return false,
             },
-            SettingKey::ray_proxied if value <= 1 => self.ray_proxied = value == 1,
+            SettingKey::ray_proxied => match ProxiedMode::of(value) {
+                Some(o) => self.ray_proxied = o,
+                None => return false,
+            },
             _ => return false,
         }
         true

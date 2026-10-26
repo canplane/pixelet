@@ -103,7 +103,22 @@
       },
       "ray_proxied": {
         "label": "Proxied cast",
-        "description": "Starts every point's ray at the proxy box drawn in front of it, instead of off the beam samples. Needs the proxy raster on."
+        "off": {
+          "label": "Off",
+          "description": "Draws as usual."
+        },
+        "read": {
+          "label": "Read, then fix misses",
+          "description": "Walks each point from its proxy box reading what is already known, then walks again the points that ran into the unknown."
+        },
+        "write": {
+          "label": "Write as it goes",
+          "description": "Walks each point from its proxy box once, recording what it finds as it goes."
+        },
+        "beam": {
+          "label": "Beam lines, no samples",
+          "description": "Runs the usual beams but no samples, and starts each point's ray from its beam no sooner than its proxy box."
+        }
       }
     }
   },

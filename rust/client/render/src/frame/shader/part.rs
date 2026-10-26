@@ -120,7 +120,13 @@ pub const SHADER_PROXIED_ROUTE: u32 = 55;
 pub const SHADER_PROXIED: u32 = 56;
 pub const SHADER_PROXIED_MISS: u32 = 57;
 pub const SHADER_PROXIED_CHECK: u32 = 58;
-pub const SHADERS: u32 = 59;
+/// The proxied cast's pixels each walked once, writing the observed
+/// pyramid as they go: a compute entry.
+pub const SHADER_PROXIED_WRITE: u32 = 59;
+/// The proxied cast's pixels each walked from its cell's beam line, no
+/// sooner than its box: a compute entry.
+pub const SHADER_PROXIED_BEAM: u32 = 60;
+pub const SHADERS: u32 = 61;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -342,4 +348,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["proxied_miss.gen"],
     // SHADER_PROXIED_CHECK
     &["proxied_check.gen"],
+    // SHADER_PROXIED_WRITE
+    &["proxied_write.gen"],
+    // SHADER_PROXIED_BEAM
+    &["proxied_beam.gen"],
 ];
