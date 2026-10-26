@@ -202,9 +202,11 @@ The proxy was built to the conditions above and measured on the fixed path
 [a ray from the box](../experiment/20261026-a-ray-from-the-box.md)). It held
 every condition but the one that decides it:
 
-- **Conservative and exact.** No stop past a box's front over 100M stops, and
-  a walk from the right box stops where the eye's own walk does, which is more
-  often right than the samples' answer (0.44% of the cast's stops differ).
+- **Conservative and exact where a ray walked, but not covering.** No stop
+  past a box's front over 100M stops, and a walk from the right box stops where
+  the eye's own walk does, more often right than the samples' answer (0.44% of
+  the cast's stops differ). But the screen was not whole: in `read`, 22,792
+  pixels no box covered showed sky where the eye's walk stops.
 - **Cheap where it was weighed.** The cut and raster cost 1–12 ms, the walk
   from a box about 6 ms against a warm pyramid.
 - **Not cheaper than the cast.** The samples are also what writes the observed
@@ -214,8 +216,8 @@ every condition but the one that decides it:
 
 So "if it cannot remove them, it is not taken" holds: it can remove them only
 by paying their writing per pixel. The samples stay, and the shimmer's first
-cause is answered another way or not yet. What is open from the attempt: the
-`read` mode's coverage holes, untraced. What it leaves for the next attempt is
+cause is answered another way or not yet. Open from the attempt: those
+holes, untraced. What it leaves for the next attempt is
 the question it got wrong: a raster that only starts the ray saves the march,
 not the descent or the writing a cell's pixels share, so a split between
 raster and ray has to give the raster that shared work, not only the start.
