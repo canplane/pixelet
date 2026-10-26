@@ -2,7 +2,7 @@
 
 //! The command tables, xpute's and a program's on top of it. Majors below
 //! xpute's `program_major` are xpute's; a number is given out once across
-//! both, and never again once a table's `$retired` holds it. The emitters
+//! both. The emitters
 //! are cmd/ts.rs, cmd/rs.rs and cmd/cpp.rs.
 
 mod cpp;
@@ -57,15 +57,6 @@ struct Enum {
     default: Option<String>,
     unknown: Option<String>,
     entries: Vec<Entry>,
-    #[serde(rename = "$retired", default)]
-    retired: Vec<Retired>,
-}
-
-/// A number taken out of a table, and the name it had.
-#[derive(Deserialize)]
-struct Retired {
-    name: String,
-    value: u32,
 }
 
 #[derive(Deserialize)]
@@ -163,8 +154,7 @@ fn literal(value: u32, format: &str) -> String {
 }
 
 /// Every command is numbered by a major and a minor that cmd.json names. A
-/// table's numbers are each given out once, and none of them `$retired`: a
-/// number an older side still sends must not come to mean another member.
+/// table's numbers are each given out once.
 fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
@@ -176,24 +166,6 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
                     m.name,
                     other.name,
                     literal(m.value, &e.format)
-                ));
-            }
-            if let Some(r) = e.retired.iter().find(|r| r.value == m.value) {
-                return Err(format!(
-                    "{json}: {}'s {} is {}, retired from {}",
-                    e.name,
-                    m.name,
-                    literal(m.value, &e.format),
-                    r.name
-                ));
-            }
-        }
-        for (i, r) in e.retired.iter().enumerate() {
-            if e.retired[..i].iter().any(|o| o.value == r.value) {
-                return Err(format!(
-                    "{json}: {}'s $retired holds {} twice",
-                    e.name,
-                    literal(r.value, &e.format)
                 ));
             }
         }

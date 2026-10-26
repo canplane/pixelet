@@ -1,10 +1,10 @@
 // pxl-tool/spec/setting.rs
 
 //! The settings, each by the number schema.json gives it, and a choice's
-//! options by theirs; a number is given out once in its table, never one
-//! `$retired`. The kernel's table carries the numbers and no names, which
-//! are the shell's, for its rows and the locale. The shell gets a separate
-//! production table without the `dev` settings so the bundler drops them.
+//! options by theirs; a number is given out once in its table. The kernel's
+//! table carries the numbers and no names, which are the shell's, for its
+//! rows and the locale. The shell gets a separate production table without
+//! the `dev` settings so the bundler drops them.
 //! A setting whose `kept` is false the kernel's store neither keeps nor reads.
 
 use super::data::ts_literal;
@@ -61,29 +61,11 @@ fn number(n: &Node, what: &str) -> Result<u32, String> {
         .ok_or(format!("{JSON}: {what}'s number is not a whole u32"))
 }
 
-/// A table's numbers are each given out once, and none of them `$retired`:
-/// a number kept in storage or sent by an older shell must not come to mean
-/// another setting or option.
-fn check_numbers(
-    table: &str,
-    numbered: &[(&str, u32)],
-    retired: Option<&Node>,
-) -> Result<(), String> {
-    let retired = match retired {
-        None => Vec::new(),
-        Some(r) => r
-            .arr()
-            .ok_or(format!("{JSON}: {table}'s $retired is not a list"))?
-            .iter()
-            .map(|n| number(n, &format!("{table}'s $retired")))
-            .collect::<Result<Vec<_>, _>>()?,
-    };
+/// A table's numbers are each given out once.
+fn check_numbers(table: &str, numbered: &[(&str, u32)]) -> Result<(), String> {
     for (i, (name, n)) in numbered.iter().enumerate() {
         if let Some((other, _)) = numbered[..i].iter().find(|(_, m)| m == n) {
             return Err(format!("{JSON}: {table}'s {name} and {other} are both {n}"));
-        }
-        if retired.contains(n) {
-            return Err(format!("{JSON}: {table}'s {name} is {n}, a retired number"));
         }
     }
     Ok(())
@@ -105,7 +87,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
-    check_numbers("SETTINGS", &numbers, every.get("$retired"))?;
+    check_numbers("SETTINGS", &numbers)?;
     let number_of = |s: &Setting| {
         numbers
             .iter()
@@ -135,7 +117,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 .iter()
                 .map(|(o, v)| (o.as_str(), *v))
                 .collect::<Vec<_>>(),
-            n.get("$retired"),
         )?;
         lists.push(List {
             name,
@@ -264,7 +245,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ),
         String::new(),
         "    /// One past the highest number: the length of a list of every".into(),
-        "    /// setting's value at its number, where a retired number's stays 0.".into(),
+        "    /// setting's value at its number, where a number not given out stays 0.".into(),
         format!(
             "    pub const SLOTS: usize = {};",
             numbers

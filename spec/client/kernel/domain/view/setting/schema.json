@@ -16,12 +16,10 @@
     "A setting carries its `number` (the kernel's SettingKey), and a choice's",
     "`options` names one of the lists below, which numbers each option. The",
     "numbers are what crosses and what storage keeps; the names are the",
-    "shell's alone, for its rows and the locale. A number is given out once: a",
-    "setting or an option taken out leaves its number in its table's",
-    "`$retired`, and the generator refuses a number given twice or one",
-    "retired, so a number stored or sent never comes to mean another. An",
-    "`index` is a place in a list kept elsewhere — the person and the pet are",
-    "by theirs in actor.json — and crosses as itself."
+    "shell's alone, for its rows and the locale. A number is given out once;",
+    "the generator refuses one given twice. An `index` is a place in a list",
+    "kept elsewhere — the person and the pet are by theirs in actor.json — and",
+    "crosses as itself."
   ],
   "RESOLUTION_MODES": {
     "$value": { "auto": 0, "fixed": 1, "low": 2 },
@@ -82,7 +80,6 @@
     ]
   },
   "SETTINGS": {
-    "$retired": [],
     "textures": {
       "number": 0,
       "$doc": [
