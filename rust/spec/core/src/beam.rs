@@ -6,11 +6,12 @@
 //! than it can share with the rays about it (`narrow`); each cell starts
 //! from the least of the beam rays about it, shortened by a margin
 //! (`handed`), and what resumes from the line that beam ray left is the
-//! samples, `SAMPLE` a cell a side, walked to the block that fills; each
-//! drawn pixel takes the nearest of the blocks the samples about it stopped
-//! at that its own ray enters, and walks from its cell's start only where
-//! none does. The lattice is the grid's own, so neither the beam rays nor
-//! the samples follow the screen's pixels.
+//! samples, `SAMPLE` a cell a side, walked to the block that fills; the
+//! blocks they stopped at are drawn as boxes, and each drawn pixel takes the
+//! nearest its own ray enters (`raster`), walking from its cell's start
+//! only where that is a node a sample lacks at, or none. The lattice is the
+//! grid's own, so neither the beam rays nor the samples follow the
+//! screen's pixels.
 
 use crate::grid::SPLIT;
 
@@ -221,16 +222,6 @@ impl Grid {
         ]
     }
 
-    /// The first of the `2 · NEAR` a side samples about the screen's point
-    /// at the tangents `[tx, ty]`: `NEAR` of them at or before the point,
-    /// which the lattice's `NEAR` past the screen put a sample past the
-    /// point's floor, so the first is the floor and one.
-    pub fn about(&self, [tx, ty]: [f32; 2]) -> [u32; 2] {
-        let d = self.s / SAMPLE as f32;
-        let at = |v: f32| libm::floorf(v / d) as u32 + 1;
-        [at(tx + self.tan[0]), at(self.tan[1] - ty)]
-    }
-
     /// Corner `[i, j]`'s index among the corners.
     pub fn corner_index(&self, [i, j]: [u32; 2]) -> u32 {
         j * self.corners[0] + i
@@ -287,21 +278,20 @@ pub const CELL_WORDS: u32 = 2;
 
 /// The samples: rays on a lattice `SAMPLE` a cell a side, each resumed from
 /// its cell's start as a pixel is and walked to the block that fills; a
-/// pixel takes the nearest of the blocks the `2 · NEAR` a side samples about
-/// it stopped at that its own ray enters, and walks only where none does.
-/// The lattice runs `NEAR` samples past the screen on each side, so every
-/// sample a pixel reads is cast.
+/// pixel takes the nearest of the blocks they stopped at that its own ray
+/// enters (`raster`), and walks only where none does. The lattice runs
+/// `NEAR` samples past the screen on each side, so a block seen at the
+/// screen's edge is one a sample stopped at.
 pub const SAMPLE: u32 = 4;
 pub const NEAR: u32 = 2;
 
-/// What a sample leaves for the pixels about it, in words: the node it
-/// stopped at (`NODE_WORDS`), its zoom `SAMPLE_NONE` where it went on to
-/// its reach, the block there, 1 where that node lacks, which a
-/// pixel entering it before any block takes as its own, and the axis the
-/// sample entered it across: a face its ray reached through air, so one a
-/// pixel may show only where it enters across the same; what lies about
-/// that face (`faces::word`), asked once here for every pixel that shows
-/// it.
+/// What a sample leaves for the pixels, in words: the node it stopped at
+/// (`NODE_WORDS`), its zoom `SAMPLE_NONE` where it went on to its reach,
+/// the block there, 1 where that node lacks, which a pixel entering it
+/// before any block walks itself, and the axis the sample entered it
+/// across: a face its ray reached through air, so one a pixel may show only
+/// where it enters across the same; what lies about that face
+/// (`faces::word`), asked once here for every pixel that shows it.
 pub const SAMPLE_NODE: u32 = 0;
 pub const SAMPLE_BLOCK: u32 = SAMPLE_NODE + NODE_WORDS;
 pub const SAMPLE_LACKS: u32 = SAMPLE_BLOCK + 2;

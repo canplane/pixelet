@@ -6,7 +6,8 @@ written and nothing beyond it. The checks below came back with their counts.
 **Status (2026-10-24): built, as the observed pyramid** (pxl-spec-core
 observed.rs). It is filled where the rays asked: the beam rays, the samples, and
 the pixels whose reading walk missed (`ray::MISS`), walked again from their
-cell's start in the same pass (pxl-shader cast.rs `miss_cs`). An entry's key is
+cell's start in the same pass (pxl-shader cast.rs `miss_list_cs`, off the list
+`cast_cs` makes of them). An entry's key is
 its walk's tag and the zooms asked (`key(tag, [far, near])`); entries are kept
 between frames and forgotten over the squares that moved (`forgets`), or whole
 where what every node is asked of moved (`FORGETS_ALL`). It is not the

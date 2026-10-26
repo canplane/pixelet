@@ -2,8 +2,8 @@
 
 //! The GPU's compute entries, a module of their own each when built, over
 //! the world as the GPU holds it (world.rs) and the eye it is cast from
-//! (eye.rs): the eye's rays (beam.rs, cast.rs) through the observed pyramid
-//! (observed.rs), the world's depth from the sun (sun.rs), each handed
+//! (eye.rs): the eye's rays (beam.rs, raster.rs, cast.rs) through the
+//! observed pyramid (observed.rs), the world's depth from the sun (sun.rs), each handed
 //! square's ground (ground.rs) and ways (ways.rs), and the decor the ground
 //! grows (decor.rs). An entry is named by `entry_point_name`, never by its
 //! module's path, so each keeps the name pxl-tool shader.rs `ENTRIES` reads.
@@ -19,16 +19,18 @@ mod decor;
 mod eye;
 mod ground;
 mod observed;
+mod raster;
 mod sun;
 mod ways;
 mod world;
 
 pub use beam::{beam_cs, cells_cs, sample_cs};
-pub use cast::{cast_cs, miss_cs};
+pub use cast::{cast_cs, miss_cs, miss_list_cs};
 pub use decor::{decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs};
 pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
+pub use raster::{boxes_cs, faces_cs};
 pub use sun::{sun_cs, sun_mark_cs, SunMoved};
 pub use ways::{ways_cs, ways_free_cs, ways_freed_cs, ways_tree_cs};
 pub use world::{Looks, Unlooked, World};

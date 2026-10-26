@@ -14,8 +14,15 @@
     "case",
     "fill",
     "cast",
+    "beam",
+    "cells",
+    "sample",
+    "sraster",
+    "pixel",
+    "miss",
     "grow",
-    "shadow"
+    "shadow",
+    "faces"
   ],
   "FRAME_KINDS": [
     "none",

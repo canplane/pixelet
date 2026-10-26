@@ -260,11 +260,17 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 /// its depth prepass, its occlusion, its drawing and its cast. The air's
 /// tables, the fill and the decor's growth, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
-const PER_PIXEL: [GpuSpanName; 4] = [
+const PER_PIXEL: [GpuSpanName; 10] = [
     GpuSpanName::prepass,
     GpuSpanName::ao,
     GpuSpanName::world,
     GpuSpanName::cast,
+    GpuSpanName::beam,
+    GpuSpanName::cells,
+    GpuSpanName::sample,
+    GpuSpanName::sraster,
+    GpuSpanName::pixel,
+    GpuSpanName::miss,
 ];
 
 /// A frame's GPU time in the passes drawn at the world's pixels (`PER_PIXEL`):

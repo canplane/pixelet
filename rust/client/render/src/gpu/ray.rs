@@ -3,10 +3,12 @@
 //! The eye's rays, each drawn at its own pixel where it met a face, painted
 //! by paint.wgsl's `paint` (pxl-spec-core ray.rs), from the world surface's
 //! `rays` the GPU's cast leaves (gpu/renderer.rs `Cast`): the ground it
-//! casts over (ray/ground.rs) and the cast (ray/cast.rs).
+//! casts over (ray/ground.rs) and the cast (ray/cast.rs), its samples'
+//! stops handed to the rasterizer (ray/raster.rs).
 
 mod cast;
 mod ground;
+mod raster;
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
 use crate::gpu::api::{

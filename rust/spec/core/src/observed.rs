@@ -15,12 +15,15 @@
 //! - its head: how many tiles are taken, the frame's number, what is
 //!   forgotten, and the eye's windows' slots that moved (`HEAD_WORDS`);
 //! - the entries, the roots' and then the tiles' (`ENTRIES_AT`);
-//! - the tiles' stack, the free ones past those taken (`STACK_AT`).
+//! - the tiles' stack, the free ones past those taken (`STACK_AT`);
+//! - the pixels the frame's reading walk marked missed, listed for the walk
+//!   that writes the pyramid (`MARKS_AT`).
 //!
-//! That is all of it (`WORDS`): the pixels a frame's cast missed are
-//! marked in their own rays (`ray::MISS`), so a walk that only reads the
-//! pyramid holds its binding read-only, and a GPU's compiler types no word
-//! of it atomic for that walk.
+//! That is all of it (`WORDS`). The pixels a frame's cast missed are
+//! marked in their own rays (`ray::MISS`) and listed here by plain writes,
+//! their count kept apart (`ray::MISS_ARGS_COUNT`) and copied in after
+//! (`MARKS_COUNT`), so a walk that only reads the pyramid types no word of
+//! it atomic.
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
@@ -82,8 +85,18 @@ pub const ENTRIES_AT: u32 = HEAD_WORDS;
 /// ones from it up, the next taken first; every tile in turn where the
 /// pyramid is forgotten whole.
 pub const STACK_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
-/// The buffer's words, whatever is drawn: none of them a pixel's.
-pub const WORDS: u32 = STACK_AT + TILES;
+/// The marked pixels listed (`MARKS_AT`), a word each, its row over its
+/// column, as many as `MARKS`; and their count, copied in from the walk's
+/// dispatch (`ray::MISS_ARGS_COUNT`) once the reading walk is done
+/// (`MARKS_COUNT`). A pixel past `MARKS` is walked by the walk over every
+/// pixel (`ray::MISS_ARGS_WHOLE`). Room for the bursts a load or a long
+/// zoom marks, about a hundred thousand at 9 Mpx.
+pub const MARKS: u32 = 1 << 20;
+pub const MARKS_COUNT: u32 = STACK_AT + TILES;
+pub const MARKS_AT: u32 = MARKS_COUNT + 1;
+/// The buffer's words, whatever is drawn: the list's room fixed, so none
+/// of them a pixel's.
+pub const WORDS: u32 = MARKS_AT + MARKS;
 
 /// No entry: a node no tile keeps.
 pub const NONE: u32 = u32::MAX;
