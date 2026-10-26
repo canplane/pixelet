@@ -152,6 +152,7 @@ impl ResolutionMode {
 ///   cut_n  — at the box over the stop that the proxy's cut draws, `coarser`
 ///            n (rust/spec/core/src/proxy.rs `cut`), from where the ray
 ///            enters it.
+///   locate_n — cut_n's box found, and nothing walked from it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum OracleStart {
@@ -163,10 +164,12 @@ pub enum OracleStart {
     cut_4 = 5,
     cut_6 = 6,
     cut_8 = 7,
+    locate_1 = 8,
+    locate_2 = 9,
 }
 
 impl OracleStart {
-    pub const ALL: [OracleStart; 8] = [
+    pub const ALL: [OracleStart; 10] = [
         OracleStart::off,
         OracleStart::root,
         OracleStart::cut_1,
@@ -175,6 +178,8 @@ impl OracleStart {
         OracleStart::cut_4,
         OracleStart::cut_6,
         OracleStart::cut_8,
+        OracleStart::locate_1,
+        OracleStart::locate_2,
     ];
 
     /// The option a number names, or none for a number the list does not give out.

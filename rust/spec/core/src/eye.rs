@@ -13,13 +13,15 @@ pub const ORIGIN: usize = 0;
 /// from (pxl-shader cast.rs `oracle_cs`, `oracle`): not at all
 /// (`ORACLE_OFF`), the world's root (`ORACLE_ROOT`), or, `ORACLE_CUT` and
 /// past it, the box over the stop that the proxy's cut draws, `coarser`
-/// (pxl-spec-core `proxy::cut`) one for each past `ORACLE_CUT`.
+/// (pxl-spec-core `proxy::cut`) one for each past `ORACLE_CUT`; with
+/// `ORACLE_LOCATE`, that box only found, not walked from.
 pub const STEPS: usize = 3;
 pub const SHOW_STEPS: u32 = 1;
 pub const ORACLE_SHIFT: u32 = 8;
 pub const ORACLE_OFF: u32 = 0;
 pub const ORACLE_ROOT: u32 = 1;
 pub const ORACLE_CUT: u32 = 2;
+pub const ORACLE_LOCATE: u32 = 1 << 16;
 
 /// Where the oracle starts, off the steps' word (`STEPS`).
 pub const fn oracle(steps: u32) -> u32 {

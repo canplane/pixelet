@@ -44,6 +44,14 @@
         "cut_8": {
           "label": "From the proxy box, 8 coarser",
           "description": "Walks every point again from the box a proxy would draw over it, 8 sizes coarser than the camera grid asks, and times that walk on its own."
+        },
+        "locate_1": {
+          "label": "Find the proxy box only, 1 coarser",
+          "description": "Finds the box a proxy would draw over every point, 1 sizes coarser than the camera grid asks, without walking from it, and times that on its own."
+        },
+        "locate_2": {
+          "label": "Find the proxy box only, 2 coarser",
+          "description": "Finds the box a proxy would draw over every point, 2 sizes coarser than the camera grid asks, without walking from it, and times that on its own."
         }
       }
     }

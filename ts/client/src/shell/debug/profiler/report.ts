@@ -33,7 +33,12 @@ const oracleText = (f: Frame) =>
       n1(f.oracle_visits / f.oracle_stops)
     } a stop   located ${
       n1(f.oracle_located / f.oracle_stops)
-    } a stop   left ${f.oracle_left}`,
+    } a stop   left ${f.oracle_left}   coarser ${
+      n1(f.oracle_coarser / f.oracle_stops)
+    } a stop`,
+    `          differed: word ${f.oracle_differed_word}   nearer ${f.oracle_differed_nearer}   as the eye's walk ${f.oracle_differed_true}   left ${f.oracle_differed_left}   clamped ${f.oracle_differed_clamped}   coarser ${
+      n1(f.oracle_differed_coarser / f.oracle_differed)
+    } a stop   the cast's not the eye's ${f.oracle_untrue}   the eye's lacked ${f.oracle_truth_lacked}`,
   ];
 
 export function failText(fail: u32, detail: u32): string {

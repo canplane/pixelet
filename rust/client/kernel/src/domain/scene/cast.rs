@@ -52,17 +52,19 @@ pub fn shards() -> &'static [[i32; 4]] {
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     let s = settings_store();
-    let oracle = match s.ray_oracle {
-        OracleStart::off => eye::ORACLE_OFF,
-        OracleStart::root => eye::ORACLE_ROOT,
-        OracleStart::cut_1 => eye::ORACLE_CUT + 1,
-        OracleStart::cut_2 => eye::ORACLE_CUT + 2,
-        OracleStart::cut_3 => eye::ORACLE_CUT + 3,
-        OracleStart::cut_4 => eye::ORACLE_CUT + 4,
-        OracleStart::cut_6 => eye::ORACLE_CUT + 6,
-        OracleStart::cut_8 => eye::ORACLE_CUT + 8,
+    let (oracle, locate) = match s.ray_oracle {
+        OracleStart::off => (eye::ORACLE_OFF, 0),
+        OracleStart::root => (eye::ORACLE_ROOT, 0),
+        OracleStart::cut_1 => (eye::ORACLE_CUT + 1, 0),
+        OracleStart::cut_2 => (eye::ORACLE_CUT + 2, 0),
+        OracleStart::cut_3 => (eye::ORACLE_CUT + 3, 0),
+        OracleStart::cut_4 => (eye::ORACLE_CUT + 4, 0),
+        OracleStart::cut_6 => (eye::ORACLE_CUT + 6, 0),
+        OracleStart::cut_8 => (eye::ORACLE_CUT + 8, 0),
+        OracleStart::locate_1 => (eye::ORACLE_CUT + 1, eye::ORACLE_LOCATE),
+        OracleStart::locate_2 => (eye::ORACLE_CUT + 2, eye::ORACLE_LOCATE),
     };
-    let steps = (u32::from(s.ray_steps) * eye::SHOW_STEPS) | (oracle << eye::ORACLE_SHIFT);
+    let steps = (u32::from(s.ray_steps) * eye::SHOW_STEPS) | (oracle << eye::ORACLE_SHIFT) | locate;
     lens::gpu_cast(o, lens::tau(), steps, &mut words)?;
     let edits = preview::current();
     let cut = |e: Option<EntryAt>| {

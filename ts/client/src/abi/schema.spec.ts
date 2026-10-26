@@ -241,6 +241,8 @@ export const SETTINGS = {
       cut_4: 5 as number,
       cut_6: 6 as number,
       cut_8: 7 as number,
+      locate_1: 8 as number,
+      locate_2: 9 as number,
     },
     section: "debug",
     dev: true,

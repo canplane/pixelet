@@ -146,7 +146,8 @@ pub struct FrameSample {
 /// them (pxl-render gpu/ray/cast.rs `Oracle`): the frames whose counts were
 /// read back, the pixels the cast stopped, those the walk again stopped
 /// otherwise, those it lacked a node for, its visits, the reads that found
-/// the node it started at, and those whose walk left that node.
+/// the node it started at, and those whose walk left that node, then the
+/// breakdown profiler.json's FRAME says.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct OracleSample {
@@ -157,6 +158,15 @@ pub struct OracleSample {
     pub visits: f64,
     pub located: f64,
     pub left: f64,
+    pub differed_word: f64,
+    pub differed_nearer: f64,
+    pub differed_true: f64,
+    pub differed_left: f64,
+    pub differed_clamped: f64,
+    pub differed_coarser: f64,
+    pub coarser: f64,
+    pub untrue: f64,
+    pub truth_lacked: f64,
 }
 
 /// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
@@ -190,6 +200,15 @@ words!(FrameSample, FRAME::WORDS,
     oracle.differed => FRAME::oracle_differed, oracle.lacked => FRAME::oracle_lacked,
     oracle.visits => FRAME::oracle_visits, oracle.located => FRAME::oracle_located,
     oracle.left => FRAME::oracle_left,
+    oracle.differed_word => FRAME::oracle_differed_word,
+    oracle.differed_nearer => FRAME::oracle_differed_nearer,
+    oracle.differed_true => FRAME::oracle_differed_true,
+    oracle.differed_left => FRAME::oracle_differed_left,
+    oracle.differed_clamped => FRAME::oracle_differed_clamped,
+    oracle.differed_coarser => FRAME::oracle_differed_coarser,
+    oracle.coarser => FRAME::oracle_coarser,
+    oracle.untrue => FRAME::oracle_untrue,
+    oracle.truth_lacked => FRAME::oracle_truth_lacked,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
