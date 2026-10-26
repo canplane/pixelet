@@ -108,7 +108,10 @@ pub const SHADER_ORACLE: u32 = 50;
 /// dispatch laid off it (pxl-spec-core `proxy`): compute entries.
 pub const SHADER_PROXY: u32 = 51;
 pub const SHADER_PROXY_ARGS: u32 = 52;
-pub const SHADERS: u32 = 53;
+/// The cut's boxes drawn at the eye's rays' pixels, their nearest face's
+/// box and depth kept (proxy_raster.wgsl).
+pub const SHADER_PROXY_RASTER: u32 = 53;
+pub const SHADERS: u32 = 54;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -318,4 +321,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["proxy.gen"],
     // SHADER_PROXY_ARGS
     &["proxy_args.gen"],
+    // SHADER_PROXY_RASTER
+    &["proxy_box", "proxy_raster"],
 ];

@@ -71,7 +71,9 @@ pub const PIPELINE_DECOR_DEPTH: u32 = 31;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 32;
 pub const PIPELINE_SUN_MAP: u32 = 33;
 pub const PIPELINE_SCREEN_PREPASS: u32 = 34;
-pub const PIPELINES: u32 = 35;
+/// The proxy's boxes, their nearest face's box at a pixel (gpu/ray/proxy.rs).
+pub const PIPELINE_PROXY_RASTER: u32 = 35;
+pub const PIPELINES: u32 = 36;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -554,6 +556,18 @@ const fn plan_of(id: u32) -> Plan {
             },
             &[],
             &[&SCREEN_GROUP],
+        ),
+        // Both sides of every box, nearest kept, reversed: its box's number
+        // into a target of its own (gpu/ray/proxy.rs).
+        PIPELINE_PROXY_RASTER => plan(
+            Head {
+                depth_write: true,
+                depth_compare: GREATER,
+                blend: OPAQUE,
+                ..blended(SHADER_PROXY_RASTER, CULL_NONE)
+            },
+            &[],
+            &[&[[0, UNIFORM], [1, STORAGE]]],
         ),
         // Only where the opaque world left the far plane, so covered pixels never run it.
         PIPELINE_SKY => plan(

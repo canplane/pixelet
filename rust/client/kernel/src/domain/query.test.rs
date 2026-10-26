@@ -712,6 +712,20 @@ fn enters(ray: &pxl_spec_core::cast::Ray, p: &pxl_spec_core::proxy::Proxy) -> Op
     (t1 > t0).then_some(t0)
 }
 
+/// Where `ray` from the origin, inside the box `p`, leaves it short of its
+/// reach; none where it reaches its reach first.
+fn leaves(ray: &pxl_spec_core::cast::Ray, p: &pxl_spec_core::proxy::Proxy) -> Option<f64> {
+    let mut t1 = f64::from(ray.reach);
+    for a in 0..3 {
+        let d = f64::from(ray.direction[a]);
+        if d != 0.0 {
+            let (lo, hi) = (f64::from(p.lo[a]), f64::from(p.hi[a]));
+            t1 = t1.min((lo / d).max(hi / d));
+        }
+    }
+    (t1 < f64::from(ray.reach)).then_some(t1)
+}
+
 /// The nearest a ray from `o` enters any box of the proxy's under the node
 /// `n` (pxl-spec-core `proxy`), nearer than `best`, each node asked through
 /// the world's one query with nothing handed down, as a pass building the
@@ -826,13 +840,14 @@ fn quantile(v: &[f64], p: f64) -> f64 {
 }
 
 /// The proxy's boxes are conservative: over flat, rolling and steep ground,
-/// with a bridge, a tunnel and cubes placed, every eye ray enters a box no
-/// later than the cast stops (`cast::first`, the GPU's own descent, its
-/// world without decor), a ray entering none meets nothing, and a walk
-/// started at the box's front stops where the walk from the eye does. How
-/// loose the boxes are is printed, by how many zooms coarser than the
-/// camera grid's they are drawn (`proxy::cut`): `cargo test-host --
-/// proxy --nocapture`.
+/// with a bridge, a tunnel and cubes placed, the cut built from the seeds
+/// over the eye's coarsest window (`proxy::seed`), every eye ray enters a
+/// box, or leaves that window (`proxy::coverage`), no later than the cast
+/// stops (`cast::first`, the GPU's own descent, its world without decor); a
+/// ray that does neither meets nothing; and a walk started there stops
+/// where the walk from the eye does. How loose the boxes are is printed, by
+/// how many zooms coarser than the camera grid's they are drawn
+/// (`proxy::cut`): `cargo test-host -- proxy --nocapture`.
 #[test]
 fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
     use crate::domain::layer::object::store::AIR;
@@ -976,6 +991,9 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
             let eye = [centre[0], centre[1], own + over];
             let o = world::origin(eye[0], eye[1], eye[2]);
             assert!(proxy::aired(&Windowed, o), "{name} +{over}");
+            let (first, laid) = proxy::covered(&Windowed);
+            assert!(laid, "{name} +{over}: the eye's coarsest window laid out");
+            let cover = proxy::coverage(o, first);
             let mut gaps: Vec<Vec<(f64, f64, f64)>> = vec![Vec::new(); COARSER.len()];
             let (mut stops, mut lacks, mut sky) = (0, 0, 0);
             let mut visits = [0u64; 2];
@@ -998,15 +1016,16 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
                 for (k, &coarser) in COARSER.iter().enumerate() {
                     let mut best = f64::INFINITY;
                     let mut asked = 0;
-                    for r in 0..27 {
-                        let roots = [r % 3 - 1, r / 3 % 3 - 1, r / 9 - 1];
-                        let root = Node {
-                            roots,
-                            ..Node::ROOT
-                        };
+                    for k in 0..proxy::SEEDS {
+                        let seed = proxy::seed(o, first, k);
                         front(
-                            &mut q, o, &ray, detail, coarser, root, &mut best, &mut asked,
+                            &mut q, o, &ray, detail, coarser, seed, &mut best, &mut asked,
                         );
+                    }
+                    // Past the window the cast lacks: a ray starts no later
+                    // than it leaves it.
+                    if let Some(t) = leaves(&ray, &cover) {
+                        best = best.min(t);
                     }
                     if best.is_infinite() {
                         assert_eq!(
@@ -1066,13 +1085,9 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
                 // Three coarser alone, as a test's time allows: where the
                 // windows lack, one and two count seven and fifty times as many.
                 for (k, &coarser) in COARSER.iter().enumerate().skip(2) {
-                    for r in 0..27 {
-                        let roots = [r % 3 - 1, r / 3 % 3 - 1, r / 9 - 1];
-                        let root = Node {
-                            roots,
-                            ..Node::ROOT
-                        };
-                        drawn_boxes(&mut q, o, detail, coarser, root, 3000.0, &mut boxes[k]);
+                    for s in 0..proxy::SEEDS {
+                        let seed = proxy::seed(o, first, s);
+                        drawn_boxes(&mut q, o, detail, coarser, seed, 3000.0, &mut boxes[k]);
                     }
                 }
                 eprintln!(

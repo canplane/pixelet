@@ -87,6 +87,18 @@
         "cut_3": {
           "label": "Build the cut, 3 coarser",
           "description": "Builds the boxes a proxy would draw every frame, 3 sizes coarser than the camera grid asks, and counts and times them on their own; nothing draws them."
+        },
+        "raster_1": {
+          "label": "Build and draw the cut, 1 coarser",
+          "description": "Builds the boxes a proxy would draw every frame, 1 size coarser than the camera grid asks, draws them at every pixel, and times the drawing on its own; nothing reads them yet."
+        },
+        "raster_2": {
+          "label": "Build and draw the cut, 2 coarser",
+          "description": "Builds the boxes a proxy would draw every frame, 2 sizes coarser than the camera grid asks, draws them at every pixel, and times the drawing on its own; nothing reads them yet."
+        },
+        "raster_3": {
+          "label": "Build and draw the cut, 3 coarser",
+          "description": "Builds the boxes a proxy would draw every frame, 3 sizes coarser than the camera grid asks, draws them at every pixel, and times the drawing on its own; nothing reads them yet."
         }
       }
     }

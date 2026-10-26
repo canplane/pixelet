@@ -22,15 +22,19 @@ use crate::domain::view::lens;
 use crate::domain::view::setting::store::{settings_store, OracleStart, ProxyCut};
 use pxl_spec::bake::constant::EntryAt;
 
-/// The cut a proxy would draw, as the setting asks for it: its `coarser`
-/// (pxl-spec-core `proxy::cut`), none for 0 (pxl-render gpu/renderer.rs
-/// `Cast::proxy`).
+/// The cut a proxy draws, as the setting asks for it: its `coarser`
+/// (pxl-spec-core `proxy::cut`), none for 0, and whether it is drawn
+/// (pxl-render gpu/renderer.rs `Cast::proxy`).
 pub fn proxy() -> u32 {
+    use pxl_render::gpu::ray::PROXY_RASTER;
     match settings_store().ray_proxy {
         ProxyCut::off => 0,
         ProxyCut::cut_1 => 1,
         ProxyCut::cut_2 => 2,
         ProxyCut::cut_3 => 3,
+        ProxyCut::raster_1 => 1 | PROXY_RASTER,
+        ProxyCut::raster_2 => 2 | PROXY_RASTER,
+        ProxyCut::raster_3 => 3 | PROXY_RASTER,
     }
 }
 

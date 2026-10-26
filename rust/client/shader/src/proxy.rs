@@ -100,9 +100,11 @@ fn node_at(data: &[u32], q: u32, k: u32) -> Node {
 /// the cast asks it at, with its floor (`proxy::floor`); a box written into
 /// the scratch and counted, a node over the cut's children queued for the
 /// next zoom, each that meets its clipped box along z; none at all where the
-/// eye is not in the open (`proxy::aired`). A box is its node
-/// and its extent along z (`proxy::BOX_WORDS`). What would pass the
-/// scratch's room is dropped and counted.
+/// eye is not in the open (`proxy::aired`). A box is its node, its planes
+/// grown as the raster draws them (`proxy::inflated`), its entry in the
+/// observed pyramid none, the cast's to read, and whether it is about the
+/// eye (`proxy::eyed`), listed in the counts (`proxy::COUNT_EYE`). What
+/// would pass the scratch's room is dropped and counted.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "proxy_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn proxy_cs(
@@ -157,6 +159,7 @@ pub fn proxy_cs(
         let k = add(counts, proxy::COUNT_BOXES, 1);
         if k >= proxy::BOXES {
             add(counts, proxy::COUNT_DROPPED, 1);
+            add(counts, proxy::COUNT_DROPPED_BOXES, 1);
             return;
         }
         let w = proxy::box_at(k);
@@ -166,8 +169,29 @@ pub fn proxy_cs(
             put(data, w + j, words[j as usize]);
             j += 1;
         }
-        put(data, w + proxy::BOX_Z, p.lo[2].to_bits());
-        put(data, w + proxy::BOX_Z + 1, p.hi[2].to_bits());
+        // Grown as the raster draws it, and about the eye or not.
+        let g = proxy::inflated(&p, f32::from_bits(count(counts, proxy::COUNT_PIXEL)));
+        let b = [g.lo[0], g.lo[1], g.lo[2], g.hi[0], g.hi[1], g.hi[2]];
+        let mut j = 0;
+        while j < 6 {
+            put(data, w + proxy::BOX_LO + j, b[j as usize].to_bits());
+            j += 1;
+        }
+        put(data, w + proxy::BOX_ENTRY, pxl_spec_core::observed::NONE);
+        let eyed = proxy::eyed(&g, [eye.tan.x, eye.tan.y]);
+        put(
+            data,
+            w + proxy::BOX_FLAGS,
+            if eyed { proxy::EYED } else { 0 },
+        );
+        if eyed {
+            let e = add(counts, proxy::COUNT_EYES, 1);
+            if e < proxy::EYES {
+                add(counts, proxy::COUNT_EYE + e, k + 1);
+            } else {
+                add(counts, proxy::COUNT_DROPPED, 1);
+            }
+        }
         return;
     }
     if p.says != UNDER {

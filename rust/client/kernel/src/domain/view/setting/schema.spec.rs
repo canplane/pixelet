@@ -200,10 +200,11 @@ impl OracleStart {
     }
 }
 
-/// Whether the GPU builds the cut a proxy would draw, and how coarse (rust/client/shader/src/proxy.rs `proxy_cs`).
+/// Whether the GPU builds the cut a proxy draws, how coarse, and whether it draws it (rust/client/shader/src/proxy.rs `proxy_cs`, rust/client/render/src/frame/shader/proxy_raster.wgsl).
 ///
-///   off    — it does not.
-///   cut_n  — every frame, `coarser` n (rust/spec/core/src/proxy.rs `cut`).
+///   off       — it does not.
+///   cut_n     — every frame, `coarser` n (rust/spec/core/src/proxy.rs `cut`).
+///   raster_n  — that, and its boxes drawn at the rays' pixels, timed apart (span `raster`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ProxyCut {
@@ -211,14 +212,20 @@ pub enum ProxyCut {
     cut_1 = 1,
     cut_2 = 2,
     cut_3 = 3,
+    raster_1 = 4,
+    raster_2 = 5,
+    raster_3 = 6,
 }
 
 impl ProxyCut {
-    pub const ALL: [ProxyCut; 4] = [
+    pub const ALL: [ProxyCut; 7] = [
         ProxyCut::off,
         ProxyCut::cut_1,
         ProxyCut::cut_2,
         ProxyCut::cut_3,
+        ProxyCut::raster_1,
+        ProxyCut::raster_2,
+        ProxyCut::raster_3,
     ];
 
     /// The option a number names, or none for a number the list does not give out.

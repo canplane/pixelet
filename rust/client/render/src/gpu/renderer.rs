@@ -54,7 +54,7 @@ use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::{RaysPass, ORACLE_COUNTS, PROXY_SUMS};
+use crate::gpu::ray::{ProxyFrame, RaysPass, ORACLE_COUNTS, PROXY_SUMS};
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
@@ -200,9 +200,10 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
-    /// The cut a proxy would draw, built each frame over the same world at
-    /// this `coarser` (pxl-spec-core `proxy::cut`; gpu/ray/proxy.rs), none
-    /// for 0: counted and timed, drawn by nothing.
+    /// The cut a proxy draws, built each frame over the same world at this
+    /// `coarser` (pxl-spec-core `proxy::cut`; gpu/ray/proxy.rs), none for 0,
+    /// and drawn at the rays' pixels where `PROXY_RASTER` is set over it:
+    /// counted and timed, read by nothing yet.
     pub proxy: u32,
 }
 
@@ -673,7 +674,6 @@ impl Renderer {
         read.mark(self.moon.step(g, &self.mips, input.moon));
         read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
         let mut cast = input.cast;
-        let proxy = cast.as_ref().map_or(0, |c| c.proxy);
         // What the frame cannot put off is recorded before what can wait:
         // the cast pass made first, then the squares' uploads, which take
         // only the room left.
@@ -774,6 +774,9 @@ impl Renderer {
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] =
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
+        let proxy = cast
+            .as_ref()
+            .map(|c| ProxyFrame::of(c, [world.width, world.height]));
         self.screen.prepare(
             g,
             cast,
@@ -837,8 +840,10 @@ impl Renderer {
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
-        self.screen.dispatch(g, encoder, &mut stamps);
+        // The proxy's cut and raster before the cast, which reads them
+        // where it is proxied, and nothing of the cast's.
         self.screen.proxy(g, encoder, &mut stamps, proxy);
+        self.screen.dispatch(g, encoder, &mut stamps);
         // The sun's map: the world's depth from the sun, where the rays hold
         // the world it was cast with, then decor's and the actors' drawn over it.
         if self.shadows {

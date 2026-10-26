@@ -21,7 +21,7 @@ use cast::CastBuffers;
 pub use cast::ORACLE_COUNTS;
 use ground::GroundBuffers;
 use proxy::ProxyBuffers;
-pub use proxy::PROXY_SUMS;
+pub use proxy::{ProxyBindings, ProxyFrame, PROXY_RASTER, PROXY_SUMS};
 
 pub struct RaysPass {
     built: Built,
@@ -71,16 +71,29 @@ impl RaysPass {
         }
     }
 
-    /// The cut a proxy would draw at `coarser` (pxl-spec-core `proxy::cut`),
-    /// none for 0, built into `encoder` over the world the cast binds, once
-    /// the cast has bound it.
-    pub fn proxy(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp], coarser: u32) {
+    /// The cut a proxy draws as `frame` asks (pxl-spec-core `proxy::cut`),
+    /// none at a `coarser` of 0, built into `encoder` over the world the
+    /// cast binds once the cast has bound it, and drawn where it asks.
+    pub fn proxy(
+        &mut self,
+        g: &Gpu,
+        encoder: u32,
+        stamps: &mut [Stamp],
+        frame: Option<ProxyFrame>,
+    ) {
+        (self.proxy.ran, self.proxy.rastered) = (false, false);
         let Some(bound) = self.cast.as_ref().and_then(CastBuffers::world) else {
             return;
         };
-        if coarser != 0 {
-            self.proxy.dispatch(g, encoder, stamps, coarser, bound);
+        if let Some(f) = frame.filter(|f| f.coarser != 0) {
+            self.proxy.dispatch(g, encoder, stamps, &f, bound);
         }
+    }
+
+    /// What a reader of the cut binds, and whether this frame built and
+    /// drew it (`ProxyBindings`).
+    pub fn proxy_bindings(&self) -> ProxyBindings {
+        self.proxy.bindings()
     }
 
     /// The cut's counts copied last frame mapped back (`ProxyBuffers::back`).

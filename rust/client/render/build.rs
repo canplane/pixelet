@@ -84,6 +84,14 @@ fn main() {
         looks,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
+    // Where the cut's boxes lie in its scratch and how one is laid
+    // (pxl-spec-core proxy.rs), as the raster reads them.
+    {
+        use pxl_spec_core::proxy::{box_at, BOX_FLAGS, BOX_HI, BOX_LO, BOX_WORDS, EYED};
+        let at = box_at(0);
+        let proxy = format!("const PROXY_BOX_AT: u32 = {at}u;\nconst PROXY_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst PROXY_BOX_LO: u32 = {BOX_LO}u;\nconst PROXY_BOX_HI: u32 = {BOX_HI}u;\nconst PROXY_BOX_FLAGS: u32 = {BOX_FLAGS}u;\nconst PROXY_EYED: u32 = {EYED}u;\n");
+        std::fs::write(out.join("proxy_box.wgsl"), proxy).expect("the proxy's boxes' shader");
+    }
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
     use pxl_spec_core::eye::{FORWARD, ORIGIN, REACH, RIGHT, SHOW_STEPS, STEPS, TAN, UP};
