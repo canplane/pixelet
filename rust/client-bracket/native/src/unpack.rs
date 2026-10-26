@@ -10,39 +10,14 @@
 //! or the kernel's: it touches only the caller's bytes and its own, so it
 //! takes no handoff (xpute-host native `Guest::run`).
 
-use ruzstd::decoding::errors::{FrameDecoderError, ReadFrameHeaderError};
-use ruzstd::decoding::{BlockDecodingStrategy, FrameDecoder};
-
-/// The blocks decoded before what they made is drained: a bound on the
-/// window the decoder holds beside the output.
-const DRAIN_BYTES: usize = 1 << 20;
-
 /// Every frame of `body` decoded, its skippable frames passed over; none
-/// where one does not decode.
-pub fn decode(mut body: &[u8]) -> Option<Vec<u8>> {
-    let mut frames = FrameDecoder::new();
-    let mut raw = Vec::new();
-    while !body.is_empty() {
-        match frames.init(&mut body) {
-            Ok(()) => {}
-            Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
-                length,
-                ..
-            })) => {
-                body = body.get(length as usize..)?;
-                continue;
-            }
-            Err(_) => return None,
-        }
-        while !frames.is_finished() {
-            frames
-                .decode_blocks(&mut body, BlockDecodingStrategy::UptoBytes(DRAIN_BYTES))
-                .ok()?;
-            frames.collect_to_writer(&mut raw).ok()?;
-        }
-        frames.collect_to_writer(&mut raw).ok()?;
+/// where one does not decode, or ends before its frame does.
+pub fn decode(body: &[u8]) -> Option<Vec<u8>> {
+    // libzstd reads no frame as one cut short; no frame is nothing.
+    if body.is_empty() {
+        return Some(Vec::new());
     }
-    Some(raw)
+    zstd::stream::decode_all(body).ok()
 }
 
 /// Decodes the zstd body of `len` bytes at `src`: 0, with the bytes at
