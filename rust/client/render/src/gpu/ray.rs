@@ -66,26 +66,40 @@ impl RaysPass {
             looks,
             ground: None,
             cast: None,
-            proxy: ProxyBuffers::new(g, pipelines),
+            proxy: ProxyBuffers::new(),
             kind: FrameKind::plain,
         }
     }
 
+    /// The cut's pipelines made where `frame` asks for the cut, one a turn
+    /// where the stream has room (`ProxyBuffers::made`), before the frame;
+    /// whether they all are.
+    pub fn proxy_made(
+        &mut self,
+        g: &Gpu,
+        pipelines: &mut Pipelines,
+        frame: Option<ProxyFrame>,
+    ) -> bool {
+        frame.is_some_and(|f| f.coarser != 0) && self.proxy.made(g, pipelines)
+    }
+
     /// The cut a proxy draws as `frame` asks (pxl-spec-core `proxy::cut`),
-    /// none at a `coarser` of 0, built into `encoder` over the world the
-    /// cast binds once the cast has bound it, and drawn where it asks.
+    /// none at a `coarser` of 0 or before its pipelines are made
+    /// (`proxy_made`), built into `encoder` over the world the cast binds
+    /// once the cast has bound it, and drawn where it asks.
     pub fn proxy(
         &mut self,
         g: &Gpu,
         encoder: u32,
         stamps: &mut [Stamp],
         frame: Option<ProxyFrame>,
+        made: bool,
     ) {
         (self.proxy.ran, self.proxy.rastered) = (false, false);
         let Some(bound) = self.cast.as_ref().and_then(CastBuffers::world) else {
             return;
         };
-        if let Some(f) = frame.filter(|f| f.coarser != 0) {
+        if let Some(f) = frame.filter(|f| made && f.coarser != 0) {
             self.proxy.dispatch(g, encoder, stamps, &f, bound);
         }
     }

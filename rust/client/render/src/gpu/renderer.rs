@@ -777,6 +777,7 @@ impl Renderer {
         let proxy = cast
             .as_ref()
             .map(|c| ProxyFrame::of(c, [world.width, world.height]));
+        let proxy_made = self.screen.proxy_made(g, &mut self.pipelines, proxy);
         self.screen.prepare(
             g,
             cast,
@@ -842,7 +843,8 @@ impl Renderer {
         let encoder = g.encoder();
         // The proxy's cut and raster before the cast, which reads them
         // where it is proxied, and nothing of the cast's.
-        self.screen.proxy(g, encoder, &mut stamps, proxy);
+        self.screen
+            .proxy(g, encoder, &mut stamps, proxy, proxy_made);
         self.screen.dispatch(g, encoder, &mut stamps);
         // The sun's map: the world's depth from the sun, where the rays hold
         // the world it was cast with, then decor's and the actors' drawn over it.

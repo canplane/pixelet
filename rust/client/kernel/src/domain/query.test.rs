@@ -1217,8 +1217,20 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
                 visits[1] as f64 / stops.max(1) as f64,
             );
             column_gaps.sort_by(f64::total_cmp);
+            let near = |p: &pxl_spec_core::proxy::Proxy| {
+                (0..3)
+                    .map(|a| {
+                        let v = p.lo[a].max(0.0).min(p.hi[a]);
+                        f64::from(v * v)
+                    })
+                    .sum::<f64>()
+            };
+            let within = columns
+                .iter()
+                .filter(|p| near(p) <= 3000.0 * 3000.0)
+                .count();
             eprintln!(
-                "  columns 2 coarser: {} boxes; gap p50 {:.2} p90 {:.2} max {:.2} units",
+                "  columns 2 coarser: {} boxes, {within} within 3000 units; gap p50 {:.2} p90 {:.2} max {:.2} units",
                 columns.len(),
                 quantile(&column_gaps, 0.5),
                 quantile(&column_gaps, 0.9),

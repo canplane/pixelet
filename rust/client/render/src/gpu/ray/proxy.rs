@@ -19,7 +19,7 @@ use pxl_spec_core::proxy::{
 use pxl_spec_core::window::{EYE_WINDOWS, ORIGIN_AT, SLOTS};
 
 use crate::frame::shader::record::{
-    compute, PIPELINE_PROXY_RASTER, SHADER_PROXY, SHADER_PROXY_ARGS,
+    compute, source, PIPELINE_PROXY_RASTER, SHADER_PROXY, SHADER_PROXY_ARGS, SHADER_PROXY_RASTER,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
@@ -93,9 +93,12 @@ impl ProxyFrame {
     }
 }
 
-/// The cut's pipelines, made once; its buffers, made where the setting
-/// first asks for the cut, and its targets where it first asks for the
-/// raster at a size; its groups, over the cast's world (`bound`: the eye,
+/// The cut's pipelines, made where the setting first asks for the cut, a
+/// pipeline a turn, before the frame and only where the turn's stream has
+/// room for its module (`made`): its modules are large, and a turn that
+/// makes them past the stream's room is lost whole. Its buffers, made where
+/// the setting first asks for the cut, and its targets where it first asks
+/// for the raster at a size; its groups, over the cast's world (`bound`: the eye,
 /// the windows, the ground, the service area, the overwrites and the ways'
 /// pool), made again exactly when one of them is another. The counts are
 /// copied into `read` where no mapping of it is out (`copied`), mapped back
@@ -136,11 +139,11 @@ pub(super) struct ProxyBuffers {
 }
 
 impl ProxyBuffers {
-    pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> ProxyBuffers {
+    pub(super) fn new() -> ProxyBuffers {
         ProxyBuffers {
-            built: pipelines.build_compute(g, SHADER_PROXY, &compute::PROXY_GROUP),
-            args_built: pipelines.build_compute(g, SHADER_PROXY_ARGS, &compute::PROXY_ARGS_GROUP),
-            raster_built: pipelines.build(g, PIPELINE_PROXY_RASTER, Format::rg32uint),
+            built: Built::default(),
+            args_built: Built::default(),
+            raster_built: Built::default(),
             counts: 0,
             data: 0,
             args: 0,
@@ -165,6 +168,23 @@ impl ProxyBuffers {
             ran: false,
             rastered: false,
         }
+    }
+
+    /// Its pipelines made, as many as the turn's stream has room for, the
+    /// next one each turn; whether all of them are. Before the frame, as its
+    /// transaction holds no room for a module.
+    pub(super) fn made(&mut self, g: &Gpu, pipelines: &mut Pipelines) -> bool {
+        // A module's record: its source, and a page for its words.
+        let room = |kind: u32| crate::gpu::api::room(source(kind).len() + 4096);
+        if self.built.pipeline == 0 && room(SHADER_PROXY) {
+            self.built = pipelines.build_compute(g, SHADER_PROXY, &compute::PROXY_GROUP);
+        } else if self.args_built.pipeline == 0 && room(SHADER_PROXY_ARGS) {
+            self.args_built =
+                pipelines.build_compute(g, SHADER_PROXY_ARGS, &compute::PROXY_ARGS_GROUP);
+        } else if self.raster_built.pipeline == 0 && room(SHADER_PROXY_RASTER) {
+            self.raster_built = pipelines.build(g, PIPELINE_PROXY_RASTER, Format::rg32uint);
+        }
+        self.built.pipeline != 0 && self.args_built.pipeline != 0 && self.raster_built.pipeline != 0
     }
 
     /// The cut at the frame's `coarser` (pxl-spec-core `proxy::cut`) built

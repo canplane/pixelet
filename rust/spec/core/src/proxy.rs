@@ -38,7 +38,7 @@ use crate::cast::{
 };
 use crate::ground::{blocks, face_height, leaf_blocks, Held, UNBOUNDED};
 use crate::overwrite::{self, Lanes, PLACED};
-use crate::window::{squares_zoom, Found, Squares, ACROSS, FIRST_CELL};
+use crate::window::{held_to, squares_zoom, Found, Squares, ACROSS, FIRST_CELL, SQUARE_SHIFT};
 use crate::{
     axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM,
 };
@@ -587,6 +587,233 @@ pub fn corner(k: u32, flipped: bool) -> [u32; 3] {
     c[((a + 1) % 3) as usize] = u;
     c[((a + 2) % 3) as usize] = v;
     c
+}
+
+/// The proxy's boxes taken off the held ground alone, a column a level
+/// entry of the eye's windows (`window::level_at`, `ground::Bounds`), not a
+/// cube a node of the world's query: each window's present squares, each
+/// at the level the camera grid asks at its entries' nearest point
+/// (`column_fits`), each entry where the cast reads that window (`column`).
+/// What is placed is boxed apart, off the objects' tree.
+///
+/// Whether entry `at` of level `j` of the square `q` of the eye's window at
+/// `cell` is at the cut's zoom or under it (`cut`), by its nearest point
+/// across: at its nearest point along X and Y, the eye's height ignored,
+/// which only asks finer. The coarsest level that is, or the cells', is the
+/// one a column is boxed at, so a window's boxes tile what it holds.
+pub fn column_fits(
+    o: [i32; 3],
+    detail: Detail,
+    coarser: Zoom,
+    cell: Zoom,
+    q: [i32; 2],
+    j: u32,
+    at: [u32; 2],
+) -> bool {
+    let (zoom, idx) = entry_node(cell, q, j, at);
+    j == 0
+        || zoom
+            >= cut(
+                detail,
+                coarser,
+                across_of(&planes(o, &node_at(o, zoom, idx)), 0.0, false),
+            )
+}
+
+/// The node at the cells' zoom less `j` an entry bounds, and its index.
+fn entry_node(cell: Zoom, q: [i32; 2], j: u32, at: [u32; 2]) -> (Zoom, [i32; 3]) {
+    let k = SQUARE_SHIFT - j;
+    (
+        cell - j,
+        [(q[0] << k) + at[0] as i32, (q[1] << k) + at[1] as i32, 0],
+    )
+}
+
+/// The box `p`'s distance squared across from the eye, `grow` its sides
+/// more on each side, the farthest corner's (`far`) or the nearest point's,
+/// X and Y alone.
+fn across_of(p: &Proxy, grow: f32, far: bool) -> f32 {
+    let d = |a: usize| {
+        let (lo, hi) = (p.lo[a] - grow, p.hi[a] + grow);
+        let v = if far {
+            greater(-lo, hi)
+        } else if lo > 0.0 {
+            lo
+        } else if hi < 0.0 {
+            hi
+        } else {
+            0.0
+        };
+        v * v
+    };
+    d(0) + d(1)
+}
+
+/// The finest window over `cell`, to `top`, whose one present square holds
+/// all of the node `(zoom, idx)` across, where the cast reads its ground
+/// and not `cell`'s; past `top` where none does.
+fn finer_holding(w: &impl Squares, cell: Zoom, top: Zoom, zoom: Zoom, idx: [i32; 3]) -> Zoom {
+    let mut c = cell + 1;
+    while c <= top {
+        // A node within one of that window's squares.
+        if c - zoom <= SQUARE_SHIFT {
+            let s = c - zoom;
+            let q = [
+                wrap_index(squares_zoom(c), (idx[0] << s) >> SQUARE_SHIFT),
+                (idx[1] << s) >> SQUARE_SHIFT,
+            ];
+            if w.present(c, q).1 {
+                return c;
+            }
+        }
+        c += 1;
+    }
+    top + 1
+}
+
+/// Entry `at` of level `j` of the square `q` of the eye's window at `cell`,
+/// a square held present there, as the proxy boxes it off the held ground
+/// alone (`column_fits` chooses the level): `BOX`, a column across the
+/// entry from its floor to its top, in units from the eye `o`; `NONE` where
+/// the cast reads no block of it off this window, every zoom it may ask
+/// there read off a finer window holding it.
+///
+/// - The zooms: those the cast may draw a block at in the entry and the
+///   eight about it, from the camera grid's zoom at their farthest corner,
+///   their height spread by a coarsest block either way, to its zoom at
+///   their nearest point or the entry's own zoom under it, the finer; of
+///   those, the ones whose cells it reads off this window, the window's
+///   own and finer to the first finer window holding the entry present.
+/// - Its top: the entry's ground faces' highest rounded at each of those
+///   zooms as a block of it rounds (`ground::top`), and what its ways fill
+///   (`ways::slab`); the world's top where ground about it is held by no
+///   window at all, the cast lacking there at every height, so a ray
+///   enters that ground from the side, through this column, and where no
+///   window holds its own ground at the coarsest zoom asked, so the cast
+///   lacks there itself, at every height.
+/// - Its floor: the ground's floor (`floor`) off the lowest face of the
+///   entry and the eight about it at its level in this window, each read
+///   off this window as this one is; the world's bottom where one is read
+///   off another, whose faces this window does not hold; Earth past the
+///   service area at sea level, and ground no window holds left out.
+#[allow(clippy::too_many_arguments)]
+pub fn column(
+    w: &(impl Squares + Area),
+    o: [i32; 3],
+    detail: Detail,
+    cell: Zoom,
+    q: [i32; 2],
+    j: u32,
+    at: [u32; 2],
+) -> Proxy {
+    let (zoom, idx) = entry_node(cell, q, j, at);
+    let foot = planes(o, &node_at(o, zoom, idx));
+    let none = Proxy { says: NONE, ..foot };
+    let berth = w.present(cell, q).0;
+    let [g, ways] = crate::ground::bounds_of(w.level(cell, berth, j, at));
+    if g[0] > g[1] {
+        return none;
+    }
+    let (og, r0) = (grid_of(o)[2], roots_of(o)[2]);
+    // The zooms the cast may draw a block at in the nine.
+    let side = foot.hi[0] - foot.lo[0];
+    let coarsest: i32 = 1 << (crate::UNIT_ZOOM - FIRST_CELL);
+    let reach_z = |v: i32| {
+        let u = level(v, og, r0);
+        u * u
+    };
+    let top_seen = if ways[1] > g[1] { ways[1] } else { g[1] };
+    let lo_z = reach_z(g[0] - coarsest);
+    let hi_z = reach_z(top_seen + coarsest);
+    let far = across_of(&foot, side, true) + if lo_z > hi_z { lo_z } else { hi_z };
+    let near = across_of(&foot, side, false);
+    let zc = detail.at(far);
+    let zf = detail.at(near);
+    let zf = if zf > zoom + 1 { zf } else { zoom + 1 };
+    // The zooms it is read off this window at.
+    let top = held_to(zf);
+    if top < cell {
+        return none;
+    }
+    // A block the cast asks at the coarsest zoom no window under it holds is
+    // a lack at every height (`ground::node`): the column stands to the top.
+    let cs = held_to(zc);
+    // rust-gpu has no `saturating_sub`.
+    #[allow(clippy::implicit_saturating_sub)]
+    let s = if cs >= zoom { cs - zoom } else { 0 };
+    let (f, _) = crate::window::step(w, Found::NONE, cs, [idx[0] << s, idx[1] << s]);
+    let lacks = !f.here();
+    let first = finer_holding(w, cell, top, zoom, idx);
+    if held_to(zc) >= first {
+        return none;
+    }
+    let z_lo = if cell == FIRST_CELL || zc > cell {
+        zc
+    } else {
+        cell
+    };
+    let z_hi = if first <= LEAF_CELL && first - 1 < zf {
+        first - 1
+    } else {
+        zf
+    };
+    let mut over = g[1];
+    let mut z = z_lo;
+    while z <= z_hi {
+        let t = face_height(z, blocks(z, g[1] as f32));
+        over = if t > over { t } else { over };
+        z += 1;
+    }
+    let w_top = crate::ways::slab(ways, [z_lo, z_hi])[1];
+    over = if w_top > over { w_top } else { over };
+    // The floor off the nine at this level of this window.
+    let (mut low, mut known, mut walled) = (g[0], true, false);
+    let k = SQUARE_SHIFT - j;
+    let mut n = 0u32;
+    while n < 9 {
+        let d = [(n % 3) as i32 - 1, (n / 3) as i32 - 1];
+        if d[0] != 0 || d[1] != 0 {
+            let m = [wrap_index(zoom, idx[0] + d[0]), idx[1] + d[1], 0];
+            let sq = [wrap_index(squares_zoom(cell), m[0] >> k), m[1] >> k];
+            let (b, here) = w.present(cell, sq);
+            if here && finer_holding(w, cell, top, zoom, m) == first {
+                let e = [
+                    (m[0] & ((1 << k) - 1)) as u32,
+                    (m[1] & ((1 << k) - 1)) as u32,
+                ];
+                let [h, _] = crate::ground::bounds_of(w.level(cell, b, j, e));
+                if h[0] > h[1] {
+                    known = false;
+                } else if h[0] < low {
+                    low = h[0];
+                }
+            } else {
+                // Read off another window, or off none.
+                let s = top - zoom;
+                let g = [m[0] << s, m[1] << s];
+                let (f, _) = crate::window::step(w, Found::NONE, top, g);
+                if f.here() {
+                    known = false;
+                } else if zoom >= SHARD_ZOOM && Shard::UNKNOWN.at(w, (zoom, [m[0], m[1]])).past() {
+                    low = if SEA_LEVEL < low { SEA_LEVEL } else { low };
+                } else {
+                    walled = true;
+                }
+            }
+        }
+        n += 1;
+    }
+    let floor = if known {
+        face_height(zc, blocks(zc, low as f32) - 2 * leaf_blocks(zc))
+    } else {
+        ANY[0]
+    };
+    let top_z = if walled || lacks { ANY[1] } else { over };
+    Proxy {
+        says: BOX,
+        lo: [foot.lo[0], foot.lo[1], level(floor, og, r0)],
+        hi: [foot.hi[0], foot.hi[1], level(top_z, og, r0)],
+    }
 }
 
 /// The raster's reversed depth, a box's face at view depth `w` drawn at
