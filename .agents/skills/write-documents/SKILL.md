@@ -1,14 +1,18 @@
 ---
 name: write-documents
-description: How the repository's prose is written and reviewed — README.md, ARCHITECTURE.md, xpute's two, the READMEs beside the code, the live minutes and the skills. Use before writing or reworking one, before committing a change to one, and when a document is hard to read but it is not obvious why.
+description: How the documents people read are written and reviewed — README.md, ARCHITECTURE.md, xpute's two and the READMEs beside the code. Use before writing or reworking one, before committing a change to one, and when one is hard to read but it is not obvious why. Not for doc/, AGENTS.md or the skills.
 ---
 
 # Writing the documents
 
-The documents are read by someone who has not seen the code. They are not
-reference cards and not essays: each one explains a mechanism in an order that
-can be followed from the top. `doc/minutes/archive/` and `doc/experiment/` keep
-their day and are not held to this (`doc/README.md`).
+The documents this holds are read by people, someone who has not seen the
+code. They are not reference cards and not essays: each one explains a
+mechanism in an order that can be followed from the top.
+
+What agents mostly write for each other is not held to it: `doc/` — the
+backlog, the minutes and the experiments — `AGENTS.md` and the skills. Their
+reader already knows the tree, and the care this asks for costs more there than
+it buys.
 
 What a document should be, with the faults each rule was written after, is
 [reference.md](./reference.md). Read it before writing a document or
@@ -39,10 +43,9 @@ cited is the convention skill's.
 - **The wrap is the file's.** No formatter touches the documents outside the
   code trees (`Makefile`), so a file keeps the wrap it has: `README.md`,
   `ARCHITECTURE.md`, xpute's two and `infra/README.md` run a paragraph to one
-  line; `AGENTS.md`, `doc/` and the skills wrap at about eighty columns. A
-  Markdown file under `ts/` or `xpute/ts/` is `deno fmt`'s, and `make check`
-  holds it. Rewrapping to the other convention is a diff of the whole file for
-  nothing.
+  line. A Markdown file under `ts/` or `xpute/ts/` is `deno fmt`'s, and
+  `make check` holds it. Rewrapping a file to another convention is a diff of
+  the whole file for nothing.
 - **Read the whole document from the top**, on the page rather than in a diff.
 
 The last is not a formality, and the others do not replace it. Each check above
