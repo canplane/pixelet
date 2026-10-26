@@ -735,7 +735,7 @@ fn front(
     *asked += 1;
     let mut at = q.world.start((n.zoom, n.index(o)));
     let i = q.answer(&mut at, zooms);
-    let p = proxy::of(o, &n, node, cut, i);
+    let p = proxy::of(o, &n, node, cut, i, floored(q, o, detail, &n, &i));
     match p.says {
         BOX => {
             if let Some(t) = enters(ray, &p) {
@@ -785,7 +785,7 @@ fn drawn_boxes(
     }
     let mut at = q.world.start((n.zoom, n.index(o)));
     let i = q.answer(&mut at, zooms);
-    let p = proxy::of(o, &n, node, cut, i);
+    let p = proxy::of(o, &n, node, cut, i, floored(q, o, detail, &n, &i));
     match p.says {
         BOX => {
             boxes[0] += 1;
@@ -798,6 +798,23 @@ fn drawn_boxes(
         }
         _ => {}
     }
+}
+
+/// The floor of the node `n` where it is a split (`proxy::floor`), off the
+/// ground as a node's reading holds it; none for any other.
+fn floored(
+    q: &Asking,
+    o: [i32; 3],
+    detail: pxl_spec_core::cast::Detail,
+    n: &pxl_spec_core::cast::Node,
+    i: &In<[u32; 2]>,
+) -> i32 {
+    if i.kind != Kind::Split {
+        return pxl_spec_core::ground::UNBOUNDED[0];
+    }
+    let mut lines = Default::default();
+    let mut held = super::node::Reading::new(q.world, &mut lines);
+    pxl_spec_core::proxy::floor(&mut held, o, detail, n)
 }
 
 /// A sorted sample's share `p` (0 to 1), none of none.
@@ -818,8 +835,11 @@ fn quantile(v: &[f64], p: f64) -> f64 {
 /// proxy --nocapture`.
 #[test]
 fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
+    use crate::domain::layer::object::store::AIR;
+    use crate::domain::layer::terrain::window::Windowed;
     use pxl_spec::bake::separation::{Builder, Form, POINT_SCALE};
     use pxl_spec_core::cast::{self, Detail, Ends, Node, Rooted, Until};
+    use pxl_spec_core::proxy;
     let _g = serial();
     let leaf = top().children()[0];
     let (x0, y0, side) = leaf.rect();
@@ -906,7 +926,7 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
         (rng >> 11) as f64 / (1u64 << 53) as f64
     };
     const RAYS: usize = 200;
-    const COARSER: [Zoom; 4] = [0, 1, 2, 3];
+    const COARSER: [Zoom; 3] = [1, 2, 3];
     for (name, relief, deck, held) in grounds {
         let residency = relieved(leaf, relief, ways(deck), centre, held);
         let mut store = Store::default();
@@ -930,14 +950,32 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
             OBJECT_COARSEST + 1,
             red,
         );
+        // A shaft dug 24 deep, three cells square: a ray down it meets ground
+        // under every face about it.
+        let shaft = [centre[0] - 20.0, centre[1] + 15.0];
+        let mouth = libm::floor(relief.mean(x0, shaft, 1.0));
+        for k in 0..9 * 24 {
+            let at = [
+                shaft[0] + f64::from(k % 3),
+                shaft[1] + f64::from(k / 3 % 3),
+                mouth - 24.0 + f64::from(k / 9),
+            ];
+            write(&mut store, at, OBJECT_COARSEST, AIR);
+        }
         let world = World::new(&residency, &store);
+        // An eye down the shaft is not in the open: it has no proxy.
+        let down_the_shaft = world::origin(shaft[0] + 1.5, shaft[1] + 1.5, mouth - 20.0);
+        assert!(!proxy::aired(&Windowed, down_the_shaft), "{name}");
         let mut q = Asking {
             world: &world,
             lines: Default::default(),
         };
         for over in [2.0, 20.0, 200.0] {
-            let eye = [centre[0], centre[1], face + over];
+            // Over its own leaf cell's face, as its column holds it.
+            let own = libm::rint(relief.mean(x0, centre.map(|v| libm::floor(v) + 0.5), 1.0));
+            let eye = [centre[0], centre[1], own + over];
             let o = world::origin(eye[0], eye[1], eye[2]);
+            assert!(proxy::aired(&Windowed, o), "{name} +{over}");
             let mut gaps: Vec<Vec<(f64, f64, f64)>> = vec![Vec::new(); COARSER.len()];
             let (mut stops, mut lacks, mut sky) = (0, 0, 0);
             let mut visits = [0u64; 2];
@@ -1011,7 +1049,7 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
                     if k == 0 {
                         visits[0] += u64::from(met.visits);
                     }
-                    if k == 2 {
+                    if coarser == 2 {
                         visits[1] += u64::from(from.visits);
                     }
                     let block = units(met.stop.node.zoom);
@@ -1025,9 +1063,9 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
             );
             if over == 20.0 {
                 let mut boxes = [[0u32; 2]; COARSER.len()];
-                // Three coarser alone, as a test's time allows: one and two
-                // instance nine and seven times as many.
-                for (k, &coarser) in COARSER.iter().enumerate().skip(3) {
+                // Three coarser alone, as a test's time allows: where the
+                // windows lack, one and two count seven and fifty times as many.
+                for (k, &coarser) in COARSER.iter().enumerate().skip(2) {
                     for r in 0..27 {
                         let roots = [r % 3 - 1, r / 3 % 3 - 1, r / 9 - 1];
                         let root = Node {
@@ -1039,7 +1077,7 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
                 }
                 eprintln!(
                     "  boxes within 3000 units and the slab's tops of them, 3 coarser: {:?}",
-                    boxes[3]
+                    boxes[2]
                 );
             }
             for (k, g) in gaps.iter_mut().enumerate() {

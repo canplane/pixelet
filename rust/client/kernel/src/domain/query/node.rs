@@ -170,7 +170,7 @@ impl World<'_> {
 /// The ground as a node's reading holds it (pxl-spec-core `ground::Held`):
 /// the world's residency down the node's line, the lines its walk read,
 /// and the first tile it found lacked or only a coarser one standing in for.
-struct Reading<'r, 'a> {
+pub(super) struct Reading<'r, 'a> {
     world: &'r World<'a>,
     lines: &'r mut Lines,
     lacked: Option<Tile>,
@@ -178,7 +178,7 @@ struct Reading<'r, 'a> {
 }
 
 impl<'r, 'a> Reading<'r, 'a> {
-    fn new(world: &'r World<'a>, lines: &'r mut Lines) -> Reading<'r, 'a> {
+    pub(super) fn new(world: &'r World<'a>, lines: &'r mut Lines) -> Reading<'r, 'a> {
         Reading {
             world,
             lines,
