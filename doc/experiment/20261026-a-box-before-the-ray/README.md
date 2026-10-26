@@ -135,3 +135,69 @@ same count widened to them.
   the buried ones. It is conservative only for an eye over the ground: an eye
   in a cave reaches buried nodes without crossing a box, so it would fall back
   to starting at the eye. That clip is not built or proved here.
+
+## Since: the floor, the GPU pass, the raster
+
+The same day, in 41bc88c37 through 237be9197; measured on the CPU, as above,
+except where the page is named.
+
+- **The floor.** A box is cut off a block under the lowest face of its node
+  and the eight about it (`proxy::floor`), read at the zooms the cast may draw
+  a block at there (to the camera grid's zoom at the nearest point, or the
+  node's own under it), off the windows the cast reads that ground from. A
+  ray from an eye in the open (`proxy::aired`) reaches ground under it only
+  through the ground's surface, which lies in a box; an eye not in the open
+  has no proxy. Every cut node is a split, never a block (`proxy::cut`), so
+  that surface is boxed even where it is carved. Ground no window holds at
+  all is a lack at every height, entered only from the side: a node walled in
+  by it is no box (`UNHELD`); past the service area the Earth faces at sea
+  level. Read up to the finest zoom instead, a far node's floor fell to the
+  world's bottom off windows holding its ground in part, and the box count
+  swung 6× from one load to the next on the page.
+- **Box counts at `coarser` 3** within 3000 units of the +20 eye: flat 17.2 k,
+  rolling 18.4 k, steep 42.3 k, held only to z12 45 k (177 k before the
+  unheld rule). At `coarser` 2: 60.5 k, 67.2 k, 178 k, 187 k.
+- **The GPU pass** (ray_proxy, a dev setting; spans `proxy`, `raster`):
+  seeded at zoom 8 over the eye's coarsest window, past which the cast lacks
+  and a ray starts where it leaves it; a round a dispatch; boxes grown by two
+  drawn pixels and drawn at every pixel, nearest front kept, reversed depth
+  drawn 2⁻¹² nearer, back faces culled (`proxy::corner`, its winding held by
+  a test). Descending three zooms a round asked three times the nodes and was
+  slower (122 k nodes, 15.6 ms, against 41.8 k and 10.4): one a round stands.
+  On the CPU the floor is about 70 % of a node's cost.
+- **Its pipelines** are made one a turn where the stream has room: a turn
+  whose modules pass its stream's room is lost whole.
+
+## Tried: boxes off the window levels alone
+
+Columns taken straight off the windows' level entries (`proxy::column`), the
+objects' tree boxed apart, no `world::node`: conservative on every ray, but
+too loose to start rays from. At `coarser` 2, within 3000 units of the +20
+eye (gap p50 / p90, units):
+
+| Ground        | Cut boxes | Column boxes | Cut gap   | Column gap |
+| ------------- | --------- | ------------ | --------- | ---------- |
+| flat          | 60.5 k    | 72.8 k       | 0 / 4.4   | 16 / 74    |
+| rolling       | 67.2 k    | 72.8 k       | 0 / 4.2   | 19 / 75    |
+| steep         | 178 k     | 72.9 k       | 1.3 / 34  | 5.3 / 57   |
+| z12 up        | 187 k     | 54.2 k       | 1.0 / 44  | 90 / 116   |
+
+Where they are looser than the cut, and why:
+
+1. Nothing prunes air: every held entry is a column from its floor to its
+   faces' top, where the cut drops a node its slab misses.
+2. Each of the two or three windows the cast reads at a distance boxes its
+   own column, as a window's faces bound its own reads alone.
+3. Where the cast lacks, the entry's own ground at the coarsest zoom asked
+   held nowhere or a neighbour held nowhere, the column stands to the world's
+   top, at every height.
+4. A neighbour read off another window leaves no floor known: the column
+   runs to the world's bottom (one box still, not a stack).
+5. What is placed is not in the levels: boxed off a descent of the objects'
+   tree, so not wholly without a descent.
+6. Earth past the service area is taken at sea level for ground no window
+   holds; not tried, the fixture has no area's edge.
+
+Caves, digs and tunnels hold as in the cut, as they only carve. Fewer boxes
+on steep or partly held ground do not buy back a start 4 to 20 times
+farther from the stop, which a walk pays for: the cut stays the producer.
