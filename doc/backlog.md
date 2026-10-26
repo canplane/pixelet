@@ -14,13 +14,14 @@ Nothing now.
 
 ## P1
 
-- **The proxy, measured as one cast with each pixel's own walk.** Boxes
-  rasterized from the bounds the GPU already holds start each pixel's ray, and
-  every pixel walks its own from there, with no samples' answer; taken if that
-  cast is under the one as built on the fixed path (p95 79 ms, nearly five
-  times the 16.7 ms gate), and with it the shimmer's first cause and the sun's
-  map are answered —
-  [20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md).
+- **Where the raster's work ends and the ray's begins, surveyed before
+  built.** The proxy that only started the ray was measured and not taken: it
+  saved the march but not the descent and pyramid writing a cell's pixels
+  share. The next split must hand the raster that shared work (a tile's or a
+  brick's own traversal, local to what is drawn) and is weighed first on
+  paper, against the cast as built on the fixed path (p95 79 ms) —
+  [20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md),
+  "Resolved".
 
 ## P2
 

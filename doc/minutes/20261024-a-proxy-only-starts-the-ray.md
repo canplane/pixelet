@@ -3,7 +3,7 @@
 **2026-10-24** — decided in the conversation, on one condition the user set:
 none of the machinery the chunk meshes needed comes back. Not built. What is
 built first is the clean-up below, which holds whichever way the start of a ray
-goes.
+goes. _Built and measured 2026-10-26, and not taken: "Resolved", at the end._
 
 A ray costs what it does because every pixel walks the world's tree on its own,
 though thousands of pixels looking at one face end on the same block. A
@@ -194,3 +194,28 @@ beam; the sun's do neither: each walks from the roots through the world's query
 proxy taken here starts the sun's rays as it starts the eye's, through the path
 the eye's take, and the map's cost is measured with it. Shadows stay off by
 default, as at 10-12.
+
+## Resolved 2026-10-26: built, measured, not taken
+
+The proxy was built to the conditions above and measured on the fixed path
+([a box before the ray](../experiment/20261026-a-box-before-the-ray/README.md),
+[a ray from the box](../experiment/20261026-a-ray-from-the-box.md)). It held
+every condition but the one that decides it:
+
+- **Conservative and exact.** No stop past a box's front over 100M stops, and
+  a walk from the right box stops where the eye's own walk does, which is more
+  often right than the samples' answer (0.44% of the cast's stops differ).
+- **Cheap where it was weighed.** The cut and raster cost 1–12 ms, the walk
+  from a box about 6 ms against a warm pyramid.
+- **Not cheaper than the cast.** The samples are also what writes the observed
+  pyramid, a cell at a time; without them each pixel writes its own, and every
+  way tried paid 180–300 ms against the cast's 80. Keeping the beams to write
+  it, and walking each pixel from its cell's line at its box, cost 178 ms.
+
+So "if it cannot remove them, it is not taken" holds: it can remove them only
+by paying their writing per pixel. The samples stay, and the shimmer's first
+cause is answered another way or not yet. What is open from the attempt: the
+`read` mode's coverage holes, untraced. What it leaves for the next attempt is
+the question it got wrong: a raster that only starts the ray saves the march,
+not the descent or the writing a cell's pixels share, so a split between
+raster and ray has to give the raster that shared work, not only the start.
