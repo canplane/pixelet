@@ -412,7 +412,7 @@ impl Renderer {
         let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer, sky_buffer);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
-        let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, sky_buffer, air);
+        let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let pack = Pack::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());

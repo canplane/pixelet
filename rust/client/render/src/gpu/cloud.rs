@@ -1,11 +1,11 @@
 // pxl-render/gpu/cloud.rs
 
-//! The cloud sheets, altocumulus and cirrus, laid over the world's pass, both
-//! reading the cloud field (`pxl-spec-core cloud.rs`) as a tile baked once
+//! The cloud sheets, altocumulus and cirrus, each a plane drawn over the
+//! world's pass against its depth, both reading the cloud field (`pxl-spec-core cloud.rs`) as a tile baked once
 //! per device.
 //! The cumulus is drawn as decor is (`pxl-kernel domain/scene/environment/cloud.rs`).
 
-use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_ABOVE, PIPELINE_CLOUD_FIELD};
+use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
@@ -17,9 +17,9 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::look::environment::{ENV_AIR, ENV_SKY};
+use crate::look::environment::ENV_SKY;
 use pxl_spec::space::coord::world::EXTENT;
-use pxl_spec_core::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT};
+use pxl_spec_core::cloud::{drift, LATTICE_COUNT, LATTICE_SHAMT};
 use pxl_spec_core::UNIT_ZOOM;
 
 const _: () = assert!(
@@ -32,25 +32,20 @@ const _: () = assert!(
 );
 
 pub struct CloudPass {
-    below: Built,
-    above: Built,
-    over: bool,
+    built: Built,
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],
 }
 
 impl CloudPass {
-    /// `sky_buffer`, the sky's words, whose ray each pixel's is.
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
         frame_buffer: u32,
-        sky_buffer: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> CloudPass {
-        let below = pipelines.build(g, PIPELINE_CLOUD, g.canvas());
-        let above = pipelines.build(g, PIPELINE_CLOUD_ABOVE, g.canvas());
+        let built = pipelines.build(g, PIPELINE_CLOUD, g.canvas());
         let tile = g.texture(
             CLOUD_TILE_TEXELS,
             CLOUD_TILE_TEXELS,
@@ -82,13 +77,12 @@ impl CloudPass {
         );
         let mut e = vec![
             buffer_entry(0, frame_buffer),
-            buffer_entry(19, sky_buffer),
             buffer_entry(1, uniform),
             view_entry(2, tile_view),
             sampler_entry(3, tile_sampler),
         ];
         e.extend(air);
-        let group = g.bind_group(below.layouts[0], &e);
+        let group = g.bind_group(built.layouts[0], &e);
         bake(
             g,
             pipelines,
@@ -96,9 +90,7 @@ impl CloudPass {
             mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
         );
         CloudPass {
-            below,
-            above,
-            over: false,
+            built,
             uniform,
             group,
             words: [0.0; CLOUDS_FLOATS],
@@ -108,13 +100,11 @@ impl CloudPass {
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
     /// place on the map in the world's doubles; `reach_km` how far it
     /// observes: past it no sheet is drawn. The field moves with the wind,
-    /// so its words are the clouds' own, apart from the sky's, whose ray
-    /// they are drawn along.
+    /// so its words are the clouds' own.
     pub fn lay_out(&mut self, over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
         self.words[SHOWN] = shown as f32;
         self.words[REACH] = reach_km;
         field(&mut self.words, over, env);
-        self.over = env[ENV_AIR] as f64 > CUMULUS_KM;
     }
 
     /// `words` written, where the frame's read found them moved.
@@ -132,16 +122,10 @@ impl CloudPass {
         if self.words[SHOWN] <= 0.0 {
             return;
         }
-        g.set_pipeline(
-            pass,
-            if self.over {
-                self.above.pipeline
-            } else {
-                self.below.pipeline
-            },
-        );
+        g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.group, &[]);
-        g.draw(pass, 3, 1, 0, 0);
+        // A quad each, the farther sheet first (cloud.wgsl `vs`).
+        g.draw(pass, 6, 2, 0, 0);
     }
 }
 

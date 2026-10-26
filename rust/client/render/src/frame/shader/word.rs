@@ -168,7 +168,7 @@ uniform! {
 pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
 
 uniform! {
-    /// The cloud sheets' (cloud.wgsl, gpu/cloud.rs); their ray is the sky's.
+    /// The cloud sheets' (cloud.wgsl, gpu/cloud.rs).
     clouds {
         /// How much of the clouds the kernel shows (pxl-kernel
         /// domain/scene/environment/cloud.rs `clouds_shown`).

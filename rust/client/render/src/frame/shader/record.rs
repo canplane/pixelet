@@ -58,27 +58,26 @@ pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 19;
 pub const PIPELINE_ATMOS_EXPOSURE: u32 = 20;
 pub const PIPELINE_STAR: u32 = 21;
 pub const PIPELINE_CLOUD: u32 = 22;
-pub const PIPELINE_CLOUD_ABOVE: u32 = 23;
-pub const PIPELINE_CLOUD_FIELD: u32 = 24;
-pub const PIPELINE_SHEET: u32 = 25;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 26;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 27;
+pub const PIPELINE_CLOUD_FIELD: u32 = 23;
+pub const PIPELINE_SHEET: u32 = 24;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 25;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 26;
 /// The markers' regions, numbered, into a target of their own (pass/marker.rs).
-pub const PIPELINE_MARKER_REGION: u32 = 28;
+pub const PIPELINE_MARKER_REGION: u32 = 27;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 29;
+pub const PIPELINE_DEBUG_FACE: u32 = 28;
 /// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
-pub const PIPELINE_SCREEN_RAY: u32 = 30;
+pub const PIPELINE_SCREEN_RAY: u32 = 29;
 /// Decor's and the actors' depth from the sun, and the world's laid in
 /// before them, into the sun's shadow map (gpu/shadow.rs).
-pub const PIPELINE_DECOR_DEPTH: u32 = 31;
-pub const PIPELINE_SKINNED_DEPTH: u32 = 32;
-pub const PIPELINE_SUN_MAP: u32 = 33;
-pub const PIPELINE_SCREEN_PREPASS: u32 = 34;
+pub const PIPELINE_DECOR_DEPTH: u32 = 30;
+pub const PIPELINE_SKINNED_DEPTH: u32 = 31;
+pub const PIPELINE_SUN_MAP: u32 = 32;
+pub const PIPELINE_SCREEN_PREPASS: u32 = 33;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER: u32 = 35;
-pub const PIPELINES: u32 = 36;
+pub const PIPELINE_RASTER: u32 = 34;
+pub const PIPELINES: u32 = 35;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -286,14 +285,8 @@ const LIT_FRAME: [[u32; 2]; 15] = {
     ]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 2]; 16] = and(
-    [
-        [0, UNIFORM],
-        [19, UNIFORM],
-        [1, UNIFORM],
-        [2, TEXTURE],
-        [3, SAMPLER],
-    ],
+const CLOUD_GROUP: [[u32; 2]; 15] = and(
+    [[0, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]],
     AIR,
 );
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
@@ -710,23 +703,8 @@ const fn plan_of(id: u32) -> Plan {
                 &[[0, UNIFORM], [1, STORAGE]],
             ],
         ),
-        // From under the sheets only where the world left the far plane; from over them everywhere.
-        PIPELINE_CLOUD => plan(
-            Head {
-                depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_CLOUD, CULL_NONE)
-            },
-            &[],
-            &[&CLOUD_GROUP],
-        ),
-        PIPELINE_CLOUD_ABOVE => plan(
-            Head {
-                depth_compare: ALWAYS,
-                ..blended(SHADER_CLOUD, CULL_NONE)
-            },
-            &[],
-            &[&CLOUD_GROUP],
-        ),
+        // The sheets' planes, against the world's depth: what stands before them hides them.
+        PIPELINE_CLOUD => plan(blended(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP]),
         PIPELINE_CLOUD_FIELD => plan(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => panic!("a pipeline number with no plan"),
     }

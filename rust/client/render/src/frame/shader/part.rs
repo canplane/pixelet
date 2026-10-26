@@ -228,7 +228,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "star",
     ],
     // SHADER_CLOUD
-    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_word", "cloud"],
+    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "cloud"],
     // SHADER_CLOUD_FIELD
     &[
         "cloud_hash",
