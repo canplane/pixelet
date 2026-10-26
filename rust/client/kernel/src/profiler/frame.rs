@@ -201,8 +201,9 @@ pub struct ProxiedSample {
 /// The `ray_proxy` cut's sums since boot, as the renderer keeps them
 /// (pxl-render gpu/ray/proxy.rs `PROXY_SUMS`): the frames whose counts were
 /// read back, the boxes, the nodes asked, the nodes or boxes dropped past
-/// its scratch's room, the frames whose eye was not in the open, and the
-/// boxes dropped of those dropped.
+/// its scratch's room, the frames whose eye was not in the open, the boxes
+/// dropped of those dropped, the boxes whose floor was not known, and the
+/// squares the eye's windows held present.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ProxySample {
@@ -212,6 +213,8 @@ pub struct ProxySample {
     pub dropped: f64,
     pub shut: f64,
     pub dropped_boxes: f64,
+    pub unfloored: f64,
+    pub present: f64,
 }
 
 /// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
@@ -272,6 +275,7 @@ words!(FrameSample, FRAME::WORDS,
     proxy.frames => FRAME::proxy_frames, proxy.boxes => FRAME::proxy_boxes,
     proxy.nodes => FRAME::proxy_nodes, proxy.dropped => FRAME::proxy_dropped,
     proxy.shut => FRAME::proxy_shut, proxy.dropped_boxes => FRAME::proxy_dropped_boxes,
+    proxy.unfloored => FRAME::proxy_unfloored, proxy.present => FRAME::proxy_present,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

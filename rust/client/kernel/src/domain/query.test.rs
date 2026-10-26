@@ -833,7 +833,8 @@ fn floored(
     }
     let mut lines = Default::default();
     let mut held = super::node::Reading::new(q.world, &mut lines);
-    pxl_spec_core::proxy::floor(&mut held, o, detail, n)
+    let lanes = q.world.objects.lanes();
+    pxl_spec_core::proxy::floor(&mut held, &lanes, o, detail, n)
 }
 
 /// A sorted sample's share `p` (0 to 1), none of none.
@@ -982,6 +983,21 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
             ];
             write(&mut store, at, OBJECT_COARSEST, AIR);
         }
+        // Where only z12's tiles are held, a wall placed out on ground no
+        // window holds, 32 long, 4 thick and 16 tall, a quarter of the
+        // 16-unit blocks the cast draws there: it stands with no ground under
+        // it (`world::node`), and rays are aimed at it.
+        let wall = [centre[0] + 2600.0, centre[1] - 16.0];
+        if held > TOP_ZOOM {
+            for k in 0..32 * 4 * 16 {
+                let at = [
+                    wall[0] + f64::from(k / 32 % 4),
+                    wall[1] + f64::from(k % 32),
+                    libm::floor(face) + f64::from(k / 128),
+                ];
+                write(&mut store, at, OBJECT_COARSEST, red);
+            }
+        }
         let world = World::new(&residency, &store);
         // An eye down the shaft is not in the open: it has no proxy.
         let down_the_shaft = world::origin(shaft[0] + 1.5, shaft[1] + 1.5, mouth - 20.0);
@@ -1003,14 +1019,25 @@ fn a_proxy_s_box_is_entered_no_later_than_the_cast_stops() {
             let (mut stops, mut lacks, mut sky) = (0, 0, 0);
             let mut visits = [0u64; 2];
             let mut empty = [0u32; COARSER.len()];
-            for _ in 0..RAYS {
+            for r in 0..RAYS {
                 let az = random() * std::f64::consts::TAU;
                 let el = -1.3 + 1.35 * random();
-                let d = [
-                    (libm::cos(el) * libm::cos(az)) as f32,
-                    (libm::cos(el) * libm::sin(az)) as f32,
-                    libm::sin(el) as f32,
-                ];
+                let d = if held > TOP_ZOOM && r % 4 == 0 {
+                    // At a point of the wall.
+                    let at = [
+                        wall[0] - eye[0],
+                        wall[1] + 32.0 * random() - eye[1],
+                        libm::floor(face) + 16.0 * random() - eye[2],
+                    ];
+                    let l = libm::sqrt(at[0] * at[0] + at[1] * at[1] + at[2] * at[2]);
+                    at.map(|v| (v / l) as f32)
+                } else {
+                    [
+                        (libm::cos(el) * libm::cos(az)) as f32,
+                        (libm::cos(el) * libm::sin(az)) as f32,
+                        libm::sin(el) as f32,
+                    ]
+                };
                 let ray = cast::Ray::new(d, 3000.0);
                 let met = cast::first(&mut q, o, &ray, detail, Until::Fills);
                 match met.ends {

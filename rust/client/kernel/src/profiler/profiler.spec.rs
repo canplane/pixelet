@@ -49,7 +49,7 @@ pub mod LIMITS {
     pub const ZOOMS: u32 = 24;
 }
 
-/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The oracle lanes are the `ray_oracle` measurement's, summed since boot over the frames whose counts were read back with `ray_steps` on (pxl-render gpu/ray/cast.rs `Oracle`): the frames, the pixels the cast stopped, those whose walk from just short of the stop stopped otherwise, those whose walk lacked a node the observed pyramid did not hold, that walk's visits, the reads that found the node it started at, and those whose walk left that node; of those that stopped otherwise, those on another first word, those nearer, those the walk from the eye agrees with, those that left the node, those whose start was held to the stop, and how many zooms coarser than the stop their node was, summed, as `oracle_coarser` sums it over every stop; and the cast's stops the walk from the eye does not make, and the walks from the eye that lacked; of those that stopped otherwise, those whose front was held below 0 and above the stop, each with those of them the eye's walk agrees with; the walks again that stopped otherwise than the eye's; and the starts held in a node over the box's (pxl-shader cast.rs `oracle_cs`). The proxied lanes are the `ray_proxied` cast's check against the eye's own walk, read back with the oracle's: the pixels it stopped, those it left to the sky, those of them the eye's walk stops in, the stops the eye's walk makes otherwise, its walks that lacked, the starts past where it stops, the starts held over their box's node, the visits, and the pixels walked again where the observed pyramid could not answer (pxl-shader proxied.rs `proxied_check_cs`). The proxy lanes are the `ray_proxy` cut's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/proxy.rs `ProxyBuffers`): the frames, the boxes, the nodes asked, the nodes or boxes dropped past its scratch's room, the frames whose eye was not in the open, where it built none, and the boxes of those dropped (the rest are nodes past a queue's room). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
+/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The oracle lanes are the `ray_oracle` measurement's, summed since boot over the frames whose counts were read back with `ray_steps` on (pxl-render gpu/ray/cast.rs `Oracle`): the frames, the pixels the cast stopped, those whose walk from just short of the stop stopped otherwise, those whose walk lacked a node the observed pyramid did not hold, that walk's visits, the reads that found the node it started at, and those whose walk left that node; of those that stopped otherwise, those on another first word, those nearer, those the walk from the eye agrees with, those that left the node, those whose start was held to the stop, and how many zooms coarser than the stop their node was, summed, as `oracle_coarser` sums it over every stop; and the cast's stops the walk from the eye does not make, and the walks from the eye that lacked; of those that stopped otherwise, those whose front was held below 0 and above the stop, each with those of them the eye's walk agrees with; the walks again that stopped otherwise than the eye's; and the starts held in a node over the box's (pxl-shader cast.rs `oracle_cs`). The proxied lanes are the `ray_proxied` cast's check against the eye's own walk, read back with the oracle's: the pixels it stopped, those it left to the sky, those of them the eye's walk stops in, the stops the eye's walk makes otherwise, its walks that lacked, the starts past where it stops, the starts held over their box's node, the visits, and the pixels walked again where the observed pyramid could not answer (pxl-shader proxied.rs `proxied_check_cs`). The proxy lanes are the `ray_proxy` cut's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/proxy.rs `ProxyBuffers`): the frames, the boxes, the nodes asked, the nodes or boxes dropped past its scratch's room, the frames whose eye was not in the open, where it built none, the boxes of those dropped (the rest are nodes past a queue's room), the boxes whose floor no window held to know, which stand on the world's bottom, and the squares the eye's windows held present in those frames (pxl-render gpu/ray/proxy.rs `PROXY_SUMS`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const interval_ms: u32 = 1;
@@ -132,7 +132,9 @@ pub mod FRAME {
     pub const proxy_dropped: u32 = 156;
     pub const proxy_shut: u32 = 157;
     pub const proxy_dropped_boxes: u32 = 158;
-    pub const WORDS: u32 = 159;
+    pub const proxy_unfloored: u32 = 159;
+    pub const proxy_present: u32 = 160;
+    pub const WORDS: u32 = 161;
 }
 
 /// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it.
@@ -144,7 +146,7 @@ pub mod FRAME_GROUPS {
     pub const cap: usize = 1;
     pub const oracle: usize = 22;
     pub const proxied: usize = 9;
-    pub const proxy: usize = 6;
+    pub const proxy: usize = 8;
     pub const requests: usize = 2;
     pub const tiles: usize = 2;
     pub const device: usize = 5;
@@ -176,9 +178,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 159;
-    pub const prev: u32 = 160;
-    pub const WORDS: u32 = 319;
+    pub const has_prev: u32 = 161;
+    pub const prev: u32 = 162;
+    pub const WORDS: u32 = 323;
 }
 
 pub mod SPREAD {
@@ -243,15 +245,15 @@ pub mod SUMMARY {
         pub const wakes: u32 = 49;
         pub const heap_used_delta_bytes: u32 = 52;
         pub const last: u32 = 53;
-        pub const WORDS: u32 = 212;
+        pub const WORDS: u32 = 214;
     }
     pub mod tasks {
-        pub const AT: u32 = 215;
+        pub const AT: u32 = 217;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 335;
+        pub const AT: u32 = 337;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -260,7 +262,7 @@ pub mod SUMMARY {
     /// The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_distance`).
     /// The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: u32 = 496;
+        pub const AT: u32 = 498;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -286,7 +288,7 @@ pub mod SUMMARY {
         pub const blocked: u32 = 22;
         pub const WORDS: u32 = 23;
     }
-    pub const WORDS: u32 = 519;
+    pub const WORDS: u32 = 521;
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.

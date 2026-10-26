@@ -151,13 +151,17 @@ pub fn proxy_cs(
     let mut at = At::of(&world, (node.zoom, c));
     let i = world.node(&mut at, node.zoom, c, zooms, 0.0);
     let floor = if i.kind == Kind::Split {
-        proxy::floor(&mut world, origin, detail, &node)
+        let lanes = world;
+        proxy::floor(&mut world, &lanes, origin, detail, &node)
     } else {
         UNBOUNDED[0]
     };
     let p = proxy::of(origin, &node, planes, cut, i, floor);
     if p.says == BOX {
         let k = add(counts, proxy::COUNT_BOXES, 1);
+        if floor == UNBOUNDED[0] {
+            add(counts, proxy::COUNT_UNFLOORED, 1);
+        }
         if k >= proxy::BOXES {
             add(counts, proxy::COUNT_DROPPED, 1);
             add(counts, proxy::COUNT_DROPPED_BOXES, 1);

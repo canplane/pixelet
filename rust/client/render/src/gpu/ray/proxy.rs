@@ -16,7 +16,7 @@ use pxl_spec_core::proxy::{
     self, ARGS_DRAW, ARGS_WORDS, BIAS, BOX_VERTICES, COUNTS, COUNT_COARSER, COUNT_COVER,
     COUNT_PIXEL, COUNT_QUEUE, DATA_WORDS, LEVELS, NEAR, NODE_WORDS, SEEDS,
 };
-use pxl_spec_core::window::ORIGIN_AT;
+use pxl_spec_core::window::{EYE_WINDOWS, ORIGIN_AT, SLOTS};
 
 use crate::frame::shader::record::{
     compute, PIPELINE_PROXY_RASTER, SHADER_PROXY, SHADER_PROXY_ARGS,
@@ -33,9 +33,11 @@ use xpute_guest::mem::off_of;
 /// What the profiler is handed of the cut (`ProxyBuffers::sums`): the
 /// frames whose counts were read back, then the boxes, the nodes asked, the
 /// nodes or boxes dropped past the scratch's room, the frames whose eye was
-/// not in the open (pxl-spec-core `proxy::aired`), and the boxes dropped of
-/// those dropped, summed over them.
-pub const PROXY_SUMS: usize = 6;
+/// not in the open (pxl-spec-core `proxy::aired`), the boxes dropped of
+/// those dropped, the boxes whose floor was not known (`proxy::floor`), and
+/// the squares the eye's windows held present in the frames counted, summed
+/// over them.
+pub const PROXY_SUMS: usize = 8;
 
 /// Where `Cast::proxy` asks for the raster beside the cut, over its
 /// `coarser` in the bits under it.
@@ -56,6 +58,8 @@ pub struct ProxyFrame {
     first: [i32; 2],
     laid: bool,
     pub size: [u32; 2],
+    /// The squares the eye's windows hold present (`window::Slot`).
+    present: u32,
 }
 
 impl ProxyFrame {
@@ -73,6 +77,9 @@ impl ProxyFrame {
             first: [w(0), w(1)],
             laid: w(2) != 0,
             size,
+            present: (0..(EYE_WINDOWS * SLOTS) as usize)
+                .filter(|&r| cast.window.get(4 * r + 2).is_some_and(|&p| p != 0))
+                .count() as u32,
         }
     }
 
@@ -118,6 +125,8 @@ pub(super) struct ProxyBuffers {
     mapping: Box<u32>,
     copied: bool,
     mapped: bool,
+    /// The squares present in the frame whose counts were copied.
+    copied_present: u32,
     sums: [f64; PROXY_SUMS],
     pub(super) ran: bool,
     pub(super) rastered: bool,
@@ -148,6 +157,7 @@ impl ProxyBuffers {
             mapping: Box::new(DONE),
             copied: false,
             mapped: false,
+            copied_present: 0,
             sums: [0.0; PROXY_SUMS],
             ran: false,
             rastered: false,
@@ -263,7 +273,7 @@ impl ProxyBuffers {
         if !self.copied && !self.mapped {
             let size = word_bytes(COUNTS as usize);
             g.copy_buffer(encoder, (self.counts, 0), (self.read, 0), size);
-            self.copied = true;
+            (self.copied, self.copied_present) = (true, frame.present);
         }
     }
 
@@ -339,6 +349,8 @@ impl ProxyBuffers {
             self.sums[3] += f64::from(l[proxy::COUNT_DROPPED as usize]);
             self.sums[4] += f64::from(u32::from(l[proxy::COUNT_SHUT as usize] != 0));
             self.sums[5] += f64::from(l[proxy::COUNT_DROPPED_BOXES as usize]);
+            self.sums[6] += f64::from(l[proxy::COUNT_UNFLOORED as usize]);
+            self.sums[7] += f64::from(self.copied_present);
             self.mapped = false;
         }
         if self.copied && *self.mapping & DONE != 0 {

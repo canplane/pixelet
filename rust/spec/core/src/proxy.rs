@@ -31,13 +31,17 @@
 use crate::answer::ANY;
 use crate::answer::{fills, slab_of, In, Kind};
 use crate::area::Area;
+use crate::area::Shard;
 use crate::cast::{
     asked as zooms, bounds, greater, grid_of, kept_bounds, lesser, level, reach, roots_of, under,
     Detail, Node,
 };
 use crate::ground::{blocks, face_height, leaf_blocks, Held, UNBOUNDED};
+use crate::overwrite::{self, Lanes, PLACED};
 use crate::window::{squares_zoom, Found, Squares, ACROSS, FIRST_CELL};
-use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, SHARD_ZOOM, TOP_ZOOM};
+use crate::{
+    axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM,
+};
 
 /// What a node is to the proxy: nothing to draw, a box, or a node over the
 /// cut whose children are asked in turn.
@@ -92,19 +96,38 @@ pub fn asked(o: [i32; 3], detail: Detail, coarser: Zoom, n: &Node) -> ([Zoom; 2]
 /// The lowest a box over the node `n` from the origin `o` need reach, in
 /// leaf cells: a block under the lowest face about the node, the four
 /// nodes a zoom coarser that cover it and the eight about it
-/// (`Held::relief`), read from the coarsest zoom the cast may draw a block
-/// in those nine at to the finest it asks anywhere, rounded at that
-/// coarsest as the ground rounds a face (`ground::top`). Under it a block
-/// lies wholly under every face about it, at every zoom it may be asked at.
-/// The world's bottom where any of the four is not held, or for a root.
+/// (`Held::relief`), read over the zooms the cast may draw a block in those
+/// nine at, rounded at the coarsest of them as the ground rounds a face
+/// (`ground::top`). Under it a block lies wholly under every face about it,
+/// at every zoom it may be asked at. The world's bottom where a floor is not
+/// known: a root, or one of the four bounding nothing or held only by a
+/// window finer than the cast reads it at.
 ///
-/// No block meeting the nine is coarser than the camera grid's zoom at
-/// their farthest corner (pxl-spec-core cast.rs `walk`), and a coarser
-/// zoom's floor is no higher than a finer's, so the coarsest's stands for
-/// all of them; the four hold more than the nine, which only lowers it.
-/// Read to the finest, a node's floor is no higher than its children's, so
-/// a node over the cut is cut off at its own as well.
-pub fn floor<H: Held>(held: &mut H, o: [i32; 3], detail: Detail, n: &Node) -> i32 {
+/// The zooms: no block meeting the nine is coarser than the camera grid's
+/// zoom at their farthest corner, nor finer than at their nearest point or
+/// the node's own zoom under it, whichever is finer (pxl-spec-core cast.rs
+/// `walk`, a block's parent is a split). A coarser zoom's floor is no
+/// higher than a finer's, so the coarsest's stands for all of them; the
+/// four hold more than the nine, which only lowers it. Where some of the four
+/// no window holds at all, they are left out: the cast lacks wherever it
+/// asks there (`ground::node`), at every height, so a ray from an eye in the
+/// open enters that ground only from the side, out of ground held about it,
+/// where the boxes over that ground stand; and where none of the four is
+/// held and nothing is placed under the node, it is no box (`UNHELD`), its
+/// ground walled off by those. Past the service area the Earth stands with
+/// no window holding it, its face at sea level.
+/// Read no finer than
+/// that, a far node's ground is read off the windows that hold it whole, as
+/// the cast reads it, not off a finer one holding part of it, which bounds
+/// nothing. Both zooms only grow finer from a node to its children, so a
+/// node over the cut is cut off at its own floor as well.
+pub fn floor<H: Held>(
+    held: &mut H,
+    lanes: &impl Lanes,
+    o: [i32; 3],
+    detail: Detail,
+    n: &Node,
+) -> i32 {
     if n.zoom == 0 {
         return UNBOUNDED[0];
     }
@@ -114,11 +137,12 @@ pub fn floor<H: Held>(held: &mut H, o: [i32; 3], detail: Detail, n: &Node) -> i3
         [lo[0] - side - e[0], lo[1] - side - e[1], lo[2] - e[2]],
         [hi[0] + side - e[0], hi[1] + side - e[1], hi[2] - e[2]],
     );
-    let (coarse, fine) = (detail.at(r[0]), detail.range[1]);
+    let (coarse, fine) = (detail.at(r[0]), detail.at(r[1]));
+    let fine = if fine > n.zoom + 1 { fine } else { n.zoom + 1 };
     let (c, z) = (n.index(o), n.zoom - 1);
     // The nine's two parents a side: c − 1 and c + 1 halved differ by one.
     let first = [(c[0] - 1) >> 1, (c[1] - 1) >> 1];
-    let mut low = UNBOUNDED[1];
+    let (mut low, mut unheld) = (UNBOUNDED[1], 0);
     let mut k = 0u32;
     while k < 4 {
         let m = [
@@ -128,23 +152,54 @@ pub fn floor<H: Held>(held: &mut H, o: [i32; 3], detail: Detail, n: &Node) -> i3
         ];
         let mut place = Found::NONE;
         let ([g, _], ok) = held.relief(&mut place, [coarse, fine], (z, m));
-        // Not held, or bounding nothing: no floor is known.
-        if !ok || g[0] > g[1] {
+        if !ok {
+            // Not held: past the service area, the Earth's ground, its face
+            // at sea level whatever is held (`ground::node`); else, held by
+            // no window at all up to the finest the cast reads there, a
+            // lack wherever it is asked, which no face bounds; else no floor
+            // is known. Coarser than a shard, which it is is not known.
+            if z < SHARD_ZOOM {
+                return UNBOUNDED[0];
+            }
+            if Shard::UNKNOWN.at(held, (z, [m[0], m[1]])).past() {
+                low = if SEA_LEVEL < low { SEA_LEVEL } else { low };
+            } else {
+                let mut place = Found::NONE;
+                let (_, any) = held.relief(&mut place, [fine, fine], (z, m));
+                if any {
+                    return UNBOUNDED[0];
+                }
+                unheld += 1;
+            }
+        } else if g[0] > g[1] {
+            // Bounding nothing: no floor is known.
             return UNBOUNDED[0];
+        } else {
+            low = if g[0] < low { g[0] } else { low };
         }
-        low = if g[0] < low { g[0] } else { low };
         k += 1;
+    }
+    // Walled off, unless something placed under it stands there anyway,
+    // which answers where the ground lacks (`world::node`).
+    if unheld == 4 && !overwrite::cursor(lanes, PLACED, n.zoom, c).holds() {
+        return UNHELD;
     }
     face_height(coarse, blocks(coarse, low as f32) - 2 * leaf_blocks(coarse))
 }
 
+/// The floor of a node whose ground and all about it no window holds
+/// (`floor`): over the world's top, so it is no box.
+pub const UNHELD: i32 = ANY[1];
+
 /// Whether the eye at `o` is in the open: its leaf cell held, and no ground
-/// there, or the eye at its face or over it. Else the proxy draws nothing,
-/// and every ray starts at the eye (`floor`).
+/// there, or the eye at its face or over it, and under the world's top,
+/// where no box reaches (`floor`). Else the proxy draws nothing, and every
+/// ray starts at the eye.
 pub fn aired(w: &(impl Squares + Area), o: [i32; 3]) -> bool {
     let b = [wrap_index(LEAF_CELL, o[0] >> FRAC_W), o[1] >> FRAC_W];
     let (cell, f) = crate::window::ground(w, Found::NONE, LEAF_CELL, b);
-    f.here() && (!cell.grounded() || o[2] >> FRAC_W >= cell.top)
+    let z = o[2] >> FRAC_W;
+    f.here() && z < ANY[1] && (!cell.grounded() || z >= cell.top)
 }
 
 /// The node `n` from the origin `o` as the proxy draws it, `i` the world's
@@ -273,7 +328,9 @@ pub fn coverage(o: [i32; 3], first: [i32; 2]) -> Proxy {
 /// boxes' entries were read at (`observed::FRAME`, the reader's); then the
 /// host's: the window's planes (`coverage`), lowest then highest, and a
 /// drawn pixel's angle (`inflated`), as f32 bits; then the boxes about the
-/// eye (`eyed`), how many and, up to `EYES`, which. A frame that dropped
+/// eye (`eyed`), how many and, up to `EYES`, which; and the boxes whose
+/// floor no window held to know (`floor`), each stood on the world's
+/// bottom. A frame that dropped
 /// anything, or whose eye is not in the open, has no proxy: its rays start
 /// at the eye.
 pub const COUNT_BOXES: u32 = 0;
@@ -290,8 +347,9 @@ pub const COUNT_PIXEL: u32 = 16;
 pub const COUNT_EYES: u32 = 17;
 pub const COUNT_EYE: u32 = 18;
 pub const EYES: u32 = 8;
+pub const COUNT_UNFLOORED: u32 = COUNT_EYE + EYES;
 pub const COUNTS: u32 = 32;
-const _: () = assert!(COUNT_EYE + EYES <= COUNTS);
+const _: () = assert!(COUNT_UNFLOORED < COUNTS);
 
 /// The zoom the cut starts at, a node the world's height tall: none
 /// coarser is ever a box (`cut`).

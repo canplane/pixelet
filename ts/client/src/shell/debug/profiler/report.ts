@@ -60,7 +60,11 @@ const proxyText = (f: Frame) =>
       n1(f.proxy_boxes / f.proxy_frames)
     } boxes a frame over ${f.proxy_frames} frames since boot   nodes ${
       n1(f.proxy_nodes / f.proxy_frames)
-    } a frame   dropped ${f.proxy_dropped} (boxes ${f.proxy_dropped_boxes}, the rest nodes)   not in the open ${f.proxy_shut} frames`,
+    } a frame   dropped ${f.proxy_dropped} (boxes ${f.proxy_dropped_boxes}, the rest nodes)   not in the open ${f.proxy_shut} frames   unfloored ${
+      n1(f.proxy_unfloored / f.proxy_frames)
+    } a frame   squares present ${
+      n1(f.proxy_present / f.proxy_frames)
+    } a frame`,
   ];
 
 export function failText(fail: u32, detail: u32): string {
