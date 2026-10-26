@@ -262,12 +262,12 @@ pub fn coverage(o: [i32; 3], first: [i32; 2]) -> Proxy {
     }
 }
 
-/// The cut as a GPU builds it, a zoom a dispatch from the seeds over the
+/// The cut as a GPU builds it, a round a dispatch from the seeds over the
 /// window it is built within (`covered`; pxl-shader proxy.rs `proxy_cs`,
 /// `proxy_args_cs`), and the frame's header a reader of its boxes reads:
-/// its counts, a word each, the boxes written, the nodes asked, the zoom
-/// the next dispatch reads, each queue's nodes (two words, the zoom read
-/// and the zoom written alternating), what was dropped past the scratch's
+/// its counts, a word each, the boxes written, the nodes asked, the round
+/// the next dispatch reads, each queue's nodes (two words, the round read
+/// and the round written alternating), what was dropped past the scratch's
 /// room, `coarser`, whether the eye was found not in the open (`aired`),
 /// the boxes dropped of those dropped, the observed pyramid's frame the
 /// boxes' entries were read at (`observed::FRAME`, the reader's); then the
@@ -320,8 +320,9 @@ pub fn seed(o: [i32; 3], first: [i32; 2], k: u32) -> Node {
     )
 }
 
-/// The zooms the cut is built over, a dispatch each: from the seeds' to
-/// the finest it draws at (`cut`).
+/// The rounds the cut is built in, a dispatch each: as many as the zooms
+/// from the seeds' to the finest it draws at (`cut`), as a round descends a
+/// node by a zoom at least (`steps`).
 pub const LEVELS: u32 = LEAF_CELL - SEED_ZOOM;
 
 /// A `proxy_cs` workgroup's threads.
@@ -346,7 +347,7 @@ pub const EYED: u32 = 1;
 /// The scratch: the two queues, then the boxes.
 pub const DATA_WORDS: u32 = 2 * QUEUE_NODES * NODE_WORDS + BOXES * BOX_WORDS;
 
-/// The indirect args the cut leaves: the next zoom's dispatch, then the
+/// The indirect args the cut leaves: the next round's dispatch, then the
 /// boxes' draw, a box's corners an instance (`BOX_VERTICES`).
 pub const ARGS_DRAW: u32 = 3;
 pub const ARGS_WORDS: u32 = 8;
@@ -382,6 +383,98 @@ pub fn node_of(w: [u32; NODE_WORDS as usize]) -> Node {
         zoom: w[3] & 0xff,
         roots: [r(0), r(1), r(2)],
     }
+}
+
+/// Whether the eye's `right`, `up` and `forward` turn the other way from
+/// the one `corner` winds a front face for: right × up along forward.
+pub fn flipped(right: [f32; 3], up: [f32; 3], forward: [f32; 3]) -> bool {
+    let x = [
+        right[1] * up[2] - right[2] * up[1],
+        right[2] * up[0] - right[0] * up[2],
+        right[0] * up[1] - right[1] * up[0],
+    ];
+    x[0] * forward[0] + x[1] * forward[1] + x[2] * forward[2] > 0.0
+}
+
+/// The most zooms a node over the cut is descended by in one of the GPU's
+/// rounds (`steps`): its descendants that many zooms finer queued at once,
+/// so the rounds, each as slow as its slowest node, are a third as many.
+pub const SKIP: Zoom = 3;
+
+/// The zooms the node `n` from the origin `o` may be descended by at once,
+/// one to `SKIP`: to the cut's zoom at its farthest point (`cut`), which no
+/// node under it is coarser than, so no node between is a box, and the
+/// boxes are the cut's whichever way it is descended.
+pub fn steps(o: [i32; 3], detail: Detail, coarser: Zoom, n: &Node) -> Zoom {
+    let (lo, hi) = bounds(n, grid_of(o));
+    let e = detail.eye;
+    let r = reach(
+        [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
+        [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
+    );
+    let far = cut(detail, coarser, r[0]);
+    if far >= n.zoom + SKIP {
+        SKIP
+    } else if far > n.zoom + 1 {
+        far - n.zoom
+    } else {
+        1
+    }
+}
+
+/// Descendant `i` of the node `n`, `k` zooms finer, of its `8^k`: bit `3j`
+/// X's, `3j + 1` Y's and `3j + 2` Z's of the `j`-th zoom down from `n`'s
+/// finest, as `child` reads `i`'s low three.
+pub fn descendant(n: &Node, k: Zoom, i: u32) -> Node {
+    let mut d = *n;
+    let mut j = 0;
+    while j < k {
+        d = child(&d, i >> (3 * (k - 1 - j)) & 7);
+        j += 1;
+    }
+    d
+}
+
+/// A box's corner `k` of the raster's 36 (proxy_raster.wgsl, where build.rs
+/// writes them): two triangles a face, the faces in their order across X,
+/// then Y, then Z, low side first, each wound counter-clockwise seen from
+/// outside, so a face turned to the eye is wound counter-clockwise on the
+/// screen (`a_face_turned_to_the_eye_is_wound_counter_clockwise`) and the
+/// raster culls the faces turned away; each triangle wound the other way
+/// where `flipped`, an eye whose right, up and forward turn the other way
+/// (`flipped`).
+pub fn corner(k: u32, flipped: bool) -> [u32; 3] {
+    let face = k / 6;
+    // A triangle's second and third corners swapped turn it the other way.
+    let j = match (k % 6, flipped) {
+        (1, true) => 2,
+        (2, true) => 1,
+        (4, true) => 5,
+        (5, true) => 4,
+        (j, _) => j,
+    };
+    let t = match j {
+        0 | 3 => 0,
+        1 => 1,
+        2 | 4 => 2,
+        _ => 3,
+    };
+    let (a, high) = (face / 2, face % 2);
+    // The quad's corners in (u, v), u along the next axis and v the one
+    // after it: counter-clockwise about the face's outward normal on the
+    // high side, clockwise on the low, whose normal is the other way.
+    let (u, v) = match t {
+        0 => (0, 0),
+        1 => (1, 0),
+        2 => (1, 1),
+        _ => (0, 1),
+    };
+    let (u, v) = if high == 1 { (u, v) } else { (v, u) };
+    let mut c = [0u32; 3];
+    c[a as usize] = high;
+    c[((a + 1) % 3) as usize] = u;
+    c[((a + 2) % 3) as usize] = v;
+    c
 }
 
 /// The raster's reversed depth, a box's face at view depth `w` drawn at
@@ -459,6 +552,57 @@ pub fn bound(depth: f32, cos: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every face of a box the eye stands outside of and before, projected
+    /// as the raster projects it (proxy_raster.wgsl `vs`), is wound
+    /// counter-clockwise on the screen where its outward normal is turned
+    /// to the eye, clockwise where it is turned away: a front face is kept.
+    #[test]
+    fn a_face_turned_to_the_eye_is_wound_counter_clockwise() {
+        // An eye looking north, then one turned and pitched down.
+        let views: [[[f32; 3]; 3]; 2] = [
+            [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]],
+            [
+                [0.8, -0.6, 0.0],
+                [0.36, 0.48, 0.8],
+                [-0.48, -0.64, 0.6].map(|v: f32| -v),
+            ],
+        ];
+        // Each mirrored too, as an eye whose axes turn the other way.
+        let views = views
+            .into_iter()
+            .flat_map(|[r, u, f]| [[r, u, f], [r.map(|v| -v), u, f]]);
+        for [r, u, f] in views {
+            let flip = flipped(r, u, f);
+            let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+            for at in [[-0.5f32, 4.0, -0.7], [2.0, 6.0, 1.0], [-3.0, 3.0, 2.5]] {
+                let p = |c: [u32; 3]| {
+                    let q = [
+                        at[0] + c[0] as f32,
+                        at[1] + c[1] as f32,
+                        at[2] + c[2] as f32,
+                    ];
+                    let w = dot(q, f);
+                    [dot(q, r) / w, dot(q, u) / w, w]
+                };
+                for face in 0..6u32 {
+                    let [a, b, c] = [0, 1, 2].map(|j| p(corner(face * 6 + j, flip)));
+                    if a[2] <= 0.0 || b[2] <= 0.0 || c[2] <= 0.0 {
+                        continue;
+                    }
+                    let area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+                    // The face's outward normal and a point on it.
+                    let axis = (face / 2) as usize;
+                    let mut n = [0.0f32; 3];
+                    n[axis] = if face % 2 == 1 { 1.0 } else { -1.0 };
+                    let mut on = at;
+                    on[axis] += (face % 2) as f32;
+                    let turned = dot(n, on) < 0.0;
+                    assert_eq!(area > 0.0, turned, "{at:?} face {face}, flipped {flip}");
+                }
+            }
+        }
+    }
 
     /// `node_at` is `Node::index`'s inverse, X across the antimeridian and
     /// the roots apart included.

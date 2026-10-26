@@ -557,14 +557,15 @@ const fn plan_of(id: u32) -> Plan {
             &[],
             &[&SCREEN_GROUP],
         ),
-        // Both sides of every box, nearest kept, reversed: its box's number
-        // into a target of its own (gpu/ray/proxy.rs).
+        // Every box's faces turned to the eye, nearest kept, reversed: its
+        // box's number and its depth into a target of their own
+        // (gpu/ray/proxy.rs).
         PIPELINE_PROXY_RASTER => plan(
             Head {
                 depth_write: true,
                 depth_compare: GREATER,
                 blend: OPAQUE,
-                ..blended(SHADER_PROXY_RASTER, CULL_NONE)
+                ..blended(SHADER_PROXY_RASTER, CULL_BACK)
             },
             &[],
             &[&[[0, UNIFORM], [1, STORAGE]]],

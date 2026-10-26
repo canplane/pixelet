@@ -256,13 +256,14 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         unlike_eye,
         held,
     });
-    let [frames, boxes, nodes, dropped, shut] = stat.proxy;
+    let [frames, boxes, nodes, dropped, shut, dropped_boxes] = stat.proxy;
     set_proxy(ProxySample {
         frames,
         boxes,
         nodes,
         dropped,
         shut,
+        dropped_boxes,
     });
     set_host_frame(
         out.kind,

@@ -757,8 +757,11 @@ fn front(
             }
         }
         UNDER if enters(ray, &p).is_some() => {
-            let mut children: Vec<(f64, pxl_spec_core::cast::Node)> = (0..8)
-                .map(|k| proxy::child(&n, k))
+            // As the GPU descends it: as many zooms at once as no box lies
+            // between (`proxy::steps`).
+            let k = proxy::steps(o, detail, coarser, &n);
+            let mut children: Vec<(f64, pxl_spec_core::cast::Node)> = (0..1 << (3 * k))
+                .map(|d| proxy::descendant(&n, k, d))
                 .filter_map(|c| {
                     let (_, b, _) = proxy::asked(o, detail, coarser, &c);
                     enters(ray, &b).map(|t| (t, c))
@@ -806,8 +809,10 @@ fn drawn_boxes(
             boxes[1] += u32::from(p.hi[2] < node.hi[2]);
         }
         UNDER => {
-            for k in 0..8 {
-                drawn_boxes(q, o, detail, coarser, proxy::child(&n, k), reach, boxes);
+            let k = proxy::steps(o, detail, coarser, &n);
+            for d in 0..1 << (3 * k) {
+                let c = proxy::descendant(&n, k, d);
+                drawn_boxes(q, o, detail, coarser, c, reach, boxes);
             }
         }
         _ => {}

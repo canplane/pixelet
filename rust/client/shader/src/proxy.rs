@@ -1,11 +1,10 @@
 // pxl-shader/proxy.rs
 
-//! The cut a rasterized proxy would draw (pxl-spec-core `proxy`), built each
-//! frame from the eye down the pyramid a zoom a dispatch: each node of a
-//! zoom asked what it is (`proxy_cs`), its box kept or its children queued
-//! for the next zoom, whose dispatch the one after lays (`proxy_args_cs`).
-//! Nothing outlives the frame, and nothing draws the boxes yet: they are
-//! counted and timed.
+//! The cut a rasterized proxy draws (pxl-spec-core `proxy`), built each frame
+//! down the pyramid a round a dispatch from the seeds over the eye's
+//! coarsest window: each node a round holds asked what it is (`proxy_cs`),
+//! its box kept or its descendants queued for the next round, whose dispatch
+//! the one after lays (`proxy_args_cs`). Nothing outlives the frame.
 
 use pxl_spec_core::answer::Kind;
 use pxl_spec_core::cast::{Node, Query};
@@ -93,18 +92,20 @@ fn node_at(data: &[u32], q: u32, k: u32) -> Node {
     ])
 }
 
-/// Each node of the zoom the cut is at, a thread a node of the queue it
+/// Each node of the round the cut is at, a thread a node of the queue it
 /// reads (pxl-spec-core `proxy::COUNT_LEVEL`, `proxy::COUNT_QUEUE`): kept
 /// where the eye may see it, asked what it is through the world's one query
 /// with nothing handed down (`World::node`, `world::At::of`) at the zooms
 /// the cast asks it at, with its floor (`proxy::floor`); a box written into
-/// the scratch and counted, a node over the cut's children queued for the
-/// next zoom, each that meets its clipped box along z; none at all where the
-/// eye is not in the open (`proxy::aired`). A box is its node, its planes
-/// grown as the raster draws them (`proxy::inflated`), its entry in the
-/// observed pyramid none, the cast's to read, and whether it is about the
-/// eye (`proxy::eyed`), listed in the counts (`proxy::COUNT_EYE`). What
-/// would pass the scratch's room is dropped and counted.
+/// the scratch and counted, a node over the cut's descendants queued for
+/// the next round, as many zooms finer as no box lies between
+/// (`proxy::steps`), each that meets its clipped box along z and that the
+/// eye may see; none at all where the eye is not in the open
+/// (`proxy::aired`). A box is its node, its planes grown as the raster draws
+/// them (`proxy::inflated`), its entry in the observed pyramid none, the
+/// cast's to read, and whether it is about the eye (`proxy::eyed`), listed
+/// in the counts (`proxy::COUNT_EYE`). What would pass the scratch's room is
+/// dropped and counted.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "proxy_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn proxy_cs(
@@ -197,20 +198,20 @@ pub fn proxy_cs(
     if p.says != UNDER {
         return;
     }
-    let mid = 0.5 * (planes.lo[2] + planes.hi[2]);
-    let mut k = 0;
-    while k < 8 {
-        let (lo, hi) = if k & 4 == 0 {
-            (planes.lo[2], mid)
-        } else {
-            (mid, planes.hi[2])
-        };
-        if lo < p.hi[2] && p.lo[2] < hi {
+    // Its descendants as many zooms finer as no box lies between
+    // (`proxy::steps`), each queued that meets its clipped box along z and
+    // that the eye may see.
+    let k = proxy::steps(origin, detail, coarser, &node);
+    let mut d = 0;
+    while d < 1 << (3 * k) {
+        let under = proxy::descendant(&node, k, d);
+        let (_, b, _) = proxy::asked(origin, detail, coarser, &under);
+        if b.lo[2] < p.hi[2] && p.lo[2] < b.hi[2] && seen(eye, &b) {
             let s = add(counts, proxy::COUNT_QUEUE + 1 - q, 1);
             if s >= proxy::QUEUE_NODES {
                 add(counts, proxy::COUNT_DROPPED, 1);
             } else {
-                let words = proxy::node_words(&proxy::child(&node, k));
+                let words = proxy::node_words(&under);
                 let w = proxy::queue_at(1 - q, s);
                 let mut j = 0;
                 while j < proxy::NODE_WORDS {
@@ -219,13 +220,13 @@ pub fn proxy_cs(
                 }
             }
         }
-        k += 1;
+        d += 1;
     }
 }
 
-/// The next zoom's dispatch, a thread for the cut's whole: a workgroup a
-/// `proxy_cs` workgroup's share of the queue the zoom just read filled,
-/// that queue emptied for the zoom after, the zoom stepped; and the boxes'
+/// The next round's dispatch, a thread for the cut's whole: a workgroup a
+/// `proxy_cs` workgroup's share of the queue the round just read filled,
+/// that queue emptied for the round after, the round stepped; and the boxes'
 /// draw args (pxl-spec-core `proxy::ARGS_DRAW`), a box's corners an
 /// instance, as a raster pass would read them.
 #[spirv(compute(threads(1, 1, 1), entry_point_name = "proxy_args_cs"))]

@@ -32,9 +32,10 @@ use xpute_guest::mem::off_of;
 
 /// What the profiler is handed of the cut (`ProxyBuffers::sums`): the
 /// frames whose counts were read back, then the boxes, the nodes asked, the
-/// nodes or boxes dropped past the scratch's room, and the frames whose eye
-/// was not in the open (pxl-spec-core `proxy::aired`), summed over them.
-pub const PROXY_SUMS: usize = 5;
+/// nodes or boxes dropped past the scratch's room, the frames whose eye was
+/// not in the open (pxl-spec-core `proxy::aired`), and the boxes dropped of
+/// those dropped, summed over them.
+pub const PROXY_SUMS: usize = 6;
 
 /// Where `Cast::proxy` asks for the raster beside the cut, over its
 /// `coarser` in the bits under it.
@@ -103,11 +104,13 @@ pub(super) struct ProxyBuffers {
     args_group: u32,
     raster_group: u32,
     bound: [u32; 6],
-    /// The raster's targets: its boxes' numbers plus one (r32uint) and
-    /// their faces' reversed depth (depth32float, `proxy::bound`), each at
-    /// the drawn pixels' size, and their views.
+    /// The raster's targets, each at the drawn pixels' size: a pixel's box
+    /// plus one and its face's reversed depth as f32 bits (rg32uint, read by
+    /// `proxy::bound`; a 2D view and a one-layer array's), and the depth it
+    /// is tested by (depth32float), and their views.
     index: u32,
     index_view: u32,
+    index_array: u32,
     depth: u32,
     depth_view: u32,
     target_size: [u32; 2],
@@ -125,7 +128,7 @@ impl ProxyBuffers {
         ProxyBuffers {
             built: pipelines.build_compute(g, SHADER_PROXY, &compute::PROXY_GROUP),
             args_built: pipelines.build_compute(g, SHADER_PROXY_ARGS, &compute::PROXY_ARGS_GROUP),
-            raster_built: pipelines.build(g, PIPELINE_PROXY_RASTER, Format::r32uint),
+            raster_built: pipelines.build(g, PIPELINE_PROXY_RASTER, Format::rg32uint),
             counts: 0,
             data: 0,
             args: 0,
@@ -137,6 +140,7 @@ impl ProxyBuffers {
             bound: [0; 6],
             index: 0,
             index_view: 0,
+            index_array: 0,
             depth: 0,
             depth_view: 0,
             target_size: [0; 2],
@@ -186,7 +190,7 @@ impl ProxyBuffers {
                 buffer_usage::MAP_READ | buffer_usage::COPY_DST,
             );
             self.uniform = g.buffer(
-                word_bytes(12),
+                word_bytes(16),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
             self.raster_group = g.bind_group(
@@ -264,25 +268,28 @@ impl ProxyBuffers {
     }
 
     /// The boxes the cut wrote drawn at the drawn pixels (proxy_raster.wgsl),
-    /// as many as its args say, into targets of their own, made again where
-    /// the size is another: a pixel keeps the nearest face its middle's ray
-    /// meets, drawn `BIAS` nearer, and that face's box plus one, none where
-    /// it meets none.
+    /// as many as its args say, their faces turned away culled, into
+    /// targets of their own, made again where the size is another: a pixel
+    /// keeps the nearest face its middle's ray meets, drawn `BIAS` nearer,
+    /// that face's box plus one and its depth, none where it meets none.
     fn raster(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp], frame: &ProxyFrame) {
         if frame.size != self.target_size {
             release(self.index_view);
+            release(self.index_array);
             release(self.index);
             release(self.depth_view);
             release(self.depth);
             let [w, h] = frame.size;
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            self.index = g.texture(w, h, 1, Format::r32uint, 1, usage);
+            self.index = g.texture(w, h, 1, Format::rg32uint, 1, usage);
             self.index_view = g.view(self.index, false, 0, 1, 0, 1);
+            self.index_array = g.view(self.index, true, 0, 1, 0, 1);
             self.depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
             self.target_size = frame.size;
         }
         let [r, u, f] = frame.axes;
+        let flipped = 36 * u32::from(proxy::flipped(r, u, f));
         let uniform = [
             r[0],
             r[1],
@@ -296,6 +303,10 @@ impl ProxyBuffers {
             f[1],
             f[2],
             NEAR * (1.0 + BIAS),
+            f32::from_bits(flipped),
+            0.0,
+            0.0,
+            0.0,
         ];
         g.write_buffer(self.uniform, 0, bytes(&uniform));
         let stamp = stamps[GpuSpanName::raster as usize].pass();
@@ -327,6 +338,7 @@ impl ProxyBuffers {
             self.sums[2] += f64::from(l[proxy::COUNT_NODES as usize]);
             self.sums[3] += f64::from(l[proxy::COUNT_DROPPED as usize]);
             self.sums[4] += f64::from(u32::from(l[proxy::COUNT_SHUT as usize] != 0));
+            self.sums[5] += f64::from(l[proxy::COUNT_DROPPED_BOXES as usize]);
             self.mapped = false;
         }
         if self.copied && *self.mapping & DONE != 0 {
@@ -349,13 +361,15 @@ impl ProxyBuffers {
 
     /// What a reader of the cut binds (the cast's proxied mode): its counts
     /// and header (`proxy::COUNTS`), its scratch, the boxes in it from
-    /// `proxy::box_at`, and the raster's targets' views, the boxes' numbers
-    /// plus one and their reversed depth; all none before they are made.
+    /// `proxy::box_at`, and the raster's target's views, a pixel's box plus
+    /// one and its depth's bits, 2D and as a one-layer array, and the depth
+    /// it was tested by; all none before they are made.
     pub(super) fn bindings(&self) -> ProxyBindings {
         ProxyBindings {
             counts: self.counts,
             data: self.data,
             index: self.index_view,
+            index_array: self.index_array,
             depth: self.depth_view,
             ran: self.ran,
             rastered: self.rastered,
@@ -370,6 +384,7 @@ pub struct ProxyBindings {
     pub counts: u32,
     pub data: u32,
     pub index: u32,
+    pub index_array: u32,
     pub depth: u32,
     pub ran: bool,
     pub rastered: bool,
