@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 9b89e3352ce1c19807d6aad9ff36dc4ad94cf5cb32ac99142fe6fc3dde112bb0
+// Inputs: 4dafc9b4375cac4fb4fa4e28d8fcb821970387d9eadde69d64a4449845ff8cf8
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -1549,7 +1549,7 @@ fn function_() {
                 let _e680 = (f32((_e325 - _e639)) * 0.00390625f);
                 let _e683 = (f32((_e329 - _e653)) * 0.00390625f);
                 let _e686 = atomicLoad((&global_7.member[0u]));
-                let _e688 = ((8u * _e686) + 7u);
+                let _e688 = ((6u * _e686) + 5u);
                 let _e694 = (_e248 + ((((_e317 / 8u) * _e245) + (_e313 / 8u)) * 2u));
                 if (_e694 < _e233) {
                     let _e698 = global_12.member[_e694];
@@ -2622,7 +2622,7 @@ fn function_() {
                                                     phi_5653_ = u32();
                                                     phi_5654_ = u32();
                                                 } else {
-                                                    let _e1941 = (((_e1885 & 1048575u) / 8u) < (_e688 / 8u));
+                                                    let _e1941 = (((_e1885 & 1048575u) / 6u) < (_e688 / 6u));
                                                     phi_5653_ = select(_e1872, _e1885, _e1941);
                                                     phi_5654_ = select(_e1874, _e1880, _e1941);
                                                 }

@@ -554,11 +554,7 @@ and hands the rest to the rasterizer, in five steps (`pxl-shader beam.rs`
 `beam_cs`; [a cell casts a beam](./doc/minutes/20261022-a-cell-casts-a-beam.md)):
 
 1. A **beam ray** at each corner of a camera grid cell walks the descent the
-   cell's pixels share, and stops before a node too narrow to share. The
-   corners go in three passes, every sixteenth first, then every fourth, then
-   the rest (`pxl-spec-core beam.rs` `LEVELS`), so a node the rays of many
-   corners share is asked of the world once, by the first pass that reaches
-   it.
+   cell's pixels share, and stops before a node too narrow to share.
 2. Each cell starts at the least of the beam rays about it.
 3. **Samples**, four a cell a side, walk on to the blocks they stop at.
 4. Each block a sample stopped at is drawn as a box

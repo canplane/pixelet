@@ -772,8 +772,7 @@ impl RaysPass {
         let Some(c) = self.cast.as_mut() else { return };
         if self.kind == FrameKind::cast {
             // The observed pyramid forgotten first where it is; then the
-            // beam rays writing it, a corner each, a lattice of them a
-            // dispatch, the coarsest first; each cell's start off them;
+            // beam rays writing it, a corner each; each cell's start off them;
             // the samples writing it, each from its cell's start; their
             // blocks drawn as boxes, each pixel's nearest kept; the pixels
             // off that, or reading it from their cell's start, marking the
@@ -831,16 +830,7 @@ impl RaysPass {
                 let pass = g.compute_pass(encoder, stamps[span as usize].pass());
                 g.set_bind_group(pass, 0, group, &[]);
                 g.set_pipeline(pass, built.pipeline);
-                if span == GpuSpanName::beam {
-                    // A pass of the beam rays a dispatch, the coarsest first,
-                    // its pass the dispatch's depth (`beam_cs`).
-                    for level in (1..=beam::LEVELS).rev() {
-                        let [x, y] = c.grid.level_span(level);
-                        g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), level);
-                    }
-                } else {
-                    g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
-                }
+                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
                 g.end(pass);
             }
             // The marked pixels' count where their walk reads it, then that

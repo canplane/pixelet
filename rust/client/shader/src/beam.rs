@@ -212,14 +212,11 @@ where
 /// `beam::Grid::corners`): its walk from the world's root to the first block that
 /// fills or lacks, or the first split too narrow to share
 /// (`cast::Until::Beam`), through the observed pyramid writing what it asks
-/// (`Writing`), and its line there, for the pixels about it. A pass a
-/// dispatch, the coarsest first, each casting the corners of its own
-/// lattice (`beam::LEVELS`) and reading what the passes before it wrote.
+/// (`Writing`), and its line there, for the pixels about it.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(num_workgroups)] groups: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
@@ -233,15 +230,11 @@ pub fn beam_cs(
     let window: &[IVec4] = window;
     let (origin, detail) = eye_origin(eye);
     let g = grid(eye);
-    // The pass this dispatch casts is its depth in workgroups, its last
-    // slice the one that runs: the coarser passes were cast before.
-    let level = groups.z;
-    let ([x, y], casts) = g.level_corner(level, [id.x, id.y]);
-    if id.z + 1 != level || !casts {
+    if id.x >= g.corners[0] || id.y >= g.corners[1] {
         return;
     }
-    let ray = eye_ray(eye, g.corner([x, y]));
-    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::beam_pass(level));
+    let ray = eye_ray(eye, g.corner([id.x, id.y]));
+    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::BEAM_PASS);
     let world = World {
         window,
         ground,
@@ -251,7 +244,7 @@ pub fn beam_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let base = beam::Grid::line(g.corner_index([x, y]));
+    let base = beam::Grid::line(g.corner_index([id.x, id.y]));
     let met = cast::rooted(
         &mut Writing {
             world,

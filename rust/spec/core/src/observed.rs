@@ -114,21 +114,16 @@ const _: () = assert!(
 );
 
 /// The writing passes of a frame's cast, each a tag of its own (`tag`): the
-/// beam rays' passes, the coarsest first (`beam::LEVELS`), the samples and
-/// the pixels that missed; then the sun's beam rays, samples and slots that
-/// missed, which ask the same nodes at the zooms the eye asks them.
-pub const PASSES: u32 = crate::beam::LEVELS + 5;
-pub const SAMPLES_PASS: u32 = crate::beam::LEVELS;
-pub const MISSED_PASS: u32 = crate::beam::LEVELS + 1;
-pub const SUN_BEAM_PASS: u32 = crate::beam::LEVELS + 2;
-pub const SUN_SAMPLES_PASS: u32 = crate::beam::LEVELS + 3;
-pub const SUN_MISSED_PASS: u32 = crate::beam::LEVELS + 4;
-
-/// The beam rays' pass `level` (`beam::LEVELS`) as a writing pass, the
-/// coarsest 0.
-pub const fn beam_pass(level: u32) -> u32 {
-    crate::beam::LEVELS - level
-}
+/// beam rays, the samples and the pixels that missed; then the sun's beam
+/// rays, samples and slots that missed, which ask the same nodes at the
+/// zooms the eye asks them.
+pub const PASSES: u32 = 6;
+pub const BEAM_PASS: u32 = 0;
+pub const SAMPLES_PASS: u32 = 1;
+pub const MISSED_PASS: u32 = 2;
+pub const SUN_BEAM_PASS: u32 = 3;
+pub const SUN_SAMPLES_PASS: u32 = 4;
+pub const SUN_MISSED_PASS: u32 = 5;
 
 /// The frames one clearing's keys tell apart (`tag`), before the next: as
 /// many as the tag's 20 bits hold `PASSES` tags of.
@@ -187,9 +182,9 @@ pub const fn key(tag: u32, [far, near]: [Zoom; 2]) -> u32 {
     tag | far << 20 | near << 26
 }
 
-/// A walk's tag: its frame's number and its pass (`PASSES`): the beam
-/// rays' (`beam_pass`), the samples' (`SAMPLES_PASS`) or the pixels' that
-/// missed (`MISSED_PASS`). Never 0, which no key is.
+/// A walk's tag: its frame's number and its pass, the beam rays' 0, the
+/// samples' 1 and the pixels that missed 2 (`PASSES`). Never 0, which no
+/// key is.
 pub const fn tag(frame: u32, pass: u32) -> u32 {
     PASSES * frame + pass
 }
