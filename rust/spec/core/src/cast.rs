@@ -123,7 +123,7 @@ impl Ray {
 /// and rust-gpu lowers each into two NaN-check branches — seventeen a pass
 /// of the walk's loop. No number the walk compares is NaN (`Ray::new`), so
 /// the comparison is the whole rule.
-fn greater(a: f32, b: f32) -> f32 {
+pub(crate) fn greater(a: f32, b: f32) -> f32 {
     if a > b {
         a
     } else {
@@ -131,7 +131,7 @@ fn greater(a: f32, b: f32) -> f32 {
     }
 }
 
-fn lesser(a: f32, b: f32) -> f32 {
+pub(crate) fn lesser(a: f32, b: f32) -> f32 {
     if a < b {
         a
     } else {
@@ -199,14 +199,14 @@ impl Node {
 
 /// The origin `o` on the finest grid within its root: the Q3 itself
 /// modulo the root's side, 2^32.
-fn grid_of(o: [i32; 3]) -> [u32; 3] {
+pub(crate) fn grid_of(o: [i32; 3]) -> [u32; 3] {
     // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
     [o[0] as u32, o[1] as u32, o[2] as u32]
 }
 
 /// The root holding the origin `o` on each axis: its Q3 over the root's
 /// side, 2^32, floored, so 0 or −1.
-fn roots_of(o: [i32; 3]) -> [i32; 3] {
+pub(crate) fn roots_of(o: [i32; 3]) -> [i32; 3] {
     [o[0] >> 31, o[1] >> 31, o[2] >> 31]
 }
 
@@ -242,9 +242,17 @@ fn units(p: u32, og: u32, roots: i32) -> f32 {
         + ((p & 0xff) as i32 - (og & 0xff) as i32) as f32 / (1 << FRAC_W) as f32
 }
 
+/// The plane `v` leaf cells up, a slab's face, in units from the origin at
+/// `og` on the finest grid in the root `r0` along z (`roots_of`), as a
+/// corner is (`units`).
+pub(crate) fn level(v: i32, og: u32, r0: i32) -> f32 {
+    let root = v >> UNIT_ZOOM;
+    units(((v - (root << UNIT_ZOOM)) as u32) << FRAC_W, og, root - r0)
+}
+
 /// A node's side at zoom `z` less one, on the finest grid: the bits under
 /// its corner's, 2^32 − 1 at a root, whose side no u32 holds.
-fn under(z: Zoom) -> u32 {
+pub(crate) fn under(z: Zoom) -> u32 {
     if z >= FINEST_ZOOM {
         0
     } else {
@@ -284,7 +292,7 @@ fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, reach): (f32, f32)) -> (f32, f
 /// A node's planes, in units from the origin at `og` on the finest grid, each
 /// a corner's (`units`): the far plane is the next node's corner, in the next
 /// root where the corner goes past its own.
-fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
+pub(crate) fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
     let u = under(n.zoom);
     let far = |c: u32, og: u32, roots: i32| {
         let last = c.wrapping_add(u);
@@ -513,7 +521,7 @@ pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 /// A node's farthest and nearest distances from the eye, squared, its
 /// planes `lo` and `hi` units from the eye on each axis: its corner
 /// farthest from the eye and its point nearest it.
-fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
+pub(crate) fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
     let near = [
         lesser(greater(lo[0], 0.0), hi[0]),
         lesser(greater(lo[1], 0.0), hi[1]),
@@ -534,7 +542,7 @@ fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 /// corner, so this only adds coarser zooms than its own, which splits more
 /// and stops on the same block (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
 /// "more cautiously").
-fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
+pub(crate) fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
 }
 
@@ -738,19 +746,11 @@ pub fn walk<Q: Query>(
                 // stop is where that span begins.
                 Kind::Split => {
                     let [lo, hi] = slab_of(i.block[0]);
-                    let level = |v: i32| {
-                        let root = v >> UNIT_ZOOM;
-                        units(
-                            ((v - (root << UNIT_ZOOM)) as u32) << FRAC_W,
-                            og[2],
-                            root - r0[2],
-                        )
-                    };
                     let (bottom, top) = planes(
                         ray.direction[2],
                         ray.inverse[2],
-                        level(lo),
-                        level(hi),
+                        level(lo, og[2], r0[2]),
+                        level(hi, og[2], r0[2]),
                         (t0, t1),
                     );
                     into = until == Until::Air || greater(t0, bottom) < lesser(t1, top);
