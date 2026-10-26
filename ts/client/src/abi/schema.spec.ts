@@ -247,6 +247,20 @@ export const SETTINGS = {
     section: "debug",
     dev: true,
   },
+  /** The cut a rasterized proxy would draw (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), built on the GPU every frame from the eye over what it holds, as PROXY_CUTS says, in a pass timed apart (span `proxy`): its boxes written and counted, drawn by nothing, and how a pixel starts unchanged (rust/client/shader/src/proxy.rs `proxy_cs`). */
+  ray_proxy: {
+    key: 21 as number,
+    kind: "choice",
+    default: "off",
+    options: {
+      off: 0 as number,
+      cut_1: 1 as number,
+      cut_2: 2 as number,
+      cut_3: 3 as number,
+    },
+    section: "debug",
+    dev: true,
+  },
 } as const;
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */

@@ -15,7 +15,7 @@ use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{DeviceSample, GpuSample, OracleSample};
+use crate::profiler::frame::{DeviceSample, GpuSample, OracleSample, ProxySample};
 use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
@@ -30,7 +30,7 @@ use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_oracle};
+use crate::profiler::report::{set_host_frame, set_oracle, set_proxy};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -190,6 +190,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
             shards: crate::domain::scene::cast::shards(),
             overwrites: crate::domain::scene::cast::overwrites(),
             decor: crate::domain::scene::decor::drawn::frame(),
+            proxy: crate::domain::scene::cast::proxy(),
         }),
         text: text_raster,
         sheet: sheet(),
@@ -248,6 +249,14 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         coarser,
         untrue,
         truth_lacked,
+    });
+    let [frames, boxes, nodes, dropped, shut] = stat.proxy;
+    set_proxy(ProxySample {
+        frames,
+        boxes,
+        nodes,
+        dropped,
+        shut,
     });
     set_host_frame(
         out.kind,

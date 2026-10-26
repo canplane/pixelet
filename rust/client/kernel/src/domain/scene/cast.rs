@@ -19,8 +19,20 @@ use crate::domain::layer::terrain::tile::kept;
 use crate::domain::layer::terrain::window::{self, Handed};
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
-use crate::domain::view::setting::store::{settings_store, OracleStart};
+use crate::domain::view::setting::store::{settings_store, OracleStart, ProxyCut};
 use pxl_spec::bake::constant::EntryAt;
+
+/// The cut a proxy would draw, as the setting asks for it: its `coarser`
+/// (pxl-spec-core `proxy::cut`), none for 0 (pxl-render gpu/renderer.rs
+/// `Cast::proxy`).
+pub fn proxy() -> u32 {
+    match settings_store().ray_proxy {
+        ProxyCut::off => 0,
+        ProxyCut::cut_1 => 1,
+        ProxyCut::cut_2 => 2,
+        ProxyCut::cut_3 => 3,
+    }
+}
 
 /// The service area's index as the GPU reads it, and whether a declared
 /// source made it: one is declared once (sys/io/source.rs `declare`), so it is

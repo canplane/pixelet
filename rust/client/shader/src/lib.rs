@@ -4,9 +4,10 @@
 //! the world as the GPU holds it (world.rs) and the eye it is cast from
 //! (eye.rs): the eye's rays (beam.rs, cast.rs) through the observed pyramid
 //! (observed.rs), the world's depth from the sun (sun.rs), each handed
-//! square's ground (ground.rs) and ways (ways.rs), and the decor the ground
-//! grows (decor.rs). An entry is named by `entry_point_name`, never by its
-//! module's path, so each keeps the name pxl-tool shader.rs `ENTRIES` reads.
+//! square's ground (ground.rs) and ways (ways.rs), the decor the ground
+//! grows (decor.rs), and the cut a proxy would draw (proxy.rs). An entry is
+//! named by `entry_point_name`, never by its module's path, so each keeps
+//! the name pxl-tool shader.rs `ENTRIES` reads.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
 // The workspace's clippy never builds this crate: its own build refuses a
@@ -19,6 +20,7 @@ mod decor;
 mod eye;
 mod ground;
 mod observed;
+mod proxy;
 mod sun;
 mod ways;
 mod world;
@@ -29,6 +31,7 @@ pub use decor::{decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_pl
 pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
+pub use proxy::{proxy_args_cs, proxy_cs};
 pub use sun::{sun_cs, sun_mark_cs, SunMoved};
 pub use ways::{ways_cs, ways_free_cs, ways_freed_cs, ways_tree_cs};
 pub use world::{Looks, Unlooked, World};

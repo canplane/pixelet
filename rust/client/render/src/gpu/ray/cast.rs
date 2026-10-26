@@ -200,6 +200,16 @@ const _: () = assert!(
 /// buffers were they one group.
 const CAST_GROUP: [u32; compute::MISS_GROUP.len()] = compute::MISS_GROUP;
 
+impl CastBuffers {
+    /// The world the cast binds, as the proxy's cut binds it (ray/proxy.rs):
+    /// the eye, the windows, the ground, the service area, the overwrites
+    /// and the ways' pool; none before the cast first binds it.
+    pub(super) fn world(&self) -> Option<[u32; 6]> {
+        let b = self.bound;
+        (b[0] != 0).then_some([b[0], b[1], b[2], b[5], b[6], b[7]])
+    }
+}
+
 impl RaysPass {
     /// The cast pass's pipelines and buffers, made once, where the frame
     /// first casts: before any of its uploads (`hand`), which take the
@@ -351,6 +361,7 @@ impl RaysPass {
                     written: _,
                 },
             decor: _,
+            proxy: _,
         } = &cast;
         let r = &mut c.read;
         r.begin();

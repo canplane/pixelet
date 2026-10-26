@@ -41,6 +41,18 @@ const oracleText = (f: Frame) =>
     } a stop   the cast's not the eye's ${f.oracle_untrue}   the eye's lacked ${f.oracle_truth_lacked}`,
   ];
 
+/** The `ray_proxy` cut's sums since boot as the last frame holds them
+ * (profiler.json FRAME's proxy lanes), where any frame's counts were read
+ * back. */
+const proxyText = (f: Frame) =>
+  f.proxy_frames === 0 ? [] : [
+    `  proxy   ${
+      n1(f.proxy_boxes / f.proxy_frames)
+    } boxes a frame over ${f.proxy_frames} frames since boot   nodes ${
+      n1(f.proxy_nodes / f.proxy_frames)
+    } a frame   dropped ${f.proxy_dropped}   not in the open ${f.proxy_shut} frames`,
+  ];
+
 export function failText(fail: u32, detail: u32): string {
   const name = strerror(fail as Errno).split(":")[0];
   return detail === 0 ? name : `${name} ${detail}`;
@@ -148,6 +160,7 @@ function windowSection(r: ProfilerReport): string[] {
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     ...oracleText(last),
+    ...proxyText(last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,
     `  heap used Δ ${

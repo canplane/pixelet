@@ -7,8 +7,10 @@
 
 mod cast;
 mod ground;
+mod proxy;
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
+use crate::gpu::api::Stamp;
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Format, Gpu,
 };
@@ -18,6 +20,8 @@ use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 pub use cast::ORACLE_COUNTS;
 use ground::GroundBuffers;
+use proxy::ProxyBuffers;
+pub use proxy::PROXY_SUMS;
 
 pub struct RaysPass {
     built: Built,
@@ -34,6 +38,9 @@ pub struct RaysPass {
     looks: u32,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
+    /// The cut a proxy would draw, built over the cast's world where the
+    /// setting asks for it (ray/proxy.rs).
+    proxy: ProxyBuffers,
     /// What this frame does with the cast, as `prepare` decided it: nothing
     /// cast (`plain`), the rays standing (`standing`), or a cast run
     /// (`cast`).
@@ -59,8 +66,36 @@ impl RaysPass {
             looks,
             ground: None,
             cast: None,
+            proxy: ProxyBuffers::new(g, pipelines),
             kind: FrameKind::plain,
         }
+    }
+
+    /// The cut a proxy would draw at `coarser` (pxl-spec-core `proxy::cut`),
+    /// none for 0, built into `encoder` over the world the cast binds, once
+    /// the cast has bound it.
+    pub fn proxy(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp], coarser: u32) {
+        let Some(bound) = self.cast.as_ref().and_then(CastBuffers::world) else {
+            return;
+        };
+        if coarser != 0 {
+            self.proxy.dispatch(g, encoder, stamps, coarser, bound);
+        }
+    }
+
+    /// The cut's counts copied last frame mapped back (`ProxyBuffers::back`).
+    pub fn proxy_back(&mut self, g: &Gpu) {
+        self.proxy.back(g);
+    }
+
+    /// The cut's sums since boot (`PROXY_SUMS`).
+    pub fn proxy_sums(&self) -> [f64; PROXY_SUMS] {
+        self.proxy.sums()
+    }
+
+    /// The frame the cut's copy was encoded in was dropped.
+    pub fn proxy_dropped(&mut self) {
+        self.proxy.dropped();
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is

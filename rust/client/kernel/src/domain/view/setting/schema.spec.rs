@@ -188,6 +188,33 @@ impl OracleStart {
     }
 }
 
+/// Whether the GPU builds the cut a proxy would draw, and how coarse (rust/client/shader/src/proxy.rs `proxy_cs`).
+///
+///   off    — it does not.
+///   cut_n  — every frame, `coarser` n (rust/spec/core/src/proxy.rs `cut`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ProxyCut {
+    off = 0,
+    cut_1 = 1,
+    cut_2 = 2,
+    cut_3 = 3,
+}
+
+impl ProxyCut {
+    pub const ALL: [ProxyCut; 4] = [
+        ProxyCut::off,
+        ProxyCut::cut_1,
+        ProxyCut::cut_2,
+        ProxyCut::cut_3,
+    ];
+
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<ProxyCut> {
+        ProxyCut::ALL.into_iter().find(|o| *o as u32 == number)
+    }
+}
+
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -271,10 +298,12 @@ pub enum SettingKey {
     ray_steps = 19,
     /// A measurement the proxy of doc/minutes/20261024-a-proxy-only-starts-the-ray.md is weighed by: every pixel the cast stopped walks again, from where ORACLE_STARTS says, as a perfect proxy would start it, in a pass timed apart (span `oracle`), and that walk's stop is what is drawn; with `ray_steps` on, its visits are coloured and counted, and the stops that differ from the cast's (rust/client/shader/src/cast.rs `oracle_cs`).
     ray_oracle = 20,
+    /// The cut a rasterized proxy would draw (doc/minutes/20261024-a-proxy-only-starts-the-ray.md), built on the GPU every frame from the eye over what it holds, as PROXY_CUTS says, in a pass timed apart (span `proxy`): its boxes written and counted, drawn by nothing, and how a pixel starts unchanged (rust/client/shader/src/proxy.rs `proxy_cs`).
+    ray_proxy = 21,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 21] = [
+    pub const ALL: [SettingKey; 22] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -296,11 +325,12 @@ impl SettingKey {
         SettingKey::pet,
         SettingKey::ray_steps,
         SettingKey::ray_oracle,
+        SettingKey::ray_proxy,
     ];
 
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a retired number's stays 0.
-    pub const SLOTS: usize = 21;
+    pub const SLOTS: usize = 22;
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
@@ -332,6 +362,7 @@ impl SettingKey {
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
             SettingKey::ray_oracle => SettingKind::Choice,
+            SettingKey::ray_proxy => SettingKind::Choice,
         }
     }
 
@@ -345,7 +376,10 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::surface_follow | SettingKey::ray_steps | SettingKey::ray_oracle
+            SettingKey::surface_follow
+                | SettingKey::ray_steps
+                | SettingKey::ray_oracle
+                | SettingKey::ray_proxy
         )
     }
 
@@ -382,6 +416,7 @@ pub struct Settings {
     pub pet: u8,
     pub ray_steps: bool,
     pub ray_oracle: OracleStart,
+    pub ray_proxy: ProxyCut,
 }
 
 impl Settings {
@@ -408,6 +443,7 @@ impl Settings {
         pet: 5,
         ray_steps: false,
         ray_oracle: OracleStart::off,
+        ray_proxy: ProxyCut::off,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -435,6 +471,7 @@ impl Settings {
             SettingKey::pet => self.pet as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
             SettingKey::ray_oracle => self.ray_oracle as u32,
+            SettingKey::ray_proxy => self.ray_proxy as u32,
         }
     }
 
@@ -482,6 +519,10 @@ impl Settings {
             SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
             SettingKey::ray_oracle => match OracleStart::of(value) {
                 Some(o) => self.ray_oracle = o,
+                None => return false,
+            },
+            SettingKey::ray_proxy => match ProxyCut::of(value) {
+                Some(o) => self.ray_proxy = o,
                 None => return false,
             },
             _ => return false,

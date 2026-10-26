@@ -17,6 +17,7 @@ export const GPU_SPAN_NAMES = [
   "fill",
   "cast",
   "oracle",
+  "proxy",
   "grow",
   "shadow",
 ] as const;

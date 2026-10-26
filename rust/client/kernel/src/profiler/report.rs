@@ -13,7 +13,8 @@ use xpute_guest::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
 use crate::profiler::frame::{
-    DeviceSample, FrameSample, GpuSample, HeapSample, OracleSample, RingSample, TileSample,
+    DeviceSample, FrameSample, GpuSample, HeapSample, OracleSample, ProxySample, RingSample,
+    TileSample,
 };
 use crate::profiler::record::{profiler_record_frame, profiler_recording};
 use crate::sys::io::demand::Stream;
@@ -95,6 +96,14 @@ pub fn set_oracle(o: OracleSample) {
     ORACLE.set(o);
 }
 
+/// The renderer's sums of the proxy's cut as it last stated them, kept as
+/// the oracle's are.
+static PROXY: Global<ProxySample> = Global::new();
+
+pub fn set_proxy(p: ProxySample) {
+    PROXY.set(p);
+}
+
 /// The frame turn's record, once its frame is drawn.
 pub fn profiler_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
@@ -134,6 +143,7 @@ pub fn profiler_frame(t: FrameTurn) {
         out: counts.map(|c| f64::from(c.1)),
         terrain_refused,
         oracle: *ORACLE.get(OracleSample::default),
+        proxy: *PROXY.get(ProxySample::default),
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };

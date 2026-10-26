@@ -104,7 +104,11 @@ pub const SHADER_CAMERA_GRID: u32 = 49;
 /// short of it, where the eye asks for the oracle's measurement
 /// (pxl-spec-core `eye::oracle`): a compute entry.
 pub const SHADER_ORACLE: u32 = 50;
-pub const SHADERS: u32 = 51;
+/// The cut a proxy would draw, a zoom a dispatch, and the next zoom's
+/// dispatch laid off it (pxl-spec-core `proxy`): compute entries.
+pub const SHADER_PROXY: u32 = 51;
+pub const SHADER_PROXY_ARGS: u32 = 52;
+pub const SHADERS: u32 = 53;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -310,4 +314,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "encode", "sky_word", "camera_grid"],
     // SHADER_ORACLE
     &["oracle.gen"],
+    // SHADER_PROXY
+    &["proxy.gen"],
+    // SHADER_PROXY_ARGS
+    &["proxy_args.gen"],
 ];

@@ -53,6 +53,25 @@
           "label": "Find the proxy box only, 2 coarser",
           "description": "Finds the box a proxy would draw over every point, 2 sizes coarser than the camera grid asks, without walking from it, and times that on its own."
         }
+      },
+      "ray_proxy": {
+        "label": "Proxy cut",
+        "off": {
+          "label": "Off",
+          "description": "Builds nothing."
+        },
+        "cut_1": {
+          "label": "Build the cut, 1 coarser",
+          "description": "Builds the boxes a proxy would draw every frame, 1 size coarser than the camera grid asks, and counts and times them on their own; nothing draws them."
+        },
+        "cut_2": {
+          "label": "Build the cut, 2 coarser",
+          "description": "Builds the boxes a proxy would draw every frame, 2 sizes coarser than the camera grid asks, and counts and times them on their own; nothing draws them."
+        },
+        "cut_3": {
+          "label": "Build the cut, 3 coarser",
+          "description": "Builds the boxes a proxy would draw every frame, 3 sizes coarser than the camera grid asks, and counts and times them on their own; nothing draws them."
+        }
       }
     }
   },

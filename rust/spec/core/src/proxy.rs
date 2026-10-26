@@ -190,3 +190,92 @@ pub fn child(n: &Node, k: u32) -> Node {
         roots: n.roots,
     }
 }
+
+/// The cut as a GPU builds it, a zoom a dispatch from the roots about the
+/// eye (pxl-shader proxy.rs `proxy_cs`, `proxy_args_cs`): its counts, a
+/// word each, the boxes written, the nodes asked, the zoom the next
+/// dispatch reads, each queue's nodes (two words, the zoom read and the
+/// zoom written alternating), what was dropped past the scratch's room,
+/// `coarser`, the host's, and whether the eye was found not in the open
+/// (`aired`), where the cut is nothing.
+pub const COUNT_BOXES: u32 = 0;
+pub const COUNT_NODES: u32 = 1;
+pub const COUNT_LEVEL: u32 = 2;
+pub const COUNT_QUEUE: u32 = 3;
+pub const COUNT_DROPPED: u32 = 5;
+pub const COUNT_COARSER: u32 = 6;
+pub const COUNT_SHUT: u32 = 7;
+pub const COUNTS: u32 = 8;
+
+/// The zooms the cut is built over, a dispatch each: from the roots to the
+/// finest it draws at (`cut`).
+pub const LEVELS: u32 = LEAF_CELL;
+
+/// A `proxy_cs` workgroup's threads.
+pub const WORKGROUP: u32 = 64;
+
+/// The roots it starts from: those about the eye's on every axis.
+pub const ROOTS: u32 = 27;
+
+/// A queued node's words (`node_words`), the nodes a queue holds, the
+/// boxes the scratch holds and a box's words: its node's (`node_words`),
+/// from which its planes across follow (`asked`), then its lowest and
+/// highest along z in units from the eye, as f32 bits.
+pub const NODE_WORDS: u32 = 4;
+pub const QUEUE_NODES: u32 = 1 << 18;
+pub const BOXES: u32 = 1 << 19;
+pub const BOX_WORDS: u32 = 8;
+pub const BOX_Z: u32 = NODE_WORDS;
+/// The scratch: the two queues, then the boxes.
+pub const DATA_WORDS: u32 = 2 * QUEUE_NODES * NODE_WORDS + BOXES * BOX_WORDS;
+
+/// The indirect args the cut leaves: the next zoom's dispatch, then the
+/// boxes' draw, a box's corners an instance (`BOX_VERTICES`).
+pub const ARGS_DRAW: u32 = 3;
+pub const ARGS_WORDS: u32 = 8;
+pub const BOX_VERTICES: u32 = 36;
+
+/// Where node `k` of queue `q` begins in the scratch.
+pub const fn queue_at(q: u32, k: u32) -> u32 {
+    (q * QUEUE_NODES + k) * NODE_WORDS
+}
+
+/// Where box `k` begins in the scratch.
+pub const fn box_at(k: u32) -> u32 {
+    2 * QUEUE_NODES * NODE_WORDS + k * BOX_WORDS
+}
+
+/// A node as a queue holds it: its corner, then its zoom and its roots,
+/// each one more than the root from the origin's, two bits an axis.
+pub fn node_words(n: &Node) -> [u32; NODE_WORDS as usize] {
+    let r = |a: usize| ((n.roots[a] + 1) as u32 & 3) << (8 + 2 * a as u32);
+    [
+        n.corner[0],
+        n.corner[1],
+        n.corner[2],
+        n.zoom | r(0) | r(1) | r(2),
+    ]
+}
+
+/// `node_words`'s node.
+pub fn node_of(w: [u32; NODE_WORDS as usize]) -> Node {
+    let r = |a: u32| (w[3] >> (8 + 2 * a) & 3) as i32 - 1;
+    Node {
+        corner: [w[0], w[1], w[2]],
+        zoom: w[3] & 0xff,
+        roots: [r(0), r(1), r(2)],
+    }
+}
+
+/// Root `k` of the `ROOTS` about the origin's.
+pub fn root(k: u32) -> Node {
+    Node {
+        corner: [0; 3],
+        zoom: 0,
+        roots: [
+            (k % 3) as i32 - 1,
+            (k / 3 % 3) as i32 - 1,
+            (k / 9) as i32 - 1,
+        ],
+    }
+}

@@ -140,6 +140,7 @@ pub struct FrameSample {
     pub out: [f64; STREAMS],
     pub terrain_refused: f64,
     pub oracle: OracleSample,
+    pub proxy: ProxySample,
 }
 
 /// The `ray_oracle` measurement's sums since boot, as the renderer keeps
@@ -167,6 +168,20 @@ pub struct OracleSample {
     pub coarser: f64,
     pub untrue: f64,
     pub truth_lacked: f64,
+}
+
+/// The `ray_proxy` cut's sums since boot, as the renderer keeps them
+/// (pxl-render gpu/ray/proxy.rs `PROXY_SUMS`): the frames whose counts were
+/// read back, the boxes, the nodes asked, the nodes or boxes dropped past
+/// its scratch's room, and the frames whose eye was not in the open.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ProxySample {
+    pub frames: f64,
+    pub boxes: f64,
+    pub nodes: f64,
+    pub dropped: f64,
+    pub shut: f64,
 }
 
 /// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
@@ -209,6 +224,9 @@ words!(FrameSample, FRAME::WORDS,
     oracle.coarser => FRAME::oracle_coarser,
     oracle.untrue => FRAME::oracle_untrue,
     oracle.truth_lacked => FRAME::oracle_truth_lacked,
+    proxy.frames => FRAME::proxy_frames, proxy.boxes => FRAME::proxy_boxes,
+    proxy.nodes => FRAME::proxy_nodes, proxy.dropped => FRAME::proxy_dropped,
+    proxy.shut => FRAME::proxy_shut,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

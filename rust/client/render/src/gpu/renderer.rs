@@ -54,7 +54,7 @@ use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::{RaysPass, ORACLE_COUNTS};
+use crate::gpu::ray::{RaysPass, ORACLE_COUNTS, PROXY_SUMS};
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
@@ -200,6 +200,10 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
+    /// The cut a proxy would draw, built each frame over the same world at
+    /// this `coarser` (pxl-spec-core `proxy::cut`; gpu/ray/proxy.rs), none
+    /// for 0: counted and timed, drawn by nothing.
+    pub proxy: u32,
 }
 
 /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
@@ -250,6 +254,8 @@ pub struct FrameStat {
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
     /// The oracle's sums since boot (gpu/ray/cast.rs `Oracle`).
     pub oracle: [f64; ORACLE_COUNTS + 1],
+    /// The proxy's cut's sums since boot (gpu/ray/proxy.rs `PROXY_SUMS`).
+    pub proxy: [f64; PROXY_SUMS],
 }
 
 /// A frame's GPU time: its spans' sum, the passes timed. The span from the
@@ -667,6 +673,7 @@ impl Renderer {
         read.mark(self.moon.step(g, &self.mips, input.moon));
         read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
         let mut cast = input.cast;
+        let proxy = cast.as_ref().map_or(0, |c| c.proxy);
         // What the frame cannot put off is recorded before what can wait:
         // the cast pass made first, then the squares' uploads, which take
         // only the room left.
@@ -807,6 +814,7 @@ impl Renderer {
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
         self.screen.oracle_back(g);
+        self.screen.proxy_back(g);
         if read.read(self.clouds.words()) {
             self.clouds.write(g);
         }
@@ -830,6 +838,7 @@ impl Renderer {
         frame_begin();
         let encoder = g.encoder();
         self.screen.dispatch(g, encoder, &mut stamps);
+        self.screen.proxy(g, encoder, &mut stamps, proxy);
         // The sun's map: the world's depth from the sun, where the rays hold
         // the world it was cast with, then decor's and the actors' drawn over it.
         if self.shadows {
@@ -982,6 +991,7 @@ impl Renderer {
         if skipped {
             REDRAW.set(true);
             self.screen.dropped();
+            self.screen.proxy_dropped();
             for case in self.cases.iter_mut().flatten() {
                 case.read.forget();
             }
@@ -1113,6 +1123,7 @@ impl Renderer {
             census,
             gpu_spans,
             oracle: self.screen.oracle_sums(),
+            proxy: self.screen.proxy_sums(),
         }
     }
 }
