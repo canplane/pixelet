@@ -12,7 +12,7 @@ use xpute_kit::status::errno::Errno;
 
 use super::{ProxyBindings, RaysPass};
 use crate::frame::shader::record::{
-    compute, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
+    compute, source, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
     SHADER_MISS, SHADER_ORACLE, SHADER_PROXIED, SHADER_PROXIED_BEAM, SHADER_PROXIED_CHECK,
     SHADER_PROXIED_ENTRY, SHADER_PROXIED_MISS, SHADER_PROXIED_ROUTE, SHADER_PROXIED_WRITE,
     SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
@@ -139,7 +139,11 @@ pub(super) struct CastBuffers {
 /// shown, the check against the eye's walk, into the oracle's counts past
 /// its own. The cut's counts copied into `header`, a uniform, ahead of the
 /// pass, as its passes bind the most storage a device must give. Its
-/// groups, over `bound`, made again exactly when one of them is another.
+/// pipelines made only where the eye asks for them, those its mode reads,
+/// one a turn where the stream has room, before the frame (`proxied_made`):
+/// a module's source goes down the stream, and these are megabytes. Its
+/// groups, over `bound` and the pipelines made, made again exactly when one
+/// of them is another.
 struct Proxied {
     entry: Built,
     route: Built,
@@ -149,13 +153,14 @@ struct Proxied {
     write: Built,
     beam: Built,
     groups: [u32; 7],
-    bound: [u32; 15],
+    bound: [u32; 16],
     sizes: u32,
     args: u32,
     header: u32,
     wanted: bool,
     writes: bool,
     beams: bool,
+    ready: bool,
 }
 
 /// The counts `oracle_cs` keeps, by its words (pxl-shader cast.rs `STOPS`
@@ -288,15 +293,15 @@ impl RaysPass {
             sums: [0.0; ORACLE_COUNTS + 1],
         };
         let proxied = Proxied {
-            entry: pipelines.build_compute(g, SHADER_PROXIED_ENTRY, &compute::PROXIED_ENTRY_GROUP),
-            route: pipelines.build_compute(g, SHADER_PROXIED_ROUTE, &compute::PROXIED_ROUTE_GROUP),
-            pixels: pipelines.build_compute(g, SHADER_PROXIED, &compute::PROXIED_GROUP),
-            miss: pipelines.build_compute(g, SHADER_PROXIED_MISS, &compute::PROXIED_MISS_GROUP),
-            check: pipelines.build_compute(g, SHADER_PROXIED_CHECK, &compute::PROXIED_CHECK_GROUP),
-            write: pipelines.build_compute(g, SHADER_PROXIED_WRITE, &compute::PROXIED_WRITE_GROUP),
-            beam: pipelines.build_compute(g, SHADER_PROXIED_BEAM, &compute::PROXIED_BEAM_GROUP),
+            entry: Built::default(),
+            route: Built::default(),
+            pixels: Built::default(),
+            miss: Built::default(),
+            check: Built::default(),
+            write: Built::default(),
+            beam: Built::default(),
             groups: [0; 7],
-            bound: [0; 15],
+            bound: [0; 16],
             sizes: buffer(word_bytes(proxied::ROUTE_WORDS as usize), storage),
             args: buffer(
                 word_bytes(proxied::ROUTE_WORDS as usize),
@@ -309,6 +314,7 @@ impl RaysPass {
             wanted: false,
             writes: false,
             beams: false,
+            ready: false,
         };
         let c = CastBuffers {
             built,
@@ -828,7 +834,8 @@ impl RaysPass {
         let grows = self.grows();
         let raster = self.proxy.bindings();
         let Some(c) = self.cast.as_mut() else { return };
-        let proxied = c.proxied.wanted && raster.rastered && raster.index_array != 0;
+        let proxied =
+            c.proxied.wanted && c.proxied.ready && raster.rastered && raster.index_array != 0;
         if proxied {
             c.proxied.regroup(g, c.bound, c.oracle.counts, raster);
         }
@@ -1166,6 +1173,7 @@ impl Proxied {
             raster.index_array,
             self.sizes,
             beams,
+            self.made(),
         ];
         if bound == self.bound {
             return;
@@ -1175,9 +1183,16 @@ impl Proxied {
         }
         let (counts, data, index, header) =
             (raster.counts, raster.data, raster.index_array, self.header);
+        let group = |b: &Built, entries: &[crate::gpu::api::Entry]| {
+            if b.pipeline == 0 {
+                0
+            } else {
+                g.bind_group(b.layouts[0], entries)
+            }
+        };
         self.groups = [
-            g.bind_group(
-                self.entry.layouts[0],
+            group(
+                &self.entry,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1191,16 +1206,16 @@ impl Proxied {
                     buffer_entry(17, header),
                 ],
             ),
-            g.bind_group(
-                self.route.layouts[0],
+            group(
+                &self.route,
                 &[
                     buffer_entry(11, counts),
                     buffer_entry(15, self.sizes),
                     buffer_entry(16, self.args),
                 ],
             ),
-            g.bind_group(
-                self.pixels.layouts[0],
+            group(
+                &self.pixels,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1215,8 +1230,8 @@ impl Proxied {
                     buffer_entry(17, header),
                 ],
             ),
-            g.bind_group(
-                self.miss.layouts[0],
+            group(
+                &self.miss,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1230,8 +1245,8 @@ impl Proxied {
                     buffer_entry(12, data),
                 ],
             ),
-            g.bind_group(
-                self.check.layouts[0],
+            group(
+                &self.check,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1246,8 +1261,8 @@ impl Proxied {
                     buffer_entry(17, header),
                 ],
             ),
-            g.bind_group(
-                self.write.layouts[0],
+            group(
+                &self.write,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1263,8 +1278,8 @@ impl Proxied {
                     buffer_entry(17, header),
                 ],
             ),
-            g.bind_group(
-                self.beam.layouts[0],
+            group(
+                &self.beam,
                 &[
                     buffer_entry(0, eye),
                     buffer_entry(1, window),
@@ -1281,5 +1296,73 @@ impl Proxied {
             ),
         ];
         self.bound = bound;
+    }
+}
+
+impl Proxied {
+    /// A bit a pipeline made, as `regroup` keys its groups by.
+    fn made(&self) -> u32 {
+        [
+            &self.entry,
+            &self.route,
+            &self.pixels,
+            &self.miss,
+            &self.check,
+            &self.write,
+            &self.beam,
+        ]
+        .iter()
+        .enumerate()
+        .fold(0, |m, (k, b)| m | u32::from(b.pipeline != 0) << k)
+    }
+}
+
+impl RaysPass {
+    /// The proxied cast's pipelines its mode reads, where the eye's steps'
+    /// word (pxl-spec-core `eye::STEPS`) asks for it: the next one not yet
+    /// made, where the turn's stream has room for its module, one a turn,
+    /// before the frame; whether all it reads are made, the check's too
+    /// where the steps are shown.
+    pub fn proxied_made(&mut self, g: &Gpu, pipelines: &mut Pipelines, steps: Option<u32>) {
+        let Some(c) = self.cast.as_mut() else { return };
+        let p = &mut c.proxied;
+        let Some(w) = steps.filter(|w| w & eye::PROXIED != 0) else {
+            p.ready = false;
+            return;
+        };
+        let (beam, write) = (w & eye::PROXIED_BEAM != 0, w & eye::PROXIED_WRITE != 0);
+        let read = !beam && !write;
+        let wants = [
+            (SHADER_PROXIED_ROUTE, true),
+            (SHADER_PROXIED_ENTRY, !beam),
+            (SHADER_PROXIED, read),
+            (SHADER_PROXIED_MISS, read),
+            (SHADER_PROXIED_WRITE, write),
+            (SHADER_PROXIED_BEAM, beam),
+            (SHADER_PROXIED_CHECK, w & eye::SHOW_STEPS != 0),
+        ];
+        let mut ready = true;
+        let mut one = false;
+        for (kind, want) in wants {
+            let (built, group) = match kind {
+                SHADER_PROXIED_ROUTE => (&mut p.route, &compute::PROXIED_ROUTE_GROUP[..]),
+                SHADER_PROXIED_ENTRY => (&mut p.entry, &compute::PROXIED_ENTRY_GROUP[..]),
+                SHADER_PROXIED => (&mut p.pixels, &compute::PROXIED_GROUP[..]),
+                SHADER_PROXIED_MISS => (&mut p.miss, &compute::PROXIED_MISS_GROUP[..]),
+                SHADER_PROXIED_WRITE => (&mut p.write, &compute::PROXIED_WRITE_GROUP[..]),
+                SHADER_PROXIED_BEAM => (&mut p.beam, &compute::PROXIED_BEAM_GROUP[..]),
+                _ => (&mut p.check, &compute::PROXIED_CHECK_GROUP[..]),
+            };
+            if !want || built.pipeline != 0 {
+                continue;
+            }
+            // A module's record: its source, and a page for its words.
+            if !one && crate::gpu::api::room(source(kind).len() + 4096) {
+                *built = pipelines.build_compute(g, kind, group);
+                one = true;
+            }
+            ready &= built.pipeline != 0;
+        }
+        p.ready = ready;
     }
 }

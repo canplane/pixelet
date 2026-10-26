@@ -778,6 +778,8 @@ impl Renderer {
             .as_ref()
             .map(|c| ProxyFrame::of(c, [world.width, world.height]));
         let proxy_made = self.screen.proxy_made(g, &mut self.pipelines, proxy);
+        let steps = cast.as_ref().map(|c| c.eye[pxl_spec_core::eye::STEPS]);
+        self.screen.proxied_made(g, &mut self.pipelines, steps);
         self.screen.prepare(
             g,
             cast,
