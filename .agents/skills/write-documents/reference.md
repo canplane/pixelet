@@ -155,6 +155,14 @@ to it as coverage.
 The same rule inside a document: if a section has already said the turn is
 somebody else's, it should not then draw that turn.
 
+ARCHITECTURE.md holds the structure: the parts, the rule each follows, and
+what crosses between them. How one module's mechanism runs — its cases, its
+order of steps, its settings — is that module's doc comment or the README
+beside its code, where whoever changes it reads it, and ARCHITECTURE.md points
+there. ARCHITECTURE.md grew from 18 sections to 42 this way, one a subsystem,
+some saying again what the module's comment already said and some saying what
+the module's comment never did; the rewrite moved each to its module.
+
 A file that is assembled at build time still has to read as a file. One
 README here has a provenance section spliced in on export, and the license
 paragraph under it said "the copy carries the license" — a phrase whose

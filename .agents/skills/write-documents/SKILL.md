@@ -40,12 +40,13 @@ cited is the convention skill's.
   ("in two parts"), a table row for a task that has grown, the sibling documents
   where the same word stands, a forward reference the move created, and any
   sentence whose antecedent was cut.
-- **The wrap is the file's.** No formatter touches the documents outside the
-  code trees (`Makefile`), so a file keeps the wrap it has: `README.md`,
-  `ARCHITECTURE.md`, xpute's two and `infra/README.md` run a paragraph to one
-  line. A Markdown file under `ts/` or `xpute/ts/` is `deno fmt`'s, and
-  `make check` holds it. Rewrapping a file to another convention is a diff of
-  the whole file for nothing.
+- **Prose wraps at 80 columns.** No formatter touches the documents outside
+  the code trees (`Makefile`), so `README.md`, `ARCHITECTURE.md`, xpute's two
+  and `infra/README.md` are wrapped by hand: a paragraph breaks after the last
+  word that fits in 80 columns, mid-sentence, as `deno fmt` wraps a Markdown
+  file under `ts/` or `xpute/ts/`, which `make check` holds. A table, a figure
+  or a link that cannot break runs past it. Rewrap only the paragraphs an
+  edit touches.
 - **Read the whole document from the top**, on the page rather than in a diff.
 
 The last is not a formality, and the others do not replace it. Each check above
