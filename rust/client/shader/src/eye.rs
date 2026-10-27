@@ -10,7 +10,7 @@ use pxl_spec_core::{beam, eye, observed, tally};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
-use crate::observer::{Aim, Observer};
+use crate::observer::{Aim, Level, Observer};
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
 /// where pxl-spec-core `eye` lays them (asserted below).
@@ -202,7 +202,7 @@ impl Observer for Eye {
     }
 
     /// Every one: what the eye casts is what it shows.
-    fn needs<W: Words + ?Sized>(&self, _: &W, _: u32, _: [u32; 2]) -> bool {
+    fn needs<W: Words + ?Sized>(&self, _: &W, _: Level, _: [u32; 2]) -> bool {
         true
     }
 }
