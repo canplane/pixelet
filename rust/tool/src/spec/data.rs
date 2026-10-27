@@ -62,10 +62,10 @@ const DATA_SPECS: [DataSpec; 26] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/block/ext.json",
+        json: "spec/spec/object/ext.json",
         uses: &[],
         ts: None,
-        rs: Some("rust/spec/src/block/ext.spec.rs"),
+        rs: Some("rust/spec/src/object/ext.spec.rs"),
         rs_also: &[],
         module: Some("ext"),
         enums: Enums::All,

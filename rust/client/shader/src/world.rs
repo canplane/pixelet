@@ -180,7 +180,7 @@ impl<L: Looks> ground::Held for World<'_, L> {
         (r, here)
     }
 
-    /// The block's column off the windows, the area's edge laid on it
+    /// The cell's column off the windows, the area's edge laid on it
     /// (pxl-spec-core `window::ground`), as the CPU reads it (pxl-kernel
     /// domain/query/node.rs `Reading::cell`).
     fn cell(&mut self, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
@@ -189,7 +189,7 @@ impl<L: Looks> ground::Held for World<'_, L> {
 }
 
 /// What a node is on the GPU: its value, one of the catalog's whichever
-/// source holds it, and the four looks the ground's block is drawn by
+/// source holds it, and the four looks the ground's asset is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
 impl<L: Looks> Query for World<'_, L> {
     type At = At;
@@ -219,10 +219,10 @@ impl<L: Looks> Query for World<'_, L> {
 
 impl<L: Looks> World<'_, L> {
     /// What lies about the face a ray stopped on (pxl-spec-core
-    /// `face::word`): each block beside the stop's at its zoom, hiding its
+    /// `face::word`): each cell beside the stop's at its zoom, hiding its
     /// cube whole (`answer::whole`), asked off the line down to the stop's
     /// node (`support::line`, `support::asset`), each from the deepest node
-    /// it shares with it, never again from the top; a box's own, a block
+    /// it shares with it, never again from the top; a box's own, a cell
     /// kept short of its cube (`face::BOX`); nothing where the ray stopped
     /// on none.
     pub(crate) fn faced<A: Copy>(
@@ -245,7 +245,7 @@ impl<L: Looks> World<'_, L> {
     }
 }
 
-/// The face a ray enters a block through across `axis` (pxl-spec-core
+/// The face a ray enters a cell through across `axis` (pxl-spec-core
 /// `ray`): 2·axis, plus one where its outward normal points down the axis,
 /// against the ray.
 pub(crate) fn face_of(ray: &cast::Ray, axis: u32) -> u32 {

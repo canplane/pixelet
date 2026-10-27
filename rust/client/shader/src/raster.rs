@@ -19,7 +19,7 @@ use crate::world::{Unlooked, World};
 use crate::{add, most};
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in
-/// every word a pixel reads of them: the node, the block, whether it lacks
+/// every word a pixel reads of them: the node, the asset, whether it lacks
 /// and the axis entered across, so what lies about its face is alike too
 /// (world.rs `World::faced`, its face the axis's turned to the eye).
 fn alike<W: Words + ?Sized>(w: &W, a: u32, b: u32) -> bool {
@@ -93,7 +93,7 @@ pub(crate) fn boxed<W: Words + ?Sized>(
     box_at
 }
 
-/// The block a ray from `origin` takes off the raster's pick, the sample at
+/// The cell a ray from `origin` takes off the raster's pick, the sample at
 /// word `k` of `w`: where the ray enters it (`cast::entry`) across the axis
 /// the sample entered by, the eye's pixels and the sun's slots alike, and
 /// whether it does.
@@ -148,7 +148,7 @@ pub fn sample_box_cs(
 /// than once a sample, and left in its sample's words
 /// (`beam::SAMPLE_FACES`), the one sample of the box a pixel reads
 /// (cast.rs `cast_cs`). Its sample's ray is the one `sample_cs` cast, and
-/// its stop the node, block and axis it left; a sample that lacks met no
+/// its stop the node, asset and axis it left; a sample that lacks met no
 /// face.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "face_cs"))]
 #[allow(clippy::too_many_arguments)]

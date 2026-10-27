@@ -12,7 +12,7 @@
 pub mod sentinel {
     /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds
     pub const void: u8 = 0x00;
-    /// bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec block/limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it
+    /// bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it
     pub const unknown: u8 = 0xff;
 }
 

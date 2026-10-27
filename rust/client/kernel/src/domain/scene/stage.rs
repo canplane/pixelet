@@ -71,7 +71,7 @@ pub fn stage_write() {
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = crate::domain::view::param::FOV;
-    // The camera grid's cell angle: the footprint a drawn block covers per
+    // The camera grid's cell angle: the footprint a drawn cell covers per
     // unit of distance, square on.
     let tau = crate::domain::view::lens::tau();
     s[STAGE_AT::CELL] = crate::domain::view::lens::cell(tau);
@@ -91,7 +91,7 @@ pub fn stage_write() {
         0.0
     };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    // In units, so neither the resolution nor a block's size moves it.
+    // In units, so neither the resolution nor a cell's size moves it.
     s[STAGE_AT::EDGE_WIDTH] = crate::domain::scene::param::EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light {
         crate::domain::scene::param::RIM_INTENSITY
@@ -293,7 +293,7 @@ pub fn visible_step(
         let hide = edits.hide.filter(|&at| {
             crate::domain::query::World::now()
                 .placed(at)
-                .is_some_and(|e| pxl_spec::block::object::object_value_is_decor(e.state))
+                .is_some_and(|e| pxl_spec::object::is_decor(e.state))
         });
         crate::domain::scene::decor::drawn::step(frame.eye, hide, edits.scattered);
         crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.pass);

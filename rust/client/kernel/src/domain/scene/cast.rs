@@ -69,7 +69,7 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
 }
 
 /// What is placed, for the GPU: the objects' tree's lanes as they live, the
-/// room either has, the store's revision, and the blocks written since the
+/// room either has, the store's revision, and the families written since the
 /// revision the lanes were last handed at, so the GPU takes only those
 /// again where it holds that one (domain/layer/object/store.rs `gpu_lanes`).
 pub fn overwrites() -> Overwrites<'static> {

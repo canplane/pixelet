@@ -159,7 +159,7 @@ struct Windows {
     pinned: List<Tile, { PINNED_TILES as usize }>,
     /// The berths this turn hands the fill (`due`).
     due: List<u32, { HANDED as usize }>,
-    /// The heap as it was when it first refused a square's blocks the
+    /// The heap as it was when it first refused a square's families the
     /// mirror's room, while one waits on it (`WAITING`).
     heap: Option<Refused>,
 }
@@ -228,7 +228,7 @@ pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 
 /// Every square's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
 /// cells as they come back, and the eye's windows' fold; a test's own. Its
-/// ways' trees' blocks are the heap's (mirror.rs).
+/// ways' trees' families are the heap's (mirror.rs).
 pub(crate) struct Planes {
     /// Each square's words as they came back, whole (`window::BACK_WORDS`),
     /// `CELLS_LANE_BYTES` apart.
@@ -260,7 +260,7 @@ pub fn joined_lane() -> u32 {
     off_of_slice(joined) as u32
 }
 
-/// The GPU's ways' pool as the CPU mirrors it, the landed squares' blocks
+/// The GPU's ways' pool as the CPU mirrors it, the landed squares' families
 /// at the GPU's slots, which a cursor reads as the cast reads the GPU's
 /// (pxl-spec-core `way::tree`).
 pub fn pool() -> &'static Mirror {
@@ -487,13 +487,13 @@ fn show(w: &mut Windows, i: u32) {
 
 /// A berth's ticket while its square's ways' tree is refused, the pool or
 /// the scratch at its cap (pxl-render gpu/ray/ground.rs `Short`), the square
-/// past its own most or its blocks past the mirror's cap (`landed`), none
+/// past its own most or its families past the mirror's cap (`landed`), none
 /// of which asking again changes: never a fill's (`fill`), and not absent,
 /// so the square is not handed again every turn, nor its tile asked or kept
 /// for it, while a window wants it (`berth`). A reader reads the coarser
 /// window's, as for any square absent.
 const REFUSED: u32 = u32::MAX;
-/// A berth's ticket while the heap refused its square's blocks the
+/// A berth's ticket while the heap refused its square's families the
 /// mirror's room (`mirror::Unlaid::Heap`): not absent, as `REFUSED`, until
 /// the heap gives a page back (`Windows::heap`), when it is absent again
 /// and handed again (`step`).
@@ -502,13 +502,13 @@ const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 
 /// Berth `b`'s cells back from its fill `ticket` (pxl-render
 /// `read_back`), and how its ways' tree landed, where the berth still waits
-/// on that fill: built, its blocks laid into the pool's mirror at their
+/// on that fill: built, its families laid into the pool's mirror at their
 /// slots, it is present and what is read over its tile moved; to be filled
 /// again (`Landing::Again`), it is absent, handed again; refused, or its
-/// blocks past the mirror's cap, it is absent and `REFUSED` while a window
-/// wants it; its blocks refused the mirror's room by the heap, it is absent
+/// families past the mirror's cap, it is absent and `REFUSED` while a window
+/// wants it; its families refused the mirror's room by the heap, it is absent
 /// and `WAITING` on the heap. A fill no berth waits on lays
-/// nothing: its blocks may be another's by now. Every window's slot
+/// nothing: its families may be another's by now. Every window's slot
 /// holding the square shows it (`show`).
 pub fn landed(b: u32, ticket: u32, landing: Landing) {
     let w = windows();
@@ -782,7 +782,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
 /// The windows as the CPU holds them, for pxl-spec-core's one reading of a
 /// cell (`window::step`, `window::bound_over`): each square's columns,
 /// levels and ways' tree's root as the GPU drew and folded them, read back
-/// (its tree's blocks in the pool's mirror, `pool`); and
+/// (its tree's families in the pool's mirror, `pool`); and
 /// the service area they end at (pxl-spec-core `area::Area`).
 #[derive(Clone, Copy)]
 pub struct Windowed;
@@ -816,7 +816,7 @@ impl Squares for Windowed {
     }
 
     /// As the GPU folded it, read back a frame or more later: an entry for
-    /// a block no longer held names another, and reads none (pxl-spec-core
+    /// a cell no longer held names another, and reads none (pxl-spec-core
     /// `window::unfold`).
     fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
         let at =

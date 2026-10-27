@@ -127,7 +127,7 @@ impl Squares for Fresh<'_> {
 
 /// A handed square's spans in its scratch from `at` (`window::SPANS_AT`),
 /// as its fill kept them (`spans`): what its levels and its ways' tree
-/// read its blocks off.
+/// read its cells off.
 pub struct Scratch<'a> {
     pub words: &'a [u32],
     pub at: u32,
@@ -371,7 +371,7 @@ pub fn keep(sq: &impl window::Square, scratch: &mut [u32], mine: u32, i: u32) ->
 /// the ways write in it off the spans its fill kept (`way::bound`;
 /// `ground::Bounds`); a higher one over the level under it, written before
 /// (`window::join`). A bore's air counts as far as the column's top, as the
-/// ways write it: the blocks of the square's ways tree under it lie in the
+/// ways write it: the cells of the square's ways tree under it lie in the
 /// bound (`way::tree`), and a node it splits more holds only air or void
 /// there. Over the top it is air whatever writes it; a bound reaching up
 /// there, past a tunnel's mouth where the ground falls away under its
@@ -625,7 +625,7 @@ mod tests {
                         way::NOTHING => ground::VOID,
                         v => v,
                     };
-                    assert_eq!(got, want, "round {round}, cell {cell}, column {x}, {y}, block {z}");
+                    assert_eq!(got, want, "round {round}, cell {cell}, column {x}, {y}, z {z}");
                 }
             }
         }

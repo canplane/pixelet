@@ -185,7 +185,7 @@ fn world() -> Option<&'static mut Surface> {
 
 /// Device pixels per CSS pixel the display shows the world at, whatever the
 /// load drew it at: what the camera grid is laid by (`view_resize`), so a
-/// block's zoom, demand and a pointer's reach follow the screen, not the
+/// cell's zoom, demand and a pointer's reach follow the screen, not the
 /// load; a pixel a CSS pixel before the world has a surface.
 pub fn display_ratio() -> f64 {
     world().map_or(1.0, |s| device(s.dpr))

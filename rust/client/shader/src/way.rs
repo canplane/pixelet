@@ -21,7 +21,7 @@ use crate::world::square_at;
 /// The ways of the squares `fresh` names, one a `z`, a thread a column of
 /// the square and its ring (`x`, row by row): each its spans once off the
 /// square's lines into the square's scratch (`fill::spans`), which its
-/// levels and its ways' tree read its blocks and its neighbours' off. Over
+/// levels and its ways' tree read its cells and its neighbours' off. Over
 /// `height_cs`'s tops: a way is told from their faces. Each square's
 /// entry as handed whole: where it lies and its shard lay the area's edge
 /// (pxl-spec-core `way::Columns::walled`).

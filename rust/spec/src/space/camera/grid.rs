@@ -6,8 +6,8 @@
 use crate::space::coord::zoom::{units, Zoom};
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
-/// 1/`SPLIT` radians about the eye, and the block it is drawn with, whole,
-/// spans at least one cell from any direction, so a zoom's block is drawn
+/// 1/`SPLIT` radians about the eye, and the node it is drawn with, whole,
+/// spans at least one cell from any direction, so a zoom's node is drawn
 /// from half `SPLIT` of its sides away out to `SPLIT` of them. Pixels are a screen's, derived from it
 /// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
 /// inside it is its layer's to fold (pxl-spec-core, which a GPU's cast sizes
@@ -29,7 +29,7 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
 pub const RATIO_MAX: f64 = pxl_spec_core::grid::RATIO_MAX as f64;
 
 /// The drawn pixels a camera grid's cell spans, at the reference view: about
-/// twelve, at every ratio. A block drawn for it spans that to twice that.
+/// twelve, at every ratio. A node drawn for it spans that to twice that.
 pub fn target_cell_px() -> f64 {
     px_per_unit(REFERENCE_VIEWPORT_H * RATIO_MAX, REFERENCE_FOV_DEG) / SPLIT
 }
@@ -72,7 +72,7 @@ impl Tau {
     /// The camera grid's cell zoom at `r2`, a distance from the eye squared:
     /// the widest cell whose split distance is within the distance, which is
     /// the finest whose side spans one of the grid's cells there, `r / SPLIT`.
-    /// A block drawn whole, all its faces, is at least its side wide from any
+    /// A node drawn whole, all its faces, is at least its side wide from any
     /// direction, so the face a ray meets does not enter. Finer than the
     /// ground's near the eye, held to what a zoom can name: pxl-spec-core's, the
     /// one rule the CPU and a GPU's cast size by, of the one input, a square;

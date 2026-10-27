@@ -1,28 +1,28 @@
 # Architecture — pixelet
 
-pixelet draws the real Earth as blocks you can build on, in a browser tab or a
+pixelet draws the real Earth as cubes you can build on, in a browser tab or a
 device app, and what it draws is what is walked on. Both follow from one
 function. A pixel's ray, a walker's step, the pointer and an edit all ask the
 same question of a **node**, a cube of space at a zoom: what fills it, at the
 zoom its distance from the eye asks. One function answers
-(`pxl-spec-core world.rs` `node`). It lays the ground's grid, each cell a block
+(`pxl-spec-core world.rs` `node`). It lays the ground's grid, each cell a cube
 at its height with the caves carved under its face, and then writes the ways off
 the ground and what players placed over it.
 
-No reader asks block by block. It descends (`pxl-spec-core cast.rs` `first`),
+No reader asks cell by cell. It descends (`pxl-spec-core cast.rs` `first`),
 passing whole a node in which nothing fills and splitting only one that may hold
 something. The function and the descent are one source compiled for the CPU and,
-through rust-gpu, for the GPU, so the block a pixel shows and the block a foot
+through rust-gpu, for the GPU, so the cell a pixel shows and the cell a foot
 stands on are one answer.
 
 How finely the world is drawn is the other half, and it is one rule too: the
-view is a grid of angular cells about the eye, and a block is drawn at the zoom
-whose block spans at least a cell at its distance (`pxl-spec-core grid.rs`
+view is a grid of angular cells about the eye, and a node is drawn at the zoom
+at which it spans at least one of them at its distance (`pxl-spec-core grid.rs`
 `cell_at`). What a zoom folds away is not there at that zoom, to draw, to walk
 on or to miss, and nothing finer is fetched to keep it.
 
 A kind of thing is drawn wholly on one side. The GPU's rays find the world's
-blocks, a player's cubes among them, and the GPU grows the ground's decor and
+cubes, a player's among them, and the GPU grows the ground's decor and
 draws it with a player's, which the kernel hands it as records, each where it is
 drawn. Everything else the kernel decides to draw, it lists: the actors, the
 cumulus, the puck, the ghosts, the markers. The renderer draws the list and
@@ -73,7 +73,7 @@ a map; each name in it is defined where its part begins.
 ```
 
 The parts follow that order. **The world** is what the kernel carries: sizes,
-positions, layers and what fills a block. **The eye** goes from the eye down to
+positions, layers and what fills a cell. **The eye** goes from the eye down to
 the layers. **Drawing** is the last step up, from the eye's rays and the
 kernel's list to a frame. **Below the view** is what all of it stands on, `sys/`
 and the top that wires it: the reads, the turn, the memory. **Making the data**
@@ -106,8 +106,8 @@ The words for what is sized:
 - The **pyramid** is the tree of all tiles: a tile at z covers the 2 × 2 under
   it at z + 1, and its Morton key is a prefix of theirs
   (`space/hierarchy/morton.rs`).
-- A **block** is what stands in a cell, grown by the ground or placed: a cube, a
-  decor or a marker (`domain/layer/object/store.rs` `Entry`).
+- An **asset** is what fills a cell, grown by the ground or placed: a cube, a
+  decor or a marker, kept as its id (`domain/layer/object/store.rs` `Entry`).
 
 A tile's zoom is a web map's, and a z24 cell is a web map's z16 pixel; only the
 3857 adapter knows it (`adapter/3857.rs` `cell_zoom_of`).
@@ -169,7 +169,7 @@ path, joins eight equal leaves into one, and folds its path again. So one
 picture has one tree. A leaf of `AIR` erases what a lower layer would show.
 
 A leaf may carry an **extension**, such as a marker's words, kept in a pool per
-**class** of ids (`pxl-spec block/ext.rs` `class_of`). It is placed and erased
+**class** of ids (`pxl-spec object/ext.rs` `class_of`). It is placed and erased
 with its leaf, which is never joined or split. The store persists in a kept slot
 whose format byte is its layout's version (`host.json` `format`).
 
@@ -184,12 +184,12 @@ Places are a setting.
 The **earth** layer is the planet's picture, baked at its top zoom only
 (`pxl-spec bake/tile/earth.rs`).
 
-## What fills a block
+## What fills a cell
 
-What stands in one cell is a block. It has two independent axes:
+What fills one cell is an asset. It has two independent axes:
 
-- Its **kind** is its asset's, how it is drawn: a cube, a decor model, or a
-  marker facing the viewer. The object layer stores it as its asset's id, the
+- Its **kind** is how it is drawn: a cube, a decor model, or a
+  marker facing the viewer. The object layer stores it as its id, the
   kind over its shape (`spec/spec/asset/id.json` `SHAPE_BITS`).
 - Its **source** is which side holds it: the base, whose ground grows it, or the
   object layer.
@@ -211,14 +211,14 @@ is a slot the catalog fills (Catalogs and assets).
 
 ---
 
-A block coarser than a leaf cell is what its zoom holds. The ground's coarse
+A cell coarser than a leaf is what its zoom holds. The ground's coarse
 cell stands at its folded height, its look the majority of those it folds
 ([doc/minutes/20261005-the-ground-is-a-carto-palette.md](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)).
-Its top block is filled to the share its height reaches (`ground.rs` `top`).
+Its top cell is filled to the share its height reaches (`ground.rs` `top`).
 What is placed and the ways fold to the kind most of their fill is
 (`overwrite.rs` `fold`).
 
-A coarse block's fill is how much of its cube the ground and what is written
+A coarse cell's fill is how much of its cube the ground and what is written
 over it cover (`answer.rs` `cover`). It keeps that fill in eighths, floored: its
 **kept eighths**. It is drawn as its cube shrunk about its center by the cube
 root of that, so its volume is its fill (`cast.rs` `kept_bounds`).
@@ -237,14 +237,14 @@ root of that, so its volume is its fill (`cast.rs` `kept_bounds`).
 
 The box holds to a few rules:
 
-- Nothing is drawn where a block keeps none, and the block under a shrunk top is
+- Nothing is drawn where a cell keeps none, and the cell under a shrunk top is
   ground no cave takes.
 - A ray stops where it enters the box and passes it where it misses. The eye's,
   the sun's and the pointer's rays do alike (`cast.rs` `entry`).
-- A shrunk block closes no edge of a block beside it.
+- A shrunk cell closes no edge of a cell beside it.
 - The ray carries the kept eighths, so the pass that colors the screen draws the
   box (`ray.rs` `KEPT_SHIFT`).
-- A leaf's block keeps its cube whole, so nothing walked or edited at the leaves
+- A leaf cell keeps its cube whole, so nothing walked or edited at the leaves
   changes.
 
 So flat ground far away reads as separate cubes rather than a sheet: every axis
@@ -319,11 +319,11 @@ long as nothing leaks into a neighbouring cell beyond what the area measure
 allows.
 
 That gives the one rule of detail: what is drawn is what the eye's rays reach. A
-ray goes down the pyramid and stops at the first block that fills at the zoom
-its distance asks. That block is what its pixels show; nothing no ray stops on
+ray goes down the pyramid and stops at the first cell that fills at the zoom
+its distance asks. That cell is what its pixels show; nothing no ray stops on
 is drawn. The GPU casts one ray a drawn pixel (Drawing).
 
-Height is not special: the distance is to the block met, every axis alike. The
+Height is not special: the distance is to the cell met, every axis alike. The
 rule is not yet closed by area: a flat top seen grazing is drawn finer than it
 shows (doc/backlog.md, P1).
 
@@ -350,11 +350,11 @@ The query fetches and keeps nothing, so reading costs what is asked, not what a
 tile holds.
 
 The **world** composes the layers into one answer (`domain/query/world.rs`
-`World`). What is in a block is one rule, for drawing and for control alike
+`World`). What is in a cell is one rule, for drawing and for control alike
 (`pxl-spec-core world.rs` `node`):
 
-1. the ground's grid, each cell a block shifted up to its height;
-2. the caves' air under its face, from a hash pyramid asked only at the blocks a
+1. the ground's grid, each cell a cube shifted up to its height;
+2. the caves' air under its face, from a hash pyramid asked only at the cells a
    reader asks for (`pxl-spec procedural.rs`);
 3. the ways off the ground, where each crossing of a line over the column is a
    deck and its pier, a bore, an embankment or a cutting
@@ -386,7 +386,7 @@ a node coarser than the zoom its distance asks
                                          the order the ray meets
                                          them, each handed what its
                                          parent found
-a block at the zoom its distance asks
+a cell at the zoom its distance asks
    +-- fills --------------------------> met: its pixels show it
    +-- not known ----------------------> the ray stops there
 ```
@@ -546,7 +546,7 @@ everything else, and the renderer executes both and decides nothing but color.
 
 Each drawn pixel is one ray on the GPU. It walks the same descent the CPU runs,
 over the ground's windows, the caves, the ways and the objects' tree as the GPU
-holds them. The block it stops on is the pixel's
+holds them. The node it stops on is the pixel's
 ([the GPU casts a ray a pixel](./doc/minutes/20261014-the-gpu-casts-a-ray-a-pixel.md)).
 Once a frame the kernel hands the GPU the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), so every pass reads one grid.
@@ -558,19 +558,19 @@ and hands the rest to the rasterizer, in five steps (`pxl-shader beam.rs`
 1. A **beam ray** at each corner of a camera grid cell walks the descent the
    cell's pixels share, and stops before a node too narrow to share.
 2. Each cell starts at the least of the beam rays about it.
-3. **Samples**, four a cell a side, walk on to the blocks they stop at.
-4. Each block a sample stopped at is drawn as a box
+3. **Samples**, four a cell a side, walk on to the nodes they stop at.
+4. Each node a sample stopped at is drawn as a box
    (`pxl-render gpu/ray/raster.rs`, `frame/shader/raster.wgsl`). It draws only
    the face its sample's ray came in through, and a pixel keeps that face only
-   where its own ray enters the block through it. The depth test keeps the
-   nearest, so each pixel holds the nearest sampled block its ray enters.
-5. The pixel takes that block (`pxl-shader cast.rs` `cast_cs`), or the sky where
+   where its own ray enters the node through it. The depth test keeps the
+   nearest, so each pixel holds the nearest sampled node its ray enters.
+5. The pixel takes that node (`pxl-shader cast.rs` `cast_cs`), or the sky where
    no sample about it met anything, and walks itself only where it holds none,
    or where the nearest is a node a sample could not answer.
 
-The block can come from any sample on the screen, not only the ones about the
-pixel, and a block no sample stopped at is not drawn. A pixel whose ray first
-meets such a block shows the drawn one behind it, a cost
+The node can come from any sample on the screen, not only the ones about the
+pixel, and a node no sample stopped at is not drawn. A pixel whose ray first
+meets such a node shows the drawn one behind it, a cost
 [the raster picks](./doc/experiment/20261026-the-raster-picks.md) measured
 against each pixel's own walk.
 
@@ -582,12 +582,12 @@ an edit or a preview changed, and the parts of what is placed an edit wrote
 it lacks is listed and walked again, asking the world, in the pass after
 (`cast.rs` `miss_list_cs`).
 
-A ray leaves four words (`pxl-spec-core ray.rs`): the block it met, with its
-face, zoom and kept eighths; how far; the looks a coarse block folds; and which
-of the face's edges and corners meet the air or a rising block.
+A ray leaves four words (`pxl-spec-core ray.rs`): the asset it met, with its
+face, zoom and kept eighths; how far; the looks a coarse cell folds; and which
+of the face's edges and corners meet the air or a rising cell.
 
 The **screen pass** reads those words (`frame/shader/screen_ray.wgsl`
-`pixel_ray`) and paints the block with the one function every lit face uses
+`pixel_ray`) and paints the cell with the one function every lit face uses
 (`frame/shader/paint.wgsl` `paint`): its swatch or image, shaded edges, light,
 and the air before it. Its depth is set back by a share of the face's slope
 across a pixel, so what lies on a face, like the location puck, wins with no
@@ -607,18 +607,18 @@ full, one device pixel a CSS pixel, or, by default, auto.
 Auto judges moving frames by their GPU time against the paced interval. It steps
 down at once when over budget, and up only after a run of windows the higher
 step would fit; without GPU timing it counts missed frames instead. The camera
-grid is laid by the display's ratio, not the drawn one, so a block's zoom and
+grid is laid by the display's ratio, not the drawn one, so a cell's zoom and
 what is fetched never follow the load.
 
-## Light on the blocks
+## Light on the cubes
 
-Three settings shade a block beyond its light
+Three settings shade a cube beyond its light
 (`spec/client/kernel/domain/view/setting/schema.json`):
 
 - **Edges** draw a line along every crease, an edge meeting the air or a rising
-  block. It has one width in units at every block size, so only perspective
+  cell. It has one width in units at every cell size, so only perspective
   thins it.
-- **Corners** either darken a face along each edge and corner a block rises
+- **Corners** either darken a face along each edge and corner a cell rises
   across, tinted warm (`screen_ray.wgsl` `creases`), or run N8AO over the rays'
   depth and the grown decor (`gpu/ao.rs`).
 - **Shadows** read the sun's map, below.
@@ -629,7 +629,7 @@ side (`pxl-spec-core sun.rs` `Sun`), so the map follows the eye a texel at a
 time.
 
 It is cast as the eye's rays are (`pxl-shader sun.rs`): beam rays along the sun,
-samples a few texels apart, their blocks drawn from the sun as boxes, and each
+samples a few texels apart, their nodes drawn from the sun as boxes, and each
 texel taking the nearest its ray enters, walking only where none is. The walks
 read and write the eye's observed pyramid. The whole map is cast again only in
 a frame where what it reads moved: the light's frame or box, the eye's place,
@@ -796,10 +796,10 @@ holds.
   (`coverage_gizmo.rs`).
 - `camera_gizmo`: the camera grid over the screen, rings a cell apart cut into
   cells of one solid angle (`frame/shader/camera_grid.wgsl`), and each pixel's
-  block tinted by the share of a cell its face shows the eye (`screen_lit.wgsl`
+  cube tinted by the share of a cell its face shows the eye (`screen_lit.wgsl`
   `cell_share`).
-- `ray_steps`, in a development build: each pixel coloured by the nodes its own
-  ray walked, grey where it took the block the raster kept.
+- `ray_steps`: each pixel coloured by the nodes its own ray walked, grey where it
+  took the cell the raster kept.
 
 ---
 
@@ -1408,7 +1408,7 @@ them.
 | Earth Engine's `MODE` pyramiding                                                                                                                                    | `pxl-spec bake/fold.rs`                                                                                                             | A 2 × 2 majority fold of the zoom under it                                                                                               |
 | Distant Horizons                                                                                                                                                    | `pxl-render mesh/paint/palette.rs`                                                                                                  | A distant cell drawn as the mean of what it folds                                                                                        |
 | Minecraft's `cube_all`, `cube_bottom_top`                                                                                                                           | `pxl-render gpu/pack.rs`                                                                                                            | Which face image a cube wears: its own side and bottom where the pack ships them, its top on every face where not                        |
-| Minecraft Beta's `replaceBlocksForBiome` ([doc/minutes/archive/20261011-the-ground-under-its-face.md](./doc/minutes/archive/20261011-the-ground-under-its-face.md)) | `pxl-spec-core ground.rs` `Cell::block`                                                                                             | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
+| Minecraft Beta's `replaceBlocksForBiome` ([doc/minutes/archive/20261011-the-ground-under-its-face.md](./doc/minutes/archive/20261011-the-ground-under-its-face.md)) | `pxl-spec-core ground.rs` `Cell::asset`                                                                                             | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
 | Minecraft's map colors                                                                                                                                              | `spec/spec/asset/color.json` underground                                                                                            | The colors of soil, sandstone and stone                                                                                                  |
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c))                              | `pxl-kernel domain/query/support.rs` `step_slide`                                                                                   | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
 | Amanatides and Woo's voxel traversal                                                                                                                                | `pxl-kernel domain/query/ray.rs`, `domain/query/support.rs`                                                                         | The next cell along a ray, by the share of the way to each axis's edge                                                                   |

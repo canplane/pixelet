@@ -18,7 +18,7 @@ use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, written, Write};
 use crate::sys::io::file::{self, Kept, KeptFile};
 use crate::sys::sched::edge::wake_at;
-use pxl_spec::block::ext::{class_of, Class};
+use pxl_spec::object::ext::{class_of, Class};
 
 struct State {
     save_due_ms: Option<f64>,

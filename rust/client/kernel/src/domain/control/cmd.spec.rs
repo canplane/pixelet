@@ -604,7 +604,7 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     INPUT_HOLD = 0x110b,
-    /// The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec block/ext.json) are refused whole, never cut.
+    /// The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut.
     INPUT_MARKER_WORDS = 0x110c,
     /// The marker the tool left waiting is let go, nothing put up.
     INPUT_MARKER_CANCEL = 0x110d,

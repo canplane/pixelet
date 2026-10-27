@@ -402,7 +402,7 @@ impl<'a> World<'a> {
     }
 
     /// Whether decor `s` strikes may reach into the node `(zoom, c)`, X on
-    /// the asker's lap, where no block under it fills: decor stands on the
+    /// the asker's lap, where no cell under it fills: decor stands on the
     /// ground or where something is placed, and reaches no farther than its
     /// reach from there, so a node is out of it where, about it and as wide
     /// as the reach, the windows' relief holds no top over its bottom less the

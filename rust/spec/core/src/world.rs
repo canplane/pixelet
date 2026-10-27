@@ -100,11 +100,11 @@ impl At {
 /// preview's `carve` and `hide` (`overwrite::Cut`) are read with what is
 /// placed.
 ///
-/// It is a block where `near` is its zoom or coarser, or past the ground's
+/// It is a cell where `near` is its zoom or coarser, or past the ground's
 /// cells where nothing placed or carved is finer in it (`overwrite::whole`):
-/// the world holds nothing finer than the node there. A block is what is
+/// the world holds nothing finer than the node there. Its asset is what is
 /// placed in it where that fills it whole, air included, else the ground's
-/// block with what the ways and what is placed write over it (their tree's
+/// asset with what the ways and what is placed write over it (their tree's
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
 /// `way::tree::read`), one value whichever source holds it
 /// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
@@ -112,17 +112,17 @@ impl At {
 /// (`answer::cover`, `answer::eighths`, `answer::KEPT_SHIFT`), air where
 /// that is none; `PLACED_ASSET` over a placed value, the source control tells an
 /// edit by, which nothing drawn reads. Its second word is the four looks
-/// the ground's block is drawn by (`ground::Cell::four`, `ground::word`),
+/// the ground's asset is drawn by (`ground::Cell::four`, `ground::word`),
 /// none for any other. Coarser, a split where
 /// any layer may fill under it at a zoom asked, each by its own bound —
 /// what is placed (`overwrite::over`), the ground's (`ground::slab`), the
 /// ways' (`way::slab`), each meeting the node (`ground::meets`) — its
-/// block words the box in its own steps they lie in, every axis alike
+/// asset words the box in its own steps they lie in, every axis alike
 /// (`answer::box_word`, `overwrite::bound`, `ground::box_along_z`);
-/// else air, a block of air its size, its value void; where the ground is
-/// not held, the lack. Whether a block is the zoom asked's or coarser air is
+/// else air, a cell of air its size, its value void; where the ground is
+/// not held, the lack. Whether a cell is the zoom asked's or coarser air is
 /// the asker's: its zoom against the finest asked (`near`), past the
-/// ground's cells, where nothing finer is, a block either way.
+/// ground's cells, where nothing finer is, a cell either way.
 #[allow(clippy::too_many_arguments)]
 pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     held: &mut H,
@@ -137,7 +137,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     at.shard = at.shard.at(held, (zoom, [c[0], c[1]]));
     let (cave, put, shard) = (at.cave, at.placed, at.shard);
     let (place, trail) = (&mut at.ground, &mut at.ways);
-    let block = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
+    let is_cell = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
     let over = overwrite::over(
         lanes,
         put,
@@ -145,9 +145,9 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         hide,
         zoom,
         c,
-        if block { zoom } else { near },
+        if is_cell { zoom } else { near },
     );
-    // The four looks a filling block of what is placed is drawn by, a byte
+    // The four looks a filling asset of what is placed is drawn by, a byte
     // each (`ground::word`): only the ground's looks, a placed cube of a
     // look, fit; one past a byte, an object's, is drawn by its value.
     let laid = || {
@@ -162,7 +162,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             if bytes { ground::word(four) } else { 0 },
         ]
     };
-    // Filling its cube whole, what is placed is the block, whatever is
+    // Filling its cube whole, what is placed is the cell's asset, whatever is
     // under it.
     if over.says == CELL && over.fill == FULL {
         return In {
@@ -177,7 +177,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         (BOX_NONE, false)
     };
     let before = *place;
-    let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
+    let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], is_cell);
     if place.from() != before.from()
         || place.berth() != before.berth()
         || place.here() != before.here()
@@ -194,15 +194,15 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             overwrite::Held::NOTHING
         };
     }
-    // The ways where the block's column was read: their leaf or fold over it.
-    let way = if block && i.kind == Kind::Cell && place.here() {
+    // The ways where the cell's column was read: their leaf or fold over it.
+    let way = if is_cell && i.kind == Kind::Cell && place.here() {
         overwrite::value(pool, *trail, Cut::NONE, zoom, c)
     } else {
         VOID
     };
-    if block {
+    if is_cell {
         // Where the ground is not held, the lack, unless what is placed
-        // keeps a block there alone.
+        // keeps an asset there alone.
         let lacks = In {
             kind: i.kind,
             asset: i.asset,
@@ -210,10 +210,10 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         if i.kind == Kind::Lacks && over.says != CELL {
             return lacks;
         }
-        // The ground's block, the share of its cube it fills and its four
+        // The ground's asset, the share of its cube it fills and its four
         // looks; then what each layer writes over it, the ways and what is
         // placed, its share kept with the ground's (`answer::cover`): the
-        // block keeps the eighths of its cube all of them fill
+        // cell keeps the eighths of its cube all of them fill
         // (`answer::eighths`), its look the kind most of that is.
         let mut value = if i.kind == Kind::Cell {
             i.asset[0]
@@ -246,7 +246,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         if kept == 0 && i.kind == Kind::Lacks {
             return lacks;
         }
-        let block = if kept == 0 {
+        let asset = if kept == 0 {
             // Nothing kept: air, what is placed's where it is air.
             [
                 if over.says == CELL && over.asset == AIR {
@@ -261,7 +261,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         };
         return In {
             kind: Kind::Cell,
-            asset: block,
+            asset,
         };
     }
     // Coarser, what is placed splits it where it may fill, and the ways

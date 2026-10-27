@@ -202,7 +202,7 @@ function MarkerButton() {
     <Pressable
       onPress={selectMarker}
       accessibilityRole="button"
-      accessibilityLabel={t("blocks.pin")}
+      accessibilityLabel={t("assets.pin")}
       style={styles.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>

@@ -3,25 +3,25 @@
 // The eye's rays (pxl-spec-core `ray`), a drawn pixel each: each pixel
 // the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's
 // boxes are. A pixel whose ray met nothing is left to the sky. What lies
-// across each edge and corner of a face — the air, the next block of a flat
-// run, a block rising in front of it — is the world's own answer, asked once
+// across each edge and corner of a face — the air, the next cell of a flat
+// run, a cell rising in front of it — is the world's own answer, asked once
 // where the cast stopped (pxl-spec-core `face`) and handed in the pixel's
 // own words: a line is drawn along an edge that meets the air, and the face
-// closes in towards an edge or a corner a block rises across (`creases`). No
-// other pixel's ray is read, so every pixel of a block is painted by the
+// closes in towards an edge or a corner a cell rises across (`creases`). No
+// other pixel's ray is read, so every pixel of a cell is painted by the
 // same bits.
 
 // The rays, a layer a word: what a ray met (value, face, zoom), how far it
-// went (f32 bits), the four looks the ground's block is drawn by or, in the
+// went (f32 bits), the four looks the ground's cell is drawn by or, in the
 // steps view, the nodes its descent asked, and its face's edges and corners
-// (`RAY_FACES`). A block is painted from these, its own, alone.
+// (`RAY_FACES`). A cell is painted from these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each value's swatch and layer, then the colour it reads as from afar, in
 // linear light (`mesh/paint/ground.rs` `look_words`), by value whichever
 // source holds it.
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
 // The eye the rays left (pxl-spec-core `eye`): its Q3 steps (`EYE_ORIGIN`),
-// FRAC_W bits a unit and wrapping, a block's place on the lattice read off
+// FRAC_W bits a unit and wrapping, a cell's place on the lattice read off
 // their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
 // and the axes and tangents each ray's direction is formed of.
 @group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;
@@ -114,7 +114,7 @@ fn swatch(l: vec4u) -> vec3f {
   return vec3f(unpack2x16unorm(l.x), unpack2x16unorm(l.y).x);
 }
 
-// What a look reads as on a block coarser than the ground's cell: its
+// What a look reads as on a cell coarser than the ground's: its
 // layer's mean where the pack is drawn, else its swatch.
 fn far(l: vec4u) -> vec3f {
   return select(swatch(l), vec3f(unpack2x16unorm(l.z), unpack2x16unorm(l.w).x), frame_low_spec() < 0.5);
@@ -125,7 +125,7 @@ struct Drawn {
   taps: vec4f,
 };
 
-// What the block a pixel's ray met is drawn as, by its value, whichever
+// What the cell a pixel's ray met is drawn as, by its value, whichever
 // source holds it: at the ground's cell or finer, its swatch and its layer
 // in all four taps; coarser, one colour as it reads from afar, the ground's
 // the mean of the four looks its cell folds where its face's own is among
@@ -145,7 +145,7 @@ fn drawn(c: vec3u) -> Drawn {
   return Drawn(far(l), vec4f(NO_LAYER));
 }
 
-// Along `axis`, how far the eye is past the start of the block of side
+// Along `axis`, how far the eye is past the start of the cell of side
 // 2^k units it stands in: its steps' low k + FRAC_W bits, every bit at the
 // world's side.
 fn eye_phase(axis: u32, k: i32) -> f32 {
@@ -155,10 +155,10 @@ fn eye_phase(axis: u32, k: i32) -> f32 {
   return f32(low) / f32(1u << FRAC_W);
 }
 
-// Where a ray meets the face it entered, from the eye, kept on the block
-// (the block half its side in from where the ray entered it, its corner on
+// Where a ray meets the face it entered, from the eye, kept on the cell
+// (the cell half its side in from where the ray entered it, its corner on
 // the lattice, and the face's plane through it), the face's normal and
-// the axis it lies across, that block's corner, its least on every axis,
+// the axis it lies across, that cell's corner, its least on every axis,
 // and its side, in units: of the box it is where it keeps less than its
 // cube (`ray_kept`).
 struct Hit {
@@ -178,7 +178,7 @@ fn hit_of(c: vec2u, d: vec3f) -> Hit {
   let e = vec3f(eye_phase(0u, k), eye_phase(1u, k), eye_phase(2u, k));
   let t = bitcast<f32>(c.y);
   let node = floor((e + d * t - n * (0.5 * kept_side(ray_kept(c.x)) * side)) / side) * side - e;
-  // A block kept short of its cube is the box its share fills, inset about
+  // A cell kept short of its cube is the box its share fills, inset about
   // the cube's center (pxl-spec-core cast.rs `kept_bounds`).
   let box = side * kept_side(ray_kept(c.x));
   let corner = node + vec3f(0.5 * (side - box));
@@ -213,14 +213,14 @@ fn footprint(p: mat2x3f) -> vec3f {
 // `p·F` across a pixel `p`. With the aim `a` (`a·F = 1`, the hit `w·a`) and
 // `a_x` its change across a pixel, `p_x·F / w = |a_x·n| / |a·n|`.
 //
-// It never lets an overlay a block or more behind the face win over it: the
+// It never lets an overlay a cell or more behind the face win over it: the
 // step is `w·|a|` times the share along the ray, while the face's plane a
-// block `side` back lies `side·|a| / |a·n|` further along it, so the step
+// cell `side` back lies `side·|a| / |a·n|` further along it, so the step
 // reaches it only once `SNAP·w·|a_x·n| ≥ side`. But `w·|a_x|` is a pixel's
 // width at the hit's distance, a cell of the camera grid there over the
-// cosine of the ray off the forward axis, and a block observed there spans
+// cosine of the ray off the forward axis, and a cell observed there spans
 // at least that cell (the eye decides): the step is at most `SNAP / cos` of
-// a block, under one for any field of view short of 150°, however edge on
+// a cell, under one for any field of view short of 150°, however edge on
 // the face is seen. `BEHIND` adds 2^-14 of the distance, where a cell is a
 // thousandth of it.
 fn behind(h: Hit, p: mat2x3f) -> f32 {
@@ -231,7 +231,7 @@ fn behind(h: Hit, p: mat2x3f) -> f32 {
 // #1a1006 as a ratio: a warm contact shadow rather than gray.
 const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
 
-// How much a rising edge closes a face `d` blocks from it: over one block
+// How much a rising edge closes a face `d` cells from it: over one cell
 // and no further. Squared, not smoothstep: a smoothstep sits flat against
 // the wall and reads as a dark strip with an edge rather than a gradient.
 fn occlusion_of(d: f32) -> f32 {
@@ -248,12 +248,12 @@ struct Creases {
 
 // Off the face's own bits (pxl-spec-core `face`), edge `k` +u, -u, +v, -v
 // and corner `k` across edges `k & 1` and `2 + (k >> 1)`. The line: along
-// each crease, an edge that meets the air or one a block rises across,
-// `frame_edge_width` units wide whatever the block's size, so blocks of
+// each crease, an edge that meets the air or one a cell rises across,
+// `frame_edge_width` units wide whatever the cell's size, so cells of
 // every size side by side show one line and perspective alone thins it far
-// off (`line_at`). The closing in: each edge a block rises across, and each
+// off (`line_at`). The closing in: each edge a cell rises across, and each
 // corner one rises across alone, takes its share of what the last left,
-// over a block, tinted warm.
+// over a cell, tinted warm.
 fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
   if (frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) {
     return Creases(0.0, vec3f(1.0));
@@ -261,7 +261,7 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
   let u = (h.axis + 1u) % 3u;
   let v = (h.axis + 2u) % 3u;
   let l = (h.at - h.corner) / h.side;
-  // Each edge: how far it is, in blocks, and the units a drawn pixel spans
+  // Each edge: how far it is, in cells, and the units a drawn pixel spans
   // toward it.
   let to = vec4f(1.0 - l[u], l[u], 1.0 - l[v], l[v]);
   let pixel = max(footprint(p), vec3f(1e-9));

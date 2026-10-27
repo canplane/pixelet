@@ -17,7 +17,7 @@ use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::block::object::object_value_is_marker;
+use pxl_spec::object::is_marker;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
@@ -96,7 +96,7 @@ fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
 pub(super) fn read(square: Square, columns: &Aabb, pins: &mut Vec<Pin>) {
     let world = World::now();
     world.placed_in(columns, &mut |e| {
-        if !object_value_is_marker(e.state) {
+        if !is_marker(e.state) {
             return;
         }
         let (stands, base) = pin_at(e.id());

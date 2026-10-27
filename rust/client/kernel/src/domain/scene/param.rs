@@ -13,7 +13,7 @@
 pub const RIM_INTENSITY: f64 = 0.5;
 
 /// Edge shading along a cube's creases, convex and concave: its darkening,
-/// and its width in units, one line alike on blocks of every size and
+/// and its width in units, one line alike on cells of every size and
 /// thinned by perspective alone: about a CSS pixel at the default orbit's
 /// focus.
 pub const EDGE_STRENGTH: f64 = 0.3;

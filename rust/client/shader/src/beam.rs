@@ -139,7 +139,7 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
 
 /// A sample's stop `met` put at word `base` (pxl-spec-core
 /// `beam::SAMPLE_WORDS`), as the raster reads it (raster.rs): the node and
-/// block it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
+/// cell it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
 /// whether what it stopped at lacks, and the axis it entered across; what
 /// lies about that face is the eye's box's, asked once a box (raster.rs
 /// `face_cs`).
@@ -159,7 +159,7 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A
     w.set(base + beam::SAMPLE_VISITS, met.visits);
 }
 
-/// `ray`'s walk to the block that fills, resumed at `t` from the deepest
+/// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it (doc/minutes/20261022-a-cell-casts-a-beam.md,
 /// "Where a pixel resumes"); through `q`, reading or writing.
@@ -264,7 +264,7 @@ pub fn cell_cs(
 }
 
 /// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a
-/// thread each, the eye's (observer.rs `sample`): the node and block it
+/// thread each, the eye's (observer.rs `sample`): the node and asset it
 /// stopped at left for the raster (`beam::SAMPLE_WORDS`; raster.rs),
 /// `beam::SAMPLE_NONE` where it went on to its reach, and whether what it
 /// stopped at lacks. What lies about the face it entered is asked only of a

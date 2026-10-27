@@ -208,7 +208,7 @@ impl Sun {
     }
 
     /// `detail`, the eye's zooms at every point as the eye asks them
-    /// (`cast::Detail::eye`), so the map holds the blocks the eye draws; its
+    /// (`cast::Detail::eye`), so the map holds the cells the eye draws; its
     /// cone the map's texel, which passes what a texel cannot tell apart
     /// (`cast::Cone`), and its beam rays `BEAM` of them apart.
     pub fn detail(&self, mut detail: Detail) -> Detail {
@@ -430,14 +430,14 @@ pub const TILE: u32 = 8;
 /// The sun's beam (pxl-shader sun.rs `sun_beam_cs`, `sun_cell_cs`; doc/minutes/20261022-a-cell-casts-a-beam.md,
 /// the eye's): a beam ray at every `BEAM`-th texel of the box across and
 /// down, `BEAM_WINDOW` past it on each side, each walked from the world's
-/// root along the sun's rays until a block that fills or lacks or a split
+/// root along the sun's rays until a cell that fills or lacks or a split
 /// narrower than `2√2` beam spacings (`Sun::detail`, `cast::Detail::apart`), leaving its
 /// line and how far it got less `margin`; each `BEAM`-square cell of the
 /// box starts at the least of the beam rays within `BEAM_WINDOW` of its
 /// corners, and its texels resume from that ray's line there.
 ///
 /// Why that is a texel's root walk, as the eye's proof has it with the
-/// rays parallel: take `X`, the block a texel's ray ends at, `e` its entry,
+/// rays parallel: take `X`, the cell a texel's ray ends at, `e` its entry,
 /// and `Y` the smallest cube holding `e` at least `√2` beam spacings wide.
 /// Along the sun `Y` covers a disk half its side across, which holds a beam
 /// ray; a beam ray through `Y` stops where it enters `Y` or sooner, as `Y`
@@ -508,13 +508,13 @@ pub fn margin(width: f32) -> f32 {
 
 /// The sun's map as the eye's rays are cast, every slot every frame
 /// (pxl-spec-core `raster`): a sample every `SAMPLE` slots across and down
-/// walked (pxl-shader `sun_sample_cs`), the blocks they stopped at written
+/// walked (pxl-shader `sun_sample_cs`), the cells they stopped at written
 /// as boxes by the eye's writer (pxl-shader raster.rs `boxed`) and drawn
 /// from the sun by the eye's raster, orthographic (pxl-render raster.wgsl),
 /// in the box's order (`Sun::texel`), each texel keeping the nearest its own
 /// ray enters; and a slot whose ray enters its pick, tested again with its
 /// own ray as the eye's pixels test theirs (`cast::entry`), takes it
-/// (`sun_cs`); the rest are listed and walked apart (`misses_at`). A block
+/// (`sun_cs`); the rest are listed and walked apart (`misses_at`). A cell
 /// no sample stopped at may stand in front of the one picked, as in the
 /// eye's. The raster's `EYED` case has no
 /// sun's: every ray starts on the near plane, before every box.

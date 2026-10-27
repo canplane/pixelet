@@ -1,6 +1,6 @@
-// pxl-spec/block/ext.rs
+// pxl-spec/object/ext.rs
 
-//! Which class an asset id is of: the shape the extension a block of it
+//! Which class an asset id is of: the shape the extension a placed asset of it
 //! carries takes, and so the pool it is kept in. By kind for now: a marker
 //! carries its words.
 

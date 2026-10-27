@@ -4,7 +4,7 @@
 //! (domain/layer/terrain/window.rs) at the cells of the tile its cells fold from,
 //! off the finest window holding them: exact where that is the zoom its
 //! tile's line says its ground at, coarser where only one over holds them.
-//! A column's ways are its square's tree the GPU built, its blocks read
+//! A column's ways are its square's tree the GPU built, its families read
 //! back into the pool's mirror (domain/layer/terrain/window.rs `pool`).
 
 use pxl_spec::bake::tile::terrain::TerrainTile;

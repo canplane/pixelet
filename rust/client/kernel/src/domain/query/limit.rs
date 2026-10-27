@@ -2,12 +2,12 @@
 
 //! Where the world ends for what moves in it: the service area, the shards
 //! its source serves (sys/io/source.rs), which a walker does not leave, and where
-//! a block may be placed in or taken from, over ground the world knows
+//! an asset may be placed or taken out, over ground the world knows
 //! between its bedrock and its ceiling. Every walker's walk and every edit
 //! asks these, and nothing else decides them; the camera is no walker and
 //! asks none (query/support.rs `step_slide`).
 
-use pxl_spec::block::limit::{at_edge, bedrock, ceiling};
+use pxl_spec::limit::{at_edge, bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
@@ -24,7 +24,7 @@ use pxl_spec_core::window::Found;
 
 impl World<'_> {
     /// Whether the leaf cell under `at` is the service area's and off its
-    /// edge (`pxl-spec block/limit.rs` `at_edge`), where the wall stands:
+    /// edge (`pxl-spec limit.rs` `at_edge`), where the wall stands:
     /// known before any of its ground arrives, off its shard's nine as the
     /// fill lays the wall (pxl-spec-core `area::gone_ring`), the area's index
     /// asked once (`Shard::at`).
@@ -36,7 +36,7 @@ impl World<'_> {
     /// Whether `space` may hold an edit: every leaf tile under it within
     /// the service area and off its edge (`within`), and there `space` over
     /// the bedrock and under the ceiling of ground the world knows exactly,
-    /// no tile not yet held (`pxl-spec block/limit.rs`). The bedrock and
+    /// no tile not yet held (`pxl-spec limit.rs`). The bedrock and
     /// the ceiling rise with the face, so every column's hold where the
     /// lowest ceiling and the highest bedrock do: the ground's bound over
     /// the nodes holding `space` at its leaf cells, the fewest at the zoom

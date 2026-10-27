@@ -580,11 +580,11 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 }
 
 /// What growing decor asks of the world, as either side holds it: the
-/// query's support, a column's footing and the blocks about it, what is
+/// query's support, a column's footing and the assets about it, what is
 /// placed in a box, and the catalog's rows where it reads them. Decor
 /// reads no layer's storage.
 pub trait Grounds {
-    /// A footing as this side keeps it: what its blocks are asked off.
+    /// A footing as this side keeps it: what its assets are asked off.
     type Footing;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
@@ -593,7 +593,7 @@ pub trait Grounds {
     /// (`support::footing`), as this side asks it; its top (`cast::top`),
     /// false where nothing fills there or the world lacks it.
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool);
-    /// What is in the block `c` of `zoom` about the footing `f`, the
+    /// What is in the cell `c` of `zoom` about the footing `f`, the
     /// world's one query's answer (`support::asset`): `void`, the ground's
     /// value, or `PLACED_ASSET` over what is placed.
     fn asset(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
@@ -625,12 +625,12 @@ impl Grown {
 }
 
 /// Where candidate `c` of `decor` stands at `cell`: on its column's footing
-/// (`support::footing`), facing as the blocks beside it at the footing's
+/// (`support::footing`), facing as the cells beside it at the footing's
 /// level vote (`asks`); then, where `boxed`, whether it grows there:
-/// every block of its box void and every one under its base a look it
+/// every cell of its box void and every one under its base a look it
 /// grows on, whichever layer holds it, each asked of the world's one query
 /// at `cell`; air placed in it or under it no void; and no placed decor
-/// claims its room (`claimed`). Every block both ask is asked at one place
+/// claims its room (`claimed`). Every cell both ask is asked at one place
 /// about one footing (`asks`). Where it stands, whether it does, and
 /// whether it grows there, true where not `boxed`.
 pub fn grown(
@@ -656,7 +656,7 @@ pub fn grown(
     (g, true, grows)
 }
 
-/// Every block growing decor asks of the world, at one place, as a GPU
+/// Every cell growing decor asks of the world, at one place, as a GPU
 /// inlines a call once a place it is called from: a candidate posed by its
 /// `seed`, the cells about its footing its pose votes on, then, where
 /// `boxed`, the box of `g` as that pose turned it (`grown`'s rule).
@@ -689,7 +689,7 @@ fn asks<Q: Grounds>(
     }
     let foot = [g.at[0] >> s, g.at[1] >> s, (g.at[2] >> s) - 1];
     let (mut horizontal, mut vertical) = (0, 0);
-    // The box, laid out once the vote is in: its blocks, from the one under
+    // The box, laid out once the vote is in: its cells, from the one under
     // its base up, a column at a time.
     let (mut lo, mut n) = ([0; 3], [0; 3]);
     let mut ask = 0;
@@ -917,7 +917,7 @@ impl Decor {
         }
     }
 
-    /// Whether the ground grows it on a block of `value`: a look it stands on.
+    /// Whether the ground grows it on a cell of `value`: a look it stands on.
     pub const fn allows(&self, value: u32) -> bool {
         value < 256 && self.on[(value >> 5) as usize] >> (value & 31) & 1 == 1
     }

@@ -2,12 +2,12 @@
 
 //! gpu-portable: the camera grid's beam (doc/minutes/20261022-a-cell-casts-a-beam.md).
 //! A beam ray is cast through each corner of the grid's cells and walks the
-//! pyramid until it meets a block that fills or lacks, or a split narrower
+//! pyramid until it meets a cell that fills or lacks, or a split narrower
 //! than it can share with the rays about it (`cast::narrow`); each cell starts
 //! from the least of the beam rays about it, shortened by a margin
 //! (`handed`), and what resumes from the line that beam ray left is the
-//! samples, `SAMPLE` a cell a side, walked to the block that fills; the
-//! blocks they stopped at are drawn as boxes, and each drawn pixel takes the
+//! samples, `SAMPLE` a cell a side, walked to the cell that fills; the
+//! cells they stopped at are drawn as boxes, and each drawn pixel takes the
 //! nearest its own ray enters (`raster`), walking from its cell's start
 //! only where that is a node a sample lacks at, or none. The lattice is the
 //! grid's own, so neither the beam rays nor the samples follow the
@@ -283,23 +283,23 @@ pub const CELL_CORNER: u32 = 1;
 pub const CELL_WORDS: u32 = 2;
 
 /// The samples: rays on a lattice `SAMPLE` a cell a side, each resumed from
-/// its cell's start as a pixel is and walked to the block that fills; a
-/// pixel takes the nearest of the blocks they stopped at that its own ray
+/// its cell's start as a pixel is and walked to the cell that fills; a
+/// pixel takes the nearest of the cells they stopped at that its own ray
 /// enters (`raster`), and walks only where none does. The lattice runs
-/// `NEAR` samples past the screen on each side, so a block seen at the
+/// `NEAR` samples past the screen on each side, so a cell seen at the
 /// screen's edge is one a sample stopped at.
 pub const SAMPLE: u32 = 4;
 pub const NEAR: u32 = 2;
 
 /// What a sample leaves for the pixels, in words: the node it stopped at
 /// (`NODE_WORDS`), its zoom `SAMPLE_NONE` where it went on to its reach,
-/// the block there, 1 where that node lacks, which a pixel entering it
-/// before any block walks itself, and the axis the sample entered it
+/// the asset there, 1 where that node lacks, which a pixel entering it
+/// before any cell walks itself, and the axis the sample entered it
 /// across: a face its ray reached through air, so one a pixel may show only
 /// where it enters across the same; what lies about that face
 /// (`face::word`), asked once here for every pixel that shows it; and the
 /// nodes visited from the eye to it, its beam ray's and its own, which a
-/// pixel that takes its block reports in the steps view as the walk it
+/// pixel that takes its cell reports in the steps view as the walk it
 /// took.
 pub const SAMPLE_NODE: u32 = 0;
 pub const SAMPLE_ASSET: u32 = SAMPLE_NODE + NODE_WORDS;

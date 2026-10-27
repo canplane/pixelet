@@ -4,7 +4,7 @@
 //! grows what the ground grows and draws it with placed decor: what only
 //! the CPU knows, handed over and never read back. Each kind's zooms where
 //! it is a sprite's worth, a pixel's size and the tiers' floors, the anchor
-//! the decor block is drawn about, the decor the eraser leaves out, each
+//! a decor is drawn about, the decor the eraser leaves out, each
 //! variant's extent, placed decor as records, and the boxes the objects
 //! were written in, where what the ground grows may have changed.
 

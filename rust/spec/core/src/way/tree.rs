@@ -1,6 +1,6 @@
 // pxl-spec-core/way/tree.rs
 
-//! gpu-portable: a square's ways as blocks, in a tree of the placed tree's
+//! gpu-portable: a square's ways as cells, in a tree of the placed tree's
 //! shape (pxl-spec-core overwrite.rs), so a reader asks them by the one
 //! rule it asks what is placed by
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md): from the
@@ -158,7 +158,7 @@ pub const FAMILY_WORDS: u32 = 16;
 
 /// The most families one square's build takes before its fold gives any
 /// back: the most of the format-12 set (2026-10-18, its windows' squares
-/// lined as before the face block, which only lines more); a tile past it
+/// lined as before the face cell, which only lines more); a tile past it
 /// fails its bake (pxl-geo-bake terrain/pool.rs), and what a build keeps a
 /// square, its records and the families its fold gives back, is held to it.
 pub const SQUARE_FAMILIES: u32 = 24_067;

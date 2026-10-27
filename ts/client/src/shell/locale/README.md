@@ -28,7 +28,7 @@ Not used: map, voxel, pixel, and world for anything but the world above or the
 real one ("현실 세계"). A setting's cost is said in words a user has — light on
 performance, the most demanding option — not in operations per pixel.
 
-An item — each cube, decor, marker and pet, the `blocks.*` and `pets.*` keys —
+An item — each cube, decor, marker and pet, the `assets.*` and `pets.*` keys —
 has one name, the English one, in every locale: only en.json holds it, and every
 other locale falls back to it. A section's header is written in the reader's
 language.

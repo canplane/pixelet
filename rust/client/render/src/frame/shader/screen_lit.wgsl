@@ -25,7 +25,7 @@ fn fs(v: VertexOut) -> FragOut {
     let clip = frame_view_proj() * vec4f(at, 1.0);
     var o: FragOut;
     // The nodes asked, the third word in this view; none where the pixel
-    // showed a sample's block and walked nothing, grey.
+    // showed a sample's cell and walked nothing, grey.
     o.color = vec4f(select(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), vec3f(STEPS_NONE), c.z == 0u), 1.0);
     o.depth = clip.z / clip.w;
     return o;
@@ -58,7 +58,7 @@ fn fs(v: VertexOut) -> FragOut {
   return o;
 }
 
-// Under the camera gizmo: the solid angle the face of the block the ray
+// Under the camera gizmo: the solid angle the face of the cell the ray
 // stopped on shows the eye, its cube's side at its zoom squared over the
 // distance squared, foreshortened by the face's cosine to the ray, as a
 // share of a grid cell's, `frame_cell` squared. The zoom rule weighs the
@@ -67,9 +67,9 @@ fn fs(v: VertexOut) -> FragOut {
 //
 // 10-12 tinted the chunks' faces by the same share of its own cell, τ/96
 // (96 sides its split distance), green within (¼, 1], blue finer, red
-// coarser: a block there spans (½, 1] of that cell. Today's cell is
+// coarser: a world's cell there spans (½, 1] of that grid cell. Today's cell is
 // τ/`SPLIT`, τ/192, half as wide at the same zoom rule (pxl-spec-core
-// grid.rs `cell_at`: a block spans (1, 2] cells), so that cell squared is 4
+// grid.rs `cell_at`: a world's cell spans (1, 2] of them), so that cell squared is 4
 // of today's: within (1, 4] green, finer blue, coarser red.
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   if (frame_gizmo() < 0.5) {

@@ -21,7 +21,7 @@ pub const TAU: usize = 11;
 pub const UP: usize = 12;
 /// The tangents of the screen's half-angles across and up, f32 bits.
 pub const TAN: usize = 16;
-/// The zooms a block is asked at, coarsest then finest.
+/// The zooms a cell is asked at, coarsest then finest.
 pub const RANGE: usize = 18;
 /// A preview's cut to air and its left-out leaf, each X, Y, Z and the zoom,
 /// the zoom `NO_CUT` for none (pxl-spec-core `overwrite::Cut`).

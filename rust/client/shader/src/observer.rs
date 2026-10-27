@@ -51,7 +51,7 @@ pub(crate) trait Observer {
     /// Its run of lanes in the tally (pxl-spec-core `tally::EYE`,
     /// `tally::SUN`).
     const TALLY: u32;
-    /// Whether its walks write the blocks that fill, as a walk reading the
+    /// Whether its walks write the assets that fill, as a walk reading the
     /// looks does (observed.rs `Writing::assets`).
     const ASSETS: bool;
     /// The passes its beam, its samples and its walks again write the
@@ -113,7 +113,7 @@ fn index(across: u32, c: [u32; 2]) -> u32 {
     c[1] * across + c[0]
 }
 
-/// Corner `c`'s beam ray walked from the world's root to the first block
+/// Corner `c`'s beam ray walked from the world's root to the first cell
 /// that fills or lacks, or the first split too narrow to share
 /// (`cast::Until::Beam`), through the observed pyramid writing what it asks,
 /// its line left in `w` for the rays about it (`Leaving`), how far they
@@ -184,7 +184,7 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
     w.set(at + beam::CELL_CORNER, from);
 }
 
-/// The walk of the ray aimed `aim` to the block that fills, resumed at
+/// The walk of the ray aimed `aim` to the cell that fills, resumed at
 /// cell `cell`'s start from the deepest node of its line holding where it
 /// is there, held from the ray's own origin, or from the root at it where
 /// that lies in another root (beam.rs `resumed`); through `q`, reading or
@@ -211,7 +211,7 @@ where
     (met, line.visits())
 }
 
-/// Sample `s`'s ray resumed from its cell's start, walked to the block that
+/// Sample `s`'s ray resumed from its cell's start, walked to the cell that
 /// fills through the observed pyramid writing what it asks, and its stop
 /// left in `w` for the raster (`sample_put`), with the nodes it and its
 /// beam ray visited.
@@ -287,7 +287,7 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
     )
 }
 
-/// What a ray at `at` aimed `aim` takes (`resolve`): the block off the
+/// What a ray at `at` aimed `aim` takes (`resolve`): the cell off the
 /// raster's pick, the sky, or a walk of its own.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -298,7 +298,7 @@ pub(crate) enum Takes {
 }
 
 /// What the ray at `at` aimed `aim` takes, `pick` the raster's there: the
-/// block it enters as the sample picked entered it (`took`), its stop and
+/// cell it enters as the sample picked entered it (`took`), its stop and
 /// that sample's first word; else the sky where no sample about it met
 /// anything and it picked none (`sky`); else a walk of its own, which its
 /// pass lists for the walk again. The eye's pixels and the sun's slots alike.
@@ -329,7 +329,7 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
     }
 }
 
-/// The block the ray aimed `aim` takes off the raster's pick `pick`, a
+/// The cell the ray aimed `aim` takes off the raster's pick `pick`, a
 /// sample's number that lacks not (`raster::sample_of`): where it enters it
 /// as that sample entered it (raster.rs `picked`), the sample's first word,
 /// and whether it does.

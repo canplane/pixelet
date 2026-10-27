@@ -28,7 +28,7 @@ pub struct Eye {
     pub up: Vec4,
     /// The tangents of the screen's half-angles across and up.
     pub tan: Vec2,
-    /// The zooms a block is asked at. [naga] A vec2 of u32s, which naga's
+    /// The zooms a cell is asked at. [naga] A vec2 of u32s, which naga's
     /// SPIR-V reader looks for, and never makes, where it splits the layer
     /// off an arrayed image's coordinate (`Rays`).
     pub range: UVec2,

@@ -67,9 +67,9 @@ pub const SHADER_JOINED: u32 = 35;
 /// The air's volume, a column of froxels a workgroup (atmos_froxel.wgsl):
 /// its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 36;
-/// Each handed square's ways as blocks in one pool (pxl-spec-core
-/// `way::tree`), generated with the cast: a re-filled square's old blocks
-/// given back, its tree built off the pool's stack, the blocks its build
+/// Each handed square's ways as a tree of cells in one pool (pxl-spec-core
+/// `way::tree`), generated with the cast: a re-filled square's old families
+/// given back, its tree built off the pool's stack, the families its build
 /// gave back pushed after: a compute entry each.
 pub const SHADER_WAY_FREE: u32 = 37;
 pub const SHADER_WAY_TREE: u32 = 38;
@@ -86,7 +86,7 @@ pub const SHADER_CELL: u32 = 41;
 pub const SHADER_MISS: u32 = 42;
 pub const SHADER_FORGET: u32 = 43;
 /// The samples, a thread each, resumed from their cells' starts and walked
-/// to the blocks the pixels about them take (pxl-spec-core `beam::Grid::samples`):
+/// to the cells the pixels about them take (pxl-spec-core `beam::Grid::samples`):
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 44;
 /// The world's depth from the sun into its clipmap, generated with the cast

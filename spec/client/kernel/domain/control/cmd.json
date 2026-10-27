@@ -1035,7 +1035,7 @@
           "name": "INPUT_MARKER_WORDS",
           "value": 4364,
           "$doc": [
-            "The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec block/ext.json) are refused whole, never cut."
+            "The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut."
           ],
           "packet": [
             {

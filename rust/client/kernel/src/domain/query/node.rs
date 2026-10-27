@@ -4,14 +4,14 @@
 //! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
 //! "The query between them"), one record of a node answering two sizes.
 //!
-//! At the zoom a reader asks, it is what the node is, the block, by the one
+//! At the zoom a reader asks, it is what the node is, the cell, by the one
 //! rule (pxl-spec-core `ground::node`), each source answering from its own
 //! level of detail at that zoom and from what the node's parent found,
-//! handed down (`At`; `World::block` for an asker with none):
+//! handed down (`At`; `World::asset` for an asker with none):
 //!
 //! - the ground: its column off the windows, as the GPU drew it and the CPU
 //!   read it back, and the area's edge laid on it; the ways off the tree the
-//!   GPU built of its square, its blocks read back into the pool's mirror,
+//!   GPU built of its square, its families read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-spec-core `window::ground`,
 //!   `way::tree`);
 //! - the caves: the hash pyramid's node at that zoom, its value
@@ -27,7 +27,7 @@
 //! only splits more, never from detail finer than asked:
 //!
 //! - the ground: by its one rule (pxl-spec-core `ground::slab`, as a cell's
-//!   block asks `Cell::opens` of one block) over the lowest and highest the windows
+//!   asset asks `Cell::opens` of one cell) over the lowest and highest the windows
 //!   hold under the node (`Residency::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
@@ -63,7 +63,7 @@ use crate::domain::layer::terrain::window::{pool, Windowed};
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
 
-/// The coarsest zoom a block is asked at: the coarsest cells a tile draws.
+/// The coarsest zoom a cell is asked at: the coarsest cells a tile draws.
 pub(super) fn coarsest() -> Zoom {
     GROUND.grid_zoom(TOP_ZOOM)
 }
@@ -83,7 +83,7 @@ impl World<'_> {
         self.objects.revision()
     }
 
-    /// What is in the block `node`, X on the asker's lap, at its own
+    /// What is in the cell `node`, X on the asker's lap, at its own
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
     /// (`drawn`).
     pub fn asset(&self, node: Node<3>) -> Answer<u32> {
@@ -99,7 +99,7 @@ impl World<'_> {
         }
     }
 
-    /// What is in `at`'s block, at its own zoom, `coarsest` or finer: none
+    /// What is in `at`'s cell, at its own zoom, `coarsest` or finer: none
     /// where it is air or void, else what fills it (`node`, asked at its
     /// own zoom). `lines` are the ground's lines the asker read, which its
     /// own steps from (`node`).
@@ -138,9 +138,9 @@ impl World<'_> {
     /// the ground read as the GPU reads it, off what it drew and read back
     /// (`Windowed`), down the node's line through the residency
     /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
-    /// box in its own steps; a block, the zoom asked's, void for air; or,
+    /// box in its own steps; the asset of a cell at the zoom asked, void for air; or,
     /// coarser than asked and nothing under it filling, air its size, which
-    /// its zoom against `asked` tells. The four looks a block is drawn by are the GPU's to
+    /// its zoom against `asked` tells. The four looks a cell is drawn by are the GPU's to
     /// draw. `lines` are the ground's lines the walk asking it read, which
     /// its own steps from (`line_walked`).
     pub(super) fn node(
@@ -248,7 +248,7 @@ impl ground::Held for Reading<'_, '_> {
         }
     }
 
-    /// The block's column off the windows, the area's edge laid on it, as
+    /// The cell's column off the windows, the area's edge laid on it, as
     /// the GPU reads it (pxl-spec-core `window::ground`), stepped from where
     /// its relief found its cells.
     fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {

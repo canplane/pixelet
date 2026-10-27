@@ -12,7 +12,7 @@
 //! What is placed is the last layer the ground decision lays
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md), so it is
 //! asked first (`over`): where it holds a value, air included, that is the
-//! block, whatever is under it.
+//! cell's asset, whatever is under it.
 
 use crate::cube::{object, sentinel, Ground, Object};
 use crate::{Zoom, LEAF_CELL};
@@ -129,7 +129,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
 /// A leaf's word in its parent's fold (`fold`): a leaf whose value is a
 /// voxel fills it whole; the empty word, and any other, none. The one rule
 /// whichever side builds a tree, the objects' store (pxl-spec
-/// block/volume.rs) or a square's ways (`way::tree`).
+/// object/volume.rs) or a square's ways (`way::tree`).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
     if word != 0 && voxel(id) {
@@ -303,7 +303,7 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 /// What the node `at` of `zoom` holding `held` folds to, as a cell of its zoom
 /// is drawn: the leaf's value, or its fold's kind wherever any of it is
 /// filled, with what of its cube that fills (`filled`); `VOID` where nothing
-/// that is a voxel is. How much of the block is kept is the block's, of
+/// that is a voxel is. How much of the cell is kept is the cell's, of
 /// every layer together (`answer::cover`, `answer::eighths`). `hide`, a
 /// preview's left-out leaf, is left out where it is the leaf itself.
 pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
@@ -342,7 +342,7 @@ pub fn filled(lanes: &impl Lanes, held: Held) -> u32 {
     }
 }
 
-/// The four looks the node `at` of `zoom` holding `held`, a block of value
+/// The four looks the node `at` of `zoom` holding `held`, a cell of value
 /// `v` (`value`), is drawn by, `dx + 2·dy`, as the ground's cell is by the
 /// four its fold took (pxl-spec-core `ground::Cell::four`): its 2×2 seen
 /// from above one zoom finer, the same for every face as the ground's. A
@@ -394,12 +394,12 @@ pub fn looks(
 pub const UNDER: u32 = 0;
 /// Something placed under the node may fill it: split it.
 pub const SPLIT: u32 = 1;
-/// What is placed is the block (`Over::block`), filling `Over::fill` of
+/// What is placed is the cell's asset (`Over::asset`), filling `Over::fill` of
 /// its cube.
 pub const CELL: u32 = 2;
 
 /// What is placed answers for a node, before any layer under it: what it
-/// says, and as a block its value and the share of its cube that fills, in
+/// says, and as a cell its value and the share of its cube that fills, in
 /// `FULL`'s units (`filled`), whole for a leaf or a cut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Over {
@@ -409,12 +409,12 @@ pub struct Over {
 }
 
 /// What is placed answers for the node `at` of `zoom` holding `held`, asked
-/// down to `near`: as a block where `near` is its zoom or coarser, the value
+/// down to `near`: as a cell where `near` is its zoom or coarser, the value
 /// it holds or `carve`'s air and what of its cube that fills, else the
 /// layers under it. Coarser, it answers from its own
 /// pyramid as the ground answers from its relief (pxl-spec-core
 /// `ground::node`): the layers under it where nothing placed in it is a
-/// block at any zoom asked (`cells_by`), else a split. A preview's cut and
+/// cell at any zoom asked (`cells_by`), else a split. A preview's cut and
 /// its left-out leaf only make air, so where nothing placed fills, what is
 /// under answers and splits where it fills.
 pub fn over(
@@ -495,11 +495,11 @@ pub fn bound(lanes: &impl Lanes, held: Held, zoom: Zoom) -> crate::answer::BoxWo
     box_word([first(0), first(1), first(2)], [past(0), past(1), past(2)])
 }
 
-/// Whether anything placed under the node holding `held` may be a block at
-/// a zoom `d` under it or coarser (a block keeps an eighth of its cube or
+/// Whether anything placed under the node holding `held` may be a cell at
+/// a zoom `d` under it or coarser (a cell keeps an eighth of its cube or
 /// more, `answer::eighths`): a leaf of a voxel fills every cube under it,
 /// one of none fills none; a fold's share is the mean of its eight's (spec
-/// block/volume.rs `fold`), so the node's filled volume is its share of
+/// object/volume.rs `fold`), so the node's filled volume is its share of
 /// its cube, and none of the 8ᵈ cubes `d` under it holds an eighth of its
 /// own unless the share is at least `FULL / 8ᵈ⁺¹`, a coarser cube's eighth
 /// more still. A share is floored at each fold, each floor less than one of

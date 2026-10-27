@@ -1,6 +1,6 @@
 // pxl-render/mesh/paint/ground.rs
 
-//! What a block that fills is drawn as, by its value alone: its swatch and
+//! What an asset that fills is drawn as, by its value alone: its swatch and
 //! texture layer as the catalog's painter teaches them (object.rs), a ground
 //! look's and a placed cube of that look's one entry.
 

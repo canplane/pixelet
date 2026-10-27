@@ -31,7 +31,7 @@ fn main() {
     }
     // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
     // pxl-spec-core, where the cast reads them: a ray is painted by its
-    // block's zoom against these, its block placed off the eye's Q3 steps.
+    // cell's zoom against these, its cell placed off the eye's Q3 steps.
     let lattice = format!(
         "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
         pxl_spec_core::UNIT_ZOOM,
@@ -52,7 +52,7 @@ fn main() {
     // edge or a corner (pxl-spec-core face.rs).
     use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
     let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
-    // The side of the box a block kept short of its cube is, by the eighths
+    // The side of the box a cell kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
     let sides: String = (1..pxl_spec_core::answer::EIGHTHS)
         .map(|k| {
@@ -65,7 +65,7 @@ fn main() {
     let kept = format!(
         "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
-    // A coarse block's four looks, its ray's third word, as a cell's word
+    // A coarse cell's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
     let b = pxl_spec_core::ground::LOOK_BITS;
     let m = (1u32 << b) - 1;

@@ -71,7 +71,7 @@ impl Lens {
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
 /// and the reach; the unit right and τ; the unit up; the tangents of the
-/// screen's half-angles across and up and the zooms a block is asked at;
+/// screen's half-angles across and up and the zooms a cell is asked at;
 /// the camera grid the cast lays over the screen off them, once. A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.

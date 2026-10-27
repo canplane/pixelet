@@ -115,7 +115,7 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Marker);
 
   return (
-    <Item label={t("blocks.pin")} active={active} cell={cell} onPress={onPick}>
+    <Item label={t("assets.pin")} active={active} cell={cell} onPress={onPick}>
       <View
         style={[
           styles.decor,

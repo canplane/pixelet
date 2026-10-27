@@ -853,7 +853,7 @@ impl RaysPass {
             // The observed pyramid forgotten first where it is; then the
             // beam rays writing it, a corner each; each cell's start off them;
             // the samples writing it, each from its cell's start; their
-            // blocks drawn as boxes, each pixel's nearest kept; the pixels
+            // cells drawn as boxes, each pixel's nearest kept; the pixels
             // off that, or reading it from their cell's start, marking the
             // pixels that missed; and those again,
             // writing it, a thread a drawn pixel, each but the marked

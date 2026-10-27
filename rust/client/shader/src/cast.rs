@@ -1,6 +1,6 @@
 // pxl-shader/cast.rs
 
-//! Each drawn pixel's ray (`cast_cs`) off the block the raster kept at it
+//! Each drawn pixel's ray (`cast_cs`) off the cell the raster kept at it
 //! or the sky, and the rest walked (`miss_list_cs` over their list,
 //! `miss_cs` over every pixel where the list was full).
 
@@ -28,7 +28,7 @@ type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on and the
 /// face it entered through, then how far as f32 bits, then the four looks
-/// the ground's block is drawn by, a byte each (`ground::word`), or in the
+/// the ground's asset is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
 /// face (`World::faced`); where it met nothing, the first two zero.
 fn word<A: Copy>(
@@ -73,7 +73,7 @@ fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
     }
 }
 
-/// Each pixel's ray: the block the raster kept at it (pxl-spec-core
+/// Each pixel's ray: the cell the raster kept at it (pxl-spec-core
 /// `raster`; pxl-render gpu/ray/raster.rs), the nearest a sample stopped at
 /// that its ray enters across the axis that sample entered by, tested again
 /// exactly (`cast::entry`) where a GPU's f32 may part the two, its words, no
@@ -110,8 +110,8 @@ pub fn cast_cs(
     let ray = aim.ray;
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = picks.fetch(UVec3::new(id.x, id.y, 0));
-    // The block off its pick, the sky, or a walk of its own (observer.rs
-    // `resolve`), the nearest block entered at the reach where none is.
+    // The cell off its pick, the sky, or a walk of its own (observer.rs
+    // `resolve`), the nearest cell entered at the reach where none is.
     let (took, hit, k) = observer::resolve(eye, beams, px, &aim, kept.x);
     let steps = eye.origin.w != 0;
     let on = seen_at(seen, observed::TALLY_ON) != 0;

@@ -43,7 +43,7 @@ pub const PIPELINE_DEBUG: u32 = 7;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 8;
 /// The camera grid over the screen (camera_grid.wgsl): (0, 0, 0, uniform,
-/// pipeline). Listed, it also tints the rays' blocks (`frame_gizmo`).
+/// pipeline). Listed, it also tints the rays' cells (`frame_gizmo`).
 pub const PIPELINE_CAMERA_GRID: u32 = 9;
 
 /// Every pipeline a draw record names, in the order a frame's census counts

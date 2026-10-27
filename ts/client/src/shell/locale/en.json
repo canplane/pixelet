@@ -114,7 +114,7 @@
       },
       "camera_gizmo": {
         "label": "Camera Gizmo",
-        "description": "Overlays a ring-shaped grid around the screen's center and colors blocks by how large they appear on screen: green when about one grid cell, blue when smaller, red when larger."
+        "description": "Overlays a ring-shaped grid around the screen's center and colors cubes by how large they appear on screen: green when about one grid cell, blue when smaller, red when larger."
       },
       "ray_steps": {
         "label": "Ray steps",
@@ -169,7 +169,7 @@
       "section_caption": "How the view moves when you drag it"
     }
   },
-  "blocks": {
+  "assets": {
     "cube": {
       "ground": {
         "land": "Land",
