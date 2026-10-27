@@ -29,6 +29,14 @@ layer reading another's storage, is no option: it is never listed, ranked or
 offered as the alternative. Where only a breach would be fast, say so, and
 offer what the structure allows.
 
+Every option is symmetric across what the world holds: the ground and what
+is placed are one kind from two sources (ARCHITECTURE.md, "What fills a
+cell"), and nothing drawn may tell one from the other. An option that acts on
+one source alone, a shape or a fact only the ground produces, breaks that
+symmetry and is no option either. The touch rule placed coarse cells by bits
+only the ground set, so a terrace of placed cubes would look otherwise than
+the ground's; it was built across three sessions and reverted whole.
+
 ## Proving it
 
 - By equal output over real data, not by a timing: for the ground's fill,
