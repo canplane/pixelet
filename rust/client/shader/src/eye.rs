@@ -74,7 +74,11 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
             tau: eye.right_tau.w,
             range: [eye.range.x, eye.range.y],
             eye: [0.0; 3],
-            beam: 0.0,
+            cone: cast::Cone {
+                angle: pxl_spec_core::beam::spacing(eye.right_tau.w),
+                across: 0.0,
+            },
+            apart: 1.0,
         },
     )
 }

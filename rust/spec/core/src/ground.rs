@@ -15,7 +15,10 @@
 //! height a CPU and a GPU compute from this one source can differ in the
 //! last bit where it falls on an eighth of a block.
 
-use crate::answer::{bound_of, bound_word, eighths, slab_word, In, Kind, ANY};
+use crate::answer::{
+    bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
+    BOX_WHOLE,
+};
 use crate::area::{earth, walled, Area, Shard};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
@@ -403,18 +406,9 @@ pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
     z << s < hi << e && (z + 1) << s > lo << e
 }
 
-/// What two bounds hold together: the lower of their lowest, the higher of
-/// their highest (`EMPTY` joins as nothing).
-pub fn join(a: [i32; 2], b: [i32; 2]) -> [i32; 2] {
-    [
-        if a[0] < b[0] { a[0] } else { b[0] },
-        if a[1] > b[1] { a[1] } else { b[1] },
-    ]
-}
-
 /// A bound over every height a cell holds, i16's whole range: a relief, the
-/// lowest and highest face heights, both held. Not a slab of what may fill
-/// along z, half-open (`answer::ANY`), which is another fact in another unit.
+/// lowest and highest face heights, both held. Not a span of what may fill
+/// along z, half-open (`slab`), which is another fact in another unit.
 pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 
 /// The bound of no ground, lowest over highest: what joins as nothing.
@@ -449,7 +443,7 @@ pub trait Held: Area {
 
 /// What the ground answers of a node (`node`): its kind, and a block's
 /// look.
-pub type Answer = In<u32>;
+pub type Answer = In<[u32; 2]>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `cave` the caves there and `block` whether it is asked at its own zoom:
@@ -479,16 +473,16 @@ pub fn node<H: Held>(
 ) -> (Answer, Cell, [i32; 2]) {
     let air = In {
         kind: Kind::Block,
-        block: VOID,
+        block: [VOID, 0],
     };
-    // A split no bound tells the slab of holds anything anywhere along z.
+    // A split no bound tells the span of holds anything anywhere in it.
     let split = In {
         kind: Kind::Split,
-        block: slab_word(ANY),
+        block: BOX_WHOLE,
     };
     let lacks = In {
         kind: Kind::Lacks,
-        block: VOID,
+        block: [VOID, 0],
     };
     // Past the area: a block's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
@@ -497,7 +491,7 @@ pub fn node<H: Held>(
         let answer = if block {
             In {
                 kind: Kind::Block,
-                block: earth,
+                block: [earth, 0],
             }
         } else if earth == VOID {
             air
@@ -535,20 +529,20 @@ pub fn node<H: Held>(
         return (
             In {
                 kind: Kind::Block,
-                block,
+                block: [block, 0],
             },
             column,
             ways,
         );
     }
     // Air where none of it lies where the ground may fill, else a split
-    // and where along z.
+    // and its box, the span along z it may fill in the node's steps.
     let (known, hollow) = cave.whole(zoom);
     let s = slab(shard, (zoom, c), relief, [far, near], known && hollow);
     let answer = if meets(s, (zoom, c[2]), near) {
         In {
             kind: Kind::Split,
-            block: slab_word(s),
+            block: box_along_z(s, (zoom, c[2])),
         }
     } else {
         air
@@ -636,9 +630,113 @@ impl Cell {
     }
 }
 
+const _: () = assert!(
+    crate::LEAF_CELL == crate::UNIT_ZOOM,
+    "a span's leaf cell is the world's unit"
+);
+const _: () = assert!(
+    -(1i32 << (crate::HEIGHT_BITS - 1)) == i16::MIN as i32
+        && (1i32 << (crate::HEIGHT_BITS - 1)) - 1 == i16::MAX as i32,
+    "the world's z, in leaf cells, is i16's range"
+);
+
+/// The leaf cells `[lo, hi)` along z of the node `(zoom, z)`, as its box:
+/// its steps along z they meet, rounded out, and the node whole across.
+/// A node finer than a leaf cell holds it whole; nothing, or a span the node
+/// does not meet, none (`BOX_NONE`).
+pub fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWords {
+    if lo >= hi {
+        return BOX_NONE;
+    }
+    if zoom >= crate::LEAF_CELL {
+        return BOX_WHOLE;
+    }
+    // The step of the node a leaf cell `v` lies in, as the node's own
+    // steps count it: `v` scaled by `BOX_STEPS` / side, less the node's first.
+    let shift = crate::LEAF_CELL - zoom;
+    let step = |v: i32| -> i32 {
+        if shift >= BOX_BITS {
+            (v >> (shift - BOX_BITS)) - (z << BOX_BITS)
+        } else {
+            (v << (BOX_BITS - shift)) - (z << BOX_BITS)
+        }
+    };
+    // The span's first step and past its last, as the node counts them:
+    // past the step its last leaf cell lies in, as a leaf cell a step or
+    // wider ends on a step's edge of its own.
+    let (first, past) = (
+        step(lo),
+        if shift >= BOX_BITS {
+            step(hi - 1) + 1
+        } else {
+            step(hi)
+        },
+    );
+    // A span the node does not meet is none of its box.
+    if past <= 0 || first >= BOX_STEPS as i32 {
+        return BOX_NONE;
+    }
+    let held = |e: i32, lo: i32, hi: i32| {
+        if e < lo {
+            lo
+        } else if e > hi {
+            hi
+        } else {
+            e
+        }
+    };
+    let (first, past) = (
+        held(first, 0, BOX_STEPS as i32 - 1) as u32,
+        held(past, 1, BOX_STEPS as i32) as u32,
+    );
+    box_word([0, 0, first], [BOX_STEPS, BOX_STEPS, past])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::answer::box_of;
+
+    /// A z span becomes the steps of the node it meets, rounded out, the
+    /// node whole across; none where the node does not meet it.
+    #[test]
+    fn a_span_along_z_is_its_steps_rounded_out() {
+        let zoom = crate::LEAF_CELL - 6;
+        // The node of side 64 leaf cells over [128, 192), 16 steps a leaf
+        // cell: [138, 140) is its steps [160, 192).
+        assert_eq!(
+            box_of(box_along_z([138, 140], (zoom, 2))),
+            ([0, 0, 160], [1024, 1024, 192])
+        );
+        assert_eq!(
+            box_of(box_along_z([100, 300], (zoom, 2))),
+            ([0, 0, 0], [1024, 1024, 1024])
+        );
+        assert_eq!(box_along_z([5, 5], (zoom, 0)), BOX_NONE);
+        // A span wholly under or over the node is none of it.
+        assert_eq!(box_along_z([0, 128], (zoom, 2)), BOX_NONE);
+        assert_eq!(box_along_z([192, 300], (zoom, 2)), BOX_NONE);
+        // Under sea level: the node over [-64, 0), the span [-10, -9) its
+        // steps [864, 880).
+        assert_eq!(
+            box_of(box_along_z([-10, -9], (zoom, -1))),
+            ([0, 0, 864], [1024, 1024, 880])
+        );
+        // A root's node, its z the world's whole: one step holds it.
+        assert_eq!(
+            box_of(box_along_z([-5, 7], (0, 0))),
+            ([0, 0, 0], [1024, 1024, 1])
+        );
+        assert_eq!(
+            box_of(box_along_z([-5, 7], (0, -1))),
+            ([0, 0, 1023], [1024, 1024, 1024])
+        );
+        // A node finer than a leaf cell: its steps scale up.
+        assert_eq!(
+            box_of(box_along_z([3, 4], (crate::LEAF_CELL - 1, 1))),
+            ([0, 0, 512], [1024, 1024, 1024])
+        );
+    }
 
     #[test]
     fn a_coarse_top_keeps_the_eighths_its_mean_fills() {

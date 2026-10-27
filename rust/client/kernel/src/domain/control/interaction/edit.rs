@@ -77,7 +77,7 @@ fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
 }
 
 /// The middle of the cube `at` names.
-fn middle(at: EntryAt) -> Q3 {
+pub(super) fn middle(at: EntryAt) -> Q3 {
     let (base, half) = (
         base_of(at.zoom(), at.at()),
         q3::from_real(units(at.zoom()) / 2.0),

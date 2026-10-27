@@ -53,6 +53,10 @@ may compose the query whole.
   - the ways' cursor, rerooted where the square changes;
   - the three slabs joined.
 
+  > Since 2026-10-27: each source gives a box in the node's own steps, and the
+  > three boxes are joined
+  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
+
   That is a fact of the node, not of the ray. Every ray through the node works
   it out again, every frame. Descent reuses what it established within one ray,
   and nothing between rays or between frames.
@@ -184,6 +188,8 @@ and data, never estimated.
   `Lacks`) and two words.
   - For a block, the words are its value and its four looks.
   - For a split, they are its slab word.
+
+  > Since 2026-10-27: its box in its own steps on every axis (`answer::box_word`).
 - Its `block` flag is the node's zoom against the zoom asked, which the ray has,
   so it is not stored.
 - Each piece of state it threads follows from the node's line alone:

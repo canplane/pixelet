@@ -134,8 +134,14 @@ impl Sun {
         z
     }
 
-    /// `detail` asking no finer than `finest`.
+    /// `detail` asking no finer than `finest`, its cone the map's texel and
+    /// its beam rays `BEAM` of them apart.
     pub fn detail(&self, mut detail: Detail) -> Detail {
+        detail.cone = crate::cast::Cone {
+            angle: 0.0,
+            across: length(self.across),
+        };
+        detail.apart = BEAM as f32;
         let z = self.finest();
         if detail.range[1] > z {
             detail.range[1] = z;
@@ -347,7 +353,7 @@ pub const TILE: u32 = 8;
 /// the eye's): a beam ray at every `BEAM`-th texel of the box across and
 /// down, `BEAM_WINDOW` past it on each side, each walked from the world's
 /// root along the sun's rays until a block that fills or lacks or a split
-/// narrower than `2√2` beam spacings (`cast::Detail::beam`), leaving its
+/// narrower than `2√2` beam spacings (`Sun::detail`, `cast::Detail::apart`), leaving its
 /// line and how far it got less `margin`; each `BEAM`-square cell of the
 /// box starts at the least of the beam rays within `BEAM_WINDOW` of its
 /// corners, and its texels resume from that ray's line there.
@@ -412,13 +418,6 @@ pub const fn cell(size: u32, [i, j]: [u32; 2]) -> u32 {
 
 pub const fn beam_words(size: u32) -> u32 {
     cells_at(size) + cells_across(size) * cells_across(size) * CELL_WORDS
-}
-
-impl Sun {
-    /// How far apart its beam rays lie, in units: `BEAM` texels across.
-    pub fn beam_width(&self) -> f32 {
-        BEAM as f32 * length(self.across)
-    }
 }
 
 /// How far short of where a beam ray stopped a cell's texels start: the

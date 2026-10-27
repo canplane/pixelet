@@ -193,12 +193,20 @@ pub fn sun_miss_cs(
     };
     let (p, o, ray, detail) = sun_slot(eye, moved, size.x, slot);
     let tag = observed::tag(seen_at(seen, observed::FRAME), observed::SUN_MISSED_PASS);
-    let met = sun_resumed(&mut Writing {
+    let met = sun_resumed(
+        &mut Writing {
             world,
             seen,
             tag,
             blocks: false,
-        }, list, size.x, p, o, &ray, detail);
+        },
+        list,
+        size.x,
+        p,
+        o,
+        &ray,
+        detail,
+    );
     let s = sun_of(eye);
     // SAFETY: a slot `sun_cs` listed, within the map.
     unsafe { sun.write(slot, s.word(detail, pxl_spec_core::sun::depth(&s, &met))) };
@@ -245,12 +253,20 @@ pub fn sun_sample_cs(
     let (o, ray, from) = pxl_spec_core::sun::ray(origin, &s, &starts(moved), p);
     detail.eye = from;
     let tag = observed::tag(seen_at(seen, observed::FRAME), observed::SUN_SAMPLES_PASS);
-    let met = sun_resumed(&mut Writing {
+    let met = sun_resumed(
+        &mut Writing {
             world,
             seen,
             tag,
             blocks: false,
-        }, list, size.x, p, o, &ray, detail);
+        },
+        list,
+        size.x,
+        p,
+        o,
+        &ray,
+        detail,
+    );
     let index = id.y * (size.x / d) + id.x;
     sample_put(list, pxl_spec_core::sun::sample(size.x, index), &met);
 }
@@ -282,16 +298,8 @@ pub fn sun_boxes_cs(
     let n = size.x / d;
     let at = |i: u32, j: u32| pxl_spec_core::sun::sample(size.x, j * n + i);
     let before = [
-        if id.x > 0 {
-            at(id.x - 1, id.y)
-        } else {
-            NONE
-        },
-        if id.y > 0 {
-            at(id.x, id.y - 1)
-        } else {
-            NONE
-        },
+        if id.x > 0 { at(id.x - 1, id.y) } else { NONE },
+        if id.y > 0 { at(id.x, id.y - 1) } else { NONE },
     ];
     // From where box texel (0, 0)'s ray starts, as the raster lays the
     // texels' rays off it (pxl-render raster.wgsl), in the frame the slots'
@@ -318,7 +326,7 @@ pub fn sun_boxes_cs(
 /// on each side: its ray from where its texel of the box lies on the near
 /// plane (`sun::Starts`), walked from the world's root to the first block
 /// that fills or lacks or the first split narrower than `2√2` of the
-/// beam's spacing (`cast::Until::Beam`, `cast::Detail::beam`), its line
+/// beam's spacing (`cast::Until::Beam`, `cast::Detail::apart`), its line
 /// left for the texels about it (`Leaving`) and how far they may start
 /// from it, its stop less `sun::margin`.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_beam_cs"))]
@@ -370,8 +378,7 @@ pub fn sun_beam_cs(
         origin[1].wrapping_sub(o[1]) as f32 / q3,
         origin[2].wrapping_sub(o[2]) as f32 / q3,
     ];
-    let width = s.beam_width();
-    detail.beam = width;
+    let width = detail.apart * detail.cone.width(0.0);
     let ray = cast::Ray::new(s.dir, s.reach);
     let base = pxl_spec_core::sun::line(size.x, id.y * across + id.x);
     let k = base + pxl_spec_core::sun::LINE_ORIGIN;
@@ -432,10 +439,7 @@ pub fn sun_cells_cs(
         let mut i = 0;
         while i < side {
             let r = (id.y + j) * across + id.x + i;
-            let t = f32::from_bits(at(
-                list,
-                pxl_spec_core::sun::line(size.x, r) + beam::LINE_T,
-            ));
+            let t = f32::from_bits(at(list, pxl_spec_core::sun::line(size.x, r) + beam::LINE_T));
             if t < least {
                 least = t;
                 from = r;

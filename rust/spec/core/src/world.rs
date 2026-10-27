@@ -10,7 +10,8 @@
 //! detail, and what it holds stays behind it.
 
 use crate::answer::{
-    cover, eighths, fills, kept_word, slab_of, slab_word, In, Kind, ANY, PLACED_BLOCK,
+    box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE,
+    PLACED_BLOCK,
 };
 use crate::area::Shard;
 use crate::caves::Cave;
@@ -116,7 +117,8 @@ impl At {
 /// any layer may fill under it at a zoom asked, each by its own bound —
 /// what is placed (`overwrite::over`), the ground's (`ground::slab`), the
 /// ways' (`ways::slab`), each meeting the node (`ground::meets`) — its
-/// block word where along z (`slab_word`);
+/// block words the box in its own steps they lie in, every axis alike
+/// (`answer::box_word`, `overwrite::bound`, `ground::box_along_z`);
 /// else air, a block of air its size, its value void; where the ground is
 /// not held, the lack. Whether a block is the zoom asked's or coarser air is
 /// the asker's: its zoom against the finest asked (`near`), past the
@@ -168,11 +170,11 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             block: laid(),
         };
     }
-    // Where what is placed splits the node, where along z it may fill.
+    // Where what is placed splits the node, the box it may fill.
     let (placed, splits) = if over.says == SPLIT {
-        (overwrite::slab(lanes, put, zoom, c), true)
+        (overwrite::bound(lanes, put, zoom), true)
     } else {
-        (ground::EMPTY, false)
+        (BOX_NONE, false)
     };
     let before = *place;
     let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
@@ -197,7 +199,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         // keeps a block there alone.
         let lacks = In {
             kind: i.kind,
-            block: [i.block, 0],
+            block: i.block,
         };
         if i.kind == Kind::Lacks && over.says != BLOCK {
             return lacks;
@@ -207,7 +209,11 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         // placed, its share kept with the ground's (`answer::cover`): the
         // block keeps the eighths of its cube all of them fill
         // (`answer::eighths`), its look the kind most of that is.
-        let mut value = if i.kind == Kind::Block { i.block } else { VOID };
+        let mut value = if i.kind == Kind::Block {
+            i.block[0]
+        } else {
+            VOID
+        };
         let mut fill = if fills(value) { cell.cover(c[2]) } else { 0 };
         let mut four = if fills(value) {
             ground::word(cell.four(zoom, value))
@@ -253,9 +259,10 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         };
     }
     // Coarser, what is placed splits it where it may fill, and the ways
-    // what the ground leaves air where they may; a split's slab is every
-    // source's own joined: what is placed (`overwrite::slab`), the ground's
-    // (`ground::slab`, unbounded where it lacks) and the ways' (`ways::slab`).
+    // what the ground leaves air where they may; a split's box is every
+    // source's own joined, each in the node's steps: what is placed
+    // (`overwrite::bound`), the ground's (`ground::slab`, all of it where
+    // it lacks) and the ways' (`ways::slab`), the last two along z.
     let ways = crate::ways::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Block && fill {
@@ -266,17 +273,27 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     if kind != Kind::Split {
         return In {
             kind,
-            block: [i.block, 0],
+            block: i.block,
         };
     }
     let own = match i.kind {
-        Kind::Split => slab_of(i.block),
-        Kind::Lacks => ANY,
-        _ => ground::EMPTY,
+        Kind::Split => i.block,
+        Kind::Lacks => BOX_WHOLE,
+        _ => BOX_NONE,
     };
-    let joined = ground::join(ground::join(own, ways), placed);
+    let joined = box_join(
+        box_join(own, ground::box_along_z(ways, (zoom, c[2]))),
+        placed,
+    );
+    // Every source saying nothing lies in it is air its size.
+    if box_none(joined) {
+        return In {
+            kind: Kind::Block,
+            block: crate::answer::AIR,
+        };
+    }
     In {
         kind,
-        block: [slab_word(joined), 0],
+        block: joined,
     }
 }

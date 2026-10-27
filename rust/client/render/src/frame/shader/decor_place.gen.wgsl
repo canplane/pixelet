@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 36ef2dcc9d3f8c0e34c711de52a61d8ba81cd475726fdf2c6f335cb2f07d9fc4
+// Inputs: 0fe57a5d067c7de44c33fe0c4012121472dd6a20bcd378055078e050b022581a
 struct type_7 {
     member: array<vec4<i32>>,
 }
@@ -18,7 +18,7 @@ struct type_16 {
     member_2: u32,
 }
 
-struct type_17 {
+struct type_18 {
     member: u32,
     member_1: u32,
 }
@@ -74,7 +74,7 @@ fn function_() {
     var phi_564_: bool;
     var phi_565_: bool;
     var phi_268_: bool;
-    var phi_310_: type_17;
+    var phi_310_: type_18;
     var phi_315_: u32;
     var phi_587_: type_16;
     var phi_398_: array<u32, 3>;
@@ -150,7 +150,7 @@ fn function_() {
                     phi_268_ = select(_e121, false, _e123);
                 }
                 let _e126 = phi_268_;
-                phi_310_ = type_17((_e42.x * 2070u), select(0u, select(2070u, _e89, (_e89 < 2070u)), _e126));
+                phi_310_ = type_18((_e42.x * 2070u), select(0u, select(2070u, _e89, (_e89 < 2070u)), _e126));
             } else {
                 let _e59 = ((_e42.x - 768u) * 64u);
                 if (7951872u < _e49) {
@@ -166,7 +166,7 @@ fn function_() {
                     phi_302_ = 0u;
                 }
                 let _e69 = phi_302_;
-                phi_310_ = type_17((1589760u + _e59), select(64u, _e69, (_e69 < 64u)));
+                phi_310_ = type_18((1589760u + _e59), select(64u, _e69, (_e69 < 64u)));
             }
             let _e133 = phi_310_;
             phi_315_ = _e43.x;
