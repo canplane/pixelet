@@ -182,8 +182,8 @@ pub(super) struct CastBuffers {
     /// What the sun's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
-    /// The list, the beam's pipelines and the raster's the sun's groups were
-    /// made over, made again where one is another.
+    /// The list, the sun's picks and its boxes the sun's groups were made
+    /// over, made again where one is another.
     sun_grouped: [u32; 3],
 }
 
@@ -283,10 +283,8 @@ impl RaysPass {
             cells_built,
             sample_built,
             beams: 0,
-            eye_head: buffer(
-                word_bytes(sun::MOVED_WORDS),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            ),
+            // Never written: a buffer is made zeroed.
+            eye_head: buffer(word_bytes(sun::MOVED_WORDS), buffer_usage::UNIFORM),
             grid: beam::Grid::of_words([0.0; 2], [0; eye::GRID_WORDS]),
             beam_room: 0,
             miss_built,

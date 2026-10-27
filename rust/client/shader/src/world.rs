@@ -33,8 +33,9 @@ pub(crate) fn square_at(square: u32) -> u32 {
 /// squares the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`).
-/// The squares' cells' four looks are `L`'s: their own buffer where the
-/// cast draws by them, none where a pass draws nothing (`Unlooked`).
+/// The squares' cells' four looks are `L`'s: their own buffer for the
+/// cast's walks, every observer's alike, none where a pass reads no cell's
+/// look (`Unlooked`).
 #[derive(Clone, Copy)]
 pub struct World<'a, L> {
     /// The windows' table (pxl-spec-core `window::Slot`): every window's
@@ -78,8 +79,8 @@ impl Looks for &[u32] {
     }
 }
 
-/// No looks bound: a pass that draws nothing reads none, every cell's four
-/// the word it holds, none (`ground::word`'s zero). A word, not nothing:
+/// No looks bound: a pass that reads no cell's look, every cell's four the
+/// word it holds, none (`ground::word`'s zero). A word, not nothing:
 /// rust-gpu offsets no pointer to a field of no size.
 #[derive(Clone, Copy)]
 pub struct Unlooked(pub(crate) u32);
