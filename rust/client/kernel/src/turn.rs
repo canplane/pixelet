@@ -312,21 +312,11 @@ pub struct HostFrame {
 }
 
 static FRAME: Global<Option<HostFrame>> = Global::new();
-static WALL_MS: Global<f64> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
 static DRAWN: Global<bool> = Global::new();
 
 fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
-}
-
-/// The wall clock as the last frame told it, in Unix ms; 0 before the first.
-pub fn wall_now() -> f64 {
-    *WALL_MS.get(|| 0.0)
-}
-
-pub fn set_wall_now(unix_ms: f64) {
-    WALL_MS.set(unix_ms);
 }
 
 pub fn world_frame_asked(host: HostFrame) {

@@ -77,7 +77,7 @@ pub(super) fn apply(
             )?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
-            let last = crate::turn::wall_now();
+            let last = crate::sys::sched::clock::wall_now();
             let delta = if last > 0.0 {
                 ((p.unix_ms - last) / 1000.0).max(0.0)
             } else {
@@ -92,7 +92,7 @@ pub(super) fn apply(
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::turn::set_wall_now(p.unix_ms);
+            crate::sys::sched::clock::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {

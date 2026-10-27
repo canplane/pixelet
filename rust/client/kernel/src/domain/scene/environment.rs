@@ -15,7 +15,7 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::sys::sched::edge::wake_at;
-use crate::turn::wall_now;
+use crate::sys::sched::clock::wall_now;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use xpute_guest::clock::now;
 

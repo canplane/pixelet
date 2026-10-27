@@ -15,7 +15,7 @@
 //! block, whatever is under it.
 
 use crate::cube::{object, sentinel, Ground, Object};
-use crate::Zoom;
+use crate::{Zoom, LEAF_CELL};
 
 /// A slot's heap word when it is a branch, its children's family under it.
 pub const BRANCH: u32 = 1 << 31;
@@ -23,9 +23,30 @@ pub const BRANCH: u32 = 1 << 31;
 /// The family of the root what is placed is under.
 pub const PLACED: u32 = 0;
 
-/// A cube filled whole, as a fold's share counts it: a share is in 2⁻¹⁵ of
-/// its cube, floored at each fold, so eighths stay exact five folds deep.
-pub const FULL: u32 = 1 << 15;
+pub use crate::answer::FULL;
+
+/// The edits a frame hands what reads them at most (pxl-kernel
+/// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box
+/// of leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel
+/// unions the rest into the last.
+pub const EDITS: u32 = 8;
+/// The boxes of leaf cells a frame's edits and a preview's cuts changed:
+/// the edits, and a preview's cut and left-out leaf as they were and as they
+/// are; past them the rest is joined into the last (pxl-render gpu/grown.rs
+/// `hold`). What reads those columns asks them again: decor's growth, the
+/// observed pyramid's forgetting.
+pub const BOXES: u32 = EDITS + 4;
+
+/// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
+pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
+    if zoom <= LEAF_CELL {
+        let s = LEAF_CELL - zoom;
+        [at[0] << s, at[1] << s, (at[0] + 1) << s, (at[1] + 1) << s]
+    } else {
+        let s = zoom - LEAF_CELL;
+        [at[0] >> s, at[1] >> s, (at[0] >> s) + 1, (at[1] >> s) + 1]
+    }
+}
 
 const VOID: u32 = sentinel::void as u32;
 pub const AIR: u32 = object::air as u32;

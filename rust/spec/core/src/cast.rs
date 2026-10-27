@@ -75,7 +75,7 @@ impl Cone {
 /// what an eye's ray met, where the eye stands from it, so a node is asked
 /// at the zooms the eye's rays ask it (`reach`). `cone` is the ray's own
 /// (`Cone`), and `apart` how many of its widths a beam ray lies from the
-/// next of its grid (`Until::Beam`, `beam::narrow`): 1 for the eye's, whose
+/// next of its grid (`Until::Beam`, `narrow`): 1 for the eye's, whose
 /// cone is the grid's cell, `sun::BEAM` for the sun's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
@@ -93,11 +93,19 @@ impl Detail {
     }
 }
 
+/// Whether a node `side` wide, squared, is too narrow for a beam ray to
+/// share where the grid's rays lie `width` apart, squared: under twice the
+/// width that holds one of them for certain, `2√2 · width`; the eye's
+/// `s · d` at the node's farthest point.
+pub fn narrow(side2: f32, width2: f32) -> bool {
+    side2 < 8.0 * width2
+}
+
 /// Which block a ray stops at: the first it cannot see through
 /// (`answer::transparent`), as an eye sees; or the first it can, as what is
 /// climbed out of ends; or, for a beam ray of the camera grid, the first it
 /// cannot see through or the first split too narrow to hold one of the
-/// grid's rays for certain (`beam::narrow`), every split entered whose box
+/// grid's rays for certain (`narrow`), every split entered whose box
 /// it meets widened by `2√2` of that width
 /// (doc/minutes/20261022-a-cell-casts-a-beam.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -863,9 +871,9 @@ pub fn walk<Q: Query>(
                 Kind::Split if until == Until::Beam => {
                     // The grid's rays `apart` cones apart at the node's far
                     // corner: a split narrower than `2√2` of that may lie
-                    // between them (`beam::narrow`, pxl-spec-core `sun::BEAM`).
+                    // between them (`narrow`, pxl-spec-core `sun::BEAM`).
                     let width = detail.apart * detail.cone.width(libm::sqrtf(reach[0]));
-                    let narrow = crate::beam::narrow(side * side, width * width);
+                    let narrow = narrow(side * side, width * width);
                     let meets = meets_box(2.0 * core::f32::consts::SQRT_2 * width);
                     into = meets && !narrow;
                     if meets && narrow {
