@@ -1,10 +1,11 @@
 {
   "$doc": [
     "Every setting the app has, declared once: its default, its kind, and",
-    "where the settings sheet shows it. The store reads the defaults from here",
-    "and the sheet renders rows from here, so adding a setting is one entry in",
-    "SETTINGS plus its two strings in the locale catalog under",
-    "`settings.<section>.<key>`. A choice may carry `costs` beside its",
+    "where it is shown, its `section`: one of the settings sheet's, or",
+    "`profiler`, the profiler panel's own. The store reads the defaults from",
+    "here and the sheet renders rows from here, so adding a setting to the",
+    "sheet is one entry in SETTINGS plus its two strings in the locale catalog",
+    "under `settings.<section>.<key>`. A choice may carry `costs` beside its",
     "`options`, one per option in the same order, for when what an option costs",
     "differs from its neighbors'; an empty string is no badge. A `dev` setting",
     "is in the kernel's table in every build and offered only under a",
@@ -313,7 +314,7 @@
       ],
       "kind": "toggle",
       "default": false,
-      "section": "debug",
+      "section": "profiler",
       "dev": true
     },
     "sky_time": {

@@ -2,8 +2,8 @@
 
 /**
  * The profiler panel: the profiler's recording controls, exports and
- * gauge. Shown by the `profiler` setting in any build; the kernel
- * records from boot while it is on. A development page reads the same from
+ * gauge, and its own settings (section `profiler`). Shown by the `profiler`
+ * setting in any build; the kernel records from boot while it is on. A development page reads the same from
  * the console (shell/debug/console.ts).
  */
 
@@ -23,8 +23,12 @@ import {
 } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
-import { kernel_command } from "@/abi/shell.ts";
-import { SETTINGS } from "@/shell/setting/schema.ts";
+import { kernel_command, kernel_setting } from "@/abi/shell.ts";
+import {
+  type SettingName,
+  SETTINGS,
+  settingsIn,
+} from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const enum Tint {
@@ -126,6 +130,42 @@ function PanelButton(
 
 const SAID_MS = 2500;
 
+/** A setting the panel holds (section `profiler`). */
+type Own = {
+  [K in SettingName]: (typeof SETTINGS)[K]["section"] extends "profiler" ? K
+    : never;
+}[SettingName];
+
+/** Each a toggle beside the buttons; a dev one is absent from a production
+ * build (`settingsIn`), and its button with it. */
+const OWN: Record<Own, { label: string; hint: string }> = {
+  ray_counts: {
+    label: "Counts",
+    hint:
+      "count the eye's and the sun's casts into the report; off while timing, its atomics run in the cast's spans",
+  },
+};
+
+function OwnToggle(
+  { name, onHint }: {
+    name: Own;
+    onHint: (hint: string | null) => void;
+  },
+) {
+  const { key } = SETTINGS[name];
+  const on = useKernel((s) => s.settings[key] === 1);
+  const own = OWN[name];
+  return (
+    <PanelButton
+      onHint={onHint}
+      label={own.label}
+      hint={own.hint}
+      tint={on ? Tint.Go : Tint.Plain}
+      onPress={() => kernel_setting(key, on ? 0 : 1)}
+    />
+  );
+}
+
 function restartWindow(): void {
   kernel_command(Command.PROFILER_START);
   longFramesClear();
@@ -199,6 +239,9 @@ export function ProfilerPanel() {
           hint="save the window as a timeline for ui.perfetto.dev"
           onPress={() => void profilerTraceSave().then(setSaid)}
         />
+        {(settingsIn("profiler") as Own[]).map((name) => (
+          <OwnToggle key={name} name={name} onHint={setHint} />
+        ))}
       </View>
       {/* Under the buttons: a two-line hint above them moved the hovered button away. */}
       {(said ?? hint) !== null && (
