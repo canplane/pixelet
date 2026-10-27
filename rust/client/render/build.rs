@@ -119,8 +119,9 @@ fn main() {
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
-    // A sun slot's word read as its depth, a share of the light box's
-    // (pxl-spec-core sun.rs `depth_of`): its top bits over the zoom asked.
+    // A sun slot's word read as its depth, a share of the light box's, as
+    // pxl-spec-core sun.rs `Sun::word` lays it: its top bits over the zoom
+    // asked: the one place a word's depth is read.
     use pxl_spec_core::sun::{DEPTH_ONE, ZOOM_BITS as SUN_ZOOM_BITS};
     let sun = format!(
         "fn sun_depth(w: u32) -> f32 {{ return f32(w >> {SUN_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n"

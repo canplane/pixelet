@@ -296,12 +296,6 @@ impl Sun {
     }
 }
 
-/// A slot's depth (`Sun::word`): a share of the box's depth, the stop's
-/// own pushed back (`depth`), so no nearer than it.
-pub fn depth_of(word: u32) -> f32 {
-    (word >> ZOOM_BITS) as f32 / DEPTH_ONE as f32
-}
-
 /// What the sun's cast is handed beside the eye's words, a storage buffer: a
 /// head of `MOVED_HEAD` vec4s, whether the cast is counted
 /// (`MOVED_COUNTED`), then the rays' starts (`Starts`, from `STARTS_AT`),
