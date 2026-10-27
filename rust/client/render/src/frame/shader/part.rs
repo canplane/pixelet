@@ -120,7 +120,10 @@ pub const SHADER_SUN_CELLS: u32 = 55;
 /// compute entries.
 pub const SHADER_SUN_SAMPLE: u32 = 56;
 pub const SHADER_SUN_BOXES: u32 = 57;
-pub const SHADERS: u32 = 58;
+/// The tiles of the sun's box the eye's rays meet, marked read in a cast
+/// (pxl-spec-core `sun::marks_at`): a compute entry.
+pub const SHADER_SUN_MARK: u32 = 58;
+pub const SHADERS: u32 = 59;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -340,4 +343,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["sun_sample.gen"],
     // SHADER_SUN_BOXES
     &["sun_boxes.gen"],
+    // SHADER_SUN_MARK
+    &["sun_mark.gen"],
 ];

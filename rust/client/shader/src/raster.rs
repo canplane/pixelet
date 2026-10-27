@@ -14,6 +14,7 @@ use spirv_std::spirv;
 use crate::beam::{node_at, Beams, Words};
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::observed::{seen_at, seen_put};
+use crate::observer;
 use crate::world::{Unlooked, World};
 use crate::{add, most};
 
@@ -119,9 +120,9 @@ pub(crate) fn picked<W: Words + ?Sized>(
 }
 
 /// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a
-/// thread each: written as a box for the raster's draw (`boxed`), the one
-/// across and up before it, and the dispatch that asks its face raised to
-/// hold it (`raster::ARGS_FACES`).
+/// thread each: written as a box for the raster's draw, the eye's
+/// (observer.rs `sample_box`), and the dispatch that asks its face raised
+/// to hold it (`raster::ARGS_FACES`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "boxes_cs"))]
 pub fn boxes_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -134,29 +135,7 @@ pub fn boxes_cs(
     if id.x >= g.samples[0] || id.y >= g.samples[1] {
         return;
     }
-    let before = [
-        if id.x > 0 {
-            g.sample_at([id.x - 1, id.y])
-        } else {
-            NONE
-        },
-        if id.y > 0 {
-            g.sample_at([id.x, id.y - 1])
-        } else {
-            NONE
-        },
-    ];
-    let (origin, _) = eye_origin(eye);
-    let box_at = boxed(
-        beams,
-        g.sample_at([id.x, id.y]),
-        before,
-        origin,
-        id.y * g.samples[0] + id.x,
-        (true, [eye.tan.x, eye.tan.y]),
-        boxes,
-        args,
-    );
+    let box_at = observer::sample_box(eye, beams, [id.x, id.y], boxes, args);
     if box_at != NONE {
         most(args, raster::ARGS_FACES, box_at / raster::FACES_LANES + 1);
     }

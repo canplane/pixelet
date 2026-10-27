@@ -1,11 +1,16 @@
 // pxl-shader/eye.rs
 
 //! The eye a cast is from, as the kernel writes its words (pxl-spec-core
-//! `eye`), and what every entry reads off it.
+//! `eye`), what every entry reads off it, and the eye as an observer
+//! (observer.rs `Observer`): its camera grid's corners, cells and samples
+//! (pxl-spec-core `beam::Grid`), a ray at the screen's tangents.
 
 use pxl_spec_core::cast::{self, Detail};
-use pxl_spec_core::{beam, eye};
+use pxl_spec_core::{beam, eye, observed, tally};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
+
+use crate::beam::Words;
+use crate::observer::{Aim, Observer};
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
 /// where pxl-spec-core `eye` lays them (asserted below).
@@ -104,3 +109,95 @@ pub(crate) fn grid(eye: &Eye) -> beam::Grid {
     beam::Grid::of_words([eye.tan.x, eye.tan.y], w)
 }
 const _: () = assert!(eye::GRID_WORDS == 16, "`grid` reads the grid's four vec4s");
+
+impl Observer for Eye {
+    type At = [f32; 2];
+    const TALLY: u32 = tally::EYE;
+    const BLOCKS: bool = true;
+    const PASSES: [u32; 3] = [
+        observed::BEAM_PASS,
+        observed::SAMPLES_PASS,
+        observed::MISSED_PASS,
+    ];
+    const APART: bool = false;
+
+    fn corners(&self) -> [u32; 2] {
+        grid(self).corners
+    }
+
+    fn corner(&self, c: [u32; 2]) -> Aim {
+        self.aim(grid(self).corner(c))
+    }
+
+    fn handed(&self, _: &Aim, t: f32) -> f32 {
+        grid(self).handed(t)
+    }
+
+    fn line(&self, index: u32) -> u32 {
+        beam::Grid::line(index)
+    }
+
+    /// Every ray of the eye's starts at the eye.
+    fn origin_of<W: Words + ?Sized>(&self, _: &W, _: u32) -> [i32; 3] {
+        eye_origin(self).0
+    }
+
+    fn keep_origin<W: Words + ?Sized>(&self, _: &mut W, _: u32, _: [i32; 3]) {}
+
+    fn cells(&self) -> [u32; 2] {
+        grid(self).span
+    }
+
+    /// Its own window of corners (`beam::Grid::cell_window`), wider toward
+    /// the screen's edge.
+    fn window(&self, c: [u32; 2]) -> ([u32; 2], u32) {
+        let g = grid(self);
+        let k = g.cell_window(c);
+        let [x, y] = g.first(c);
+        ([x - k, y - k], 2 + 2 * k)
+    }
+
+    fn cell_at(&self, c: [u32; 2]) -> u32 {
+        grid(self).cell_at(c)
+    }
+
+    fn samples(&self) -> [u32; 2] {
+        grid(self).samples
+    }
+
+    fn point(&self, s: [u32; 2]) -> [f32; 2] {
+        grid(self).sample(s)
+    }
+
+    fn sample_cell(&self, s: [u32; 2]) -> [u32; 2] {
+        grid(self).sample_cell(s)
+    }
+
+    fn sample_at(&self, s: [u32; 2]) -> u32 {
+        grid(self).sample_at(s)
+    }
+
+    /// Always about it: the lattice runs `beam::NEAR` samples past the
+    /// screen.
+    fn sample_before(&self, at: [f32; 2]) -> ([u32; 2], bool) {
+        (grid(self).sample_before(at), true)
+    }
+
+    fn aim(&self, at: [f32; 2]) -> Aim {
+        let (origin, detail) = eye_origin(self);
+        Aim {
+            origin,
+            ray: eye_ray(self, at),
+            detail,
+        }
+    }
+
+    fn cell_of(&self, at: [f32; 2]) -> [u32; 2] {
+        grid(self).cell(at)
+    }
+
+    /// From the eye, its boxes about it marked at the screen's tangents.
+    fn laid(&self) -> ([i32; 3], (bool, [f32; 2])) {
+        (eye_origin(self).0, (true, [self.tan.x, self.tan.y]))
+    }
+}

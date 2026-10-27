@@ -11,16 +11,16 @@ use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
 
-use crate::beam::{resumed, started, Beams};
-use crate::eye::{eye_origin, grid, Eye};
-use crate::observed::{seen_at, seen_put, tallied, Reading, Seen, Writing, MISSED};
-use crate::raster::picked;
+use crate::beam::Beams;
+use crate::eye::{grid, Eye};
+use crate::observed::{seen_at, seen_put, Reading, Seen, MISSED};
+use crate::observer::{self, Observer};
 use crate::world::{face_of, Unlooked, World};
 use crate::{add, most};
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
 /// pxl-spec-core `ray`): the cast writes them.
-type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
+pub(crate) type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// The raster's pick at each drawn pixel (pxl-render gpu/ray/raster.rs): its
 /// sample's number (pxl-spec-core `raster::id_of`), 0 where it kept none,
@@ -58,20 +58,10 @@ const _: () = assert!(
 /// The tangents across and up of the middle of drawn pixel `p` of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
-fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
+pub(crate) fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
     let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
-}
-
-/// Whether the four samples about the screen's point at the tangents `px`
-/// each went on to its reach (`beam::SAMPLE_NONE`), meeting nothing.
-fn sky(beams: &Beams, g: &beam::Grid, px: [f32; 2]) -> bool {
-    let [i, j] = g.sample_before(px);
-    let none = |s: [u32; 2]| {
-        seen_at(beams, g.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM) == beam::SAMPLE_NONE
-    };
-    none([i, j]) && none([i + 1, j]) && none([i, j + 1]) && none([i + 1, j + 1])
 }
 
 /// A ray's words written into the rays at pixel `p`.
@@ -120,10 +110,10 @@ pub fn cast_cs(
     if id.x >= size.x || id.y >= size.y {
         return;
     }
-    let (origin, detail) = eye_origin(eye);
     let g = grid(eye);
     let px = pixel_tan(eye, id, size);
-    let (ray, t, line) = started(eye, &g, beams, g.cell(px), px);
+    let aim = eye.aim(px);
+    let (origin, ray) = (aim.origin, aim.ray);
     // The nearest block entered, at the reach where none is.
     let mut hit = cast::Stop {
         t: ray.reach,
@@ -140,9 +130,7 @@ pub fn cast_cs(
     let kept: UVec4 = picks.fetch(UVec3::new(id.x, id.y, 0));
     let pick = kept.x;
     if pick != 0 && pick & raster::LACK == 0 {
-        let s = raster::sample_of(pick);
-        let k = g.sample_at([s % g.samples[0], s / g.samples[0]]);
-        let (stop, enters) = picked(beams, k, origin, &ray);
+        let (stop, k, enters) = observer::took(eye, beams, &aim, pick);
         if enters {
             hit = stop;
             faces = seen_at(beams, k + beam::SAMPLE_FACES);
@@ -154,7 +142,7 @@ pub fn cast_cs(
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
-    if pick == 0 && sky(beams, &g, px) {
+    if pick == 0 && observer::sky(eye, beams, px) {
         written(
             rays,
             id,
@@ -196,14 +184,12 @@ pub fn cast_cs(
         );
         return;
     }
-    let met = resumed(
+    let (met, before) = observer::resume(
+        eye,
         &mut Reading { seen: &*seen },
-        origin,
-        &ray,
-        detail,
-        t,
-        &line,
-        line.node(),
+        beams,
+        &aim,
+        eye.cell_of(px),
     );
     counted(marks, on, tally::WALKED, 1);
     counted(marks, on, tally::PIXEL, met.visits);
@@ -227,7 +213,7 @@ pub fn cast_cs(
         };
         let faces = world.faced(origin, &ray, &met);
         let met = Met {
-            visits: met.visits + line.visits(),
+            visits: met.visits + before,
             ..met
         };
         written(rays, id, word(&ray, met, steps, faces));
@@ -282,11 +268,6 @@ fn missed(
     id: UVec3,
     size: UVec3,
 ) -> [u32; ray::WORDS as usize] {
-    let (origin, detail) = eye_origin(eye);
-    let g = grid(eye);
-    let px = pixel_tan(eye, id, size);
-    let (ray, t, line) = started(eye, &g, beams, g.cell(px), px);
-    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::MISSED_PASS);
     let mut world = World {
         window,
         ground,
@@ -296,27 +277,13 @@ fn missed(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let met = resumed(
-        &mut Writing {
-            world,
-            seen: &mut *seen,
-            tag,
-            blocks: true,
-        },
-        origin,
-        &ray,
-        detail,
-        t,
-        &line,
-        line.node(),
-    );
-    tallied(seen, tally::EYE, tally::MISS, met.visits);
-    let faces = world.faced(origin, &ray, &met);
+    let (aim, met, before) = observer::walked(eye, world, seen, beams, pixel_tan(eye, id, size));
+    let faces = world.faced(aim.origin, &aim.ray, &met);
     let met = Met {
-        visits: met.visits + line.visits(),
+        visits: met.visits + before,
         ..met
     };
-    word(&ray, met, eye.origin.w != 0, faces)
+    word(&aim.ray, met, eye.origin.w != 0, faces)
 }
 
 /// Each pixel `cast_cs` marked missed and could not list, its ray again

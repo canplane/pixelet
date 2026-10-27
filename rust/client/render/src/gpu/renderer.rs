@@ -589,11 +589,17 @@ impl Renderer {
             // Up to a power of two, so the snap grid and the texel move only in steps;
             // the shadows fade by the casters' own reach.
             let half = libm::exp2(libm::ceil(libm::log2(far)));
-            self.shadow
-                .aim(&env[ENV_SUN..ENV_SUN + 3], eye, half, eye_world.map(|v| -v));
+            let rim = (far / half) as f32;
+            self.shadow.aim(
+                &env[ENV_SUN..ENV_SUN + 3],
+                eye,
+                half,
+                rim,
+                eye_world.map(|v| -v),
+            );
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
-            u[SHADOW_RIM] = (far / half) as f32;
+            u[SHADOW_RIM] = rim;
         }
 
         self.atmosphere.lay_out(g, env);
