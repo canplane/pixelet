@@ -1047,9 +1047,9 @@ mod tests {
             }
         }
     }
-    use crate::answer::{kept_word, BOX_WHOLE, EIGHTHS};
+    use crate::answer::{kept_word, BOX_WHOLE, EIGHTHS, FULL};
     use crate::cube::ground::stone;
-    use crate::overwrite::{AIR, FULL};
+    use crate::overwrite::AIR;
 
     /// One block of stone at `TARGET`, a unit cell, keeping `kept` eighths of
     /// its cube; air about it.

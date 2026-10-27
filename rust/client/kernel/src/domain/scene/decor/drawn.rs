@@ -14,6 +14,7 @@ use pxl_spec::space::camera::grid::{split_distance, target_cell_px, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec_core::overwrite;
 use pxl_spec_core::scatter::{self, drawn, row_of};
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
@@ -68,7 +69,7 @@ struct Handed {
     placed: Vec<[u32; scatter::GROWN_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`edited`, `frame`).
-    edits: [[i32; 4]; scatter::EDITS as usize],
+    edits: [[i32; 4]; overwrite::EDITS as usize],
     edited: usize,
     translation: [f32; 3],
     /// What the params were last made of, by value.
@@ -109,7 +110,7 @@ fn handed() -> &'static mut Handed {
         shown: [0; DECORS.len()],
         params: [0; drawn::PARAM_WORDS as usize],
         placed: Vec::new(),
-        edits: [[0; 4]; scatter::EDITS as usize],
+        edits: [[0; 4]; overwrite::EDITS as usize],
         edited: 0,
         translation: [0.0; 3],
         seen: None,
@@ -234,7 +235,7 @@ fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
 /// Where the objects were written, as the turn's change took them
 /// (domain/query/changed.rs), held for the next frame to hand: each region's
 /// columns in leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past
-/// `scatter::EDITS`, the rest joined into the last, so every write is met,
+/// `overwrite::EDITS`, the rest joined into the last, so every write is met,
 /// however many turns pass before a frame takes them.
 pub fn edited(regions: &[Aabb]) {
     let h = handed();

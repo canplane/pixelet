@@ -121,6 +121,8 @@ pub struct DrawList {
     uniforms: Vec<f32>,
     next_handle: u32,
     taken: Vec<u32>,
+    /// Where each actor drawn stands, units from the eye (`stand`).
+    stands: Vec<[f32; 3]>,
 }
 
 pub struct Lists<'a> {
@@ -131,6 +133,9 @@ pub struct Lists<'a> {
     /// Read where they lie, unwritten until the page replays the turn: the
     /// list begins again only in the next turn's `begin_frame`.
     pub uniforms: &'a [f32],
+    /// Where each actor drawn stands, units from the eye, as its draw is
+    /// placed (`stand`).
+    pub stands: &'a [[f32; 3]],
 }
 
 impl DrawList {
@@ -208,6 +213,14 @@ impl DrawList {
     pub fn begin_frame(&mut self) {
         self.draws.clear();
         self.uniforms.clear();
+        self.stands.clear();
+    }
+
+    /// An actor drawn stands at `translation`, its draw's (pxl-kernel
+    /// domain/scene/actor.rs `Actor::draw`): a receiver of the sun's map
+    /// (pxl-spec-core `sun::ACTORS_AT`).
+    pub fn stand(&mut self, translation: [f32; 3]) {
+        self.stands.push(translation);
     }
 
     /// Eye-relative, narrowed to f32 after the subtraction, so precision is finest near the eye.
@@ -344,6 +357,7 @@ impl DrawList {
             frees: &l.frees[side][..frees],
             draws: &self.draws,
             uniforms: &self.uniforms,
+            stands: &self.stands,
         }
     }
 }

@@ -83,6 +83,7 @@ const SPEC_CORE_ORDER: [(&str, u8); 24] = [
     ("lattice", 0),
     ("grid", 0),
     ("answer", 0),
+    ("tally", 0),
     ("area", 1),
     ("caves", 1),
     ("ground", 1),
@@ -102,7 +103,6 @@ const SPEC_CORE_ORDER: [(&str, u8); 24] = [
     ("scatter", 3),
     ("decor", 3),
     ("faces", 3),
-    ("tally", 3),
 ];
 
 /// xpute's words are host, guest and their contract (AGENTS.md): pixelet's

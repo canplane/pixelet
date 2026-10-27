@@ -169,7 +169,6 @@ pub struct ObserverSample {
     pub miss: f64,
     pub picked: f64,
     pub walked: f64,
-    pub pixel: f64,
     pub boxes: f64,
 }
 
@@ -186,7 +185,6 @@ impl RaySample {
                 miss: lane(tally::MISS),
                 picked: lane(tally::PICKED),
                 walked: lane(tally::WALKED),
-                pixel: lane(tally::PIXEL),
                 boxes: lane(tally::BOXES),
             }
         };
@@ -233,7 +231,6 @@ words!(FrameSample, FRAME::WORDS,
     rays.eye.miss => FRAME::eye_miss,
     rays.eye.picked => FRAME::eye_picked,
     rays.eye.walked => FRAME::eye_walked,
-    rays.eye.pixel => FRAME::eye_pixel,
     rays.eye.boxes => FRAME::eye_boxes,
     rays.sun.casts => FRAME::sun_casts,
     rays.sun.rays => FRAME::sun_rays,
@@ -242,7 +239,6 @@ words!(FrameSample, FRAME::WORDS,
     rays.sun.miss => FRAME::sun_miss,
     rays.sun.picked => FRAME::sun_picked,
     rays.sun.walked => FRAME::sun_walked,
-    rays.sun.pixel => FRAME::sun_pixel,
     rays.sun.boxes => FRAME::sun_boxes,
 );
 

@@ -16,6 +16,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
         SHADER_GROWN_MARK => "decor_mark_cs",
+        SHADER_GROWN_STAND => "decor_stand_cs",
         SHADER_GROWN => "decor_cs",
         SHADER_GROWN_COUNT => "decor_count_cs",
         SHADER_GROWN_ARGS => "decor_args_cs",

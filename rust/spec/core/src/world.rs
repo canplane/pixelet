@@ -10,13 +10,13 @@
 //! detail, and what it holds stays behind it.
 
 use crate::answer::{
-    box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE,
+    box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
     PLACED_BLOCK,
 };
 use crate::area::Shard;
 use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
-use crate::overwrite::{self, Cut, Lanes, AIR, BLOCK, FULL, PLACED, SPLIT};
+use crate::overwrite::{self, Cut, Lanes, AIR, BLOCK, PLACED, SPLIT};
 use crate::window::{Found, Squares};
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 

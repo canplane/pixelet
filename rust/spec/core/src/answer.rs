@@ -152,16 +152,23 @@ pub const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
 /// (cast.rs `walk`), and the one place a value is told to be so: what
 /// nothing is painted on and what is placed as nothing. What is placed
 /// answers a voxel alone (`overwrite::value`), so no decor or marker is
-/// among them.
+/// among them. A question of light, not of matter (`fills`): the two split
+/// the values between them today only because no matter lets light
+/// through yet, so neither is the other's negation; matter a ray sees
+/// through would answer yes to both.
 pub fn transparent(value: u32) -> bool {
     let v = self::value(value);
     v == sentinel::void as u32 || v == object::air as u32
 }
 
-/// Whether a block's value fills its block, as the layers compose its
-/// volume (`cover`): what is not transparent.
+/// Whether a block's value is matter, taking its share of its block as the
+/// layers compose its volume (`cover`) and drawn by its looks: anything but
+/// what nothing is painted on and what is placed as nothing. A question of
+/// matter, not of light (`transparent`): matter a ray sees through would
+/// still fill, so this is not `!transparent`.
 pub fn fills(value: u32) -> bool {
-    !transparent(value)
+    let v = self::value(value);
+    v != sentinel::void as u32 && v != object::air as u32
 }
 
 /// A block's kept share over its value and `PLACED_BLOCK`: the eighths of

@@ -62,7 +62,7 @@ pub const MISS_ARGS_WHOLE: u32 = 3;
 pub const MISS_ARGS_COUNT: u32 = 6;
 pub const MISS_ARGS_TALLY: u32 = 7;
 pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + crate::tally::RAYS) as usize;
-pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0, 0];
+pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0];
 
 /// The first word of a stop at `block`, a block's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.

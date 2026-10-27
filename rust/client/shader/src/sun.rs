@@ -70,7 +70,7 @@ fn epoch(m: &Moved) -> u32 {
 /// cast numbered `cast` casts (`sun::reads_at`), none past the box: tile by
 /// tile where they are few, else by the squares they lie in
 /// (`sun::coarse_at`), which may name a square for a tile of it alone.
-fn fresh_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i32; 2]) -> bool {
+fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i32; 2]) -> bool {
     let n = pxl_spec_core::sun::tiles(size) as i32;
     let (lo, hi) = (
         [lo[0].max(0), lo[1].max(0)],
@@ -356,7 +356,7 @@ impl Observer for Map {
             let tile = [p[0] as i32 / t, p[1] as i32 / t];
             ([tile[0] - 1, tile[1] - 1], [tile[0] + 1, tile[1] + 1])
         };
-        fresh_in(w, self.size, self.cast, lo, hi)
+        casts_in(w, self.size, self.cast, lo, hi)
     }
 }
 

@@ -29,7 +29,9 @@ mod world;
 
 pub use beam::{beam_cs, cells_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs};
-pub use decor::{decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs};
+pub use decor::{
+    decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs, decor_stand_cs,
+};
 pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;

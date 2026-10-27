@@ -27,6 +27,7 @@ use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::answer::{self, In, Kind};
 pub(super) use pxl_spec_core::cast::Until;
 use pxl_spec_core::cast::{self, Cone, Detail, Ends, Query};
+use pxl_spec_core::support::{Footing, Line};
 
 /// The zooms a block is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
@@ -281,25 +282,50 @@ impl<'a> World<'a> {
 
     /// The footing down column `g` at `cell` (pxl-spec-core
     /// `support::footing`): the top of the block met as drawn, with what the
-    /// world lacked on the way; none where nothing fills.
-    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Answer<Option<(i32, f32)>> {
-        let mut walker = Walker {
-            world: self,
-            lack: None,
-            answered: false,
-            strike: None,
-            lines: Lines::default(),
-        };
+    /// world lacked on the way, none where nothing a ray cannot see through
+    /// is met; and the footing itself, whose line the blocks about it are
+    /// asked off (`block_about`).
+    pub(super) fn footing(
+        &self,
+        cell: Zoom,
+        g: [i32; 2],
+    ) -> (Answer<Option<(i32, f32)>>, Footing<At>) {
+        let mut walker = self.walker();
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
         let f = pxl_spec_core::support::footing(&mut walker, cell, g);
         let met = (f.ends == Ends::Stop).then_some(f.top);
-        match (met, walker.lack, walker.answered) {
+        let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
             (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),
             (None, Some(l), true) => Answer::Coarser(None, l),
             (None, Some(l), false) => Answer::Nothing(l),
+        };
+        (answer, f)
+    }
+
+    /// What is in the block `c` of `zoom`, asked off the line `l` (pxl-spec-core
+    /// `support::block`): from the deepest node of it holding the block,
+    /// never again from the top; nothing and the tile where the world lacks
+    /// it.
+    pub(super) fn block_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
+        let mut walker = self.walker();
+        let value = pxl_spec_core::support::block(&mut walker, l, zoom, c);
+        match walker.lack {
+            None => Answer::Exact(value),
+            Some(t) => Answer::Nothing(t),
+        }
+    }
+
+    /// A walk with nothing met yet, striking no decor.
+    fn walker(&self) -> Walker<'_, 'a> {
+        Walker {
+            world: self,
+            lack: None,
+            answered: false,
+            strike: None,
+            lines: Lines::default(),
         }
     }
 

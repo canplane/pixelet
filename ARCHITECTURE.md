@@ -487,8 +487,10 @@ its nearest point is nearer than its cells' split distance, as a ray's descent
 does, and each square left is read at its window's zoom, between the heights the
 world stands at in it. The partition never depends on what a ray met.
 
-Decor is grown and drawn on the GPU each frame, a thread a candidate, never
-stored (`pxl-render gpu/grown.rs`). Placed decor is handed in beside it as
+Decor is grown on the GPU, again only where what it reads changed: which
+candidates stand is drawn a thread a patch, and each that stands grows a
+thread a candidate. It is drawn each frame and never stored in a layer
+(`pxl-render gpu/grown.rs`). Placed decor is handed in beside it as
 records (`domain/scene/decor/drawn.rs`). A kind is drawn as a model down to its
 own size on screen, and as a sprite below it.
 

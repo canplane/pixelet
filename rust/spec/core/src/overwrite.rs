@@ -23,7 +23,7 @@ pub const BRANCH: u32 = 1 << 31;
 /// The family of the root what is placed is under.
 pub const PLACED: u32 = 0;
 
-pub use crate::answer::FULL;
+use crate::answer::FULL;
 
 /// The edits a frame hands what reads them at most (pxl-kernel
 /// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box

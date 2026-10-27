@@ -72,7 +72,7 @@ pub(super) struct CastBuffers {
     frame: u32,
     forget: bool,
     moved: [u32; observed::MOVED_WORDS as usize],
-    boxes: [[i32; 4]; observed::BOXES as usize],
+    boxes: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
     written: [u32; observed::WRITTEN as usize],
     writes: usize,
@@ -195,7 +195,7 @@ pub(super) struct CastBuffers {
 struct Forgot {
     all: bool,
     moved: [u32; observed::MOVED_WORDS as usize],
-    boxes: [[i32; 4]; observed::BOXES as usize],
+    boxes: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
     written: [u32; observed::WRITTEN as usize],
     writes: usize,
@@ -278,7 +278,7 @@ impl RaysPass {
             frame: 0,
             forget: true,
             moved: [0; observed::MOVED_WORDS as usize],
-            boxes: [[0; 4]; observed::BOXES as usize],
+            boxes: [[0; 4]; overwrite::BOXES as usize],
             holding: 0,
             written: [0; observed::WRITTEN as usize],
             writes: 0,
@@ -589,22 +589,16 @@ impl RaysPass {
         }
         // Decor grown first: where it stands is what the sun's cast reads
         // of it, and its buffers what the sun's groups bind.
-        let fresh_squares = self.ground.as_ref().map_or(0, |gb| gb.fresh);
-        let world = [
-            c.eye,
-            c.window,
-            ground,
-            c.shards,
-            c.overwrites,
-            pool,
-            fresh_squares,
-        ];
+        let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool];
         let grows = Grows {
             window: cast.window,
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
                 .try_into()
                 .or_bug(Errno::ENOTRECOVERABLE),
-            filled: fresh,
+            fresh: self
+                .ground
+                .as_ref()
+                .map_or(&[][..], |gb| &gb.handed[..fresh as usize]),
             eye: &cast.eye,
         };
         c.grown.prepare(g, cast.decor, grows, meshes, world);

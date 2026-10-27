@@ -264,6 +264,11 @@ observed.rs `Reading`); the walks that write the pyramid still compose a node
 its entry does not hold, from what was handed it, and keep that in the entry
 (`Writing`, `world::At::words`)._
 
+_Note (2026-10-27): no walk only reads the pyramid any more. The pixel pass
+walks nothing, taking the raster's pick or the sky and listing the rest for
+the walk again (pxl-shader cast.rs `cast_cs`), so the reading walk and its
+`Reading` are gone; every walk writes it (`Writing`)._
+
 - Every source's composition inside the cast: placed, ground, zoom loop,
   fallback, `held_of`, caves, shard, the ways' cursor and the slab join.
 - The `At` a walk threads to feed that composition, and the stack of it.

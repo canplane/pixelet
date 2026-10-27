@@ -10,7 +10,7 @@ use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
 use pxl_spec_core::window::{self, Found, Squares, FIRST_CELL, SLOTS, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec_core::world::{self, At};
-use pxl_spec_core::{at, faces, ground, ways};
+use pxl_spec_core::{at, faces, ground, support, ways};
 use spirv_std::glam::IVec4;
 
 use crate::eye::Eye;
@@ -218,18 +218,13 @@ impl<L: Looks> Query for World<'_, L> {
 }
 
 impl<L: Looks> World<'_, L> {
-    /// The value of the block `c` at `zoom`, asked of the world's one
-    /// query with nothing handed down (pxl-spec-core `world::At::of`).
-    pub(crate) fn block(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
-        let mut at = At::of(self, (zoom, c));
-        self.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
-    }
-
     /// What lies about the face a ray stopped on (pxl-spec-core
-    /// `faces::word`): each block beside the stop's at its zoom
-    /// (`World::block`), filling its cube whole (`answer::whole`); a box's
-    /// own, a block kept short of its cube (`faces::BOX`); nothing where the
-    /// ray stopped on none.
+    /// `faces::word`): each block beside the stop's at its zoom, hiding its
+    /// cube whole (`answer::whole`), asked off the line down to the stop's
+    /// node (`support::line`, `support::block`), each from the deepest node
+    /// it shares with it, never again from the top; a box's own, a block
+    /// kept short of its cube (`faces::BOX`); nothing where the ray stopped
+    /// on none.
     pub(crate) fn faced<A: Copy>(
         &mut self,
         origin: [i32; 3],
@@ -243,8 +238,9 @@ impl<L: Looks> World<'_, L> {
             return faces::BOX;
         }
         let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
+        let line = support::line(self, zoom, c);
         faces::word(face_of(ray, met.stop.axis), |d| {
-            answer::whole(self.block(zoom, faces::beside(zoom, c, d)))
+            answer::whole(support::block(self, &line, zoom, faces::beside(zoom, c, d)))
         })
     }
 }

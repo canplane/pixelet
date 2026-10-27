@@ -21,7 +21,7 @@ use pxl_render::gpu::api::OBJECT_OPS;
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
 use crate::domain::query::decor::asset::{decor_model, decor_skin};
 use crate::domain::query::model::draw_list;
-use crate::domain::scene::character::companion::{companion_skins, companion_stands};
+use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::preview::preview_rows;
 use crate::domain::scene::environment::cloud::cloud_groups;
 use crate::domain::scene::indicator::coverage_gizmo::coverage_gizmo_step;
@@ -115,6 +115,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         return;
     }
     let lists = draw_list().take();
+    let actors = lists.stands;
     let models = crate::domain::query::model::models();
     // Each decor variant at its draw group (pxl-spec-core scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
@@ -150,7 +151,6 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
     let o = crate::domain::view::observation::observation();
     let eye = o.as_ref().and_then(crate::domain::scene::cast::eye);
-    let (stands, standing) = companion_stands(view().at().eye);
     let mut terrain_upload = crate::domain::scene::cast::upload;
     let mut terrain_landed = crate::domain::layer::terrain::window::landed;
     let out = render_frame(FrameInput {
@@ -191,7 +191,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
             shards: crate::domain::scene::cast::shards(),
             overwrites: crate::domain::scene::cast::overwrites(),
             decor: crate::domain::scene::decor::drawn::frame(),
-            actors: &stands[..standing],
+            actors,
             ray_counts: settings_store().ray_counts,
         }),
         text: text_raster,

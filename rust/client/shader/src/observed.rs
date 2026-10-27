@@ -6,7 +6,7 @@
 
 use pxl_spec_core::answer::In;
 use pxl_spec_core::cast::Query;
-use pxl_spec_core::{observed, tally};
+use pxl_spec_core::observed;
 use pxl_spec_core::world::At;
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
@@ -63,7 +63,7 @@ pub(crate) fn tallied(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
                 { Scope::QueueFamily as u32 },
                 { Semantics::NONE.bits() },
             >(
-                w.index_mut(tally::walk_at(observer, lane) as usize),
+                w.index_mut(observed::tally_at(observer, lane) as usize),
                 visits,
             );
         }
