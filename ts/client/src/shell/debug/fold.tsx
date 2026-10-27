@@ -5,7 +5,7 @@
  * the one that was open, so the corner holds one at a time.
  */
 
-import { CaretDown, CaretUp } from "phosphor-react-native";
+import { CaretDownIcon, CaretUpIcon } from "phosphor-react-native";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
@@ -47,8 +47,8 @@ export function Fold(
           <View style={styles.end}>
             {open && end}
             {open
-              ? <CaretUp size={12} color={HINT_INK} />
-              : <CaretDown size={12} color={HINT_INK} />}
+              ? <CaretUpIcon size={12} color={HINT_INK} />
+              : <CaretDownIcon size={12} color={HINT_INK} />}
           </View>
         </View>
       </Pressable>
