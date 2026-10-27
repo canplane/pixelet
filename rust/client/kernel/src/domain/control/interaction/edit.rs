@@ -21,7 +21,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::answer::PLACED_BLOCK;
+use pxl_spec_core::answer::PLACED_ASSET;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
@@ -35,7 +35,7 @@ use pxl_spec::bake::constant::EntryAt;
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
 fn carved(at: &Q3) -> bool {
-    World::now().block_of(at).value() == Some(PLACED_BLOCK | AIR)
+    World::now().asset_of(at).value() == Some(PLACED_ASSET | AIR)
 }
 
 // ---- Mutations ----
@@ -71,7 +71,7 @@ fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let ground = World::now()
         .previewing(Some(entry), None)
-        .block_of(&middle(entry))
+        .asset_of(&middle(entry))
         .exact();
     ground == Some(look as u32)
 }
@@ -199,7 +199,7 @@ pub fn remove(at: EntryAt) {
     // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
     let id = match world
         .previewing(Some(at), None)
-        .block_of(&middle(at))
+        .asset_of(&middle(at))
         .exact()
     {
         Some(v) if v != VOID && !pxl_spec_core::answer::placed(v) => AIR,

@@ -22,7 +22,7 @@ pub enum Kind {
     Split,
     /// A block: at the zoom asked, what it is; coarser, air (`AIR`) where
     /// nothing under it fills at the zooms asked, as a block of air its size.
-    Block,
+    Cell,
     /// Not held: past it the ray tells nothing.
     Lacks,
 }
@@ -31,7 +31,7 @@ pub enum Kind {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct In<B> {
     pub kind: Kind,
-    pub block: B,
+    pub asset: B,
 }
 
 /// What no block fills: void, no looks.
@@ -43,13 +43,13 @@ pub const VALUE_BITS: u32 = 16;
 /// A block's word where what is placed answered it, over its value: the
 /// source control tells an edit by (`placed`), which nothing drawn reads.
 /// Over it, the share of its cube the block keeps (`KEPT_SHIFT`).
-pub const PLACED_BLOCK: u32 = 1 << VALUE_BITS;
+pub const PLACED_ASSET: u32 = 1 << VALUE_BITS;
 
 /// A block's value, without whether what is placed holds it
-/// (`PLACED_BLOCK`) or what of its cube it keeps: a look reads the same
+/// (`PLACED_ASSET`) or what of its cube it keeps: a look reads the same
 /// whichever layer holds it.
 pub const fn value(block: u32) -> u32 {
-    block & (PLACED_BLOCK - 1)
+    block & (PLACED_ASSET - 1)
 }
 
 /// A bound as a word, its lowest in the low half and its highest in the
@@ -171,7 +171,7 @@ pub fn fills(value: u32) -> bool {
     v != sentinel::void as u32 && v != object::air as u32
 }
 
-/// A block's kept share over its value and `PLACED_BLOCK`: the eighths of
+/// A block's kept share over its value and `PLACED_ASSET`: the eighths of
 /// its cube it keeps of what fills it (`kept`), 0 for all eight, so a leaf's
 /// word, and every block's whole, sets no bit of it.
 pub const KEPT_SHIFT: u32 = 17;
@@ -250,9 +250,9 @@ pub fn whole(block: u32) -> bool {
     !transparent(block) && kept(block) == EIGHTHS
 }
 
-/// Whether what is placed holds a block's value (`PLACED_BLOCK`).
+/// Whether what is placed holds a block's value (`PLACED_ASSET`).
 pub fn placed(value: u32) -> bool {
-    value & PLACED_BLOCK != 0
+    value & PLACED_ASSET != 0
 }
 
 #[cfg(test)]

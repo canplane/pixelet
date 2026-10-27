@@ -227,7 +227,7 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
 }
 
 /// A height in leaf cells as blocks of `cell` (`top`).
-pub fn blocks(cell: Zoom, h: f32) -> i32 {
+pub fn cells(cell: Zoom, h: f32) -> i32 {
     top(cell, h).0
 }
 
@@ -254,7 +254,7 @@ pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
 }
 
 /// Blocks of `cell` a leaf cell is tall: one where a cell folds the leaves.
-pub fn leaf_blocks(cell: Zoom) -> i32 {
+pub fn leaf_cells(cell: Zoom) -> i32 {
     1 << (cell as i32 - LEAF_CELL as i32).max(0)
 }
 
@@ -280,13 +280,13 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
 /// block in blocks of `cell`: under it, the ground under its face, which a
 /// cave may take (`Cell::opens`) and a way's bore is lined in
 /// (pxl-spec-core `way::lined`).
-pub fn face_block(cell: Zoom, face: i32) -> i32 {
-    blocks(cell, face as f32) - leaf_blocks(cell)
+pub fn face_cell(cell: Zoom, face: i32) -> i32 {
+    cells(cell, face as f32) - leaf_cells(cell)
 }
 
 /// The bedrock's top under a face at `face` leaf cells, in blocks of `cell`.
 pub fn rock(cell: Zoom, face: i32) -> i32 {
-    blocks(cell, bedrock(face) as f32)
+    cells(cell, bedrock(face) as f32)
 }
 
 /// What the ground is in block `z` of a cell of `cell` whose look is `look`
@@ -300,7 +300,7 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
     if cell < LEAF_CELL || look == UNKNOWN {
         return look;
     }
-    let s = leaf_blocks(cell);
+    let s = leaf_cells(cell);
     // Water's filler is water, as sand's is sand: under a face it is the
     // same block, never dirt.
     let (filler, sandstone) = match look {
@@ -360,7 +360,7 @@ pub fn slab(
     };
     // No bedrock in it: the bedrock's top, rounded at `near` as a face is,
     // at most its bottom.
-    let rock = face_height(near, blocks(near, bedrock(hi) as f32));
+    let rock = face_height(near, cells(near, bedrock(hi) as f32));
     let caved = hollow
         && !meets([UNBOUNDED[0], rock], (zoom, c[2]), near)
         && !walled(shard, near, (zoom, [c[0], c[1]]));
@@ -371,12 +371,12 @@ pub fn slab(
     };
     let mut z = coarsest(zoom, far);
     while z <= near {
-        let top = face_height(z, blocks(z, hi as f32));
+        let top = face_height(z, cells(z, hi as f32));
         over = if top > over { top } else { over };
         if caved {
             // Its top block, and the block under it where the top is a box
             // (`Cell::opens`).
-            let floor = face_height(z, blocks(z, lo as f32) - 2 * leaf_blocks(z));
+            let floor = face_height(z, cells(z, lo as f32) - 2 * leaf_cells(z));
             under = if floor < under { floor } else { under };
         }
         z += 1;
@@ -471,17 +471,17 @@ pub fn node<H: Held>(
     block: bool,
 ) -> (Answer, Cell, [i32; 2]) {
     let air = In {
-        kind: Kind::Block,
-        block: [VOID, 0],
+        kind: Kind::Cell,
+        asset: [VOID, 0],
     };
     // A split no bound tells the span of holds anything anywhere in it.
     let split = In {
         kind: Kind::Split,
-        block: BOX_WHOLE,
+        asset: BOX_WHOLE,
     };
     let lacks = In {
         kind: Kind::Lacks,
-        block: [VOID, 0],
+        asset: [VOID, 0],
     };
     // Past the area: a block's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
@@ -489,8 +489,8 @@ pub fn node<H: Held>(
         let earth = earth(c[2]);
         let answer = if block {
             In {
-                kind: Kind::Block,
-                block: [earth, 0],
+                kind: Kind::Cell,
+                asset: [earth, 0],
             }
         } else if earth == VOID {
             air
@@ -524,11 +524,11 @@ pub fn node<H: Held>(
     }
     if block {
         let column = held.cell(*place, zoom, c);
-        let block = column.block(zoom, c[2], || cave.hollow());
+        let block = column.asset(zoom, c[2], || cave.hollow());
         return (
             In {
-                kind: Kind::Block,
-                block: [block, 0],
+                kind: Kind::Cell,
+                asset: [block, 0],
             },
             column,
             ways,
@@ -541,7 +541,7 @@ pub fn node<H: Held>(
     let answer = if meets(s, (zoom, c[2]), near) {
         In {
             kind: Kind::Split,
-            block: box_along_z(s, (zoom, c[2])),
+            asset: box_along_z(s, (zoom, c[2])),
         }
     } else {
         air
@@ -594,7 +594,7 @@ impl Cell {
     /// either.
     fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
-        let under = face_block(cell, face) - (self.part < FULL) as i32;
+        let under = face_cell(cell, face) - (self.part < FULL) as i32;
         self.look != UNKNOWN && z < under && z >= rock(cell, face)
     }
 
@@ -617,7 +617,7 @@ impl Cell {
     /// ground's look, its fold's majority at a coarser cell, as what is
     /// placed is its fold's (doc/minutes/20261005-the-ground-is-a-carto-palette.md,
     /// "One value space"), `void` for air.
-    pub fn block(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
+    pub fn asset(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
         if !self.grounded() {
             return VOID;
         }

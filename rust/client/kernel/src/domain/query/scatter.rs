@@ -41,7 +41,7 @@ impl<'a, 'w> Asked<'a, 'w> {
 
 /// The world's one query on the CPU, each ask answered with what its tiles
 /// lacked: a column's footing with its line (`World::footing`), each block
-/// about it asked off that line (`World::block_about`).
+/// about it asked off that line (`World::asset_about`).
 impl Grounds for Asked<'_, '_> {
     type Footing = Footing<At>;
 
@@ -60,9 +60,9 @@ impl Grounds for Asked<'_, '_> {
     }
 
     /// Void where the world holds nothing there.
-    fn block(&mut self, f: &Footing<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+    fn asset(&mut self, f: &Footing<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
         self.world
-            .block_about(&f.line, zoom, c)
+            .asset_about(&f.line, zoom, c)
             .value()
             .unwrap_or(u32::from(sentinel::void))
     }

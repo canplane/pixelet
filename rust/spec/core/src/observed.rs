@@ -88,7 +88,7 @@ pub const FORGETS_MOVED: u32 = 2;
 /// An entry's words.
 pub const W_KEY: u32 = 0;
 pub const W_KIND: u32 = 1;
-pub const W_BLOCK: u32 = 2;
+pub const W_ASSET: u32 = 2;
 pub const W_AT: u32 = 4;
 /// The node: its zoom, then its index on X, Y and Z.
 pub const W_NODE: u32 = W_AT + AT_WORDS;
@@ -221,8 +221,8 @@ pub const fn kind_word(kind: Kind) -> u32 {
 pub const fn kind_of(w: u32) -> Kind {
     if w == Kind::Split as u32 {
         Kind::Split
-    } else if w == Kind::Block as u32 {
-        Kind::Block
+    } else if w == Kind::Cell as u32 {
+        Kind::Cell
     } else {
         Kind::Lacks
     }

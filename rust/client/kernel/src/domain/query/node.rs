@@ -86,7 +86,7 @@ impl World<'_> {
     /// What is in the block `node`, X on the asker's lap, at its own
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
     /// (`drawn`).
-    pub fn block(&self, node: Node<3>) -> Answer<u32> {
+    pub fn asset(&self, node: Node<3>) -> Answer<u32> {
         self.drawn(&mut self.start(node), &mut Lines::default())
     }
 
@@ -107,8 +107,8 @@ impl World<'_> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         self.node(at, [zoom, zoom], lines).map(|i| {
-            if i.kind == Kind::Block {
-                i.block[0]
+            if i.kind == Kind::Cell {
+                i.asset[0]
             } else {
                 VOID
             }

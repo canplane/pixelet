@@ -52,8 +52,8 @@ pub(crate) trait Observer {
     /// `tally::SUN`).
     const TALLY: u32;
     /// Whether its walks write the blocks that fill, as a walk reading the
-    /// looks does (observed.rs `Writing::blocks`).
-    const BLOCKS: bool;
+    /// looks does (observed.rs `Writing::assets`).
+    const ASSETS: bool;
     /// The passes its beam, its samples and its walks again write the
     /// observed pyramid under (pxl-spec-core `observed::BEAM_PASS`).
     const PASSES: [u32; 3];
@@ -137,7 +137,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
             world,
             seen: &mut *seen,
             tag,
-            blocks: O::BLOCKS,
+            assets: O::ASSETS,
         },
         aim.origin,
         &aim.ray,
@@ -238,7 +238,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
             world,
             seen: &mut *seen,
             tag,
-            blocks: O::BLOCKS,
+            assets: O::ASSETS,
         },
         &*w,
         &aim,
@@ -320,7 +320,7 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
         axis: 0,
         node: cast::Node::ROOT,
         at: 0u32,
-        block: [0; 2],
+        asset: [0; 2],
     };
     if pick == 0 && sky(o, w, at) {
         (Takes::Sky, none, 0)
@@ -383,7 +383,7 @@ pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(
             world,
             seen: &mut *seen,
             tag,
-            blocks: O::BLOCKS,
+            assets: O::ASSETS,
         },
         w,
         &aim,

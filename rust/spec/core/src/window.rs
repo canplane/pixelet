@@ -462,7 +462,7 @@ impl<Q: Square> crate::way::Columns for Q {
             return 0;
         }
         let cell = Square::cell(self);
-        crate::ground::face_height(cell, crate::ground::blocks(cell, self.height(c) as f32))
+        crate::ground::face_height(cell, crate::ground::cells(cell, self.height(c) as f32))
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.

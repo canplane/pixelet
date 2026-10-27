@@ -59,7 +59,7 @@ pub fn ghost() -> Ghost {
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
             cube_of(
-                w.block_of(&middle(EntryAt::holding(GROUND.cell(), h)))
+                w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
                     .value()
                     .map_or(0, pxl_spec_core::answer::value),
             )

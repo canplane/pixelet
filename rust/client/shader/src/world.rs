@@ -221,7 +221,7 @@ impl<L: Looks> World<'_, L> {
     /// What lies about the face a ray stopped on (pxl-spec-core
     /// `face::word`): each block beside the stop's at its zoom, hiding its
     /// cube whole (`answer::whole`), asked off the line down to the stop's
-    /// node (`support::line`, `support::block`), each from the deepest node
+    /// node (`support::line`, `support::asset`), each from the deepest node
     /// it shares with it, never again from the top; a box's own, a block
     /// kept short of its cube (`face::BOX`); nothing where the ray stopped
     /// on none.
@@ -234,13 +234,13 @@ impl<L: Looks> World<'_, L> {
         if met.ends != Ends::Stop {
             return 0;
         }
-        if answer::kept(met.stop.block[0]) < answer::EIGHTHS {
+        if answer::kept(met.stop.asset[0]) < answer::EIGHTHS {
             return face::BOX;
         }
         let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
         let line = support::line(self, zoom, c);
         face::word(face_of(ray, met.stop.axis), |d| {
-            answer::whole(support::block(self, &line, zoom, face::beside(zoom, c, d)))
+            answer::whole(support::asset(self, &line, zoom, face::beside(zoom, c, d)))
         })
     }
 }

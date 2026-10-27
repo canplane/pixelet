@@ -68,7 +68,7 @@ pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
     };
     let met = cast::rooted(q, o, &ray, detail, Until::Opaque, &mut f);
     f.ends = met.ends;
-    f.top = cast::top(o, &met.stop.node, met.stop.block[0]);
+    f.top = cast::top(o, &met.stop.node, met.stop.asset[0]);
     f
 }
 
@@ -130,7 +130,7 @@ pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
 /// from the deepest node of the line holding it, each node under that
 /// handed down by its parent (`Query::child`), and from its own root where
 /// no node of the line holds it.
-pub fn block<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+pub fn asset<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
     let (line, lz) = (l.at, l.zoom);
     let mut z = if zoom < lz { zoom } else { lz };
     while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
@@ -147,7 +147,7 @@ pub fn block<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u
         z += 1;
         at = q.child(&at, z, over(c, zoom, z));
     }
-    q.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
+    q.node(&mut at, zoom, c, [zoom, zoom], 0.0).asset[0]
 }
 
 #[cfg(test)]
@@ -197,18 +197,18 @@ mod tests {
                 return if node[2] << s < 2 {
                     In {
                         kind: Kind::Split,
-                        block: BOX_WHOLE,
+                        asset: BOX_WHOLE,
                     }
                 } else {
                     In {
-                        kind: Kind::Block,
-                        block: AIR,
+                        kind: Kind::Cell,
+                        asset: AIR,
                     }
                 };
             }
             In {
-                kind: Kind::Block,
-                block: if node[2] < height(node[0]) { STONE } else { AIR },
+                kind: Kind::Cell,
+                asset: if node[2] < height(node[0]) { STONE } else { AIR },
             }
         }
     }
@@ -226,12 +226,12 @@ mod tests {
                 for z in -2..4 {
                     let want = if z < height(x) { STONE[0] } else { AIR[0] };
                     let c = [x, y, z];
-                    assert_eq!(block(&mut Step, &f.line, UNIT_ZOOM, c), want, "{c:?}");
+                    assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, c), want, "{c:?}");
                 }
             }
         }
         let far = [(3 << UNIT_ZOOM) + 6, 3, -1];
-        assert_eq!(block(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
+        assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
     }
 
     /// A line straight down to a node holds the blocks about it as the
@@ -245,7 +245,7 @@ mod tests {
                 for z in -1..4 {
                     let want = if z < height(x) { STONE[0] } else { AIR[0] };
                     let c = [x, y, z];
-                    assert_eq!(block(&mut Step, &l, UNIT_ZOOM, c), want, "{c:?}");
+                    assert_eq!(asset(&mut Step, &l, UNIT_ZOOM, c), want, "{c:?}");
                 }
             }
         }

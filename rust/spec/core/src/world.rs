@@ -11,12 +11,12 @@
 
 use crate::answer::{
     box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
-    PLACED_BLOCK,
+    PLACED_ASSET,
 };
 use crate::area::Shard;
 use crate::cave::Cave;
 use crate::ground::{self, Held, VOID};
-use crate::overwrite::{self, Cut, Lanes, AIR, BLOCK, PLACED, SPLIT};
+use crate::overwrite::{self, Cut, Lanes, AIR, CELL, PLACED, SPLIT};
 use crate::window::{Found, Squares};
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
@@ -110,7 +110,7 @@ impl At {
 /// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
 /// space"), keeping the eighths of its cube they fill together over it
 /// (`answer::cover`, `answer::eighths`, `answer::KEPT_SHIFT`), air where
-/// that is none; `PLACED_BLOCK` over a placed value, the source control tells an
+/// that is none; `PLACED_ASSET` over a placed value, the source control tells an
 /// edit by, which nothing drawn reads. Its second word is the four looks
 /// the ground's block is drawn by (`ground::Cell::four`, `ground::word`),
 /// none for any other. Coarser, a split where
@@ -151,23 +151,23 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     // each (`ground::word`): only the ground's looks, a placed cube of a
     // look, fit; one past a byte, an object's, is drawn by its value.
     let laid = || {
-        let four = if fills(over.block) {
-            overwrite::looks(lanes, put, hide, zoom, c, over.block)
+        let four = if fills(over.asset) {
+            overwrite::looks(lanes, put, hide, zoom, c, over.asset)
         } else {
             [0; 4]
         };
         let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
         [
-            PLACED_BLOCK | over.block,
+            PLACED_ASSET | over.asset,
             if bytes { ground::word(four) } else { 0 },
         ]
     };
     // Filling its cube whole, what is placed is the block, whatever is
     // under it.
-    if over.says == BLOCK && over.fill == FULL {
+    if over.says == CELL && over.fill == FULL {
         return In {
-            kind: Kind::Block,
-            block: laid(),
+            kind: Kind::Cell,
+            asset: laid(),
         };
     }
     // Where what is placed splits the node, the box it may fill.
@@ -195,7 +195,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         };
     }
     // The ways where the block's column was read: their leaf or fold over it.
-    let way = if block && i.kind == Kind::Block && place.here() {
+    let way = if block && i.kind == Kind::Cell && place.here() {
         overwrite::value(pool, *trail, Cut::NONE, zoom, c)
     } else {
         VOID
@@ -205,9 +205,9 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         // keeps a block there alone.
         let lacks = In {
             kind: i.kind,
-            block: i.block,
+            asset: i.asset,
         };
-        if i.kind == Kind::Lacks && over.says != BLOCK {
+        if i.kind == Kind::Lacks && over.says != CELL {
             return lacks;
         }
         // The ground's block, the share of its cube it fills and its four
@@ -215,8 +215,8 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         // placed, its share kept with the ground's (`answer::cover`): the
         // block keeps the eighths of its cube all of them fill
         // (`answer::eighths`), its look the kind most of that is.
-        let mut value = if i.kind == Kind::Block {
-            i.block[0]
+        let mut value = if i.kind == Kind::Cell {
+            i.asset[0]
         } else {
             VOID
         };
@@ -235,8 +235,8 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             }
             fill = f;
         }
-        if over.says == BLOCK {
-            let (f, theirs) = cover(fill, over.block, over.fill);
+        if over.says == CELL {
+            let (f, theirs) = cover(fill, over.asset, over.fill);
             if theirs || !fills(value) {
                 [value, four] = laid();
             }
@@ -249,8 +249,8 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         let block = if kept == 0 {
             // Nothing kept: air, what is placed's where it is air.
             [
-                if over.says == BLOCK && over.block == AIR {
-                    PLACED_BLOCK | AIR
+                if over.says == CELL && over.asset == AIR {
+                    PLACED_ASSET | AIR
                 } else {
                     VOID
                 },
@@ -260,8 +260,8 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             [kept_word(value, kept), four]
         };
         return In {
-            kind: Kind::Block,
-            block,
+            kind: Kind::Cell,
+            asset: block,
         };
     }
     // Coarser, what is placed splits it where it may fill, and the ways
@@ -271,7 +271,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     // it lacks) and the ways' (`way::slab`), the last two along z.
     let ways = crate::way::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
-    let kind = if splits || i.kind == Kind::Block && fill {
+    let kind = if splits || i.kind == Kind::Cell && fill {
         Kind::Split
     } else {
         i.kind
@@ -279,11 +279,11 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     if kind != Kind::Split {
         return In {
             kind,
-            block: i.block,
+            asset: i.asset,
         };
     }
     let own = match i.kind {
-        Kind::Split => i.block,
+        Kind::Split => i.asset,
         Kind::Lacks => BOX_WHOLE,
         _ => BOX_NONE,
     };
@@ -294,13 +294,13 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     // Every source saying nothing lies in it is air its size.
     if box_none(joined) {
         return In {
-            kind: Kind::Block,
-            block: crate::answer::AIR,
+            kind: Kind::Cell,
+            asset: crate::answer::AIR,
         };
     }
     In {
         kind,
-        block: joined,
+        asset: joined,
     }
 }
 

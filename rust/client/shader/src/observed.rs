@@ -123,7 +123,7 @@ pub(crate) struct Writing<'a, L> {
     /// looks (the sun's, `Unlooked`) answers such a block without them, and
     /// another walk may read what it writes; splits, what is transparent and
     /// lacks carry none.
-    pub(crate) blocks: bool,
+    pub(crate) assets: bool,
 }
 
 impl<L: Looks> Query for Writing<'_, L> {
@@ -181,14 +181,14 @@ impl<L: Looks> Query for Writing<'_, L> {
                             seen_at(self.seen, a + 4),
                         ]);
                         let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
-                        let block = [
-                            seen_at(self.seen, w + observed::W_BLOCK),
-                            seen_at(self.seen, w + observed::W_BLOCK + 1),
+                        let asset = [
+                            seen_at(self.seen, w + observed::W_ASSET),
+                            seen_at(self.seen, w + observed::W_ASSET + 1),
                         ];
                         if seen_load(self.seen, w) == held {
                             n.entry = first + k;
                             n.at = at;
-                            return In { kind, block };
+                            return In { kind, asset };
                         }
                         to = observed::NONE;
                         free = observed::NONE;
@@ -217,9 +217,9 @@ impl<L: Looks> Query for Writing<'_, L> {
         let answer = Query::node(&mut self.world, &mut n.at, zoom, c, asked, t0);
         let w = observed::entry_at(to);
         if to != observed::NONE
-            && (self.blocks
-                || answer.kind != pxl_spec_core::answer::Kind::Block
-                || pxl_spec_core::answer::transparent(answer.block[0]))
+            && (self.assets
+                || answer.kind != pxl_spec_core::answer::Kind::Cell
+                || pxl_spec_core::answer::transparent(answer.asset[0]))
             && key != observed::CLAIMED
             && seen_swap(self.seen, w, key, observed::CLAIMED) == key
         {
@@ -228,8 +228,8 @@ impl<L: Looks> Query for Writing<'_, L> {
                 w + observed::W_KIND,
                 observed::kind_word(answer.kind),
             );
-            seen_put(self.seen, w + observed::W_BLOCK, answer.block[0]);
-            seen_put(self.seen, w + observed::W_BLOCK + 1, answer.block[1]);
+            seen_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
+            seen_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
             let words = n.at.words();
             let a = w + observed::W_AT;
             seen_put(self.seen, a, words[0]);

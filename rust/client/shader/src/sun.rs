@@ -186,7 +186,7 @@ impl Map {
 impl Observer for Map {
     type At = [u32; 2];
     const TALLY: u32 = tally::SUN;
-    const BLOCKS: bool = false;
+    const ASSETS: bool = false;
     const PASSES: [u32; 3] = [
         observed::SUN_BEAM_PASS,
         observed::SUN_SAMPLES_PASS,
