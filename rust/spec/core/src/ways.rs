@@ -3,15 +3,15 @@
 //! gpu-portable: the ways off the ground, as a block asks them — a bridge's
 //! deck and its piers, a tunnel's bore and the way's block about it, an
 //! approach's embankment or cutting — one rule for a square's fill, which
-//! writes each column's runs once, and the descent on both sides, which
-//! reads them (pxl-spec bake/separation.rs keeps the lines, solved
-//! offline). A block is asked of the lines over its column, each visit of a
-//! line its own crossing: the run of its segments, one after another, that
-//! are over the column. A column's visits make its spans once (`column`),
-//! what a block of it is is read off them (`at`), and ground beside the air
-//! they leave takes that way's look, read off the spans of the columns
-//! beside it as its fill writes its runs (`lined`), so a reader reads a
-//! block's own column alone. What is under half a block in any dimension at a
+//! keeps each column's spans once and builds its ways' tree off them, which
+//! the descent on both sides reads (pxl-spec bake/separation.rs keeps the
+//! lines, solved offline). A block is asked of the lines over its column,
+//! each visit of a line its own crossing: the run of its segments, one
+//! after another, that are over the column. A column's visits make its
+//! spans once (`column`), what a block of it is is read off them (`at`),
+//! and ground beside the air they leave takes that way's look, read off the
+//! spans of the columns beside it as its fill builds its tree (`lined`), so
+//! a reader reads a block's own column alone. What is under half a block in any dimension at a
 //! zoom is absent there, as the fold drops a line under half a cell wide: a
 //! slab or a bore fills a block where it holds half its height or more, and
 //! a pier, a leaf cell square, stands only in columns no more than two leaf
@@ -64,7 +64,7 @@ pub const APPROACH: u32 = 2;
 /// What `block` answers where the ways write nothing there.
 pub const NOTHING: u32 = u32::MAX;
 
-/// What a bore's air is in a column's runs (`lined`): the ground's void.
+/// What a bore's air is where the ways write it (`lined`): the ground's void.
 pub const AIR: u32 = sentinel::void as u32;
 
 /// A vector's length, as a GPU takes one: no `hypot` there.
@@ -491,10 +491,6 @@ pub trait Columns {
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
     fn joins(&self, c: [i32; 2], k: u32) -> bool;
-    /// Column `c`'s spans and whether they fit `SPANS` (`column`): worked
-    /// out off its segments, or read where they were worked out once for
-    /// every column beside it to read (pxl-spec-core fill.rs `spans`).
-    fn spans(&self, c: [i32; 2]) -> (Spans, bool);
 }
 
 /// The `k`-th segment's crossing of column `c`.
@@ -615,7 +611,7 @@ fn pier_stands<C: Columns>(
 }
 
 /// What a span's value marks as a bore's air, over the look of its way.
-const AIR_OF: u32 = 0x80;
+pub(crate) const AIR_OF: u32 = 0x80;
 
 /// What one visit writes in its column, in leaf cells: a deck's slab or an
 /// embankment (its way's look), or a bore's or a cutting's air (`AIR_OF`
@@ -670,19 +666,23 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) 
 /// The most spans one column's visits make (`column`): the most of the
 /// format-12 set (2026-10-17), measured with every tile at every zoom (z14's
 /// 10 at 01033210230311; z15's most 9, none past z11); a tile past it fails
-/// its bake (pxl-spec bake/tile/terrain.rs `runs_fit`).
+/// its bake (pxl-spec bake/tile/terrain.rs `fill_fit`).
 pub const SPANS: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come: each a
 /// deck's slab or an embankment (its way's look), a pier (`PIER`), or a
 /// bore's or a cutting's air (`AIR_OF` over its way's look); `n` of them.
-/// The sweep's working set: its visits found once, made into the column's
-/// runs (`runs`).
+/// And its face block (`ground::face_block`), under which a bore's air
+/// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
+/// or it is past the area, where nothing does. What its blocks are read
+/// off, its visits found once: a square's fill keeps them (pxl-spec-core
+/// fill.rs `spans`, read through `Kept`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spans {
     pub run: [[i32; 2]; SPANS],
     pub value: [u32; SPANS],
     pub n: u32,
+    pub face: i32,
 }
 
 impl Spans {
@@ -690,6 +690,7 @@ impl Spans {
         run: [[0, 0]; SPANS],
         value: [0; SPANS],
         n: 0,
+        face: i32::MIN,
     };
 
     /// Span `v` over `run`, where there is room; false where there is none.
@@ -705,22 +706,23 @@ impl Spans {
 }
 
 /// Column `c`'s spans: what each visit of a line writes there that fills a
-/// block of the grid's zoom (`fills_any`), as `at` reads no other — none in
-/// a column of the bedrock, past the area or walled by its edge
-/// (`Columns::walled`), as bedrock wins over a way as it does over the
-/// ground's face — and whether they all fit `SPANS`.
+/// block of the grid's zoom (`fills_any`), as `at` reads no other, and its
+/// face block — none, nor a face, in a column of the bedrock, past the area
+/// or walled by its edge (`Columns::walled`), as bedrock wins over a way as
+/// it does over the ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
-    if cols.count(c) == 0 || cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
+    if cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
         return (spans, fits);
     }
     // The column's face and the tile's scale, read once for all its visits.
+    let cell = cols.cell();
     let ground = (cols.face(c), cols.per_m());
+    spans.face = crate::ground::face_block(cell, ground.0);
     let mut k = 0;
     while k < cols.count(c) {
         let (w, next) = writes(cols, c, k, ground);
         k = next;
-        let cell = cols.cell();
         if w.value != NOTHING && fills_any(cell, w.run) {
             fits &= spans.push(w.run, w.value);
         }
@@ -731,15 +733,24 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     (spans, fits)
 }
 
-/// What the ways write in block `z` at `cell` of a column whose spans are
-/// `spans`: a deck's slab or its pier, the highest of those over it keeping
-/// what two share, a slab before its pier; else the first air over it
-/// (`AIR_OF` over its way's look); else `NOTHING`.
-pub fn at(spans: &Spans, cell: Zoom, z: i32) -> u32 {
+/// A square's columns' spans and the ring's about it as its fill keeps
+/// them (pxl-spec-core fill.rs `spans`), read in place: column `c`'s face
+/// block and how many spans it has (`Spans`), and its `j`-th span and its
+/// value.
+pub trait Kept {
+    fn head(&self, c: [i32; 2]) -> (i32, u32);
+    fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
+}
+
+/// What the ways write in block `z` at `cell` of column `c`, its `n` spans
+/// kept in `k`: a deck's slab or its pier, the highest of those over it
+/// keeping what two share, a slab before its pier; else the first air over
+/// it (`AIR_OF` over its way's look); else `NOTHING`.
+fn at(k: &impl Kept, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
     let (mut best, mut look, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
-    let mut k = 0;
-    while k < spans.n as usize {
-        let (run, v) = (spans.run[k], spans.value[k]);
+    let mut j = 0;
+    while j < n {
+        let (run, v) = k.span(c, j);
         if fills(cell, run, z) {
             if v & AIR_OF != 0 {
                 if air == NOTHING {
@@ -749,7 +760,7 @@ pub fn at(spans: &Spans, cell: Zoom, z: i32) -> u32 {
                 (best, look) = (run, v);
             }
         }
-        k += 1;
+        j += 1;
     }
     if look != NOTHING {
         look
@@ -760,15 +771,14 @@ pub fn at(spans: &Spans, cell: Zoom, z: i32) -> u32 {
 
 /// The `k`-th of a block and the six about it, from its own: the row under
 /// it, the cell before it, the block under it, the block over it, the cell
-/// after it, the row over it — the order of the grid's cells.
+/// after it, the row over it — the order of the grid's cells. No index into
+/// an array: a bounds check's panic is a return no barrier after it may
+/// follow (pxl-shader `ways_tree_cs`, whose leaves read it).
 fn near(k: u32) -> [i32; 3] {
-    let mut d = [0; 3];
-    if k > 0 {
-        let j = k - 1;
-        let (i, s) = if j < 3 { (j, -1) } else { (5 - j, 1) };
-        d[if i == 2 { 2 } else { 1 - i as usize }] = s;
-    }
-    d
+    // Its axis, y, x then z, and its side.
+    let (i, s) = if k < 4 { (k.wrapping_sub(1), -1) } else { (6 - k, 1) };
+    let on = |axis: u32| if k != 0 && i == axis { s } else { 0 };
+    [on(1), on(0), on(2)]
 }
 
 /// Where the ways may fill a node along z, at the zooms from `coarsest` to
@@ -806,149 +816,194 @@ pub fn slab([lo, hi]: [i32; 2], [coarsest, near]: [Zoom; 2]) -> [i32; 2] {
     [under, over]
 }
 
-/// A run along z as a square holds it, a word: its first block, an `i16`,
-/// and its value (`at`'s, its air `AIR_OF` over its way's look), `NOTHING`
-/// as `0xffff`. It holds to the next run's first block.
-pub fn run_word(lo: i32, value: u32) -> u32 {
-    (lo as u32 & 0xffff) | (value & 0xffff) << 16
+/// The column the `m`-th of `near` reads beside column `c`, and the block
+/// it reads it at from `z`: the cell's own for the blocks under and over.
+fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
+    let d = near(m);
+    ([c[0] + d[0], c[1] + d[1]], z + d[2])
 }
 
-/// A run's first block and its value; a value of no way is `NOTHING`.
-pub fn run_of(w: u32) -> (i32, u32) {
-    let value = w >> 16;
-    (
-        (w << 16) as i32 >> 16,
-        if value == 0xffff { NOTHING } else { value },
-    )
-}
-
-/// The first block past `z` where one of a column's spans' blocks
-/// (`filled`) begins or ends, `i32::MAX` where none does.
-fn edge_after(spans: &Spans, cell: Zoom, z: i32) -> i32 {
-    let mut edge = i32::MAX;
-    let mut k = 0;
-    while k < spans.n as usize {
-        let [first, last] = filled(cell, spans.run[k]);
-        if first > z {
-            edge = edge.min(first);
-        }
-        if last >= z {
-            edge = edge.min(last + 1);
-        }
-        k += 1;
-    }
-    edge
-}
-
-/// A column's spans, the four columns' beside it in `near`'s order (the
-/// row under it, the cell before it, the cell after it, the row over it)
-/// and its ground's face block (`ground::face_block`), none where the
-/// area's edge walls it: what its blocks are read off (`lined`).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Around {
-    pub spans: [Spans; 5],
-    pub face: i32,
-}
-
-/// Column `c` and the columns beside it (`Around`), the ring's off their
-/// edge bins, and whether all their spans fit `SPANS`.
-pub fn around<C: Columns>(cols: &C, c: [i32; 2]) -> (Around, bool) {
-    let mut a = Around {
-        spans: [Spans::NONE; 5],
-        face: i32::MIN,
-    };
-    if cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
-        return (a, true);
-    }
-    a.face = crate::ground::face_block(cols.cell(), cols.face(c));
-    let mut fits = true;
-    let mut k = 0;
-    while k < 7 {
-        let d = near(k);
-        if k != 3 && k != 4 {
-            let (s, fit) = cols.spans([c[0] + d[0], c[1] + d[1]]);
-            a.spans[beside(k)] = s;
-            fits &= fit;
-        }
-        k += 1;
-    }
-    (a, fits)
-}
-
-/// Which of `Around`'s spans the `k`-th of `near` reads: its own column's
-/// for itself and the blocks under and over it.
-fn beside(k: u32) -> usize {
-    if k < 3 {
-        k as usize
-    } else if k < 5 {
-        0
-    } else {
-        k as usize - 2
-    }
-}
-
-/// What the ways write in block `z` of a column at `cell` (`at` of its
-/// own spans): a deck's slab or its pier, else a bore's air (`AIR`); else,
-/// under the ground's face block, where a cave may take it
-/// (`ground::face_block`), the way's look where a bore's air is beside it —
-/// under or over it, or across one of its four faces, the first in `near`'s
-/// order — so a cave never opens into a way, whatever carves the ground
+/// What the ways write in block `z` of column `c` at `cell`, its spans and
+/// those beside it kept in `k` (`at` of its own): a deck's slab or its
+/// pier, else a bore's air (`AIR`); else, under its face block, where a
+/// cave may take it (`ground::face_block`), the way's look where a bore's
+/// air is beside it — under or over it, or across one of its four faces,
+/// the first in `near`'s order — so a cave never opens into a way, whatever
+/// carves the ground
 /// (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md,
-/// "Separation"); else `NOTHING`.
-pub fn lined(a: &Around, cell: Zoom, z: i32) -> u32 {
-    let v = at(&a.spans[0], cell, z);
+/// "Separation"); else `NOTHING`. Read off the spans in place, the
+/// column's own first: a block it writes reads none beside it.
+pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
+    let (face, n) = k.head(c);
+    let v = at(k, c, n, cell, z);
     if v != NOTHING {
         return if v & AIR_OF != 0 { AIR } else { v };
     }
-    let mut k = 1;
-    while z < a.face && k < 7 {
-        let v = at(&a.spans[beside(k)], cell, z + near(k)[2]);
+    let mut m = 1;
+    while z < face && m < 7 {
+        let (b, zb) = beside(c, m, z);
+        let v = at(k, b, k.head(b).1, cell, zb);
         if v != NOTHING && v & AIR_OF != 0 {
             return v & !AIR_OF;
         }
-        k += 1;
+        m += 1;
     }
     NOTHING
 }
 
-/// The first block past `z` where what `lined` reads may change: an edge of
-/// a span's blocks (`edge_after`) of a column beside, of its own one block
-/// either side too, or its face block; `i32::MAX` where none is.
-fn edge_around(a: &Around, cell: Zoom, z: i32) -> i32 {
-    let mut edge = if a.face > z { a.face } else { i32::MAX };
-    let mut k = 0;
-    while k < 7 {
-        // Own spans read at `z + s` change past `z` where an edge `e` of them
-        // is past `z + s`: at `e - s`.
-        let s = near(k)[2];
-        let e = edge_after(&a.spans[beside(k)], cell, z + s);
-        if e != i32::MAX {
-            edge = edge.min(e - s);
+/// The leaf cells between which column `c`'s blocks at `cell` hold what
+/// the ways write there (`lined`), its ground's top `top` leaf cells: from
+/// the lowest to past the highest, `ground::EMPTY` where they write none.
+/// Its own spans' blocks (`filled`), a bore's air only as far as the top,
+/// over which it is air whatever writes it; and under its face block, the
+/// blocks a bore's air beside it lines, where no slab or pier of that
+/// column fills the block read (`bare`). A lined block is under the face's
+/// block, so under the top: the hull of the blocks `lined` reads something
+/// in, exactly, off the spans, never a block at a time.
+pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
+    let s = 1i32 << (LEAF_CELL - cell);
+    let (face, n) = k.head(c);
+    let [mut lo, mut hi] = crate::ground::EMPTY;
+    let mut j = 0;
+    while j < n {
+        let (run, v) = k.span(c, j);
+        let [first, last] = filled(cell, run);
+        let end = if v & AIR_OF != 0 {
+            ((last + 1) * s).min(top)
+        } else {
+            (last + 1) * s
+        };
+        if first <= last && first * s < end {
+            (lo, hi) = (lo.min(first * s), hi.max(end));
         }
-        k += 1;
+        j += 1;
     }
-    edge
+    // A face of none lines nothing, and has no block under it to name.
+    let mut m = if face == i32::MIN { 7 } else { 1 };
+    while m < 7 {
+        let (b, dz) = beside(c, m, 0);
+        let nb = k.head(b).1;
+        let mut j = 0;
+        while j < nb {
+            let (run, v) = k.span(b, j);
+            // Air read at `z + dz` lines `z`, under the face block, where no
+            // slab or pier of its column fills it.
+            let [first, last] = filled(cell, run);
+            let last = last.min(face - 1 + dz);
+            let (from, to) = (
+                bare(k, b, nb, cell, [first, last], 1),
+                bare(k, b, nb, cell, [last, first], -1),
+            );
+            if v & AIR_OF != 0 && from <= last {
+                (lo, hi) = (lo.min((from - dz) * s), hi.max((to - dz + 1) * s));
+            }
+            j += 1;
+        }
+        m += 1;
+    }
+    [lo, hi]
 }
 
-/// A column's runs at `cell` as a square holds them (pxl-spec-core window.rs
-/// `RUNS_AT`): each block from which what the ways write there (`lined`)
-/// changes, as a run (`run_word`), lowest first, the last `NOTHING` on; the
-/// `k`-th to `put`, and how many. Between two edges (`edge_around`) the
-/// same spans fill every block it reads, so `lined` is read once a piece,
-/// never a block at a time. The walk steps from edge to edge in one place,
-/// as a GPU inlines a call once a site.
-pub fn runs(a: &Around, cell: Zoom, mut put: impl FnMut(u32, u32)) -> u32 {
-    // From one past the least, so the block under it is still a block.
-    let (mut z, mut held, mut n) = (i32::MIN + 1, NOTHING, 0);
-    loop {
-        z = edge_around(a, cell, z);
-        if z == i32::MAX {
-            return n;
+/// The first block from `from` toward `to`, a `step` at a time, that no
+/// slab or pier of column `b`'s `n` spans fills, where its air is read as
+/// air (`at`); past `to` where they fill every one. Each step past one
+/// of them, so no more than one a span.
+fn bare(k: &impl Kept, b: [i32; 2], n: u32, cell: Zoom, [from, to]: [i32; 2], step: i32) -> i32 {
+    let (mut z, mut moved) = (from, true);
+    while moved && (z - to) * step <= 0 {
+        moved = false;
+        let mut j = 0;
+        while j < n {
+            let (run, v) = k.span(b, j);
+            let [first, last] = filled(cell, run);
+            if v & AIR_OF == 0 && first <= z && z <= last {
+                (z, moved) = (if step > 0 { last + 1 } else { first - 1 }, true);
+            }
+            j += 1;
         }
-        let v = lined(a, cell, z);
-        if v != held {
-            put(n, run_word(z, v));
-            (held, n) = (v, n + 1);
+    }
+    z
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A column and the four beside it, each a face block and its spans.
+    struct Five([(i32, [([i32; 2], u32); 4], u32); 5]);
+
+    impl Five {
+        fn of(&self, c: [i32; 2]) -> &(i32, [([i32; 2], u32); 4], u32) {
+            let k = match c {
+                [0, 0] => 0,
+                [0, -1] => 1,
+                [-1, 0] => 2,
+                [1, 0] => 3,
+                _ => 4,
+            };
+            &self.0[k]
+        }
+    }
+
+    impl Kept for Five {
+        fn head(&self, c: [i32; 2]) -> (i32, u32) {
+            let (face, _, n) = self.of(c);
+            (*face, *n)
+        }
+        fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
+            self.of(c).1[j as usize]
+        }
+    }
+
+    /// `bound` is the hull of the blocks `lined` writes, a block at a
+    /// time, a bore's air held to the top: every way a slab, a pier or air
+    /// over another, beside it or over and under it can lie, at zooms from
+    /// the leaves to three coarser.
+    #[test]
+    fn the_bound_is_the_hull_of_what_lined_writes() {
+        let mut seed = 0x2545_f491_u32;
+        let mut next = |m: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed % m
+        };
+        for _ in 0..20_000 {
+            let cell = LEAF_CELL - next(4);
+            let s = 1i32 << (LEAF_CELL - cell);
+            let top = next(120) as i32 - 60;
+            let face = crate::ground::face_block(
+                cell,
+                crate::ground::face_height(cell, crate::ground::blocks(cell, top as f32)),
+            );
+            let mut five = [(0, [([0, 0], 0); 4], 0); 5];
+            for (k, col) in five.iter_mut().enumerate() {
+                let n = next(5);
+                for j in 0..n as usize {
+                    let lo = next(140) as i32 - 70;
+                    let v = match next(3) {
+                        0 => AIR_OF | 3,
+                        1 => 7,
+                        _ => PIER,
+                    };
+                    col.1[j] = ([lo, lo + 1 + next(30) as i32], v);
+                }
+                col.2 = n;
+                col.0 = if k == 0 && next(8) == 0 { i32::MIN } else { face };
+            }
+            let k = Five(five);
+            let mut hull = crate::ground::EMPTY;
+            for z in -200 / s..200 / s {
+                let v = lined(&k, [0, 0], cell, z);
+                if v == NOTHING {
+                    continue;
+                }
+                let end = if v == AIR { ((z + 1) * s).min(top) } else { (z + 1) * s };
+                if z * s < end {
+                    hull = [hull[0].min(z * s), hull[1].max(end)];
+                }
+            }
+            assert_eq!(bound(&k, [0, 0], cell, top), hull, "{:?} at {cell}, top {top}", k.0);
         }
     }
 }

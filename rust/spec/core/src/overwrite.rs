@@ -243,16 +243,25 @@ fn of(lanes: &impl Lanes, slot: u32, zoom: Zoom) -> Held {
 /// asks this once, at its root.
 pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
     let p = path(zoom, at);
-    let mut held = of(
+    down(
         lanes,
         root + slot_of([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]),
         0,
-    );
-    let mut z = 0;
+        zoom,
+        p,
+    )
+}
+
+/// What the node `at` of `zoom` holds under the node of `top` over it that
+/// `slot` holds: down from it to its own slot, or to the leaf over it, a
+/// `child` a zoom.
+pub fn down(lanes: &impl Lanes, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> Held {
+    let mut held = of(lanes, slot, top);
+    let mut z = top;
     while z < zoom && held.folded() {
         z += 1;
         let s = zoom - z;
-        held = child(lanes, held, z, [p[0] >> s, p[1] >> s, p[2] >> s]);
+        held = child(lanes, held, z, [at[0] >> s, at[1] >> s, at[2] >> s]);
     }
     held
 }

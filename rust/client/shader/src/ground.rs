@@ -86,8 +86,8 @@ pub fn heights_cs(
 }
 
 /// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
-/// column's own, its top and its runs in its scratch (`fill::level`), a
-/// higher one over the level under it, written before (`window::join`): a
+/// column's own, its top and the spans kept in its scratch (`fill::level`),
+/// a higher one over the level under it, written before (`window::join`): a
 /// dispatch a level, from 0 up.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "bound_cs"))]
 pub fn bound_cs(
@@ -95,8 +95,7 @@ pub fn bound_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] level: &UVec4,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
-    // Read and written, as `ways_cs` binds it: the two share one group.
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] scratch: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] scratch: &[u32],
 ) {
     let j = level.x;
     let side = SQUARE >> j;
@@ -105,14 +104,14 @@ pub fn bound_cs(
     }
     let rec = window::handed_at(id.z);
     let base = square_at(at(fresh, rec + window::FRESH_SQUARE));
-    let runs = fill::Scratch {
-        words: &*scratch,
+    let kept = fill::Scratch {
+        words: scratch,
         at: fill::scratch_at(scratch, id.z),
     };
     fill::level(
         ground,
         base,
-        &runs,
+        &kept,
         at(fresh, rec + window::FRESH_CELL),
         j,
         [id.x, id.y],

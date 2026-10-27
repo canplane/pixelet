@@ -3,23 +3,22 @@
 //! gpu-portable: a square's fill, a thread at a time, off its record in the
 //! frame's fresh list (`window::HANDED_WORDS`, its words, looks, samples and
 //! lines) into the buffer its words lie in from `base`
-//! (`window::SQUARE_WORDS`): each column's ground
-//! top off its tile's samples and its cell as laid (`heights`), its ways'
-//! runs off its lines into its scratch, the frame's (`window::FIRSTS_AT`),
-//! in four passes (each column's spans once, `spans`; then `ways`, a
-//! workgroup's scan between them, `stretch_runs` and `scanned`), and its
-//! levels, level 0 each column's own
-//! (`level`), and its ways' tree off the runs (`ways::tree`). A GPU runs
-//! each pass a thread a column or entry
-//! (pxl-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs its
-//! columns' passes in order over one square (`square`), so the runs it
-//! sizes a tile's room by are the ones a GPU writes.
+//! (`window::SQUARE_WORDS`): each column's ground top off its tile's
+//! samples and its cell as laid (`heights`), its ways' spans off its lines,
+//! each column's once, into its scratch, the frame's (`spans`,
+//! `window::SPANS_AT`), and off them its levels, level 0 each column's own
+//! (`level`), and its ways' tree (`ways::tree`). A GPU runs each pass a
+//! thread a column or entry (pxl-shader `heights_cs`, `ways_cs`,
+//! `bound_cs`); a bake runs its columns' passes in order over one square
+//! (`square`), so the spans it sizes a tile's room by are the ones a GPU
+//! keeps.
 
 use crate::area::Shard;
 use crate::window::{
-    self, column_top, handed_at, Squares, COLUMNS_AT, ELE_AT, FIRSTS_AT, FRESH_CELL, FRESH_FIRST,
-    FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LEVEL_ENTRY_WORDS,
-    LINES_AT, LOOKS_AT, ROOT_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, SQUARE_WORDS,
+    self, column_top, handed_at, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE,
+    FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT,
+    LOOKS_AT, ROOT_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMNS, SPANS_COLUMN_WORDS, SQUARE,
+    SQUARE_CELLS, SQUARE_WORDS,
 };
 use crate::{at, ground, ways, Zoom};
 
@@ -75,6 +74,19 @@ fn handed(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
     )
 }
 
+/// The cells' zoom of the square a frame hands `k`-th in `fresh`.
+pub fn cell_of(fresh: &[u32], k: u32) -> Zoom {
+    at(fresh, handed_at(k) + FRESH_CELL)
+}
+
+/// The square at `base`'s own nodes along z its ways meet, its cells at
+/// `cell`, off its levels' whole bound (`ways::tree::span`): what its ways'
+/// tree's root holds, the first one's Z and how many.
+pub fn root_span(ground: &[u32], base: u32, cell: Zoom) -> (i32, u32) {
+    let ways = ground::bounds_of(level_of(ground, base, window::LEVELS, [0, 0]))[1];
+    ways::tree::span(ways, cell)
+}
+
 /// A square being filled, on its own: what `level` folds.
 pub struct Fresh<'a> {
     pub ground: &'a [u32],
@@ -113,23 +125,58 @@ impl Squares for Fresh<'_> {
     }
 }
 
-/// A handed square's runs in its scratch from `at` (`window::FIRSTS_AT`,
-/// `window::RUNS_AT`), as its fill wrote them.
+/// A handed square's spans in its scratch from `at` (`window::SPANS_AT`),
+/// as its fill kept them (`spans`): what its levels and its ways' tree
+/// read its blocks off.
 pub struct Scratch<'a> {
     pub words: &'a [u32],
     pub at: u32,
 }
 
-impl ways::tree::Runs for Scratch<'_> {
-    fn column(&self, i: u32) -> [u32; 2] {
-        [
-            at(self.words, self.at + FIRSTS_AT + i),
-            at(self.words, self.at + FIRSTS_AT + i + 1),
-        ]
+impl Scratch<'_> {
+    /// Where column `c`'s spans begin, `c` in the square's cells, its ring
+    /// one past each side.
+    fn column(&self, c: [i32; 2]) -> u32 {
+        let i = (c[1] + 1) as u32 * SPANS_ACROSS + (c[0] + 1) as u32;
+        self.at + SPANS_AT + i * SPANS_COLUMN_WORDS
     }
-    fn run(&self, r: u32) -> u32 {
-        at(self.words, self.at + RUNS_AT + r)
+}
+
+impl ways::Kept for Scratch<'_> {
+    fn head(&self, c: [i32; 2]) -> (i32, u32) {
+        let w = at(self.words, self.column(c));
+        let face = w as i32 >> 16;
+        (
+            if face == i16::MIN as i32 {
+                i32::MIN
+            } else {
+                face
+            },
+            w & SPANS_COUNT,
+        )
     }
+    fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
+        let w = self.column(c) + 1 + 2 * j;
+        (
+            crate::answer::bound_of(at(self.words, w) as i32),
+            at(self.words, w + 1),
+        )
+    }
+}
+
+/// A column's spans' head word's count (`window::SPANS_COLUMN_WORDS`); the
+/// bit over it, where they did not fit.
+const SPANS_COUNT: u32 = 0x7fff;
+const SPANS_PAST: u32 = 0x8000;
+
+/// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
+fn head_word(s: &ways::Spans, fits: bool) -> u32 {
+    let face = if s.face == i32::MIN {
+        i16::MIN as i32
+    } else {
+        s.face.clamp(i16::MIN as i32 + 1, i16::MAX as i32)
+    };
+    s.n | if fits { 0 } else { SPANS_PAST } | (face as u32) << 16
 }
 
 /// Where the square a frame hands `k`-th has its scratch in the frame's
@@ -142,23 +189,6 @@ pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
     k * (scratch.len() as u32 / window::HANDED)
 }
 
-/// The square handed `k`-th in `fresh` as its ways' tree is of: its cells'
-/// zoom and its index, its first cell's over its side (`ways::tree::Of`).
-pub fn of(fresh: &[u32], k: u32) -> ways::tree::Of {
-    let rec = handed_at(k);
-    let first = [
-        at(fresh, rec + FRESH_FIRST) as i32,
-        at(fresh, rec + FRESH_FIRST + 1) as i32,
-    ];
-    ways::tree::Of {
-        cell: at(fresh, rec + FRESH_CELL),
-        at: [
-            first[0] >> window::SQUARE_SHIFT,
-            first[1] >> window::SQUARE_SHIFT,
-        ],
-    }
-}
-
 /// A square being filled, as the ways' rule reads it (`window::Square`):
 /// its laid cells in its lane, its lines and samples in its record, and
 /// where it is as handed (`window::FRESH_WORDS`).
@@ -169,14 +199,7 @@ struct Filling<'a> {
     rec: u32,
     cell: u32,
     place: [u32; 2],
-    /// The scratch its columns' spans are kept in from (`spans`), where
-    /// they were worked out already; `NOT_KEPT` where not.
-    kept: &'a [u32],
-    mine: u32,
 }
-
-/// No columns' spans kept: each worked out off its lines.
-const NOT_KEPT: u32 = u32::MAX;
 
 impl window::Square for Filling<'_> {
     fn cell(&self) -> u32 {
@@ -213,23 +236,15 @@ impl window::Square for Filling<'_> {
             [first[0] + c[0], first[1] + c[1]],
         )
     }
-    fn kept_spans(&self, c: [i32; 2]) -> (bool, ways::Spans, bool) {
-        if self.mine == NOT_KEPT {
-            return (false, ways::Spans::NONE, true);
-        }
-        let (spans, fits) = stored(self.kept, self.mine, c);
-        (true, spans, fits)
-    }
 }
 
 /// Column `[x, y]` of the square a frame hands `k`-th in `fresh`: its
 /// ground's top (`ground::height`) off its tile's samples, a gone cell's
 /// (its own look `UNKNOWN`, past the area) the Earth's at sea level, so it
-/// reads as the Earth (`area::laid`); its runs' first the ways' to write
-/// (`ways`); and, a column of an even `x`, its cell and
-/// the next as laid, the word they share (`window::LAID_WORDS`), so each
-/// word has one writer: its own look off its four at the square's zoom
-/// (`ground::own`), and at a leaf's cells or finer, which of the leaf
+/// reads as the Earth (`area::laid`); and, a column of an even `x`, its
+/// cell and the next as laid, the word they share (`window::LAID_WORDS`),
+/// so each word has one writer: its own look off its four at the square's
+/// zoom (`ground::own`), and at a leaf's cells or finer, which of the leaf
 /// cells about its own are past the area (`area::gone_ring`), off the
 /// square's shard.
 pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
@@ -296,73 +311,12 @@ pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     );
 }
 
-/// The ways of the square a frame hands `k`-th in `fresh`, for column `i`,
-/// into its scratch in `scratch` (`scratch_at`): unless `write`, its runs
-/// counted into its first; where `write`, once each column's first is
-/// where its runs begin (`scanned`), its runs written from it — each off
-/// its spans and those beside it (`ways::around`) read along z
-/// (`ways::runs`). A column's spans, `u32::MAX` where its or those beside
-/// it do not fit `ways::SPANS`; 0 for the rest.
-pub fn ways(
-    ground: &[u32],
-    fresh: &[u32],
-    scratch: &mut [u32],
-    k: u32,
-    write: bool,
-    i: u32,
-) -> u32 {
-    let (rec, base, place, cell) = handed(fresh, k);
-    let mine = scratch_at(scratch, k);
-    let firsts = mine + FIRSTS_AT;
-    if i >= SQUARE_CELLS {
-        return 0;
-    }
-    let (around, fits) = {
-        let filling = Filling {
-            ground,
-            base,
-            fresh,
-            rec,
-            cell,
-            place,
-            kept: scratch,
-            mine,
-        };
-        let [x, y] = window::of_index(i);
-        crate::ways::around(&filling, [x as i32, y as i32])
-    };
-    let (from, room) = if write {
-        (at(scratch, firsts + i), RUNS_SQUARE)
-    } else {
-        (0, 0)
-    };
-    let n = put_runs(scratch, mine, &around, cell, from, room);
-    if !write {
-        put(scratch, firsts + i, n);
-    }
-    if fits {
-        around.spans[0].n
-    } else {
-        u32::MAX
-    }
-}
-
 /// The spans of column `i` of the square handed `k`-th and its ring
-/// (`window::SPANS_COLUMNS`, row by row from the ring's first) into its
-/// scratch (`window::SPANS_AT`): worked out once a column, off its lines and
-/// its face (`ways::column`), before its runs and its neighbours' read them
-/// (`ways`), where each column's own and its four neighbours' were each
-/// worked out again by every column beside it, in the count and the write
-/// alike.
-pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32) {
-    if i >= window::SPANS_COLUMNS {
-        return;
-    }
+/// (`window::SPANS_COLUMNS`) into its scratch (`keep`): each column's
+/// worked out once, before its levels and its ways' tree read them and its
+/// neighbours': the most it makes (`keep`).
+pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32) -> u32 {
     let (rec, base, place, cell) = handed(fresh, k);
-    let c = [
-        (i % window::SPANS_ACROSS) as i32 - 1,
-        (i / window::SPANS_ACROSS) as i32 - 1,
-    ];
     let filling = Filling {
         ground,
         base,
@@ -370,12 +324,32 @@ pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32)
         rec,
         cell,
         place,
-        kept: ground,
-        mine: NOT_KEPT,
     };
-    let (s, fits) = crate::ways::column(&filling, c);
-    let at = scratch_at(scratch, k) + window::SPANS_AT + i * window::SPANS_COLUMN_WORDS;
-    put(scratch, at, s.n | u32::from(!fits) << 31);
+    let mine = scratch_at(scratch, k);
+    keep(&filling, scratch, mine, i)
+}
+
+/// Column `i` of square `sq` and its ring, row by row from the ring's
+/// first (`window::SPANS_COLUMNS`), its spans off its lines and its face
+/// (`ways::column`) into the scratch from `mine` (`window::SPANS_AT`); a
+/// corner of the ring, beside no column of the square, none. The most
+/// spans it makes, `u32::MAX` where they do not fit `ways::SPANS`.
+pub fn keep(sq: &impl window::Square, scratch: &mut [u32], mine: u32, i: u32) -> u32 {
+    if i >= SPANS_COLUMNS {
+        return 0;
+    }
+    let c = [
+        (i % SPANS_ACROSS) as i32 - 1,
+        (i / SPANS_ACROSS) as i32 - 1,
+    ];
+    let edge = |v: i32| v == -1 || v == SQUARE as i32;
+    let (s, fits) = if edge(c[0]) && edge(c[1]) {
+        (ways::Spans::NONE, true)
+    } else {
+        ways::column(sq, c)
+    };
+    let at = mine + SPANS_AT + i * SPANS_COLUMN_WORDS;
+    put(scratch, at, head_word(&s, fits));
     let mut j = 0;
     while j < s.n as usize {
         let w = at + 1 + 2 * j as u32;
@@ -385,124 +359,35 @@ pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32)
         put(scratch, w + 1, s.value[j]);
         j += 1;
     }
-}
-
-/// Column `c`'s spans as `spans` stored them in the scratch from `mine`,
-/// `c` in the square's cells, its ring one past each side.
-fn stored(scratch: &[u32], mine: u32, c: [i32; 2]) -> (ways::Spans, bool) {
-    let i = (c[1] + 1) as u32 * window::SPANS_ACROSS + (c[0] + 1) as u32;
-    let at = mine + window::SPANS_AT + i * window::SPANS_COLUMN_WORDS;
-    let head = self::at(scratch, at);
-    let mut s = ways::Spans::NONE;
-    s.n = head & !(1 << 31);
-    let mut j = 0;
-    while j < s.n as usize && j < ways::SPANS {
-        let w = at + 1 + 2 * j as u32;
-        s.run[j] = crate::answer::bound_of(self::at(scratch, w) as i32);
-        s.value[j] = self::at(scratch, w + 1);
-        j += 1;
+    if fits {
+        s.n
+    } else {
+        u32::MAX
     }
-    (s, head >> 31 == 0)
-}
-
-/// The threads that sum a square's columns' counts into their firsts, a
-/// workgroup (pxl-shader `ways_cs`), each over a stretch of the
-/// columns in their order.
-pub const SCAN_THREADS: u32 = 64;
-const STRETCH: u32 = SQUARE_CELLS / SCAN_THREADS;
-
-/// Thread `t`'s stretch of the square handed `k`-th: its columns' runs, as
-/// counted into their firsts in its scratch (`ways`), summed.
-pub fn stretch_runs(scratch: &[u32], k: u32, t: u32) -> u32 {
-    let firsts = scratch_at(scratch, k) + FIRSTS_AT + t * STRETCH;
-    let (mut n, mut k) = (0, 0);
-    while k < STRETCH {
-        (n, k) = (n + at(scratch, firsts + k), k + 1);
-    }
-    n
-}
-
-/// Thread `t`'s stretch of the square handed `k`-th, its columns' firsts
-/// in its scratch written where their runs begin, `before` the runs of the
-/// stretches before it (an exclusive scan of `stretch_runs` over the
-/// threads, Blelloch 1990): each column's the runs before it; the last
-/// thread's, the square's count past them (`window::FIRSTS_AT`).
-pub fn scanned(scratch: &mut [u32], k: u32, t: u32, before: u32) {
-    let firsts = scratch_at(scratch, k) + FIRSTS_AT;
-    let (mut n, mut k) = (before, t * STRETCH);
-    while k < (t + 1) * STRETCH {
-        let count = at(scratch, firsts + k);
-        put(scratch, firsts + k, n);
-        (n, k) = (n + count, k + 1);
-    }
-    if t + 1 == SCAN_THREADS {
-        put(scratch, firsts + SQUARE_CELLS, n);
-    }
-}
-
-const _: () = assert!(
-    STRETCH * SCAN_THREADS == SQUARE_CELLS,
-    "the stretches cover the columns"
-);
-
-/// A column's runs off its spans and those beside it (`ways::runs`) into
-/// the scratch at `scratch`'s runs from `first`, as far as `room`; how
-/// many there are.
-fn put_runs(
-    words: &mut [u32],
-    scratch: u32,
-    around: &ways::Around,
-    cell: u32,
-    first: u32,
-    room: u32,
-) -> u32 {
-    ways::runs(around, cell, move |k, w| {
-        if first + k < room {
-            put(words, scratch + RUNS_AT + first + k, w);
-        }
-    })
 }
 
 /// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
-/// its runs write, as its fill wrote them (`runs`; `ground::Bounds`); a
-/// higher one over the level under it,
-/// written before (`window::join`). A bore's air counts as far as the
-/// column's top, as the ways write it: the blocks of the square's ways tree
-/// under it lie in the bound (`ways::tree`), and a node it splits more holds
-/// only air or void there. Over the top it is air whatever writes it; a
-/// bound reaching up there, past a tunnel's mouth where the ground falls
-/// away under its clear height, split every node over it.
+/// the ways write in it off the spans its fill kept (`ways::bound`;
+/// `ground::Bounds`); a higher one over the level under it, written before
+/// (`window::join`). A bore's air counts as far as the column's top, as the
+/// ways write it: the blocks of the square's ways tree under it lie in the
+/// bound (`ways::tree`), and a node it splits more holds only air or void
+/// there. Over the top it is air whatever writes it; a bound reaching up
+/// there, past a tunnel's mouth where the ground falls away under its
+/// clear height, split every node over it.
 pub fn level(
     ground: &mut [u32],
     base: u32,
-    runs: &impl ways::tree::Runs,
+    kept: &impl ways::Kept,
     cell: Zoom,
     j: u32,
     at: [u32; 2],
 ) {
     let w = if j == 0 {
-        let i = window::index_of(at);
-        let [mut r, to] = runs.column(i);
-        let (top, s) = (
-            column_top(column_of(ground, base, i)),
-            1i32 << (crate::LEAF_CELL - cell),
-        );
-        let [mut lo, mut hi] = ground::EMPTY;
-        while r + 1 < to {
-            let (z, value) = ways::run_of(runs.run(r));
-            if value != ways::NOTHING {
-                // A bore's air (`ways::lined`) counts only as far as the
-                // column's top: over it, it is air whatever writes it.
-                let end = ways::run_of(runs.run(r + 1)).0 * s;
-                let end = if value == ways::AIR { end.min(top) } else { end };
-                if z * s < end {
-                    (lo, hi) = (lo.min(z * s), hi.max(end));
-                }
-            }
-            r += 1;
-        }
-        ground::bounds_word([[top, top], [lo, hi]])
+        let top = column_top(column_of(ground, base, window::index_of(at)));
+        let lines = ways::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
+        ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
         window::join(
@@ -526,10 +411,10 @@ pub fn level(
 /// its looks, samples and lines as handed, its words laid here; `lane` its
 /// words, and `scratch` its scratch (`ways::tree::SCRATCH_WORDS`); its cells
 /// at `cell`, lying at `place` in its tile, its first cell `first`; its
-/// columns, its runs and levels; inside the area, so no wall cuts its ways
-/// and the runs are the most a client's fill writes. The runs its ways read
-/// as, and the most spans a column makes (`u32::MAX` past `ways::SPANS`);
-/// its ways' tree is built off them after (`tree`).
+/// columns, its spans and levels; inside the area, so no wall cuts its ways
+/// and the spans are the most a client's fill keeps. The most spans a
+/// column makes (`u32::MAX` past `ways::SPANS`); its ways' tree is built
+/// off them after (`tree`).
 pub fn square(
     fresh: &mut [u32],
     lane: &mut [u32],
@@ -537,7 +422,7 @@ pub fn square(
     place: [u32; 2],
     cell: Zoom,
     first: [i32; 2],
-) -> [u32; 2] {
+) -> u32 {
     fresh[..FRESH_WORDS as usize].copy_from_slice(&window::fresh(
         0,
         window::place_word(place),
@@ -551,52 +436,36 @@ pub fn square(
             heights(lane, fresh, 0, [x, y]);
         }
     }
-    for i in 0..window::SPANS_COLUMNS {
-        spans(lane, fresh, scratch, 0, i);
-    }
     let mut most = 0;
-    for i in 0..SQUARE_CELLS {
-        most = most.max(ways(lane, fresh, scratch, 0, false, i));
+    for i in 0..SPANS_COLUMNS {
+        most = most.max(spans(lane, fresh, scratch, 0, i));
     }
-    let mut before = 0;
-    for t in 0..SCAN_THREADS {
-        let n = stretch_runs(scratch, 0, t);
-        scanned(scratch, 0, t, before);
-        before += n;
-    }
-    for i in 0..SQUARE_CELLS {
-        ways(lane, fresh, scratch, 0, true, i);
-    }
-    let runs = Scratch {
+    let kept = Scratch {
         words: scratch,
         at: 0,
     };
     for j in 0..=window::LEVELS {
         let side = SQUARE >> j;
         for k in 0..side * side {
-            level(lane, 0, &runs, cell, j, [k % side, k / side]);
+            level(lane, 0, &kept, cell, j, [k % side, k / side]);
         }
     }
-    [at(scratch, FIRSTS_AT + SQUARE_CELLS), most]
+    most
 }
 
-/// The square `of`, filled into `lane` and its runs into `scratch`
-/// (`square`), its ways' tree built
-/// into `pool`, its heap words then its data words, a level at a time as a
-/// GPU's workgroup builds it (pxl-shader `ways_tree_cs`,
-/// `ways::tree`), its families taken in order from family `from`, its root's,
-/// family 0 being none's: the families it took, and those it holds once
-/// folded; `u32::MAX` both where `pool` has too few or it takes more than
-/// `ways::tree::SQUARE_FAMILIES`.
-pub fn tree(
-    lane: &[u32],
-    scratch: &[u32],
-    of: ways::tree::Of,
-    pool: &mut [u32],
-    from: u32,
-) -> [u32; 2] {
+/// The square filled into `lane` and its spans into `scratch` (`square`),
+/// its cells at `cell`, its ways' tree built into `pool`, its heap words
+/// then its data words, a level at a time as a GPU's workgroup builds it
+/// (pxl-shader `ways_tree_cs`, `ways::tree`), from the square's own nodes
+/// along z down, its families taken in order from family `from`, its
+/// root's, family 0 being none's: the families it took, those it holds once
+/// folded, and its root word (`ways::tree::root_word`), none taken and 0
+/// where it has no ways; `u32::MAX` all three where `pool` has too few, it
+/// takes more than `ways::tree::SQUARE_FAMILIES`, or its ways span more
+/// than `ways::tree::ROOT_NODES` of its nodes along z.
+pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u32) -> [u32; 3] {
     use ways::tree::{self as t, Lane};
-    let (square, runs) = (
+    let (square, kept) = (
         Fresh {
             ground: lane,
             base: 0,
@@ -606,26 +475,35 @@ pub fn tree(
             at: 0,
         },
     );
+    let (z0, nodes) = root_span(lane, 0, cell);
+    if nodes == 0 {
+        return [0, 0, 0];
+    }
     let room = pool.len() as u32 / 16;
+    if nodes > t::ROOT_NODES || room <= from {
+        return [u32::MAX; 3];
+    }
     let mut p = Lane(pool);
-    t::root(&mut p, of, 8 * from);
-    // Each level's candidates, the families the level over it took.
-    let mut levels = [[0u32; 2]; crate::LEAF_CELL as usize + 1];
+    t::root(&mut p, z0, 8 * from);
+    // Each level's candidates, the families the level over it took, from the
+    // square's own zoom.
+    let top = cell - window::SQUARE_SHIFT;
+    let mut levels = [[0u32; 2]; window::SQUARE_SHIFT as usize + 1];
     let (mut b, mut n, mut taken) = (8 * from, 8, 1);
-    let mut zoom = 0;
-    while zoom < of.cell {
-        levels[zoom as usize] = [b, n];
+    let mut zoom = top;
+    while zoom < cell {
+        levels[(zoom - top) as usize] = [b, n];
         let flagged = (b..b + n)
-            .filter(|&s| t::flag(&p, &square, 0, of, zoom, s))
+            .filter(|&s| t::flag(&p, &square, 0, cell, zoom, s))
             .count() as u32;
         if room < from + taken || !t::fits(room - from - taken, taken, flagged) {
-            return [u32::MAX; 2];
+            return [u32::MAX; 3];
         }
         let next = 8 * (from + taken);
         let mut k = 0;
         for s in b..b + n {
-            if t::flag(&p, &square, 0, of, zoom, s) {
-                t::branch(&mut p, of, zoom, s, next + 8 * k);
+            if t::flag(&p, &square, 0, cell, zoom, s) {
+                t::branch(&mut p, s, next + 8 * k);
                 k += 1;
             } else {
                 t::empty(&mut p, s);
@@ -634,17 +512,122 @@ pub fn tree(
         (b, n, taken, zoom) = (next, 8 * flagged, taken + flagged, zoom + 1);
     }
     for s in b..b + n {
-        t::leaf(&mut p, &runs, of, s);
+        t::leaf(&mut p, &kept, cell, s);
     }
     let mut freed = 0;
-    while zoom > 0 {
+    while zoom > top {
         zoom -= 1;
-        let [b, n] = levels[zoom as usize];
+        let [b, n] = levels[(zoom - top) as usize];
         for s in b..b + n {
             if t::under(&p, s) != t::NONE && t::fold(&mut p, zoom, s) != t::NONE {
                 freed += 1;
             }
         }
     }
-    [taken, taken - freed]
+    [taken, taken - freed, t::root_word(from, z0)]
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use super::*;
+    use crate::overwrite::{self, Cut};
+    use crate::ways::tree::{self, Read};
+    use std::{vec, vec::Vec};
+
+    /// A square's tree as `tree` builds it, its root at the square, reads
+    /// back through `ways::tree::cursor` at every cell what `ways::lined`
+    /// writes there, and nothing past it: random spans in a patch of
+    /// columns, slabs, piers and bores over and beside one another, at the
+    /// leaves and coarser.
+    #[test]
+    fn a_tree_reads_back_what_the_ways_write_at_every_cell() {
+        let mut seed = 0x9e37_79b9_u32;
+        let mut next = |m: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed % m
+        };
+        for round in 0..6 {
+            let cell = crate::LEAF_CELL - round % 3;
+            let (mut lane, mut scratch) = (
+                vec![0u32; SQUARE_WORDS as usize],
+                vec![0u32; tree::SCRATCH_WORDS as usize],
+            );
+            let base_top = next(200) as i32 - 100;
+            let tops: Vec<i32> = (0..SPANS_COLUMNS)
+                .map(|_| base_top + next(9) as i32 - 4)
+                .collect();
+            for i in 0..SQUARE_CELLS {
+                let [x, y] = window::of_index(i);
+                let ring = ((y + 1) * SPANS_ACROSS + x + 1) as usize;
+                put(&mut lane, COLUMNS_AT + i, tops[ring] as u32 & 0xffff);
+            }
+            // A patch of columns with ways, the rest none; every column's face.
+            let patch = [next(48) as i32, next(48) as i32];
+            for i in 0..SPANS_COLUMNS {
+                let c = [
+                    (i % SPANS_ACROSS) as i32 - 1,
+                    (i / SPANS_ACROSS) as i32 - 1,
+                ];
+                let top = tops[i as usize];
+                let mut s = ways::Spans::NONE;
+                s.face = ground::face_block(
+                    cell,
+                    ground::face_height(cell, ground::blocks(cell, top as f32)),
+                );
+                let inside = (0..16).contains(&(c[0] - patch[0]))
+                    && (0..16).contains(&(c[1] - patch[1]));
+                if inside {
+                    s.n = next(4);
+                    for j in 0..s.n as usize {
+                        let lo = top + next(40) as i32 - 30;
+                        s.run[j] = [lo, lo + 1 + next(12) as i32];
+                        s.value[j] = match next(3) {
+                            0 => ways::AIR_OF | 3,
+                            1 => 7,
+                            _ => ways::PIER,
+                        };
+                    }
+                }
+                let at = SPANS_AT + i * SPANS_COLUMN_WORDS;
+                put(&mut scratch, at, head_word(&s, true));
+                for j in 0..s.n {
+                    let w = at + 1 + 2 * j;
+                    put(&mut scratch, w, crate::answer::bound_word(s.run[j as usize]) as u32);
+                    put(&mut scratch, w + 1, s.value[j as usize]);
+                }
+            }
+            let kept = Scratch {
+                words: &scratch,
+                at: 0,
+            };
+            for j in 0..=window::LEVELS {
+                let side = SQUARE >> j;
+                for k in 0..side * side {
+                    level(&mut lane, 0, &kept, cell, j, [k % side, k / side]);
+                }
+            }
+            let mut pool = vec![0u32; 16 * (tree::SQUARE_FAMILIES as usize + 1)];
+            let [taken, held, root] = tree(&lane, &scratch, cell, &mut pool, 1);
+            assert!(taken != u32::MAX && held <= taken, "round {round}: refused");
+            let p = Read(&pool);
+            let s = 1i32 << (crate::LEAF_CELL - cell);
+            for i in 0..SQUARE_CELLS {
+                let [x, y] = window::of_index(i);
+                for z in (base_top - 60) / s..(base_top + 60) / s {
+                    let at = [x as i32, y as i32, z];
+                    let held = tree::cursor(&p, root, cell, cell, at);
+                    let got = tree::read(overwrite::value(&p, held, Cut::NONE, cell, at));
+                    let want = match ways::lined(&kept, [at[0], at[1]], cell, z) {
+                        ways::NOTHING => ground::VOID,
+                        v => v,
+                    };
+                    assert_eq!(got, want, "round {round}, cell {cell}, column {x}, {y}, block {z}");
+                }
+            }
+        }
+    }
 }

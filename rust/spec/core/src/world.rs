@@ -183,7 +183,13 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         || place.here() != before.here()
     {
         *trail = if place.here() {
-            overwrite::cursor(pool, squares.root(place.from(), place.berth()), zoom, c)
+            crate::ways::tree::cursor(
+                pool,
+                squares.root(place.from(), place.berth()),
+                place.from(),
+                zoom,
+                c,
+            )
         } else {
             overwrite::Held::NOTHING
         };

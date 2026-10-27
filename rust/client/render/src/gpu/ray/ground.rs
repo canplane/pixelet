@@ -13,7 +13,7 @@ use xpute_guest::mem::off_of;
 
 use super::RaysPass;
 use crate::frame::shader::record::{
-    compute, dynamic, same, SHADER_BOUND, SHADER_HEIGHTS, SHADER_WAYS, SHADER_WAYS_FREE,
+    compute, dynamic, SHADER_BOUND, SHADER_HEIGHTS, SHADER_WAYS, SHADER_WAYS_FREE,
     SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::gpu::api::{
@@ -32,8 +32,8 @@ const FREE: u32 = u32::MAX;
 /// The terrain's frames on the GPU and the passes that draw their cells.
 pub(super) struct GroundBuffers {
     /// Per berth of the windows' squares (`window::SQUARES`), its columns,
-    /// levels, runs and cells as laid, which `heights_cs`, `ways_cs` and
-    /// `bound_cs` write in the turn it is handed (pxl-spec-core
+    /// levels, cells as laid and root, which `heights_cs`, `bound_cs` and
+    /// `ways_tree_cs` write in the turn it is handed (pxl-spec-core
     /// `window::SQUARE_WORDS`).
     pub(super) ground: u32,
     /// Per berth, its cells' four looks (`LOOKS_BYTES`).
@@ -86,15 +86,16 @@ pub(super) struct GroundBuffers {
     stack: u32,
     scratch: u32,
     scratch_families: u32,
-    /// Each slot's number, `bound_cs`'s level and `ways_cs`'s pass, at a
-    /// dynamic offset of their groups.
+    /// Each slot's number, `bound_cs`'s level, at a dynamic offset of its
+    /// group.
     slots: u32,
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
     /// `bound_cs`'s group, its level at a dynamic offset (`SLOT_STRIDE`).
     bound_group: u32,
-    /// `ways_cs`'s, and its group, its pass at a dynamic offset.
+    /// `ways_cs`'s, and its group: the fresh frames, the frames it reads
+    /// the columns of, and the scratch it keeps the spans in.
     ways_built: Built,
     ways_group: u32,
     /// A re-filled square's old ways' tree given back, its new one built,
@@ -164,12 +165,12 @@ enum Short {
 }
 
 /// What a build whose records' count is `n` ran out of (pxl-shader
-/// `ways_tree_cs`): none counted the pool, `CRAMPED` the scratch; neither
-/// for a tree built, nor for one past the square's own most (`NONE`), which
-/// no growth lets it build.
+/// `ways_tree_cs`): `STARVED` the pool, `CRAMPED` the scratch; neither
+/// for a tree built, none counted where the square has no ways, nor for one
+/// past the square's own most (`NONE`), which no growth lets it build.
 fn short_of(n: u32) -> Option<Short> {
     match n {
-        0 => Some(Short::Pool),
+        ways::tree::STARVED => Some(Short::Pool),
         ways::tree::CRAMPED => Some(Short::Scratch),
         _ => None,
     }
@@ -217,14 +218,23 @@ impl GroundBuffers {
         }
         let (fresh, ground, pool, stack, scratch) =
             (self.fresh, self.ground, self.pool, self.stack, self.scratch);
-        let entries = [
-            buffer_range_entry(0, self.slots, 0, 16),
-            buffer_entry(1, fresh),
-            buffer_entry(2, ground),
-            buffer_entry(3, scratch),
-        ];
-        self.bound_group = g.bind_group(self.bound_built.layouts[0], &entries);
-        self.ways_group = g.bind_group(self.ways_built.layouts[0], &entries);
+        self.bound_group = g.bind_group(
+            self.bound_built.layouts[0],
+            &[
+                buffer_range_entry(0, self.slots, 0, 16),
+                buffer_entry(1, fresh),
+                buffer_entry(2, ground),
+                buffer_entry(3, scratch),
+            ],
+        );
+        self.ways_group = g.bind_group(
+            self.ways_built.layouts[0],
+            &[
+                buffer_entry(0, fresh),
+                buffer_entry(1, ground),
+                buffer_entry(2, scratch),
+            ],
+        );
         self.free_group = g.bind_group(
             self.free_built.layouts[0],
             &[
@@ -286,7 +296,7 @@ impl GroundBuffers {
     }
 
     /// Each square's tree room in the scratch twice as many families, never
-    /// past `most`, once a build outgrew it (`read_back`); its runs stay as
+    /// past `most`, once a build outgrew it (`read_back`); its spans stay as
     /// they are (`window::TREE_AT`), so the buffer grows by less than twice.
     /// Nothing is copied: a square's records are copied into its read in the
     /// frame it is filled in, before any turn grows it. Ahead of the turn's
@@ -351,20 +361,11 @@ const _: () = assert!(
     "LOOKS_BYTES: the squares' looks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
-/// dynamic offset (`SLOT_STRIDE`), the fresh frames, the frames it writes
-/// the levels of, and the handed squares' scratch it writes or reads the
-/// runs in. The cast's and `joined_cs`'s one group is the cast's, which
-/// binds all of theirs.
+/// `bound_cs`'s group: its level at a dynamic offset (`SLOT_STRIDE`), the
+/// fresh frames, the frames it writes the levels of, and the handed
+/// squares' scratch it reads the spans in. The cast's and `joined_cs`'s one
+/// group is the cast's, which binds all of theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
-const _: () = assert!(
-    same(compute::BOUND_GROUP, compute::WAYS_GROUP),
-    "the levels' and the ways' passes share a group"
-);
-const _: () = assert!(
-    compute::WAYS_WORKGROUP[0] == pxl_spec_core::fill::SCAN_THREADS,
-    "a square's columns are summed by one workgroup"
-);
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.
 const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
@@ -396,8 +397,7 @@ impl RaysPass {
                     buffer_entry(2, looks),
                 ],
             );
-            // Each slot's number in it, written once: `bound_cs`'s level,
-            // `ways_cs`'s pass.
+            // Each slot's number in it, written once: `bound_cs`'s level.
             let slots = buffer(
                 (LEVELS + 1) * SLOT_STRIDE,
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -408,7 +408,7 @@ impl RaysPass {
             let scratch = scratch_buffer(g, scratch_families);
             let (bound_built, ways_built) = (
                 pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
-                pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP),
+                pipelines.build_compute(g, SHADER_WAYS, &compute::WAYS_GROUP),
             );
             let (pool, stack) = pool_buffers(g, families);
             let free_built =
@@ -505,7 +505,7 @@ impl RaysPass {
     }
 
     /// The squares this turn handed filled: their tops from their samples,
-    /// their ways' runs, their levels a dispatch, level 0 a column's own and
+    /// their ways' spans, their levels a dispatch, level 0 a column's own and
     /// each over the one before, and their ways' trees. Ahead of the frame,
     /// as they outlive it, so no square the window names is cast before its
     /// cells are written, even when the frame proper is dropped. Whether it
@@ -529,35 +529,24 @@ impl RaysPass {
             SQUARE.div_ceil(w[1]),
             c.fresh_len,
         );
-        // A column a thread, over the tops just drawn: the columns' runs
-        // counted, summed a square a workgroup (pxl-spec-core
-        // `fill::SCAN_THREADS`), written, before the levels fold them.
+        // A column a thread, over the tops just drawn: each column's spans
+        // once, the square's and its ring's (pxl-spec-core fill.rs `spans`),
+        // which the levels and the trees read.
         g.set_pipeline(pass, c.ways_built.pipeline);
-        // Each column's spans once, the square's and its ring's
-        // (pxl-spec-core fill.rs `spans`), which the count and the write read.
-        g.set_bind_group(pass, 0, c.ways_group, &[3 * SLOT_STRIDE]);
+        g.set_bind_group(pass, 0, c.ways_group, &[]);
         g.dispatch(
             pass,
             window::SPANS_COLUMNS.div_ceil(compute::WAYS_WORKGROUP[0]),
             1,
             c.fresh_len,
         );
-        for k in 0..3 {
-            g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
-            let across = if k == 1 {
-                1
-            } else {
-                SQUARE_CELLS / compute::WAYS_WORKGROUP[0]
-            };
-            g.dispatch(pass, across, 1, c.fresh_len);
-        }
         g.set_pipeline(pass, c.bound_built.pipeline);
         for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
             let side = (SQUARE >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
             g.dispatch(pass, side, side, c.fresh_len);
         }
-        // Each square's ways as blocks, a workgroup a square, over its runs
+        // Each square's ways as blocks, a workgroup a square, over its spans
         // and the levels just folded; then what its build gave back pushed,
         // a dispatch after, so no push lands under another square's ids
         // while it reads them.
@@ -573,7 +562,7 @@ impl RaysPass {
 
     /// The squares the grids wrote mapped back where the CPU looks them up,
     /// once the encoder that wrote them is submitted: a square's columns,
-    /// levels and runs lie together (`window::BACK_WORDS`), so one mapping
+    /// levels, cells as laid and root lie together (`window::BACK_WORDS`), so one mapping
     /// brings them all.
     ///
     /// A square asked takes a free buffer of `READS`, which maps once at a
@@ -621,8 +610,8 @@ impl RaysPass {
         };
         // A read lands with its square's words and its records both: told
         // where it is of the square's latest fill, discarded where a later
-        // fill asked again, whose own read brings it. A build with no
-        // record ran out of the pool or the scratch it was built in, its
+        // fill asked again, whose own read brings it. A build that ran out
+        // of the pool or the scratch it was built in keeps no record, its
         // count saying which (`short_of`), which grows ahead of the next
         // turn's squares where it is as built still and may (`ran_out`,
         // `grow`, `grow_scratch`), the square filled again; one past its

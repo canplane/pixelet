@@ -56,7 +56,7 @@ fn mirrored(records: &[u32]) {
 /// each square the tiles `held` cover present in its berth, the focus's
 /// windows the eye's finest two again: per tile, a cell's own look
 /// and its height, row by row from its first, and its lines; each square's
-/// columns, its tops and its ways' runs as its fill writes them
+/// columns, its tops and its ways' spans as its fill keeps them
 /// (`fill_columns`), and its levels as a GPU folds them (pxl-spec-core
 /// `fill::level`), read back. Built once a run for a centre and its tiles
 /// (`BUILT`); each hold is its own copy, whatever a test does to it.
@@ -199,13 +199,9 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             }
         }
         // Its ways' tree into the pool's mirror, its root word naming it.
-        let of = pxl_spec_core::ways::tree::Of {
-            cell,
-            at: [wrap_index(cell - SQUARE_SHIFT, square[0]), square[1]],
-        };
-        let [taken, _] = pxl_spec_core::fill::tree(&lane, &scratch, of, &mut pool, next);
+        let [taken, _, root] = pxl_spec_core::fill::tree(&lane, &scratch, cell, &mut pool, next);
         assert_ne!(taken, u32::MAX, "a square's tree past the pool");
-        lane[window::ROOT_AT as usize] = 8 * next;
+        lane[window::ROOT_AT as usize] = root;
         next += taken;
         let at = (b * CELLS_LANE_BYTES / 4) as usize;
         planes().cells[at..at + window::BACK_WORDS as usize].copy_from_slice(&lane);
@@ -226,31 +222,22 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
 }
 
 /// A square's columns as a GPU's fill writes them (pxl-spec-core
-/// `fill::heights`, `fill::ways`), over cells whose tops are given
+/// `fill::heights`, `fill::spans`), over cells whose tops are given
 /// (`top`) rather than drawn off samples: each column's word, its top, into
-/// `lane`; and its spans and those beside it off its lines (`ways::around`)
-/// read along z as runs (`ways::runs`), into its `scratch` from its first,
-/// none past `RUNS_SQUARE`.
+/// `lane`; and the spans of its columns and its ring off its lines
+/// (`fill::keep`) into its `scratch`.
 fn fill_columns(
     sq: &impl window::Square,
     top: impl Fn(u32) -> i32,
     lane: &mut [u32],
     scratch: &mut [u32],
 ) {
-    use pxl_spec_core::window::{COLUMNS_AT, FIRSTS_AT, RUNS_AT, RUNS_SQUARE};
-    let mut runs = 0;
     for i in 0..SQUARE_CELLS {
-        lane[(COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
-        scratch[(FIRSTS_AT + i) as usize] = runs;
-        let [x, y] = window::of_index(i);
-        let around = pxl_spec_core::ways::around(sq, [x as i32, y as i32]).0;
-        runs += pxl_spec_core::ways::runs(&around, sq.cell(), |k, w| {
-            if runs + k < RUNS_SQUARE {
-                scratch[(RUNS_AT + runs + k) as usize] = w;
-            }
-        });
+        lane[(window::COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
     }
-    scratch[(FIRSTS_AT + SQUARE_CELLS) as usize] = runs;
+    for i in 0..window::SPANS_COLUMNS {
+        pxl_spec_core::fill::keep(sq, scratch, 0, i);
+    }
 }
 
 /// The eye's windows laid out about `eye` and the focus's about `focus`, in

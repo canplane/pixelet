@@ -15,8 +15,9 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
+use pxl_spec_core::ways::tree::ROOT_NODES;
 use pxl_spec_core::ways::SPANS;
-use pxl_spec_core::window::{RUNS_SQUARE, SQUARE};
+use pxl_spec_core::window::SQUARE;
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub const CELL_U: f64 = units(GROUND.cell());
@@ -30,15 +31,16 @@ impl crate::pyramid::Base for TerrainTile {
     /// Refused where a record's room does not hold its lines (pxl-spec
     /// `Separation::fits`), or a window's square would hold more of its
     /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),
-    /// or more of its ways' runs, or a column more spans (`terrain::runs_fit`).
+    /// or a column more of its ways' spans, or its ways more of its nodes
+    /// along z than its tree's root holds (`terrain::fill_fit`).
     fn encode(&self, at: Tile) -> Result<Vec<u8>, String> {
         self.separation
             .fits()
             .map_err(|[lines, points]| format!("its ways hold {lines} lines and {points} points, past MAX_LINES ({MAX_LINES}) or MAX_POINTS ({MAX_POINTS})"))?;
         terrain::ways_fit(&self.separation, SQUARE)
             .map_err(|([qx, qy], n)| format!("its square ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_SQUARE_SEGMENTS ({})", terrain::WAYS_SQUARE_SEGMENTS))?;
-        terrain::runs_fit(at, self).map_err(|([qx, qy], [runs, spans])| {
-            format!("its square ({qx}, {qy}) reads as {runs} of the ways' runs and a column {spans} spans, past RUNS_SQUARE ({RUNS_SQUARE}) or SPANS ({SPANS})")
+        terrain::fill_fit(at, self).map_err(|([qx, qy], [spans, nodes])| {
+            format!("its square ({qx}, {qy}) makes a column of {spans} of the ways' spans and its ways meet {nodes} of its nodes along z, past SPANS ({SPANS}) or ROOT_NODES ({ROOT_NODES})")
         })?;
         terrain::encode(self).map_err(|e| format!("{e:?}"))
     }

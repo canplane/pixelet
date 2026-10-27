@@ -54,9 +54,9 @@ pub const SHADER_GROWN: u32 = 29;
 pub const SHADER_GROWN_COUNT: u32 = 30;
 pub const SHADER_GROWN_ARGS: u32 = 31;
 pub const SHADER_GROWN_PLACE: u32 = 32;
-/// Each newly held terrain frame's ways, its columns' runs along z off its
-/// lines, generated with the cast from pxl-spec-core's `ways`: its one
-/// compute entry.
+/// Each newly held terrain frame's ways, its columns' spans off its lines,
+/// generated with the cast from pxl-spec-core's `ways`: its one compute
+/// entry.
 pub const SHADER_WAYS: u32 = 33;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN_STAND`'s and `SHADER_GROWN`'s dispatches: its one compute entry.

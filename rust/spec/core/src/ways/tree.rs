@@ -4,21 +4,25 @@
 //! shape (pxl-spec-core overwrite.rs), so a reader asks them by the one
 //! rule it asks what is placed by
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md): from the
-//! world's zoom-0 block down to the square's cells, a node's eight slots a family,
-//! children only where they differ, each branch its eight folded
+//! square's own nodes along z down to its cells, a node's eight slots a
+//! family, children only where they differ, each branch its eight folded
 //! (`overwrite::fold`), its leaves what the ways write at its cells
-//! (`ways::lined`, read off the square's runs). Its families are taken from
-//! one pool every square's tree shares, off a free stack, and a square's
-//! root word names its zoom-0 nodes' family (`window::ROOT_AT`), read as the placed
-//! tree's is (`overwrite::cursor`).
+//! (`ways::lined`, read off the square's spans). A reader asks a square's
+//! ways only of a node the square's or under it, a wider one the windows'
+//! bound over its squares (`window::bound_over`), so the tree holds nothing
+//! over the square. Its families are taken from one pool every square's
+//! tree shares, off a free stack, and a square's root word names the family
+//! of its nodes along z (`root_word`, `window::ROOT_AT`), from which a
+//! reader steps down as the placed tree's does (`cursor`).
 //!
 //! Built a level at a time, one square to a workgroup (pxl-shader
 //! `ways_tree_cs`), top-down then back up:
 //!
-//! - the zoom-0 block's eight are the first level's candidates (`root`);
-//! - each candidate coarser than the cells is flagged where it is the
-//!   square's or under it and its z meets the ways' bound in the square's
-//!   levels (`flag`): a flagged one takes a family for its children,
+//! - the square's nodes along z its ways' bound meets are the first
+//!   level's candidates, a slot each of its root family (`span`, `root`);
+//! - each candidate coarser than the cells is flagged where its z meets
+//!   the ways' bound in the square's levels (`flag`): a flagged one takes a
+//!   family for its children,
 //!   the next level's candidates (`branch`), the rest hold nothing
 //!   (`empty`); a level's families come off the stack together, `fits` the
 //!   check before;
@@ -31,8 +35,8 @@
 //! A candidate's node is held in its data word while the tree is built,
 //! where its leaf or fold is written after (`pack`).
 
-use crate::overwrite::{self, Lanes, AIR as PLACED_AIR, BRANCH};
-use crate::window::{Squares, LEVELS, SQUARE_SHIFT};
+use crate::overwrite::{self, Held, Lanes, AIR as PLACED_AIR, BRANCH};
+use crate::window::{Squares, SQUARE_SHIFT};
 use crate::{ground, Zoom, LEAF_CELL};
 
 /// The tree's lanes as its builder writes them, a word a slot.
@@ -78,29 +82,6 @@ impl Lanes for Read<'_> {
     }
 }
 
-/// A square's runs as its fill wrote them (`ways::runs`): column `i`'s
-/// first run and the next column's, and run `r`.
-pub trait Runs {
-    fn column(&self, i: u32) -> [u32; 2];
-    fn run(&self, r: u32) -> u32;
-}
-
-/// The square a tree is of: its cells' zoom, and its index among the squares
-/// at it, X counted from the round's start (`window::square_of`).
-#[derive(Clone, Copy)]
-pub struct Of {
-    pub cell: Zoom,
-    pub at: [i32; 2],
-}
-
-impl Of {
-    /// The zoom a square is a node at: a square's cells, `SQUARE_SHIFT`
-    /// zooms coarser.
-    const fn zoom(self) -> Zoom {
-        self.cell - SQUARE_SHIFT
-    }
-}
-
 /// The most families the pool grows to, eight slots each, every square's
 /// tree's: a bake's set fits it wherever the eye is (pxl-spec
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
@@ -110,8 +91,66 @@ impl Of {
 /// past what it holds is refused (`fits`), its square left absent. Family 0
 /// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
 /// so a root word 0 is a square with no tree, read as nothing without a
-/// word of its own (`window::ROOT_AT`).
+/// family of its own (`root_word`).
 pub const POOL_FAMILIES: u32 = 1 << 20;
+
+/// A square's root word (`window::ROOT_AT`): its root family's id, under
+/// `POOL_FAMILIES`, and over it the Z of the node its first slot holds, in
+/// the bits left; 0, family 0, where the square has no tree.
+pub const fn root_word(family: u32, z0: i32) -> u32 {
+    family | (z0 as u32) << ROOT_ID_BITS
+}
+
+/// A root word's family's first slot and its first slot's Z.
+pub const fn root_slot(w: u32) -> (u32, i32) {
+    (8 * (w & (POOL_FAMILIES - 1)), w as i32 >> ROOT_ID_BITS)
+}
+
+/// A root word's family id bits, `POOL_FAMILIES`'s.
+const ROOT_ID_BITS: u32 = POOL_FAMILIES.trailing_zeros();
+const _: () = assert!(
+    POOL_FAMILIES.is_power_of_two()
+        && (i16::MIN as i32 >> SQUARE_SHIFT) >= -(1 << (31 - ROOT_ID_BITS)),
+    "a root word holds every family's id and a square's Z, the leaves' i16 over its side"
+);
+
+/// The most of a square's own nodes along z its root family holds, a slot
+/// each: a square is a node `SQUARE_SHIFT` zooms over its cells, and its
+/// ways' bound meets no more of them than this; a tile past it fails its
+/// bake (pxl-spec bake/tile/terrain.rs `fill_fit`), its build refused as one
+/// `past` its families. The most of the staged z15 set is 4 (2026-10-27).
+pub const ROOT_NODES: u32 = overwrite::FAMILY;
+
+/// The square's own nodes along z its ways' bound `[lo, hi)` (leaf cells,
+/// `ground::Bounds`) meets, its cells at `cell`: the first's Z and how
+/// many, none where the bound is empty.
+pub fn span([lo, hi]: [i32; 2], cell: Zoom) -> (i32, u32) {
+    let d = LEAF_CELL - (cell - SQUARE_SHIFT);
+    if lo >= hi {
+        (0, 0)
+    } else {
+        (lo >> d, (((hi - 1) >> d) - (lo >> d) + 1) as u32)
+    }
+}
+
+/// What the node `at` of `zoom` holds of the square's ways' tree whose root
+/// word is `root`, its cells at `cell`, the node the square's or under it:
+/// the square's own node along z over it in the root family, then down
+/// (`overwrite::down`), as `overwrite::cursor` steps; nothing where the root
+/// holds no node there. A descent asks this once, where it finds the
+/// square (pxl-spec-core world.rs `node`).
+pub fn cursor(lanes: &impl Lanes, root: u32, cell: Zoom, zoom: Zoom, at: [i32; 3]) -> Held {
+    let (first, z0) = root_slot(root);
+    let top = cell - SQUARE_SHIFT;
+    if root == 0 || zoom < top {
+        return Held::NOTHING;
+    }
+    let k = (at[2] >> (zoom - top)) - z0;
+    if k < 0 || k >= ROOT_NODES as i32 {
+        return Held::NOTHING;
+    }
+    overwrite::down(lanes, first + k as u32, top, zoom, at)
+}
 
 /// A family's words in a pool: its eight heap words and its eight data
 /// words.
@@ -127,7 +166,7 @@ pub const SQUARE_FAMILIES: u32 = 24_067;
 /// No slot: a fold that gives no family back.
 pub const NONE: u32 = u32::MAX;
 
-/// A handed square's scratch past its runs (`window::TREE_AT`), a frame's,
+/// A handed square's scratch past its spans (`window::TREE_AT`), a frame's,
 /// for a tree of `families` at most: the families its build gave back, their
 /// count first, for the pushes after it (pxl-shader `ways_freed_cs`); then
 /// the families its tree holds from `records_at`, their count first, a
@@ -173,102 +212,58 @@ pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_FAMILIES);
 /// A build's records' count where its tree would take more families than its
 /// scratch holds (`cramped`), short of the square's own most: no record
 /// kept and its root word 0, which the renderer reads as the scratch's to
-/// grow, as a count of none is the pool's, and `NONE` the square's own
-/// most (pxl-render gpu/ray/ground.rs `Short`). Past any count of a square's.
+/// grow; `STARVED` the pool's, and `NONE` the square's own most (pxl-render
+/// gpu/ray/ground.rs `Short`). Each past any count of a square's, so a count
+/// of none is a square built with no ways, its root word 0.
 pub const CRAMPED: u32 = NONE - 1;
-const _: () = assert!(CRAMPED > SQUARE_FAMILIES, "no count of records is the mark");
+pub const STARVED: u32 = NONE - 2;
+const _: () = assert!(STARVED > SQUARE_FAMILIES, "no count of records is a mark");
 
-/// A candidate's word: its X and Y under the square, `SQUARE_SHIFT` bits
-/// each, none coarser than the square; whether it is off the square, a
-/// node beside the square's own at a zoom over it; and its Z.
+/// A candidate's word: its X and Y in the square at its zoom,
+/// `SQUARE_SHIFT` bits each, and its Z.
 const REL_MASK: u32 = (1 << SQUARE_SHIFT) - 1;
-const OFF: u32 = 1 << (2 * SQUARE_SHIFT);
-const Z_SHIFT: u32 = 2 * SQUARE_SHIFT + 1;
+const Z_SHIFT: u32 = 2 * SQUARE_SHIFT;
 const _: () = assert!(
     32 - Z_SHIFT > 16,
     "a cell's Z, an i16 at the leaves, in a candidate's word"
 );
 
-/// The square's node at `zoom`, no finer than the square, X counted from
-/// the round's start (`overwrite::path`).
-fn over(of: Of, zoom: Zoom) -> [i32; 2] {
-    let s = of.zoom() - zoom;
+/// The candidate word of the node `at`, its X and Y in the square.
+fn pack(at: [i32; 3]) -> u32 {
+    (at[2] as u32) << Z_SHIFT | (at[1] as u32) << SQUARE_SHIFT | at[0] as u32
+}
+
+/// A candidate word's node, its X and Y in the square.
+fn unpack(w: u32) -> [i32; 3] {
     [
-        (of.at[0] >> s) & (1u32 << zoom).wrapping_sub(1) as i32,
-        of.at[1] >> s,
+        (w & REL_MASK) as i32,
+        ((w >> SQUARE_SHIFT) & REL_MASK) as i32,
+        (w as i32) >> Z_SHIFT,
     ]
 }
 
-/// The candidate word of the node `at` of `zoom` under the root.
-fn pack(of: Of, zoom: Zoom, at: [i32; 3]) -> u32 {
-    let z = (at[2] as u32) << Z_SHIFT;
-    if zoom <= of.zoom() {
-        let o = over(of, zoom);
-        return if at[0] == o[0] && at[1] == o[1] {
-            z
-        } else {
-            z | OFF
-        };
-    }
-    let s = zoom - of.zoom();
-    let rel = [at[0] - (of.at[0] << s), at[1] - (of.at[1] << s)];
-    z | (rel[1] as u32) << SQUARE_SHIFT | rel[0] as u32
-}
-
-/// A candidate word's node at `zoom`, and whether it is the square's or
-/// under it.
-fn unpack(of: Of, zoom: Zoom, w: u32) -> ([i32; 3], bool) {
-    let z = (w as i32) >> Z_SHIFT;
-    if zoom <= of.zoom() {
-        let o = over(of, zoom);
-        return ([o[0], o[1], z], w & OFF == 0);
-    }
-    let s = zoom - of.zoom();
-    let rel = [
-        (w & REL_MASK) as i32,
-        ((w >> SQUARE_SHIFT) & REL_MASK) as i32,
-    ];
-    (
-        [(of.at[0] << s) + rel[0], (of.at[1] << s) + rel[1], z],
-        true,
-    )
-}
-
-/// The first level: the world's zoom-0 block, its eight nodes in the family at `root` as
-/// `overwrite::cursor` lays them, each a candidate.
-pub fn root(pool: &mut impl Pool, of: Of, root: u32) {
+/// The first level: the square's own nodes along z from `z0`, in the family
+/// at `root` as `cursor` reads them, each a candidate.
+pub fn root(pool: &mut impl Pool, z0: i32, root: u32) {
     let mut k = 0;
-    while k < 8 {
-        let at = [(k & 1) as i32, -((k >> 1 & 1) as i32), -((k >> 2) as i32)];
+    while k < ROOT_NODES {
         pool.set_heap(root + k, 0);
-        pool.set_data(root + k, pack(of, 0, at));
+        pool.set_data(root + k, pack([0, 0, z0 + k as i32]));
         k += 1;
     }
 }
 
 /// Whether the candidate at `slot`, a node of `zoom`, takes a family for
-/// its children: it is coarser than the square's cells, the square's or
-/// under it, and its Z meets where the square's ways write under it, the
-/// ways' bound of the square's levels at its size, the square's whole over
-/// it (`window::Squares::level`, its slot `s`).
-pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, of: Of, zoom: Zoom, slot: u32) -> bool {
-    let (at, under) = unpack(of, zoom, pool.data(slot));
-    if zoom >= of.cell || !under {
+/// its children: it is coarser than the square's cells at `cell`, and its
+/// Z meets where the square's ways write under it, the ways' bound of the
+/// square's levels at its size (`window::Squares::level`, its slot `s`).
+pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, cell: Zoom, zoom: Zoom, slot: u32) -> bool {
+    let at = unpack(pool.data(slot));
+    if zoom >= cell {
         return false;
     }
-    let (j, e) = if zoom <= of.zoom() {
-        (LEVELS, [0, 0])
-    } else {
-        let s = zoom - of.zoom();
-        (
-            of.cell - zoom,
-            [
-                (at[0] - (of.at[0] << s)) as u32,
-                (at[1] - (of.at[1] << s)) as u32,
-            ],
-        )
-    };
-    let [lo, hi] = ground::bounds_of(w.level(of.cell, s, j, e))[1];
+    let e = [at[0] as u32, at[1] as u32];
+    let [lo, hi] = ground::bounds_of(w.level(cell, s, cell - zoom, e))[1];
     let d = LEAF_CELL - zoom;
     lo < (at[2] + 1) << d && hi > at[2] << d
 }
@@ -276,9 +271,9 @@ pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, of: Of, zoom: Zoom, slot
 /// Whether a level's families, a flagged candidate's each, may be taken
 /// together: the pool has `flagged` left of `left`, and the square, having
 /// taken `taken`, stays within `SQUARE_FAMILIES`. None is taken past either:
-/// the tree is refused, its root word 0 and no record kept, which the
-/// renderer reads as the pool's to grow or, at its cap, the square's to
-/// stay absent; its count `NONE` where it is `past` the square's most,
+/// the tree is refused, its root word 0 and its records' count `STARVED`,
+/// which the renderer reads as the pool's to grow or, at its cap, the
+/// square's to stay absent; its count `NONE` where it is `past` the square's most,
 /// absent at once (pxl-render gpu/renderer.rs `Landing`). The bake bounds
 /// a set's and a square's (pxl-geo-bake terrain/pool.rs).
 pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
@@ -287,8 +282,8 @@ pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
 
 /// Whether a level's `flagged` families take a square that has taken `taken`
 /// past its most, `SQUARE_FAMILIES`: refused whatever the pool holds, so its
-/// build keeps `NONE` for its records' count rather than none, which the
-/// pool's growth answers (pxl-shader `ways_tree_cs`).
+/// build keeps `NONE` for its records' count rather than `STARVED`, which
+/// the pool's growth answers (pxl-shader `ways_tree_cs`).
 pub fn past(taken: u32, flagged: u32) -> bool {
     flagged > SQUARE_FAMILIES - taken
 }
@@ -303,11 +298,10 @@ pub fn cramped(families: u32, taken: u32, flagged: u32) -> bool {
     taken + flagged > families
 }
 
-/// The flagged candidate at `slot`, a node of `zoom`, a branch whose
-/// children's family begins at `first`: its eight, the next level's
-/// candidates.
-pub fn branch(pool: &mut impl Pool, of: Of, zoom: Zoom, slot: u32, first: u32) {
-    let (at, _) = unpack(of, zoom, pool.data(slot));
+/// The flagged candidate at `slot`, a branch whose children's family begins
+/// at `first`: its eight, the next level's candidates.
+pub fn branch(pool: &mut impl Pool, slot: u32, first: u32) {
+    let at = unpack(pool.data(slot));
     pool.set_heap(slot, BRANCH | first);
     let mut k = 0;
     while k < 8 {
@@ -317,7 +311,7 @@ pub fn branch(pool: &mut impl Pool, of: Of, zoom: Zoom, slot: u32, first: u32) {
             2 * at[2] + (k >> 2) as i32,
         ];
         pool.set_heap(first + k, 0);
-        pool.set_data(first + k, pack(of, zoom + 1, child));
+        pool.set_data(first + k, pack(child));
         k += 1;
     }
 }
@@ -329,35 +323,13 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 }
 
 /// The candidate at `slot`, a cell of the square: a leaf of what the ways
-/// write there, its column's run holding its Z (`ways::lined`'s, as the
-/// fill wrote them, lowest first), found by halving, nothing where none
-/// does. A bore's air is placed air in
-/// the tree, filling what it holds (`overwrite::voxel`), and the ground's
-/// void where a reader reads it, as the ways write it (`ways::AIR`).
-pub fn leaf(pool: &mut impl Pool, runs: &impl Runs, of: Of, slot: u32) {
-    let (at, under) = unpack(of, of.cell, pool.data(slot));
-    let mut value = super::NOTHING;
-    if under {
-        let s = SQUARE_SHIFT;
-        let i = crate::window::index_of([
-            (at[0] - (of.at[0] << s)) as u32,
-            (at[1] - (of.at[1] << s)) as u32,
-        ]);
-        // The first run past Z: the one before it holds Z.
-        let [first, to] = runs.column(i);
-        let (mut lo, mut hi) = (first, to);
-        while lo < hi {
-            let mid = lo + (hi - lo) / 2;
-            if super::run_of(runs.run(mid)).0 <= at[2] {
-                lo = mid + 1;
-            } else {
-                hi = mid;
-            }
-        }
-        if lo > first {
-            value = super::run_of(runs.run(lo - 1)).1;
-        }
-    }
+/// write there (`ways::lined`, off the spans its fill kept), nothing where
+/// they write none. A bore's air is placed air in the tree, filling what it
+/// holds (`overwrite::voxel`), and the ground's void where a reader reads
+/// it, as the ways write it (`ways::AIR`).
+pub fn leaf(pool: &mut impl Pool, kept: &impl super::Kept, cell: Zoom, slot: u32) {
+    let at = unpack(pool.data(slot));
+    let value = super::lined(kept, [at[0], at[1]], cell, at[2]);
     let word = if value == super::NOTHING {
         ground::VOID
     } else if value == super::AIR {
@@ -475,7 +447,7 @@ mod tests {
 
     #[test]
     fn a_scratch_holds_the_families_it_is_made_for() {
-        // At a square's most, the layout it had before it grew: its runs,
+        // At a square's most, the layout it had before it grew: its spans,
         // its freed families' count and ids, its records' count and records.
         assert_eq!(
             SCRATCH_WORDS,

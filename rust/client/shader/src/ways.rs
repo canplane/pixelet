@@ -1,6 +1,6 @@
 // pxl-shader/ways.rs
 
-//! Each handed square's ways: their runs off its lines (`ways_cs`), and
+//! Each handed square's ways: their spans off its lines (`ways_cs`), and
 //! their tree in the ways' pool (pxl-spec-core `ways::tree`), the old one
 //! given back (`ways_free_cs`), the new one built (`ways_tree_cs`) and the
 //! families the build gave back pushed (`ways_freed_cs`).
@@ -9,57 +9,38 @@ use pxl_spec_core::fill::{self, put};
 use pxl_spec_core::overwrite;
 use pxl_spec_core::ways::tree::{self, Pool, FREED_AT, RECORD_WORDS};
 use pxl_spec_core::window;
-use pxl_spec_core::{at, LEAF_CELL};
+use pxl_spec_core::at;
 use spirv_std::arch::IndexUnchecked;
-use spirv_std::glam::{UVec3, UVec4};
+use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 use crate::add;
 use crate::world::square_at;
 
-/// The ways of the squares `fresh` names, one a `z`, a thread a column
-/// (`x`, cells row by row): each column's spans and those beside it off the
-/// square's lines (pxl-spec-core `ways::around`) read along z as runs
-/// (`ways::runs`), into the square's scratch from its column's first
-/// (`window::FIRSTS_AT`). Four dispatches: `pass.x` 3 first, each column
-/// of the square and its ring its spans once into the scratch
-/// (`fill::spans`), which the rest read; then 0 to 2: each column
-/// counts its runs into its first; a workgroup a square sums them into each
-/// column's first, each
-/// thread a stretch (`fill::stretch_runs`), the stretches' sums scanned in
-/// the workgroup's memory (Hillis and Steele 1986; GPU Gems 3, ch. 39) and
-/// each stretch's firsts written off it (`fill::scanned`); each column
-/// writes its runs from its first. Over `heights_cs`'s tops: a way is told
-/// from their faces. Each square's entry as handed whole: where it lies
-/// and its shard lay the area's edge (pxl-spec-core
-/// `ways::Columns::walled`).
+/// The ways of the squares `fresh` names, one a `z`, a thread a column of
+/// the square and its ring (`x`, row by row): each its spans once off the
+/// square's lines into the square's scratch (`fill::spans`), which its
+/// levels and its ways' tree read its blocks and its neighbours' off. Over
+/// `heights_cs`'s tops: a way is told from their faces. Each square's
+/// entry as handed whole: where it lies and its shard lay the area's edge
+/// (pxl-spec-core `ways::Columns::walled`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "ways_cs"))]
 pub fn ways_cs(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(local_invocation_id)] lane: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] pass: &UVec4,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
-    // Read and written, as `bound_cs` binds it: the two share one group.
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] scratch: &mut [u32],
-    #[spirv(workgroup)] sums: &mut [u32; fill::SCAN_THREADS as usize],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] scratch: &mut [u32],
 ) {
-    if pass.x == 3 {
-        fill::spans(ground, fresh, scratch, id.z, id.x);
-        return;
-    }
-    if pass.x != 1 {
-        fill::ways(ground, fresh, scratch, id.z, pass.x == 2, id.x);
-        return;
-    }
-    let t = lane.x;
-    let own = fill::stretch_runs(scratch, id.z, t);
-    fill::scanned(scratch, id.z, t, scan(sums, t, own) - own);
+    fill::spans(ground, fresh, scratch, id.z, id.x);
 }
 
+/// The lanes of a workgroup a square: `ways_tree_cs`'s, which a level's
+/// scan ranks the flagged across, and `ways_freed_cs`'s.
+const LANES: u32 = 64;
+
 /// The workgroup's words, a lane's own: a scan's sums, a level's numbers.
-type Shared = [u32; fill::SCAN_THREADS as usize];
+type Shared = [u32; LANES as usize];
 
 /// Thread `t`'s inclusive sum of the workgroup's `own`s, a step a doubling
 /// (Hillis and Steele 1986; GPU Gems 3, ch. 39): each sum adds the one `d`
@@ -68,14 +49,13 @@ type Shared = [u32; fill::SCAN_THREADS as usize];
 /// bounds check branches on the lane between the barriers, which WebGPU
 /// takes only in uniform control flow; and two loads lie between them, a
 /// lane's own, so they are no one load every lane shares
-/// (pxl-shader-build's `workgroupUniformLoad`). `ways_cs`'s and
-/// `ways_tree_cs`'s one scan.
+/// (pxl-shader-build's `workgroupUniformLoad`). `ways_tree_cs`'s scan.
 fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
-    let at = |v: u32| (v & (fill::SCAN_THREADS - 1)) as usize;
+    let at = |v: u32| (v & (LANES - 1)) as usize;
     // SAFETY: every index is masked under the array's length.
     unsafe { *sums.index_unchecked_mut(at(t)) = own };
     let mut d = 1;
-    while d < fill::SCAN_THREADS {
+    while d < LANES {
         spirv_std::arch::workgroup_memory_barrier_with_group_sync();
         // SAFETY: masked, as above.
         let (before, sum) = unsafe {
@@ -99,7 +79,7 @@ fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
 fn shared(w: &Shared, i: u32) -> u32 {
     spirv_std::arch::workgroup_memory_barrier_with_group_sync();
     // SAFETY: masked under the array's length.
-    let v = unsafe { *w.index_unchecked((i & (fill::SCAN_THREADS - 1)) as usize) };
+    let v = unsafe { *w.index_unchecked((i & (LANES - 1)) as usize) };
     spirv_std::arch::workgroup_memory_barrier_with_group_sync();
     v
 }
@@ -107,14 +87,14 @@ fn shared(w: &Shared, i: u32) -> u32 {
 /// Word `i` of the workgroup's `w`, as the lane that wrote it reads it.
 fn lane_word(w: &Shared, i: u32) -> u32 {
     // SAFETY: masked under the array's length.
-    unsafe { *w.index_unchecked((i & (fill::SCAN_THREADS - 1)) as usize) }
+    unsafe { *w.index_unchecked((i & (LANES - 1)) as usize) }
 }
 
 /// Word `i` of the workgroup's `w` set to `v`, by lane 0 alone.
 fn set_shared(w: &mut Shared, t: u32, i: u32, v: u32) {
     if t == 0 {
         // SAFETY: masked under the array's length.
-        unsafe { *w.index_unchecked_mut((i & (fill::SCAN_THREADS - 1)) as usize) = v };
+        unsafe { *w.index_unchecked_mut((i & (LANES - 1)) as usize) = v };
     }
 }
 
@@ -249,11 +229,12 @@ pub fn ways_free_cs(
         return;
     }
     let heap = |slot: u32| at(pool, slot);
-    // Each level's family and the next of its eight to look under.
-    let mut path = [[0u32; 2]; LEAF_CELL as usize + 1];
-    let (mut d, mut first) = (0usize, root);
-    path[0] = [root, 0];
-    push(stack, root / 8);
+    // Each level's family and the next of its eight to look under, from the
+    // square's own nodes down to its cells.
+    let mut path = [[0u32; 2]; window::SQUARE_SHIFT as usize + 1];
+    let (mut d, mut first) = (0usize, tree::root_slot(root).0);
+    path[0] = [first, 0];
+    push(stack, first / 8);
     loop {
         let [b, k] = path[d];
         if k == 8 {
@@ -277,17 +258,19 @@ pub fn ways_free_cs(
 
 /// Each handed square's ways as a tree of the placed tree's shape
 /// (pxl-spec-core `ways::tree`), a workgroup a square, `group.z` its place
-/// in `fresh`: from the world's zoom-0 block down a level at a time, each
+/// in `fresh`: from the square's own nodes along z its ways' bound meets
+/// (`tree::span`) down a level at a time, each
 /// candidate flagged where the square's levels say a way may lie under it
 /// and the flagged given their children's families off the pool's stack
 /// together, in the order the workgroup's scan ranks them; at the square's
-/// cells each a leaf off its column's runs; then up, each branch folded,
-/// one of eight equal leaves written as that leaf and its family given back
-/// (`ways_freed_cs` pushes them), every family it holds kept as a record for
-/// the read-back. Its root word last; none where the pool or its scratch
-/// ran out, the families it took given back, and its records' count saying
-/// which (`tree::CRAMPED`). A level's numbers are what every lane reads
-/// alike (`shared`), the loops' bounds.
+/// cells each a leaf off the spans kept (`ways::lined`); then up, each
+/// branch folded, one of eight equal leaves written as that leaf and its
+/// family given back (`ways_freed_cs` pushes them), every family it holds
+/// kept as a record for the read-back. Its root word last; none where it
+/// has no ways, nothing taken nor kept, or where the pool or its scratch ran
+/// out, the families it took given back, and its records' count saying
+/// which (`tree::STARVED`, `tree::CRAMPED`). A level's numbers are what
+/// every lane reads alike (`shared`), the loops' bounds.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "ways_tree_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn ways_tree_cs(
@@ -301,8 +284,7 @@ pub fn ways_tree_cs(
     #[spirv(workgroup)] sums: &mut Shared,
     #[spirv(workgroup)] levels: &mut Shared,
 ) {
-    let (k, t, lanes) = (group.z, lane.x, fill::SCAN_THREADS);
-    let of = fill::of(fresh, k);
+    let (k, t, lanes) = (group.z, lane.x, LANES);
     let base = square_at(at(fresh, window::handed_at(k) + window::FRESH_SQUARE));
     let mine = fill::scratch_at(scratch, k);
     // The families a square's scratch holds, every square's alike, and where
@@ -314,29 +296,43 @@ pub fn ways_tree_cs(
     // level's `c / 8`-th off the stack, from where its ids begin.
     let slot = |stack: &[u32], from: u32, c: u32| 8 * id(stack, from + c / 8) + c % 8;
     // levels[2j], levels[2j + 1]: level j's first id on the stack and its
-    // candidates; the last three words, the families the square has taken, its
+    // candidates, level 0 the square's own nodes along z; the last four
+    // words, the first one's Z, the families the square has taken, its
     // cells' zoom and whether the pool held every level so far (`HELD`), or
-    // the level the square took past its own most (`PAST`), or past what its
-    // scratch holds (`SHORT`).
-    let (taken, cells, held) = (lanes - 3, lanes - 2, lanes - 1);
+    // the square has no ways (`BARE`), or the level the square took past its
+    // own most (`PAST`), or past what its scratch holds (`SHORT`); 0 where
+    // the pool ran out.
+    let (z0, taken, cells, held) = (lanes - 4, lanes - 3, lanes - 2, lanes - 1);
     const HELD: u32 = 1;
     const PAST: u32 = 2;
     const SHORT: u32 = 3;
+    const BARE: u32 = 4;
     if t == 0 {
         put(scratch, mine + FREED_AT, 0);
         put(scratch, records, 0);
-        let (from, ok) = pop(stack, 0, 1);
-        set_shared(levels, t, taken, 1);
-        if ok {
-            tree::root(&mut pool, of, 8 * id(stack, from));
-        }
+        let cell = fill::cell_of(fresh, k);
+        let (z, nodes) = fill::root_span(ground, base, cell);
+        let (from, state) = if nodes == 0 {
+            (0, BARE)
+        } else if nodes > tree::ROOT_NODES {
+            (0, PAST)
+        } else {
+            let (from, ok) = pop(stack, 0, 1);
+            if ok {
+                tree::root(&mut pool, z, 8 * id(stack, from));
+            }
+            (from, ok as u32)
+        };
+        let ok = state == HELD;
+        set_shared(levels, t, taken, ok as u32);
         set_shared(levels, t, 0, from);
-        set_shared(levels, t, 1, if ok { 8 } else { 0 });
-        set_shared(levels, t, cells, of.cell);
-        set_shared(levels, t, held, ok as u32);
+        set_shared(levels, t, 1, if ok { tree::ROOT_NODES } else { 0 });
+        set_shared(levels, t, z0, z as u32);
+        set_shared(levels, t, cells, cell);
+        set_shared(levels, t, held, state);
     }
     let (cell, first) = (shared(levels, cells), shared(levels, 0));
-    let (mut j, mut zoom) = (0, 0);
+    let (mut j, mut zoom) = (0, cell - window::SQUARE_SHIFT);
     let mut ok = shared(levels, held) == HELD;
     while ok && zoom < cell {
         settle();
@@ -349,7 +345,7 @@ pub fn ways_tree_cs(
             // chosen: a short circuit would put the scan after it in a
             // branch of the lane's own, where no barrier may be.
             let i = c + t;
-            let flag = tree::flag(&pool, &square, 0, of, zoom, slot(stack, from, i)) & (i < n);
+            let flag = tree::flag(&pool, &square, 0, cell, zoom, slot(stack, from, i)) & (i < n);
             scan(sums, t, flag as u32);
             flagged += shared(sums, lanes - 1);
             c += lanes;
@@ -381,10 +377,10 @@ pub fn ways_tree_cs(
         while ok && c < n {
             let i = c + t;
             let s = slot(stack, from, i);
-            let flag = tree::flag(&pool, &square, 0, of, zoom, s) & (i < n);
+            let flag = tree::flag(&pool, &square, 0, cell, zoom, s) & (i < n);
             let rank = before + scan(sums, t, flag as u32) - flag as u32;
             if flag {
-                tree::branch(&mut pool, of, zoom, s, 8 * id(stack, next + rank));
+                tree::branch(&mut pool, s, 8 * id(stack, next + rank));
             } else if i < n {
                 tree::empty(&mut pool, s);
             }
@@ -417,12 +413,12 @@ pub fn ways_tree_cs(
     // flow, which WebGPU takes only there.
     let mut c = 0;
     while ok && c < n {
-        let runs = fill::Scratch {
+        let kept = fill::Scratch {
             words: scratch,
             at: mine,
         };
         if c + t < n {
-            tree::leaf(&mut pool, &runs, of, slot(stack, from, c + t));
+            tree::leaf(&mut pool, &kept, cell, slot(stack, from, c + t));
         }
         c += lanes;
     }
@@ -449,10 +445,14 @@ pub fn ways_tree_cs(
     }
     settle();
     if t == 0 {
-        let root = if ok { 8 * id(stack, first) } else { 0 };
+        let family = id(stack, first);
         let short = lane_word(levels, held);
         if ok {
-            record(scratch, records, &pool, root);
+            record(scratch, records, &pool, 8 * family);
+        } else if short == 0 {
+            // Past what the pool holds: its count `STARVED`, the pool's to
+            // grow (pxl-render `Short`).
+            put(scratch, records, tree::STARVED);
         } else if short == PAST {
             // Past the square's own most, which no pool's growth lets it
             // build: its count `NONE`, refused at once (pxl-render `Landing`).
@@ -462,6 +462,11 @@ pub fn ways_tree_cs(
             // scratch's to grow, as none is the pool's (pxl-render `Short`).
             put(scratch, records, tree::CRAMPED);
         }
+        let root = if ok {
+            tree::root_word(family, lane_word(levels, z0) as i32)
+        } else {
+            0
+        };
         put(ground, base + window::ROOT_AT, root);
     }
 }
@@ -481,6 +486,6 @@ pub fn ways_freed_cs(
     let mut r = lane.x;
     while r < n {
         push(stack, at(scratch, mine + FREED_AT + 1 + r));
-        r += fill::SCAN_THREADS;
+        r += LANES;
     }
 }
