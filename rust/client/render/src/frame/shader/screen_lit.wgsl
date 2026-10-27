@@ -17,9 +17,12 @@ fn fs(v: VertexOut) -> FragOut {
   let ddy = dpdy(uv);
   if (eye_word(EYE_STEPS) != 0u) {
     // A ray that met nothing at the end of what the eye observes, nearer than
-    // the far plane's 0 the sky stands at.
-    let t = select(bitcast<f32>(eye_word(EYE_REACH)), bitcast<f32>(c.y), met);
-    let clip = frame_view_proj() * vec4f(d * t, 1.0);
+    // the far plane's 0 the sky stands at; one that met a face at the depth
+    // the lit pixel is drawn at (`behind`), so what is laid on the face shows
+    // as it does there.
+    let far = d * bitcast<f32>(eye_word(EYE_REACH));
+    let at = select(far, h.at * (1.0 + behind(h, pixel_steps(a, size, h))), met);
+    let clip = frame_view_proj() * vec4f(at, 1.0);
     var o: FragOut;
     // The nodes asked, the third word in this view; none where the pixel
     // showed a sample's block and walked nothing, grey.
