@@ -86,7 +86,8 @@ fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
 
 /// A setting schema.json marks `kept` false is the session's: it is not in
 /// what is kept, a change to it alone asks for no write, and one found in
-/// the slot reads as its default.
+/// the slot reads as its default. A dev one this build does not offer
+/// takes no change at all (`is_offered`), so only the offered are changed.
 #[test]
 fn a_session_s_setting_is_neither_kept_nor_read() {
     let _g = crate::sys::serial();
@@ -116,7 +117,7 @@ fn a_session_s_setting_is_neither_kept_nor_read() {
     opened();
     file::kept_answered(Kept::Settings, Err(file::Opened::Absent));
     assert!(settings_load_step());
-    for &key in &session {
+    for &key in session.iter().filter(|&&k| is_offered(k, other(k))) {
         assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
     }
     assert!(
