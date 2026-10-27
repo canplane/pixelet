@@ -67,16 +67,9 @@ fn epoch(m: &Moved) -> u32 {
 
 /// Whether tile `[i, j]` of the box is one the cast numbered `cast` casts
 /// (`sun::fresh_at`), none past the box.
-fn fresh(list: &[u32], size: u32, cast: u32, [i, j]: [i32; 2]) -> bool {
-    let n = pxl_spec_core::sun::tiles(size) as i32;
-    i >= 0
-        && j >= 0
-        && i < n
-        && j < n
-        && at(
-            list,
-            pxl_spec_core::sun::fresh_at(size) + (j * n + i) as u32,
-        ) == cast
+fn fresh(list: &[u32], size: u32, cast: u32, tile: [i32; 2]) -> bool {
+    let w = tile_word(size, pxl_spec_core::sun::fresh_at(size), tile);
+    w != NO_TILE && at(list, w) == cast
 }
 
 /// Whether a tile about box texel `p`'s, it or one beside it, is one the
@@ -605,14 +598,13 @@ pub fn sun_cells_cs(
     observer::cell(&m, list, [id.x, id.y]);
 }
 
-/// The drawn pixels' rays (cast.rs `Rays`), a thread a square of them
-/// `sun::MARK` a side, each read: the point it met the world at, its tile
-/// of the box marked read in this cast
-/// (`sun::marks_at`) with the tiles beside it, and those up the tallest
-/// decor over it (pxl-spec-core `scatter::TALLEST`), as decor and the
-/// actors stand on what the eye meets; nothing where it met nothing. A
-/// word written alike by every thread it is marked by, so none needs an
-/// atomic. Run after the eye's rays, before the sun's beam.
+/// The world's receivers of the sun's map: the drawn pixels' rays (cast.rs
+/// `Rays`), a thread a square of them `sun::MARK` a side, each read, the
+/// tile the point it met the world at lies on marked stood on
+/// (`sun::stands_at`), a run on one tile once; nothing where it met
+/// nothing. A word written alike by every thread it is marked by, so none
+/// needs an atomic. Run after the eye's rays, before the reach
+/// (`sun_reach_cs`); the drawn receivers stand apart (`sun_mark_drawn_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_mark_cs"))]
 pub fn sun_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -628,7 +620,7 @@ pub fn sun_mark_cs(
         return;
     }
     let (s, n): (Sun, UVec3) = (sun_of(eye), sun.query_size());
-    let (cast, epoch) = (cast_number(moved), epoch(moved));
+    let cast = cast_number(moved);
     // The tile last marked, so a run of pixels on one marks it once.
     let mut last = [i32::MIN; 2];
     let mut y = 0;
@@ -646,18 +638,12 @@ pub fn sun_mark_cs(
             if first != 0 && first != pxl_spec_core::ray::MISS {
                 let t = f32::from_bits(rays.read(UVec3::new(p.x, p.y, 1)));
                 let d = eye_ray(eye, pixel_tan(eye, p, size)).direction;
-                let v = [d[0] * t, d[1] * t, d[2] * t];
-                let (_, steps) = s.read_up(v, 0);
-                let mut k = 0;
-                while k <= steps {
-                    let tile = s.read_up(v, k).0;
-                    // [rust-gpu] By its words: an array's `!=` is an
-                    // intrinsic it does not lower.
-                    if tile[0] != last[0] || tile[1] != last[1] {
-                        mark_about(list, n.x, [cast, epoch], tile);
-                        last = tile;
-                    }
-                    k += 1;
+                let tile = s.tile_of([d[0] * t, d[1] * t, d[2] * t]);
+                // [rust-gpu] By its words: an array's `!=` is an intrinsic
+                // it does not lower.
+                if tile[0] != last[0] || tile[1] != last[1] {
+                    stand(list, n.x, cast, tile);
+                    last = tile;
                 }
             }
             x += 1;
@@ -666,28 +652,178 @@ pub fn sun_mark_cs(
     }
 }
 
-/// Tile `[i, j]` of the box and the tiles beside it marked read in the cast
-/// numbered `cast`, none past the box; each that no cast since `epoch`
-/// marked, which the mark it overwrites tells, cast in it
-/// (`sun::fresh_at`). Of two threads marking one, whichever reads the
-/// other's mark leaves its fresh word to the other, which writes it.
-fn mark_about(list: &mut [u32], size: u32, [cast, epoch]: [u32; 2], [i, j]: [i32; 2]) {
+/// The decor's anchor on axis `c` from the eye at Q3 `o`, in units, X the
+/// short way round as a Q3 wraps (pxl-spec-core `scatter::drawn::ANCHOR`).
+fn anchored(params: &[u32], c: u32, o: i32) -> f32 {
+    const _: () = assert!(
+        24 + pxl_spec_core::FRAC_W == 32,
+        "unit cells wrap at 2^24 (decor.rs `place_one`) as a Q3 wraps at 2^32"
+    );
+    let w = pxl_spec_core::FRAC_W;
+    let a = at(params, pxl_spec_core::scatter::drawn::ANCHOR + c) as i32;
+    a.wrapping_shl(w).wrapping_sub(o) as f32 / (1u32 << w) as f32
+}
+
+/// Lane `l` of instance slot `k` of `room`, f32 (pxl-shader decor.rs
+/// `place_one`).
+fn lane(instances: &[u32], room: u32, l: u32, k: u32) -> f32 {
+    f32::from_bits(at(instances, l * room + k))
+}
+
+/// Tile `[i, j]`'s word among the box's tiles' words at `first` (the
+/// stands, the marks, the fresh tiles), `NO_TILE` past the box.
+fn tile_word(size: u32, first: u32, [i, j]: [i32; 2]) -> u32 {
     let n = pxl_spec_core::sun::tiles(size) as i32;
-    let mut b = -1;
-    while b <= 1 {
-        let mut a = -1;
-        while a <= 1 {
-            let (x, y) = (i + a, j + b);
-            if x >= 0 && y >= 0 && x < n && y < n {
-                let k = (y * n + x) as u32;
-                let mark = pxl_spec_core::sun::marks_at(size) + k;
-                if at(list, mark) < epoch {
-                    put(list, pxl_spec_core::sun::fresh_at(size) + k, cast);
-                }
-                put(list, mark, cast);
-            }
+    if i >= 0 && j >= 0 && i < n && j < n {
+        first + (j * n + i) as u32
+    } else {
+        NO_TILE
+    }
+}
+
+/// No tile's word (`tile_word`).
+const NO_TILE: u32 = u32::MAX;
+
+/// Tile `tile` of the box marked stood on in the cast numbered `cast`
+/// (`sun::stands_at`), none past the box.
+fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
+    let w = tile_word(size, pxl_spec_core::sun::stands_at(size), tile);
+    if w != NO_TILE {
+        put(list, w, cast);
+    }
+}
+
+/// The drawn receivers of the sun's map, each the eye sees standing as the
+/// world's do (`sun_mark_cs`): the actors the host draws, a thread each
+/// (`sun::ACTORS_AT`); then the decor grown, a thread a slot of its
+/// instances (pxl-render gpu/grown.rs), as many as were placed
+/// (`decor_place_cs`), where each stands about the decor's anchor. Seen where a
+/// ball about its middle as wide as decor is tall and wide meets the view
+/// (`eye::sees`); the tiles about its own stood on too, as many as half
+/// the widest decor spans (`Sun::ring`). The actors are the skinned draws',
+/// a case's among them, which marks tiles needlessly at most, and no more
+/// than `sun::ACTORS`, past which one stands unmarked. Run after decor is
+/// placed, before the reach.
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "sun_mark_drawn_cs"))]
+#[allow(clippy::too_many_arguments)]
+pub fn sun_mark_drawn_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 18)] params: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 20)] instances: &[u32],
+) {
+    use pxl_spec_core::scatter::{drawn, TALLEST, WIDEST};
+    let head = pxl_spec_core::sun::ACTORS_AT;
+    let k = id.x as usize;
+    let v = if k < pxl_spec_core::sun::ACTORS {
+        if k >= moved[head].x as usize {
+            return;
+        }
+        let p = moved[head + 1 + k];
+        [
+            f32::from_bits(p.x as u32),
+            f32::from_bits(p.y as u32),
+            f32::from_bits(p.z as u32),
+        ]
+    } else {
+        let room = instances.len() as u32 / (drawn::LANES + 1);
+        let k = (k - pxl_spec_core::sun::ACTORS) as u32;
+        // Every slot placed this cast's frame, the regions' last end.
+        let placed = at(regions, 2 * drawn::REGIONS - 1).min(room);
+        if k >= placed {
+            return;
+        }
+        // [rust-gpu] Each by a call, not a closure over a binding's slice.
+        [
+            anchored(params, 0, eye.origin.x) + lane(instances, room, 0, k),
+            anchored(params, 1, eye.origin.y) + lane(instances, room, 1, k),
+            anchored(params, 2, eye.origin.z) + lane(instances, room, 2, k),
+        ]
+    };
+    let v3 = |v: Vec4| [v.x, v.y, v.z];
+    let middle = [v[0], v[1], v[2] + TALLEST as f32 / 2.0];
+    let axes = [v3(eye.forward_far), v3(eye.right_tau), v3(eye.up)];
+    if !pxl_spec_core::eye::sees(
+        axes,
+        [eye.tan.x, eye.tan.y],
+        middle,
+        (TALLEST + WIDEST) as f32,
+    ) {
+        return;
+    }
+    let (s, n): (Sun, UVec3) = (sun_of(eye), sun.query_size());
+    let ([i, j], cast, r) = (s.tile_of(v), cast_number(moved), s.ring());
+    let mut b = -r;
+    while b <= r {
+        let mut a = -r;
+        while a <= r {
+            stand(list, n.x, cast, [i + a, j + b]);
             a += 1;
         }
         b += 1;
     }
+}
+
+/// Which tiles of the box a receiver reads in this cast (`sun::marks_at`),
+/// a thread a tile, after every receiver stood (`sun_mark_cs`,
+/// `sun_mark_drawn_cs`), before the beam: one within a tile and its taps of
+/// a step up the way up from a tile one stands on (`Sun::up`, `Sun::up_at`:
+/// a point that far up lies that many tiles over or one more, its taps a
+/// tile either side), as decor and the actors stand on what the eye meets
+/// and are no taller. Each read that no cast since the epoch's first read,
+/// which its own last mark tells, is the cast's to cast (`sun::fresh_at`).
+/// A tile's words its own thread's alone.
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_reach_cs"))]
+pub fn sun_reach_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
+) {
+    let size: UVec3 = sun.query_size();
+    let n = pxl_spec_core::sun::tiles(size.x);
+    // [naga] The eye's vec2 of u32s read, so the module holds the type
+    // naga's SPIR-V reader splits an arrayed image's layer off by (`Eye`).
+    if id.x >= n || id.y >= n || eye.range.x > eye.range.y {
+        return;
+    }
+    let s = sun_of(eye);
+    let (cast, epoch) = (cast_number(moved), epoch(moved));
+    let up = s.up();
+    let t = [id.x as i32, id.y as i32];
+    let mut read = false;
+    let mut k = 0;
+    while k <= up.1 && !read {
+        let o = Sun::up_at(up, k);
+        let mut b = -2;
+        while b <= 1 && !read {
+            let mut a = -2;
+            while a <= 1 && !read {
+                read = stood(&*list, size.x, cast, [t[0] - o[0] + a, t[1] - o[1] + b]);
+                a += 1;
+            }
+            b += 1;
+        }
+        k += 1;
+    }
+    if read {
+        let w = id.y * n + id.x;
+        let mark = pxl_spec_core::sun::marks_at(size.x) + w;
+        if at(list, mark) < epoch {
+            put(list, pxl_spec_core::sun::fresh_at(size.x) + w, cast);
+        }
+        put(list, mark, cast);
+    }
+}
+
+/// Whether a receiver stood on tile `tile` in the cast numbered `cast`,
+/// none past the box.
+fn stood(list: &[u32], size: u32, cast: u32, tile: [i32; 2]) -> bool {
+    let w = tile_word(size, pxl_spec_core::sun::stands_at(size), tile);
+    w != NO_TILE && at(list, w) == cast
 }

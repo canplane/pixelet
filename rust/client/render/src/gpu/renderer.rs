@@ -10,6 +10,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec_core::eye;
 use pxl_spec_core::ray;
 use pxl_spec_core::scatter::GROUPS;
+use pxl_spec_core::sun;
 use pxl_spec_core::ways;
 use pxl_spec_core::window::{self, FreshSquare};
 use xpute_guest::abi::handle::handle_slot;
@@ -19,7 +20,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{
-    census_slot, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
+    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
     PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
     PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS,
     UPLOAD_WORDS,
@@ -784,12 +785,22 @@ impl Renderer {
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] =
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
+        // Where each actor drawn stands, units from the eye, a receiver of
+        // the sun's map as decor is (pxl-spec-core `sun::ACTORS_AT`).
+        let mut actors = [[0.0f32; 3]; sun::ACTORS];
+        let mut n = 0;
+        for d in draws.of(PIPELINE_SKINNED).take(sun::ACTORS) {
+            let u = uniform_of(uniforms, d);
+            actors[n] = [u[0], u[1], u[2]];
+            n += 1;
+        }
         self.screen.prepare(
             g,
             cast,
             &meshes,
             (world.rays_view, [world.width, world.height]),
             (self.shadow.world, self.shadow.frame, self.shadow.starts()),
+            &actors[..n],
         );
         // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
