@@ -5,7 +5,7 @@
 //! `miss_cs` over every pixel where the list was full).
 
 use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{answer, beam, face, observed, ray, tally, way};
+use pxl_spec_core::{beam, observed, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
@@ -30,8 +30,7 @@ type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
 /// face it entered through, then how far as f32 bits, then the four looks
 /// the ground's asset is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
-/// face (`World::faced`) and the faces its cell touches; where it met
-/// nothing, the first two zero.
+/// face (`World::faced`); where it met nothing, the first two zero.
 fn word<A: Copy>(
     ray: &cast::Ray,
     met: Met<A>,
@@ -47,7 +46,7 @@ fn word<A: Copy>(
         ray::first_word(value, face_of(ray, s.axis), s.node.zoom),
         s.t.to_bits(),
         if steps { met.visits } else { four },
-        faces | answer::touch(value) << face::TOUCH_SHIFT,
+        faces,
     ]
 }
 const _: () = assert!(

@@ -51,13 +51,9 @@ fn main() {
         )
     };
     // Its word of what lies about its face, and that word's fields, a bit an
-    // edge or a corner (pxl-spec-core face.rs), and the faces its cell
-    // touches, a bit a face (answer.rs `touch`).
-    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT, TOUCH_SHIFT};
-    let faces = format!(
-        "const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\nfn faces_touch(w: u32) -> u32 {{ return (w >> {TOUCH_SHIFT}u) & {}u; }}\n",
-        (1u32 << pxl_spec_core::answer::TOUCH_BITS) - 1
-    );
+    // edge or a corner (pxl-spec-core face.rs).
+    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
+    let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
     // The side of the box a cell kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
     let sides: String = (1..pxl_spec_core::answer::EIGHTHS)
@@ -69,8 +65,7 @@ fn main() {
         })
         .collect();
     let kept = format!(
-        "const KEPT_EIGHTHS: u32 = {}u;\nfn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n",
-        pxl_spec_core::answer::EIGHTHS
+        "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
