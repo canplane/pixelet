@@ -247,6 +247,7 @@ export const SETTINGS = {
       dusk: 5 as number,
     },
     section: "debug",
+    dev: true,
     kept: false,
   },
 } as const;
@@ -445,21 +446,5 @@ export const SETTINGS_SHIPPED = {
     kind: "toggle",
     default: false,
     section: "debug",
-  },
-  /** The hour the sky is drawn at; SKY_TIMES says each. */
-  sky_time: {
-    key: 21 as number,
-    kind: "choice",
-    default: "real",
-    options: {
-      real: 0 as number,
-      dawn: 1 as number,
-      morning: 2 as number,
-      noon: 3 as number,
-      afternoon: 4 as number,
-      dusk: 5 as number,
-    },
-    section: "debug",
-    kept: false,
   },
 } as const;
