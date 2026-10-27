@@ -4,6 +4,12 @@
 //! radius being the zoom. The controls write the target; `turn` brings what
 //! is drawn to it (domain/approach.rs). Everything that reads the world reads the
 //! drawn state.
+//!
+//! The controls are written through one funnel (`ask`), where terrain
+//! answers whether a state puts the eye in the ground
+//! (orbit/terrain_gate.rs `allowed_view`), and the camera setting decides
+//! what follows: through ignores the ground, stop takes a control as far as
+//! it gets, and climb raises the drawn pitch instead (`climb_polar`).
 
 pub mod terrain_gate;
 

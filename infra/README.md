@@ -11,8 +11,22 @@ client ─ Worker ┼─ /tile/*, /asset/* ────────────�
                                                       └▶ pxl-api ── db-main
 ```
 
-Locally the same two databases run from one compose file, and the tile server
-stands in for the bucket.
+Locally the same two databases run from one compose file, and a tile server
+stands in for the bucket (`pxl-geo-bake bin/serve_tiles.rs`). It bakes on demand
+by the bakes' own functions, every layer the same way (`demand/pyramid.rs`): a
+leaf when first asked for, and a tile above folded from its sources, no coarser
+than `--folds` zooms over the leaves. What it bakes is kept across restarts
+until a purge. With `--shelf` it serves each kind's baked set as it stands, so a
+bake is seen before it is published. Either way it answers the bucket's
+declaration in the published shape, so the client reads it as it reads the
+bucket. A set's whole checks are the bake's commit's alone
+([ARCHITECTURE.md](../ARCHITECTURE.md#a-set)).
+
+| Make target | Tiles                         |
+| ----------- | ----------------------------- |
+| `dev-oven`  | baked on demand               |
+| `dev-shelf` | the last bakes                |
+| `dev`       | from the published deployment |
 
 ```
 infra/

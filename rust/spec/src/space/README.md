@@ -2,9 +2,10 @@
 
 Everything in this world has a position: three integers, an axis each, counting
 256ths of a unit. Every coarser grouping of the world — the cell an object
-fills, the camera grid's cell a ray draws, the tile a request fetches — is that
-position shifted down on each axis. A size is a **zoom**, one number for all of
-them, and grouping is a shift, never a division.
+fills, the tile a request fetches — is that position shifted down on each axis.
+The camera grid's cell is an angle about the eye, not a grouping of positions
+(`camera/grid.rs`). A size is a **zoom**, one number for all of them, and
+grouping is a shift, never a division.
 
 What a unit is worth in meters is not in this module. The lattice counts units;
 what a unit means belongs to whoever projects it. That split is why no file here
@@ -44,11 +45,12 @@ X goes once round the world in 2^24 units, so a thing the world over 2^z wide is
 at zoom z: z is 24 less the log of its side in units (`coord/zoom.rs`). A bigger
 zoom is finer, one zoom finer is half as wide, and the unit itself is z24.
 
-| zoom | side | what this program puts there                     |
-| ---- | ---- | ------------------------------------------------ |
-| z27  | 1/8u | a placed object's finest cell                    |
-| z24  | 1u   | a ground cell, the canonical unit                |
-| z15  | 512u | a leaf tile, the finest the ground is fetched at |
+| zoom | side | what this program puts there                                          |
+| ---- | ---- | --------------------------------------------------------------------- |
+| z27  | 1/8u | a placed object's finest cell                                         |
+| z24  | 1u   | a ground cell, the canonical unit                                     |
+| z15  | 512u | a leaf tile, the finest the ground is fetched at                      |
+| z4   |      | the coarsest tile, where the pyramid stops (pxl-spec-core `TOP_ZOOM`) |
 
 The zooms are size and nothing else — the rightmost column is this program's
 arrangement, not the number's meaning. A zoom finer than z24 is a fraction of a
@@ -77,6 +79,8 @@ Meaning enters at an **adapter**, and only there:
   plane's, in u, or the ground's, in meters; `scale_factor` relates them, and
   `mer_from_u`/`u_from_mer` are the only way to or from Mercator's meter.
 - `coord/adapter/4326.rs` — lon/lat, and the projection to and from 3857.
+  3857's plane leaves out the poles (`CLAMP_LAT`), and the pyramid never
+  leaves the plane.
 
 ### What the adapter makes the zooms, here
 
@@ -115,10 +119,12 @@ z15            z14
 A tile at z holds the same record a leaf does — 512 cells a side — so its cells
 are z + 9, a layer's cells always its tile's zoom plus the layer's own constant
 (pxl-spec-core `lattice.rs` `Lattice`, which `layer/lattice.rs` places in the
-world). Its key is a leaf's key shifted down 15 − z, and a key alone does not
-say by how much, so a tile is named by its zoom and a key together (`Tile`,
-`layer/tile.rs`); the tile at a zoom over a leaf is `Tile::over`, and a tile's
-first leaf, which 512u square it begins at, is `first_leaf`.
+world). Its key is a 2D Morton key, a digit a zoom (`hierarchy/morton.rs`), so a
+tile's key is a prefix of its children's: a leaf's key shifted down 15 − z, and
+a key alone does not say by how much, so a tile is named by its zoom and a key
+together (`Tile`, `layer/tile.rs`); the tile at a zoom over a leaf is
+`Tile::over`, and a tile's first leaf, which 512u square it begins at, is
+`first_leaf`.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_at`), and terrain's
 tile zoom is the one whose cells those are (pxl-spec-core `Lattice::tile_zoom`);
