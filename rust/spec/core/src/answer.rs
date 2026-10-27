@@ -9,7 +9,10 @@
 //! Below the descent, the query and the sources alike.
 
 use crate::cube::{object, sentinel};
-use crate::overwrite::FULL;
+
+/// A cube filled whole, as a share counts it: a share is in 2⁻¹⁵ of its
+/// cube, floored at each fold, so eighths stay exact five folds deep.
+pub const FULL: u32 = 1 << 15;
 
 /// What a node is to a descent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -169,7 +172,7 @@ pub const KEPT_BITS: u32 = 3;
 /// A cube's eighths: its children, what a share is kept in.
 pub const EIGHTHS: u32 = 8;
 
-/// The eighths of a cube kept of `fill` of it, in `overwrite::FULL`'s units:
+/// The eighths of a cube kept of `fill` of it, in `FULL`'s units:
 /// floored, so a trace too small to fill one child keeps none and nothing is
 /// drawn there. The one rule a block's kept share is, the ground's top
 /// (`ground::top`) and a block of every layer together (`cover`) alike.
@@ -185,7 +188,7 @@ pub const fn eighths(fill: u32) -> u32 {
 /// What of a block's cube fills, and whether an overwrite's kind is its
 /// look: the ground filling `ground` of it, under an overwrite — what is
 /// placed, or the ways — of `kind` filling `over` of it, each in
-/// `overwrite::FULL`'s units. A kind that fills lies beside the ground, as
+/// `FULL`'s units. A kind that fills lies beside the ground, as
 /// a thing stands on it, so their shares add; air lies in it, as a cut or a
 /// bore, so it takes its share from the ground's. The look is the kind most
 /// of the fill is: the overwrite's where it fills at least as much as the

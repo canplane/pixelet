@@ -29,22 +29,28 @@ RUST = REPO / "rust"
 TARGET = "wasm32-unknown-unknown"
 # Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
 TARGET_DIR = Path(os.environ["CARGO_TARGET_DIR"]) if os.environ.get("CARGO_TARGET_DIR") else RUST / "target"
-BUILT = TARGET_DIR / TARGET / "release/pxl_wasm.wasm"
 OUT = WEB / "src/guest.wasm"
 # The source path each number in a published module's panics stands for; kept by the deploy, never bundled.
 PATHS = WEB / "src/guest.paths.json"
 
 # What `deno task build` bundles: no dev features, numbered panic paths.
 PUBLISHED = "--published" in sys.argv[1:]
+# The published module is release's bytes; the dev server's, watch's, which a
+# change rebuilds in part (rust/Cargo.toml). Each in its own directory, so
+# building one never starts the other over.
+PROFILE = "release" if PUBLISHED else "watch"
+BUILT = TARGET_DIR / TARGET / PROFILE / "pxl_wasm.wasm"
 
 # Strips run here, not via Cargo, so target features are still declared while wasm-opt runs.
-WASM_OPT = [
-    # Inlines across the crate graph, which LTO does not.
-    "-O3",
+STRIPS = [
     "--strip-debug",
     "--strip-producers",
     "--strip-target-features",
 ]
+# Inlines across the crate graph, which LTO does not: the published module's
+# speed, which `preview` serves. The dev server's module only has to show a
+# change working, and -O3 would be most of each of its rebuilds.
+WASM_OPT = ["-O3", *STRIPS] if PUBLISHED else STRIPS
 
 # embassy and critical-section export their `#[no_mangle]` symbols; only these stay.
 EXPORTS = ["intr"]
@@ -91,7 +97,7 @@ def main():
     before = mtime(BUILT)
     try:
         status = subprocess.run(
-            ["cargo", "build", "--release", "--package", "pxl-wasm", "--target", TARGET, *(["--no-default-features"] if PUBLISHED else [])],
+            ["cargo", "build", "--profile", PROFILE, "--package", "pxl-wasm", "--target", TARGET, *(["--no-default-features"] if PUBLISHED else [])],
             cwd=RUST,
             env={**os.environ, "RUSTFLAGS": remapped()},
         )
@@ -102,7 +108,10 @@ def main():
         return status.returncode
 
     # Finishing an unchanged module again would reload every open dev page.
-    if mtime(BUILT) == before and OUT.is_file() and before is not None and mtime(OUT) >= before:
+    # The module carries the time of what it was finished from, so it is this
+    # build's only when the two are equal: the dev server's and the published
+    # are each their own file, and either may have been finished last.
+    if before is not None and mtime(BUILT) == before and mtime(OUT) == before:
         print("[build-wasm] up to date -> src/guest.wasm")
         return 0
 
@@ -122,6 +131,8 @@ def main():
         # The module last: it is what a reader keys on.
         if PUBLISHED:
             os.replace(numbered, PATHS)
+        built = mtime(BUILT)
+        os.utime(done, ns=(built, built))
         os.replace(done, OUT)
         said = (", without the dev-only settings" if PUBLISHED else "") + (f", and {paths} source paths numbered" if paths > 0 else "")
         print(f"[build-wasm] {linked} -> {OUT.stat().st_size} bytes, stripped{said} -> src/guest.wasm")

@@ -3,7 +3,7 @@
 //! gpu-portable: the camera grid's beam (doc/minutes/20261022-a-cell-casts-a-beam.md).
 //! A beam ray is cast through each corner of the grid's cells and walks the
 //! pyramid until it meets a block that fills or lacks, or a split narrower
-//! than it can share with the rays about it (`narrow`); each cell starts
+//! than it can share with the rays about it (`cast::narrow`); each cell starts
 //! from the least of the beam rays about it, shortened by a margin
 //! (`handed`), and what resumes from the line that beam ray left is the
 //! samples, `SAMPLE` a cell a side, walked to the block that fills; the
@@ -21,13 +21,6 @@ pub fn spacing(tau: f32) -> f32 {
     tau / SPLIT
 }
 
-/// Whether a node `side` wide, squared, is too narrow for a beam ray to
-/// share where the grid's rays lie `width` apart, squared: under twice the
-/// width that holds one of them for certain, `2√2 · width`; the eye's
-/// `s · d` at the node's farthest point.
-pub fn narrow(side2: f32, width2: f32) -> bool {
-    side2 < 8.0 * width2
-}
 
 /// The camera grid as a frame lays it over the screen, worked out once,
 /// from the screen's tangents and τ (`of`), where the kernel writes the

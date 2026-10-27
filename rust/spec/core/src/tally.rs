@@ -6,7 +6,7 @@
 //! its samples, its rays a pixel or a slot taking the raster's pick or
 //! walking, those walked again, and the boxes its samples drew
 //! (pxl-render gpu/ray/tally.rs). A pass adds where it can write: a walk
-//! that writes the observed pyramid into its head (`observed::TALLY_AT`),
+//! that writes the observed pyramid into its head (`observed::TALLY_AT`, `walk_at`),
 //! as no binding more fits beside it; a pixel's or a slot's into its walk
 //! again's args (`ray::MISS_ARGS_TALLY`), which it adds to already, as its
 //! read of the pyramid is no atomic one; the boxes off the raster's draw
@@ -40,6 +40,17 @@ pub const WALKS: u32 = 3;
 pub const RAYS: u32 = 3;
 const _: () =
     assert!(BEAM == 0 && MISS + 1 == WALKS && PICKED == WALKS && PIXEL + 1 == WALKS + RAYS);
+
+const _: () = assert!(
+    OBSERVERS * WALKS == crate::observed::TALLY_WORDS,
+    "the walks' counts fill the pyramid's head words for them"
+);
+
+/// Where `observer`'s lane `lane` of its walks is counted in the observed
+/// pyramid's head (`observed::TALLY_AT`).
+pub const fn walk_at(observer: u32, lane: u32) -> u32 {
+    crate::observed::TALLY_AT + observer * WALKS + lane
+}
 
 /// Lane `lane` of `observer` in the array.
 pub const fn at(observer: u32, lane: u32) -> u32 {

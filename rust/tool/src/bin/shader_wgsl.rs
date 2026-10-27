@@ -6,7 +6,14 @@
 //! of the sources that made it.
 //!
 //!   cargo shader-wgsl            write them   (in rust/)
+//!   cargo shader-wgsl --force    write them, made again whatever they name
 //!   cargo shader-wgsl --check    fail if one is not current
+//!
+//! A write makes nothing when every file already names the digest of what
+//! makes it as it is now (pxl-tool shader.rs `INPUT_ROOTS`), the record
+//! check_rules holds each to, so the container would write the same bytes.
+//! A file edited by hand under its digest is what `--force` is for; `--check`
+//! always makes them and compares.
 //!
 //! Whether the browser's compiler takes what this writes is the web app's
 //! test (ts/app/web src/shader.test.ts, Tint through Dawn), which make
@@ -21,7 +28,7 @@ use std::path::Path;
 use std::process::{Command, ExitCode};
 
 use pxl_tool::root;
-use pxl_tool::shader::{header, inputs_digest, DIR, ENTRIES};
+use pxl_tool::shader::{header, inputs_digest, made_from, stale, DIR, ENTRIES};
 
 const IMAGE: &str = "rust:1-bookworm";
 const BUILT: &str =
@@ -71,8 +78,14 @@ fn generate(
 
 fn run() -> Result<bool, String> {
     let check = std::env::args().any(|a| a == "--check");
+    let force = std::env::args().any(|a| a == "--force");
     let root = root();
-    let made = generate(&root, &inputs_digest(&root)?)?;
+    let digest = inputs_digest(&root)?;
+    if !check && !force && stale(&root, &digest).is_empty() {
+        println!("current: every entry names the sources' digest {digest}");
+        return Ok(true);
+    }
+    let made = generate(&root, &digest)?;
     let mut current = true;
     for (_, file, text) in &made {
         let target = root.join(DIR).join(file);
@@ -80,14 +93,23 @@ fn run() -> Result<bool, String> {
             if std::fs::read_to_string(&target).ok().as_deref() == Some(text.as_str()) {
                 println!("current: {}", target.display());
             } else {
+                let named = std::fs::read_to_string(&target)
+                    .is_ok_and(|text| made_from(&text) == Some(digest.as_str()));
+                let mend = if named { " --force" } else { "" };
                 eprintln!(
-                    "stale: {} is not what the source makes now; run `cargo shader-wgsl`",
+                    "stale: {} is not what the source makes now; run `cargo shader-wgsl{mend}`",
                     target.display()
                 );
                 current = false;
             }
         } else {
-            std::fs::write(&target, text).map_err(|e| format!("{}: {e}", target.display()))?;
+            // Renamed into place: a run killed mid-write would leave a body cut
+            // short under a head that names the current digest, which a write
+            // then takes as made.
+            let part = target.with_extension("wgsl.part");
+            std::fs::write(&part, text)
+                .and_then(|()| std::fs::rename(&part, &target))
+                .map_err(|e| format!("{}: {e}", target.display()))?;
             println!("wrote {} ({} bytes)", target.display(), text.len());
         }
     }

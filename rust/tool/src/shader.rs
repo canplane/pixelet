@@ -59,18 +59,25 @@ pub const INPUTS: &str = "// Inputs: ";
 
 /// What makes the entries: pxl-spec-core, the shader crate, the builder that
 /// reads its SPIR-V into WGSL, xpute-kit beneath them, their lock and the
-/// toolchain's pin — every Rust, TOML and lock file under them the tree holds
-/// (`git ls-files -co --exclude-standard`, as check_rules lists it), so a new
-/// one counts before it is added and nothing ignored does. Wider than what
-/// reaches a shader: a change elsewhere in them asks for a regenerate that
-/// differs only here.
-const INPUT_ROOTS: [&str; 6] = [
+/// toolchain's pin, the cargo config the container's cargo reads from above
+/// the shader crate, and this generator, which writes each file's head —
+/// every Rust, TOML and lock file under them the tree holds (`git ls-files
+/// -co --exclude-standard`, as check_rules lists it), so a new one counts
+/// before it is added and nothing ignored does. The digest is all that holds
+/// a file current, for a write that skips the container and for check_rules
+/// alike, so it names everything a file is made by. Wider than what reaches a
+/// shader: a change elsewhere in them asks for a regenerate that differs only
+/// here.
+const INPUT_ROOTS: [&str; 9] = [
     "rust/spec/core/",
     "rust/client/shader/",
     "rust/client/shader/build/",
     "xpute/rust/kit/",
     "rust/client/shader/Cargo.lock",
     "rust/client/shader/rust-toolchain.toml",
+    "rust/.cargo/config.toml",
+    "rust/tool/src/shader.rs",
+    "rust/tool/src/bin/shader_wgsl.rs",
 ];
 
 /// Each checked-in entry's path from the checkout's root.
@@ -109,6 +116,22 @@ pub fn inputs_digest(root: &Path) -> Result<String, String> {
         hash.update(&bytes);
     }
     Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// The digest of the sources a generated module was made from, as its head
+/// names it.
+pub fn made_from(text: &str) -> Option<&str> {
+    text.lines().find_map(|l| l.strip_prefix(INPUTS))
+}
+
+/// Each checked-in entry that does not name `digest`, missing ones too.
+pub fn stale(root: &Path, digest: &str) -> Vec<String> {
+    generated()
+        .filter(|f| {
+            std::fs::read_to_string(root.join(f))
+                .map_or(true, |text| made_from(&text) != Some(digest))
+        })
+        .collect()
 }
 
 /// The head every generated module carries, its digest last.

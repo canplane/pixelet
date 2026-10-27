@@ -215,15 +215,9 @@ pub const fn grown_for(head: [u32; 4], q: [i32; 2]) -> bool {
     head[3] == 1 && head[1] as i32 == q[0] && head[2] as i32 == q[1]
 }
 
-/// The edits a frame hands decor's growth at most (pxl-kernel
-/// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box of
-/// leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel unions
-/// the rest into the last.
-pub const EDITS: u32 = 8;
-/// The boxes a frame's growth is asked over: the edits, and a preview's
-/// cut and left-out leaf as they were and as they are; past them the
-/// renderer joins the rest into the last (pxl-render gpu/grown.rs `hold`).
-pub const BOXES: u32 = EDITS + 4;
+/// The edits and cuts a frame's growth is asked over, the objects' own
+/// (`overwrite::EDITS`, `overwrite::BOXES`, `overwrite::cut_box`).
+pub use crate::overwrite::{cut_box, BOXES, EDITS};
 /// What `decor_mark_cs` reads first: whether every slot grows, decor having
 /// been off; the squares filled this frame; the boxes; then the boxes, four
 /// words each.
@@ -236,17 +230,6 @@ pub const GROWS_AT: u32 = 4;
 
 /// The words of what `decor_mark_cs` lists.
 pub const GROWS_WORDS: u32 = GROWS_AT + EYE_SLOTS * DECORS.len() as u32;
-
-/// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
-pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
-    if zoom <= LEAF_CELL {
-        let s = LEAF_CELL - zoom;
-        [at[0] << s, at[1] << s, (at[0] + 1) << s, (at[1] + 1) << s]
-    } else {
-        let s = zoom - LEAF_CELL;
-        [at[0] >> s, at[1] >> s, (at[0] >> s) + 1, (at[1] >> s) + 1]
-    }
-}
 
 /// Whether the box `b` of leaf cells meets square `q` of the window at
 /// `cell` or a square beside it: what decor in the square stands and grows
