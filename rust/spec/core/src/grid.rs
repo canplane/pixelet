@@ -19,9 +19,11 @@ pub const RATIO_MAX: f32 = 2.0;
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
 /// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs), stated
-/// at `RATIO_MAX`: 96 a radian a CSS pixel asks, in drawn pixels. A lower
-/// ratio's cells are wider by `RATIO_MAX` over it, its τ, so whatever is
-/// sized by `SPLIT` holds at every ratio.
+/// at `RATIO_MAX`: 96 a radian a CSS pixel asks, in drawn pixels. Every
+/// view is cast at τ `RATIO_MAX` whatever its ratio (pxl-spec
+/// space/camera/grid.rs `Tau::VIEW`), its cells as wide as a ratio of one
+/// asks, so what is observed is the display's pixels' to draw, never theirs
+/// to decide; whatever is sized by `SPLIT` holds at every τ.
 pub const SPLIT: f32 = 96.0 * RATIO_MAX;
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared,

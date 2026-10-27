@@ -49,6 +49,12 @@ pub struct Tau(f64);
 impl Tau {
     pub const FINEST: Tau = Tau(1.0);
 
+    /// Every view's, whatever its screen: the cell a ratio of one asks of
+    /// `SPLIT`, which is stated at `RATIO_MAX`, so about twelve CSS pixels at
+    /// the reference view. How many pixels a display draws it with is the
+    /// drawing's, never what is observed.
+    pub const VIEW: Tau = Tau(RATIO_MAX);
+
     /// At least 1: a finer quality than the criterion breaks the reach.
     pub fn of(scale: f64) -> Tau {
         xpute_kit::ensure!(scale >= 1.0, EINVAL);
