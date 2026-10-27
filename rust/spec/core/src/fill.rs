@@ -145,12 +145,12 @@ impl Scratch<'_> {
 impl way::Kept for Scratch<'_> {
     fn head(&self, c: [i32; 2]) -> (i32, u32) {
         let w = at(self.words, self.column(c));
-        let face = w as i32 >> 16;
+        let top = w as i32 >> 16;
         (
-            if face == i16::MIN as i32 {
+            if top == i16::MIN as i32 {
                 i32::MIN
             } else {
-                face
+                top
             },
             w & SPANS_COUNT,
         )
@@ -171,12 +171,12 @@ const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
 fn head_word(s: &way::Spans, fits: bool) -> u32 {
-    let face = if s.face == i32::MIN {
+    let top = if s.top == i32::MIN {
         i16::MIN as i32
     } else {
-        s.face.clamp(i16::MIN as i32 + 1, i16::MAX as i32)
+        s.top.clamp(i16::MIN as i32 + 1, i16::MAX as i32)
     };
-    s.n | if fits { 0 } else { SPANS_PAST } | (face as u32) << 16
+    s.n | if fits { 0 } else { SPANS_PAST } | (top as u32) << 16
 }
 
 /// Where the square a frame hands `k`-th has its scratch in the frame's
@@ -369,8 +369,9 @@ pub fn keep(sq: &impl window::Square, scratch: &mut [u32], mine: u32, i: u32) ->
 /// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
 /// the ways write in it off the spans its fill kept (`way::bound`;
-/// `ground::Bounds`); a higher one over the level under it, written before
-/// (`window::join`). A bore's air counts as far as the column's top, as the
+/// `ground::Bounds`), and over its column word's top which columns beside it
+/// touch its top cell (`touches`); a higher one over the level under it,
+/// written before (`window::join`). A bore's air counts as far as the column's top, as the
 /// ways write it: the cells of the square's ways tree under it lie in the
 /// bound (`way::tree`), and a node it splits more holds only air or void
 /// there. Over the top it is air whatever writes it; a bound reaching up
@@ -385,8 +386,15 @@ pub fn level(
     at: [u32; 2],
 ) {
     let w = if j == 0 {
-        let top = column_top(column_of(ground, base, window::index_of(at)));
-        let lines = way::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
+        let (i, c) = (window::index_of(at), [at[0] as i32, at[1] as i32]);
+        let word = column_of(ground, base, i);
+        let top = column_top(word);
+        put(
+            ground,
+            base + COLUMNS_AT + i,
+            word & 0xffff | touches(kept, c) << 16,
+        );
+        let lines = way::bound(kept, c, cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
@@ -404,6 +412,27 @@ pub fn level(
     let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_index(j, at);
     put(ground, e, w[0] as u32);
     put(ground, e + 1, w[1] as u32);
+}
+
+/// Which of the four columns beside column `c` touch its ground's top cell
+/// (`window::column_touches`): those whose top in cells, as its fill kept it
+/// in the spans' heads, reaches this one's, a ring column's off the tile's
+/// samples as every one's. None where the column has no top (past the area
+/// or walled) or the one beside has none.
+fn touches(kept: &impl way::Kept, c: [i32; 2]) -> u32 {
+    let (own, _) = kept.head(c);
+    let touch = |d: [i32; 2], bit: u32| {
+        let (top, _) = kept.head([c[0] + d[0], c[1] + d[1]]);
+        if own != i32::MIN && top != i32::MIN && top >= own {
+            bit
+        } else {
+            0
+        }
+    };
+    touch([-1, 0], window::TOUCH_X_LO)
+        | touch([1, 0], window::TOUCH_X_HI)
+        | touch([0, -1], window::TOUCH_Y_LO)
+        | touch([0, 1], window::TOUCH_Y_HI)
 }
 
 /// A square filled whole, its passes in a GPU's order (pxl-render
@@ -574,10 +603,7 @@ mod tests {
                 ];
                 let top = tops[i as usize];
                 let mut s = way::Spans::NONE;
-                s.face = ground::face_cell(
-                    cell,
-                    ground::face_height(cell, ground::cells(cell, top as f32)),
-                );
+                s.top = ground::cells(cell, top as f32);
                 let inside = (0..16).contains(&(c[0] - patch[0]))
                     && (0..16).contains(&(c[1] - patch[1]));
                 if inside {
@@ -609,6 +635,28 @@ mod tests {
                 for k in 0..side * side {
                     level(&mut lane, 0, &kept, cell, j, [k % side, k / side]);
                 }
+            }
+            // Each column's touches, against its neighbours' tops in cells.
+            let cells_at = |x: i32, y: i32| {
+                let ring = ((y + 1) as u32 * SPANS_ACROSS + (x + 1) as u32) as usize;
+                ground::cells(cell, tops[ring] as f32)
+            };
+            for i in 0..SQUARE_CELLS {
+                let [x, y] = window::of_index(i);
+                let (x, y) = (x as i32, y as i32);
+                let own = cells_at(x, y);
+                let want = [
+                    (cells_at(x - 1, y), window::TOUCH_X_LO),
+                    (cells_at(x + 1, y), window::TOUCH_X_HI),
+                    (cells_at(x, y - 1), window::TOUCH_Y_LO),
+                    (cells_at(x, y + 1), window::TOUCH_Y_HI),
+                ]
+                .iter()
+                .filter(|(t, _)| *t >= own)
+                .fold(0, |b, (_, bit)| b | bit);
+                let word = column_of(&lane, 0, i);
+                assert_eq!(window::column_touches(word), want, "round {round}, column {x}, {y}");
+                assert_eq!(column_top(word), tops[((y + 1) as u32 * SPANS_ACROSS + (x + 1) as u32) as usize]);
             }
             let mut pool = vec![0u32; 16 * (tree::SQUARE_FAMILIES as usize + 1)];
             let [taken, held, root] = tree(&lane, &scratch, cell, &mut pool, 1);
