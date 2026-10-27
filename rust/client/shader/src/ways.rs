@@ -22,7 +22,9 @@ use crate::world::square_at;
 /// (`x`, cells row by row): each column's spans and those beside it off the
 /// square's lines (pxl-spec-core `ways::around`) read along z as runs
 /// (`ways::runs`), into the square's scratch from its column's first
-/// (`window::FIRSTS_AT`). Three dispatches, `pass.x` 0 to 2: each column
+/// (`window::FIRSTS_AT`). Four dispatches: `pass.x` 3 first, each column
+/// of the square and its ring its spans once into the scratch
+/// (`fill::spans`), which the rest read; then 0 to 2: each column
 /// counts its runs into its first; a workgroup a square sums them into each
 /// column's first, each
 /// thread a stretch (`fill::stretch_runs`), the stretches' sums scanned in
@@ -43,6 +45,10 @@ pub fn ways_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] scratch: &mut [u32],
     #[spirv(workgroup)] sums: &mut [u32; fill::SCAN_THREADS as usize],
 ) {
+    if pass.x == 3 {
+        fill::spans(ground, fresh, scratch, id.z, id.x);
+        return;
+    }
     if pass.x != 1 {
         fill::ways(ground, fresh, scratch, id.z, pass.x == 2, id.x);
         return;

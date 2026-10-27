@@ -6,8 +6,9 @@
 //! (`window::SQUARE_WORDS`): each column's ground
 //! top off its tile's samples and its cell as laid (`heights`), its ways'
 //! runs off its lines into its scratch, the frame's (`window::FIRSTS_AT`),
-//! in three passes (`ways`, a workgroup's scan between them,
-//! `stretch_runs` and `scanned`), and its levels, level 0 each column's own
+//! in four passes (each column's spans once, `spans`; then `ways`, a
+//! workgroup's scan between them, `stretch_runs` and `scanned`), and its
+//! levels, level 0 each column's own
 //! (`level`), and its ways' tree off the runs (`ways::tree`). A GPU runs
 //! each pass a thread a column or entry
 //! (pxl-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs its
@@ -168,7 +169,14 @@ struct Filling<'a> {
     rec: u32,
     cell: u32,
     place: [u32; 2],
+    /// The scratch its columns' spans are kept in from (`spans`), where
+    /// they were worked out already; `NOT_KEPT` where not.
+    kept: &'a [u32],
+    mine: u32,
 }
+
+/// No columns' spans kept: each worked out off its lines.
+const NOT_KEPT: u32 = u32::MAX;
 
 impl window::Square for Filling<'_> {
     fn cell(&self) -> u32 {
@@ -204,6 +212,13 @@ impl window::Square for Filling<'_> {
             samples(self.fresh, self.rec),
             [first[0] + c[0], first[1] + c[1]],
         )
+    }
+    fn kept_spans(&self, c: [i32; 2]) -> (bool, ways::Spans, bool) {
+        if self.mine == NOT_KEPT {
+            return (false, ways::Spans::NONE, true);
+        }
+        let (spans, fits) = stored(self.kept, self.mine, c);
+        (true, spans, fits)
     }
 }
 
@@ -310,6 +325,8 @@ pub fn ways(
             rec,
             cell,
             place,
+            kept: scratch,
+            mine,
         };
         let [x, y] = window::of_index(i);
         crate::ways::around(&filling, [x as i32, y as i32])
@@ -328,6 +345,64 @@ pub fn ways(
     } else {
         u32::MAX
     }
+}
+
+/// The spans of column `i` of the square handed `k`-th and its ring
+/// (`window::SPANS_COLUMNS`, row by row from the ring's first) into its
+/// scratch (`window::SPANS_AT`): worked out once a column, off its lines and
+/// its face (`ways::column`), before its runs and its neighbours' read them
+/// (`ways`), where each column's own and its four neighbours' were each
+/// worked out again by every column beside it, in the count and the write
+/// alike.
+pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32) {
+    if i >= window::SPANS_COLUMNS {
+        return;
+    }
+    let (rec, base, place, cell) = handed(fresh, k);
+    let c = [
+        (i % window::SPANS_ACROSS) as i32 - 1,
+        (i / window::SPANS_ACROSS) as i32 - 1,
+    ];
+    let filling = Filling {
+        ground,
+        base,
+        fresh,
+        rec,
+        cell,
+        place,
+        kept: ground,
+        mine: NOT_KEPT,
+    };
+    let (s, fits) = crate::ways::column(&filling, c);
+    let at = scratch_at(scratch, k) + window::SPANS_AT + i * window::SPANS_COLUMN_WORDS;
+    put(scratch, at, s.n | u32::from(!fits) << 31);
+    let mut j = 0;
+    while j < s.n as usize {
+        let w = at + 1 + 2 * j as u32;
+        let held = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32);
+        let run = [held(s.run[j][0]), held(s.run[j][1])];
+        put(scratch, w, crate::answer::bound_word(run) as u32);
+        put(scratch, w + 1, s.value[j]);
+        j += 1;
+    }
+}
+
+/// Column `c`'s spans as `spans` stored them in the scratch from `mine`,
+/// `c` in the square's cells, its ring one past each side.
+fn stored(scratch: &[u32], mine: u32, c: [i32; 2]) -> (ways::Spans, bool) {
+    let i = (c[1] + 1) as u32 * window::SPANS_ACROSS + (c[0] + 1) as u32;
+    let at = mine + window::SPANS_AT + i * window::SPANS_COLUMN_WORDS;
+    let head = self::at(scratch, at);
+    let mut s = ways::Spans::NONE;
+    s.n = head & !(1 << 31);
+    let mut j = 0;
+    while j < s.n as usize && j < ways::SPANS {
+        let w = at + 1 + 2 * j as u32;
+        s.run[j] = crate::answer::bound_of(self::at(scratch, w) as i32);
+        s.value[j] = self::at(scratch, w + 1);
+        j += 1;
+    }
+    (s, head >> 31 == 0)
 }
 
 /// The threads that sum a square's columns' counts into their firsts, a
@@ -475,6 +550,9 @@ pub fn square(
         for x in 0..SQUARE {
             heights(lane, fresh, 0, [x, y]);
         }
+    }
+    for i in 0..window::SPANS_COLUMNS {
+        spans(lane, fresh, scratch, 0, i);
     }
     let mut most = 0;
     for i in 0..SQUARE_CELLS {

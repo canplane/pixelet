@@ -491,6 +491,10 @@ pub trait Columns {
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
     fn joins(&self, c: [i32; 2], k: u32) -> bool;
+    /// Column `c`'s spans and whether they fit `SPANS` (`column`): worked
+    /// out off its segments, or read where they were worked out once for
+    /// every column beside it to read (pxl-spec-core fill.rs `spans`).
+    fn spans(&self, c: [i32; 2]) -> (Spans, bool);
 }
 
 /// The `k`-th segment's crossing of column `c`.
@@ -862,8 +866,8 @@ pub fn around<C: Columns>(cols: &C, c: [i32; 2]) -> (Around, bool) {
     while k < 7 {
         let d = near(k);
         if k != 3 && k != 4 {
-            let (spans, fit) = column(cols, [c[0] + d[0], c[1] + d[1]]);
-            a.spans[beside(k)] = spans;
+            let (s, fit) = cols.spans([c[0] + d[0], c[1] + d[1]]);
+            a.spans[beside(k)] = s;
             fits &= fit;
         }
         k += 1;

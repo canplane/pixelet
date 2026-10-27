@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 0fe57a5d067c7de44c33fe0c4012121472dd6a20bcd378055078e050b022581a
+// Inputs: 0cd065f00712b7a4e3fb84789c7ae3e611ecbb387c0091b7b95de70f8c084f07
 struct type_4 {
     member: array<u32>,
 }
@@ -31,7 +31,7 @@ fn function_() {
     let _e15 = arrayLength((&global_2.member));
     let _e17 = arrayLength((&global_3.member));
     let _e20 = (_e12.z * (_e15 / 9u));
-    let _e21 = (_e20 + 19417u);
+    let _e21 = (_e20 + 110893u);
     if (_e21 < _e15) {
         let _e25 = global_2.member[_e21];
         phi_63_ = _e25;
@@ -44,7 +44,7 @@ fn function_() {
         let _e30 = phi_66_;
         let _e31 = (_e30 < _e27);
         if _e31 {
-            let _e33 = ((_e20 + 19418u) + _e30);
+            let _e33 = ((_e20 + 110894u) + _e30);
             if (_e33 < _e15) {
                 let _e37 = global_2.member[_e33];
                 phi_92_ = _e37;

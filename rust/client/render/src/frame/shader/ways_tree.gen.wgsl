@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 0fe57a5d067c7de44c33fe0c4012121472dd6a20bcd378055078e050b022581a
+// Inputs: 0cd065f00712b7a4e3fb84789c7ae3e611ecbb387c0091b7b95de70f8c084f07
 struct type_5 {
     member: array<u32>,
 }
@@ -390,17 +390,17 @@ fn function_() {
     let _e118 = (_e117 * 17067u);
     let _e119 = (_e81 / 9u);
     let _e120 = (_e67.z * _e119);
-    if (_e119 < 19419u) {
+    if (_e119 < 110895u) {
         phi_2619_ = 0u;
     } else {
-        let _e123 = ((_e119 - 19419u) / 18u);
+        let _e123 = ((_e119 - 110895u) / 18u);
         phi_2619_ = select(24067u, _e123, (_e123 < 24067u));
     }
     let _e127 = phi_2619_;
-    let _e129 = (_e120 + (19418u + _e127));
+    let _e129 = (_e120 + (110894u + _e127));
     let _e130 = (_e68.x == 0u);
     if _e130 {
-        let _e131 = (_e120 + 19417u);
+        let _e131 = (_e120 + 110893u);
         if (_e131 < _e81) {
             atomicStore((&global_6.member[_e131]), 0u);
         }
@@ -1071,7 +1071,7 @@ fn function_() {
                                 phi_1123_ = 0u;
                             }
                             let _e925 = phi_1123_;
-                            let _e927 = (_e120 + 19417u);
+                            let _e927 = (_e120 + 110893u);
                             if (_e927 < _e81) {
                                 let _e931 = atomicAdd((&global_6.member[_e927]), 1u);
                                 phi_1133_ = _e931;
@@ -1079,7 +1079,7 @@ fn function_() {
                                 phi_1133_ = 0u;
                             }
                             let _e933 = phi_1133_;
-                            let _e935 = ((_e120 + 19418u) + _e933);
+                            let _e935 = ((_e120 + 110894u) + _e933);
                             if (_e935 < _e81) {
                                 atomicStore((&global_6.member[_e935]), (_e925 ^ _e919));
                             }
@@ -2278,7 +2278,7 @@ fn function_() {
                                 let _e1776 = local_26;
                                 let _e1777 = select(4294967295u, _e1205, _e1776);
                                 if (_e1777 != 4294967295u) {
-                                    let _e1824 = (_e120 + 19417u);
+                                    let _e1824 = (_e120 + 110893u);
                                     if (_e1824 < _e81) {
                                         let _e1828 = atomicAdd((&global_6.member[_e1824]), 1u);
                                         phi_1930_ = _e1828;
@@ -2286,7 +2286,7 @@ fn function_() {
                                         phi_1930_ = 0u;
                                     }
                                     let _e1830 = phi_1930_;
-                                    let _e1832 = ((_e120 + 19418u) + _e1830);
+                                    let _e1832 = ((_e120 + 110894u) + _e1830);
                                     if (_e1832 < _e81) {
                                         atomicStore((&global_6.member[_e1832]), (_e1777 / 8u));
                                     }
