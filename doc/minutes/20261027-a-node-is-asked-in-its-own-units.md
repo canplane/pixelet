@@ -1,0 +1,95 @@
+# A node is asked in its own units
+
+**2026-10-27** — decided with the user. It records what a ray asks the world
+and what it is told, and the bound that follows. It is a decision record, not a
+rule each change is held to.
+
+> A ray marches the pyramid's grid at the zoom its cone asks, and asks the
+> world one node at a time. The world answers in that node's own units: a box
+> in its own steps, every axis alike. The look is the LOD's as it was.
+
+## Decided
+
+- **The question is a node.** What a ray asks is a node of the pyramid, its
+  zoom and its index on three axes (`cast::Query::node`). Nothing in the walk
+  knows what the world is made of: a heightfield, a way or a placed cube is the
+  query's business (`world::node`), as
+  [a box is all the view asks](./archive/20260928-what-is-drawn-is-what-the-screen-covers.md)
+  decided for the view.
+- **The answer is in the node's units.** A split answers where its content may
+  lie as a box in the node's own steps, 1/1024 of its side, the pyramid ten
+  zooms under it, on x, y and z alike (`answer::box_word`, its two block
+  words), conservative: what the node holds lies in it. It replaces a span
+  along z in leaf cells, which singled one axis out against
+  [a coarse cell is isotropic](./archive/20260923-a-coarse-cell-is-isotropic.md).
+  Each source gives its own box and the query joins them; a source keeps its
+  own measure inside (the ground's span along z), and only the box leaves.
+- **The ray is a cone.** It widens with distance, and at each distance it
+  steps in the grid of the zoom whose cell is that width (`grid::cell_at`), one
+  rule shared with what is fetched and held (`window::RADIUS`) and with the
+  beams' spacing (`beam::spacing`). The container a step lands in is the
+  cone's; the box inside it is what is drawn there, in eighths, floating as the
+  LOD always has. The two are independent.
+- **What the ray cannot tell apart is passed.** A ray has a cone, as wide as
+  `across + angle · d` at `d` (`cast::Cone`): the eye's an angle, its grid's
+  cell; the sun's a width, its texel; control and physics none, held to what
+  is there, an observer with a quantum of its own. A ray tests a split's box
+  shrunk by half its cone at the node's nearest point, so what is thinner, or
+  rises over its path by less, is passed, not drawn
+  ([a cell's inside is don't-care](./archive/20260928-what-is-drawn-is-what-the-screen-covers.md)).
+  Nothing has to be drawn exactly. Only a side inside the node is shrunk: how
+  thick content on its face is cannot be known from this node alone, as it
+  may go on into the neighbour, and shrinking it opened a seam a ray fell
+  through. And by the
+  cone's extent along that side's axis, so a side the ray crosses head on
+  keeps what it holds, and the one it grazes is pruned whole. A beam ray's
+  prune is its pixels', at the node's nearest point, no more than any
+  pixel's through the node, and on each side by the extent its grid's rays
+  may take less the angle they part by: it passes nothing a pixel's ray would
+  meet, up to the second order in the cell's angle, `O(s² d)`, that rays
+  farther in its window may part by more. That rests on boxes nesting, a
+  node's inside its parent's, and on a prune that only grows going down.
+  It also rests on every source's box being at least a block it asks thick,
+  wider than the cone there: the ground's reaches down to the node's floor or
+  spans two blocks, what is placed answers halves. A source answering thinner
+  boxes would be passed crossed at a slant.
+- **A walk resumed is a walk of its own.** A pixel resumed inside a node never
+  tests that node again, so it may stop on content the root's walk would
+  have passed in that node's pruned strip: no later, within half a cone,
+  and from whichever line it starts. A pick is exact while the eye prunes, so a pointer may
+  strike a thing thinner than half a cone the eye no longer draws: the two
+  observe on quanta of their own.
+
+## What follows
+
+- **The work a ray does is closed.** Per octave of distance a ray crosses
+  about `1/s` of the cone's cells (`s = τ / SPLIT`, about 192 at τ = 1), so a
+  ray crosses at most about `(1/s) · log₂(reach / d_near)` of the cone's
+  cells, and enters about twice that many nodes, every node over them on its
+  path included, plus the near-eye floor where a block is wider than the cone,
+  plus the levels it descends. It holds whatever the world holds.
+- **The horizon costs what any direction does.** Without the pruning a ray
+  grazing a surface passed a node only where it cleared all of its box, so it
+  went down to nodes about as tall as its clearance, about `1/s` of them an
+  octave: the band just above the horizon ran at the bound's edge. Passing
+  what its cone cannot tell apart, a ray grazing ground smoother than the cone
+  passes whole nodes, as a ray looking up or down does. At the horizon,
+  turning, rough, a load each: the beam span 10.9–12.4 ms to 3.7 at p95, GPU
+  p50 17.9 ms to 13.0 and p95 17.0, 59.6 fps; on the fixed path the frame as
+  it was (GPU p50 10.4 ms, 51.9 fps).
+- **The step is a quantum, kept under the grid.** A box rounded out to a step
+  of its node stands over what it holds by up to that step, and a ray grazing
+  it clears it that much later. At an eighth of the node (the first cut,
+  b64c4c7ae) a large node's top stood far over the grid there and the beam
+  span grew, 3.7 ms to 4.5–4.7 ms at p95 on the fixed path; at 1/1024 a node
+  ten zooms over the grid still rounds within one of its cells.
+
+## Not taken
+
+- **A child-occupancy mask.** Eight bits naming the children that hold
+  anything: isotropic, but half a node along each axis, coarser than the box's
+  steps, and over the ground it marks every lower child, so a grazing ray
+  enters the same nodes. A box answers more.
+- **Drawing a coarse block as its content's box.** It would let an area rule
+  leave grazing ground coarse, and change what a far plain looks like. The look
+  stays the LOD's.

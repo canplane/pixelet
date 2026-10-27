@@ -75,6 +75,16 @@ as an eye's ray does (`cast::walk`), with two differences:
 - **No slab clip.** A split is entered even where the ray lies outside the slab
   along z its content may fill (Laine and Karras's contour tests off), so a beam
   ray meets every non-air node its line crosses.
+
+  > Since then: a beam ray passes a split whose box it clears by `2√2 · s · d`
+  > (f94ee59b2), the box in the split's own steps on every axis since 2026-10-27
+  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)),
+  > less what the pixels' own cone prunes at the node's nearest point. The
+  > proof below then holds through a point a pixel's ray keeps in the pruned
+  > box of the narrow node, not the block it enters: boxes nest, a node's in
+  > its parent's, and the prune only grows going down, so the beam ray's
+  > pruned and grown box of any node over it holds that point; what is left
+  > is the second order in the cell's angle, `O(s² d)`, of the rays' parting.
 - **It stops early.** It stops at the entry of the first block that fills or
   lacks, as any walk ends, and of the first split narrower than `2√2 · s · d`,
   where `s` is the cell's angle and `d` the node's farthest distance from the

@@ -9,22 +9,18 @@
 //! what is placed as it is held, whatever its size; a cell with nothing
 //! placed finer than it is one column, one ray.
 
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{REACH, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{at_zoom, Ray, Until};
-use super::surface::Surface;
+use super::ray::{at_zoom, cell_at, Ray, Until};
 use super::world::World;
 use crate::domain::layer::*;
 use pxl_spec::space::layer::tile::Tile;
@@ -39,15 +35,6 @@ pub fn over(top: f64) -> f64 {
 /// The floor under a center at `z`: what `over` lifts it from.
 pub fn under(z: f64) -> f64 {
     z - units(GROUND.cell()) / 2.0
-}
-
-/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
-/// distance (`Tau::cell_at`), no finer than the ground's cells and, once the
-/// source declares its top, no coarser than a tile draws.
-pub fn cell_at(eye: V3, tau: Tau, at: V3) -> Zoom {
-    let v = v3::sub(&at, &eye);
-    let cell = tau.cell_at(v3::dot(&v, &v)).min(GROUND.cell());
-    TerrainTile::top().map_or(cell, |top| cell.max(GROUND.grid_zoom(top)))
 }
 
 /// Whether a walker at `at`, seen from `eye`, walks: the camera grid at the
@@ -206,13 +193,6 @@ impl<'w, 'a> Upright<'w, 'a> {
 }
 
 impl<'a> World<'a> {
-    /// The ground's surface under `at`, as the frame draws it at the tile
-    /// zoom `zoom`; none where the cell has no ground.
-    pub fn surface(&self, at: &Q3, zoom: Zoom) -> Answer<Option<Surface>> {
-        let (cell, c) = GROUND.cell_of(zoom, at).node();
-        self.surface_of(cell, c)
-    }
-
     /// What is in the leaf block at `at`, as the cast draws it: its value
     /// (pxl-spec-core `world::node`'s), void where none.
     pub fn block_of(&self, at: &Q3) -> Answer<u32> {

@@ -22,7 +22,7 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::answer::{fills, kept, side, slab_of, In, Kind, AIR, EIGHTHS};
+use crate::answer::{box_of, fills, kept, side, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
 use crate::grid::cell_at;
 use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
@@ -40,6 +40,31 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
     [d[0] / l, d[1] / l, d[2] / l]
 }
 
+/// What a ray cannot tell apart, as wide as `across + angle · d` units at
+/// `d` from the eye (`Detail::eye`): the eye's an angle, its camera grid's cell
+/// (`beam::spacing`); parallel rays' a width, the sun's texel; an asker held
+/// to what is there, control and physics, none (`EXACT`), observing on a
+/// quantum of its own
+/// (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md,
+/// "A cell's inside is don't-care").
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Cone {
+    pub angle: f32,
+    pub across: f32,
+}
+
+impl Cone {
+    pub const EXACT: Cone = Cone {
+        angle: 0.0,
+        across: 0.0,
+    };
+
+    /// Its width at `d` from the eye.
+    pub fn width(self, d: f32) -> f32 {
+        self.across + self.angle * d
+    }
+}
+
 /// The zoom asked at each distance: the camera grid's cells there
 /// (`cell_at`), the distance scaled by `tau`, at least 1, held to `range`,
 /// asked of a distance squared (`at`). A
@@ -47,16 +72,17 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 /// The distance is the eye's, `eye` units from the walk's origin: none for
 /// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
-/// at the zooms the eye's rays ask it (`reach`). `beam` is how far apart a
-/// beam of parallel rays lies, in units, the sun's map's (pxl-spec-core
-/// `sun::BEAM`), which a beam ray's narrow split is judged by (`Until::Beam`);
-/// 0 for the eye's, whose rays part by an angle (`beam::narrow`).
+/// at the zooms the eye's rays ask it (`reach`). `cone` is the ray's own
+/// (`Cone`), and `apart` how many of its widths a beam ray lies from the
+/// next of its grid (`Until::Beam`, `beam::narrow`): 1 for the eye's, whose
+/// cone is the grid's cell, `sun::BEAM` for the sun's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
     pub tau: f32,
     pub range: [Zoom; 2],
     pub eye: [f32; 3],
-    pub beam: f32,
+    pub cone: Cone,
+    pub apart: f32,
 }
 
 impl Detail {
@@ -70,7 +96,8 @@ impl Detail {
 /// first that does not, as what is climbed out of ends; or, for a beam ray of
 /// the camera grid, the first that fills or the first split too narrow to
 /// hold one of the grid's rays for certain (`beam::narrow`), every split
-/// entered whatever its slab (doc/minutes/20261022-a-cell-casts-a-beam.md).
+/// entered whose box it meets widened by `2√2` of that width
+/// (doc/minutes/20261022-a-cell-casts-a-beam.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Until {
@@ -517,6 +544,9 @@ pub struct Stop<A> {
     pub axis: u32,
     pub node: Node,
     pub at: A,
+    /// What it stopped at, as the query answered it: a block's words, or,
+    /// where a beam ray stopped at a narrow split, that split's box
+    /// (`answer::box_word`), which no reader takes for a block's.
     pub block: [u32; 2],
 }
 
@@ -681,17 +711,30 @@ pub fn walk<Q: Query>(
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
 ) -> Met<Q::At> {
-    let (og, r0) = (grid_of(o), roots_of(o));
+    let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
     // over it (`stack`, its own from `low` down, `over`'s above), and its
     // visits. The node's planes and the world's node it is follow from its
     // corner, and are worked out where they are read.
     let (mut n, mut at, mut t) = from;
+    // The cone's extent along each axis, `√(1 − dₐ²)`, a side's prune's
+    // share (`meets_box`); a beam ray's less by the angle its grid's rays
+    // part by, so it prunes no more than any of them on any side, up to the
+    // second order in the cell's angle its window's farther rays may part.
+    let parts = if until == Until::Beam {
+        core::f32::consts::SQRT_2 * detail.apart * detail.cone.angle
+    } else {
+        0.0
+    };
+    let along = |d: f32| greater(libm::sqrtf(greater(1.0 - d * d, 0.0)) - parts, 0.0);
+    let facing = [
+        along(ray.direction[0]),
+        along(ray.direction[1]),
+        along(ray.direction[2]),
+    ];
     let mut stack = [at; DEPTH];
     let (mut low, mut visits) = (n.zoom, 0);
-    // The cell's angle a beam ray's narrow splits are measured by.
-    let s = crate::beam::spacing(detail.tau);
     loop {
         let u = under(n.zoom);
         let (lo, hi) = bounds(&n, og);
@@ -721,28 +764,60 @@ pub fn walk<Q: Query>(
             // The planes the ray enters where it stops: the node's, or the
             // box a block keeping less than its cube is.
             let mut near = [x.0, y.0, z.0];
-            // ESVO's contour (Laine & Karras 2010): whether the ray's span in
-            // a split node meets the slab along z its content lies in,
-            // widened by `w` above and below, its planes a face's own
-            // (`level`).
-            let meets_slab = |w: f32| {
-                let [lo, hi] = slab_of(i.block[0]);
-                let level = |v: i32| {
-                    let root = v >> UNIT_ZOOM;
-                    units(
-                        ((v - (root << UNIT_ZOOM)) as u32) << FRAC_W,
-                        og[2],
-                        root - r0[2],
-                    )
+            // ESVO's contour (Laine & Karras 2010) on every axis alike:
+            // whether the ray's span in a split node meets the box in its
+            // steps its content lies in (`answer::box_of`), grown by `w`
+            // on every side, less `prune` on each side inside the node.
+            // What the ray cannot tell apart is no part of what it meets:
+            // a box shrunk by half its cone at the node's nearest point, so
+            // content thinner than that is passed, not drawn
+            // (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md,
+            // "A cell's inside is don't-care"). Only on a side inside the
+            // node: one on its face may go on into the neighbour, so it is
+            // no thinner than the cone there. And by the cone's extent along
+            // that side's axis, `√(1 − dₐ²)` of it, so a side the ray crosses
+            // head on keeps what it holds, and one it grazes is pruned
+            // whole. A walk out of what fills, or with no cone, prunes
+            // nothing.
+            let meets_box = |w: f32| {
+                let (first, past) = box_of(i.block);
+                let prune = 0.5 * detail.cone.width(libm::sqrtf(reach[1]));
+                let inner = |a: usize, inside: bool| if inside { prune * facing[a] } else { 0.0 };
+                // Step `e` of the box on axis `a`, on the grid's own planes
+                // (`units`), as a node's own are: the far one the node's.
+                let step = |a: usize, e: u32, out: u32| {
+                    if e >= BOX_STEPS {
+                        return hi[a];
+                    }
+                    // A step's width a whole count of the finest grid's
+                    // over a node `BOX_STEPS` or more of them wide; finer,
+                    // rounded out (`out` the step less one to round up), as
+                    // `e · side` fits a u32 there.
+                    let at = if u >= BOX_STEPS - 1 {
+                        e * ((u >> BOX_BITS) + 1)
+                    } else {
+                        (e * (u + 1) + out) >> BOX_BITS
+                    };
+                    units(n.corner[a].wrapping_add(at), og[a], n.roots[a])
                 };
-                let (bottom, top) = planes(
-                    ray.direction[2],
-                    ray.inverse[2],
-                    level(lo) - w,
-                    level(hi) + w,
-                    (t0, t1),
+                let (bx, by, bz) = spans(
+                    ray,
+                    (
+                        [
+                            step(0, first[0], 0) - w + inner(0, first[0] > 0),
+                            step(1, first[1], 0) - w + inner(1, first[1] > 0),
+                            step(2, first[2], 0) - w + inner(2, first[2] > 0),
+                        ],
+                        [
+                            step(0, past[0], BOX_STEPS - 1) + w - inner(0, past[0] < BOX_STEPS),
+                            step(1, past[1], BOX_STEPS - 1) + w - inner(1, past[1] < BOX_STEPS),
+                            step(2, past[2], BOX_STEPS - 1) + w - inner(2, past[2] < BOX_STEPS),
+                        ],
+                    ),
+                    t0,
                 );
-                greater(t0, bottom) < lesser(t1, top)
+                greater(greater(greater(t0, bx.0), by.0), bz.0)
+                    < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
             };
             let ends = match i.kind {
                 Kind::Lacks => Ends::Lacks,
@@ -778,26 +853,17 @@ pub fn walk<Q: Query>(
                     Ends::Stop
                 }
                 Kind::Block => Ends::On,
-                // A beam ray passes whole a split whose slab it clears by
+                // A beam ray passes whole a split whose box it clears by
                 // `2√2` of the grid's width there, as the grid's rays about
                 // it clear it too; else it stops at one it may not share with
                 // them, and enters every other.
                 Kind::Split if until == Until::Beam => {
-                    // Parallel rays `detail.beam` apart, or the grid's
-                    // `s · d` at the node's far corner: a split narrower than
-                    // `2√2` of that may lie between them (pxl-spec-core
-                    // `sun::BEAM`, `beam::narrow`).
-                    let width = if detail.beam > 0.0 {
-                        detail.beam
-                    } else {
-                        s * libm::sqrtf(reach[0])
-                    };
-                    let narrow = if detail.beam > 0.0 {
-                        side * side < 8.0 * width * width
-                    } else {
-                        crate::beam::narrow(side * side, reach[0], s)
-                    };
-                    let meets = meets_slab(2.0 * core::f32::consts::SQRT_2 * width);
+                    // The grid's rays `apart` cones apart at the node's far
+                    // corner: a split narrower than `2√2` of that may lie
+                    // between them (`beam::narrow`, pxl-spec-core `sun::BEAM`).
+                    let width = detail.apart * detail.cone.width(libm::sqrtf(reach[0]));
+                    let narrow = crate::beam::narrow(side * side, width * width);
+                    let meets = meets_box(2.0 * core::f32::consts::SQRT_2 * width);
                     into = meets && !narrow;
                     if meets && narrow {
                         Ends::Stop
@@ -805,12 +871,12 @@ pub fn walk<Q: Query>(
                         Ends::On
                     }
                 }
-                // A span wholly out of the slab, or touching it alone, meets
+                // A span wholly out of the box, or touching it alone, meets
                 // nothing that fills, and a walk to what fills passes the
                 // node whole. A walk to air goes in: its stop is where that
                 // span begins.
                 Kind::Split => {
-                    into = until == Until::Air || meets_slab(0.0);
+                    into = until == Until::Air || meets_box(0.0);
                     Ends::On
                 }
             };
@@ -970,7 +1036,7 @@ mod tests {
             }
         }
     }
-    use crate::answer::{kept_word, slab_word, ANY, EIGHTHS};
+    use crate::answer::{kept_word, BOX_WHOLE, EIGHTHS};
     use crate::cube::ground::stone;
     use crate::overwrite::{AIR, FULL};
 
@@ -999,7 +1065,7 @@ mod tests {
             match (zoom < UNIT_ZOOM, over) {
                 (true, true) => In {
                     kind: Kind::Split,
-                    block: [slab_word(ANY), 0],
+                    block: BOX_WHOLE,
                 },
                 (false, true) => In {
                     kind: Kind::Block,
@@ -1023,7 +1089,8 @@ mod tests {
             tau: 1.0,
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
-            beam: 0.0,
+            cone: Cone::EXACT,
+            apart: 0.0,
         };
         first(&mut One { kept }, o, &ray, detail, Until::Fills)
     }
@@ -1056,6 +1123,212 @@ mod tests {
         // Whole, the cube's face.
         let met = along(EIGHTHS, 0.5, 0.5);
         assert!((met.stop.t - 5.0).abs() < 1e-5, "{}", met.stop.t);
+    }
+
+    /// Every split's content in the box `0` names, air at the leaves.
+    struct Boxed(crate::answer::BoxWords);
+
+    impl Query for Boxed {
+        type At = ();
+        fn root(&mut self, _: [i32; 3]) {}
+        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
+        fn node(
+            &mut self,
+            _: &mut (),
+            zoom: Zoom,
+            _: [i32; 3],
+            _: [Zoom; 2],
+            _: f32,
+        ) -> In<[u32; 2]> {
+            if zoom < UNIT_ZOOM {
+                In {
+                    kind: Kind::Split,
+                    block: self.0,
+                }
+            } else {
+                In {
+                    kind: Kind::Block,
+                    block: [AIR, 0],
+                }
+            }
+        }
+    }
+
+    /// A ray passes a split whole where it misses the split's box on any
+    /// axis, and enters it where it meets it.
+    #[test]
+    fn a_ray_passes_a_split_whose_box_it_misses_on_any_axis() {
+        use crate::answer::box_word;
+        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
+        let o = [steps(5.0), steps(0.4), steps(0.6)];
+        let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
+        let detail = Detail {
+            tau: 1.0,
+            range: [UNIT_ZOOM, UNIT_ZOOM],
+            eye: [0.0; 3],
+            cone: Cone {
+                angle: 1.0 / 192.0,
+                across: 0.0,
+            },
+            apart: 1.0,
+        };
+        let walk = |b: crate::answer::BoxWords| first(&mut Boxed(b), o, &ray, detail, Until::Fills);
+        // The origin lies in the root's lower half on every axis.
+        for missed in [
+            box_word([512, 0, 0], [1024; 3]),
+            box_word([0, 512, 0], [1024; 3]),
+            box_word([0, 0, 512], [1024; 3]),
+        ] {
+            let met = walk(missed);
+            assert_eq!(
+                (met.ends, met.visits),
+                (Ends::On, 1),
+                "{:?}",
+                box_of(missed)
+            );
+        }
+        assert!(walk(box_word([0; 3], [512; 3])).visits > 1);
+        // An edge that is not a half: the origin lies in the root's first
+        // step along z, so a box from its second misses and one to it
+        // meets.
+        assert_eq!(walk(box_word([0, 0, 1], [1024; 3])).visits, 1);
+        assert!(walk(box_word([0; 3], [1024, 1024, 1])).visits > 1);
+        // A beam ray meets a box it clears by less than `2√2` of its width,
+        // and passes one it clears by more: the root's second step along z
+        // starts 2^14 units over the origin.
+        let beam = |width: f32| {
+            let detail = Detail {
+                cone: Cone {
+                    angle: 0.0,
+                    across: width,
+                },
+                ..detail
+            };
+            first(
+                &mut Boxed(box_word([0, 0, 1], [1024; 3])),
+                o,
+                &ray,
+                detail,
+                Until::Beam,
+            )
+        };
+        assert_eq!(beam(1.0).visits, 1);
+        assert!(beam(1.0e4).visits > 1);
+        // What the grid cannot tell apart is passed: a slab one step thick
+        // about the origin, 2^14 units, is entered by rays a tenth of a unit
+        // apart (the origin a unit off the root's corner) and passed by rays
+        // further apart than twice its thickness.
+        let spaced = |width: f32| {
+            let detail = Detail {
+                cone: Cone {
+                    angle: 0.0,
+                    across: width,
+                },
+                ..detail
+            };
+            first(
+                &mut Boxed(box_word([0; 3], [1024, 1024, 1])),
+                o,
+                &ray,
+                detail,
+                Until::Fills,
+            )
+        };
+        assert!(spaced(0.1).visits > 1);
+        assert_eq!(spaced(1.0e5).visits, 1);
+        // Crossed head on, a slab thinner than the cone keeps what it holds:
+        // a ray down through the same slab meets it.
+        let down = Ray::new([0.0, 0.0, -1.0], 20.0);
+        let wide = Detail {
+            cone: Cone {
+                angle: 0.0,
+                across: 1.0e5,
+            },
+            ..detail
+        };
+        let met = first(
+            &mut Boxed(box_word([0; 3], [1024, 1024, 1])),
+            o,
+            &down,
+            wide,
+            Until::Fills,
+        );
+        assert!(met.visits > 1);
+        // With no cone, nothing is pruned.
+        let exact = Detail {
+            cone: Cone::EXACT,
+            ..detail
+        };
+        let met = first(
+            &mut Boxed(box_word([0; 3], [1024, 1024, 1])),
+            o,
+            &ray,
+            exact,
+            Until::Fills,
+        );
+        assert!(met.visits > 1);
+    }
+
+    /// Flat ground under z = 5, stone a leaf, air over it, every split's
+    /// box its span along z.
+    struct Flat;
+
+    impl Query for Flat {
+        type At = ();
+        fn root(&mut self, _: [i32; 3]) {}
+        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
+        fn node(
+            &mut self,
+            _: &mut (),
+            zoom: Zoom,
+            node: [i32; 3],
+            _: [Zoom; 2],
+            _: f32,
+        ) -> In<[u32; 2]> {
+            let side = 1i64 << (UNIT_ZOOM - zoom.min(UNIT_ZOOM));
+            let bottom = node[2] as i64 * side;
+            if zoom >= UNIT_ZOOM || bottom >= 5 || bottom + side <= 5 {
+                let solid = zoom >= UNIT_ZOOM && node[2] < 5 || zoom < UNIT_ZOOM && bottom < 5;
+                In {
+                    kind: Kind::Block,
+                    block: [
+                        if solid {
+                            kept_word(stone as u32, EIGHTHS)
+                        } else {
+                            AIR
+                        },
+                        0,
+                    ],
+                }
+            } else {
+                In {
+                    kind: Kind::Split,
+                    block: crate::ground::box_along_z([i16::MIN as i32, 5], (zoom, node[2])),
+                }
+            }
+        }
+    }
+
+    /// A ray down onto flat ground beside a seam of the nodes over it stops
+    /// on the ground, its prune taking no strip off the nodes' own faces.
+    #[test]
+    fn a_ray_down_beside_a_seam_stops_on_the_ground() {
+        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
+        let o = [steps(0.01), steps(5.3), steps(10.0)];
+        let ray = Ray::new([0.0, 0.0, -1.0], 40.0);
+        let detail = Detail {
+            tau: 1.0,
+            range: [UNIT_ZOOM, UNIT_ZOOM],
+            eye: [0.0; 3],
+            cone: Cone {
+                angle: 0.0,
+                across: 1.0,
+            },
+            apart: 1.0,
+        };
+        let met = first(&mut Flat, o, &ray, detail, Until::Fills);
+        assert_eq!(met.ends, Ends::Stop);
+        assert!((met.stop.t - 5.0).abs() < 1e-3, "{}", met.stop.t);
     }
 
     #[test]

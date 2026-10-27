@@ -63,7 +63,7 @@ const units3 = (
 
 /**
  * Live: where the camera and the pointer are now, not over the window. The
- * pointer twice: what it meets as drawn, and what the tool held strikes
+ * pointer twice: what it meets at the eye's zooms, and what the tool held strikes
  * there, so a hover that takes nothing shows where the two part.
  */
 export function ProfilerView({ v }: { v: Gauge["view"] }) {

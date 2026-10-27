@@ -10,12 +10,12 @@
 use pxl_spec::asset::cube::{cube_of, Cube};
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::DecorId;
+use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::domain::control::interaction::edit::{pending, restores_scattered, Pending};
+use crate::domain::control::interaction::edit::{middle, pending, restores_scattered, Pending};
 use crate::domain::control::interaction::{holding, hover, ActiveTool};
 use crate::domain::layer::object::meta::user_decor_pick;
 pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
@@ -54,14 +54,15 @@ pub fn ghost() -> Ghost {
     let carved = CARVED.get(|| Asked::NONE);
     // Looked at each frame turn, a hover not asked of this one too.
     carved.kept();
+    // The cell being carved as the world answers it, whichever source fills
+    // it: the ground, a way, a bore's wall.
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
-            cube_of(u32::from(
-                w.surface(h, LEAF_ZOOM)
+            cube_of(
+                w.block_of(&middle(EntryAt::holding(GROUND.cell(), h)))
                     .value()
-                    .flatten()
-                    .map_or(0, |s| s.block),
-            ))
+                    .map_or(0, pxl_spec_core::answer::value),
+            )
         }),
         _ => None,
     };

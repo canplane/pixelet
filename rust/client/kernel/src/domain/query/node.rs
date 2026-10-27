@@ -137,9 +137,9 @@ impl World<'_> {
     /// the ground read as the GPU reads it, off what it drew and read back
     /// (`Windowed`), down the node's line through the residency
     /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
-    /// slab; a block, the zoom asked's, void for air; or, coarser than asked
-    /// and nothing under it filling, air its size, which its zoom against
-    /// `asked` tells. The four looks a block is drawn by are the GPU's to
+    /// box in its own steps; a block, the zoom asked's, void for air; or,
+    /// coarser than asked and nothing under it filling, air its size, which
+    /// its zoom against `asked` tells. The four looks a block is drawn by are the GPU's to
     /// draw. `lines` are the ground's lines the walk asking it read, which
     /// its own steps from (`line_walked`).
     pub(super) fn node(

@@ -3,12 +3,12 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 36ef2dcc9d3f8c0e34c711de52a61d8ba81cd475726fdf2c6f335cb2f07d9fc4
+// Inputs: 0fe57a5d067c7de44c33fe0c4012121472dd6a20bcd378055078e050b022581a
 struct type_6 {
     member: array<u32>,
 }
 
-struct type_15 {
+struct type_17 {
     member: u32,
     member_1: u32,
 }
@@ -34,7 +34,7 @@ fn function_() {
     var phi_349_: u32;
     var phi_369_: u32;
     var phi_1578_: bool;
-    var phi_391_: type_15;
+    var phi_391_: type_17;
     var phi_394_: u32;
     var phi_410_: u32;
     var phi_413_: u32;
@@ -43,17 +43,17 @@ fn function_() {
     var phi_1575_: bool;
     var local_4: u32;
     var phi_454_: bool;
-    var phi_459_: type_15;
-    var phi_460_: type_15;
+    var phi_459_: type_17;
+    var phi_460_: type_17;
     var phi_461_: bool;
     var phi_466_: u32;
-    var phi_468_: type_15;
+    var phi_468_: type_17;
     var phi_469_: u32;
     var phi_470_: bool;
     var phi_471_: bool;
     var phi_1588_: bool;
     var phi_472_: u32;
-    var phi_392_: type_15;
+    var phi_392_: type_17;
     var phi_395_: u32;
     var phi_473_: bool;
     var phi_474_: bool;
@@ -63,8 +63,8 @@ fn function_() {
     var phi_1315_: bool;
     var phi_1314_: bool;
     var phi_1312_: u32;
-    var local_5: type_15;
-    var local_6: type_15;
+    var local_5: type_17;
+    var local_6: type_17;
     var phi_492_: u32;
     var phi_493_: u32;
     var phi_1600_: bool;
@@ -115,7 +115,7 @@ fn function_() {
     var phi_1066_: u32;
     var phi_1084_: u32;
     var phi_1616_: bool;
-    var phi_1106_: type_15;
+    var phi_1106_: type_17;
     var phi_1109_: u32;
     var phi_1125_: u32;
     var phi_1128_: u32;
@@ -124,17 +124,17 @@ fn function_() {
     var phi_1613_: bool;
     var local_12: u32;
     var phi_1169_: bool;
-    var phi_1174_: type_15;
-    var phi_1175_: type_15;
+    var phi_1174_: type_17;
+    var phi_1175_: type_17;
     var phi_1176_: bool;
     var phi_1181_: u32;
-    var phi_1183_: type_15;
+    var phi_1183_: type_17;
     var phi_1184_: u32;
     var phi_1185_: bool;
     var phi_1186_: bool;
     var phi_1646_: bool;
     var phi_1187_: u32;
-    var phi_1107_: type_15;
+    var phi_1107_: type_17;
     var phi_1110_: u32;
     var phi_1188_: bool;
     var phi_1189_: bool;
@@ -144,8 +144,8 @@ fn function_() {
     var phi_1319_: bool;
     var phi_1318_: bool;
     var phi_1317_: u32;
-    var local_13: type_15;
-    var local_14: type_15;
+    var local_13: type_17;
+    var local_14: type_17;
     var phi_1207_: u32;
     var phi_1208_: u32;
     var phi_1254_: u32;
@@ -240,7 +240,7 @@ fn function_() {
                         break;
                     }
                     let _e187 = local_3[_e184];
-                    let _e190 = type_15(0u, type_15().member_1);
+                    let _e190 = type_17(0u, type_17().member_1);
                     phi_1578_ = false;
                     phi_391_ = _e190;
                     phi_394_ = 0u;
@@ -305,7 +305,7 @@ fn function_() {
                             let _e220 = (2u * _e219);
                             let _e221 = (_e220 > 4u);
                             if _e221 {
-                                phi_468_ = type_15();
+                                phi_468_ = type_17();
                                 phi_469_ = u32();
                                 phi_470_ = false;
                                 phi_471_ = false;
@@ -318,9 +318,9 @@ fn function_() {
                                     }
                                     let _e230 = phi_454_;
                                     if _e230 {
-                                        phi_459_ = type_15(1u, _e199);
+                                        phi_459_ = type_17(1u, _e199);
                                     } else {
-                                        phi_459_ = type_15();
+                                        phi_459_ = type_17();
                                     }
                                     let _e233 = phi_459_;
                                     phi_460_ = _e233;
@@ -356,7 +356,7 @@ fn function_() {
                         } else {
                             phi_1588_ = _e192;
                             phi_472_ = u32();
-                            phi_392_ = type_15();
+                            phi_392_ = type_17();
                             phi_395_ = u32();
                             phi_473_ = false;
                             phi_474_ = false;
@@ -765,7 +765,7 @@ fn function_() {
                                 let _e733 = (2u * _e732);
                                 let _e734 = (_e733 > 4u);
                                 if _e734 {
-                                    phi_1183_ = type_15();
+                                    phi_1183_ = type_17();
                                     phi_1184_ = u32();
                                     phi_1185_ = false;
                                     phi_1186_ = false;
@@ -778,9 +778,9 @@ fn function_() {
                                         }
                                         let _e743 = phi_1169_;
                                         if _e743 {
-                                            phi_1174_ = type_15(1u, _e712);
+                                            phi_1174_ = type_17(1u, _e712);
                                         } else {
-                                            phi_1174_ = type_15();
+                                            phi_1174_ = type_17();
                                         }
                                         let _e746 = phi_1174_;
                                         phi_1175_ = _e746;
@@ -816,7 +816,7 @@ fn function_() {
                             } else {
                                 phi_1646_ = _e705;
                                 phi_1187_ = u32();
-                                phi_1107_ = type_15();
+                                phi_1107_ = type_17();
                                 phi_1110_ = u32();
                                 phi_1188_ = false;
                                 phi_1189_ = false;

@@ -217,8 +217,8 @@ fn side(out: &mut [f64]) {
     use crate::domain::control::interaction::{self, collision};
     let tau = crate::domain::view::lens::tau();
     let pointed = interaction::pointed();
-    // What the pointer meets as drawn, whatever the tool could strike there,
-    // and the zoom the rays draw it at.
+    // What the pointer meets, exactly, at the zooms the eye asks, whatever
+    // the tool could strike there, and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
         let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
         let pose = crate::domain::view::frame::pose::view();

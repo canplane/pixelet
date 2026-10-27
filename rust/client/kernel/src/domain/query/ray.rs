@@ -12,20 +12,21 @@ use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::residency::Lines;
-use crate::domain::layer::Answer;
+use crate::domain::layer::{Answer, Base};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::v3::V3;
+use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::{origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::answer::{self, In, Kind};
 pub(super) use pxl_spec_core::cast::Until;
-use pxl_spec_core::cast::{self, Detail, Ends, Query};
+use pxl_spec_core::cast::{self, Cone, Detail, Ends, Query};
 
 /// The zooms a block is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
@@ -43,7 +44,8 @@ pub fn at_zoom(tile: Zoom) -> Detail {
         tau: 1.0,
         range: [z, z],
         eye: [0.0; 3],
-        beam: 0.0,
+        cone: Cone::EXACT,
+        apart: 0.0,
     }
 }
 
@@ -57,7 +59,8 @@ pub fn held() -> Detail {
         tau: 1.0,
         range: [finest, finest],
         eye: [0.0; 3],
-        beam: 0.0,
+        cone: Cone::EXACT,
+        apart: 0.0,
     }
 }
 
@@ -69,8 +72,18 @@ pub fn by_distance(tau: Tau) -> Detail {
         tau: tau.scale() as f32,
         range: asked(),
         eye: [0.0; 3],
-        beam: 0.0,
+        cone: Cone::EXACT,
+        apart: 0.0,
     }
+}
+
+/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
+/// distance (`Tau::cell_at`), no finer than the ground's cells and, once the
+/// source declares its top, no coarser than a tile draws.
+pub fn cell_at(eye: V3, tau: Tau, at: V3) -> Zoom {
+    let v = v3::sub(&at, &eye);
+    let cell = tau.cell_at(v3::dot(&v, &v)).min(GROUND.cell());
+    TerrainTile::top().map_or(cell, |top| cell.max(GROUND.grid_zoom(top)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -183,10 +196,16 @@ impl<'a> Query for Walker<'_, 'a> {
                 t0 < s.held && self.world.may_strike(s, at.node, at.handed.shard)
             });
         match answer.kind {
-            // Air coarser than asked, gone into where decor may stand in it.
+            // Air coarser than asked, gone into where decor may stand in it;
+            // and a split entered whole, its box the world's, not the decor
+            // standing over it.
             Kind::Block if zoom < asked[1] && decor => In {
                 kind: Kind::Split,
-                block: [answer::slab_word(answer::ANY), 0],
+                block: answer::BOX_WHOLE,
+            },
+            Kind::Split if decor => In {
+                kind: Kind::Split,
+                block: answer::BOX_WHOLE,
             },
             _ => answer,
         }

@@ -422,47 +422,47 @@ pub fn over(
     }
 }
 
-/// Where what is placed under the node `at` of `zoom` holding `held` may lie
-/// along z, in leaf cells, from its lowest to past its highest: as its tree
-/// holds it, the halves of the node's z any of its eight children holds
-/// anything in, or all of it where they are one (not folded); a node a leaf
-/// cell tall or finer, all of its leaf cell. Nothing (`ground::EMPTY`)
-/// where nothing is placed. A preview's cut only makes air, so what is
-/// placed under it lies here still.
-pub fn slab(lanes: &impl Lanes, held: Held, zoom: Zoom, at: [i32; 3]) -> [i32; 2] {
+/// Where what is placed under the node holding `held` may lie, as a box in
+/// the node's steps on every axis (`answer::box_word`): as its tree holds
+/// it, the halves of the node on each axis any of its eight children holds
+/// anything in, or all of it where they are one (not folded). None
+/// (`answer::BOX_NONE`) where nothing is placed. A preview's cut only makes
+/// air, so what is placed under it lies here still.
+pub fn bound(lanes: &impl Lanes, held: Held, zoom: Zoom) -> crate::answer::BoxWords {
+    use crate::answer::{box_word, BOX_NONE, BOX_STEPS, BOX_WHOLE};
     if !held.holds() {
-        return crate::ground::EMPTY;
+        return BOX_NONE;
     }
-    if zoom >= crate::LEAF_CELL {
-        let b = at[2] >> (zoom - crate::LEAF_CELL);
-        return [b, b + 1];
-    }
-    let side = 1 << (crate::LEAF_CELL - zoom);
-    let bottom = at[2] * side;
-    if !held.folded() || side == 1 {
-        return [bottom, bottom + side];
+    if !held.folded() {
+        return BOX_WHOLE;
     }
     let base = lanes.heap(held.slot()) & !BRANCH;
-    let (mut under, mut over) = (false, false);
+    // On each axis, whether any child holding anything lies in its lower
+    // half, and in its upper: child `k`'s half on axis `a` is bit `a` of `k`.
+    // A bit an axis: a GPU's arrays hold no bools.
+    let (mut low, mut high) = (0u32, 0u32);
     let mut k = 0;
     while k < 8 {
         if of(lanes, base + k, zoom + 1).holds() {
-            if k & 4 == 0 {
-                under = true;
-            } else {
-                over = true;
+            let mut a = 0;
+            while a < 3 {
+                if k >> a & 1 == 0 {
+                    low |= 1 << a;
+                } else {
+                    high |= 1 << a;
+                }
+                a += 1;
             }
         }
         k += 1;
     }
-    [
-        if under { bottom } else { bottom + side / 2 },
-        if over {
-            bottom + side
-        } else {
-            bottom + side / 2
-        },
-    ]
+    if low | high == 0 {
+        return BOX_NONE;
+    }
+    let half = BOX_STEPS / 2;
+    let first = |a: u32| if low >> a & 1 != 0 { 0 } else { half };
+    let past = |a: u32| if high >> a & 1 != 0 { BOX_STEPS } else { half };
+    box_word([first(0), first(1), first(2)], [past(0), past(1), past(2)])
 }
 
 /// Whether anything placed under the node holding `held` may be a block at
@@ -504,4 +504,59 @@ pub fn whole(held: Held, carve: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
         c[0] == a[0] && c[1] == a[1] && c[2] == a[2]
     };
     !held.folded() && !carved
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::answer::{box_of, BOX_NONE, BOX_WHOLE};
+
+    /// A family at slot 8: the children `held` names hold a voxel, the rest
+    /// nothing.
+    struct Family(&'static [u32]);
+
+    impl Lanes for Family {
+        fn heap(&self, slot: u32) -> u32 {
+            if slot == 1 {
+                8
+            } else {
+                0
+            }
+        }
+        fn data(&self, slot: u32) -> u32 {
+            if slot >= 8 && self.0.contains(&(slot - 8)) {
+                1
+            } else {
+                VOID
+            }
+        }
+    }
+
+    /// What is placed answers, on each axis, the halves its children hold
+    /// anything in; a leaf all of it; nothing, none.
+    #[test]
+    fn what_is_placed_is_its_children_s_halves_on_every_axis() {
+        let zoom = 10;
+        let branch = Held::branch(1, zoom);
+        // Child 0 (low x, y, z) alone: the low half on every axis.
+        assert_eq!(
+            box_of(bound(&Family(&[0]), branch, zoom)),
+            ([0; 3], [512; 3])
+        );
+        // Child 5 (x high, y low, z high) alone.
+        assert_eq!(
+            box_of(bound(&Family(&[5]), branch, zoom)),
+            ([512, 0, 512], [1024, 512, 1024])
+        );
+        // Children 1 and 2: x and y each both halves, z the low.
+        assert_eq!(
+            box_of(bound(&Family(&[1, 2]), branch, zoom)),
+            ([0; 3], [1024, 1024, 512])
+        );
+        assert_eq!(bound(&Family(&[]), Held::NOTHING, zoom), BOX_NONE);
+        assert_eq!(
+            bound(&Family(&[]), Held(1 << SLOT_SHIFT | zoom), zoom),
+            BOX_WHOLE
+        );
+    }
 }

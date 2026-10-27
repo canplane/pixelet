@@ -2,9 +2,11 @@
 
 //! The ground's surface: a cell's top and the block its face is, read off
 //! the windows by the one reading of a column the GPU reads too
-//! (pxl-spec-core `window::ground`), the area's edge laid on it. What a
-//! policy over the ground — where a walker stands over it — reads, knowing
-//! no tile.
+//! (pxl-spec-core `window::ground`), the area's edge laid on it. The
+//! ground's alone, so a part of the support (`support.rs`), where a walker
+//! starts looking for what it stands on, and read inside the query only:
+//! what a cell holds, a cave, a way, a bridge or what is placed included,
+//! is the world's answer (`World::block_of`), never the ground's.
 
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -26,7 +28,7 @@ impl World<'_> {
     /// The surface of the cell `c` of `cell`: its ground's top, in units,
     /// and its face; past the service area the Earth's, at sea level; none
     /// where it has no ground.
-    pub fn surface_of(&self, cell: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
+    pub(super) fn surface_of(&self, cell: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
         let shard = Shard::UNKNOWN.at(&Windowed, (cell, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {

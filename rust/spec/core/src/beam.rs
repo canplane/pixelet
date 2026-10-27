@@ -21,11 +21,12 @@ pub fn spacing(tau: f32) -> f32 {
     tau / SPLIT
 }
 
-/// Whether a node `side` wide, squared, its farthest point `far` squared
-/// from the eye, is too narrow for a beam ray to share: under twice the
-/// width that holds one of the grid's rays for certain, `2√2 · s · d`.
-pub fn narrow(side2: f32, far2: f32, s: f32) -> bool {
-    side2 < 8.0 * s * s * far2
+/// Whether a node `side` wide, squared, is too narrow for a beam ray to
+/// share where the grid's rays lie `width` apart, squared: under twice the
+/// width that holds one of them for certain, `2√2 · width`; the eye's
+/// `s · d` at the node's farthest point.
+pub fn narrow(side2: f32, width2: f32) -> bool {
+    side2 < 8.0 * width2
 }
 
 /// The camera grid as a frame lays it over the screen, worked out once,
