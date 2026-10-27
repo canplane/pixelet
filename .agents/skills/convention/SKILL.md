@@ -21,6 +21,11 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
   things elsewhere, as a page frame, a stack frame and a display frame share
   one, so a word in use for something else is no reason to rename. A borrowed
   term is weighed by its defining properties alone.
+- What a name is judged by is whether it is the fittest one, the one a reader
+  takes at once and cannot take for another thing. A clash counts only where
+  the two meet: two structures one word within a subsystem, read side by
+  side, is a clash; the same word in parts that never meet is not. Weigh it
+  there, not by a word's count across the tree.
 - Where a word is in doubt, the 04-05 checkpoint's (`checkpoint/20260405-rpc`)
   is a reference: frame, packet, signal.
 - Folders and files are singular, for what each one is; plural only where the
