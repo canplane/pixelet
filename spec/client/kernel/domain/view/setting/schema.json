@@ -304,8 +304,7 @@
       ],
       "kind": "toggle",
       "default": false,
-      "section": "debug",
-      "dev": true
+      "section": "debug"
     },
     "ray_counts": {
       "number": 20,
