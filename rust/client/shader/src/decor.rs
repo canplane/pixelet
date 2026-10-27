@@ -46,8 +46,8 @@ impl Grounds for Growing<'_> {
         (f, top, met)
     }
 
-    fn block(&mut self, f: &Self::Footing, zoom: u32, c: [i32; 3]) -> u32 {
-        support::block(&mut self.world, &f.line, zoom, c)
+    fn asset(&mut self, f: &Self::Footing, zoom: u32, c: [i32; 3]) -> u32 {
+        support::asset(&mut self.world, &f.line, zoom, c)
     }
 
     fn placed(&self, p: &mut pxl_spec_core::world::Placed) -> ([i32; 3], u32, bool) {

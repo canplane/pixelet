@@ -594,9 +594,9 @@ pub trait Grounds {
     /// false where nothing fills there or the world lacks it.
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool);
     /// What is in the block `c` of `zoom` about the footing `f`, the
-    /// world's one query's answer (`support::block`): `void`, the ground's
-    /// value, or `PLACED_BLOCK` over what is placed.
-    fn block(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
+    /// world's one query's answer (`support::asset`): `void`, the ground's
+    /// value, or `PLACED_ASSET` over what is placed.
+    fn asset(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::Placed::next`).
     fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
@@ -732,7 +732,7 @@ fn asks<Q: Grounds>(
                 [foot[0], foot[1] + along, foot[2]]
             }
         };
-        let v = q.block(f, cell, b);
+        let v = q.asset(f, cell, b);
         if voted {
             let holds = if b[2] == lo[2] {
                 decor.allows(value(v))

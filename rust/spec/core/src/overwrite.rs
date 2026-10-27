@@ -396,7 +396,7 @@ pub const UNDER: u32 = 0;
 pub const SPLIT: u32 = 1;
 /// What is placed is the block (`Over::block`), filling `Over::fill` of
 /// its cube.
-pub const BLOCK: u32 = 2;
+pub const CELL: u32 = 2;
 
 /// What is placed answers for a node, before any layer under it: what it
 /// says, and as a block its value and the share of its cube that fills, in
@@ -404,7 +404,7 @@ pub const BLOCK: u32 = 2;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Over {
     pub says: u32,
-    pub block: u32,
+    pub asset: u32,
     pub fill: u32,
 }
 
@@ -414,7 +414,7 @@ pub struct Over {
 /// layers under it. Coarser, it answers from its own
 /// pyramid as the ground answers from its relief (pxl-spec-core
 /// `ground::node`): the layers under it where nothing placed in it is a
-/// block at any zoom asked (`blocks_by`), else a split. A preview's cut and
+/// block at any zoom asked (`cells_by`), else a split. A preview's cut and
 /// its left-out leaf only make air, so where nothing placed fills, what is
 /// under answers and splits where it fills.
 pub fn over(
@@ -427,14 +427,14 @@ pub fn over(
     near: Zoom,
 ) -> Over {
     if zoom < near {
-        let says = if blocks_by(lanes, held, near - zoom) {
+        let says = if cells_by(lanes, held, near - zoom) {
             SPLIT
         } else {
             UNDER
         };
         return Over {
             says,
-            block: VOID,
+            asset: VOID,
             fill: 0,
         };
     }
@@ -444,10 +444,10 @@ pub fn over(
     } else {
         value(lanes, held, hide, zoom, at)
     };
-    let says = if v == VOID { UNDER } else { BLOCK };
+    let says = if v == VOID { UNDER } else { CELL };
     Over {
         says,
-        block: v,
+        asset: v,
         fill: if carved { FULL } else { filled(lanes, held) },
     }
 }
@@ -507,7 +507,7 @@ pub fn bound(lanes: &impl Lanes, held: Held, zoom: Zoom) -> crate::answer::BoxWo
 /// short of the filled volume by less than 8/7 of a unit: two units over it
 /// hold it. Where the ground fills the rest of such a cube, its own bound
 /// splits it.
-fn blocks_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
+fn cells_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
     if !held.holds() {
         return false;
     }

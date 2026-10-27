@@ -73,7 +73,7 @@ pub(crate) fn boxed<W: Words + ?Sized>(
         return NONE;
     }
     let node = node_at(w, k + beam::SAMPLE_NODE);
-    let (lo, hi) = cast::drawn(origin, &node, w.word(k + beam::SAMPLE_BLOCK));
+    let (lo, hi) = cast::drawn(origin, &node, w.word(k + beam::SAMPLE_ASSET));
     let lacks = w.word(k + beam::SAMPLE_LACKS) != 0;
     let eyed = eyed && raster::eyed(lo, hi, tan);
     let box_at = add(args, raster::ARGS_INSTANCES, 1);
@@ -104,17 +104,17 @@ pub(crate) fn picked<W: Words + ?Sized>(
     ray: &cast::Ray,
 ) -> (cast::Stop<u32>, bool) {
     let node = node_at(w, k + beam::SAMPLE_NODE);
-    let block = [
-        w.word(k + beam::SAMPLE_BLOCK),
-        w.word(k + beam::SAMPLE_BLOCK + 1),
+    let asset = [
+        w.word(k + beam::SAMPLE_ASSET),
+        w.word(k + beam::SAMPLE_ASSET + 1),
     ];
-    let (enter, axis, enters) = cast::entry(origin, ray, &node, block[0]);
+    let (enter, axis, enters) = cast::entry(origin, ray, &node, asset[0]);
     let stop = cast::Stop {
         t: enter,
         axis,
         node,
         at: 0u32,
-        block,
+        asset,
     };
     (stop, enters && axis == w.word(k + beam::SAMPLE_AXIS))
 }
@@ -184,9 +184,9 @@ pub fn face_cs(
                 axis: seen_at(beams, k + beam::SAMPLE_AXIS),
                 node: node_at(beams, k + beam::SAMPLE_NODE),
                 at: 0u32,
-                block: [
-                    seen_at(beams, k + beam::SAMPLE_BLOCK),
-                    seen_at(beams, k + beam::SAMPLE_BLOCK + 1),
+                asset: [
+                    seen_at(beams, k + beam::SAMPLE_ASSET),
+                    seen_at(beams, k + beam::SAMPLE_ASSET + 1),
                 ],
             },
             visits: 0,

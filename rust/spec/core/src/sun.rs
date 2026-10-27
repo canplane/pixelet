@@ -707,7 +707,7 @@ mod tests {
                 axis,
                 node,
                 at: (),
-                block: [0; 2],
+                asset: [0; 2],
             },
             visits: 0,
         }

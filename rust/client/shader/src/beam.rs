@@ -153,8 +153,8 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A
         );
     }
     w.set(base + beam::SAMPLE_LACKS, (met.ends == Ends::Lacks) as u32);
-    w.set(base + beam::SAMPLE_BLOCK, stop.block[0]);
-    w.set(base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
+    w.set(base + beam::SAMPLE_ASSET, stop.asset[0]);
+    w.set(base + beam::SAMPLE_ASSET + 1, stop.asset[1]);
     w.set(base + beam::SAMPLE_AXIS, stop.axis);
     w.set(base + beam::SAMPLE_VISITS, met.visits);
 }

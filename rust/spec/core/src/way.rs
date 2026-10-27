@@ -672,7 +672,7 @@ pub const SPANS: usize = 10;
 /// A column's spans, in leaf cells, in the order its visits come: each a
 /// deck's slab or an embankment (its way's look), a pier (`PIER`), or a
 /// bore's or a cutting's air (`AIR_OF` over its way's look); `n` of them.
-/// And its face block (`ground::face_block`), under which a bore's air
+/// And its face block (`ground::face_cell`), under which a bore's air
 /// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
 /// or it is past the area, where nothing does. What its blocks are read
 /// off, its visits found once: a square's fill keeps them (pxl-spec-core
@@ -718,7 +718,7 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     // The column's face and the tile's scale, read once for all its visits.
     let cell = cols.cell();
     let ground = (cols.face(c), cols.per_m());
-    spans.face = crate::ground::face_block(cell, ground.0);
+    spans.face = crate::ground::face_cell(cell, ground.0);
     let mut k = 0;
     while k < cols.count(c) {
         let (w, next) = writes(cols, c, k, ground);
@@ -826,7 +826,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// What the ways write in block `z` of column `c` at `cell`, its spans and
 /// those beside it kept in `k` (`at` of its own): a deck's slab or its
 /// pier, else a bore's air (`AIR`); else, under its face block, where a
-/// cave may take it (`ground::face_block`), the way's look where a bore's
+/// cave may take it (`ground::face_cell`), the way's look where a bore's
 /// air is beside it — under or over it, or across one of its four faces,
 /// the first in `near`'s order — so a cave never opens into a way, whatever
 /// carves the ground
@@ -972,9 +972,9 @@ mod tests {
             let cell = LEAF_CELL - next(4);
             let s = 1i32 << (LEAF_CELL - cell);
             let top = next(120) as i32 - 60;
-            let face = crate::ground::face_block(
+            let face = crate::ground::face_cell(
                 cell,
-                crate::ground::face_height(cell, crate::ground::blocks(cell, top as f32)),
+                crate::ground::face_height(cell, crate::ground::cells(cell, top as f32)),
             );
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {

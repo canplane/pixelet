@@ -557,7 +557,7 @@ pub struct Stop<A> {
     /// What it stopped at, as the query answered it: a block's words, or,
     /// where a beam ray stopped at a narrow split, that split's box
     /// (`answer::box_word`), which no reader takes for a block's.
-    pub block: [u32; 2],
+    pub asset: [u32; 2],
 }
 
 /// How a walk ended: where it stopped, gone on to its reach, or at a node
@@ -791,7 +791,7 @@ pub fn walk<Q: Query>(
             // whole. A walk out of what is not transparent, or with no cone, prunes
             // nothing.
             let meets_box = |w: f32| {
-                let (first, past) = box_of(i.block);
+                let (first, past) = box_of(i.asset);
                 let prune = 0.5 * detail.cone.width(libm::sqrtf(reach[1]));
                 let inner = |a: usize, inside: bool| if inside { prune * facing[a] } else { 0.0 };
                 // Step `e` of the box on axis `a`, on the grid's own planes
@@ -836,13 +836,13 @@ pub fn walk<Q: Query>(
                 // fills (`kept_bounds`): an eye's ray stops where it enters
                 // the box and passes it as air where it misses; a beam ray
                 // stops at its node, as the samples it hands on may meet it.
-                Kind::Block
+                Kind::Cell
                     if until == Until::Opaque
-                        && !transparent(i.block[0])
+                        && !transparent(i.asset[0])
                         && !inside
-                        && kept(i.block[0]) < EIGHTHS =>
+                        && kept(i.asset[0]) < EIGHTHS =>
                 {
-                    let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.block[0]), t);
+                    let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.asset[0]), t);
                     let (b0, b1) = (
                         greater(greater(greater(t, bx.0), by.0), bz.0),
                         lesser(lesser(lesser(ray.reach, bx.1), by.1), bz.1),
@@ -854,16 +854,16 @@ pub fn walk<Q: Query>(
                         Ends::On
                     }
                 }
-                Kind::Block
+                Kind::Cell
                     if match until {
-                        Until::Opaque => !transparent(i.block[0]) && !inside,
-                        Until::Transparent => transparent(i.block[0]),
-                        Until::Beam => !transparent(i.block[0]),
+                        Until::Opaque => !transparent(i.asset[0]) && !inside,
+                        Until::Transparent => transparent(i.asset[0]),
+                        Until::Beam => !transparent(i.asset[0]),
                     } =>
                 {
                     Ends::Stop
                 }
-                Kind::Block => Ends::On,
+                Kind::Cell => Ends::On,
                 // A beam ray passes whole a split whose box it clears by
                 // `2√2` of the grid's width there, as the grid's rays about
                 // it clear it too; else it stops at one it may not share with
@@ -901,7 +901,7 @@ pub fn walk<Q: Query>(
                     axis,
                     node: n,
                     at,
-                    block: i.block,
+                    asset: i.asset,
                 };
                 keep.keep(&n, at, &stack);
                 return Met { ends, stop, visits };
@@ -945,7 +945,7 @@ pub fn walk<Q: Query>(
                     axis: 0,
                     node: n,
                     at,
-                    block: AIR,
+                    asset: AIR,
                 };
                 keep.keep(&n, at, &stack);
                 return Met {
@@ -1076,15 +1076,15 @@ mod tests {
             match (zoom < UNIT_ZOOM, over) {
                 (true, true) => In {
                     kind: Kind::Split,
-                    block: BOX_WHOLE,
+                    asset: BOX_WHOLE,
                 },
                 (false, true) => In {
-                    kind: Kind::Block,
-                    block: [kept_word(stone as u32, self.kept), 0],
+                    kind: Kind::Cell,
+                    asset: [kept_word(stone as u32, self.kept), 0],
                 },
                 _ => In {
-                    kind: Kind::Block,
-                    block: [AIR, 0],
+                    kind: Kind::Cell,
+                    asset: [AIR, 0],
                 },
             }
         }
@@ -1154,12 +1154,12 @@ mod tests {
             if zoom < UNIT_ZOOM {
                 In {
                     kind: Kind::Split,
-                    block: self.0,
+                    asset: self.0,
                 }
             } else {
                 In {
-                    kind: Kind::Block,
-                    block: [AIR, 0],
+                    kind: Kind::Cell,
+                    asset: [AIR, 0],
                 }
             }
         }
@@ -1302,8 +1302,8 @@ mod tests {
             if zoom >= UNIT_ZOOM || bottom >= 5 || bottom + side <= 5 {
                 let solid = zoom >= UNIT_ZOOM && node[2] < 5 || zoom < UNIT_ZOOM && bottom < 5;
                 In {
-                    kind: Kind::Block,
-                    block: [
+                    kind: Kind::Cell,
+                    asset: [
                         if solid {
                             kept_word(stone as u32, EIGHTHS)
                         } else {
@@ -1315,7 +1315,7 @@ mod tests {
             } else {
                 In {
                     kind: Kind::Split,
-                    block: crate::ground::box_along_z([i16::MIN as i32, 5], (zoom, node[2])),
+                    asset: crate::ground::box_along_z([i16::MIN as i32, 5], (zoom, node[2])),
                 }
             }
         }

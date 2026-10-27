@@ -6,7 +6,7 @@
 //! ground's alone, so a part of the support (`support.rs`), where a walker
 //! starts looking for what it stands on, and read inside the query only:
 //! what a cell holds, a cave, a way, a bridge or what is placed included,
-//! is the world's answer (`World::block_of`), never the ground's.
+//! is the world's answer (`World::asset_of`), never the ground's.
 
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -21,7 +21,7 @@ use crate::domain::layer::{Answer, Query};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Surface {
     pub top: f64,
-    pub block: GroundId,
+    pub asset: GroundId,
 }
 
 impl World<'_> {
@@ -33,7 +33,7 @@ impl World<'_> {
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(pxl_spec_core::SEA_LEVEL),
-                block: pxl_spec::asset::cube::sentinel::unknown,
+                asset: pxl_spec::asset::cube::sentinel::unknown,
             }));
         }
         let side = units(cell);
@@ -45,7 +45,7 @@ impl World<'_> {
             .map(|col| {
                 col.grounded().then(|| Surface {
                     top: f64::from(col.top) * units(cell),
-                    block: col.look as GroundId,
+                    asset: col.look as GroundId,
                 })
             })
     }

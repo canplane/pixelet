@@ -302,8 +302,8 @@ pub const NEAR: u32 = 2;
 /// pixel that takes its block reports in the steps view as the walk it
 /// took.
 pub const SAMPLE_NODE: u32 = 0;
-pub const SAMPLE_BLOCK: u32 = SAMPLE_NODE + NODE_WORDS;
-pub const SAMPLE_LACKS: u32 = SAMPLE_BLOCK + 2;
+pub const SAMPLE_ASSET: u32 = SAMPLE_NODE + NODE_WORDS;
+pub const SAMPLE_LACKS: u32 = SAMPLE_ASSET + 2;
 pub const SAMPLE_AXIS: u32 = SAMPLE_LACKS + 1;
 pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;

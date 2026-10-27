@@ -41,7 +41,7 @@ fn word<A: Copy>(
         return [0, 0, met.visits, 0];
     }
     let s = met.stop;
-    let [value, four] = s.block;
+    let [value, four] = s.asset;
     [
         ray::first_word(value, face_of(ray, s.axis), s.node.zoom),
         s.t.to_bits(),

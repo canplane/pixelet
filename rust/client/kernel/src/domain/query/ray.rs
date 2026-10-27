@@ -182,7 +182,7 @@ impl<'a> Query for Walker<'_, 'a> {
                 self.lack.get_or_insert(l);
                 return In {
                     kind: Kind::Lacks,
-                    block: answer::AIR,
+                    asset: answer::AIR,
                 };
             }
             Answer::Coarser(i, l) => {
@@ -200,13 +200,13 @@ impl<'a> Query for Walker<'_, 'a> {
             // Air coarser than asked, gone into where decor may stand in it;
             // and a split entered whole, its box the world's, not the decor
             // standing over it.
-            Kind::Block if zoom < asked[1] && decor => In {
+            Kind::Cell if zoom < asked[1] && decor => In {
                 kind: Kind::Split,
-                block: answer::BOX_WHOLE,
+                asset: answer::BOX_WHOLE,
             },
             Kind::Split if decor => In {
                 kind: Kind::Split,
-                block: answer::BOX_WHOLE,
+                asset: answer::BOX_WHOLE,
             },
             _ => answer,
         }
@@ -284,7 +284,7 @@ impl<'a> World<'a> {
     /// `support::footing`): the top of the block met as drawn, with what the
     /// world lacked on the way, none where nothing a ray cannot see through
     /// is met; and the footing itself, whose line the blocks about it are
-    /// asked off (`block_about`).
+    /// asked off (`asset_about`).
     pub(super) fn footing(
         &self,
         cell: Zoom,
@@ -306,12 +306,12 @@ impl<'a> World<'a> {
     }
 
     /// What is in the block `c` of `zoom`, asked off the line `l` (pxl-spec-core
-    /// `support::block`): from the deepest node of it holding the block,
+    /// `support::asset`): from the deepest node of it holding the block,
     /// never again from the top; nothing and the tile where the world lacks
     /// it.
-    pub(super) fn block_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
+    pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
         let mut walker = self.walker();
-        let value = pxl_spec_core::support::block(&mut walker, l, zoom, c);
+        let value = pxl_spec_core::support::asset(&mut walker, l, zoom, c);
         match walker.lack {
             None => Answer::Exact(value),
             Some(t) => Answer::Nothing(t),
@@ -347,7 +347,7 @@ impl<'a> World<'a> {
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
-        let struck = match answer::placed(s.block[0]) {
+        let struck = match answer::placed(s.asset[0]) {
             true => self
                 .objects
                 .placed(zoom, wrap_cell(zoom, c), s.at.handed.placed)
@@ -356,7 +356,7 @@ impl<'a> World<'a> {
         };
         // A block kept short of its cube is the box it is drawn as, about
         // its cube's center (pxl-spec-core `cast::kept_bounds`).
-        let (lo, hi) = cast::kept_bounds(([0.0; 3], [1.0; 3]), s.block[0]);
+        let (lo, hi) = cast::kept_bounds(([0.0; 3], [1.0; 3]), s.asset[0]);
         let t = f64::from(s.t);
         Hit {
             t,

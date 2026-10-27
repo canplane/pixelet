@@ -574,9 +574,9 @@ mod tests {
                 ];
                 let top = tops[i as usize];
                 let mut s = way::Spans::NONE;
-                s.face = ground::face_block(
+                s.face = ground::face_cell(
                     cell,
-                    ground::face_height(cell, ground::blocks(cell, top as f32)),
+                    ground::face_height(cell, ground::cells(cell, top as f32)),
                 );
                 let inside = (0..16).contains(&(c[0] - patch[0]))
                     && (0..16).contains(&(c[1] - patch[1]));

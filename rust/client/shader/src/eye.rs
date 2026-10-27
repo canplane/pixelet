@@ -113,7 +113,7 @@ const _: () = assert!(eye::GRID_WORDS == 16, "`grid` reads the grid's four vec4s
 impl Observer for Eye {
     type At = [f32; 2];
     const TALLY: u32 = tally::EYE;
-    const BLOCKS: bool = true;
+    const ASSETS: bool = true;
     const PASSES: [u32; 3] = [
         observed::BEAM_PASS,
         observed::SAMPLES_PASS,
