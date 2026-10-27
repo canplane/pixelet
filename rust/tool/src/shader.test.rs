@@ -31,3 +31,13 @@ fn a_toml_file_means_its_value() {
     assert_eq!(bare, said);
     assert_ne!(bare, moved);
 }
+
+#[test]
+fn a_workspace_inherited_from_means_what_its_members_take() {
+    let base = "[workspace]\nmembers = [\"a\"]\n[workspace.package]\nedition = \"2021\"\n[profile.dev]\nopt-level = 0\n";
+    let profiled = "[workspace]\nmembers = [\"a\", \"b\"]\n[workspace.package]\nedition = \"2021\"\n[profile.dev]\nopt-level = 1\n";
+    let edition = "[workspace]\nmembers = [\"a\"]\n[workspace.package]\nedition = \"2024\"\n";
+    let f = "rust/Cargo.toml";
+    assert_eq!(meaning(f, base).unwrap(), meaning(f, profiled).unwrap());
+    assert_ne!(meaning(f, base).unwrap(), meaning(f, edition).unwrap());
+}

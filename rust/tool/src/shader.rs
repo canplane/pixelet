@@ -153,12 +153,35 @@ fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
             text.parse().map_err(|e| format!("{f}: {e:?}"))?;
         tokens(stream, &mut out);
     } else if f.ends_with(".toml") {
-        let value: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
+        let mut value: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
+        if INHERITED.contains(&f) {
+            value = inherited(&value);
+        }
         out.extend(value.to_string().into_bytes());
     } else {
         out.extend(text.as_bytes());
     }
     Ok(out)
+}
+
+/// The workspaces outside the shader's whose manifests its crates inherit
+/// from (`edition.workspace = true` and the like), and so are read for that
+/// alone: their profiles, patches and members are the workspace that builds
+/// them, which here is the shader's own.
+const INHERITED: [&str; 2] = ["rust/Cargo.toml", "xpute/rust/Cargo.toml"];
+
+/// What a member takes from a workspace's manifest: its `package`,
+/// `dependencies` and `lints` tables under `[workspace]`.
+fn inherited(manifest: &toml::Value) -> toml::Value {
+    let mut kept = toml::Table::new();
+    if let Some(workspace) = manifest.get("workspace").and_then(toml::Value::as_table) {
+        for key in ["package", "dependencies", "lints"] {
+            if let Some(v) = workspace.get(key) {
+                kept.insert(key.to_string(), v.clone());
+            }
+        }
+    }
+    toml::Value::Table(kept)
 }
 
 /// Each token of `stream` written into `out`, a doc attribute (`#[doc …]`,
