@@ -2,16 +2,19 @@
 
 //! The camera grid's beam rays (pxl-spec-core `beam`): each corner's walk
 //! and line (`beam_cs`), where each cell's pixels start off them
-//! (`cells_cs`), and the samples walked from those starts (`sample_cs`).
+//! (`cells_cs`), and the samples walked from those starts (`sample_cs`),
+//! each the eye's call of its pass (observer.rs); and the words a line, a
+//! node and a sample are held in, every observer's.
 
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
 use pxl_spec_core::world::At;
-use pxl_spec_core::{beam, observed, tally, ways};
+use pxl_spec_core::{beam, observed, ways};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
-use crate::eye::{eye_origin, eye_ray, grid, Eye};
-use crate::observed::{seen_at, seen_put, tallied, Seen, Writ, Writing};
+use crate::eye::{grid, Eye};
+use crate::observed::{seen_at, seen_put, Seen, Writ};
+use crate::observer;
 use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
@@ -156,28 +159,6 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A
     w.set(base + beam::SAMPLE_VISITS, met.visits);
 }
 
-/// Where the ray at the screen's tangents `tan` starts from the screen's
-/// cell `cell` of `grid`: that cell's least, the corner's line it resumes
-/// from, and the ray (pxl-spec-core `beam`).
-pub(crate) fn started<'a>(
-    eye: &Eye,
-    grid: &beam::Grid,
-    beams: &'a Beams,
-    cell: [u32; 2],
-    tan: [f32; 2],
-) -> (cast::Ray, f32, Beamed<'a, Beams>) {
-    let at = grid.cell_at(cell);
-    let t = f32::from_bits(seen_at(beams, at + beam::CELL_T));
-    (
-        eye_ray(eye, tan),
-        t,
-        Beamed(
-            beams,
-            beam::Grid::line(seen_at(beams, at + beam::CELL_CORNER)),
-        ),
-    )
-}
-
 /// `ray`'s walk to the block that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it (doc/minutes/20261022-a-cell-casts-a-beam.md,
@@ -209,10 +190,7 @@ where
 }
 
 /// Each beam ray of the camera grid, a thread a corner (pxl-spec-core
-/// `beam::Grid::corners`): its walk from the world's root to the first block that
-/// fills or lacks, or the first split too narrow to share
-/// (`cast::Until::Beam`), through the observed pyramid writing what it asks
-/// (`Writing`), and its line there, for the pixels about it.
+/// `beam::Grid::corners`), the eye's (observer.rs `beam`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
@@ -228,13 +206,10 @@ pub fn beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let window: &[IVec4] = window;
-    let (origin, detail) = eye_origin(eye);
     let g = grid(eye);
     if id.x >= g.corners[0] || id.y >= g.corners[1] {
         return;
     }
-    let ray = eye_ray(eye, g.corner([id.x, id.y]));
-    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::BEAM_PASS);
     let world = World {
         window,
         ground,
@@ -244,23 +219,7 @@ pub fn beam_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let base = beam::Grid::line(g.corner_index([id.x, id.y]));
-    let met = cast::rooted(
-        &mut Writing {
-            world,
-            seen: &mut *seen,
-            tag,
-            blocks: true,
-        },
-        origin,
-        &ray,
-        detail,
-        Until::Beam,
-        &mut Leaving(beams, base),
-    );
-    tallied(seen, tally::EYE, tally::BEAM, met.visits);
-    seen_put(beams, base + beam::LINE_T, g.handed(met.stop.t).to_bits());
-    seen_put(beams, base + beam::LINE_VISITS, met.visits);
+    observer::beam(eye, world, seen, beams, [id.x, id.y]);
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -289,11 +248,8 @@ impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
 }
 
 /// Where each cell's pixels start (pxl-spec-core `beam::CELL_WORDS`), a
-/// thread a cell of the screen (`beam::Grid::span`): the least of the beam
-/// rays within its own window of its corners (`Grid::cell_window`), every
-/// one cast since the widest window is the grid's `past`, and that corner,
-/// whose line they resume from; past the lines in the beam rays' buffer
-/// (`Grid::cell_at`).
+/// thread a cell of the screen (`beam::Grid::span`), the eye's (observer.rs
+/// `cell`), past the lines in the beam rays' buffer (`Grid::cell_at`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cells_cs"))]
 pub fn cells_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -304,37 +260,16 @@ pub fn cells_cs(
     if id.x >= g.span[0] || id.y >= g.span[1] {
         return;
     }
-    let k = g.cell_window([id.x, id.y]);
-    let [x, y] = g.first([id.x, id.y]);
-    let t_of = |c: u32| f32::from_bits(seen_at(beams, beam::Grid::line(c) + beam::LINE_T));
-    let first = g.corner_index([x - k, y - k]);
-    let (mut least, mut from) = (t_of(first), first);
-    let mut j = y - k;
-    while j <= y + 1 + k {
-        let mut i = x - k;
-        while i <= x + 1 + k {
-            let c = g.corner_index([i, j]);
-            let t = t_of(c);
-            if t < least {
-                (least, from) = (t, c);
-            }
-            i += 1;
-        }
-        j += 1;
-    }
-    let cell = g.cell_at([id.x, id.y]);
-    seen_put(beams, cell + beam::CELL_T, least.to_bits());
-    seen_put(beams, cell + beam::CELL_CORNER, from);
+    observer::cell(eye, beams, [id.x, id.y]);
 }
 
-/// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a thread each:
-/// its ray resumed from its cell's start as a pixel's is, walked to the
-/// block that fills through the observed pyramid writing what it asks
-/// (`Writing`), and the node and block it stopped at left for the raster
-/// (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where it went on
-/// to its reach, and whether what it stopped at lacks. What lies about the
-/// face it entered is asked only of a sample that draws a box, the one
-/// whose words a pixel reads (raster.rs `faces_cs`).
+/// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a
+/// thread each, the eye's (observer.rs `sample`): the node and block it
+/// stopped at left for the raster (`beam::SAMPLE_WORDS`; raster.rs),
+/// `beam::SAMPLE_NONE` where it went on to its reach, and whether what it
+/// stopped at lacks. What lies about the face it entered is asked only of a
+/// sample that draws a box, the one whose words a pixel reads (raster.rs
+/// `faces_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sample_cs(
@@ -350,19 +285,10 @@ pub fn sample_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let window: &[IVec4] = window;
-    let (origin, detail) = eye_origin(eye);
     let g = grid(eye);
     if id.x >= g.samples[0] || id.y >= g.samples[1] {
         return;
     }
-    let (ray, t, line) = started(
-        eye,
-        &g,
-        beams,
-        g.sample_cell([id.x, id.y]),
-        g.sample([id.x, id.y]),
-    );
-    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::SAMPLES_PASS);
     let world = World {
         window,
         ground,
@@ -372,24 +298,5 @@ pub fn sample_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let met = resumed(
-        &mut Writing {
-            world,
-            seen: &mut *seen,
-            tag,
-            blocks: true,
-        },
-        origin,
-        &ray,
-        detail,
-        t,
-        &line,
-        line.node(),
-    );
-    tallied(seen, tally::EYE, tally::SAMPLE, met.visits);
-    let met = Met {
-        visits: met.visits + line.visits(),
-        ..met
-    };
-    sample_put(beams, g.sample_at([id.x, id.y]), &met);
+    observer::sample(eye, world, seen, beams, [id.x, id.y]);
 }

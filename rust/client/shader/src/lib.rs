@@ -2,11 +2,13 @@
 
 //! The GPU's compute entries, a module of their own each when built, over
 //! the world as the GPU holds it (world.rs) and the eye it is cast from
-//! (eye.rs): the eye's rays (beam.rs, raster.rs, cast.rs) through the
-//! observed pyramid (observed.rs), the world's depth from the sun (sun.rs), each handed
-//! square's ground (ground.rs) and ways (ways.rs), and the decor the ground
-//! grows (decor.rs). An entry is named by `entry_point_name`, never by its
-//! module's path, so each keeps the name pxl-tool shader.rs `ENTRIES` reads.
+//! (eye.rs): the passes a cast takes, written once over the observer it
+//! casts for (observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs)
+//! through the observed pyramid (observed.rs), the world's depth from the
+//! sun (sun.rs), each handed square's ground (ground.rs) and ways
+//! (ways.rs), and the decor the ground grows (decor.rs). An entry is named
+//! by `entry_point_name`, never by its module's path, so each keeps the
+//! name pxl-tool shader.rs `ENTRIES` reads.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
 // The workspace's clippy never builds this crate: its own build refuses a
@@ -19,6 +21,7 @@ mod decor;
 mod eye;
 mod ground;
 mod observed;
+mod observer;
 mod raster;
 mod sun;
 mod ways;
@@ -31,7 +34,9 @@ pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
 pub use raster::{boxes_cs, faces_cs};
-pub use sun::{sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_miss_cs, sun_sample_cs};
+pub use sun::{
+    sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_mark_cs, sun_miss_cs, sun_sample_cs,
+};
 pub use ways::{ways_cs, ways_free_cs, ways_freed_cs, ways_tree_cs};
 pub use world::{Looks, Unlooked, World};
 

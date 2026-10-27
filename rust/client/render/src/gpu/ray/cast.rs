@@ -16,7 +16,7 @@ use super::RaysPass;
 use crate::frame::shader::record::{
     compute, source, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
     SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_BEAM, SHADER_SUN_CELLS,
-    SHADER_SUN_MISS,
+    SHADER_SUN_MARK, SHADER_SUN_MISS,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
@@ -98,10 +98,21 @@ pub(super) struct CastBuffers {
     /// room (`sun_made`).
     sun_beam_built: Built,
     sun_cells_built: Built,
+    /// The tiles of the sun's box the eye's rays mark read in a cast
+    /// (`sun_mark_cs`, pxl-spec-core `sun::marks_at`), made with the beam's.
+    sun_mark_built: Built,
     /// The sun's mark's group and its cast's (`sun_groups`), and the
     /// buffers they bind: made again exactly when one of them is another.
-    sun_groups: [u32; 6],
-    sun_bound: [u32; 7],
+    sun_groups: [u32; 7],
+    sun_bound: [u32; 8],
+    /// The sun's casts so far, the number its marks are made with
+    /// (pxl-spec-core `sun::MOVED_CAST`), never zero, which no tile holds
+    /// marked.
+    sun_number: u32,
+    /// The number of the cast since which only the eye's look moved
+    /// (pxl-spec-core `sun::MOVED_EPOCH`): a tile cast in it or after
+    /// stands.
+    sun_epoch: u32,
     /// Whether all the sun's cast is made (`sun_made`): its list, its beam's
     /// pipelines and its raster; before then no sun's map is cast.
     sun_ready: bool,
@@ -117,6 +128,9 @@ pub(super) struct CastBuffers {
     /// place, quality and zooms, and whether the world under it moved; and
     /// whether this frame casts it, every slot.
     sun_read: Read,
+    /// The eye's look it last read: where only it moved, what the cast
+    /// before cast stands (`sun_epoch`).
+    sun_look: Read,
     /// What it is handed beside the eye's words (pxl-spec-core
     /// `sun::MOVED_WORDS`).
     sun_moved: u32,
@@ -159,7 +173,7 @@ pub(super) struct CastBuffers {
     tally: Tally,
     /// The list, the beam's pipelines and the raster's the sun's groups were
     /// made over, made again where one is another.
-    sun_grouped: [u32; 5],
+    sun_grouped: [u32; 6],
 }
 
 /// What a cast's head handed the pyramid's forgetting (pxl-spec-core
@@ -264,8 +278,11 @@ impl RaysPass {
             sun_miss_built,
             sun_beam_built: Built::default(),
             sun_cells_built: Built::default(),
-            sun_groups: [0; 6],
-            sun_bound: [0; 7],
+            sun_mark_built: Built::default(),
+            sun_groups: [0; 7],
+            sun_bound: [0; 8],
+            sun_number: 0,
+            sun_epoch: 0,
             sun_ready: false,
             sun_list: sun_list(g, false),
             sun_list_whole: false,
@@ -274,6 +291,7 @@ impl RaysPass {
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             sun_read: Read::default(),
+            sun_look: Read::default(),
             sun_moved: buffer(
                 word_bytes(sun::MOVED_WORDS),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
@@ -308,7 +326,7 @@ impl RaysPass {
             pixel_group: 0,
             pixel_bound: [0; 11],
             tally,
-            sun_grouped: [0; 5],
+            sun_grouped: [0; 6],
         };
         self.cast = Some(c);
     }
@@ -550,16 +568,19 @@ impl RaysPass {
                 }
             }
         }
-        // The sun's map is cast whole, every slot, as the eye's rays are
-        // (pxl-spec-core `sun`), where what it reads moved: the light's frame
-        // or box, the eye's place, quality or zooms, which the zooms its rays
-        // ask follow, or the world under it. The eye's look alone casts it
-        // no ray, and a standing frame none. Nothing it cast is kept for
-        // the next. None where no shadow is cast, nor before all its cast is
-        // made (`sun_made`), its read let go until then.
+        // The sun's map is cast, every slot a receiver reads, as the eye's
+        // rays are (pxl-spec-core `sun`), where what it reads moved: the
+        // light's frame or box, the eye's place, quality or zooms, which the
+        // zooms its rays ask follow, its look, which the tiles read follow
+        // (`sun_mark_cs`), or the world under it. A standing frame casts
+        // none. Where only the look moved, a tile cast since anything else
+        // last did stands, and only the tiles read anew are cast
+        // (`sun::MOVED_EPOCH`). None where no shadow is cast, nor before all
+        // its cast is made (`sun_made`), its read let go until then.
         let shadows = cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS]
             .iter()
             .any(|&w| w != 0);
+        // All it reads but the look, then the look.
         let r = &mut c.sun_read;
         r.begin();
         r.read(&[sun_map.1, u32::from(shadows)]);
@@ -568,7 +589,11 @@ impl RaysPass {
         r.read(&cast.eye[eye::TAU..eye::TAU + 1]);
         r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
         r.mark(world_moved);
-        let sun_moved = !r.end();
+        let held = r.end();
+        let l = &mut c.sun_look;
+        l.begin();
+        l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
+        let sun_moved = !held || !l.end();
         if !c.sun_ready {
             c.sun_read.forget();
         }
@@ -576,6 +601,12 @@ impl RaysPass {
         if c.sun_cast {
             // The head (pxl-spec-core `sun::MOVED_WORDS`).
             let mut head = [0u32; sun::MOVED_WORDS];
+            c.sun_number = c.sun_number.wrapping_add(1).max(1);
+            if !held {
+                c.sun_epoch = c.sun_number;
+            }
+            head[sun::MOVED_CAST] = c.sun_number;
+            head[sun::MOVED_EPOCH] = c.sun_epoch;
             head[sun::MOVED_COUNTED] = u32::from(ray_counts);
             let at = 4 * sun::STARTS_AT;
             head[at..at + 4 * sun::STARTS_VEC4S].copy_from_slice(&sun_map.2.words());
@@ -677,11 +708,13 @@ impl RaysPass {
             c.overwrites,
             pool,
             sun_map.0,
+            rays.0,
         ];
         let grouped = [
             c.sun_list,
             c.sun_beam_built.pipeline,
             c.sun_cells_built.pipeline,
+            c.sun_mark_built.pipeline,
             c.raster.sun_picks(),
             c.raster.sun.boxes,
         ];
@@ -699,6 +732,7 @@ impl RaysPass {
                     &c.raster.sun.sample_built,
                     &c.raster.sun.boxes_built,
                     &c.sun_miss_built,
+                    &c.sun_mark_built,
                 ],
                 sun_bound,
                 [
@@ -857,6 +891,14 @@ impl RaysPass {
             // are: each a pass timed in its own span.
             let stamp = stamps[GpuSpanName::sun_beam as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
+            // The tiles the eye's rays meet marked first, a thread every
+            // `sun::MARK` pixels across and down, timed with the beam
+            // (`sun_mark_cs`).
+            g.set_bind_group(pass, 0, c.sun_groups[6], &[]);
+            g.set_pipeline(pass, c.sun_mark_built.pipeline);
+            let w = compute::SUN_MARK_WORKGROUP;
+            let [x, y] = c.size.map(|v| v.div_ceil(sun::MARK));
+            g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
             g.set_pipeline(pass, c.sun_beam_built.pipeline);
             let n = sun::beam_across(shadow::SIZE);
@@ -944,6 +986,11 @@ impl RaysPass {
             if room(SHADER_SUN_CELLS) {
                 c.sun_cells_built =
                     pipelines.build_compute(g, SHADER_SUN_CELLS, &compute::SUN_CELLS_GROUP);
+            }
+        } else if c.sun_mark_built.pipeline == 0 {
+            if room(SHADER_SUN_MARK) {
+                c.sun_mark_built =
+                    pipelines.build_compute(g, SHADER_SUN_MARK, &compute::SUN_MARK_GROUP);
             }
         } else {
             c.sun_ready = c.raster.sun_made(g, pipelines, true, shadow::SIZE);
@@ -1084,20 +1131,23 @@ fn sun_list(g: &Gpu, whole: bool) -> u32 {
 /// tiles' frames, the service area's index, the overwrites and the ways'
 /// pool, the cast's alone; the observed pyramid, which the sun's walks read
 /// and write as the eye's do; the clipmap; its head (`moved`), the beam's
-/// lines, the samples and the misses (`list`), the raster's boxes, picks and args, and the misses' dispatch; the
-/// slots', the beam's, the cells', the samples', the boxes' and the
-/// misses' walk's, each none before its pipeline and buffers are made.
+/// lines, the samples and the misses (`list`), the raster's boxes, picks
+/// and args, and the misses' dispatch; the eye's rays, which the mark reads;
+/// the slots', the beam's, the cells', the samples', the boxes', the
+/// misses' walk's and the mark's, each none before its pipeline and buffers
+/// are made.
 fn sun_groups(
     g: &Gpu,
-    [walk, beam, cells, sample, boxes_built, miss]: [&Built; 6],
-    bound: [u32; 7],
+    [walk, beam, cells, sample, boxes_built, miss, mark]: [&Built; 7],
+    bound: [u32; 8],
     [seen, moved, list, boxes, picks, args, misses]: [u32; 7],
-) -> [u32; 6] {
-    let [eye, window, ground, shards, overwrites, pool, sun] = bound;
+) -> [u32; 7] {
+    let [eye, window, ground, shards, overwrites, pool, sun, rays] = bound;
     let entries = [
         (0, buffer_entry(0, eye)),
         (1, buffer_entry(1, window)),
         (2, buffer_entry(2, ground)),
+        (3, view_entry(3, rays)),
         (5, buffer_entry(5, shards)),
         (6, buffer_entry(6, overwrites)),
         (7, buffer_entry(7, pool)),
@@ -1141,5 +1191,6 @@ fn sun_groups(
             made(boxes_built, &compute::SUN_BOXES_GROUP)
         },
         g.bind_group(miss.layouts[0], &of(&compute::SUN_MISS_GROUP)),
+        made(mark, &compute::SUN_MARK_GROUP),
     ]
 }

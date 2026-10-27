@@ -198,9 +198,10 @@ impl Shadow {
         ]
     }
 
-    /// `reach` is the map's half width about `target`; `fixed` is a point
-    /// that stays put in the world as the eye moves, in the eye's frame.
-    pub fn aim(&mut self, sun_dir: &[f32], target: V3, reach: f64, fixed: V3) {
+    /// `reach` is the map's half width about `target`, `rim` the share of
+    /// it a receiver reads within; `fixed` is a point that stays put in the
+    /// world as the eye moves, in the eye's frame.
+    pub fn aim(&mut self, sun_dir: &[f32], target: V3, reach: f64, rim: f32, fixed: V3) {
         self.texel = reach * 2.0 / f64::from(SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the sun goes, on purpose: the sun read as moving. Turned on every
@@ -254,7 +255,13 @@ impl Shadow {
                 inverse[4 * k + 2] as f32,
             ]
         };
-        self.sun = Sun::of([column(0), column(1), column(2), column(3)], SIZE, corner).words();
+        self.sun = Sun::of(
+            [column(0), column(1), column(2), column(3)],
+            SIZE,
+            corner,
+            rim,
+        )
+        .words();
         (self.box_corner, self.inverse) = (corner, inverse);
         self.eye_world = fixed.map(|v| -v);
     }
