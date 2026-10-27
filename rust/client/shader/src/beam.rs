@@ -1,10 +1,11 @@
 // pxl-shader/beam.rs
 
-//! The camera grid's beam rays (pxl-spec-core `beam`): each corner's walk
-//! and line (`beam_cs`), where each cell's pixels start off them
-//! (`cell_cs`), and the samples walked from those starts (`sample_cs`),
-//! each the eye's call of its pass (observer.rs); and the words a line, a
-//! node and a sample are held in, every observer's.
+//! The beam rays (pxl-spec-core `beam`): each corner's walk and line
+//! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
+//! samples walked from those starts (`sample_cs`), each its pass's one
+//! entry, cast for the eye's camera grid or the sun's map as the head it is
+//! handed names (observer.rs `Either`); and the words a line, a node and a
+//! sample are held in, every observer's.
 
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
 use pxl_spec_core::world::At;
@@ -12,16 +13,19 @@ use pxl_spec_core::{beam, observed, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
-use crate::eye::{grid, Eye};
+use crate::either::Either;
+use crate::eye::Eye;
 use crate::observed::{seen_at, seen_put, Seen, Writ};
-use crate::observer;
+use crate::observer::{self, Observer};
+use crate::sun::Moved;
 use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
 /// `beam`): the lines, a corner each, the cells' starts and the samples'
-/// stops, as the frame's `Grid` lays them (`Grid::size`), a runtime array
-/// as `Seen` is. A pixel's own ray words say whether it missed
-/// (`ray::MISS`), so nothing here is a pixel's.
+/// stops, as the frame's `Grid` lays them (`Grid::size`), or as the sun's
+/// list does (`sun::list_words`) where the pass casts for the map; a
+/// runtime array as `Seen` is. A pixel's own ray words say whether it
+/// missed (`ray::MISS`), so nothing here is a pixel's.
 pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
 /// A beam ray's line (pxl-spec-core `beam::LINE_WORDS`, at `base` of the
@@ -189,8 +193,9 @@ where
     cast::walk(q, origin, ray, detail, Until::Opaque, from, line, &mut ())
 }
 
-/// Each beam ray of the camera grid, a thread a corner (pxl-spec-core
-/// `beam::Grid::corners`), the eye's (observer.rs `beam`).
+/// Each beam ray of its observer's lattice, a thread a corner: the camera
+/// grid's (pxl-spec-core `beam::Grid::corners`), or the sun's map's
+/// (`sun::BEAM`), as its head names (observer.rs `beam`, `Either`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
@@ -204,10 +209,12 @@ pub fn beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
 ) {
     let window: &[IVec4] = window;
-    let g = grid(eye);
-    if id.x >= g.corners[0] || id.y >= g.corners[1] {
+    let o = Either::of(eye, moved);
+    let [across, down] = o.corners();
+    if id.x >= across || id.y >= down {
         return;
     }
     let world = World {
@@ -219,7 +226,7 @@ pub fn beam_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::beam(eye, world, seen, beams, [id.x, id.y]);
+    observer::beam(&o, world, seen, beams, [id.x, id.y]);
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -247,29 +254,32 @@ impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
     }
 }
 
-/// Where each cell's pixels start (pxl-spec-core `beam::CELL_WORDS`), a
-/// thread a cell of the screen (`beam::Grid::span`), the eye's (observer.rs
-/// `cell`), past the lines in the beam rays' buffer (`Grid::cell_at`).
+/// Where each cell's rays start (pxl-spec-core `beam::CELL_WORDS`), a
+/// thread a cell of its observer's lattice (observer.rs `cell`): the
+/// screen's (`beam::Grid::span`), past the lines in the beam rays' buffer
+/// (`Grid::cell_at`), or the sun's map's (`sun::cell`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cell_cs"))]
 pub fn cell_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
 ) {
-    let g = grid(eye);
-    if id.x >= g.span[0] || id.y >= g.span[1] {
+    let o = Either::of(eye, moved);
+    let [across, down] = o.cells();
+    if id.x >= across || id.y >= down {
         return;
     }
-    observer::cell(eye, beams, [id.x, id.y]);
+    observer::cell(&o, beams, [id.x, id.y]);
 }
 
-/// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a
-/// thread each, the eye's (observer.rs `sample`): the node and asset it
-/// stopped at left for the raster (`beam::SAMPLE_WORDS`; raster.rs),
-/// `beam::SAMPLE_NONE` where it went on to its reach, and whether what it
-/// stopped at lacks. What lies about the face it entered is asked only of a
-/// sample that draws a box, the one whose words a pixel reads (raster.rs
-/// `face_cs`).
+/// Each sample of its observer's lattice, a thread each (observer.rs
+/// `sample`): the screen's (pxl-spec-core `beam::Grid::samples`) or the
+/// sun's map's (`sun::SAMPLE`). The node and asset it stopped at left for
+/// the raster (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where
+/// it went on to its reach, and whether what it stopped at lacks. What lies
+/// about the face it entered is asked only of a sample that draws a box,
+/// the one whose words a pixel reads (raster.rs `face_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sample_cs(
@@ -283,10 +293,12 @@ pub fn sample_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
 ) {
     let window: &[IVec4] = window;
-    let g = grid(eye);
-    if id.x >= g.samples[0] || id.y >= g.samples[1] {
+    let o = Either::of(eye, moved);
+    let [across, down] = o.samples();
+    if id.x >= across || id.y >= down {
         return;
     }
     let world = World {
@@ -298,5 +310,5 @@ pub fn sample_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::sample(eye, world, seen, beams, [id.x, id.y]);
+    observer::sample(&o, world, seen, beams, [id.x, id.y]);
 }

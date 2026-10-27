@@ -5,11 +5,11 @@
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
 struct type_6 {
-    member: array<vec4<i32>>,
+    member: array<u32>,
 }
 
-struct type_9 {
-    member: array<u32>,
+struct type_12 {
+    member: array<vec4<i32>>,
 }
 
 struct type_23 {
@@ -46,13 +46,13 @@ struct type_35 {
 
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
-var<storage> global_1: type_6;
+var<storage> global_1: type_12;
 @group(0) @binding(2)
 var<storage> global_2: type_28;
 @group(0) @binding(1)
-var<storage, read_write> global_3: type_9;
+var<storage, read_write> global_3: type_6;
 @group(0) @binding(3)
-var<storage> global_4: type_9;
+var<storage> global_4: type_6;
 
 fn function_() {
     var local: array<i32, 36>;

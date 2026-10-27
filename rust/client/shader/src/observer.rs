@@ -7,10 +7,11 @@
 //! (`sample`) and box (`sample_box`), a ray's pick (`took`), the sky about it
 //! (`sky`) or a walk of its own (`resolve`), and its walk resumed off the
 //! beam (`resume`, `walked`), each casting what its observer needs alone
-//! (`Observer::needs`). An
-//! entry is an observer's call of a pass (beam.rs, cast.rs, raster.rs,
-//! sun.rs); its lattice, its rays and what its walks leave are its own
-//! (eye.rs `Eye`, sun.rs `Map`).
+//! (`Observer::needs`). An entry is a pass's call for its observer (beam.rs,
+//! cast.rs, raster.rs, sun.rs); its lattice, its rays and what its walks
+//! leave are its own (eye.rs `Eye`, sun.rs `Map`). A pass both observers
+//! take is one entry, its observer the one its head names (either.rs
+//! `Either`), so a pass is one module whichever casts it.
 
 use pxl_spec_core::cast::{self, Detail, Met, Query, Until};
 use pxl_spec_core::{beam, observed, raster, tally};
@@ -50,17 +51,17 @@ pub(crate) trait Observer {
     type At: Copy;
     /// Its run of lanes in the tally (pxl-spec-core `tally::EYE`,
     /// `tally::SUN`).
-    const TALLY: u32;
+    fn tally(&self) -> u32;
     /// Whether its walks write the assets that fill, as a walk reading the
     /// looks does (observed.rs `Writing::assets`).
-    const ASSETS: bool;
+    fn assets(&self) -> bool;
     /// The passes its beam, its samples and its walks again write the
     /// observed pyramid under (pxl-spec-core `observed::BEAM_PASS`).
-    const PASSES: [u32; 3];
+    fn passes(&self) -> [u32; 3];
     /// Whether its rays start apart, a line's nodes held from its own
     /// origin (`origin_of`); else every ray starts at one, a line's node
     /// its own.
-    const APART: bool;
+    fn apart(&self) -> bool;
 
     /// Its beam rays' corners across and down.
     fn corners(&self) -> [u32; 2];
@@ -131,13 +132,13 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
     let aim = o.corner(c);
     let base = o.line(index(o.corners()[0], c));
     o.keep_origin(w, base, aim.origin);
-    let tag = observed::tag(seen_at(seen, observed::FRAME), O::PASSES[0]);
+    let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[0]);
     let met = cast::rooted(
         &mut Writing {
             world,
             seen: &mut *seen,
             tag,
-            assets: O::ASSETS,
+            assets: o.assets(),
         },
         aim.origin,
         &aim.ray,
@@ -145,7 +146,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
         Until::Beam,
         &mut Leaving(&mut *w, base),
     );
-    tallied(seen, O::TALLY, tally::BEAM, met.visits);
+    tallied(seen, o.tally(), tally::BEAM, met.visits);
     w.set(base + beam::LINE_T, o.handed(&aim, met.stop.t).to_bits());
     w.set(base + beam::LINE_VISITS, met.visits);
 }
@@ -202,7 +203,7 @@ where
     let at = o.cell_at(cell);
     let t = f32::from_bits(w.word(at + beam::CELL_T));
     let line = Beamed(w, o.line(w.word(at + beam::CELL_CORNER)));
-    let node = if O::APART {
+    let node = if o.apart() {
         line.node().moved(o.origin_of(w, line.1), aim.origin)
     } else {
         line.node()
@@ -231,20 +232,20 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
         return;
     }
     let aim = o.aim(o.point(s));
-    let tag = observed::tag(seen_at(seen, observed::FRAME), O::PASSES[1]);
+    let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[1]);
     let (met, before) = resume(
         o,
         &mut Writing {
             world,
             seen: &mut *seen,
             tag,
-            assets: O::ASSETS,
+            assets: o.assets(),
         },
         &*w,
         &aim,
         o.sample_cell(s),
     );
-    tallied(seen, O::TALLY, tally::SAMPLE, met.visits);
+    tallied(seen, o.tally(), tally::SAMPLE, met.visits);
     let met = Met {
         visits: met.visits + before,
         ..met
@@ -376,19 +377,19 @@ pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(
     at: O::At,
 ) -> (Aim, Met<Writ>, u32) {
     let aim = o.aim(at);
-    let tag = observed::tag(seen_at(seen, observed::FRAME), O::PASSES[2]);
+    let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[2]);
     let (met, before) = resume(
         o,
         &mut Writing {
             world,
             seen: &mut *seen,
             tag,
-            assets: O::ASSETS,
+            assets: o.assets(),
         },
         w,
         &aim,
         o.cell_of(at),
     );
-    tallied(seen, O::TALLY, tally::MISS, met.visits);
+    tallied(seen, o.tally(), tally::MISS, met.visits);
     (aim, met, before)
 }

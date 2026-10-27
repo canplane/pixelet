@@ -3,10 +3,11 @@
 //! The world's depth from the sun into its clipmap (pxl-spec-core `sun`),
 //! every slot each frame it is cast, by the passes the eye's rays take,
 //! the sun's map their observer (`Map`; observer.rs): the beam rays and
-//! their cells' starts (`sun_beam_cs`, `sun_cell_cs`), the samples
-//! (`sun_sample_cs`) and their boxes (`sun_sample_box_cs`), which the raster
-//! draws, every slot taking its pick or the sky (`sun_cs`) and the rest
-//! walked (`sun_miss_cs`).
+//! their cells' starts, the samples and their boxes, which the raster
+//! draws, each the entry the eye's takes too (beam.rs `beam_cs`,
+//! `cell_cs`, `sample_cs`; raster.rs `sample_box_cs`) handed the sun's head
+//! (`Moved`); every slot taking its pick or the sky (`sun_cs`) and the
+//! rest walked (`sun_miss_cs`).
 
 use pxl_spec_core::cast::{self, Detail};
 use pxl_spec_core::fill::put;
@@ -21,7 +22,7 @@ use crate::decor::Instances;
 use crate::eye::{eye_origin, eye_ray, Eye};
 use crate::observed::Seen;
 use crate::observer::{self, Aim, Level, Observer, Takes};
-use crate::world::{Unlooked, World};
+use crate::world::World;
 
 /// The world's depth from the sun, a slot of the sun's clipmap each
 /// (pxl-spec-core `sun`): the slot's texel of the light box, and its ray
@@ -38,32 +39,50 @@ type SunWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 /// as the eye's pixels read theirs.
 type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
 
-/// What the sun's cast is handed beside the eye's words (pxl-spec-core
-/// `sun::MOVED_HEAD`): whether it is counted (`sun::MOVED_COUNTED`), and where the
-/// rays start (`sun::Starts`).
-type Moved = [IVec4];
+/// What the sun's cast is handed beside the eye's words, a uniform
+/// (pxl-spec-core `sun::MOVED_HEAD`): its number, whether it is counted,
+/// its epoch and the map's side, where the rays start (`sun::Starts`) and
+/// the actors drawn. The eye's head, all zero, names no map (`size`).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Moved {
+    v: [IVec4; pxl_spec_core::sun::MOVED_HEAD],
+}
+
+const _: () = assert!(
+    pxl_spec_core::sun::MOVED_CAST == 0
+        && pxl_spec_core::sun::MOVED_COUNTED == 1
+        && pxl_spec_core::sun::MOVED_EPOCH == 2
+        && pxl_spec_core::sun::MOVED_SIZE == 3,
+    "the head's first vec4 is read by its words"
+);
 
 /// Where the rays start (`sun::Starts`), off the head.
 fn starts(m: &Moved) -> Starts {
     Starts::of_words(|k| {
-        let v = m[pxl_spec_core::sun::STARTS_AT + k];
+        let v = m.v[pxl_spec_core::sun::STARTS_AT + k];
         [v.x, v.y, v.z, v.w]
     })
 }
 
 fn counts(m: &Moved) -> bool {
-    m[0].y != 0
+    m.v[0].y != 0
 }
 
 /// The cast's number (`sun::MOVED_CAST`).
 fn cast_number(m: &Moved) -> u32 {
-    m[0].x as u32
+    m.v[0].x as u32
 }
 
 /// The number of the cast since which only the eye's look moved
 /// (`sun::MOVED_EPOCH`).
 fn epoch(m: &Moved) -> u32 {
-    m[0].z as u32
+    m.v[0].z as u32
+}
+
+/// The map's side (`sun::MOVED_SIZE`), none in the eye's head.
+pub(crate) fn size(m: &Moved) -> u32 {
+    m.v[0].w as u32
 }
 
 /// Whether a tile from `lo` to `hi`, tiles across and down, is one the
@@ -103,19 +122,22 @@ fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i
     false
 }
 
-/// The world as the sun's walks read it, no looks drawn.
+/// The world as the sun's walk again reads it, as the eye's do, the looks
+/// too, which only what a stop is drawn by holds and the map's word leaves
+/// out (`Map::word`).
 fn world<'a>(
     eye: &'a Eye,
     window: &'a [IVec4],
     ground: &'a [u32],
+    looks: &'a [u32],
     shards: &'a [IVec4],
     overwrites: &'a [u32],
     pool: &'a [u32],
-) -> World<'a, Unlooked> {
+) -> World<'a, &'a [u32]> {
     World {
         window,
         ground,
-        looks: Unlooked(0),
+        looks,
         shards,
         overwrites,
         eye,
@@ -158,17 +180,23 @@ pub(crate) struct Map {
 }
 
 impl Map {
-    fn of(eye: &Eye, moved: &Moved, size: u32) -> Map {
+    pub(crate) fn of(eye: &Eye, moved: &Moved) -> Map {
         let sun = sun_of(eye);
         let (origin, detail) = eye_origin(eye);
         Map {
             sun,
             starts: starts(moved),
-            size,
+            size: size(moved),
             eye: origin,
             detail: sun.detail(detail),
             cast: cast_number(moved),
         }
+    }
+
+    /// Its side (`sun::MOVED_SIZE`), which its slots and its list are laid
+    /// by.
+    pub(crate) fn side(&self) -> u32 {
+        self.size
     }
 
     /// Its samples across and down, a side.
@@ -185,14 +213,26 @@ impl Map {
 
 impl Observer for Map {
     type At = [u32; 2];
-    const TALLY: u32 = tally::SUN;
-    const ASSETS: bool = false;
-    const PASSES: [u32; 3] = [
-        observed::SUN_BEAM_PASS,
-        observed::SUN_SAMPLES_PASS,
-        observed::SUN_MISSED_PASS,
-    ];
-    const APART: bool = true;
+
+    fn tally(&self) -> u32 {
+        tally::SUN
+    }
+
+    fn assets(&self) -> bool {
+        false
+    }
+
+    fn passes(&self) -> [u32; 3] {
+        [
+            observed::SUN_BEAM_PASS,
+            observed::SUN_SAMPLES_PASS,
+            observed::SUN_MISSED_PASS,
+        ]
+    }
+
+    fn apart(&self) -> bool {
+        true
+    }
 
     fn corners(&self) -> [u32; 2] {
         let a = pxl_spec_core::sun::beam_across(self.size);
@@ -392,18 +432,18 @@ pub fn sun_cs(
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
     #[spirv(descriptor_set = 0, binding = 15)] picks: &Picks,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 17)] misses: &mut [u32],
 ) {
     let t = pxl_spec_core::sun::TILE;
-    let size: UVec3 = sun.query_size();
+    let m = Map::of(eye, moved);
+    let n = m.side();
     let slot = UVec3::new(group.x * t + lane.x, group.y * t + lane.y, 0);
-    if slot.x >= size.x || slot.y >= size.y {
+    if slot.x >= n || slot.y >= n {
         return;
     }
-    let m = Map::of(eye, moved, size.x);
     let at = [slot.x, slot.y];
     // A slot no receiver reads, or one an earlier cast of the epoch cast,
     // left as it was.
@@ -411,7 +451,7 @@ pub fn sun_cs(
         return;
     }
     let aim = m.aim(at);
-    let p = m.sun.texel(size.x, at);
+    let p = m.sun.texel(n, at);
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = picks.fetch(UVec3::new(p[0], p[1], 0));
     let (took, stop, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
@@ -434,10 +474,10 @@ pub fn sun_cs(
     // Listed for its walk again as the eye's pixels are (cast.rs `listed`):
     // the list holds every slot, so none finds it full.
     counted(misses, counts(moved), tally::WALKED, 1);
-    let at = listed(misses, size.x * size.y, [0; 2]);
+    let at = listed(misses, n * n, [0; 2]);
     put(
         list,
-        pxl_spec_core::sun::misses_at(size.x) + at,
+        pxl_spec_core::sun::misses_at(n) + at,
         slot.y << 16 | slot.x,
     );
 }
@@ -460,132 +500,29 @@ pub fn sun_miss_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let window: &[IVec4] = window;
-    let size: UVec3 = sun.query_size();
+    let m = Map::of(eye, moved);
+    let n = m.side();
     let i = (group.y * pxl_spec_core::ray::MISS_ACROSS + group.x) * pxl_spec_core::ray::MISS_LANES
         + lane.x;
-    if i >= at(list, pxl_spec_core::sun::misses_count(size.x)) {
+    if i >= at(list, pxl_spec_core::sun::misses_count(n)) {
         return;
     }
-    let w = at(list, pxl_spec_core::sun::misses_at(size.x) + i);
+    let w = at(list, pxl_spec_core::sun::misses_at(n) + i);
     let slot = UVec3::new(w & 0xffff, w >> 16, 0);
-    let world = world(eye, window, ground, shards, overwrites, pool);
-    let m = Map::of(eye, moved, size.x);
+    let world = world(eye, window, ground, looks, shards, overwrites, pool);
     let (aim, met, _) = observer::walked(&m, world, seen, list, [slot.x, slot.y]);
     // SAFETY: a slot `sun_cs` listed, within the map.
     unsafe { sun.write(slot, m.word(&aim, &met)) };
-}
-
-/// Each sample of the sun's map (pxl-spec-core `sun::SAMPLE`), a slot every
-/// `SAMPLE` across and down, a thread each, the map's (observer.rs
-/// `sample`): its stop left in the eye's samples' words for the raster
-/// (`sun_sample_box_cs`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_sample_cs"))]
-#[allow(clippy::too_many_arguments)]
-pub fn sun_sample_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
-) {
-    let window: &[IVec4] = window;
-    let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, moved, size.x);
-    if id.x >= m.across() || id.y >= m.across() {
-        return;
-    }
-    let world = world(eye, window, ground, shards, overwrites, pool);
-    observer::sample(&m, world, seen, list, [id.x, id.y]);
-}
-
-/// Each sample of the sun's map (`sun_sample_cs`), a thread each, written
-/// as a box for the raster's draw, the map's (observer.rs `sample_box`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_sample_box_cs"))]
-#[allow(clippy::too_many_arguments)]
-pub fn sun_sample_box_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] boxes: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
-) {
-    let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, moved, size.x);
-    // [naga] The eye's vec2 of u32s read, so the module holds the type
-    // naga's SPIR-V reader splits an arrayed image's layer off by (`Eye`).
-    if id.x >= m.across() || id.y >= m.across() || eye.range.x > eye.range.y {
-        return;
-    }
-    observer::sample_box(&m, list, [id.x, id.y], boxes, args);
-}
-
-/// Each beam ray of the sun's map (pxl-spec-core `sun::BEAM`), a thread
-/// each, `sun::beam_across` a side, `sun::BEAM_WINDOW` of them past the box
-/// on each side, the map's (observer.rs `beam`): its line and its origin
-/// left for the texels about it, and how far they start from it.
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_beam_cs"))]
-#[allow(clippy::too_many_arguments)]
-pub fn sun_beam_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
-) {
-    let window: &[IVec4] = window;
-    let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, moved, size.x);
-    let [across, down] = m.corners();
-    if id.x >= across || id.y >= down {
-        return;
-    }
-    let world = world(eye, window, ground, shards, overwrites, pool);
-    observer::beam(&m, world, seen, list, [id.x, id.y]);
-}
-
-/// Where each cell of the sun's map starts (pxl-spec-core `sun::cell`), a
-/// thread a cell, `sun::BEAM` texels a side, the map's (observer.rs
-/// `cell`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_cell_cs"))]
-pub fn sun_cell_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-) {
-    let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, moved, size.x);
-    let [across, down] = m.cells();
-    // [naga] The eye's vec2 of u32s read, so the module holds the type
-    // naga's SPIR-V reader splits an arrayed image's layer off by (`Eye`).
-    if id.x >= across || id.y >= down || eye.range.x > eye.range.y {
-        return;
-    }
-    observer::cell(&m, list, [id.x, id.y]);
 }
 
 /// The world's receivers of the sun's map: the drawn pixels' rays (cast.rs
@@ -600,16 +537,15 @@ pub fn sun_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
-    let size: UVec3 = rays.query_size();
+    let drawn: UVec3 = rays.query_size();
     let m = pxl_spec_core::sun::MARK;
-    if id.x * m >= size.x || id.y * m >= size.y {
+    if id.x * m >= drawn.x || id.y * m >= drawn.y {
         return;
     }
-    let (s, n): (Sun, UVec3) = (sun_of(eye), sun.query_size());
+    let (s, n) = (sun_of(eye), size(moved));
     let cast = cast_number(moved);
     // The tile last marked, so a run of pixels on one marks it once.
     let mut last = [i32::MIN; 2];
@@ -620,19 +556,19 @@ pub fn sun_mark_cs(
             let p = UVec3::new(id.x * m + x, id.y * m + y, 0);
             // A ray that met nothing leaves its first word zero (cast.rs
             // `word`).
-            let first: u32 = if p.x < size.x && p.y < size.y {
+            let first: u32 = if p.x < drawn.x && p.y < drawn.y {
                 rays.read(UVec3::new(p.x, p.y, 0))
             } else {
                 0
             };
             if first != 0 && first != pxl_spec_core::ray::MISS {
                 let t = f32::from_bits(rays.read(UVec3::new(p.x, p.y, 1)));
-                let d = eye_ray(eye, pixel_tan(eye, p, size)).direction;
+                let d = eye_ray(eye, pixel_tan(eye, p, drawn)).direction;
                 let tile = s.tile_of([d[0] * t, d[1] * t, d[2] * t]);
                 // [rust-gpu] By its words: an array's `!=` is an intrinsic
                 // it does not lower.
                 if tile[0] != last[0] || tile[1] != last[1] {
-                    stand(list, n.x, cast, tile);
+                    stand(list, n, cast, tile);
                     last = tile;
                 }
             }
@@ -680,8 +616,7 @@ fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
 pub fn sun_mark_drawn_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 18)] params: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
@@ -691,10 +626,10 @@ pub fn sun_mark_drawn_cs(
     let head = pxl_spec_core::sun::ACTORS_AT;
     let k = id.x as usize;
     let v = if k < pxl_spec_core::sun::ACTORS {
-        if k >= moved[head].x as usize {
+        if k >= moved.v[head].x as usize {
             return;
         }
-        let p = moved[head + 1 + k];
+        let p = moved.v[head + 1 + k];
         [
             f32::from_bits(p.x as u32),
             f32::from_bits(p.y as u32),
@@ -724,13 +659,13 @@ pub fn sun_mark_drawn_cs(
     ) {
         return;
     }
-    let (s, n): (Sun, UVec3) = (sun_of(eye), sun.query_size());
+    let (s, n) = (sun_of(eye), size(moved));
     let ([i, j], cast, r) = (s.tile_of(v), cast_number(moved), s.ring());
     let mut b = -r;
     while b <= r {
         let mut a = -r;
         while a <= r {
-            stand(list, n.x, cast, [i + a, j + b]);
+            stand(list, n, cast, [i + a, j + b]);
             a += 1;
         }
         b += 1;
@@ -750,15 +685,12 @@ pub fn sun_mark_drawn_cs(
 pub fn sun_reach_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
-    let size: UVec3 = sun.query_size();
-    let n = pxl_spec_core::sun::tiles(size.x);
-    // [naga] The eye's vec2 of u32s read, so the module holds the type
-    // naga's SPIR-V reader splits an arrayed image's layer off by (`Eye`).
-    if id.x >= n || id.y >= n || eye.range.x > eye.range.y {
+    let side = size(moved);
+    let n = pxl_spec_core::sun::tiles(side);
+    if id.x >= n || id.y >= n {
         return;
     }
     let s = sun_of(eye);
@@ -766,7 +698,7 @@ pub fn sun_reach_cs(
     let t = pxl_spec_core::sun::TILE;
     let middle = [(id.x * t + t / 2) as i32, (id.y * t + t / 2) as i32];
     if !s.read(
-        size.x,
+        side,
         middle,
         pxl_spec_core::sun::READ_PAD + t as f32 * core::f32::consts::FRAC_1_SQRT_2,
     ) {
@@ -783,7 +715,7 @@ pub fn sun_reach_cs(
         while b <= 1 && !read {
             let mut a = -2;
             while a <= 1 && !read {
-                read = stood(&*list, size.x, cast, [t[0] - o[0] + a, t[1] - o[1] + b]);
+                read = stood(&*list, side, cast, [t[0] - o[0] + a, t[1] - o[1] + b]);
                 a += 1;
             }
             b += 1;
@@ -791,12 +723,12 @@ pub fn sun_reach_cs(
         k += 1;
     }
     // Read, and read first in the epoch: the cast's to cast.
-    let w = pxl_spec_core::sun::reads_at(size.x) + id.y * n + id.x;
+    let w = pxl_spec_core::sun::reads_at(side) + id.y * n + id.x;
     if read && at(list, w) < epoch {
         put(list, w, cast);
         put(
             list,
-            pxl_spec_core::sun::coarse_square(size.x, [id.x, id.y]),
+            pxl_spec_core::sun::coarse_square(side, [id.x, id.y]),
             cast,
         );
     }

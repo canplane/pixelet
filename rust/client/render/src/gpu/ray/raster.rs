@@ -11,10 +11,9 @@
 
 use pxl_spec_core::{beam, eye, raster, sun};
 
-use crate::frame::shader::record::{
-    compute, source, PIPELINE_RASTER, SHADER_SAMPLE_BOX, SHADER_FACE, SHADER_SUN_SAMPLE_BOX,
-    SHADER_SUN_SAMPLE,
-};
+use super::cast::HEAD_BINDING;
+
+use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER_SAMPLE_BOX};
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
     Load, Stamp,
@@ -30,7 +29,9 @@ use crate::gpu::span_spec::GpuSpanName;
 /// of the boxes' writing, their drawing and their faces' asking, made again
 /// exactly when what they bind is another (`bound`).
 pub(super) struct Raster {
-    boxes_built: Built,
+    /// The boxes' writing, the eye's and the sun's map's (pxl-shader
+    /// raster.rs `sample_box_cs`), each over its own group.
+    pub(super) boxes_built: Built,
     faces_built: Built,
     draw_built: Built,
     pub(super) args: u32,
@@ -44,23 +45,20 @@ pub(super) struct Raster {
     depth_view: u32,
     size: [u32; 2],
     groups: [u32; 3],
-    bound: [u32; 8],
+    bound: [u32; 9],
     /// The sun's, made where its shadows are first cast (`sun_made`); and a
     /// pick of none, bound where it is not.
     pub(super) sun: SunRaster,
     blank_array: u32,
 }
 
-/// The sun's samples' boxes drawn from the sun by the same draw
-/// (pxl-spec-core `sun::SAMPLE`): its samples' and its
-/// boxes' pipelines, made one a turn where the stream has room; its boxes,
-/// room for a sample every `sun::SAMPLE` texels; their args; its view, a
-/// uniform; its targets at the map's side, in the box's order; and the
-/// draw's group.
+/// The sun's samples' boxes, written by the eye's pass (`boxes_built`) and
+/// drawn from the sun by the same draw (pxl-spec-core `sun::SAMPLE`): its
+/// boxes, room for a sample every `sun::SAMPLE` texels; their args; its
+/// view, a uniform; its targets at the map's side, in the box's order; and
+/// the draw's group.
 #[derive(Default)]
 pub(super) struct SunRaster {
-    pub(super) sample_built: Built,
-    pub(super) boxes_built: Built,
     pub(super) boxes: u32,
     pub(super) args: u32,
     uniform: u32,
@@ -101,7 +99,7 @@ impl Raster {
             depth_view: 0,
             size: [0; 2],
             groups: [0; 3],
-            bound: [0; 8],
+            bound: [0; 9],
             sun: SunRaster::default(),
             blank_array: g.view(blank, true, 0, 1, 0, 1),
         }
@@ -110,8 +108,9 @@ impl Raster {
     /// What a frame that casts needs, before its dispatches: the boxes made
     /// again where the `grid`'s samples outgrow them; its targets at the
     /// rays' `size`; the raster's view off the `eye`'s words; the args
-    /// cleared; its groups over the cast's `eye` and `beams`, and, for the
-    /// faces' asking, the world's query's buffers (`world`: the window, the
+    /// cleared; its groups over the cast's `eye`, `beams` and the eye's
+    /// `head` (pxl-spec-core `sun::MOVED_SIZE`), and, for the faces'
+    /// asking, the world's query's buffers (`world`: the window, the
     /// tiles' frames, the service area's index, the overwrites, the ways'
     /// pool).
     pub(super) fn prepare(
@@ -120,7 +119,7 @@ impl Raster {
         e: &[u32],
         size: [u32; 2],
         grid: &beam::Grid,
-        [eye, beams]: [u32; 2],
+        [eye, beams, head]: [u32; 3],
         world: [u32; 5],
     ) {
         let samples = grid.samples[0] * grid.samples[1];
@@ -196,7 +195,7 @@ impl Raster {
         g.write_buffer(self.args, 0, bytes(&args));
         let [window, ground, shards, overwrites, pool] = world;
         let bound = [
-            eye, beams, self.boxes, window, ground, shards, overwrites, pool,
+            eye, beams, head, self.boxes, window, ground, shards, overwrites, pool,
         ];
         if bound != self.bound {
             for group in self.groups {
@@ -208,6 +207,7 @@ impl Raster {
                     &[
                         buffer_entry(0, eye),
                         buffer_entry(8, beams),
+                        buffer_entry(HEAD_BINDING, head),
                         buffer_entry(14, self.boxes),
                         buffer_entry(16, self.args),
                     ],
@@ -276,32 +276,11 @@ impl Raster {
 const UNIFORM: usize = 24;
 
 impl Raster {
-    /// The sun's pipelines made where `wanted`, one a
-    /// turn where the stream has room for its module, then its buffers and
-    /// its targets at the map's `size`; whether it is made.
-    pub(super) fn sun_made(
-        &mut self,
-        g: &Gpu,
-        pipelines: &mut Pipelines,
-        wanted: bool,
-        size: u32,
-    ) -> bool {
+    /// The sun's buffers and its targets at the map's `size`, made once;
+    /// whether they are.
+    pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.sun;
-        if !wanted {
-            return s.group != 0;
-        }
-        let room = |kind: u32| crate::gpu::api::room(source(kind).len() + 4096);
-        if s.sample_built.pipeline == 0 {
-            if room(SHADER_SUN_SAMPLE) {
-                s.sample_built =
-                    pipelines.build_compute(g, SHADER_SUN_SAMPLE, &compute::SUN_SAMPLE_GROUP);
-            }
-        } else if s.boxes_built.pipeline == 0 {
-            if room(SHADER_SUN_SAMPLE_BOX) {
-                s.boxes_built =
-                    pipelines.build_compute(g, SHADER_SUN_SAMPLE_BOX, &compute::SUN_SAMPLE_BOX_GROUP);
-            }
-        } else if s.group == 0 {
+        if s.group == 0 {
             let samples = (size / sun::SAMPLE) * (size / sun::SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             s.boxes = g.buffer(word_bytes(raster::words(samples) as usize), storage);
@@ -379,7 +358,7 @@ impl Raster {
             n,
             v.reach,
             // The boxes are laid from box texel (0, 0)'s start (pxl-shader
-            // sun.rs `sun_sample_box_cs`).
+            // sun.rs `Map::laid`).
             0.0,
             0.0,
             0.0,

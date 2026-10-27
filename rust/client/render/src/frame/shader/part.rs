@@ -112,25 +112,17 @@ pub const SHADER_MISS_LIST: u32 = 52;
 /// What lies about each box's face, asked once a box (pxl-spec-core
 /// `raster::ARGS_FACES`): a compute entry.
 pub const SHADER_FACE: u32 = 53;
-/// The sun's beam rays and its cells' starts off them (pxl-spec-core
-/// `sun::BEAM`): compute entries.
-pub const SHADER_SUN_BEAM: u32 = 54;
-pub const SHADER_SUN_CELL: u32 = 55;
-/// The sun's samples and their boxes (pxl-spec-core `sun::SAMPLE`):
-/// compute entries.
-pub const SHADER_SUN_SAMPLE: u32 = 56;
-pub const SHADER_SUN_SAMPLE_BOX: u32 = 57;
 /// The tiles of the sun's box its receivers stand on in a cast
 /// (pxl-spec-core `sun::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
 /// (`sun::reads_at`): compute entries.
-pub const SHADER_SUN_MARK: u32 = 58;
-pub const SHADER_SUN_MARK_DRAWN: u32 = 59;
-pub const SHADER_SUN_REACH: u32 = 60;
+pub const SHADER_SUN_MARK: u32 = 54;
+pub const SHADER_SUN_MARK_DRAWN: u32 = 55;
+pub const SHADER_SUN_REACH: u32 = 56;
 /// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
 /// time, for `SHADER_GROWN` to grow: its one compute entry.
-pub const SHADER_GROWN_STAND: u32 = 61;
-pub const SHADERS: u32 = 62;
+pub const SHADER_GROWN_STAND: u32 = 57;
+pub const SHADERS: u32 = 58;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -266,7 +258,15 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAY
-    lit!["lattice", "ray", "eye", "paint", "debug_look", "screen_ray", "screen_lit"],
+    lit![
+        "lattice",
+        "ray",
+        "eye",
+        "paint",
+        "debug_look",
+        "screen_ray",
+        "screen_lit"
+    ],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
@@ -342,14 +342,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["miss_list.gen"],
     // SHADER_FACE
     &["face.gen"],
-    // SHADER_SUN_BEAM
-    &["sun_beam.gen"],
-    // SHADER_SUN_CELL
-    &["sun_cell.gen"],
-    // SHADER_SUN_SAMPLE
-    &["sun_sample.gen"],
-    // SHADER_SUN_SAMPLE_BOX
-    &["sun_sample_box.gen"],
     // SHADER_SUN_MARK
     &["sun_mark.gen"],
     // SHADER_SUN_MARK_DRAWN
