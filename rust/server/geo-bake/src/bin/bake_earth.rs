@@ -139,7 +139,7 @@ struct Plate<'a, const N: usize> {
 impl<const N: usize> Plate<'_, N> {
     /// The mean over a box of longitude and latitude, in degrees, each pixel
     /// weighed by how much of it the box covers; a box narrower than a pixel is
-    /// widened to one, so a coarse source is read as a tent, not as blocks.
+    /// widened to one, so a coarse source is read as a tent, not as steps.
     fn mean(&self, [lng0, lng1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
         let span = |a: f64, b: f64| {
             let (mid, half) = ((a + b) / 2.0, ((b - a).abs() / 2.0).max(0.5));
