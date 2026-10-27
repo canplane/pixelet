@@ -175,7 +175,7 @@ impl<'w, 'a> Upright<'w, 'a> {
                 middle(k / self.across, self.corner[1]),
             ]
             .map(|v| libm::floor(v / unit) as i32);
-            let answer = self.world.footing(cell, g);
+            let (answer, _) = self.world.footing(cell, g);
             if let Some(l) = answer.lack() {
                 self.lack.get_or_insert(l);
             }

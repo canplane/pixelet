@@ -6,7 +6,7 @@
 //! is read and whichever layer holds what it stands on. It reads no tile:
 //! where it stands is its column's footing, the world's ray down it
 //! (`World::footing`), and which way it faces and whether it grows the
-//! world's blocks about it (pxl-spec-core `scatter::stand`, `grows`).
+//! world's blocks about it (pxl-spec-core `scatter::grown`).
 
 use pxl_spec::asset::cube::sentinel;
 use pxl_spec::asset::decor::Decor;
@@ -14,8 +14,11 @@ use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec_core::scatter::{self as core_scatter, Grounds, Grown};
-use pxl_spec_core::{overwrite, FRAC_W};
+use pxl_spec_core::support::Footing;
+use pxl_spec_core::world::Placed;
+use pxl_spec_core::FRAC_W;
 
+use super::node::At;
 use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
@@ -36,45 +39,54 @@ impl<'a, 'w> Asked<'a, 'w> {
     }
 }
 
-impl overwrite::Lanes for Asked<'_, '_> {
-    fn heap(&self, slot: u32) -> u32 {
-        self.lanes.heap(slot)
-    }
-    fn data(&self, slot: u32) -> u32 {
-        self.lanes.data(slot)
-    }
-}
-
+/// The world's one query on the CPU, each ask answered with what its tiles
+/// lacked: a column's footing with its line (`World::footing`), each block
+/// about it asked off that line (`World::block_about`).
 impl Grounds for Asked<'_, '_> {
+    type Footing = Footing<At>;
+
     fn rows(&self) -> &[pxl_spec_core::decor::Decor] {
         &pxl_spec_core::decor::DECORS
     }
 
     /// None where the world lacked a tile on the way: decor grows on what
     /// is held as its tiles say.
-    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {
-        match self.world.footing(cell, g) {
-            crate::domain::layer::Answer::Exact(Some(top)) => (top, true),
-            _ => ((0, 0.0), false),
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Footing<At>, (i32, f32), bool) {
+        let (answer, f) = self.world.footing(cell, g);
+        match answer {
+            crate::domain::layer::Answer::Exact(Some(top)) => (f, top, true),
+            _ => (f, (0, 0.0), false),
         }
     }
 
-    /// Void where the world holds nothing there (`World::block`).
-    fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32 {
+    /// Void where the world holds nothing there.
+    fn block(&mut self, f: &Footing<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
         self.world
-            .block((zoom, c))
+            .block_about(&f.line, zoom, c)
             .value()
             .unwrap_or(u32::from(sentinel::void))
     }
+
+    fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {
+        p.next(&self.lanes)
+    }
 }
 
-/// What the ground stands of `decor` in the leaf `cell` on `face`, the
-/// leaf's ground read about it (`World::grown_in`): the leaf scatter, cell
-/// by cell, which a region grows the same (pxl-spec procedural.test.rs).
-pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i32; 2]) -> Option<Instance> {
+/// What the ground stands of `decor` in the leaf `cell`, the leaf's ground
+/// read about it (`World::grown_in`): the leaf scatter, cell by cell, which
+/// a region grows the same (pxl-spec procedural.test.rs); and, where
+/// `boxed`, whether it grows there, its box asked about the same footing
+/// (pxl-spec-core `scatter::grown`), true where not.
+pub(super) fn grown_at(
+    asked: &mut Asked,
+    decor: &Decor,
+    cell: [i32; 2],
+    boxed: bool,
+) -> Option<(Instance, bool)> {
     let candidate = scatter_at(decor.row, cell)?;
-    let (g, here) = core_scatter::stand(asked, decor.row, GROUND.cell(), &candidate);
-    here.then(|| instance(decor, &g))
+    let (g, stood, grows) =
+        core_scatter::grown(asked, decor.row, GROUND.cell(), &candidate, boxed);
+    stood.then(|| (instance(decor, &g), grows))
 }
 
 /// Decor standing as `g`, as an instance: its box's min corner a leaf
@@ -89,17 +101,4 @@ pub fn instance(decor: &Decor, g: &Grown) -> Instance {
         source: Source::Ground([x, y, z]),
         meta,
     }
-}
-
-/// An instance the ground grows as pxl-spec-core's evaluation takes it back.
-pub fn grown_of(i: &Instance) -> Option<Grown> {
-    let Source::Ground([x, y, z]) = i.source else {
-        return None;
-    };
-    Some(Grown {
-        variant: i.meta.variant,
-        turn: i.meta.turn,
-        at: [x, y, z],
-        sink: libm::rint((f64::from(z) - i.at[2]) * f64::from(1u32 << FRAC_W)) as u32,
-    })
 }

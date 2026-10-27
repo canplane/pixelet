@@ -37,7 +37,8 @@
 //! in between.
 
 use crate::answer::Kind;
-use crate::overwrite::cut_box;
+use crate::overwrite::{cut_box, BOXES};
+use crate::tally;
 use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::world::AT_WORDS;
 use crate::{wrap_index, Zoom, LEAF_CELL};
@@ -59,16 +60,21 @@ pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
 pub const MOVED_WORDS: u32 = (EYE_WINDOWS * SLOTS).div_ceil(32);
 pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
-pub const BOXES: u32 = crate::overwrite::BOXES;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN: u32 = 32;
 /// Whether the walks count what they ask, where the `ray_counts` setting
-/// asks, and the `TALLY_WORDS` they count into, which the tally lays out
-/// (pxl-spec-core `tally::walk_at`).
+/// asks, and the words they count into, each observer's walks' lanes
+/// (`tally_at`).
 pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN;
 pub const TALLY_AT: u32 = TALLY_ON + 1;
-pub const TALLY_WORDS: u32 = 6;
+pub const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
 pub const HEAD_WORDS: u32 = TALLY_AT + TALLY_WORDS;
+
+/// Where `observer`'s walks count lane `lane` (pxl-spec-core `tally::BEAM`
+/// to `tally::MISS`) in the head.
+pub const fn tally_at(observer: u32, lane: u32) -> u32 {
+    TALLY_AT + observer * tally::WALKS + lane
+}
 
 /// What a frame forgets: nothing; everything, where what every node is
 /// asked of moved (the service area) or the keys' frames ran out; the nodes

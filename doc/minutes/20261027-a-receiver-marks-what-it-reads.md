@@ -34,8 +34,9 @@ read. It is a decision record, not a rule each change is held to.
 - **Cast only what a receiver reads.** A receiver marks the tile of the box
   it stands on (`sun::stands_at`): the world where each drawn pixel's ray met
   it (`sun_mark_cs`); decor where each instance placed stands, as decor tells
-  (decor.rs `Placed`), and the actors where the scene says each does
-  (`Cast::actors`), each the eye sees (`sun_mark_drawn_cs`, `eye::sees`,
+  (decor.rs `Instances`), and the actors where each is drawn (pxl-kernel
+  actor.rs `Actor::draw`, pxl-render frame/draw.rs `Lists::stands`), each
+  the eye sees (`sun_mark_drawn_cs`, `eye::sees`,
   `Sun::ring`). One reach, a tile a thread, reads a tile in the disk a shadow
   fades out by (`Sun::rim`, `Sun::read`) within a tile and its taps of the
   way up the tallest decor from one stood on (`sun_reach_cs`, `Sun::up`,

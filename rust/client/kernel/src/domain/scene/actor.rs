@@ -206,7 +206,9 @@ impl Actor {
         moves
     }
 
-    /// Into the frame's list, standing at `stance`.
+    /// Into the frame's list, standing at `stance`, and where it stands with
+    /// it (`DrawList::stand`): every actor drawn is a receiver of the sun's
+    /// map, which reads the ones the eye sees.
     pub fn draw(&self, draw: &mut DrawList, models: &Models, stance: &Stance, eye: V3) {
         let Some(m) = models.get(self.model) else {
             return;
@@ -225,5 +227,6 @@ impl Actor {
             1.0,
             stance.scale,
         );
+        draw.stand(t);
     }
 }

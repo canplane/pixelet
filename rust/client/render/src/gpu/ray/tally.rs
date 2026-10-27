@@ -123,7 +123,7 @@ impl Tally {
             for (buffer, word, lane, words) in [
                 (
                     from.seen,
-                    tally::walk_at(o, tally::BEAM),
+                    observed::tally_at(o, tally::BEAM),
                     tally::BEAM,
                     tally::WALKS,
                 ),

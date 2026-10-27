@@ -158,8 +158,8 @@ threads ran in, so the image is a function of the world and the eye (20261012,
 _As built, pxl-shader runs `beam_cs`, `cells_cs`, `sample_cs` and `cast_cs`, and
 `miss_cs` after `cast_cs` for the pixels the observed pyramid could not finish._
 
-- **pxl-spec-core `cast`:** a beam stop rule beside `Until::Fills` and
-  `Until::Air`; a walk that starts from a line's node at a distance, its stack
+- **pxl-spec-core `cast`:** a beam stop rule beside `Until::Opaque` and
+  `Until::Transparent`; a walk that starts from a line's node at a distance, its stack
   read from the line, which every eye's ray takes and a walk from the root is
   the case of.
 - **pxl-shader:** a pass a corner for the beam rays, a pass a cell for the

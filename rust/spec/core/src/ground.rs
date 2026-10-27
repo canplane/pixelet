@@ -17,14 +17,13 @@
 
 use crate::answer::{
     bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
-    BOX_WHOLE,
+    BOX_WHOLE, FULL,
 };
 use crate::area::{earth, walled, Area, Shard};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
-use crate::overwrite::FULL;
 use crate::window::Found;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
@@ -233,7 +232,7 @@ pub fn blocks(cell: Zoom, h: f32) -> i32 {
 }
 
 /// A height in leaf cells as blocks of `cell`, and the share of the top one
-/// it fills, in `overwrite::FULL`'s units: shifted past the leaves, every
+/// it fills, in `answer::FULL`'s units: shifted past the leaves, every
 /// block whole; under them, the mean in blocks, its top the block it ends
 /// in where it fills an eighth of it or more (`answer::eighths`), the share
 /// of it filled kept there, else the block under it, whole. So a coarse
@@ -571,7 +570,7 @@ impl Cell {
         fold: [VOID; 4],
     };
 
-    /// The share of block `z` its ground fills, in `overwrite::FULL`'s
+    /// The share of block `z` its ground fills, in `answer::FULL`'s
     /// units, where a block of it fills there (`block`): whole under its
     /// top block, its part there (`top`).
     pub fn cover(&self, z: i32) -> u32 {

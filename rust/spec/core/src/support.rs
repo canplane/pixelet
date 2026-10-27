@@ -2,35 +2,48 @@
 
 //! gpu-portable: where something stands, asked of the world's one query
 //! (pxl-kernel domain/query/support.rs, a walker's support): a column's
-//! footing, the first block that fills down it from the world's top at a
-//! cell zoom, its top as drawn (`footing`); and a block about it, asked from
-//! the deepest node of the footing's line holding it and stepped down by
-//! what each parent hands its child, never again from the top (`block`;
-//! ARCHITECTURE.md "The query, the only seam", its cursor). The CPU's and a
-//! GPU's alike, each over its own reading of the world (`cast::Query`).
+//! footing, the first block a ray down it from the world's top cannot see
+//! through at a cell zoom, its top as drawn (`footing`); and the query's
+//! cursor (ARCHITECTURE.md "The query, the only seam"): a descent's line
+//! (`Line`), a footing's or one straight down to a node (`line`), and a
+//! block about it asked from the deepest node of that line holding it and
+//! stepped down by what each parent hands its child, never again from the
+//! top (`block`). The CPU's and a GPU's alike, each over its own reading of
+//! the world (`cast::Query`).
 
 use crate::cast::{self, Detail, Ends, Keep, Node, Query, Ray, Until, DEPTH};
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
-/// A column's footing: its top as drawn at its cell zoom (`cast::top`),
-/// how the ray down ended — met (`Ends::Stop`), nothing filling (`On`) or a
-/// node not held (`Lacks`) — and the line it descended: the node it ended
-/// at, what was handed it, and what was handed each node over it, by zoom.
+/// A descent's line: the node it ended at, by its index at its zoom, what
+/// was handed it, and what was handed each node over it, by zoom.
 #[derive(Clone, Copy)]
-pub struct Footing<A> {
-    pub top: (i32, f32),
-    pub ends: Ends,
-    origin: [i32; 3],
-    node: Node,
+pub struct Line<A> {
+    at: [i32; 3],
+    zoom: Zoom,
     live: A,
     stack: [A; DEPTH],
 }
 
+/// A column's footing: its top as drawn at its cell zoom (`cast::top`),
+/// how the ray down ended — met (`Ends::Stop`), nothing it cannot see
+/// through (`On`) or a node not held (`Lacks`) — and the line it
+/// descended.
+#[derive(Clone, Copy)]
+pub struct Footing<A> {
+    pub top: (i32, f32),
+    pub ends: Ends,
+    pub line: Line<A>,
+    origin: [i32; 3],
+}
+
 impl<A: Copy> Keep<A> for Footing<A> {
     fn keep(&mut self, node: &Node, live: A, stack: &[A; DEPTH]) {
-        self.node = *node;
-        self.live = live;
-        self.stack = *stack;
+        self.line = Line {
+            at: node.index(self.origin),
+            zoom: node.zoom,
+            live,
+            stack: *stack,
+        };
     }
 }
 
@@ -40,14 +53,18 @@ impl<A: Copy> Keep<A> for Footing<A> {
 /// it; its line kept for the blocks asked about it (`block`).
 pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
     let (o, ray, detail) = down(cell, g);
-    let root = q.root(Node::ROOT.index(o));
+    let at = Node::ROOT.index(o);
+    let root = q.root(at);
     let mut f = Footing {
         top: (0, 0.0),
         ends: Ends::On,
+        line: Line {
+            at,
+            zoom: 0,
+            live: root,
+            stack: [root; DEPTH],
+        },
         origin: o,
-        node: Node::ROOT,
-        live: root,
-        stack: [root; DEPTH],
     };
     let met = cast::rooted(q, o, &ray, detail, Until::Opaque, &mut f);
     f.ends = met.ends;
@@ -88,13 +105,33 @@ fn same(a: [i32; 3], b: [i32; 3]) -> bool {
     a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
 }
 
-/// What is in the block `c` of `zoom` about the footing `f`, as the world's
+/// The line straight down to node `c` of `zoom` from its root, each node
+/// handed down by its parent: where a reader of the blocks about a node
+/// asks them from (`block`).
+pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
+    let mut at = q.root(over(c, zoom, 0));
+    let mut stack = [at; DEPTH];
+    let mut z = 0;
+    while z < zoom {
+        stack[z as usize] = at;
+        z += 1;
+        at = q.child(&at, z, over(c, zoom, z));
+    }
+    Line {
+        at: c,
+        zoom,
+        live: at,
+        stack,
+    }
+}
+
+/// What is in the block `c` of `zoom` about the line `l`, as the world's
 /// one query answers it at that zoom (`Query::node`'s first word): asked
-/// from the deepest node of `f`'s line holding it, each node under that
+/// from the deepest node of the line holding it, each node under that
 /// handed down by its parent (`Query::child`), and from its own root where
 /// no node of the line holds it.
-pub fn block<Q: Query>(q: &mut Q, f: &Footing<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-    let (line, lz) = (f.node.index(f.origin), f.node.zoom);
+pub fn block<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+    let (line, lz) = (l.at, l.zoom);
     let mut z = if zoom < lz { zoom } else { lz };
     while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
         z -= 1;
@@ -102,9 +139,9 @@ pub fn block<Q: Query>(q: &mut Q, f: &Footing<Q::At>, zoom: Zoom, c: [i32; 3]) -
     let mut at = if !same(over(line, lz, z), over(c, zoom, z)) {
         q.root(over(c, zoom, 0))
     } else if z == lz {
-        f.live
+        l.live
     } else {
-        f.stack[z as usize]
+        l.stack[z as usize]
     };
     while z < zoom {
         z += 1;
@@ -189,11 +226,28 @@ mod tests {
                 for z in -2..4 {
                     let want = if z < height(x) { STONE[0] } else { AIR[0] };
                     let c = [x, y, z];
-                    assert_eq!(block(&mut Step, &f, UNIT_ZOOM, c), want, "{c:?}");
+                    assert_eq!(block(&mut Step, &f.line, UNIT_ZOOM, c), want, "{c:?}");
                 }
             }
         }
         let far = [(3 << UNIT_ZOOM) + 6, 3, -1];
-        assert_eq!(block(&mut Step, &f, UNIT_ZOOM, far), STONE[0]);
+        assert_eq!(block(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
+    }
+
+    /// A line straight down to a node holds the blocks about it as the
+    /// world does, its own among them.
+    #[test]
+    fn a_block_asked_off_a_line_to_a_node_is_the_world_s() {
+        let at = [3, 2, 1];
+        let l = line(&mut Step, UNIT_ZOOM, at);
+        for x in 1..6 {
+            for y in 0..5 {
+                for z in -1..4 {
+                    let want = if z < height(x) { STONE[0] } else { AIR[0] };
+                    let c = [x, y, z];
+                    assert_eq!(block(&mut Step, &l, UNIT_ZOOM, c), want, "{c:?}");
+                }
+            }
+        }
     }
 }

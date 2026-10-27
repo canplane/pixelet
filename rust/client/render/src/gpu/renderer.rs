@@ -200,10 +200,9 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
-    /// Where each actor drawn in the world stands, units from the eye, as
-    /// its draw's translation (pxl-kernel domain/scene/character/companion.rs
-    /// `companion_stands`): receivers of the sun's map as decor is
-    /// (pxl-spec-core `sun::ACTORS_AT`).
+    /// Where each actor drawn stands, units from the eye, as its draw is
+    /// placed (frame/draw.rs `Lists::stands`): receivers of the sun's map as
+    /// decor is (pxl-spec-core `sun::ACTORS_AT`).
     pub actors: &'a [[f32; 3]],
     /// Whether what the eye's cast and the sun's walked and took is counted
     /// (gpu/ray/tally.rs).

@@ -59,7 +59,7 @@ pub const SHADER_GROWN_PLACE: u32 = 32;
 /// compute entry.
 pub const SHADER_WAYS: u32 = 33;
 /// Which eye slots' decor grows again this frame, listed for
-/// `SHADER_GROWN`'s dispatch: its one compute entry.
+/// `SHADER_GROWN_STAND`'s and `SHADER_GROWN`'s dispatches: its one compute entry.
 pub const SHADER_GROWN_MARK: u32 = 34;
 /// The eye's windows folded over their squares, generated with the cast
 /// from pxl-spec-core's `window::fold`: its one compute entry.
@@ -123,11 +123,14 @@ pub const SHADER_SUN_BOXES: u32 = 57;
 /// The tiles of the sun's box its receivers stand on in a cast
 /// (pxl-spec-core `sun::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
-/// (`sun::marks_at`): compute entries.
+/// (`sun::reads_at`): compute entries.
 pub const SHADER_SUN_MARK: u32 = 58;
 pub const SHADER_SUN_MARK_DRAWN: u32 = 59;
 pub const SHADER_SUN_REACH: u32 = 60;
-pub const SHADERS: u32 = 61;
+/// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
+/// time, for `SHADER_GROWN` to grow: its one compute entry.
+pub const SHADER_GROWN_STAND: u32 = 61;
+pub const SHADERS: u32 = 62;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -353,4 +356,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["sun_mark_drawn.gen"],
     // SHADER_SUN_REACH
     &["sun_reach.gen"],
+    // SHADER_GROWN_STAND
+    &["decor_stand.gen"],
 ];
