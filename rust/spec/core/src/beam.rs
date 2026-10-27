@@ -228,11 +228,6 @@ impl Grid {
         ]
     }
 
-    /// Corner `[i, j]`'s index among the corners.
-    pub fn corner_index(&self, [i, j]: [u32; 2]) -> u32 {
-        j * self.corners[0] + i
-    }
-
     /// The first word of corner `c`'s line, by its index.
     pub fn line(c: u32) -> u32 {
         c * LINE_WORDS
@@ -280,8 +275,9 @@ pub const LINE_WORDS: u32 = LINE_AT + LINE_STEP * crate::cast::DEPTH as u32;
 
 /// What a cell hands its pixels, in words: where they start, f32 bits, and
 /// the corner whose line they resume from, as an index into the corners
-/// (`Grid::corner_index`). A screen's cell each, in the beam rays' buffer
-/// past the lines (`Grid::cell_at`), one binding for both.
+/// row by row (pxl-shader observer.rs `index`). A screen's cell each, in
+/// the beam rays' buffer past the lines (`Grid::cell_at`), one binding for
+/// both.
 pub const CELL_T: u32 = 0;
 pub const CELL_CORNER: u32 = 1;
 pub const CELL_WORDS: u32 = 2;

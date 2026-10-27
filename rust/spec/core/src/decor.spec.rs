@@ -13,7 +13,6 @@
 /// side at the zoom its candidates are born at, a zoom keeping one in `kept`
 /// of the next finer's.
 pub const PATCH: u32 = 16;
-pub const KEPT: u32 = 4;
 
 /// The most variants a decor has.
 pub const VARIANTS: usize = 9;
