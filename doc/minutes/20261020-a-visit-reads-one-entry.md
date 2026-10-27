@@ -97,8 +97,8 @@ past the zoom it asks. So a looser bound can only add visits, and only above
 that zoom. The block it stops on is the same.
 
 **Filled where the sources land.** The table is composed in the passes that
-already run when a square arrives on the GPU (`heights_cs`, `bound_cs`,
-`ways_cs`, `joined_cs`), and where something placed changes. The image is then a
+already run when a square arrives on the GPU (`height_cs`, `bound_cs`,
+`way_cs`, `joined_cs`), and where something placed changes. The image is then a
 function of the world and the eye alone.
 
 ## Alternatives weighed

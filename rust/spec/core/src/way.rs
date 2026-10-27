@@ -1,4 +1,4 @@
-// pxl-spec-core/ways.rs
+// pxl-spec-core/way.rs
 
 //! gpu-portable: the ways off the ground, as a block asks them — a bridge's
 //! deck and its piers, a tunnel's bore and the way's block about it, an
@@ -773,7 +773,7 @@ fn at(k: &impl Kept, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
 /// it, the cell before it, the block under it, the block over it, the cell
 /// after it, the row over it — the order of the grid's cells. No index into
 /// an array: a bounds check's panic is a return no barrier after it may
-/// follow (pxl-shader `ways_tree_cs`, whose leaves read it).
+/// follow (pxl-shader `way_tree_cs`, whose leaves read it).
 fn near(k: u32) -> [i32; 3] {
     // Its axis, y, x then z, and its side.
     let (i, s) = if k < 4 { (k.wrapping_sub(1), -1) } else { (6 - k, 1) };

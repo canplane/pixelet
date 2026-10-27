@@ -2,13 +2,13 @@
 
 //! The camera grid's beam rays (pxl-spec-core `beam`): each corner's walk
 //! and line (`beam_cs`), where each cell's pixels start off them
-//! (`cells_cs`), and the samples walked from those starts (`sample_cs`),
+//! (`cell_cs`), and the samples walked from those starts (`sample_cs`),
 //! each the eye's call of its pass (observer.rs); and the words a line, a
 //! node and a sample are held in, every observer's.
 
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
 use pxl_spec_core::world::At;
-use pxl_spec_core::{beam, observed, ways};
+use pxl_spec_core::{beam, observed, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
@@ -142,7 +142,7 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
 /// block it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
 /// whether what it stopped at lacks, and the axis it entered across; what
 /// lies about that face is the eye's box's, asked once a box (raster.rs
-/// `faces_cs`).
+/// `face_cs`).
 pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A>) {
     let stop = &met.stop;
     node_put(w, base + beam::SAMPLE_NODE, &stop.node);
@@ -217,7 +217,7 @@ pub fn beam_cs(
         shards,
         overwrites,
         eye,
-        pool: ways::tree::Read(pool),
+        pool: way::tree::Read(pool),
     };
     observer::beam(eye, world, seen, beams, [id.x, id.y]);
 }
@@ -250,8 +250,8 @@ impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
 /// Where each cell's pixels start (pxl-spec-core `beam::CELL_WORDS`), a
 /// thread a cell of the screen (`beam::Grid::span`), the eye's (observer.rs
 /// `cell`), past the lines in the beam rays' buffer (`Grid::cell_at`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "cells_cs"))]
-pub fn cells_cs(
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "cell_cs"))]
+pub fn cell_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
@@ -269,7 +269,7 @@ pub fn cells_cs(
 /// `beam::SAMPLE_NONE` where it went on to its reach, and whether what it
 /// stopped at lacks. What lies about the face it entered is asked only of a
 /// sample that draws a box, the one whose words a pixel reads (raster.rs
-/// `faces_cs`).
+/// `face_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sample_cs(
@@ -296,7 +296,7 @@ pub fn sample_cs(
         shards,
         overwrites,
         eye,
-        pool: ways::tree::Read(pool),
+        pool: way::tree::Read(pool),
     };
     observer::sample(eye, world, seen, beams, [id.x, id.y]);
 }

@@ -6467,7 +6467,7 @@ fn function_() {
 }
 
 @compute @workgroup_size(64, 1, 1)
-fn faces_cs(@builtin(global_invocation_id) param: vec3<u32>) {
+fn face_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_();
 }

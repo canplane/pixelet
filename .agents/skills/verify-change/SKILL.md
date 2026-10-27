@@ -28,6 +28,10 @@ it. How cargo runs is the cargo skill's ([cargo](../cargo/SKILL.md)).
 - **Logic a test covers:** that test file alone (`cargo test -p <crate>
   <module>`, `deno test -A <file>.test.ts`), once the change is ready to run,
   not after every edit.
+- **A change that must leave the ground's fill as it was** (pxl-spec-core
+  fill, way, window, ground): `fill_digest`'s lines over out/terrain from
+  an export of the commit before and of the change, then `--diff` them
+  (pxl-geo-bake bin/fill_digest.rs); each side is kept once for the machine.
 
 No lint, no format, no `make check` or `make test`, no `deno task check` or
 `test`, no `check-diff.py` by reflex: they hold the code's look and the whole

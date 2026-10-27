@@ -16,7 +16,7 @@ import {
 import { useDockStore, useInHand } from "@/shell/store/dock.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { Panel } from "@/shell/ui/panel.tsx";
-import { PanelTabs } from "@/shell/ui/panel-tabs.tsx";
+import { Tabbed } from "@/shell/ui/tabbed.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { chrome, color } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
@@ -160,7 +160,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   return (
     <Panel label={t("drawer.title")} onClose={onClose} half>
       <NameTipLayer>
-        <PanelTabs
+        <Tabbed
           onClose={onClose}
           tabs={[
             { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
@@ -225,7 +225,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
               {tab === DrawerTab.Character && <CharacterPicker />}
             </>
           )}
-        </PanelTabs>
+        </Tabbed>
       </NameTipLayer>
     </Panel>
   );

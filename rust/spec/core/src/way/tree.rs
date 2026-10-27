@@ -1,4 +1,4 @@
-// pxl-spec-core/ways/tree.rs
+// pxl-spec-core/way/tree.rs
 
 //! gpu-portable: a square's ways as blocks, in a tree of the placed tree's
 //! shape (pxl-spec-core overwrite.rs), so a reader asks them by the one
@@ -7,7 +7,7 @@
 //! square's own nodes along z down to its cells, a node's eight slots a
 //! family, children only where they differ, each branch its eight folded
 //! (`overwrite::fold`), its leaves what the ways write at its cells
-//! (`ways::lined`, read off the square's spans). A reader asks a square's
+//! (`way::lined`, read off the square's spans). A reader asks a square's
 //! ways only of a node the square's or under it, a wider one the windows'
 //! bound over its squares (`window::bound_over`), so the tree holds nothing
 //! over the square. Its families are taken from one pool every square's
@@ -16,7 +16,7 @@
 //! reader steps down as the placed tree's does (`cursor`).
 //!
 //! Built a level at a time, one square to a workgroup (pxl-shader
-//! `ways_tree_cs`), top-down then back up:
+//! `way_tree_cs`), top-down then back up:
 //!
 //! - the square's nodes along z its ways' bound meets are the first
 //!   level's candidates, a slot each of its root family (`span`, `root`);
@@ -168,7 +168,7 @@ pub const NONE: u32 = u32::MAX;
 
 /// A handed square's scratch past its spans (`window::TREE_AT`), a frame's,
 /// for a tree of `families` at most: the families its build gave back, their
-/// count first, for the pushes after it (pxl-shader `ways_freed_cs`); then
+/// count first, for the pushes after it (pxl-shader `way_freed_cs`); then
 /// the families its tree holds from `records_at`, their count first, a
 /// record each, its family's id and its eight heap and eight data words,
 /// which the read-back carries to the CPU's mirror. A build takes no more
@@ -283,7 +283,7 @@ pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
 /// Whether a level's `flagged` families take a square that has taken `taken`
 /// past its most, `SQUARE_FAMILIES`: refused whatever the pool holds, so its
 /// build keeps `NONE` for its records' count rather than `STARVED`, which
-/// the pool's growth answers (pxl-shader `ways_tree_cs`).
+/// the pool's growth answers (pxl-shader `way_tree_cs`).
 pub fn past(taken: u32, flagged: u32) -> bool {
     flagged > SQUARE_FAMILIES - taken
 }
@@ -292,7 +292,7 @@ pub fn past(taken: u32, flagged: u32) -> bool {
 /// past the `families` its scratch holds (`scratch_families`), whose freed
 /// families and records each have room for so many: not taken, its build
 /// keeping `CRAMPED` for its records' count, which the scratch's growth
-/// answers (pxl-shader `ways_tree_cs`). Asked after `past`, so it marks
+/// answers (pxl-shader `way_tree_cs`). Asked after `past`, so it marks
 /// only what a larger scratch holds.
 pub fn cramped(families: u32, taken: u32, flagged: u32) -> bool {
     taken + flagged > families
@@ -323,10 +323,10 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 }
 
 /// The candidate at `slot`, a cell of the square: a leaf of what the ways
-/// write there (`ways::lined`, off the spans its fill kept), nothing where
+/// write there (`way::lined`, off the spans its fill kept), nothing where
 /// they write none. A bore's air is placed air in the tree, filling what it
 /// holds (`overwrite::voxel`), and the ground's void where a reader reads
-/// it, as the ways write it (`ways::AIR`).
+/// it, as the ways write it (`way::AIR`).
 pub fn leaf(pool: &mut impl Pool, kept: &impl super::Kept, cell: Zoom, slot: u32) {
     let at = unpack(pool.data(slot));
     let value = super::lined(kept, [at[0], at[1]], cell, at[2]);
@@ -431,7 +431,7 @@ pub fn lay(pool: &mut impl Pool, records: &[u32]) {
 }
 
 /// How a reader reads a leaf's value: the ground's void for a bore's air,
-/// as the ways write it (`ways::AIR`), else itself; `ground::VOID` where
+/// as the ways write it (`way::AIR`), else itself; `ground::VOID` where
 /// the tree holds nothing.
 pub fn read(value: u32) -> u32 {
     if value == PLACED_AIR {

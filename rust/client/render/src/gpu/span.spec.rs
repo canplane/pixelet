@@ -29,7 +29,7 @@ pub enum GpuSpanName {
     fill = 7,
     cast = 8,
     beam = 9,
-    cells = 10,
+    cell = 10,
     sample = 11,
     sraster = 12,
     pixel = 13,
@@ -41,7 +41,7 @@ pub enum GpuSpanName {
     sun_walk = 19,
     grow = 20,
     shadow = 21,
-    faces = 22,
+    face = 22,
 }
 
 impl GpuSpanName {
@@ -57,7 +57,7 @@ impl GpuSpanName {
         GpuSpanName::fill,
         GpuSpanName::cast,
         GpuSpanName::beam,
-        GpuSpanName::cells,
+        GpuSpanName::cell,
         GpuSpanName::sample,
         GpuSpanName::sraster,
         GpuSpanName::pixel,
@@ -69,7 +69,7 @@ impl GpuSpanName {
         GpuSpanName::sun_walk,
         GpuSpanName::grow,
         GpuSpanName::shadow,
-        GpuSpanName::faces,
+        GpuSpanName::face,
     ];
 
     /// The member a number names, or none for a number the set does not

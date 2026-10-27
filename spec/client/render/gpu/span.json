@@ -15,7 +15,7 @@
     "fill",
     "cast",
     "beam",
-    "cells",
+    "cell",
     "sample",
     "sraster",
     "pixel",
@@ -27,7 +27,7 @@
     "sun_walk",
     "grow",
     "shadow",
-    "faces"
+    "face"
   ],
   "FRAME_KINDS": [
     "none",

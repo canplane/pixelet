@@ -7,8 +7,8 @@
 //! samples and its cell as laid (`heights`), its ways' spans off its lines,
 //! each column's once, into its scratch, the frame's (`spans`,
 //! `window::SPANS_AT`), and off them its levels, level 0 each column's own
-//! (`level`), and its ways' tree (`ways::tree`). A GPU runs each pass a
-//! thread a column or entry (pxl-shader `heights_cs`, `ways_cs`,
+//! (`level`), and its ways' tree (`way::tree`). A GPU runs each pass a
+//! thread a column or entry (pxl-shader `height_cs`, `way_cs`,
 //! `bound_cs`); a bake runs its columns' passes in order over one square
 //! (`square`), so the spans it sizes a tile's room by are the ones a GPU
 //! keeps.
@@ -20,7 +20,7 @@ use crate::window::{
     LOOKS_AT, ROOT_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMNS, SPANS_COLUMN_WORDS, SQUARE,
     SQUARE_CELLS, SQUARE_WORDS,
 };
-use crate::{at, ground, ways, Zoom};
+use crate::{at, ground, way, Zoom};
 
 /// Word `i` of `s` set to `v`, as `at` reads: totally, none past it, so no
 /// store aborts.
@@ -80,11 +80,11 @@ pub fn cell_of(fresh: &[u32], k: u32) -> Zoom {
 }
 
 /// The square at `base`'s own nodes along z its ways meet, its cells at
-/// `cell`, off its levels' whole bound (`ways::tree::span`): what its ways'
+/// `cell`, off its levels' whole bound (`way::tree::span`): what its ways'
 /// tree's root holds, the first one's Z and how many.
 pub fn root_span(ground: &[u32], base: u32, cell: Zoom) -> (i32, u32) {
     let ways = ground::bounds_of(level_of(ground, base, window::LEVELS, [0, 0]))[1];
-    ways::tree::span(ways, cell)
+    way::tree::span(ways, cell)
 }
 
 /// A square being filled, on its own: what `level` folds.
@@ -142,7 +142,7 @@ impl Scratch<'_> {
     }
 }
 
-impl ways::Kept for Scratch<'_> {
+impl way::Kept for Scratch<'_> {
     fn head(&self, c: [i32; 2]) -> (i32, u32) {
         let w = at(self.words, self.column(c));
         let face = w as i32 >> 16;
@@ -170,7 +170,7 @@ const SPANS_COUNT: u32 = 0x7fff;
 const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
-fn head_word(s: &ways::Spans, fits: bool) -> u32 {
+fn head_word(s: &way::Spans, fits: bool) -> u32 {
     let face = if s.face == i32::MIN {
         i16::MIN as i32
     } else {
@@ -181,7 +181,7 @@ fn head_word(s: &ways::Spans, fits: bool) -> u32 {
 
 /// Where the square a frame hands `k`-th has its scratch in the frame's
 /// `scratch`, `window::HANDED` squares' alike, each a `HANDED`th of its
-/// length (`ways::tree::scratch_words`), which the renderer grows
+/// length (`way::tree::scratch_words`), which the renderer grows
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`): taken from
 /// the buffer, as the pool's free stack takes its own (pxl-shader `pop`).
 /// A one square's scratch is the first's.
@@ -331,9 +331,9 @@ pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32)
 
 /// Column `i` of square `sq` and its ring, row by row from the ring's
 /// first (`window::SPANS_COLUMNS`), its spans off its lines and its face
-/// (`ways::column`) into the scratch from `mine` (`window::SPANS_AT`); a
+/// (`way::column`) into the scratch from `mine` (`window::SPANS_AT`); a
 /// corner of the ring, beside no column of the square, none. The most
-/// spans it makes, `u32::MAX` where they do not fit `ways::SPANS`.
+/// spans it makes, `u32::MAX` where they do not fit `way::SPANS`.
 pub fn keep(sq: &impl window::Square, scratch: &mut [u32], mine: u32, i: u32) -> u32 {
     if i >= SPANS_COLUMNS {
         return 0;
@@ -344,9 +344,9 @@ pub fn keep(sq: &impl window::Square, scratch: &mut [u32], mine: u32, i: u32) ->
     ];
     let edge = |v: i32| v == -1 || v == SQUARE as i32;
     let (s, fits) = if edge(c[0]) && edge(c[1]) {
-        (ways::Spans::NONE, true)
+        (way::Spans::NONE, true)
     } else {
-        ways::column(sq, c)
+        way::column(sq, c)
     };
     let at = mine + SPANS_AT + i * SPANS_COLUMN_WORDS;
     put(scratch, at, head_word(&s, fits));
@@ -368,25 +368,25 @@ pub fn keep(sq: &impl window::Square, scratch: &mut [u32], mine: u32, i: u32) ->
 
 /// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
-/// the ways write in it off the spans its fill kept (`ways::bound`;
+/// the ways write in it off the spans its fill kept (`way::bound`;
 /// `ground::Bounds`); a higher one over the level under it, written before
 /// (`window::join`). A bore's air counts as far as the column's top, as the
 /// ways write it: the blocks of the square's ways tree under it lie in the
-/// bound (`ways::tree`), and a node it splits more holds only air or void
+/// bound (`way::tree`), and a node it splits more holds only air or void
 /// there. Over the top it is air whatever writes it; a bound reaching up
 /// there, past a tunnel's mouth where the ground falls away under its
 /// clear height, split every node over it.
 pub fn level(
     ground: &mut [u32],
     base: u32,
-    kept: &impl ways::Kept,
+    kept: &impl way::Kept,
     cell: Zoom,
     j: u32,
     at: [u32; 2],
 ) {
     let w = if j == 0 {
         let top = column_top(column_of(ground, base, window::index_of(at)));
-        let lines = ways::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
+        let lines = way::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
@@ -409,11 +409,11 @@ pub fn level(
 /// A square filled whole, its passes in a GPU's order (pxl-render
 /// gpu/ray/ground.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
 /// its looks, samples and lines as handed, its words laid here; `lane` its
-/// words, and `scratch` its scratch (`ways::tree::SCRATCH_WORDS`); its cells
+/// words, and `scratch` its scratch (`way::tree::SCRATCH_WORDS`); its cells
 /// at `cell`, lying at `place` in its tile, its first cell `first`; its
 /// columns, its spans and levels; inside the area, so no wall cuts its ways
 /// and the spans are the most a client's fill keeps. The most spans a
-/// column makes (`u32::MAX` past `ways::SPANS`); its ways' tree is built
+/// column makes (`u32::MAX` past `way::SPANS`); its ways' tree is built
 /// off them after (`tree`).
 pub fn square(
     fresh: &mut [u32],
@@ -456,15 +456,15 @@ pub fn square(
 /// The square filled into `lane` and its spans into `scratch` (`square`),
 /// its cells at `cell`, its ways' tree built into `pool`, its heap words
 /// then its data words, a level at a time as a GPU's workgroup builds it
-/// (pxl-shader `ways_tree_cs`, `ways::tree`), from the square's own nodes
+/// (pxl-shader `way_tree_cs`, `way::tree`), from the square's own nodes
 /// along z down, its families taken in order from family `from`, its
 /// root's, family 0 being none's: the families it took, those it holds once
-/// folded, and its root word (`ways::tree::root_word`), none taken and 0
+/// folded, and its root word (`way::tree::root_word`), none taken and 0
 /// where it has no ways; `u32::MAX` all three where `pool` has too few, it
-/// takes more than `ways::tree::SQUARE_FAMILIES`, or its ways span more
-/// than `ways::tree::ROOT_NODES` of its nodes along z.
+/// takes more than `way::tree::SQUARE_FAMILIES`, or its ways span more
+/// than `way::tree::ROOT_NODES` of its nodes along z.
 pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u32) -> [u32; 3] {
-    use ways::tree::{self as t, Lane};
+    use way::tree::{self as t, Lane};
     let (square, kept) = (
         Fresh {
             ground: lane,
@@ -533,11 +533,11 @@ mod tests {
 
     use super::*;
     use crate::overwrite::{self, Cut};
-    use crate::ways::tree::{self, Read};
+    use crate::way::tree::{self, Read};
     use std::{vec, vec::Vec};
 
     /// A square's tree as `tree` builds it, its root at the square, reads
-    /// back through `ways::tree::cursor` at every cell what `ways::lined`
+    /// back through `way::tree::cursor` at every cell what `way::lined`
     /// writes there, and nothing past it: random spans in a patch of
     /// columns, slabs, piers and bores over and beside one another, at the
     /// leaves and coarser.
@@ -573,7 +573,7 @@ mod tests {
                     (i / SPANS_ACROSS) as i32 - 1,
                 ];
                 let top = tops[i as usize];
-                let mut s = ways::Spans::NONE;
+                let mut s = way::Spans::NONE;
                 s.face = ground::face_block(
                     cell,
                     ground::face_height(cell, ground::blocks(cell, top as f32)),
@@ -586,9 +586,9 @@ mod tests {
                         let lo = top + next(40) as i32 - 30;
                         s.run[j] = [lo, lo + 1 + next(12) as i32];
                         s.value[j] = match next(3) {
-                            0 => ways::AIR_OF | 3,
+                            0 => way::AIR_OF | 3,
                             1 => 7,
-                            _ => ways::PIER,
+                            _ => way::PIER,
                         };
                     }
                 }
@@ -621,8 +621,8 @@ mod tests {
                     let at = [x as i32, y as i32, z];
                     let held = tree::cursor(&p, root, cell, cell, at);
                     let got = tree::read(overwrite::value(&p, held, Cut::NONE, cell, at));
-                    let want = match ways::lined(&kept, [at[0], at[1]], cell, z) {
-                        ways::NOTHING => ground::VOID,
+                    let want = match way::lined(&kept, [at[0], at[1]], cell, z) {
+                        way::NOTHING => ground::VOID,
                         v => v,
                     };
                     assert_eq!(got, want, "round {round}, cell {cell}, column {x}, {y}, block {z}");

@@ -404,7 +404,7 @@ fn function_() {
 }
 
 @compute @workgroup_size(8, 8, 1)
-fn boxes_cs(@builtin(global_invocation_id) param: vec3<u32>) {
+fn sample_box_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_();
 }

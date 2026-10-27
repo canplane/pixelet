@@ -5,7 +5,7 @@
 // boxes are. A pixel whose ray met nothing is left to the sky. What lies
 // across each edge and corner of a face — the air, the next block of a flat
 // run, a block rising in front of it — is the world's own answer, asked once
-// where the cast stopped (pxl-spec-core `faces`) and handed in the pixel's
+// where the cast stopped (pxl-spec-core `face`) and handed in the pixel's
 // own words: a line is drawn along an edge that meets the air, and the face
 // closes in towards an edge or a corner a block rises across (`creases`). No
 // other pixel's ray is read, so every pixel of a block is painted by the
@@ -246,7 +246,7 @@ struct Creases {
   open: vec3f,
 };
 
-// Off the face's own bits (pxl-spec-core `faces`), edge `k` +u, -u, +v, -v
+// Off the face's own bits (pxl-spec-core `face`), edge `k` +u, -u, +v, -v
 // and corner `k` across edges `k & 1` and `2 + (k >> 1)`. The line: along
 // each crease, an edge that meets the air or one a block rises across,
 // `frame_edge_width` units wide whatever the block's size, so blocks of

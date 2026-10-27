@@ -11,7 +11,7 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
 use pxl_spec_core::lattice::CELL_CENTER;
-use pxl_spec_core::ways::{self, Segment, Stations};
+use pxl_spec_core::way::{self, Segment, Stations};
 
 use super::malformed;
 use crate::procedural::Frame;
@@ -20,8 +20,8 @@ use crate::space::layer::lattice::TILE_CELLS;
 use xpute_kit::math::scalar::round;
 
 /// Points are in eighths of the tile's cell, which an `i16` holds far past
-/// the tile's edge (pxl-spec-core ways.rs).
-pub const POINT_SCALE: f64 = ways::POINT_SCALE as f64;
+/// the tile's edge (pxl-spec-core way.rs).
+pub const POINT_SCALE: f64 = way::POINT_SCALE as f64;
 
 /// A line's width byte for `width` of its tile's cells, in eighths rounded
 /// half to even, an eighth at least: the widest a way is drawn is what the
@@ -32,16 +32,16 @@ pub fn width_byte(width: f64) -> u8 {
     round(width * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8
 }
 
-/// What a line over a column is and occupies there (pxl-spec-core ways.rs).
-pub use pxl_spec_core::ways::{Crossing, Occupies, Occupy, STACKED_DECK_HEADROOM_M};
+/// What a line over a column is and occupies there (pxl-spec-core way.rs).
+pub use pxl_spec_core::way::{Crossing, Occupies, Occupy, STACKED_DECK_HEADROOM_M};
 
 /// What a line is, from the source's flags alone; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Form {
-    Bridge = ways::BRIDGE as u8,     // a slab under its surface
-    Tunnel = ways::TUNNEL as u8,     // its clear height and shell over its surface
-    Approach = ways::APPROACH as u8, // a bridge's or a tunnel's approach on the ground: an embankment or a cutting
+    Bridge = way::BRIDGE as u8,     // a slab under its surface
+    Tunnel = way::TUNNEL as u8,     // its clear height and shell over its surface
+    Approach = way::APPROACH as u8, // a bridge's or a tunnel's approach on the ground: an embankment or a cutting
 }
 
 impl Form {
@@ -89,7 +89,7 @@ pub struct Separation {
     pub kind: Cow<'static, [u8]>,    // transport type: the source's class, the slab's material
     pub form: Cow<'static, [u8]>,    // `Form`: the source's flags
     pub clear: Cow<'static, [u8]>,   // a bore's clear space over its surface, in leaf cells: solved
-    /// The coarsest zoom each point is held at (pxl-spec-core `ways::coarsest`):
+    /// The coarsest zoom each point is held at (pxl-spec-core `way::coarsest`):
     /// what a fold keeps of a line, the bake's alone — no client path folds,
     /// so a client's record holds none (`Lanes::into_room`).
     pub coarsest: Cow<'static, [u8]>,
@@ -191,15 +191,15 @@ impl Separation {
     }
 
     /// The segment that starts at point `p` in its words (pxl-spec-core
-    /// ways.rs `Segment::words`), and whether the one stored before it is its
+    /// way.rs `Segment::words`), and whether the one stored before it is its
     /// line's one before it: a line ends square at its first and last.
-    pub fn segment_words(&self, p: usize, continues: bool) -> [u32; ways::SEGMENT_WORDS] {
+    pub fn segment_words(&self, p: usize, continues: bool) -> [u32; way::SEGMENT_WORDS] {
         let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
         let (first, last) = (
             p == self.starts[d] as usize,
             p + 2 == self.starts[d + 1] as usize,
         );
-        let flags = ways::flags(u32::from(self.form[d]), first, last, continues);
+        let flags = way::flags(u32::from(self.form[d]), first, last, continues);
         Segment::words(
             [self.points[p], self.points[p + 1]],
             [self.tops[p], self.tops[p + 1]],
@@ -275,7 +275,7 @@ impl Line<'_> {
     }
 
     pub fn reach(&self) -> f64 {
-        f64::from(ways::reach(self.width_cells() as f32))
+        f64::from(way::reach(self.width_cells() as f32))
     }
 
     pub fn footprint(&self) -> f64 {
@@ -295,9 +295,9 @@ impl Line<'_> {
 }
 
 /// What segment `s` is over the column of side `side` about `at` in its
-/// tile's cells (pxl-spec-core ways.rs `crossing`).
+/// tile's cells (pxl-spec-core way.rs `crossing`).
 fn crossing_at(s: &Segment, at: [f64; 2], side: f64, stations: &Stations) -> Option<Crossing> {
-    Some(ways::crossing(
+    Some(way::crossing(
         s,
         at.map(|v| v as f32),
         side as f32,
@@ -307,7 +307,7 @@ fn crossing_at(s: &Segment, at: [f64; 2], side: f64, stations: &Stations) -> Opt
 }
 
 pub fn footprint(width: f64) -> f64 {
-    f64::from(ways::footprint(width as f32))
+    f64::from(way::footprint(width as f32))
 }
 
 /// The runs of consecutive segments of the line through `points`, in a
@@ -342,12 +342,12 @@ pub fn runs_within(points: &[[f64; 2]], reach: f64) -> Vec<[usize; 2]> {
 /// segment once: every point is the child's halved and rounded (`round`,
 /// half to even), a function of that point alone, so the copies tiles hold
 /// of one line fold to the same segments and are taken as one. A line whose
-/// width vanishes at the parent's cells (pxl-spec-core `ways::vanishes`) is
+/// width vanishes at the parent's cells (pxl-spec-core `way::vanishes`) is
 /// none there, and a segment whose ends fold to one point is none. The
 /// segments rejoin where a copy held one after another and the second starts
 /// where the first ends, surface and all, so a line runs on through its
 /// copies' cuts; then of each line only the points held at `zoom`
-/// (from its `ways::coarsest` on) stay, each by its own lane, so what a parent holds is a
+/// (from its `way::coarsest` on) stay, each by its own lane, so what a parent holds is a
 /// function of the world's lines alone, not of which tiles held them. A line
 /// holds a point where it crosses each edge of the tiles of the zoom under
 /// one it is held at (geo-bake terrain/pipeline/separation.rs), so a
@@ -365,7 +365,7 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
         let q = [(k % 4) as i32 - 1, (k / 4) as i32 - 1].map(|q| q * tile);
         for line in child.iter() {
             let width = width_byte(line.width_cells() / 2.0);
-            if ways::vanishes(f32::from(width) / ways::POINT_SCALE) {
+            if way::vanishes(f32::from(width) / way::POINT_SCALE) {
                 continue;
             }
             let up = |i: usize| {

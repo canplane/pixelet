@@ -274,7 +274,7 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
 /// byte its own look, high the leaf cells about it gone, `gone_ring`), with
 /// the area's edge laid, the one rule a column is read by (pxl-spec-core
 /// `window::ground`) and the ways' fill walls one by
-/// (`ways::Columns::walled`), on the CPU and a GPU alike: at a leaf's cells
+/// (`way::Columns::walled`), on the CPU and a GPU alike: at a leaf's cells
 /// or finer, ground beside a gone leaf cell, of those the block touches
 /// (`ring`), is the wall, bedrock (`UNKNOWN`) up to its own face. A gone
 /// cell is bedrock already, its look `UNKNOWN` (gone is past), and its top

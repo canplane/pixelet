@@ -16,7 +16,7 @@ use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
 use crate::answer::value;
 use crate::cast::Detail;
-use crate::caves::node_seed;
+use crate::cave::node_seed;
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, COUNTS, DECORS, PATCH};
 use crate::lattice::GROUND;

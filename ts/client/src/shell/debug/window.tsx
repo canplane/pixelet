@@ -1,4 +1,4 @@
-// @pxl/client/shell/debug/panels.tsx
+// @pxl/client/shell/debug/window.tsx
 
 /** A panel for every debug setting, stacked in the order the settings sheet lists them: one window
  * in the corner (`shell/world/corner.tsx`), which the chat's lines give way to while any of it is up. */
@@ -44,7 +44,7 @@ export function useDebugWindow(): boolean {
   );
 }
 
-export function DebugPanels() {
+export function DebugWindow() {
   return settingsIn("debug").filter(isPanel).map((name) => {
     const Panel = PANEL[name];
     return <Panel key={name} />;

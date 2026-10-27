@@ -14,7 +14,6 @@ use postgres::Client;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, G3857};
 use pxl_spec::space::layer::tile::{LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::ways;
 
 use crate::terrain::repository::TerrainRepository;
 use crate::terrain::CELL_U;
@@ -44,7 +43,7 @@ pub struct Line {
     pub clear: u8,
 }
 
-/// Each point's coarsest zoom (pxl-spec-core `ways::coarsest`) on the line
+/// Each point's coarsest zoom (pxl-spec-core `way::coarsest`) on the line
 /// through `points`, its XY in DB coordinates and its height in leaf cells:
 /// its effective area on the line, in leaf cells² — Visvalingam–Whyatt, as
 /// TopoJSON's presimplify and mapshaper weigh a point: the triangle it makes
@@ -108,7 +107,7 @@ pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
         .map(|i| match i {
             0 => end(ends[0]),
             _ if i + 1 == n => end(ends[1]),
-            _ => ways::coarsest(area[i] as f32) as u8,
+            _ => pxl_spec_core::way::coarsest(area[i] as f32) as u8,
         })
         .collect()
 }

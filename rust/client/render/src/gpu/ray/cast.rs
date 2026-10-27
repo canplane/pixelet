@@ -14,8 +14,8 @@ use super::raster::Raster;
 use super::tally::{self, Counted, Tally};
 use super::RaysPass;
 use crate::frame::shader::record::{
-    compute, source, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
-    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_BEAM, SHADER_SUN_CELLS,
+    compute, source, within, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
+    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_BEAM, SHADER_SUN_CELL,
     SHADER_SUN_MARK, SHADER_SUN_MARK_DRAWN, SHADER_SUN_MISS, SHADER_SUN_REACH,
 };
 use crate::gpu::api::{
@@ -33,7 +33,7 @@ use crate::gpu::span_spec::{FrameKind, GpuSpanName};
 pub(super) struct CastBuffers {
     built: Built,
     /// The camera grid's beam rays (`beam_cs`, a thread a corner), where
-    /// each cell's pixels start off them (`cells_cs`, a thread a cell of
+    /// each cell's pixels start off them (`cell_cs`, a thread a cell of
     /// the screen), the samples walked from those starts (`sample_cs`, a
     /// thread a sample), and their buffer, over the cast's group
     /// (pxl-spec-core `beam`): a line a corner, a start a cell, a stop a
@@ -218,7 +218,7 @@ fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
 const _: () = assert!(
     within(compute::JOINED_GROUP, compute::MISS_GROUP)
         && within(compute::BEAM_GROUP, compute::MISS_GROUP)
-        && within(compute::CELLS_GROUP, compute::MISS_GROUP)
+        && within(compute::CELL_GROUP, compute::MISS_GROUP)
         && within(compute::SAMPLE_GROUP, compute::MISS_GROUP)
         && within(compute::FORGET_GROUP, compute::MISS_GROUP)
         && within(compute::MISS_LIST_GROUP, compute::MISS_GROUP),
@@ -244,7 +244,7 @@ impl RaysPass {
         let group = &WORLD_GROUP;
         let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
         let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
-        let cells_built = pipelines.build_compute(g, SHADER_CELLS, group);
+        let cells_built = pipelines.build_compute(g, SHADER_CELL, group);
         let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
         let joined_built = pipelines.build_compute(g, SHADER_JOINED, group);
         let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
@@ -883,10 +883,10 @@ impl RaysPass {
                     compute::BEAM_WORKGROUP,
                 ),
                 (
-                    GpuSpanName::cells,
+                    GpuSpanName::cell,
                     &c.cells_built,
                     c.grid.span,
-                    compute::CELLS_WORKGROUP,
+                    compute::CELL_WORKGROUP,
                 ),
                 (
                     GpuSpanName::sample,
@@ -974,7 +974,7 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.sun_groups[2], &[]);
             g.set_pipeline(pass, c.sun_cells_built.pipeline);
             let n = sun::cells_across(shadow::SIZE);
-            let w = compute::SUN_CELLS_WORKGROUP;
+            let w = compute::SUN_CELL_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
             let n = shadow::SIZE / sun::SAMPLE;
@@ -989,7 +989,7 @@ impl RaysPass {
             let pass = g.compute_pass(encoder, stamp.pass());
             g.set_bind_group(pass, 0, c.sun_groups[4], &[]);
             g.set_pipeline(pass, c.raster.sun.boxes_built.pipeline);
-            let w = compute::SUN_BOXES_WORKGROUP;
+            let w = compute::SUN_SAMPLE_BOX_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
             c.raster.sun_draw(g, encoder, stamp);
@@ -1045,9 +1045,9 @@ impl RaysPass {
                     pipelines.build_compute(g, SHADER_SUN_BEAM, &compute::SUN_BEAM_GROUP);
             }
         } else if c.sun_cells_built.pipeline == 0 {
-            if room(SHADER_SUN_CELLS) {
+            if room(SHADER_SUN_CELL) {
                 c.sun_cells_built =
-                    pipelines.build_compute(g, SHADER_SUN_CELLS, &compute::SUN_CELLS_GROUP);
+                    pipelines.build_compute(g, SHADER_SUN_CELL, &compute::SUN_CELL_GROUP);
             }
         } else if c.sun_mark_built.pipeline == 0 {
             if room(SHADER_SUN_MARK) {
@@ -1258,7 +1258,7 @@ fn sun_groups(
     [
         g.bind_group(walk.layouts[0], &of(&compute::SUN_GROUP)),
         made(beam, &compute::SUN_BEAM_GROUP),
-        made(cells, &compute::SUN_CELLS_GROUP),
+        made(cells, &compute::SUN_CELL_GROUP),
         // The raster's once its buffers are made, a turn after its pipelines.
         if boxes == 0 {
             0
@@ -1268,7 +1268,7 @@ fn sun_groups(
         if boxes == 0 {
             0
         } else {
-            made(boxes_built, &compute::SUN_BOXES_GROUP)
+            made(boxes_built, &compute::SUN_SAMPLE_BOX_GROUP)
         },
         g.bind_group(miss.layouts[0], &of(&compute::SUN_MISS_GROUP)),
         made(mark, &compute::SUN_MARK_GROUP),

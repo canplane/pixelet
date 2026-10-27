@@ -241,7 +241,7 @@ impl Node {
                 self.roots[a] - (og.wrapping_add(d.unsigned_abs()) < og) as i32
             }
         };
-        // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+        // [naga] each axis by itself, not a loop (cave.rs `node_seed`).
         Node {
             corner: self.corner,
             zoom: self.zoom,
@@ -267,7 +267,7 @@ impl Node {
 /// The origin `o` on the finest grid within its root: the Q3 itself
 /// modulo the root's side, 2^32.
 fn grid_of(o: [i32; 3]) -> [u32; 3] {
-    // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+    // [naga] each axis by itself, not a loop (cave.rs `node_seed`).
     [o[0] as u32, o[1] as u32, o[2] as u32]
 }
 
@@ -296,7 +296,7 @@ pub fn point_at(o: [i32; 3], ray: &Ray, t: f32) -> ([u32; 3], [i32; 3]) {
             },
         )
     };
-    // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+    // [naga] each axis by itself, not a loop (cave.rs `node_seed`).
     let (x, y, z) = (on(0), on(1), on(2));
     ([x.0, y.0, z.0], [x.1, y.1, z.1])
 }
@@ -512,7 +512,7 @@ fn crossing(d: [f32; 3], t: [f32; 3], last: bool) -> u32 {
     } else {
         2
     };
-    // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+    // [naga] each axis by itself, not a loop (cave.rs `node_seed`).
     if e < 1 && moves(1) && beats(t[1], axis(t, e)) {
         e = 1;
     }

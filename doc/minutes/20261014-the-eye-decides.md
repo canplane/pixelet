@@ -48,7 +48,7 @@ node (`7615b4c1c`), and no dependency was left running up the axis
 
 A chunk meshed whole draws what no eye can see. A heightfield chunk `n` cells a
 side has a surface of about `n²` faces. Caves are hash-drawn pockets through the
-ground (`rust/spec/core/src/caves.rs`), and their walls grow with the volume,
+ground (`rust/spec/core/src/cave.rs`), and their walls grow with the volume,
 toward `n³`. A camera on the surface sees almost none of them, and the chunk
 drew them all.
 
@@ -213,7 +213,7 @@ the first middle road, chunks chosen by rays, from
 `checkpoint/20261012-eye-axis` with the runs gone.
 
 > Since a square's columns are filled on the GPU as it lands (pxl-shader
-> ground.rs `heights_cs`), a step reads its cell's column, and no longer reads a
+> ground.rs `height_cs`), a step reads its cell's column, and no longer reads a
 > tile's samples or runs the bicubic again.
 
 **Two reductions in view.** Neither adds a mechanism; each hands a role the rays

@@ -22,7 +22,7 @@ this order, each layer written over the one before:
    cell's height at once: one pass over a fixed-stride grid. A cell shows its
    top face, and a side face as tall as the step down to each neighbour lower
    than it. A way at grade only recolors its cell.
-2. **Caves.** A procedural field (`pxl-spec-core caves.rs` `Cave::hollow`),
+2. **Caves.** A procedural field (`pxl-spec-core cave.rs` `Cave::hollow`),
    asked only under the ground's face.
 3. **Separation.** The ways off the ground — decks, piers, the fill a ramp
    stands on, a tunnel's bore — written in 3D where they are, nowhere else. A

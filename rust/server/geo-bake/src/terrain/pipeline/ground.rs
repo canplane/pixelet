@@ -9,7 +9,7 @@ use pxl_spec::asset::cube::ground;
 use pxl_spec::bake::tile::terrain::{Ground, GroundId};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec_core::lattice::CELL_CENTER;
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
 
@@ -132,7 +132,7 @@ pub(crate) fn render_polygon<T: Copy>(
 }
 
 /// Every cell whose center the way covers along a segment (pxl-spec-core
-/// ways.rs `on_way`, the rule a column is crossed by), its line cut square
+/// way.rs `on_way`, the rule a column is crossed by), its line cut square
 /// where `cut` says at its first and last.
 fn render_linear_feat(
     points: &[P],
@@ -143,7 +143,7 @@ fn render_linear_feat(
     mask: Sea,
 ) {
     let (width, center) = (width_cell as f32, f64::from(CELL_CENTER));
-    let reach = f64::from(ways::reach(width));
+    let reach = f64::from(way::reach(width));
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {
         let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
@@ -158,7 +158,7 @@ fn render_linear_feat(
         for y in span(1) {
             for x in span(0) {
                 let at = [x as f64 + center, y as f64 + center].map(|v| v as f32);
-                if ways::on_way(a.map(|v| v as f32), b.map(|v| v as f32), width, ends, at).1 {
+                if way::on_way(a.map(|v| v as f32), b.map(|v| v as f32), width, ends, at).1 {
                     put(cells, mask, cell_idx(x, y), value);
                 }
             }

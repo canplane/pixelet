@@ -1,4 +1,4 @@
-// pxl-spec-core/caves.rs
+// pxl-spec-core/cave.rs
 
 //! gpu-portable: a node's seed and the caves, u32 hashes over i32 cells, no
 //! `Option<bool>`, and index loops where rust-gpu lowers no array iterator.

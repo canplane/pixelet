@@ -27,7 +27,7 @@ use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{Form, STACKED_DECK_HEADROOM_M};
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
@@ -144,7 +144,7 @@ impl Obstacles {
                         headroom,
                         nodes: nodes.clone(),
                     });
-                    let r = f64::from(ways::reach(width));
+                    let r = f64::from(way::reach(width));
                     let k = |v: f64| (v / out.bucket).floor() as i64;
                     for bx in k(pair[0][0].min(pair[1][0]) - r)..=k(pair[0][0].max(pair[1][0]) + r)
                     {
@@ -330,7 +330,7 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
     }
     let same = effective_layer(a) == effective_layer(b);
     // their edges meet where each way's cover ends (pxl-spec-core `reach`)
-    let reach = |r: &Stretch| f64::from(ways::reach((r.width_u / CELL_U) as f32));
+    let reach = |r: &Stretch| f64::from(way::reach((r.width_u / CELL_U) as f32));
     let touching = reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same {
         touching.max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M)))
@@ -723,7 +723,7 @@ fn road_decks(
         .iter()
         .map(|&q| cells_box(&stretches[q].whole.points))
         .collect();
-    let reach = |q: usize| f64::from(ways::reach((stretches[q].width_u / CELL_U) as f32));
+    let reach = |q: usize| f64::from(way::reach((stretches[q].width_u / CELL_U) as f32));
     let farthest = |a: usize, b: usize| {
         (reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M)))
             .max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M)))
@@ -870,7 +870,7 @@ fn road_decks(
                 );
                 for o in obstacles.at(c) {
                     // a way meeting the structure runs at its level, not under it
-                    if ways::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
+                    if way::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
                         && crosses([n[0] - p[0], n[1] - p[1]], o)
                         && !o.nodes.iter().any(|n| group_nodes.contains(n))
                     {
@@ -1013,7 +1013,7 @@ fn road_decks(
             }
             let layer = effective_layer(r);
             let width = (r.width_u / CELL_U) as f32;
-            let around = disk(ways::reach(width));
+            let around = disk(way::reach(width));
             for (&c, &y) in r.cell.iter().zip(&ys[m]) {
                 let (x, z) = cell_key(c);
                 for &[dx, dz] in &around {
@@ -1110,7 +1110,7 @@ fn rail_decks(
                     r.cell[(j + 1).min(r.cell.len() - 1)],
                 );
                 for o in obstacles.at(c) {
-                    if ways::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
+                    if way::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
                         && crosses([n[0] - p[0], n[1] - p[1]], o)
                         && !o.nodes.iter().any(|n| r.nodes.contains(n))
                     {

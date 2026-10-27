@@ -17,21 +17,21 @@ fn a_build_that_ran_out_is_judged_by_the_pool_it_was_built_in() {
 #[test]
 fn a_build_that_ran_out_says_of_what() {
     // `STARVED` is the pool's; `CRAMPED` the scratch's.
-    assert_eq!(short_of(ways::tree::STARVED), Some(Short::Pool));
-    assert_eq!(short_of(ways::tree::CRAMPED), Some(Short::Scratch));
+    assert_eq!(short_of(way::tree::STARVED), Some(Short::Pool));
+    assert_eq!(short_of(way::tree::CRAMPED), Some(Short::Scratch));
     // A tree built, none for a square with no ways, or past the square's
     // own most, grows neither.
     assert_eq!(short_of(0), None);
     assert_eq!(short_of(1), None);
-    assert_eq!(short_of(ways::tree::SQUARE_FAMILIES), None);
-    assert_eq!(short_of(ways::tree::NONE), None);
+    assert_eq!(short_of(way::tree::SQUARE_FAMILIES), None);
+    assert_eq!(short_of(way::tree::NONE), None);
 }
 
 #[test]
 fn a_scratch_at_its_most_is_as_it_was() {
     // 18.01 MiB, `HANDED` squares of `SCRATCH_WORDS`.
     assert_eq!(
-        scratch_bytes(ways::tree::SQUARE_FAMILIES),
-        HANDED * ways::tree::SCRATCH_WORDS * 4
+        scratch_bytes(way::tree::SQUARE_FAMILIES),
+        HANDED * way::tree::SCRATCH_WORDS * 4
     );
 }

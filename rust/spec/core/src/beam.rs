@@ -297,7 +297,7 @@ pub const NEAR: u32 = 2;
 /// before any block walks itself, and the axis the sample entered it
 /// across: a face its ray reached through air, so one a pixel may show only
 /// where it enters across the same; what lies about that face
-/// (`faces::word`), asked once here for every pixel that shows it; and the
+/// (`face::word`), asked once here for every pixel that shows it; and the
 /// nodes visited from the eye to it, its beam ray's and its own, which a
 /// pixel that takes its block reports in the steps view as the walk it
 /// took.

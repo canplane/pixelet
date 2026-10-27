@@ -53,9 +53,9 @@ const raysText = (f: Frame) => {
         name.padEnd(7)
       } cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${
         perCast(o.beam)
-      }  sample ${perCast(o.sample)}  miss ${
-        perCast(o.miss)
-      }   picked ${share(o.picked)}  walked ${share(o.walked)} (${
+      }  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   picked ${
+        share(o.picked)
+      }  walked ${share(o.walked)} (${
         n1(o.miss / Math.max(1, o.walked))
       } nodes each)   boxes ${perCast(o.boxes)} a cast`,
     ];

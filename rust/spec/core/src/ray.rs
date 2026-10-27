@@ -7,7 +7,7 @@
 //! share of its cube it keeps (`first_word`); how far, f32 bits; the four looks the ground's block is
 //! drawn by (`ground::word`, none for any other), or in the steps view the
 //! nodes its descent asked; and what lies about the face it entered
-//! (`faces::word`), the world's own answer about the block, the same for
+//! (`face::word`), the world's own answer about the block, the same for
 //! every pixel of it. A block is painted from these, its own, alone, by its
 //! value whichever source holds it. Where it met nothing, the first two
 //! are zero: a stop's value is never void.

@@ -15,14 +15,14 @@ pub mod answer;
 pub mod area;
 pub mod beam;
 pub mod cast;
-pub mod caves;
+pub mod cave;
 pub mod cloud;
 #[path = "cube.spec.rs"]
 pub mod cube;
 #[path = "decor.spec.rs"]
 pub mod decor;
 pub mod eye;
-pub mod faces;
+pub mod face;
 pub mod fill;
 pub mod grid;
 pub mod ground;
@@ -35,7 +35,7 @@ pub mod scatter;
 pub mod sun;
 pub mod support;
 pub mod tally;
-pub mod ways;
+pub mod way;
 pub mod window;
 pub mod world;
 

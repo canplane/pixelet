@@ -14,8 +14,8 @@ import { chrome, color, layer } from "@/shell/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { SensorStatus } from "./sensor-status.tsx";
 import { MapScaleBar } from "./scale-bar.tsx";
-import { LocationButtons } from "./location-buttons.tsx";
-import { ViewButtons } from "./view-buttons.tsx";
+import { LocationStack } from "./location-stack.tsx";
+import { ViewStack } from "./view-stack.tsx";
 import { BusyDim } from "@/shell/world/busy-dim.tsx";
 import { useChromeTop } from "@/shell/world/chrome.ts";
 import { CircularButton } from "@/shell/ui/circular-button.tsx";
@@ -94,8 +94,8 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.right, { top }]}>
-        <LocationButtons />
-        <ViewButtons />
+        <LocationStack />
+        <ViewStack />
       </BusyDim>
     </>
   );

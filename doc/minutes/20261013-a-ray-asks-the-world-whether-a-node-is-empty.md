@@ -100,9 +100,9 @@ fills, from what each source already keeps, with nothing new stored:
 
 > Since changed for separation: whether anything under a node fills is no longer
 > read off the ways' fold, as for the objects, but by a bound of their own,
-> joined apart from the ground's (pxl-spec-core `ways::slab`). What a node is
+> joined apart from the ground's (pxl-spec-core `way::slab`). What a node is
 > still comes from a tree of the placed tree's shape, built on the GPU a square
-> at a time (pxl-spec-core `ways/tree.rs`).
+> at a time (pxl-spec-core `way/tree.rs`).
 
 ## What goes
 

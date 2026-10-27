@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Panel } from "@/shell/ui/panel.tsx";
-import { PanelTabs } from "@/shell/ui/panel-tabs.tsx";
+import { Tabbed } from "@/shell/ui/tabbed.tsx";
 import { hairline } from "@/shell/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
 import { settingText } from "./row.tsx";
@@ -27,7 +27,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Panel label={t("settings.title")} onClose={onClose}>
-      <PanelTabs
+      <Tabbed
         onClose={onClose}
         tabs={[
           { value: SettingsTab.Options, label: t("settings.tabs.options") },
@@ -58,7 +58,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 <AboutSection />
               </>
             )}
-      </PanelTabs>
+      </Tabbed>
     </Panel>
   );
 }

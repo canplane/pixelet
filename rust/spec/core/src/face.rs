@@ -1,4 +1,4 @@
-// pxl-spec-core/faces.rs
+// pxl-spec-core/face.rs
 
 //! gpu-portable: what lies about a face of a block, as the cast hands it to
 //! the screen pass in a ray's own words (`ray::FACES`): across each of the

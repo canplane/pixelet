@@ -1,4 +1,4 @@
-// @pxl/client/shell/world/top/location-buttons.tsx
+// @pxl/client/shell/world/top/location-stack.tsx
 
 import { useTranslation } from "react-i18next";
 
@@ -30,7 +30,7 @@ const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
   },
 };
 
-export function LocationButtons() {
+export function LocationStack() {
   const { t } = useTranslation();
   const status = useKernel((s) => s.location.status);
   const hasLocation = useKernel((s) => s.location.has_location);

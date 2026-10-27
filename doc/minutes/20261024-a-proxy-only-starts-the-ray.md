@@ -48,7 +48,7 @@ persists, nothing to invalidate"._
 
 A ray's start is set today by three passes over a buffer sized by the screen
 (rust/spec/core/src/beam.rs): beam rays at the camera grid's corners
-(`beam_cs`), a start for each cell off them (`cells_cs`), and samples a quarter
+(`beam_cs`), a start for each cell off them (`cell_cs`), and samples a quarter
 cell apart that pixels take their block from (`sample_cs`). That buffer is the
 one that met the 128 MiB per-binding floor on a 4K surface. A depth a pixel from
 a rasterized proxy gives each pixel its own start directly, so the proxy is a
@@ -61,7 +61,7 @@ Each of these holds whether or not the proxy is taken, because the ray stays
 what decides the pixel. They are in:
 
 - a block's face bits asked of the query once a block, by the sample that stops
-  on it (rust/spec/core/src/faces.rs);
+  on it (rust/spec/core/src/face.rs);
 - the camera grid computed once a frame and handed to the GPU in the eye's words
   (`beam::Grid`);
 - the per-pixel miss list gone: a pixel that missed says so in its own ray word

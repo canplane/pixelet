@@ -17,7 +17,7 @@ export const GPU_SPAN_NAMES = [
   "fill",
   "cast",
   "beam",
-  "cells",
+  "cell",
   "sample",
   "sraster",
   "pixel",
@@ -29,7 +29,7 @@ export const GPU_SPAN_NAMES = [
   "sun_walk",
   "grow",
   "shadow",
-  "faces",
+  "face",
 ] as const;
 
 export const FRAME_KINDS = [

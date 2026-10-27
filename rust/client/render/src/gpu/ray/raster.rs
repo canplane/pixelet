@@ -2,17 +2,17 @@
 
 //! The samples' stops handed to the rasterizer (pxl-spec-core `raster`,
 //! pxl-shader raster.rs): after the samples, each stopped sample's box
-//! written (`boxes_cs`) and the boxes drawn at the rays' pixels
+//! written (`sample_box_cs`) and the boxes drawn at the rays' pixels
 //! (raster.wgsl), the nearest face a pixel's ray enters kept with its
 //! sample, in passes timed together (span `sraster`), which the cast's
 //! pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
-//! box's face asked once a box (`faces_cs`, span `faces`). Its args, boxes
+//! box's face asked once a box (`face_cs`, span `face`). Its args, boxes
 //! and targets are written whole each frame before they are read.
 
 use pxl_spec_core::{beam, eye, raster, sun};
 
 use crate::frame::shader::record::{
-    compute, source, PIPELINE_RASTER, SHADER_BOXES, SHADER_FACES, SHADER_SUN_BOXES,
+    compute, source, PIPELINE_RASTER, SHADER_SAMPLE_BOX, SHADER_FACE, SHADER_SUN_SAMPLE_BOX,
     SHADER_SUN_SAMPLE,
 };
 use crate::gpu::api::{
@@ -78,8 +78,8 @@ impl Raster {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
         let blank = g.texture(1, 1, 1, Format::r32uint, 1, texture_usage::TEXTURE_BINDING);
         Raster {
-            boxes_built: pipelines.build_compute(g, SHADER_BOXES, &compute::BOXES_GROUP),
-            faces_built: pipelines.build_compute(g, SHADER_FACES, &compute::FACES_GROUP),
+            boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
+            faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             args: g.buffer(
                 word_bytes(raster::ARGS_WORDS as usize),
@@ -243,7 +243,7 @@ impl Raster {
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_bind_group(pass, 0, self.groups[0], &[]);
         g.set_pipeline(pass, self.boxes_built.pipeline);
-        let w = compute::BOXES_WORKGROUP;
+        let w = compute::SAMPLE_BOX_WORKGROUP;
         let [x, y] = grid.samples;
         g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
         g.end(pass);
@@ -264,7 +264,7 @@ impl Raster {
         g.end(pass);
         // What lies about each box's face, before the pixels read it off
         // their pick's sample.
-        let pass = g.compute_pass(encoder, stamps[GpuSpanName::faces as usize].pass());
+        let pass = g.compute_pass(encoder, stamps[GpuSpanName::face as usize].pass());
         g.set_bind_group(pass, 0, self.groups[2], &[]);
         g.set_pipeline(pass, self.faces_built.pipeline);
         g.dispatch_indirect(pass, self.args, word_bytes(raster::ARGS_FACES as usize));
@@ -297,9 +297,9 @@ impl Raster {
                     pipelines.build_compute(g, SHADER_SUN_SAMPLE, &compute::SUN_SAMPLE_GROUP);
             }
         } else if s.boxes_built.pipeline == 0 {
-            if room(SHADER_SUN_BOXES) {
+            if room(SHADER_SUN_SAMPLE_BOX) {
                 s.boxes_built =
-                    pipelines.build_compute(g, SHADER_SUN_BOXES, &compute::SUN_BOXES_GROUP);
+                    pipelines.build_compute(g, SHADER_SUN_SAMPLE_BOX, &compute::SUN_SAMPLE_BOX_GROUP);
             }
         } else if s.group == 0 {
             let samples = (size / sun::SAMPLE) * (size / sun::SAMPLE);
@@ -379,7 +379,7 @@ impl Raster {
             n,
             v.reach,
             // The boxes are laid from box texel (0, 0)'s start (pxl-shader
-            // sun.rs `sun_boxes_cs`).
+            // sun.rs `sun_sample_box_cs`).
             0.0,
             0.0,
             0.0,

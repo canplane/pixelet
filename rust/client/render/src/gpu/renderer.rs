@@ -10,8 +10,8 @@ use pxl_spec::space::coord::world;
 use pxl_spec_core::eye;
 use pxl_spec_core::ray;
 use pxl_spec_core::scatter::GROUPS;
-use pxl_spec_core::ways;
-use pxl_spec_core::window::{self, FreshSquare};
+use pxl_spec_core::way;
+use pxl_spec_core::window::{FRESH_WORDS, HANDED};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -139,24 +139,24 @@ pub struct GroundSquares<'a> {
     pub joined: u32,
     /// The ways' pool's families at first and at most (pxl-kernel domain/layer/terrain/param.rs
     /// `WAYS_POOL_BYTES`): it starts at the first and doubles each time a
-    /// build runs out, never past the most, nor `ways::tree::POOL_FAMILIES`
+    /// build runs out, never past the most, nor `way::tree::POOL_FAMILIES`
     /// (`GroundBuffers::grow`).
     pub pool: [u32; 2],
     /// The families each handed square's scratch holds a tree of, at first and
     /// at most (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_BYTES`): it starts at the
     /// first and doubles each time a build outgrows it, never past the most,
-    /// nor `ways::tree::SQUARE_FAMILIES` (`GroundBuffers::grow_scratch`).
+    /// nor `way::tree::SQUARE_FAMILIES` (`GroundBuffers::grow_scratch`).
     pub scratch: [u32; 2],
     /// A read's records' room at first, in bytes: every read's is doubled
     /// past a square's records that outgrew it, up to
-    /// `ways::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
+    /// `way::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
     pub records: u32,
 }
 
 /// How a square's fill landed: its cells are back in every case.
 pub enum Landing<'a> {
     /// Its ways' tree built: the families it holds, their count first, a
-    /// record each (pxl-spec-core `ways::tree::lay`).
+    /// record each (pxl-spec-core `way::tree::lay`).
     Built(&'a [u32]),
     /// To be filled again, for want of room the renderer grows: its tree not
     /// built, the pool or the scratch it was built in having run out
@@ -164,16 +164,21 @@ pub enum Landing<'a> {
     /// the refill frees.
     Again,
     /// Its tree refused, the pool or the scratch at its most having run out,
-    /// or the square past its own (`ways::tree::past`): the square stays
+    /// or the square past its own (`way::tree::past`): the square stays
     /// absent.
     Refused,
 }
+
+/// The read-backs a square's cells and its ways' records come back in
+/// (gpu/ray/ground.rs `GroundBuffers::read_back`): two frames' fills, so one
+/// frame's mappings are still landing while the next is copied.
+pub const READS: u32 = 2 * HANDED;
 
 /// The pool's records the renderer keeps on the heap at their worst, in
 /// the buddy's blocks: every read's room at a square's most
 /// (`GroundBuffers::room`), each a power of two as the heap gives it.
 pub const RECORD_ROOMS_BYTES: u64 =
-    window::READS as u64 * (ways::tree::RECORDS_BYTES as u64).next_power_of_two();
+    READS as u64 * (way::tree::RECORDS_BYTES as u64).next_power_of_two();
 
 /// A square whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed.
@@ -221,6 +226,29 @@ pub struct Overwrites<'a> {
     pub revision: u32,
     pub since: u32,
     pub written: &'a [u32],
+}
+
+/// Where a square's cells, which the GPU draws, come back to in the
+/// kernel's memory: its columns, levels, laid cells and root
+/// (pxl-spec-core `window::BACK_WORDS`); and the fill's ticket, never 0,
+/// which the kernel is told once this fill's are in.
+#[derive(Clone, Copy, Default)]
+pub struct CellsBack {
+    pub cells: u32,
+    pub ticket: u32,
+}
+
+/// A square handed to the GPU's fill, the record the ground's windows hand
+/// on (pxl-kernel domain/layer/terrain/window.rs `fill`): its words
+/// (pxl-spec-core `window::fresh`), its four looks a cell, its tile's
+/// padded samples, its lines as far as they are written
+/// (`window::LINES_AT`), and where its cells come back to.
+pub struct FreshSquare<'a> {
+    pub fresh: [u32; FRESH_WORDS as usize],
+    pub looks: &'a [u8],
+    pub samples: &'a [i16],
+    pub lines: &'a [u32],
+    pub back: CellsBack,
 }
 
 /// Takes a square while the turn's stream has room for it.
@@ -276,7 +304,7 @@ const PER_PIXEL: [GpuSpanName; 10] = [
     GpuSpanName::world,
     GpuSpanName::cast,
     GpuSpanName::beam,
-    GpuSpanName::cells,
+    GpuSpanName::cell,
     GpuSpanName::sample,
     GpuSpanName::sraster,
     GpuSpanName::pixel,

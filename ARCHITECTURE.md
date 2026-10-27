@@ -358,7 +358,7 @@ The **world** composes the layers into one answer (`domain/query/world.rs`
    reader asks for (`pxl-spec procedural.rs`);
 3. the ways off the ground, where each crossing of a line over the column is a
    deck and its pier, a bore, an embankment or a cutting
-   (`pxl-spec-core ways.rs`);
+   (`pxl-spec-core way.rs`);
 4. then what is placed, air included.
 
 A ray asked of the world reads that rule at the zoom the eye's rays draw there
@@ -427,8 +427,8 @@ window takes its own berth where it is free, but after two windows have
 overlapped and parted, one may hold its squares in the other's.
 
 A square is filled on the GPU as its tile lands. Compute passes make each cell's
-**column**, its ground's top (`heights_cs`), and the spans its ways make over it
-along z (`ways_cs`), which only the fill reads. They fold a bound over the
+**column**, its ground's top (`height_cs`), and the spans its ways make over it
+along z (`way_cs`), which only the fill reads. They fold a bound over the
 columns and their spans into **levels** (`bound_cs`). Both are read back, so the
 CPU's query and the cast meet the same bridge or tunnel.
 
@@ -690,7 +690,7 @@ dropped whole, and the next turn draws again.
 
 Shaders and pipelines are `pxl-render`'s (`frame/shader/`). The compute entries
 are `pxl-shader`'s, a module each by what it computes (`beam.rs`, `raster.rs`,
-`cast.rs`, `observed.rs`, `sun.rs`, `ground.rs`, `ways.rs`, `decor.rs`), each keeping the
+`cast.rs`, `observed.rs`, `sun.rs`, `ground.rs`, `way.rs`, `decor.rs`), each keeping the
 name the build reads it by (pxl-tool `shader.rs` `ENTRIES`), built to WGSL and
 checked in beside the rest (`*.gen.wgsl`). The renderer's build validates each
 shader with naga and takes each pipeline's binding stages from it (pxl-render
@@ -930,9 +930,9 @@ A read is a file in xpute's sense
 ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)):
 the kernel names a root by its number and an object below it by its number, the
 path's one name, and the client binds each root to what each number is
-(`ts/client/src/namespace/roots.ts`), `@xpute/host` carrying the open and the
+(`ts/client/src/namespace/namespace.ts`), `@xpute/host` carrying the open and the
 write there. The binds are one table, bound once at boot and sealed
-(`ts/client/src/namespace/roots.ts` `ROOTS`). The roots are
+(`namespace`). The roots are
 `spec/client/kernel/sys/io/host.json` `root`'s:
 
 | Root               | The kernel's path                                              | What the client binds it to                                                                                  |

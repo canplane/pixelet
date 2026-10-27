@@ -4,7 +4,7 @@
 //! is answered by (`node`) before what overwrites it: a cell's look and
 //! height off the window drawing it (`window::ground`), and its blocks by
 //! depth with a cave's air where a cave may take them. What overwrites it
-//! is not here: the ways by their own rule (`ways.rs`), and what is placed
+//! is not here: the ways by their own rule (`way.rs`), and what is placed
 //! by its own (`placed.rs`).
 //!
 //! A look and a height are stored as a byte and an i16 and read into a word
@@ -20,7 +20,7 @@ use crate::answer::{
     BOX_WHOLE, FULL,
 };
 use crate::area::{earth, walled, Area, Shard};
-use crate::caves::Cave;
+use crate::cave::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
@@ -81,7 +81,7 @@ pub fn ceiling(face: i32) -> i32 {
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
 /// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
 /// one producer of a cell's height, which a GPU runs once a cell of a held
-/// tile (`heights_cs`), and the CPU reads back.
+/// tile (`height_cs`), and the CPU reads back.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
     bicubic(ele, x as f32 + CELL_CENTER, y as f32 + CELL_CENTER)
 }
@@ -279,7 +279,7 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
 /// The face block of a cell whose face is `face` leaf cells, its first
 /// block in blocks of `cell`: under it, the ground under its face, which a
 /// cave may take (`Cell::opens`) and a way's bore is lined in
-/// (pxl-spec-core `ways::lined`).
+/// (pxl-spec-core `way::lined`).
 pub fn face_block(cell: Zoom, face: i32) -> i32 {
     blocks(cell, face as f32) - leaf_blocks(cell)
 }

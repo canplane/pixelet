@@ -14,7 +14,7 @@ use crate::answer::{
     PLACED_BLOCK,
 };
 use crate::area::Shard;
-use crate::caves::Cave;
+use crate::cave::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, AIR, BLOCK, PLACED, SPLIT};
 use crate::window::{Found, Squares};
@@ -26,7 +26,7 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 /// objects' tree), what is known of the service area at its shard
 /// (`area::Shard`), where the windows held the ground's cells of a node
 /// over it (`window::Found`, `window::step`), and the ways' cursor in the
-/// tree of the square `ground` names (`ways::tree`). The CPU's and a GPU's
+/// tree of the square `ground` names (`way::tree`). The CPU's and a GPU's
 /// alike.
 #[derive(Clone, Copy)]
 pub struct At {
@@ -106,7 +106,7 @@ impl At {
 /// placed in it where that fills it whole, air included, else the ground's
 /// block with what the ways and what is placed write over it (their tree's
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
-/// `ways::tree::read`), one value whichever source holds it
+/// `way::tree::read`), one value whichever source holds it
 /// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
 /// space"), keeping the eighths of its cube they fill together over it
 /// (`answer::cover`, `answer::eighths`, `answer::KEPT_SHIFT`), air where
@@ -116,7 +116,7 @@ impl At {
 /// none for any other. Coarser, a split where
 /// any layer may fill under it at a zoom asked, each by its own bound —
 /// what is placed (`overwrite::over`), the ground's (`ground::slab`), the
-/// ways' (`ways::slab`), each meeting the node (`ground::meets`) — its
+/// ways' (`way::slab`), each meeting the node (`ground::meets`) — its
 /// block words the box in its own steps they lie in, every axis alike
 /// (`answer::box_word`, `overwrite::bound`, `ground::box_along_z`);
 /// else air, a block of air its size, its value void; where the ground is
@@ -183,7 +183,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         || place.here() != before.here()
     {
         *trail = if place.here() {
-            crate::ways::tree::cursor(
+            crate::way::tree::cursor(
                 pool,
                 squares.root(place.from(), place.berth()),
                 place.from(),
@@ -228,7 +228,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         };
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
-            let w = crate::ways::tree::read(way);
+            let w = crate::way::tree::read(way);
             let (f, theirs) = cover(fill, w, overwrite::filled(pool, *trail));
             if theirs || !fills(value) {
                 (value, four) = (w, ground::word([w; 4]));
@@ -268,8 +268,8 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     // what the ground leaves air where they may; a split's box is every
     // source's own joined, each in the node's steps: what is placed
     // (`overwrite::bound`), the ground's (`ground::slab`, all of it where
-    // it lacks) and the ways' (`ways::slab`), the last two along z.
-    let ways = crate::ways::slab(bound, [ground::coarsest(zoom, far), near]);
+    // it lacks) and the ways' (`way::slab`), the last two along z.
+    let ways = crate::way::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Block && fill {
         Kind::Split

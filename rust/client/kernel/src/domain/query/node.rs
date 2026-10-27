@@ -13,7 +13,7 @@
 //!   read it back, and the area's edge laid on it; the ways off the tree the
 //!   GPU built of its square, its blocks read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-spec-core `window::ground`,
-//!   `ways::tree`);
+//!   `way::tree`);
 //! - the caves: the hash pyramid's node at that zoom, its value
 //!   (`procedural.rs` `Cave`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
@@ -31,9 +31,9 @@
 //!   hold under the node (`Residency::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
-//! - the ways: by their own rule (pxl-spec-core `ways::slab`) over their
+//! - the ways: by their own rule (pxl-spec-core `way::slab`) over their
 //!   own bound in the same levels, the leaf cells the ways write in each
-//!   column (pxl-spec-core `ways::bound`) joined apart from the ground's
+//!   column (pxl-spec-core `way::bound`) joined apart from the ground's
 //!   (pxl-spec-core fill.rs `level`); a way a coarser tile drops as
 //!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
