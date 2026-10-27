@@ -52,8 +52,8 @@ pub(crate) trait Observer {
     /// Its run of lanes in the tally (pxl-spec-core `tally::EYE`,
     /// `tally::SUN`).
     fn tally(&self) -> u32;
-    /// Whether its walks write the assets that fill, as a walk reading the
-    /// looks does (observed.rs `Writing::assets`).
+    /// Whether its walks write the cells a ray sees into the observed
+    /// pyramid (observed.rs `Writing::assets`).
     fn assets(&self) -> bool;
     /// The passes its beam, its samples and its walks again write the
     /// observed pyramid under (pxl-spec-core `observed::BEAM_PASS`).

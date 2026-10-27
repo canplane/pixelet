@@ -312,7 +312,7 @@ pub const MOVED_COUNTED: usize = 1;
 pub const MOVED_EPOCH: usize = 2;
 /// The map's side, which the slots' lattice is laid by. A pass the eye's
 /// rays and the sun's map share is handed the eye's own head, all zero, in
-/// its place (pxl-shader observer.rs `Either`): a head naming no map is the
+/// its place (pxl-shader either.rs `Either`): a head naming no map is the
 /// eye's.
 pub const MOVED_SIZE: usize = 3;
 

@@ -4,7 +4,7 @@
 //! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
 //! samples walked from those starts (`sample_cs`), each its pass's one
 //! entry, cast for the eye's camera grid or the sun's map as the head it is
-//! handed names (observer.rs `Either`); and the words a line, a node and a
+//! handed names (either.rs `Either`); and the words a line, a node and a
 //! sample are held in, every observer's.
 
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
@@ -195,7 +195,7 @@ where
 
 /// Each beam ray of its observer's lattice, a thread a corner: the camera
 /// grid's (pxl-spec-core `beam::Grid::corners`), or the sun's map's
-/// (`sun::BEAM`), as its head names (observer.rs `beam`, `Either`).
+/// (`sun::BEAM`), as its head names (observer.rs `beam`; either.rs `Either`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
