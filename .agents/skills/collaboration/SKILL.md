@@ -55,3 +55,10 @@ a run in the checkout using a binary made from the export.
 
 Where its hunks stand on another's uncommitted change, that
 one lands first.
+
+## Tooling
+
+The user also runs agents in git worktrees at times. So what builds, caches
+or generates serves a shared checkout, an export and a worktree alike: its key
+holds no absolute path and no session's own variable (rust/.cargo/rustc.sh
+unsets the target's for sccache), and it finds the tree from where it runs.

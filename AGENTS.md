@@ -7,10 +7,13 @@
 - The skills are in `.agents/skills/`, each its role: `cargo` running cargo,
   `verify-change` what a change runs while working, Rust or TypeScript,
   `collaboration` sessions sharing the checkout, `convention` how the tree is
-  written, `write-documents` the documents people read, `deploy` checking once
+  written, `reshape` how a change to structure or speed is found, proposed and
+  proven, `write-documents` the documents people read, `deploy` checking once
   and sending, `bake-tiles`, `publish-bucket` and `device-build` the tiles, the
   bucket and the devices.
   Read the one whose role a step is before taking it.
+- The agents are in `.agents/agents/`: `review` reviews a change before it is
+  committed, read-only and handed the code, not its author's conclusions.
 - **xpute** is the floor a guest program runs on. Its words are host, guest and
   their contract, and they name no program. The host grants the guest memory and
   time, carries bytes, and dispatches the guest's calls by number; it decides
