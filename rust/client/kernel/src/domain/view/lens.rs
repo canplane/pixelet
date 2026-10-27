@@ -7,13 +7,12 @@
 //! drawn").
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
+use pxl_spec::space::camera::grid::{Tau, SPLIT};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::origin;
 use pxl_spec_core::{beam, eye};
 
 use crate::domain::query::asked;
-use crate::domain::view::frame::pose::view;
 
 /// The camera grid's cell at `tau`, as an angle.
 pub fn cell(tau: Tau) -> f64 {
@@ -26,23 +25,11 @@ pub fn cell_there(distance: f64) -> f64 {
     cell(tau()) * distance
 }
 
-/// The quality: a cell spans as many drawn pixels at the optical axis as
-/// the camera grid's at the reference view (`target_cell_px`), never finer
-/// than `SPLIT`, which is stated at the finest ratio: at a lower one the
-/// cell is wider by as much. The screen plane stands `height / (2 · tan(fov /
-/// 2))` drawn pixels from the eye, so `n` of them span `2 · atan(n / 2 /
-/// that)`.
-/// Held by the view, worked out where its height or its surface's ratio
-/// change (`tau_of`).
+/// The quality: every view's (`Tau::VIEW`), an angle whatever the screen,
+/// so what is observed at a distance is the same at any ratio and any
+/// height; the display's pixels draw it and decide nothing of it.
 pub fn tau() -> Tau {
-    view().tau
-}
-
-/// `tau` of a view `height` CSS pixels tall, drawn at `ratio`.
-pub fn tau_of(height: f64, ratio: f64) -> Tau {
-    let tan_up = libm::tan(crate::domain::view::param::FOV.to_radians() / 2.0);
-    let half = target_cell_px() * tan_up / (height * ratio);
-    Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
+    Tau::VIEW
 }
 
 /// The screen as the eye sees it: its axes and the tangents of its half-angles.

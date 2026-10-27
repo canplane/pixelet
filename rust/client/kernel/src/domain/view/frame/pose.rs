@@ -5,7 +5,6 @@
 //! the pose; nothing here knows which.
 
 use pxl_spec::space::camera::eye::Frustum;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -30,12 +29,6 @@ pub struct View {
 
     pub width: f64,
     pub height: f64,
-    /// The display's device pixels a CSS pixel the camera grid is laid by
-    /// (`resolution::display_ratio`), whatever the load draws the world at.
-    pub ratio: f64,
-    /// The quality the eye's rays are cast at (`lens::tau`), of its height
-    /// and ratio.
-    pub tau: Tau,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -51,9 +44,6 @@ impl View {
             pose: None,
             width: 1.0,
             height: 1.0,
-            // A pixel a CSS pixel until a surface says.
-            ratio: 1.0,
-            tau: crate::domain::view::lens::tau_of(1.0, 1.0),
             view_matrix: mat4::new(),
             inv_view_matrix: mat4::new(),
             proj: mat4::new(),
@@ -126,17 +116,16 @@ pub fn km_per_u() -> f64 {
     libm::cos(anchor()[1].to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
 }
 
-/// The view `width` × `height` CSS pixels, its world surface drawn at
-/// `ratio`: what its matrices and its τ are made of, made again only where
-/// one moved.
-pub fn view_resize(width: f64, height: f64, ratio: f64) {
+/// The view `width` × `height` CSS pixels: what its matrices are made of,
+/// made again only where one moved. The pixels it is drawn with are the
+/// drawing's alone (`lens::tau`).
+pub fn view_resize(width: f64, height: f64) {
     let v = view();
     let (width, height) = (width.max(1.0), height.max(1.0));
-    if width == v.width && height == v.height && ratio == v.ratio {
+    if width == v.width && height == v.height {
         return;
     }
-    (v.width, v.height, v.ratio) = (width, height, ratio);
-    v.tau = crate::domain::view::lens::tau_of(height, ratio);
+    (v.width, v.height) = (width, height);
     crate::domain::view::observation::forget();
     compose();
 }
