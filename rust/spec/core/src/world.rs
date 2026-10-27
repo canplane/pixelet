@@ -10,8 +10,8 @@
 //! detail, and what it holds stays behind it.
 
 use crate::answer::{
-    box_join, box_none, cover, eighths, fills, kept_word, touch_word, In, Kind, BOX_NONE,
-    BOX_WHOLE, EIGHTHS, FULL, PLACED_ASSET,
+    box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
+    PLACED_ASSET,
 };
 use crate::area::Shard;
 use crate::cave::Cave;
@@ -226,10 +226,6 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         } else {
             0
         };
-        // The ground's top cell as the ground alone draws it, nothing written
-        // over it: the one cell whose neighbours the ground knows
-        // (`answer::touch`, `Cell::touch`), its floor whole under it.
-        let ground_top = fills(value) && c[2] == cell.top - 1 && way == VOID && over.says != CELL;
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
             let w = crate::way::tree::read(way);
@@ -260,8 +256,6 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
                 },
                 0,
             ]
-        } else if ground_top && kept < EIGHTHS {
-            [touch_word(kept_word(value, kept), cell.touch | 1 << 4), four]
         } else {
             [kept_word(value, kept), four]
         };

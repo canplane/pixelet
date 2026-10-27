@@ -23,7 +23,7 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::answer::{box_of, kept, side, touch, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
+use crate::answer::{box_of, kept, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
 use crate::grid::cell_at;
 use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
@@ -436,45 +436,24 @@ fn entered(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
 }
 
 /// A cell's planes as it is drawn, its node's planes `(lo, hi)`
-/// (`bounds`) made the box of the share of its cube its word `asset` keeps
-/// (`answer::kept`), placed by the faces it touches (`answer::touch`): it
-/// spans an axis whose two faces touch, sits flush against the one that
-/// does, and is centered where none does, the `a` axes it does not span each
-/// `f^(1/(3 − a))` of the node, so its volume is the share `f`. Its node
-/// itself where it keeps it whole or every face touches; with no face
-/// touching, a cube about its center (`answer::side`).
+/// (`bounds`) inset about their center on every axis alike by the share of
+/// its cube its word `asset` keeps (`answer::kept`, `answer::side`): a box
+/// that share's volume, its node itself where it keeps it whole.
 pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32; 3]) {
     let k = kept(asset);
-    let t = touch(asset);
-    let both = |a: u32| t >> (2 * a) & 3 == 3;
-    let spanned = both(0) as u32 + both(1) as u32 + both(2) as u32;
-    if k == EIGHTHS || spanned == 3 {
+    if k == EIGHTHS {
         return (lo, hi);
     }
-    let f = k as f32 / EIGHTHS as f32;
-    // [rust-gpu] By the free axes' count, as a GPU has no cube root.
-    let s = match spanned {
-        0 => side(k),
-        1 => libm::sqrtf(f),
-        _ => f,
-    };
-    let (mut a_lo, mut a_hi) = (lo, hi);
-    let mut a = 0;
-    while a < 3 {
-        let (low, high) = (t >> (2 * a) & 1 != 0, t >> (2 * a + 1) & 1 != 0);
-        let len = (hi[a] - lo[a]) * s;
-        if low && !high {
-            a_hi[a] = lo[a] + len;
-        } else if high && !low {
-            a_lo[a] = hi[a] - len;
-        } else if !low {
-            let inset = 0.5 * (hi[a] - lo[a] - len);
-            a_lo[a] = lo[a] + inset;
-            a_hi[a] = hi[a] - inset;
-        }
-        a += 1;
-    }
-    (a_lo, a_hi)
+    let by = 0.5 * (1.0 - side(k));
+    let inset = [
+        (hi[0] - lo[0]) * by,
+        (hi[1] - lo[1]) * by,
+        (hi[2] - lo[2]) * by,
+    ];
+    (
+        [lo[0] + inset[0], lo[1] + inset[1], lo[2] + inset[2]],
+        [hi[0] - inset[0], hi[1] - inset[1], hi[2] - inset[2]],
+    )
 }
 
 /// The top of the cell a stop met, as it is drawn (`kept_bounds`): the
@@ -1143,134 +1122,6 @@ mod tests {
         assert_eq!(crate::answer::eighths(FULL), EIGHTHS);
         assert_eq!(crate::answer::eighths(FULL / 8 - 1), 0);
         assert_eq!(crate::answer::eighths(3 * FULL / 8), 3);
-    }
-
-    /// Over every face it may touch and every share: the box spans an axis
-    /// both of whose faces touch, sits flush on the one that does, and is
-    /// centered on one where none does, and its volume is its share, but
-    /// where every face touches, when it is its node.
-    #[test]
-    fn a_box_spans_what_it_touches_and_keeps_its_share() {
-        use crate::answer::touch_word;
-        for t in 0..64u32 {
-            for k in 1..=EIGHTHS {
-                let asset = touch_word(kept_word(0, k), t);
-                let (lo, hi) = kept_bounds(([0.0; 3], [1.0; 3]), asset);
-                let whole = (0..3).all(|a| t >> (2 * a) & 3 == 3);
-                let volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2]);
-                let want = if whole { 1.0 } else { k as f32 / EIGHTHS as f32 };
-                assert!((volume - want).abs() < 1e-5, "{t:06b} {k}: {volume}");
-                if whole || k == EIGHTHS {
-                    continue;
-                }
-                for a in 0..3 {
-                    let (low, high) = (t >> (2 * a) & 1 != 0, t >> (2 * a + 1) & 1 != 0);
-                    match (low, high) {
-                        (true, true) => assert!(lo[a] == 0.0 && hi[a] == 1.0, "{t:06b} {k} {a}"),
-                        (true, false) => assert!(lo[a] == 0.0 && hi[a] < 1.0, "{t:06b} {k} {a}"),
-                        (false, true) => assert!(lo[a] > 0.0 && hi[a] == 1.0, "{t:06b} {k} {a}"),
-                        (false, false) => assert!((lo[a] + hi[a] - 1.0).abs() < 1e-6),
-                    }
-                }
-            }
-        }
-    }
-
-    /// A terrace: every unit cell at z = 0 keeping `kept` eighths, touching
-    /// the faces `touch`, stone whole under it and air over it.
-    struct Terrace {
-        kept: u32,
-        touch: u32,
-    }
-
-    impl Query for Terrace {
-        type At = ();
-        fn root(&mut self, _: [i32; 3]) {}
-        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
-        fn node(
-            &mut self,
-            _: &mut (),
-            zoom: Zoom,
-            node: [i32; 3],
-            _: [Zoom; 2],
-            _: f32,
-        ) -> In<[u32; 2]> {
-            let s = UNIT_ZOOM - zoom;
-            let z = node[2] << s;
-            if zoom < UNIT_ZOOM {
-                // Over the terrace, or holding it or the stone under it.
-                return if z > 0 {
-                    In {
-                        kind: Kind::Cell,
-                        asset: [AIR, 0],
-                    }
-                } else {
-                    In {
-                        kind: Kind::Split,
-                        asset: BOX_WHOLE,
-                    }
-                };
-            }
-            let asset = match node[2] {
-                0 => crate::answer::touch_word(kept_word(stone as u32, self.kept), self.touch),
-                z if z < 0 => stone as u32,
-                _ => crate::answer::AIR[0],
-            };
-            In {
-                kind: Kind::Cell,
-                asset: [asset, 0],
-            }
-        }
-    }
-
-    /// The faces a terrace's interior cell touches: its four sides and its
-    /// floor, open above.
-    const INTERIOR: u32 = 0b01_1111;
-
-    fn on_terrace(touch: u32, o: [f32; 3], d: [f32; 3]) -> Met<()> {
-        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let o = [steps(o[0]), steps(o[1]), steps(o[2])];
-        let ray = Ray::new(d, 64.0);
-        let detail = Detail {
-            tau: 1.0,
-            range: [UNIT_ZOOM, UNIT_ZOOM],
-            eye: [0.0; 3],
-            cone: Cone::EXACT,
-            apart: 0.0,
-        };
-        first(&mut Terrace { kept: 4, touch }, o, &ray, detail, Until::Opaque)
-    }
-
-    /// Down onto a terrace whose cells touch, a ray stops on its one level
-    /// wherever it falls, on a cell's edge too; with nothing touching it
-    /// falls between the centered boxes onto the stone.
-    #[test]
-    fn a_ray_down_never_falls_between_cells_that_touch() {
-        for x in [0.0f32, 0.03, 0.5, 0.97, 1.0, 3.999] {
-            let met = on_terrace(INTERIOR, [x, 0.25, 4.0], [0.0, 0.0, -1.0]);
-            assert_eq!(met.ends, Ends::Stop, "{x}");
-            assert!((met.stop.t - 3.5).abs() < 1e-4, "{x}: {}", met.stop.t);
-        }
-        let met = on_terrace(0, [1.0, 0.25, 4.0], [0.0, 0.0, -1.0]);
-        assert!(met.stop.t > 3.99, "{}", met.stop.t);
-    }
-
-    /// The box's shape adds no walk: a ray grazing a terrace over every box
-    /// asks the same nodes whether its cells touch or are boxes apart, as
-    /// what the descent asks is the splits' and the cells' kinds, never their
-    /// boxes (the cone's prune, which keeps the horizon cheap, is untouched).
-    #[test]
-    fn a_grazing_ray_asks_the_same_nodes_where_cells_touch() {
-        let d = {
-            let v = [1.0f32, 0.0, -0.0005];
-            let n = libm::sqrtf(v[0] * v[0] + v[2] * v[2]);
-            [v[0] / n, 0.0, v[2] / n]
-        };
-        let apart = on_terrace(0, [0.5, 0.5, 0.95], d);
-        let touching = on_terrace(INTERIOR, [0.5, 0.5, 0.95], d);
-        assert_eq!((apart.ends, touching.ends), (Ends::On, Ends::On));
-        assert_eq!(touching.visits, apart.visits);
-        assert!(apart.visits > 0);
     }
 
     #[test]

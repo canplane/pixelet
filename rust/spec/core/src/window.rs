@@ -242,38 +242,21 @@ pub const SPANS_AT: u32 = 0;
 pub const SPANS_ACROSS: u32 = SQUARE + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (`way::Spans`): a head word, its count, the
-/// count's high bit set where they did not fit `way::SPANS`, and its
-/// ground's top in cells over them, an `i16`, `i16::MIN` for none (fill.rs
-/// `head_word`);
+/// count's high bit set where they did not fit `way::SPANS`, and its face
+/// cell over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
 /// then each span's lowest and past its highest, an `i16` each as the
 /// world's z is, held to it (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * crate::way::SPANS as u32;
 pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A square's columns, a word a cell, row by row: a cell's ground's top in
-/// leaf cells, an `i16`, low (`column_top`); and over it which of the four
-/// columns beside it touch its top cell at the square's zoom
-/// (`column_touches`), the ground's half of the answer's touching faces
-/// (`answer`): its top's face below touches by the top's own rule
-/// (`ground::top`), and one beside touches where its top reaches this one's
-/// top cell (pxl-spec-core fill.rs `level`).
+/// leaf cells, an `i16`, low (`column_top`).
 pub const COLUMN_WORDS: u32 = SQUARE_CELLS;
 
 /// A column word's ground top.
 pub const fn column_top(w: u32) -> i32 {
     (w << 16) as i32 >> 16
 }
-
-/// A column word's columns beside it that touch its top, a bit each: X's
-/// lower then higher, Y's lower then higher (`TOUCH_X_LO` …).
-pub const fn column_touches(w: u32) -> u32 {
-    (w >> 16) & 0xf
-}
-
-pub const TOUCH_X_LO: u32 = 1;
-pub const TOUCH_X_HI: u32 = 2;
-pub const TOUCH_Y_LO: u32 = 4;
-pub const TOUCH_Y_HI: u32 = 8;
 
 /// A square's cells as its fill lays them, two a word, cell `i` in the
 /// `i % 2`-th half (`laid_at`): its own look, low (`ground::own` of its four
@@ -474,11 +457,12 @@ impl<Q: Square> crate::way::Columns for Q {
             self.laid(i) & 0xff
         }
     }
-    fn top(&self, c: [i32; 2]) -> i32 {
+    fn face(&self, c: [i32; 2]) -> i32 {
         if !held(c) {
             return 0;
         }
-        crate::ground::cells(Square::cell(self), self.height(c) as f32)
+        let cell = Square::cell(self);
+        crate::ground::face_height(cell, crate::ground::cells(cell, self.height(c) as f32))
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.
@@ -629,9 +613,7 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u3
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, where the column's own cells
 /// were found (`step`), with the area's edge laid on it off the cell as its
-/// fill laid it (`area::laid`), and the columns beside it touching its top
-/// where it is read at the zoom of the square holding it, none elsewhere;
-/// and where it is held.
+/// fill laid it (`area::laid`); and where it is held.
 pub fn ground(
     w: &(impl Squares + crate::area::Area),
     place: Found,
@@ -646,11 +628,6 @@ pub fn ground(
         top,
         part,
         fold: crate::ground::looks(word),
-        touch: if f.here() && f.from() == zoom {
-            column_touches(column)
-        } else {
-            0
-        },
     };
     (cell, f)
 }
