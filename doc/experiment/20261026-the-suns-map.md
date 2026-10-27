@@ -173,6 +173,15 @@ What the first cuts showed (rough, single loads):
   `BLOCK_SAMPLES` (8) samples. With the world loaded, 88% of texels took a
   pick. The cost is shadow detail under that block size near the eye, which
   the check does not see (it walks at the same zooms).
+  **2026-10-27: the cap is gone.** A coarse block cast its shadow on the fine
+  ground the eye draws inside it, as gray blobs edged by its faces, the map's
+  unit no longer the eye's. Counted with `ray_counts`, panning: on the start
+  view 68.6% of texels took a pick (99.2% capped), the boxes 156k a cast
+  (24k), the walks' nodes 11.2M (0.34M), `sun_walk` p95 about 28 ms (0.7);
+  at mid altitude 78.4% (17.7% capped, its texels meeting nothing walked
+  too), 10.4M (3.55M). The 3–5% above was not seen again. What is left
+  walking is near the eye, where a block the eye asks is a sample's spacing
+  or less.
 - **A frame mismatch.** The boxes had been laid from the cast's Q3 eye and
   the uniform's `first` from the renderer's light frame.
 - **Correctness.** Against a walk under the same rule, measured with the
