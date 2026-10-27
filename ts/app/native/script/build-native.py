@@ -76,7 +76,7 @@ def xcode():
     return {
         "target": target,
         "published": need("CONFIGURATION") == "Release",
-        "built": f"{target}/native/libpxl_native.a",
+        "built": "libpxl_native.a",
         "linked": f"{out}/PxlNative/libpxl_native.a",
         # Where the guest's C header and module map are put for Swift to
         # import (`import PxlNative`), beside the library.
@@ -97,7 +97,7 @@ def gradle(args):
     return {
         "target": ANDROID_TARGET,
         "published": need("variant") == "release",
-        "built": f"{ANDROID_TARGET}/native/libpxl_native.so",
+        "built": "libpxl_native.so",
         "linked": f"{need('out')}/{ANDROID_ABI}/libpxl_native.so",
         "include": None,
         "cargo": ["rustc", "--crate-type", "cdylib"],
@@ -128,9 +128,13 @@ def main():
         else:
             i += 1
     build = gradle(args) if "--android" in argv else xcode()
+    # A release takes `native`, any other configuration `native-watch`, which a
+    # change rebuilds in part (rust/Cargo.toml). Each in its own directory, so
+    # building one never starts the other over.
+    profile = "native" if build["published"] else "native-watch"
 
     code = subprocess.run(
-        [*["cargo", *build["cargo"]], "--profile", "native", "--package", "pxl-native", "--target", build["target"], *(["--no-default-features"] if build["published"] else [])],
+        [*["cargo", *build["cargo"]], "--profile", profile, "--package", "pxl-native", "--target", build["target"], *(["--no-default-features"] if build["published"] else [])],
         cwd=RUST,
         env=build["env"],
     ).returncode
@@ -141,7 +145,7 @@ def main():
     # library it takes is newer than the one it has.
     # Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
     target_dir = Path(os.environ["CARGO_TARGET_DIR"]) if os.environ.get("CARGO_TARGET_DIR") else RUST / "target"
-    built = target_dir / build["built"]
+    built = target_dir / build["target"] / profile / build["built"]
     linked = Path(build["linked"])
     if mtime(built) > mtime(linked):
         linked.parent.mkdir(parents=True, exist_ok=True)
