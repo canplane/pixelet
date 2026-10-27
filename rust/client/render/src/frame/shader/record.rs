@@ -39,6 +39,8 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_SUN_SAMPLE => "sun_sample_cs",
         SHADER_SUN_BOXES => "sun_boxes_cs",
         SHADER_SUN_MARK => "sun_mark_cs",
+        SHADER_SUN_MARK_DRAWN => "sun_mark_drawn_cs",
+        SHADER_SUN_REACH => "sun_reach_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

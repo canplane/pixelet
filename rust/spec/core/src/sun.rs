@@ -144,26 +144,55 @@ impl Sun {
         ]
     }
 
-    /// The tiles of the box a receiver may read where the eye meets the
-    /// world `v` units from it (pxl-shader sun.rs `sun_mark_cs`): its own
-    /// tile, and those on the way up the tallest decor over it
-    /// (`scatter::TALLEST`), as decor and the actors stand on what the eye
-    /// meets. The `k`-th of them, and how many past the first there are, a
-    /// tile apart at most.
-    pub fn read_up(&self, v: [f32; 3], k: u32) -> ([i32; 2], u32) {
-        let tile = TILE as f32;
-        let at = self.texel_at(v);
-        let top = self.texel_at([v[0], v[1], v[2] + crate::scatter::TALLEST as f32]);
-        let reach = [(top[0] - at[0]) / tile, (top[1] - at[1]) / tile];
-        let long = libm::fabsf(reach[0]).max(libm::fabsf(reach[1]));
-        let steps = libm::ceilf(long) as u32;
+    /// The tile of the box a receiver standing `v` units from the eye
+    /// stands on (pxl-shader sun.rs `sun_mark_cs`, `sun_mark_drawn_cs`).
+    pub fn tile_of(&self, v: [f32; 3]) -> [i32; 2] {
+        let (at, tile) = (self.texel_at(v), TILE as f32);
+        [
+            libm::floorf((at[0] + 0.5) / tile) as i32,
+            libm::floorf((at[1] + 0.5) / tile) as i32,
+        ]
+    }
+
+    /// How many tiles either side of its own a drawn receiver stands on
+    /// (pxl-shader sun.rs `sun_mark_drawn_cs`): as many as half the widest
+    /// decor (`scatter::WIDEST`) spans, at least one, as its tile is one a
+    /// point of it lies in.
+    pub fn ring(&self) -> i32 {
+        let across = TILE as f32 * libm::sqrtf(dot(self.across, self.across));
+        let half = crate::scatter::WIDEST as f32 / 2.0;
+        (libm::ceilf(half / across) as i32).max(1)
+    }
+
+    /// The way up the tallest decor (`scatter::TALLEST`) on the box, in
+    /// tiles across and down, and the steps it takes a tile apart at most:
+    /// a receiver standing on a tile reads the box up it, decor and the
+    /// actors no taller (pxl-shader sun.rs `sun_reach_cs`). The box is
+    /// orthographic, so it is the same from every tile.
+    pub fn up(&self) -> ([f32; 2], u32) {
+        let (low, top, tile) = (
+            self.texel_at([0.0; 3]),
+            self.texel_at([0.0, 0.0, crate::scatter::TALLEST as f32]),
+            TILE as f32,
+        );
+        let way = [(top[0] - low[0]) / tile, (top[1] - low[1]) / tile];
+        let long = libm::fabsf(way[0]).max(libm::fabsf(way[1]));
+        (way, libm::ceilf(long) as u32)
+    }
+
+    /// The `k`-th step of the way `up`, whole tiles from the tile stood on,
+    /// rounded down: a point that far up lies this many tiles over or one
+    /// more, as the point stood on lies anywhere in its tile.
+    pub fn up_at((way, steps): ([f32; 2], u32), k: u32) -> [i32; 2] {
         let f = if steps == 0 {
             0.0
         } else {
             k as f32 / steps as f32
         };
-        let on = |a: usize| libm::floorf((at[a] + 0.5) / tile + reach[a] * f) as i32;
-        ([on(0), on(1)], steps)
+        [
+            libm::floorf(way[0] * f) as i32,
+            libm::floorf(way[1] * f) as i32,
+        ]
     }
 
     /// Whether box texel `p` of the map `size` a side lies where a receiver
@@ -275,8 +304,9 @@ pub fn depth_of(word: u32) -> f32 {
 
 /// What the sun's cast is handed beside the eye's words, a storage buffer: a
 /// head of `MOVED_HEAD` vec4s, whether the cast is counted
-/// (`MOVED_COUNTED`), then the rays' starts (`Starts`, from `STARTS_AT`).
-pub const MOVED_HEAD: usize = STARTS_AT + STARTS_VEC4S;
+/// (`MOVED_COUNTED`), then the rays' starts (`Starts`, from `STARTS_AT`),
+/// then the actors (`ACTORS_AT`).
+pub const MOVED_HEAD: usize = ACTORS_AT + 1 + ACTORS;
 pub const MOVED_WORDS: usize = 4 * MOVED_HEAD;
 /// The cast's number, counted up from one each cast, which a tile read in
 /// it is marked with (`marks_at`).
@@ -314,6 +344,13 @@ pub const ANCHOR: i32 = 2048;
 /// anchors, their remainders.
 pub const STARTS_AT: usize = 2;
 pub const STARTS_VEC4S: usize = 11;
+
+/// The actors the host draws, receivers of the sun's map as decor is
+/// (pxl-shader sun.rs `sun_mark_drawn_cs`), past the starts: how many, the
+/// first word of a vec4, then each where it stands, units from the eye, a
+/// vec4 each, as many as `ACTORS`; any past them marks nothing.
+pub const ACTORS_AT: usize = STARTS_AT + STARTS_VEC4S;
+pub const ACTORS: usize = 32;
 
 impl Starts {
     /// The start of the ray of world texel `w`, X across and Y down the
@@ -522,14 +559,22 @@ pub const fn misses_at(size: u32) -> u32 {
     misses_count(size) + 1
 }
 
-/// The tiles of the box a receiver reads in a cast, past the misses: a
+/// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
-/// last cast that marked it (`MOVED_CAST`; pxl-shader sun.rs
-/// `sun_mark_cs`). A cast casts only the slots of tiles it marked
-/// (`sun_cs`), as no receiver reads any other: the eye's pixels meet the
-/// world there, and decor and the actors stand on what they meet.
-pub const fn marks_at(size: u32) -> u32 {
+/// last cast a receiver stood on it in (`MOVED_CAST`; pxl-shader sun.rs
+/// `sun_mark_cs`, `sun_mark_drawn_cs`): where the eye's pixels meet the
+/// world, and where the decor and the actors drawn stand.
+pub const fn stands_at(size: u32) -> u32 {
     misses_at(size) + size * size
+}
+
+/// The tiles a receiver reads in a cast, past the stands, as many: the
+/// number of the last cast one did, a tile within its taps of the way up
+/// from a tile one stands on (`Sun::up`; pxl-shader sun.rs
+/// `sun_reach_cs`). A cast casts only the slots of tiles read (`sun_cs`),
+/// as no receiver reads any other.
+pub const fn marks_at(size: u32) -> u32 {
+    stands_at(size) + tiles(size) * tiles(size)
 }
 
 pub const fn tiles(size: u32) -> u32 {
@@ -542,15 +587,16 @@ pub const fn tiles(size: u32) -> u32 {
 pub const MARK: u32 = 4;
 
 /// The tiles a cast casts, past the marks, a word a tile as the marks are:
-/// the cast's number where it marked a tile no cast since `MOVED_EPOCH`
-/// had, which the mark sees in the mark it overwrites (pxl-shader sun.rs
-/// `mark_about`). Every other tile marked holds what such a cast left.
+/// the cast's number where it marked a tile read no cast since
+/// `MOVED_EPOCH` had, which it sees in the mark it overwrites (pxl-shader
+/// sun.rs `sun_reach_cs`). Every other tile read holds what such a cast
+/// left.
 pub const fn fresh_at(size: u32) -> u32 {
     marks_at(size) + tiles(size) * tiles(size)
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
-/// marks, the fresh tiles.
+/// stands, the marks, the fresh tiles.
 pub const fn list_words(size: u32) -> u32 {
     fresh_at(size) + tiles(size) * tiles(size)
 }
@@ -792,9 +838,9 @@ mod tests {
         }
     }
 
-    /// A receiver's tiles run from its own up the tallest decor over it.
+    /// The way up runs a tile a step, along the sun's slant across the box.
     #[test]
-    fn a_receiver_reads_up_the_tallest_decor() {
+    fn the_way_up_runs_a_tile_a_step() {
         // The sun 45 degrees over x, a box 4 units wide in 16 texels: a
         // unit up moves a point a texel's worth of units across, 4 texels.
         let r = core::f32::consts::FRAC_1_SQRT_2;
@@ -809,15 +855,71 @@ mod tests {
             [0, 0],
             1.0,
         );
-        let v = [0.0, 0.0, -4.0];
-        let (first, steps) = s.read_up(v, 0);
-        let (last, _) = s.read_up(v, steps);
+        let up = s.up();
         let rise = crate::scatter::TALLEST as f32 * 4.0 / TILE as f32 * r;
-        assert_eq!(steps, libm::ceilf(rise) as u32);
         assert!(
-            last[0] > first[0] && last[1] == first[1],
-            "{first:?} {last:?}"
+            (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
+            "{up:?}"
         );
+        assert_eq!(up.1, libm::ceilf(rise) as u32);
+        assert_eq!(Sun::up_at(up, 0), [0, 0]);
+        assert_eq!(Sun::up_at(up, up.1), [libm::floorf(rise) as i32, 0]);
+        // A point on the near plane under texel 9's middle stands on tile 1.
+        assert_eq!(s.tile_of([0.0; 3])[1], s.tile_of([0.0, 0.0, -1.0])[1]);
+    }
+
+    /// Every texel a receiver's taps read, at any height up to the tallest
+    /// decor over a point stood on, lies in a tile the reach reads from the
+    /// tile stood on (pxl-shader sun.rs `sun_reach_cs`: a tile `t` is read
+    /// where one stood on lies at `t − up_at(k) + [−2, 1]²`), whatever the
+    /// sun's slant.
+    #[test]
+    fn the_reach_reads_every_tile_a_receiver_up_the_way_reads() {
+        for (sx, sz) in [
+            (0.0f32, 1.0f32),
+            (0.3, 0.95),
+            (0.7, 0.7),
+            (0.95, 0.31),
+            (-0.9, 0.44),
+        ] {
+            let n = libm::sqrtf(sx * sx + sz * sz);
+            let dir = [sx / n, 0.0, -sz / n];
+            // The box's axes square to the rays: across in x and z, down y.
+            let across = [sz / n * 2.0, 0.0, sx / n * 2.0];
+            let s = Sun::of(
+                [
+                    across,
+                    [0.0, 2.0, 0.0],
+                    dir.map(|v| v * 8.0),
+                    [0.0, 0.0, 4.0],
+                ],
+                64,
+                [0, 0],
+                1.0,
+            );
+            let up = s.up();
+            let texel = libm::sqrtf(dot(s.across, s.across));
+            for base in [[0.1, 0.2, -3.0], [0.37, -0.81, -2.5], [-0.66, 0.45, -3.3]] {
+                let stood = s.tile_of(base);
+                for h in [0.0, 0.7, 1.9, 3.1, crate::scatter::TALLEST as f32] {
+                    for (a, b) in [(0.0, 0.0), (3.5, 0.0), (-3.5, 0.0), (0.0, 3.5), (2.5, -2.5)] {
+                        // A tap `(a, b)` texels off the point `h` up.
+                        let p = [
+                            base[0] + s.across[0] / texel * a * texel,
+                            base[1] + s.down[1] / texel * b * texel,
+                            base[2] + h + s.across[2] / texel * a * texel,
+                        ];
+                        let t = s.tile_of(p);
+                        let reached = (0..=up.1).any(|k| {
+                            let o = Sun::up_at(up, k);
+                            let d = [t[0] - o[0] - stood[0], t[1] - o[1] - stood[1]];
+                            (-1..=2).contains(&d[0]) && (-1..=2).contains(&d[1])
+                        });
+                        assert!(reached, "sun {sx} {sz} base {base:?} h {h} tap {a} {b}");
+                    }
+                }
+            }
+        }
     }
 
     /// A receiver reads the disk of `rim` about the box's middle, and a

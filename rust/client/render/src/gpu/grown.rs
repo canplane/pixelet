@@ -512,6 +512,19 @@ impl Grown {
         }
     }
 
+    /// Whether decor is placed again this frame, so stands elsewhere.
+    pub fn counts(&self) -> bool {
+        self.on && self.counting
+    }
+
+    /// What the sun's mark reads of the decor placed, while decor is on: its
+    /// frame's words, its regions and its instances (pxl-shader sun.rs
+    /// `sun_mark_drawn_cs`), and the slots the instances hold.
+    pub fn placed(&self) -> Option<([u32; 3], u32)> {
+        (self.on && self.instances != 0)
+            .then_some(([self.params, self.regions, self.instances], self.room))
+    }
+
     /// What the draws read, while decor is on: the decor's instances, their slots,
     /// the regions' indirect args, and where they are drawn.
     pub fn drawn(&self) -> Option<Drawn> {

@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: cad94dc6464572c19dedc9ad234fe46e6afb0879ebe724f82f8aedcd781e44b4
+// Inputs: 2a1efbe0e95088be35aae96890bf70211652841e1811747352ac12a721ffbcbb
 struct type_7 {
     member: array<u32>,
 }
@@ -18,7 +18,7 @@ struct type_23 {
     member_1: u32,
 }
 
-struct type_29 {
+struct type_28 {
     member: vec4<u32>,
 }
 
@@ -94,7 +94,7 @@ var<private> global: vec3<u32>;
 var<private> global_1: vec3<u32>;
 var<workgroup> global_2: array<u32, 64>;
 @group(0) @binding(0)
-var<uniform> global_3: type_29;
+var<uniform> global_3: type_28;
 @group(0) @binding(1)
 var<storage> global_4: type_7;
 @group(0) @binding(2)

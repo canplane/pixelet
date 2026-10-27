@@ -73,3 +73,40 @@ const _: () = assert!(
 /// depth, a step a unit high shadowed the ground below it in stripes a
 /// texel apart: the taps up the slope saw past the step.
 pub const SLOPE_BIAS: f32 = 1.0;
+
+/// Whether a ball `radius` units wide about `v`, units from the eye, lies
+/// at all in the view of the eye looking along `forward`, `right` across
+/// and `up`, the screen's half-angles' tangents `tan`: before it, and past
+/// none of its sides by more than its radius, each side's distance to a
+/// point its offset over the side's slope (`√(1 + tan²)`).
+pub fn sees(
+    [forward, right, up]: [[f32; 3]; 3],
+    tan: [f32; 2],
+    v: [f32; 3],
+    radius: f32,
+) -> bool {
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let f = dot(v, forward);
+    let side = |o: f32, t: f32| libm::fabsf(o) - t * f <= radius * libm::sqrtf(1.0 + t * t);
+    f >= -radius && side(dot(v, right), tan[0]) && side(dot(v, up), tan[1])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ball before the eye within its view is seen, one past a side or
+    /// behind it by more than its radius not.
+    #[test]
+    fn the_eye_sees_what_lies_within_its_view() {
+        let axes = [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
+        let tan = [1.0, 0.5];
+        assert!(sees(axes, tan, [0.0, 10.0, 0.0], 0.0));
+        assert!(sees(axes, tan, [9.9, 10.0, 0.0], 0.0));
+        assert!(!sees(axes, tan, [12.0, 10.0, 0.0], 1.0));
+        assert!(sees(axes, tan, [12.0, 10.0, 0.0], 2.0));
+        assert!(!sees(axes, tan, [0.0, 10.0, 6.0], 0.5));
+        assert!(!sees(axes, tan, [0.0, -3.0, 0.0], 2.0));
+        assert!(sees(axes, tan, [0.0, -1.0, 0.0], 2.0));
+    }
+}

@@ -35,7 +35,8 @@ pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
 pub use raster::{boxes_cs, faces_cs};
 pub use sun::{
-    sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_mark_cs, sun_miss_cs, sun_sample_cs,
+    sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs,
+    sun_reach_cs, sun_sample_cs,
 };
 pub use ways::{ways_cs, ways_free_cs, ways_freed_cs, ways_tree_cs};
 pub use world::{Looks, Unlooked, World};

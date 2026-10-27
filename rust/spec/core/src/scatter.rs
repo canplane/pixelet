@@ -776,9 +776,11 @@ const CLAIM_REACH: [i32; 3] = {
     [wide as i32 - 1, wide as i32 - 1, tall as i32 - 1]
 };
 
-/// The tallest decor, in unit cells: as high over what it stands on as
-/// anything grown reaches (pxl-shader sun.rs `sun_mark_cs`).
+/// The tallest decor and the widest, in unit cells: as high over what it
+/// stands on as anything grown reaches, and as far across (pxl-spec-core
+/// sun.rs `Sun::up`, `Sun::ring`).
 pub const TALLEST: i32 = CLAIM_REACH[2] + 1;
+pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
 
 /// The nodes placed decor is first asked at, so a box with nothing placed
 /// near it is told so in a few looks: 8 unit cells a side.
