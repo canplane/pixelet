@@ -224,7 +224,6 @@ export const SETTINGS = {
     kind: "toggle",
     default: false,
     section: "debug",
-    dev: true,
   },
   /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
   ray_counts: {
@@ -439,6 +438,13 @@ export const SETTINGS_SHIPPED = {
     kind: "index",
     default: 5 as number,
     section: "character",
+  },
+  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's block or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl). */
+  ray_steps: {
+    key: 19 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
   },
   /** The hour the sky is drawn at; SKY_TIMES says each. */
   sky_time: {
