@@ -213,6 +213,36 @@ core, and where the two part the user's stands.
   write it far more, and a zoom that follows the slant puts more zooms of one
   place in it. As it stands, it will run out of room.
 
+## 10-14 already answered it
+
+The same stripes were met on 10-13 and proved; the drawing took a ray a pixel
+on 10-14 for it ([the eye decides](./20261014-the-eye-decides.md),
+[the GPU casts a ray a pixel](./20261014-the-gpu-casts-a-ray-a-pixel.md)).
+
+- **The stripes.** With a ray a cell of the camera grid, a chunk drew only the
+  blocks rays stopped on, and the ground came in rows with sky between them:
+  "Between two neighbouring rays on ground seen at a grazing angle lie blocks
+  that no ray stopped on, so they are never built."
+- **The proof.** Two conditions cannot both hold:
+  1. only what a ray reaches is built;
+  2. what is built is rasterized at more pixels than there are rays.
+
+  10-14 dropped the second: "A pixel is not the final form of the rule, only
+  its finest setting: one ray a cell, with the cell shrunk to a pixel."
+- **The structure holds both again.** Since 10-23 only the boxes the samples
+  stopped at are rasterized (condition 1), and they are handed to every pixel
+  (condition 2). [A cell casts a beam](./20261022-a-cell-casts-a-beam.md)
+  records it as "the cut was taken". The pick's axis refusal and the walk again
+  answer part of it; by 10-14's proof the rest returns as rows. The rows are
+  that proof come back, not a new problem.
+- **The ray's rule is a floor.** Among the five things whose removal brings
+  their problem back, 10-14 names "the ray's rule — the zoom its distance asks,
+  and a stop at the first block that fills". So the zoom stays the distance's,
+  and no density field is needed for the rows: a ray a pixel answers them, as
+  ESVO, GigaVoxels and Teardown draw. The prune passes blocks that fill, which
+  stands against the same floor. How the horizon is bounded without it, or
+  with it changed, is still open.
+
 ## The experiment
 
 - **When the rows began.** The felt speed-up
