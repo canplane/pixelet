@@ -22,11 +22,11 @@ struct type_13 {
 }
 
 struct type_16 {
-    member: array<vec4<i32>>,
+    member: array<u32>,
 }
 
-struct type_19 {
-    member: array<u32>,
+struct type_23 {
+    member: array<vec4<i32>>,
 }
 
 struct type_29 {
@@ -63,15 +63,15 @@ var<uniform> global: type_13;
 var<private> global_1: vec3<u32>;
 var<private> global_2: vec3<u32>;
 @group(0) @binding(1)
-var<storage> global_3: type_19;
+var<storage> global_3: type_16;
 @group(0) @binding(2)
 var<storage> global_4: type_36;
 @group(0) @binding(3)
-var<storage, read_write> global_5: type_19;
+var<storage, read_write> global_5: type_16;
 @group(0) @binding(4)
 var<storage, read_write> global_6: type_40;
 @group(0) @binding(5)
-var<storage> global_7: type_16;
+var<storage> global_7: type_23;
 
 fn function_() {
     var phi_213_: vec4<i32>;

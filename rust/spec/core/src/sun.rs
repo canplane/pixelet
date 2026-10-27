@@ -296,10 +296,10 @@ impl Sun {
     }
 }
 
-/// What the sun's cast is handed beside the eye's words, a storage buffer: a
-/// head of `MOVED_HEAD` vec4s, whether the cast is counted
-/// (`MOVED_COUNTED`), then the rays' starts (`Starts`, from `STARTS_AT`),
-/// then the actors (`ACTORS_AT`).
+/// What the sun's cast is handed beside the eye's words, a uniform: a head
+/// of `MOVED_HEAD` vec4s, the cast's number, whether it is counted, its
+/// epoch and the map's side (`MOVED_CAST` to `MOVED_SIZE`), then the rays'
+/// starts (`Starts`, from `STARTS_AT`), then the actors (`ACTORS_AT`).
 pub const MOVED_HEAD: usize = ACTORS_AT + 1 + ACTORS;
 pub const MOVED_WORDS: usize = 4 * MOVED_HEAD;
 /// The cast's number, counted up from one each cast, which a tile stood on
@@ -310,6 +310,11 @@ pub const MOVED_COUNTED: usize = 1;
 /// moved: what a cast in it or after left in a tile stands, as the eye's
 /// place, the light and the world it was cast for still do (`reads_at`).
 pub const MOVED_EPOCH: usize = 2;
+/// The map's side, which the slots' lattice is laid by. A pass the eye's
+/// rays and the sun's map share is handed the eye's own head, all zero, in
+/// its place (pxl-shader observer.rs `Either`): a head naming no map is the
+/// eye's.
+pub const MOVED_SIZE: usize = 3;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -427,14 +432,15 @@ impl Starts {
 /// slots' pass (pxl-shader `sun_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The sun's beam (pxl-shader sun.rs `sun_beam_cs`, `sun_cell_cs`; doc/minutes/20261022-a-cell-casts-a-beam.md,
-/// the eye's): a beam ray at every `BEAM`-th texel of the box across and
-/// down, `BEAM_WINDOW` past it on each side, each walked from the world's
-/// root along the sun's rays until a cell that fills or lacks or a split
-/// narrower than `2√2` beam spacings (`Sun::detail`, `cast::Detail::apart`), leaving its
-/// line and how far it got less `margin`; each `BEAM`-square cell of the
-/// box starts at the least of the beam rays within `BEAM_WINDOW` of its
-/// corners, and its texels resume from that ray's line there.
+/// The sun's beam (pxl-shader beam.rs `beam_cs`, `cell_cs`, the eye's entries;
+/// doc/minutes/20261022-a-cell-casts-a-beam.md): a beam ray at every `BEAM`-th
+/// texel of the box across and down, `BEAM_WINDOW` past it on each side, each
+/// walked from the world's root along the sun's rays until a cell that fills or
+/// lacks or a split narrower than `2√2` beam spacings (`Sun::detail`,
+/// `cast::Detail::apart`), leaving its line and how far it got less `margin`;
+/// each `BEAM`-square cell of the box starts at the least of the beam rays
+/// within `BEAM_WINDOW` of its corners, and its texels resume from that ray's
+/// line there.
 ///
 /// Why that is a texel's root walk, as the eye's proof has it with the
 /// rays parallel: take `X`, the cell a texel's ray ends at, `e` its entry,
@@ -508,7 +514,7 @@ pub fn margin(width: f32) -> f32 {
 
 /// The sun's map as the eye's rays are cast, every slot every frame
 /// (pxl-spec-core `raster`): a sample every `SAMPLE` slots across and down
-/// walked (pxl-shader `sun_sample_cs`), the cells they stopped at written
+/// walked (pxl-shader beam.rs `sample_cs`), the cells they stopped at written
 /// as boxes by the eye's writer (pxl-shader raster.rs `boxed`) and drawn
 /// from the sun by the eye's raster, orthographic (pxl-render raster.wgsl),
 /// in the box's order (`Sun::texel`), each texel keeping the nearest its own

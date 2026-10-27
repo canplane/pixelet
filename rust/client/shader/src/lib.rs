@@ -3,10 +3,11 @@
 //! The GPU's compute entries, a module of their own each when built, over
 //! the world as the GPU holds it (world.rs) and the eye it is cast from
 //! (eye.rs): the passes a cast takes, written once over the observer it
-//! casts for (observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs)
-//! through the observed pyramid (observed.rs), the world's depth from the
-//! sun (sun.rs), each handed square's ground (ground.rs) and ways
-//! (way.rs), and the decor the ground grows (decor.rs). An entry is named
+//! casts for (observer.rs), a pass both observers take one entry
+//! (either.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
+//! observed pyramid (observed.rs), the world's depth from the sun (sun.rs),
+//! each handed square's ground (ground.rs) and ways (way.rs), and the decor
+//! the ground grows (decor.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
 //! name pxl-tool shader.rs `ENTRIES` reads.
 
@@ -18,6 +19,7 @@
 mod beam;
 mod cast;
 mod decor;
+mod either;
 mod eye;
 mod ground;
 mod observed;
@@ -35,11 +37,8 @@ pub use decor::{
 pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, joined_cs};
 pub use observed::forget_cs;
-pub use raster::{sample_box_cs, face_cs};
-pub use sun::{
-    sun_beam_cs, sun_sample_box_cs, sun_cell_cs, sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs,
-    sun_reach_cs, sun_sample_cs,
-};
+pub use raster::{face_cs, sample_box_cs};
+pub use sun::{sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs, sun_reach_cs, Moved};
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{Looks, Unlooked, World};
 

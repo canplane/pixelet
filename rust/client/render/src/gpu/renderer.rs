@@ -720,7 +720,7 @@ impl Renderer {
         // only the room left.
         if cast.is_some() {
             self.screen.make(g, &mut self.pipelines);
-            self.screen.sun_made(g, &mut self.pipelines, self.shadows);
+            self.screen.sun_made(g, self.shadows);
         }
         self.screen.hand(g, &mut self.pipelines, &mut input.ground);
         let tiles = input.earth_tiles;
