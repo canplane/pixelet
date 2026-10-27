@@ -62,7 +62,10 @@ pub(crate) fn tallied(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
                 u32,
                 { Scope::QueueFamily as u32 },
                 { Semantics::NONE.bits() },
-            >(w.index_mut(observed::tally_at(observer, lane) as usize), visits);
+            >(
+                w.index_mut(observed::tally_at(observer, lane) as usize),
+                visits,
+            );
         }
     }
 }
@@ -97,58 +100,6 @@ fn is_node(seen: &Seen, w: u32, zoom: u32, c: [i32; 3]) -> bool {
         && seen_at(seen, n + 1) == c[0] as u32
         && seen_at(seen, n + 2) == c[1] as u32
         && seen_at(seen, n + 3) == c[2] as u32
-}
-
-/// The observed pyramid as a pixel's walk reads it, writing nothing
-/// (pxl-spec-core `observed`): a node its slot keeps at the zooms asked is
-/// its entry's answer; any other is a miss, which ends the walk as a lack
-/// would, its block `MISSED`, which no lack's is. A miss is told by the
-/// answer and not by a field: a walk's state that changes in its loop holds
-/// no pointer, which naga takes no struct holding. No walk writes in its
-/// pass, so what it reads stands.
-pub(crate) struct Reading<'a> {
-    pub(crate) seen: &'a Seen,
-}
-
-/// The block a miss ends a walk on.
-pub(crate) const MISSED: [u32; 2] = [observed::NONE, observed::NONE];
-
-impl Query for Reading<'_> {
-    type At = u32;
-
-    fn root(&mut self, _: [i32; 3]) -> u32 {
-        observed::NONE
-    }
-
-    fn child(&mut self, _: &u32, _: u32, _: [i32; 3]) -> u32 {
-        observed::NONE
-    }
-
-    fn node(&mut self, e: &mut u32, zoom: u32, c: [i32; 3], asked: [u32; 2], _: f32) -> In<[u32; 2]> {
-        *e = bucket_of(zoom, c);
-        if *e != observed::NONE {
-            let mut k = 0;
-            while k < observed::BUCKET {
-                let w = observed::entry_at(*e + k);
-                if observed::holds(seen_at(self.seen, w), asked) && is_node(self.seen, w, zoom, c) {
-                    *e += k;
-                    let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
-                    return In {
-                        kind,
-                        block: [
-                            seen_at(self.seen, w + observed::W_BLOCK),
-                            seen_at(self.seen, w + observed::W_BLOCK + 1),
-                        ],
-                    };
-                }
-                k += 1;
-            }
-        }
-        In {
-            kind: pxl_spec_core::answer::Kind::Lacks,
-            block: MISSED,
-        }
-    }
 }
 
 /// Where a writing walk is: the node's slot, `observed::NONE` where none

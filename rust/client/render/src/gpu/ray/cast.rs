@@ -170,12 +170,12 @@ pub(super) struct CastBuffers {
     read: Read,
     /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
     /// pick at each pixel the pixels read (`cast_cs`), over a group of
-    /// their own (`pixel_group`): the world's group's bindings and the
-    /// raster's picks (`pixel_bound`), made again exactly when one of them
-    /// is another.
+    /// their own (`pixel_group`): the eye, the rays, the beam's words, the
+    /// pyramid and the raster's picks (`pixel_bound`), made again exactly
+    /// when one of them is another.
     raster: Raster,
     pixel_group: u32,
-    pixel_bound: [u32; 11],
+    pixel_bound: [u32; 5],
     /// What the sun's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
@@ -223,7 +223,7 @@ const _: () = assert!(
 /// pixels': the one the missed pixels' cast binds whole. The sun's cast
 /// binds its world and its clipmap (`SUN_GROUP`), past the floor's storage
 /// buffers were they one group; the pixels' (`cast_cs`) read the raster's
-/// picks beside the world, read-only (`pixel_group`).
+/// picks and no world (`pixel_group`).
 const WORLD_GROUP: [u32; compute::MISS_GROUP.len()] = compute::MISS_GROUP;
 
 impl RaysPass {
@@ -335,7 +335,7 @@ impl RaysPass {
             read: Read::default(),
             raster,
             pixel_group: 0,
-            pixel_bound: [0; 11],
+            pixel_bound: [0; 5],
             tally,
             sun_grouped: [0; 8],
         };
@@ -738,9 +738,7 @@ impl RaysPass {
                 [c.eye, c.beams],
                 [c.window, ground, c.shards, c.overwrites, pool],
             );
-            let mut pixel_bound = [0; 11];
-            pixel_bound[..10].copy_from_slice(&bound);
-            pixel_bound[10] = c.raster.picks_array;
+            let pixel_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.picks_array];
             if pixel_bound != c.pixel_bound {
                 release(c.pixel_group);
                 c.pixel_group = pixel_group(g, &c.built, pixel_bound, c.marks);
@@ -1157,20 +1155,15 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 10]) -> u32 {
     g.bind_group(built.layouts[0], &entries)
 }
 
-/// The pixels' group 0 over `bound`: the world's group's (`cast_group`),
-/// read-only bar the pyramid, which the marked pixels are listed in, the
-/// raster's picks, a one-layer array, and the words the marked are counted
-/// in (`marks`).
-fn pixel_group(g: &Gpu, built: &Built, bound: [u32; 11], marks: u32) -> u32 {
-    let [eye, window, ground, rays, _looks, shards, overwrites, pool, beams, seen, picks] = bound;
+/// The pixels' group 0 over `bound`: the eye, the rays, the beam's words,
+/// the pyramid, which the marked pixels are listed in, the raster's picks,
+/// a one-layer array, and the words the marked are counted in (`marks`).
+/// No world: a pixel walks nothing of its own (`cast_cs`).
+fn pixel_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
+    let [eye, rays, beams, seen, picks] = bound;
     let entries = [
         buffer_entry(0, eye),
-        buffer_entry(1, window),
-        buffer_entry(2, ground),
         view_entry(3, rays),
-        buffer_entry(5, shards),
-        buffer_entry(6, overwrites),
-        buffer_entry(7, pool),
         buffer_entry(8, beams),
         buffer_entry(9, seen),
         view_entry(13, picks),
