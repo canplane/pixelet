@@ -533,6 +533,15 @@ impl RaysPass {
         // counted, summed a square a workgroup (pxl-spec-core
         // `fill::SCAN_THREADS`), written, before the levels fold them.
         g.set_pipeline(pass, c.ways_built.pipeline);
+        // Each column's spans once, the square's and its ring's
+        // (pxl-spec-core fill.rs `spans`), which the count and the write read.
+        g.set_bind_group(pass, 0, c.ways_group, &[3 * SLOT_STRIDE]);
+        g.dispatch(
+            pass,
+            window::SPANS_COLUMNS.div_ceil(compute::WAYS_WORKGROUP[0]),
+            1,
+            c.fresh_len,
+        );
         for k in 0..3 {
             g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
             let across = if k == 1 {

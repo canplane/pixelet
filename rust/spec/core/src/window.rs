@@ -270,10 +270,23 @@ pub const RUNS_SQUARE: u32 = 15320;
 /// row, and the square's count past the last (`FIRSTS_AT`); then its tree's
 /// (`ways::tree::FREED_AT`). Its levels' ways' bound and its ways' tree
 /// are made off the runs (pxl-spec-core fill.rs `level`, `ways::tree::leaf`),
-/// and they go with the frame.
+/// and they go with the frame. Before the tree's, each column's spans, the
+/// square's and the ring of columns about it, which a column's runs read
+/// beside its own (`SPANS_AT`, fill.rs `spans`).
 pub const FIRSTS_AT: u32 = 0;
 pub const RUNS_AT: u32 = FIRSTS_AT + SQUARE_CELLS + 1;
-pub const TREE_AT: u32 = RUNS_AT + RUNS_SQUARE;
+/// The columns whose spans a square's runs read: the square's and a ring
+/// of one about it, `SPANS_ACROSS` a side, row by row from the ring's
+/// first.
+pub const SPANS_ACROSS: u32 = SQUARE + 2;
+pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
+/// A column's spans in words: its count, the high bit set where they did
+/// not fit `ways::SPANS`; then each span's lowest and past its highest, an
+/// `i16` each as the world's z is, held to it (`answer::bound_word`), and its value
+/// (`ways::Spans`).
+pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * crate::ways::SPANS as u32;
+pub const SPANS_AT: u32 = RUNS_AT + RUNS_SQUARE;
+pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A square's columns, a word a cell, row by row: a cell's ground's top in
 /// leaf cells, an `i16`, low (`column_top`).
@@ -381,6 +394,13 @@ pub trait Square {
     /// they wall it by.
     fn laid(&self, i: u32) -> u32;
     fn height(&self, c: [i32; 2]) -> i32;
+    /// Column `c`'s spans and whether they fit, where the square keeps them
+    /// worked out already (`SPANS_AT`, pxl-spec-core fill.rs `spans`):
+    /// whether it does, and they. None by default, each worked out off its
+    /// lines (`ways::column`).
+    fn kept_spans(&self, _c: [i32; 2]) -> (bool, crate::ways::Spans, bool) {
+        (false, crate::ways::Spans::NONE, true)
+    }
 }
 
 /// Whether column `c` is the square's or its ring's.
@@ -488,6 +508,14 @@ impl<Q: Square> crate::ways::Columns for Q {
         }
         let cell = Square::cell(self);
         crate::ground::face_height(cell, crate::ground::blocks(cell, self.height(c) as f32))
+    }
+    fn spans(&self, c: [i32; 2]) -> (crate::ways::Spans, bool) {
+        let (kept, spans, fits) = self.kept_spans(c);
+        if kept {
+            (spans, fits)
+        } else {
+            crate::ways::column(self, c)
+        }
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.
