@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::ways::tree::{POOL_FAMILIES, SCRATCH_WORDS, SQUARE_FAMILIES};
+use pxl_spec_core::ways::tree::{POOL_FAMILIES, ROOT_NODES, SCRATCH_WORDS, SQUARE_FAMILIES};
 use pxl_spec_core::window::{ACROSS, HANDED_WORDS, SQUARE, SQUARE_WORDS, WAYS_SQUARE_SEGMENTS};
 
 use crate::pyramid::Staged;
@@ -95,7 +95,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
 /// The squares of `tiles` the set holds, each its tree's families.
 fn held(set: &Staged<'_>, tiles: &[Tile]) -> Result<Held, String> {
     let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS as usize];
-    let (mut handed, mut lane, mut runs) = (
+    let (mut handed, mut lane, mut kept) = (
         vec![0; HANDED_WORDS as usize],
         vec![0; SQUARE_WORDS as usize],
         vec![0; SCRATCH_WORDS as usize],
@@ -111,12 +111,12 @@ fn held(set: &Staged<'_>, tiles: &[Tile]) -> Result<Held, String> {
             p,
             &tile,
             &mut scratch,
-            [&mut handed, &mut lane, &mut runs, &mut pool],
+            [&mut handed, &mut lane, &mut kept, &mut pool],
         );
         let cell = GROUND.cell_zoom(p.zoom);
         for (k, [taken, held]) in families.into_iter().enumerate() {
             if taken == u32::MAX {
-                return Err(format!("{}: its square {k} takes more than SQUARE_FAMILIES ({SQUARE_FAMILIES}) of its ways' tree's families", p.name()));
+                return Err(format!("{}: its square {k} takes more than SQUARE_FAMILIES ({SQUARE_FAMILIES}) of its ways' tree's families, or its ways meet more than ROOT_NODES ({ROOT_NODES}) of its nodes along z", p.name()));
             }
             let at = [
                 p.at[0] * SIDE as i32 + (k as u32 % SIDE) as i32,

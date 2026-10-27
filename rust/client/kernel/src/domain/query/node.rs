@@ -32,9 +32,10 @@
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
 //! - the ways: by their own rule (pxl-spec-core `ways::slab`) over their
-//!   own bound in the same levels, the leaf cells each column's runs write
-//!   joined apart from the ground's (pxl-spec-core fill.rs `level`); a way a
-//!   coarser tile drops as narrower than half its cell is dropped there, as
+//!   own bound in the same levels, the leaf cells the ways write in each
+//!   column (pxl-spec-core `ways::bound`) joined apart from the ground's
+//!   (pxl-spec-core fill.rs `level`); a way a coarser tile drops as
+//!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
 //! - the caves: the hash node hollow and drawing nothing again under it
 //!   (`procedural::Cave`, one draw of its parent's);

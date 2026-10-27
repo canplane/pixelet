@@ -26,10 +26,10 @@ pub const AO_STRENGTH: f64 = 0.2;
 // ---- the ways, as the stage hands them to the GPU ----
 
 /// The ways' pool on the GPU at first, 1 MiB, 16 Ki families: a square with
-/// no ways holds its root family alone, so the 960 squares' roots and some
-/// ways. It doubles each time a build runs out (pxl-render
-/// gpu/ray/ground.rs `GroundBuffers::grow`), the square that ran out filled
-/// again a turn later, so a dense view reaches 64 MiB in six. Not yet
+/// no ways holds none, and one with ways a family from its own nodes along
+/// z down (pxl-spec-core `ways::tree`), so the ways of a sparse view. It
+/// doubles each time a build runs out (pxl-render gpu/ray/ground.rs
+/// `GroundBuffers::grow`), the square that ran out filled again a turn later, so a dense view reaches 64 MiB in six. Not yet
 /// measured against a dense view.
 pub const WAYS_POOL_FIRST_BYTES: u32 = 1 << 20;
 const _: () = assert!(
@@ -45,7 +45,7 @@ const _: () = assert!(
 /// rooms on the heap together, `window::READS` of each.
 pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 
-/// The most the handed squares' scratch takes on the GPU, 18.68 MiB:
+/// The most the handed squares' scratch takes on the GPU, 18.01 MiB:
 /// `window::HANDED` squares' each for a tree of `ways::tree::SQUARE_FAMILIES`,
 /// the bake's bound on a square's, so at this no square of a baked set is
 /// refused for it (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`).
@@ -59,19 +59,19 @@ pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 /// out of memory may fail to make the larger scratch, and nothing hears
 /// it, the host keeping no error scope, so the renderer builds on in a
 /// buffer the device holds as an error. Its last growth holds the old
-/// scratch beside the new, 16.15 MiB with 18.68, until the old is let go.
+/// scratch beside the new, 16.88 MiB with 18.01, until the old is let go.
 pub const WAYS_SCRATCH_BYTES: u32 =
     pxl_spec_core::window::HANDED * pxl_spec_core::ways::tree::SCRATCH_WORDS * 4;
 
-/// The handed squares' scratch at first, 4 MiB, 311 families a square: its
-/// runs and its columns' spans, 3.81 MiB for the nine, are a square's most
-/// whatever it holds, and the rest a tree of 311 families, more than a
-/// read's first room holds records of (240). Each square's tree room
-/// doubles each time a build outgrows it, its runs and spans fixed, the
-/// square filled again a turn later, so the scratch goes 4.00, 4.19, 4.58,
-/// 5.35, 6.89, 9.98, 16.15 and 18.68 MiB, a square at the bake's bound
-/// reaching the cap in seven. Not yet measured against a dense view; the
-/// pool's known gap holds for each growth (`WAYS_SCRATCH_BYTES`).
+/// The handed squares' scratch at first, 4 MiB, 1390 families a square:
+/// its columns' spans, 3.14 MiB for the nine, are a square's most whatever
+/// it holds, and the rest a tree of 1390 families, more than a read's first
+/// room holds records of (240). Each square's tree room doubles each time a
+/// build outgrows it, its spans fixed, the square filled again a turn
+/// later, so the scratch goes 4.00, 4.86, 6.58, 10.01, 16.88 and 18.01 MiB,
+/// a square at the bake's bound reaching the cap in five. Not yet measured
+/// against a dense view; the pool's known gap holds for each growth
+/// (`WAYS_SCRATCH_BYTES`).
 pub const WAYS_SCRATCH_FIRST_BYTES: u32 = 4 << 20;
 const _: () = {
     use pxl_spec_core::{ways::tree, window::HANDED};

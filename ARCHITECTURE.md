@@ -427,10 +427,10 @@ window takes its own berth where it is free, but after two windows have
 overlapped and parted, one may hold its squares in the other's.
 
 A square is filled on the GPU as its tile lands. Compute passes make each cell's
-**column**, its ground's top and the runs its ways write over it along z
-(`heights_cs`, `ways_cs`). They fold a bound over the columns into **levels**
-(`bound_cs`). Both are read back, so the CPU's query and the cast meet the same
-bridge or tunnel.
+**column**, its ground's top (`heights_cs`), and the spans its ways make over it
+along z (`ways_cs`), which only the fill reads. They fold a bound over the
+columns and their spans into **levels** (`bound_cs`). Both are read back, so the
+CPU's query and the cast meet the same bridge or tunnel.
 
 Its ways are built into a tree of families, a node's eight children each, from
 one pool every square shares, on the GPU, and its families read back into the

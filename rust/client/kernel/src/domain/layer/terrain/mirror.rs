@@ -56,9 +56,13 @@ impl Mirror {
     /// families' ids, the chunks they reach grown first; nothing laid where
     /// one lies past the cap or the heap refuses a chunk, which the square's
     /// landing takes as its tree refused or waiting on the heap
-    /// (domain/layer/terrain/window.rs `landed`).
+    /// (domain/layer/terrain/window.rs `landed`). A square with no ways has
+    /// none, and reaches no chunk.
     pub fn lay(&mut self, records: &[u32]) -> Result<(), Unlaid> {
         let n = records.first().map_or(0, |&n| n.min(SQUARE_FAMILIES));
+        if n == 0 {
+            return Ok(());
+        }
         let id = |r: u32| {
             records
                 .get((1 + r * RECORD_WORDS) as usize)

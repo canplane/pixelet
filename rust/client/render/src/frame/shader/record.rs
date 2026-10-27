@@ -133,21 +133,6 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
     true
 }
 
-/// Whether two groups are one layout, entry for entry.
-pub const fn same<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> bool {
-    if N != M {
-        return false;
-    }
-    let mut k = 0;
-    while k < N {
-        if a[k] != b[k] {
-            return false;
-        }
-        k += 1;
-    }
-    true
-}
-
 use crate::frame::draw::{
     PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
