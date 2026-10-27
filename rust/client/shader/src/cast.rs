@@ -13,7 +13,7 @@ use spirv_std::{spirv, Image};
 use crate::beam::Beams;
 use crate::eye::{grid, Eye};
 use crate::observed::{seen_at, seen_put, Seen};
-use crate::observer::{self, Observer};
+use crate::observer::{self, Observer, Takes};
 use crate::world::{face_of, World};
 use crate::{add, most};
 
@@ -118,7 +118,7 @@ pub fn cast_cs(
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
-    if took == observer::SKY {
+    if took == Takes::Sky {
         written(
             rays,
             id,
@@ -142,7 +142,7 @@ pub fn cast_cs(
         );
         return;
     }
-    if took == observer::TOOK {
+    if took == Takes::Pick {
         // What lies about its face, the sample's, and the nodes the
         // sample's walk visited, which the steps view shows as this pixel's.
         let (faces, visits) = (

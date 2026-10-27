@@ -31,10 +31,14 @@ pub(crate) struct Aim {
 
 /// The levels of an observer's lattice a pass casts (`Observer::needs`): a
 /// corner's beam ray, a cell's start, a sample, a ray at a point.
-pub(crate) const CORNER: u32 = 0;
-pub(crate) const CELL: u32 = 1;
-pub(crate) const SAMPLE: u32 = 2;
-pub(crate) const RAY: u32 = 3;
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub(crate) enum Level {
+    Corner,
+    Cell,
+    Sample,
+    Ray,
+}
 
 /// An observer as the passes ask it: its lattice of beam rays' corners,
 /// their cells and its samples, where each one's words lie, and the ray at
@@ -98,10 +102,10 @@ pub(crate) trait Observer {
     /// about the eye is marked and at the screen's tangents (raster.rs
     /// `boxed`).
     fn laid(&self) -> ([i32; 3], (bool, [f32; 2]));
-    /// Whether the cast needs what `level` (`CORNER`, `CELL`, `SAMPLE`,
-    /// `RAY`) at `at` of its lattice gives, off its words `w`: the one
-    /// place a pass is told it may pass a thread by.
-    fn needs<W: Words + ?Sized>(&self, w: &W, level: u32, at: [u32; 2]) -> bool;
+    /// Whether the cast needs what `level` at `at` of its lattice gives,
+    /// off its words `w`: the one place a pass is told it may pass a thread
+    /// by.
+    fn needs<W: Words + ?Sized>(&self, w: &W, level: Level, at: [u32; 2]) -> bool;
 }
 
 /// The number of `c` on a lattice `across` a row, a corner's or a sample's.
@@ -121,7 +125,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
     w: &mut W,
     c: [u32; 2],
 ) {
-    if !o.needs(&*w, CORNER, c) {
+    if !o.needs(&*w, Level::Corner, c) {
         return;
     }
     let aim = o.corner(c);
@@ -155,7 +159,7 @@ fn t_of<O: Observer, W: Words + ?Sized>(o: &O, w: &W, k: u32) -> f32 {
 /// window (`Observer::window`), and that corner, whose line they resume
 /// from.
 pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]) {
-    if !o.needs(&*w, CELL, c) {
+    if !o.needs(&*w, Level::Cell, c) {
         return;
     }
     let across = o.corners()[0];
@@ -219,7 +223,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
     s: [u32; 2],
 ) {
     // One not needed meets nothing, so draws no box (`sample_box`).
-    if !o.needs(&*w, SAMPLE, s) {
+    if !o.needs(&*w, Level::Sample, s) {
         w.set(
             o.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM,
             beam::SAMPLE_NONE,
@@ -285,9 +289,13 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
 
 /// What a ray at `at` aimed `aim` takes (`resolve`): the block off the
 /// raster's pick, the sky, or a walk of its own.
-pub(crate) const TOOK: u32 = 0;
-pub(crate) const SKY: u32 = 1;
-pub(crate) const WALKS: u32 = 2;
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub(crate) enum Takes {
+    Pick,
+    Sky,
+    Walk,
+}
 
 /// What the ray at `at` aimed `aim` takes, `pick` the raster's there: the
 /// block it enters as the sample picked entered it (`took`), its stop and
@@ -300,11 +308,11 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
     at: O::At,
     aim: &Aim,
     pick: u32,
-) -> (u32, cast::Stop<u32>, u32) {
+) -> (Takes, cast::Stop<u32>, u32) {
     if pick != 0 && pick & raster::LACK == 0 {
         let (stop, k, enters) = took(o, w, aim, pick);
         if enters {
-            return (TOOK, stop, k);
+            return (Takes::Pick, stop, k);
         }
     }
     let none = cast::Stop {
@@ -315,9 +323,9 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
         block: [0; 2],
     };
     if pick == 0 && sky(o, w, at) {
-        (SKY, none, 0)
+        (Takes::Sky, none, 0)
     } else {
-        (WALKS, none, 0)
+        (Takes::Walk, none, 0)
     }
 }
 

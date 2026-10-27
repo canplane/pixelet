@@ -20,7 +20,7 @@ use crate::cast::{counted, listed, pixel_tan, Rays};
 use crate::decor::Instances;
 use crate::eye::{eye_origin, eye_ray, Eye};
 use crate::observed::Seen;
-use crate::observer::{self, Aim, Observer};
+use crate::observer::{self, Aim, Level, Observer, Takes};
 use crate::world::{Unlooked, World};
 
 /// The world's depth from the sun, a slot of the sun's clipmap each
@@ -332,29 +332,33 @@ impl Observer for Map {
     /// either way, beyond the four it lies about (`sample_before`), as a box
     /// fewer is a slot walked more; a cell, a tile, as a sample does; a beam
     /// ray the cells whose window holds it (`window`), each as a cell does.
-    fn needs<W: Words + ?Sized>(&self, w: &W, level: u32, at: [u32; 2]) -> bool {
+    fn needs<W: Words + ?Sized>(&self, w: &W, level: Level, at: [u32; 2]) -> bool {
         const _: () = assert!(
             pxl_spec_core::sun::BEAM == pxl_spec_core::sun::TILE
                 && pxl_spec_core::sun::SAMPLE <= pxl_spec_core::sun::TILE,
             "a cell is a tile, and a sample's slots lie within a tile of it"
         );
-        use crate::observer::{CELL, CORNER, RAY};
         let t = pxl_spec_core::sun::TILE as i32;
-        let (lo, hi) = if level == RAY {
-            let p = self.sun.texel(self.size, at);
-            let tile = [p[0] as i32 / t, p[1] as i32 / t];
-            (tile, tile)
-        } else if level == CELL {
-            let c = [at[0] as i32, at[1] as i32];
-            ([c[0] - 1, c[1] - 1], [c[0] + 1, c[1] + 1])
-        } else if level == CORNER {
-            let side = self.window([0, 0]).1 as i32;
-            let c = [at[0] as i32, at[1] as i32];
-            ([c[0] - side, c[1] - side], [c[0] + 1, c[1] + 1])
-        } else {
-            let p = self.sun.texel(self.size, self.point(at));
-            let tile = [p[0] as i32 / t, p[1] as i32 / t];
-            ([tile[0] - 1, tile[1] - 1], [tile[0] + 1, tile[1] + 1])
+        let (lo, hi) = match level {
+            Level::Ray => {
+                let p = self.sun.texel(self.size, at);
+                let tile = [p[0] as i32 / t, p[1] as i32 / t];
+                (tile, tile)
+            }
+            Level::Cell => {
+                let c = [at[0] as i32, at[1] as i32];
+                ([c[0] - 1, c[1] - 1], [c[0] + 1, c[1] + 1])
+            }
+            Level::Corner => {
+                let side = self.window([0, 0]).1 as i32;
+                let c = [at[0] as i32, at[1] as i32];
+                ([c[0] - side, c[1] - side], [c[0] + 1, c[1] + 1])
+            }
+            Level::Sample => {
+                let p = self.sun.texel(self.size, self.point(at));
+                let tile = [p[0] as i32 / t, p[1] as i32 / t];
+                ([tile[0] - 1, tile[1] - 1], [tile[0] + 1, tile[1] + 1])
+            }
         };
         casts_in(w, self.size, self.cast, lo, hi)
     }
@@ -403,7 +407,7 @@ pub fn sun_cs(
     let at = [slot.x, slot.y];
     // A slot no receiver reads, or one an earlier cast of the epoch cast,
     // left as it was.
-    if !m.needs(&*list, observer::RAY, at) {
+    if !m.needs(&*list, Level::Ray, at) {
         return;
     }
     let aim = m.aim(at);
@@ -411,7 +415,7 @@ pub fn sun_cs(
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = picks.fetch(UVec3::new(p[0], p[1], 0));
     let (took, stop, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
-    if took == observer::TOOK {
+    if took == Takes::Pick {
         let met = cast::Met {
             ends: cast::Ends::Stop,
             stop,
@@ -422,7 +426,7 @@ pub fn sun_cs(
         unsafe { sun.write(slot, m.word(&aim, &met)) };
         return;
     }
-    if took == observer::SKY {
+    if took == Takes::Sky {
         // SAFETY: within the map, bounded by its size above.
         unsafe { sun.write(slot, m.sun.word(aim.detail, 1.0)) };
         return;
