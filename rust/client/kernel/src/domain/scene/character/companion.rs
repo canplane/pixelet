@@ -447,6 +447,23 @@ pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     }
 }
 
+/// Where each figure drawn stands, units from `eye`, as its draw is placed
+/// (`Actor::draw`): the actors the sun's map is read by (pxl-render
+/// gpu/renderer.rs `Cast::actors`). The figures' count is the second.
+pub fn companion_stands(eye: V3) -> ([[f32; 3]; 2], usize) {
+    let c = companion();
+    let mut stands = ([[0.0; 3]; 2], 0);
+    for (_, stance) in [&mut c.person, &mut c.pet]
+        .into_iter()
+        .flatten()
+        .filter_map(Figure::drawn)
+    {
+        stands.0[stands.1] = DrawList::translation(stance.at, eye);
+        stands.1 += 1;
+    }
+    stands
+}
+
 /// Where the person's line hangs, over its head, while the person shows it,
 /// seen from `eye` at `tau`: while the person is drawn (its stance is set
 /// only while it holds its actor), and where the camera grid's cell at its

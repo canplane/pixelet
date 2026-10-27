@@ -186,7 +186,7 @@ where
     } else {
         (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t)
     };
-    cast::walk(q, origin, ray, detail, Until::Fills, from, line, &mut ())
+    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, &mut ())
 }
 
 /// Each beam ray of the camera grid, a thread a corner (pxl-spec-core

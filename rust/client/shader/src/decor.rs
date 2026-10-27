@@ -44,9 +44,10 @@ impl Grounds for Growing<'_> {
     }
 
     /// The world's ray down the column, the cast's own descent
-    /// (pxl-spec-core `scatter::footing`).
+    /// (pxl-spec-core `support::footing`).
     fn footing(&mut self, cell: u32, g: [i32; 2]) -> ((i32, f32), bool) {
-        scatter::footing(&mut self.world, cell, g)
+        let f = pxl_spec_core::support::footing(&mut self.world, cell, g);
+        (f.top, f.ends == pxl_spec_core::cast::Ends::Stop)
     }
 
     fn block(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
@@ -462,15 +463,12 @@ fn place_one(
     if slot >= room {
         return;
     }
-    let anchor = drawn::ANCHOR as usize;
-    // X about the anchor the short way round: leaf cells wrap at 2^24.
-    let x = (((grown[i + 1] as i32).wrapping_sub(params[anchor] as i32)) << 8 >> 8) as f32
-        + across as f32 / 2.0;
-    let y =
-        (grown[i + 2] as i32).wrapping_sub(params[anchor + 1] as i32) as f32 + deep as f32 / 2.0;
+    // [rust-gpu] Each by a call, not a closure over a binding's slice.
+    let x = from_anchor(params, grown, i, 0) + across as f32 / 2.0;
+    let y = from_anchor(params, grown, i, 1) + deep as f32 / 2.0;
     // Its base as drawn: under its box's corner by its footing's kept top.
     let sink = grown[i + 4] as f32 / (1 << pxl_spec_core::FRAC_W) as f32;
-    let z = (grown[i + 3] as i32).wrapping_sub(params[anchor + 2] as i32) as f32 - sink;
+    let z = from_anchor(params, grown, i, 2) - sink;
     let (room, slot) = (room as usize, slot as usize);
     instances[slot] = x.to_bits();
     instances[room + slot] = y.to_bits();
@@ -478,4 +476,77 @@ fn place_one(
     instances[3 * room + slot] = ((turn % 4) as f32 * core::f32::consts::FRAC_PI_2).to_bits();
     instances[4 * room + slot] = 1.0f32.to_bits();
     instances[drawn::LANES as usize * room + slot] = slot as u32;
+}
+
+/// The corner of the record at word `i` on `axis` about the anchor, in
+/// unit cells (`place_one`).
+fn from_anchor(params: &[u32], grown: &[u32], i: usize, axis: usize) -> f32 {
+    let anchor = drawn::ANCHOR as usize + axis;
+    about(
+        (grown[i + 1 + axis] as i32).wrapping_sub(params[anchor] as i32),
+        axis as u32,
+    ) as f32
+}
+
+/// A difference of unit cells on `axis`, X the short way round, as unit
+/// cells wrap at 2^24 on X: the one statement of the wrap, the placed
+/// decor's about the anchor (`place_one`) and the anchor's about the eye
+/// (`Instances::stands`) alike.
+fn about(d: i32, axis: u32) -> i32 {
+    if axis == 0 {
+        d << 8 >> 8
+    } else {
+        d
+    }
+}
+
+const _: () = assert!(
+    pxl_spec_core::FRAC_W == 8,
+    "a Q3's unit cells wrap at 2^24 as `about` takes them"
+);
+
+/// The decor placed this frame as its draws read it (`decor_place_cs`):
+/// its frame's words, its regions and its instances. What a reader beside
+/// the draws asks of it, how many and where each stands, decor answers
+/// here, so none names its lanes (pxl-shader sun.rs `sun_mark_drawn_cs`).
+pub(crate) struct Instances<'a> {
+    pub(crate) params: &'a [u32],
+    pub(crate) regions: &'a [u32],
+    pub(crate) instances: &'a [u32],
+}
+
+impl Instances<'_> {
+    /// The slots the instances hold.
+    fn room(&self) -> u32 {
+        self.instances.len() as u32 / (drawn::LANES + 1)
+    }
+
+    /// How many are placed: the last region's end once placed, the regions
+    /// laid in order from the first slot (`decor_args_cs`), no more than the
+    /// slots.
+    pub(crate) fn count(&self) -> u32 {
+        at(self.regions, 2 * drawn::REGIONS - 1).min(self.room())
+    }
+
+    /// Where placed slot `k` stands, its base middle as drawn (`place_one`),
+    /// units from the eye at Q3 `origin`.
+    pub(crate) fn stands(&self, k: u32, origin: [i32; 3]) -> [f32; 3] {
+        [
+            self.anchored(0, origin[0]) + self.lane(0, k),
+            self.anchored(1, origin[1]) + self.lane(1, k),
+            self.anchored(2, origin[2]) + self.lane(2, k),
+        ]
+    }
+
+    /// The anchor on `axis` from a Q3 `o`, in units.
+    fn anchored(&self, axis: u32, o: i32) -> f32 {
+        let w = pxl_spec_core::FRAC_W;
+        let a = at(self.params, drawn::ANCHOR + axis) as i32;
+        about(a.wrapping_sub(o >> w), axis) as f32 - (o & ((1 << w) - 1)) as f32 / (1 << w) as f32
+    }
+
+    /// Lane `l` of slot `k`, f32.
+    fn lane(&self, l: u32, k: u32) -> f32 {
+        f32::from_bits(at(self.instances, l * self.room() + k))
+    }
 }

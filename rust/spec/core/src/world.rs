@@ -18,7 +18,7 @@ use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, AIR, BLOCK, FULL, PLACED, SPLIT};
 use crate::window::{Found, Squares};
-use crate::{Zoom, LEAF_CELL};
+use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own, so a
 /// descent asks each node's sources once rather than again from the top:
@@ -295,5 +295,109 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     In {
         kind,
         block: joined,
+    }
+}
+
+/// The zoom a box's placed leaves are first asked at: 8 unit cells a side,
+/// so a box with nothing placed near it is told so in a few looks.
+const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
+const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
+
+/// What is placed at the unit cells of a box, one leaf at a time
+/// (`Placed::next`), each with its cell and its stored word, as the
+/// objects' tree holds it (`overwrite`): asked of the query, never by
+/// walking the tree beside it. A cursor rather than a callback, so a GPU,
+/// which takes no closure over a binding's slice, walks it alike.
+#[derive(Clone, Copy)]
+pub struct Placed {
+    lo: [i32; 3],
+    hi: [i32; 3],
+    /// The node at `PLACED_FIRST` asked next.
+    first: [i32; 3],
+    /// The nodes gone into, a level each, the child each is at, and the
+    /// level at; none gone into at 0.
+    held: [overwrite::Held; PLACED_LEVELS + 1],
+    index: [[i32; 3]; PLACED_LEVELS + 1],
+    next: [u32; PLACED_LEVELS + 1],
+    depth: usize,
+}
+
+/// The placed leaves at the unit cells of `[lo, hi]`, both ends held.
+pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> Placed {
+    let s = UNIT_ZOOM - PLACED_FIRST;
+    Placed {
+        lo,
+        hi,
+        first: [lo[0] >> s, lo[1] >> s, lo[2] >> s],
+        held: [overwrite::Held::NOTHING; PLACED_LEVELS + 1],
+        index: [[0; 3]; PLACED_LEVELS + 1],
+        next: [0; PLACED_LEVELS + 1],
+        depth: 0,
+    }
+}
+
+impl Placed {
+    /// The next leaf placed at a unit cell of the box, its cell and its
+    /// word (`Lanes::data`); false past the last. One descent of the tree's
+    /// branches meeting the box, each child stepped once from its parent.
+    pub fn next(&mut self, lanes: &impl Lanes) -> ([i32; 3], u32, bool) {
+        let s = UNIT_ZOOM - PLACED_FIRST;
+        loop {
+            if self.depth == 0 {
+                if self.first[2] > self.hi[2] >> s {
+                    return ([0; 3], 0, false);
+                }
+                let n = self.first;
+                self.first[0] += 1;
+                if self.first[0] > self.hi[0] >> s {
+                    self.first[0] = self.lo[0] >> s;
+                    self.first[1] += 1;
+                    if self.first[1] > self.hi[1] >> s {
+                        self.first[1] = self.lo[1] >> s;
+                        self.first[2] += 1;
+                    }
+                }
+                let node = overwrite::cursor(lanes, PLACED, PLACED_FIRST, n);
+                if node.holds() {
+                    (self.held[0], self.index[0], self.next[1]) = (node, n, 0);
+                    self.depth = 1;
+                }
+                continue;
+            }
+            let d = self.depth;
+            if self.next[d] == 8 {
+                self.depth -= 1;
+                self.next[self.depth] += 1;
+                continue;
+            }
+            let (o, p) = (self.next[d], self.index[d - 1]);
+            let c = [
+                2 * p[0] + (o & 1) as i32,
+                2 * p[1] + (o >> 1 & 1) as i32,
+                2 * p[2] + (o >> 2 & 1) as i32,
+            ];
+            let z = PLACED_FIRST + d as Zoom;
+            let t = UNIT_ZOOM - z;
+            let meets = c[0] << t <= self.hi[0]
+                && (c[0] + 1) << t > self.lo[0]
+                && c[1] << t <= self.hi[1]
+                && (c[1] + 1) << t > self.lo[1]
+                && c[2] << t <= self.hi[2]
+                && (c[2] + 1) << t > self.lo[2];
+            let h = if meets {
+                overwrite::child(lanes, self.held[d - 1], z, c)
+            } else {
+                overwrite::Held::NOTHING
+            };
+            if h.holds() && h.folded() && d < PLACED_LEVELS {
+                (self.held[d], self.index[d], self.next[d + 1]) = (h, c, 0);
+                self.depth += 1;
+                continue;
+            }
+            self.next[d] += 1;
+            if d == PLACED_LEVELS && h.holds() && !h.folded() && h.zoom() == UNIT_ZOOM {
+                return (c, lanes.data(h.slot()), true);
+            }
+        }
     }
 }

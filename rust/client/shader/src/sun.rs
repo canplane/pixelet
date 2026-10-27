@@ -11,12 +11,13 @@
 use pxl_spec_core::cast::{self, Detail};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::sun::{Starts, Sun};
-use pxl_spec_core::{at, beam, observed, raster, tally, ways};
+use pxl_spec_core::{at, beam, observed, tally, ways};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
 use crate::beam::Words;
 use crate::cast::{counted, listed, pixel_tan, Rays};
+use crate::decor::Instances;
 use crate::eye::{eye_origin, eye_ray, Eye};
 use crate::observed::Seen;
 use crate::observer::{self, Aim, Observer};
@@ -65,31 +66,61 @@ fn epoch(m: &Moved) -> u32 {
     m[0].z as u32
 }
 
-/// Whether tile `[i, j]` of the box is one the cast numbered `cast` casts
-/// (`sun::fresh_at`), none past the box.
-fn fresh(list: &[u32], size: u32, cast: u32, tile: [i32; 2]) -> bool {
-    let w = tile_word(size, pxl_spec_core::sun::fresh_at(size), tile);
-    w != NO_TILE && at(list, w) == cast
-}
-
-/// Whether a tile about box texel `p`'s, it or one beside it, is one the
-/// cast numbered `cast` casts: one of the slots a sample there lies about
-/// is in it.
-fn fresh_about(list: &[u32], size: u32, cast: u32, p: [u32; 2]) -> bool {
-    let t = pxl_spec_core::sun::TILE;
-    let (i, j) = ((p[0] / t) as i32, (p[1] / t) as i32);
-    let mut b = -1;
-    while b <= 1 {
-        let mut a = -1;
-        while a <= 1 {
-            if fresh(list, size, cast, [i + a, j + b]) {
+/// Whether a tile from `lo` to `hi`, tiles across and down, is one the
+/// cast numbered `cast` casts (`sun::reads_at`), none past the box: tile by
+/// tile where they are few, else by the squares they lie in
+/// (`sun::coarse_at`), which may name a square for a tile of it alone.
+fn fresh_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i32; 2]) -> bool {
+    let n = pxl_spec_core::sun::tiles(size) as i32;
+    let (lo, hi) = (
+        [lo[0].max(0), lo[1].max(0)],
+        [hi[0].min(n - 1), hi[1].min(n - 1)],
+    );
+    if lo[0] > hi[0] || lo[1] > hi[1] {
+        return false;
+    }
+    let few = (hi[0] - lo[0] + 1) * (hi[1] - lo[1] + 1) <= 16;
+    let (k, first, row) = if few {
+        (1, pxl_spec_core::sun::reads_at(size), n)
+    } else {
+        (
+            pxl_spec_core::sun::COARSE as i32,
+            pxl_spec_core::sun::coarse_at(size),
+            pxl_spec_core::sun::coarse(size) as i32,
+        )
+    };
+    let mut j = lo[1] / k;
+    while j <= hi[1] / k {
+        let mut i = lo[0] / k;
+        while i <= hi[0] / k {
+            if w.word(first + (j * row + i) as u32) == cast {
                 return true;
             }
-            a += 1;
+            i += 1;
         }
-        b += 1;
+        j += 1;
     }
     false
+}
+
+/// The world as the sun's walks read it, no looks drawn.
+fn world<'a>(
+    eye: &'a Eye,
+    window: &'a [IVec4],
+    ground: &'a [u32],
+    shards: &'a [IVec4],
+    overwrites: &'a [u32],
+    pool: &'a [u32],
+) -> World<'a, Unlooked> {
+    World {
+        window,
+        ground,
+        looks: Unlooked(0),
+        shards,
+        overwrites,
+        eye,
+        pool: ways::tree::Read(pool),
+    }
 }
 
 /// The sun's cast off the eye's words (pxl-spec-core `sun::Sun::words`).
@@ -121,40 +152,28 @@ pub(crate) struct Map {
     size: u32,
     eye: [i32; 3],
     detail: Detail,
+    /// The cast's number (`sun::MOVED_CAST`), which names the tiles it
+    /// casts (`Observer::needs`).
+    cast: u32,
 }
 
-/// No starts, for a pass that aims no ray and is handed no head
-/// (`sun_cells_cs`).
-const UNAIMED: Starts = Starts {
-    base: [0; 2],
-    across: [0.0; 3],
-    down: [0.0; 3],
-    at: [[0; 3]; 4],
-    frac: [[0.0; 3]; 4],
-};
-
 impl Map {
-    fn of(eye: &Eye, starts: Starts, size: u32) -> Map {
+    fn of(eye: &Eye, moved: &Moved, size: u32) -> Map {
         let sun = sun_of(eye);
         let (origin, detail) = eye_origin(eye);
         Map {
             sun,
-            starts,
+            starts: starts(moved),
             size,
             eye: origin,
             detail: sun.detail(detail),
+            cast: cast_number(moved),
         }
     }
 
     /// Its samples across and down, a side.
     fn across(&self) -> u32 {
         self.size / pxl_spec_core::sun::SAMPLE
-    }
-
-    /// Whether box texel `p` lies where a receiver reads the map, grown by
-    /// `pad` texels (`Sun::read`).
-    fn read(&self, p: [i32; 2], pad: f32) -> bool {
-        self.sun.read(self.size, p, pad)
     }
 
     /// The word a slot leaves for the walk `met` of its ray aimed `aim`.
@@ -307,27 +326,44 @@ impl Observer for Map {
     fn laid(&self) -> ([i32; 3], (bool, [f32; 2])) {
         (self.starts.start(self.sun.corner), (false, [0.0; 2]))
     }
+
+    /// What feeds a tile this cast casts (`sun::reads_at`): a ray its own
+    /// slot's tile; a sample the slots its box may be picked by, a tile
+    /// either way, beyond the four it lies about (`sample_before`), as a box
+    /// fewer is a slot walked more; a cell, a tile, as a sample does; a beam
+    /// ray the cells whose window holds it (`window`), each as a cell does.
+    fn needs<W: Words + ?Sized>(&self, w: &W, level: u32, at: [u32; 2]) -> bool {
+        const _: () = assert!(
+            pxl_spec_core::sun::BEAM == pxl_spec_core::sun::TILE
+                && pxl_spec_core::sun::SAMPLE <= pxl_spec_core::sun::TILE,
+            "a cell is a tile, and a sample's slots lie within a tile of it"
+        );
+        use crate::observer::{CELL, CORNER, RAY};
+        let t = pxl_spec_core::sun::TILE as i32;
+        let (lo, hi) = if level == RAY {
+            let p = self.sun.texel(self.size, at);
+            let tile = [p[0] as i32 / t, p[1] as i32 / t];
+            (tile, tile)
+        } else if level == CELL {
+            let c = [at[0] as i32, at[1] as i32];
+            ([c[0] - 1, c[1] - 1], [c[0] + 1, c[1] + 1])
+        } else if level == CORNER {
+            let side = self.window([0, 0]).1 as i32;
+            let c = [at[0] as i32, at[1] as i32];
+            ([c[0] - side, c[1] - side], [c[0] + 1, c[1] + 1])
+        } else {
+            let p = self.sun.texel(self.size, self.point(at));
+            let tile = [p[0] as i32 / t, p[1] as i32 / t];
+            ([tile[0] - 1, tile[1] - 1], [tile[0] + 1, tile[1] + 1])
+        };
+        fresh_in(w, self.size, self.cast, lo, hi)
+    }
 }
 
 const _: () = assert!(
     beam::CELL_T == pxl_spec_core::sun::CELL_T && beam::CELL_CORNER == pxl_spec_core::sun::CELL_RAY,
     "a cell's start lies as the eye's (observer.rs `cell`)"
 );
-
-/// How far past the disk a receiver reads (`Sun::read`) each pass casts, in
-/// texels: a slot the receiver's own reach (`sun::READ_PAD`); a sample the
-/// slots it is one of the four about, `SAMPLE` across and down; a cell its
-/// samples, a cell's half-diagonal from its middle; a beam ray the cells
-/// whose window holds it, `BEAM_WINDOW` and one more beam spacings across
-/// and down, from a cell's corner.
-const SLOT_PAD: f32 = pxl_spec_core::sun::READ_PAD;
-const SAMPLE_PAD: f32 = SLOT_PAD + pxl_spec_core::sun::SAMPLE as f32 * core::f32::consts::SQRT_2;
-const CELL_PAD: f32 =
-    SAMPLE_PAD + pxl_spec_core::sun::BEAM as f32 * core::f32::consts::FRAC_1_SQRT_2 + 1.0;
-const BEAM_PAD: f32 = CELL_PAD
-    + ((pxl_spec_core::sun::BEAM_WINDOW + 1) * pxl_spec_core::sun::BEAM) as f32
-        * core::f32::consts::SQRT_2
-    + pxl_spec_core::sun::BEAM as f32;
 
 const _: () = assert!(
     pxl_spec_core::sun::RIM == 15,
@@ -344,11 +380,8 @@ const _: () = assert!(
 /// own ray enters it (observer.rs `took`), or the sky where no sample about
 /// it met anything (observer.rs `sky`), as the eye's pixels do (cast.rs
 /// `cast_cs`), and the word it leaves there; the rest listed for their walk
-/// (`sun_miss_cs`), every slot where the raster is not made yet. Only the
-/// slots of the tiles the cast casts (`sun::fresh_at`): one past the disk
-/// (`Sun::read`) or in a tile none marked (`sun_mark_cs`) no receiver
-/// reads, and one in a tile an earlier cast of its epoch cast stands
-/// (`sun::MOVED_EPOCH`).
+/// (`sun_miss_cs`), every slot where the raster is not made yet (observer.rs
+/// `resolve`). Only the slots of the tiles the cast casts (`Map::needs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_cs"))]
 pub fn sun_cs(
     #[spirv(workgroup_id)] group: UVec3,
@@ -366,37 +399,30 @@ pub fn sun_cs(
     if slot.x >= size.x || slot.y >= size.y {
         return;
     }
-    let m = Map::of(eye, starts(moved), size.x);
+    let m = Map::of(eye, moved, size.x);
     let at = [slot.x, slot.y];
-    let aim = m.aim(at);
-    let p = m.sun.texel(size.x, at);
-    // Past where any receiver reads, or in a tile an earlier cast left
-    // standing: nothing cast, its word as it was.
-    let t = pxl_spec_core::sun::TILE;
-    let tile = [(p[0] / t) as i32, (p[1] / t) as i32];
-    if !m.read([p[0] as i32, p[1] as i32], SLOT_PAD)
-        || !fresh(&*list, size.x, cast_number(moved), tile)
-    {
+    // A slot no receiver reads, or one an earlier cast of the epoch cast,
+    // left as it was.
+    if !m.needs(&*list, observer::RAY, at) {
         return;
     }
+    let aim = m.aim(at);
+    let p = m.sun.texel(size.x, at);
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = picks.fetch(UVec3::new(p[0], p[1], 0));
-    let pick = kept.x;
-    if pick != 0 && pick & raster::LACK == 0 {
-        let (stop, _, enters) = observer::took(&m, &*list, &aim, pick);
-        if enters {
-            let met = cast::Met {
-                ends: cast::Ends::Stop,
-                stop,
-                visits: 0,
-            };
-            counted(misses, counts(moved), tally::PICKED, 1);
-            // SAFETY: within the map, bounded by its size above.
-            unsafe { sun.write(slot, m.word(&aim, &met)) };
-            return;
-        }
+    let (took, stop, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
+    if took == observer::TOOK {
+        let met = cast::Met {
+            ends: cast::Ends::Stop,
+            stop,
+            visits: 0,
+        };
+        counted(misses, counts(moved), tally::PICKED, 1);
+        // SAFETY: within the map, bounded by its size above.
+        unsafe { sun.write(slot, m.word(&aim, &met)) };
+        return;
     }
-    if pick == 0 && observer::sky(&m, &*list, at) {
+    if took == observer::SKY {
         // SAFETY: within the map, bounded by its size above.
         unsafe { sun.write(slot, m.sun.word(aim.detail, 1.0)) };
         return;
@@ -447,16 +473,8 @@ pub fn sun_miss_cs(
     }
     let w = at(list, pxl_spec_core::sun::misses_at(size.x) + i);
     let slot = UVec3::new(w & 0xffff, w >> 16, 0);
-    let world = World {
-        window,
-        ground,
-        looks: Unlooked(0),
-        shards,
-        overwrites,
-        eye,
-        pool: ways::tree::Read(pool),
-    };
-    let m = Map::of(eye, starts(moved), size.x);
+    let world = world(eye, window, ground, shards, overwrites, pool);
+    let m = Map::of(eye, moved, size.x);
     let (aim, met, _) = observer::walked(&m, world, seen, list, [slot.x, slot.y]);
     // SAFETY: a slot `sun_cs` listed, within the map.
     unsafe { sun.write(slot, m.word(&aim, &met)) };
@@ -465,7 +483,7 @@ pub fn sun_miss_cs(
 /// Each sample of the sun's map (pxl-spec-core `sun::SAMPLE`), a slot every
 /// `SAMPLE` across and down, a thread each, the map's (observer.rs
 /// `sample`): its stop left in the eye's samples' words for the raster
-/// (`sun_boxes_cs`); none past every slot a receiver reads.
+/// (`sun_boxes_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_sample_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sun_sample_cs(
@@ -483,28 +501,11 @@ pub fn sun_sample_cs(
 ) {
     let window: &[IVec4] = window;
     let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, starts(moved), size.x);
+    let m = Map::of(eye, moved, size.x);
     if id.x >= m.across() || id.y >= m.across() {
         return;
     }
-    let p = m.sun.texel(size.x, m.point([id.x, id.y]));
-    if !m.read([p[0] as i32, p[1] as i32], SAMPLE_PAD)
-        || !fresh_about(&*list, size.x, cast_number(moved), p)
-    {
-        // Past every slot a receiver reads: met nothing, so drawn as no box.
-        let k = m.sample_at([id.x, id.y]) + beam::SAMPLE_NODE + beam::NODE_ZOOM;
-        list.set(k, beam::SAMPLE_NONE);
-        return;
-    }
-    let world = World {
-        window,
-        ground,
-        looks: Unlooked(0),
-        shards,
-        overwrites,
-        eye,
-        pool: ways::tree::Read(pool),
-    };
+    let world = world(eye, window, ground, shards, overwrites, pool);
     observer::sample(&m, world, seen, list, [id.x, id.y]);
 }
 
@@ -522,7 +523,7 @@ pub fn sun_boxes_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
 ) {
     let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, starts(moved), size.x);
+    let m = Map::of(eye, moved, size.x);
     // [naga] The eye's vec2 of u32s read, so the module holds the type
     // naga's SPIR-V reader splits an arrayed image's layer off by (`Eye`).
     if id.x >= m.across() || id.y >= m.across() || eye.range.x > eye.range.y {
@@ -534,8 +535,7 @@ pub fn sun_boxes_cs(
 /// Each beam ray of the sun's map (pxl-spec-core `sun::BEAM`), a thread
 /// each, `sun::beam_across` a side, `sun::BEAM_WINDOW` of them past the box
 /// on each side, the map's (observer.rs `beam`): its line and its origin
-/// left for the texels about it, and how far they start from it; none past
-/// every cell a receiver's slots start from.
+/// left for the texels about it, and how far they start from it.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sun_beam_cs(
@@ -553,46 +553,32 @@ pub fn sun_beam_cs(
 ) {
     let window: &[IVec4] = window;
     let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, starts(moved), size.x);
+    let m = Map::of(eye, moved, size.x);
     let [across, down] = m.corners();
-    let (b, w) = (
-        pxl_spec_core::sun::BEAM as i32,
-        pxl_spec_core::sun::BEAM_WINDOW as i32,
-    );
-    let p = [(id.x as i32 - w) * b, (id.y as i32 - w) * b];
-    if id.x >= across || id.y >= down || !m.read(p, BEAM_PAD) {
+    if id.x >= across || id.y >= down {
         return;
     }
-    let world = World {
-        window,
-        ground,
-        looks: Unlooked(0),
-        shards,
-        overwrites,
-        eye,
-        pool: ways::tree::Read(pool),
-    };
+    let world = world(eye, window, ground, shards, overwrites, pool);
     observer::beam(&m, world, seen, list, [id.x, id.y]);
 }
 
 /// Where each cell of the sun's map starts (pxl-spec-core `sun::cell`), a
 /// thread a cell, `sun::BEAM` texels a side, the map's (observer.rs
-/// `cell`); none past every sample a receiver's slots read.
+/// `cell`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_cells_cs"))]
 pub fn sun_cells_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
     let size: UVec3 = sun.query_size();
-    let m = Map::of(eye, UNAIMED, size.x);
+    let m = Map::of(eye, moved, size.x);
     let [across, down] = m.cells();
-    let (b, half) = (pxl_spec_core::sun::BEAM, pxl_spec_core::sun::BEAM / 2);
-    let p = [(id.x * b + half) as i32, (id.y * b + half) as i32];
     // [naga] The eye's vec2 of u32s read, so the module holds the type
     // naga's SPIR-V reader splits an arrayed image's layer off by (`Eye`).
-    if id.x >= across || id.y >= down || eye.range.x > eye.range.y || !m.read(p, CELL_PAD) {
+    if id.x >= across || id.y >= down || eye.range.x > eye.range.y {
         return;
     }
     observer::cell(&m, list, [id.x, id.y]);
@@ -652,26 +638,8 @@ pub fn sun_mark_cs(
     }
 }
 
-/// The decor's anchor on axis `c` from the eye at Q3 `o`, in units, X the
-/// short way round as a Q3 wraps (pxl-spec-core `scatter::drawn::ANCHOR`).
-fn anchored(params: &[u32], c: u32, o: i32) -> f32 {
-    const _: () = assert!(
-        24 + pxl_spec_core::FRAC_W == 32,
-        "unit cells wrap at 2^24 (decor.rs `place_one`) as a Q3 wraps at 2^32"
-    );
-    let w = pxl_spec_core::FRAC_W;
-    let a = at(params, pxl_spec_core::scatter::drawn::ANCHOR + c) as i32;
-    a.wrapping_shl(w).wrapping_sub(o) as f32 / (1u32 << w) as f32
-}
-
-/// Lane `l` of instance slot `k` of `room`, f32 (pxl-shader decor.rs
-/// `place_one`).
-fn lane(instances: &[u32], room: u32, l: u32, k: u32) -> f32 {
-    f32::from_bits(at(instances, l * room + k))
-}
-
 /// Tile `[i, j]`'s word among the box's tiles' words at `first` (the
-/// stands, the marks, the fresh tiles), `NO_TILE` past the box.
+/// stands, the reads), `NO_TILE` past the box.
 fn tile_word(size: u32, first: u32, [i, j]: [i32; 2]) -> u32 {
     let n = pxl_spec_core::sun::tiles(size) as i32;
     if i >= 0 && j >= 0 && i < n && j < n {
@@ -696,14 +664,13 @@ fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
 /// The drawn receivers of the sun's map, each the eye sees standing as the
 /// world's do (`sun_mark_cs`): the actors the host draws, a thread each
 /// (`sun::ACTORS_AT`); then the decor grown, a thread a slot of its
-/// instances (pxl-render gpu/grown.rs), as many as were placed
-/// (`decor_place_cs`), where each stands about the decor's anchor. Seen where a
+/// instances (pxl-render gpu/grown.rs), as many as are placed, where each
+/// stands, as decor tells (decor.rs `Instances`). Seen where a
 /// ball about its middle as wide as decor is tall and wide meets the view
 /// (`eye::sees`); the tiles about its own stood on too, as many as half
-/// the widest decor spans (`Sun::ring`). The actors are the skinned draws',
-/// a case's among them, which marks tiles needlessly at most, and no more
-/// than `sun::ACTORS`, past which one stands unmarked. Run after decor is
-/// placed, before the reach.
+/// the widest decor spans (`Sun::ring`). The actors are those the scene
+/// draws in the world (pxl-render gpu/renderer.rs `Cast::actors`), no more
+/// than `sun::ACTORS`. Run after decor is placed, before the reach.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "sun_mark_drawn_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sun_mark_drawn_cs(
@@ -716,7 +683,7 @@ pub fn sun_mark_drawn_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 20)] instances: &[u32],
 ) {
-    use pxl_spec_core::scatter::{drawn, TALLEST, WIDEST};
+    use pxl_spec_core::scatter::{TALLEST, WIDEST};
     let head = pxl_spec_core::sun::ACTORS_AT;
     let k = id.x as usize;
     let v = if k < pxl_spec_core::sun::ACTORS {
@@ -730,19 +697,17 @@ pub fn sun_mark_drawn_cs(
             f32::from_bits(p.z as u32),
         ]
     } else {
-        let room = instances.len() as u32 / (drawn::LANES + 1);
+        let placed = Instances {
+            params,
+            regions,
+            instances,
+        };
         let k = (k - pxl_spec_core::sun::ACTORS) as u32;
-        // Every slot placed this cast's frame, the regions' last end.
-        let placed = at(regions, 2 * drawn::REGIONS - 1).min(room);
-        if k >= placed {
+        if k >= placed.count() {
             return;
         }
-        // [rust-gpu] Each by a call, not a closure over a binding's slice.
-        [
-            anchored(params, 0, eye.origin.x) + lane(instances, room, 0, k),
-            anchored(params, 1, eye.origin.y) + lane(instances, room, 1, k),
-            anchored(params, 2, eye.origin.z) + lane(instances, room, 2, k),
-        ]
+        let o = [eye.origin.x, eye.origin.y, eye.origin.z];
+        placed.stands(k, o)
     };
     let v3 = |v: Vec4| [v.x, v.y, v.z];
     let middle = [v[0], v[1], v[2] + TALLEST as f32 / 2.0];
@@ -768,15 +733,15 @@ pub fn sun_mark_drawn_cs(
     }
 }
 
-/// Which tiles of the box a receiver reads in this cast (`sun::marks_at`),
-/// a thread a tile, after every receiver stood (`sun_mark_cs`,
-/// `sun_mark_drawn_cs`), before the beam: one within a tile and its taps of
-/// a step up the way up from a tile one stands on (`Sun::up`, `Sun::up_at`:
-/// a point that far up lies that many tiles over or one more, its taps a
-/// tile either side), as decor and the actors stand on what the eye meets
-/// and are no taller. Each read that no cast since the epoch's first read,
-/// which its own last mark tells, is the cast's to cast (`sun::fresh_at`).
-/// A tile's words its own thread's alone.
+/// Which tiles of the box a receiver reads in this cast, a thread a tile,
+/// after every receiver stood (`sun_mark_cs`, `sun_mark_drawn_cs`), before
+/// the beam: one in the disk it reads (`Sun::read`), within a tile and its
+/// taps of a step up the way up from a tile one stands on (`Sun::up`,
+/// `Sun::up_at`: a point that far up lies that many tiles over or one more,
+/// its taps a tile either side), as decor and the actors stand on what the
+/// eye meets and are no taller. One read that no cast of the epoch read is
+/// the cast's to cast: its word names the cast (`sun::reads_at`), and its
+/// square's (`sun::coarse_at`). A tile's word its own thread's alone.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_reach_cs"))]
 pub fn sun_reach_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -793,6 +758,16 @@ pub fn sun_reach_cs(
         return;
     }
     let s = sun_of(eye);
+    // A tile past every slot a receiver reads holds none of its slots.
+    let t = pxl_spec_core::sun::TILE;
+    let middle = [(id.x * t + t / 2) as i32, (id.y * t + t / 2) as i32];
+    if !s.read(
+        size.x,
+        middle,
+        pxl_spec_core::sun::READ_PAD + t as f32 * core::f32::consts::FRAC_1_SQRT_2,
+    ) {
+        return;
+    }
     let (cast, epoch) = (cast_number(moved), epoch(moved));
     let up = s.up();
     let t = [id.x as i32, id.y as i32];
@@ -811,13 +786,15 @@ pub fn sun_reach_cs(
         }
         k += 1;
     }
-    if read {
-        let w = id.y * n + id.x;
-        let mark = pxl_spec_core::sun::marks_at(size.x) + w;
-        if at(list, mark) < epoch {
-            put(list, pxl_spec_core::sun::fresh_at(size.x) + w, cast);
-        }
-        put(list, mark, cast);
+    // Read, and read first in the epoch: the cast's to cast.
+    let w = pxl_spec_core::sun::reads_at(size.x) + id.y * n + id.x;
+    if read && at(list, w) < epoch {
+        put(list, w, cast);
+        put(
+            list,
+            pxl_spec_core::sun::coarse_square(size.x, [id.x, id.y]),
+            cast,
+        );
     }
 }
 

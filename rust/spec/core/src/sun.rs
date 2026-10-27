@@ -308,13 +308,13 @@ pub fn depth_of(word: u32) -> f32 {
 /// then the actors (`ACTORS_AT`).
 pub const MOVED_HEAD: usize = ACTORS_AT + 1 + ACTORS;
 pub const MOVED_WORDS: usize = 4 * MOVED_HEAD;
-/// The cast's number, counted up from one each cast, which a tile read in
-/// it is marked with (`marks_at`).
+/// The cast's number, counted up from one each cast, which a tile stood on
+/// and read in it is marked with (`stands_at`, `reads_at`).
 pub const MOVED_CAST: usize = 0;
 pub const MOVED_COUNTED: usize = 1;
-/// The number of the cast since which only the eye's look moved: what a
-/// cast in it or after left in a tile stands, as the eye's place, the light
-/// and the world it was cast for still do (`fresh_at`).
+/// The number of the cast since which only what says which tiles are read
+/// moved: what a cast in it or after left in a tile stands, as the eye's
+/// place, the light and the world it was cast for still do (`reads_at`).
 pub const MOVED_EPOCH: usize = 2;
 
 /// Where a texel's ray starts, the same point of the world in every frame
@@ -568,12 +568,13 @@ pub const fn stands_at(size: u32) -> u32 {
     misses_at(size) + size * size
 }
 
-/// The tiles a receiver reads in a cast, past the stands, as many: the
-/// number of the last cast one did, a tile within its taps of the way up
-/// from a tile one stands on (`Sun::up`; pxl-shader sun.rs
-/// `sun_reach_cs`). A cast casts only the slots of tiles read (`sun_cs`),
-/// as no receiver reads any other.
-pub const fn marks_at(size: u32) -> u32 {
+/// The tiles a receiver reads, past the stands, as many: the number of the
+/// cast that first read one in its epoch (`MOVED_EPOCH`), read where it lies
+/// within its taps of the way up from a tile one stands on (`Sun::up`;
+/// pxl-shader sun.rs `sun_reach_cs`). A tile this cast's number names is
+/// the cast's to cast; one an earlier cast of its epoch names holds what
+/// that cast left; no receiver reads any other.
+pub const fn reads_at(size: u32) -> u32 {
     stands_at(size) + tiles(size) * tiles(size)
 }
 
@@ -586,19 +587,30 @@ pub const fn tiles(size: u32) -> u32 {
 /// tiles at an edge or a grazing face, and a run on one tile marks it once.
 pub const MARK: u32 = 4;
 
-/// The tiles a cast casts, past the marks, a word a tile as the marks are:
-/// the cast's number where it marked a tile read no cast since
-/// `MOVED_EPOCH` had, which it sees in the mark it overwrites (pxl-shader
-/// sun.rs `sun_reach_cs`). Every other tile read holds what such a cast
-/// left.
-pub const fn fresh_at(size: u32) -> u32 {
-    marks_at(size) + tiles(size) * tiles(size)
+/// The reads by the square of `COARSE` tiles a side, past them, `coarse`
+/// a row: the cast's number where a tile in the square is the cast's to
+/// cast, read in place of the tiles where a span of them is asked
+/// (pxl-shader sun.rs `Map::needs`).
+pub const COARSE: u32 = 8;
+
+pub const fn coarse(size: u32) -> u32 {
+    tiles(size) / COARSE
+}
+
+pub const fn coarse_at(size: u32) -> u32 {
+    reads_at(size) + tiles(size) * tiles(size)
+}
+
+/// The word of the square tile `[i, j]` lies in, among the squares'
+/// (`coarse_at`); the map's tiles a whole number of squares a side.
+pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
+    coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
-/// stands, the marks, the fresh tiles.
+/// stands, the reads, their squares.
 pub const fn list_words(size: u32) -> u32 {
-    fresh_at(size) + tiles(size) * tiles(size)
+    coarse_at(size) + coarse(size) * coarse(size)
 }
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on

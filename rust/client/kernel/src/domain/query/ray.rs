@@ -235,7 +235,7 @@ impl<'a> World<'a> {
     /// one not held at all is the lack too, past which the ray tells nothing.
     /// Decor, which is no block, is struck at the leaf cells it passes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
-        let (met, strike) = self.along(ray, detail, Until::Fills, self.strike(ray));
+        let (met, strike) = self.along(ray, detail, Until::Opaque, self.strike(ray));
         let decor = strike
             .and_then(|s| s.best)
             .filter(|&(d, _)| met.value().flatten().is_none_or(|h: Hit| d < h.t));
@@ -280,10 +280,9 @@ impl<'a> World<'a> {
     }
 
     /// The footing down column `g` at `cell` (pxl-spec-core
-    /// `scatter::footing`): the top of the block met as drawn, where the
-    /// world holds the column as its tiles say; none where nothing fills or
-    /// a tile under the ray is lacked or only a coarser one stands in.
-    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(i32, f32)> {
+    /// `support::footing`): the top of the block met as drawn, with what the
+    /// world lacked on the way; none where nothing fills.
+    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Answer<Option<(i32, f32)>> {
         let mut walker = Walker {
             world: self,
             lack: None,
@@ -294,8 +293,14 @@ impl<'a> World<'a> {
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
-        let (top, met) = pxl_spec_core::scatter::footing(&mut walker, cell, g);
-        (met && walker.lack.is_none()).then_some(top)
+        let f = pxl_spec_core::support::footing(&mut walker, cell, g);
+        let met = (f.ends == Ends::Stop).then_some(f.top);
+        match (met, walker.lack, walker.answered) {
+            (m, None, _) => Answer::Exact(m),
+            (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),
+            (None, Some(l), true) => Answer::Coarser(None, l),
+            (None, Some(l), false) => Answer::Nothing(l),
+        }
     }
 
     /// Where the descent from `q`, the ray's origin as a position names it,

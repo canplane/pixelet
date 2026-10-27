@@ -200,4 +200,9 @@ impl Observer for Eye {
     fn laid(&self) -> ([i32; 3], (bool, [f32; 2])) {
         (eye_origin(self).0, (true, [self.tan.x, self.tan.y]))
     }
+
+    /// Every one: what the eye casts is what it shows.
+    fn needs<W: Words + ?Sized>(&self, _: &W, _: u32, _: [u32; 2]) -> bool {
+        true
+    }
 }

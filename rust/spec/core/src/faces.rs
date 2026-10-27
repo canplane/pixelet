@@ -21,15 +21,15 @@ use crate::{wrap_index, Zoom};
 /// A face's edges, and its corners.
 pub const EDGES: u32 = 4;
 /// Bit `k` of each field is edge `k`'s or corner `k`'s, the fields in the
-/// order they are asked, each deciding what the next asks. A block fills
-/// in front of the face across the edge: the face meets a wall there, and
+/// order they are asked, each deciding what the next asks. A block hides
+/// what is in front of the face across the edge: the face meets a wall there, and
 /// closes in towards it.
 pub const RISE_SHIFT: u32 = 0;
 /// The edge meets the air: neither the block in front of the face across
-/// it nor the one beside it fills, a convex edge or a step down, drawn as
+/// it nor the one beside it hides it, a convex edge or a step down, drawn as
 /// a line.
 pub const LINE_SHIFT: u32 = EDGES;
-/// A block fills in front of the face across the corner, and none across
+/// A block hides what is in front of the face across the corner, and none across
 /// either edge meeting there, which closes the corner in already.
 pub const CORNER_SHIFT: u32 = 2 * EDGES;
 pub const BITS: u32 = 3 * EDGES;
@@ -37,15 +37,15 @@ pub const BITS: u32 = 3 * EDGES;
 /// The bits of a face of a block kept short of its cube
 /// (`answer::kept`), a box inset in it apart from every block about it:
 /// every edge meets the air, and nothing rises across one. Beside it, it is
-/// no block that fills for a face's bits (`answer::whole`).
+/// no block that hides for a face's bits (`answer::whole`).
 pub const BOX: u32 = ((1 << EDGES) - 1) << LINE_SHIFT;
 
 /// The bits of face `face` (a ray's: 2·axis, plus one where its outward
-/// normal points down the axis) of a block, `fills(d)` whether the block
-/// `d` blocks from it fills its cube whole (`answer::whole`): bit `i` answers the
+/// normal points down the axis) of a block, `hides(d)` whether the block
+/// `d` blocks from it hides its cube whole (`answer::whole`): bit `i` answers the
 /// `i`th block asked, and a block is not asked where a bit already set
 /// decides it. One place asks, as a shader inlines each.
-pub fn word(face: u32, mut fills: impl FnMut([i32; 3]) -> bool) -> u32 {
+pub fn word(face: u32, mut hides: impl FnMut([i32; 3]) -> bool) -> u32 {
     let axis = face / 2;
     let n = unit(axis, 1 - 2 * (face & 1) as i32);
     let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
@@ -63,9 +63,9 @@ pub fn word(face: u32, mut fills: impl FnMut([i32; 3]) -> bool) -> u32 {
                 w >> RISE_SHIFT & (1 << a | 1 << b) == 0,
             ),
         };
-        // A line where the block beside does not fill; a rise or a corner
+        // A line where the block beside does not hide; a rise or a corner
         // where the one in front does.
-        if open && fills(d) != (field == 1) {
+        if open && hides(d) != (field == 1) {
             w |= 1 << i;
         }
         i += 1;

@@ -517,12 +517,14 @@ impl Grown {
         self.on && self.counting
     }
 
-    /// What the sun's mark reads of the decor placed, while decor is on: its
-    /// frame's words, its regions and its instances (pxl-shader sun.rs
-    /// `sun_mark_drawn_cs`), and the slots the instances hold.
-    pub fn placed(&self) -> Option<([u32; 3], u32)> {
-        (self.on && self.instances != 0)
-            .then_some(([self.params, self.regions, self.instances], self.room))
+    /// The decor placed, while decor is on (`Instances`).
+    pub fn placed(&self) -> Option<Instances> {
+        (self.on && self.instances != 0).then_some(Instances {
+            params: self.params,
+            regions: self.regions,
+            instances: self.instances,
+            room: self.room,
+        })
     }
 
     /// What the draws read, while decor is on: the decor's instances, their slots,
@@ -534,6 +536,17 @@ impl Grown {
             uniform_group: self.uniform_group,
         })
     }
+}
+
+/// The decor placed as a reader beside the draws reads it (pxl-shader
+/// decor.rs `Instances`, read by sun.rs `sun_mark_drawn_cs`): its frame's
+/// words, its regions and its instances, and the slots they hold.
+#[derive(Clone, Copy)]
+pub struct Instances {
+    pub params: u32,
+    pub regions: u32,
+    pub instances: u32,
+    pub room: u32,
 }
 
 /// The decor's instances as the draws read them (`Grown::drawn`): their

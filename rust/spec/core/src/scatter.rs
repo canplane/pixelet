@@ -491,8 +491,8 @@ pub trait Grounds: Lanes {
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
-    /// The footing down column `g` at `cell` (`footing`), as this side
-    /// casts it: its top (`cast::top`); false where nothing fills there or
+    /// The footing down column `g` at `cell`, the query's support
+    /// (`support::footing`), as this side asks it: its top (`cast::top`); false where nothing fills there or
     /// the world lacks it.
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool);
     /// What is in the block `c` of `zoom`, the world's one query's answer
@@ -514,44 +514,8 @@ pub struct Grown {
     pub sink: u32,
 }
 
-/// The footing down column `g` at `cell`: the first block that fills on
-/// the world's one ray straight down the column's middle, at `cell`'s
-/// blocks alone, from the top of the world (`HEIGHT_BITS`) — where a walker
-/// stands (pxl-kernel domain/query/support.rs `highest`), whichever layer holds
-/// it. Its top as drawn, at `cell` (`cast::top`); false where the ray
-/// meets none.
-pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {
-    let (o, ray, detail) = footing_ray(cell, g);
-    let met = crate::cast::first(q, o, &ray, detail, crate::cast::Until::Fills);
-    (
-        crate::cast::top(o, &met.stop.node, met.stop.block[0]),
-        met.ends == crate::cast::Ends::Stop,
-    )
-}
-
-/// The footing's ray down column `g` at `cell`: from the top of the world
-/// over the column's middle, straight down, at `cell`'s blocks alone.
-fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::cast::Detail) {
-    let s = crate::FINEST_ZOOM - cell;
-    let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
-    let top = ((1i32 << (crate::HEIGHT_BITS - 1)) << FRAC_W) - 1;
-    let o = [mid(g[0]), mid(g[1]), top];
-    let ray = crate::cast::Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
-    (
-        o,
-        ray,
-        crate::cast::Detail {
-            tau: 1.0,
-            range: [cell, cell],
-            eye: [0.0; 3],
-            cone: crate::cast::Cone::EXACT,
-            apart: 0.0,
-        },
-    )
-}
-
 /// Where candidate `c` of `decor` stands at `cell`: on its column's footing
-/// (`footing`), facing as the blocks beside it at the footing's level vote
+/// (`support::footing`), facing as the blocks beside it at the footing's level vote
 /// (`asks`); false where the column has none.
 pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> (Grown, bool) {
     grown(q, decor, cell, c, false)
