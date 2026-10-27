@@ -119,8 +119,8 @@ pub(crate) struct Writing<'a, L> {
     pub(crate) world: World<'a, L>,
     pub(crate) seen: &'a mut Seen,
     pub(crate) tag: u32,
-    /// Whether it writes a block a ray sees: a walk whose world reads no
-    /// looks (the sun's, `Unlooked`) answers such a block without them, and
+    /// Whether it writes an asset a ray sees: a walk whose world reads no
+    /// looks (the sun's, `Unlooked`) answers such an asset without them, and
     /// another walk may read what it writes; splits, what is transparent and
     /// lacks carry none.
     pub(crate) assets: bool,

@@ -513,7 +513,7 @@ impl Renderer {
         r
     }
 
-    /// What a block's face is painted by, wherever it is drawn from
+    /// What a cell's face is painted by, wherever it is drawn from
     /// (paint.wgsl): the frame, the sun's shadow, the texture pack, the occlusion
     /// and the air.
     fn lit_entries(&self, frame: u32) -> Vec<Entry> {
@@ -531,7 +531,7 @@ impl Renderer {
         e
     }
 
-    /// The ghost boxes' group 0: what a block's face is painted by, and the draws.
+    /// The ghost boxes' group 0: what a cell's face is painted by, and the draws.
     fn box_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
         let mut e = self.lit_entries(self.frame_buffer);
@@ -776,7 +776,7 @@ impl Renderer {
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        // The camera gizmo listed tints the rays' blocks (screen_lit.wgsl `cell_share`).
+        // The camera gizmo listed tints the rays' cells (screen_lit.wgsl `cell_share`).
         self.frame[GIZMO] = if draws.of(PIPELINE_CAMERA_GRID).len() > 0 {
             1.0
         } else {

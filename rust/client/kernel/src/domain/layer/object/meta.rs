@@ -5,7 +5,7 @@
 
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::decor_id_from_num;
-use pxl_spec::block::object::object_value_is_decor;
+use pxl_spec::object::is_decor;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
 use pxl_spec_core::scatter::placed_pose;
@@ -23,7 +23,7 @@ pub fn user_decor_pick(corner: &Q3, decor: &Decor) -> (u32, u32) {
 /// A placed decor as one instance, its box's min corner at its entry's; none
 /// for anything else placed.
 pub fn placed(e: &Entry) -> Option<Instance> {
-    if !object_value_is_decor(e.state) {
+    if !is_decor(e.state) {
         return None;
     }
     let decor = Decor::of(decor_id_from_num(e.state));

@@ -1,19 +1,19 @@
 // pxl-spec-core/way.rs
 
-//! gpu-portable: the ways off the ground, as a block asks them — a bridge's
-//! deck and its piers, a tunnel's bore and the way's block about it, an
+//! gpu-portable: the ways off the ground, as a cell asks them — a bridge's
+//! deck and its piers, a tunnel's bore and the way's ground about it, an
 //! approach's embankment or cutting — one rule for a square's fill, which
 //! keeps each column's spans once and builds its ways' tree off them, which
 //! the descent on both sides reads (pxl-spec bake/separation.rs keeps the
-//! lines, solved offline). A block is asked of the lines over its column,
+//! lines, solved offline). A cell is asked of the lines over its column,
 //! each visit of a line its own crossing: the run of its segments, one
 //! after another, that are over the column. A column's visits make its
-//! spans once (`column`), what a block of it is is read off them (`at`),
+//! spans once (`column`), what a cell of it holds is read off them (`at`),
 //! and ground beside the air they leave takes that way's look, read off the
 //! spans of the columns beside it as its fill builds its tree (`lined`), so
-//! a reader reads a block's own column alone. What is under half a block in any dimension at a
+//! a reader reads a cell's own column alone. What is under half a cell in any dimension at a
 //! zoom is absent there, as the fold drops a line under half a cell wide: a
-//! slab or a bore fills a block where it holds half its height or more, and
+//! slab or a bore fills a cell where it holds half its height or more, and
 //! a pier, a leaf cell square, stands only in columns no more than two leaf
 //! cells wide. Index loops, no `Option` (a crossing none is is `Crossing::NONE`), words
 //! for tags, nothing a GPU lacks (`hypot`).
@@ -39,14 +39,14 @@ pub const STACKED_DECK_HEADROOM_M: f32 = 6.0;
 
 // From louis-e/arnis `c96872e`, Copyright (c) 2022-2026 Louis Erbkamm, under
 // the Apache License, Version 2.0 (THIRD_PARTY_NOTICES.md); changed to stand
-// on a deck's line rather than place blocks. A bridge the source names no
+// on a deck's line rather than place Minecraft blocks. A bridge the source names no
 // structure for is Arnis's beam bridge (`pier_interval`, `place_pier_bent`):
 // a bent every 8 m, 12 m once its half width passes two cells, of one-cell
 // columns.
 pub const BEAM_PILLAR_INTERVAL_M: f32 = 8.0;
 pub const WIDE_BEAM_PIER_INTERVAL_M: f32 = 12.0;
 
-/// Arnis's `LOWER_DECK_GAP`, a block short of the stacked headroom: a deck at
+/// Arnis's `LOWER_DECK_GAP`, a cell short of the stacked headroom: a deck at
 /// least this far under a pier's blocks it.
 const LOWER_DECK_GAP_M: f32 = STACKED_DECK_HEADROOM_M - 1.0;
 
@@ -61,7 +61,7 @@ pub const BRIDGE: u32 = 0;
 pub const TUNNEL: u32 = 1;
 pub const APPROACH: u32 = 2;
 
-/// What `block` answers where the ways write nothing there.
+/// What `lined` answers where the ways write nothing there.
 pub const NOTHING: u32 = u32::MAX;
 
 /// What a bore's air is where the ways write it (`lined`): the ground's void.
@@ -520,9 +520,9 @@ fn visit<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Crossing, u32) {
     (x, j)
 }
 
-/// Whether the leaf cells `[lo, hi)` fill block `z` of the grid's zoom: more
-/// than half its height, as its share of the block rounds (half to even), so
-/// a run of half a block or thinner fills none.
+/// Whether the leaf cells `[lo, hi)` fill cell `z` of the grid's zoom: more
+/// than half its height, as its share of the cell rounds (half to even), so
+/// a run of half a cell or thinner fills none.
 pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
@@ -533,10 +533,10 @@ pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
     2 * (hi.min((z + 1) * s) - lo.max(z * s)) > s
 }
 
-/// The blocks of the grid's zoom the leaf cells `[lo, hi)` fill (`fills`),
-/// `[first, last]`, first past last where none: every block between the
+/// The cells of the grid's zoom the leaf cells `[lo, hi)` fill (`fills`),
+/// `[first, last]`, first past last where none: every cell between the
 /// first and the last they reach is filled whole, so only those two can
-/// fail, and a block finer than a leaf fills as its leaf does.
+/// fail, and a cell finer than a leaf fills as its leaf does.
 pub fn filled(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
     let d = LEAF_CELL as i32 - cell as i32;
     if lo >= hi {
@@ -560,7 +560,7 @@ pub fn filled(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
     ]
 }
 
-/// Whether the leaf cells `[lo, hi)` fill any block of the grid's zoom.
+/// Whether the leaf cells `[lo, hi)` fill any cell of the grid's zoom.
 pub fn fills_any(cell: Zoom, run: [i32; 2]) -> bool {
     let [first, last] = filled(cell, run);
     first <= last
@@ -672,9 +672,9 @@ pub const SPANS: usize = 10;
 /// A column's spans, in leaf cells, in the order its visits come: each a
 /// deck's slab or an embankment (its way's look), a pier (`PIER`), or a
 /// bore's or a cutting's air (`AIR_OF` over its way's look); `n` of them.
-/// And its face block (`ground::face_cell`), under which a bore's air
+/// And its face cell (`ground::face_cell`), under which a bore's air
 /// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
-/// or it is past the area, where nothing does. What its blocks are read
+/// or it is past the area, where nothing does. What its cells are read
 /// off, its visits found once: a square's fill keeps them (pxl-spec-core
 /// fill.rs `spans`, read through `Kept`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -706,8 +706,8 @@ impl Spans {
 }
 
 /// Column `c`'s spans: what each visit of a line writes there that fills a
-/// block of the grid's zoom (`fills_any`), as `at` reads no other, and its
-/// face block — none, nor a face, in a column of the bedrock, past the area
+/// cell of the grid's zoom (`fills_any`), as `at` reads no other, and its
+/// face cell — none, nor a face, in a column of the bedrock, past the area
 /// or walled by its edge (`Columns::walled`), as bedrock wins over a way as
 /// it does over the ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
@@ -735,14 +735,14 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
 
 /// A square's columns' spans and the ring's about it as its fill keeps
 /// them (pxl-spec-core fill.rs `spans`), read in place: column `c`'s face
-/// block and how many spans it has (`Spans`), and its `j`-th span and its
+/// cell and how many spans it has (`Spans`), and its `j`-th span and its
 /// value.
 pub trait Kept {
     fn head(&self, c: [i32; 2]) -> (i32, u32);
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
 }
 
-/// What the ways write in block `z` at `cell` of column `c`, its `n` spans
+/// What the ways write in cell `z` at zoom `cell` of column `c`, its `n` spans
 /// kept in `k`: a deck's slab or its pier, the highest of those over it
 /// keeping what two share, a slab before its pier; else the first air over
 /// it (`AIR_OF` over its way's look); else `NOTHING`.
@@ -769,8 +769,8 @@ fn at(k: &impl Kept, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
     }
 }
 
-/// The `k`-th of a block and the six about it, from its own: the row under
-/// it, the cell before it, the block under it, the block over it, the cell
+/// The `k`-th of a cell and the six about it, from its own: the row under
+/// it, the column before it, the cell under it, the cell over it, the column
 /// after it, the row over it — the order of the grid's cells. No index into
 /// an array: a bounds check's panic is a return no barrier after it may
 /// follow (pxl-shader `way_tree_cs`, whose leaves read it).
@@ -784,16 +784,16 @@ fn near(k: u32) -> [i32; 3] {
 /// Where the ways may fill a node along z, at the zooms from `coarsest` to
 /// `near` a reader asks within it, where what they fill under it lies in
 /// the leaf cells `[lo, hi)` (`ground::Bounds`, a bore's air none): from
-/// its lowest to past its highest, in leaf cells. A block fills where more
-/// than half of it is (`fills`): at a zoom whose block is `s` leaf cells,
-/// from the first block more than half over `lo` to past the last more than
-/// half under `hi`; at the leaves or finer, `[lo, hi)` itself, a block
+/// its lowest to past its highest, in leaf cells. A cell fills where more
+/// than half of it is (`fills`): at a zoom whose cell is `s` leaf cells,
+/// from the first cell more than half over `lo` to past the last more than
+/// half under `hi`; at the leaves or finer, `[lo, hi)` itself, a cell
 /// filling as its leaf does. Nothing (`ground::EMPTY`) where they fill
 /// nothing.
 ///
-/// The node's bottom and top are whole blocks of every zoom finer than it,
-/// so none of its blocks fills exactly where it does not meet the finest
-/// zoom's slab (`ground::meets`), and a coarser zoom's block, more than
+/// The node's bottom and top are whole cells of every zoom finer than it,
+/// so none of its cells fills exactly where it does not meet the finest
+/// zoom's slab (`ground::meets`), and a coarser zoom's cell, more than
 /// twice its, fills less still within it.
 pub fn slab([lo, hi]: [i32; 2], [coarsest, near]: [Zoom; 2]) -> [i32; 2] {
     if lo >= hi {
@@ -816,23 +816,23 @@ pub fn slab([lo, hi]: [i32; 2], [coarsest, near]: [Zoom; 2]) -> [i32; 2] {
     [under, over]
 }
 
-/// The column the `m`-th of `near` reads beside column `c`, and the block
-/// it reads it at from `z`: the cell's own for the blocks under and over.
+/// The column the `m`-th of `near` reads beside column `c`, and the cell
+/// it reads it at from `z`: its own for the cells under and over.
 fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
     let d = near(m);
     ([c[0] + d[0], c[1] + d[1]], z + d[2])
 }
 
-/// What the ways write in block `z` of column `c` at `cell`, its spans and
+/// What the ways write in cell `z` of column `c` at zoom `cell`, its spans and
 /// those beside it kept in `k` (`at` of its own): a deck's slab or its
-/// pier, else a bore's air (`AIR`); else, under its face block, where a
+/// pier, else a bore's air (`AIR`); else, under its face cell, where a
 /// cave may take it (`ground::face_cell`), the way's look where a bore's
 /// air is beside it — under or over it, or across one of its four faces,
 /// the first in `near`'s order — so a cave never opens into a way, whatever
 /// carves the ground
 /// (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md,
 /// "Separation"); else `NOTHING`. Read off the spans in place, the
-/// column's own first: a block it writes reads none beside it.
+/// column's own first: a cell it writes reads none beside it.
 pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
     let (face, n) = k.head(c);
     let v = at(k, c, n, cell, z);
@@ -851,15 +851,15 @@ pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
     NOTHING
 }
 
-/// The leaf cells between which column `c`'s blocks at `cell` hold what
+/// The leaf cells between which column `c`'s cells at zoom `cell` hold what
 /// the ways write there (`lined`), its ground's top `top` leaf cells: from
 /// the lowest to past the highest, `ground::EMPTY` where they write none.
-/// Its own spans' blocks (`filled`), a bore's air only as far as the top,
-/// over which it is air whatever writes it; and under its face block, the
-/// blocks a bore's air beside it lines, where no slab or pier of that
-/// column fills the block read (`bare`). A lined block is under the face's
-/// block, so under the top: the hull of the blocks `lined` reads something
-/// in, exactly, off the spans, never a block at a time.
+/// Its own spans' cells (`filled`), a bore's air only as far as the top,
+/// over which it is air whatever writes it; and under its face cell, the
+/// cells a bore's air beside it lines, where no slab or pier of that
+/// column fills the cell read (`bare`). A lined cell is under the face's
+/// cell, so under the top: the hull of the cells `lined` reads something
+/// in, exactly, off the spans, never a cell at a time.
 pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL - cell);
     let (face, n) = k.head(c);
@@ -878,7 +878,7 @@ pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
         }
         j += 1;
     }
-    // A face of none lines nothing, and has no block under it to name.
+    // A face of none lines nothing, and has no cell under it to name.
     let mut m = if face == i32::MIN { 7 } else { 1 };
     while m < 7 {
         let (b, dz) = beside(c, m, 0);
@@ -886,7 +886,7 @@ pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
         let mut j = 0;
         while j < nb {
             let (run, v) = k.span(b, j);
-            // Air read at `z + dz` lines `z`, under the face block, where no
+            // Air read at `z + dz` lines `z`, under the face cell, where no
             // slab or pier of its column fills it.
             let [first, last] = filled(cell, run);
             let last = last.min(face - 1 + dz);
@@ -904,7 +904,7 @@ pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     [lo, hi]
 }
 
-/// The first block from `from` toward `to`, a `step` at a time, that no
+/// The first cell from `from` toward `to`, a `step` at a time, that no
 /// slab or pier of column `b`'s `n` spans fills, where its air is read as
 /// air (`at`); past `to` where they fill every one. Each step past one
 /// of them, so no more than one a span.
@@ -929,7 +929,7 @@ fn bare(k: &impl Kept, b: [i32; 2], n: u32, cell: Zoom, [from, to]: [i32; 2], st
 mod tests {
     use super::*;
 
-    /// A column and the four beside it, each a face block and its spans.
+    /// A column and the four beside it, each a face cell and its spans.
     struct Five([(i32, [([i32; 2], u32); 4], u32); 5]);
 
     impl Five {
@@ -955,7 +955,7 @@ mod tests {
         }
     }
 
-    /// `bound` is the hull of the blocks `lined` writes, a block at a
+    /// `bound` is the hull of the cells `lined` writes, a cell at a
     /// time, a bore's air held to the top: every way a slab, a pier or air
     /// over another, beside it or over and under it can lie, at zooms from
     /// the leaves to three coarser.

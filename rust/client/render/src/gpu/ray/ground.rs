@@ -546,7 +546,7 @@ impl RaysPass {
             let side = (SQUARE >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
             g.dispatch(pass, side, side, c.fresh_len);
         }
-        // Each square's ways as blocks, a workgroup a square, over its spans
+        // Each square's ways as cells, a workgroup a square, over its spans
         // and the levels just folded; then what its build gave back pushed,
         // a dispatch after, so no push lands under another square's ids
         // while it reads them.
@@ -588,7 +588,7 @@ impl RaysPass {
             ground.scratch[1].min(way::tree::SQUARE_FAMILIES),
         ];
         // The fold, once its mapping is free: a frame-old copy reads safely,
-        // as an entry answers only for the block whose key it holds.
+        // as an entry answers only for the cell whose key it holds.
         if let Some(c) = self
             .cast
             .as_mut()

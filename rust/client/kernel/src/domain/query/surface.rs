@@ -1,6 +1,6 @@
 // pxl-kernel/domain/query/surface.rs
 
-//! The ground's surface: a cell's top and the block its face is, read off
+//! The ground's surface: a cell's top and the asset its face is, read off
 //! the windows by the one reading of a column the GPU reads too
 //! (pxl-spec-core `window::ground`), the area's edge laid on it. The
 //! ground's alone, so a part of the support (`support.rs`), where a walker
@@ -17,7 +17,7 @@ use super::world::World;
 use crate::domain::layer::terrain::window::Windowed;
 use crate::domain::layer::{Answer, Query};
 
-/// The ground's top in a cell, in units, and the block its face is.
+/// The ground's top in a cell, in units, and the asset its face is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Surface {
     pub top: f64,

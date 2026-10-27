@@ -6,7 +6,7 @@
 //! is read and whichever layer holds what it stands on. It reads no tile:
 //! where it stands is its column's footing, the world's ray down it
 //! (`World::footing`), and which way it faces and whether it grows the
-//! world's blocks about it (pxl-spec-core `scatter::grown`).
+//! world's cells about it (pxl-spec-core `scatter::grown`).
 
 use pxl_spec::asset::cube::sentinel;
 use pxl_spec::asset::decor::Decor;
@@ -40,7 +40,7 @@ impl<'a, 'w> Asked<'a, 'w> {
 }
 
 /// The world's one query on the CPU, each ask answered with what its tiles
-/// lacked: a column's footing with its line (`World::footing`), each block
+/// lacked: a column's footing with its line (`World::footing`), each cell
 /// about it asked off that line (`World::asset_about`).
 impl Grounds for Asked<'_, '_> {
     type Footing = Footing<At>;

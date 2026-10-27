@@ -6,7 +6,7 @@
 
 _Started on December 15, 2025._
 
-**pixelet puts the real Earth into blocks — your street, its buildings, the
+**pixelet puts the real Earth into cubes — your street, its buildings, the
 river beside it, the hills behind it — and lets you build on it.**
 
 <img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.webp" width="100%">
@@ -15,8 +15,8 @@ The planet is too large to load or draw at once, so how finely anything is drawn
 follows one rule: **the eye decides.** The view is a grid of cells of equal
 angle about the eye, so a cell grows with distance. Space is cut into cubes at
 every zoom; one cube of space at one zoom is a **node**, an address the world is
-asked about, never something stored. A block is drawn at the zoom whose block
-spans at least a cell where it stands (`pxl-spec-core grid.rs` `cell_at`). A
+asked about, never something stored. Wherever it stands, the world is drawn at
+the zoom whose nodes span at least a cell there (`pxl-spec-core grid.rs` `cell_at`). A
 city, a mountain range or a tower behind a ridge costs the cells it covers on
 the screen, not what it holds.
 

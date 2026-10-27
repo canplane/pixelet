@@ -2,13 +2,13 @@
 
 //! gpu-portable: where something stands, asked of the world's one query
 //! (pxl-kernel domain/query/support.rs, a walker's support): a column's
-//! footing, the first block a ray down it from the world's top cannot see
+//! footing, the first cell a ray down it from the world's top cannot see
 //! through at a cell zoom, its top as drawn (`footing`); and the query's
 //! cursor (ARCHITECTURE.md "The query, the only seam"): a descent's line
 //! (`Line`), a footing's or one straight down to a node (`line`), and a
-//! block about it asked from the deepest node of that line holding it and
+//! asset about it asked from the deepest node of that line holding it and
 //! stepped down by what each parent hands its child, never again from the
-//! top (`block`). The CPU's and a GPU's alike, each over its own reading of
+//! top (`asset`). The CPU's and a GPU's alike, each over its own reading of
 //! the world (`cast::Query`).
 
 use crate::cast::{self, Detail, Ends, Keep, Node, Query, Ray, Until, DEPTH};
@@ -47,10 +47,10 @@ impl<A: Copy> Keep<A> for Footing<A> {
     }
 }
 
-/// The footing down column `g` at `cell`: the first block that fills on the
-/// world's one ray straight down the column's middle, at `cell`'s blocks
+/// The footing down column `g` at `cell`: the first cell that fills on the
+/// world's one ray straight down the column's middle, at the cells of `cell`
 /// alone, from the top of the world (`HEIGHT_BITS`), whichever layer holds
-/// it; its line kept for the blocks asked about it (`block`).
+/// it; its line kept for the assets asked about it (`asset`).
 pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
     let (o, ray, detail) = down(cell, g);
     let at = Node::ROOT.index(o);
@@ -73,7 +73,7 @@ pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
 }
 
 /// The ray down column `g` at `cell`: from the top of the world over the
-/// column's middle, straight down, at `cell`'s blocks alone.
+/// column's middle, straight down, at the cells of `cell` alone.
 fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
     let s = FINEST_ZOOM - cell;
     let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
@@ -106,8 +106,8 @@ fn same(a: [i32; 3], b: [i32; 3]) -> bool {
 }
 
 /// The line straight down to node `c` of `zoom` from its root, each node
-/// handed down by its parent: where a reader of the blocks about a node
-/// asks them from (`block`).
+/// handed down by its parent: where a reader of the assets about a node
+/// asks them from (`asset`).
 pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
     let mut at = q.root(over(c, zoom, 0));
     let mut stack = [at; DEPTH];
@@ -125,7 +125,7 @@ pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
     }
 }
 
-/// What is in the block `c` of `zoom` about the line `l`, as the world's
+/// What is in the cell `c` of `zoom` about the line `l`, as the world's
 /// one query answers it at that zoom (`Query::node`'s first word): asked
 /// from the deepest node of the line holding it, each node under that
 /// handed down by its parent (`Query::child`), and from its own root where
@@ -159,7 +159,7 @@ mod tests {
 
     /// Ground of stone up to `height` unit cells, two over the cells west of
     /// x = 4, none over the rest; air over it. Each node's `At` is the node
-    /// it was handed for, checked where it is asked, so a block asked off
+    /// it was handed for, checked where it is asked, so an asset asked off
     /// a node not over it is caught.
     struct Step;
 
@@ -213,11 +213,11 @@ mod tests {
         }
     }
 
-    /// The footing stands on the step's top, and every block about it,
+    /// The footing stands on the step's top, and every asset about it,
     /// asked off its line, is what the world holds there; one in another
     /// root is asked from that root.
     #[test]
-    fn a_block_asked_off_the_footing_is_the_world_s() {
+    fn an_asset_asked_off_the_footing_is_the_world_s() {
         let f = footing(&mut Step, UNIT_ZOOM, [6, 3]);
         assert_eq!(f.ends, Ends::Stop);
         assert_eq!(f.top.0, -1, "the top of the cell under z = 0");
@@ -234,10 +234,10 @@ mod tests {
         assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
     }
 
-    /// A line straight down to a node holds the blocks about it as the
+    /// A line straight down to a node holds the assets about it as the
     /// world does, its own among them.
     #[test]
-    fn a_block_asked_off_a_line_to_a_node_is_the_world_s() {
+    fn an_asset_asked_off_a_line_to_a_node_is_the_world_s() {
         let at = [3, 2, 1];
         let l = line(&mut Step, UNIT_ZOOM, at);
         for x in 1..6 {

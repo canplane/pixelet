@@ -128,7 +128,7 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
 // How much the box's own edges darken a point of its face: a lone box's
 // every edge is its silhouette, the nearer of the two edges of the face
 // that run through the point's axes. `pixel` is the units one of the
-// surface's pixels spans along each axis: an edge is the blocks' line, of
+// surface's pixels spans along each axis: an edge is the cells' line, of
 // one width in units whatever the box's size (`line_at`).
 fn outline(local_pos: vec3f, box_scale: vec3f, pixel: vec3f, normal: vec3f) -> f32 {
   if (frame_edge_strength() <= 0.0) {

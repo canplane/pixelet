@@ -305,7 +305,7 @@ pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
 /// its piers standing as none blocks them, by the rule its squares' columns
 /// are read by, their rings included (`way::column`) — so a line every span
-/// of which fills no block there (`way::fills_any`) is none at that zoom,
+/// of which fills no cell there (`way::fills_any`) is none at that zoom,
 /// and is not stored.
 pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
     use pxl_spec_core::window::{LINES_WORDS, SQUARE};

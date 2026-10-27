@@ -15,7 +15,7 @@ use pxl_spec::asset::decor_num_id;
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
 use pxl_spec::asset::{cube, DecorId};
-use pxl_spec::block::object::object_value_is_marker;
+use pxl_spec::object::is_marker;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
@@ -165,7 +165,7 @@ pub fn put_marker() {
     };
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().placed(at) {
-        Some(e) => object_value_is_marker(e.state),
+        Some(e) => is_marker(e.state),
         None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell)),
     };
     if stands && !words.is_empty() {
@@ -184,7 +184,7 @@ pub fn place_air(at: EntryAt) {
 }
 
 /// The eraser leaves its cell empty: where the ground fills it once the
-/// block is gone, air is written, so a block taken out of a hole leaves the
+/// asset is gone, air is written, so an asset taken out of a hole leaves the
 /// hole. A decor the ground grew whose box it shared comes back, its erase
 /// given back too.
 pub fn remove(at: EntryAt) {

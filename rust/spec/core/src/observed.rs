@@ -27,7 +27,7 @@
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
-//! answer's kind and block, what was handed the node after it was asked
+//! answer's kind and asset, what was handed the node after it was asked
 //! (`world::At::words`), and the node, its zoom and its index, which tell
 //! it from another node of the same slot (`forgets` reads its column). A
 //! walk writes a slot only once it has claimed it, its key swapped to

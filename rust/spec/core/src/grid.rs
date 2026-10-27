@@ -2,8 +2,8 @@
 
 //! gpu-portable: the camera grid, the one knob of resolution
 //! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
-//! "The descent"): a cell is an angle about the eye, and the zoom a block is
-//! drawn at a distance is the one whose block spans a cell there. What the
+//! "The descent"): a cell is an angle about the eye, and the zoom a node is
+//! drawn at, at a distance, is the one at which it spans a cell there. What the
 //! descent asks at a distance and how far the ground's windows reach both
 //! follow from it.
 

@@ -10,7 +10,7 @@ use xpute_kit::math::scalar::round;
 use crate::frame::shader::record::BOX_WORDS;
 
 /// A cell is 256 steps; a box's z is held in its mesh's own steps from the
-/// mesh's floor, since a block's z is the world's.
+/// mesh's floor, since a cell's z is the world's.
 const XY_STEPS: f64 = 256.0;
 const Z_STEPS: f64 = 65535.0;
 

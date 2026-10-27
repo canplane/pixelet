@@ -1,7 +1,7 @@
 {
   "$doc": [
     "The sky kind (id.json): what hangs in the sky, claiming no cell, so no",
-    "block is of it. Each by its files' paths under asset/content/; what a",
+    "cell holds it. Each by its files' paths under asset/content/; what a",
     "path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog)."
   ],
   "cumulus": {

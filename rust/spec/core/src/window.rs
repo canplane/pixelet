@@ -228,22 +228,22 @@ pub const LINES_WORDS: u32 =
     LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::way::SEGMENT_WORDS as u32;
 
 /// A handed square's scratch, the GPU's own for the frame it is filled
-/// (`HANDED` of them, each `way::tree::scratch_words` of the blocks its
+/// (`HANDED` of them, each `way::tree::scratch_words` of the cells its
 /// tree holds, `way::tree::SCRATCH_WORDS` at the renderer's cap): its
 /// columns' spans, the square's and the ring of columns about it, which a
-/// column's blocks read beside its own (`SPANS_AT`, pxl-spec-core fill.rs
+/// column's cells read beside its own (`SPANS_AT`, pxl-spec-core fill.rs
 /// `spans`); then its tree's (`way::tree::FREED_AT`). Its levels' ways'
 /// bound and its ways' tree are made off the spans (fill.rs `level`,
 /// `way::tree::leaf`), and they go with the frame.
 pub const SPANS_AT: u32 = 0;
-/// The columns whose spans a square's blocks read: the square's and a ring
+/// The columns whose spans a square's cells read: the square's and a ring
 /// of one about it, `SPANS_ACROSS` a side, row by row from the ring's
 /// first.
 pub const SPANS_ACROSS: u32 = SQUARE + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (`way::Spans`): a head word, its count, the
 /// count's high bit set where they did not fit `way::SPANS`, and its face
-/// block over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
+/// cell over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
 /// then each span's lowest and past its highest, an `i16` each as the
 /// world's z is, held to it (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * crate::way::SPANS as u32;
@@ -534,7 +534,7 @@ impl Found {
     }
 }
 
-/// The cell at `from` column `c` of blocks at `zoom` lies in.
+/// The cell at `from` that column `c` of the cells at `zoom` lies in.
 fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
     let s = zoom - from;
     [wrap_index(from, c[0] >> s), c[1] >> s]

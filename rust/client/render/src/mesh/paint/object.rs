@@ -1,6 +1,6 @@
 // pxl-render/mesh/paint/object.rs
 
-//! The object store's records as blocks: the materials their values are
+//! The object store's records as assets: the materials their values are
 //! drawn as, by the catalog.
 
 use pxl_spec::asset::cube;

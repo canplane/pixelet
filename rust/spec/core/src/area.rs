@@ -2,7 +2,7 @@
 
 //! gpu-portable: where the world's data ends, the service area — the shards
 //! a source serves — and the ground's own rule at its edge (pxl-spec
-//! block/limit.rs): past it, the Earth's ground, solid to sea level; inside
+//! limit.rs): past it, the Earth's ground, solid to sea level; inside
 //! it, a leaf column with ground beside one past the area is bedrock up to
 //! its own face, so the wall's outer face stands on the area's edge at every
 //! zoom. The area runs on shards' edges, which no node a shard or finer
@@ -215,10 +215,10 @@ pub const fn beside(k: u32) -> [i32; 2] {
     [(j % 3) as i32 - 1, (j / 3) as i32 - 1]
 }
 
-/// The leaf cells about the leaf cell holding the block `b` at `cell`, a
+/// The leaf cells about the leaf cell holding the column `b` at `cell`, a
 /// leaf's or finer, that its eight neighbours lie in (`beside`'s bits). A
-/// block within its leaf cell touches none; one on a leaf's edge or corner,
-/// the cells across them; at the leaves, all eight. Whether the block has
+/// column within its leaf cell touches none; one on a leaf's edge or corner,
+/// the cells across them; at the leaves, all eight. Whether the column has
 /// ground beside one gone (`laid`) is whether any of these is.
 pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
     let m = (1 << (cell - LEAF_CELL)) - 1;
@@ -270,17 +270,17 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
     gone
 }
 
-/// The block `b` at `cell` of a cell laid as the fill lays it (`laid` low
+/// The column `b` at `cell` of a cell laid as the fill lays it (`laid` low
 /// byte its own look, high the leaf cells about it gone, `gone_ring`), with
 /// the area's edge laid, the one rule a column is read by (pxl-spec-core
 /// `window::ground`) and the ways' fill walls one by
 /// (`way::Columns::walled`), on the CPU and a GPU alike: at a leaf's cells
-/// or finer, ground beside a gone leaf cell, of those the block touches
+/// or finer, ground beside a gone leaf cell, of those the column touches
 /// (`ring`), is the wall, bedrock (`UNKNOWN`) up to its own face. A gone
 /// cell is bedrock already, its look `UNKNOWN` (gone is past), and its top
 /// the Earth's at sea level as its fill lays it (pxl-spec-core
-/// `fill::heights`): the wall at sea level, so a block of it is the Earth's
-/// (`earth`). A block read off a square coarser than a leaf's cells, a
+/// `fill::heights`): the wall at sea level, so a cell of it is the Earth's
+/// (`earth`). A column read off a square coarser than a leaf's cells, a
 /// stand-in, has none gone about it, so no wall: the stand-in is the world
 /// at its zoom, and the wall is a fact of the leaves it does not hold.
 pub fn laid(laid: u32, cell: Zoom, b: [i32; 2]) -> u32 {
@@ -292,7 +292,7 @@ pub fn laid(laid: u32, cell: Zoom, b: [i32; 2]) -> u32 {
     }
 }
 
-/// Block `z` past the service area: the Earth's ground, bedrock under sea
+/// Cell `z` past the service area: the Earth's ground, bedrock under sea
 /// level, air over it.
 pub fn earth(z: i32) -> u32 {
     if z < SEA_LEVEL {

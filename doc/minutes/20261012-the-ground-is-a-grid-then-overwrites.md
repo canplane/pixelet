@@ -33,7 +33,7 @@ this order, each layer written over the one before:
 
 Where air meets ground under its face, whatever made the air, the ground shows
 faces of its material by depth, soil or stone, bedrock under its floor
-(`pxl-spec-core ground.rs` `by_depth`, `pxl-spec block/limit.rs`). Strata are
+(`pxl-spec-core ground.rs` `by_depth`, `pxl-spec limit.rs`). Strata are
 that rule of depth, not stored.
 
 **One answer, every reader.** What is at a block is these layers read in this

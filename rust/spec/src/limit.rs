@@ -1,4 +1,4 @@
-// pxl-spec/block/limit.rs
+// pxl-spec/limit.rs
 
 //! Where the world ends, one place for every limit an edit and a column
 //! meet: the world is open from `BEDROCK_DEPTH` under the ground or sea
@@ -9,7 +9,7 @@
 //! is bedrock, the unknown the world holds no more of
 //! (`spec/spec/asset/cube.json` `unknown`), and the service area is walled by
 //! it from inside: a leaf column with ground beside one past the area is
-//! bedrock up to its own face, a block of the leaves as any is, so the wall's
+//! bedrock up to its own face, a cell of the leaves as any is, so the wall's
 //! outer face stands on the area's edge at every zoom (pxl-spec-core
 //! area.rs `laid`).
 

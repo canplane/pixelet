@@ -21,5 +21,5 @@ convenience:
   how they stand, their tiles and shards, as translucent lines over the ground;
 - `camera_gizmo.rs`, behind the `camera_gizmo` setting: the camera grid's cells,
   drawn per pixel by the renderer (pxl-render `frame/shader/camera_grid.wgsl`),
-  and the blocks the rays stop on tinted by the share of a cell their faces show
+  and the cubes the rays stop on tinted by the share of a cell their faces show
   the eye.

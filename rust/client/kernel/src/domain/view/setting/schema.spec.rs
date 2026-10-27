@@ -87,7 +87,7 @@ impl OrbitObstacleMode {
 ///   off    — none.
 ///   corner — the screen pass's own: the floor along a cube and the inside
 ///            of a corner, where a neighbouring pixel's face rises in front
-///            of the pixel's own plane within a block or two of it
+///            of the pixel's own plane within a cell or two of it
 ///            (rust/client/render/src/frame/shader/screen_ray.wgsl).
 ///            A few taps of the rays a pixel, behind a uniform.
 ///   screen — N8AO
@@ -258,11 +258,11 @@ pub enum SettingKey {
     profiler = 14,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs).
     world_gizmo = 15,
-    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the blocks the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs).
+    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs).
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's block or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl).
+    /// Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl).
     ray_steps = 19,
     /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
     ray_counts = 20,

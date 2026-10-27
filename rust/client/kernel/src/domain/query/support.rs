@@ -4,7 +4,7 @@
 //! climbing as a walker would. A walker is a cell wide, so each is asked of
 //! the point's cell as its columns at the finest zoom anything is placed at
 //! in it, a ray straight up or down through each (`Upright`), the ray every
-//! reader casts (`World::along`): the first block that fills, or out of what
+//! reader casts (`World::along`): the first cell that fills, or out of what
 //! fills the first that does not, in any of them. So a walker stands on
 //! what is placed as it is held, whatever its size; a cell with nothing
 //! placed finer than it is one column, one ray.
@@ -87,7 +87,7 @@ impl<'w, 'a> Upright<'w, 'a> {
         }
     }
 
-    /// The box of the first block each column's ray from the height `z` to
+    /// The box of the first cell each column's ray from the height `z` to
     /// the height `to`, up or down, stops at (`until`).
     fn rays(
         &mut self,
@@ -121,7 +121,7 @@ impl<'w, 'a> Upright<'w, 'a> {
 
     /// The top of what fills at the height `z` in any column: out of each
     /// one's fill in turn, until none fills where the walker stands. A
-    /// column's fill tops at the bottom of its first block that does not
+    /// column's fill tops at the bottom of its first cell that does not
     /// fill from `z` up, `z` where its own does not; filled to the reach's
     /// top only where the world holds it so: a way into tiles not held fills
     /// nothing, as what a zoom does not hold is absent there.
@@ -142,7 +142,7 @@ impl<'w, 'a> Upright<'w, 'a> {
     }
 
     /// The top of the highest solid under `z` in any column, over the
-    /// reach's floor: the rays down from `z`, which start in the block over
+    /// reach's floor: the rays down from `z`, which start in the cell over
     /// it.
     fn below(&mut self, z: f64) -> Option<f64> {
         self.rays(z, REACH.min[2], Until::Opaque)
@@ -152,7 +152,7 @@ impl<'w, 'a> Upright<'w, 'a> {
     }
 
     /// The bottom of the lowest solid over `z` and under `to` in any column:
-    /// the rays up from `z`, which start in the block at `z` and so meet
+    /// the rays up from `z`, which start in the cell at `z` and so meet
     /// none at it.
     fn above(&mut self, z: f64, to: f64) -> Option<f64> {
         self.rays(z, to, Until::Opaque)
@@ -212,7 +212,7 @@ impl<'w, 'a> Upright<'w, 'a> {
 }
 
 impl<'a> World<'a> {
-    /// What is in the leaf block at `at`, as the cast draws it: its value
+    /// What is in the leaf cell at `at`, as the cast draws it: its value
     /// (pxl-spec-core `world::node`'s), void where none.
     pub fn asset_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.cell());

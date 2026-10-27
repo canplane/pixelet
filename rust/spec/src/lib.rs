@@ -5,10 +5,11 @@
 
 pub mod asset;
 pub mod bake;
-pub mod block;
 pub mod division;
+pub mod limit;
 #[path = "division.spec.rs"]
 mod division_spec;
+pub mod object;
 pub mod procedural;
 #[path = "route.spec.rs"]
 pub mod route;

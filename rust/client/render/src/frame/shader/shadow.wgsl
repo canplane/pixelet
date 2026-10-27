@@ -5,7 +5,7 @@
 // drawing the map binds a blank one here and reads as lit.
 
 // Taps a texel and a half apart, so the filtered edge spans about a unit: one
-// texel apart, the edge cut each cell's shadow out as a hard block.
+// texel apart, the edge cut each cell's shadow out as a hard square.
 const SHADOW_SPREAD: f32 = 1.5;
 
 // The share of the casters' reach past which a shadow fades to nothing at it.

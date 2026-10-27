@@ -1,9 +1,9 @@
 // pxl-spec-core/raster.rs
 
 //! gpu-portable: the samples' stops drawn as boxes, so the rasterizer picks
-//! each drawn pixel's block (pxl-shader raster.rs `sample_box_cs`, cast.rs
+//! each drawn pixel's cell (pxl-shader raster.rs `sample_box_cs`, cast.rs
 //! `cast_cs`; pxl-render gpu/ray/raster.rs, raster.wgsl). Each sample that
-//! stopped is a box, the block as the cast stops on it (`cast::drawn`),
+//! stopped is a box, the cell as the cast stops on it (`cast::drawn`),
 //! unless the sample before it across or up stopped alike, which some
 //! sample before it in turn draws. A box draws its face turned to the eye
 //! across the axis its sample entered by, a lack's every face turned to
@@ -13,7 +13,7 @@
 //! where it enters across the same. A ray enters a box through one face, so
 //! what is kept lies where the ray enters, at the depth the raster draws
 //! it, and the depth test keeps the nearest box the pixel's ray enters of
-//! every sample's, leaving its sample's number (`id_of`): the pixel's block
+//! every sample's, leaving its sample's number (`id_of`): the pixel's cell
 //! where a hit, and where a lack, a node it walks itself.
 
 /// The draw's indirect args, a buffer of their own (`ARGS_WORDS`):

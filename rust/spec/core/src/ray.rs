@@ -4,11 +4,11 @@
 //! pixel and the screen pass reads them there (pxl-render
 //! frame/shader/screen_ray.wgsl), a layer of the world surface's rays a
 //! word: what it stopped on, through which face, at which zoom and the
-//! share of its cube it keeps (`first_word`); how far, f32 bits; the four looks the ground's block is
+//! share of its cube it keeps (`first_word`); how far, f32 bits; the four looks the ground's asset is
 //! drawn by (`ground::word`, none for any other), or in the steps view the
 //! nodes its descent asked; and what lies about the face it entered
-//! (`face::word`), the world's own answer about the block, the same for
-//! every pixel of it. A block is painted from these, its own, alone, by its
+//! (`face::word`), the world's own answer about the cell, the same for
+//! every pixel of it. A cell is painted from these, its own, alone, by its
 //! value whichever source holds it. Where it met nothing, the first two
 //! are zero: a stop's value is never void.
 
@@ -21,8 +21,8 @@ pub const FACES: u32 = 3;
 /// The first word's fields: the value, one of the catalog's whichever
 /// source holds it (doc/minutes/20261005-the-ground-is-a-carto-palette.md,
 /// "One value space"); the face it entered through, 2·axis plus one where
-/// its outward normal points down the axis; the zoom of the block it
-/// stopped on, six bits; the eighths of its cube the block keeps, 0 for all
+/// its outward normal points down the axis; the zoom of the cell it
+/// stopped on, six bits; the eighths of its cube the cell keeps, 0 for all
 /// eight (`answer::kept`), so the screen pass draws the box it is
 /// (`answer::side`).
 pub use crate::answer::VALUE_BITS;
@@ -64,9 +64,9 @@ pub const MISS_ARGS_TALLY: u32 = 7;
 pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + crate::tally::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0];
 
-/// The first word of a stop at `block`, a block's word (`answer`): its
+/// The first word of a stop at `asset`, an asset's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.
-pub const fn first_word(block: u32, face: u32, zoom: Zoom) -> u32 {
-    let kept = block >> crate::answer::KEPT_SHIFT & ((1 << KEPT_BITS) - 1);
-    crate::answer::value(block) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
+pub const fn first_word(asset: u32, face: u32, zoom: Zoom) -> u32 {
+    let kept = asset >> crate::answer::KEPT_SHIFT & ((1 << KEPT_BITS) - 1);
+    crate::answer::value(asset) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
 }

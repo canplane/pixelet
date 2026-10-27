@@ -184,9 +184,9 @@ and data, never estimated.
 
 **2. One record holds every answer.**
 
-- `world::node` answers an `In<[u32; 2]>`: a `Kind` (`Split`, `Block` or
+- `world::node` answers an `In<[u32; 2]>`: a `Kind` (`Split`, `Cell` or
   `Lacks`) and two words.
-  - For a block, the words are its value and its four looks.
+  - For a cell, the words are its asset and its four looks.
   - For a split, they are its slab word.
 
   > Since 2026-10-27: its box in its own steps on every axis (`answer::box_word`).

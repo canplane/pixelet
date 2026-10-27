@@ -69,11 +69,11 @@ export function decorGlyph(kind: u8): GlyphName {
 }
 
 export function cubeLabel(t: (key: string) => string, cube: Cube): string {
-  return t(`blocks.cube.${cubeId(cube)}`);
+  return t(`assets.cube.${cubeId(cube)}`);
 }
 
 export function decorLabel(t: (key: string) => string, kind: u8): string {
-  return t(`blocks.decor.${decorName(kind)}`);
+  return t(`assets.decor.${decorName(kind)}`);
 }
 
 export function heldRing(ground: string, ink: string, width: number): string {

@@ -31,7 +31,7 @@ struct Growing<'a> {
 }
 
 /// The query's support on the cast's world (pxl-spec-core `support`): a
-/// column's footing, its line kept, each block about it asked off that
+/// column's footing, its line kept, each asset about it asked off that
 /// line; and what is placed in a box (`world::placed_in`).
 impl Grounds for Growing<'_> {
     type Footing = support::Footing<At>;

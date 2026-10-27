@@ -2,7 +2,7 @@
 
 //! gpu-portable: the ground's column at a cell, the one rule a node's ground
 //! is answered by (`node`) before what overwrites it: a cell's look and
-//! height off the window drawing it (`window::ground`), and its blocks by
+//! height off the window drawing it (`window::ground`), and its cells by
 //! depth with a cave's air where a cave may take them. What overwrites it
 //! is not here: the ways by their own rule (`way.rs`), and what is placed
 //! by its own (`placed.rs`).
@@ -13,7 +13,7 @@
 //! Heights are f32 here, as WGSL has them. WGSL's f32 is not strictly IEEE (a
 //! division's last place, a contraction into a fused multiply-add), so a
 //! height a CPU and a GPU compute from this one source can differ in the
-//! last bit where it falls on an eighth of a block.
+//! last bit where it falls on an eighth of a cell.
 
 use crate::answer::{
     bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
@@ -62,17 +62,17 @@ const SANDSTONE_DEPTH: i32 = 2;
 pub const BEDROCK_DEPTH: i32 = 64;
 
 /// The bedrock's top under a face at `face` leaf cells, in leaf cells: the
-/// lowest a block may reach there, every walk's, edit's and column's.
+/// lowest a cube may reach there, every walk's, edit's and column's.
 pub fn bedrock(face: i32) -> i32 {
     face.min(SEA_LEVEL) - BEDROCK_DEPTH
 }
 
-/// Leaf cells over the ground or sea level, whichever is higher, a block
+/// Leaf cells over the ground or sea level, whichever is higher, a cube
 /// may reach: Minecraft's 320 over its −64, held from sea level so a shore
 /// is not buried.
 pub const HEADROOM: i32 = 128;
 
-/// The highest a block may reach over a face at `face` leaf cells, in leaf
+/// The highest a cube may reach over a face at `face` leaf cells, in leaf
 /// cells: every edit's ceiling, as `bedrock` is its floor.
 pub fn ceiling(face: i32) -> i32 {
     face.max(SEA_LEVEL) + HEADROOM
@@ -191,7 +191,7 @@ pub fn bicubic(ele: impl Fn(usize) -> i32, tx: f32, ty: f32) -> i32 {
     libm::rintf(out.clamp(lo as f32, hi as f32)) as i32
 }
 
-/// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
+/// The value filling more than half of a 2×2 (or 2×2×2) group, `v[dx + 2·dy +
 /// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
 /// parent cell's zoom, since a fixed corner drifts the map half a coarse cell a step.
 pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
@@ -226,17 +226,17 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
     }
 }
 
-/// A height in leaf cells as blocks of `cell` (`top`).
+/// A height in leaf cells as cells of `cell` (`top`).
 pub fn cells(cell: Zoom, h: f32) -> i32 {
     top(cell, h).0
 }
 
-/// A height in leaf cells as blocks of `cell`, and the share of the top one
+/// A height in leaf cells as cells of `cell`, and the share of the top one
 /// it fills, in `answer::FULL`'s units: shifted past the leaves, every
-/// block whole; under them, the mean in blocks, its top the block it ends
+/// cell whole; under them, the mean in cells, its top the cell it ends
 /// in where it fills an eighth of it or more (`answer::eighths`), the share
-/// of it filled kept there, else the block under it, whole. So a coarse
-/// cell's ground is the volume its mean height fills, as a block of it is
+/// of it filled kept there, else the cell under it, whole. So a coarse
+/// column's ground is the volume its mean height fills, as a cell of it is
 /// drawn: whole under its top, its top a box its share's volume.
 pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
     let d = cell as i32 - LEAF_CELL as i32;
@@ -253,14 +253,14 @@ pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
     }
 }
 
-/// Blocks of `cell` a leaf cell is tall: one where a cell folds the leaves.
+/// Cells of `cell` a leaf cell is tall: one where a cell folds the leaves.
 pub fn leaf_cells(cell: Zoom) -> i32 {
     1 << (cell as i32 - LEAF_CELL as i32).max(0)
 }
 
-/// The face of a top of `top` blocks of `cell`, in leaf cells, as the grid
+/// The face of a top of `top` cells of `cell`, in leaf cells, as the grid
 /// draws it: past the leaves a leaf height shifted, under them the mean as
-/// its blocks round it.
+/// its cells round it.
 pub fn face_height(cell: Zoom, top: i32) -> i32 {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
@@ -276,22 +276,22 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
     }
 }
 
-/// The face block of a cell whose face is `face` leaf cells, its first
-/// block in blocks of `cell`: under it, the ground under its face, which a
+/// The face cell of a column whose face is `face` leaf cells, its first
+/// cell in cells of `cell`: under it, the ground under its face, which a
 /// cave may take (`Cell::opens`) and a way's bore is lined in
 /// (pxl-spec-core `way::lined`).
 pub fn face_cell(cell: Zoom, face: i32) -> i32 {
     cells(cell, face as f32) - leaf_cells(cell)
 }
 
-/// The bedrock's top under a face at `face` leaf cells, in blocks of `cell`.
+/// The bedrock's top under a face at `face` leaf cells, in cells of `cell`.
 pub fn rock(cell: Zoom, face: i32) -> i32 {
     cells(cell, bedrock(face) as f32)
 }
 
-/// What the ground is in block `z` of a cell of `cell` whose look is `look`
-/// and whose top is `top` blocks: by depth under its top, `void` over it. A
-/// cell coarser than the leaves' is a summary of the faces under it, its
+/// What the ground is in cell `z` of a column of `cell` whose look is `look`
+/// and whose top is `top` cells: by depth under its top, `void` over it. A
+/// column coarser than the leaves' is a summary of the faces under it, its
 /// ground its face whole; the wall (`unknown`) is itself all through.
 pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
     if z >= top {
@@ -302,7 +302,7 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
     }
     let s = leaf_cells(cell);
     // Water's filler is water, as sand's is sand: under a face it is the
-    // same block, never dirt.
+    // same cell, never dirt.
     let (filler, sandstone) = match look {
         SAND | BEACH => (SAND, SANDSTONE_DEPTH),
         WATER => (WATER, 0),
@@ -327,23 +327,23 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
 /// from `far` to `near` a reader asks within it, where the faces under it
 /// at those zooms lie between `lo` and `hi` leaf cells (`node`'s relief,
 /// every one of those zooms' joined): from its lowest to past its highest,
-/// in leaf cells, by the ground's one rule (`blocks`, `Cell::opens`).
+/// in leaf cells, by the ground's one rule (`cells`, `Cell::opens`).
 /// Coarser than a shard, the Earth past the service area may be in it too,
 /// its face at sea level.
 ///
 /// Over it, past the highest top any of those zooms rounds `hi` to: a
-/// coarser zoom's block may round past a finer's. Under it, the lowest
-/// face's top block and the one under it at those zooms, the ground a cave
+/// coarser zoom's cell may round past a finer's. Under it, the lowest
+/// face's top cell and the one under it at those zooms, the ground a cave
 /// leaves there (`Cell::opens`), where a
 /// cave takes all of the node (`hollow`), no bedrock is in it and no wall
 /// is about it; else from the world's bottom. Nothing (`EMPTY`) where no
 /// zoom is asked within it.
 ///
 /// What fills the node is what of it lies in the slab (`meets`): its bottom
-/// and top are whole blocks of every zoom finer than it, an even count of
-/// each, and `blocks` ends a height at the block it fills an eighth of or
+/// and top are whole cells of every zoom finer than it, an even count of
+/// each, and `cells` ends a height at the cell it fills an eighth of or
 /// more (`top`), so a zoom's top is at most the bottom exactly when the
-/// face is under an eighth of that zoom's block over it, the finest zoom's
+/// face is under an eighth of that zoom's cell over it, the finest zoom's
 /// saying it for all of them. A top kept short of whole still lies in it
 /// whole, which only splits more.
 pub fn slab(
@@ -374,7 +374,7 @@ pub fn slab(
         let top = face_height(z, cells(z, hi as f32));
         over = if top > over { top } else { over };
         if caved {
-            // Its top block, and the block under it where the top is a box
+            // Its top cell, and the cell under it where the top is a box
             // (`Cell::opens`).
             let floor = face_height(z, cells(z, lo as f32) - 2 * leaf_cells(z));
             under = if floor < under { floor } else { under };
@@ -433,32 +433,32 @@ pub trait Held: Area {
         cells: [Zoom; 2],
         node: (Zoom, [i32; 3]),
     ) -> (Bounds, bool);
-    /// The column of the block `c` at `zoom` off the windows
+    /// The column of the cell `c` at `zoom` off the windows
     /// (`window::ground`), the service area's edge laid on it as its fill
     /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
     /// (`relief`'s), or found anew where `place` is `NONE`.
     fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell;
 }
 
-/// What the ground answers of a node (`node`): its kind, and a block's
-/// look.
+/// What the ground answers of a node (`node`): its kind, and a cell's
+/// asset and look.
 pub type Answer = In<[u32; 2]>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
-/// `cave` the caves there and `block` whether it is asked at its own zoom:
+/// `cave` the caves there and `is_cell` whether it is asked at its own zoom:
 /// past the service area, the Earth's; else the node's own bound first, of
-/// each zoom's tile its cells are read from (`Held::relief`) — a block over it is air,
-/// else its cell's block (`Cell::block`), its look; a
-/// coarser node no part of which lies where the ground may fill at the zooms asked (`slab`, `meets`) a block of
-/// air its size, else split; where no tile over it is held, a block is the
-/// lack and a coarser node split, not known empty.
+/// each zoom's tile its cells are read from (`Held::relief`) — at its own zoom,
+/// over it is air, else its column's asset (`Cell::asset`), its look; a
+/// coarser node no part of which lies where the ground may fill at the zooms asked (`slab`, `meets`) a cube of
+/// air its size, else split; where no tile over it is held, a node at its own
+/// zoom is the lack and a coarser node split, not known empty.
 /// `shard` is what is known of the area at the node, known a shard or
 /// finer: its asker's, which asks it once at its entry (`Shard::at`).
 /// `place` is where the cells of a node over it were held
 /// (`Held::relief`), `NONE` where none were, and becomes the node's: where
-/// a block's column was read, which the ways write over it are read at
+/// a cell's column was read, which the ways write over it are read at
 /// (pxl-spec-core `world::node`), and `NONE` past the area, where nothing
-/// is read. With the answer the cell its block was read off, none
+/// is read. With the answer the column its cell was read off, none
 /// (`Cell::NONE`) for a coarser node; and the ways' bound read with its own
 /// (`Held::relief`), `EMPTY` where none was.
 pub fn node<H: Held>(
@@ -468,7 +468,7 @@ pub fn node<H: Held>(
     place: &mut Found,
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
-    block: bool,
+    is_cell: bool,
 ) -> (Answer, Cell, [i32; 2]) {
     let air = In {
         kind: Kind::Cell,
@@ -483,11 +483,11 @@ pub fn node<H: Held>(
         kind: Kind::Lacks,
         asset: [VOID, 0],
     };
-    // Past the area: a block's own Earth, or a node's where it is all over
+    // Past the area: a cell's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
     if shard.past() {
         let earth = earth(c[2]);
-        let answer = if block {
+        let answer = if is_cell {
             In {
                 kind: Kind::Cell,
                 asset: [earth, 0],
@@ -504,31 +504,31 @@ pub fn node<H: Held>(
     if zoom < TOP_ZOOM {
         return (split, Cell::NONE, EMPTY);
     }
-    // A block's cells are its zoom's. A coarser node's are every zoom's
+    // A cell's columns are its zoom's. A coarser node's are every zoom's
     // asked within it, from the coarsest to `near`: each zoom's cells are
     // its own tile's, whose face, its own samples' bicubic, no other zoom's
     // bounds, above or below, so the bound is every one's joined, read once
     // a window (`Held::relief`).
     let first = coarsest(zoom, far);
-    let cells = if block {
+    let cells = if is_cell {
         [zoom, zoom]
     } else {
         [if first > near { near } else { first }, near]
     };
     let ([relief, ways], ok) = held.relief(place, cells, (zoom, c));
-    // Not held at a zoom asked: a block is the lack; a coarser node is not
-    // known empty, so it is split, and a ray stops only at a block it meets
+    // Not held at a zoom asked: a cell is the lack; a coarser node is not
+    // known empty, so it is split, and a ray stops only at a cell it meets
     // not held.
     if !ok {
-        return (if block { lacks } else { split }, Cell::NONE, EMPTY);
+        return (if is_cell { lacks } else { split }, Cell::NONE, EMPTY);
     }
-    if block {
+    if is_cell {
         let column = held.cell(*place, zoom, c);
-        let block = column.asset(zoom, c[2], || cave.hollow());
+        let asset = column.asset(zoom, c[2], || cave.hollow());
         return (
             In {
                 kind: Kind::Cell,
-                asset: [block, 0],
+                asset: [asset, 0],
             },
             column,
             ways,
@@ -550,8 +550,8 @@ pub fn node<H: Held>(
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
-/// service area's wall), its top in blocks of its zoom and the share of
-/// its top block it fills (`top`), and the four looks its fold took
+/// service area's wall), its top in cells of its zoom and the share of
+/// its top cell it fills (`top`), and the four looks its fold took
 /// (`looks`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
@@ -570,9 +570,9 @@ impl Cell {
         fold: [VOID; 4],
     };
 
-    /// The share of block `z` its ground fills, in `answer::FULL`'s
-    /// units, where a block of it fills there (`block`): whole under its
-    /// top block, its part there (`top`).
+    /// The share of cell `z` its ground fills, in `answer::FULL`'s
+    /// units, where a cell of it fills there (`asset`): whole under its
+    /// top cell, its part there (`top`).
     pub fn cover(&self, z: i32) -> u32 {
         if z == self.top - 1 {
             self.part
@@ -586,11 +586,11 @@ impl Cell {
         self.look == UNKNOWN || Ground::grounds(self.look)
     }
 
-    /// Whether a cave may take block `z` of the cell at `cell`: the ground's
-    /// one rule of where a cave may take it, ground under its face block, over
+    /// Whether a cave may take cell `z` of the column at `cell`: the ground's
+    /// one rule of where a cave may take it, ground under its face cell, over
     /// its bedrock, off the area's wall, the face and the bedrock rounded to
-    /// blocks as the column rounds them. Under a top kept short of whole
-    /// is ground, as under a shrunk box, so the block under it is not taken
+    /// cells as the column rounds them. Under a top kept short of whole
+    /// is ground, as under a shrunk box, so the cell under it is not taken
     /// either.
     fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
@@ -598,7 +598,7 @@ impl Cell {
         self.look != UNKNOWN && z < under && z >= rock(cell, face)
     }
 
-    /// The four looks block `g` of the cell at `cell` is drawn by: where it
+    /// The four looks asset `g` of the column at `cell` is drawn by: where it
     /// is the cell's own look at a cell coarser than the leaves', the four
     /// its fold took, whose mean it is drawn as, "the 2 × 2 … by design"
     /// (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md);
@@ -612,7 +612,7 @@ impl Cell {
         }
     }
 
-    /// Block `z` of the cell at `cell`, a cave's air where a cave may take
+    /// The asset in cell `z` of the column at `cell`, a cave's air where a cave may take
     /// it (`opens`) and `hollow` says one does, asked only there: the
     /// ground's look, its fold's majority at a coarser cell, as what is
     /// placed is its fold's (doc/minutes/20261005-the-ground-is-a-carto-palette.md,
@@ -739,16 +739,16 @@ mod tests {
 
     #[test]
     fn a_coarse_top_keeps_the_eighths_its_mean_fills() {
-        // Blocks of eight leaf cells.
+        // Cells of eight leaf cells.
         let cell = LEAF_CELL - 3;
         assert_eq!(top(cell, 16.0), (2, FULL));
         assert_eq!(top(cell, 17.0), (3, FULL / 8));
         assert_eq!(top(cell, 23.0), (3, 7 * FULL / 8));
         assert_eq!(top(cell, -1.0), (0, 7 * FULL / 8));
-        // An eighth of a block of 64 is 8 leaf cells: under it, nothing.
+        // An eighth of a cell of 64 is 8 leaf cells: under it, nothing.
         assert_eq!(top(LEAF_CELL - 6, 7.0), (0, FULL));
         assert_eq!(top(LEAF_CELL - 6, 8.0), (1, FULL / 8));
-        // At the leaves, every block whole.
+        // At the leaves, every cell whole.
         assert_eq!(top(LEAF_CELL, 5.0), (5, FULL));
     }
 }

@@ -25,8 +25,8 @@ use crate::world::{Unlooked, World};
 
 /// The world's depth from the sun, a slot of the sun's clipmap each
 /// (pxl-spec-core `sun`): the slot's texel of the light box, and its ray
-/// from the box's near plane along the sun's rays, its block taken off the
-/// raster's pick or walked through the world's one query to the block that
+/// from the box's near plane along the sun's rays, its cell taken off the
+/// raster's pick or walked through the world's one query to the cell that
 /// fills (`cast::first`) as the eye's are, and the word it leaves there,
 /// every frame the map is cast. Its one layer read and written in place,
 /// the one format family WebGPU lets a shader do both to, as the rays' are.

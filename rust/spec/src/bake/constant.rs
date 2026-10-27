@@ -17,7 +17,7 @@ pub use pxl_spec_core::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SP
 
 pub use super::object::OBJECT_TIERS;
 
-/// The objects' coarsest tier, a placed block, one unit: the ladder is the
+/// The objects' coarsest tier, a placed cell, one unit: the ladder is the
 /// objects' own and never the ground's cell.
 pub const OBJECT_COARSEST: Zoom = UNIT_ZOOM;
 

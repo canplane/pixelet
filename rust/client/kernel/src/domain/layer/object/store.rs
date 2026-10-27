@@ -16,7 +16,7 @@ use xpute_guest::global::Global;
 use pxl_spec::asset::cube::{cube_of, Cube};
 use pxl_spec::asset::{cube, decor_id_from_num, AssetId, DecorId};
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
-use pxl_spec::block::object::{object_value_is_decor, object_value_is_marker};
+use pxl_spec::object::{is_decor, is_marker};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
@@ -30,11 +30,11 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::object::ext::{Ext, Pools, NONE};
 use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
-use pxl_spec::block::ext::class_of;
-use pxl_spec::block::volume::fold;
+use pxl_spec::object::ext::class_of;
+use pxl_spec::object::volume::fold;
 use pxl_spec_core::overwrite::{self, path, Held};
 
-/// The asset a placed block is, by its kind.
+/// The asset a placed cell holds, by its kind.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Asset {
     Cube { cube: Cube },
@@ -71,9 +71,9 @@ impl Entry {
 
     /// What it is, by its kind; not for air, which is the eraser's mark.
     pub fn asset(&self) -> Asset {
-        if object_value_is_marker(self.state) {
+        if is_marker(self.state) {
             Asset::Marker
-        } else if object_value_is_decor(self.state) {
+        } else if is_decor(self.state) {
             Asset::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
