@@ -26,7 +26,7 @@ use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::mer_from_u;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
@@ -394,7 +394,7 @@ fn road_bores(
         let n = r.cell.len();
         let last = n - 1;
         // the lowest ground over the bore's footprint decides its roof
-        let wall = disk(ways::footprint((r.width_u / CELL_U) as f32));
+        let wall = disk(way::footprint((r.width_u / CELL_U) as f32));
         let cover: Vec<i32> = r
             .at
             .iter()

@@ -155,7 +155,7 @@ threads ran in, so the image is a function of the world and the eye (20261012,
 
 ## What changes
 
-_As built, pxl-shader runs `beam_cs`, `cells_cs`, `sample_cs` and `cast_cs`, and
+_As built, pxl-shader runs `beam_cs`, `cell_cs`, `sample_cs` and `cast_cs`, and
 `miss_cs` after `cast_cs` for the pixels the observed pyramid could not finish._
 
 - **pxl-spec-core `cast`:** a beam stop rule beside `Until::Opaque` and

@@ -60,11 +60,6 @@ pub const FILL_SHARE_MS: f32 = 4.0;
 /// domain/layer/terrain/window.rs `due`): its share less its passes, over a square.
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 
-/// The read-backs a square's cells and its ways' records come back in
-/// (pxl-render gpu/ray/ground.rs `read_back`): two frames' fills, so one
-/// frame's mappings are still landing while the next is copied.
-pub const READS: u32 = 2 * HANDED;
-
 /// A square handed to the GPU's fill, in words: its berth, where it lies in
 /// its tile (`place_word`, in squares), its cells' zoom, its window's as the
 /// window holds it (pxl-kernel domain/layer/terrain/window.rs `Window::cell`; a
@@ -72,7 +67,7 @@ pub const READS: u32 = 2 * HANDED;
 /// first cell at that zoom as the world names it, X wrapped there, then Y,
 /// two words; and what is known of the service area at it (`area::Shard`,
 /// its word), which the ways' fill lays the area's edge by
-/// (`ways::Columns::walled`).
+/// (`way::Columns::walled`).
 pub const FRESH_SQUARE: u32 = 0;
 pub const FRESH_PLACE: u32 = FRESH_SQUARE + 1;
 pub const FRESH_CELL: u32 = FRESH_PLACE + 1;
@@ -100,28 +95,6 @@ pub const fn fresh(
         w[FRESH_SHARD as usize],
     ) = (first[0] as u32, first[1] as u32, shard.word());
     w
-}
-
-/// Where a square's cells, which the GPU draws, come back to in the
-/// kernel's memory: its columns, levels, laid cells and root (`BACK_WORDS`);
-/// and the fill's ticket, never 0, which the kernel is told once this
-/// fill's are in.
-#[derive(Clone, Copy, Default)]
-pub struct CellsBack {
-    pub cells: u32,
-    pub ticket: u32,
-}
-
-/// A square handed to the GPU's fill, the record the ground's windows hand
-/// on and the renderer takes: its words (`fresh`), its four looks a cell,
-/// its tile's padded samples, its lines as far as they are written
-/// (`LINES_AT`), and where its cells come back to.
-pub struct FreshSquare<'a> {
-    pub fresh: [u32; FRESH_WORDS as usize],
-    pub looks: &'a [u8],
-    pub samples: &'a [i16],
-    pub lines: &'a [u32],
-    pub back: CellsBack,
 }
 
 /// Where a square lies in its tile, in squares, as one word: X low, Y high.
@@ -244,36 +217,36 @@ pub const WAYS_SQUARE_SEGMENTS: u32 = 1065;
 
 /// A square's lines, laid by the CPU as the square is filled (pxl-spec
 /// bake/tile/terrain.rs `square_lines`) for its fill to keep its columns'
-/// spans off (`fill::spans`): its tile's header (`ways::header`), a word a bin
+/// spans off (`fill::spans`): its tile's header (`way::header`), a word a bin
 /// (`WAYS_BINS`), its first entry and its count over it; the entries, two a
 /// word, each one of the square's segments, a bin's in their order; then
-/// the segments a bin reaches, in their lines' order, `ways::SEGMENT_WORDS`
+/// the segments a bin reaches, in their lines' order, `way::SEGMENT_WORDS`
 /// each. None holds more than `WAYS_SQUARE_SEGMENTS` of either.
-pub const LINES_ENTRIES_AT: u32 = crate::ways::HEADER_WORDS + WAYS_BINS;
+pub const LINES_ENTRIES_AT: u32 = crate::way::HEADER_WORDS + WAYS_BINS;
 pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_SQUARE_SEGMENTS.div_ceil(2);
 pub const LINES_WORDS: u32 =
-    LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
+    LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::way::SEGMENT_WORDS as u32;
 
 /// A handed square's scratch, the GPU's own for the frame it is filled
-/// (`HANDED` of them, each `ways::tree::scratch_words` of the blocks its
-/// tree holds, `ways::tree::SCRATCH_WORDS` at the renderer's cap): its
+/// (`HANDED` of them, each `way::tree::scratch_words` of the blocks its
+/// tree holds, `way::tree::SCRATCH_WORDS` at the renderer's cap): its
 /// columns' spans, the square's and the ring of columns about it, which a
 /// column's blocks read beside its own (`SPANS_AT`, pxl-spec-core fill.rs
-/// `spans`); then its tree's (`ways::tree::FREED_AT`). Its levels' ways'
+/// `spans`); then its tree's (`way::tree::FREED_AT`). Its levels' ways'
 /// bound and its ways' tree are made off the spans (fill.rs `level`,
-/// `ways::tree::leaf`), and they go with the frame.
+/// `way::tree::leaf`), and they go with the frame.
 pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a square's blocks read: the square's and a ring
 /// of one about it, `SPANS_ACROSS` a side, row by row from the ring's
 /// first.
 pub const SPANS_ACROSS: u32 = SQUARE + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
-/// A column's spans in words (`ways::Spans`): a head word, its count, the
-/// count's high bit set where they did not fit `ways::SPANS`, and its face
+/// A column's spans in words (`way::Spans`): a head word, its count, the
+/// count's high bit set where they did not fit `way::SPANS`, and its face
 /// block over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
 /// then each span's lowest and past its highest, an `i16` each as the
 /// world's z is, held to it (`answer::bound_word`), and its value.
-pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * crate::ways::SPANS as u32;
+pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * crate::way::SPANS as u32;
 pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A square's columns, a word a cell, row by row: a cell's ground's top in
@@ -311,7 +284,7 @@ pub const COLUMNS_AT: u32 = 0;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const LAID_AT: u32 = LEVELS_AT + LEVEL_WORDS;
 /// Its ways' tree's root word: the family of its own nodes along z in the
-/// pool and the first one's Z (`ways::tree::root_word`); 0, family 0, never
+/// pool and the first one's Z (`way::tree::root_word`); 0, family 0, never
 /// handed out, where it has none.
 pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
 pub const SQUARE_WORDS: u32 = ROOT_AT + 1;
@@ -367,14 +340,14 @@ pub trait Squares {
 }
 
 /// One square as its fill reads it, for the ways' one rule
-/// (`ways::Columns`): its cells' zoom, where it lies in its tile (in
+/// (`way::Columns`): its cells' zoom, where it lies in its tile (in
 /// squares), word `k` of its lines (`LINES_AT`), cell `i` as `heights` laid
 /// it (`LAID_WORDS`), its own look and the area's edge it is walled by, and
 /// column `c`'s height off its tile's samples, `c`
 /// counted from its first cell, the ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
 /// edge bin it borders, whose lines hold every one that reaches it
-/// (`ways::footprint`); one past the ring has no segment.
+/// (`way::footprint`); one past the ring has no segment.
 pub trait Square {
     fn cell(&self) -> Zoom;
     fn place(&self) -> [u32; 2];
@@ -409,7 +382,7 @@ fn bin_of(sq: &impl Square, c: [i32; 2]) -> (u32, u32) {
         c[1].clamp(0, SQUARE as i32 - 1) as u32,
     );
     let b = (y >> WAYS_SHIFT) * WAYS_BINS_ACROSS + (x >> WAYS_SHIFT);
-    let w = sq.line(crate::ways::HEADER_WORDS + b);
+    let w = sq.line(crate::way::HEADER_WORDS + b);
     (w & 0xffff, w >> 16)
 }
 
@@ -418,29 +391,29 @@ fn entry_of(sq: &impl Square, e: u32) -> u32 {
     (sq.line(LINES_ENTRIES_AT + e / 2) >> (16 * (e % 2))) & 0xffff
 }
 
-fn segment_at(sq: &impl Square, at: u32) -> crate::ways::Segment {
-    let base = LINES_SEGMENTS_AT + at * crate::ways::SEGMENT_WORDS as u32;
-    let mut w = [0; crate::ways::SEGMENT_WORDS];
+fn segment_at(sq: &impl Square, at: u32) -> crate::way::Segment {
+    let base = LINES_SEGMENTS_AT + at * crate::way::SEGMENT_WORDS as u32;
+    let mut w = [0; crate::way::SEGMENT_WORDS];
     let mut k = 0;
     while k < w.len() {
         w[k] = sq.line(base + k as u32);
         k += 1;
     }
-    crate::ways::Segment::of(w)
+    crate::way::Segment::of(w)
 }
 
-fn header_of(sq: &impl Square) -> (f32, crate::ways::Stations) {
-    let mut w = [0; crate::ways::HEADER_WORDS as usize];
+fn header_of(sq: &impl Square) -> (f32, crate::way::Stations) {
+    let mut w = [0; crate::way::HEADER_WORDS as usize];
     let mut k = 0;
     while k < w.len() {
         w[k] = sq.line(k as u32);
         k += 1;
     }
-    crate::ways::of_header(w)
+    crate::way::of_header(w)
 }
 
 /// A square's columns as its lines and its cells give them.
-impl<Q: Square> crate::ways::Columns for Q {
+impl<Q: Square> crate::way::Columns for Q {
     fn cell(&self) -> Zoom {
         Square::cell(self)
     }
@@ -450,7 +423,7 @@ impl<Q: Square> crate::ways::Columns for Q {
     fn count(&self, c: [i32; 2]) -> u32 {
         bin_of(self, c).1
     }
-    fn segment(&self, c: [i32; 2], k: u32) -> crate::ways::Segment {
+    fn segment(&self, c: [i32; 2], k: u32) -> crate::way::Segment {
         segment_at(self, entry_of(self, bin_of(self, c).0 + k))
     }
     /// In its tile's cells: the square's first, then the cell's middle.
@@ -470,7 +443,7 @@ impl<Q: Square> crate::ways::Columns for Q {
         let i = cell_index(c);
         i != SQUARE_CELLS && crate::area::laid(self.laid(i), Square::cell(self), c) == UNKNOWN
     }
-    fn stations(&self) -> crate::ways::Stations {
+    fn stations(&self) -> crate::way::Stations {
         header_of(self).1
     }
     /// Its own look, before the service area's wall is laid, as its fill

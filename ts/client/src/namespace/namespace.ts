@@ -1,4 +1,4 @@
-// @pxl/client/namespace/roots.ts
+// @pxl/client/namespace/namespace.ts
 
 /**
  * The kernel's namespace: each number it opens a file under (host.json

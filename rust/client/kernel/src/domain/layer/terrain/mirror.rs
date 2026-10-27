@@ -1,6 +1,6 @@
 // pxl-kernel/domain/layer/terrain/mirror.rs
 
-//! The GPU's ways' pool as the CPU mirrors it (pxl-spec-core `ways::tree`):
+//! The GPU's ways' pool as the CPU mirrors it (pxl-spec-core `way::tree`):
 //! each landing square's families laid at the ids the GPU gave them
 //! (window.rs `landed`), which a cursor reads as the cast reads the GPU's.
 //! On the heap, a chunk at a time as the ids laid reach past it: the GPU's
@@ -9,7 +9,7 @@
 //! words each, never past the pool's cap (domain/layer/terrain/param.rs `WAYS_POOL_BYTES`).
 
 use pxl_spec_core::overwrite::Lanes;
-use pxl_spec_core::ways::tree::{self, Pool, FAMILY_WORDS, RECORD_WORDS, SQUARE_FAMILIES};
+use pxl_spec_core::way::tree::{self, Pool, FAMILY_WORDS, RECORD_WORDS, SQUARE_FAMILIES};
 use xpute_guest::global::Global;
 
 /// A chunk's families, 64 KiB of them: what the mirror grows by.
@@ -52,7 +52,7 @@ pub fn mirror() -> &'static mut Mirror {
 }
 
 impl Mirror {
-    /// A square's records (pxl-spec-core `ways::tree::lay`) laid at their
+    /// A square's records (pxl-spec-core `way::tree::lay`) laid at their
     /// families' ids, the chunks they reach grown first; nothing laid where
     /// one lies past the cap or the heap refuses a chunk, which the square's
     /// landing takes as its tree refused or waiting on the heap

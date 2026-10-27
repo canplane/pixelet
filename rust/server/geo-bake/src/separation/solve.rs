@@ -54,7 +54,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{footprint as line_reach, Form};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, Part, PartId};
@@ -512,7 +512,7 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
                 ends,
                 clipped,
                 nodes,
-                half: ways::half_cells((s.piece.width() / CELL_U) as f32),
+                half: way::half_cells((s.piece.width() / CELL_U) as f32),
                 width_u: s.piece.width(),
             });
         }

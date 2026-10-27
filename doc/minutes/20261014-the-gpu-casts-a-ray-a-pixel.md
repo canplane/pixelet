@@ -81,7 +81,7 @@ the turn, else from a copy into the stream. The ground goes up as a window a
 zoom, origin and layer a tile, in `earth_window`'s shape. A tile not held is
 answered by the coarser zoom.
 
-_Superseded below: the separation (pxl-spec-core ways.rs, `ways*.gen.wgsl`),
+_Superseded below: the separation (pxl-spec-core way.rs, `ways*.gen.wgsl`),
 what is placed (pxl-spec-core overwrite.rs) and decor (`decor*.gen.wgsl`) now
 run on the GPU, and the CPU's cast draws nothing._
 
@@ -166,7 +166,7 @@ the step's work.
 ## What follows, in order, each measured alone
 
 _History: the order as set on 2026-10-14. Steps 1 to 3 are now a square's fill
-on the GPU as it lands (pxl-spec-core fill.rs: `heights_cs`, `bound_cs`, the
+on the GPU as it lands (pxl-spec-core fill.rs: `height_cs`, `bound_cs`, the
 area laid on a cell), 6 is the beam, and 7 the overwrites above; what the code
 holds is in ARCHITECTURE.md (Windows and squares; Drawing)._
 

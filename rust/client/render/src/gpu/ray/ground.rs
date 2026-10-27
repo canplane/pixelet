@@ -1,47 +1,47 @@
 // pxl-render/gpu/ray/ground.rs
 
 //! The windows' squares on the GPU: each handed square filled in its turn
-//! (`heights_cs`, `ways_cs`, `bound_cs`, the ways' tree) and its cells and
+//! (`height_cs`, `way_cs`, `bound_cs`, the ways' tree) and its cells and
 //! its tree's records read back where the CPU looks them up.
 
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 use pxl_spec_core::window::{
-    self, CellsBack, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_SQUARE, FRESH_WORDS, HANDED,
+    self, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_SQUARE, FRESH_WORDS, HANDED,
     HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS,
 };
 use xpute_guest::mem::off_of;
 
 use super::RaysPass;
 use crate::frame::shader::record::{
-    compute, dynamic, SHADER_BOUND, SHADER_HEIGHTS, SHADER_WAYS, SHADER_WAYS_FREE,
-    SHADER_WAYS_FREED, SHADER_WAYS_TREE,
+    compute, dynamic, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE,
+    SHADER_WAY_FREED, SHADER_WAY_TREE,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_range_entry, buffer_usage, bytes, release, room, word_bytes,
     write_buffer_bytes, Gpu, Stamp, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{GroundSquares, Landing};
+use crate::gpu::renderer::{CellsBack, GroundSquares, Landing};
 
 /// The buffers squares' cells come back through: what a frame hands, a
 /// mapping still out a frame more (pxl-spec-core `window::HANDED`).
-const READS: usize = window::READS as usize;
+const READS: usize = crate::gpu::renderer::READS as usize;
 /// A buffer of them carrying no square.
 const FREE: u32 = u32::MAX;
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 pub(super) struct GroundBuffers {
     /// Per berth of the windows' squares (`window::SQUARES`), its columns,
-    /// levels, cells as laid and root, which `heights_cs`, `bound_cs` and
-    /// `ways_tree_cs` write in the turn it is handed (pxl-spec-core
+    /// levels, cells as laid and root, which `height_cs`, `bound_cs` and
+    /// `way_tree_cs` write in the turn it is handed (pxl-spec-core
     /// `window::SQUARE_WORDS`).
     pub(super) ground: u32,
     /// Per berth, its cells' four looks (`LOOKS_BYTES`).
     pub(super) looks: u32,
     /// The squares the turn handed, `window::HANDED` at most, a record each
     /// (`window::HANDED_WORDS`): its words, then its looks, its tile's
-    /// samples and its lines, which only its fill reads; `heights_cs`'s,
-    /// `bound_cs`'s and `ways_cs`'s one per `id.z`.
+    /// samples and its lines, which only its fill reads; `height_cs`'s,
+    /// `bound_cs`'s and `way_cs`'s one per `id.z`.
     pub(super) fresh: u32,
     pub(super) fresh_len: u32,
     /// Per berth (`window::SQUARES`), its cells' way back: the fill
@@ -79,7 +79,7 @@ pub(super) struct GroundBuffers {
     ran_out: [bool; 2],
     /// The ways' pool, which the cast reads, its families and its free stack;
     /// and the handed squares' scratch, the families each square's holds a
-    /// tree of (`ways::tree::scratch_words`), whose records each read copies
+    /// tree of (`way::tree::scratch_words`), whose records each read copies
     /// in the frame they are built: nothing in it outlives its frame.
     pub(super) pool: u32,
     families: u32,
@@ -94,16 +94,16 @@ pub(super) struct GroundBuffers {
     bound_built: Built,
     /// `bound_cs`'s group, its level at a dynamic offset (`SLOT_STRIDE`).
     bound_group: u32,
-    /// `ways_cs`'s, and its group: the fresh frames, the frames it reads
+    /// `way_cs`'s, and its group: the fresh frames, the frames it reads
     /// the columns of, and the scratch it keeps the spans in.
     ways_built: Built,
     ways_group: u32,
     /// A re-filled square's old ways' tree given back, its new one built,
-    /// the families the build gave back pushed (pxl-spec-core `ways::tree`):
+    /// the families the build gave back pushed (pxl-spec-core `way::tree`):
     /// each pass and its group, over the ways' pool, heap words then data
     /// words (`pool_bytes`), its free stack, the count taken then the ids,
     /// family 0 never among them, a word a family, and each handed square's
-    /// scratch past its build (`ways::tree::FREED_AT`).
+    /// scratch past its build (`way::tree::FREED_AT`).
     free_built: Built,
     free_group: u32,
     tree_built: Built,
@@ -118,10 +118,10 @@ pub(super) struct GroundBuffers {
 /// makes it, zeroed (pxl-shader `TAKEN`, `id`), so nothing is written to
 /// start it, nor to grow it.
 const fn pool_bytes(families: u32) -> u32 {
-    families * ways::tree::FAMILY_WORDS * 4
+    families * way::tree::FAMILY_WORDS * 4
 }
 const _: () = assert!(
-    crate::frame::shader::floor::fits(pool_bytes(ways::tree::POOL_FAMILIES) as u64, true),
+    crate::frame::shader::floor::fits(pool_bytes(way::tree::POOL_FAMILIES) as u64, true),
     "the ways' pool at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
@@ -139,10 +139,10 @@ fn pool_buffers(g: &Gpu, families: u32) -> (u32, u32) {
 /// bytes: `HANDED` of them, every square's alike, so each finds its own off
 /// the buffer's length (pxl-spec-core fill.rs `scratch_at`).
 const fn scratch_bytes(families: u32) -> u32 {
-    HANDED * ways::tree::scratch_words(families) * 4
+    HANDED * way::tree::scratch_words(families) * 4
 }
 const _: () = assert!(
-    crate::frame::shader::floor::fits(scratch_bytes(ways::tree::SQUARE_FAMILIES) as u64, true),
+    crate::frame::shader::floor::fits(scratch_bytes(way::tree::SQUARE_FAMILIES) as u64, true),
     "the scratch at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
@@ -165,13 +165,13 @@ enum Short {
 }
 
 /// What a build whose records' count is `n` ran out of (pxl-shader
-/// `ways_tree_cs`): `STARVED` the pool, `CRAMPED` the scratch; neither
+/// `way_tree_cs`): `STARVED` the pool, `CRAMPED` the scratch; neither
 /// for a tree built, none counted where the square has no ways, nor for one
 /// past the square's own most (`NONE`), which no growth lets it build.
 fn short_of(n: u32) -> Option<Short> {
     match n {
-        ways::tree::STARVED => Some(Short::Pool),
-        ways::tree::CRAMPED => Some(Short::Scratch),
+        way::tree::STARVED => Some(Short::Pool),
+        way::tree::CRAMPED => Some(Short::Scratch),
         _ => None,
     }
 }
@@ -205,7 +205,7 @@ fn ran_out(built: u32, families: u32, most: u32) -> RanOut {
 }
 impl GroundBuffers {
     /// The ways' passes' groups over the pool, its stack and the scratch as
-    /// they are, and `bound_cs`'s and `ways_cs`'s over the scratch.
+    /// they are, and `bound_cs`'s and `way_cs`'s over the scratch.
     fn ways_groups(&mut self, g: &Gpu) {
         for group in [
             self.bound_group,
@@ -268,7 +268,7 @@ impl GroundBuffers {
     /// `TAKEN`). Ahead of the turn's squares, so their builds and the cast
     /// read the new one; the cast's groups follow its id (`prepare`).
     fn grow(&mut self, g: &Gpu, most: u32) {
-        let families = (2 * self.families).min(most).min(ways::tree::POOL_FAMILIES);
+        let families = (2 * self.families).min(most).min(way::tree::POOL_FAMILIES);
         if families <= self.families {
             return;
         }
@@ -304,7 +304,7 @@ impl GroundBuffers {
     fn grow_scratch(&mut self, g: &Gpu, most: u32) {
         let families = (2 * self.scratch_families)
             .min(most)
-            .min(ways::tree::SQUARE_FAMILIES);
+            .min(way::tree::SQUARE_FAMILIES);
         if families <= self.scratch_families {
             return;
         }
@@ -352,7 +352,7 @@ const _: () = assert!(
 );
 
 /// The windows' squares' cells' four looks, a word a cell in the berths'
-/// order: written by the fill off each handed square (`heights_cs`), read
+/// order: written by the fill off each handed square (`height_cs`), read
 /// by the cast at a hit (pxl-shader `World`'s `Looks`). Their own
 /// buffer, as the squares' binding has no room for them.
 const LOOKS_BYTES: u64 = SQUARES as u64 * SQUARE_CELLS as u64 * 4;
@@ -378,17 +378,17 @@ impl RaysPass {
     pub fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundSquares) {
         let families = ground.pool[0]
             .min(ground.pool[1])
-            .min(ways::tree::POOL_FAMILIES);
+            .min(way::tree::POOL_FAMILIES);
         let scratch_families = ground.scratch[0]
             .min(ground.scratch[1])
-            .clamp(1, ways::tree::SQUARE_FAMILIES);
+            .clamp(1, way::tree::SQUARE_FAMILIES);
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let frames_buffer = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
             let looks = buffer(LOOKS_BYTES as u32, storage);
-            let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &compute::HEIGHTS_GROUP);
+            let heights_built = pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP);
             let heights_group = g.bind_group(
                 heights_built.layouts[0],
                 &[
@@ -408,15 +408,15 @@ impl RaysPass {
             let scratch = scratch_buffer(g, scratch_families);
             let (bound_built, ways_built) = (
                 pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
-                pipelines.build_compute(g, SHADER_WAYS, &compute::WAYS_GROUP),
+                pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
             );
             let (pool, stack) = pool_buffers(g, families);
             let free_built =
-                pipelines.build_compute(g, SHADER_WAYS_FREE, &compute::WAYS_FREE_GROUP);
+                pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP);
             let tree_built =
-                pipelines.build_compute(g, SHADER_WAYS_TREE, &compute::WAYS_TREE_GROUP);
+                pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP);
             let freed_built =
-                pipelines.build_compute(g, SHADER_WAYS_FREED, &compute::WAYS_FREED_GROUP);
+                pipelines.build_compute(g, SHADER_WAY_FREED, &compute::WAY_FREED_GROUP);
             let mut gb = GroundBuffers {
                 ground: frames_buffer,
                 looks,
@@ -437,8 +437,8 @@ impl RaysPass {
                 record_mapping: Box::new([0; READS]),
                 built_in: [[0; 2]; READS],
                 record_bytes: (ground.records.next_multiple_of(4)).clamp(
-                    word_bytes(1 + ways::tree::RECORD_WORDS as usize),
-                    ways::tree::RECORDS_BYTES,
+                    word_bytes(1 + way::tree::RECORD_WORDS as usize),
+                    way::tree::RECORDS_BYTES,
                 ),
                 pool,
                 families,
@@ -516,13 +516,13 @@ impl RaysPass {
         };
         let pass = g.compute_pass(encoder, stamp.pass());
         // A re-filled square's old ways' families given back, off its root word
-        // before its build writes another (pxl-spec-core `ways::tree`).
+        // before its build writes another (pxl-spec-core `way::tree`).
         g.set_pipeline(pass, c.free_built.pipeline);
         g.set_bind_group(pass, 0, c.free_group, &[]);
         g.dispatch(pass, 1, 1, c.fresh_len);
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
-        let w = compute::HEIGHTS_WORKGROUP;
+        let w = compute::HEIGHT_WORKGROUP;
         g.dispatch(
             pass,
             SQUARE.div_ceil(w[0]),
@@ -536,7 +536,7 @@ impl RaysPass {
         g.set_bind_group(pass, 0, c.ways_group, &[]);
         g.dispatch(
             pass,
-            window::SPANS_COLUMNS.div_ceil(compute::WAYS_WORKGROUP[0]),
+            window::SPANS_COLUMNS.div_ceil(compute::WAY_WORKGROUP[0]),
             1,
             c.fresh_len,
         );
@@ -584,8 +584,8 @@ impl RaysPass {
     pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundSquares) {
         let (landed, joined) = (&mut *ground.landed, ground.joined);
         let most = [
-            ground.pool[1].min(ways::tree::POOL_FAMILIES),
-            ground.scratch[1].min(ways::tree::SQUARE_FAMILIES),
+            ground.pool[1].min(way::tree::POOL_FAMILIES),
+            ground.scratch[1].min(way::tree::SQUARE_FAMILIES),
         ];
         // The fold, once its mapping is free: a frame-old copy reads safely,
         // as an entry answers only for the block whose key it holds.
@@ -629,8 +629,8 @@ impl RaysPass {
             c.asked[s as usize].ticket = 0;
             let room = &c.record_rooms[k];
             let n = room.first().copied().unwrap_or(0);
-            let words = 1 + n.min(ways::tree::SQUARE_FAMILIES) * ways::tree::RECORD_WORDS;
-            let landing = if n == ways::tree::NONE {
+            let words = 1 + n.min(way::tree::SQUARE_FAMILIES) * way::tree::RECORD_WORDS;
+            let landing = if n == way::tree::NONE {
                 Landing::Refused
             } else if let Some(short) = short_of(n) {
                 let (i, now) = (short as usize, [c.families, c.scratch_families]);
@@ -646,7 +646,7 @@ impl RaysPass {
                 c.record_bytes = c.record_bytes.max(
                     word_bytes(words as usize)
                         .next_power_of_two()
-                        .min(ways::tree::RECORDS_BYTES),
+                        .min(way::tree::RECORDS_BYTES),
                 );
                 Landing::Again
             } else {
@@ -678,10 +678,10 @@ impl RaysPass {
                 BACK_WORDS * 4,
             );
             let sb = c.scratch_families;
-            let records = (h * ways::tree::scratch_words(sb) + ways::tree::records_at(sb)) as usize;
+            let records = (h * way::tree::scratch_words(sb) + way::tree::records_at(sb)) as usize;
             let words = c.record_rooms[k]
                 .len()
-                .min((1 + sb * ways::tree::RECORD_WORDS) as usize);
+                .min((1 + sb * way::tree::RECORD_WORDS) as usize);
             g.copy_buffer(
                 e,
                 (c.scratch, word_bytes(records)),

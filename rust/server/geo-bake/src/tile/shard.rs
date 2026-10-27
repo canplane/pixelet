@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{source_of, Coverage, Node};
 use crate::pyramid::{
-    ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, MANIFEST,
+    ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
 use crate::source;
 use crate::util::git_sha;
@@ -234,7 +234,7 @@ impl Stage {
                 whole: &tiles,
                 gone,
             };
-            L::fits_set(&view, workers)?;
+            let fits = L::fits_set(&view, workers)?;
             // Before anything moves: a commit begun is finished, never undone, so
             // the set will hold these, and a commit cut short leaves them said.
             if let Some(held) = self.will_hold()? {
@@ -251,6 +251,14 @@ impl Stage {
                         .as_bytes(),
                 )
                 .map_err(|e| io(&path, e))?;
+            }
+            // What the set will keep of its tiles, beside it until they are
+            // all moved (`finish_commit`).
+            if let Some(fits) = fits {
+                let text: String = fits.iter().map(|(p, fit)| format!("{} {fit}\n", p.name())).collect();
+                let path = self.next_fits();
+                fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
+                crate::util::write_atomic(&path, text.as_bytes()).map_err(|e| io(&path, e))?;
             }
             fs::rename(self.done(FOLD), self.done(COMMIT)).map_err(|e| io(&self.done(FOLD), e))?;
         }
@@ -298,7 +306,25 @@ impl Stage {
         for p in self.read_done(COMMIT)? {
             self.set.remove(p)?;
         }
+        // The set's tiles all moved, what it keeps of them is theirs; the
+        // stage's kept beside its tiles, read into it, go.
+        let next = self.next_fits();
+        if next.exists() {
+            fs::rename(&next, self.set.root.join(FITS)).map_err(|e| io(&next, e))?;
+        }
+        for entry in fs::read_dir(&self.stage.root).map_err(|e| io(&self.stage.root, e))? {
+            let path = entry.map_err(|e| io(&self.stage.root, e))?.path();
+            if path.extension().is_some_and(|e| e == "fit") {
+                fs::remove_file(&path).map_err(|e| io(&path, e))?;
+            }
+        }
         self.remove_done(COMMIT)
+    }
+
+    /// What the set will keep of its tiles (`FITS`) once a commit begun has
+    /// moved them.
+    fn next_fits(&self) -> PathBuf {
+        self.set.root.join(format!("{FITS}.next"))
     }
 
     /// The set as a version is uploaded, into `to`, made empty first: every

@@ -18,7 +18,7 @@ pub(crate) type HeldTile = (
 
 /// What `hold` leaves held: the squares' words up to their last that is
 /// not zero, the pool's families taken as records (pxl-spec-core
-/// `ways::tree::lay`), the slots and the berths.
+/// `way::tree::lay`), the slots and the berths.
 struct Built {
     cells: Vec<u32>,
     records: Vec<u32>,
@@ -34,11 +34,11 @@ type Over = ([f64; 2], Vec<HeldTile>);
 static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SQUARES * CELLS_LANE_BYTES / 4) as usize;
-const POOL_WORDS: usize = 16 * pxl_spec_core::ways::tree::POOL_FAMILIES as usize;
+const POOL_WORDS: usize = 16 * pxl_spec_core::way::tree::POOL_FAMILIES as usize;
 
 /// The pool's mirror holding `records`, a square's most at a time.
 fn mirrored(records: &[u32]) {
-    use pxl_spec_core::ways::tree::{RECORD_WORDS, SQUARE_FAMILIES};
+    use pxl_spec_core::way::tree::{RECORD_WORDS, SQUARE_FAMILIES};
     let m = mirror();
     m.clear();
     for families in records.chunks((SQUARE_FAMILIES * RECORD_WORDS) as usize) {
@@ -169,7 +169,7 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         };
         let (mut lane, mut scratch) = (
             vec![0u32; window::SQUARE_WORDS as usize],
-            vec![0u32; pxl_spec_core::ways::tree::SCRATCH_WORDS as usize],
+            vec![0u32; pxl_spec_core::way::tree::SCRATCH_WORDS as usize],
         );
         fill_columns(
             &laid,
@@ -211,7 +211,7 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         show(w, i);
     }
     // Every family taken, a record each: its id, its heap words, its data.
-    let p = pxl_spec_core::ways::tree::Read(&pool);
+    let p = pxl_spec_core::way::tree::Read(&pool);
     let mut records = Vec::new();
     for b in 1..next {
         records.push(b);

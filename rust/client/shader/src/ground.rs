@@ -1,13 +1,13 @@
 // pxl-shader/ground.rs
 
 //! Each handed square's ground, filled once as it is handed: its columns'
-//! tops off its tile's samples (`heights_cs`) and its levels (`bound_cs`),
+//! tops off its tile's samples (`height_cs`) and its levels (`bound_cs`),
 //! which the CPU reads back; and the eye's windows' levels folded over
 //! their squares (`joined_cs`).
 
 use pxl_spec_core::fill;
 use pxl_spec_core::window::{self, FIRST_CELL, SQUARE};
-use pxl_spec_core::{at, ways};
+use pxl_spec_core::{at, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 use spirv_std::spirv;
 
@@ -52,7 +52,7 @@ pub fn joined_cs(
             shards,
             overwrites,
             eye,
-            pool: ways::tree::Read(pool),
+            pool: way::tree::Read(pool),
         };
         window::fold(&world, cell, l, b)
     };
@@ -71,8 +71,8 @@ pub fn joined_cs(
 /// off the samples in it, an even column's laying its cell and the next
 /// (`fill::heights`); and its cell's four looks into their own buffer
 /// (`fill::look`), which the cast draws by.
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "heights_cs"))]
-pub fn heights_cs(
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "height_cs"))]
+pub fn height_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &mut [u32],

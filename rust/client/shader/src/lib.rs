@@ -6,7 +6,7 @@
 //! casts for (observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs)
 //! through the observed pyramid (observed.rs), the world's depth from the
 //! sun (sun.rs), each handed square's ground (ground.rs) and ways
-//! (ways.rs), and the decor the ground grows (decor.rs). An entry is named
+//! (way.rs), and the decor the ground grows (decor.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
 //! name pxl-tool shader.rs `ENTRIES` reads.
 
@@ -24,23 +24,23 @@ mod observed;
 mod observer;
 mod raster;
 mod sun;
-mod ways;
+mod way;
 mod world;
 
-pub use beam::{beam_cs, cells_cs, sample_cs};
+pub use beam::{beam_cs, cell_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs};
 pub use decor::{
     decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs, decor_stand_cs,
 };
 pub use eye::Eye;
-pub use ground::{bound_cs, heights_cs, joined_cs};
+pub use ground::{bound_cs, height_cs, joined_cs};
 pub use observed::forget_cs;
-pub use raster::{boxes_cs, faces_cs};
+pub use raster::{sample_box_cs, face_cs};
 pub use sun::{
-    sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs,
+    sun_beam_cs, sun_sample_box_cs, sun_cell_cs, sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs,
     sun_reach_cs, sun_sample_cs,
 };
-pub use ways::{ways_cs, ways_free_cs, ways_freed_cs, ways_tree_cs};
+pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{Looks, Unlooked, World};
 
 use spirv_std::memory::{Scope, Semantics};

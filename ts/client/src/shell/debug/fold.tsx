@@ -13,9 +13,9 @@ import { create } from "zustand";
 import { cornerPanel } from "@/shell/ui/corner-card.ts";
 import { alpha, color } from "@/shell/ui/theme.ts";
 import { gauge } from "./profiler/gauge.tsx";
-import type { PanelName } from "./panels.tsx";
+import type { PanelName } from "./window.tsx";
 
-/** The fold open, by its panel's name (panels.tsx `PANEL`). */
+/** The fold open, by its panel's name (window.tsx `PANEL`). */
 export const useOpenFold = create<{ open: PanelName | null }>(() => ({
   open: null,
 }));

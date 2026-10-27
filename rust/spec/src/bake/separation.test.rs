@@ -1,7 +1,7 @@
 // pxl-spec/bake/separation.test.rs
 
 use super::*;
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 
 use crate::procedural::Frame;
 
@@ -70,7 +70,7 @@ fn each_form_is_drawn_from_its_surface() {
         clear: 3,
     };
     let no = [0, 0];
-    let on = |c: Crossing, ground: i32, cpm: f32| ways::occupies(&c, ground, cpm);
+    let on = |c: Crossing, ground: i32, cpm: f32| way::occupies(&c, ground, cpm);
     let at = |what: Occupy, span: [i32; 2]| Occupies {
         what,
         span,

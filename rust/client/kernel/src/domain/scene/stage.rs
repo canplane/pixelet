@@ -175,13 +175,13 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
                 crate::domain::scene::param::WAYS_POOL_FIRST_BYTES,
                 crate::domain::layer::terrain::param::WAYS_POOL_BYTES,
             ]
-            .map(|b| b / (4 * pxl_spec_core::ways::tree::FAMILY_WORDS)),
+            .map(|b| b / (4 * pxl_spec_core::way::tree::FAMILY_WORDS)),
             scratch: [
                 crate::domain::scene::param::WAYS_SCRATCH_FIRST_BYTES,
                 crate::domain::scene::param::WAYS_SCRATCH_BYTES,
             ]
             .map(|b| {
-                pxl_spec_core::ways::tree::scratch_families(b / (4 * pxl_spec_core::window::HANDED))
+                pxl_spec_core::way::tree::scratch_families(b / (4 * pxl_spec_core::window::HANDED))
             }),
             records: crate::domain::scene::param::WAYS_RECORDS_FIRST_BYTES,
         },

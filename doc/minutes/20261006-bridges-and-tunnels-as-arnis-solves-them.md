@@ -70,7 +70,7 @@ Arnis's numbers are metres — a block is a metre upright on the Earth (its
 `u_per_m` at the page's south-west corner (`pxl-spec procedural.rs`
 `Frame::per_m`), rounded half to even (`pxl-spec-core` `cells_of_m`;
 `pxl-geo-bake separation/solve.rs`). A deck's slab is Arnis's structure depth so
-taken (`pxl-spec-core ways.rs` `occupies`, `slab_depth`), and a bore's clear
+taken (`pxl-spec-core way.rs` `occupies`, `slab_depth`), and a bore's clear
 space is carried by its line (`pxl-spec bake/separation.rs` `clear`): its
 ceiling under cover, the whole height to the sky where the roof is open.
 

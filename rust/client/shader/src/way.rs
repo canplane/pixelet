@@ -1,13 +1,13 @@
-// pxl-shader/ways.rs
+// pxl-shader/way.rs
 
-//! Each handed square's ways: their spans off its lines (`ways_cs`), and
-//! their tree in the ways' pool (pxl-spec-core `ways::tree`), the old one
-//! given back (`ways_free_cs`), the new one built (`ways_tree_cs`) and the
-//! families the build gave back pushed (`ways_freed_cs`).
+//! Each handed square's ways: their spans off its lines (`way_cs`), and
+//! their tree in the ways' pool (pxl-spec-core `way::tree`), the old one
+//! given back (`way_free_cs`), the new one built (`way_tree_cs`) and the
+//! families the build gave back pushed (`way_freed_cs`).
 
 use pxl_spec_core::fill::{self, put};
 use pxl_spec_core::overwrite;
-use pxl_spec_core::ways::tree::{self, Pool, FREED_AT, RECORD_WORDS};
+use pxl_spec_core::way::tree::{self, Pool, FREED_AT, RECORD_WORDS};
 use pxl_spec_core::window;
 use pxl_spec_core::at;
 use spirv_std::arch::IndexUnchecked;
@@ -22,11 +22,11 @@ use crate::world::square_at;
 /// the square and its ring (`x`, row by row): each its spans once off the
 /// square's lines into the square's scratch (`fill::spans`), which its
 /// levels and its ways' tree read its blocks and its neighbours' off. Over
-/// `heights_cs`'s tops: a way is told from their faces. Each square's
+/// `height_cs`'s tops: a way is told from their faces. Each square's
 /// entry as handed whole: where it lies and its shard lay the area's edge
-/// (pxl-spec-core `ways::Columns::walled`).
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "ways_cs"))]
-pub fn ways_cs(
+/// (pxl-spec-core `way::Columns::walled`).
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "way_cs"))]
+pub fn way_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &[u32],
@@ -35,8 +35,8 @@ pub fn ways_cs(
     fill::spans(ground, fresh, scratch, id.z, id.x);
 }
 
-/// The lanes of a workgroup a square: `ways_tree_cs`'s, which a level's
-/// scan ranks the flagged across, and `ways_freed_cs`'s.
+/// The lanes of a workgroup a square: `way_tree_cs`'s, which a level's
+/// scan ranks the flagged across, and `way_freed_cs`'s.
 const LANES: u32 = 64;
 
 /// The workgroup's words, a lane's own: a scan's sums, a level's numbers.
@@ -49,7 +49,7 @@ type Shared = [u32; LANES as usize];
 /// bounds check branches on the lane between the barriers, which WebGPU
 /// takes only in uniform control flow; and two loads lie between them, a
 /// lane's own, so they are no one load every lane shares
-/// (pxl-shader-build's `workgroupUniformLoad`). `ways_tree_cs`'s scan.
+/// (pxl-shader-build's `workgroupUniformLoad`). `way_tree_cs`'s scan.
 fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
     let at = |v: u32| (v & (LANES - 1)) as usize;
     // SAFETY: every index is masked under the array's length.
@@ -151,7 +151,7 @@ fn push(stack: &mut [u32], family: u32) {
 
 /// `n` families off the stack together for a square that has taken `taken`:
 /// where their ids begin in it, and false where fewer are free or the
-/// square would take more than its most (`ways::tree::fits`), none taken.
+/// square would take more than its most (`way::tree::fits`), none taken.
 /// One exit, for the reason `add` gives.
 fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     let len = stack.len() as u32;
@@ -210,10 +210,10 @@ fn freed(scratch: &mut [u32], at: u32, family: u32) {
 }
 
 /// Each re-filled square's old ways' tree given back to the pool, a
-/// workgroup a square, ahead of its build (`ways_tree_cs`): walked from its
+/// workgroup a square, ahead of its build (`way_tree_cs`): walked from its
 /// root word, depth first, every family its own and its branches' pushed.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "ways_free_cs"))]
-pub fn ways_free_cs(
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "way_free_cs"))]
+pub fn way_free_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
@@ -257,23 +257,23 @@ pub fn ways_free_cs(
 }
 
 /// Each handed square's ways as a tree of the placed tree's shape
-/// (pxl-spec-core `ways::tree`), a workgroup a square, `group.z` its place
+/// (pxl-spec-core `way::tree`), a workgroup a square, `group.z` its place
 /// in `fresh`: from the square's own nodes along z its ways' bound meets
 /// (`tree::span`) down a level at a time, each
 /// candidate flagged where the square's levels say a way may lie under it
 /// and the flagged given their children's families off the pool's stack
 /// together, in the order the workgroup's scan ranks them; at the square's
-/// cells each a leaf off the spans kept (`ways::lined`); then up, each
+/// cells each a leaf off the spans kept (`way::lined`); then up, each
 /// branch folded, one of eight equal leaves written as that leaf and its
-/// family given back (`ways_freed_cs` pushes them), every family it holds
+/// family given back (`way_freed_cs` pushes them), every family it holds
 /// kept as a record for the read-back. Its root word last; none where it
 /// has no ways, nothing taken nor kept, or where the pool or its scratch ran
 /// out, the families it took given back, and its records' count saying
 /// which (`tree::STARVED`, `tree::CRAMPED`). A level's numbers are what
 /// every lane reads alike (`shared`), the loops' bounds.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "ways_tree_cs"))]
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "way_tree_cs"))]
 #[allow(clippy::too_many_arguments)]
-pub fn ways_tree_cs(
+pub fn way_tree_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
@@ -471,11 +471,11 @@ pub fn ways_tree_cs(
     }
 }
 
-/// The families each handed square's build gave back (`ways_tree_cs`), on the
+/// The families each handed square's build gave back (`way_tree_cs`), on the
 /// stack again: after the build, so no push lands under another square's
 /// ids while it reads them.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "ways_freed_cs"))]
-pub fn ways_freed_cs(
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "way_freed_cs"))]
+pub fn way_freed_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] scratch: &[u32],

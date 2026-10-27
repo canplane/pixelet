@@ -5,7 +5,7 @@
 //! `miss_cs` over every pixel where the list was full).
 
 use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{beam, observed, ray, tally, ways};
+use pxl_spec_core::{beam, observed, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
@@ -235,7 +235,7 @@ fn missed(
         shards,
         overwrites,
         eye,
-        pool: ways::tree::Read(pool),
+        pool: way::tree::Read(pool),
     };
     let (aim, met, before) = observer::walked(eye, world, seen, beams, pixel_tan(eye, id, size));
     let faces = world.faced(aim.origin, &aim.ray, &met);

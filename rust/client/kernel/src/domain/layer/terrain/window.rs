@@ -21,7 +21,7 @@ use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
 use pxl_spec_core::window::{
-    self, CellsBack, FreshSquare, Slot, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS,
+    self, Slot, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS,
     SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS,
 };
 use pxl_spec_core::wrap_index;
@@ -42,7 +42,7 @@ use crate::sys::io::room::Refused;
 use crate::sys::io::source::Declared;
 use crate::sys::mem::fixed::lane;
 use pxl_render::gpu::api::DONE;
-use pxl_render::gpu::renderer::Landing;
+use pxl_render::gpu::renderer::{CellsBack, FreshSquare, Landing};
 
 /// Who a window is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -262,7 +262,7 @@ pub fn joined_lane() -> u32 {
 
 /// The GPU's ways' pool as the CPU mirrors it, the landed squares' blocks
 /// at the GPU's slots, which a cursor reads as the cast reads the GPU's
-/// (pxl-spec-core `ways::tree`).
+/// (pxl-spec-core `way::tree`).
 pub fn pool() -> &'static Mirror {
     mirror()
 }

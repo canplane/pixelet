@@ -7,7 +7,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
@@ -38,6 +38,13 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
 
     /// As tile `at` is published.
     fn encode(&self, at: Tile) -> Result<Vec<u8>, String>;
+
+    /// As tile `at` is stored: its packet, as `encode` makes it, and what of
+    /// it the set keeps beside its tiles for `fits_set` (`FITS`), where the
+    /// kind keeps anything; one pass makes both.
+    fn stored(&self, at: Tile) -> Result<(Vec<u8>, Option<String>), String> {
+        Ok((self.encode(at)?, None))
+    }
     fn decode(raw: &[u8]) -> Result<Self, String>;
 
     fn sources(p: Tile) -> Vec<Tile> {
@@ -52,9 +59,11 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
 
     /// Refused where the set as it will be (`set`) holds what no reader
     /// can: a fact of the whole set, not of a tile, asked before a commit
-    /// moves anything; `workers` tiles read at once. None for most kinds.
-    fn fits_set(_set: &Staged<'_>, _workers: usize) -> Result<(), String> {
-        Ok(())
+    /// moves anything, of what each tile's `stored` kept; `workers` tiles at
+    /// once. What the set will keep of its tiles (`FITS`), where the kind
+    /// keeps anything; none for most kinds.
+    fn fits_set(_set: &Staged<'_>, _workers: usize) -> Result<Option<Vec<(Tile, String)>>, String> {
+        Ok(None)
     }
 }
 
@@ -73,6 +82,13 @@ impl<L: Base> Absent<L> for L {
 
 /// Inside a set, beside its tiles; no tile is named so.
 pub const MANIFEST: &str = "manifest.json";
+
+/// Inside a set, what it keeps of each of its tiles (`Base::stored`), a line
+/// a tile, its name and what was kept: so a commit asks what the set will
+/// hold of these, never of the tiles read and made again. Not published.
+/// A stage keeps each staged tile's beside it, `<name>.fit`. No tile is
+/// named so.
+pub const FITS: &str = "fits";
 
 pub struct TileSet {
     pub root: PathBuf,
@@ -94,14 +110,56 @@ impl TileSet {
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    pub fn remove(&self, p: Tile) -> Result<(), String> {
-        let path = self.path(p);
-        match fs::remove_file(&path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                Err(format!("{}: {e}", path.display()))
-            }
-            _ => Ok(()),
+    fn fit_path(&self, p: Tile) -> PathBuf {
+        self.root.join(format!("{}.fit", p.name()))
+    }
+
+    /// A tile as `Base::stored` made it, and beside it what was kept, or
+    /// none: the kept first, so a tile written is never beside another's.
+    pub fn write_stored(&self, p: Tile, packed: &[u8], fit: Option<&str>) -> Result<(), String> {
+        fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
+        let path = self.fit_path(p);
+        match fit {
+            Some(fit) => write_atomic(&path, fit.as_bytes())
+                .map_err(|e| format!("{}: {e}", path.display()))?,
+            None => remove_file(&path)?,
         }
+        self.write(p, packed)
+    }
+
+    /// What was kept beside a tile (`write_stored`), none where nothing was.
+    pub fn fit(&self, p: Tile) -> Result<Option<String>, String> {
+        let path = self.fit_path(p);
+        match fs::read_to_string(&path) {
+            Ok(text) => Ok(Some(text)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        }
+    }
+
+    /// The tile, then what was kept beside it: one gone first leaves a kept
+    /// no tile reads.
+    pub fn remove(&self, p: Tile) -> Result<(), String> {
+        remove_file(&self.path(p))?;
+        remove_file(&self.fit_path(p))
+    }
+
+    /// What the set keeps of its tiles (`FITS`), by tile; none for a set
+    /// that keeps nothing, one baked before it kept them.
+    pub fn fits(&self) -> Result<Option<FnvHashMap<Tile, String>>, String> {
+        let path = self.root.join(FITS);
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        };
+        let mut out = FnvHashMap::default();
+        for line in text.lines() {
+            let (name, fit) = line.split_once(' ').unwrap_or((line, ""));
+            let p = Tile::of_name(name).ok_or_else(|| format!("{}: {name} names no tile", path.display()))?;
+            out.insert(p, fit.to_string());
+        }
+        Ok(Some(out))
     }
 
     pub fn read<L: Base>(&self, p: Tile) -> Result<Option<L>, String> {
@@ -140,6 +198,13 @@ impl TileSet {
         }
         out.values_mut().for_each(|v| v.sort_unstable());
         Ok(out)
+    }
+}
+
+fn remove_file(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
+        _ => Ok(()),
     }
 }
 
@@ -207,6 +272,26 @@ impl Staged<'_> {
         L::decode(&raw)
             .map(Some)
             .map_err(|e| format!("{}: {e}", p.name()))
+    }
+
+    /// What the set as it will be keeps of `p` (`Base::stored`), as
+    /// `content` reads its tile: the stage's beside a staged tile, none for
+    /// one gone, else the set's (`base`, its `fits`). `None` where the set
+    /// keeps nothing, one baked before it did, so it is not known.
+    pub fn kept(
+        &self,
+        p: Tile,
+        base: Option<&FnvHashMap<Tile, String>>,
+    ) -> Result<Option<Option<String>>, String> {
+        if (p.zoom != self.leaf || self.whole.contains(&ancestor(p, SHARD_ZOOM)))
+            && self.stage.path(p).exists()
+        {
+            return self.stage.fit(p).map(Some);
+        }
+        if self.gone.contains(&p) {
+            return Ok(Some(None));
+        }
+        Ok(base.map(|fits| fits.get(&p).cloned()))
     }
 
     /// Every tile it may hold, the set's and the stage's, each zoom's
@@ -383,18 +468,19 @@ fn fold_band<L: Base>(
             }
             let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
                 .map(|t| {
-                    t.encode(parent)
+                    t.stored(parent)
                         .map_err(|e| format!("{}: {e}", parent.name()))
                 })
                 .transpose()?;
-            if set.content(parent)? == after {
+            if set.content(parent)?.as_deref() == after.as_ref().map(|(raw, _)| raw.as_slice()) {
                 continue;
             }
             match &after {
-                Some(raw) => {
-                    set.stage.write(
+                Some((raw, fit)) => {
+                    set.stage.write_stored(
                         parent,
                         &pack(raw, Level::Stored).map_err(|e| e.to_string())?,
+                        fit.as_deref(),
                     )?;
                     written.push(parent);
                 }

@@ -1,13 +1,13 @@
 // pxl-shader/raster.rs
 
 //! The samples' stops handed to the rasterizer (pxl-spec-core `raster`):
-//! each stopped sample's box written for the raster's draw (`boxes_cs`),
+//! each stopped sample's box written for the raster's draw (`sample_box_cs`),
 //! which pxl-render raster.wgsl draws and pxl-shader cast.rs `cast_cs`
 //! reads each pixel's pick off; and what lies about each box's face asked
-//! once a box (`faces_cs`).
+//! once a box (`face_cs`).
 
 use pxl_spec_core::cast::{Ends, Met, Stop};
-use pxl_spec_core::{beam, cast, raster, ways};
+use pxl_spec_core::{beam, cast, raster, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
@@ -123,8 +123,8 @@ pub(crate) fn picked<W: Words + ?Sized>(
 /// thread each: written as a box for the raster's draw, the eye's
 /// (observer.rs `sample_box`), and the dispatch that asks its face raised
 /// to hold it (`raster::ARGS_FACES`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "boxes_cs"))]
-pub fn boxes_cs(
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_box_cs"))]
+pub fn sample_box_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
@@ -141,7 +141,7 @@ pub fn boxes_cs(
     }
 }
 
-/// Each box `boxes_cs` wrote, a thread each, `raster::FACES_LANES` a
+/// Each box `sample_box_cs` wrote, a thread each, `raster::FACES_LANES` a
 /// workgroup, dispatched off its args (`raster::ARGS_FACES`), each past the
 /// boxes' count returning at once: what lies about the face its sample
 /// entered (`World::faced`), asked of the world's query once a box rather
@@ -150,9 +150,9 @@ pub fn boxes_cs(
 /// (cast.rs `cast_cs`). Its sample's ray is the one `sample_cs` cast, and
 /// its stop the node, block and axis it left; a sample that lacks met no
 /// face.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "faces_cs"))]
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "face_cs"))]
 #[allow(clippy::too_many_arguments)]
-pub fn faces_cs(
+pub fn face_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
@@ -198,7 +198,7 @@ pub fn faces_cs(
             shards,
             overwrites,
             eye,
-            pool: ways::tree::Read(pool),
+            pool: way::tree::Read(pool),
         };
         world.faced(origin, &ray, &met)
     };

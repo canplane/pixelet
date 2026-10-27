@@ -1,4 +1,4 @@
-// @pxl/client/shell/world/top/view-buttons.tsx
+// @pxl/client/shell/world/top/view-stack.tsx
 
 import { useTranslation } from "react-i18next";
 
@@ -12,7 +12,7 @@ const FREE = MODE.options.free;
 const ORBIT = MODE.options.orbit;
 const PLACE = SETTINGS.place.key;
 
-export function ViewButtons() {
+export function ViewStack() {
   const { t } = useTranslation();
   const first = useKernel((s) => s.settings[MODE.key]) === FREE;
   const places = useKernel((s) => s.settings[PLACE]) === 1;

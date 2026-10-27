@@ -108,7 +108,7 @@ pub fn square_lines(
     scratch: &mut [(u32, u32)],
     out: &mut [u32],
 ) -> usize {
-    use pxl_spec_core::ways::{header, HEADER_WORDS, SEGMENT_WORDS};
+    use pxl_spec_core::way::{header, HEADER_WORDS, SEGMENT_WORDS};
     use pxl_spec_core::window::{
         LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE, WAYS_BINS,
     };
@@ -206,7 +206,7 @@ fn square_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 /// The window's square at `place` (in squares) of `tile` as its fill reads
 /// it, its lines `lines` (`square_lines`): its looks four a cell as a client
 /// hands them (`handed`) and its heights off the tile's samples `ele` as
-/// `heights_cs` draws them (`ground::height`), its ring's too.
+/// `height_cs` draws them (`ground::height`), its ring's too.
 fn laid<'a>(
     tile: Tile,
     ground: &'a Ground,
@@ -270,7 +270,7 @@ fn record(
 
 /// The window's square at `place` (in squares) of `tile`, handed into
 /// `handed` (`record`) and filled into `lane`, its spans into `kept`, its
-/// scratch (`ways::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-spec-core
+/// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-spec-core
 /// `fill::square`): the most spans a column makes.
 pub fn square_spans(
     tile: Tile,
@@ -287,40 +287,8 @@ pub fn square_spans(
     pxl_spec_core::fill::square(handed, lane, kept, place, cell, first)
 }
 
-/// Each square of `tile`'s windows' ways' tree as a GPU builds it, row by
-/// row of its squares (pxl-spec-core `fill::tree`): the families it takes,
-/// and those it holds once folded, none for a square without ways; none for
-/// a tile without ways. `kept` its scratch as a GPU's, and
-/// `pool` a square's room to build in, its heap words then its data words.
-pub fn square_families(
-    tile: Tile,
-    held: &TerrainTile,
-    scratch: &mut [(u32, u32)],
-    [handed, lane, kept, pool]: [&mut [u32]; 4],
-) -> Vec<[u32; 2]> {
-    use pxl_spec_core::window::SQUARE;
-    if held.separation.is_empty() {
-        return Vec::new();
-    }
-    let side = TILE_CELLS / SQUARE;
-    (0..side * side)
-        .map(|k| {
-            square_spans(
-                tile,
-                held,
-                [k % side, k / side],
-                scratch,
-                [handed, lane, kept],
-            );
-            let cell = pxl_spec_core::fill::cell_of(handed, 0);
-            let [taken, held, _] = pxl_spec_core::fill::tree(lane, kept, cell, pool, 1);
-            [taken, held]
-        })
-        .collect()
-}
-
 /// The families the windows' trees take wherever the eye is, of the pool
-/// (pxl-spec-core `ways::tree::POOL_FAMILIES`): each eye's window's most at
+/// (pxl-spec-core `way::tree::POOL_FAMILIES`): each eye's window's most at
 /// its cells (`worst`, the most any placement of it holds), the others'
 /// each the most of any, and the squares handed a frame each the most a
 /// square takes before its fold gives families back (`taken`). A square
@@ -336,8 +304,8 @@ pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
 /// its piers standing as none blocks them, by the rule its squares' columns
-/// are read by, their rings included (`ways::column`) — so a line every span
-/// of which fills no block there (`ways::fills_any`) is none at that zoom,
+/// are read by, their rings included (`way::column`) — so a line every span
+/// of which fills no block there (`way::fills_any`) is none at that zoom,
 /// and is not stored.
 pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
     use pxl_spec_core::window::{LINES_WORDS, SQUARE};
@@ -374,7 +342,7 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
                 let ring = -1..=SQUARE as i32;
                 ring.clone().any(|y| {
                     ring.clone()
-                        .any(|x| pxl_spec_core::ways::column(&sq, [x, y]).0.n > 0)
+                        .any(|x| pxl_spec_core::way::column(&sq, [x, y]).0.n > 0)
                 })
             })
         });
@@ -394,41 +362,108 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
     }
 }
 
-/// Whether each square of `tile`'s windows fills as a client fills it
-/// (`square_spans`): no column more than `ways::SPANS` spans, and its ways
-/// meeting no more than `ways::tree::ROOT_NODES` of its own nodes along z,
-/// its tree's root's; the first square that does not, the most spans a
-/// column makes there and the nodes its ways meet.
-pub fn fill_fit(tile: Tile, held: &TerrainTile) -> Result<(), ([u32; 2], [u32; 2])> {
+/// What a tile's windows' squares take of a client's ways (`fill_fit`):
+/// each square with ways, by its index in the tile row by row, and the
+/// families its tree holds once folded; and the most a square takes before
+/// its fold gives families back. Empty for a tile without ways.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Fit {
+    pub held: Vec<(u32, u32)>,
+    pub taken: u32,
+}
+
+/// Why a square does not fill as a client fills it (`fill_fit`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unfit {
+    /// A column making more than `way::SPANS` spans, how many.
+    Spans(u32),
+    /// Its ways meeting more than `way::tree::ROOT_NODES` of its own nodes
+    /// along z, its tree's root's: how many.
+    Nodes(u32),
+    /// Its tree taking more than `way::tree::SQUARE_FAMILIES` families.
+    Families,
+}
+
+/// A square as `fill_fit` filled and built it: its words and its kept
+/// spans (pxl-spec-core `fill::square`), its cells' zoom, and its ways' tree
+/// in a pool of its own, its root word (`way::tree::root_word`) and the
+/// families its build took and holds.
+pub struct Built<'a> {
+    pub lane: &'a [u32],
+    pub kept: &'a [u32],
+    pub cell: Zoom,
+    pub pool: &'a [u32],
+    pub root: u32,
+    pub taken: u32,
+    pub held: u32,
+}
+
+/// Each square of `tile`'s windows filled (`square_spans`) and its ways'
+/// tree built (pxl-spec-core `fill::tree`) as a client fills and builds
+/// them, row by row of its squares, once, each handed to `each` as built
+/// with its index in the tile, which a proof reads (pxl-geo-bake
+/// bin/fill_digest.rs): the first square that does not fit and why, else
+/// what the tile takes of the client's ways (`Fit`).
+pub fn fill_fit(
+    tile: Tile,
+    held: &TerrainTile,
+    mut each: impl FnMut(u32, &Built<'_>),
+) -> Result<Fit, ([u32; 2], Unfit)> {
     use pxl_spec_core::window::{HANDED_WORDS, SQUARE, SQUARE_WORDS};
+    use pxl_spec_core::way::tree::{ROOT_NODES, SCRATCH_WORDS, SQUARE_FAMILIES};
+    let mut fit = Fit::default();
     if held.separation.is_empty() {
-        return Ok(());
+        return Ok(fit);
     }
     let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS];
     let (mut handed, mut lane, mut kept) = (
         vec![0; HANDED_WORDS as usize],
         vec![0; SQUARE_WORDS as usize],
-        vec![0; pxl_spec_core::ways::tree::SCRATCH_WORDS as usize],
+        vec![0; SCRATCH_WORDS as usize],
     );
-    for qy in 0..TILE_CELLS / SQUARE {
-        for qx in 0..TILE_CELLS / SQUARE {
-            let spans = square_spans(
-                tile,
-                held,
-                [qx, qy],
-                &mut scratch,
-                [&mut handed, &mut lane, &mut kept],
-            );
-            let cell = pxl_spec_core::fill::cell_of(&handed, 0);
-            let (_, nodes) = pxl_spec_core::fill::root_span(&lane, 0, cell);
-            if spans > pxl_spec_core::ways::SPANS as u32
-                || nodes > pxl_spec_core::ways::tree::ROOT_NODES
-            {
-                return Err(([qx, qy], [spans, nodes]));
-            }
+    // A square's room: the most a build takes, past the family none holds.
+    let mut pool = vec![0; 16 * (SQUARE_FAMILIES as usize + 1)];
+    let side = TILE_CELLS / SQUARE;
+    for k in 0..side * side {
+        let place = [k % side, k / side];
+        let spans = square_spans(
+            tile,
+            held,
+            place,
+            &mut scratch,
+            [&mut handed, &mut lane, &mut kept],
+        );
+        if spans > pxl_spec_core::way::SPANS as u32 {
+            return Err((place, Unfit::Spans(spans)));
         }
+        let cell = pxl_spec_core::fill::cell_of(&handed, 0);
+        // Asked before the build, which refuses past either alike.
+        let (_, nodes) = pxl_spec_core::fill::root_span(&lane, 0, cell);
+        if nodes > ROOT_NODES {
+            return Err((place, Unfit::Nodes(nodes)));
+        }
+        let [taken, families, root] = pxl_spec_core::fill::tree(&lane, &kept, cell, &mut pool, 1);
+        if taken == u32::MAX {
+            return Err((place, Unfit::Families));
+        }
+        each(
+            k,
+            &Built {
+                lane: &lane,
+                kept: &kept,
+                cell,
+                pool: &pool,
+                root,
+                taken,
+                held: families,
+            },
+        );
+        if families > 0 {
+            fit.held.push((k, families));
+        }
+        fit.taken = fit.taken.max(taken);
     }
-    Ok(())
+    Ok(fit)
 }
 
 // Made on first use: a constant array of zeros would ship in the module's data.

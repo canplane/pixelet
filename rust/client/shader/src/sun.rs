@@ -3,15 +3,15 @@
 //! The world's depth from the sun into its clipmap (pxl-spec-core `sun`),
 //! every slot each frame it is cast, by the passes the eye's rays take,
 //! the sun's map their observer (`Map`; observer.rs): the beam rays and
-//! their cells' starts (`sun_beam_cs`, `sun_cells_cs`), the samples
-//! (`sun_sample_cs`) and their boxes (`sun_boxes_cs`), which the raster
+//! their cells' starts (`sun_beam_cs`, `sun_cell_cs`), the samples
+//! (`sun_sample_cs`) and their boxes (`sun_sample_box_cs`), which the raster
 //! draws, every slot taking its pick or the sky (`sun_cs`) and the rest
 //! walked (`sun_miss_cs`).
 
 use pxl_spec_core::cast::{self, Detail};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::sun::{Starts, Sun};
-use pxl_spec_core::{at, beam, observed, tally, ways};
+use pxl_spec_core::{at, beam, observed, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
@@ -119,7 +119,7 @@ fn world<'a>(
         shards,
         overwrites,
         eye,
-        pool: ways::tree::Read(pool),
+        pool: way::tree::Read(pool),
     }
 }
 
@@ -487,7 +487,7 @@ pub fn sun_miss_cs(
 /// Each sample of the sun's map (pxl-spec-core `sun::SAMPLE`), a slot every
 /// `SAMPLE` across and down, a thread each, the map's (observer.rs
 /// `sample`): its stop left in the eye's samples' words for the raster
-/// (`sun_boxes_cs`).
+/// (`sun_sample_box_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_sample_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn sun_sample_cs(
@@ -515,9 +515,9 @@ pub fn sun_sample_cs(
 
 /// Each sample of the sun's map (`sun_sample_cs`), a thread each, written
 /// as a box for the raster's draw, the map's (observer.rs `sample_box`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_boxes_cs"))]
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_sample_box_cs"))]
 #[allow(clippy::too_many_arguments)]
-pub fn sun_boxes_cs(
+pub fn sun_sample_box_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
@@ -569,8 +569,8 @@ pub fn sun_beam_cs(
 /// Where each cell of the sun's map starts (pxl-spec-core `sun::cell`), a
 /// thread a cell, `sun::BEAM` texels a side, the map's (observer.rs
 /// `cell`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_cells_cs"))]
-pub fn sun_cells_cs(
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_cell_cs"))]
+pub fn sun_cell_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,

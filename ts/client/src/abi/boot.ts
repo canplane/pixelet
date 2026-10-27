@@ -23,7 +23,7 @@ import {
   Sensor,
 } from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/namespace/source.ts";
-import { namespace } from "@/namespace/roots.ts";
+import { namespace } from "@/namespace/namespace.ts";
 import { follow_refused, migrate } from "@/namespace/storage.ts";
 import { HOST, open_host } from "@/host/mount.ts";
 import {

@@ -1,7 +1,7 @@
 // pxl-spec-core/raster.rs
 
 //! gpu-portable: the samples' stops drawn as boxes, so the rasterizer picks
-//! each drawn pixel's block (pxl-shader raster.rs `boxes_cs`, cast.rs
+//! each drawn pixel's block (pxl-shader raster.rs `sample_box_cs`, cast.rs
 //! `cast_cs`; pxl-render gpu/ray/raster.rs, raster.wgsl). Each sample that
 //! stopped is a box, the block as the cast stops on it (`cast::drawn`),
 //! unless the sample before it across or up stopped alike, which some
@@ -19,7 +19,7 @@
 /// The draw's indirect args, a buffer of their own (`ARGS_WORDS`):
 /// `ARGS_VERTICES`, `ARGS_INSTANCES`, then two words the draw reads as 0;
 /// then the dispatch over the boxes that asks what lies about each one's
-/// face (pxl-shader `faces_cs`), `FACES_LANES` boxes a workgroup
+/// face (pxl-shader `face_cs`), `FACES_LANES` boxes a workgroup
 /// (`ARGS_FACES`), its workgroups raised as boxes are written, the other
 /// two 1. One dispatch's 65535 workgroups hold 4.2M boxes, a box a sample
 /// at most and a sample 16 pixels: past 67 Mpx.

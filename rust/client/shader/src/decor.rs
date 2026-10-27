@@ -15,7 +15,7 @@ use pxl_spec_core::support;
 use pxl_spec_core::world::At;
 use pxl_spec_core::scatter::{self, drawn, mark, marked, Grounds, MARKS, SQUARE_PATCHES};
 use pxl_spec_core::window::{self, FIRST_CELL, SLOTS};
-use pxl_spec_core::{at, ways, LEAF_CELL};
+use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -278,7 +278,7 @@ pub fn decor_cs(
             shards,
             overwrites,
             eye,
-            pool: ways::tree::Read(pool),
+            pool: way::tree::Read(pool),
         },
         rows,
     };

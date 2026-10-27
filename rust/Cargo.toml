@@ -187,7 +187,7 @@ incremental = true
 # naga's Metal backend writes a `let` of a loop's body that `break if` reads
 # in `continuing` as its expression again after the counter moved, so the
 # loop ends an iteration early (gfx-rs/wgpu#4558). rust-gpu emits that shape
-# throughout the generated shaders: on wgpu/Metal heights_cs differed from
+# throughout the generated shaders: on wgpu/Metal height_cs differed from
 # ground::height in 3791 of a square's 4096 cells, 0 with the fix. Its fix,
 # gfx-rs/wgpu#10459, sits on trunk, whose naga-types wgpu 30.0.1 no longer
 # matches, so wgpu's crates move to the same rev. Drop when a wgpu release

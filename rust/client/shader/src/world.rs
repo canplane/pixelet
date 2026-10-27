@@ -10,7 +10,7 @@ use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
 use pxl_spec_core::window::{self, Found, Squares, FIRST_CELL, SLOTS, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec_core::world::{self, At};
-use pxl_spec_core::{at, faces, ground, support, ways};
+use pxl_spec_core::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
 
 use crate::eye::Eye;
@@ -44,9 +44,9 @@ pub struct World<'a, L> {
     /// square (`window::ORIGIN_AT`) and the eye's windows' folds
     /// (`window::JOINED_AT`).
     pub(crate) window: &'a [IVec4],
-    /// Per berth (`window::SQUARES`), its square's columns (`heights_cs`,
-    /// `ways_cs`), their levels (`bound_cs`), their runs (`ways_cs`) and its
-    /// cells as laid (`heights_cs`) (`window::SQUARE_WORDS`), whichever
+    /// Per berth (`window::SQUARES`), its square's columns (`height_cs`,
+    /// `way_cs`), their levels (`bound_cs`), their runs (`way_cs`) and its
+    /// cells as laid (`height_cs`) (`window::SQUARE_WORDS`), whichever
     /// window filled it.
     pub(crate) ground: &'a [u32],
     /// Per berth, in the same order, its cells' four looks (`Looks`).
@@ -60,14 +60,14 @@ pub struct World<'a, L> {
     /// The eye, whose preview cuts are read where something placed or cut
     /// is asked about, not held through the descent.
     pub(crate) eye: &'a Eye,
-    /// The ways' pool (pxl-spec-core `ways::tree`), every square's tree,
+    /// The ways' pool (pxl-spec-core `way::tree`), every square's tree,
     /// which every pass that asks the world's query reads.
-    pub(crate) pool: ways::tree::Read<'a>,
+    pub(crate) pool: way::tree::Read<'a>,
 }
 
 /// Where the squares' cells' four looks are read: a word a cell
 /// (`ground::looks`), `window::SQUARE_CELLS` a square in the squares' order,
-/// as the fill wrote them off the handed record (`heights_cs`).
+/// as the fill wrote them off the handed record (`height_cs`).
 pub trait Looks: Copy {
     fn look(&self, i: u32) -> u32;
 }
@@ -219,11 +219,11 @@ impl<L: Looks> Query for World<'_, L> {
 
 impl<L: Looks> World<'_, L> {
     /// What lies about the face a ray stopped on (pxl-spec-core
-    /// `faces::word`): each block beside the stop's at its zoom, hiding its
+    /// `face::word`): each block beside the stop's at its zoom, hiding its
     /// cube whole (`answer::whole`), asked off the line down to the stop's
     /// node (`support::line`, `support::block`), each from the deepest node
     /// it shares with it, never again from the top; a box's own, a block
-    /// kept short of its cube (`faces::BOX`); nothing where the ray stopped
+    /// kept short of its cube (`face::BOX`); nothing where the ray stopped
     /// on none.
     pub(crate) fn faced<A: Copy>(
         &mut self,
@@ -235,12 +235,12 @@ impl<L: Looks> World<'_, L> {
             return 0;
         }
         if answer::kept(met.stop.block[0]) < answer::EIGHTHS {
-            return faces::BOX;
+            return face::BOX;
         }
         let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
         let line = support::line(self, zoom, c);
-        faces::word(face_of(ray, met.stop.axis), |d| {
-            answer::whole(support::block(self, &line, zoom, faces::beside(zoom, c, d)))
+        face::word(face_of(ray, met.stop.axis), |d| {
+            answer::whole(support::block(self, &line, zoom, face::beside(zoom, c, d)))
         })
     }
 }
