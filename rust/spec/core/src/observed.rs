@@ -51,7 +51,9 @@ use crate::{wrap_index, Zoom, LEAF_CELL};
 /// growth is asked over (pxl-spec-core `scatter::BOXES`, `scatter::cut_box`;
 /// pxl-render gpu/grown.rs); and the families of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
-/// `WRITTEN` at most, past which all is forgotten (`reads_written`).
+/// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
+/// whether its walks count what they ask, and what they counted
+/// (`TALLY_ON`, `TALLY_AT`).
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
@@ -60,7 +62,17 @@ pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
 pub const BOXES: u32 = crate::scatter::BOXES;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN: u32 = 32;
-pub const HEAD_WORDS: u32 = WRITTEN_AT + 1 + WRITTEN;
+/// Whether the walks count what they ask, where the `ray_counts` setting
+/// asks, and what they counted: `tally::WALKS` lanes an observer, its
+/// walks' that write the pyramid (pxl-spec-core `tally`).
+pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN;
+pub const TALLY_AT: u32 = TALLY_ON + 1;
+pub const HEAD_WORDS: u32 = TALLY_AT + crate::tally::OBSERVERS * crate::tally::WALKS;
+
+/// Where `observer`'s lane `lane` of its walks is counted in the head.
+pub const fn tally_at(observer: u32, lane: u32) -> u32 {
+    TALLY_AT + observer * crate::tally::WALKS + lane
+}
 
 /// What a frame forgets: nothing; everything, where what every node is
 /// asked of moved (the service area) or the keys' frames ran out; the nodes

@@ -51,6 +51,22 @@ fn seen_store(w: &mut Seen, i: u32, v: u32) {
     }
 }
 
+/// `visits`, the nodes a walk of `observer`'s asked, added to its lane
+/// `lane` of the head where the walks count (pxl-spec-core
+/// `observed::TALLY_ON`, `tally`).
+pub(crate) fn tallied(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
+    if seen_load(w, observed::TALLY_ON) != 0 {
+        // SAFETY: as `seen_at`.
+        unsafe {
+            spirv_std::arch::atomic_i_add::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+            >(w.index_mut(observed::tally_at(observer, lane) as usize), visits);
+        }
+    }
+}
+
 /// Word `i` set to `v` where it holds `was`; what it held.
 fn seen_swap(w: &mut Seen, i: u32, was: u32, v: u32) -> u32 {
     // SAFETY: as `seen_at`.

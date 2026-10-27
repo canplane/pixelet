@@ -20,7 +20,7 @@ use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
-pub use tally::SUN_SUMS;
+pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
 
 pub struct RaysPass {
     built: Built,

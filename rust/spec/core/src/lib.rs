@@ -33,6 +33,7 @@ pub mod raster;
 pub mod ray;
 pub mod scatter;
 pub mod sun;
+pub mod tally;
 pub mod ways;
 pub mod window;
 pub mod world;

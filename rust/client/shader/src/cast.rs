@@ -6,14 +6,14 @@
 //! list was full).
 
 use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{beam, observed, raster, ray, ways};
+use pxl_spec_core::{beam, observed, raster, ray, tally, ways};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
 
 use crate::beam::{resumed, started, Beams};
 use crate::eye::{eye_origin, grid, Eye};
-use crate::observed::{seen_at, seen_put, Reading, Seen, Writing, MISSED};
+use crate::observed::{seen_at, seen_put, tallied, Reading, Seen, Writing, MISSED};
 use crate::raster::picked;
 use crate::world::{face_of, Unlooked, World};
 use crate::{add, most};
@@ -150,6 +150,7 @@ pub fn cast_cs(
         }
     }
     let steps = eye.origin.w != 0;
+    let on = seen_at(seen, observed::TALLY_ON) != 0;
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
@@ -178,6 +179,7 @@ pub fn cast_cs(
         return;
     }
     if hit.t < ray.reach {
+        counted(marks, on, tally::PICKED, 1);
         written(
             rays,
             id,
@@ -203,6 +205,8 @@ pub fn cast_cs(
         &line,
         line.node(),
     );
+    counted(marks, on, tally::WALKED, 1);
+    counted(marks, on, tally::PIXEL, met.visits);
     if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
         // SAFETY: within the rays, bounded by their size above.
         unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
@@ -227,6 +231,15 @@ pub fn cast_cs(
             ..met
         };
         written(rays, id, word(&ray, met, steps, faces));
+    }
+}
+
+/// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
+/// `tally::PICKED` on) in its walk again's args `args`, where `on`
+/// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
+pub(crate) fn counted(args: &mut [u32], on: bool, lane: u32, v: u32) {
+    if on {
+        add(args, ray::MISS_ARGS_TALLY + lane - tally::PICKED, v);
     }
 }
 
@@ -286,7 +299,7 @@ fn missed(
     let met = resumed(
         &mut Writing {
             world,
-            seen,
+            seen: &mut *seen,
             tag,
             blocks: true,
         },
@@ -297,6 +310,7 @@ fn missed(
         &line,
         line.node(),
     );
+    tallied(seen, tally::EYE, tally::MISS, met.visits);
     let faces = world.faced(origin, &ray, &met);
     let met = Met {
         visits: met.visits + line.visits(),

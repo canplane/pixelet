@@ -9,15 +9,14 @@
 
 use pxl_spec_core::cast::{self, Detail, Until};
 use pxl_spec_core::fill::put;
-use pxl_spec_core::{at, beam, observed, raster, ways};
+use pxl_spec_core::{at, beam, observed, raster, tally, ways};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
-use crate::add;
 use crate::beam::{resumed, sample_put, Beamed, Leaving};
-use crate::cast::listed;
+use crate::cast::{counted, listed};
 use crate::eye::{eye_origin, Eye};
-use crate::observed::{seen_at, Seen, Writing};
+use crate::observed::{seen_at, tallied, Seen, Writing};
 use crate::raster::{boxed, picked, NONE};
 use crate::world::{Unlooked, World};
 
@@ -37,7 +36,7 @@ type SunWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// What the sun's cast is handed beside the eye's words (pxl-spec-core
-/// `sun::MOVED_HEAD`): whether it is counted (`sun::COUNTS`), and where the
+/// `sun::MOVED_HEAD`): whether it is counted (`sun::MOVED_COUNTED`), and where the
 /// rays start (`sun::Starts`).
 type Moved = [IVec4];
 
@@ -49,7 +48,7 @@ fn starts(m: &Moved) -> pxl_spec_core::sun::Starts {
     })
 }
 
-fn counted(m: &Moved) -> bool {
+fn counts(m: &Moved) -> bool {
     m[0].y != 0
 }
 
@@ -104,7 +103,6 @@ pub fn sun_cs(
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 13)] counts: &mut [u32],
     #[spirv(descriptor_set = 0, binding = 15)] picks: &Picks,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 17)] misses: &mut [u32],
 ) {
@@ -127,9 +125,7 @@ pub fn sun_cs(
                 stop,
                 visits: 0,
             };
-            if counted(moved) {
-                add(counts, pxl_spec_core::sun::COUNT_PICKED, 1);
-            }
+            counted(misses, counts(moved), tally::PICKED, 1);
             let s = sun_of(eye);
             // SAFETY: within the map, bounded by its size above.
             unsafe { sun.write(slot, s.word(detail, pxl_spec_core::sun::depth(&s, &met))) };
@@ -138,6 +134,7 @@ pub fn sun_cs(
     }
     // Listed for its walk again as the eye's pixels are (cast.rs `listed`):
     // the list holds every slot, so none finds it full.
+    counted(misses, counts(moved), tally::WALKED, 1);
     let at = listed(misses, size.x * size.y, [0; 2]);
     put(
         list,
@@ -196,7 +193,7 @@ pub fn sun_miss_cs(
     let met = sun_resumed(
         &mut Writing {
             world,
-            seen,
+            seen: &mut *seen,
             tag,
             blocks: false,
         },
@@ -207,6 +204,7 @@ pub fn sun_miss_cs(
         &ray,
         detail,
     );
+    tallied(seen, tally::SUN, tally::MISS, met.visits);
     let s = sun_of(eye);
     // SAFETY: a slot `sun_cs` listed, within the map.
     unsafe { sun.write(slot, s.word(detail, pxl_spec_core::sun::depth(&s, &met))) };
@@ -256,7 +254,7 @@ pub fn sun_sample_cs(
     let met = sun_resumed(
         &mut Writing {
             world,
-            seen,
+            seen: &mut *seen,
             tag,
             blocks: false,
         },
@@ -267,6 +265,7 @@ pub fn sun_sample_cs(
         &ray,
         detail,
     );
+    tallied(seen, tally::SUN, tally::SAMPLE, met.visits);
     let index = id.y * (size.x / d) + id.x;
     sample_put(list, pxl_spec_core::sun::sample(size.x, index), &met);
 }
@@ -284,7 +283,6 @@ pub fn sun_boxes_cs(
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 13)] counts: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] boxes: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
 ) {
@@ -306,7 +304,7 @@ pub fn sun_boxes_cs(
     // rays start in (`sun::Starts`).
     let s = sun_of(eye);
     let origin = starts(moved).start(s.corner);
-    let box_at = boxed(
+    boxed(
         list,
         at(id.x, id.y),
         before,
@@ -316,9 +314,6 @@ pub fn sun_boxes_cs(
         boxes,
         args,
     );
-    if box_at != NONE && counted(moved) {
-        add(counts, pxl_spec_core::sun::COUNT_BOXES, 1);
-    }
 }
 
 /// Each beam ray of the sun's map (pxl-spec-core `sun::BEAM`), a thread
@@ -389,7 +384,7 @@ pub fn sun_beam_cs(
     let met = cast::rooted(
         &mut Writing {
             world,
-            seen,
+            seen: &mut *seen,
             tag,
             blocks: false,
         },
@@ -399,6 +394,7 @@ pub fn sun_beam_cs(
         Until::Beam,
         &mut Leaving(list, base),
     );
+    tallied(seen, tally::SUN, tally::BEAM, met.visits);
     let t = met.stop.t - pxl_spec_core::sun::margin(width);
     put(
         list,

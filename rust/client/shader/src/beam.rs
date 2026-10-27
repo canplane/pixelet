@@ -6,12 +6,12 @@
 
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
 use pxl_spec_core::world::At;
-use pxl_spec_core::{beam, observed, ways};
+use pxl_spec_core::{beam, observed, tally, ways};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
-use crate::observed::{seen_at, seen_put, Seen, Writ, Writing};
+use crate::observed::{seen_at, seen_put, tallied, Seen, Writ, Writing};
 use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
@@ -248,7 +248,7 @@ pub fn beam_cs(
     let met = cast::rooted(
         &mut Writing {
             world,
-            seen,
+            seen: &mut *seen,
             tag,
             blocks: true,
         },
@@ -258,6 +258,7 @@ pub fn beam_cs(
         Until::Beam,
         &mut Leaving(beams, base),
     );
+    tallied(seen, tally::EYE, tally::BEAM, met.visits);
     seen_put(beams, base + beam::LINE_T, g.handed(met.stop.t).to_bits());
     seen_put(beams, base + beam::LINE_VISITS, met.visits);
 }
@@ -374,7 +375,7 @@ pub fn sample_cs(
     let met = resumed(
         &mut Writing {
             world,
-            seen,
+            seen: &mut *seen,
             tag,
             blocks: true,
         },
@@ -385,6 +386,7 @@ pub fn sample_cs(
         &line,
         line.node(),
     );
+    tallied(seen, tally::EYE, tally::SAMPLE, met.visits);
     let met = Met {
         visits: met.visits + line.visits(),
         ..met
