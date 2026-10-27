@@ -115,6 +115,34 @@
       "camera_gizmo": {
         "label": "Camera Gizmo",
         "description": "Overlays a ring-shaped grid around the screen's center and colors blocks by how large they appear on screen: green when about one grid cell, blue when smaller, red when larger."
+      },
+      "sky_time": {
+        "label": "Sky time",
+        "description": "Holds the sky and the sun at an hour of the place you are looking at, in its solar time. Clouds and stored data keep the real clock. A reload returns to the real time.",
+        "real": {
+          "label": "Real time",
+          "description": "Follows the device's clock."
+        },
+        "dawn": {
+          "label": "Dawn, 7:00",
+          "description": "A low sun, long shadows."
+        },
+        "morning": {
+          "label": "Morning, 9:00",
+          "description": "The sun stands at a slant."
+        },
+        "noon": {
+          "label": "Noon",
+          "description": "The sun at its highest, the shortest shadows."
+        },
+        "afternoon": {
+          "label": "Afternoon, 3:00",
+          "description": "The sun leans west."
+        },
+        "dusk": {
+          "label": "Dusk, 5:00",
+          "description": "A low sun, long shadows."
+        }
       }
     },
     "disclaimer": {

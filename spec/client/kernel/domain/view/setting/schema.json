@@ -79,6 +79,30 @@
       "           tint. Five passes and 11 bytes a pixel."
     ]
   },
+  "SKY_TIMES": {
+    "$value": {
+      "real": 0,
+      "dawn": 1,
+      "morning": 2,
+      "noon": 3,
+      "afternoon": 4,
+      "dusk": 5
+    },
+    "$doc": [
+      "The hour the sky is drawn at, at the place the sky is seen from: the",
+      "wall clock's own, or one held in the place's solar time, so the sun",
+      "stands where it does there at that hour today whatever the clock reads",
+      "(pxl-kernel domain/scene/environment.rs `shown`). Only the sky's time;",
+      "the clouds, the frame's step and the storage keep the wall clock.",
+      "",
+      "  real      — the wall clock.",
+      "  dawn      — 7:00, a low sun.",
+      "  morning   — 9:00.",
+      "  noon      — 12:00, the sun highest.",
+      "  afternoon — 15:00.",
+      "  dusk      — 17:00, a low sun."
+    ]
+  },
   "SETTINGS": {
     "textures": {
       "number": 0,
@@ -292,6 +316,15 @@
       "default": false,
       "section": "debug",
       "dev": true
+    },
+    "sky_time": {
+      "number": 21,
+      "$doc": ["The hour the sky is drawn at; SKY_TIMES says each."],
+      "kind": "choice",
+      "default": "real",
+      "options": "SKY_TIMES",
+      "section": "debug",
+      "kept": false
     }
   }
 }
