@@ -143,6 +143,45 @@ impl ResolutionMode {
     }
 }
 
+/// The hour the sky is drawn at, at the place the sky is seen from: the
+/// wall clock's own, or one held in the place's solar time, so the sun
+/// stands where it does there at that hour today whatever the clock reads
+/// (pxl-kernel domain/scene/environment.rs `shown`). Only the sky's time;
+/// the clouds, the frame's step and the storage keep the wall clock.
+///
+///   real      — the wall clock.
+///   dawn      — 7:00, a low sun.
+///   morning   — 9:00.
+///   noon      — 12:00, the sun highest.
+///   afternoon — 15:00.
+///   dusk      — 17:00, a low sun.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SkyTime {
+    real = 0,
+    dawn = 1,
+    morning = 2,
+    noon = 3,
+    afternoon = 4,
+    dusk = 5,
+}
+
+impl SkyTime {
+    pub const ALL: [SkyTime; 6] = [
+        SkyTime::real,
+        SkyTime::dawn,
+        SkyTime::morning,
+        SkyTime::noon,
+        SkyTime::afternoon,
+        SkyTime::dusk,
+    ];
+
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<SkyTime> {
+        SkyTime::ALL.into_iter().find(|o| *o as u32 == number)
+    }
+}
+
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -227,10 +266,12 @@ pub enum SettingKey {
     ray_steps = 19,
     /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
     ray_counts = 20,
+    /// The hour the sky is drawn at; SKY_TIMES says each.
+    sky_time = 21,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 21] = [
+    pub const ALL: [SettingKey; 22] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -252,11 +293,12 @@ impl SettingKey {
         SettingKey::pet,
         SettingKey::ray_steps,
         SettingKey::ray_counts,
+        SettingKey::sky_time,
     ];
 
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a number not given out stays 0.
-    pub const SLOTS: usize = 21;
+    pub const SLOTS: usize = 22;
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
@@ -288,13 +330,17 @@ impl SettingKey {
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
             SettingKey::ray_counts => SettingKind::Toggle,
+            SettingKey::sky_time => SettingKind::Choice,
         }
     }
 
     /// Written to the settings' kept slot and read from it; one schema.json
     /// marks `kept` false is held for the session alone.
     pub fn kept(self) -> bool {
-        !matches!(self, SettingKey::place | SettingKey::camera_mode)
+        !matches!(
+            self,
+            SettingKey::place | SettingKey::camera_mode | SettingKey::sky_time
+        )
     }
 
     /// Offered by a development build only.
@@ -338,6 +384,7 @@ pub struct Settings {
     pub pet: u8,
     pub ray_steps: bool,
     pub ray_counts: bool,
+    pub sky_time: SkyTime,
 }
 
 impl Settings {
@@ -364,6 +411,7 @@ impl Settings {
         pet: 5,
         ray_steps: false,
         ray_counts: false,
+        sky_time: SkyTime::real,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -391,6 +439,7 @@ impl Settings {
             SettingKey::pet => self.pet as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
             SettingKey::ray_counts => self.ray_counts as u32,
+            SettingKey::sky_time => self.sky_time as u32,
         }
     }
 
@@ -437,6 +486,10 @@ impl Settings {
             },
             SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
             SettingKey::ray_counts if value <= 1 => self.ray_counts = value == 1,
+            SettingKey::sky_time => match SkyTime::of(value) {
+                Some(o) => self.sky_time = o,
+                None => return false,
+            },
             _ => return false,
         }
         true

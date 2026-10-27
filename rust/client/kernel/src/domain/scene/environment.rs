@@ -14,6 +14,8 @@ use pxl_spec::space::coord::v3;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
+use crate::domain::view::setting::schema_spec::SkyTime;
+use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::clock::wall_now;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
@@ -40,6 +42,27 @@ fn heights(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
         mu(sun_position(days, lat, lon)),
         mu(moon_position(days, lat, lon)),
     ]
+}
+
+/// The Unix ms the sky is drawn at, `unix_ms` the wall clock's, seen from
+/// longitude `lon` in degrees (the `sky_time` setting): the wall clock's
+/// own, or the hour `time` names in the place's mean solar time today, held
+/// there, so the sun stands where it does at that hour whatever the clock
+/// reads; and whether it is held.
+fn shown(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
+    const HOUR_MS: f64 = 3_600_000.0;
+    let hour = match time {
+        SkyTime::real => return (unix_ms, false),
+        SkyTime::dawn => 7.0,
+        SkyTime::morning => 9.0,
+        SkyTime::noon => 12.0,
+        SkyTime::afternoon => 15.0,
+        SkyTime::dusk => 17.0,
+    };
+    // The place's solar time runs ahead of UTC by its longitude, 15° an hour.
+    let ahead = lon / 15.0 * HOUR_MS;
+    let today = libm::floor((unix_ms + ahead) / (24.0 * HOUR_MS)) * 24.0 * HOUR_MS;
+    (today + hour * HOUR_MS - ahead, true)
 }
 
 /// Each light's height a display level of the sky moves over (pxl-render
@@ -139,10 +162,13 @@ impl EnvironmentDraw {
     /// landing waking the turn. The clouds' is the wind carrying them a pixel
     /// at the nearest (`cloud::drift_step_s`). Between steps their words
     /// stand. A clock set back before where a light last stepped steps it
-    /// there at once.
+    /// there at once. The sky's clock is the hour the `sky_time` setting
+    /// shows (`shown`), which a held hour never steps; the clouds' is the
+    /// wall clock's.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.observed();
+        let (sky_ms, held) = shown(settings_store().sky_time, unix_ms, at[0]);
         let heights = |days: f64| heights(days, at);
         let step = steps();
         // As fast as each height moves over the minute from `at`, when it will have moved a step.
@@ -156,15 +182,16 @@ impl EnvironmentDraw {
         };
         let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;
         let mut next = sky_next(self.sky_at);
-        if !self.started || unix_ms >= next || unix_ms < self.sky_at {
-            (self.days, self.sky_at) = (j2000_days(unix_ms), unix_ms);
+        if !self.started || sky_ms >= next || sky_ms < self.sky_at {
+            (self.days, self.sky_at) = (j2000_days(sky_ms), sky_ms);
             next = sky_next(self.sky_at);
             self.aim();
         }
         if !self.started || unix_ms >= clouds_next(self.clouds_at) || unix_ms < self.clouds_at {
             (self.time, self.clouds_at) = ((unix_ms - first) / 1000.0, unix_ms);
         }
-        (next.min(clouds_next(self.clouds_at)) - unix_ms).max(0.0)
+        let sky_in = if held { f64::INFINITY } else { next - sky_ms };
+        sky_in.min(clouds_next(self.clouds_at) - unix_ms).max(0.0)
     }
 
     /// The sun and moon and the stars' turn at the sky's days and anchor.
