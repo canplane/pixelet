@@ -102,7 +102,7 @@ pub const GLOBAL_BASE: u32 = 8388608;
 /// the buddy's block for a division's, the ways' pool's mirror at its cap
 /// and every read's room for a square's records at its most, and the
 /// profiler's lanes while its setting is on, each in the buddy's blocks,
-/// a power of two, 204.61 MiB.
+/// a power of two, 204.58 MiB.
 ///
 /// Each figure here in MiB to two places is held to the code by a test
 /// (door/layout.test.rs); the data's end is a build's, and read off one.
