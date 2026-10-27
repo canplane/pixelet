@@ -245,6 +245,29 @@ pub const fn side(k: u32) -> f32 {
     }
 }
 
+/// Which faces of a cell kept short of its cube touch a neighbour filled at
+/// its height, a bit a face over `KEPT_SHIFT`'s: `2a` the low face on axis
+/// `a`, `2a + 1` the high. Where its box is drawn follows from them alone,
+/// so every reader draws and meets one shape (cast.rs `kept_bounds`): a
+/// box spans an axis whose two faces touch, sits flush against the one
+/// face that does, and is centered where none does, the axes it does not
+/// span sharing its volume alike. A producer sets them only for what it
+/// knows its neighbours by, the ground at the zoom its square holds; every
+/// other cell's are clear, a box centered on every axis.
+pub const TOUCH_SHIFT: u32 = KEPT_SHIFT + KEPT_BITS;
+pub const TOUCH_BITS: u32 = 6;
+const _: () = assert!(TOUCH_SHIFT + TOUCH_BITS <= 32);
+
+/// The faces `asset`'s cell touches (`TOUCH_SHIFT`).
+pub const fn touch(asset: u32) -> u32 {
+    asset >> TOUCH_SHIFT & ((1 << TOUCH_BITS) - 1)
+}
+
+/// `asset` touching the faces `t` (`TOUCH_SHIFT`).
+pub const fn touch_word(asset: u32, t: u32) -> u32 {
+    asset & !(((1 << TOUCH_BITS) - 1) << TOUCH_SHIFT) | (t & ((1 << TOUCH_BITS) - 1)) << TOUCH_SHIFT
+}
+
 /// Whether an asset hides its cube whole: it is not transparent and keeps
 /// all of it (`kept`). A cell beside a box closes in none of its edges.
 pub fn whole(asset: u32) -> bool {

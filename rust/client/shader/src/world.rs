@@ -223,8 +223,8 @@ impl<L: Looks> World<'_, L> {
     /// cube whole (`answer::whole`), asked off the line down to the stop's
     /// node (`support::line`, `support::asset`), each from the deepest node
     /// it shares with it, never again from the top; a box's own, a cell
-    /// kept short of its cube (`face::BOX`); nothing where the ray stopped
-    /// on none.
+    /// kept short of its cube, by the faces it touches (`face::kept_box`);
+    /// nothing where the ray stopped on none.
     pub(crate) fn faced<A: Copy>(
         &mut self,
         origin: [i32; 3],
@@ -235,7 +235,10 @@ impl<L: Looks> World<'_, L> {
             return 0;
         }
         if answer::kept(met.stop.asset[0]) < answer::EIGHTHS {
-            return face::BOX;
+            return face::kept_box(
+                face_of(ray, met.stop.axis),
+                answer::touch(met.stop.asset[0]),
+            );
         }
         let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
         let line = support::line(self, zoom, c);

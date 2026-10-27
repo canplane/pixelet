@@ -52,8 +52,8 @@ fn main() {
     };
     // Its word of what lies about its face, and that word's fields, a bit an
     // edge or a corner (pxl-spec-core face.rs).
-    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
-    let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
+    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT, TOUCH_SHIFT};
+    let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\nconst FACES_TOUCH: u32 = {TOUCH_SHIFT}u;\n");
     // The side of the box a cell kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
     let sides: String = (1..pxl_spec_core::answer::EIGHTHS)
