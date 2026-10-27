@@ -199,7 +199,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs). */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -218,7 +218,7 @@ export const SETTINGS = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl). */
+  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",
@@ -420,7 +420,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs). */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -439,7 +439,7 @@ export const SETTINGS_SHIPPED = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl). */
+  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",

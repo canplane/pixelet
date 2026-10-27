@@ -4,9 +4,8 @@
 // of one solid angle, a cell's angle squared (`frame_cell`, pxl-kernel
 // domain/view/lens.rs `cell`, τ / `SPLIT`), in rings a cell apart about the
 // optical axis, each ring cut into as many as fit, so a cell here holds the
-// area the eye decides a cell's zoom by (pxl-spec-core grid.rs).
-
-const COLOR = vec4f(1.0, 1.0, 1.0, 0.55);
+// area the eye decides a cell's zoom by (pxl-spec-core grid.rs). Its lines
+// are `GRID_COLOR` (debug_look.json).
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -44,5 +43,5 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let dphi = min(fwidth(phi), fwidth(fract(phi / TAU) * TAU));
   let sectors = edge(phi * n / TAU, n * dphi / TAU) * step(1.5, n);
   let line = max(edge(r - 0.5, fwidth(r)), sectors);
-  return vec4f(to_srgb(COLOR.rgb), COLOR.a * line);
+  return vec4f(to_srgb(GRID_COLOR.rgb), GRID_COLOR.a * line);
 }

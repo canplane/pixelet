@@ -10,6 +10,8 @@ mod part;
 #[path = "src/frame/shader/word.rs"]
 #[allow(dead_code)]
 mod word;
+#[path = "src/frame/shader/debug_look.spec.rs"]
+mod debug_look;
 
 fn main() {
     let dir = Path::new("src/frame/shader");
@@ -143,6 +145,7 @@ fn main() {
         1u32 << HASH_KEPT
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
+    std::fs::write(out.join("debug_look.wgsl"), debug_looks()).expect("the debug views' looks");
     std::fs::write(
         Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"),
         compute(dir),
@@ -151,6 +154,43 @@ fn main() {
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/word.rs");
+}
+
+/// The debug views' looks (debug_look.json) as WGSL: the grid's and the
+/// tints decoded to light, which their passes mix in, and the steps' as they
+/// are, which the pass writes to the screen; the ramp read straight between
+/// its stops.
+fn debug_looks() -> String {
+    use debug_look::{grid, share, steps};
+    let srgb = |c: u32| [c >> 16, c >> 8, c].map(|v| (v & 255) as f32 / 255.0);
+    let light = |c: u32| {
+        srgb(c).map(|v| {
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        })
+    };
+    let parts = |v: [f32; 3]| format!("{:?}, {:?}, {:?}", v[0], v[1], v[2]);
+    let vec3 = |v: [f32; 3]| format!("vec3f({})", parts(v));
+    let ramp: Vec<String> = steps::ramp.iter().map(|&c| vec3(srgb(c))).collect();
+    let last = steps::ramp.len() - 1;
+    format!(
+        "const GRID_COLOR = vec4f({}, {:?});\nconst SHARE_FINER = {};\nconst SHARE_FINER_MOST: f32 = {:?};\nconst SHARE_WITHIN = {};\nconst SHARE_WITHIN_MOST: f32 = {:?};\nconst SHARE_COARSER = {};\nconst STEPS_MOST: f32 = {:?};\nconst STEPS_NONE = {};\nconst STEPS_RAMP = array<vec3f, {}>({});\nfn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
+        parts(light(grid::rgb)),
+        grid::alpha,
+        vec3(light(share::finer::rgb)),
+        share::finer::most,
+        vec3(light(share::within::rgb)),
+        share::within::most,
+        vec3(light(share::coarser::rgb)),
+        steps::most,
+        vec3(srgb(steps::none)),
+        ramp.len(),
+        ramp.join(", "),
+        last - 1
+    )
 }
 
 /// WGSL has no string literals, so `//` always starts a comment. Lines are never

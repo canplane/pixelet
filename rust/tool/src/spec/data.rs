@@ -38,7 +38,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 26] = [
+const DATA_SPECS: [DataSpec; 27] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -275,6 +275,17 @@ const DATA_SPECS: [DataSpec; 26] = [
         rs: Some("rust/client/kernel/src/domain/scene/indicator/gizmo.spec.rs"),
         rs_also: &[],
         module: Some("gizmo_spec"),
+        enums: Enums::None,
+        ts_names: None,
+        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/render/frame/shader/debug_look.json",
+        uses: &[],
+        ts: Some("ts/client/src/abi/debug_look.spec.ts"),
+        rs: Some("rust/client/render/src/frame/shader/debug_look.spec.rs"),
+        rs_also: &[],
+        module: Some("debug_look_spec"),
         enums: Enums::None,
         ts_names: None,
         cpp: None,
