@@ -204,6 +204,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       </>
     ),
     cap: null,
+    rays: null,
+    eye: null,
     sun: null,
     requests: failing.length > 0 && (
       <>
