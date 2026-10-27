@@ -10,7 +10,9 @@
 
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_distance, target_cell_px, SPLIT};
+use pxl_spec::space::camera::grid::{
+    px_per_unit, split_distance, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H, SPLIT,
+};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
@@ -34,9 +36,14 @@ pub fn decor_gone_px() -> f64 {
     crate::domain::scene::decor::param::DECOR_MODEL_PX
 }
 
-/// The sprite's edge in pixels, at the reference view's cell.
+/// The sprite's edge in CSS pixels, as `units_per_px_at` counts them: its
+/// share of the camera grid's cell (`lens::cell`) at the reference view, so
+/// the same at any display ratio.
 pub fn decor_sprite_px() -> f64 {
-    crate::domain::scene::decor::param::DECOR_SPRITE_CELLS * target_cell_px()
+    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau());
+    crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
+        * cell
+        * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG)
 }
 
 /// How far a thing `extent_u` wide is a sprite's worth: where it spans

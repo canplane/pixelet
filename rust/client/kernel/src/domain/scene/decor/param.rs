@@ -8,6 +8,6 @@
 pub const DECOR_MODEL_PX: f64 = 12.0;
 
 /// Under this share of a camera grid cell a decor kind's sprite is not drawn:
-/// set by eye, below it an instance is pixel noise; about three pixels at
-/// the reference view.
+/// set by eye, below it an instance is pixel noise; about three CSS pixels
+/// at the reference view.
 pub const DECOR_SPRITE_CELLS: f64 = 0.25;
