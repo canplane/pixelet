@@ -925,7 +925,6 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     ));
     portable.extend([
         format!("pub const PATCH: u32 = {patch};"),
-        format!("pub const KEPT: u32 = {kept};"),
         String::new(),
         "/// The most variants a decor has.".into(),
         format!("pub const VARIANTS: usize = {variants_max};"),

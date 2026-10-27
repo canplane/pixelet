@@ -73,12 +73,14 @@ const KERNEL_ORDER: [(&str, u8); 12] = [
     ("sys", 0),
 ];
 const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
+const KERNEL_BESIDE: [&str; 1] = ["profiler"];
 
-/// pxl-spec-core's order: what every part speaks, the layers' storage, the
-/// query over them (ARCHITECTURE.md, "The query, the only seam"), and what
-/// asks it. A layer knows no query, and the query no asker.
+/// pxl-spec-core's order: what every part speaks, the layers' storage and
+/// the world's fields, the query over them (ARCHITECTURE.md, "The query, the
+/// only seam"), and what asks it. A layer knows no query, and the query no
+/// asker.
 const SPEC_CORE: &str = "rust/spec/core/src/";
-const SPEC_CORE_ORDER: [(&str, u8); 24] = [
+const SPEC_CORE_ORDER: [(&str, u8); 25] = [
     ("cube", 0),
     ("lattice", 0),
     ("grid", 0),
@@ -86,6 +88,7 @@ const SPEC_CORE_ORDER: [(&str, u8); 24] = [
     ("tally", 0),
     ("area", 1),
     ("caves", 1),
+    ("cloud", 1),
     ("ground", 1),
     ("window", 1),
     ("ways", 1),
@@ -172,19 +175,28 @@ fn standing(f: &str, root: &str) -> String {
 }
 
 /// Every name in `root`'s files of a module above the file's own in
-/// `order`, or of one head by another.
+/// `order`, or of one head by another; and every module `order` does not
+/// place, but the crate's root and those that stand `beside` it, so a new
+/// one is placed before it is checked.
 fn ordered(
     files: &[&str],
     read: &dyn Fn(&str) -> Option<String>,
     root: &str,
     order: &[(&str, u8)],
     heads: &[&str],
+    beside: &[&str],
 ) -> Vec<String> {
     let level = |m: &str| order.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
     let mut problems = Vec::new();
+    let mut unplaced = std::collections::BTreeSet::new();
     for f in files.iter().filter(|f| f.starts_with(root) && f.ends_with(".rs")) {
         let me = standing(f, root);
-        let Some(mine) = level(&me) else { continue };
+        let Some(mine) = level(&me) else {
+            if !["lib", "domain"].contains(&me.as_str()) && !beside.contains(&me.as_str()) {
+                unplaced.insert(me);
+            }
+            continue;
+        };
         for (line, them) in named(&read(f).unwrap_or_default()) {
             let Some(theirs) = level(&them) else { continue };
             let head = heads.contains(&me.as_str()) && heads.contains(&them.as_str());
@@ -194,6 +206,11 @@ fn ordered(
                 ));
             }
         }
+    }
+    for me in unplaced {
+        problems.push(format!(
+            "{root}{me}: `{me}` has no place in the layers' order; give it one (check_rules.rs)"
+        ));
     }
     problems
 }
@@ -260,8 +277,8 @@ fn run() -> Result<Vec<String>, String> {
         problems.push(format!("{f}: CommonJS; the tree's scripts are ES modules"));
     }
 
-    problems.extend(ordered(&files, &read, KERNEL, &KERNEL_ORDER, &KERNEL_HEADS));
-    problems.extend(ordered(&files, &read, SPEC_CORE, &SPEC_CORE_ORDER, &[]));
+    problems.extend(ordered(&files, &read, KERNEL, &KERNEL_ORDER, &KERNEL_HEADS, &KERNEL_BESIDE));
+    problems.extend(ordered(&files, &read, SPEC_CORE, &SPEC_CORE_ORDER, &[], &[]));
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
