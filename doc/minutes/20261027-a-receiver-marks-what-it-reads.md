@@ -61,6 +61,14 @@ read. It is a decision record, not a rule each change is held to.
 - **The marks are by tile, the reach gathers.** A receiver writes one word,
   and the reach's tile is written by its own thread alone. Marking a column
   a tile wide from every pixel cost 20 ms at two; one tile a pixel, 4.
+- **A low sun costs what a high one does.** The way up is the tallest
+  decor seen from the sun, its height times the cosine of the sun's
+  height, so it is no longer than the tallest decor however low the sun
+  goes. At about 5° (7:25, Bundang's start view) the sun's passes took
+  6.1 ms against 5.9 at 10:00, the beam's pass with the marks and the
+  reach 2.9 against 3.3. Only the walks again grew, 0.4 to 1.2 ms: a
+  grazing sample's box covers fewer slots, so 1.08% of the slots walked
+  against 2.32% picked, where at 10:00 0.43% walked against 5.51%.
 
 ## Not taken
 
@@ -76,7 +84,6 @@ read. It is a decision record, not a rule each change is held to.
 
 ## Open
 
-- At a low sun the way up is long, and the reach reads more a tile.
 - A tile's content follows the eye's place, so a pan casts every tile read
   again, though a step moves few tiles' zooms: what a tile holds could be
   kept where no zoom band crossed its rays' span.
