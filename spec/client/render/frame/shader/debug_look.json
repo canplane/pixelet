@@ -1,0 +1,88 @@
+{
+  "$doc": [
+    "What the renderer's two debug views are drawn in, so the screen and the",
+    "shell's legend of them read one look: the camera gizmo's grid and the",
+    "tints of the cells the rays stop on (camera_grid.wgsl, screen_lit.wgsl",
+    "`cell_share`), and the ray steps' ramp (screen_lit.wgsl). Each #rrggbb in",
+    "sRGB."
+  ],
+  "grid": {
+    "$type": "rgb",
+    "$doc": [
+      "The camera grid's lines."
+    ],
+    "rgb": "#ffffff",
+    "alpha": {
+      "$type": "f32",
+      "$value": 0.55
+    }
+  },
+  "share": {
+    "$type": "rgb",
+    "$doc": [
+      "The tint on a cell the rays stop on, by the solid angle its face shows the",
+      "eye over a grid cell's, in this order, each up to its `most`."
+    ],
+    "finer": {
+      "rgb": "#5995ff",
+      "most": {
+        "$type": "f32",
+        "$value": 1.0
+      },
+      "$doc": "Within one grid cell."
+    },
+    "within": {
+      "rgb": "#59f37c",
+      "most": {
+        "$type": "f32",
+        "$value": 4.0
+      },
+      "$doc": "Within one to four."
+    },
+    "coarser": {
+      "rgb": "#ff6c59",
+      "$doc": "Past four."
+    }
+  },
+  "steps": {
+    "$doc": [
+      "The nodes a pixel's ray asked, on a log scale."
+    ],
+    "most": {
+      "$type": "f32",
+      "$value": 1024,
+      "$doc": "The steps the ramp runs up to, the same on every screen so two compare."
+    },
+    "none": {
+      "$type": "rgb",
+      "$value": "#808080",
+      "$doc": "A pixel that walked nothing, apart from the ramp's every colour."
+    },
+    "ramp": {
+      "$type": "rgb",
+      "$value": [
+        "#23171b",
+        "#493eaf",
+        "#446aee",
+        "#3295f7",
+        "#26bde1",
+        "#29ddbb",
+        "#40f392",
+        "#66fd6d",
+        "#96fa50",
+        "#c6eb3b",
+        "#eed02d",
+        "#ffab24",
+        "#ff801d",
+        "#ee5415",
+        "#c92d0c",
+        "#a11202",
+        "#900d00"
+      ],
+      "$doc": [
+        "Google's Turbo, dark blue at none through green and yellow to dark red at",
+        "`most`, at even stops a pixel's colour runs straight between."
+      ]
+    }
+  }
+}

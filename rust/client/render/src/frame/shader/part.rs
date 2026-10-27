@@ -266,7 +266,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAY
-    lit!["lattice", "ray", "eye", "paint", "screen_ray", "screen_lit"],
+    lit!["lattice", "ray", "eye", "paint", "debug_look", "screen_ray", "screen_lit"],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
@@ -333,7 +333,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "screen_depth"
     ],
     // SHADER_CAMERA_GRID
-    &["frame", "encode", "sky_word", "camera_grid"],
+    &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
     // SHADER_SAMPLE_BOX
     &["sample_box.gen"],
     // SHADER_RASTER
