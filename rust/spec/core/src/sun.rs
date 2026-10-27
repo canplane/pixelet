@@ -16,7 +16,7 @@
 //! established is kept for the next, so no policy says what still stands.
 
 use crate::cast::{Detail, Ends, Met, Ray};
-use crate::{axis, Zoom, FINEST_ZOOM, FRAC_W};
+use crate::{axis, FRAC_W};
 
 /// The sun's cast as the eye's words hold it (`eye::SUN`), a frame's
 /// constants worked out once off the light box (`Sun::of`), each a vec4's
@@ -115,40 +115,16 @@ impl Sun {
         }
     }
 
-    /// The finest zoom its rays ask the world at: the finest whose block
-    /// spans `BLOCK_SAMPLES` samples (`SAMPLE`) of the map. The eye's blocks
-    /// span several of its samples, and the raster hands a block to the
-    /// pixels about the samples that met it; the sun's texel follows no
-    /// zoom, and asked as finely as the eye asks near it, a block was a
-    /// texel or less, met by no sample about most texels.
-    pub fn finest(&self) -> Zoom {
-        let side = BLOCK_SAMPLES as f32 * SAMPLE as f32 * length(self.across);
-        let steps = side * (1u32 << FRAC_W) as f32;
-        // The zoom whose side, `2^(FINEST_ZOOM - z)` steps, is `steps` or more.
-        let mut z = FINEST_ZOOM;
-        let mut side = 1.0f32;
-        while z > 0 && side < steps {
-            z -= 1;
-            side *= 2.0;
-        }
-        z
-    }
-
-    /// `detail` asking no finer than `finest`, its cone the map's texel and
-    /// its beam rays `BEAM` of them apart.
+    /// `detail`, the eye's zooms at every point as the eye asks them
+    /// (`cast::Detail::eye`), so the map holds the blocks the eye draws; its
+    /// cone the map's texel, which passes what a texel cannot tell apart
+    /// (`cast::Cone`), and its beam rays `BEAM` of them apart.
     pub fn detail(&self, mut detail: Detail) -> Detail {
         detail.cone = crate::cast::Cone {
             angle: 0.0,
             across: length(self.across),
         };
         detail.apart = BEAM as f32;
-        let z = self.finest();
-        if detail.range[1] > z {
-            detail.range[1] = z;
-        }
-        if detail.range[0] > detail.range[1] {
-            detail.range[0] = detail.range[1];
-        }
         detail
     }
 
@@ -439,17 +415,13 @@ pub fn margin(width: f32) -> f32 {
 /// (`sun_cs`); the rest are listed and walked apart (`misses_at`). A block
 /// no sample stopped at may stand in front of the one picked, as in the
 /// eye's. The raster's `EYED` case has no
-/// sun's: every ray starts on the near plane, before every box. Its rays ask
-/// the world no finer than `Sun::finest`, so a block spans the samples as
-/// the eye's blocks span its.
+/// sun's: every ray starts on the near plane, before every box.
 ///
 /// The samples' spacing; their words, the eye's samples' own
 /// (`beam::SAMPLE_WORDS`), past the beam's in the list's buffer
 /// (`samples_at`), a sample `size / SAMPLE` across and down, by its index
 /// `j · across + i`, which its box is drawn with (`raster::id_of`).
 pub const SAMPLE: u32 = 4;
-/// The samples a block spans at least (`Sun::finest`).
-pub const BLOCK_SAMPLES: u32 = 8;
 
 pub const fn samples_at(size: u32) -> u32 {
     beam_words(size)
