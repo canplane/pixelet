@@ -5,12 +5,14 @@
 use core::mem::{offset_of, size_of};
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
+use pxl_spec_core::tally;
 use xpute_guest::sched::tick::PHASES;
 
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, WORST};
 use crate::profiler::word::{words, Words};
 use pxl_render::frame::draw::{DrawCensus, DRAW_PIPELINES};
 use pxl_render::gpu::api::OBJECT_OPS;
+use pxl_render::gpu::ray;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS;
@@ -139,32 +141,59 @@ pub struct FrameSample {
     pub waiting: [f64; STREAMS],
     pub out: [f64; STREAMS],
     pub terrain_refused: f64,
-    pub sun: SunSample,
+    pub rays: RaySample,
 }
 
-/// The `sun_counts` setting's sums since boot, as the renderer keeps them
-/// (pxl-render gpu/ray/tally.rs `SUN_SUMS`), in profiler.json FRAME's sun
-/// lanes' order.
+/// The `ray_counts` setting's sums since boot, as the renderer keeps them
+/// (pxl-render gpu/ray/tally.rs `RAY_SUMS`), in profiler.json FRAME's
+/// rays, eye and sun lanes' order: the frames whose counts landed, then the
+/// eye's and the sun's.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct SunSample {
+pub struct RaySample {
     pub frames: f64,
-    pub cast_frames: f64,
-    pub texels: f64,
+    pub eye: ObserverSample,
+    pub sun: ObserverSample,
+}
+
+/// An observer's sums (pxl-render gpu/ray/tally.rs `sum_at`): the frames it
+/// cast in, its pixels or slots in them, then its lanes (pxl-spec-core
+/// `tally`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ObserverSample {
+    pub casts: f64,
+    pub rays: f64,
+    pub beam: f64,
+    pub sample: f64,
+    pub miss: f64,
     pub picked: f64,
+    pub walked: f64,
+    pub pixel: f64,
     pub boxes: f64,
 }
 
-impl SunSample {
-    /// The renderer's sums (`SUN_SUMS`), in their order.
-    pub fn of(s: [f64; pxl_render::gpu::ray::SUN_SUMS]) -> SunSample {
-        let [frames, cast_frames, texels, picked, boxes] = s;
-        SunSample {
-            frames,
-            cast_frames,
-            texels,
-            picked,
-            boxes,
+impl RaySample {
+    /// The renderer's sums (`RAY_SUMS`), in their order.
+    pub fn of(s: [f64; ray::RAY_SUMS]) -> RaySample {
+        let observer = |o: u32| {
+            let lane = |l: u32| s[ray::sum_at(o, ray::LANES_AT + l as usize)];
+            ObserverSample {
+                casts: s[ray::sum_at(o, ray::CASTS)],
+                rays: s[ray::sum_at(o, ray::RAYS)],
+                beam: lane(tally::BEAM),
+                sample: lane(tally::SAMPLE),
+                miss: lane(tally::MISS),
+                picked: lane(tally::PICKED),
+                walked: lane(tally::WALKED),
+                pixel: lane(tally::PIXEL),
+                boxes: lane(tally::BOXES),
+            }
+        };
+        RaySample {
+            frames: s[ray::FRAMES],
+            eye: observer(tally::EYE),
+            sun: observer(tally::SUN),
         }
     }
 }
@@ -196,11 +225,25 @@ words!(FrameSample, FRAME::WORDS,
     body_slots_peak => FRAME::body_slots_peak,
     waiting => FRAME::waiting, out => FRAME::out,
     terrain_refused => FRAME::cap_terrain_refused,
-    sun.frames => FRAME::sun_frames,
-    sun.cast_frames => FRAME::sun_cast_frames,
-    sun.texels => FRAME::sun_texels,
-    sun.picked => FRAME::sun_picked,
-    sun.boxes => FRAME::sun_boxes,
+    rays.frames => FRAME::rays_frames,
+    rays.eye.casts => FRAME::eye_casts,
+    rays.eye.rays => FRAME::eye_rays,
+    rays.eye.beam => FRAME::eye_beam,
+    rays.eye.sample => FRAME::eye_sample,
+    rays.eye.miss => FRAME::eye_miss,
+    rays.eye.picked => FRAME::eye_picked,
+    rays.eye.walked => FRAME::eye_walked,
+    rays.eye.pixel => FRAME::eye_pixel,
+    rays.eye.boxes => FRAME::eye_boxes,
+    rays.sun.casts => FRAME::sun_casts,
+    rays.sun.rays => FRAME::sun_rays,
+    rays.sun.beam => FRAME::sun_beam,
+    rays.sun.sample => FRAME::sun_sample,
+    rays.sun.miss => FRAME::sun_miss,
+    rays.sun.picked => FRAME::sun_picked,
+    rays.sun.walked => FRAME::sun_walked,
+    rays.sun.pixel => FRAME::sun_pixel,
+    rays.sun.boxes => FRAME::sun_boxes,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

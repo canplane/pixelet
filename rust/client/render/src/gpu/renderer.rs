@@ -54,7 +54,7 @@ use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::{RaysPass, SUN_SUMS};
+use crate::gpu::ray::{RaysPass, RAY_SUMS};
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
@@ -200,9 +200,9 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
-    /// Whether what the sun's cast walked and took is counted
+    /// Whether what the eye's cast and the sun's walked and took is counted
     /// (gpu/ray/tally.rs).
-    pub sun_counts: bool,
+    pub ray_counts: bool,
 }
 
 /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
@@ -251,9 +251,9 @@ pub struct FrameStat {
     /// draws and triangles.
     pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
-    /// The sun's and the eye's recast's counts, summed since boot
-    /// (gpu/ray/tally.rs `SUN_SUMS`).
-    pub sun: [f64; SUN_SUMS],
+    /// The eye's cast's and the sun's counts, summed since boot
+    /// (gpu/ray/tally.rs `RAY_SUMS`).
+    pub rays: [f64; RAY_SUMS],
 }
 
 /// A frame's GPU time: its spans' sum, the passes timed. The span from the
@@ -1123,7 +1123,7 @@ impl Renderer {
             pack_bytes: self.pack.bytes as f64,
             census,
             gpu_spans,
-            sun: self.screen.tally_sums(),
+            rays: self.screen.tally_sums(),
         }
     }
 }

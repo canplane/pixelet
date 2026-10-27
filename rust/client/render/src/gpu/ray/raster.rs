@@ -33,7 +33,7 @@ pub(super) struct Raster {
     boxes_built: Built,
     faces_built: Built,
     draw_built: Built,
-    args: u32,
+    pub(super) args: u32,
     boxes: u32,
     room: u32,
     uniform: u32,
@@ -83,7 +83,10 @@ impl Raster {
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             args: g.buffer(
                 word_bytes(raster::ARGS_WORDS as usize),
-                buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::INDIRECT,
+                buffer_usage::STORAGE
+                    | buffer_usage::COPY_DST
+                    | buffer_usage::INDIRECT
+                    | buffer_usage::COPY_SRC,
             ),
             boxes: 0,
             room: 0,
@@ -304,7 +307,7 @@ impl Raster {
             s.boxes = g.buffer(word_bytes(raster::words(samples) as usize), storage);
             s.args = g.buffer(
                 word_bytes(raster::ARGS_WORDS as usize),
-                storage | buffer_usage::INDIRECT,
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
             s.uniform = g.buffer(
                 word_bytes(UNIFORM),

@@ -11,7 +11,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
-use super::tally::{self, Tally};
+use super::tally::{self, Counted, Tally};
 use super::RaysPass;
 use crate::frame::shader::record::{
     compute, source, within, SHADER_BEAM, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_JOINED,
@@ -157,9 +157,9 @@ pub(super) struct CastBuffers {
     /// What the sun's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
-    /// The counts, the list and the beam's pipelines the sun's groups were
+    /// The list, the beam's pipelines and the raster's the sun's groups were
     /// made over, made again where one is another.
-    sun_grouped: [u32; 6],
+    sun_grouped: [u32; 5],
 }
 
 /// What a cast's head handed the pyramid's forgetting (pxl-spec-core
@@ -244,7 +244,10 @@ impl RaysPass {
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             forget_built,
-            seen: buffer(word_bytes(observed::WORDS as usize), storage),
+            seen: buffer(
+                word_bytes(observed::WORDS as usize),
+                storage | buffer_usage::COPY_SRC,
+            ),
             frame: 0,
             forget: true,
             moved: [0; observed::MOVED_WORDS as usize],
@@ -305,7 +308,7 @@ impl RaysPass {
             pixel_group: 0,
             pixel_bound: [0; 11],
             tally,
-            sun_grouped: [0; 6],
+            sun_grouped: [0; 5],
         };
         self.cast = Some(c);
     }
@@ -358,9 +361,9 @@ impl RaysPass {
                     written: _,
                 },
             decor,
-            sun_counts,
+            ray_counts,
         } = &cast;
-        let sun_counts = *sun_counts;
+        let ray_counts = *ray_counts;
         let r = &mut c.read;
         r.begin();
         // The sun's words are its cast's alone (below).
@@ -573,7 +576,7 @@ impl RaysPass {
         if c.sun_cast {
             // The head (pxl-spec-core `sun::MOVED_WORDS`).
             let mut head = [0u32; sun::MOVED_WORDS];
-            head[sun::MOVED_COUNTED] = u32::from(sun_counts);
+            head[sun::MOVED_COUNTED] = u32::from(ray_counts);
             let at = 4 * sun::STARTS_AT;
             head[at..at + 4 * sun::STARTS_VEC4S].copy_from_slice(&sun_map.2.words());
             g.write_buffer(c.sun_moved, 0, bytes(&head));
@@ -627,10 +630,10 @@ impl RaysPass {
             c.sent = None;
         }
         let frame = tally::Frame {
-            sun: c.sun_cast,
-            texels: shadow::SIZE * shadow::SIZE,
+            casts: [self.kind == FrameKind::cast, c.sun_cast],
+            rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
         };
-        c.tally.begin(g, sun_counts, frame);
+        c.tally.begin(g, ray_counts, c.seen, frame);
         let bound = [
             c.eye,
             c.window,
@@ -676,7 +679,6 @@ impl RaysPass {
             sun_map.0,
         ];
         let grouped = [
-            c.tally.counts,
             c.sun_list,
             c.sun_beam_built.pipeline,
             c.sun_cells_built.pipeline,
@@ -703,7 +705,6 @@ impl RaysPass {
                     c.seen,
                     c.sun_moved,
                     c.sun_list,
-                    c.tally.counts,
                     c.raster.sun.boxes,
                     c.raster.sun_picks(),
                     c.raster.sun.args,
@@ -906,7 +907,12 @@ impl RaysPass {
             g.dispatch_indirect(pass, c.sun_misses, list);
             g.end(pass);
         }
-        c.tally.copy(g, encoder);
+        let counted = Counted {
+            seen: c.seen,
+            args: [c.marks, c.sun_misses],
+            boxes: [c.raster.args, c.raster.sun.args],
+        };
+        c.tally.copy(g, encoder, &counted);
         if grows {
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::grow as usize].pass());
             c.grown.dispatch(g, pass);
@@ -951,11 +957,11 @@ impl RaysPass {
         }
     }
 
-    /// The counts' sums since boot (ray/tally.rs `SUN_SUMS`).
-    pub fn tally_sums(&self) -> [f64; tally::SUN_SUMS] {
+    /// The counts' sums since boot (ray/tally.rs `RAY_SUMS`).
+    pub fn tally_sums(&self) -> [f64; tally::RAY_SUMS] {
         self.cast
             .as_ref()
-            .map_or([0.0; tally::SUN_SUMS], |c| c.tally.sums())
+            .map_or([0.0; tally::RAY_SUMS], |c| c.tally.sums())
     }
 
     pub fn sun_casts(&self) -> bool {
@@ -1078,15 +1084,14 @@ fn sun_list(g: &Gpu, whole: bool) -> u32 {
 /// tiles' frames, the service area's index, the overwrites and the ways'
 /// pool, the cast's alone; the observed pyramid, which the sun's walks read
 /// and write as the eye's do; the clipmap; its head (`moved`), the beam's
-/// lines, the samples and the misses (`list`), the counts (ray/tally.rs),
-/// the raster's boxes, picks and args, and the misses' dispatch; the
+/// lines, the samples and the misses (`list`), the raster's boxes, picks and args, and the misses' dispatch; the
 /// slots', the beam's, the cells', the samples', the boxes' and the
 /// misses' walk's, each none before its pipeline and buffers are made.
 fn sun_groups(
     g: &Gpu,
     [walk, beam, cells, sample, boxes_built, miss]: [&Built; 6],
     bound: [u32; 7],
-    [seen, moved, list, counts, boxes, picks, args, misses]: [u32; 8],
+    [seen, moved, list, boxes, picks, args, misses]: [u32; 7],
 ) -> [u32; 6] {
     let [eye, window, ground, shards, overwrites, pool, sun] = bound;
     let entries = [
@@ -1100,7 +1105,6 @@ fn sun_groups(
         (10, view_entry(10, sun)),
         (11, buffer_entry(11, moved)),
         (12, buffer_entry(12, list)),
-        (13, buffer_entry(13, counts)),
         (14, buffer_entry(14, boxes)),
         (15, view_entry(15, picks)),
         (16, buffer_entry(16, args)),

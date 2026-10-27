@@ -13,7 +13,7 @@ use xpute_guest::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
 use crate::profiler::frame::{
-    DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, SunSample, TileSample,
+    DeviceSample, FrameSample, GpuSample, HeapSample, RaySample, RingSample, TileSample,
 };
 use crate::profiler::record::{profiler_record_frame, profiler_recording};
 use crate::sys::io::demand::Stream;
@@ -70,12 +70,12 @@ fn ring_sample() -> RingSample {
     }
 }
 
-/// The renderer's sun counts as it last stated them: sums since boot, so
+/// The renderer's ray counts as it last stated them: sums since boot, so
 /// kept, not taken, by a turn that draws none.
-static SUN: Global<SunSample> = Global::new();
+static RAYS: Global<RaySample> = Global::new();
 
-pub fn set_sun(s: SunSample) {
-    SUN.set(s);
+pub fn set_rays(s: RaySample) {
+    RAYS.set(s);
 }
 
 /// A frame turn's own measures (turn.rs `world_frame`).
@@ -133,7 +133,7 @@ pub fn profiler_frame(t: FrameTurn) {
         waiting: counts.map(|c| f64::from(c.0)),
         out: counts.map(|c| f64::from(c.1)),
         terrain_refused,
-        sun: *SUN.get(SunSample::default),
+        rays: *RAYS.get(RaySample::default),
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };

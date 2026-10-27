@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 0cd065f00712b7a4e3fb84789c7ae3e611ecbb387c0091b7b95de70f8c084f07
+// Inputs: 1fb86c7f274dea4ae8952179b71d69aa03eb19e19353d02fcf36a3b565c828c1
 struct type_5 {
     member: array<u32>,
 }
@@ -94,7 +94,7 @@ fn function_() {
             if (_e42.x >= 524288u) {
             } else {
                 let _e45 = (_e42.x * 13u);
-                let _e46 = (108u + _e45);
+                let _e46 = (115u + _e45);
                 let _e49 = global_1.member[1u];
                 if (_e49 == 1u) {
                     global_1.member[_e46] = 0u;
@@ -102,10 +102,10 @@ fn function_() {
                     let _e53 = global_1.member[_e46];
                     if (_e53 == 0u) {
                     } else {
-                        let _e58 = global_1.member[(_e45 + 117u)];
-                        let _e62 = global_1.member[(_e45 + 118u)];
+                        let _e58 = global_1.member[(_e45 + 124u)];
+                        let _e62 = global_1.member[(_e45 + 125u)];
                         let _e63 = bitcast<i32>(_e62);
-                        let _e67 = global_1.member[(_e45 + 119u)];
+                        let _e67 = global_1.member[(_e45 + 126u)];
                         let _e68 = bitcast<i32>(_e67);
                         local = array<u32, 24>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
                         phi_126_ = 0u;
@@ -377,7 +377,7 @@ fn function_() {
                         if select(false, true, select(_e267, true, select(select(_e262, false, _e266), false, _e267))) {
                             global_1.member[_e46] = 0u;
                         } else {
-                            let _e275 = global_1.member[(_e45 + 113u)];
+                            let _e275 = global_1.member[(_e45 + 120u)];
                             phi_351_ = 0u;
                             loop {
                                 let _e277 = phi_351_;
