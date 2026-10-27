@@ -562,3 +562,49 @@ fn a_reading_reports_the_columns_its_queries_read() {
         .unwrap();
     assert_eq!(read.get(), Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
 }
+
+#[test]
+fn what_is_placed_in_a_box_is_what_the_store_holds_there() {
+    let _g = serial();
+    let unit = pxl_spec_core::UNIT_ZOOM;
+    let mut store = Store::default();
+    let corners: [V3; 5] = [
+        [3.0, 4.0, 5.0],
+        [3.0, 5.0, 5.0],
+        [10.0, 4.0, 2.0],
+        [40.0, 4.0, 5.0],
+        [3.0, 4.0, 30.0],
+    ];
+    for (k, &c) in corners.iter().enumerate() {
+        write(&mut store, c, unit, 100 + k as u32);
+    }
+    // The first three, the box their cells span; the last two past it.
+    let cell = |c: V3| index_of(unit, &world::point(c[0], c[1], c[2]));
+    let (a, b, c) = (cell(corners[0]), cell(corners[1]), cell(corners[2]));
+    let lo = [a[0].min(c[0]), a[1].min(b[1]), c[2].min(a[2])];
+    let hi = [a[0].max(c[0]), a[1].max(b[1]), c[2].max(a[2])];
+    let lanes = store.lanes();
+    let mut asked = Vec::new();
+    let mut placed = pxl_spec_core::world::placed_in(lo, hi);
+    loop {
+        let (at, word, more) = placed.next(&lanes);
+        if !more {
+            break;
+        }
+        asked.push((at, word & 0xffff));
+    }
+    let mut held = Vec::new();
+    let space = pxl_spec::space::coord::aabb::Aabb {
+        min: [3.0, 4.0, 2.0],
+        max: [11.0, 6.0, 6.0],
+    };
+    store.entries_in(&space, &mut |e| {
+        if e.zoom == unit {
+            held.push((e.at, u32::from(e.state)));
+        }
+    });
+    asked.sort_unstable();
+    held.sort_unstable();
+    assert_eq!(asked.len(), 3, "{asked:?}");
+    assert_eq!(asked, held);
+}

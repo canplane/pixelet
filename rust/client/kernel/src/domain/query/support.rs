@@ -128,7 +128,7 @@ impl<'w, 'a> Upright<'w, 'a> {
     fn lift(&mut self, mut z: f64) -> f64 {
         loop {
             let top = (0..self.across * self.across)
-                .map(|k| match self.met(k, z, REACH.max[2], Until::Air) {
+                .map(|k| match self.met(k, z, REACH.max[2], Until::Transparent) {
                     Answer::Exact(None) => REACH.max[2],
                     Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => b.min[2].max(z),
                     Answer::Coarser(None, _) | Answer::Nothing(_) => z,
@@ -145,7 +145,7 @@ impl<'w, 'a> Upright<'w, 'a> {
     /// reach's floor: the rays down from `z`, which start in the block over
     /// it.
     fn below(&mut self, z: f64) -> Option<f64> {
-        self.rays(z, REACH.min[2], Until::Fills)
+        self.rays(z, REACH.min[2], Until::Opaque)
             .map(|b| b.max[2])
             .filter(|&t| t > REACH.min[2])
             .reduce(f64::max)
@@ -155,17 +155,36 @@ impl<'w, 'a> Upright<'w, 'a> {
     /// the rays up from `z`, which start in the block at `z` and so meet
     /// none at it.
     fn above(&mut self, z: f64, to: f64) -> Option<f64> {
-        self.rays(z, to, Until::Fills)
+        self.rays(z, to, Until::Opaque)
             .map(|b| b.min[2])
             .filter(|&b| b < to)
             .reduce(f64::min)
     }
 
-    /// The top of the highest solid in any column, within the reach.
+    /// The top of the highest solid in any column, within the reach: each
+    /// column's footing at its zoom, the one support every reader asks
+    /// (`World::footing`, pxl-spec-core `support::footing`).
     fn highest(&mut self) -> Option<f64> {
-        self.rays(REACH.max[2], REACH.min[2], Until::Fills)
-            .map(|b| b.max[2].min(REACH.max[2]))
-            .reduce(f64::max)
+        let cell = self.detail.range[0];
+        let unit = units(cell);
+        let mut most: Option<f64> = None;
+        for k in 0..self.across * self.across {
+            let middle = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
+            let g = [
+                middle(k % self.across, self.corner[0]),
+                middle(k / self.across, self.corner[1]),
+            ]
+            .map(|v| libm::floor(v / unit) as i32);
+            let answer = self.world.footing(cell, g);
+            if let Some(l) = answer.lack() {
+                self.lack.get_or_insert(l);
+            }
+            if let Some(Some((at, rise))) = answer.value() {
+                let top = ((f64::from(at) + f64::from(rise)) * unit).min(REACH.max[2]);
+                most = Some(most.map_or(top, |m| m.max(top)));
+            }
+        }
+        most
     }
 
     /// The cell's ground's top, in units.

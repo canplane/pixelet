@@ -19,30 +19,36 @@ read. It is a decision record, not a rule each change is held to.
   edged by its faces (b3b3ee8c8). Pushing the caster's depth back by what it
   is coarser was a patch on two units, and was not taken.
 - **One interface, the passes written once.** A cast's passes, the beam
-  rays, the cells' starts, the samples and their boxes, a ray's pick or sky,
-  the walk again, are one set over an observer (pxl-shader observer.rs
-  `Observer`): its lattice, the ray at a point of it with the zooms it asks
-  and its cone (`Aim`), whether its rays start apart, and where its boxes are
-  laid. The eye (`Eye`) and the sun's map (sun.rs `Map`) are two; an effect
-  more implements those and takes the rest (7895fb2ba).
+  rays, the cells' starts, the samples and their boxes, a ray's pick, sky or
+  walk (`resolve`), the walk again, are one set over an observer (pxl-shader
+  observer.rs `Observer`): its lattice, the ray at a point of it with the
+  zooms it asks and its cone (`Aim`), whether its rays start apart, where its
+  boxes are laid, and which of its lattice a cast needs (`needs`), the one
+  place a pass is told it may pass a thread. The eye (`Eye`), needing all,
+  and the sun's map (sun.rs `Map`) are two; an effect more implements those
+  and takes the rest (7895fb2ba).
 - **Each effect its own nature.** What the eye records is a pixel's ray; what
   the sun records is a field a surface, decor, an impostor and an actor all
   read (pxl-render shadow.wgsl `sun_lit`), so it stays a map, not a ray at
   each of the eye's samples, which only the world's surface would read.
-- **Cast only what a receiver reads.** Nothing past the disk a shadow fades
-  out by (`Sun::rim`, `Sun::read`; f2e2c6ead). Within it, a receiver marks
-  the tile of the box it stands on (`sun::stands_at`): the world where each
-  drawn pixel's ray met it (`sun_mark_cs`), decor where each instance placed
-  stands and the actors where each does, each the eye sees (`sun_mark_drawn_cs`,
-  `eye::sees`, `Sun::ring`). One reach, a tile a thread, reads a tile within
-  a tile and its taps of the way up the tallest decor from one stood on
-  (`sun_reach_cs`, `Sun::up`, `Sun::up_at`), as nothing drawn is taller and
-  everything stands on what the eye meets (22818bb97).
+- **Cast only what a receiver reads.** A receiver marks the tile of the box
+  it stands on (`sun::stands_at`): the world where each drawn pixel's ray met
+  it (`sun_mark_cs`); decor where each instance placed stands, as decor tells
+  (decor.rs `Placed`), and the actors where the scene says each does
+  (`Cast::actors`), each the eye sees (`sun_mark_drawn_cs`, `eye::sees`,
+  `Sun::ring`). One reach, a tile a thread, reads a tile in the disk a shadow
+  fades out by (`Sun::rim`, `Sun::read`) within a tile and its taps of the
+  way up the tallest decor from one stood on (`sun_reach_cs`, `Sun::up`,
+  `Sun::up_at`), as nothing drawn is taller and everything stands on what
+  the eye meets; each pass then casts what feeds those tiles alone
+  (`Map::needs`; f2e2c6ead, 22818bb97).
 - **What a tile holds, and which tiles are read.** A tile's depth follows the
   eye's place, the light and the world; which tiles are read follows the
-  look, the actors and decor placed again. Where only the latter moved, a
-  tile cast since the former last did stands, and only tiles read anew are
-  cast (`sun::MOVED_EPOCH`, `sun::fresh_at`; 2e513d00c).
+  look, the actors and decor placed again; the host tracks each apart
+  (`sun_content`, `sun_receivers`). Where only the latter moved, a tile cast
+  since the former last did stands, and only tiles read anew are cast: a
+  tile's one word names the cast that first read it in the epoch
+  (`sun::MOVED_EPOCH`, `sun::reads_at`; 2e513d00c).
 
 ## What follows
 
@@ -70,7 +76,13 @@ read. It is a decision record, not a rule each change is held to.
 
 ## Open
 
-- The sun's beam rays still cover the disk; they could follow the marks.
-- An actor moving casts the whole chain each frame, though only its tiles are
-  new.
 - At a low sun the way up is long, and the reach reads more a tile.
+- A tile's content follows the eye's place, so a pan casts every tile read
+  again, though a step moves few tiles' zooms: what a tile holds could be
+  kept where no zoom band crossed its rays' span.
+- Snapping the place the zooms are measured from, for the eye and the sun
+  alike, was weighed and held: the content would change once a step, but
+  the rings would jump a step at a time where they now slide, the step's
+  frame would take the whole cast, so the worst frame stays, and the rule
+  is the window's and the query's too. Taken up again where the sun's
+  passes are measured to drop frames.

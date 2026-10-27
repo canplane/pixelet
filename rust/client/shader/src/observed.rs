@@ -119,9 +119,10 @@ pub(crate) struct Writing<'a, L> {
     pub(crate) world: World<'a, L>,
     pub(crate) seen: &'a mut Seen,
     pub(crate) tag: u32,
-    /// Whether it writes a block that fills: a walk whose world reads no
-    /// looks (the sun's, `Unlooked`) answers a filled block without them, and
-    /// another walk may read what it writes; splits, air and lacks carry none.
+    /// Whether it writes a block a ray sees: a walk whose world reads no
+    /// looks (the sun's, `Unlooked`) answers such a block without them, and
+    /// another walk may read what it writes; splits, what is transparent and
+    /// lacks carry none.
     pub(crate) blocks: bool,
 }
 
@@ -218,7 +219,7 @@ impl<L: Looks> Query for Writing<'_, L> {
         if to != observed::NONE
             && (self.blocks
                 || answer.kind != pxl_spec_core::answer::Kind::Block
-                || !pxl_spec_core::answer::fills(answer.block[0]))
+                || pxl_spec_core::answer::transparent(answer.block[0]))
             && key != observed::CLAIMED
             && seen_swap(self.seen, w, key, observed::CLAIMED) == key
         {

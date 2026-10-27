@@ -4,8 +4,10 @@
 //! sun's map, and the passes every cast takes, written once over it
 //! (doc/minutes/20261022-a-cell-casts-a-beam.md): each corner's beam ray
 //! (`beam`), each cell's start off them (`cell`), each sample's walk
-//! (`sample`) and box (`sample_box`), a ray's pick (`took`) or the sky about
-//! it (`sky`), and its walk resumed off the beam (`resume`, `walked`). An
+//! (`sample`) and box (`sample_box`), a ray's pick (`took`), the sky about it
+//! (`sky`) or a walk of its own (`resolve`), and its walk resumed off the
+//! beam (`resume`, `walked`), each casting what its observer needs alone
+//! (`Observer::needs`). An
 //! entry is an observer's call of a pass (beam.rs, cast.rs, raster.rs,
 //! sun.rs); its lattice, its rays and what its walks leave are its own
 //! (eye.rs `Eye`, sun.rs `Map`).
@@ -26,6 +28,13 @@ pub(crate) struct Aim {
     pub(crate) ray: cast::Ray,
     pub(crate) detail: Detail,
 }
+
+/// The levels of an observer's lattice a pass casts (`Observer::needs`): a
+/// corner's beam ray, a cell's start, a sample, a ray at a point.
+pub(crate) const CORNER: u32 = 0;
+pub(crate) const CELL: u32 = 1;
+pub(crate) const SAMPLE: u32 = 2;
+pub(crate) const RAY: u32 = 3;
 
 /// An observer as the passes ask it: its lattice of beam rays' corners,
 /// their cells and its samples, where each one's words lie, and the ray at
@@ -89,6 +98,10 @@ pub(crate) trait Observer {
     /// about the eye is marked and at the screen's tangents (raster.rs
     /// `boxed`).
     fn laid(&self) -> ([i32; 3], (bool, [f32; 2]));
+    /// Whether the cast needs what `level` (`CORNER`, `CELL`, `SAMPLE`,
+    /// `RAY`) at `at` of its lattice gives, off its words `w`: the one
+    /// place a pass is told it may pass a thread by.
+    fn needs<W: Words + ?Sized>(&self, w: &W, level: u32, at: [u32; 2]) -> bool;
 }
 
 /// The number of `c` on a lattice `across` a row, a corner's or a sample's.
@@ -108,6 +121,9 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
     w: &mut W,
     c: [u32; 2],
 ) {
+    if !o.needs(&*w, CORNER, c) {
+        return;
+    }
     let aim = o.corner(c);
     let base = o.line(index(o.corners()[0], c));
     o.keep_origin(w, base, aim.origin);
@@ -139,6 +155,9 @@ fn t_of<O: Observer, W: Words + ?Sized>(o: &O, w: &W, k: u32) -> f32 {
 /// window (`Observer::window`), and that corner, whose line they resume
 /// from.
 pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]) {
+    if !o.needs(&*w, CELL, c) {
+        return;
+    }
     let across = o.corners()[0];
     let ([x, y], side) = o.window(c);
     let mut from = index(across, [x, y]);
@@ -199,6 +218,14 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
     w: &mut W,
     s: [u32; 2],
 ) {
+    // One not needed meets nothing, so draws no box (`sample_box`).
+    if !o.needs(&*w, SAMPLE, s) {
+        w.set(
+            o.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM,
+            beam::SAMPLE_NONE,
+        );
+        return;
+    }
     let aim = o.aim(o.point(s));
     let tag = observed::tag(seen_at(seen, observed::FRAME), O::PASSES[1]);
     let (met, before) = resume(
@@ -254,6 +281,44 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
         boxes,
         args,
     )
+}
+
+/// What a ray at `at` aimed `aim` takes (`resolve`): the block off the
+/// raster's pick, the sky, or a walk of its own.
+pub(crate) const TOOK: u32 = 0;
+pub(crate) const SKY: u32 = 1;
+pub(crate) const WALKS: u32 = 2;
+
+/// What the ray at `at` aimed `aim` takes, `pick` the raster's there: the
+/// block it enters as the sample picked entered it (`took`), its stop and
+/// that sample's first word; else the sky where no sample about it met
+/// anything and it picked none (`sky`); else a walk of its own, which its
+/// pass lists for the walk again. The eye's pixels and the sun's slots alike.
+pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
+    o: &O,
+    w: &W,
+    at: O::At,
+    aim: &Aim,
+    pick: u32,
+) -> (u32, cast::Stop<u32>, u32) {
+    if pick != 0 && pick & raster::LACK == 0 {
+        let (stop, k, enters) = took(o, w, aim, pick);
+        if enters {
+            return (TOOK, stop, k);
+        }
+    }
+    let none = cast::Stop {
+        t: aim.ray.reach,
+        axis: 0,
+        node: cast::Node::ROOT,
+        at: 0u32,
+        block: [0; 2],
+    };
+    if pick == 0 && sky(o, w, at) {
+        (SKY, none, 0)
+    } else {
+        (WALKS, none, 0)
+    }
 }
 
 /// The block the ray aimed `aim` takes off the raster's pick `pick`, a

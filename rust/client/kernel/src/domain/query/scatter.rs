@@ -50,10 +50,13 @@ impl Grounds for Asked<'_, '_> {
         &pxl_spec_core::decor::DECORS
     }
 
+    /// None where the world lacked a tile on the way: decor grows on what
+    /// is held as its tiles say.
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {
-        self.world
-            .footing(cell, g)
-            .map_or(((0, 0.0), false), |top| (top, true))
+        match self.world.footing(cell, g) {
+            crate::domain::layer::Answer::Exact(Some(top)) => (top, true),
+            _ => ((0, 0.0), false),
+        }
     }
 
     /// Void where the world holds nothing there (`World::block`).

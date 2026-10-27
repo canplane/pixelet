@@ -4,7 +4,8 @@
 //! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md),
 //! one descent for the CPU and the GPU over a query each answers its own
 //! way (`Query`). A node coarser than the zoom its distance asks is asked
-//! whether anything under it fills: nothing, and the ray goes on past it
+//! whether anything under it is not transparent: nothing, and the ray goes
+//! on past it
 //! whole; else its children the ray meets, nearest first. A node at that
 //! zoom is asked its block, and the ray stops there or goes on.
 //!
@@ -22,7 +23,7 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::answer::{box_of, fills, kept, side, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
+use crate::answer::{box_of, kept, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
 use crate::grid::cell_at;
 use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
@@ -92,17 +93,18 @@ impl Detail {
     }
 }
 
-/// Which block a ray stops at: the first that fills, as an eye sees; or the
-/// first that does not, as what is climbed out of ends; or, for a beam ray of
-/// the camera grid, the first that fills or the first split too narrow to
-/// hold one of the grid's rays for certain (`beam::narrow`), every split
-/// entered whose box it meets widened by `2√2` of that width
+/// Which block a ray stops at: the first it cannot see through
+/// (`answer::transparent`), as an eye sees; or the first it can, as what is
+/// climbed out of ends; or, for a beam ray of the camera grid, the first it
+/// cannot see through or the first split too narrow to hold one of the
+/// grid's rays for certain (`beam::narrow`), every split entered whose box
+/// it meets widened by `2√2` of that width
 /// (doc/minutes/20261022-a-cell-casts-a-beam.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Until {
-    Fills,
-    Air,
+    Opaque,
+    Transparent,
     Beam,
 }
 
@@ -450,7 +452,7 @@ pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), block: u32) -> ([f32; 3], [f3
 /// floor of its node `n` on its grid from the origin `o`, and the share of
 /// the node's side its top lies over that floor — its cube's top where its
 /// word `block` keeps it whole, else its kept box's. What a walker and decor
-/// stand on (pxl-kernel domain/query/ray.rs `hit`, `scatter::footing`).
+/// stand on (pxl-kernel domain/query/ray.rs `hit`, `support::footing`).
 pub fn top(o: [i32; 3], n: &Node, block: u32) -> (i32, f32) {
     (n.index(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), block).1[2])
 }
@@ -684,15 +686,16 @@ impl<A: Copy> Keep<A> for () {
 /// (doc/minutes/20261022-a-cell-casts-a-beam.md) — what was handed each node
 /// over it read off `over` where the walk climbs past it, and through the
 /// roots the ray crosses. What the ray starts inside is not met when it
-/// stops where a block fills, so an eye under the ground is not stopped
+/// stops at what it cannot see through, so an eye under the ground is not stopped
 /// where it stands.
 ///
 /// The walk holds its node, each axis an integer in its root (`Node`), and
 /// where the ray is, `t`; the planes, the span and the axis entered across
 /// are worked out from those where asked. A node is entered once: asked
-/// whether anything under it fills at the zooms every ray from the origin
-/// asks within it (`asked`); a block — the block at that zoom, or air where
-/// nothing under it fills — the walk stops at (for an eye, where it fills,
+/// whether anything under it is not transparent at the zooms every ray from
+/// the origin asks within it (`asked`); a block — the block at that zoom, or
+/// air where all under it is — the walk stops at (for an eye, where it is not
+/// transparent,
 /// but not in the block it starts in, and where the ray enters the box a
 /// block keeping less than its cube is, `kept_bounds`; for what is climbed
 /// out of, where it does not) or goes on past; else its child the ray is in (PUSH, Laine &
@@ -777,7 +780,7 @@ pub fn walk<Q: Query>(
             // no thinner than the cone there. And by the cone's extent along
             // that side's axis, `√(1 − dₐ²)` of it, so a side the ray crosses
             // head on keeps what it holds, and one it grazes is pruned
-            // whole. A walk out of what fills, or with no cone, prunes
+            // whole. A walk out of what is not transparent, or with no cone, prunes
             // nothing.
             let meets_box = |w: f32| {
                 let (first, past) = box_of(i.block);
@@ -826,8 +829,8 @@ pub fn walk<Q: Query>(
                 // the box and passes it as air where it misses; a beam ray
                 // stops at its node, as the samples it hands on may meet it.
                 Kind::Block
-                    if until == Until::Fills
-                        && fills(i.block[0])
+                    if until == Until::Opaque
+                        && !transparent(i.block[0])
                         && !inside
                         && kept(i.block[0]) < EIGHTHS =>
                 {
@@ -845,9 +848,9 @@ pub fn walk<Q: Query>(
                 }
                 Kind::Block
                     if match until {
-                        Until::Fills => fills(i.block[0]) && !inside,
-                        Until::Air => !fills(i.block[0]),
-                        Until::Beam => fills(i.block[0]),
+                        Until::Opaque => !transparent(i.block[0]) && !inside,
+                        Until::Transparent => transparent(i.block[0]),
+                        Until::Beam => !transparent(i.block[0]),
                     } =>
                 {
                     Ends::Stop
@@ -872,11 +875,11 @@ pub fn walk<Q: Query>(
                     }
                 }
                 // A span wholly out of the box, or touching it alone, meets
-                // nothing that fills, and a walk to what fills passes the
-                // node whole. A walk to air goes in: its stop is where that
-                // span begins.
+                // nothing a ray cannot see through, and a walk to that passes
+                // the node whole. A walk to what is transparent goes in: its
+                // stop is where that span begins.
                 Kind::Split => {
-                    into = until == Until::Air || meets_box(0.0);
+                    into = until == Until::Transparent || meets_box(0.0);
                     Ends::On
                 }
             };
@@ -1092,7 +1095,7 @@ mod tests {
             cone: Cone::EXACT,
             apart: 0.0,
         };
-        first(&mut One { kept }, o, &ray, detail, Until::Fills)
+        first(&mut One { kept }, o, &ray, detail, Until::Opaque)
     }
 
     #[test]
@@ -1172,7 +1175,8 @@ mod tests {
             },
             apart: 1.0,
         };
-        let walk = |b: crate::answer::BoxWords| first(&mut Boxed(b), o, &ray, detail, Until::Fills);
+        let walk =
+            |b: crate::answer::BoxWords| first(&mut Boxed(b), o, &ray, detail, Until::Opaque);
         // The origin lies in the root's lower half on every axis.
         for missed in [
             box_word([512, 0, 0], [1024; 3]),
@@ -1231,7 +1235,7 @@ mod tests {
                 o,
                 &ray,
                 detail,
-                Until::Fills,
+                Until::Opaque,
             )
         };
         assert!(spaced(0.1).visits > 1);
@@ -1251,7 +1255,7 @@ mod tests {
             o,
             &down,
             wide,
-            Until::Fills,
+            Until::Opaque,
         );
         assert!(met.visits > 1);
         // With no cone, nothing is pruned.
@@ -1264,7 +1268,7 @@ mod tests {
             o,
             &ray,
             exact,
-            Until::Fills,
+            Until::Opaque,
         );
         assert!(met.visits > 1);
     }
@@ -1326,7 +1330,7 @@ mod tests {
             },
             apart: 1.0,
         };
-        let met = first(&mut Flat, o, &ray, detail, Until::Fills);
+        let met = first(&mut Flat, o, &ray, detail, Until::Opaque);
         assert_eq!(met.ends, Ends::Stop);
         assert!((met.stop.t - 5.0).abs() < 1e-3, "{}", met.stop.t);
     }

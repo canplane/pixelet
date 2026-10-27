@@ -5,7 +5,7 @@
 //! `miss_cs` over every pixel where the list was full).
 
 use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{beam, observed, raster, ray, tally, ways};
+use pxl_spec_core::{beam, observed, ray, tally, ways};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
@@ -108,35 +108,17 @@ pub fn cast_cs(
     let px = pixel_tan(eye, id, size);
     let aim = eye.aim(px);
     let ray = aim.ray;
-    // The nearest block entered, at the reach where none is.
-    let mut hit = cast::Stop {
-        t: ray.reach,
-        axis: 0,
-        node: cast::Node::ROOT,
-        at: 0u32,
-        block: [0; 2],
-    };
-    // What lies about its face, the sample's, and the nodes the sample's
-    // walk visited, which the steps view shows as this pixel's.
-    let mut faces = 0;
-    let mut visits = 0;
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = picks.fetch(UVec3::new(id.x, id.y, 0));
-    let pick = kept.x;
-    if pick != 0 && pick & raster::LACK == 0 {
-        let (stop, k, enters) = observer::took(eye, beams, &aim, pick);
-        if enters {
-            hit = stop;
-            faces = seen_at(beams, k + beam::SAMPLE_FACES);
-            visits = seen_at(beams, k + beam::SAMPLE_VISITS);
-        }
-    }
+    // The block off its pick, the sky, or a walk of its own (observer.rs
+    // `resolve`), the nearest block entered at the reach where none is.
+    let (took, hit, k) = observer::resolve(eye, beams, px, &aim, kept.x);
     let steps = eye.origin.w != 0;
     let on = seen_at(seen, observed::TALLY_ON) != 0;
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
-    if pick == 0 && observer::sky(eye, beams, px) {
+    if took == observer::SKY {
         written(
             rays,
             id,
@@ -160,7 +142,13 @@ pub fn cast_cs(
         );
         return;
     }
-    if hit.t < ray.reach {
+    if took == observer::TOOK {
+        // What lies about its face, the sample's, and the nodes the
+        // sample's walk visited, which the steps view shows as this pixel's.
+        let (faces, visits) = (
+            seen_at(beams, k + beam::SAMPLE_FACES),
+            seen_at(beams, k + beam::SAMPLE_VISITS),
+        );
         counted(marks, on, tally::PICKED, 1);
         written(
             rays,

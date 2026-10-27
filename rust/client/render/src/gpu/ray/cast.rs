@@ -131,18 +131,23 @@ pub(super) struct CastBuffers {
     /// The misses' walk's dispatch and count, as the eye's are
     /// (pxl-spec-core `ray::MISS_ARGS_WORDS`).
     sun_misses: u32,
-    /// What the sun's cast last read (`Read`): the light's frame
-    /// (`Shadow::frame`), whether shadows are cast, the light box, the eye's
-    /// place, quality and zooms, and whether the world under it moved; and
-    /// whether this frame casts it, every slot.
-    sun_read: Read,
-    /// The eye's look and the actors' places it last read: where only they
-    /// moved, what the cast before cast stands (`sun_epoch`).
-    sun_look: Read,
+    /// What a tile of the sun's map holds follows, as the sun's cast last
+    /// read it (`Read`): the light's frame (`Shadow::frame`), whether
+    /// shadows are cast, the light box, the eye's place, quality and zooms,
+    /// and whether the world under it moved; one moving begins an epoch
+    /// (`sun_epoch`).
+    sun_content: Read,
+    /// Which tiles the receivers read, as it last read it: the eye's look,
+    /// the actors' places, decor placed again. One moving alone casts only
+    /// the tiles read anew.
+    sun_receivers: Read,
     /// What it is handed beside the eye's words (pxl-spec-core
     /// `sun::MOVED_WORDS`).
     sun_moved: u32,
     sun_cast: bool,
+    /// Whether the next cast marks where the eye's rays met the world
+    /// (`sun_mark_cs`): held until one does.
+    sun_world: bool,
     pub(super) joined_read: u32,
     pub(super) joined_mapping: Box<u32>,
     refold: bool,
@@ -301,13 +306,14 @@ impl RaysPass {
                 word_bytes(ray::MISS_ARGS_WORDS),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
-            sun_read: Read::default(),
-            sun_look: Read::default(),
+            sun_content: Read::default(),
+            sun_receivers: Read::default(),
             sun_moved: buffer(
                 word_bytes(sun::MOVED_WORDS),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             ),
             sun_cast: false,
+            sun_world: false,
             joined_read: buffer(
                 word_bytes(window::EYE_JOINED_WORDS as usize),
                 buffer_usage::MAP_READ | buffer_usage::COPY_DST,
@@ -352,7 +358,6 @@ impl RaysPass {
         meshes: &[u32; GROUPS as usize],
         rays: (u32, [u32; 2]),
         sun_map: (u32, u32, sun::Starts),
-        actors: &[[f32; 3]],
     ) {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
@@ -367,7 +372,7 @@ impl RaysPass {
             if let Some(c) = self.cast.as_mut() {
                 c.grown.off();
                 c.read.forget();
-                c.sun_read.forget();
+                c.sun_content.forget();
                 c.sun_cast = false;
             }
             return;
@@ -391,6 +396,8 @@ impl RaysPass {
                     written: _,
                 },
             decor,
+            // The sun's alone, which reads them with the look (below).
+            actors: _,
             ray_counts,
         } = &cast;
         let ray_counts = *ray_counts;
@@ -616,7 +623,7 @@ impl RaysPass {
             .iter()
             .any(|&w| w != 0);
         // All it reads but the look, then the look.
-        let r = &mut c.sun_read;
+        let r = &mut c.sun_content;
         r.begin();
         r.read(&[sun_map.1, u32::from(shadows)]);
         r.read(&cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS]);
@@ -627,16 +634,22 @@ impl RaysPass {
         let held = r.end();
         // The look, where the actors stand and decor placed again: which
         // tiles are read, not what a tile holds.
-        let l = &mut c.sun_look;
+        let l = &mut c.sun_receivers;
         l.begin();
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
-        l.read(actors);
+        l.read(cast.actors);
         l.mark(c.grown.counts());
         let sun_moved = !held || !l.end();
         if !c.sun_ready {
-            c.sun_read.forget();
+            c.sun_content.forget();
         }
         c.sun_cast = shadows && sun_moved && c.sun_ready;
+        // The world's receivers stand where the eye's rays met it: marked
+        // again by the next cast after the rays were cast again, or where an
+        // epoch begins. Else what they stood on stands, marked in the epoch
+        // already, so none of it is the cast's to cast anew
+        // (`sun_reach_cs`).
+        c.sun_world |= self.kind == FrameKind::cast || !held;
         if c.sun_cast {
             // The head (pxl-spec-core `sun::MOVED_WORDS`).
             let mut head = [0u32; sun::MOVED_WORDS];
@@ -651,9 +664,9 @@ impl RaysPass {
             head[at..at + 4 * sun::STARTS_VEC4S].copy_from_slice(&sun_map.2.words());
             // The actors drawn, receivers as decor is (`sun_mark_drawn_cs`).
             let at = 4 * sun::ACTORS_AT;
-            let n = actors.len().min(sun::ACTORS);
+            let n = cast.actors.len().min(sun::ACTORS);
             head[at] = n as u32;
-            for (k, a) in actors[..n].iter().enumerate() {
+            for (k, a) in cast.actors[..n].iter().enumerate() {
                 let w = at + 4 * (1 + k);
                 head[w..w + 3].copy_from_slice(&a.map(f32::to_bits));
             }
@@ -748,7 +761,7 @@ impl RaysPass {
         let [params, regions, instances] = c
             .grown
             .placed()
-            .map_or([c.sun_none; 3], |(placed, _)| placed);
+            .map_or([c.sun_none; 3], |p| [p.params, p.regions, p.instances]);
         let sun_bound = [
             c.eye,
             c.window,
@@ -941,14 +954,17 @@ impl RaysPass {
             // decor and the actors drawn stand, a thread each
             // (`sun_mark_drawn_cs`); then those they read, a thread a tile
             // (`sun_reach_cs`).
-            g.set_bind_group(pass, 0, c.sun_groups[6], &[]);
-            g.set_pipeline(pass, c.sun_mark_built.pipeline);
-            let w = compute::SUN_MARK_WORKGROUP;
-            let [x, y] = c.size.map(|v| v.div_ceil(sun::MARK));
-            g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+            if c.sun_world {
+                c.sun_world = false;
+                g.set_bind_group(pass, 0, c.sun_groups[6], &[]);
+                g.set_pipeline(pass, c.sun_mark_built.pipeline);
+                let w = compute::SUN_MARK_WORKGROUP;
+                let [x, y] = c.size.map(|v| v.div_ceil(sun::MARK));
+                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+            }
             g.set_bind_group(pass, 0, c.sun_groups[7], &[]);
             g.set_pipeline(pass, c.sun_mark_drawn_built.pipeline);
-            let room = c.grown.placed().map_or(0, |(_, room)| room);
+            let room = c.grown.placed().map_or(0, |p| p.room);
             let w = compute::SUN_MARK_DRAWN_WORKGROUP;
             g.dispatch(pass, (room + sun::ACTORS as u32).div_ceil(w[0]), 1, 1);
             g.set_bind_group(pass, 0, c.sun_groups[8], &[]);
@@ -1108,7 +1124,7 @@ impl RaysPass {
                 }
             }
             c.read.forget();
-            c.sun_read.forget();
+            c.sun_content.forget();
             c.grown.dropped();
             c.tally.dropped();
         }
@@ -1171,6 +1187,11 @@ fn pixel_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
     ];
     g.bind_group(built.layouts[0], &entries)
 }
+
+const _: () = assert!(
+    sun::tiles(shadow::SIZE).is_multiple_of(sun::COARSE),
+    "the map's tiles are a whole number of squares a side (`sun::coarse_square`)"
+);
 
 /// The sun's list, a word before shadows are cast, or `whole`: the beam's
 /// lines and the cells' starts, the raster's samples and the misses past
