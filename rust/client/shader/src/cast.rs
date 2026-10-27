@@ -1,9 +1,8 @@
 // pxl-shader/cast.rs
 
 //! Each drawn pixel's ray (`cast_cs`) off the block the raster kept at it
-//! or down the observed pyramid, and those that missed it walked again
-//! (`miss_list_cs` over their list, `miss_cs` over every pixel where the
-//! list was full).
+//! or the sky, and the rest walked (`miss_list_cs` over their list,
+//! `miss_cs` over every pixel where the list was full).
 
 use pxl_spec_core::cast::{self, Ends, Met};
 use pxl_spec_core::{beam, observed, raster, ray, tally, ways};
@@ -13,9 +12,9 @@ use spirv_std::{spirv, Image};
 
 use crate::beam::Beams;
 use crate::eye::{grid, Eye};
-use crate::observed::{seen_at, seen_put, Reading, Seen, MISSED};
+use crate::observed::{seen_at, seen_put, Seen};
 use crate::observer::{self, Observer};
-use crate::world::{face_of, Unlooked, World};
+use crate::world::{face_of, World};
 use crate::{add, most};
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -78,29 +77,24 @@ fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
 /// `raster`; pxl-render gpu/ray/raster.rs), the nearest a sample stopped at
 /// that its ray enters across the axis that sample entered by, tested again
 /// exactly (`cast::entry`) where a GPU's f32 may part the two, its words, no
-/// step its own; where it kept a node a sample lacks at, or none, or the
-/// test refuses it, the ray from its cell's start, reading the observed
-/// pyramid alone (`Reading`), its binding read-only so no read of it is
-/// atomic: its words where every node it asked was kept, else its first
-/// word the mark `miss_cs` walks it again by (pxl-spec-core `ray::MISS`). A
-/// block the raster kept comes with what lies about its face, its
-/// sample's; a pixel that walked itself asks the world's query its own
-/// (`World::faced`). A marked pixel is listed for the walk again
-/// (pxl-spec-core `observed::MARKS_AT`) by a plain write, its place taken
-/// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_COUNT`),
-/// so no word of the pyramid is typed atomic here; one past the list's
-/// room has the walk over every pixel dispatched instead.
+/// step its own, with what lies about its face, its sample's; the sky
+/// where no sample about it met anything. Any other pixel, where it kept a
+/// node a sample lacks at, or none, or the test refuses it, takes no walk
+/// here: its first word is the mark the walk again goes by (pxl-spec-core
+/// `ray::MISS`; `miss_list_cs`, `miss_cs`), so no lane carries a walk's
+/// footprint for the few that walk
+/// (doc/experiment/20261026-the-pixel-pass-footprint.md). A marked pixel
+/// is listed for that walk (pxl-spec-core `observed::MARKS_AT`) by a plain
+/// write, its place taken off the count in its dispatch's words (`marks`,
+/// `ray::MISS_ARGS_COUNT`), so no word of the pyramid is typed atomic here;
+/// one past the list's room has the walk over every pixel dispatched
+/// instead.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cast_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
     #[spirv(descriptor_set = 0, binding = 13)] picks: &Picks,
@@ -113,14 +107,14 @@ pub fn cast_cs(
     let g = grid(eye);
     let px = pixel_tan(eye, id, size);
     let aim = eye.aim(px);
-    let (origin, ray) = (aim.origin, aim.ray);
+    let ray = aim.ray;
     // The nearest block entered, at the reach where none is.
     let mut hit = cast::Stop {
         t: ray.reach,
         axis: 0,
         node: cast::Node::ROOT,
         at: 0u32,
-        block: MISSED,
+        block: [0; 2],
     };
     // What lies about its face, the sample's, and the nodes the sample's
     // walk visited, which the steps view shows as this pixel's.
@@ -184,39 +178,17 @@ pub fn cast_cs(
         );
         return;
     }
-    let (met, before) = observer::resume(
-        eye,
-        &mut Reading { seen: &*seen },
-        beams,
-        &aim,
-        eye.cell_of(px),
-    );
+    // Neither: marked and listed for its walk (`miss_list_cs`), which reads
+    // and writes the pyramid. No walk is this pass's own, so a lane that
+    // takes its pick pays none of a walk's footprint
+    // (doc/experiment/20261026-the-pixel-pass-footprint.md).
     counted(marks, on, tally::WALKED, 1);
-    counted(marks, on, tally::PIXEL, met.visits);
-    if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
-        // SAFETY: within the rays, bounded by their size above.
-        unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
-        let whole = [size.x.div_ceil(8), size.y.div_ceil(8)];
-        let at = listed(marks, observed::MARKS, whole);
-        if at < observed::MARKS {
-            seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
-        }
-    } else {
-        let mut world = World {
-            window,
-            ground,
-            looks: Unlooked(0),
-            shards,
-            overwrites,
-            eye,
-            pool: ways::tree::Read(pool),
-        };
-        let faces = world.faced(origin, &ray, &met);
-        let met = Met {
-            visits: met.visits + before,
-            ..met
-        };
-        written(rays, id, word(&ray, met, steps, faces));
+    // SAFETY: within the rays, bounded by their size above.
+    unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
+    let whole = [size.x.div_ceil(8), size.y.div_ceil(8)];
+    let at = listed(marks, observed::MARKS, whole);
+    if at < observed::MARKS {
+        seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
     }
 }
 
