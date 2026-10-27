@@ -2,11 +2,12 @@
 
 /**
  * The profiler panel: the profiler's recording controls, exports and
- * gauge, and its own settings (section `profiler`). Shown by the `profiler`
+ * gauge, and its own settings (section `profiler`) under the buttons. Shown by the `profiler`
  * setting in any build; the kernel records from boot while it is on. A development page reads the same from
  * the console (shell/debug/console.ts).
  */
 
+import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -136,33 +137,43 @@ type Own = {
     : never;
 }[SettingName];
 
-/** Each a toggle beside the buttons; a dev one is absent from a production
- * build (`settingsIn`), and its button with it. */
-const OWN: Record<Own, { label: string; hint: string }> = {
-  ray_counts: {
-    label: "Counts",
-    hint:
-      "count the eye's and the sun's casts into the report; off while timing, its atomics run in the cast's spans",
-  },
+/** Each a checkbox under the buttons, set while the window is stopped: one
+ * that changed mid-window would leave the window's frames counted apart. A
+ * dev one is absent from a production build (`settingsIn`), and its box
+ * with it. */
+const OWN: Record<Own, { label: string; note: string }> = {
+  ray_counts: { label: "Ray counts", note: "into the report; slows the casts" },
 };
 
-function OwnToggle(
-  { name, onHint }: {
-    name: Own;
-    onHint: (hint: string | null) => void;
-  },
-) {
+function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
   const { key } = SETTINGS[name];
   const on = useKernel((s) => s.settings[key] === 1);
   const own = OWN[name];
+  const Box = on ? CheckSquareIcon : SquareIcon;
   return (
-    <PanelButton
-      onHint={onHint}
-      label={own.label}
-      hint={own.hint}
-      tint={on ? Tint.Go : Tint.Plain}
+    <Pressable
       onPress={() => kernel_setting(key, on ? 0 : 1)}
-    />
+      disabled={disabled}
+      accessibilityRole="checkbox"
+      aria-checked={on}
+      style={[
+        gauge.row,
+        styles.check,
+        disabled && { opacity: disabledContent },
+      ]}
+    >
+      <View style={styles.checkLabel}>
+        <Box
+          size={18}
+          color={gauge.text.color}
+          weight={on ? "fill" : "regular"}
+        />
+        <Text style={gauge.text}>{own.label}</Text>
+      </View>
+      <Text style={[gauge.text, gauge.key, styles.note]} numberOfLines={1}>
+        {disabled ? "stop the window to change" : own.note}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -239,10 +250,10 @@ export function ProfilerPanel() {
           hint="save the window as a timeline for ui.perfetto.dev"
           onPress={() => void profilerTraceSave().then(setSaid)}
         />
-        {(settingsIn("profiler") as Own[]).map((name) => (
-          <OwnToggle key={name} name={name} onHint={setHint} />
-        ))}
       </View>
+      {(settingsIn("profiler") as Own[]).map((name) => (
+        <OwnCheck key={name} name={name} disabled={recording} />
+      ))}
       {/* Under the buttons: a two-line hint above them moved the hovered button away. */}
       {(said ?? hint) !== null && (
         <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>
@@ -263,6 +274,9 @@ const styles = StyleSheet.create({
     color: HINT_INK,
   },
   body: { flexShrink: 1 },
+  check: { alignItems: "center", marginTop: 6 },
+  checkLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
+  note: { flexShrink: 1, textAlign: "right" },
   buttons: { flexDirection: "row", gap: 4, marginTop: 8 },
   button: {
     flex: 1,
