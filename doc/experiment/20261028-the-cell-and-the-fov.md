@@ -18,7 +18,7 @@ sprites.
 
 ## How
 
-Three exports of `0380ba7ba` (`4679ea4d4` and a record):
+Three exports of `9f4c51cbe` (`c9e157b79` and a record):
 
 - **:5176 A:** as it is: 50°, `SPLIT` 192.
 - **:5177 B:** 53.13010235415598° in pxl-kernel view/param.rs `FOV` and

@@ -41,7 +41,7 @@ device's location (terraces by water).
     face's is.
   - The same probe also counted the face pass's asks and the raster's
     fragments (an atomic in `fs`).
-  - It ran on HEAD `bc4f30997` against that variant. Each pair was checked as
+  - It ran on HEAD `1cd917e72` against that variant. Each pair was checked as
     one frame by its screenshot and its boxes (within 1%).
   - A flatter spot could not be pinned, so a lower, turned grazing view
     stood in.
