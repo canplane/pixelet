@@ -1738,7 +1738,7 @@ fn function_() {
                             phi_4602_ = array<u32, 3>(0u, 1u, 2u);
                         }
                         let _e969 = phi_4602_;
-                        let _e972 = ((6u * _e967) + _e969[0]);
+                        let _e972 = ((7u * _e967) + _e969[0]);
                         let _e976 = (_e915.member[0] >> bitcast<u32>(31i));
                         let _e979 = (_e915.member[1] >> bitcast<u32>(31i));
                         let _e982 = (_e915.member[2] >> bitcast<u32>(31i));
@@ -2286,7 +2286,7 @@ fn function_() {
                                                             phi_5803_ = u32();
                                                             phi_5804_ = u32();
                                                         } else {
-                                                            let _e1625 = (((_e1569 & 1048575u) / 6u) < (_e972 / 6u));
+                                                            let _e1625 = (((_e1569 & 1048575u) / 7u) < (_e972 / 7u));
                                                             phi_5803_ = select(_e1556, _e1569, _e1625);
                                                             phi_5804_ = select(_e1558, _e1564, _e1625);
                                                         }

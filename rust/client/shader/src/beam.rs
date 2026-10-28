@@ -1,7 +1,8 @@
 // pxl-shader/beam.rs
 
-//! The beam rays (pxl-spec-core `beam`): each corner's walk and line
-//! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
+//! The beam rays (pxl-spec-core `beam`): the eye's line asked once ahead of
+//! them (`origin_cs`), each corner's walk and line (`beam_cs`), where each
+//! cell's rays start off them (`cell_cs`), and the
 //! samples walked from those starts (`sample_cs`), each its pass's one
 //! entry, cast for the eye's camera grid or the sun's map as the head it is
 //! handed names (either.rs `Either`); and the words a line, a node and a
@@ -191,6 +192,33 @@ where
         (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t)
     };
     cast::walk(q, origin, ray, detail, Until::Opaque, from, line, &mut ())
+}
+
+/// The eye's line, asked once ahead of its beam rays (eye.rs
+/// `origin`): one thread, the frame's shared descent paid once.
+#[spirv(compute(threads(1, 1, 1), entry_point_name = "origin_cs"))]
+#[allow(clippy::too_many_arguments)]
+pub fn origin_cs(
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+) {
+    let window: &[IVec4] = window;
+    let world = World {
+        window,
+        ground,
+        looks,
+        shards,
+        overwrites,
+        eye,
+        pool: way::tree::Read(pool),
+    };
+    crate::eye::origin(eye, world, seen);
 }
 
 /// Each beam ray of its observer's lattice, a thread a corner: the camera

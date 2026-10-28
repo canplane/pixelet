@@ -122,7 +122,10 @@ pub const SHADER_SUN_REACH: u32 = 56;
 /// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
 /// time, for `SHADER_GROWN` to grow: its one compute entry.
 pub const SHADER_GROWN_STAND: u32 = 57;
-pub const SHADERS: u32 = 58;
+/// The eye's line, asked once ahead of its beam rays, generated with the
+/// cast from pxl-spec-core's `cast::origin_line`: a compute entry.
+pub const SHADER_ORIGIN: u32 = 58;
+pub const SHADERS: u32 = 59;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -350,4 +353,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["sun_reach.gen"],
     // SHADER_GROWN_STAND
     &["decor_stand.gen"],
+    // SHADER_ORIGIN
+    &["origin.gen"],
 ];

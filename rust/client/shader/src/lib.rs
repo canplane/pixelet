@@ -29,7 +29,7 @@ mod sun;
 mod way;
 mod world;
 
-pub use beam::{beam_cs, cell_cs, sample_cs};
+pub use beam::{beam_cs, cell_cs, origin_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs};
 pub use decor::{
     decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs, decor_stand_cs,

@@ -10,7 +10,9 @@ use pxl_spec_core::{beam, eye, observed, tally};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
+use crate::observed::{seen_at, Seen, Writing};
 use crate::observer::{Aim, Level, Observer};
+use crate::world::{Looks, World};
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
 /// where pxl-spec-core `eye` lays them (asserted below).
@@ -84,6 +86,26 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
             },
         },
     )
+}
+
+/// The nodes holding the eye, from its root down, asked once a frame ahead
+/// of its beam rays, which every one of them enters first (pxl-spec-core
+/// `cast::origin_line`): written under a pass of their own
+/// (`observed::ORIGIN_PASS`), so each ray reads them kept rather than
+/// asking the world again. The sun's rays start apart, so it has none.
+pub(crate) fn origin<L: Looks>(eye: &Eye, world: World<'_, L>, seen: &mut Seen) {
+    let (o, detail) = eye_origin(eye);
+    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::ORIGIN_PASS);
+    cast::origin_line(
+        &mut Writing {
+            world,
+            seen,
+            tag,
+            assets: eye.assets(),
+        },
+        o,
+        detail,
+    );
 }
 
 /// The eye's ray at the tangents `[tx, ty]`, reaching as far as the eye.
