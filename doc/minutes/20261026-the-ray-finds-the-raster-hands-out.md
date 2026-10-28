@@ -64,7 +64,7 @@ decision record, not a rule each change is held to.
 
 Nothing now. What was open here, settled the same day:
 
-- **The sun's map took the eye's division** (e04a3a855): beams, samples a few
+- **The shadow map took the eye's division** (e04a3a855): beams, samples a few
   texels apart, their blocks drawn from the sun and each texel taking the
   nearest it enters, walks only where none is entered. The policy that kept its
   clipmap between frames went with it, and a frame where nothing it reads moved

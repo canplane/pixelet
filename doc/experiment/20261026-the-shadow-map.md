@@ -1,4 +1,4 @@
-# The sun's map
+# The shadow map
 
 **2026-10-26.** With shadows on, the sun's shadow map was the frame's largest
 cost while moving: on main at 21f72517b, fixed path

@@ -1,7 +1,7 @@
 # A receiver marks what it reads
 
 **2026-10-27** — decided with the user. It records how an effect beside the
-eye observes the world, and how the sun's map came to cost what its receivers
+eye observes the world, and how the shadow map came to cost what its receivers
 read. It is a decision record, not a rule each change is held to.
 
 > One interface, one unit, each effect its own nature. The sun asks the world
@@ -25,7 +25,7 @@ read. It is a decision record, not a rule each change is held to.
   zooms it asks and its cone (`Aim`), whether its rays start apart, where its
   boxes are laid, and which of its lattice a cast needs (`needs`), the one
   place a pass is told it may pass a thread. The eye (`Eye`), needing all,
-  and the sun's map (sun.rs `Map`) are two; an effect more implements those
+  and the shadow map (sun.rs `Map`) are two; an effect more implements those
   and takes the rest (7895fb2ba).
 - **Each effect its own nature.** What the eye records is a pixel's ray; what
   the sun records is a field a surface, decor, an impostor and an actor all

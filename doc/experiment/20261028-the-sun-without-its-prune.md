@@ -8,7 +8,7 @@ mitigations that kept it were dropped
 
 ## Why
 
-The sun's map passed what its texel could not tell apart by the same
+The shadow map passed what its texel could not tell apart by the same
 machinery as the eye's prune (pxl-spec-core cast.rs `walk`, `meets_box`'s
 inner shrink and its `facing`). With the eye's prune gone, the sun's was
 the only reason left for that machinery. The question was whether the sun

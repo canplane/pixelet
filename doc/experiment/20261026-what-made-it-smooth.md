@@ -29,9 +29,9 @@ caching or sharing of discovery, no raster in any of them.
   start view its spans are each under 1.5 ms p95 with 96.9% of slots picked,
   where before the day's sun rework `shadow` was 60.2 ms p95 and the interval
   216 ms against 77 with shadows off
-  ([the sun's map](./20261026-the-suns-map.md)).
+  ([the shadow map](./20261026-the-shadow-map.md)).
 
-Also before the felt change and possibly part of it: e04a3a855 (the sun's map
+Also before the felt change and possibly part of it: e04a3a855 (the shadow map
 cast as the eye's rays are, its keep policy gone), 806af7525 (faces asked once
 a box), de2f73c26 (missed pixels from a list), 21f72517b (the raster picks),
 7778b87f0 (four occlusion samples). After it, not part of the feel but of the

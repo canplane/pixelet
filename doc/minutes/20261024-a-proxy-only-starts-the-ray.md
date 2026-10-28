@@ -67,7 +67,7 @@ what decides the pixel. They are in:
 - the per-pixel miss list gone: a pixel that missed says so in its own ray word
   (`ray::MISS`);
 - one depth rule for what is laid on a face, owned by the screen pass;
-- the sun's map cast incrementally, only where it moved or the world changed.
+- the shadow map cast incrementally, only where it moved or the world changed.
 
 Landing them first means a proxy, if built, is measured against a cast whose
 start is the only thing it changes.
@@ -179,7 +179,7 @@ Recommended by the reduce session, not ordered.
   a sample keeps none beside its block (pxl-shader cast.rs `cast_cs`, `word`;
   `beam::SAMPLE_WORDS`).
 
-## Deferred: the sun's map costs what 10-12's did not
+## Deferred: the shadow map costs what 10-12's did not
 
 Measured 2026-10-24 on the start view, shadows on, the camera still: about 5 to
 10 frames a second for the first ten seconds, 40 to 70 after, and a frame of 200

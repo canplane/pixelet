@@ -146,9 +146,9 @@ order the threads ran in, so the image is a function of the world and the eye
 ## As built
 
 pxl-shader writes the passes once over the one a cast is for, the eye or the
-sun's map (observer.rs `Observer`): `beam_cs`, `cell_cs`, `sample_cs`,
+shadow map (observer.rs `Observer`): `beam_cs`, `cell_cs`, `sample_cs`,
 `sample_box_cs` and the raster's draw; the eye's pixels then take `cast_cs`,
-and `miss_list_cs` and `miss_cs` for the pixels it marked; the sun's map its
+and `miss_list_cs` and `miss_cs` for the pixels it marked; the shadow map its
 own (sun.rs).
 
 - **pxl-spec-core `cast`:** the beam's stop rule beside `Until::Opaque` and

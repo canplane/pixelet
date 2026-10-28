@@ -32,7 +32,7 @@ rule each change is held to.
   LOD always has. The two are independent.
 - **Nothing the ray meets is passed.** A ray enters every split whose box it
   meets and stops at the first block that is not transparent, the eye's and
-  the sun's map's alike. Its cone is read only by a beam, as how far apart its
+  the shadow map's alike. Its cone is read only by a beam, as how far apart its
   rays lie (`cast::Spacing`): the eye's an angle, its grid's cell; the sun's a
   width, `sun::BEAM` of its map's texels; control and physics none
   (`Spacing::NONE`). Passing what the cone cannot tell apart, a split's box
