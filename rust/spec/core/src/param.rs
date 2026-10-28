@@ -69,15 +69,6 @@ pub mod ground {
     pub const ELE_SPACING_LOG2_M: u32 = 5;
 }
 
-pub mod night {
-    /// The sine of the sun's height over which night falls, wherever it is
-    /// shown: the stars over the sky (pxl-render look/environment.rs), the
-    /// cities' lights over the land (pxl-render atmos_air.wgsl `city_shown`),
-    /// and the night the kernel tells (pxl-kernel domain/scene/environment.rs
-    /// `night`); whole at the first, none at the second, the horizon.
-    pub const FALL: [f64; 2] = [-0.1, 0.0];
-}
-
 pub mod raster {
     /// Drawn pixels a face is grown by in its own plane, at each corner's
     /// distance: so a pixel's middle on its edge is not lost to the
