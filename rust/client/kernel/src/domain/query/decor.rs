@@ -19,12 +19,11 @@ use pxl_spec::space::layer::lattice::Cells;
 
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::asset::DecorId;
-use pxl_spec::space::camera::grid::split_distance;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{cube, index_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::{draw_reach, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::Ray;
@@ -338,7 +337,7 @@ impl<'a> World<'a> {
         let Grown { models } = self.decor?;
         // Held as it is out to where the view draws the leaves' tiles.
         let held = match GROUND.z_at(0.0) {
-            LEAF_ZOOM => split_distance(GROUND.grid_zoom(LEAF_ZOOM - 1)).min(ray.reach),
+            LEAF_ZOOM => draw_reach(GROUND, LEAF_ZOOM).min(ray.reach),
             _ => return None,
         };
         let reach = reach();

@@ -225,12 +225,17 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     p.last = Some(seen.clone());
     // The eye's windows' squares in view (domain/view/observation.rs
     // `squares`), as decor's are: the box the world stands in over each,
-    // grown by what a marker draws past it at the box's far side.
+    // grown by what a marker draws past it at the box's far side; none past
+    // where the rays end, over ground the sky's Earth stands for.
     let now = &mut p.now;
     now.drawn.clear();
     let reach = reach_px(SPACING_PX);
+    let drawn = crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0);
     crate::domain::view::observation::squares(&o, &mut |square, heights| {
         let b = region(square, heights);
+        if o.measure(&b).near > drawn {
+            return;
+        }
         let far = v3::len(&core::array::from_fn(|k| {
             (b.min[k] - o.eye[k]).abs().max((b.max[k] - o.eye[k]).abs())
         }));

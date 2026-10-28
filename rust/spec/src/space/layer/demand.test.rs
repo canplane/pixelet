@@ -3,8 +3,8 @@
 use super::*;
 use crate::space::camera::grid::*;
 use crate::space::coord::zoom::FINEST_ZOOM;
-use crate::space::layer::lattice::demand_reach;
 use crate::space::layer::lattice::GROUND;
+use crate::space::layer::lattice::{demand_reach, draw_reach};
 use crate::space::layer::tile::*;
 
 /// The ground tile a distance folds from, past the pyramid's ends too, as
@@ -104,5 +104,22 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
             z,
             "and ends where the next coarser begins"
         );
+    }
+}
+
+/// The view draws a zoom out to where the grid asks the cell a zoom coarser,
+/// no farther: just short of `draw_reach` a ray asks the zoom's own cells,
+/// and at it the coarser's.
+#[test]
+fn the_view_draws_a_zoom_to_where_the_grid_asks_a_coarser_cell() {
+    for zoom in TOP_ZOOM..=LEAF_ZOOM {
+        let r = draw_reach(GROUND, zoom);
+        assert_eq!(
+            zoom_at(short_of(r)),
+            zoom as i32,
+            "zoom {zoom} short of its reach"
+        );
+        assert_eq!(zoom_at(r), zoom as i32 - 1, "zoom {zoom} at its reach");
+        assert_eq!(demand_reach(GROUND, zoom), r * WINDOW_MARGIN);
     }
 }

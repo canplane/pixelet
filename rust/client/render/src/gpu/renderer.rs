@@ -551,7 +551,7 @@ impl Renderer {
         );
     }
 
-    /// `reach` how far the eye observes, in units; none without an eye.
+    /// `reach` how far the eye draws, in units; none without an eye.
     fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: f32) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
@@ -632,7 +632,7 @@ impl Renderer {
             u[SHADOW_RIM] = rim;
         }
 
-        self.atmosphere.lay_out(g, env);
+        self.atmosphere.lay_out(g, env, reach);
     }
 
     /// A box is one instance shared by `BOX_VERTICES`; a draw's first box is its first
@@ -737,7 +737,7 @@ impl Renderer {
         read.read(input.cases);
 
         targets(g, world);
-        // How far the eye observes, as far as the clouds are drawn.
+        // How far the eye draws, as far as the clouds are drawn.
         let reach = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));

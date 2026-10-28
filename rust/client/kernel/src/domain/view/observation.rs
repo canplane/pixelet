@@ -4,7 +4,7 @@
 //! is known of what a box of the world holds.
 
 use crate::sys::io::demand::Order;
-use pxl_spec::space::layer::lattice::demand_reach;
+use pxl_spec::space::layer::lattice::{demand_reach, draw_reach};
 use xpute_guest::global::Global;
 
 use pxl_spec::space::camera::eye::Observation;
@@ -29,10 +29,18 @@ pub fn eye() -> Option<V3> {
     Some(view().pose?.eye)
 }
 
-/// How far the eye observes: as far as the source's top is demanded. None
-/// before the source declares its top.
-pub fn eye_reach() -> Option<f64> {
+/// How far from the eye the layers are demanded and the windows hold: as far
+/// as the source's top is, past where it is drawn by the windows' margin.
+/// None before the source declares its top.
+pub fn eye_demand_reach() -> Option<f64> {
     crate::sys::io::source::top().map(|top| demand_reach(GROUND, top))
+}
+
+/// How far the eye draws, the rays and the clouds alike: as far as the
+/// source's top is drawn, short of what the windows hold past it
+/// (`eye_demand_reach`). None before the source declares its top.
+pub fn eye_draw_reach() -> Option<f64> {
+    crate::sys::io::source::top().map(|top| draw_reach(GROUND, top))
 }
 
 /// The turn's observation, made by its first reader after the view is
@@ -53,10 +61,10 @@ pub fn turn(moved: bool) {
     let stands = !moved
         && match *OBSERVED.get(|| None) {
             Some(Some(o)) => {
-                Some(o.reach) == eye_reach()
+                Some(o.reach) == eye_demand_reach()
                     && !crate::domain::query::changed::within([[o.eye[0], o.eye[1]]; 2], &[])
             }
-            Some(None) => eye().is_none() || eye_reach().is_none(),
+            Some(None) => eye().is_none() || eye_demand_reach().is_none(),
             None => false,
         };
     if !stands {
@@ -64,12 +72,12 @@ pub fn turn(moved: bool) {
     }
 }
 
-/// Out to `eye_reach`. None before the camera stands anywhere or the source
+/// Out to `eye_demand_reach`. None before the camera stands anywhere or the source
 /// declares its top.
 pub fn observation() -> Option<Observation> {
     *OBSERVED.get(|| None).get_or_insert_with(|| {
         let eye = eye()?;
-        let reach = eye_reach()?;
+        let reach = eye_demand_reach()?;
         let height = eye_height();
         Some(Observation {
             eye,

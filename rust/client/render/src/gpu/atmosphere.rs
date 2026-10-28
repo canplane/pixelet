@@ -21,8 +21,8 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
-    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
-    GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
+    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, DRAWN, EARTH_REACH, EARTH_TILES, EARTH_WINDOW,
+    EXPOSURE, GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
     MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION,
     OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL,
     SUN_ANGULAR_RADIUS, SUN_DIR, TOP_RADIUS,
@@ -431,7 +431,7 @@ impl Atmosphere {
 
     /// Every light's and ray's height is measured up the world's z, straight
     /// up where the eye stands.
-    pub fn lay_out(&mut self, g: &Gpu, env: &[f32]) {
+    pub fn lay_out(&mut self, g: &Gpu, env: &[f32], reach: f32) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let altitude_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
@@ -442,6 +442,7 @@ impl Atmosphere {
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE_KM] = env[ENV_AIR + 3];
+        self.words[DRAWN] = reach;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         let r = &mut self.read;
         r.begin();
