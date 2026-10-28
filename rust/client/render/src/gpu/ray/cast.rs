@@ -15,7 +15,7 @@ use super::tally::{self, Counted, Tally};
 use super::RaysPass;
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
-    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
+    SHADER_MISS, SHADER_MISS_LIST, SHADER_ORIGIN, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
     SHADER_SUN_MARK_DRAWN, SHADER_SUN_MISS, SHADER_SUN_REACH, UNIFORM,
 };
 use crate::gpu::api::{
@@ -72,6 +72,10 @@ pub(super) struct CastBuffers {
     miss_list_built: Built,
     marks: u32,
     forget_built: Built,
+    /// The eye's line asked once a frame, after the forgetting and ahead of
+    /// its beam rays, which every one of them enters first (`origin_cs`,
+    /// one thread, pxl-spec-core `cast::origin_line`).
+    origin_built: Built,
     seen: u32,
     frame: u32,
     forget: bool,
@@ -266,6 +270,7 @@ impl RaysPass {
         let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
         let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, group);
         let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
+        let origin_built = pipelines.build_compute(g, SHADER_ORIGIN, group);
         let sun_built = pipelines.build_compute(g, SHADER_SUN, &compute::SUN_GROUP);
         let sun_miss_built = pipelines.build_compute(g, SHADER_SUN_MISS, &compute::SUN_MISS_GROUP);
         let sun_mark_built = pipelines.build_compute(g, SHADER_SUN_MARK, &compute::SUN_MARK_GROUP);
@@ -294,6 +299,7 @@ impl RaysPass {
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             forget_built,
+            origin_built,
             seen: buffer(
                 word_bytes(observed::WORDS as usize),
                 storage | buffer_usage::COPY_SRC,
@@ -862,8 +868,10 @@ impl RaysPass {
         let grows = self.grows();
         let Some(c) = self.cast.as_mut() else { return };
         if self.kind == FrameKind::cast {
-            // The observed pyramid forgotten first where it is; then the
-            // beam rays writing it, a corner each; each cell's start off them;
+            // The observed pyramid forgotten first where it is, and the
+            // eye's line asked into it once; then the beam rays writing it,
+            // a corner each, each reading that line kept; each cell's start
+            // off them;
             // the samples writing it, each from its cell's start; their
             // cells drawn as boxes, each pixel's nearest kept; the pixels
             // off that, or reading it from their cell's start, marking the
@@ -872,9 +880,10 @@ impl RaysPass {
             // returning at once. One pass, a dispatch each, each
             // reading what the ones before wrote (pxl-spec-core `observed`).
             // A pass a dispatch, each timed in its own span, so the cast's
-            // parts are read apart: `cast` holds the forgetting alone; the
-            // samples' boxes drawn between the samples and the pixels, which
-            // take the raster's pick (ray/raster.rs, span `sraster`).
+            // parts are read apart: `cast` holds the forgetting and the
+            // eye's line; the samples' boxes drawn between the samples and
+            // the pixels, which take the raster's pick (ray/raster.rs, span
+            // `sraster`).
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::cast as usize].pass());
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != observed::FORGETS_NONE {
@@ -886,6 +895,8 @@ impl RaysPass {
                     1,
                 );
             }
+            g.set_pipeline(pass, c.origin_built.pipeline);
+            g.dispatch(pass, 1, 1, 1);
             g.end(pass);
             for (span, built, [x, y], w) in [
                 (
