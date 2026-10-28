@@ -6,9 +6,9 @@
 
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
+use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
@@ -71,7 +71,6 @@ pub fn stage_write() {
     let [width, height] = crate::domain::view::frame::screen::size();
     s[STAGE_AT::VIEWPORT] = width;
     s[STAGE_AT::VIEWPORT + 1] = height;
-    s[STAGE_AT::FOV] = pxl_spec::space::camera::grid::fov().to_degrees();
     // The camera grid's cell angle: the footprint a drawn cell covers per
     // unit of distance, square on.
     s[STAGE_AT::CELL] = pxl_spec::space::camera::grid::CELL;
