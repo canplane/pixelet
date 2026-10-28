@@ -5,7 +5,13 @@ use super::*;
 /// Windows of `load` budgets each, judged as one frame a window.
 fn windows(k: &mut Scale, load: f64, n: u32, timed: bool) -> u32 {
     (0..n)
-        .filter(|_| k.judge(load * param::SCALE_WINDOW_MS, param::SCALE_WINDOW_MS, timed))
+        .filter(|_| {
+            k.judge(
+                Some(load * param::SCALE_WINDOW_MS),
+                param::SCALE_WINDOW_MS,
+                timed,
+            )
+        })
         .count() as u32
 }
 
@@ -29,6 +35,29 @@ fn timed_steps_down_at_once_and_up_once_the_step_above_fits() {
     assert_eq!(windows(&mut k, 0.3, param::SCALE_UP_WINDOWS - 1, true), 0);
     assert_eq!(windows(&mut k, 0.3, 1, true), 1);
     assert_eq!(k.step, 1);
+}
+
+/// Timed, a window is its frames' budgets whether or not a read landed with
+/// them: reads on one frame in three judge it as soon as every frame would,
+/// by the frames that took them, and a window none landed in is not judged.
+#[test]
+fn timed_windows_count_every_frame_and_judge_by_the_reads() {
+    let frame = param::SCALE_BUDGET_FLOOR_MS;
+    let frames = (param::SCALE_WINDOW_MS / frame).ceil() as u32;
+    let mut k = Scale::NEW;
+    let changed = (0..frames)
+        .filter(|i| k.judge((i % 3 == 0).then_some(1.5 * frame), frame, true))
+        .count();
+    assert_eq!((changed, k.step), (1, 1), "one window's frames step down");
+    let mut k = Scale::NEW;
+    let changed = (0..3 * frames)
+        .filter(|_| k.judge(None, frame, true))
+        .count();
+    assert_eq!(
+        (changed, k.step, k.since),
+        (0, 0, u32::MAX),
+        "no read, no judgement"
+    );
 }
 
 /// Untimed, a step up is a probe after a hold of quiet windows; one that
@@ -84,7 +113,7 @@ fn a_pause_keeps_the_quiet_windows_judged() {
         0
     );
     k.judge(
-        0.3 * param::SCALE_WINDOW_MS,
+        Some(0.3 * param::SCALE_WINDOW_MS),
         0.5 * param::SCALE_WINDOW_MS,
         true,
     );
