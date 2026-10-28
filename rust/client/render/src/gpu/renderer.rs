@@ -3,9 +3,9 @@
 //! Executes the scheduler's draw lists on the device, in the kernel's own turn,
 //! in the device's depth (`mat4::perspective`).
 
+use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
-use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec_core::eye;
 use pxl_spec_core::ray;
@@ -314,28 +314,25 @@ pub fn pixels_ms(spans: &[f64]) -> f64 {
     PER_PIXEL.iter().map(|&s| spans[s as usize]).sum()
 }
 
-/// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, taken in f64: a
-/// direction unprojected from two points in the shader holds only ~1e-3 rad,
-/// which the secant carries out to kilometres at the horizon.
-fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
-    let mut inv = mat4::new();
-    mat4::invert(&mut inv, view_proj);
-    let point = |x: f64, y: f64| -> V3 {
-        let clip = [x, y, 0.5, 1.0];
-        let row = |r: usize| (0..4).map(|c| inv[c * 4 + r] * clip[c]).sum::<f64>();
-        let w = row(3);
-        [row(0) / w, row(1) / w, row(2) / w]
-    };
-    let c = point(0.0, 0.0);
-    for (k, (to, from)) in [(point(1.0, 0.0), c), (point(0.0, 1.0), c), (c, *eye)]
-        .into_iter()
-        .enumerate()
-    {
-        for (o, e) in out[at + 4 * k..at + 4 * k + 3]
-            .iter_mut()
-            .zip(v3::sub(&to, &from))
-        {
-            *o = e as f32;
+/// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, the screen's lens
+/// off the view's planes (pxl-spec `Frustum::lens`, as the cast's eye takes
+/// it): its right and up by their tangents, and its forward, taken in f64
+/// before they are narrowed, a direction unprojected in the shader holding
+/// only ~1e-3 rad, which the secant carries out to kilometres at the
+/// horizon. Zero without a screen.
+fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4) {
+    let mut planes = Frustum::default();
+    mat4::frustum_planes(&mut planes.planes, view_proj);
+    let columns = planes.lens().map_or([[0.0; 3]; 3], |l| {
+        [
+            l.right.map(|c| c * l.tan[0]),
+            l.up.map(|c| c * l.tan[1]),
+            l.forward,
+        ]
+    });
+    for (k, column) in columns.iter().enumerate() {
+        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(column) {
+            *o = *e as f32;
         }
     }
 }
@@ -572,7 +569,7 @@ impl Renderer {
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
-        put_ray(&mut self.sky, sky::RAY, &m, &eye);
+        put_ray(&mut self.sky, sky::RAY, &m);
         self.clouds.lay_out(
             [eye_world[0], eye_world[1]],
             env,

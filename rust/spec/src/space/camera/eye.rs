@@ -42,6 +42,52 @@ impl Frustum {
         }
         self
     }
+
+    /// The screen as the eye sees it, off the planes alone: the axes are
+    /// differences of opposite normals and the tangents their ratios, so
+    /// where the planes are measured from moves neither. None without a
+    /// screen.
+    pub fn lens(&self) -> Option<Lens> {
+        let n = |k: usize| -> V3 {
+            [
+                self.planes[k * 4],
+                self.planes[k * 4 + 1],
+                self.planes[k * 4 + 2],
+            ]
+        };
+        let forward = unit(n(4))?;
+        let right = unit(v3::sub(&n(0), &n(1)))?;
+        let up = unit(v3::sub(&n(2), &n(3)))?;
+        let tan = [
+            v3::dot(&n(0), &forward) / v3::dot(&n(0), &right),
+            v3::dot(&n(2), &forward) / v3::dot(&n(2), &up),
+        ];
+        tan.iter()
+            .all(|t| t.is_finite() && *t > 0.0)
+            .then_some(Lens {
+                forward,
+                right,
+                up,
+                tan,
+            })
+    }
+}
+
+/// The screen as the eye sees it (`Frustum::lens`): its unit axes and the
+/// tangents of its half-angles across and up. A pixel's ray is `forward`
+/// plus its tangents along `right` and `up`, the one form every reader of
+/// the screen's rays takes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lens {
+    pub forward: V3,
+    pub right: V3,
+    pub up: V3,
+    pub tan: [f64; 2],
+}
+
+fn unit(v: V3) -> Option<V3> {
+    let l = v3::len(&v);
+    (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -76,3 +122,7 @@ impl Observation {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "eye.test.rs"]
+mod test;
