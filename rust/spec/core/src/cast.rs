@@ -2,13 +2,12 @@
 
 //! gpu-portable: the first cell a ray meets, at the zoom its distance asks
 //! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md),
-//! for the CPU and the GPU over a query each answers its own way (`Query`),
-//! by one ray (`walk`) or by a packet of them walked as one (`packet`), each
-//! node met by one rule (`meet`). A node coarser than the zoom its distance
-//! asks is asked whether anything under it is not transparent: nothing, and
-//! the ray goes on past it whole; else its children the ray meets, nearest
-//! first. A node at that zoom is asked its asset, and the ray stops there or
-//! goes on.
+//! one descent for the CPU and the GPU over a query each answers its own
+//! way (`Query`). A node coarser than the zoom its distance asks is asked
+//! whether anything under it is not transparent: nothing, and the ray goes
+//! on past it
+//! whole; else its children the ray meets, nearest first. A node at that
+//! zoom is asked its asset, and the ray stops there or goes on.
 //!
 //! Positions are integers: the ray's origin is a Q3, and a node's corner is
 //! the Q3 steps of its root's finest grid (`Node`), the origin's own grid,
@@ -542,8 +541,7 @@ pub trait Query {
     /// that one found handed down.
     fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At;
     /// What is in the node `node` at `zoom`, `at` what its ancestors handed
-    /// it, asked from `far` to `near`, the ray in it from `t0` (a packet's
-    /// first ray in it, `packet`): the world's
+    /// it, asked from `far` to `near`, the ray in it from `t0`: the world's
     /// answer (pxl-spec-core `answer`), whichever side reads it.
     fn node(
         &mut self,
@@ -676,304 +674,6 @@ pub fn origin_line<Q: Query>(q: &mut Q, o: [i32; 3], detail: Detail) -> u32 {
     rooted(q, o, &nowhere, detail, Until::Beam, &mut ()).visits
 }
 
-/// The rays a packet holds: a camera grid cell's samples, `beam::SAMPLE`
-/// a side (param.rs), a bit each of a `u32`.
-pub const PACKET: usize = (crate::param::beam::SAMPLE * crate::param::beam::SAMPLE) as usize;
-const _: () = assert!(PACKET <= 32, "a packet's rays are the bits of a u32");
-
-/// The first cell each live ray of `rays` (a bit of `live` each) from the
-/// origin `o` meets that an eye stops at (`Until::Opaque`), the rays walked
-/// as one, each handed to `found` with its index as it ends: down from the
-/// root holding the origin, a node asked of the world once for the rays of
-/// a sign that enter it (the first of them its `t0`), each ray meeting it by
-/// the rule one ray's walk meets it by (`meet`) and keeping its own stop.
-/// Rays whose directions part in sign on an axis take a node's children in
-/// other orders, so each sign's rays walk apart, and those holding the
-/// origin are asked once a sign. A ray that leaves a root goes on into the
-/// next with the others leaving by the same face, as `walk` crosses a root.
-/// A ray's met counts no visits: the packet's are its own. The nodes asked,
-/// and the rays not ended, none where every one is.
-pub fn packet<Q: Query>(
-    q: &mut Q,
-    o: [i32; 3],
-    rays: &[Ray; PACKET],
-    live: u32,
-    detail: Detail,
-    found: &mut impl FnMut(usize, Met<Q::At>),
-) -> (u32, u32) {
-    let og = grid_of(o);
-    let sign = |r: &Ray| {
-        (r.direction[0] < 0.0) as u32
-            | ((r.direction[1] < 0.0) as u32) << 1
-            | ((r.direction[2] < 0.0) as u32) << 2
-    };
-    let (mut visits, mut done) = (0, !live);
-    let mut s = 0;
-    while s < 8 {
-        let mut group = 0;
-        let mut r = 0;
-        while r < PACKET {
-            if live >> r & 1 != 0 && sign(&rays[r]) == s {
-                group |= 1 << r;
-            }
-            r += 1;
-        }
-        if group != 0 {
-            visits += packet_sign(q, o, og, rays, group, s, detail, found, &mut done);
-        }
-        s += 1;
-    }
-    let left = if PACKET == 32 {
-        !done
-    } else {
-        !done & ((1 << PACKET) - 1)
-    };
-    (visits, left)
-}
-
-/// `packet`'s walk of the rays `group`, every one of whose directions has
-/// the signs `sign` (a bit an axis, set where it falls): through the roots
-/// they cross, a node's children taken nearest the rays first, a node asked
-/// once where any of them enters it. `done` takes each ray as it ends.
-#[allow(clippy::too_many_arguments)]
-fn packet_sign<Q: Query>(
-    q: &mut Q,
-    o: [i32; 3],
-    og: [u32; 3],
-    rays: &[Ray; PACKET],
-    group: u32,
-    sign: u32,
-    detail: Detail,
-    found: &mut impl FnMut(usize, Met<Q::At>),
-    done: &mut u32,
-) -> u32 {
-    let mut t = [0.0f32; PACKET];
-    let mut visits = 0;
-    // A node's turn: which of `rays_in` enter it, it asked once, met by
-    // each; at a root (`fresh`), one only touching it there at its reach
-    // ends there too, as `walk` ends it. What goes on into its children, what
-    // was handed it, and whether any ray entered.
-    let mut enter = |q: &mut Q,
-                     n: Node,
-                     parent: Q::At,
-                     fresh: bool,
-                     rays_in: u32,
-                     t: &mut [f32; PACKET],
-                     done: &mut u32|
-     -> (u32, Q::At, bool) {
-        let (lo, hi) = bounds(&n, og);
-        let mut spans_of = [((0.0, 0.0), (0.0, 0.0), (0.0, 0.0)); PACKET];
-        let mut span = [(0.0f32, 0.0f32); PACKET];
-        let (mut entering, mut ending, mut first) = (0u32, 0u32, 0.0f32);
-        let mut r = 0;
-        while r < PACKET {
-            if rays_in >> r & 1 != 0 && *done >> r & 1 == 0 {
-                let ray = &rays[r];
-                let (x, y, z) = spans(ray, (lo, hi), t[r]);
-                let (t0, t1) = (
-                    greater(greater(greater(t[r], x.0), y.0), z.0),
-                    lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
-                );
-                if t1 > t0 {
-                    if entering == 0 || t0 < first {
-                        first = t0;
-                    }
-                    entering |= 1 << r;
-                } else if fresh && t1 >= ray.reach {
-                    ending |= 1 << r;
-                }
-                spans_of[r] = (x, y, z);
-                span[r] = (t0, t1);
-            }
-            r += 1;
-        }
-        if entering | ending == 0 {
-            return (0, parent, false);
-        }
-        let mut at = if fresh {
-            parent
-        } else {
-            q.child(&parent, n.zoom, n.index(o))
-        };
-        // What was handed it before it was asked: a ray only touching it
-        // ends with that, as its own walk never asks it.
-        let (handed, mut into) = (at, 0);
-        if entering != 0 {
-            let e = detail.eye;
-            let reach = reach(
-                [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
-                [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
-            );
-            let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, reach), first);
-            visits += 1;
-            let mut r = 0;
-            while r < PACKET {
-                if entering >> r & 1 != 0 {
-                    let ray = &rays[r];
-                    let (t0, t1) = span[r];
-                    let (ends, near, inward) = meet(
-                        ray,
-                        &n,
-                        og,
-                        (lo, hi),
-                        spans_of[r],
-                        (t[r], t0, t1),
-                        reach,
-                        &i,
-                        detail,
-                        Until::Opaque,
-                    );
-                    if ends != Ends::On {
-                        let (t, axis) = entered(ray, near);
-                        let stop = Stop {
-                            t,
-                            axis,
-                            node: n,
-                            at,
-                            asset: i.asset,
-                        };
-                        found(
-                            r as usize,
-                            Met {
-                                ends,
-                                stop,
-                                visits: 0,
-                            },
-                        );
-                        *done |= 1 << r;
-                    } else if inward {
-                        into |= 1 << r;
-                        t[r] = t0;
-                    } else if t1 >= ray.reach {
-                        ending |= 1 << r;
-                    } else {
-                        t[r] = greater(t[r], t1);
-                    }
-                }
-                r += 1;
-            }
-        }
-        // Gone on to its reach: no stop, which no asker reads.
-        let mut r = 0;
-        while r < PACKET {
-            if ending >> r & 1 != 0 {
-                let stop = Stop {
-                    t: span[r].1,
-                    axis: 0,
-                    node: n,
-                    at: if entering >> r & 1 != 0 { at } else { handed },
-                    asset: AIR,
-                };
-                found(
-                    r as usize,
-                    Met {
-                        ends: Ends::On,
-                        stop,
-                        visits: 0,
-                    },
-                );
-                *done |= 1 << r;
-            }
-            r += 1;
-        }
-        (into, at, true)
-    };
-    // The roots the rays go through, each with the rays in it: the origin's
-    // first, then each one rays still going leave it into, by the axis
-    // each leaves by (as `walk` crosses a root).
-    let mut todo = [([0i32; 3], 0u32); PACKET];
-    todo[0] = ([0; 3], group);
-    let (mut len, mut rounds) = (1, 0);
-    while len > 0 && rounds < 4 * PACKET {
-        rounds += 1;
-        len -= 1;
-        let (roots, rays_in) = todo[len];
-        let root = Node {
-            corner: [0; 3],
-            zoom: 0,
-            roots,
-        };
-        let parent = q.root(root.index(o));
-        let (into, at, entered_any) = enter(q, root, parent, true, rays_in, &mut t, done);
-        if entered_any && into != 0 {
-            // The nodes gone into, a zoom an entry: the node, what was
-            // handed it, the rays gone into it, and the next of its
-            // children to take.
-            let mut stack = [(root, at, 0u32, 0u32); DEPTH];
-            stack[0] = (root, at, into, 0);
-            let mut depth = 1;
-            while depth > 0 {
-                let (n, at, rays_in, k) = stack[depth - 1];
-                if k == 8 || rays_in & !*done == 0 {
-                    depth -= 1;
-                    continue;
-                }
-                stack[depth - 1].3 = k + 1;
-                // The children nearest the rays first: on an axis they
-                // fall along, the upper half first.
-                let c = k ^ sign;
-                let half = (under(n.zoom) >> 1) + 1;
-                let side = |a: u32, corner: u32| {
-                    if c >> a & 1 != 0 {
-                        corner | half
-                    } else {
-                        corner
-                    }
-                };
-                let child = Node {
-                    corner: [
-                        side(0, n.corner[0]),
-                        side(1, n.corner[1]),
-                        side(2, n.corner[2]),
-                    ],
-                    zoom: n.zoom + 1,
-                    ..n
-                };
-                let (into, child_at, entered_any) =
-                    enter(q, child, at, false, rays_in, &mut t, done);
-                if entered_any && into != 0 && depth < DEPTH {
-                    stack[depth] = (child, child_at, into, 0);
-                    depth += 1;
-                }
-            }
-        }
-        // The rays still going: into the next root, past the face each
-        // leaves this one by.
-        let (lo, hi) = bounds(&root, og);
-        let mut r = 0;
-        while r < PACKET {
-            if rays_in >> r & 1 != 0 && *done >> r & 1 == 0 {
-                let ray = &rays[r];
-                let (x, y, z) = spans(ray, (lo, hi), t[r]);
-                let e = crossing(ray.direction, [x.1, y.1, z.1], false);
-                let by = if axis(ray.direction, e) > 0.0 { 1 } else { -1 };
-                let next = [
-                    roots[0] + (e == 0) as i32 * by,
-                    roots[1] + (e == 1) as i32 * by,
-                    roots[2] + (e == 2) as i32 * by,
-                ];
-                let mut j = 0;
-                while j < len
-                    && (todo[j].0[0] != next[0]
-                        || todo[j].0[1] != next[1]
-                        || todo[j].0[2] != next[2])
-                {
-                    j += 1;
-                }
-                if j == len && len < PACKET {
-                    todo[len] = (next, 0);
-                    len += 1;
-                }
-                if j < len {
-                    todo[j].1 |= 1 << r;
-                }
-            }
-            r += 1;
-        }
-    }
-    visits
-}
-
 /// What was handed each node over where a walk starts, by its zoom: the
 /// line it resumes from, as a beam ray left it (`Keep`), read where the
 /// walk climbs over its start, and where it ends for what keeps its line.
@@ -1010,139 +710,6 @@ impl<A: Copy> Keep<A> for () {
     const LINE: bool = false;
 
     fn keep(&mut self, _: &Met<A>, _: &[A; DEPTH]) {}
-}
-
-/// What a ray does at the node `n` it enters over `t0..t1`, having walked
-/// to `t`, the node answered `i`: how its walk ends there, the planes it
-/// entered where it stops, and whether it goes on into the node's
-/// children. The one rule a node is met by, by one ray's walk or a
-/// packet's (`packet`).
-#[allow(clippy::too_many_arguments)]
-#[inline(always)]
-fn meet(
-    ray: &Ray,
-    n: &Node,
-    og: [u32; 3],
-    (lo, hi): ([f32; 3], [f32; 3]),
-    (x, y, z): ((f32, f32), (f32, f32), (f32, f32)),
-    (t, t0, t1): (f32, f32, f32),
-    reach: [f32; 2],
-    i: &In<[u32; 2]>,
-    detail: Detail,
-    until: Until,
-) -> (Ends, [f32; 3], bool) {
-    let u = under(n.zoom);
-    let mut into = false;
-    let inside =
-        lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
-    let side = hi[0] - lo[0];
-    // The planes the ray enters where it stops: the node's, or the
-    // box a cell keeping less than its cube is.
-    let mut near = [x.0, y.0, z.0];
-    // ESVO's contour (Laine & Karras 2010) on every axis alike:
-    // whether the ray's span in a split node meets the box in its
-    // steps its content lies in (`answer::box_of`), grown by `w`
-    // on every side. Nothing a ray meets is passed for being thin.
-    let meets_box = |w: f32| {
-        let (first, past) = box_of(i.asset);
-        // Step `e` of the box on axis `a`, on the grid's own planes
-        // (`units`), as a node's own are: the far one the node's.
-        let step = |a: usize, e: u32, out: u32| {
-            if e >= BOX_STEPS {
-                return hi[a];
-            }
-            // A step's width a whole count of the finest grid's
-            // over a node `BOX_STEPS` or more of them wide; finer,
-            // rounded out (`out` the step less one to round up), as
-            // `e · side` fits a u32 there.
-            let at = if u >= BOX_STEPS - 1 {
-                e * ((u >> BOX_BITS) + 1)
-            } else {
-                (e * (u + 1) + out) >> BOX_BITS
-            };
-            units(n.corner[a].wrapping_add(at), og[a], n.roots[a])
-        };
-        let (bx, by, bz) = spans(
-            ray,
-            (
-                [
-                    step(0, first[0], 0) - w,
-                    step(1, first[1], 0) - w,
-                    step(2, first[2], 0) - w,
-                ],
-                [
-                    step(0, past[0], BOX_STEPS - 1) + w,
-                    step(1, past[1], BOX_STEPS - 1) + w,
-                    step(2, past[2], BOX_STEPS - 1) + w,
-                ],
-            ),
-            t0,
-        );
-        greater(greater(greater(t0, bx.0), by.0), bz.0)
-            < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
-    };
-    let ends = match i.kind {
-        Kind::Lacks => Ends::Lacks,
-        // A cell keeping less than its cube is the box its share
-        // fills (`kept_bounds`): an eye's ray stops where it enters
-        // the box and passes it as air where it misses; a beam ray
-        // stops at its node, as the samples it hands on may meet it.
-        Kind::Cell
-            if until == Until::Opaque
-                && !transparent(i.asset[0])
-                && !inside
-                && kept(i.asset[0]) < EIGHTHS =>
-        {
-            let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.asset[0]), t);
-            let (b0, b1) = (
-                greater(greater(greater(t, bx.0), by.0), bz.0),
-                lesser(lesser(lesser(ray.reach, bx.1), by.1), bz.1),
-            );
-            near = [bx.0, by.0, bz.0];
-            if b1 > b0 {
-                Ends::Stop
-            } else {
-                Ends::On
-            }
-        }
-        Kind::Cell
-            if match until {
-                Until::Opaque => !transparent(i.asset[0]) && !inside,
-                Until::Transparent => transparent(i.asset[0]),
-                Until::Beam => !transparent(i.asset[0]),
-            } =>
-        {
-            Ends::Stop
-        }
-        Kind::Cell => Ends::On,
-        // A beam ray passes whole a split whose box it clears by
-        // `2√2` of the grid's width there, as the grid's rays about
-        // it clear it too; else it stops at one it may not share with
-        // them, and enters every other.
-        Kind::Split if until == Until::Beam => {
-            // The grid's rays' spacing at the node's far corner: a
-            // split narrower than `2√2` of that may lie between them
-            // (`narrow`).
-            let width = detail.spacing.width(libm::sqrtf(reach[0]));
-            let narrow = narrow(side * side, width * width);
-            let meets = meets_box(NARROW * width);
-            into = meets && !narrow;
-            if meets && narrow {
-                Ends::Stop
-            } else {
-                Ends::On
-            }
-        }
-        // A span wholly out of the box, or touching it alone, meets
-        // nothing a ray cannot see through, and a walk to that passes
-        // the node whole. A walk to what is transparent goes in: its
-        // stop is where that span begins.
-        Kind::Split => {
-            into = until == Until::Transparent || meets_box(0.0);
-            Ends::On
-        }
-    };
-    (ends, near, into)
 }
 
 /// The first cell `ray` meets within its reach that `until` stops at, at
@@ -1209,19 +776,119 @@ pub fn walk<Q: Query>(
             );
             let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, reach), t0);
             visits += 1;
-            let (ends, near, inward) = meet(
-                ray,
-                &n,
-                og,
-                (lo, hi),
-                (x, y, z),
-                (t, t0, t1),
-                reach,
-                &i,
-                detail,
-                until,
-            );
-            into = inward;
+            let inside = lo[0] <= 0.0
+                && 0.0 < hi[0]
+                && lo[1] <= 0.0
+                && 0.0 < hi[1]
+                && lo[2] <= 0.0
+                && 0.0 < hi[2];
+            let side = hi[0] - lo[0];
+            // The planes the ray enters where it stops: the node's, or the
+            // box a cell keeping less than its cube is.
+            let mut near = [x.0, y.0, z.0];
+            // ESVO's contour (Laine & Karras 2010) on every axis alike:
+            // whether the ray's span in a split node meets the box in its
+            // steps its content lies in (`answer::box_of`), grown by `w`
+            // on every side. Nothing a ray meets is passed for being thin.
+            let meets_box = |w: f32| {
+                let (first, past) = box_of(i.asset);
+                // Step `e` of the box on axis `a`, on the grid's own planes
+                // (`units`), as a node's own are: the far one the node's.
+                let step = |a: usize, e: u32, out: u32| {
+                    if e >= BOX_STEPS {
+                        return hi[a];
+                    }
+                    // A step's width a whole count of the finest grid's
+                    // over a node `BOX_STEPS` or more of them wide; finer,
+                    // rounded out (`out` the step less one to round up), as
+                    // `e · side` fits a u32 there.
+                    let at = if u >= BOX_STEPS - 1 {
+                        e * ((u >> BOX_BITS) + 1)
+                    } else {
+                        (e * (u + 1) + out) >> BOX_BITS
+                    };
+                    units(n.corner[a].wrapping_add(at), og[a], n.roots[a])
+                };
+                let (bx, by, bz) = spans(
+                    ray,
+                    (
+                        [
+                            step(0, first[0], 0) - w,
+                            step(1, first[1], 0) - w,
+                            step(2, first[2], 0) - w,
+                        ],
+                        [
+                            step(0, past[0], BOX_STEPS - 1) + w,
+                            step(1, past[1], BOX_STEPS - 1) + w,
+                            step(2, past[2], BOX_STEPS - 1) + w,
+                        ],
+                    ),
+                    t0,
+                );
+                greater(greater(greater(t0, bx.0), by.0), bz.0)
+                    < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
+            };
+            let ends = match i.kind {
+                Kind::Lacks => Ends::Lacks,
+                // A cell keeping less than its cube is the box its share
+                // fills (`kept_bounds`): an eye's ray stops where it enters
+                // the box and passes it as air where it misses; a beam ray
+                // stops at its node, as the samples it hands on may meet it.
+                Kind::Cell
+                    if until == Until::Opaque
+                        && !transparent(i.asset[0])
+                        && !inside
+                        && kept(i.asset[0]) < EIGHTHS =>
+                {
+                    let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.asset[0]), t);
+                    let (b0, b1) = (
+                        greater(greater(greater(t, bx.0), by.0), bz.0),
+                        lesser(lesser(lesser(ray.reach, bx.1), by.1), bz.1),
+                    );
+                    near = [bx.0, by.0, bz.0];
+                    if b1 > b0 {
+                        Ends::Stop
+                    } else {
+                        Ends::On
+                    }
+                }
+                Kind::Cell
+                    if match until {
+                        Until::Opaque => !transparent(i.asset[0]) && !inside,
+                        Until::Transparent => transparent(i.asset[0]),
+                        Until::Beam => !transparent(i.asset[0]),
+                    } =>
+                {
+                    Ends::Stop
+                }
+                Kind::Cell => Ends::On,
+                // A beam ray passes whole a split whose box it clears by
+                // `2√2` of the grid's width there, as the grid's rays about
+                // it clear it too; else it stops at one it may not share with
+                // them, and enters every other.
+                Kind::Split if until == Until::Beam => {
+                    // The grid's rays' spacing at the node's far corner: a
+                    // split narrower than `2√2` of that may lie between them
+                    // (`narrow`).
+                    let width = detail.spacing.width(libm::sqrtf(reach[0]));
+                    let narrow = narrow(side * side, width * width);
+                    let meets = meets_box(NARROW * width);
+                    into = meets && !narrow;
+                    if meets && narrow {
+                        Ends::Stop
+                    } else {
+                        Ends::On
+                    }
+                }
+                // A span wholly out of the box, or touching it alone, meets
+                // nothing a ray cannot see through, and a walk to that passes
+                // the node whole. A walk to what is transparent goes in: its
+                // stop is where that span begins.
+                Kind::Split => {
+                    into = until == Until::Transparent || meets_box(0.0);
+                    Ends::On
+                }
+            };
             if ends != Ends::On {
                 // Where the walk ends, its stop, made there and nowhere else:
                 // where the ray enters the node, or its asset's box
@@ -1603,322 +1270,6 @@ mod tests {
         assert_eq!(met.ends, Ends::On);
         // The whole cube stops it there.
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, Ends::Stop);
-    }
-
-    /// Hills: ground of a few waves, solid under `h(x, y)`, a cell at the
-    /// zoom asked keeping the share of its column under the ground, a split
-    /// over it whose box runs to the highest ground under it, rounded to its
-    /// coarsest zoom asked, as the world's ground is answered.
-    struct Hills {
-        nodes: u32,
-        /// Flat terraces a whole unit apart, stepping along x + y, in place
-        /// of the waves: ground whose faces lie on the grid's own planes.
-        terraces: bool,
-    }
-
-    impl Hills {
-        fn h(&self, x: f64, y: f64) -> f64 {
-            if self.terraces {
-                return 20.0 + libm::floor((x + y) / 16.0);
-            }
-            40.0 + 30.0 * libm::sin(x / 97.0)
-                + 22.0 * libm::sin(y / 61.0 + 1.3)
-                + 9.0 * libm::sin((x + y) / 23.0)
-        }
-
-        /// The ground's range over `[x0, x1] × [y0, y1]`: its waves' sum at
-        /// their widest, a bound, never a value it misses.
-        fn range(&self, x0: f64, x1: f64, y0: f64, y1: f64) -> (f64, f64) {
-            if self.terraces {
-                return (self.h(x0, y0), self.h(x1, y1) + 1.0);
-            }
-            let wave = |a: f64, k: f64, phi: f64, u0: f64, u1: f64| {
-                let (v0, v1) = (u0 / k + phi, u1 / k + phi);
-                if v1 - v0 >= core::f64::consts::TAU {
-                    return (-a, a);
-                }
-                let (s0, s1) = (libm::sin(v0), libm::sin(v1));
-                let (mut lo, mut hi) = (s0.min(s1), s0.max(s1));
-                let pi = core::f64::consts::PI;
-                if pi / 2.0 + libm::ceil((v0 - pi / 2.0) / (2.0 * pi)) * 2.0 * pi <= v1 {
-                    hi = 1.0;
-                }
-                if -pi / 2.0 + libm::ceil((v0 + pi / 2.0) / (2.0 * pi)) * 2.0 * pi <= v1 {
-                    lo = -1.0;
-                }
-                (a * lo, a * hi)
-            };
-            let (a, b, c) = (
-                wave(30.0, 97.0, 0.0, x0, x1),
-                wave(22.0, 61.0, 1.3, y0, y1),
-                wave(9.0, 23.0, 0.0, x0 + y0, x1 + y1),
-            );
-            (40.0 + a.0 + b.0 + c.0, 40.0 + a.1 + b.1 + c.1)
-        }
-    }
-
-    impl Query for Hills {
-        type At = ();
-        fn root(&mut self, _: [i32; 3]) {}
-        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
-        fn node(
-            &mut self,
-            _: &mut (),
-            zoom: Zoom,
-            c: [i32; 3],
-            asked: [Zoom; 2],
-            _: f32,
-        ) -> In<[u32; 2]> {
-            self.nodes += 1;
-            let side = libm::pow(2.0, UNIT_ZOOM as f64 - zoom as f64);
-            let (x0, y0, z0) = (c[0] as f64 * side, c[1] as f64 * side, c[2] as f64 * side);
-            let air = In {
-                kind: Kind::Cell,
-                asset: crate::answer::AIR,
-            };
-            if zoom >= asked[1] {
-                let h = self.h(x0 + side / 2.0, y0 + side / 2.0);
-                let k = (((h - z0) / side).clamp(0.0, 1.0) * 8.0) as u32;
-                return match k {
-                    0 => air,
-                    8.. => In {
-                        kind: Kind::Cell,
-                        asset: [stone as u32, 0],
-                    },
-                    k => In {
-                        kind: Kind::Cell,
-                        asset: [kept_word(stone as u32, k), 0],
-                    },
-                };
-            }
-            let (lo, hi) = self.range(x0, x0 + side, y0, y0 + side);
-            let zc = asked[0].max(zoom + 1);
-            let sn = libm::pow(2.0, UNIT_ZOOM as f64 - zc as f64);
-            let hi = (libm::floor(hi / sn) + 1.0) * sn;
-            if hi <= z0 {
-                return air;
-            }
-            if lo >= z0 + side {
-                return In {
-                    kind: Kind::Split,
-                    asset: BOX_WHOLE,
-                };
-            }
-            let hz = libm::ceil((hi - z0) / side * BOX_STEPS as f64).clamp(1.0, BOX_STEPS as f64);
-            In {
-                kind: Kind::Split,
-                asset: crate::answer::box_word([0; 3], [BOX_STEPS, BOX_STEPS, hz as u32]),
-            }
-        }
-    }
-
-    /// Hills with what each node is handed (a hash of its line, so a node
-    /// handed another's would show), and nothing held past `x` 2000: there
-    /// the world lacks.
-    struct Handed(Hills);
-
-    impl Query for Handed {
-        type At = u64;
-        fn root(&mut self, node: [i32; 3]) -> u64 {
-            node.iter().fold(0x9e37_79b9_7f4a_7c15, |h, &v| {
-                (h ^ v as u64).wrapping_mul(0x100_0000_01b3)
-            })
-        }
-        fn child(&mut self, at: &u64, zoom: Zoom, node: [i32; 3]) -> u64 {
-            node.iter().fold(at ^ zoom as u64, |h, &v| {
-                (h ^ v as u64).wrapping_mul(0x100_0000_01b3)
-            })
-        }
-        fn node(
-            &mut self,
-            at: &mut u64,
-            zoom: Zoom,
-            c: [i32; 3],
-            asked: [Zoom; 2],
-            t0: f32,
-        ) -> In<[u32; 2]> {
-            *at = at.rotate_left(7) ^ asked[0] as u64;
-            let side = libm::pow(2.0, UNIT_ZOOM as f64 - zoom as f64);
-            if c[0] as f64 * side > 2000.0 {
-                self.0.nodes += 1;
-                return In {
-                    kind: Kind::Lacks,
-                    asset: crate::answer::AIR,
-                };
-            }
-            self.0.node(&mut (), zoom, c, asked, t0)
-        }
-    }
-
-    /// A packet's rays stop each where its own walk stops, over hills seen
-    /// from low and high, steep and grazing, up into the sky, and where the
-    /// world lacks, each handed what its own walk is; and in fewer asks.
-    #[test]
-    fn a_packet_s_rays_stop_where_each_alone_stops() {
-        let steps = |u: f64| (u * (1 << FRAC_W) as f64) as i32;
-        let (mut alone, mut together, mut cells) = (0u32, 0u32, 0u32);
-        let mut ended = [0u32; 3];
-        for &(terraces, ex, ey, ez) in &[
-            (false, 10.3, 7.9, 120.0),
-            (false, -300.6, 40.2, 600.0),
-            (false, 55.5, -12.25, 2900.0),
-            // On the grid's planes: an eye on whole units over terraces.
-            (true, 16.0, 32.0, 64.0),
-            (true, -8.0, 0.0, 300.0),
-        ] {
-            let o = [steps(ex), steps(ey), steps(ez)];
-            let detail = Detail {
-                range: [13, UNIT_ZOOM],
-                eye: [0.0; 3],
-                spacing: Spacing {
-                    angle: crate::grid::CELL,
-                    across: 0.0,
-                },
-            };
-            // A packet of rays on the grid's own diagonals and axes, of every
-            // sign: each sign's rays walk apart, and ties at planes and
-            // edges fall as each ray's own walk takes them.
-            let exact = [
-                [1.0, 0.0, -1.0],
-                [-1.0, 0.0, -1.0],
-                [0.0, 1.0, -1.0],
-                [0.0, -1.0, -1.0],
-                [1.0, 1.0, -1.0],
-                [-1.0, 1.0, -1.0],
-                [1.0, -1.0, -1.0],
-                [-1.0, -1.0, -1.0],
-                [0.0, 0.0, -1.0],
-                [1.0, 0.0, 0.0],
-                [0.0, -1.0, 0.0],
-                [2.0, 1.0, -1.0],
-                [1.0, 2.0, -2.0],
-                [-2.0, 1.0, -1.0],
-                [1.0, 1.0, 0.0],
-                [3.0, -1.0, -1.0],
-            ];
-            let mut rays = [Ray::new([1.0, 0.0, 0.0], 1.0); PACKET];
-            for k in 0..PACKET {
-                let d = exact[k];
-                let l = libm::sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-                // The last reaches nowhere: it ends on the root it touches.
-                let reach = if k == PACKET - 1 { 0.0 } else { 3.0e5 };
-                rays[k] = Ray::new([d[0] / l, d[1] / l, d[2] / l], reach);
-            }
-            let mut met = [first(
-                &mut Handed(Hills { nodes: 0, terraces }),
-                o,
-                &rays[0],
-                detail,
-                Until::Opaque,
-            ); PACKET];
-            let (_, left) = packet(
-                &mut Handed(Hills { nodes: 0, terraces }),
-                o,
-                &rays,
-                (1 << PACKET) - 1,
-                detail,
-                &mut |k, m| met[k] = m,
-            );
-            assert_eq!(left, 0, "rays the packet left from {:?}", (ex, ey, ez));
-            for k in 0..PACKET {
-                let m = first(
-                    &mut Handed(Hills { nodes: 0, terraces }),
-                    o,
-                    &rays[k],
-                    detail,
-                    Until::Opaque,
-                );
-                ended[m.ends as usize] += 1;
-                let got = met[k];
-                assert_eq!(
-                    (
-                        got.ends,
-                        got.stop.t.to_bits(),
-                        got.stop.axis,
-                        got.stop.node,
-                        got.stop.at,
-                        got.stop.asset
-                    ),
-                    (
-                        m.ends,
-                        m.stop.t.to_bits(),
-                        m.stop.axis,
-                        m.stop.node,
-                        m.stop.at,
-                        m.stop.asset
-                    ),
-                    "exact ray {k} from {:?}",
-                    (ex, ey, ez)
-                );
-            }
-            // Cells across a view from steep to grazing, each its 4 × 4
-            // samples a quarter of a cell apart.
-            for row in 0..24 {
-                for col in 0..6 {
-                    let pitch = 0.1 - 0.06 * row as f32;
-                    let yaw = 0.3 * col as f32 - 0.8;
-                    let mut rays = [Ray::new([1.0, 0.0, 0.0], 1.0); PACKET];
-                    let a = crate::grid::CELL / 4.0;
-                    for k in 0..PACKET {
-                        let (p, w) = (pitch + a * (k / 4) as f32, yaw + a * (k % 4) as f32);
-                        let d = [
-                            libm::cosf(p) * libm::cosf(w),
-                            libm::cosf(p) * libm::sinf(w),
-                            libm::sinf(p),
-                        ];
-                        rays[k] = Ray::new(d, 3.0e5);
-                    }
-                    let mut met = [first(
-                        &mut Handed(Hills { nodes: 0, terraces }),
-                        o,
-                        &rays[0],
-                        detail,
-                        Until::Opaque,
-                    ); PACKET];
-                    let mut world = Handed(Hills { nodes: 0, terraces });
-                    let (asked, left) = packet(
-                        &mut world,
-                        o,
-                        &rays,
-                        (1 << PACKET) - 1,
-                        detail,
-                        &mut |k, m| met[k] = m,
-                    );
-                    assert_eq!(left, 0, "rays the packet left: row {row} col {col}");
-                    together += asked;
-                    cells += 1;
-                    for k in 0..PACKET {
-                        let mut one = Handed(Hills { nodes: 0, terraces });
-                        let m = first(&mut one, o, &rays[k], detail, Until::Opaque);
-                        ended[m.ends as usize] += 1;
-                        alone += one.0.nodes;
-                        let got = met[k];
-                        let key = |m: Met<u64>| {
-                            (
-                                m.ends,
-                                m.stop.t.to_bits(),
-                                m.stop.axis,
-                                m.stop.node,
-                                m.stop.at,
-                                m.stop.asset,
-                            )
-                        };
-                        assert_eq!(
-                            key(got),
-                            key(m),
-                            "eye {:?} row {row} col {col} ray {k}",
-                            (ex, ey, ez)
-                        );
-                    }
-                }
-            }
-        }
-        // Every way a walk ends is among them: a stop, the sky, a lack.
-        assert!(ended.iter().all(|&n| n > 0), "{ended:?}");
-        assert!(
-            together * 3 < alone,
-            "{together} asks together, {alone} alone, {cells} cells"
-        );
     }
 
     /// What a walk asks, in order: each node, and the zooms it is asked at.
