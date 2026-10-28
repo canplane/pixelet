@@ -58,7 +58,6 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
     cloud::weather::ALL,
     cloud::altocumulus::ALL,
     cloud::cirrus::ALL,
-    display::ALL,
     lens::ALL,
     light::ALL,
     night::ALL,
@@ -178,15 +177,6 @@ pub mod cloud {
             OPACITY: f32 = 0.45;
             SALT: u32 = 0x0c1c;
         }
-    }
-}
-
-/// What an 8-bit screen shows.
-pub mod display {
-    params! {
-        /// Below one 8-bit step, half of it: a star's light or a cloud
-        /// sheet's opacity this faint is not drawn.
-        FLOOR: f32 = 0.5 / 255.0;
     }
 }
 
@@ -333,6 +323,9 @@ pub mod sky {
             HALO_MAG: f32 = 1.0;
             HALO_SIGMA: f32 = 4.0;
             HALO_GAIN: f32 = 0.06;
+            /// The faintest light a star is drawn at, in linear light, a
+            /// choice: encoded, it is several 8-bit steps.
+            FLOOR: f32 = 0.5 / 255.0;
             /// How many of its deviations a star's quad reaches.
             CUTOFF_SIGMAS: f32 = 3.0;
             /// The most a star's light is drawn at.

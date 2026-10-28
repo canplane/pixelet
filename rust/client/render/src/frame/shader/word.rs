@@ -307,6 +307,10 @@ pub const MOON_MAP_MEAN: f32 = 0.2459;
 /// SkyAtmosphere sizes it.
 pub const AIR_FROXELS: u32 = 32;
 
+/// Half an 8-bit step of an opacity: a cloud sheet's under it moves no
+/// pixel by a step, so it is not drawn.
+pub const HALF_STEP: f32 = 0.5 / 255.0;
+
 /// A layer past the last: the face's swatch alone.
 pub const NO_LAYER: u32 = 255;
 
