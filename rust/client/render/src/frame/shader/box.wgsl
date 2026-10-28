@@ -157,7 +157,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     i.box_uv,
     dpdx(i.box_uv),
     dpdy(i.box_uv),
-    vec3f(screen_open(i.clip.xy)),
+    screen_open(i.clip.xy),
     Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)),
   );
   return vec4f(finish(paint(s), i.clip.xy), i.opacity);

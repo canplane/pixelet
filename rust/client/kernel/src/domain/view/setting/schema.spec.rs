@@ -83,7 +83,10 @@ impl OrbitObstacleMode {
     }
 }
 
-/// Where the ambient occlusion comes from.
+/// Where the ambient occlusion comes from. Either is the sky's visibility
+/// and darkens only the light from the sky and its bounce, never the direct
+/// sun, which the shadows are the sun's visibility of; neither tints
+/// (rust/client/render/src/frame/shader/atmos_light.wgsl `surface_light_in`).
 ///
 ///   off    — none.
 ///   corner — the screen pass's own: the floor along a cube and the inside
@@ -94,8 +97,8 @@ impl OrbitObstacleMode {
 ///   screen — N8AO
 ///            (rust/client/render/src/gpu/ao.rs): the world's depth drawn
 ///            once more, the occlusion sampled from it at half resolution,
-///            denoised, and applied to every lit surface as a warm dark
-///            tint. Five passes and 11 bytes a pixel.
+///            denoised, and read by every lit surface. Five passes and 11
+///            bytes a pixel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum AoMode {
