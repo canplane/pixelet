@@ -1,8 +1,10 @@
 // pxl-kernel/domain/view/lens.rs
 
 //! The camera grid through the screen: the cell a distance holds
-//! (`cell_there`), and what the GPU's cast of the screen's rays reads
-//! (`gpu_cast`), a ray a drawn pixel, one rule wherever the eye is.
+//! (`cell_there`), how long a motion takes to be seen there and a clock
+//! stepped by it (`seen_step_s`, `Stepped`), and what the GPU's cast of the
+//! screen's rays reads (`gpu_cast`), a ray a drawn pixel, one rule wherever
+//! the eye is.
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::CELL;
@@ -25,6 +27,29 @@ pub fn cell_there(distance: f64) -> f64 {
 /// (`distance` infinite) or nothing moves.
 pub fn seen_step_s(distance: f64, speed: f64) -> f64 {
     crate::domain::view::param::SEEN_STEP_CELLS * cell_there(distance) / speed
+}
+
+/// A clock as it is seen, stepped a quantum at a time: what it shows stands
+/// between steps, its source's reading where it last stepped, taken anew
+/// once the source reaches the next step from there, or at once where the
+/// source went back or it never stepped. Its source is its reader's.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Stepped(Option<f64>);
+
+impl Stepped {
+    /// Its source at `t`, the next step from a reading `at` of it
+    /// `next(at)`: what it shows, the reading it next steps at, and whether
+    /// it stepped.
+    pub fn at(&mut self, t: f64, next: impl Fn(f64) -> f64) -> (f64, f64, bool) {
+        if let Some(at) = self.0 {
+            let due = next(at);
+            if !(t >= due || t < at) {
+                return (at, due, false);
+            }
+        }
+        self.0 = Some(t);
+        (t, next(t), true)
+    }
 }
 
 /// The screen as the eye sees it: its axes and the tangents of its half-angles.
@@ -98,3 +123,7 @@ fn unit(v: V3) -> Option<V3> {
     let l = v3::len(&v);
     (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }
+
+#[cfg(test)]
+#[path = "lens.test.rs"]
+mod test;

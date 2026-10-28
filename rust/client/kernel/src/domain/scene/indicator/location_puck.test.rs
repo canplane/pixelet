@@ -77,41 +77,45 @@ fn the_zone_asks_each_cell_once_and_lays_the_same_bytes() {
         cells.sort_unstable();
         cells.dedup();
         assert_eq!(asked, cells.len(), "a cell asked more than once");
+        assert!(
+            zone_samples().any(|s| {
+                let at = [0, 1].map(|k| center[k] + f64::from(s.at[k]) * cell);
+                rough(&world::point(at[0], at[1], center[2])).is_none()
+            }),
+            "a column not known lies in the zone about {center:?}"
+        );
     }
 }
 
 #[test]
-fn a_stepped_clock_steps_once_a_step_has_passed_and_wakes_for_the_next() {
-    let (mut time, mut stepped) = (0.0, None);
-    // The first turn starts it: nothing has passed.
-    assert_eq!(
-        step_clock(&mut time, &mut stepped, 1000.0, Some(50.0)),
-        Some(1050.0)
-    );
-    assert_eq!(time, 0.0);
-    // Short of a step it stands, and the wake stays where it was.
-    assert_eq!(
-        step_clock(&mut time, &mut stepped, 1030.0, Some(50.0)),
-        Some(1050.0)
-    );
-    assert_eq!(time, 0.0);
-    // Past it, it takes all that passed.
-    assert_eq!(
-        step_clock(&mut time, &mut stepped, 1080.0, Some(50.0)),
-        Some(1130.0)
-    );
-    assert_eq!(time, 0.08);
-}
-
-#[test]
-fn a_held_clock_takes_nothing_of_what_passed_while_held() {
-    let (mut time, mut stepped) = (2.0, None);
-    step_clock(&mut time, &mut stepped, 0.0, Some(50.0));
-    assert_eq!(step_clock(&mut time, &mut stepped, 10.0, None), None);
-    // A minute later it runs again: from there, with no jump.
-    assert_eq!(
-        step_clock(&mut time, &mut stepped, 60_010.0, Some(50.0)),
-        Some(60_060.0)
-    );
-    assert_eq!(time, 2.0);
+fn the_beacon_holds_still_over_a_stall_rather_than_leaping() {
+    let _g = crate::sys::serial();
+    let mut puck = LocationPuck {
+        zone: Some(Zone {
+            center: [0.0; 3],
+            target: [0.0; 2],
+            shown: None,
+            night: false,
+            time: 0.0,
+            run: 0.0,
+            clock: Stepped::default(),
+            visible: false,
+        }),
+        ..Default::default()
+    };
+    // The eye at the zone's center: seen, and the bob spans the cell there.
+    puck.tick(&Frame {
+        delta_s: 0.05,
+        ..Frame::default()
+    });
+    // A minute passes, a hidden tab; the turn's step is capped as turn.rs
+    // caps it (`MAX_STEP_S`).
+    xpute_guest::clock::set(|| 60_000.0);
+    puck.tick(&Frame {
+        delta_s: 0.1,
+        ..Frame::default()
+    });
+    xpute_guest::clock::set(|| 0.0);
+    let time = puck.zone.as_ref().map_or(f64::NAN, |z| z.time);
+    assert!(time > 0.0 && time < 0.2, "the bob leapt to {time} s");
 }
