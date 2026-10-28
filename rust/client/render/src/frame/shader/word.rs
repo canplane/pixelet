@@ -215,7 +215,7 @@ uniform! {
         VIEW: Mat4 = 0,
         PROJ: Mat4 = 16,
         TRANSLATION: Vec3 = 32,
-        PX_K: F32 = 35,
+        PX_PER_UNIT: F32 = 35,
         BEFORE: F32 = 36,
     }
 }

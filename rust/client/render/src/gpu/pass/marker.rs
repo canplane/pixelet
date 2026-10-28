@@ -165,7 +165,7 @@ pub struct MarkerPass {
     frame_group: u32,
     pub view: [f32; 16],
     pub proj: [f32; 16],
-    pub px_k: f32,
+    pub px_per_unit: f32,
 }
 
 impl MarkerPass {
@@ -206,7 +206,7 @@ impl MarkerPass {
             uniforms: DrawUniforms::new(word_bytes(MARKER_FLOATS), align),
             view: [0.0; 16],
             proj: [0.0; 16],
-            px_k: 1.0,
+            px_per_unit: 1.0,
         }
     }
 
@@ -386,7 +386,7 @@ impl MarkerPass {
                 .filter(|d| d[1] > 0)
                 .filter(|d| uploads.get(d[0]).is_some())
         };
-        let (view, proj, px_k) = (self.view, self.proj, self.px_k);
+        let (view, proj, px_per_unit) = (self.view, self.proj, self.px_per_unit);
         let count = placed().take(SETS).count() as u32;
         let mut before = 0;
         self.uniforms
@@ -396,7 +396,7 @@ impl MarkerPass {
                 s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
                 s[marker::TRANSLATION..marker::TRANSLATION + 3]
                     .copy_from_slice(&uniform_of(uniforms, d)[..3]);
-                s[marker::PX_K] = px_k;
+                s[marker::PX_PER_UNIT] = px_per_unit;
                 s[marker::BEFORE] = before as f32;
                 buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
                 before += d[1];

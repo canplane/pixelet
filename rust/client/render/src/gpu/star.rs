@@ -86,7 +86,7 @@ impl StarPass {
         u[SKY..SKY + ENV_STAR_FRAME_FLOATS]
             .copy_from_slice(&env[ENV_STARS..ENV_STARS + ENV_STAR_FRAME_FLOATS]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
-        let css = stage_lane()[STAGE_AT::VIEWPORT];
+        let css = stage_lane()[STAGE_AT::VIEWPORT_WIDTH];
         u[DENSITY] = if css > 0.0 {
             (width as f64 / css) as f32
         } else {
