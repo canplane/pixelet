@@ -7,8 +7,8 @@
   `write-documents` (documents people read), `deploy` (checking once and
   sending), and `bake-tiles`, `publish-bucket` and `device-build` (tiles, the
   bucket, devices). Read the skill for a step before taking it.
-- The agents are in `.agents/agents/`: `review` reviews a change before it is
-  committed. It is read-only and is handed the code, not its author's
+- The agents are in `.agents/agents/`: `review` reviews a change. It is
+  read-only and is handed the code, not its author's
   conclusions.
 - `ARCHITECTURE.md` (and `xpute/ARCHITECTURE.md` for xpute) defines the parts
   and their boundaries. At the host/guest boundary:

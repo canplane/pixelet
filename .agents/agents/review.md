@@ -1,6 +1,6 @@
 ---
 name: review
-description: Reviews a change in this tree for correctness and structure (including the layering in ARCHITECTURE.md), without relying on its author's conclusions, and reports ranked findings, each with a file, a line and a concrete failure. Read-only. Use when a change is to be reviewed before it is committed.
+description: Reviews a change in this tree for correctness and structure (including the layering in ARCHITECTURE.md), without relying on its author's conclusions, and reports ranked findings, each with a file, a line and a concrete failure. Read-only. Use when a change is to be reviewed.
 tools: Read, Grep, Glob, Bash, LSP
 ---
 
