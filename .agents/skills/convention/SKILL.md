@@ -1,6 +1,6 @@
 ---
 name: convention
-description: How the tree is written — names, where a thing goes, a file's header and citations, and the few rules the code holds everywhere. Use when naming, creating, moving or renaming a module, folder, file or type; when a file names a path out of its package; when a doc or comment cites code; and when writing rounding, float math, a map, a pointer from an offset, a script or an @expo/ui import.
+description: How the tree is written — names, where a thing goes, a file's header and citations, and the few rules the code holds everywhere. Use when naming, creating, moving or renaming a module, folder, file or type; when a file names a path out of its package; when a doc or comment cites code; when writing down what the user said; and when writing rounding, float math, a map, a pointer from an offset, a script or an @expo/ui import.
 ---
 
 # Convention
@@ -75,6 +75,9 @@ boundary `AGENTS.md`'s.
 - A comment says only what a reader would otherwise get wrong — an invariant, a
   hazard, where a number comes from — in a sentence. It tells no history and
   does not restate the code or a document.
+- The tree is written in English, the shell's translations aside
+  (`ts/client/src/shell/locale/`). What the user said is put in English as their
+  point, never quoted.
 
 ## Code
 
