@@ -16,8 +16,7 @@ use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::get_tile_bbox;
 use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
 const HELD: usize = 512;

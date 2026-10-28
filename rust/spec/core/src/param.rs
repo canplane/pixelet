@@ -62,10 +62,6 @@ pub mod ground {
     /// may reach: Minecraft's 320 over its −64, held from sea level so a shore
     /// is not buried.
     pub const HEADROOM: i32 = 128;
-
-    /// The elevation samples' spacing, in metres as a power of two: the source
-    /// is about 30 m, rounded to 32.
-    pub const ELE_SPACING_LOG2_M: u32 = 5;
 }
 
 pub mod raster {
@@ -83,12 +79,6 @@ pub mod scatter {
     /// flood fill), enough to outvote a one-cell stairstep jog in a straight run;
     /// it does not resolve curves.
     pub const ALIGN_NEIGHBOR_RADIUS: i32 = 3;
-}
-
-pub mod seed {
-    /// The seed every procedural draw starts from (cave.rs `node_seed`).
-    /// Changing it reshuffles everything scattered.
-    pub const MASTER: u32 = 0x5eed_0001;
 }
 
 pub mod sun {
@@ -114,22 +104,6 @@ pub mod sun {
     /// four texels, half a unit where a texel is 1/8 u, where taps a texel
     /// apart cut each cell's shadow out as a hard square.
     pub const SPREAD: f32 = 1.5;
-}
-
-pub mod tile {
-    use crate::Zoom;
-
-    /// The finest tile zoom (pxl-spec space/layer/tile.rs).
-    pub const LEAF_ZOOM: Zoom = 15;
-
-    /// The coarsest tile zoom, the pyramid's top: what a layer is kept in runs
-    /// from it to the leaves, and a source declares its own top at it or finer
-    /// (its `top_zoom`).
-    pub const TOP_ZOOM: Zoom = 4;
-
-    /// A tile's cells a side, in zoom steps: 2^9, so a leaf tile's cells are at
-    /// `LEAF_ZOOM` + 9, the ground's finest cell (`lattice::GROUND`).
-    pub const STEPS: Zoom = 9;
 }
 
 pub mod way {

@@ -9,8 +9,7 @@
 //! straddles.
 
 use crate::cube::Ground;
-use crate::param::tile::LEAF_ZOOM;
-use crate::{index_at, wrap_index as wrap, Zoom, LEAF_CELL, SEA_LEVEL, SHARD_ZOOM};
+use crate::{index_at, wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
 
 use crate::ground::{UNKNOWN, VOID};
 

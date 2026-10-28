@@ -4,14 +4,6 @@
 //! it: each value one literal, a subject a module, its reason beside it.
 //! What follows from them is computed by name where it is used.
 
-pub mod division {
-    use crate::space::coord::zoom::Zoom;
-
-    /// The finest tile Overture makes of its divisions (overture-tiles
-    /// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.
-    pub const LEAF: Zoom = 12;
-}
-
 pub mod marker {
     use crate::space::coord::zoom::Zoom;
 
@@ -22,9 +14,6 @@ pub mod marker {
 
 pub mod place {
     use crate::space::coord::zoom::Zoom;
-
-    /// Carto's last zoom, openstreetmap.org's: the leaf places through it.
-    pub const LAST: Zoom = 19;
 
     /// How far apart places stand, in zooms: an icon's cell is this many
     /// coarser than the camera grid's, and the cell a place keeps to itself

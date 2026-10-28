@@ -9,8 +9,7 @@
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::control::camera::controller::{put_center, Motion};
 use crate::domain::control::navigation::support::{exact, is_unknown, nearest, unknown_z};

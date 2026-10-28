@@ -17,7 +17,7 @@ use crate::domain::layer::Answer;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The world's floor (`world::REACH`), under any ground, in steps: what a
 /// point whose height is not known holds.

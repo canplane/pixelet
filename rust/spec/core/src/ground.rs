@@ -28,9 +28,8 @@ use crate::param::ground::BEDROCK_DEPTH;
 use crate::param::ground::FILLER_DEPTH;
 use crate::param::ground::HEADROOM;
 use crate::param::ground::SANDSTONE_DEPTH;
-use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 use crate::window::Found;
-use crate::{Zoom, LEAF_CELL, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
 /// The catalog's void and unknown as the words a look is read into.
@@ -45,8 +44,7 @@ const STONE: u32 = ground::stone as u32;
 
 /// Inner elevation samples across one leaf tile: a tile is about twice its
 /// side in units in meters wide and the source is about 30 m, rounded to 32 m.
-pub const TILE_ELE_SPAN: u32 =
-    1 << (UNIT_ZOOM - LEAF_ZOOM + 1 - crate::param::ground::ELE_SPACING_LOG2_M);
+pub const TILE_ELE_SPAN: u32 = 1 << (UNIT_ZOOM - LEAF_ZOOM + 1 - 5);
 
 /// Two samples of padding give the bicubic a 4×4 kernel at every edge texel,
 /// and let the ground height 32 cells past the tile be read without the

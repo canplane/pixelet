@@ -20,7 +20,7 @@ pub use pxl_spec_core::lattice::{Lattice, GROUND, TILE_CELLS};
 /// ground cells, the coarsest the camera grid draws. A tile coarser is one no
 /// reader asks for, so the bake folds no coarser.
 pub const fn coarsest(lattice: Lattice) -> Zoom {
-    lattice.read_zoom(GROUND.cell_zoom(pxl_spec_core::param::tile::TOP_ZOOM))
+    lattice.read_zoom(GROUND.cell_zoom(super::tile::TOP_ZOOM))
 }
 
 /// How far from an observer's foot a demand at `zoom` can lie: where a

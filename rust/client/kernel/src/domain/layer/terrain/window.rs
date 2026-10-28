@@ -16,11 +16,10 @@ use pxl_spec::bake::tile::terrain::{
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::{tile_at, Tile};
+use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
 use pxl_spec_core::window::{
     self, Slot, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES,
     SQUARE_CELLS, SQUARE_SHIFT, WINDOWS,

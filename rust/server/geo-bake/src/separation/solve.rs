@@ -48,8 +48,7 @@ mod tunnel;
 
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;

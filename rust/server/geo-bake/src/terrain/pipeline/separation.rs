@@ -10,7 +10,7 @@ use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, u_from_mer};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::param::tile::{LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::tile::{LEAF_ZOOM, TOP_ZOOM};
 use xpute_kit::math::scalar::round;
 
 use crate::separation::Line;

@@ -11,10 +11,9 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{tile_at, Tile};
+use pxl_spec::space::layer::tile::{tile_at, Tile, TOP_ZOOM};
 use pxl_spec_core::area::Shard;
 use pxl_spec_core::ground::{Bounds, Cell};
-use pxl_spec_core::param::tile::TOP_ZOOM;
 use pxl_spec_core::window::{self as cells, Found};
 
 use crate::domain::layer::residency::{Line, Lines, Residency};

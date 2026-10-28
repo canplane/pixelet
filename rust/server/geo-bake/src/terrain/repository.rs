@@ -5,7 +5,7 @@ use std::sync::Arc;
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, BBox3857};
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::elevation::Raster;
 use crate::segment::Part;

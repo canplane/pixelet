@@ -19,8 +19,7 @@ use fnv::FnvHashMap;
 use pxl_spec::bake::tile::Occupancy;
 
 use pxl_spec::space::layer::demand::reach_tiles;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::layer::{Asks, Base};
 use crate::sys::io::demand::Ask;

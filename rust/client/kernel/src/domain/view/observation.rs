@@ -14,8 +14,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use pxl_spec_core::window::{squares_zoom, SQUARE_SHIFT};
 
 use crate::domain::layer::residency::floor;
