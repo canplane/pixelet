@@ -2402,7 +2402,7 @@ fn function_() {
                             }
                             let _e425 = phi_18921_;
                             let _e428 = atomicLoad((&global_10.member[0u]));
-                            let _e430 = ((7u * _e428) + 2u);
+                            let _e430 = ((6u * _e428) + 2u);
                             let _e435 = global.member.member_8[0u][0u];
                             let _e440 = global.member.member_8[1u][1u];
                             let _e445 = global.member.member_8[1u][2u];
@@ -3337,7 +3337,7 @@ fn function_() {
                                                                 phi_5525_ = u32();
                                                                 phi_5526_ = u32();
                                                             } else {
-                                                                let _e1612 = (((_e1556 & 1048575u) / 7u) < (_e430 / 7u));
+                                                                let _e1612 = (((_e1556 & 1048575u) / 6u) < (_e430 / 6u));
                                                                 phi_5525_ = select(_e1543, _e1556, _e1612);
                                                                 phi_5526_ = select(_e1545, _e1551, _e1612);
                                                             }

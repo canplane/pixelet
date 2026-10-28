@@ -663,17 +663,6 @@ pub fn rooted<Q: Query>(
     )
 }
 
-/// The nodes holding the origin `o`, from its root down: the line every ray
-/// from `o` enters first, asked as each such ray's walk asks it, by that
-/// walk, of a ray that goes nowhere, so it enters every node holding the
-/// origin and no other. Asked once ahead of the rays, so a reader that
-/// keeps the answers hands them to every ray (pxl-shader eye.rs
-/// `origin`). The nodes asked.
-pub fn origin_line<Q: Query>(q: &mut Q, o: [i32; 3], detail: Detail) -> u32 {
-    let nowhere = Ray::new([0.0, 0.0, -1.0], f32::MIN_POSITIVE);
-    rooted(q, o, &nowhere, detail, Until::Beam, &mut ()).visits
-}
-
 /// What was handed each node over where a walk starts, by its zoom: the
 /// line it resumes from, as a beam ray left it (`Keep`), read where the
 /// walk climbs over its start, and where it ends for what keeps its line.
@@ -1270,105 +1259,5 @@ mod tests {
         assert_eq!(met.ends, Ends::On);
         // The whole cube stops it there.
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, Ends::Stop);
-    }
-
-    /// What a walk asks, in order: each node, and the zooms it is asked at.
-    struct Asked<Q> {
-        q: Q,
-        log: [(Zoom, [i32; 3], [Zoom; 2]); 512],
-        len: usize,
-    }
-
-    impl<Q: Query<At = ()>> Query for Asked<Q> {
-        type At = ();
-        fn root(&mut self, node: [i32; 3]) {
-            self.q.root(node)
-        }
-        fn child(&mut self, at: &(), zoom: Zoom, node: [i32; 3]) {
-            self.q.child(at, zoom, node)
-        }
-        fn node(
-            &mut self,
-            at: &mut (),
-            zoom: Zoom,
-            node: [i32; 3],
-            asked: [Zoom; 2],
-            t0: f32,
-        ) -> In<[u32; 2]> {
-            if self.len < self.log.len() {
-                self.log[self.len] = (zoom, node, asked);
-                self.len += 1;
-            }
-            self.q.node(at, zoom, node, asked, t0)
-        }
-    }
-
-    fn asked_by<Q: Query<At = ()>>(q: Q) -> Asked<Q> {
-        Asked {
-            q,
-            log: [(0, [0; 3], [0; 2]); 512],
-            len: 0,
-        }
-    }
-
-    /// The nodes holding the origin, asked once, are the nodes every ray from
-    /// it enters first, each asked at the same zooms: what a ray reads of
-    /// them kept is what it would have asked.
-    #[test]
-    fn every_ray_enters_the_origin_s_line_first_as_it_is_asked() {
-        use crate::answer::box_word;
-        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let detail = Detail {
-            range: [12, UNIT_ZOOM],
-            eye: [0.0; 3],
-            spacing: Spacing {
-                angle: crate::grid::CELL,
-                across: 0.0,
-            },
-        };
-        for o in [
-            [steps(5.3), steps(0.4), steps(1.6)],
-            [steps(-2.7), steps(30.1), steps(-0.2)],
-            [steps(1.0e5), steps(-7.5e3), steps(300.0)],
-        ] {
-            let world = || Boxed(box_word([0; 3], [1024; 3]));
-            let mut line = asked_by(world());
-            let visits = origin_line(&mut line, o, detail);
-            assert_eq!(visits as usize, line.len);
-            assert!(line.len > 1);
-            for d in [
-                [1.0, 0.2, -0.3],
-                [-0.5, 0.9, 0.1],
-                [0.1, -0.2, -1.0],
-                [-0.7, -0.7, 0.05],
-            ] {
-                let l = libm::sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-                let ray = Ray::new([d[0] / l, d[1] / l, d[2] / l], 50.0);
-                let mut walk = asked_by(world());
-                first(&mut walk, o, &ray, detail, Until::Opaque);
-                // Each node the walk asks that holds the origin is the
-                // line's at its zoom, asked alike.
-                let (og, mut k) = (grid_of(o), 0);
-                while k < walk.len {
-                    let (zoom, node, asked) = walk.log[k];
-                    let keep = !under(zoom);
-                    let holding = Node {
-                        corner: [og[0] & keep, og[1] & keep, og[2] & keep],
-                        zoom,
-                        roots: [0; 3],
-                    };
-                    if holding.index(o) == node && (zoom as usize) < line.len {
-                        assert_eq!(line.log[zoom as usize], (zoom, node, asked));
-                    }
-                    k += 1;
-                }
-                // And it enters them first, root down.
-                let mut z = 0;
-                while z < line.len.min(walk.len) && walk.log[z] == line.log[z] {
-                    z += 1;
-                }
-                assert!(z > 1, "{o:?} {d:?}: {z}");
-            }
-        }
     }
 }
