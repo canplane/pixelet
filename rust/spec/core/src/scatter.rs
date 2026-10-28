@@ -345,15 +345,14 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     across && b[1] < reads[3] && b[3] > reads[1]
 }
 
-/// The zoom a record names where it is drawn at any distance: placed decor,
-/// which no window grows. No window's cells are at it (`FIRST_CELL`).
+/// The zoom a record names for placed decor, which no window grows. No
+/// window's cells are at it (`FIRST_CELL`).
 pub const PLACED_AT: Zoom = 0;
 const _: () = assert!(crate::window::FIRST_CELL > PLACED_AT);
 
 /// A record's first word: its decor and variant, a byte each, its turn in
-/// quarters, and the window zoom it was grown at, the one it is drawn at
-/// where the rays ask it (`drawn_at`), `PLACED_AT` for placed decor; past
-/// them, once sized, its region (`drawn::REGION_SHIFT`).
+/// quarters, and the window zoom it was grown at, `PLACED_AT` for placed
+/// decor; past them, once sized, its region (`drawn::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
     decor | variant << 8 | turn << TURN_SHIFT | cell << CELL_SHIFT
 }
@@ -793,13 +792,13 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 }
 
 /// Whether decor `d2` from the eye, its distance squared (`distance2`), is
-/// drawn at `cell`: the zoom the rays ask at its distance (`Detail::at`),
-/// so each decor is drawn at one zoom, where the rays draw the ground
-/// about it. The ground's decor grows no finer than a leaf cell's window
-/// (`shown`'s zooms), so where the rays ask finer, for what is placed
-/// finer, it is drawn at the leaf cell's.
-pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom) -> bool {
-    detail.at(d2).min(LEAF_CELL) == cell
+/// drawn: where the rays ask the leaf cell's zoom or finer at its distance
+/// (`Detail::at`), and not where they ask coarser. Decor, grown or placed,
+/// is one set at the leaf cell's window alone (pxl-kernel
+/// domain/scene/decor/drawn.rs `shown`), never thinned or posed again at a
+/// coarser one.
+pub fn drawn_at(detail: Detail, d2: f32) -> bool {
+    detail.at(d2) >= LEAF_CELL
 }
 
 /// Placed decor's tag (`node_seed`).

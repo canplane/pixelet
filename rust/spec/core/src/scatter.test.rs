@@ -50,3 +50,24 @@ fn a_patch_contest_is_each_candidate_standing() {
         "no candidate was beaten, so the contest was not tried"
     );
 }
+
+/// Decor is drawn where the rays ask the leaf cell's zoom or finer at its
+/// distance, and nowhere they ask coarser.
+#[test]
+fn decor_is_drawn_at_the_leaves_or_finer_and_never_coarser() {
+    let detail = Detail {
+        range: [0, crate::FINEST_ZOOM],
+        eye: [0.0; 3],
+        spacing: crate::cast::Spacing::NONE,
+    };
+    let mut d = 0.25f32;
+    let mut seen = [false; 2];
+    while d < 1.0e6 {
+        let d2 = d * d;
+        let at = detail.at(d2);
+        assert_eq!(drawn_at(detail, d2), at >= LEAF_CELL, "at {d}: z{at}");
+        seen[usize::from(at >= LEAF_CELL)] = true;
+        d *= 1.5;
+    }
+    assert_eq!(seen, [true, true], "both sides of the leaves are asked");
+}
