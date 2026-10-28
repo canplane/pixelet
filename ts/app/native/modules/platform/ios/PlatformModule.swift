@@ -37,13 +37,13 @@ public class PlatformModule: Module {
       PlatformModule.current = nil
     }
 
-    // ---- the kernel's turns (platform/gpu.ts) ----
+    // ---- the kernel's turns (src/gpu.ts) ----
 
     /// The device's host asks a turn: a completion it writes at the next
     /// turn's poll would otherwise wait for an input to be read.
     Events("onWake")
 
-    // ---- the kernel (platform/guest.ts, gpu.ts) ----
+    // ---- the kernel (src/guest.ts, gpu.ts) ----
 
     Function("mem") { () throws -> NativeArrayBuffer in
       var bytes: UInt32 = 0
@@ -62,7 +62,7 @@ public class PlatformModule: Module {
       xpute_gpu_open() == 0
     }
 
-    // ---- the transport (platform/origin.ts) ----
+    // ---- the transport (src/origin.ts) ----
 
     /// A body fetched still zstd, decoded off the JavaScript thread on the
     /// module's queue, into the library's bytes, which JavaScript takes
@@ -77,7 +77,7 @@ public class PlatformModule: Module {
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: bytes, count: count), cleanup: { pxl_unpacked_free(bytes, count) })
     }
 
-    // ---- storage (platform/storage.ts) ----
+    // ---- storage (src/storage.ts) ----
     //
     // UserDefaults, the system's store for an app's small values, as a page's
     // localStorage is the browser's.
@@ -99,7 +99,7 @@ public class PlatformModule: Module {
       UIPasteboard.general.string = text
     }
 
-    // ---- text (platform/text.ts, Text.swift) ----
+    // ---- text (src/text.ts, Text.swift) ----
 
     Function("textWidth") { (weight: Double, px: Double, text: String) -> Double in
       textWidth(text, weight, px)
@@ -113,7 +113,7 @@ public class PlatformModule: Module {
       textRaster(text, weight, px, rgba, x, width, height, out.rawPointer)
     }
 
-    // ---- the compass (platform/sensor.ts) ----
+    // ---- the compass (src/sensor.ts) ----
 
     /// Whether the device has a compass at all, which expo-horizon-location only says
     /// by failing a watch — and a failed watch reads as a compass lost, not
@@ -122,7 +122,7 @@ public class PlatformModule: Module {
       CLLocationManager.headingAvailable()
     }
 
-    // ---- the surface (platform/surface.tsx, SurfaceView.swift) ----
+    // ---- the surface (src/surface.tsx, SurfaceView.swift) ----
 
     View(SurfaceView.self) {
       Events("onAttach", "onDetach")
@@ -131,7 +131,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- the keyboard (platform/above-keyboard.tsx, KeyboardDock.swift) ----
+    // ---- the keyboard (ts/client/src/shell/ui/above-keyboard.native.tsx, KeyboardDock.swift) ----
     //
     // The surface stays the first view, the one the module's name alone
     // reaches; this one is asked for by its own.
@@ -149,7 +149,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- the segmented control (platform/segmented.tsx, SegmentedControl.swift) ----
+    // ---- the segmented control (ts/client/src/shell/ui/segmented.ios.tsx, SegmentedControl.swift) ----
 
     View(SegmentedControl.self) {
       Events("onPick")
@@ -161,7 +161,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- a see-through backing's blur (platform/backing.tsx, Blur.swift) ----
+    // ---- a see-through backing's blur (ts/client/src/shell/ui/backing.ios.tsx, Blur.swift) ----
 
     View(Blur.self) {}
   }

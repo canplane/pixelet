@@ -17,18 +17,13 @@ const DEPTH_BIAS_CELLS: f32 = 1.5;
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process. view, proj, translation and px_k, then the
 // number before the set's first marker.
-@group(1) @binding(0) var<uniform> marker_words: array<vec4f, 10>;
-
-fn marker_view() -> mat4x4f { return mat4x4f(marker_words[0], marker_words[1], marker_words[2], marker_words[3]); }
-fn marker_proj() -> mat4x4f { return mat4x4f(marker_words[4], marker_words[5], marker_words[6], marker_words[7]); }
-fn marker_translation() -> vec3f { return marker_words[8].xyz; }
-fn marker_px_k() -> f32 { return marker_words[8].w; }
+@group(1) @binding(0) var<uniform> marker_words: array<vec4f, MARKER_VEC4S>;
 
 @group(2) @binding(0) var<storage, read> instances: array<f32>;
 
 // A marker's number, never 0, which is no region.
 fn marker_number(ii: u32) -> u32 {
-  return u32(marker_words[9].x) + ii + 1u;
+  return u32(marker_before()) + ii + 1u;
 }
 
 struct Placed {
@@ -45,8 +40,7 @@ struct Placed {
 
 // Corner `vi` of instance `ii`'s quad, as wide as its sprite or its region.
 fn placed(vi: u32, ii: u32, region: bool) -> Placed {
-  // INSTANCE_FLOATS floats an instance (pxl-kernel domain/scene/marker/set.rs).
-  let k = ii * 11u;
+  let k = ii * MARKER_INSTANCE_FLOATS;
   let anchor = vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + marker_translation();
   let sprite_w = instances[k + 3u];
   let size_px = vec2f(select(sprite_w, instances[k + 10u], region), instances[k + 4u]);

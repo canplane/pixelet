@@ -7,6 +7,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import { HDR_SZ, WORD_SZ } from "@xpute/kit/wire/xtp/spec.ts";
 
 import * as frame from "./frame.ts";
 import {
@@ -26,9 +27,9 @@ export function slots_bytes(cap: u32, slot_bytes: u32): u32 {
   return cap * slot_bytes;
 }
 
-/** Payloads are padded to 8 bytes. */
+/** Payloads are padded to XTP's word (`WORD_SZ`). */
 function padded(bytes: u32): u32 {
-  return Math.ceil(bytes / 8) * 8;
+  return Math.ceil(bytes / WORD_SZ) * WORD_SZ;
 }
 
 /** A power of two, so a position masks to its slot. */
@@ -36,11 +37,12 @@ function is_pow2(n: u32): boolean {
   return n !== 0 && (n & (n - 1)) === 0;
 }
 
-/** A packet's 16-byte header plus the payload its second word names. */
+/** A packet's header plus the payload its second word names. */
 function packet_bytes(u8: U8Array, at: u32): u32 {
-  const payload = u8[at + 8] | (u8[at + 9] << 8) | (u8[at + 10] << 16) |
-    (u8[at + 11] << 24);
-  return padded(16 + (payload >>> 0));
+  const word = at + WORD_SZ;
+  const payload = u8[word] | (u8[word + 1] << 8) | (u8[word + 2] << 16) |
+    (u8[word + 3] << 24);
+  return padded(HDR_SZ + (payload >>> 0));
 }
 
 export class Ring {
@@ -82,7 +84,7 @@ export class Ring {
     slot_bytes: u32,
   ): Ring {
     if (!is_pow2(cap)) throw new InvariantError(Errno.EINVAL);
-    if (!is_pow2(slot_bytes) || slot_bytes % 8 !== 0) {
+    if (!is_pow2(slot_bytes) || slot_bytes % WORD_SZ !== 0) {
       throw new InvariantError(Errno.EINVAL);
     }
     new Uint8Array(mem as ArrayBuffer, at, ring_bytes(cap)).fill(0);
@@ -183,7 +185,8 @@ export class Ring {
     if (packet_at === 0) return null;
     const off = packet_at - this.slot_base;
     if (
-      off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength
+      off < 0 || off % this.slot_bytes !== 0 ||
+      off + HDR_SZ > this.slots.byteLength
     ) throw new MarshalError(Errno.EBADMSG);
     const len = packet_bytes(this.slots, off);
     if (len > this.slot_bytes) throw new MarshalError(Errno.EBADMSG);

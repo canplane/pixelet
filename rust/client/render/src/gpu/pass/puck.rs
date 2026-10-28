@@ -3,8 +3,9 @@
 //! The location puck: an instanced zone of unit boxes and an octahedron beacon.
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
+use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, Entry, Gpu};
-use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{buffer_size, Draws, Uploads};
@@ -12,7 +13,10 @@ use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 use crate::param::puck::beacon;
 
-fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
+/// The octahedron's: three for each of its eight faces.
+pub const BEACON_VERTICES: u32 = 24;
+
+fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
     let faces: [[[f32; 3]; 3]; 6] = [
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -21,7 +25,7 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
         [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
     ];
-    let (mut position, mut uv, mut index) = ([0.0; 72], [0.0; 48], [0u32; 36]);
+    let (mut position, mut uv, mut index) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTICES as usize]);
     for (f, [n, u, w]) in faces.iter().enumerate() {
         for (c, (a, b)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
             .into_iter()
@@ -41,9 +45,12 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
     (position, uv, index)
 }
 
-fn octahedron_lanes() -> ([f32; 72], [f32; 72]) {
+/// A float lane of the octahedron's: three a vertex.
+const BEACON_LANE: usize = 3 * BEACON_VERTICES as usize;
+
+fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
     let r = beacon::RADIUS;
-    let (mut position, mut normal) = ([0.0; 72], [0.0; 72]);
+    let (mut position, mut normal) = ([0.0; BEACON_LANE], [0.0; BEACON_LANE]);
     let len = 3f32.sqrt();
     let mut k = 0;
     for sx in [1.0f32, -1.0] {
@@ -111,7 +118,7 @@ impl PuckPass {
         let [r, gr, b] = linear_rgb(indicator::ACTION);
         // The beacon is lit through the air: the air's words, transmittance and sampler.
         let mut lit = vec![buffer_entry(0, frame_buffer)];
-        lit.extend(air.iter().filter(|e| [8, 9, 11].contains(&e.binding)));
+        lit.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
         let beacon_frame_group = g.bind_group(beacon.layouts[0], &lit);
         PuckPass {
             frame_group: g.bind_group(zone.layouts[0], &[buffer_entry(0, frame_buffer)]),
@@ -186,7 +193,7 @@ impl PuckPass {
         for k in 0..count {
             let (group, offset) = slots.at(k);
             g.set_bind_group(pass, 1, group, &[offset]);
-            g.draw(pass, 24, 1, 0, 0);
+            g.draw(pass, BEACON_VERTICES, 1, 0, 0);
         }
     }
 
@@ -212,7 +219,7 @@ impl PuckPass {
             let (group, offset) = slots.at(k as u32);
             g.set_bind_group(pass, 1, group, &[offset]);
             g.set_bind_group(pass, 2, upload, &[]);
-            g.draw_indexed(pass, 36, d[1], 0, 0);
+            g.draw_indexed(pass, BOX_VERTICES, d[1], 0, 0);
         }
     }
 }

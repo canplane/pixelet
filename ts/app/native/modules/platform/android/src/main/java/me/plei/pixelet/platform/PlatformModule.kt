@@ -34,7 +34,7 @@ class PlatformModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- the kernel (platform/guest.ts, gpu.ts) ----
+    // ---- the kernel (src/guest.ts, gpu.ts) ----
 
     // The region is the guest's for the app's life: nothing is let go when
     // the buffer is.
@@ -45,7 +45,7 @@ class PlatformModule : Module() {
     /** Whether the device opened; what it is, the kernel reads from the host. */
     Function("gpuOpen") { PxlNative.gpuOpen() }
 
-    // ---- the kernel's turns (platform/gpu.ts) ----
+    // ---- the kernel's turns (src/gpu.ts) ----
 
     /** The device's host asks a turn: a completion it writes at the next
      * turn's poll would otherwise wait for an input to be read. Sent from the
@@ -57,7 +57,7 @@ class PlatformModule : Module() {
 
     OnDestroy { PxlNative.woken = null }
 
-    // ---- the transport (platform/origin.ts) ----
+    // ---- the transport (src/origin.ts) ----
 
     /** A body fetched still zstd, decoded off the JavaScript thread on the
      * module's queue, into a direct buffer JavaScript takes without a copy. */
@@ -65,7 +65,7 @@ class PlatformModule : Module() {
       NativeArrayBuffer(PxlNative.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
     }
 
-    // ---- storage (platform/storage.ts) ----
+    // ---- storage (src/storage.ts) ----
     //
     // SharedPreferences, the system's store for an app's small values, as a
     // page's localStorage is the browser's.
@@ -83,7 +83,7 @@ class PlatformModule : Module() {
       clipboard.setPrimaryClip(ClipData.newPlainText("pixelet", text))
     }
 
-    // ---- text (platform/text.ts, Text.kt) ----
+    // ---- text (src/text.ts, Text.kt) ----
 
     Function("textWidth") { weight: Double, px: Double, text: String -> textWidth(text, weight, px) }
 
@@ -94,7 +94,7 @@ class PlatformModule : Module() {
       if (out.byteLength >= width * height * 4) textRaster(text, weight, px, rgba.toLong(), x, width, height, out)
     }
 
-    // ---- the compass (platform/sensor.ts) ----
+    // ---- the compass (src/sensor.ts) ----
 
     /** Whether the device has a compass at all, which expo-horizon-location only says
      * by failing a watch — and a failed watch reads as a compass lost, not
@@ -104,7 +104,7 @@ class PlatformModule : Module() {
       sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
     }
 
-    // ---- the safe area (platform/safe-area.ts) ----
+    // ---- the safe area (src/safe-area.ts) ----
 
     /** How much of the screen's bottom inset takes a touch, in
      * density-independent pixels: the navigation buttons' bar, or none with
@@ -116,7 +116,7 @@ class PlatformModule : Module() {
       insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom / view.resources.displayMetrics.density.toDouble()
     }
 
-    // ---- the surface (platform/surface.tsx, KernelSurfaceView.kt) ----
+    // ---- the surface (src/surface.tsx, KernelSurfaceView.kt) ----
     //
     // The first view, the one the module's name alone reaches.
 
@@ -125,7 +125,7 @@ class PlatformModule : Module() {
       Prop("surface") { view: KernelSurfaceView, surface: Int -> view.surface = surface }
     }
 
-    // ---- the keyboard (platform/above-keyboard.tsx, KeyboardDock.kt) ----
+    // ---- the keyboard (ts/client/src/shell/ui/above-keyboard.native.tsx, KeyboardDock.kt) ----
 
     View(KeyboardDock::class) {
       Events("onLift")

@@ -6,6 +6,14 @@ use crate::golden::Golden;
 const GOLDEN: &str = include_str!("../../../../spec/golden/codec/json.tsv");
 
 #[test]
+fn json_reads_a_value_as_deep_as_the_record_and_refuses_one_deeper() {
+    let most = Golden::load(GOLDEN).u64("depth.most") as usize;
+    let nested = |n: usize| format!("{}0{}", "[".repeat(n), "]".repeat(n));
+    assert!(read_json(&nested(most)).is_some());
+    assert!(read_json(&nested(most + 1)).is_none());
+}
+
+#[test]
 fn json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json() {
     let doc = read_json(r#" {"a": [1, -2.5e1, true, null, "x\"y"], "b": {"k": "\uD83D\uDE00 \u00e9\n"}, "a": "last"} "#).unwrap();
     assert_eq!(doc.type_of(), JsonType::Object);

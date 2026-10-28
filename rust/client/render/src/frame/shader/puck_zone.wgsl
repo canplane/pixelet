@@ -17,7 +17,7 @@ struct VertexOut {
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let k = v.i * 8u;
+  let k = v.i * PUCK_ZONE_INSTANCE_FLOATS;
   let center = vec3f(zone[k], zone[k + 1u], zone[k + 2u]);
   // Only the faces open to the air: one the ground buries stays unseen
   // behind it rather than fight it along the edges it meets. A shut face's

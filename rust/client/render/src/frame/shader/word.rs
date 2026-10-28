@@ -8,8 +8,6 @@
 /// A draw's uniform (frame/draw.rs): its translation and what its pipeline
 /// reads past it.
 pub const DRAW_FLOATS: usize = 8;
-/// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs).
-pub const AO_FLOATS: usize = 36;
 
 /// What a uniform's field is to the shader that reads it off the vec4s.
 #[derive(Clone, Copy)]
@@ -198,13 +196,87 @@ uniform! {
 }
 pub const STARS_FLOATS: usize = floats(stars::FIELDS);
 
+uniform! {
+    /// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs): the view's
+    /// projection and its inverse, and the half-resolution target's size.
+    ao {
+        PROJ: Mat4 = 0,
+        INV_PROJ: Mat4 = 16,
+        HALF: Vec2 = 32,
+    }
+}
+pub const AO_FLOATS: usize = floats(ao::FIELDS);
+
+uniform! {
+    /// A marker set's (marker.wgsl, gpu/pass/marker.rs): the view, the
+    /// projection, the set's translation and its pixels a unit, and the
+    /// markers before the set's first.
+    marker {
+        VIEW: Mat4 = 0,
+        PROJ: Mat4 = 16,
+        TRANSLATION: Vec3 = 32,
+        PX_K: F32 = 35,
+        BEFORE: F32 = 36,
+    }
+}
+pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
+
+/// A marker's instance and a puck zone's box's, in floats, as the kernel
+/// lays them (pxl-kernel domain/scene/marker/set.rs, location_puck.rs) and
+/// marker.wgsl and puck_zone.wgsl read them.
+pub const MARKER_INSTANCE_FLOATS: u32 = 11;
+pub const PUCK_ZONE_INSTANCE_FLOATS: u32 = 8;
+
+/// A star's record as the sky reads it (gpu/star.rs, star.wgsl): its
+/// direction and flux, then its colour and a pad.
+pub const STAR_RECORD_FLOATS: usize = 8;
+
+/// The raster's view's words (gpu/ray/raster.rs, raster.wgsl `Raster`),
+/// which build.rs holds the struct to.
+pub const RASTER_FLOATS: usize = 24;
+
+/// The occlusion's passes' resolution, the screen's over this (gpu/ao.rs):
+/// the downsample keeps one depth of each 2×2 and the upsample blends the 2×2
+/// about each pixel (ao_downsample.wgsl, ao_upsample.wgsl), so it is two.
+pub const AO_DOWNSCALE: u32 = 2;
+
+/// N8AO's blue noise a side (gpu/ao.rs), which a pixel reads tiled.
+pub const AO_NOISE_SIDE: u32 = 128;
+
+/// The air's tables' sizes (gpu/atmosphere.rs `SIZES`, atmos_medium.wgsl).
+pub const TRANSMITTANCE_SIZE: (u32, u32) = (256, 64);
+pub const MULTISCATTER_SIZE: (u32, u32) = (32, 32);
+pub const SKY_VIEW_SIZE: (u32, u32) = (192, 108);
+pub const IRRADIANCE_SIZE: (u32, u32) = (64, 16);
+
+/// The decor's draw groups (gpu/pass/decor.rs), each an impostor's fit
+/// (impostor.wgsl `fits`).
+pub const DECOR_GROUPS: usize = 64;
+
+/// A sheet's shapes (gpu/sheet.rs, sheet.wgsl `fs`).
+pub const SHEET_FILL: u32 = 0;
+pub const SHEET_STROKE: u32 = 1;
+pub const SHEET_TRIANGLE: u32 = 2;
+pub const SHEET_TEXT: u32 = 3;
+pub const SHEET_HALO: u32 = 4;
+
+/// A box's steps a cell across (mesh/ghost.rs, box.wgsl); its z is held in
+/// its mesh's own.
+pub const BOX_XY_STEPS: u32 = 256;
+
+/// A box's vertices, two triangles each of its six faces (pxl-spec-core
+/// raster.rs `corner`, box.wgsl).
+pub const BOX_VERTICES: u32 = 36;
+
 /// The uniforms whose fields are stated here.
-pub const UNIFORMS: [(&str, &[Field]); 5] = [
+pub const UNIFORMS: [(&str, &[Field]); 7] = [
     (frame::NAME, frame::FIELDS),
     (sky::NAME, sky::FIELDS),
     (atmos::NAME, atmos::FIELDS),
     (clouds::NAME, clouds::FIELDS),
     (stars::NAME, stars::FIELDS),
+    (ao::NAME, ao::FIELDS),
+    (marker::NAME, marker::FIELDS),
 ];
 
 /// The cloud sheets' tile (gpu/cloud.rs), one fetch a pixel and a mip chain
@@ -237,3 +309,7 @@ pub const NO_SLOT: u32 = (1 << SLOT_BITS) - 1;
 pub const IMAGE_TOP: u32 = 0;
 pub const IMAGE_SIDE: u32 = 1;
 pub const IMAGE_BOTTOM: u32 = 2;
+
+#[cfg(test)]
+#[path = "word.test.rs"]
+mod test;

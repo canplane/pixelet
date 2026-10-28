@@ -36,7 +36,8 @@ pub const SHOWN_FALL: f64 = 0.15;
 /// How dark a night reads: dim, never black, the cities lit by then.
 pub const NIGHT_STOPS: f64 = 1.5;
 
-/// #9fb4d6, linear: light as the night eye reads it, bluer than it is.
+/// #9fb4d6, linear (atmosphere.test.rs holds it to it): light as the night
+/// eye reads it, bluer than it is.
 pub const NIGHT_COLOR: [f64; 3] = [0.3467, 0.4564, 0.6724];
 /// The full Moon against the Sun as the night eye reads it, not the 1/400,000 it is.
 pub const MOON_LIGHT: f64 = 0.007;
@@ -55,3 +56,7 @@ pub fn moon_phase_light(alpha: f64) -> f64 {
     let a = alpha.to_degrees().abs();
     libm::pow(10f64, -0.4 * (0.026 * a + 4e-9 * (a * a) * (a * a)))
 }
+
+#[cfg(test)]
+#[path = "atmosphere.test.rs"]
+mod test;

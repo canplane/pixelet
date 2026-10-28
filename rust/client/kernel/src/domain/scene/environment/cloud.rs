@@ -14,7 +14,7 @@
 use fnv::FnvHashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::gpu::pass::decor::GROUPS;
+use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
@@ -50,7 +50,7 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
 const FIRST_GROUP: usize = pxl_spec_core::scatter::GROUPS as usize;
 const _: () = assert!(
-    FIRST_GROUP + VARIANTS.len() <= GROUPS,
+    FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"
 );
 

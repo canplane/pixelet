@@ -119,10 +119,11 @@ pub mod sun {
     /// `samples_at`).
     pub const SAMPLE: u32 = 4;
 
-    /// How far past the disk a receiver reads the map reaches, in texels: its
-    /// taps a texel and a half out, filtered a texel more, its normal offset a
-    /// texel (pxl-render shadow.wgsl `sun_lit`), and the box's snap under one.
-    pub const READ_PAD: f32 = 4.0;
+    /// The receiver's taps apart in the sun's map, in texels, a 3×3 grid
+    /// (pxl-render shadow.wgsl `sun_lit`): the filtered edge spans about
+    /// four texels, half a unit where a texel is 1/8 u, where taps a texel
+    /// apart cut each cell's shadow out as a hard square.
+    pub const SPREAD: f32 = 1.5;
 }
 
 pub mod tile {

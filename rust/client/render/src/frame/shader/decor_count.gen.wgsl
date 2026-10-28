@@ -310,7 +310,7 @@ fn function_() {
                                             break;
                                         }
                                         let _e231 = global_5.member[_e223];
-                                        let _e238 = ((_e231 >> bitcast<u32>(18i)) & 63u);
+                                        let _e238 = ((_e231 >> bitcast<u32>(18u)) & 63u);
                                         let _e239 = (_e223 + 1u);
                                         if (_e239 < _e62) {
                                         } else {

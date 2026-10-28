@@ -60,6 +60,14 @@ XPUTE_TEST(json_is_what_the_host_s_json_parse_takes) {
     });
 }
 
+XPUTE_TEST(json_reads_a_value_as_deep_as_the_record_and_refuses_one_deeper) {
+    Golden v = Golden::load("spec/golden/codec/json.tsv");
+    std::uint64_t most = v.u64("depth.most");
+    auto nested = [](std::uint64_t n) { return std::string(n, '[') + "0" + std::string(n, ']'); };
+    XPUTE_CHECK(read_json(nested(most)).has_value());
+    XPUTE_CHECK(!read_json(nested(most + 1)).has_value());
+}
+
 XPUTE_TEST(json_a_number_past_the_doubles_reads_as_the_host_reads_it) {
     Golden v = Golden::load("spec/golden/codec/json.tsv");
     v.each("number", [&](const std::string &k) {

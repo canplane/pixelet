@@ -6,7 +6,9 @@
 //! marker's sprite by them before it is painted (pxl-kernel
 //! domain/scene/marker/design.rs).
 
-use crate::gpu::sheet::Halo;
+use pxl_spec::asset::symbol::SYMBOL_PX;
+
+use crate::gpu::sheet::{Halo, SHEET_SCALE};
 use crate::gpu::text::Font;
 
 // Regular and semibold, not canvas's "bold" (700); the system faces carry a real
@@ -62,9 +64,9 @@ pub const POINT_FONT: Font = Font {
     weight: SEMIBOLD,
     px: 12.0,
 };
-/// A symbol's disc across: the symbol (`SYMBOL_PX` at the sheet's scale, 14)
+/// A symbol's disc across: the symbol (`SYMBOL_PX` at the sheet's scale)
 /// with four pixels of fill round it.
-const POINT_DISC: f32 = 22.0;
+const POINT_DISC: f32 = SYMBOL_PX as f32 / SHEET_SCALE as f32 + 2.0 * 4.0;
 const POINT_DOT: f32 = 8.0;
 pub const POINT_RIM: f32 = 1.5;
 pub const POINT_RIM_FILL: u32 = 0xffffffe6;

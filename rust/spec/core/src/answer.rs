@@ -11,8 +11,11 @@
 use crate::cube::{object, sentinel};
 
 /// A cube filled whole, as a share counts it: a share is in 2⁻¹⁵ of its
-/// cube, floored at each fold, so eighths stay exact five folds deep.
-pub const FULL: u32 = 1 << 15;
+/// cube, floored at each fold, so eighths stay exact `FULL_FOLDS` folds deep.
+pub const FULL: u32 = 1 << (KEPT_BITS * FULL_FOLDS);
+
+/// The folds a share's eighths stay exact through.
+const FULL_FOLDS: u32 = 5;
 
 /// What a node is to a descent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,8 +178,8 @@ pub fn fills(value: u32) -> bool {
 /// A cell's kept share over its asset's value and `PLACED_ASSET`: the eighths of
 /// its cube it keeps of what fills it (`kept`), 0 for all eight, so a leaf's
 /// word, and every cell's whole, sets no bit of it.
-pub const KEPT_SHIFT: u32 = 17;
-pub const KEPT_BITS: u32 = 3;
+pub const KEPT_SHIFT: u32 = VALUE_BITS + 1;
+pub const KEPT_BITS: u32 = EIGHTHS.trailing_zeros();
 /// A cube's eighths: its children, what a share is kept in.
 pub const EIGHTHS: u32 = 8;
 

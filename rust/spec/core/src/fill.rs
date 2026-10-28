@@ -166,7 +166,7 @@ impl way::Kept for Scratch<'_> {
 
 /// A column's spans' head word's count (`window::SPANS_COLUMN_WORDS`); the
 /// bit over it, where they did not fit.
-const SPANS_COUNT: u32 = 0x7fff;
+const SPANS_COUNT: u32 = SPANS_PAST - 1;
 const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
@@ -464,6 +464,7 @@ pub fn square(
 /// takes more than `way::tree::SQUARE_FAMILIES`, or its ways span more
 /// than `way::tree::ROOT_NODES` of its nodes along z.
 pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u32) -> [u32; 3] {
+    use crate::overwrite::FAMILY;
     use way::tree::{self as t, Lane};
     let (square, kept) = (
         Fresh {
@@ -479,17 +480,17 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
     if nodes == 0 {
         return [0, 0, 0];
     }
-    let room = pool.len() as u32 / 16;
+    let room = pool.len() as u32 / t::FAMILY_WORDS;
     if nodes > t::ROOT_NODES || room <= from {
         return [u32::MAX; 3];
     }
     let mut p = Lane(pool);
-    t::root(&mut p, z0, 8 * from);
+    t::root(&mut p, z0, FAMILY * from);
     // Each level's candidates, the families the level over it took, from the
     // square's own zoom.
     let top = cell - window::SQUARE_SHIFT;
     let mut levels = [[0u32; 2]; window::SQUARE_SHIFT as usize + 1];
-    let (mut b, mut n, mut taken) = (8 * from, 8, 1);
+    let (mut b, mut n, mut taken) = (FAMILY * from, FAMILY, 1);
     let mut zoom = top;
     while zoom < cell {
         levels[(zoom - top) as usize] = [b, n];
@@ -499,17 +500,17 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
         if room < from + taken || !t::fits(room - from - taken, taken, flagged) {
             return [u32::MAX; 3];
         }
-        let next = 8 * (from + taken);
+        let next = FAMILY * (from + taken);
         let mut k = 0;
         for s in b..b + n {
             if t::flag(&p, &square, 0, cell, zoom, s) {
-                t::branch(&mut p, s, next + 8 * k);
+                t::branch(&mut p, s, next + FAMILY * k);
                 k += 1;
             } else {
                 t::empty(&mut p, s);
             }
         }
-        (b, n, taken, zoom) = (next, 8 * flagged, taken + flagged, zoom + 1);
+        (b, n, taken, zoom) = (next, FAMILY * flagged, taken + flagged, zoom + 1);
     }
     for s in b..b + n {
         t::leaf(&mut p, &kept, cell, s);

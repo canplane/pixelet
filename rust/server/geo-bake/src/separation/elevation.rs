@@ -14,8 +14,9 @@ use pxl_spec::space::coord::zoom::index_of;
 use pxl_spec_core::param::tile::LEAF_ZOOM;
 use pxl_spec_core::ground::bicubic;
 
-/// Heights at points from the tiles' elevations, in cells, as the client's
-/// `ground_ele_at` reads the elevation; a point's tile must be held.
+/// Heights at points from the tiles' elevations, in cells, as the client
+/// reads the elevation (pxl-spec-core ground.rs `bicubic`); a point's tile
+/// must be held.
 pub fn sample_cells(
     eles: &FnvHashMap<[i32; 2], Vec<i16>>,
     points: &[[f64; 2]],

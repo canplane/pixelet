@@ -89,11 +89,24 @@ impl Detail {
 
 /// Whether a node `side` wide, squared, is too narrow for a beam ray to
 /// share where the grid's rays lie `width` apart, squared: under twice the
-/// width that holds one of them for certain, `2√2 · width`; the eye's
+/// width that holds one of them for certain, `NARROW · width`; the eye's
 /// `s · d` at the node's farthest point.
 pub fn narrow(side2: f32, width2: f32) -> bool {
-    side2 < 8.0 * width2
+    side2 < NARROW_SQUARED * width2
 }
+
+/// The spacings a node is narrow under (`narrow`): twice the width that
+/// holds one ray for certain, `2√2`; and its square, exact.
+pub const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
+const NARROW_SQUARED: f32 = 8.0;
+const _: () = assert!(
+    NARROW * NARROW - NARROW_SQUARED < 1e-6 && NARROW_SQUARED - NARROW * NARROW < 1e-6,
+    "`NARROW_SQUARED` is `NARROW`'s square"
+);
+
+/// √6, as an f32 rounds it: a cube `NARROW` spacings wide spans `√3 ·
+/// NARROW`, `2√6` of them, corner to corner.
+pub const SQRT_6: f32 = 2.449_489_8;
 
 /// Which cell a ray stops at: the first it cannot see through
 /// (`answer::transparent`), as an eye sees; or the first it can, as what is
@@ -840,7 +853,7 @@ pub fn walk<Q: Query>(
                     // (`narrow`).
                     let width = detail.spacing.width(libm::sqrtf(reach[0]));
                     let narrow = narrow(side * side, width * width);
-                    let meets = meets_box(2.0 * core::f32::consts::SQRT_2 * width);
+                    let meets = meets_box(NARROW * width);
                     into = meets && !narrow;
                     if meets && narrow {
                         Ends::Stop
@@ -1141,7 +1154,7 @@ mod tests {
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
             spacing: Spacing {
-                angle: 1.0 / 192.0,
+                angle: crate::grid::CELL,
                 across: 0.0,
             },
         };

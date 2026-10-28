@@ -52,6 +52,31 @@ inline constexpr std::uint32_t ABORT = 5u;
 inline constexpr std::uint32_t PROGRAM = 2147483648u;
 } // namespace op
 
+// How many words of arguments each call's record takes, as its `op` lists them; OPENAT's
+// and ABORT's end in bytes after them.
+namespace args {
+
+inline constexpr std::uint32_t OPENAT = 3u;
+
+inline constexpr std::uint32_t READ = 3u;
+
+inline constexpr std::uint32_t WRITE = 3u;
+
+inline constexpr std::uint32_t CLOSE = 1u;
+
+inline constexpr std::uint32_t ABORT = 7u;
+} // namespace args
+
+// Where ABORT's two values lie among its arguments, each low word then high.
+namespace abort {
+
+// a.
+inline constexpr std::uint32_t A = 3u;
+
+// b.
+inline constexpr std::uint32_t B = 5u;
+} // namespace abort
+
 // How OPENAT opens.
 namespace flag {
 

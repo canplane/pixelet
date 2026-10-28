@@ -7,6 +7,9 @@
 pub mod shelf;
 
 use crate::frame::shader::record::PIPELINE_SHEET;
+use crate::frame::shader::word::{
+    SHEET_FILL, SHEET_HALO, SHEET_STROKE, SHEET_TEXT, SHEET_TRIANGLE,
+};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
@@ -20,12 +23,6 @@ use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
 use xpute_kit::math::scalar::round;
 
 const SHAPE_FLOATS: usize = 20;
-
-const FILL: u32 = 0;
-const STROKE: u32 = 1;
-const TRIANGLE: u32 = 2;
-const TEXT: u32 = 3;
-const HALO: u32 = 4;
 
 struct Line {
     font: Font,
@@ -116,7 +113,7 @@ impl Sketch {
     pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
         let rect = [px(x), px(y), px(x + w), px(y + h)];
         self.shapes.push(shape(
-            FILL,
+            SHEET_FILL,
             rect,
             color,
             [r * SHEET_SCALE as f32, 0.0, 0.0, 0.0],
@@ -139,7 +136,7 @@ impl Sketch {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = SHEET_SCALE as f32;
         self.shapes.push(shape(
-            FILL,
+            SHEET_FILL,
             rect,
             color,
             [r * scale, edge * scale, 0.0, 0.0],
@@ -151,7 +148,7 @@ impl Sketch {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = SHEET_SCALE as f32;
         self.shapes.push(shape(
-            STROKE,
+            SHEET_STROKE,
             rect,
             color,
             [r * scale, width * scale, 0.0, 0.0],
@@ -167,8 +164,13 @@ impl Sketch {
             a[0].max(b[0]).max(c[0]),
             a[1].max(b[1]).max(c[1]),
         ];
-        self.shapes
-            .push(shape(TRIANGLE, rect, color, [a[0], a[1], b[0], b[1]], c));
+        self.shapes.push(shape(
+            SHEET_TRIANGLE,
+            rect,
+            color,
+            [a[0], a[1], b[0], b[1]],
+            c,
+        ));
     }
 
     /// Carto's `symbol`, by its place in `SYMBOLS`, centered at (cx, cy).
@@ -297,7 +299,7 @@ impl SheetPainter {
                 // Soft over all of its radius past the halo's.
                 let soft = (h.shadow_radius - h.radius) * scale;
                 shapes.push(shape(
-                    HALO,
+                    SHEET_HALO,
                     dropped,
                     h.shadow,
                     [cover[0], cover[1], cover[2], h.shadow_radius * scale],
@@ -308,7 +310,7 @@ impl SheetPainter {
         for (line, &(place, cover)) in sketch.lines.iter().zip(&placed) {
             if let Some(h) = line.halo {
                 shapes.push(shape(
-                    HALO,
+                    SHEET_HALO,
                     place,
                     h.color,
                     [cover[0], cover[1], cover[2], h.radius * scale],
@@ -317,7 +319,7 @@ impl SheetPainter {
             }
         }
         for &(place, cover) in &placed {
-            shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
+            shapes.push(shape(SHEET_TEXT, place, 0, cover, [0.0; 2]));
         }
         for (k, icon) in sketch.icons.iter().enumerate() {
             let layer = (rasters.len() + k) as u32;
@@ -330,7 +332,7 @@ impl SheetPainter {
                 SYMBOL_PX as f32 / layer_h as f32,
                 0.0,
             ];
-            shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
+            shapes.push(shape(SHEET_TEXT, place, 0, cover, [0.0; 2]));
         }
         // What goes into the stream whole, asked of it at once: the text's and
         // the icons' pixels, the size and the shapes, as their writers measure them.

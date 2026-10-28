@@ -4,9 +4,9 @@
 //! pointer casts in offset crates, each rounding half to even in every
 //! language, no CommonJS file, each generated shader made from the sources the
 //! tree holds now, the layers' order, where nothing names what is above it,
-//! and the screen's pixels read only at the screen. A rule Rust alone keeps
-//! is clippy's (rust/clippy.toml); how the tree is written is the convention
-//! skill's.
+//! the screen's pixels read only at the screen, and each workgroup's size
+//! its constant. A rule Rust alone keeps is clippy's (rust/clippy.toml); how
+//! the tree is written is the convention skill's.
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -174,6 +174,97 @@ fn rays_bound(text: &str) -> Vec<(usize, String)> {
         }
     }
     out
+}
+
+/// A workgroup's size is a constant its shader's code also counts by: the
+/// lanes a scan or a stride steps across, the side a pyramid tiles by.
+/// rust-gpu's `threads` takes only literals, so each entry's is held here to
+/// its constant: the entry's file under `SHADER`, the entry, the constant's
+/// file under rust/ and its name, and how many of the size's sides it gives.
+const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
+    (
+        "raster.rs",
+        "face_cs",
+        "spec/core/src/raster.rs",
+        "FACES_LANES",
+        1,
+    ),
+    (
+        "cast.rs",
+        "cast_cs",
+        "client/shader/src/cast.rs",
+        "CAST_SIDE",
+        2,
+    ),
+    (
+        "way.rs",
+        "way_tree_cs",
+        "client/shader/src/way.rs",
+        "LANES",
+        1,
+    ),
+    (
+        "way.rs",
+        "way_freed_cs",
+        "client/shader/src/way.rs",
+        "LANES",
+        1,
+    ),
+    (
+        "decor.rs",
+        "decor_stand_cs",
+        "client/shader/src/decor.rs",
+        "PATCH_LANES",
+        1,
+    ),
+    (
+        "decor.rs",
+        "decor_count_cs",
+        "client/shader/src/decor.rs",
+        "RECORD_LANES",
+        1,
+    ),
+    (
+        "decor.rs",
+        "decor_place_cs",
+        "client/shader/src/decor.rs",
+        "RECORD_LANES",
+        1,
+    ),
+    (
+        "cast.rs",
+        "miss_list_cs",
+        "spec/core/src/ray.rs",
+        "MISS_LANES",
+        1,
+    ),
+    (
+        "sun.rs",
+        "sun_miss_cs",
+        "spec/core/src/ray.rs",
+        "MISS_LANES",
+        1,
+    ),
+];
+
+/// The workgroup size `text`, a shader's source, gives `entry`.
+fn threads(text: &str, entry: &str) -> Option<[u32; 3]> {
+    let pattern =
+        format!(r#"threads\((\d+),\s*(\d+),\s*(\d+)\),\s*entry_point_name\s*=\s*"{entry}""#);
+    let c = Regex::new(&pattern)
+        .expect("a workgroup's pattern")
+        .captures(text)?;
+    Some([1, 2, 3].map(|k| c[k].parse().unwrap_or(0)))
+}
+
+/// The value of `name`, a `u32` constant `text` writes as a literal.
+fn constant(text: &str, name: &str) -> Option<u32> {
+    let pattern = format!(r"const {name}: u32 = (\d+);");
+    Regex::new(&pattern)
+        .expect("a constant's pattern")
+        .captures(text)?[1]
+        .parse()
+        .ok()
 }
 
 /// xpute's words are host, guest and their contract (AGENTS.md): pixelet's
@@ -406,6 +497,18 @@ fn run() -> Result<Vec<String>, String> {
             ));
         }
     }
+    for (file, entry, at, name, sides) in WORKGROUPS {
+        let size = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
+        let value = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
+        let held = size
+            .zip(value)
+            .is_some_and(|(s, v)| s[..sides].iter().all(|&d| d == v));
+        if !held {
+            problems.push(format!(
+                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {value:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
+            ));
+        }
+    }
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
@@ -430,7 +533,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order and the screen's pixels hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels and the workgroups' sizes hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -484,5 +587,14 @@ mod tests {
         // A helper after an entry, or its body, is not the entry's binding.
         let after = entry("cell_cs", "id: UVec3,") + "fn written(rays: &Rays) {}\n";
         assert!(rays_bound(&after).is_empty());
+    }
+
+    #[test]
+    fn a_workgroup_is_read_against_its_constant() {
+        let text = "const LANES: u32 = 64;\n#[spirv(compute(threads(64, 1, 1), entry_point_name = \"way_cs\"))]\n";
+        assert_eq!(threads(text, "way_cs"), Some([64, 1, 1]));
+        assert_eq!(threads(text, "way_free_cs"), None);
+        assert_eq!(constant(text, "LANES"), Some(64));
+        assert_eq!(constant(text, "SIDE"), None);
     }
 }

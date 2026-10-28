@@ -9,12 +9,13 @@ use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
+use crate::frame::shader::word::DECOR_GROUPS;
 use crate::gpu::api::{
     buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
     view_entry, Format, Gpu, Load,
 };
 use crate::gpu::grown::Drawn;
-use crate::gpu::pass::decor::{DecorPass, GROUPS};
+use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
@@ -22,7 +23,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
-/// (pxl-spec-core `grid::CELLS_A_RADIAN`), 48 drawn pixels on a view 2160
+/// (pxl-spec-core `grid::CELLS_A_RADIAN`), 45 drawn pixels on a view 2160
 /// CSS pixels high at ratio 2, so this is several times any one's drawn
 /// size.
 const SPRITE: u32 = 128;
@@ -43,9 +44,9 @@ pub struct ImpostorPass {
     fits: u32,
     group: u32,
     /// Center across, center up, half side, half depth.
-    fit: [[f32; 4]; GROUPS],
-    baked: [Option<Baked>; GROUPS],
-    wanted: [Option<Baked>; GROUPS],
+    fit: [[f32; 4]; DECOR_GROUPS],
+    baked: [Option<Baked>; DECOR_GROUPS],
+    wanted: [Option<Baked>; DECOR_GROUPS],
 }
 
 /// A little room around it so a filtered edge reads nothing past it.
@@ -70,12 +71,12 @@ impl ImpostorPass {
         let atlas = g.texture(
             SPRITE,
             SPRITE,
-            GROUPS as u32,
+            DECOR_GROUPS as u32,
             Format::rgba8unorm_srgb,
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
         );
-        let atlas_view = g.view(atlas, true, 0, 1, 0, GROUPS as u32);
+        let atlas_view = g.view(atlas, true, 0, 1, 0, DECOR_GROUPS as u32);
         let depth = g.texture(
             SPRITE,
             SPRITE,
@@ -86,7 +87,7 @@ impl ImpostorPass {
         );
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
         let fits = g.buffer(
-            (GROUPS * 16) as u32,
+            DECOR_GROUPS as u32 * FIT_BYTES,
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let group = g.bind_group(
@@ -94,7 +95,7 @@ impl ImpostorPass {
             &[
                 view_entry(0, atlas_view),
                 sampler_entry(1, sampler),
-                buffer_range_entry(2, fits, 0, (GROUPS * 16) as u32),
+                buffer_range_entry(2, fits, 0, DECOR_GROUPS as u32 * FIT_BYTES),
             ],
         );
         ImpostorPass {
@@ -106,14 +107,14 @@ impl ImpostorPass {
             depth_view,
             fits,
             group,
-            fit: [[0.0; 4]; GROUPS],
-            baked: [None; GROUPS],
-            wanted: [None; GROUPS],
+            fit: [[0.0; 4]; DECOR_GROUPS],
+            baked: [None; DECOR_GROUPS],
+            wanted: [None; DECOR_GROUPS],
         }
     }
 
     pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {
-        for (group, want) in groups.take(GROUPS).enumerate() {
+        for (group, want) in groups.take(DECOR_GROUPS).enumerate() {
             self.wanted[group] = Some(want);
         }
     }
@@ -123,8 +124,8 @@ impl ImpostorPass {
         // The groups whose model or extent moved since baked, each once, and
         // whose model has landed: one still landing is due on a later frame,
         // and this one bakes, writes and submits nothing for it.
-        let (mut due, mut len) = ([(0, Baked::default(), (0, 0, 0, 0)); GROUPS], 0);
-        for k in 0..GROUPS {
+        let (mut due, mut len) = ([(0, Baked::default(), (0, 0, 0, 0)); DECOR_GROUPS], 0);
+        for k in 0..DECOR_GROUPS {
             if let Some(w) =
                 self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w))
             {
@@ -247,7 +248,7 @@ impl ImpostorPass {
         }
         g.set_bind_group(pass, 2, self.group, &[]);
         g.set_bind_group(pass, 3, d.instances_group, &[]);
-        for group in 0..groups.min(GROUPS as u32) {
+        for group in 0..groups.min(DECOR_GROUPS as u32) {
             if self.baked[group as usize].is_none() {
                 continue;
             }

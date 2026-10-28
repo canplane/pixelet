@@ -77,6 +77,18 @@ fn wake() {
     }
 }
 
+/// What the exports below answer besides 0, done: the C ABI's numbers, which
+/// an embedder's header states as they are here.
+///
+/// `xpute_gpu_open`: the system has no device.
+pub const NO_DEVICE: i32 = -1;
+/// `xpute_gpu_surface_bind`: no device is open.
+pub const NOT_OPEN: i32 = -2;
+/// `xpute_gpu_surface_bind`: the system would not make a surface of the window.
+pub const NO_SURFACE: i32 = -3;
+/// `xpute_gpu_surface_bind`: a newer handle has bound the slot since.
+pub const SLOT_TAKEN: i32 = -4;
+
 /// Opens the device as `ask` says (`open`), once, on `guest`'s thread:
 /// whether it is open.
 pub fn open(guest: Guest, ask: &Ask, plan: Plan) -> bool {
@@ -102,8 +114,9 @@ pub fn open(guest: Guest, ask: &Ask, plan: Plan) -> bool {
 
 /// Binds the guest's surface `handle` to `window`, which `target` makes a
 /// surface's target of on the guest's thread, where every surface is made:
-/// 0 when bound, -2 when no device is open, -3 when the system would not make
-/// a surface of it, -4 when a newer handle has bound its slot since. The
+/// 0 when bound, `NOT_OPEN` when no device is open, `NO_SURFACE` when the
+/// system would not make a surface of it, `SLOT_TAKEN` when a newer handle has
+/// bound its slot since. The
 /// target is made there, not handed there, since it is raw pointers and no
 /// thread's but the one that uses it.
 ///
@@ -118,16 +131,16 @@ pub unsafe fn bind(
 ) -> i32 {
     let at = window.as_ptr().expose_provenance();
     guest.run(move || {
-        let Some(d) = device() else { return -2 };
+        let Some(d) = device() else { return NOT_OPEN };
         let Some(window) = NonNull::new(core::ptr::with_exposed_provenance_mut(at)) else {
-            return -3;
+            return NO_SURFACE;
         };
         // SAFETY: the caller's window, kept until the surface is unbound.
         let Ok(surface) = (unsafe { d.instance.create_surface_unsafe(target(window)) }) else {
-            return -3;
+            return NO_SURFACE;
         };
         if !d.host.bind(handle, surface) {
-            return -4;
+            return SLOT_TAKEN;
         }
         0
     })
@@ -147,12 +160,12 @@ pub fn unbind(guest: Guest, handle: u32) {
 /// `native_abi!`, under xpute's names:
 ///
 /// - `xpute_gpu_open(void) -> int32_t`: opens the device, 0 when it is open,
-///   -1 when the system has none.
+///   `NO_DEVICE` when the system has none.
 /// - `xpute_gpu_wake_on(void (*f)(void))`: `f` asks the platform's loop for a
 ///   turn, from whichever thread learned of a completion.
 /// - `xpute_gpu_surface_bind(uint32_t handle, void *window) -> int32_t`:
-///   binds the guest's surface `handle` to `window` (`bind`), -3 for a null
-///   one.
+///   binds the guest's surface `handle` to `window` (`bind`), `NO_SURFACE`
+///   for a null one.
 /// - `xpute_gpu_surface_unbind(uint32_t handle)`: lets it go (`unbind`).
 ///
 /// `guest` is the guest's (`native_abi!`'s `guest`), `ask` and `plan` the
@@ -171,7 +184,7 @@ macro_rules! native_abi {
                 if $crate::host::native::open(($guest)(), &$ask, $plan) {
                     0
                 } else {
-                    -1
+                    $crate::host::native::NO_DEVICE
                 }
             }
 
@@ -179,7 +192,7 @@ macro_rules! native_abi {
             /// As `xpute_gpu_surface_bind`'s.
             pub unsafe fn bind(handle: u32, window: *mut ::core::ffi::c_void) -> i32 {
                 let Some(window) = ::core::ptr::NonNull::new(window) else {
-                    return -3;
+                    return $crate::host::native::NO_SURFACE;
                 };
                 // SAFETY: the caller's window, kept until it is unbound.
                 unsafe { $crate::host::native::bind(($guest)(), handle, window, $target) }

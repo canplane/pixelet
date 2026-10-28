@@ -18,10 +18,10 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let uv = i.clip.xy / frame_viewport();
   let pos = view_pos(depth, uv);
   let half_max = vec2i(ao_half()) - 1;
-  let own = clamp(fp / 2, vec2i(0), half_max);
+  let own = clamp(fp / i32(AO_DOWNSCALE), vec2i(0), half_max);
   let normal = textureLoad(blurred, own, 0).gba * 2.0 - 1.0;
   // The four half texels whose centers surround this pixel's.
-  let base = (fp - 1) / 2;
+  let base = (fp - 1) / i32(AO_DOWNSCALE);
   var total = 0.0;
   var acc = vec4f(0.0);
   for (var y = 0; y <= 1; y++) {

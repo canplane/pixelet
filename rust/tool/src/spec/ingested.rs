@@ -127,7 +127,7 @@ fn render_ts(rows: &[File], pack: &Pack) -> String {
 // SHA-256 of its bytes, which where it lies does not change), its size, and for a
 // model its extent in ENU world units, measured from the glb. A catalog names an
 // asset by its path and reads its key here; the bytes themselves are in the bucket.
-// Its order numbers each file below the asset root, from 1 (host/io/asset.ts).
+// Its order numbers each file below the asset root, from 1 (ts/client/src/namespace/asset.ts).
 
 export interface IngestedFile {
   key: string;

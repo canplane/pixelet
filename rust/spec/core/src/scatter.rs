@@ -356,16 +356,22 @@ const _: () = assert!(crate::window::FIRST_CELL > PLACED_AT);
 /// where the rays ask it (`drawn_at`), `PLACED_AT` for placed decor; past
 /// them, once sized, its region (`drawn::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
-    decor | variant << 8 | turn << 16 | cell << 18
+    decor | variant << 8 | turn << TURN_SHIFT | cell << CELL_SHIFT
 }
+
+/// A record's turn's place and width in its first word, and its zoom's
+/// place past it (`record_word`).
+const TURN_SHIFT: u32 = 16;
+const TURN_BITS: u32 = 2;
+const CELL_SHIFT: u32 = TURN_SHIFT + TURN_BITS;
 
 /// A record's decor, variant, turn and zoom (`record_word`).
 pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
     (
         w & 0xff,
         (w >> 8) & 0xff,
-        (w >> 16) & 3,
-        (w >> 18) & ((1 << crate::ZOOM_BITS) - 1),
+        (w >> TURN_SHIFT) & ((1 << TURN_BITS) - 1),
+        (w >> CELL_SHIFT) & ((1 << crate::ZOOM_BITS) - 1),
     )
 }
 
@@ -394,7 +400,7 @@ pub fn first_group(rows: &[Decor], decor: u32) -> u32 {
 /// model or a sprite, into its group's region, models at `2·group` and
 /// sprites past it; the regions laid end to end in the decor's instances, in the
 /// layout the decor and impostor shaders read (lanes x, y, z, spin, scale,
-/// `DRAWN_LANES` a slot, then the index list), each region's draw a set of
+/// `drawn::LANES` a slot, then the index list), each region's draw a set of
 /// indirect args.
 pub mod drawn {
     use super::GROUPS;
@@ -404,18 +410,21 @@ pub mod drawn {
     pub const NONE: u32 = 0xff;
     /// What a record's first word holds past its decor, variant and turn:
     /// its region, once sized.
-    pub const REGION_SHIFT: u32 = 24;
+    pub const REGION_SHIFT: u32 = super::CELL_SHIFT + crate::ZOOM_BITS;
     pub const LANES: u32 = 5;
     /// Each region's indirect args, `ARGS_WORDS` a region: a model's
     /// indexed, a sprite's a strip of four corners an instance; its first
     /// instance 0, which a device without `indirect-first-instance` holds
     /// every indirect draw to.
     pub const ARGS_WORDS: u32 = 5;
-    /// Each region's draw uniform, `UNIFORM_WORDS` apart (every device's
-    /// dynamic offset alignment), its index list's first slot at
-    /// `UNIFORM_INDEX` within it: the lanes' base, to which the args pass
-    /// adds the region's first slot once the regions are laid out.
-    pub const UNIFORM_WORDS: u32 = 64;
+    /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFFSET_BYTES`, every
+    /// device's dynamic offset alignment), its index list's first slot at
+    /// `UNIFORM_INDEX` within it: the lanes' base, to which the args pass adds
+    /// the region's first slot once the regions are laid out.
+    pub const UNIFORM_WORDS: u32 = OFFSET_BYTES / 4;
+    /// The dynamic offset alignment every WebGPU device meets: its
+    /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
+    const OFFSET_BYTES: u32 = 256;
     pub const UNIFORM_INDEX: u32 = 7;
     /// The drawing words, what a frame's decor is drawn by: the model's and
     /// the sprite's floors, each an angle about the eye in radians, the
@@ -679,7 +688,7 @@ fn asks<Q: Grounds>(
     let mut draws = SplitMix32::new(seed);
     g.variant = variant_of(decor, &mut draws);
     match decor.orientation {
-        Orientation::random => g.turn = draws.next_u32() >> 30,
+        Orientation::random => g.turn = draws.next_u32() >> (u32::BITS - TURN_BITS),
         Orientation::along_transport => {
             flip = draws.next_u32() >> 31;
             voting = 4 * ALIGN_NEIGHBOR_RADIUS;
@@ -791,7 +800,7 @@ const PLACED_TAG: u32 = 0x91ac_ed5e;
 pub fn placed_pose(decor: &Decor, corner: [i32; 3]) -> (u32, u32) {
     let mut draws = SplitMix32::new(node_seed(PLACED_TAG, (UNIT_ZOOM, corner)));
     let variant = variant_of(decor, &mut draws);
-    (variant, draws.next_u32() >> 30)
+    (variant, draws.next_u32() >> (u32::BITS - TURN_BITS))
 }
 
 /// The row of `rows` a stored value names; false for one not decor.
