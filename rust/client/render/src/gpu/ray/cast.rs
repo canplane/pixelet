@@ -20,7 +20,7 @@ use crate::frame::shader::record::{
 };
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
-    Stamp, DONE,
+    Stamp,
 };
 use crate::gpu::grown::{cut_boxes, hold, Drawn, Grown, Grows};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -86,10 +86,8 @@ pub(super) struct CastBuffers {
     /// The eye's windows folded over their squares (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
     /// (`window::JOINED_AT`), written where the windows' slots moved
-    /// (`refold`); then copied into `joined_read` and mapped back
-    /// (`read_back`), once a mapping is free, while `joined_back`; the
-    /// mapping's own word where the guest's allocator puts it, as a
-    /// square's is.
+    /// (`refold`). The CPU folds its own over the squares it holds
+    /// (pxl-kernel domain/layer/terrain/window.rs `fold`).
     joined_built: Built,
     /// The world's depth from the sun, a texel of the sun's map each
     /// (`sun_cs`), cast with the eye's rays where the shadows are on.
@@ -145,10 +143,7 @@ pub(super) struct CastBuffers {
     /// Whether the next cast marks where the eye's rays met the world
     /// (`sun_mark_cs`): held until one does.
     sun_world: bool,
-    pub(super) joined_read: u32,
-    pub(super) joined_mapping: Box<u32>,
     refold: bool,
-    pub(super) joined_back: bool,
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
@@ -334,13 +329,7 @@ impl RaysPass {
             ),
             sun_cast: false,
             sun_world: false,
-            joined_read: buffer(
-                word_bytes(window::EYE_JOINED_WORDS as usize),
-                buffer_usage::MAP_READ | buffer_usage::COPY_DST,
-            ),
-            joined_mapping: Box::new(DONE),
             refold: false,
-            joined_back: false,
             group: 0,
             bound: [0; 11],
             eye: buffer(
@@ -826,8 +815,7 @@ impl RaysPass {
     }
 
     /// The eye's windows folded over their squares where their slots moved
-    /// (`joined_cs`): ahead of the frame, as the fold outlives it, and then
-    /// mapped back (`read_back`).
+    /// (`joined_cs`): ahead of the frame, as the fold outlives it.
     pub fn fold(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
         let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else {
             return false;
@@ -847,7 +835,7 @@ impl RaysPass {
             );
         }
         g.end(pass);
-        (c.refold, c.joined_back) = (false, true);
+        c.refold = false;
         true
     }
 

@@ -582,26 +582,8 @@ impl RaysPass {
     /// `snatchable_lock` across the fence wait, `Surface::present` writes
     /// it), so none waits.
     pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundSquares) {
-        let (landed, joined) = (&mut *ground.landed, ground.joined);
+        let landed = &mut *ground.landed;
         let most = [way::tree::POOL_FAMILIES, way::tree::SQUARE_FAMILIES];
-        // The fold, once its mapping is free: a frame-old copy reads safely,
-        // as an entry answers only for the cell whose key it holds.
-        if let Some(c) = self
-            .cast
-            .as_mut()
-            .filter(|c| c.joined_back && *c.joined_mapping & DONE != 0)
-        {
-            let (e, size) = (g.encoder(), word_bytes(window::EYE_JOINED_WORDS as usize));
-            g.copy_buffer(
-                e,
-                (c.window, word_bytes((4 * window::JOINED_AT) as usize)),
-                (c.joined_read, 0),
-                size,
-            );
-            g.submit(e);
-            g.map_read(c.joined_read, 0, size, joined, &mut c.joined_mapping, 1);
-            c.joined_back = false;
-        }
         let Some(c) = self.ground.as_mut() else {
             return;
         };

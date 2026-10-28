@@ -90,19 +90,38 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     };
     PLANES.set(Planes {
         cells: of(&b.cells, CELLS_WORDS),
-        joined: vec![0; window::EYE_JOINED_WORDS as usize].leak(),
     });
     mirrored(&b.records);
     WINDOWS_STATE.set(fresh());
     windows().slots.copy_from_slice(&b.slots);
     windows().berths.copy_from_slice(&b.berths);
+    fold(windows());
+}
+
+/// The square at `cell` holding cell `g` absent, a fill on its way to it,
+/// and the windows folded without it, as a turn's step leaves them before
+/// it lands: its berth and that fill's ticket, which `landed` takes.
+pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
+    let w = windows();
+    let b = berth_of(w, cell, window::square_of(g).0).expect("held");
+    (w.berths[b as usize].present, w.berths[b as usize].ticket) = (false, 7);
+    for i in of_slot(b % SLOTS) {
+        show(w, i);
+    }
+    fold(w);
+    (b, 7)
+}
+
+/// The device gone, as a turn's step finds it: every square's cells given
+/// up (`berth`).
+pub(crate) fn lose() {
+    berth(windows(), true);
 }
 
 /// `hold`'s windows, built: the families their trees took, as records.
 fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
-        joined: vec![0; window::EYE_JOINED_WORDS as usize].leak(),
     });
     // The trees built into a pool in one lane, as the GPU's.
     let mut pool = vec![0; POOL_WORDS];
@@ -264,8 +283,13 @@ fn lay(w: &mut Windows, eye: [f64; 2], focus: [f64; 2]) {
     berth(w, false);
 }
 
-/// Every square held present, as if each had landed.
+/// Every square held present, as if each had landed, its cells as they
+/// came back, all zero unless a test held its own (`hold`): the windows
+/// fold over them wherever they are laid again (`berth`).
 fn land_all(w: &mut Windows) {
+    PLANES.get(|| Planes {
+        cells: vec![0; CELLS_WORDS].leak(),
+    });
     for b in w.berths.iter_mut().filter(|b| !b.is_free()) {
         b.present = true;
     }
@@ -401,6 +425,10 @@ fn windows_apart_hold_their_squares_in_their_own_berths() {
 #[test]
 fn a_landing_shows_in_every_window_wanting_the_square() {
     let _g = crate::sys::serial();
+    // The landing folds the windows over the squares' cells.
+    PLANES.set(Planes {
+        cells: vec![0; CELLS_WORDS].leak(),
+    });
     WINDOWS_STATE.set(fresh());
     let w = windows();
     let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);

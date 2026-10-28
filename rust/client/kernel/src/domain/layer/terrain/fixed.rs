@@ -12,9 +12,7 @@
 
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
-use pxl_spec_core::window::{
-    BACK_WORDS, EYE_JOINED_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS,
-};
+use pxl_spec_core::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
 
 use crate::domain::layer::residency::Residency;
 use crate::sys::mem::fixed::lane_bytes;
@@ -74,11 +72,6 @@ pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_LANES.len());
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_LANE_BYTES: u32 = lane_bytes(CELLS_BYTES as usize, 1);
 
-/// The eye's windows' levels over their squares (pxl-spec-core
-/// `window::fold`), read back as the GPU folded them (pxl-render
-/// `GroundSquares::joined`).
-pub const JOINED_BYTES: u32 = lane_bytes(EYE_JOINED_WORDS as usize, 4);
-
 /// The room a fill works in (window.rs `fill`), a lane each in order: a
 /// tile's looks four a cell as handed, a square's cut from them, its lines,
 /// and the pairs `square_lines` lays them with.
@@ -90,7 +83,7 @@ pub const FILL_LANE_BYTES: [u32; 4] = [
 ];
 
 /// Where the fill's room starts, on a cache line.
-const FILL_AT: u32 = lane_bytes((joined_off() + JOINED_BYTES) as usize, 1);
+const FILL_AT: u32 = lane_bytes(cells_off(SQUARES) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
 
@@ -104,10 +97,6 @@ pub const fn separation_lane(record: u32, k: usize) -> (u32, u32) {
 /// `Berth`), `SQUARES` of them.
 pub const fn cells_off(berth: u32) -> u32 {
     SEPARATION_BYTES + berth * CELLS_LANE_BYTES
-}
-
-pub const fn joined_off() -> u32 {
-    cells_off(SQUARES)
 }
 
 pub const fn fill_off(lane: usize) -> u32 {
