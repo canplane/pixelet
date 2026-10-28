@@ -269,7 +269,9 @@ const LIT_FRAME: [[u32; 2]; 15] = {
         AIR[10],
     ]
 };
-/// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
+/// The air's entries whole, the volume among them, which the sheets read as
+/// every painter does (atmos_air.wgsl `seen_from_eye`); the tables and the
+/// Earth's maps it does not read are laid out because the shader declares them.
 const CLOUD_GROUP: [[u32; 2]; 15] = and(
     [[0, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]],
     AIR,

@@ -42,26 +42,15 @@ fn sheet_of(i: u32) -> Sheet {
   return CIRRUS;
 }
 
-struct Layer {
-  // Linear light times opacity, before the air to it.
-  color: vec3f,
-  opacity: f32,
-};
-
-// Lit where the ray meets it as the cumulus' faces are, the face turned to the
-// eye, so the layers are one white; `t` km along `dir`.
-fn sheet(s: Sheet, world: vec3f, dir: vec3f, t: f32, footprint: f32, reach: f32) -> Layer {
-  var out: Layer;
+// How much of the sheet stands where the ray meets it, `t` km out.
+fn sheet_opacity(s: Sheet, world: vec3f, t: f32, footprint: f32, reach: f32) -> f32 {
   if (t > reach) {
-    return out;
+    return 0.0;
   }
   let p = cloud_lattice(world);
   // Read a whole number of units off, so each layer has its own clouds.
   let field = cloud_opacity_finer(p + vec2f(f32(s.salt % CLOUD_TILE_UNITS)), footprint * s.softer, s.finer);
-  out.opacity = s.opacity * field * weather(p, s.salt) * reach_fade(t, reach);
-  let up = up_at(world);
-  out.color = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, light_of(world)) * out.opacity;
-  return out;
+  return s.opacity * field * weather(p, s.salt) * reach_fade(t, reach);
 }
 
 struct CloudOut {
@@ -96,14 +85,16 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let t = length(to) * atmos_km_per_u();
   // The lattice's footprint, before any branch takes a derivative.
   let footprint = max(length(fwidth(cloud_lattice(v.world))), 1e-6);
-  let reach = clouds_reach();
-  var layer = sheet(sheet_of(v.sheet), v.world, dir, t, footprint, reach);
-  // The air to it along the ray.
-  let air = air_segments(dir, vec3f(min(t, reach)));
-  layer.color = layer.color * air[0].through + air[0].scattered * exposure() * layer.opacity;
-  let alpha = layer.opacity * clouds_shown();
+  let alpha = sheet_opacity(sheet_of(v.sheet), v.world, t, footprint, clouds_reach()) * clouds_shown();
+  // Where none of it stands, nothing more is read.
   if (alpha <= DISPLAY_FLOOR) {
     discard;
   }
-  return vec4f(finish(layer.color / layer.opacity, v.clip.xy), alpha);
+  // The air before it and the lights on it, as every painter reads them
+  // (atmos_air.wgsl `seen_from_eye`); lit as the cumulus' faces are, the
+  // face turned to the eye, so the layers are one white.
+  let seen = seen_from_eye(v.world);
+  let up = up_at(v.world);
+  let lit = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, seen.light);
+  return vec4f(finish(lit * seen.through + seen.scattered, v.clip.xy), alpha);
 }
