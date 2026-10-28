@@ -321,6 +321,8 @@ impl SheetPainter {
         for &(place, cover) in &placed {
             shapes.push(shape(SHEET_TEXT, place, 0, cover, [0.0; 2]));
         }
+        // A mask is laid texel for texel: rasterized at `SYMBOL_RATIO`, which
+        // pxl-spec asset.rs holds to `RATIO_MAX`, the sheet's scale.
         for (k, icon) in sketch.icons.iter().enumerate() {
             let layer = (rasters.len() + k) as u32;
             let half = SYMBOL_PX as f32 / 2.0;
