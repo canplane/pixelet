@@ -126,6 +126,8 @@ export interface FrameSummary {
   n: u32;
   seconds: f64;
   moving: f64;
+  /** The moving frames' intervals summed. */
+  moving_ms: f64;
   missed: f64;
   overran: f64;
   /** Intervals whose turns ran past them. */
@@ -217,6 +219,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     n: s[a + F.n],
     seconds: s[a + F.seconds],
     moving: s[a + F.moving],
+    moving_ms: s[a + F.moving_ms],
     missed: s[a + F.missed],
     overran: s[a + F.overran],
     long: s[a + F.long],

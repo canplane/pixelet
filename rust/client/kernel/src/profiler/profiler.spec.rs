@@ -208,30 +208,31 @@ pub mod SUMMARY {
         pub const n: u32 = 1;
         pub const seconds: u32 = 2;
         pub const moving: u32 = 3;
-        pub const missed: u32 = 4;
-        pub const overran: u32 = 5;
-        pub const long: u32 = 6;
-        pub const turns: u32 = 7;
-        pub const gpu_read: u32 = 8;
-        pub const interval: u32 = 9;
-        pub const busy: u32 = 12;
-        pub const tick: u32 = 15;
-        pub const gpu: u32 = 18;
-        pub const phases_p95: u32 = 21;
-        pub const gpu_spans_p95: u32 = 26;
-        pub const kinds: u32 = 49;
-        pub const wakes: u32 = 57;
-        pub const heap_used_delta_bytes: u32 = 60;
-        pub const last: u32 = 61;
-        pub const WORDS: u32 = 208;
+        pub const moving_ms: u32 = 4;
+        pub const missed: u32 = 5;
+        pub const overran: u32 = 6;
+        pub const long: u32 = 7;
+        pub const turns: u32 = 8;
+        pub const gpu_read: u32 = 9;
+        pub const interval: u32 = 10;
+        pub const busy: u32 = 13;
+        pub const tick: u32 = 16;
+        pub const gpu: u32 = 19;
+        pub const phases_p95: u32 = 22;
+        pub const gpu_spans_p95: u32 = 27;
+        pub const kinds: u32 = 50;
+        pub const wakes: u32 = 58;
+        pub const heap_used_delta_bytes: u32 = 61;
+        pub const last: u32 = 62;
+        pub const WORDS: u32 = 209;
     }
     pub mod tasks {
-        pub const AT: u32 = 211;
+        pub const AT: u32 = 212;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 331;
+        pub const AT: u32 = 332;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -240,7 +241,7 @@ pub mod SUMMARY {
     /// The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_distance`).
     /// The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: u32 = 492;
+        pub const AT: u32 = 493;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -266,7 +267,7 @@ pub mod SUMMARY {
         pub const blocked: u32 = 22;
         pub const WORDS: u32 = 23;
     }
-    pub const WORDS: u32 = 515;
+    pub const WORDS: u32 = 516;
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.

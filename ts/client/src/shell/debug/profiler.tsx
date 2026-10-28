@@ -16,7 +16,7 @@ import { gauge, ProfilerGauge, ProfilerRec } from "./profiler/gauge.tsx";
 import { Fold, HINT_INK } from "./fold.tsx";
 import { n1 } from "./profiler/lane.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
-import { fps, profilerReportRead } from "./profiler/view.ts";
+import { movingFps, profilerReportRead } from "./profiler/view.ts";
 import { LIVE_WINDOW_MS, useProfilerGauge } from "./profiler/poll.ts";
 import {
   installLongFrameObservers,
@@ -206,8 +206,15 @@ export function ProfilerPanel() {
   if (!show) return null;
   const recording = g?.rec.recording === true;
   const f = g?.frames ?? null;
-  const rate = f === null ? null : fps(f);
-  const title = rate === null ? "Profiler" : `Profiler · ${n1(rate)} fps`;
+  // The rate frames are drawn at over the last second, idle where recording
+  // saw none move in it.
+  const r = g?.recent ?? null;
+  const rate = r === null ? null : movingFps(r);
+  const title = rate !== null
+    ? `Profiler · ${n1(rate)} fps`
+    : recording
+    ? "Profiler · idle"
+    : "Profiler";
 
   return (
     <Fold
