@@ -22,9 +22,7 @@ it. How cargo runs is the cargo skill's ([cargo](../cargo/SKILL.md)).
   imports comes with it. Another member's check (`app/web`, `app/native`,
   `server/edge`) only when that member's own files changed.
 - **The kernel or the client, seen working:** the dev server already rebuilds
-  the guest and the page on a change; one look in the browser. Its speed is the
-  published module's, in `make preview`: the dev server's guest is built to be
-  rebuilt fast (rust/Cargo.toml `watch`), not to run as fast.
+  the guest and the page on a change; one look in the browser.
 - **Logic a test covers:** that test file alone (`cargo test -p <crate>
   <module>`, `deno test -A <file>.test.ts`), once the change is ready to run,
   not after every edit.
