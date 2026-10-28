@@ -19,7 +19,7 @@ use crate::domain::query::{over, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use pxl_spec::space::coord::zoom::{index_of, units};
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The target is part of the pose: the eye is `target + offset`, and a gate
 /// that read only the offset could be walked through by panning.

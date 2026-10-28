@@ -103,9 +103,9 @@ comparing with one; nothing in the pyramid counts in it.
 
 ## The pyramid
 
-A terrain tile is fetched at every zoom from the leaves (pxl-spec-core
-`param.rs` `tile::LEAF_ZOOM`) to the coarsest its layer is read at
-(`layer/lattice.rs` `coarsest`), each a tile of the same record.
+A terrain tile is fetched at every zoom from the leaves (`layer/tile.rs`
+`LEAF_ZOOM`) to the coarsest its layer is read at (`layer/lattice.rs`
+`coarsest`), each a tile of the same record.
 
 ```
 z15            z14

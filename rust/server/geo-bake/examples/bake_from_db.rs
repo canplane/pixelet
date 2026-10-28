@@ -14,8 +14,7 @@ use pxl_geo_bake::separation::{self, source::Disk};
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_spec::bake::tile::terrain;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

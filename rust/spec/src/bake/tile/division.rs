@@ -2,7 +2,7 @@
 
 //! The divisions layer's tile: per cell of the ground's lattice the finest
 //! division it is in, and every division a cell names with each of its
-//! ancestors, so a tile names its cells alone. Made at `param::division::LEAF`;
+//! ancestors, so a tile names its cells alone. Made at `DIVISION_LEAF`;
 //! each coarser tile is the majority of the four under it, and a child is kept
 //! only where it says more than its parent, which a reader that holds the
 //! parent then reads instead.
@@ -22,6 +22,10 @@ use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec_core::ground::majority;
+
+/// The finest tile Overture makes of its divisions (overture-tiles
+/// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.
+pub const DIVISION_LEAF: Zoom = 12;
 
 /// The most a packet takes, a tile past it failing its bake (`encode`): the
 /// set baked 2026-10-17 holds at most 3.28 MiB, z5's, its names' strings

@@ -7,7 +7,7 @@ use pxl_spec::space::coord::world;
 
 use crate::domain::query::World;
 use crate::domain::view::observation::eye;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// From the point's own height, so a cave's floor counts in a cave; the
 /// datum where nothing is held.

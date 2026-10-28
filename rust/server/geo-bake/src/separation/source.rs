@@ -4,8 +4,7 @@
 
 use fnv::FnvHashMap;
 use postgres::Client;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::path::Path;
 
 use postgres::types::ToSql;

@@ -17,8 +17,7 @@ use std::sync::Arc;
 
 use postgres::Client;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::elevation::Raster;

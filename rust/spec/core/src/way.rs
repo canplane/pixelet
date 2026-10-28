@@ -21,14 +21,13 @@
 pub mod tree;
 
 use crate::cube::{sentinel, Ground};
-use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 use crate::param::way::BEAM_PILLAR_INTERVAL_M;
 use crate::param::way::DECK_THICKNESS_M;
 use crate::param::way::LINE_PAST;
 use crate::param::way::PIER_MIN_RISE_M;
 use crate::param::way::STACKED_DECK_HEADROOM_M;
 use crate::param::way::WIDE_BEAM_PIER_INTERVAL_M;
-use crate::{cells_of_m, Zoom, LEAF_CELL};
+use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;

@@ -15,8 +15,7 @@ use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::source::{is_version, key, sharded};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::TOP_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
 use serde_json::{json, Map, Value};
 
 use crate::pyramid::MANIFEST;

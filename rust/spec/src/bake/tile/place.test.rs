@@ -101,7 +101,7 @@ fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
 
 #[test]
 fn no_grid_cell_reads_a_tile_coarser_than_the_coarsest() {
-    use pxl_spec_core::param::tile::TOP_ZOOM;
+    use crate::space::layer::tile::TOP_ZOOM;
     const {
         assert!(
             crate::space::layer::lattice::coarsest(GROUND) == TOP_ZOOM,
