@@ -226,7 +226,15 @@ pub(super) fn apply(
         Command::INPUT_GO_TO => {
             let p = abi::InputGoTo::read(packet(pkt)?)?;
             refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
+            // Asked after the going's coming in, so a dist asked wins over it.
             ui::go_to_degrees(p.lon, p.lat);
+            crate::domain::control::camera::controller::set_intent(
+                crate::domain::control::camera::state::IntentPatch {
+                    dist: p.dist,
+                    azimuth: p.azimuth,
+                    polar: p.polar,
+                },
+            );
             applied(s)
         }
         Command::INPUT_POSE => {
