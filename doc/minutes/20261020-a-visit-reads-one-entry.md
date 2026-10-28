@@ -241,6 +241,12 @@ the probe was kept.
   keys, so each key is visited about 2,100 times a frame.
   - The camera grid's cell spans about twelve drawn pixels (`target_cell_px`),
     so the rays through a node are many.
+
+    > **Note (10-28):** `target_cell_px` is gone. It was the τ 1 cell,
+    > 1/192 rad, in drawn pixels at ratio 2. The view's cell is 1/96 rad,
+    > about twelve CSS pixels at the reference view (pxl-spec
+    > space/camera/grid.rs `cell_css_px`), so its drawn pixels at ratio 2
+    > are about 24.
   - The world is composed 68,677 times a frame, not 146 million.
 - **A frame after a drag.** The eye moved 1.21 units (12 CSS px at the focus)
   and the table was the one the frame before left:

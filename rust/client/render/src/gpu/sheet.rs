@@ -47,11 +47,12 @@ pub struct Halo {
     pub shadow_dy: f32,
 }
 
-/// Device pixels a sheet draws per logical pixel: past two, texels cost more
-/// than the eye resolves at arm's length. The world is drawn no finer
-/// (pxl-kernel domain/view/param.rs `RESOLUTION_MAX`), so a marker is never shown
+/// Device pixels a sheet draws per logical pixel: the finest ratio a surface
+/// is drawn at (pxl-spec space/camera/grid.rs `RATIO_MAX`), past which texels cost
+/// more than the eye resolves. The world is drawn no finer (pxl-kernel
+/// domain/view/param.rs `RESOLUTION_MAX`), so a marker is never shown
 /// smaller than drawn.
-pub const SHEET_SCALE: f64 = 2.0;
+pub const SHEET_SCALE: f64 = pxl_spec::space::camera::grid::RATIO_MAX;
 
 #[derive(Default)]
 pub struct Sketch {

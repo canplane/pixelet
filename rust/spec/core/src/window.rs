@@ -117,7 +117,8 @@ pub const fn fresh_square(first: [u32; 2]) -> [i32; 2] {
 }
 
 /// How far from its centre a window holds every cell, in its own cells: a
-/// zoom's band ends `SPLIT` of its cells from the eye (`grid::SPLIT`).
+/// zoom's band ends `CELLS_A_RADIAN` of its cells from the eye, and the
+/// window holds `WINDOW_MARGIN` times that (`grid::SPLIT`).
 pub const RADIUS: u32 = crate::grid::SPLIT as u32;
 
 /// The first square of the window at `cell` about the cell `c`:
