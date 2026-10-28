@@ -1,9 +1,6 @@
 // Hillaire's multiple scattering table: second order marched with an isotropic
 // phase, higher orders as its geometric series 1 / (1 - f).
 
-const MULTISCATTER_DIRS: i32 = 8;
-const MULTISCATTER_STEPS: i32 = 20;
-
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
   let uv = v.clip.xy / MULTISCATTER_SIZE;
@@ -15,17 +12,17 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   var second = vec3f(0.0);
   var back = vec3f(0.0);
   // Equal-area grid: cos(theta) and azimuth evenly spaced.
-  for (var a = 0; a < MULTISCATTER_DIRS; a++) {
-    for (var b = 0; b < MULTISCATTER_DIRS; b++) {
-      let mu = 1.0 - 2.0 * (f32(a) + 0.5) / f32(MULTISCATTER_DIRS);
-      let phi = TAU * (f32(b) + 0.5) / f32(MULTISCATTER_DIRS);
+  for (var a = 0; a < ATMOS_MULTISCATTER_DIRS; a++) {
+    for (var b = 0; b < ATMOS_MULTISCATTER_DIRS; b++) {
+      let mu = 1.0 - 2.0 * (f32(a) + 0.5) / f32(ATMOS_MULTISCATTER_DIRS);
+      let phi = TAU * (f32(b) + 0.5) / f32(ATMOS_MULTISCATTER_DIRS);
       let s = sqrt(max(1.0 - mu * mu, 0.0));
       let dir = vec3f(s * cos(phi), s * sin(phi), mu);
       let ground = meets_ground(r, mu);
       let d = air_path(r, mu);
-      let dt = d / f32(MULTISCATTER_STEPS);
+      let dt = d / f32(ATMOS_MULTISCATTER_STEPS);
       var through = vec3f(1.0);
-      for (var i = 0; i < MULTISCATTER_STEPS; i++) {
+      for (var i = 0; i < ATMOS_MULTISCATTER_STEPS; i++) {
         let p = origin + dir * ((f32(i) + 0.5) * dt);
         let pr = length(p);
         let m = medium_at(pr - atmos_bottom_radius());
@@ -45,7 +42,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
       }
     }
   }
-  let n = f32(MULTISCATTER_DIRS * MULTISCATTER_DIRS);
+  let n = f32(ATMOS_MULTISCATTER_DIRS * ATMOS_MULTISCATTER_DIRS);
   let l2 = second / n;
   let f = back / n;
   return vec4f(l2 / (vec3f(1.0) - f), 1.0);

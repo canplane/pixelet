@@ -19,7 +19,8 @@ use crate::gpu::mip::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::environment::ENV_SKY;
 use pxl_spec::space::coord::world::EXTENT;
-use pxl_spec_core::cloud::{drift, LATTICE_COUNT, LATTICE_SHAMT};
+use pxl_spec_core::cloud::{drift, LATTICE_COUNT};
+use pxl_spec_core::param::cloud::LATTICE_SHAMT;
 use pxl_spec_core::UNIT_ZOOM;
 
 const _: () = assert!(

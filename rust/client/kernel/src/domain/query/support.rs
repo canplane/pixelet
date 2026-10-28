@@ -14,7 +14,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{REACH, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;

@@ -12,7 +12,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{Cells, GROUND};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use pxl_spec_core::area::Shard;
 use pxl_spec_core::wrap_index;
 

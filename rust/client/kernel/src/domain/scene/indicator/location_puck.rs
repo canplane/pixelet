@@ -15,13 +15,17 @@ use crate::domain::query::changed::Asked;
 use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::indicator::param::{
+    BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
+    ZONE_FOOTPRINT_U,
+};
 use crate::domain::scene::scene;
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
-// A world-space footprint (4u), whatever the ground's cell; the .707 is a
+// The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
 // one-cell diagonal correction.
-const ZONE_RADIUS_CELL: f64 = 4.0 / units(GROUND.cell()) - 0.707;
+const ZONE_RADIUS_CELL: f64 = ZONE_FOOTPRINT_U / units(GROUND.cell()) - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 /// The zone's, past which the beacon snaps to its target rather than slide.
 const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.cell());
@@ -81,10 +85,6 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
 /// The box's center relative to the zone's (3), its border flags (4), and
 /// the faces open to the air it draws (1, a bit a face).
 pub const ZONE_INSTANCE_FLOATS: usize = 8;
-const BEACON_Z_BIAS: f64 = 0.5;
-const BEACON_SMOOTH_RATE: f64 = 6.0;
-/// How far the beacon bobs either way, in units.
-const BEACON_BOB: f64 = 0.1;
 
 /// The zone shown and its beacon.
 struct Zone {
@@ -294,7 +294,7 @@ impl LocationPuck {
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,
-            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * 2.0) * BEACON_BOB) as f32,
+            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB) as f32,
         ];
         draw.draw_as(
             PIPELINE_PUCK_BEACON,
@@ -302,7 +302,7 @@ impl LocationPuck {
             p.night as u32,
             0,
             beacon,
-            (p.time * 1.2) as f32,
+            (p.time * BEACON_SPIN_RATE) as f32,
             1.0,
         );
     }

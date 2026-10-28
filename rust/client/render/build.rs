@@ -12,6 +12,9 @@ mod part;
 mod word;
 #[path = "src/frame/shader/debug_look.spec.rs"]
 mod debug_look;
+#[path = "src/param.rs"]
+#[allow(dead_code)]
+mod param;
 
 fn main() {
     let dir = Path::new("src/frame/shader");
@@ -27,6 +30,7 @@ fn main() {
         let mut shipped = stripped(&text);
         if name == "constant.wgsl" {
             shipped += &words();
+            shipped += &params();
         }
         shipped += &accessors(&text);
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
@@ -132,7 +136,8 @@ fn main() {
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
-    use pxl_spec_core::cloud::{HASH_IN, HASH_KEPT, HASH_LAST, HASH_ROUNDS, LATTICE_SHAMT};
+    use pxl_spec_core::cloud::{HASH_IN, HASH_KEPT, HASH_LAST, HASH_ROUNDS};
+    use pxl_spec_core::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
     let rounds: String = HASH_ROUNDS
         .iter()
@@ -285,6 +290,28 @@ fn compute(dir: &Path) -> String {
         );
         // Its layout within what every device binds (frame/shader/floor.rs).
         out += &format!("const _: () = assert!(crate::frame::shader::floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
+    }
+    out
+}
+
+/// Every setting (src/param.rs), named by its path under `param` (`sky::moon`'s
+/// `ALBEDO` is `SKY_MOON_ALBEDO`); the host's alone (`F64`) is not written.
+fn params() -> String {
+    use param::Value;
+    let mut out = String::new();
+    for &(path, name, value) in param::ALL.iter().flat_map(|m| m.iter()) {
+        let topic = path.rsplit_once("param::").map_or("", |(_, t)| t);
+        let named = format!("{}_{name}", topic.replace("::", "_").to_uppercase());
+        out += &match value {
+            Value::F32(v) => format!("const {named}: f32 = {v:?};\n"),
+            Value::I32(v) => format!("const {named}: i32 = {v};\n"),
+            Value::U32(v) => format!("const {named}: u32 = {v}u;\n"),
+            Value::Vec2([x, y]) => format!("const {named}: vec2f = vec2f({x:?}, {y:?});\n"),
+            Value::Vec3([x, y, z]) => {
+                format!("const {named}: vec3f = vec3f({x:?}, {y:?}, {z:?});\n")
+            }
+            Value::F64(_) => continue,
+        };
     }
     out
 }

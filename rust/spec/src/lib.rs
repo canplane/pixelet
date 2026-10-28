@@ -6,6 +6,7 @@
 pub mod asset;
 pub mod bake;
 pub mod division;
+pub mod param;
 pub mod limit;
 #[path = "division.spec.rs"]
 mod division_spec;

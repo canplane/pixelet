@@ -53,8 +53,8 @@ pub(super) struct Raster {
 }
 
 /// The sun's samples' boxes, written by the eye's pass (`boxes_built`) and
-/// drawn from the sun by the same draw (pxl-spec-core `sun::SAMPLE`): its
-/// boxes, room for a sample every `sun::SAMPLE` texels; their args; its
+/// drawn from the sun by the same draw (pxl-spec-core `param::sun::SAMPLE`): its
+/// boxes, room for a sample every `param::sun::SAMPLE` texels; their args; its
 /// view, a uniform; its targets at the map's side, in the box's order; and
 /// the draw's group.
 #[derive(Default)]
@@ -178,7 +178,7 @@ impl Raster {
             0.0,
             0.0,
             0.0,
-            raster::GROWN * pixel,
+            pxl_spec_core::param::raster::GROWN * pixel,
             w,
             h,
             reach,
@@ -281,7 +281,7 @@ impl Raster {
     pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.sun;
         if s.group == 0 {
-            let samples = (size / sun::SAMPLE) * (size / sun::SAMPLE);
+            let samples = (size / pxl_spec_core::param::sun::SAMPLE) * (size / pxl_spec_core::param::sun::SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             s.boxes = g.buffer(word_bytes(raster::words(samples) as usize), storage);
             s.args = g.buffer(
@@ -353,7 +353,7 @@ impl Raster {
             f32::from_bits(1),
             0.0,
             0.0,
-            raster::GROWN * length(v.across),
+            pxl_spec_core::param::raster::GROWN * length(v.across),
             n,
             n,
             v.reach,

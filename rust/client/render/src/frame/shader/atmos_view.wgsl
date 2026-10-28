@@ -115,15 +115,11 @@ fn air_slice(d: f32) -> f32 {
   return pow(clamp((d - e.x) / (e.y - e.x), 0.0, 1.0), 1.0 / 3.0) * f32(AIR_FROXELS - 1u);
 }
 
-// Knots to a stretch between two of the volume's slices: four, for its far
-// slabs, a hundred km and more down into the ozone and the Earth's shadow.
-const AIR_STRETCH_KNOTS: i32 = 4;
-
 // The air from `t0` to `t1` units along `dir` from the eye, exposed: one
 // stretch of the volume's column march (atmos_froxel.wgsl).
 fn air_stretch(dir: vec3f, t0: f32, t1: f32) -> Veil {
   let km = atmos_km_per_u();
-  let v = gather_between(camera_r(), frame_up(), dir, t0 * km, t1 * km, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), AIR_STRETCH_KNOTS);
+  let v = gather_between(camera_r(), frame_up(), dir, t0 * km, t1 * km, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), ATMOS_AIR_STRETCH_KNOTS);
   return Veil(v.through, v.scattered * atmos_white() * exposure());
 }
 

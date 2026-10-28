@@ -187,7 +187,7 @@ impl Observer for Eye {
         grid(self).sample_at(s)
     }
 
-    /// Always about it: the lattice runs `beam::NEAR` samples past the
+    /// Always about it: the lattice runs `param::beam::NEAR` samples past the
     /// screen.
     fn sample_before(&self, at: [f32; 2]) -> ([u32; 2], bool) {
         (grid(self).sample_before(at), true)

@@ -12,7 +12,7 @@ use super::*;
 use crate::domain::layer::Query;
 use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;
 

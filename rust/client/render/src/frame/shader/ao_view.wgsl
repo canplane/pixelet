@@ -17,13 +17,6 @@ fn ao_proj() -> mat4x4f { return mat4x4f(ao_words[0], ao_words[1], ao_words[2], 
 fn ao_inv_proj() -> mat4x4f { return mat4x4f(ao_words[4], ao_words[5], ao_words[6], ao_words[7]); }
 fn ao_half() -> vec2f { return ao_words[8].xy; }
 
-const AO_RADIUS: f32 = 1.5;
-const AO_DISTANCE_FALLOFF: f32 = 1.0;
-const AO_INTENSITY: f32 = 1.2;
-const AO_SAMPLES: i32 = 4;
-const AO_DENOISE_SAMPLES: i32 = 4;
-// N8AO's 12-texel denoise radius, halved for half resolution.
-const AO_DENOISE_RADIUS: f32 = 6.0;
 // The blue-noise texture's side; a pixel reads it tiled.
 const AO_NOISE_MASK: i32 = 127;
 

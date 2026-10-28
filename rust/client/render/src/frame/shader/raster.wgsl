@@ -1,13 +1,13 @@
 // pxl-render/frame/shader/raster.wgsl
 
-// The samples' stops drawn at the eye's rays' pixels (pxl-spec-core
-// raster.rs): each box an instance, its three faces turned to the eye, one
-// an axis, as `corner` winds them, the faces turned away never drawn, each
-// grown in its own plane by `GROWN` of a drawn pixel. A hit's box draws the
-// face across its sample's axis alone, a lack's every face turned to the
-// eye. A face keeps a pixel only where the pixel's own ray enters the box
-// across that face's axis (`raster_enters`). A ray enters a box through one
-// face, and the face lies in its plane, so a kept fragment's depth is where
+// The samples' stops drawn at the eye's rays' pixels (pxl-spec-core raster.rs):
+// each box an instance, its three faces turned to the eye, one an axis, as
+// `corner` winds them, the faces turned away never drawn, each grown in its own
+// plane by `GROWN` (pxl-spec-core param.rs `raster::GROWN`) of a drawn pixel. A
+// hit's box draws the face across its sample's axis alone, a lack's every face
+// turned to the eye. A face keeps a pixel only where the pixel's own ray enters
+// the box across that face's axis (`raster_enters`). A ray enters a box through
+// one face, and the face lies in its plane, so a kept fragment's depth is where
 // the ray enters the box: the depth test, early, keeps the nearest box the
 // pixel's ray enters of every sample's. A pixel keeps that face's sample's
 // number, which the cast's pixels read (pxl-shader cast.rs `cast_cs`). A box
@@ -16,7 +16,7 @@
 // but for the axis.
 //
 // The sun's samples' stops are drawn the same way into the sun's box
-// (pxl-spec-core sun.rs `SAMPLE`), orthographic, where
+// (pxl-spec-core param.rs `param::sun::SAMPLE`), orthographic, where
 // `turn.y` says: a texel's ray starts on the box's near plane at its middle,
 // off `first`, and runs along the sun; a box's face turned to it is the one
 // its rays enter across; its depth is how far along the rays, a share of

@@ -17,6 +17,7 @@
 
 use crate::cast::{Detail, Ends, Met, Ray};
 use crate::{axis, FRAC_W};
+use crate::param::sun::SAMPLE;
 
 /// The sun's cast as the eye's words hold it (`eye::SUN`), a frame's
 /// constants worked out once off the light box (`Sun::of`), each a vec4's
@@ -41,11 +42,6 @@ pub struct Sun {
 
 /// The word of `eye::SUN` the rim lies in.
 pub const RIM: usize = 15;
-
-/// How far past the disk a receiver reads the map reaches, in texels: its
-/// taps a texel and a half out, filtered a texel more, its normal offset a
-/// texel (pxl-render shadow.wgsl `sun_lit`), and the box's snap under one.
-pub const READ_PAD: f32 = 4.0;
 
 /// The words of `eye::SUN` the corner lies in, X then Y, which the map is
 /// laid in off.
@@ -73,7 +69,7 @@ fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
 /// holds `n`'s dot with each step it takes, so the share of the depth `t`
 /// that keeps it on the plane after a step `s` across is
 /// `−(n·s) / (n·deep)`. A caster's push is its greatest, times
-/// `eye::SLOPE_BIAS` (`Sun::of`), and a receiver's taps each compare its
+/// `param::sun::SLOPE_BIAS` (`Sun::of`), and a receiver's taps each compare its
 /// depth carried along its own plane to where the tap lies (pxl-render
 /// shadow.wgsl `sun_slope`, off the light box's rows): the one statement of
 /// a face's slope in the map, which both take any normal to. None for a
@@ -92,7 +88,7 @@ impl Sun {
     /// `(x, y)` lies at `w + x·x + y·y` on the near plane, and `z` runs
     /// from the near plane to the far; the map `size` texels a side, row 0
     /// at the top, as the lit passes read it. A stop's push is a raster
-    /// caster's polygon offset (`eye::SLOPE_BIAS`): the face's greatest
+    /// caster's polygon offset (`param::sun::SLOPE_BIAS`): the face's greatest
     /// change in depth a texel across the map (`slope`), times it.
     /// `corner` is the world texel index of the box's first texel; `rim`
     /// the share of its half-width a receiver reads within.
@@ -109,7 +105,7 @@ impl Sun {
             let n = [on(0), on(1), on(2)];
             let [i, j] = slope(n, across, down, z);
             let (i, j) = (libm::fabsf(i), libm::fabsf(j));
-            crate::eye::SLOPE_BIAS * if i > j { i } else { j }
+            crate::param::sun::SLOPE_BIAS * if i > j { i } else { j }
         };
         Sun {
             first: [
@@ -523,12 +519,10 @@ pub fn margin(width: f32) -> f32 {
 /// eye's. The raster's `EYED` case has no
 /// sun's: every ray starts on the near plane, before every box.
 ///
-/// The samples' spacing; their words, the eye's samples' own
-/// (`beam::SAMPLE_WORDS`), past the beam's in the list's buffer
-/// (`samples_at`), a sample `size / SAMPLE` across and down, by its index
-/// `j · across + i`, which its box is drawn with (`raster::id_of`).
-pub const SAMPLE: u32 = 4;
-
+/// The samples' words, the eye's samples' own (`beam::SAMPLE_WORDS`), past
+/// the beam's in the list's buffer, a sample `size / SAMPLE` across and
+/// down, by its index `j · across + i`, which its box is drawn with
+/// (`raster::id_of`).
 pub const fn samples_at(size: u32) -> u32 {
     beam_words(size)
 }
@@ -760,7 +754,7 @@ mod tests {
         let texel = 4.0 / 2048.0;
         let d = depth(&s, &met(Ends::Stop, 2.0, 2));
         assert!(
-            (d - (0.25 + crate::eye::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
+            (d - (0.25 + crate::param::sun::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
             "{d}"
         );
     }

@@ -12,31 +12,22 @@
 use crate::space::layer::lattice::Cells;
 use fnv::FnvHashSet;
 
-use crate::asset::marker::MARK_STEPS;
 use crate::asset::symbol::SYMBOLS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};
-use crate::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
+use crate::space::layer::tile::{Cell, Tile};
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
-
-/// Carto's last zoom, openstreetmap.org's: the leaf places through it.
-pub const PLACE_LAST: Zoom = 19;
+use crate::param::place::SPREAD_STEPS;
 
 /// An icon's cell: a mark's, which a power of two makes nest.
-const ICON_STEPS: Zoom = MARK_STEPS;
-
-/// The one knob of how far apart places stand, in zooms: an icon's cell is
-/// this many coarser than the camera grid's, and the cell a place keeps to
-/// itself this many coarser again. At 2 an icon's cell spans four grid
-/// cells round the drawn icon, and a place keeps four icons a side, sixteen
-/// cells; at 1 places stood too close for their names. A product choice.
-const SPREAD_STEPS: Zoom = 2;
+const ICON_STEPS: Zoom = crate::param::marker::STEPS;
 
 /// A cell an icon wide at its tile's zoom of Carto's, `SPREAD_STEPS` coarser
 /// than the camera grid: which zoom of Carto's a place is drawn at there,
@@ -52,7 +43,7 @@ const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
 pub const PLACE_FIRST: Zoom = {
-    let mut first = PLACE_LAST;
+    let mut first = crate::param::place::LAST;
     let mut k = 0;
     while k < CATEGORIES.len() {
         if let Some(z) = shown(k as u16 + 1) {
@@ -228,7 +219,7 @@ impl PlaceTile {
         });
         let mut from: Vec<Option<Zoom>> = vec![None; names.len()];
         let mut taken = FnvHashSet::default();
-        for zoom in PLACE_FIRST..=PLACE_LAST {
+        for zoom in PLACE_FIRST..=crate::param::place::LAST {
             taken.clear();
             for &p in &order {
                 let (cell, shows, ..) = &names[p];
@@ -380,7 +371,7 @@ fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
         .all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
     let bad = |(_, h): (u32, Placed)| {
         let shows = shown(h.place.category);
-        shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST)
+        shows.is_none_or(|z| h.from < z || h.from > crate::param::place::LAST)
             || h.place.name.chars().nth(NAME_CHARS).is_some()
     };
     if !ascending || tile.iter().any(bad) {

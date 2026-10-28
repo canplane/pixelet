@@ -7,7 +7,8 @@
 //! (`pxl-kernel domain/layer/query.rs`), asked in the grid's cells.
 
 use super::lattice::{Lattice, GROUND};
-use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
+use super::tile::{tile_at, tile_rows, Tile};
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::split_distance;
 use crate::space::coord::zoom::{units, Zoom};

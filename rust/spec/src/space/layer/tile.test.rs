@@ -6,6 +6,8 @@ use crate::space::coord::zoom::UNIT_ZOOM;
 use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::*;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::TOP_ZOOM;
 
 /// A cell is found from its own corner, and the cell `up` zooms coarser is the point's cell there.
 #[test]

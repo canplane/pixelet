@@ -14,6 +14,8 @@
 //! screen's pixels.
 
 use crate::grid::CELL;
+use crate::param::beam::NEAR;
+use crate::param::beam::SAMPLE;
 
 
 /// The camera grid as a frame lays it over the screen, worked out once,
@@ -68,7 +70,7 @@ impl Grid {
         let s = CELL;
         let r6 = libm::sqrtf(6.0) * s;
         let k = 2.0 * r6;
-        let reach = r6 / (1.0 - r6) * 1.01;
+        let reach = r6 / (1.0 - r6) * crate::param::beam::REACH_SLACK;
         let span = [
             libm::ceilf(2.0 * tan[0] / s) as u32,
             libm::ceilf(2.0 * tan[1] / s) as u32,
@@ -281,11 +283,8 @@ pub const CELL_WORDS: u32 = 2;
 /// its cell's start as a pixel is and walked to the cell that fills; a
 /// pixel takes the nearest of the cells they stopped at that its own ray
 /// enters (`raster`), and walks only where none does. The lattice runs
-/// `NEAR` samples past the screen on each side, so a cell seen at the
-/// screen's edge is one a sample stopped at.
-pub const SAMPLE: u32 = 4;
-pub const NEAR: u32 = 2;
-
+/// `NEAR` samples past the screen on each side.
+///
 /// What a sample leaves for the pixels, in words: the node it stopped at
 /// (`NODE_WORDS`), its zoom `SAMPLE_NONE` where it went on to its reach,
 /// the asset there, 1 where that node lacks, which a pixel entering it

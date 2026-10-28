@@ -121,7 +121,7 @@ for the loss. Both are code readings, not yet confirmed on the screen:
      > **Note (10-28):** τ is gone; it takes `grid::cell_at(d²)`, at the
      > view's cells.
    - Since 10-23 a pixel no longer walks: 4 × 4 samples a cell do
-     (`beam::SAMPLE`). A pixel takes the nearest box a sample stopped at that
+     (`param::beam::SAMPLE`). A pixel takes the nearest box a sample stopped at that
      its ray enters, and walks only where its ray enters none.
    - A row thinner on screen than a sample's spacing has no box, so its pixels
      take the box behind it.

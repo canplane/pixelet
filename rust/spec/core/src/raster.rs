@@ -71,14 +71,6 @@ pub const fn sample_of(id: u32) -> u32 {
 /// whose ray does not enter it walks, never falling to what lies behind.
 pub const NEAR: f32 = 1.0 / (1 << crate::FRAC_W) as f32;
 
-/// Drawn pixels a face is grown by in its own plane, at each corner's
-/// distance: so a pixel's middle on its edge is not lost to the
-/// rasterizer's rounding. The face stays in its plane, so a pixel's depth
-/// is still where its ray meets the face, and what the growth alone covers
-/// fails the fragment's exact test (raster.wgsl `fs`): it costs fragments
-/// and changes no pick.
-pub const GROWN: f32 = 0.25;
-
 /// Whether the box `lo`..`hi`, in units from the eye, lies so near it that
 /// the raster's near plane may cut it (`NEAR`), `tan` the tangents of the
 /// screen's half-angles: its nearest point within `NEAR` at the screen's

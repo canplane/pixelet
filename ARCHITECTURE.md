@@ -106,13 +106,13 @@ The layers split on what changes. The **base** is baked from the sources, and a
 base tile is fixed by its name within a version. The **object** layer is what
 people author, and changes under its keys.
 
-| Side   | Layer    | Stores                                                         | Shape                             | Folds by                          |
-| ------ | -------- | -------------------------------------------------------------- | --------------------------------- | --------------------------------- |
-| base   | terrain  | the ground's look and height, and its separation               | a raster tile, 2.5D               | majority (look), average (height) |
-| base   | place    | the places Carto shows at the tile's zoom, and each one's zoom | a raster tile, an icon a cell     | what shows from the parent's zoom |
-| base   | division | the finest division each cell is in, with its ancestors        | a raster tile, `DIVISION_LEAF` up | majority                          |
-| base   | earth    | the planet's picture                                           | a raster tile, top zoom only      | —                                 |
-| object | object   | what players place                                             | a sparse octree a shard           | majority                          |
+| Side   | Layer    | Stores                                                         | Shape                                     | Folds by                          |
+| ------ | -------- | -------------------------------------------------------------- | ----------------------------------------- | --------------------------------- |
+| base   | terrain  | the ground's look and height, and its separation               | a raster tile, 2.5D                       | majority (look), average (height) |
+| base   | place    | the places Carto shows at the tile's zoom, and each one's zoom | a raster tile, an icon a cell             | what shows from the parent's zoom |
+| base   | division | the finest division each cell is in, with its ancestors        | a raster tile, `param::division::LEAF` up | majority                          |
+| base   | earth    | the planet's picture                                           | a raster tile, top zoom only              | —                                 |
+| object | object   | what players place                                             | a sparse octree a shard                   | majority                          |
 
 **Terrain** is the ground. A tile holds its ground cells, their elevation, and
 its **separation**: the ways at another grade, bridges and tunnels, each a line

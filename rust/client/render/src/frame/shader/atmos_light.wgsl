@@ -57,24 +57,17 @@ fn ground_bounce_in(up: vec3f, l: Light, s: Lights) -> vec3f {
   return atmos_ground_albedo() * (l.sun * max(dot(up, s.sun), 0.0) + l.other * max(dot(up, s.moon), 0.0) + l.fill);
 }
 
-// The share that keeps its direction; the rest, an up-facing face's, reaches
-// every face alike. Directed alone, a wall turned from the sun read as a toy's.
-const DIRECTED: f32 = 0.25;
-
-// What a cast shadow takes of the sun; all of it left the shade as dark.
-const SHADOW_DEPTH: f32 = 0.5;
-
 // A matte face of albedo one, over pi, Lambert as three's standard material at
 // roughness 1: every lit pass's, and the Earth's past the terrain. `lit` is
 // the share of the sun the face's shadow lets reach it (shadow.wgsl
 // `sun_lit`), 1 where nothing casts.
 fn surface_light_in(n: vec3f, up: vec3f, lit: f32, l: Light, s: Lights) -> vec3f {
   // Turned from the sun, a face reads no shadow map.
-  let shaded = select(1.0, mix(1.0, lit, SHADOW_DEPTH), dot(n, s.sun) > 0.0);
+  let shaded = select(1.0, mix(1.0, lit, SHADOW_ALIKE_TAKEN), dot(n, s.sun) > 0.0);
   let alike = l.sun * max(dot(up, s.sun), 0.0) * shaded + l.other * max(dot(up, s.moon), 0.0) + l.fill;
   let hemi = mix(ground_bounce_in(up, l, s), l.fill, dot(n, up) * 0.5 + 0.5);
   let directed = l.sun * max(dot(n, s.sun), 0.0) * lit + l.other * max(dot(n, s.moon), 0.0) + hemi;
-  return mix(alike, directed, DIRECTED) / PI;
+  return mix(alike, directed, LIGHT_DIRECTED) / PI;
 }
 
 // Where nothing casts: the Earth's picture, the clouds.
@@ -103,24 +96,17 @@ fn eye_stops(s: Lights) -> f32 {
 
 /* glare */
 
-// Spencer et al. 1995's halo; ISO 9358 veiling glare is 1-10%, GLARE_VEIL its middle.
-const GLARE_HALO_SHARE: f32 = 0.6205;
-const GLARE_VEIL: f32 = 0.03;
-
 // The sun's glare along `dir`, exposed by `e`: the sun toward `sun`, at height
 // `mu` over the eye, as the air above the eye lets it through.
 fn glare_toward(dir: vec3f, sun: vec3f, mu: f32, e: f32) -> vec3f {
   let theta = degrees(atan2(length(cross(dir, sun)), dot(dir, sun))) + 0.02;
   let psf = 0.478 * 20.91 / (theta * theta * theta) + 0.138 * 72.37 / (theta * theta);
-  return sun_transmittance(camera_r(), mu) * atmos_white() * e * psf * (GLARE_VEIL / GLARE_HALO_SHARE);
+  return sun_transmittance(camera_r(), mu) * atmos_white() * e * psf * (LENS_GLARE_VEIL / LENS_GLARE_HALO_SHARE);
 }
 
 /* the sun's disc */
 
-// Far past white once exposed, so the air in front colors it.
-const SUN_DISC: f32 = 4.0;
-
 // The disc's center seen at height `mu` from radius `r`, exposed by `e`.
 fn disc_light(r: f32, mu: f32, e: f32) -> vec3f {
-  return transmittance_to_top(r, mu) * atmos_white() * e * SUN_DISC;
+  return transmittance_to_top(r, mu) * atmos_white() * e * SKY_SUN_DISC_GAIN;
 }

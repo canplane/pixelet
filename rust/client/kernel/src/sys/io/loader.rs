@@ -180,7 +180,7 @@ pub fn open_asset(credit: Credit, load: Load) {
     let owner = Owner::Load { key: credit.key() };
     // The sphere's number is no tile's: a subject is never 0.
     const _: () = assert!(
-        pxl_spec::space::hierarchy::morton::bits::<2>(pxl_spec::space::layer::tile::LEAF_ZOOM) < 63
+        pxl_spec::space::hierarchy::morton::bits::<2>(pxl_spec_core::param::tile::LEAF_ZOOM) < 63
     );
     match load {
         Load::Sphere => file::open(credit, BaseLayer::earth as u32, u64::from(SPHERE), owner),

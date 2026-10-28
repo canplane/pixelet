@@ -20,8 +20,20 @@ struct Sheet {
   salt: u32,
 };
 
-const ALTOCUMULUS: Sheet = Sheet(4.5, 3u, 1.0, 0.6, 0x0a1cu);
-const CIRRUS: Sheet = Sheet(9.0, 1u, 4.0, 0.45, 0x0c1cu);
+const ALTOCUMULUS: Sheet = Sheet(
+  CLOUD_ALTOCUMULUS_KM,
+  CLOUD_ALTOCUMULUS_FINER,
+  CLOUD_ALTOCUMULUS_SOFTER,
+  CLOUD_ALTOCUMULUS_OPACITY,
+  CLOUD_ALTOCUMULUS_SALT,
+);
+const CIRRUS: Sheet = Sheet(
+  CLOUD_CIRRUS_KM,
+  CLOUD_CIRRUS_FINER,
+  CLOUD_CIRRUS_SOFTER,
+  CLOUD_CIRRUS_OPACITY,
+  CLOUD_CIRRUS_SALT,
+);
 
 fn sheet_of(i: u32) -> Sheet {
   if (i == 0u) {
@@ -90,7 +102,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let air = air_segments(dir, vec3f(min(t, reach)));
   layer.color = layer.color * air[0].through + air[0].scattered * exposure() * layer.opacity;
   let alpha = layer.opacity * clouds_shown();
-  if (alpha <= 0.002) {
+  if (alpha <= DISPLAY_FLOOR) {
     discard;
   }
   return vec4f(finish(layer.color / layer.opacity, v.clip.xy), alpha);

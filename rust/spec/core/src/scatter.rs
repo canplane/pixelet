@@ -22,7 +22,9 @@ use crate::decor::{Counts, Decor, Orientation, COUNTS, DECORS, PATCH};
 use crate::lattice::GROUND;
 use crate::world::{placed_in, Placed};
 use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
-use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
+use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, UNIT_ZOOM};
+use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
+use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 
 const PATCH_SHIFT: u32 = PATCH.trailing_zeros();
 const _: () = assert!(
@@ -483,11 +485,6 @@ pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
     let [x, y, _] = decor.sizes[variant_of(decor, &mut SplitMix32::new(c.seed)) as usize];
     x.max(y) as i32
 }
-
-/// How far about a cell its turn is voted: a fixed radius (O(1) reads, no
-/// flood fill), enough to outvote a one-cell stairstep jog in a straight run;
-/// it does not resolve curves.
-pub const ALIGN_NEIGHBOR_RADIUS: i32 = 3;
 
 /// Whether `d`, its square `sd` a side, keeps `c`, its `sc`, from standing:
 /// it stands before it and claims a cell of its square. The one rule of the

@@ -15,8 +15,8 @@ fn lattice_noise(base: vec2u, p: vec2f, mask: u32, salt: u32) -> f32 {
   return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
 }
 
-// Octaves finer than half a pixel stand at their mean instead of aliasing. An
-// offset per octave keeps lattice lines from coinciding into a visible grid.
+// Octaves finer than half a pixel stand at their mean instead of aliasing, each
+// offset from the last (`NOISE_OCTAVE_OFFSET`).
 fn lattice_fbm(base: vec2u, p: vec2f, count: u32, first: u32, salt: u32, footprint: f32) -> f32 {
   let scale = 1u << first;
   var b = base * scale;
@@ -25,11 +25,11 @@ fn lattice_fbm(base: vec2u, p: vec2f, count: u32, first: u32, salt: u32, footpri
   var sum = 0.0;
   var amp = 0.5;
   var reach = footprint * f32(scale);
-  for (var k = 0u; k < 4u; k++) {
+  for (var k = 0u; k < NOISE_OCTAVES; k++) {
     if (reach > 0.5) {
       sum += amp * 0.5;
     } else {
-      sum += amp * lattice_noise(b, q + f32(k) * vec2f(0.37, 0.61), n - 1u, salt + first + k);
+      sum += amp * lattice_noise(b, q + f32(k) * NOISE_OCTAVE_OFFSET, n - 1u, salt + first + k);
     }
     reach *= 2.0;
     b *= 2u;

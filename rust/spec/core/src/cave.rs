@@ -7,10 +7,6 @@ use xpute_kit::math::rng::derive_seed_u32;
 
 use crate::{wrap_index, Zoom, LEAF_CELL};
 
-/// The seed every procedural draw starts from (`node_seed`). Changing it
-/// reshuffles everything scattered.
-const MASTER_SEED: u32 = 0x5eed_0001;
-
 /// A node's seed for one use: `tag` names the use, and the node's zoom and
 /// each of its indices are folded in, in order, X named as the world names
 /// it (`wrap_index`), so a node seeds alike on whichever lap its asker counts
@@ -18,7 +14,7 @@ const MASTER_SEED: u32 = 0x5eed_0001;
 /// so no two uses draw one stream.
 pub fn node_seed<const D: usize>(tag: u32, (zoom, at): (Zoom, [i32; D])) -> u32 {
     const { assert!(D <= 3, "a node has at most three indices") };
-    let mut h = derive_seed_u32(derive_seed_u32(MASTER_SEED, tag), zoom);
+    let mut h = derive_seed_u32(derive_seed_u32(crate::param::seed::MASTER, tag), zoom);
     // [naga] each index by itself, not a loop: Naga's Metal backend breaks a
     // `loop { … continuing { break if … } }` an iteration early, re-reading
     // its condition after the counter moved.
@@ -41,12 +37,7 @@ const CAVES: u32 = 0xca7e_0001;
 
 /// The coarsest cube a cave takes, 32 units a side: nothing coarser is
 /// hollow, so every coarser fold of the caves is solid.
-pub const CAVE_COARSEST: Zoom = LEAF_CELL - 5;
-
-/// The chance a drawing cube turns one of its eight children over, as the
-/// hash's share under it: a quarter. With each child drawing again at even
-/// odds (one hash bit), some 6% of the ground is hollow.
-const CAVE_TURN: u32 = 1 << 30;
+pub const CAVE_COARSEST: Zoom = LEAF_CELL - crate::param::cave::COARSEST_STEPS;
 
 /// A cube's draws, `c` at `z`, from one hash: whether it turns a child over
 /// (its top two bits), which (its low three), and which of its eight draw
@@ -55,7 +46,7 @@ const CAVE_TURN: u32 = 1 << 30;
 /// cubes that draw, every cube at the root's zoom among them.
 fn draws(z: Zoom, c: [i32; 3]) -> (bool, u32, u32) {
     let h = node_seed(CAVES, (z, c));
-    (h < CAVE_TURN, h & 7, (h >> 8) & 0xff)
+    (h < crate::param::cave::TURN, h & 7, (h >> 8) & 0xff)
 }
 
 /// A child's place among its parent's eight.

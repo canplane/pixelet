@@ -85,7 +85,7 @@ pub fn placement_reads(tool: PlacementTool, corner: &Q3) -> [[f64; 2]; 2] {
     let room = room(tool, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
     let pad = crate::domain::query::decor::strike::reach()
-        + f64::from(pxl_spec_core::scatter::ALIGN_NEIGHBOR_RADIUS + 1) * units(GROUND.cell())
+        + f64::from(pxl_spec_core::param::scatter::ALIGN_NEIGHBOR_RADIUS + 1) * units(GROUND.cell())
         + width;
     [
         [room.min[0] - pad, room.min[1] - pad],

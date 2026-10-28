@@ -21,6 +21,10 @@ use crate::domain::query::model::registry::Models;
 use crate::domain::query::World;
 use crate::domain::query::{cell_at, over, under, walks};
 use crate::domain::scene::actor::{Actor, Stance};
+use crate::domain::scene::character::param::{
+    CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFFSET,
+    SETTLE_DELAY_S, WALK_EPS,
+};
 use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
@@ -44,14 +48,6 @@ use xpute_guest::global::Global;
 /// actor's instance.
 pub const FIGURES: usize = Group::ALL.len();
 
-// Arbitrary, so the pet does not share the person's footprint.
-const PET_OFFSET: [f64; 2] = [-0.6, -0.6];
-
-// A fixed duration, not a fixed speed (see sample_walk_plan).
-const CATCHUP_DURATION_S: f64 = 0.6;
-
-const SETTLE_DELAY_S: f64 = 0.15;
-
 // The world scroll's own rate: the two cancel, holding the character at
 // screen center, so this is the only position smoothing while following.
 const FOLLOW_LERP_K: f64 = crate::domain::param::POS_DAMP;
@@ -63,15 +59,6 @@ const FOLLOW_FACING: f64 = core::f64::consts::PI;
 fn back_to_camera(azimuth: f64) -> f64 {
     FOLLOW_FACING - azimuth
 }
-
-// Under one GPS fix's travel at a walking pace (~0.5u), over the near-zero gap
-// a still map leaves. A rotate or pinch leaves such a gap, and a catch-up
-// across it would play the walk clip in place.
-// A line hangs this far over the model's bounding box: a fixed clearance, not a multiplier of its height.
-const HEAD_CLEARANCE_U: f64 = 0.22;
-
-const WALK_EPS: f64 = 0.03;
-const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
 struct Held {
     actor: Actor,
@@ -282,8 +269,14 @@ impl Figure {
         };
         if self.actor_clip != Some(clip) {
             if clip < held.model.clip_count {
-                held.actor
-                    .play(clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
+                held.actor.play(
+                    clip,
+                    if self.actor_clip.is_none() {
+                        0.0
+                    } else {
+                        CLIP_FADE_S
+                    },
+                );
             }
             self.actor_clip = Some(clip);
         }
