@@ -67,7 +67,7 @@ pub struct Grows<'a> {
     /// The squares handed this frame (pxl-spec-core `window::FRESH_WORDS`).
     pub fresh: &'a [[u32; window::FRESH_WORDS as usize]],
     /// The eye as the cast's (pxl-spec-core `eye`), of which the count pass
-    /// reads its place and the zooms it asks (`ORIGIN`, `TAU`, `RANGE`).
+    /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
 }
 
@@ -350,7 +350,6 @@ impl Grown {
         c.begin();
         c.read(&grows.eye[eye::ORIGIN..eye::ORIGIN + 3]);
         c.read(&[
-            grows.eye[eye::TAU],
             grows.eye[eye::RANGE],
             grows.eye[eye::RANGE + 1],
             self.room,

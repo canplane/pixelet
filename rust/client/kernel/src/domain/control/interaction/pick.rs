@@ -6,7 +6,6 @@
 
 use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
@@ -91,10 +90,10 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
 }
 
 /// In the root frame, from the eye.
-/// Decor is struck where the frame drawing at `drawn` holds it. The world
+/// Decor is struck where the frame holds it. The world
 /// asked is the stored one (`World::now`), not as the eraser's preview draws
 /// it: what to erase is what is stored.
-pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<Hit> {
+pub fn ray_pick(origin: V3, direction: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
         direction,
@@ -102,7 +101,7 @@ pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<Hit> {
     };
     // A coarser tile's answer is a summary, not what is held.
     World::now()
-        .striking_decor(drawn)
+        .striking_decor()
         .first_hit(&ray, held())
         .exact()
         .flatten()

@@ -9,7 +9,6 @@ use super::arrangement::{Instance, Key};
 use crate::domain::scene::character::companion::line_hangs;
 use crate::domain::scene::marker::chat::shown_line;
 use crate::domain::scene::marker::design::Design;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 
@@ -21,11 +20,11 @@ pub(super) struct Said {
     hangs: Option<Q3>,
 }
 
-/// The line as it is now, seen from `eye` at `tau`.
-pub(super) fn said(eye: V3, tau: Tau) -> Said {
+/// The line as it is now, seen from `eye`.
+pub(super) fn said(eye: V3) -> Said {
     Said {
         line: shown_line(),
-        hangs: line_hangs(eye, tau),
+        hangs: line_hangs(eye),
     }
 }
 

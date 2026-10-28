@@ -92,7 +92,7 @@ cannot be stored. What is stored is the node's own:
 - the world at its zoom (its fold);
 - where anything under it may fill.
 
-The ray picks its zoom by distance, as now (`Tau::cell_at`), and never descends
+The ray picks its zoom by distance, as now (`grid::cell_at`), and never descends
 past the zoom it asks. So a looser bound can only add visits, and only above
 that zoom. The block it stops on is the same.
 

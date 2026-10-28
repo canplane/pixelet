@@ -653,7 +653,7 @@ pub fn sun_mark_drawn_cs(
     };
     let v3 = |v: Vec4| [v.x, v.y, v.z];
     let middle = [v[0], v[1], v[2] + TALLEST as f32 / 2.0];
-    let axes = [v3(eye.forward_far), v3(eye.right_tau), v3(eye.up)];
+    let axes = [v3(eye.forward_far), v3(eye.right), v3(eye.up)];
     if !pxl_spec_core::eye::sees(
         axes,
         [eye.tan.x, eye.tan.y],

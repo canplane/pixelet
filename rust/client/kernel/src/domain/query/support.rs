@@ -9,7 +9,6 @@
 //! what is placed as it is held, whatever its size; a cell with nothing
 //! placed finer than it is one column, one ray.
 
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{REACH, ROUND};
@@ -37,13 +36,12 @@ pub fn under(z: f64) -> f64 {
     z - units(GROUND.cell()) / 2.0
 }
 
-/// Whether a walker at `at`, seen from `eye`, walks: the camera grid at every
-/// view's τ (`Tau::VIEW`, domain/view/lens.rs `tau`) draws the ground there
-/// at its own cells (`cell_at`), X the short way round. Else the world is a
-/// map to it (`step_slide`).
+/// Whether a walker at `at`, seen from `eye`, walks: the camera grid draws
+/// the ground there at its own cells (`cell_at`), X the short way round.
+/// Else the world is a map to it (`step_slide`).
 pub fn walks(at: &Q3, eye: &Q3) -> bool {
     let (a, e) = (q3::unpack(at), q3::unpack(eye));
-    cell_at(e, Tau::VIEW, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
+    cell_at(e, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
 }
 
 /// A point's place on the ground, in units.
@@ -277,10 +275,10 @@ impl<'a> World<'a> {
     /// it gives up where its own cell's ceiling stops the climb, and it
     /// settles on the floor where it `falls`; with `falls` off it keeps its
     /// height wherever nothing lifts it, as the orbit's eye does. Where the
-    /// camera grid at the criterion's own τ draws `from` coarser than the
-    /// ground's own cells, seen from `eye`, this is a map, not a walk: it goes
-    /// to `to` and stands there. That is decided where it starts, and by the
-    /// criterion's τ so that the quality a device draws at moves no wall.
+    /// camera grid draws `from` coarser than the ground's own cells, seen from
+    /// `eye`, this is a map, not a walk: it goes to `to` and stands there.
+    /// That is decided where it starts, and by the grid's angle so that the
+    /// pixels a device draws with move no wall.
     /// Where it is `walled`, as what walks in the world is, it never leaves
     /// the service area (`within`), sliding along its edge, and one already
     /// past it is not walled until it is back in; the camera is not, and goes anywhere a position

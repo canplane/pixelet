@@ -5,9 +5,8 @@
 //!
 //! Asks are the live eye's demand, as the estimator names it, merged with
 //! the fallback's tiles and a destination's, the best reason per tile.
-//! Nothing drawn enters them but the quality's τ the turn hands in, decided
-//! first. Where a tile marks a
-//! child as no tile (`Base::occupancy`), its ground is the tile's and the
+//! Nothing drawn enters them: the camera grid is an angle. Where a tile marks
+//! a child as no tile (`Base::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
 use pxl_spec::bake::tile::earth::EARTH_REACH;
@@ -28,7 +27,6 @@ use xpute_kit::status::errno::Errno;
 use fnv::FnvHashMap;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::layer::residency::floor;
@@ -122,7 +120,6 @@ pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
 struct Seen {
     o: Option<Observation>,
     destination: Option<Tile>,
-    tau: Tau,
 }
 
 pub struct Demand<L: Observed> {
@@ -367,15 +364,15 @@ impl<L: Observed> Demand<L> {
     }
 
     /// The layer's turn, from the live eye: the eye that is coming, which
-    /// every cast reads as it arrives. Quality is decided first so asks match
-    /// what is drawn. Observes again whenever anything in `Seen` changed.
+    /// every cast reads as it arrives. Observes again whenever anything in
+    /// `Seen` changed.
     ///
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground; and `pinned`, the
     /// tiles a reader that takes no coarser answer declares (`Base::PINNED`),
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
-    pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
+    pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile]) {
         let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation {
@@ -388,12 +385,7 @@ impl<L: Observed> Demand<L> {
             return;
         }
         self.idled = None;
-        let tau = if o.is_some() { tau } else { Tau::FINEST };
-        let now = Seen {
-            o,
-            destination,
-            tau,
-        };
+        let now = Seen { o, destination };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
             let line = destination
                 .into_iter()
@@ -405,7 +397,6 @@ impl<L: Observed> Demand<L> {
                 o.as_ref(),
                 line,
                 &ByEye {
-                    tau,
                     lattice: L::LATTICE,
                     top,
                 },

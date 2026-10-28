@@ -15,7 +15,6 @@ use crate::domain::layer::residency::Lines;
 use crate::domain::layer::{Answer, Base};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -42,7 +41,6 @@ pub fn at_zoom(tile: Zoom) -> Detail {
     let [lo, hi] = asked();
     let z = GROUND.cell_zoom(tile).clamp(lo, hi);
     Detail {
-        tau: 1.0,
         range: [z, z],
         eye: [0.0; 3],
         spacing: Spacing::NONE,
@@ -56,19 +54,18 @@ pub fn at_zoom(tile: Zoom) -> Detail {
 pub fn held() -> Detail {
     let [_, finest] = asked();
     Detail {
-        tau: 1.0,
         range: [finest, finest],
         eye: [0.0; 3],
         spacing: Spacing::NONE,
     }
 }
 
-/// The camera grid's cells at each distance from the origin at `tau`
-/// (`Tau::cell_at`), whose cell, drawn whole, spans at least one cell of
-/// the grid from any direction: the rule that sizes every drawn cell.
-pub fn by_distance(tau: Tau) -> Detail {
+/// The camera grid's cells at each distance from the origin
+/// (pxl-spec space/camera/grid.rs `cell_at`), whose cell, drawn whole, spans
+/// at least one cell of the grid from any direction: the rule that sizes
+/// every drawn cell.
+pub fn by_distance() -> Detail {
     Detail {
-        tau: tau.scale() as f32,
         range: asked(),
         eye: [0.0; 3],
         spacing: Spacing::NONE,
@@ -76,11 +73,12 @@ pub fn by_distance(tau: Tau) -> Detail {
 }
 
 /// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
-/// distance (`Tau::cell_at`), no finer than the ground's cells and, once the
-/// source declares its top, no coarser than a tile draws.
-pub fn cell_at(eye: V3, tau: Tau, at: V3) -> Zoom {
+/// distance (pxl-spec space/camera/grid.rs `cell_at`), no finer than the
+/// ground's cells and, once the source declares its top, no coarser than a
+/// tile draws.
+pub fn cell_at(eye: V3, at: V3) -> Zoom {
     let v = v3::sub(&at, &eye);
-    let cell = tau.cell_at(v3::dot(&v, &v)).min(GROUND.cell());
+    let cell = pxl_spec::space::camera::grid::cell_at(v3::dot(&v, &v)).min(GROUND.cell());
     TerrainTile::top().map_or(cell, |top| cell.max(GROUND.grid_zoom(top)))
 }
 

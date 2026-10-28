@@ -10,7 +10,7 @@ use crate::space::layer::tile::*;
 /// The ground tile a distance folds from, past the pyramid's ends too, as
 /// the rule reads it: squared.
 fn zoom_at(r: f64) -> i32 {
-    GROUND.tile_zoom_of_grid(Tau::FINEST.cell_at(r * r))
+    GROUND.tile_zoom_of_grid(cell_at(r * r))
 }
 
 /// The distance just short of `r` as the rule reads a distance: the f32
@@ -63,11 +63,12 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
     }
 }
 
-/// The reach is exactly where a zoom stops being asked for.
+/// The reach, over the window's margin, is exactly where the view stops
+/// asking for a zoom.
 #[test]
 fn the_fault_bound_is_where_a_zoom_ends() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
-        let r = demand_reach(GROUND, zoom);
+        let r = demand_reach(GROUND, zoom) / WINDOW_MARGIN;
         assert_eq!(
             zoom_at(short_of(r)),
             zoom as i32,

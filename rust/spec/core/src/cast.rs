@@ -43,7 +43,7 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 
 /// How far apart a beam's rays lie, `across + angle · d` units at `d` from
 /// the eye (`Detail::eye`): the eye's an angle, its camera grid's cell
-/// (`beam::spacing`); the sun's, whose rays are parallel, a width, `sun::BEAM`
+/// (`grid::CELL`); the sun's, whose rays are parallel, a width, `sun::BEAM`
 /// of its map's texels. Only a beam reads it, its widening and `narrow`
 /// (`Until::Beam`); an asker that casts no beam, control and physics, fills
 /// in none (`NONE`).
@@ -66,8 +66,7 @@ impl Spacing {
 }
 
 /// The zoom asked at each distance: the camera grid's cells there
-/// (`cell_at`), the distance scaled by `tau`, at least 1, held to `range`,
-/// asked of a distance squared (`at`). A
+/// (`cell_at`), held to `range`, asked of a distance squared (`at`). A
 /// stated zoom's cells wherever they are is a range of that zoom alone.
 /// The distance is the eye's, `eye` units from the walk's origin: none for
 /// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
@@ -76,7 +75,6 @@ impl Spacing {
 /// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
-    pub tau: f32,
     pub range: [Zoom; 2],
     pub eye: [f32; 3],
     pub spacing: Spacing,
@@ -85,7 +83,7 @@ pub struct Detail {
 impl Detail {
     /// At `d2`, a distance squared.
     pub fn at(self, d2: f32) -> Zoom {
-        cell_at(d2 * (self.tau * self.tau)).clamp(self.range[0], self.range[1])
+        cell_at(d2).clamp(self.range[0], self.range[1])
     }
 }
 
@@ -1065,7 +1063,6 @@ mod tests {
         let o = [steps(5.0), steps(y), steps(z)];
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
         let detail = Detail {
-            tau: 1.0,
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
             spacing: Spacing::NONE,
@@ -1141,7 +1138,6 @@ mod tests {
         let o = [steps(5.0), steps(0.4), steps(0.6)];
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
         let detail = Detail {
-            tau: 1.0,
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
             spacing: Spacing {

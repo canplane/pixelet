@@ -8,7 +8,7 @@ use pxl_spec::space::layer::lattice::demand_reach;
 use xpute_guest::global::Global;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::grid::split_distance;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::hierarchy::tree::Node;
@@ -84,13 +84,13 @@ pub fn observation() -> Option<Observation> {
 /// the eye cut into one partition: from the coarsest squares within the
 /// floor's ring (residency/floor.rs `ring`), the far edge cut by the ground,
 /// a square splits into its four while its nearest point is nearer than its
-/// cells' split distance (`Tau::split_distance`), the rule a ray's descent
-/// asks by, taken about the eye's height; each square left is at the zoom
+/// cells' split distance (pxl-spec space/camera/grid.rs `split_distance`),
+/// the rule a ray's descent asks by, taken about the eye's height; each square left is at the zoom
 /// its nearest point asks, and handed with the heights the world stands
 /// between in it. A function of the eye and the world alone, never of what
 /// a ray met; a column it knows nothing of yet is handed none, as nothing
 /// there is to stand in.
-pub fn squares(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
+pub fn squares(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else {
         return;
     };
@@ -120,7 +120,7 @@ pub fn squares(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<2>, [f64; 2]
         if d > o.reach {
             continue;
         }
-        if cell < GROUND.cell() && d < tau.split_distance(cell) {
+        if cell < GROUND.cell() && d < split_distance(cell) {
             stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
             continue;
         }
@@ -139,11 +139,11 @@ pub fn squares(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<2>, [f64; 2]
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the
 /// source's `top` the floor's (residency/floor.rs `ring`), past it the
 /// zoom's band (pxl-spec layer/demand.rs `band`); none past the far edge.
-pub fn reach(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
+pub fn reach(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
     if zoom == top {
         return floor::ring(o);
     }
-    band(o, tau, lattice, top, zoom).map(|(_, to)| to)
+    band(o, lattice, top, zoom).map(|(_, to)| to)
 }
 
 /// What the view asks a layer for: at each zoom under the source's top, which
@@ -152,7 +152,6 @@ pub fn reach(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom)
 /// asked, and so what is read, cannot depend on what was held before: the
 /// rays only see it arrive.
 pub struct ByEye {
-    pub tau: Tau,
     /// The layer's, whose tiles' cells say which zoom a distance asks for.
     pub lattice: Lattice,
     /// The coarsest zoom the source supplies whole; no requirement is coarser.
@@ -162,7 +161,7 @@ pub struct ByEye {
 impl ByEye {
     pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Tile)) {
         for zoom in self.top + 1..=LEAF_ZOOM {
-            if let Some(r) = reach(o, self.tau, self.lattice, self.top, zoom) {
+            if let Some(r) = reach(o, self.lattice, self.top, zoom) {
                 tiles_within(zoom, [o.eye[0], o.eye[1]], r).for_each(&mut *each);
             }
         }

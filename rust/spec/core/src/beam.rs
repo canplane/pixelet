@@ -13,17 +13,11 @@
 //! grid's own, so neither the beam rays nor the samples follow the
 //! screen's pixels.
 
-use crate::grid::SPLIT;
-
-/// The camera grid's cell as an angle at τ `tau`: the beam's spacing, in the
-/// screen's tangents at its axis.
-pub fn spacing(tau: f32) -> f32 {
-    tau / SPLIT
-}
+use crate::grid::CELL;
 
 
 /// The camera grid as a frame lays it over the screen, worked out once,
-/// from the screen's tangents and τ (`of`), where the kernel writes the
+/// from the screen's tangents (`of`), where the kernel writes the
 /// eye's words (pxl-kernel domain/view/lens.rs `gpu_cast`, pxl-spec-core
 /// `eye::GRID`): every thread of the cast reads it off them
 /// (pxl-shader `grid`), and the renderer sizes the cast's dispatches
@@ -34,7 +28,8 @@ pub struct Grid {
     /// The screen's half-angles' tangents, across and up: the eye's own
     /// (`eye::TAN`), so not among the grid's words.
     pub tan: [f32; 2],
-    /// The cell as an angle (`spacing`).
+    /// The cell as an angle (`grid::CELL`), in the screen's tangents at its
+    /// axis.
     pub s: f32,
     /// What a beam ray's stop is shortened by, `1 − γ`, the margin `γ`
     /// within which two rays enter a cube under `2√2 · s · d` wide apart
@@ -68,9 +63,9 @@ pub struct Grid {
 pub const GRID_WORDS: usize = 16;
 
 impl Grid {
-    /// The grid at the screen's tangents `tan` and τ `tau`.
-    pub fn of(tan: [f32; 2], tau: f32) -> Grid {
-        let s = spacing(tau);
+    /// The grid at the screen's tangents `tan`.
+    pub fn of(tan: [f32; 2]) -> Grid {
+        let s = CELL;
         let r6 = libm::sqrtf(6.0) * s;
         let k = 2.0 * r6;
         let reach = r6 / (1.0 - r6) * 1.01;
@@ -317,11 +312,11 @@ mod tests {
     #[test]
     fn the_largest_beam_fits_a_storage_binding() {
         // 4112 × 2338 drawn, a ratio of 2, at the view's FOV (the tangent of
-        // its half 1/2, pxl-spec space/camera/grid.rs `FOV_DEG`) and τ at its
-        // least, within the 33,554,432 words a storage binding holds on
-        // every device (pxl-render floor.rs).
+        // its half 1/2, pxl-spec space/camera/grid.rs `FOV_DEG`), within the
+        // 33,554,432 words a storage binding holds on every device
+        // (pxl-render floor.rs).
         let up = 0.5;
-        let words = Grid::of([up * 4112.0 / 2338.0, up], 1.0).size();
+        let words = Grid::of([up * 4112.0 / 2338.0, up]).size();
         assert!(words <= 33_554_432, "{words} words");
     }
 }

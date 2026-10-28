@@ -22,23 +22,23 @@ pub const CELLS_A_RADIAN: f32 = 96.0;
 
 /// How many times finer than the view's a grid the bands and windows are
 /// sized for (`SPLIT`, `window::RADIUS`): a window holds its zoom's cells
-/// out to `WINDOW_MARGIN` times where the view stops drawing them, so the
-/// view casts at τ `WINDOW_MARGIN` and the finest a view may ask, τ 1
-/// (pxl-spec space/camera/grid.rs `Tau::FINEST`), is held too. Whether a
-/// margin of 1 keeps up with a moving eye is unmeasured.
+/// out to `WINDOW_MARGIN` times where the view stops drawing them. Whether
+/// a margin of 1 keeps up with a moving eye is unmeasured.
 pub const WINDOW_MARGIN: f32 = 2.0;
 
 // ---- derived from the knobs ----
 
 /// The grid the bands and windows are sized for, cells a radian: the view's
-/// `WINDOW_MARGIN` times finer. A cell of the view is 1/`SPLIT` radians
-/// scaled by τ (pxl-spec space/camera/grid.rs `Tau::VIEW`, which is
-/// `WINDOW_MARGIN`), so whatever is sized by `SPLIT` holds at every τ.
+/// `WINDOW_MARGIN` times finer.
 pub const SPLIT: f32 = CELLS_A_RADIAN * WINDOW_MARGIN;
 
+/// The view's cell, an angle in radians: what a beam's rays lie apart by
+/// (`beam::Grid`), and the angle every eye's ray is asked at (`cell_at`).
+pub const CELL: f32 = 1.0 / CELLS_A_RADIAN;
+
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared,
-/// in units: the widest cell whose split distance (`SPLIT` of its sides,
-/// halved) is within the distance, held to what a zoom can name. The power
+/// in units: the widest cell whose split distance (`CELLS_A_RADIAN` of its
+/// sides, halved) is within the distance, held to what a zoom can name. The power
 /// of two is the float's own exponent, halved, so neither a logarithm nor a
 /// square root rounds it: a distance over the half split, `m·2^e` with `m`
 /// in [1, 2), squares to `m²·2^2e` with `m²` in [1, 4), whose exponent is
@@ -48,7 +48,7 @@ pub const SPLIT: f32 = CELLS_A_RADIAN * WINDOW_MARGIN;
 /// passes a square (pxl-spec space/camera/grid.rs, `scatter::drawn_at`), so
 /// a distance on a power of two falls the same side everywhere.
 pub fn cell_at(r2: f32) -> Zoom {
-    let x2 = r2 / (SPLIT * SPLIT / 4.0);
+    let x2 = r2 / (CELLS_A_RADIAN * CELLS_A_RADIAN / 4.0);
     let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
 }

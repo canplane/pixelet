@@ -223,12 +223,11 @@ doubles before it is narrowed (`pxl-render frame/draw.rs` `translation`).
 How finely each part of the view is drawn is set by the **camera grid**: angular
 cells about the eye, each the least the observer promises to tell apart, the
 same angle wherever it lies (`pxl-spec space/camera/grid.rs`). An angular cell
-is 1/`SPLIT` radians scaled by one factor every view takes alike (`Tau::VIEW`,
-`domain/view/lens.rs` `tau`), so what is observed at a distance is the same on
-every screen; a display only draws it.
+is 1/`CELLS_A_RADIAN` radians on every view (`CELL`), so what is observed at a
+distance is the same on every screen; a display only draws it.
 
 That sets the rule of detail. A node is drawn at the zoom at which it spans one
-to two angular cells at its distance (`Tau::cell_at`): each zoom is drawn over a
+to two angular cells at its distance (`cell_at`): each zoom is drawn over a
 band of distance, and the bands double going out, as an angular cell widens with
 distance.
 

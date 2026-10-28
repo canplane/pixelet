@@ -13,11 +13,9 @@ pub const STEPS: usize = 3;
 /// The unit forward, X, Y and Z, then the reach, f32 bits.
 pub const FORWARD: usize = 4;
 pub const REACH: usize = 7;
-/// The unit right, then τ, f32 bits.
+/// The unit right, then the unit up, f32 bits, each then a word no reader
+/// reads, so the next starts a vec4.
 pub const RIGHT: usize = 8;
-pub const TAU: usize = 11;
-/// The unit up, f32 bits, then a word no reader reads, so the next starts a
-/// vec4.
 pub const UP: usize = 12;
 /// The tangents of the screen's half-angles across and up, f32 bits.
 pub const TAN: usize = 16;
@@ -32,7 +30,7 @@ pub const CUT_WORDS: usize = 4;
 pub const CUTS: usize = 2 * CUT_WORDS;
 pub const NO_CUT: u32 = crate::overwrite::Cut::NONE.zoom;
 /// The camera grid the frame casts on (pxl-spec-core `beam::Grid`, its
-/// `words`), worked out once off the tangents and τ above where the kernel
+/// `words`), worked out once off the tangents above where the kernel
 /// writes them: every thread of the cast and the renderer's dispatches and
 /// buffer read it here, none works it out again.
 pub const GRID: usize = HIDE + CUT_WORDS;
@@ -52,7 +50,7 @@ pub const WORDS: usize = SUN + SUN_WORDS;
 const _: () = assert!(
     STEPS == ORIGIN + 3
         && REACH == FORWARD + 3
-        && TAU == RIGHT + 3
+        && UP == RIGHT + 4
         && TAN == UP + 4
         && RANGE == TAN + 2
         && CARVE == RANGE + 2

@@ -77,7 +77,6 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
         k="polar/azimuth"
         v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`}
       />
-      <Row k="τ" v={or(v.tau)} />
       <Row k="center lat/lon" v={geo(v.center_lat, v.center_lon)} />
       <Row k="center altitude" v={metres(v.center_z)} />
       <Head>Under the pointer, as drawn</Head>

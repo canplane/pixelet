@@ -4,7 +4,7 @@
 //! every zoom, and its scale on the camera grid's cells.
 
 use super::tile::{tile_at, Cell, Tile};
-use crate::space::camera::grid::{split_distance, Tau};
+use crate::space::camera::grid::{cell_at, split_distance, WINDOW_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{index_of, Zoom};
 use crate::space::hierarchy::tree::{
@@ -23,17 +23,18 @@ pub const fn coarsest(lattice: Lattice) -> Zoom {
     lattice.read_zoom(GROUND.cell_zoom(super::tile::TOP_ZOOM))
 }
 
-/// How far from an observer's foot a demand at `zoom` can lie: where the
-/// grid's cell a zoom coarser begins. Bounds the run along the ground too.
+/// How far from an observer's foot a demand at `zoom` can lie: where a
+/// window holds the grid's cell a zoom coarser from (`WINDOW_MARGIN`).
+/// Bounds the run along the ground too.
 pub const fn demand_reach(lattice: Lattice, zoom: Zoom) -> f64 {
-    split_distance(lattice.grid_zoom(zoom - 1))
+    split_distance(lattice.grid_zoom(zoom - 1)) * WINDOW_MARGIN
 }
 
 /// A lattice placed in the world: the tiles and cells a node, a point or an
 /// index names.
 pub trait Cells {
     fn read_tile(self, node: (Zoom, [i32; 2]), cell: Zoom) -> Tile;
-    fn z_at(self, tau: Tau, r2: f64) -> Zoom;
+    fn z_at(self, r2: f64) -> Zoom;
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell;
     fn cell_at(self, tile: Tile, index: u32) -> Cell;
     fn parent_cell(self, q: usize, index: u32) -> u32;
@@ -48,8 +49,8 @@ impl Cells for Lattice {
 
     /// The tile whose records fold into the grid's cell at `r2`, a distance
     /// squared; held to the pyramid.
-    fn z_at(self, tau: Tau, r2: f64) -> Zoom {
-        self.read_zoom(tau.cell_at(r2))
+    fn z_at(self, r2: f64) -> Zoom {
+        self.read_zoom(cell_at(r2))
     }
 
     /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.

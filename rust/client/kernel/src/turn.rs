@@ -71,7 +71,6 @@ fn companion_props() -> Option<CompanionProps> {
         steered: crate::domain::control::camera::input::steering(),
         following: crate::domain::control::navigation::follow_mode::following(),
         eye,
-        tau: crate::domain::view::lens::tau(),
     })
 }
 
@@ -104,22 +103,19 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     crate::domain::view::demand::admit_arrived(&ctx.pass);
     changes_step();
-    let tau = crate::domain::view::lens::tau();
     TerrainTile::demand().step(
         crate::domain::control::navigation::destination::tile(),
         crate::domain::layer::terrain::window::pinned(),
-        tau,
     );
     // Nothing is fetched while places are hidden.
     match crate::domain::view::setting::store::settings_store().place {
-        true => PlaceTile::demand().step(None, &[], tau),
+        true => PlaceTile::demand().step(None, &[]),
         false => PlaceTile::demand().idle(),
     }
-    Earth::demand().step(None, &[], tau);
+    Earth::demand().step(None, &[]);
     DivisionTile::demand().step(
         crate::domain::layer::division::line(crate::domain::control::camera::controller::focus()),
         &[],
-        tau,
     );
 }
 
@@ -136,7 +132,7 @@ fn scene_tick(ctx: &mut TickContext) {
 
 fn camera_input_tick(_: &mut TickContext) {
     if let Some([x, y]) = camera_input_step() {
-        crate::pointer::hover(x, y, crate::domain::view::lens::tau());
+        crate::pointer::hover(x, y);
     }
 }
 

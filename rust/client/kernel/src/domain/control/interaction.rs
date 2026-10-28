@@ -10,7 +10,6 @@ pub mod pick;
 
 use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::{cube, DecorId};
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -155,27 +154,27 @@ impl Picked {
     }
 }
 
-/// What the hover picks at `ndc_x`, `ndc_y` on the world drawn at `drawn`,
+/// What the hover picks at `ndc_x`, `ndc_y`,
 /// from the pose as the camera holds it now, which a door event or a
 /// controller may have moved since the turn composed the view.
-pub(crate) fn picked(ndc_x: f64, ndc_y: f64, drawn: Tau) -> Option<Picked> {
+pub(crate) fn picked(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
     let pose = crate::domain::control::camera::controller::pose()?;
     let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
-    let hit = ray_pick(origin, direction, drawn)?;
+    let hit = ray_pick(origin, direction)?;
     let drawn = crate::domain::view::observation::eye().map(|eye| {
         let v = v3::sub(&hit.cube.center(), &eye);
-        crate::domain::query::by_distance(drawn).at(v3::dot(&v, &v) as f32)
+        crate::domain::query::by_distance().at(v3::dot(&v, &v) as f32)
     });
     Some(Picked { hit, drawn })
 }
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
-pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
+pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
     let hover = &mut interaction().hover;
-    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y, drawn).filter(|p| !p.folded()) else {
+    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y).filter(|p| !p.folded()) else {
         *hover = Hover::default();
         return;
     };
@@ -229,9 +228,9 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     hover.coord = Some(corner);
 }
 
-/// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
-pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
-    hover_at(ndc_x, ndc_y, drawn);
+/// A tap at `ndc_x`, `ndc_y` with the tool held.
+pub fn tap(ndc_x: f64, ndc_y: f64) {
+    hover_at(ndc_x, ndc_y);
     let Some(hovered) = interaction().hover.coord else {
         return;
     };

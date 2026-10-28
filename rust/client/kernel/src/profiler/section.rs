@@ -128,7 +128,6 @@ pub struct ViewSection {
     pub dist: f64,
     pub polar: f64,
     pub azimuth: f64,
-    pub tau: f64,
     pub center_lon: f64,
     pub center_lat: f64,
     pub center_z: f64,
@@ -151,7 +150,7 @@ pub struct ViewSection {
 }
 
 words!(ViewSection, SUMMARY::view::WORDS,
-    dist => SUMMARY::view::dist, polar => SUMMARY::view::polar, azimuth => SUMMARY::view::azimuth, tau => SUMMARY::view::tau,
+    dist => SUMMARY::view::dist, polar => SUMMARY::view::polar, azimuth => SUMMARY::view::azimuth,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
