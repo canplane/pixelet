@@ -9,8 +9,8 @@ System code — xpute, and pixelet's host, its brackets and the kernel's door an
 sys — is written as Unix V6 is, xv6 its reading today. Domain code, the world
 and the shell, is not held to it. What follows is that, branch by branch, and
 the few rules the code holds everywhere. What the parts are and where their
-boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
-`AGENTS.md`'s.
+boundaries run is `ARCHITECTURE.md`'s, and the rules over the host/guest
+boundary `AGENTS.md`'s.
 
 ## Names
 
@@ -52,6 +52,10 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
   standard library alone, or sh. One in JavaScript is an ES module, TypeScript
   where a loader takes it: no `.cjs` or `.cts`. Node runs only the native
   toolchain's own scripts.
+- What builds, caches or generates serves a shared checkout, an export and a
+  worktree alike, since the user runs agents in worktrees at times: its key
+  holds no absolute path and no session's own variable, and it finds the tree
+  from where it runs.
 - Deno is the TypeScript trees' tool (`ts/`, `xpute/ts/`) and runs only in
   them; a program outside them (wrangler, aws) is called from the PATH, never
   through Deno or a tree's lock.

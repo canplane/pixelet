@@ -1,6 +1,6 @@
 ---
 name: reshape
-description: How a change to the code's structure or speed is found, proposed and proven — the whole pipeline mapped, a concept held in several forms made one across layers and kinds, no option that breaks a seam, equal output over real data the proof, one timing at the end. Use before proposing or making an optimization or a restructuring, and before naming options for any fix.
+description: How a change to the code's structure or speed is found, proposed and proven — the whole pipeline mapped, a concept held in several forms made one across layers and kinds, no option that breaks a seam, equal output over real data the proof where a tool shows it, one timing at the end. Use before proposing or making an optimization or a restructuring, and before naming options for any fix.
 ---
 
 # Reshaping
@@ -24,8 +24,8 @@ worse with each one (the user: "구조적으로 통째로 최적화를 해야지
 
 ## Proposing it
 
-Every option stays inside the layering (AGENTS.md; `cargo check-rules` holds
-its order). One that breaks a seam, a way around the world's one query or a
+Every option stays inside the layering (ARCHITECTURE.md; `cargo check-rules`
+holds its order). One that breaks a seam, a way around the world's one query or a
 layer reading another's storage, is no option: it is never listed, ranked or
 offered as the alternative. Where only a breach would be fast, say so, and
 offer what the structure allows.
@@ -48,9 +48,10 @@ not offered as a virtue.
 
 ## Proving it
 
-- By equal output over real data, not by a timing: for the ground's fill,
-  `fill_digest` ([verify-change](../verify-change/SKILL.md)).
-- A timing comes once, at the end, against the backlog's baseline: the commit
-  before and the change each served from its own export on its own port,
-  side by side, in a GPU window the sessions agreed. Never a window to
-  compare variants or chase a span.
+- By equal output over real data, not by a timing, where a tool shows it: for
+  the ground's fill, `fill_digest` ([verify-change](../verify-change/SKILL.md)).
+  Where none does, by a test that fails when the change is wrong and by its
+  generated files being what their sources make, and the proof says so.
+- A timing comes once, at the end: the commit before and the change each
+  served from its own export on its own port, side by side, in a GPU window
+  the sessions agreed. Never a window to compare variants or chase a span.
