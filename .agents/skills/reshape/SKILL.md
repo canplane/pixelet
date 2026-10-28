@@ -7,7 +7,7 @@ description: How a change to the code's structure or speed is found, proposed an
 
 Clean structure comes first. Speed is earned by reshaping the whole, never by
 picking off one hot spot: a greedy fix, an ad hoc addition, makes the code
-worse with each one (the user: "구조적으로 통째로 최적화를 해야지").
+worse with each one; the user asks that optimizing be structural and whole.
 
 ## Finding it
 

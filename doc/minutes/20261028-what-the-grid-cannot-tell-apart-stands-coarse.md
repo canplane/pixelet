@@ -13,55 +13,42 @@ from the code as it stands. Nothing in it is built yet.
 > and the zoom it meets the world at follows how densely the rays land there.
 > Every answer holds alike across direction, source, observer, axis and device.
 
-## Thesis: the philosophy, in the user's words
+## Thesis: the philosophy, as the user put it
 
-Times are KST, 10-27, and the quotes are verbatim. The September minutes they
-point to are `archive/20260928-what-is-drawn-is-what-the-screen-covers.md` ("A
-cell's inside is don't-care", "A box is all the view asks"),
+Times are KST, 10-27, and each point below is the user's, put in English. The
+September minutes those points rest on are
+`archive/20260928-what-is-drawn-is-what-the-screen-covers.md` ("A cell's inside
+is don't-care", "A box is all the view asks"),
 `archive/20260923-a-coarse-cell-is-isotropic.md` and
 `archive/20260926-the-view-is-cubes-about-the-eye.md` (the eye's cubes, the
 pyramid, called RTE).
 
 - **Far is large; under the grid, anything goes.**
-  - 01:31 "멀면 그만큼 크셔야지. 격자보다 작은데 내가 좆대로 그리든 말든 뭔
-    상관이야. … LOD로 가서 어차피 괜찮은게 아닌거야? … 우아하고, 수학적이고,
-    결정적이고, 상한이 닫히게 해결하길 바라."
-  - In English: far must be correspondingly large; what is smaller than the
-    grid may be drawn any way at all; solve it elegantly, mathematically,
+  - 01:31: far must be correspondingly large; what is smaller than the grid
+    may be drawn any way at all; solve it elegantly, mathematically,
     deterministically, with the bound closed.
 - **Perspective is the bound.**
-  - 01:32 "원근법이 상한을 자동으로 만들고 구조적 상한을 보장한다."
-  - In English: perspective makes the upper bound by itself and guarantees it
+  - 01:32: perspective makes the upper bound by itself and guarantees it
     structurally.
 - **The query is three-dimensional, in the pyramid's units.**
-  - 01:48 "쿼리는 3차원, 피라미드의 줌/격자 단위로 양자화되어서 답하는게 맞을거야.
-    … 그게 대칭성이고 환원이고 RTE니까."
-  - 01:41 "우리는 one axis … 라는 관점이 있잖아."
-  - In English: the query asks in 3D and answers quantized to the pyramid's zoom
-    and grid, which is symmetry, reduction and RTE. That is the one-axis view.
+  - 01:41: we hold the one-axis view.
+  - 01:48: the query asks in 3D and answers quantized to the pyramid's zoom
+    and grid, which is symmetry, reduction and RTE.
 - **The LOD look is the floating box.**
-  - 01:55 "LOD 공중부양 상자"
-  - 02:33 "기존 LOD 모습처럼 가면 되는거야. 1/8 양자화, 공중부양 등"
-  - In English: the coarse look stays as it was, a box quantized to eighths,
-    floating in its cell.
+  - 01:55 and 02:33: the coarse look stays as it was, a box quantized to
+    eighths, floating in its cell.
 - **No direction is privileged.**
-  - 10:17 "원근으로 보고 빈 곳은 점프하는데 지평선이 왜 자꾸 우대받냐고. 내가
-    공중을 보든지 아래를 보든지 똑같아야 할거 아니야."
-  - In English: looking up, down or at the horizon must cost and behave alike.
+  - 10:17: looking up, down or at the horizon must cost and behave alike.
 - **Don't-care means pruned, not drawn exactly.**
-  - 10:19 "애초에 don't care로 보고 그냥 가지치기를 쳐서 그리지 말든가 하란
-    말이다. 격자보다 작으면. 내가 언제 정확하게 그리라고 했어?"
-  - 10:28 "그 철학은 9월에 이미 다 확정된거고"
-  - In English: treat what is under the grid as don't-care and prune it; it was
-    never to be drawn exactly. The philosophy was settled in September.
+  - 10:19: treat what is under the grid as don't-care and prune it; it was
+    never to be drawn exactly.
+  - 10:28: the philosophy was settled in September.
 - **Observers share units, not implementations.**
-  - 12:18 "해상도/가지치기 단위는 같이 맞추는게 맞지. 하지만, 인터페이스만 같고
-    구현은 자기 효과에 맞게"
-  - In English: the eye and the sun share resolution and pruning units and one
+  - 12:18: the eye and the sun share resolution and pruning units and one
     interface, and each is implemented to its own effect.
 - **The display decides nothing.**
-  - 14:47 "LOD/레이에서 dpr의 영향을 없애자고. 직교적으로" (`0c84382cd`)
-  - In English: remove the display ratio's effect on LOD and rays, orthogonally.
+  - 14:47: remove the display ratio's effect on LOD and rays, orthogonally
+    (`0c84382cd`).
 
 The September record says what the edge of don't-care is (20260928): "What is
 not allowed is for an approximation to leak: to change what a neighbouring cell
@@ -136,12 +123,12 @@ axis of the screen. That is the gap.
 - **The touch rule** (`226b28d72`, `637b88db4`, `f3a2fbdd9`, `e5532c80c`).
   - It placed a coarse cell by bits only the ground set, so a terrace of placed
     cubes would look otherwise than the ground's. That breaks source symmetry.
-  - The user: "사용자는 겉으로 지형인지 오브젝트인지 구분이 안되어야 한다" (23:52;
-    a user must not be able to tell the ground from what is placed).
+  - The user (23:52): a user must not be able to tell, by its look, the ground
+    from what is placed.
   - Reverted whole in `8ee81810d`. The lesson is in the reshape skill,
     "Proposing it" (`de7483394`).
-- **Shadows and AO raised as costs.** They do not matter here. The user: "아예
-  텅 비어버리는게 중요한 문제지" (what matters is going empty).
+- **Shadows and AO raised as costs.** They do not matter here. The user: what
+  matters is going entirely empty.
 - **A pixel walking again when its pick is far beyond its neighbours'.** It
   guesses at the observation instead of following the rule.
 - **Reverting the prune, or τ.** Either regresses the horizon (10:17) or the
@@ -162,10 +149,9 @@ axis of the screen. That is the gap.
 
 ## Synthesis: the direction
 
-The user, 10-27 23:58: "그냥 픽셀별로 레이를 다 쏴. 빔으로 원뿔을 잘 노려.
-그리고 닿는 밀도에 비례하게 LOD/줌을 세팅하는거지." In English: shoot a ray for
-every pixel, aim the cone well with the beams, and set the LOD and zoom in
-proportion to how densely the rays land. Read with the morning's philosophy:
+The user, 10-27 23:58: shoot a ray for every pixel, aim the cone well with the
+beams, and set the LOD and zoom in proportion to how densely the rays land.
+Read with the morning's philosophy:
 
 - **Every pixel is answered by a ray of its own.** It is resumed from the beam's
   conservative start, as 20261022 was first built, where the proof held: 0 of
@@ -202,11 +188,10 @@ core, and where the two part the user's stands.
 
 ## The user's verdict and turn (10-28)
 
-- **The axis alone lets the rows go.** The user: "이게 원래의 축이 맞아. 그런데
-  이렇게 하면, 결론이 가로줄을 그냥 신경쓰지 않는다는 말로 가잖아." In English:
-  this is the original axis, but on its own it concludes that the rows do not
-  matter. A row thinner than the grid on the screen is don't-care under it,
-  and the 14:00 rows were let pass for speed on that ground.
+- **The axis alone lets the rows go.** The user: this is the original axis, but
+  on its own it concludes that the rows do not matter. A row thinner than the
+  grid on the screen is don't-care under it, and the 14:00 rows were let pass
+  for speed on that ground.
 - **The turn.** Keep the axis, go to the pixel, and turn the LOD toward the
   rays' density. Many rays then land on the same place.
 - **Concern: the prune.** Can a walk still prune when many rays land on one
