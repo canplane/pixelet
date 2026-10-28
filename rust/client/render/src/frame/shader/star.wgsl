@@ -16,6 +16,10 @@ struct StarOut {
   @location(3) halo: f32,
 };
 
+// The flux a star of `SKY_STAR_HALO_MAG` has, by the law the catalog's flux is
+// read off its magnitude by (gpu/star.rs `star_floats`).
+const HALO_FROM: f32 = pow(10.0, -0.4 * SKY_STAR_HALO_MAG);
+
 // Kasten and Young 1989, finite at the horizon where 1/sin is not.
 fn airmass(sin_alt: f32) -> f32 {
   let alt = degrees(asin(clamp(sin_alt, 0.0, 1.0)));
@@ -43,7 +47,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
     return o;
   }
   let sigma = (SKY_STAR_SIGMA_PX + SKY_STAR_SWELL_PX * sqrt(max(flux - 1.0, 0.0))) * stars_density();
-  let halo = select(0.0, SKY_STAR_HALO_GAIN * sqrt(flux / SKY_STAR_HALO_FROM), flux > SKY_STAR_HALO_FROM);
+  let halo = select(0.0, SKY_STAR_HALO_GAIN * sqrt(flux / HALO_FROM), flux > HALO_FROM);
   let corner = vec2f(f32(v & 1u), f32(v >> 1u)) * 2.0 - 1.0;
   let half = SKY_STAR_CUTOFF_SIGMAS * sigma * select(1.0, SKY_STAR_HALO_SIGMA, halo > 0.0);
   clip.z = 0.0;

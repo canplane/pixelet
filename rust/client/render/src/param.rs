@@ -328,9 +328,9 @@ pub mod sky {
             SIGMA_PX: f32 = 0.85;
             SWELL_PX: f32 = 0.6;
             /// A faint wide halo shows which star is brighter once both cores
-            /// are white: from a first-magnitude star's flux, 10^(−0.4·1)
-            /// (gpu/star.rs `star_floats`).
-            HALO_FROM: f32 = 0.398;
+            /// are white: from a first-magnitude star on (star.wgsl
+            /// `HALO_FROM`).
+            HALO_MAG: f32 = 1.0;
             HALO_SIGMA: f32 = 4.0;
             HALO_GAIN: f32 = 0.06;
             /// How many of its deviations a star's quad reaches.
