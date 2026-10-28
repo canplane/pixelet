@@ -1,8 +1,7 @@
 // pxl-kernel/domain/query/decor/asset.rs
 
 //! Every decor's models, registered as any model is (`model_of`, the one
-//! table, which a landing wakes a turn for), so the pick
-//! (`domain/query/decor/strike.rs`) and the renderer read the same mesh. A
+//! table, which a landing wakes a turn for), as the renderer reads them. A
 //! skin is the load cache's (`load_image`), asked of it where read.
 
 use crate::domain::query::model::asset::{model_of, registered};

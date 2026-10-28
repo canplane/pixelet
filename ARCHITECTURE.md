@@ -306,8 +306,8 @@ Control asks the same world, one ray at a time, at the zoom the eye's rays draw
 there, so what control meets is what is drawn (`pxl-kernel domain/query/ray.rs`
 `first_hit`). A walker stands on the first cell that fills down its cell's
 columns, at the finest zoom placed there (`domain/query/support.rs`), and the
-pointer's ray strikes decor by its model where the rays draw decor as it is
-(`domain/query/decor.rs`). None reads a layer.
+pointer's ray strikes decor as the box it claims where the rays draw decor as it
+is (`domain/query/decor.rs`). None reads a layer.
 
 What the bucket serves is said in its **declaration**: the coarsest zoom
 supplied whole, each kind's format and version, and the shards served

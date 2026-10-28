@@ -77,28 +77,30 @@ fn room(tool: PlacementTool, corner: &Q3) -> Aabb {
 }
 
 /// The columns `is_placement_blocked` reads the world over, in units, X then
-/// Y, lowest then highest: its room's, and about it what decor grown under
-/// it stands, turns and claims by — a decor's reach past it, the cells its
-/// pose votes by about each — and the room's own width again, where
-/// `World::editable` bounds it by the nodes about it.
+/// Y, lowest then highest: its room's, and about it a placed decor's reach
+/// past it, as `World::placed_occupying` reads them, and the room's own
+/// width again, where `World::editable` bounds it by the nodes about it.
 pub fn placement_reads(tool: PlacementTool, corner: &Q3) -> [[f64; 2]; 2] {
     let room = room(tool, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
-    let pad = crate::domain::query::decor::strike::reach()
-        + f64::from(pxl_spec_core::param::scatter::ALIGN_NEIGHBOR_RADIUS + 1)
-            * units(GROUND.cell())
-        + width;
+    let pad = crate::domain::query::decor::strike::reach() + width;
     [
         [room.min[0] - pad, room.min[1] - pad],
         [room.max[0] + pad, room.max[1] + pad],
     ]
 }
 
+/// Whether what `tool` places may stand over an instance of `under`: what
+/// stands (`Kind::stands`) only on what is stood on (`Kind::stood_on`).
+fn goes_on(tool: Kind, under: Kind) -> bool {
+    !tool.stands() || under.stood_on()
+}
+
 /// The shared check for the placement commit and its hover preview: its room
-/// is where the world takes an edit (`World::editable`), and nothing placed
+/// is where the world takes an edit (`World::editable`), nothing placed
 /// shares the room its kind occupies (`World::placed_occupying`), which
-/// holds its cell. A decor or a marker is stood on nowhere
-/// (`Kind::stood_on`), so neither is placed on one, grown or placed.
+/// holds its cell, and nothing in the cell under it is one it may not stand
+/// on (`goes_on`), a marker, as the ground grows none.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
     let (world, room) = (World::now(), room(tool, corner));
     let taken = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
@@ -106,12 +108,8 @@ pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
         min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
         max: [room.max[0], room.max[1], room.min[2]],
     };
-    let stood_on = |e: &Entry| kind_of(e.state).is_none_or(Kind::stood_on);
-    let on_instance = || {
-        world.placed_occupying(&under, |e| !stood_on(e)).is_some()
-            || world.grown_claim(&under).is_some()
-    };
-    taken || !tool.kind().stood_on() && on_instance()
+    let refuses = |e: &Entry| kind_of(e.state).is_some_and(|k| !goes_on(tool.kind(), k));
+    taken || world.placed_occupying(&under, refuses).is_some()
 }
 
 /// The center of the cell a hover anchor (a min corner) points at: where a
@@ -131,3 +129,7 @@ pub fn object_aabb(obj: &Entry) -> Aabb {
     let max = min.map(|v| v + obj.size());
     Aabb { min, max }
 }
+
+#[cfg(test)]
+#[path = "collision.test.rs"]
+mod test;

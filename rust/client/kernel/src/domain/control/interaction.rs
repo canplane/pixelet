@@ -10,6 +10,7 @@ pub mod pick;
 
 use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::{cube, DecorId};
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -121,6 +122,16 @@ enum Struck {
     Grown([i32; 3], Instance),
 }
 
+/// The box what is put across the face `hit` struck goes flush against, past
+/// the hit's own: a placed cube's entry, as it is stored. A decor's is the
+/// box it claims, which the hit carries.
+fn flush_against(hit: &Hit) -> Option<Aabb> {
+    match hit.struck {
+        crate::domain::query::Struck::Object(_) => resolve_hit_object(hit).map(|o| object_aabb(&o)),
+        _ => None,
+    }
+}
+
 /// What the pick struck, as a tool reads it: a placed object, or a decor the ground grew.
 fn resolve_struck(hit: &Hit) -> Option<Struck> {
     match hit.struck {
@@ -141,13 +152,22 @@ pub(crate) struct Picked {
     pub drawn: Option<Zoom>,
 }
 
+/// The cell what `hit` struck stands in: a decor's, whatever its box, else
+/// the box struck.
+fn cell_struck(hit: &Hit) -> Aabb {
+    match hit.struck {
+        crate::domain::query::Struck::Decor(i) => i.cell(),
+        _ => hit.cube,
+    }
+}
+
 impl Picked {
-    /// The zoom of the box struck.
+    /// The zoom of the cell struck.
     pub fn held(&self) -> Zoom {
-        of_side(self.hit.cube.extent()[0])
+        of_side(cell_struck(&self.hit).extent()[0])
     }
 
-    /// Whether the rays draw coarser there than the box struck: a summary,
+    /// Whether the rays draw coarser there than the cell struck: a summary,
     /// not what is held, so nothing in it is struck.
     pub fn folded(&self) -> bool {
         self.drawn.is_some_and(|z| z < self.held())
@@ -163,7 +183,7 @@ pub(crate) fn picked(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
     let hit = ray_pick(origin, direction)?;
     let drawn = crate::domain::view::observation::eye().map(|eye| {
-        let v = v3::sub(&hit.cube.center(), &eye);
+        let v = v3::sub(&cell_struck(&hit).center(), &eye);
         crate::domain::query::by_distance().at(v3::dot(&v, &v) as f32)
     });
     Some(Picked { hit, drawn })
@@ -183,13 +203,10 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        // A decor met in front of the pick is what the new cube goes flush
-        // against; a scattered one is no entry, so it lands as on the ground.
-        let precise_box = resolve_hit_object(&hit).map(|o| object_aabb(&o));
         hover.coord = Some(world_adjacent_corner(
             &hit,
             tool.size(),
-            precise_box.as_ref(),
+            flush_against(&hit).as_ref(),
         ));
         return;
     }
@@ -203,14 +220,11 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         Some(Struck::Grown(_, s)) => Some(s),
         _ => None,
     };
-    // A scattered decor is passed through.
-    hover.approach = Some(match &struck {
-        Some(Struck::Object(o)) => {
-            world_adjacent_corner(&hit, units(GROUND.cell()), Some(&object_aabb(o)))
-        }
-        Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), *cell),
-        None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
-    });
+    hover.approach = Some(world_adjacent_corner(
+        &hit,
+        units(GROUND.cell()),
+        flush_against(&hit).as_ref(),
+    ));
     let (corner, zoom) = match struck {
         Some(Struck::Object(o)) => (o.corner(), o.zoom),
         Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), GROUND.cell()),
