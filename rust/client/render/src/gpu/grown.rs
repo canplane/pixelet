@@ -5,8 +5,8 @@
 //! placed decor handed as records beside it — a candidate grown again only
 //! where what it reads changed (`decor_mark_cs`, `Grows`), its record
 //! standing otherwise; then each frame each
-//! record taken where the rays ask the zoom it was grown at and sized for
-//! the screen, counted a draw region (`decor_count_cs`), the regions laid
+//! record taken where the rays ask the leaf cell's zoom or finer and sized
+//! for the screen, counted a draw region (`decor_count_cs`), the regions laid
 //! out with their indirect args (`decor_args_cs`), and each record drawn
 //! into the decor's instances in the layout the decor and impostor shaders read
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
@@ -280,7 +280,12 @@ impl Grown {
         w.read(grows.window);
         let moved = !w.end();
         self.marked = self.holding;
-        self.marking = self.stale || moved || !grows.fresh.is_empty() || self.marked != 0;
+        // A square filled at a coarser window than the leaves' grows no decor.
+        let fresh = grows
+            .fresh
+            .iter()
+            .any(|f| f[window::FRESH_CELL as usize] == pxl_spec_core::LEAF_CELL);
+        self.marking = self.stale || moved || fresh || self.marked != 0;
         if self.marking {
             // The boxes held, at every zoom, then each square handed, at
             // its window's alone.
