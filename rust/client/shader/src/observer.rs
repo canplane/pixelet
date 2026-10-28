@@ -190,13 +190,15 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
 /// cell `cell`'s start from the deepest node of its line holding where it
 /// is there, held from the ray's own origin, or from the root at it where
 /// that lies in another root (beam.rs `resumed`); through `q`, reading or
-/// writing. Its met, and the nodes the line's beam ray visited.
+/// writing, its line left where it ends to `keep`. Its met, and the nodes
+/// the line's beam ray visited.
 pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     o: &O,
     q: &mut Q,
     w: &'a W,
     aim: &Aim,
     cell: [u32; 2],
+    keep: &mut impl cast::Keep<Q::At>,
 ) -> (Met<Q::At>, u32)
 where
     Beamed<'a, W>: cast::Over<Q::At>,
@@ -209,7 +211,7 @@ where
     } else {
         line.node()
     };
-    let met = resumed(q, aim.origin, &aim.ray, aim.detail, t, &line, node);
+    let met = resumed(q, aim.origin, &aim.ray, aim.detail, t, &line, node, keep);
     (met, line.visits())
 }
 
@@ -245,6 +247,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
         &*w,
         &aim,
         o.sample_cell(s),
+        &mut (),
     );
     tallied(seen, o.tally(), tally::SAMPLE, met.visits);
     let met = Met {
@@ -369,13 +372,15 @@ fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2]) -> bool {
 
 /// The ray at `at` walked again from its cell's start through the observed
 /// pyramid writing what it asks, a ray its pick and the pyramid left
-/// unmet: its aim, its met and the nodes its beam ray visited.
+/// unmet, its line left where it ends to `keep`: its aim, its met and the
+/// nodes its beam ray visited.
 pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(
     o: &O,
     world: World<'_, L>,
     seen: &mut Seen,
     w: &W,
     at: O::At,
+    keep: &mut impl cast::Keep<Writ>,
 ) -> (Aim, Met<Writ>, u32) {
     let aim = o.aim(at);
     let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[2]);
@@ -390,6 +395,7 @@ pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(
         w,
         &aim,
         o.cell_of(at),
+        keep,
     );
     tallied(seen, o.tally(), tally::MISS, met.visits);
     (aim, met, before)

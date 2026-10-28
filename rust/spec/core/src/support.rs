@@ -11,7 +11,7 @@
 //! top (`asset`). The CPU's and a GPU's alike, each over its own reading of
 //! the world (`cast::Query`).
 
-use crate::cast::{self, Detail, Ends, Keep, Node, Query, Ray, Until, DEPTH};
+use crate::cast::{self, Detail, Ends, Keep, Met, Node, Query, Ray, Until, DEPTH};
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
 /// A descent's line: the node it ended at, by its index at its zoom, what
@@ -36,14 +36,23 @@ pub struct Footing<A> {
     origin: [i32; 3],
 }
 
-impl<A: Copy> Keep<A> for Footing<A> {
-    fn keep(&mut self, node: &Node, live: A, stack: &[A; DEPTH]) {
-        self.line = Line {
-            at: node.index(self.origin),
+impl<A: Copy> Line<A> {
+    /// The line a walk from `origin` left where it ended at `node`
+    /// (`cast::Keep`): what was handed it, `live`, and what was handed each
+    /// node over it, by zoom.
+    pub fn kept(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
+        Line {
+            at: node.index(origin),
             zoom: node.zoom,
             live,
             stack: *stack,
-        };
+        }
+    }
+}
+
+impl<A: Copy> Keep<A> for Footing<A> {
+    fn keep(&mut self, met: &Met<A>, stack: &[A; DEPTH]) {
+        self.line = Line::kept(self.origin, &met.stop.node, met.stop.at, stack);
     }
 }
 
@@ -234,6 +243,104 @@ mod tests {
         }
         let far = [(3 << UNIT_ZOOM) + 6, 3, -1];
         assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
+    }
+
+    type At = (Zoom, [i32; 3]);
+
+    /// A walk's line where it ends (`cast::Keep`).
+    struct Kept(Option<Line<At>>, [i32; 3]);
+
+    impl Keep<At> for Kept {
+        fn keep(&mut self, met: &Met<At>, stack: &[At; DEPTH]) {
+            self.0 = Some(Line::kept(self.1, &met.stop.node, met.stop.at, stack));
+        }
+    }
+
+    /// What was handed each node of a kept line, as a beam ray's resumed
+    /// walk reads it (`cast::Over`).
+    struct Along<'a>(&'a Line<At>);
+
+    impl cast::Over<At> for Along<'_> {
+        fn over(&self, zoom: Zoom) -> At {
+            if zoom == self.0.zoom {
+                self.0.live
+            } else {
+                self.0.stack[zoom as usize]
+            }
+        }
+    }
+
+    /// The same node, handed the same down every zoom to it.
+    fn same(a: &Line<At>, b: &Line<At>) {
+        assert_eq!((a.at, a.zoom, a.live), (b.at, b.zoom, b.live));
+        assert_eq!(a.stack[..a.zoom as usize], b.stack[..b.zoom as usize]);
+    }
+
+    /// The line a walk keeps where it stops is the one straight down to its
+    /// stop, whether it walked from the root or resumed under another
+    /// ray's line and climbed over where it resumed; the assets about the
+    /// stop asked off it are the world's.
+    #[test]
+    fn a_walk_keeps_the_line_down_to_where_it_stops() {
+        let s = FINEST_ZOOM - UNIT_ZOOM;
+        let o = [(6 << s) + 17, (3 << s) + 90, 9 << s];
+        let detail = Detail {
+            range: [UNIT_ZOOM, UNIT_ZOOM],
+            eye: [0.0; 3],
+            spacing: cast::Spacing::NONE,
+        };
+        let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
+        let mut first = Kept(None, o);
+        let met = cast::rooted(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
+        assert_eq!(met.ends, Ends::Stop);
+        let first = first.0.unwrap();
+        same(&first, &line(&mut Step, first.zoom, first.at));
+        for d in [
+            [-0.45, 0.05],
+            [-0.5, 0.0],
+            [-0.4, 0.12],
+            [-0.7, -0.1],
+            [-0.2, 0.3],
+            [-0.45, 0.9],
+            [-0.1, 2.5],
+            [0.3, 0.05],
+        ] {
+            for share in [0.2, 0.5, 0.9] {
+                let ray = Ray::new([d[0], d[1], -1.0], 64.0);
+                let t = met.stop.t * share;
+                let (h, held) = met.stop.node.over(cast::point_at(o, &ray, t));
+                let h = cast::holding(o, &ray, h, t);
+                let from = if held {
+                    (h, cast::Over::over(&Along(&first), h.zoom), t)
+                } else {
+                    (Node::ROOT, Step.root(Node::ROOT.index(o)), t)
+                };
+                let mut kept = Kept(None, o);
+                let resumed = cast::walk(
+                    &mut Step,
+                    o,
+                    &ray,
+                    detail,
+                    Until::Opaque,
+                    from,
+                    &Along(&first),
+                    &mut kept,
+                );
+                assert_eq!(resumed.ends, Ends::Stop, "{d:?} {share}");
+                let kept = kept.0.unwrap();
+                let walked = line(&mut Step, kept.zoom, kept.at);
+                same(&kept, &walked);
+                for d in 0..6u32 {
+                    let mut c = kept.at;
+                    c[(d / 2) as usize] += if d % 2 == 0 { -1 } else { 1 };
+                    assert_eq!(
+                        asset(&mut Step, &kept, UNIT_ZOOM, c),
+                        asset(&mut Step, &walked, UNIT_ZOOM, c),
+                        "{c:?}"
+                    );
+                }
+            }
+        }
     }
 
     /// A line straight down to a node holds the assets about it as the

@@ -7,7 +7,7 @@
 //! once a box (`face_cs`).
 
 use pxl_spec_core::cast::{Ends, Met, Stop};
-use pxl_spec_core::{beam, cast, raster, way};
+use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
@@ -205,7 +205,7 @@ pub fn face_cs(
             eye,
             pool: way::tree::Read(pool),
         };
-        world.faced(origin, &ray, &met)
+        world.faced(origin, &ray, &met, support::line)
     };
     seen_put(beams, k + beam::SAMPLE_FACES, faces);
 }
