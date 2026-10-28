@@ -40,6 +40,7 @@ const OBJECT_NAMES = Array.from(
 /** Each list lane's names, slot by slot. */
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   phases: PHASES,
+  effects: EFFECT_NAMES,
   gpu_spans: GPU_SPAN_NAMES,
   census: CENSUS_TAGS,
   zoom_tiles: ZOOM_NAMES,
@@ -79,7 +80,6 @@ export const drawn = (f: Frame): [f64, f64] =>
   f.census.reduce(([d, t], [cd, ct]) => [d + cd, t + ct], [0, 0]);
 
 const NAME_TABLES: Record<string, readonly string[]> = {
-  worst_effect_name: EFFECT_NAMES,
   kind_name: FRAME_KINDS,
   wake_name: WAKES,
 };

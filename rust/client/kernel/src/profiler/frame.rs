@@ -27,11 +27,11 @@ const _: () = assert!(
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GpuSample {
-    /// Lags a frame or two: the read that landed with this frame, where
-    /// `read` is 1, its spans and `px` the world's pixels of the frame it
-    /// timed, what the spans were measured over; where it is 0, nothing was
-    /// measured with this frame and both are 0. The frame's GPU time is its
-    /// spans' sum (pxl-render renderer.rs `gpu_ms`).
+    /// This frame's own read, written back as it lands a frame or two later
+    /// (record.rs `profiler_record_gpu`): where `read` is 1, its spans and
+    /// `px` the world's pixels the frame drew, what the spans were measured
+    /// over; where it is 0, nothing measured this frame and both are 0. The
+    /// frame's GPU time is its spans' sum (pxl-render renderer.rs `gpu_ms`).
     pub read: f64,
     pub spans: [f64; GPU_SPANS],
     pub px: f64,
@@ -39,6 +39,10 @@ pub struct GpuSample {
     pub scale: f64,
     /// Every draw by its pipeline: the frame's draws and triangles are its sums.
     pub census: DrawCensus,
+    /// The renderer's number of this frame (pxl-render renderer.rs
+    /// `FrameStat::frame`), which a read names as it lands; 0 where it drew
+    /// none.
+    pub frame: f64,
 }
 
 #[repr(C)]
@@ -123,8 +127,11 @@ pub struct FrameSample {
     pub phases: [f64; PHASES.len()],
     pub stage_ms: f64,
     pub tasks_ms: f64,
-    pub worst_effect_ms: f64,
-    pub worst_effect_name: f64,
+    /// What the profiler cost the interval: its own record of the frame and
+    /// the shell's reads of it.
+    pub profiler_ms: f64,
+    /// Each effect's time in the frame turn, in EFFECT_NAMES' order.
+    pub effects: [f64; EFFECTS],
     /// The renderer's FRAME_KINDS and the edge's WAKES, by index.
     pub kind: f64,
     pub wake: f64,
@@ -209,10 +216,10 @@ words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, interval_ms => FRAME::interval_ms, refresh_ms => FRAME::refresh_ms, paced_ms => FRAME::paced_ms, settled => FRAME::settled,
     turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
-    worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
+    profiler_ms => FRAME::profiler_ms, effects => FRAME::effects,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
     gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
-    gpu.census => FRAME::census,
+    gpu.census => FRAME::census, gpu.frame => FRAME::gpu_frame,
     device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes,
     device.depth_bytes => FRAME::depth_bytes, device.pack_bytes => FRAME::pack_bytes, device.objects => FRAME::gpu_objects,
     tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
@@ -245,6 +252,7 @@ words!(FrameSample, FRAME::WORDS,
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
+pub const EFFECTS: usize = crate::turn::spec::EFFECT_NAMES;
 pub const STREAMS: usize = crate::sys::io::demand_spec::STREAM_NAMES;
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 
@@ -272,6 +280,12 @@ pub fn overran(f: &FrameSample) -> bool {
 /// turns rather than kept beside them.
 pub fn over_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.interval_ms).max(0.0)
+}
+
+/// What the interval's turns spent outside every part measured of them: the
+/// door's commands, its pump and the turns' own rise and fall.
+pub fn unmeasured(f: &FrameSample) -> f64 {
+    (f.busy_ms - f.effects_ms - f.tick_ms - f.stage_ms - f.tasks_ms - f.profiler_ms).max(0.0)
 }
 
 /// The interval's turns ran past it: a long frame, and `over_ms` by how much.

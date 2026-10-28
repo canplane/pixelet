@@ -32,7 +32,7 @@ use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_rays};
+use crate::profiler::report::{set_host_frame, set_rays, GpuRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -231,6 +231,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
                 objects,
                 ..DeviceSample::default()
             },
+            None,
         );
         return;
     };
@@ -239,11 +240,10 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     set_host_frame(
         out.kind,
         GpuSample {
-            read: f64::from(u8::from(stat.gpu_read)),
-            spans: stat.gpu_spans,
-            px: stat.gpu_px,
             scale,
             census: stat.census,
+            frame: stat.frame,
+            ..GpuSample::default()
         },
         DeviceSample {
             uploads: stat.uploads,
@@ -252,6 +252,11 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
             pack_bytes: stat.pack_bytes,
             objects,
         },
+        stat.gpu_read.then_some(GpuRead {
+            frame: stat.gpu_frame,
+            spans: stat.gpu_spans,
+            px: stat.gpu_px,
+        }),
     );
 }
 

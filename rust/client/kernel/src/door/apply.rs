@@ -431,10 +431,11 @@ pub(super) fn apply(
             applied(s)
         }
         // Memory is at most 1 GiB, so an address fits an i32.
-        Command::PROFILER_READ => Ok(Some(profiler_read(
-            abi::ProfilerRead::read(packet(pkt)?)?.window_ms,
-        ) as i32)),
-        Command::PROFILER_RINGS => Ok(Some(profiler_rings() as i32)),
+        Command::PROFILER_READ => {
+            let window_ms = abi::ProfilerRead::read(packet(pkt)?)?.window_ms;
+            Ok(Some(read_timed(|| profiler_read(window_ms)) as i32))
+        }
+        Command::PROFILER_RINGS => Ok(Some(read_timed(profiler_rings) as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
     }
 }
@@ -454,6 +455,15 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
             Ok(Some(0))
         }
     }
+}
+
+/// A read of the profiler, its time the profiler's cost to the interval
+/// (profiler/record.rs `profiler_record_read`).
+fn read_timed(read: impl FnOnce() -> u32) -> u32 {
+    let at = xpute_guest::clock::now();
+    let address = read();
+    crate::profiler::record::profiler_record_read(xpute_guest::clock::now() - at);
+    address
 }
 
 /// The address of READ's words (profiler.json): the summary over
