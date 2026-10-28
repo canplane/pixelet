@@ -9,7 +9,9 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
+use pxl_render::gpu::renderer::{
+    render_frame, Cast, EarthTiles, FrameInput, GroundSquares, Landing,
+};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -151,7 +153,11 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     let o = crate::domain::view::observation::observation();
     let eye = o.as_ref().and_then(crate::domain::scene::cast::eye);
     let mut terrain_upload = crate::domain::scene::cast::upload;
-    let mut terrain_landed = crate::domain::layer::terrain::window::landed;
+    let landed = core::cell::Cell::new(false);
+    let mut terrain_landed = |b: u32, ticket: u32, landing: Landing<'_>| {
+        landed.set(true);
+        crate::domain::layer::terrain::window::landed(b, ticket, landing);
+    };
     let out = render_frame(FrameInput {
         lists,
         environment: &scene().environment.out,
@@ -192,6 +198,11 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
     });
+    // What landed, folded once after all of it, before anything reads a
+    // bound again (domain/layer/terrain/window.rs `refold`).
+    if landed.get() {
+        crate::domain::layer::terrain::window::refold();
+    }
     if out.redraw {
         request_world_tick();
     }
