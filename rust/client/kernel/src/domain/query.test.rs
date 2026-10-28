@@ -122,7 +122,7 @@ fn down(at: [f64; 2]) -> Ray {
     }
 }
 
-fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
+pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = world::point(corner[0], corner[1], corner[2]);
     store.write([Write {
         key: pxl_spec::space::hierarchy::morton::key_of::<3>(side, index_of(side, &at)),
@@ -295,7 +295,7 @@ fn ray_across_antimeridian() {
     assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
 }
 
-fn flat_at_five() -> (TileCache<TerrainTile>, [f64; 2]) {
+pub(crate) fn flat_at_five() -> (TileCache<TerrainTile>, [f64; 2]) {
     let leaf = top().children()[0];
     let flat = drawn(
         vec![5; CELLS],

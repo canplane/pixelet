@@ -30,4 +30,4 @@ pub use world::{Walked, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]
-mod test;
+pub(crate) mod test;

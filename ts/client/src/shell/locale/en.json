@@ -61,7 +61,7 @@
         },
         "climb": {
           "label": "Climb over",
-          "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too."
+          "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too; zooming in there drops it under the roof."
         },
         "description": "Controls what happens when zooming, turning, or tilting would move the camera into terrain or an object."
       }

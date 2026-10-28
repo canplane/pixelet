@@ -12,11 +12,12 @@ use xpute_kit::math::scalar::wrap;
 
 use crate::domain::control::camera::orbit::orbit_eye_offset;
 use crate::domain::control::camera::state::Intent;
-use crate::domain::control::param::EYE_CLEARANCE_U;
 use crate::domain::control::param::{CLIMB_PASSES, GATE_STEP_SAMPLES};
+use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
 use crate::domain::query::changed::Asked;
-use crate::domain::query::{over, World};
+use crate::domain::query::{held, over, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
+use crate::domain::view::param::NEAR;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use pxl_spec::space::coord::zoom::{index_of, units};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -93,10 +94,16 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     match settings_store().orbit_obstacle {
         OrbitObstacleMode::through => return *to,
         // A climb that would pass through something solid (a tunnel's roof to the
-        // surface over it) is held as `stop` holds it.
+        // surface over it) is held as `stop` holds it, but for a zoom in that
+        // goes under the roof (`dive`).
         OrbitObstacleMode::climb => {
-            if path_clear(from, &climbed(*to, &World::now())) {
+            let access = World::now();
+            let climbed = climbed(*to, &access);
+            if path_clear(from, &climbed) {
                 return *to;
+            }
+            if let Some(under) = dive(to, &climbed, from, &access) {
+                return under;
             }
         }
         OrbitObstacleMode::stop => {}
@@ -147,6 +154,37 @@ fn in_solid(at: &ViewPose) -> bool {
 fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     (1..=GATE_STEP_SAMPLES)
         .all(|i| !in_solid(&between(from, to, i as f64 / GATE_STEP_SAMPLES as f64)))
+}
+
+/// A zoom in the climb holds straight down, blocked by a roof over the focus
+/// (a tunnel's, a cave's): the eye goes under the roof straight over the
+/// focus, as far from it as the zoom asked or the roof leaves, and eases there
+/// through it. Where the roof is nearer the focus than the orbit comes
+/// (`MIN_DIST`), the eye stands at `MIN_DIST` in the roof's lowest cell,
+/// which its rays do not meet (pxl-spec-core `cast::walk`): it sees down
+/// as from under the roof. Only a zoom in: a zoom out under the roof stops at
+/// it as any step stops. None where nothing roofs the focus, or `MIN_DIST`
+/// is past the roof's lowest cell.
+fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose> {
+    if to.dist >= from.dist || climbed.polar > 0.0 {
+        return None;
+    }
+    let up = orbit_eye_offset(1.0, climbed.polar, climbed.azimuth);
+    let roof = access
+        .first_hit(
+            &Ray {
+                origin: to.target,
+                direction: up,
+                reach: from.dist,
+            },
+            held(),
+        )
+        .exact()
+        .flatten()?;
+    // Under it, the near plane's own distance, so the near plane never cuts it.
+    let dist = to.dist.min(roof.t - NEAR).max(MIN_DIST);
+    let eye = v3::add(&to.target, &up.map(|v| v * dist));
+    (dist < roof.t || roof.cube.holds(eye)).then_some(ViewPose { dist, ..*climbed })
 }
 
 /// How far toward `to` the orbit gets from `from`, as the controls ask it.
@@ -207,3 +245,7 @@ fn climbed(mut at: ViewPose, access: &World) -> ViewPose {
     }
     at
 }
+
+#[cfg(test)]
+#[path = "terrain_gate.test.rs"]
+mod test;
