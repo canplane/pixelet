@@ -188,18 +188,20 @@ pub fn drawn_scale() -> f64 {
 }
 
 /// Device pixels per CSS pixel a display of `dpr` is drawn at whole: its
-/// own, no finer than `RESOLUTION_MAX`.
+/// own. How many of them the eye resolves turns on how near it is held,
+/// which no page is told: a phone's CSS pixel, held at a forearm, spans half
+/// again the reference pixel's angle, so its display's three are about the
+/// eye's limit there.
 fn device(dpr: f64) -> f64 {
-    dpr.min(param::RESOLUTION_MAX)
+    dpr
 }
 
 fn world() -> Option<&'static mut Surface> {
     surfaces().find(|s| s.role == surface_role::WORLD)
 }
 
-/// The ratio a surface is drawn at: the display's, no finer than
-/// `RESOLUTION_MAX`; the world's scaled as the setting says; a case's within
-/// its thumbnail.
+/// The ratio a surface is drawn at: the display's; the world's scaled as the
+/// setting says; a case's within its thumbnail.
 pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     let device = device(dpr);
     match role {

@@ -10,12 +10,6 @@ pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 // ---- the drawn resolution ----
 
-/// Device pixels per CSS pixel the world is drawn at: the display's, no
-/// finer than markers' sheets are drawn (pxl-render gpu/sheet.rs
-/// `SHEET_SCALE`, the same knob), so a marker is never shown smaller than
-/// drawn, and under load a share of them (domain/view/frame/resolution.rs).
-pub const RESOLUTION_MAX: f64 = pxl_spec::space::camera::grid::RATIO_MAX;
-
 /// The least share of the display's pixels, each way, the world is drawn at.
 pub const SCALE_MIN: f64 = 0.5;
 

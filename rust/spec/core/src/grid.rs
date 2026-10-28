@@ -9,8 +9,7 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 
 // ---- the view's knobs: each set by itself, and nothing else here ----
 // What is drawn and how finely follows from these, with the field of view
-// and the drawn pixels' ratio (pxl-spec space/camera/grid.rs `HALF_TAN`,
-// `RATIO_MAX`).
+// (pxl-spec space/camera/grid.rs `HALF_TAN`) and the display's pixels.
 
 /// The camera grid, the one knob of resolution: the view's cells a radian,
 /// a cell 1/`CELLS_A_RADIAN` radians about the eye whatever the screen. An

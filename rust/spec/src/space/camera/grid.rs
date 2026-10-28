@@ -15,13 +15,6 @@ use crate::space::coord::zoom::{units, Zoom};
 /// distance, a field of 53.13° (`fov`).
 pub const HALF_TAN: f64 = 0.5;
 
-/// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
-/// and where more pixels stop being seen. The CSS reference pixel subtends
-/// 0.0213° (CSS Values and Units: 96 dpi at 28 inches), 46.9 a degree, and
-/// the fovea resolves 94 a degree at most (Ashraf, Chapiro & Mantiuk,
-/// "Resolution limit of the eye: how many pixels can we see?", Nature
-/// Communications, 2025, doi:10.1038/s41467-025-64679-2): 94 / 46.9 is 2.
-pub const RATIO_MAX: f64 = 2.0;
 
 // ---- derived from the knobs ----
 

@@ -44,12 +44,10 @@ pub struct Halo {
     pub shadow_dy: f32,
 }
 
-/// Device pixels a sheet draws per logical pixel: the finest ratio a surface
-/// is drawn at (pxl-spec space/camera/grid.rs `RATIO_MAX`), past which texels cost
-/// more than the eye resolves. The world is drawn no finer (pxl-kernel
-/// domain/view/param.rs `RESOLUTION_MAX`), so a marker is never shown
-/// smaller than drawn.
-pub const SHEET_SCALE: f64 = pxl_spec::space::camera::grid::RATIO_MAX;
+/// Device pixels a sheet draws per logical pixel: the symbols' masks', laid
+/// texel for texel (pxl-spec asset/symbol.spec.rs `SYMBOL_RATIO`). A display
+/// finer than it shows a marker drawn up from it.
+pub const SHEET_SCALE: f64 = pxl_spec::asset::symbol::SYMBOL_RATIO as f64;
 
 #[derive(Default)]
 pub struct Sketch {
@@ -321,8 +319,8 @@ impl SheetPainter {
         for &(place, cover) in &placed {
             shapes.push(shape(SHEET_TEXT, place, 0, cover, [0.0; 2]));
         }
-        // A mask is laid texel for texel: rasterized at `SYMBOL_RATIO`, which
-        // pxl-spec asset.rs holds to `RATIO_MAX`, the sheet's scale.
+        // A mask is laid texel for texel: rasterized at `SYMBOL_RATIO`, the
+        // sheet's scale.
         for (k, icon) in sketch.icons.iter().enumerate() {
             let layer = (rasters.len() + k) as u32;
             let half = SYMBOL_PX as f32 / 2.0;
