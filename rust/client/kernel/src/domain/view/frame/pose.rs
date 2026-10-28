@@ -13,7 +13,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
 use crate::domain::view::param::FALLBACK_G4326;
-use pxl_spec::space::camera::grid::{fov, HALF_TAN};
+use pxl_spec::space::camera::grid::fov;
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -180,24 +180,20 @@ fn compose() {
 }
 
 /// The ray through `ndc_x`/`ndc_y` in [−1, 1], x right and y up, from
-/// `pose`, framed as the view frames its pose (`compose`); `direction` is
-/// unit. A pick asks the pose its controller holds, which may have moved
-/// since the turn composed the view.
+/// `pose`, framed as the view frames its pose (`compose`), its tangents the
+/// view's lens as the cast's eye takes them (pxl-spec `Frustum::lens`), along
+/// its forward where it has no screen yet; `direction` is unit. A pick asks
+/// the pose its controller holds, which may have moved since the turn
+/// composed the view: the lens's tangents are the screen's alone, whatever
+/// the pose.
 pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
-    let v = view();
-    let tan = HALF_TAN;
+    let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();
     mat4::transpose(&mut back, &pose.rotation);
     *origin = pose.eye;
-    mat4::transform_direction(
-        direction,
-        &back,
-        ndc_x * tan * v.width / v.height,
-        ndc_y * tan,
-        -1.0,
-    );
+    mat4::transform_direction(direction, &back, ndc_x * tan[0], ndc_y * tan[1], -1.0);
 }
 
 #[cfg(test)]
