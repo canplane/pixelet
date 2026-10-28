@@ -30,12 +30,12 @@ use crate::domain::control::sensor::geolocation::{
 use crate::domain::control::sensor::reading::{
     device_location_store, device_orientation_store, Pose,
 };
-use crate::domain::layer::division::{named, naming};
+use crate::domain::layer::division::{each_division, naming};
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
-use crate::domain::scene::stage::screen_drawn;
+use crate::domain::scene::stage::is_screen_drawn;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::domain::view::setting::store::{settings_loaded, settings_store, SettingKey};
+use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::sys::io::file::{self, Kept};
 use crate::turn::world_platform;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -48,7 +48,7 @@ use xpute_kit::status::errno::Errno;
 /// the zoom it shows from (`Division::shown_from`).
 fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     let Some(at) = at else { return };
-    named(at, |part| {
+    each_division(at, |part| {
         let names = |each: &mut dyn FnMut(&LangName<'_>)| {
             for (lang, name) in &part.names {
                 each(&LangName { lang, name });
@@ -107,9 +107,9 @@ fn shown() -> Shown {
         // Shown once a frame went to the screen over a view whose tiles all
         // show, if coarser: a finer tile asked for as the eye moves is not
         // the area loading, and would flash its toast each time.
-        status: match (crate::domain::view::observation::eye(), screen_drawn()) {
+        status: match (crate::domain::view::observation::eye(), is_screen_drawn()) {
             (None, _) => GroundStatus::Idle,
-            (Some(_), true) if TerrainTile::residency().shown() => GroundStatus::Success,
+            (Some(_), true) if TerrainTile::residency().is_shown() => GroundStatus::Success,
             _ => GroundStatus::Loading,
         },
         is_off_center: off_center().is_off_center,
@@ -124,7 +124,7 @@ fn shown() -> Shown {
         camera_busy: dragging(),
         zooming: crate::domain::control::camera::controller::zooming(),
         over_marker: crate::pointer::over_marker(),
-        settings: settings_loaded().then(|| {
+        settings: are_settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOTS];
             for key in SettingKey::ALL {
                 by_number[key as usize] = settings.get(key);
@@ -138,7 +138,7 @@ fn shown() -> Shown {
         declared: crate::sys::io::source::top().is_some(),
         kept_refused: {
             let mut refused = ([0; Kept::ALL.len()], 0);
-            for kept in Kept::ALL.into_iter().filter(|&k| file::refused(k)) {
+            for kept in Kept::ALL.into_iter().filter(|&k| file::is_refused(k)) {
                 refused.0[refused.1] = kept.slot();
                 refused.1 += 1;
             }

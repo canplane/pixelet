@@ -72,11 +72,11 @@ impl Grounds for Asked<'_, '_> {
     }
 
     /// An edit where the world holds one there, as far as it is held.
-    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
+    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
         self.world
             .asset((zoom, c))
             .value()
-            .is_some_and(pxl_spec_core::answer::placed)
+            .is_some_and(pxl_spec_core::answer::is_placed)
     }
 
     fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {

@@ -67,7 +67,7 @@ pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 /// first cell at that zoom as the world names it, X wrapped there, then Y,
 /// two words; and what is known of the service area at it (`area::Shard`,
 /// its word), which the ways' fill lays the area's edge by
-/// (`way::Columns::walled`).
+/// (`way::Columns::is_walled`).
 pub const FRESH_SQUARE: u32 = 0;
 pub const FRESH_PLACE: u32 = FRESH_SQUARE + 1;
 pub const FRESH_CELL: u32 = FRESH_PLACE + 1;
@@ -360,7 +360,7 @@ pub trait Square {
 }
 
 /// Whether column `c` is the square's or its ring's.
-fn held(c: [i32; 2]) -> bool {
+fn is_held(c: [i32; 2]) -> bool {
     c[0] >= -1 && c[1] >= -1 && c[0] <= SQUARE as i32 && c[1] <= SQUARE as i32
 }
 
@@ -375,7 +375,7 @@ fn cell_index(c: [i32; 2]) -> u32 {
 /// Column `c`'s bin word, a ring column's the edge bin it borders: its
 /// first entry and its count; none past the ring.
 fn bin_of(sq: &impl Square, c: [i32; 2]) -> (u32, u32) {
-    if !held(c) {
+    if !is_held(c) {
         return (0, 0);
     }
     let (x, y) = (
@@ -440,7 +440,7 @@ impl<Q: Square> crate::way::Columns for Q {
     /// square's first cell lies on a leaf cell's first, so `c` places the
     /// column in its leaf cell as its world index does. A ring column is
     /// none of the square's, never walled.
-    fn walled(&self, c: [i32; 2]) -> bool {
+    fn is_walled(&self, c: [i32; 2]) -> bool {
         let i = cell_index(c);
         i != SQUARE_CELLS && crate::area::laid(self.laid(i), Square::cell(self), c) == UNKNOWN
     }
@@ -459,7 +459,7 @@ impl<Q: Square> crate::way::Columns for Q {
         }
     }
     fn face(&self, c: [i32; 2]) -> i32 {
-        if !held(c) {
+        if !is_held(c) {
             return 0;
         }
         let cell = Square::cell(self);

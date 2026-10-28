@@ -73,7 +73,7 @@ impl Base for TerrainTile {
         let wanted = |r: &u32| {
             TerrainTile::residency()
                 .in_frame(*r)
-                .is_some_and(crate::domain::layer::terrain::window::tile_wanted)
+                .is_some_and(crate::domain::layer::terrain::window::is_tile_wanted)
         };
         match record {
             Some(r) if !wanted(&r) => {
@@ -108,7 +108,7 @@ const _: () = assert!(
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
     let coming = TerrainTile::residency()
-        .asked_again(|p| !crate::sys::io::request::object_failed(Stream::terrain, p.subject()));
+        .asked_again(|p| !crate::sys::io::request::has_object_failed(Stream::terrain, p.subject()));
     most_kept().saturating_sub(kept().count() + coming)
 }
 

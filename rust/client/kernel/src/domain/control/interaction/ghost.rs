@@ -53,7 +53,7 @@ pub fn ghost() -> Ghost {
 
     let carved = CARVED.get(|| Asked::NONE);
     // Looked at each frame turn, a hover not asked of this one too.
-    carved.kept();
+    carved.forget_touched();
     // The cell being carved as the world answers it, whichever source fills
     // it: the ground, a way, a bore's wall.
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {

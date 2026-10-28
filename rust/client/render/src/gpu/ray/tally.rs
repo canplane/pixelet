@@ -192,7 +192,7 @@ impl Tally {
     }
 
     /// The frame its copy was encoded in was dropped.
-    pub(super) fn dropped(&mut self) {
+    pub(super) fn on_dropped(&mut self) {
         self.copied = false;
     }
 }

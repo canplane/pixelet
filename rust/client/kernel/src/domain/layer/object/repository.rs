@@ -14,7 +14,7 @@ use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, Tr
 
 use super::store::objects;
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::store::{apply, written, Write};
+use crate::domain::layer::object::store::{apply, note_written, Write};
 use crate::sys::io::file::{self, Kept, KeptFile};
 use crate::sys::sched::edge::wake_at;
 use pxl_spec::object::ext::{class_of, Class};
@@ -118,9 +118,9 @@ fn keep(blob: Vec<u8>) {
 /// A missing blob starts the world empty. One that cannot be read or decoded
 /// here — too large, an error, a layout this build does not know — leaves the
 /// world unsaved this session, so it is never written over; where its slot
-/// was refused (sys/io/file.rs `refused`), until the host empties it and the
+/// was refused (sys/io/file.rs `is_refused`), until the host empties it and the
 /// slot is opened again.
-fn loaded() {
+fn load() {
     let st = store_state();
     if st.loaded {
         return;
@@ -137,7 +137,7 @@ fn loaded() {
         // What decoded before the failure was already read; the blob stays unsaved over.
         let regions = objects().clear();
         if !regions.is_empty() {
-            written(&regions);
+            note_written(&regions);
         }
         return;
     }
@@ -163,7 +163,7 @@ fn saves() -> &'static mut Notify {
 }
 
 pub fn step() {
-    loaded();
+    load();
     if !store_state().loaded {
         return;
     }

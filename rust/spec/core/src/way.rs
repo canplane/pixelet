@@ -473,7 +473,7 @@ pub trait Columns {
     /// Whether the area's edge walls the column: ground beside cells past
     /// the area (pxl-spec-core `area::laid`), where no way writes, as none
     /// does past it.
-    fn walled(&self, c: [i32; 2]) -> bool;
+    fn is_walled(&self, c: [i32; 2]) -> bool;
     fn face(&self, c: [i32; 2]) -> i32;
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
@@ -695,11 +695,11 @@ impl Spans {
 /// Column `c`'s spans: what each visit of a line writes there that fills a
 /// cell of the grid's zoom (`fills_any`), as `at` reads no other, and its
 /// face cell — none, nor a face, in a column of the bedrock, past the area
-/// or walled by its edge (`Columns::walled`), as bedrock wins over a way as
+/// or walled by its edge (`Columns::is_walled`), as bedrock wins over a way as
 /// it does over the ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
-    if cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
+    if cols.look(c) == crate::ground::UNKNOWN || cols.is_walled(c) {
         return (spans, fits);
     }
     // The column's face and the tile's scale, read once for all its visits.

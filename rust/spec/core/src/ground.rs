@@ -19,7 +19,7 @@ use crate::answer::{
     bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
     BOX_WHOLE, FULL,
 };
-use crate::area::{earth, walled, Area, Shard};
+use crate::area::{earth, is_walled, Area, Shard};
 use crate::cave::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
@@ -354,7 +354,7 @@ pub fn slab(
     let rock = face_height(near, cells(near, bedrock(hi) as f32));
     let caved = hollow
         && !meets([UNBOUNDED[0], rock], (zoom, c[2]), near)
-        && !walled(shard, near, (zoom, [c[0], c[1]]));
+        && !is_walled(shard, near, (zoom, [c[0], c[1]]));
     let [mut under, mut over] = if caved {
         EMPTY
     } else {
@@ -573,7 +573,7 @@ impl Cell {
     }
 
     /// Whether it has ground at all: a look the catalog grounds, or the wall.
-    pub fn grounded(&self) -> bool {
+    pub fn is_grounded(&self) -> bool {
         self.look == UNKNOWN || Ground::grounds(self.look)
     }
 
@@ -607,7 +607,7 @@ impl Cell {
     /// ground's look, its fold's majority at a coarser cell, as what is
     /// placed is its fold's, `void` for air.
     pub fn asset(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
-        if !self.grounded() {
+        if !self.is_grounded() {
             return VOID;
         }
         let g = by_depth(cell, self.look, self.top, z);

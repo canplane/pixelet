@@ -24,7 +24,7 @@ use pxl_geo_bake::demand::{
 use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
-use pxl_spec::bake::source::sharded;
+use pxl_spec::bake::source::is_sharded;
 use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT, TILE_SPHERE};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
@@ -65,7 +65,7 @@ fn named(bytes: &[u8]) -> String {
 fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tiles {
-        _ if !sharded(layer) => {
+        _ if !is_sharded(layer) => {
             read(&app.out.join(EARTH).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b))
         }
         Tiles::Shelf(dir) => {
@@ -94,7 +94,7 @@ fn declaration(app: &App) -> Result<String, String> {
     let kinds = source::try_kinds(|l| {
         let version = version_of(app, l)?;
         match &app.tiles {
-            _ if !sharded(l) => Ok(source::Kind {
+            _ if !is_sharded(l) => Ok(source::Kind {
                 shard: None,
                 ..source::of_set(&app.out.join(EARTH), &version)?
             }),

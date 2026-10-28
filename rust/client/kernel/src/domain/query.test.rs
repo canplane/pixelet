@@ -627,7 +627,7 @@ fn what_is_placed_in_a_box_is_what_the_store_holds_there() {
 /// read over it at any zoom over a square.
 #[test]
 fn a_square_landing_after_the_fold_is_read_with_its_spike() {
-    use crate::domain::layer::terrain::window::{landed, refold, test::unland, Windowed};
+    use crate::domain::layer::terrain::window::{on_landed, refold, test::unland, Windowed};
     use pxl_render::gpu::renderer::Landing;
     use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE, WINDOW};
     use pxl_spec_core::LEAF_CELL;
@@ -674,7 +674,7 @@ fn a_square_landing_after_the_fold_is_read_with_its_spike() {
     let held = met(&World::new(&residency, &store));
     let (b, ticket) = unland(LEAF_CELL, spike);
     // As the stage lands a read-back: each landing, then one fold.
-    landed(b, ticket, Landing::Built(&[0]));
+    on_landed(b, ticket, Landing::Built(&[0]));
     refold();
     assert_eq!(met(&World::new(&residency, &store)), held, "the spike met");
     let q = cells::square_of(spike).0;
@@ -759,7 +759,7 @@ fn a_grown_decor_stands_where_it_grew_whatever_is_put_over_or_under_it() {
 
 /// Only an edit in its own box takes what the ground grows away, air or a
 /// cube; one under it or over it leaves it growing (pxl-spec-core
-/// `scatter::Grounds::edited`).
+/// `scatter::Grounds::is_edited`).
 #[test]
 fn a_grown_decor_goes_only_where_an_edit_holds_its_box() {
     use crate::domain::layer::object::store::AIR;

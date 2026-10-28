@@ -66,7 +66,7 @@ impl Door {
     }
 
     pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32) {
-        self.posted(cmd, self.cq.push(tag, cmd, flags, result, None));
+        self.on_posted(cmd, self.cq.push(tag, cmd, flags, result, None));
     }
 
     /// `write` fills the slot's payload and answers the packet's length, or
@@ -79,10 +79,10 @@ impl Door {
         result: i32,
         write: impl FnOnce(&mut [u8]) -> Option<u32>,
     ) {
-        self.posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
+        self.on_posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
     }
 
-    fn posted(&self, cmd: u32, e: Errno) {
+    fn on_posted(&self, cmd: u32, e: Errno) {
         self.keep(|s| s.cq_peak = s.cq_peak.max(self.cq.len()));
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }

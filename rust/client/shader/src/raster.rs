@@ -50,7 +50,7 @@ pub(crate) const NONE: u32 = u32::MAX;
 /// stops on it (`cast::drawn`) from `origin`, appended to `boxes`, counted
 /// in `args` (`raster::ARGS_INSTANCES`), its number and its axis,
 /// `raster::EYED` where it lies about the eye at the screen's tangents
-/// `tan` (`raster::eyed`), where `eyed` asks (the sun's has none); none
+/// `tan` (`raster::is_eyed`), where `eyed` asks (the sun's has none); none
 /// where it went on to its reach, or where a sample at `before`, the one
 /// across or up, `NONE` where there is none, stopped alike (`alike`), which
 /// some sample before it in turn draws. Its place among the boxes, `NONE`
@@ -77,7 +77,7 @@ pub(crate) fn boxed<W: Words + ?Sized>(
     let node = node_at(w, k + beam::SAMPLE_NODE);
     let (lo, hi) = cast::drawn(origin, &node, w.word(k + beam::SAMPLE_ASSET));
     let lacks = w.word(k + beam::SAMPLE_LACKS) != 0;
-    let eyed = eyed && raster::eyed(lo, hi, tan);
+    let eyed = eyed && raster::is_eyed(lo, hi, tan);
     let box_at = add(args, raster::ARGS_INSTANCES, 1);
     let at = box_at * raster::BOX_WORDS;
     put(boxes, at + raster::BOX_LO, lo[0].to_bits());

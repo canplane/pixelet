@@ -117,7 +117,7 @@ pub fn surfaces() -> impl Iterator<Item = &'static mut Surface> {
     table().surfaces.iter_mut().filter(|s| s.handle != 0)
 }
 
-pub fn surfaces_lost() {
+pub fn on_surfaces_lost() {
     for s in surfaces() {
         *s = Surface {
             handle: s.handle,

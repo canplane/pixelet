@@ -17,7 +17,7 @@ use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
 use crate::beam::Words;
-use crate::cast::{counted, listed, pixel_tan, Rays};
+use crate::cast::{add_count, listed, pixel_tan, Rays};
 use crate::decor::Instances;
 use crate::eye::{eye_origin, eye_ray, Eye};
 use crate::observed::Seen;
@@ -464,7 +464,7 @@ pub fn sun_cs(
             stop,
             visits: 0,
         };
-        counted(misses, counts(moved), tally::PICKED, 1);
+        add_count(misses, counts(moved), tally::PICKED, 1);
         // SAFETY: within the map, bounded by its size above.
         unsafe { sun.write(slot, m.word(&aim, &met)) };
         return;
@@ -476,7 +476,7 @@ pub fn sun_cs(
     }
     // Listed for its walk again as the eye's pixels are (cast.rs `listed`):
     // the list holds every slot, so none finds it full.
-    counted(misses, counts(moved), tally::WALKED, 1);
+    add_count(misses, counts(moved), tally::WALKED, 1);
     let at = listed(misses, n * n, [0; 2]);
     put(
         list,

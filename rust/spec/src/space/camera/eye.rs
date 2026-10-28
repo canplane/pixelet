@@ -114,7 +114,7 @@ impl Observation {
         let e = self.eye;
         let b = &nearest_box(b, e[0]);
         let gap = |k: usize| (b.min[k] - e[k]).max(e[k] - b.max[k]).max(0.0);
-        let seen = !b.bounded() || self.frustum.is_none_or(|f| f.sees_box(b.min, b.max));
+        let seen = !b.is_bounded() || self.frustum.is_none_or(|f| f.sees_box(b.min, b.max));
         Measure {
             seen,
             near: libm::hypot(libm::hypot(gap(0), gap(1)), gap(2)),

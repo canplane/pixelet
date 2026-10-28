@@ -65,9 +65,9 @@ fn stood() -> &'static mut Asked<Q3, Answer<Option<Q3>>> {
 }
 
 /// The turn's look at what `standing` kept, a change under it letting it go
-/// (`changed::Asked::kept`): every frame turn, so each change is seen once.
+/// (`changed::Asked::forget_touched`): every frame turn, so each change is seen once.
 pub fn support_step() {
-    stood().kept();
+    stood().forget_touched();
 }
 
 /// An unknown Z on the surface of `world`'s finest ground known there; none

@@ -6,7 +6,7 @@
 
 use crate::domain::control::camera::controller;
 use crate::profiler::frame::FrameSample;
-use crate::profiler::frame::{long, missed, overran, unmeasured};
+use crate::profiler::frame::{is_missed, long, overran, unmeasured};
 use crate::profiler::record::{
     profiler_frames_since, profiler_recording_state, profiler_scratch, profiler_tasks_since,
 };
@@ -105,7 +105,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         seconds,
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
-        missed: moving().filter(|f| missed(f)).count() as f64,
+        missed: moving().filter(|f| is_missed(f)).count() as f64,
         overran: count(&overran),
         long: count(&long),
         turns: sum(&|f| f.turns),
@@ -287,7 +287,7 @@ fn side(out: &mut [f64]) {
             drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
             folded: picked
                 .as_ref()
-                .map_or(f64::NAN, |p| f64::from(u8::from(p.folded()))),
+                .map_or(f64::NAN, |p| f64::from(u8::from(p.is_folded()))),
             place_x,
             place_y,
             place_z,

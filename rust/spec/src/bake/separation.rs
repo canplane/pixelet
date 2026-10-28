@@ -457,7 +457,7 @@ impl Folded {
     }
 
     /// Whether `s` is the only one after `p` and `p` the only one before it.
-    fn joined(&self, p: usize, s: usize) -> bool {
+    fn is_joined(&self, p: usize, s: usize) -> bool {
         self.next[p] == s && self.prev[s] == p
     }
 
@@ -468,7 +468,7 @@ impl Folded {
         let mut out = Builder::default();
         let mut taken = vec![false; self.segments.len()];
         let heads = (0..self.segments.len())
-            .filter(|&s| self.prev[s] >= SEGMENTS || !self.joined(self.prev[s], s));
+            .filter(|&s| self.prev[s] >= SEGMENTS || !self.is_joined(self.prev[s], s));
         for head in heads.chain(0..self.segments.len()) {
             if taken[head] {
                 continue;
@@ -479,7 +479,7 @@ impl Folded {
                 taken[s] = true;
                 chain.push(self.segments[s].b);
                 match self.next[s] {
-                    t if t < SEGMENTS && self.joined(s, t) && !taken[t] => s = t,
+                    t if t < SEGMENTS && self.is_joined(s, t) && !taken[t] => s = t,
                     _ => break,
                 }
             }

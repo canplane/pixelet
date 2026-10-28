@@ -27,7 +27,7 @@
 /// Then the boxes' buffer, `BOX_WORDS` a box: its planes in units from the
 /// eye's origin, lowest then highest, f32 bits, its sample's number
 /// (`id_of`), and the axis its sample entered across, with `EYED` where the
-/// box lies about the eye (`eyed`).
+/// box lies about the eye (`is_eyed`).
 pub const ARGS_VERTICES: u32 = 0;
 pub const ARGS_INSTANCES: u32 = 1;
 pub const ARGS_FACES: u32 = 4;
@@ -66,7 +66,7 @@ pub const fn sample_of(id: u32) -> u32 {
 
 /// The raster's reversed depth: a face at view depth `w` drawn at `NEAR /
 /// w`, nearer greater, nothing nearer than `NEAR`, a Q3 step. A box whose
-/// nearest point lies within `eyed`'s reach of the eye may be cut by it,
+/// nearest point lies within `is_eyed`'s reach of the eye may be cut by it,
 /// and is drawn over the whole screen instead, at the nearest depth, a
 /// lack's nearer still (raster.wgsl): every pixel then takes it, and one
 /// whose ray does not enter it walks, never falling to what lies behind.
@@ -76,7 +76,7 @@ pub const NEAR: f32 = 1.0 / (1 << crate::FRAC_W) as f32;
 /// the raster's near plane may cut it (`NEAR`), `tan` the tangents of the
 /// screen's half-angles: its nearest point within `NEAR` at the screen's
 /// corner, twice over. A lack's box the eye is in is that too.
-pub fn eyed(lo: [f32; 3], hi: [f32; 3], tan: [f32; 2]) -> bool {
+pub fn is_eyed(lo: [f32; 3], hi: [f32; 3], tan: [f32; 2]) -> bool {
     let near = |a: usize| {
         let v = if lo[a] > 0.0 {
             lo[a]
@@ -93,7 +93,7 @@ pub fn eyed(lo: [f32; 3], hi: [f32; 3], tan: [f32; 2]) -> bool {
 
 /// Whether the eye's `right`, `up` and `forward` turn the other way from
 /// the one `corner` winds a front face for: right × up along forward.
-pub fn flipped(right: [f32; 3], up: [f32; 3], forward: [f32; 3]) -> bool {
+pub fn is_flipped(right: [f32; 3], up: [f32; 3], forward: [f32; 3]) -> bool {
     let x = [
         right[1] * up[2] - right[2] * up[1],
         right[2] * up[0] - right[0] * up[2],
@@ -167,7 +167,7 @@ mod tests {
             .into_iter()
             .flat_map(|[r, u, f]| [[r, u, f], [r.map(|v| -v), u, f]]);
         for [r, u, f] in views {
-            let flip = flipped(r, u, f);
+            let flip = is_flipped(r, u, f);
             let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
             for at in [[-0.5f32, 4.0, -0.7], [2.0, 6.0, 1.0], [-3.0, 3.0, 2.5]] {
                 let p = |c: [u32; 3]| {

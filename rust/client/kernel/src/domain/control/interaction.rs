@@ -169,7 +169,7 @@ impl Picked {
 
     /// Whether the rays draw coarser there than the cell struck: a summary,
     /// not what is held, so nothing in it is struck.
-    pub fn folded(&self) -> bool {
+    pub fn is_folded(&self) -> bool {
         self.drawn.is_some_and(|z| z < self.held())
     }
 }
@@ -194,7 +194,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
     let hover = &mut interaction().hover;
-    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y).filter(|p| !p.folded()) else {
+    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
         *hover = Hover::default();
         return;
     };

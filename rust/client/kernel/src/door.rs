@@ -87,7 +87,7 @@ const DIRECTORY_ENTRIES: usize = 7;
 /// held its actor for good.
 fn close_surface(handle: u32) {
     if let Some(closed) = pxl_render::gpu::surface::surface_close(handle) {
-        pxl_render::gpu::renderer::surface_closed(closed);
+        pxl_render::gpu::renderer::on_surface_closed(closed);
     }
     crate::domain::scene::character::preview::preview_close(handle);
 }
@@ -96,7 +96,7 @@ fn close_surface(handle: u32) {
 /// old shell's reads, surfaces, sensor watches and text requests will never
 /// be answered; a read left out keeps its credit forever, so all of it is
 /// let go here.
-fn host_attached(s: &mut State) {
+fn on_host_attached(s: &mut State) {
     crate::sys::io::request::reset();
     let open: Vec<u32> = pxl_render::gpu::surface::surfaces()
         .map(|surface| surface.handle)
@@ -167,8 +167,8 @@ pub fn intr(
     // The device's loss, as its host wrote it into the device's block: before
     // the commands, as a device answering again among them asks that block anew.
     if pxl_render::gpu::api::take_device_lost() {
-        pxl_render::gpu::renderer::gpu_lost();
-        crate::sys::io::loader::images_lost();
+        pxl_render::gpu::renderer::on_gpu_lost();
+        crate::sys::io::loader::on_images_lost();
     }
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     let drained = now();

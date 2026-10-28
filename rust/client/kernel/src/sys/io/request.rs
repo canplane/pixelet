@@ -416,7 +416,7 @@ impl<S: Serve> RequestScheduler<S> {
 
     /// Whether `stream`'s want of `subject` waits on its object, which
     /// failed: it is not asked again while it is wanted.
-    pub fn object_failed(&self, stream: Stream, subject: u64) -> bool {
+    pub fn has_object_failed(&self, stream: Stream, subject: u64) -> bool {
         self.find(stream, subject)
             .is_some_and(|i| matches!(self.desired[i].wait, Wait::Object))
     }
@@ -435,15 +435,15 @@ impl<S: Serve> RequestScheduler<S> {
         let want = self.find(a.stream, a.subject);
         match ended {
             Ended::Ok => {
-                self.answered();
+                self.on_answered();
                 if let Some(i) = want {
                     self.drop_want(a.stream, i);
                 }
             }
-            Ended::Failed(f) => self.failed(want, f, a.start_ms, at),
+            Ended::Failed(f) => self.on_failed(want, f, a.start_ms, at),
             // Still an answer from the server.
             Ended::Refused(refused) => {
-                self.answered();
+                self.on_answered();
                 if let Some(i) = want {
                     self.desired[i].wait = Wait::Room(refused);
                 }
@@ -454,14 +454,14 @@ impl<S: Serve> RequestScheduler<S> {
     }
 
     /// The server answered: whatever held it back is over.
-    fn answered(&mut self) {
+    fn on_answered(&mut self) {
         self.failing = None;
         self.strikes = 0;
         self.struck_ms = f64::NEG_INFINITY;
         self.held_until = f64::NEG_INFINITY;
     }
 
-    fn failed(&mut self, want: Option<usize>, failure: Failure, started_ms: f64, at: f64) {
+    fn on_failed(&mut self, want: Option<usize>, failure: Failure, started_ms: f64, at: f64) {
         let seed = derive_seed_u64(self.strikes as u64, at.to_bits());
         let wait = match self.serve.blame(failure) {
             Blame::Object => Wait::Object,
@@ -485,7 +485,7 @@ impl<S: Serve> RequestScheduler<S> {
             }
         };
         // Still an answer from the server.
-        self.answered();
+        self.on_answered();
         if let Some(i) = want {
             self.desired[i].wait = wait;
         }
@@ -499,7 +499,7 @@ impl<S: Serve> RequestScheduler<S> {
             }
         }
         self.held = [0; Stream::ALL.len()];
-        self.answered();
+        self.on_answered();
         self.given_up = false;
         self.started.clear();
         self.stops.clear();
@@ -605,8 +605,8 @@ pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
     sched().attempt_of(key)
 }
 
-pub fn object_failed(stream: Stream, subject: u64) -> bool {
-    sched().object_failed(stream, subject)
+pub fn has_object_failed(stream: Stream, subject: u64) -> bool {
+    sched().has_object_failed(stream, subject)
 }
 
 pub fn settle(key: u64, ended: Ended, phases: Option<Phases>) {

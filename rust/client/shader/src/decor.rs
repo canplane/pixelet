@@ -12,7 +12,7 @@ use pxl_spec_core::cast::{Ends, Query};
 use pxl_spec_core::decor::{Decor, COUNTS};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::lattice::GROUND;
-use pxl_spec_core::scatter::{self, drawn, mark, marked, Grounds, MARKS, SQUARE_PATCHES};
+use pxl_spec_core::scatter::{self, drawn, is_marked, mark, Grounds, MARKS, SQUARE_PATCHES};
 use pxl_spec_core::support;
 use pxl_spec_core::window::{self, FIRST_CELL, SLOTS};
 use pxl_spec_core::overwrite::Cut;
@@ -82,9 +82,9 @@ impl Grounds for Growing<'_> {
         support::asset(&mut Unplaced(&mut self.world), &f.line, zoom, c)
     }
 
-    fn edited(&mut self, zoom: u32, c: [i32; 3]) -> bool {
+    fn is_edited(&mut self, zoom: u32, c: [i32; 3]) -> bool {
         let line = support::line(&mut self.world, zoom, c);
-        answer::placed(support::asset(&mut self.world, &line, zoom, c))
+        answer::is_placed(support::asset(&mut self.world, &line, zoom, c))
     }
 
     fn placed(&self, p: &mut pxl_spec_core::world::Placed) -> ([i32; 3], u32, bool) {
@@ -101,7 +101,7 @@ fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
 /// Whether a box of the frame's (pxl-spec-core `scatter::BOXES_AT`) meets
 /// the leaf cells `reads` of the window at `cell` (`scatter::meets`): one
 /// at every zoom, or at `cell`'s.
-fn changed(grows: &[u32], cell: u32, reads: [i32; 4]) -> bool {
+fn is_changed(grows: &[u32], cell: u32, reads: [i32; 4]) -> bool {
     let mut k = 0;
     while k < at(grows, scatter::GROWS_BOXES) {
         let b = scatter::BOXES_AT + scatter::BOX_WORDS * k;
@@ -127,7 +127,7 @@ fn changed(grows: &[u32], cell: u32, reads: [i32; 4]) -> bool {
 /// where every one does, decor having been off, or its records were not
 /// grown for its square (`scatter::grown_for`), its head then laid anew and
 /// no patch bearing; else, where a box of the frame's meets what it reads
-/// (`changed`), only its candidates that read what the box holds.
+/// (`is_changed`), only its candidates that read what the box holds.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_mark_cs"))]
 pub fn decor_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -152,7 +152,7 @@ pub fn decor_mark_cs(
     );
     let head = [at(records, h), at(records, h + 1), at(records, h + 2)];
     let whole = at(grows, scatter::GROWS_EVERY) != 0 || !scatter::grown_for(head, q);
-    if !whole && !changed(grows, cell, scatter::square_reads(cell, q)) {
+    if !whole && !is_changed(grows, cell, scatter::square_reads(cell, q)) {
         return;
     }
     if whole {
@@ -202,7 +202,7 @@ const _: () = assert!(SQUARE_PATCHES <= PATCH_LANES);
 /// stream is drawn once (`scatter::each_in_patch`): where the slot grows
 /// whole, every candidate it bears is asked and how many is written
 /// (`scatter::bears_at`); else only one that reads what a box of the
-/// frame's holds (`scatter::reads`, `changed`). Their contest is drawn once
+/// frame's holds (`scatter::reads`, `is_changed`). Their contest is drawn once
 /// for them all (`scatter::beaten`, each `stands`'s answer). Each asked
 /// writes its own record (`scatter::slot_record`): `STOOD`, its cell, seed
 /// and born zoom, where it lies in the square and stands, for `decor_cs`
@@ -243,7 +243,7 @@ pub fn decor_stand_cs(
     let mut i = 0;
     while i < bears as usize {
         let [x, y] = candidates[i].cell;
-        if whole || changed(grows, cell, scatter::reads(cell, [x, y])) {
+        if whole || is_changed(grows, cell, scatter::reads(cell, [x, y])) {
             if x0 <= x && x < x1 && y0 <= y && y < y1 {
                 mark(&mut asked, i);
             } else {
@@ -255,9 +255,9 @@ pub fn decor_stand_cs(
     let beaten = scatter::beaten(decor, zoom, &candidates, bears, &asked);
     i = 0;
     while i < bears as usize {
-        if marked(&asked, i) {
+        if is_marked(&asked, i) {
             let (r, c) = (slot_word(rows, square, j, p, i as u32), candidates[i]);
-            if marked(&beaten, i) {
+            if is_marked(&beaten, i) {
                 put(out, r, scatter::UNGROWN);
             } else {
                 put(out, r, scatter::STOOD);
@@ -279,7 +279,7 @@ pub fn decor_stand_cs(
 /// (`decor_mark_cs`). What it grows on is the windows' squares and the ways
 /// over them alone, what is placed left out (`Unplaced`); what is placed
 /// and the eye's cuts only take it away where they hold its box
-/// (`Grounds::edited`).
+/// (`Grounds::is_edited`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "decor_cs"))]
 pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -351,7 +351,7 @@ const RECORD_LANES: u32 = 64;
 /// Whether workgroup `g` of a decor pass reads records: past the slots,
 /// placed decor's always; a slot's where the windows still hold the square
 /// they were grown for (`scatter::grown_for`).
-fn held(grown: &[u32], window: &[IVec4], g: u32) -> bool {
+fn is_held(grown: &[u32], window: &[IVec4], g: u32) -> bool {
     if g >= scatter::EYE_SLOTS {
         return true;
     }
@@ -362,7 +362,7 @@ fn held(grown: &[u32], window: &[IVec4], g: u32) -> bool {
 
 /// The `k`-th run of records workgroup `g` of a decor pass reads, as record
 /// numbers (pxl-spec-core `scatter::record_at`): the first and how many,
-/// where it reads any (`held`). A workgroup a slot, each run the records a
+/// where it reads any (`is_held`). A workgroup a slot, each run the records a
 /// decor's patch bears (`scatter::bears_at`); past the slots, a workgroup
 /// `scatter::RUNS` of placed decor's, a record a run. A pass reads the
 /// records the patches bear, not the room.
@@ -401,7 +401,7 @@ pub fn decor_count_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] regions: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
 ) {
-    if !held(grown, window, group.x) {
+    if !is_held(grown, window, group.x) {
         return;
     }
     let mut k = lane.x;
@@ -531,7 +531,7 @@ pub fn decor_place_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] instances: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
 ) {
-    if !held(grown, window, group.x) {
+    if !is_held(grown, window, group.x) {
         return;
     }
     let mut k = lane.x;

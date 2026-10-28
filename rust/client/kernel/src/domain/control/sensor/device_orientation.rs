@@ -121,7 +121,7 @@ pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPla
     }
 }
 
-pub fn orientation_lost() {
+pub fn on_orientation_lost() {
     let store = device_orientation_store();
     store.set_is_tracking_orientation(false);
     store.pose = Pose::Failed(Message::OrientationSignalLost);
@@ -157,7 +157,7 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
         return;
     }
     o.command = Some(OrientationCommand::Remove);
-    orientation_lost();
+    on_orientation_lost();
 }
 
 pub fn take_orientation_command() -> Option<OrientationCommand> {

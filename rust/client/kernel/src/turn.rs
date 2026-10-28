@@ -99,7 +99,7 @@ fn demand_tick(ctx: &mut TickContext) {
         pxl_render::gpu::api::device_generation(),
     );
     if pinned {
-        TerrainTile::demand().moved();
+        TerrainTile::demand().on_moved();
     }
     crate::domain::view::demand::admit_arrived(&ctx.pass);
     changes_step();
@@ -311,7 +311,7 @@ fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
-pub fn world_frame_asked(host: HostFrame) {
+pub fn on_world_frame_asked(host: HostFrame) {
     *FRAME.get(|| None) = Some(host);
     frames().notify();
 }
@@ -401,21 +401,21 @@ fn changes_step() {
     static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 3]> = Global::new();
     let [places, earth, divisions] = MOVED.get(Default::default);
     let shared = crate::domain::query::changed::take();
-    crate::domain::scene::decor::drawn::edited(crate::domain::query::changed::written());
+    crate::domain::scene::decor::drawn::note_edited(crate::domain::query::changed::written());
     PlaceTile::residency().take_moved(places);
     Earth::residency().take_moved(earth);
     DivisionTile::residency().take_moved(divisions);
     if shared {
-        TerrainTile::demand().moved();
+        TerrainTile::demand().on_moved();
     }
     if shared || !places.is_empty() {
-        PlaceTile::demand().moved();
-        crate::domain::scene::marker::moved(places);
+        PlaceTile::demand().on_moved();
+        crate::domain::scene::marker::on_moved(places);
     }
     if shared || !earth.is_empty() {
-        Earth::demand().moved();
+        Earth::demand().on_moved();
     }
     if !divisions.is_empty() {
-        DivisionTile::demand().moved();
+        DivisionTile::demand().on_moved();
     }
 }

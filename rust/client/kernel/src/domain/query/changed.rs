@@ -109,7 +109,7 @@ impl Columns {
 /// What a step asked the world, kept with what it asked it of and the
 /// columns its answer read, as its queries report them (`World::reading`),
 /// their corners in units: asked again only where what it asks of moved,
-/// or a change to the ground or the objects touched those columns (`kept`).
+/// or a change to the ground or the objects touched those columns (`forget_touched`).
 /// An answer that read nothing is not kept, as nothing says when it goes.
 pub struct Asked<K, A>(Option<(K, [[f64; 2]; 2], A)>);
 
@@ -124,7 +124,7 @@ impl<K: PartialEq, A: Copy> Asked<K, A> {
 
     /// Let go where a change touched its columns: looked at every frame
     /// turn, so it sees each change once (`within`).
-    pub fn kept(&mut self) {
+    pub fn forget_touched(&mut self) {
         if self
             .0
             .as_ref()

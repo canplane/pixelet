@@ -55,7 +55,7 @@ pub(super) fn apply(
     use crate::domain::control::interaction::{hold, holding};
     use crate::domain::control::sensor::{device_orientation, geolocation};
     use crate::domain::view::setting::store::{
-        settings_loaded, settings_open, settings_store, SettingKey,
+        are_settings_loaded, settings_open, settings_store, SettingKey,
     };
     use crate::profiler::window::{profiler_follow, profiler_window_start, profiler_window_stop};
     use crate::shell as ui;
@@ -83,7 +83,7 @@ pub(super) fn apply(
             } else {
                 0.0
             };
-            crate::turn::world_frame_asked(crate::turn::HostFrame {
+            crate::turn::on_world_frame_asked(crate::turn::HostFrame {
                 width: p.width,
                 height: p.height,
                 delta,
@@ -97,7 +97,7 @@ pub(super) fn apply(
         }
         Command::WORLD_BOOT => {
             let p = abi::WorldBoot::read(packet(pkt)?)?;
-            super::host_attached(s);
+            super::on_host_attached(s);
             crate::domain::view::setting::store::set_development(p.development);
             crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
@@ -126,14 +126,14 @@ pub(super) fn apply(
             use crate::sys::io::file::{self, Kept};
             let p = abi::WorldKeptEmptied::read(packet(pkt)?)?;
             let kept = or_refuse(
-                Kept::of_slot(p.slot).filter(|&k| file::refused(k)),
+                Kept::of_slot(p.slot).filter(|&k| file::is_refused(k)),
                 Errno::EINVAL,
             )?;
-            file::emptied(kept);
+            file::on_emptied(kept);
             // The settings write what they hold from the next keep on; the
             // objects are read again, empty, and saved from then on.
             match kept {
-                Kept::Settings => crate::domain::view::setting::store::settings_emptied(),
+                Kept::Settings => crate::domain::view::setting::store::on_settings_emptied(),
                 Kept::Objects => crate::domain::layer::object::repository::open(),
             }
             Ok(Some(0))
@@ -277,7 +277,7 @@ pub(super) fn apply(
                 abi::Sensor::Geolocation => geolocation::geolocation_error(
                     p.code.unwrap_or(abi::GeolocationErrorCode::Other),
                 ),
-                abi::Sensor::Orientation => device_orientation::orientation_lost(),
+                abi::Sensor::Orientation => device_orientation::on_orientation_lost(),
             }
             Ok(Some(0))
         }
@@ -305,7 +305,9 @@ pub(super) fn apply(
             match p.sensor {
                 abi::Sensor::Geolocation => {
                     if p.answer == abi::PermissionAnswer::Granted {
-                        geolocation::geolocation_permission_granted(world_platform().geolocation);
+                        geolocation::on_geolocation_permission_granted(
+                            world_platform().geolocation,
+                        );
                     }
                 }
                 abi::Sensor::Orientation => device_orientation::orientation_permission(
@@ -338,7 +340,7 @@ pub(super) fn apply(
             applied(s)
         }
         Command::GPU_READY => {
-            pxl_render::gpu::api::device_answered();
+            pxl_render::gpu::api::on_device_answered();
             request_world_tick();
             Ok(Some(0))
         }
@@ -384,7 +386,7 @@ pub(super) fn apply(
         Command::SETTING_SET => {
             let p = abi::SettingSet::read(packet(pkt)?)?;
             // A change before the slot is read would be read over.
-            refuse_unless(settings_loaded(), Errno::EAGAIN)?;
+            refuse_unless(are_settings_loaded(), Errno::EAGAIN)?;
             let changed = settings_store().set_setting(p.key, p.value);
             refuse_unless(changed.is_some(), Errno::EINVAL)?;
             if changed == Some(true) && p.key == SettingKey::profiler {
@@ -451,7 +453,7 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
         }
         xpute_cmd::Command::SYS_OPENED => {
             let p = xpute_cmd::SysOpened::read(packet(pkt)?)?;
-            crate::sys::io::file::opened(p.fd, p.res, p.detail);
+            crate::sys::io::file::on_opened(p.fd, p.res, p.detail);
             Ok(Some(0))
         }
     }

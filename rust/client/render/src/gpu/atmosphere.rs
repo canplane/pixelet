@@ -455,7 +455,7 @@ impl Atmosphere {
 
     /// Whether a table the world reads was drawn again, and whether it
     /// recorded anything. A light's view is drawn again when its height or
-    /// the eye's altitude has moved (`moved`), and only while no slopes are on
+    /// the eye's altitude has moved (`has_moved`), and only while no slopes are on
     /// their way, which it writes; it takes its light's slope as it is drawn.
     /// The exposure texel is a function of the words it reads and the
     /// tables, so it is drawn where `lay_out` found the words moved, or a
@@ -481,7 +481,7 @@ impl Atmosphere {
             ),
         ];
         for (k, (table, now, lit)) in views.into_iter().enumerate() {
-            if !(free && lit && moved(self.drawn_for[k], now)) {
+            if !(free && lit && has_moved(self.drawn_for[k], now)) {
                 continue;
             }
             g.write_buffer(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
@@ -560,7 +560,7 @@ fn pass_of(table: usize) -> usize {
 /// A view is drawn again for any new height of its light, which the sky's
 /// clock moves only a step at a time (pxl-kernel domain/scene/environment.rs, by
 /// `steps`), or for the eye's altitude moved its share.
-fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
+fn has_moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {
         None => true,
         Some((mu, h)) => {

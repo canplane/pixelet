@@ -339,7 +339,7 @@ impl Ring {
     }
 
     /// Whether a point's ground is held: its tile of the ring was read.
-    fn held(&self, p: [f64; 2]) -> bool {
+    fn is_held(&self, p: [f64; 2]) -> bool {
         self.loaded.contains(&tile_of(p))
     }
 

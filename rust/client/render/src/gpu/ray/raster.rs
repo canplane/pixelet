@@ -161,7 +161,7 @@ impl Raster {
         let [w, h] = size.map(|s| s.max(1) as f32);
         let reach = f32::from_bits(e[eye::REACH]);
         let pixel = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
-        let turn = BOX_VERTICES * u32::from(raster::flipped(r, u, f));
+        let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],
             r[1],
@@ -333,7 +333,7 @@ impl Raster {
         };
         let (r, d) = (unit(v.across), unit(v.down));
         let up = [-d[0], -d[1], -d[2]];
-        let turn = BOX_VERTICES * u32::from(raster::flipped(r, up, v.dir));
+        let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, up, v.dir));
         let n = size as f32;
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],

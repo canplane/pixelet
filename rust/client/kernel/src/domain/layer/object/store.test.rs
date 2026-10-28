@@ -32,7 +32,7 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
             {
                 let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
                 held.holds()
-                    && !held.folded()
+                    && !held.is_folded()
                     && overwrite::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"

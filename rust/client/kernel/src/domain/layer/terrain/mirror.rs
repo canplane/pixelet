@@ -2,7 +2,7 @@
 
 //! The GPU's ways' pool as the CPU mirrors it (pxl-spec-core `way::tree`):
 //! each landing square's families laid at the ids the GPU gave them
-//! (window.rs `landed`), which a cursor reads as the cast reads the GPU's.
+//! (window.rs `on_landed`), which a cursor reads as the cast reads the GPU's.
 //! On the heap, a chunk at a time as the ids laid reach past it: the GPU's
 //! stack hands ids from the lowest up (pxl-shader `TAKEN`), so the mirror
 //! holds the families up to the most ever taken at once, a family's sixteen
@@ -52,7 +52,7 @@ impl Mirror {
     /// families' ids, the chunks they reach grown first; nothing laid where
     /// one lies past the cap or the heap refuses a chunk, which the square's
     /// landing takes as its tree refused or waiting on the heap
-    /// (domain/layer/terrain/window.rs `landed`). A square with no ways has
+    /// (domain/layer/terrain/window.rs `on_landed`). A square with no ways has
     /// none, and reaches no chunk.
     pub fn lay(&mut self, records: &[u32]) -> Result<(), Unlaid> {
         let n = records.first().map_or(0, |&n| n.min(SQUARE_FAMILIES));

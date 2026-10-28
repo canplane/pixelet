@@ -127,9 +127,9 @@ fn walk(l: &impl Lanes, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h:
         h.write_u32(0);
         return;
     }
-    h.write_u32(1 + u32::from(held.folded()));
+    h.write_u32(1 + u32::from(held.is_folded()));
     h.write_u32(l.data(held.slot()));
-    if held.folded() && zoom < cell {
+    if held.is_folded() && zoom < cell {
         for k in 0..8 {
             let c = [
                 2 * at[0] + (k & 1),

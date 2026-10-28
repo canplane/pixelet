@@ -861,7 +861,7 @@ pub fn pipeline(id: u32) -> &'static [u32] {
 
 /// Whether pipeline `id`'s layout binds within what every WebGPU device
 /// binds (`floor::holds`), its groups as its record lays them out.
-const fn floored(id: u32) -> bool {
+const fn is_floored(id: u32) -> bool {
     let (words, _) = &RECORDS[id as usize];
     let mut at = HEAD as usize;
     let lanes = words[at];
@@ -893,7 +893,7 @@ const _: () = {
     let mut id = 0;
     while id < PIPELINES {
         assert!(
-            floored(id),
+            is_floored(id),
             "a pipeline's layout binds past WebGPU's floor (frame/shader/floor.rs)"
         );
         id += 1;

@@ -64,7 +64,7 @@ pub(crate) fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
 }
 
 /// A ray's words written into the rays at pixel `p`.
-fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
+fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
     let mut k = 0;
     while k < ray::WORDS {
         // SAFETY: within the rays, bounded by their size where `p` was.
@@ -121,7 +121,7 @@ pub fn cast_cs(
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
     if took == Takes::Sky {
-        written(
+        write_ray(
             rays,
             id,
             word(
@@ -151,8 +151,8 @@ pub fn cast_cs(
             seen_at(beams, k + beam::SAMPLE_FACES),
             seen_at(beams, k + beam::SAMPLE_VISITS),
         );
-        counted(marks, on, tally::PICKED, 1);
-        written(
+        add_count(marks, on, tally::PICKED, 1);
+        write_ray(
             rays,
             id,
             word(
@@ -171,7 +171,7 @@ pub fn cast_cs(
     // Neither: marked and listed for its walk (`miss_list_cs`), which reads
     // and writes the pyramid. No walk is this pass's own, so a lane that
     // takes its pick pays none of a walk's footprint.
-    counted(marks, on, tally::WALKED, 1);
+    add_count(marks, on, tally::WALKED, 1);
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
     let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
@@ -184,7 +184,7 @@ pub fn cast_cs(
 /// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
 /// `tally::PICKED` on) in its walk again's args `args`, where `on`
 /// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
-pub(crate) fn counted(args: &mut [u32], on: bool, lane: u32, v: u32) {
+pub(crate) fn add_count(args: &mut [u32], on: bool, lane: u32, v: u32) {
     if on {
         add(args, ray::MISS_ARGS_TALLY + lane - tally::PICKED, v);
     }
@@ -285,7 +285,7 @@ pub fn miss_cs(
     let w = missed(
         eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
     );
-    written(rays, id, w);
+    write_ray(rays, id, w);
 }
 
 /// Each pixel `cast_cs` listed (pxl-spec-core `observed::MARKS_AT`), its
@@ -325,5 +325,5 @@ pub fn miss_list_cs(
     let w = missed(
         eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
     );
-    written(rays, id, w);
+    write_ray(rays, id, w);
 }

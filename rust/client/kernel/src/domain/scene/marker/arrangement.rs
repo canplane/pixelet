@@ -163,7 +163,7 @@ fn reach_px(spacing: f64) -> f64 {
     2.0 * spacing
 }
 
-pub fn moved(places: &[Tile]) {
+pub fn on_moved(places: &[Tile]) {
     let p = ARRANGEMENT.get(Arrangement::default);
     p.moved = true;
     p.moved_places.extend_from_slice(places);

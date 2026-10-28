@@ -17,7 +17,7 @@ use xpute_guest::global::Global;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::{Asks, Base};
 use crate::sys::io::demand::Stream;
-use crate::sys::io::fetch::{answer_settled, answered, body, next_answered, release, Answered};
+use crate::sys::io::fetch::{answered, body, next_answered, on_answer_settled, release, Answered};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
@@ -325,7 +325,7 @@ impl<L: Observed> Demand<L> {
         demand.sort_unstable_by_key(|p| p.key());
         let unanswered = |p: Tile, lines: &mut Lines| {
             let r = L::residency();
-            !r.resident(p) && (!r.seek(lines, p).settled || r.again_held(p))
+            !r.resident(p) && (!r.seek(lines, p).settled || r.is_again_held(p))
         };
         // A tile no served shard is over or under is answered as its absence
         // is, and never asked for: every ask judged against the residency as
@@ -408,7 +408,7 @@ impl<L: Observed> Demand<L> {
     }
 
     /// What it reads moved: its own tiles', the ground's, or the objects'.
-    pub fn moved(&mut self) {
+    pub fn on_moved(&mut self) {
         self.moved = true;
     }
 
@@ -468,7 +468,7 @@ pub fn admit_arrived(pass: &Pass) {
                     Err(Errno::ENOTRECOVERABLE.into())
                 }
             };
-            answer_settled(key, result, phases);
+            on_answer_settled(key, result, phases);
             true
         },
         None,

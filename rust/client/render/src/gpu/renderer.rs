@@ -36,7 +36,7 @@ use crate::frame::shader::word::{
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu,
+    buffer_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
     Format, Gpu, Image, Load, Stamp,
 };
@@ -51,7 +51,7 @@ use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::marker::MarkerPass;
-use crate::gpu::pass::model::{frame_layout, skins_lost, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -62,7 +62,7 @@ use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
-use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
+use crate::gpu::surface::{on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
 use crate::look::environment::{ENV_AIR, ENV_POLE, ENV_SUN};
@@ -358,15 +358,15 @@ static REDRAW: Global<bool> = Global::new();
 /// renderer numbers on.
 static DRAWN_FRAMES: Global<f64> = Global::new();
 
-pub fn gpu_lost() {
+pub fn on_gpu_lost() {
     RENDERER.set(None);
-    skins_lost();
-    device_lost();
+    on_skins_lost();
+    on_device_lost();
     uploads().lose();
-    surfaces_lost();
+    on_surfaces_lost();
 }
 
-pub fn surface_closed(s: Surface) {
+pub fn on_surface_closed(s: Surface) {
     for id in s.targets() {
         release(id);
     }
@@ -541,7 +541,7 @@ impl Renderer {
         e.push(buffer_entry(3, self.draws_buffer));
         self.bind_group = g.bind_group(self.ghost.layouts[0], &e);
         let lit = self.lit_entries(self.frame_buffer);
-        self.screen.lit(lit);
+        self.screen.set_lit(lit);
     }
 
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
@@ -1015,13 +1015,13 @@ impl Renderer {
         let written = stamps
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.written())
+            .filter(|(_, s)| s.is_written())
             .fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
         release(canvas_view);
         // The read that landed is the one that was on its way; this frame's
         // takes its place where one was asked.
-        let gpu_read = q != 0 && g.gpu_landed();
+        let gpu_read = q != 0 && g.has_gpu_landed();
         let (gpu_spans, gpu_px, gpu_frame) = if gpu_read {
             (
                 core::array::from_fn(|k| g.gpu_ms(k as u32)),
@@ -1040,14 +1040,14 @@ impl Renderer {
         let skipped = !frame_commit();
         if skipped {
             REDRAW.set(true);
-            self.screen.dropped();
+            self.screen.on_dropped();
             for case in self.cases.iter_mut().flatten() {
                 case.read.forget();
             }
             read.forget();
             self.ao_read.forget();
         } else if self.screen.grows() {
-            self.screen.drawn();
+            self.screen.on_drawn();
         }
         read.end();
         self.frame_read = read;
@@ -1226,12 +1226,12 @@ fn targets(g: &Gpu, s: &mut Surface) {
 
 /// A frame's cast handed and never drawn: the edits its decor named, held
 /// for the next that is.
-fn unconsumed(cast: &Option<Cast>) {
+fn carry_edits(cast: &Option<Cast>) {
     let Some(d) = cast.as_ref().map(|c| &c.decor) else {
         return;
     };
     if let Some(r) = RENDERER.get(|| None).as_mut() {
-        r.screen.unconsumed(d.edits);
+        r.screen.carry_edits(d.edits);
     }
 }
 
@@ -1240,7 +1240,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
-        unconsumed(&input.cast);
+        carry_edits(&input.cast);
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput {
             kind: FrameKind::unready,
@@ -1250,7 +1250,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     };
     // The surfaces would block: skip rather than wait.
     if !(input.admit)() {
-        unconsumed(&input.cast);
+        carry_edits(&input.cast);
         take_lists(Some(g), input.lists);
         return FrameOutput {
             kind: FrameKind::held,

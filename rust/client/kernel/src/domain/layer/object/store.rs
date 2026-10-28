@@ -96,7 +96,7 @@ pub fn objects() -> &'static mut Store {
 pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
     let regions = objects().write(writes);
     if !regions.is_empty() {
-        written(&regions);
+        note_written(&regions);
     }
 }
 
@@ -104,7 +104,7 @@ static WRITTEN: Global<Vec<Aabb>> = Global::new();
 
 /// Where the objects changed, kept for the turn to tell what draws them and
 /// what is worked out from them (`take_written`); storage calls nothing above it.
-pub(super) fn written(regions: &[Aabb]) {
+pub(super) fn note_written(regions: &[Aabb]) {
     WRITTEN.get(Vec::new).extend_from_slice(regions);
     request_world_tick();
 }
@@ -295,9 +295,9 @@ impl Store {
         if !held.holds() {
             return;
         }
-        let leaf = (!held.folded()).then(|| Leaf::of(self.tree.data()[held.slot() as usize]));
+        let leaf = (!held.is_folded()).then(|| Leaf::of(self.tree.data()[held.slot() as usize]));
         let here = node_near(zoom, at, about);
-        if !enter(zoom, here, &cube(zoom, here), leaf) || !held.folded() {
+        if !enter(zoom, here, &cube(zoom, here), leaf) || !held.is_folded() {
             return;
         }
         for k in 0..8 {
@@ -390,7 +390,7 @@ impl Store {
     /// The value placed at exactly the node `at` of `zoom`, if one is, read
     /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
     pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3], held: Held) -> Option<Entry> {
-        (held.holds() && !held.folded() && held.zoom() == zoom)
+        (held.holds() && !held.is_folded() && held.zoom() == zoom)
             .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
     }
 
@@ -458,7 +458,7 @@ impl Store {
     fn release(&mut self, zoom: Zoom, at: [i32; 3]) {
         let mut freed = Vec::new();
         let held = self.cursor((zoom, at), zoom);
-        if held.holds() && !held.folded() {
+        if held.holds() && !held.is_folded() {
             let z = held.zoom();
             xpute_kit::ensure!(
                 z == zoom || Leaf::of(self.tree.data()[held.slot() as usize]).ext == NONE,
@@ -625,7 +625,7 @@ impl Store {
             let c = column(k);
             let mut leaves = k.checked_sub(1).and_then(|o| walk.at[o].leaves);
             let mut met = |held: &mut Vec<([i32; 3], Held)>, at: [i32; 3], h: Held| {
-                if h.folded() {
+                if h.is_folded() {
                     held.push((at, h));
                 } else if h.holds() {
                     leaves = join(leaves, span(k, at));

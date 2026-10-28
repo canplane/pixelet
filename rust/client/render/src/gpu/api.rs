@@ -120,7 +120,7 @@ impl Stamp {
         }
     }
 
-    pub fn written(&self) -> bool {
+    pub fn is_written(&self) -> bool {
         self.set != 0 && self.begin.is_none()
     }
 
@@ -332,7 +332,7 @@ pub fn gpu() -> Option<&'static Gpu> {
 }
 
 /// The device as its block says, once the host has written it: asked for on
-/// the first call after a device answers (`device_answered`).
+/// the first call after a device answers (`on_device_answered`).
 pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
     if s.device.is_none() && s.asked && *head(DEVICE_AT + DEVICE_WORDS - 1) == STATUS::READY {
@@ -373,7 +373,7 @@ pub fn device() -> Option<Device> {
 
 /// A device answered: its block is asked for, and read once the host has
 /// written it.
-pub fn device_answered() {
+pub fn on_device_answered() {
     let s = state();
     *head(DEVICE_AT + DEVICE_WORDS - 1) = 0;
     let at = s.at as usize + DEVICE_AT * WORD;
@@ -393,7 +393,7 @@ pub fn take_device_lost() -> bool {
     true
 }
 
-/// The devices gone so far (`device_lost`): whoever hands the GPU anything
+/// The devices gone so far (`on_device_lost`): whoever hands the GPU anything
 /// says under which, and what went under another is not there.
 pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
@@ -420,7 +420,7 @@ fn take_stamps(s: &mut State) -> bool {
 }
 
 /// The device went, and every object on it: the handles start over.
-pub fn device_lost() {
+pub fn on_device_lost() {
     if let Some(s) = STATE.get(|| None).as_mut() {
         // SAFETY: the encoder's own bytes; zeroed, it has made nothing.
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
@@ -1255,7 +1255,7 @@ impl Gpu {
 
     /// Whether the frame just submitted took a read in, so its figures were
     /// measured with it.
-    pub fn gpu_landed(&self) -> bool {
+    pub fn has_gpu_landed(&self) -> bool {
         self.s().gpu_landed
     }
 

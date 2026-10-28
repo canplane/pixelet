@@ -100,7 +100,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
 
 /// The square at `cell` holding cell `g` absent, a fill on its way to it,
 /// and the windows folded without it, as a turn's step leaves them before
-/// it lands: its berth and that fill's ticket, which `landed` takes.
+/// it lands: its berth and that fill's ticket, which `on_landed` takes.
 pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
     let w = windows();
     let b = berth_of(w, cell, window::square_of(g).0).expect("held");
@@ -439,12 +439,12 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
     for i in of_slot(0) {
         show(w, i);
     }
-    landed(b, 6, Landing::Refused);
+    on_landed(b, 6, Landing::Refused);
     assert_eq!(
         w.berths[b as usize].ticket, 7,
         "another fill's landing lays nothing"
     );
-    landed(b, 7, Landing::Built(&[0]));
+    on_landed(b, 7, Landing::Built(&[0]));
     refold();
     for win in [eye, focus] {
         let row = w.slots[(win * SLOTS) as usize];
@@ -487,7 +487,7 @@ fn a_square_waiting_on_the_heap_is_handed_again_once_a_page_is_given_back() {
     let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
     let q = want(w, eye, 0);
     let b = berth_of(w, LEAF_CELL, q).unwrap();
-    // As `landed` leaves it where the heap refused the mirror its chunk.
+    // As `on_landed` leaves it where the heap refused the mirror its chunk.
     (w.berths[b as usize].ticket, w.heap) = (WAITING, Some(Refused::now()));
     assert!(!wake(w), "no page given back: it waits");
     lay(w, leaf(CENTRE), leaf(CENTRE));

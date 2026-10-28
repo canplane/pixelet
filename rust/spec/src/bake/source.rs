@@ -26,6 +26,6 @@ pub fn is_version(version: &str) -> bool {
 
 /// Whether a kind is held a shard at a time: the pyramid's are, the Earth's
 /// picture, the sphere's, is no shard's.
-pub fn sharded(layer: BaseLayer) -> bool {
+pub fn is_sharded(layer: BaseLayer) -> bool {
     layer != BaseLayer::earth
 }

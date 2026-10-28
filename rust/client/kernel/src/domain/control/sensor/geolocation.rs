@@ -83,7 +83,7 @@ pub fn geolocation_visibility(visible: bool, supported: bool) {
 }
 
 /// A grant from outside the app recovers; otherwise a denial stuck until reload.
-pub fn geolocation_permission_granted(supported: bool) {
+pub fn on_geolocation_permission_granted(supported: bool) {
     if !device_location_store().is_tracking_location {
         start_watching(supported);
     }

@@ -97,7 +97,7 @@ impl Mark {
         [r, g, b, a]
     }
 
-    fn dashed(self) -> bool {
+    fn is_dashed(self) -> bool {
         self.look().2
     }
 }
@@ -443,7 +443,7 @@ impl Lines {
 }
 
 fn stretch(lane: &mut Vec<f32>, a: V3, b: V3, mark: Mark) {
-    let pieces = if mark.dashed() { DASHES } else { 1 };
+    let pieces = if mark.is_dashed() { DASHES } else { 1 };
     let at = |t: u32| -> [f32; 3] {
         core::array::from_fn(|i| (a[i] + (b[i] - a[i]) * t as f64 / pieces as f64) as f32)
     };

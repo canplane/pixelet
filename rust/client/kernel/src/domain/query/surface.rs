@@ -43,7 +43,7 @@ impl World<'_> {
         self.terrain
             .column(&line, Found::NONE, (cell, c))
             .map(|col| {
-                col.grounded().then(|| Surface {
+                col.is_grounded().then(|| Surface {
                     top: f64::from(col.top) * units(cell),
                     asset: col.look as GroundId,
                 })

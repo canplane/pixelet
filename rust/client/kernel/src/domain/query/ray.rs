@@ -346,7 +346,7 @@ impl<'a> World<'a> {
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
-        let struck = match answer::placed(s.asset[0]) {
+        let struck = match answer::is_placed(s.asset[0]) {
             true => self
                 .objects
                 .placed(zoom, wrap_cell(zoom, c), s.at.handed.placed)

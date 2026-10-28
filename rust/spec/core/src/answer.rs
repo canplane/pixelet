@@ -43,7 +43,7 @@ pub const AIR: [u32; 2] = [sentinel::void as u32, 0];
 pub const VALUE_BITS: u32 = 16;
 
 /// An asset's word where what is placed answered it, over its value: the
-/// source control tells an edit by (`placed`), which nothing drawn reads.
+/// source control tells an edit by (`is_placed`), which nothing drawn reads.
 /// Over it, the share of its cube the cell keeps (`KEPT_SHIFT`).
 pub const PLACED_ASSET: u32 = 1 << VALUE_BITS;
 
@@ -251,7 +251,7 @@ pub fn whole(asset: u32) -> bool {
 }
 
 /// Whether what is placed holds an asset's value (`PLACED_ASSET`).
-pub fn placed(value: u32) -> bool {
+pub fn is_placed(value: u32) -> bool {
     value & PLACED_ASSET != 0
 }
 

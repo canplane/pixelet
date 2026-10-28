@@ -29,7 +29,7 @@ struct Raster {
   right: vec4f,
   up: vec4f,
   forward: vec4f,
-  // 36 where the eye's axes turn the other way (`flipped`), each triangle
+  // 36 where the eye's axes turn the other way (`is_flipped`), each triangle
   // then wound the other way, else 0; then 1 where the view is the sun's,
   // whose `right` and `up` are then its box's steps across and down a
   // texel, as unit vectors over their lengths, and `forward` its rays'.

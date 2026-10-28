@@ -474,7 +474,7 @@ impl Grown {
     /// The frame was dropped, nothing of it recorded: what it wrote is
     /// written again, the slots it marked marked again by the boxes still
     /// held, the window's table and the placed decor read anew.
-    pub fn dropped(&mut self) {
+    pub fn on_dropped(&mut self) {
         self.marked = 0;
         self.window.forget();
         self.placed.forget();
@@ -489,7 +489,7 @@ impl Grown {
     }
 
     /// A frame's decor handed and never drawn: its edits held for the next.
-    pub fn unconsumed(&mut self, edits: &[[i32; 4]]) {
+    pub fn carry_edits(&mut self, edits: &[[i32; 4]]) {
         for &b in edits {
             hold(&mut self.held, &mut self.holding, b);
         }

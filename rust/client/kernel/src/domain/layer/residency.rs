@@ -54,7 +54,7 @@ impl<L> Entry<L> {
     }
 
     /// Held in a frame of its own, not as an empty tile.
-    fn framed(&self) -> bool {
+    fn is_framed(&self) -> bool {
         self.held.as_ref().is_some_and(|h| h.frame.is_some())
     }
 }
@@ -63,7 +63,7 @@ pub struct Residency<L: Base> {
     tiles: FnvHashMap<Tile, Entry<L>>,
     /// The tile each frame holds: the frames' side of `Held::frame`, one
     /// association read both ways — a tile's frame by every reader of a
-    /// tile (`frame`, `framed`; domain/layer/earth.rs `earth_window`,
+    /// tile (`frame`, `is_framed`; domain/layer/earth.rs `earth_window`,
     /// domain/layer/terrain/tile.rs `kept_for`, domain/layer/terrain/window.rs `voids`),
     /// a frame's tile by the GPU's hand-offs, which walk the frames
     /// (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`). Written only
@@ -236,8 +236,8 @@ impl<L: Base> Residency<L> {
     }
 
     /// Held in a frame of its own, not as an empty tile.
-    fn framed(&self, p: Tile) -> bool {
-        self.entry(p).is_some_and(Entry::framed)
+    fn is_framed(&self, p: Tile) -> bool {
+        self.entry(p).is_some_and(Entry::is_framed)
     }
 
     /// The frame a held tile is in; none for an empty one.
@@ -371,7 +371,7 @@ impl<L: Base> Residency<L> {
         p: Tile,
         victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>,
     ) -> Option<u32> {
-        if self.framed(p) {
+        if self.is_framed(p) {
             return self.remove(p);
         }
         if let Some(free) = self.free.pop() {
@@ -382,7 +382,7 @@ impl<L: Base> Residency<L> {
             &mut self
                 .tiles
                 .iter()
-                .filter(|(_, e)| e.framed() && e.ask.is_none())
+                .filter(|(_, e)| e.is_framed() && e.ask.is_none())
                 .map(|(&q, _)| q),
         ) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
@@ -442,7 +442,7 @@ impl<L: Base> Residency<L> {
     /// Whether every tile asked for shows: its answer, or a resident tile
     /// over it drawing it coarser (`drawn_from`), as a finer tile asked for
     /// while the eye moves is.
-    pub fn shown(&self) -> bool {
+    pub fn is_shown(&self) -> bool {
         let mut lines = Lines::default();
         self.tiles
             .iter()
@@ -506,11 +506,11 @@ impl<L: Base> Residency<L> {
     }
 
     /// Held and asked for again (`again`).
-    pub fn again_held(&self, p: Tile) -> bool {
+    pub fn is_again_held(&self, p: Tile) -> bool {
         self.readable(p).is_some_and(|h| h.again)
     }
 
-    /// The tiles held and asked for again, not yet come (`again_held`),
+    /// The tiles held and asked for again, not yet come (`is_again_held`),
     /// of those `counts` says.
     pub fn asked_again(&self, counts: impl Fn(Tile) -> bool) -> u32 {
         self.tiles

@@ -1068,11 +1068,11 @@ impl RaysPass {
 
     /// The frame was dropped with its cast and its image: the rays and the
     /// image hold older ones.
-    pub fn dropped(&mut self) {
+    pub fn on_dropped(&mut self) {
         if let Some(c) = self.cast.as_mut() {
             // What it was to forget, it did not: the next cast forgets it
             // too, every box and family as sent, as decor's growth holds
-            // its edits again (`unconsumed`).
+            // its edits again (`carry_edits`).
             if let Some(f) = c.sent.take() {
                 c.forget |= f.all;
                 for (m, was) in c.moved.iter_mut().zip(f.moved) {
@@ -1087,13 +1087,13 @@ impl RaysPass {
             }
             c.read.forget();
             c.sun_content.forget();
-            c.grown.dropped();
-            c.tally.dropped();
+            c.grown.on_dropped();
+            c.tally.on_dropped();
         }
     }
 
     /// The frame was drawn: what its decor marked by is done with.
-    pub fn drawn(&mut self) {
+    pub fn on_drawn(&mut self) {
         if let Some(c) = self.cast.as_mut() {
             c.grown.drawn_frame();
         }
@@ -1101,12 +1101,12 @@ impl RaysPass {
 
     /// A frame's cast handed and never drawn: the edits its decor named,
     /// held for the next that is.
-    pub fn unconsumed(&mut self, edits: &[[i32; 4]]) {
+    pub fn carry_edits(&mut self, edits: &[[i32; 4]]) {
         if let Some(c) = self.cast.as_mut() {
             for &b in edits {
                 hold(&mut c.boxes, &mut c.holding, b);
             }
-            c.grown.unconsumed(edits);
+            c.grown.carry_edits(edits);
         }
     }
 }

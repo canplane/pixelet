@@ -79,7 +79,7 @@ pub fn naming(at: &Q3) -> Option<(Tile, u32)> {
 }
 
 /// The divisions named at `naming`'s cell, broad to narrow.
-pub fn named((from, cell): (Tile, u32), each: impl FnMut(&Division)) {
+pub fn each_division((from, cell): (Tile, u32), each: impl FnMut(&Division)) {
     if let Some(tile) = DivisionTile::residency().get(from) {
         tile.name_at(cell).for_each(each);
     }

@@ -7,7 +7,7 @@
 //! however many windows want it (`Berth`). It is filled from its tile as it
 //! lands: its four looks and its tile's samples handed to the GPU, which
 //! draws and lays its cells; they come back into `.fixed.terrain`, and the
-//! square is present from then on (`landed`). Nothing of a tile is kept for
+//! square is present from then on (`on_landed`). Nothing of a tile is kept for
 //! a square still to come: one that enters asks its tile again
 //! (`Residency::again`), which the browser's cache answers.
 
@@ -258,7 +258,7 @@ fn planes() -> &'static mut Planes {
 /// `joined_cs`), over the squares as they are held here. The writers of a
 /// square a window wants or its presence are `berth`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
-/// (`landed`), folded once after all of them (`refold`): no read of a bound
+/// (`on_landed`), folded once after all of them (`refold`): no read of a bound
 /// (`Windowed`) comes between a write and its fold, so none finds one of
 /// other squares than its read of the cells does. Read through the windows
 /// it is handed (`Holding`), which its writer holds while it runs.
@@ -382,10 +382,10 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             let t = tile_of(held.cell, held.square).0;
             if room > 0
                 && !crate::domain::layer::terrain::tile::kept_for(t)
-                && !terrain.again_held(t)
+                && !terrain.is_again_held(t)
             {
                 terrain.again(t);
-                room -= u32::from(terrain.again_held(t));
+                room -= u32::from(terrain.is_again_held(t));
             }
         }
     }
@@ -427,7 +427,7 @@ fn wake(w: &mut Windows) -> bool {
 
 /// Each square a laid window wants held in one berth: the device that went
 /// took every berth's cells; a berth no window wants any more is given up,
-/// a fill on its way to it laying nothing (`landed`); and a square wanted
+/// a fill on its way to it laying nothing (`on_landed`); and a square wanted
 /// that no berth holds takes a free one of its slot's, its window's own
 /// first, absent. Then every slot's row shows its berth (`show`), and the
 /// windows are folded over them (`fold`).
@@ -504,7 +504,7 @@ fn show(w: &mut Windows, i: u32) {
 
 /// A berth's ticket while its square's ways' tree is refused, the pool or
 /// the scratch at its cap (pxl-render gpu/ray/ground.rs `Short`), the square
-/// past its own most or its families past the mirror's cap (`landed`), none
+/// past its own most or its families past the mirror's cap (`on_landed`), none
 /// of which asking again changes: never a fill's (`fill`), and not absent,
 /// so the square is not handed again every turn, nor its tile asked or kept
 /// for it, while a window wants it (`berth`). A reader reads the coarser
@@ -528,7 +528,7 @@ const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 /// nothing: its families may be another's by now. Every window's slot
 /// holding the square shows it (`show`). The windows are folded over it
 /// once the read-back's landings are all in (`refold`).
-pub fn landed(b: u32, ticket: u32, landing: Landing) {
+pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
     let w = windows();
     let held = &mut w.berths[b as usize];
     if held.ticket != ticket {
@@ -558,7 +558,7 @@ pub fn landed(b: u32, ticket: u32, landing: Landing) {
 }
 
 /// The windows folded again over the squares a frame's read-back landed
-/// (`landed`), once after all of them: the stage's, as soon as the frame it
+/// (`on_landed`), once after all of them: the stage's, as soon as the frame it
 /// renders returns (domain/scene/stage.rs `stage_render`), between whose
 /// landings nothing reads a bound here, the renderer reading only the GPU's.
 pub fn refold() {
@@ -700,7 +700,7 @@ fn berth_wants(w: &Windows, tile: Tile, b: u32) -> bool {
 
 /// Whether a window wants one of `tile`'s squares, absent: its packet is
 /// kept for it while one does.
-pub fn tile_wanted(tile: Tile) -> bool {
+pub fn is_tile_wanted(tile: Tile) -> bool {
     let w = windows();
     (0..SQUARES).any(|b| berth_wants(w, tile, b))
 }

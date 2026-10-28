@@ -225,7 +225,7 @@ fn road_bores(
         let mut n = 0;
         while n <= last && n < cap {
             let k = if from_start { n } else { last - n };
-            if !src.held(line.at((f64::from(k) * step).min(line.length()))) {
+            if !src.is_held(line.at((f64::from(k) * step).min(line.length()))) {
                 break;
             }
             n += 1;
@@ -354,7 +354,7 @@ fn road_bores(
             while k <= b {
                 let from = k;
                 let mut cells = Vec::new();
-                while k <= b && src.held(w.line.at(along(k))) {
+                while k <= b && src.is_held(w.line.at(along(k))) {
                     cells.push(w.line.at(along(k)));
                     k += 1;
                 }

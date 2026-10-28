@@ -181,7 +181,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
         center: world_to_canonical(&at.target),
     };
     let last = CLIMBED.get(|| Asked::NONE);
-    last.kept();
+    last.forget_touched();
     last.of(World::now(), climb, |w| climbed(at, &w).polar)
 }
 

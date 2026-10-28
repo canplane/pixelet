@@ -83,7 +83,7 @@ pub fn skin_made(image: u32) -> Option<u32> {
 }
 
 /// The device gone, its groups go with it.
-pub(crate) fn skins_lost() {
+pub(crate) fn on_skins_lost() {
     SKINS.set(Skins::default());
 }
 

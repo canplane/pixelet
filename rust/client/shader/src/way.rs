@@ -24,7 +24,7 @@ use crate::world::square_at;
 /// levels and its ways' tree read its cells and its neighbours' off. Over
 /// `height_cs`'s tops: a way is told from their faces. Each square's
 /// entry as handed whole: where it lies and its shard lay the area's edge
-/// (pxl-spec-core `way::Columns::walled`).
+/// (pxl-spec-core `way::Columns::is_walled`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "way_cs"))]
 pub fn way_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -204,7 +204,7 @@ fn record(scratch: &mut [u32], records: u32, pool: &impl Pool, first: u32) {
 }
 
 /// Family `family` the build gave back, into the scratch at `at`.
-fn freed(scratch: &mut [u32], at: u32, family: u32) {
+fn give_back(scratch: &mut [u32], at: u32, family: u32) {
     let r = add(scratch, at + FREED_AT, 1);
     put(scratch, at + FREED_AT + 1 + r, family);
 }
@@ -356,7 +356,7 @@ pub fn way_tree_cs(
             // the pool is asked only of what the scratch holds.
             let short = if tree::past(had, flagged) {
                 PAST
-            } else if tree::cramped(room, had, flagged) {
+            } else if tree::is_cramped(room, had, flagged) {
                 SHORT
             } else {
                 0
@@ -400,7 +400,7 @@ pub fn way_tree_cs(
             );
             let mut b = 0;
             while b < n / 8 {
-                freed(scratch, mine, id(stack, from + b));
+                give_back(scratch, mine, id(stack, from + b));
                 b += 1;
             }
             level += 1;
@@ -435,7 +435,7 @@ pub fn way_tree_cs(
             if first != tree::NONE {
                 let gave = tree::fold(&mut pool, zoom, s);
                 if gave != tree::NONE {
-                    freed(scratch, mine, gave / 8);
+                    give_back(scratch, mine, gave / 8);
                 } else {
                     record(scratch, records, &pool, first);
                 }

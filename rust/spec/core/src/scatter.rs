@@ -10,7 +10,7 @@
 //!
 //! Where a candidate stands, which way it faces and whether its footing
 //! holds are functions of the world as either side holds it (`grown`, over
-//! `Grounds`), and so is what placed decor claims (`claimed`).
+//! `Grounds`), and so is what placed decor claims (`is_claimed`).
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
@@ -515,7 +515,7 @@ pub fn rivals(decor: &Decor, c: &Candidate, side: i32) -> [[i32; 2]; 2] {
 pub const MARKS: usize = COUNTS.div_ceil(32);
 
 /// Whether candidate `i` is set in `m`.
-pub fn marked(m: &[u32; MARKS], i: usize) -> bool {
+pub fn is_marked(m: &[u32; MARKS], i: usize) -> bool {
     m[i / 32] >> (i % 32) & 1 != 0
 }
 
@@ -538,7 +538,7 @@ pub fn beaten(
     let (mut sides, mut lo, mut hi) = ([0i32; COUNTS], [i32::MAX; 2], [i32::MIN; 2]);
     let mut i = 0;
     while i < n as usize {
-        if marked(asked, i) {
+        if is_marked(asked, i) {
             sides[i] = side_of(decor, &cs[i]);
             let [l, h] = rivals(decor, &cs[i], sides[i]);
             lo = [lo[0].min(l[0]), lo[1].min(l[1])];
@@ -554,7 +554,7 @@ pub fn beaten(
         let sd = side_of(decor, &d);
         let mut i = 0;
         while i < n as usize {
-            if marked(asked, i) && beats(&d, sd, &cs[i], sides[i]) {
+            if is_marked(asked, i) && beats(&d, sd, &cs[i], sides[i]) {
                 mark(&mut beaten, i);
             }
             i += 1;
@@ -569,7 +569,7 @@ pub fn stands(decor: &Decor, zoom: Zoom, c: &Candidate) -> bool {
     let (mut cs, mut asked) = ([Candidate::NONE; COUNTS], [0u32; MARKS]);
     cs[0] = *c;
     mark(&mut asked, 0);
-    !marked(&beaten(decor, zoom, &cs, 1, &asked), 0)
+    !is_marked(&beaten(decor, zoom, &cs, 1, &asked), 0)
 }
 
 /// What stands in one leaf cell on the leaves: its candidate before the rest
@@ -604,8 +604,8 @@ pub trait Grounds {
     /// unplaced's answer (`support::asset`): `void` or the ground's value.
     fn asset(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
     /// Whether an edit holds the cell `c` of `zoom` in the world as edited,
-    /// something placed or air (`answer::placed`).
-    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
+    /// something placed or air (`answer::is_placed`).
+    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::Placed::next`).
     fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
@@ -639,8 +639,8 @@ impl Grown {
 /// footing's level vote there (`asks`); then, where `boxed`, whether it
 /// grows there: every cell of its box void and every one under its base a
 /// look it grows on, as the ground holds them; no edit in its box, air
-/// included (`Grounds::edited`); and no placed decor claims its room
-/// (`claimed`). Every cell both ask is asked at one place about one footing
+/// included (`Grounds::is_edited`); and no placed decor claims its room
+/// (`is_claimed`). Every cell both ask is asked at one place about one footing
 /// (`asks`). Where it stands, whether it does, and whether it grows there,
 /// true where not `boxed`.
 pub fn grown(
@@ -747,7 +747,7 @@ fn asks<Q: Grounds>(
             let holds = if b[2] == lo[2] {
                 decor.allows(value(v))
             } else {
-                v == sentinel::void as u32 && !q.edited(cell, b)
+                v == sentinel::void as u32 && !q.is_edited(cell, b)
             };
             if !holds {
                 return (g, false);
@@ -764,7 +764,7 @@ fn asks<Q: Grounds>(
     let [w, d, h] = decor.cells(g.variant, g.turn);
     (
         g,
-        !boxed || !claimed(q, g.at, [w as i32, d as i32, h as i32]),
+        !boxed || !is_claimed(q, g.at, [w as i32, d as i32, h as i32]),
     )
 }
 
@@ -854,7 +854,7 @@ pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
 /// `cells` a side: one whose corner, posed as placed (`placed_pose`), holds
 /// a box meeting it, each placed leaf near enough asked of the world's
 /// (`Grounds::placed`).
-pub fn claimed(q: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
+pub fn is_claimed(q: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
     let lo = [
         at[0] - CLAIM_REACH[0],
         at[1] - CLAIM_REACH[1],

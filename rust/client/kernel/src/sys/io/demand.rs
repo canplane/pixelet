@@ -61,7 +61,7 @@ impl Stream {
 
     /// The most bytes a body of its takes, its kind's packet at its longest
     /// (pxl-spec `bake::tile::max_packet_bytes`): one past it is refused
-    /// before the heap is asked (sys/io/fetch.rs `opened`). None for an asset,
+    /// before the heap is asked (sys/io/fetch.rs `on_opened`). None for an asset,
     /// which the heap alone bounds.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {

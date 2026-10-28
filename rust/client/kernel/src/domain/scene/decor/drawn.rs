@@ -43,7 +43,7 @@ pub fn decor_sprite_angle() -> f64 {
 /// How far a thing `extent_u` wide is a sprite's worth as a window holds it:
 /// where it spans `DECOR_SPRITE_CELLS` of the window's cells (`SPLIT`),
 /// `WINDOW_MARGIN` times as far as `decor_sprite_angle` puts the sprite's
-/// edge, an upper bound. `decor_shown` takes both its sides at the
+/// edge, an upper bound. `is_decor_shown` takes both its sides at the
 /// window's, so its zooms are the view's.
 pub const fn sprite_reach(extent_u: f64) -> f64 {
     extent_u * SPLIT / crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
@@ -51,7 +51,7 @@ pub const fn sprite_reach(extent_u: f64) -> f64 {
 
 /// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
 /// `cell_zoom` are drawn: as it spans where that zoom begins.
-fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
+fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     split_distance(cell_zoom) * WINDOW_MARGIN <= sprite_reach(extent_u)
 }
 
@@ -66,7 +66,7 @@ fn shown() -> [u32; DECORS.len()] {
 /// `shown`, each kind's extent `extent` gives.
 fn shown_by(extent: impl Fn(&pxl_spec::asset::decor::Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
-        u32::from(decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
+        u32::from(is_decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
     })
 }
 
@@ -78,7 +78,7 @@ struct Handed {
     drawing: [u32; drawn::DRAWING_WORDS as usize],
     placed: Vec<[u32; scatter::GROWN_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
-    /// cells, and how many the next frame hands (`edited`, `frame`).
+    /// cells, and how many the next frame hands (`note_edited`, `frame`).
     edits: [[i32; 4]; overwrite::EDITS as usize],
     edited: usize,
     translation: [f32; 3],
@@ -103,7 +103,7 @@ struct Seen {
 /// What the placed decor was walked over: the eye's cell at the reach's
 /// zoom, the coarsest cell no wider than the reach is short of, and the
 /// placed decor the eraser leaves out. Walked again where this moves, or
-/// where a write meets its box (`edited`): a traversal kept while the eye
+/// where a write meets its box (`note_edited`): a traversal kept while the eye
 /// stays in its cell.
 #[derive(Clone, Copy, PartialEq)]
 struct Walked {
@@ -250,7 +250,7 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Seen) {
 /// columns in leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past
 /// `overwrite::EDITS`, the rest joined into the last, so every write is met,
 /// however many turns pass before a frame takes them.
-pub fn edited(regions: &[Aabb]) {
+pub fn note_edited(regions: &[Aabb]) {
     let h = handed();
     let leaf = units(LEAF_CELL);
     for r in regions {
@@ -276,7 +276,7 @@ pub fn edited(regions: &[Aabb]) {
     }
 }
 
-/// The hand-over `step` made; the edits `edited` gave, once. With the
+/// The hand-over `step` made; the edits `note_edited` gave, once. With the
 /// decor setting off the ground grows its decor at no zoom, and what was
 /// placed stays.
 pub fn frame() -> DecorFrame<'static> {

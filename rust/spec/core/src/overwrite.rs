@@ -184,7 +184,7 @@ impl Held {
     }
 
     /// Leaves under the node differ: it is their fold.
-    pub fn folded(self) -> bool {
+    pub fn is_folded(self) -> bool {
         self.holds() && self.0 & FOLDED != 0
     }
 
@@ -260,7 +260,7 @@ pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
 pub fn down(lanes: &impl Lanes, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> Held {
     let mut held = of(lanes, slot, top);
     let mut z = top;
-    while z < zoom && held.folded() {
+    while z < zoom && held.is_folded() {
         z += 1;
         let s = zoom - z;
         held = child(lanes, held, z, [at[0] >> s, at[1] >> s, at[2] >> s]);
@@ -272,7 +272,7 @@ pub fn down(lanes: &impl Lanes, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) 
 /// over the parent covers it too, nothing under nothing; under a fold, its
 /// own slot.
 pub fn child(lanes: &impl Lanes, parent: Held, zoom: Zoom, at: [i32; 3]) -> Held {
-    if parent.folded() {
+    if parent.is_folded() {
         of(
             lanes,
             (lanes.heap(parent.slot()) & !BRANCH) + slot_of(at),
@@ -316,7 +316,7 @@ pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]
     };
     let v = if !held.holds() {
         VOID
-    } else if !held.folded() {
+    } else if !held.is_folded() {
         if hide.zoom == held.zoom() && holds(hide, zoom, at) {
             VOID
         } else {
@@ -337,7 +337,7 @@ pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]
 /// The share of its cube what the node holding `held` folds to fills, in
 /// `FULL`'s units (`value`): a leaf over it whole, a fold its share.
 pub fn filled(lanes: &impl Lanes, held: Held) -> u32 {
-    if held.folded() {
+    if held.is_folded() {
         high(lanes.data(held.slot()))
     } else {
         FULL
@@ -362,7 +362,7 @@ pub fn looks(
     at: [i32; 3],
     v: u32,
 ) -> [u32; 4] {
-    if !held.folded() {
+    if !held.is_folded() {
         return [v; 4];
     }
     let base = lanes.heap(held.slot()) & !BRANCH;
@@ -465,7 +465,7 @@ pub fn bound(lanes: &impl Lanes, held: Held, zoom: Zoom) -> crate::answer::BoxWo
     if !held.holds() {
         return BOX_NONE;
     }
-    if !held.folded() {
+    if !held.is_folded() {
         return BOX_WHOLE;
     }
     let base = lanes.heap(held.slot()) & !BRANCH;
@@ -514,7 +514,7 @@ fn cells_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
         return false;
     }
     let word = lanes.data(held.slot());
-    if !held.folded() {
+    if !held.is_folded() {
         return voxel(low(word));
     }
     let shift = crate::answer::KEPT_BITS * (d + 1);
@@ -532,7 +532,7 @@ pub fn whole(held: Held, carve: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
         let a = path(zoom, at);
         c[0] == a[0] && c[1] == a[1] && c[2] == a[2]
     };
-    !held.folded() && !carved
+    !held.is_folded() && !carved
 }
 
 #[cfg(test)]

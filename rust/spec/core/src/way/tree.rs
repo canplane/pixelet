@@ -174,7 +174,7 @@ pub const NONE: u32 = u32::MAX;
 /// the families its tree holds from `records_at`, their count first, a
 /// record each, its family's id and its eight heap and eight data words,
 /// which the read-back carries to the CPU's mirror. A build takes no more
-/// than its scratch holds (`cramped`), so neither runs past its room. The
+/// than its scratch holds (`is_cramped`), so neither runs past its room. The
 /// renderer starts it small and grows it (pxl-render gpu/ray/ground.rs
 /// `GroundBuffers::grow_scratch`), every square's alike, so a frame's
 /// scratch is `window::HANDED` of them and each square's length is a
@@ -212,7 +212,7 @@ pub const fn records_at(families: u32) -> u32 {
 pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_FAMILIES);
 
 /// A build's records' count where its tree would take more families than its
-/// scratch holds (`cramped`), short of the square's own most: no record
+/// scratch holds (`is_cramped`), short of the square's own most: no record
 /// kept and its root word 0, which the renderer reads as the scratch's to
 /// grow; `STARVED` the pool's, and `NONE` the square's own most (pxl-render
 /// gpu/ray/ground.rs `Short`). Each past any count of a square's, so a count
@@ -296,7 +296,7 @@ pub fn past(taken: u32, flagged: u32) -> bool {
 /// keeping `CRAMPED` for its records' count, which the scratch's growth
 /// answers (pxl-shader `way_tree_cs`). Asked after `past`, so it marks
 /// only what a larger scratch holds.
-pub fn cramped(families: u32, taken: u32, flagged: u32) -> bool {
+pub fn is_cramped(families: u32, taken: u32, flagged: u32) -> bool {
     taken + flagged > families
 }
 
@@ -477,8 +477,8 @@ mod tests {
 
     #[test]
     fn a_build_is_cramped_past_its_scratch_only() {
-        assert!(!cramped(8, 1, 7));
-        assert!(cramped(8, 1, 8));
+        assert!(!is_cramped(8, 1, 7));
+        assert!(is_cramped(8, 1, 8));
         // Past the square's most is `past`'s, asked first.
         assert!(past(1, SQUARE_FAMILIES));
     }

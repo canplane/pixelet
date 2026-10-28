@@ -105,7 +105,7 @@ pub fn retain(designs: &FnvHashSet<Design>) -> bool {
 pub fn coming(design: &Design) -> bool {
     stickers()
         .get(design)
-        .is_none_or(|b| b.slot != NO_SLOT && !sheet().painted(b.slot as u32))
+        .is_none_or(|b| b.slot != NO_SLOT && !sheet().is_painted(b.slot as u32))
 }
 
 /// Its width, height and where it stands down from its top; none until its
@@ -157,7 +157,7 @@ pub fn ready(design: &Design) -> bool {
     size(design).is_some()
         && stickers()
             .get(design)
-            .is_some_and(|b| b.slot != NO_SLOT && sheet().painted(b.slot as u32))
+            .is_some_and(|b| b.slot != NO_SLOT && sheet().is_painted(b.slot as u32))
 }
 
 /// Its design was measured first.

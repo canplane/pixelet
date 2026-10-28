@@ -149,7 +149,7 @@ const _: () = assert!(
 /// it, a power of two; none for a kind whose bodies take slots.
 const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
     match stream.max_body() {
-        Some(_) if crate::sys::io::body::slotted(stream) => 0,
+        Some(_) if crate::sys::io::body::is_slotted(stream) => 0,
         Some(max) => max.next_power_of_two() as u64,
         None => 0,
     }

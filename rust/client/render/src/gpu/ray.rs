@@ -68,7 +68,7 @@ impl RaysPass {
 
     /// The lit pass's entries, handed again whenever one of its objects is
     /// made again: the group is made again over them when next drawn.
-    pub fn lit(&mut self, entries: Vec<Entry>) {
+    pub fn set_lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
         self.bound = [0; 2];
     }

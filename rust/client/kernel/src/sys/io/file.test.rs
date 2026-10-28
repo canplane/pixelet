@@ -14,7 +14,7 @@ fn read(kept: Kept, text: &[u8]) -> Option<Vec<u8>> {
 fn a_kept_file_is_its_format_then_its_owner_s_bytes() {
     let _g = crate::sys::serial();
     for kept in Kept::ALL {
-        emptied(kept);
+        on_emptied(kept);
         let text = sealed(kept, &[7, 0, 255]);
         assert_eq!(
             BASE64.decode(&text).ok().and_then(|b| b.first().copied()),
@@ -23,7 +23,7 @@ fn a_kept_file_is_its_format_then_its_owner_s_bytes() {
         assert_eq!(read(kept, &text), Some(vec![7, 0, 255]));
         assert_eq!(read(kept, &sealed(kept, &[])), Some(vec![]));
         assert!(matches!(kept_of(kept, b""), KeptFile::None));
-        assert!(!refused(kept));
+        assert!(!is_refused(kept));
     }
 }
 
@@ -38,15 +38,15 @@ fn a_file_of_another_format_is_refused_until_emptied() {
     // An XTP packet begins "XTP\0": what the objects kept, alone, before.
     let unformatted = BASE64.encode(b"XTP\0\0\0\0\0").into_bytes();
     for text in [foreign, unformatted, br#"{"ao":"screen"}"#.to_vec()] {
-        emptied(Kept::Objects);
+        on_emptied(Kept::Objects);
         assert!(matches!(
             kept_of(Kept::Objects, &text),
             KeptFile::Unreadable
         ));
-        assert!(refused(Kept::Objects) && !refused(Kept::Settings));
+        assert!(is_refused(Kept::Objects) && !is_refused(Kept::Settings));
     }
-    emptied(Kept::Objects);
-    assert!(!refused(Kept::Objects));
+    on_emptied(Kept::Objects);
+    assert!(!is_refused(Kept::Objects));
 }
 
 #[test]

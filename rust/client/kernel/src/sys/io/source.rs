@@ -10,7 +10,7 @@
 //! serves it.
 
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
-use pxl_spec::bake::source::{key, sharded};
+use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
@@ -78,7 +78,7 @@ pub fn top() -> Option<Zoom> {
 
 /// Whether a served shard is over or under `p`, of a kind held by shards.
 pub fn serves(layer: BaseLayer, p: Tile) -> bool {
-    !sharded(layer) || declared().is_some_and(|s| s.covers(p))
+    !is_sharded(layer) || declared().is_some_and(|s| s.covers(p))
 }
 
 /// Whether the ground at `[x, y]`, in units, is past the service area: the

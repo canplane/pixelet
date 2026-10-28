@@ -66,7 +66,7 @@ impl Aabb {
         std::array::from_fn(|k| p[k].clamp(self.min[k], self.max[k]))
     }
 
-    pub fn bounded(self) -> bool {
+    pub fn is_bounded(self) -> bool {
         self.min.iter().chain(&self.max).all(|c| c.is_finite())
     }
 

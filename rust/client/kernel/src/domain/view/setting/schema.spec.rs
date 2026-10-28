@@ -337,7 +337,7 @@ impl SettingKey {
 
     /// Written to the settings' kept slot and read from it; one schema.json
     /// marks `kept` false is held for the session alone.
-    pub fn kept(self) -> bool {
+    pub fn is_kept(self) -> bool {
         !matches!(
             self,
             SettingKey::place | SettingKey::camera_mode | SettingKey::sky_time

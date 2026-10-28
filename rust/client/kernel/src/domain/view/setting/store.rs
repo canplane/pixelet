@@ -50,7 +50,7 @@ impl Settings {
         if !self.set(key, value) {
             return None;
         }
-        if key.kept() {
+        if key.is_kept() {
             *UNKEPT.get(|| false) = true;
         }
         Some(true)
@@ -60,7 +60,7 @@ impl Settings {
         let mut bytes = Vec::new();
         for key in SettingKey::ALL {
             let value = self.get(key);
-            if !key.kept() || !is_offered(key, value) || value == Settings::DEFAULT.get(key) {
+            if !key.is_kept() || !is_offered(key, value) || value == Settings::DEFAULT.get(key) {
                 continue;
             }
             leb(&mut bytes, key as u32);
@@ -108,7 +108,7 @@ enum Load {
     Asked,
     /// What it held, or nothing: written from now on.
     Loaded,
-    /// Refused (sys/io/file.rs `refused`): the defaults, and not written
+    /// Refused (sys/io/file.rs `is_refused`): the defaults, and not written
     /// over until the host sets it aside and empties the slot.
     Refused,
     /// There and not readable here otherwise: the defaults, and never
@@ -130,14 +130,14 @@ pub fn settings_open() {
 
 /// The slot was read, whatever it held: from here the store is what this
 /// session has, and what waits on it may start.
-pub fn settings_loaded() -> bool {
+pub fn are_settings_loaded() -> bool {
     *load() != Load::Asked
 }
 
 /// True the turn the slot is read. What is not offered, unknown or invalid
 /// stays at the default, as does every setting where the slot cannot be read.
 pub fn settings_load_step() -> bool {
-    if settings_loaded() {
+    if are_settings_loaded() {
         return false;
     }
     let Some(kept) = file::take_kept(Kept::Settings) else {
@@ -146,7 +146,9 @@ pub fn settings_load_step() -> bool {
     let (s, now) = match kept {
         KeptFile::Bytes(bytes) => (read_kept(&bytes), Load::Loaded),
         KeptFile::None => (Settings::DEFAULT, Load::Loaded),
-        KeptFile::Unreadable if file::refused(Kept::Settings) => (Settings::DEFAULT, Load::Refused),
+        KeptFile::Unreadable if file::is_refused(Kept::Settings) => {
+            (Settings::DEFAULT, Load::Refused)
+        }
         KeptFile::Unreadable => (Settings::DEFAULT, Load::Unreadable),
     };
     SETTINGS_STORE.set(s);
@@ -157,7 +159,7 @@ pub fn settings_load_step() -> bool {
 
 /// The host set a refused slot's file aside and emptied it: the store, with
 /// what changed meanwhile, is written from the next keep on.
-pub fn settings_emptied() {
+pub fn on_settings_emptied() {
     if *load() == Load::Refused {
         *load() = Load::Loaded;
     }
@@ -177,7 +179,7 @@ fn read_kept(bytes: &[u8]) -> Settings {
     let mut at = 0;
     while let (Some(number), Some(value)) = (unleb(bytes, &mut at), unleb(bytes, &mut at)) {
         if let Some(key) =
-            SettingKey::of(number).filter(|&key| key.kept() && is_offered(key, value))
+            SettingKey::of(number).filter(|&key| key.is_kept() && is_offered(key, value))
         {
             s.set(key, value);
         }

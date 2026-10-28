@@ -31,13 +31,13 @@ fn a_patch_contest_is_each_candidate_standing() {
                     let beaten = beaten(decor, zoom, &cs, n, &asked);
                     for i in 0..n as usize {
                         assert_eq!(
-                            !marked(&beaten, i),
+                            !is_marked(&beaten, i),
                             stands(decor, zoom, &cs[i]),
                             "decor {} at {zoom}, patch {p}, candidate {i}",
                             decor.value
                         );
                         compared += 1;
-                        lost += usize::from(marked(&beaten, i));
+                        lost += usize::from(is_marked(&beaten, i));
                     }
                     p += 1;
                 }

@@ -175,7 +175,7 @@ fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
 }
 
 /// A model and an image of one load are the same file; which it is read as
-/// is its attempt's subject's (`opened`).
+/// is its attempt's subject's (`on_opened`).
 pub fn open_asset(credit: Credit, load: Load) {
     let owner = Owner::Load { key: credit.key() };
     // The sphere's number is no tile's: a subject is never 0.
@@ -193,16 +193,16 @@ pub fn cancel_asset(key: u64) -> bool {
         return false;
     };
     file::close(fd);
-    load_rejected(key, Ended::Aborted);
+    on_load_rejected(key, Ended::Aborted);
     true
 }
 
 /// The open answered: its bytes taken now, as a tile's body is
-/// (sys/io/fetch.rs `opened`), and its descriptor closed with its credit;
+/// (sys/io/fetch.rs `on_opened`), and its descriptor closed with its credit;
 /// where the heap refuses them room, the want waits for room.
-pub fn opened(fd: u32, key: u64, opened: Opened) {
+pub fn on_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
-        load_rejected(key, Ended::Failed(opened.failure()));
+        on_load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
     let Some(what) = attempt_of(key).and_then(|(_, subject)| of_subject(subject)) else {
@@ -225,7 +225,7 @@ pub fn opened(fd: u32, key: u64, opened: Opened) {
 /// An image's bytes, read: kept, where a header gives its size
 /// (pxl-spec `asset::image_size`); a file no header sizes is the asset's
 /// own failure, so it is final.
-fn image_arrived(load: Load, file: Vec<u8>) {
+fn on_image_arrived(load: Load, file: Vec<u8>) {
     *loader().at(LoadKind::Image, load) = Some(if pxl_spec::asset::image_size(&file).is_some() {
         Entry::Image(file)
     } else {
@@ -237,7 +237,7 @@ fn image_arrived(load: Load, file: Vec<u8>) {
 
 /// The catalog's bytes, read: kept where they read as the compiled slots,
 /// else its failure, final, since asking again returns the same bytes.
-fn catalog_arrived(load: Load, file: &[u8]) {
+fn on_catalog_arrived(load: Load, file: &[u8]) {
     let read = Catalog::read(file);
     *loader().at(LoadKind::Catalog, load) = Some(if read.is_some() {
         Entry::Landed
@@ -250,7 +250,7 @@ fn catalog_arrived(load: Load, file: &[u8]) {
 
 /// The renderer took the texture of the image numbered `image`
 /// (pxl-render `take_landed`): its file goes.
-pub fn image_landed(image: u32) {
+pub fn on_image_landed(image: u32) {
     let Some(load) = Load::of(image) else { return };
     let entry = loader().at(LoadKind::Image, load);
     if matches!(entry, Some(Entry::Image(_))) {
@@ -260,7 +260,7 @@ pub fn image_landed(image: u32) {
 
 /// The device went, and every texture an image landed in: each is read
 /// again when next asked for. One still in its bytes is handed again.
-pub fn images_lost() {
+pub fn on_images_lost() {
     let l = loader();
     for entry in l.entries[LoadKind::Image as usize]
         .iter_mut()
@@ -295,8 +295,8 @@ async fn arrival(kind: LoadKind, load: Load, buf: Vec<u8>) {
     next_turn(world_edge).await;
     yield_if_spent(world_edge).await;
     match kind {
-        LoadKind::Image => return image_arrived(load, buf),
-        LoadKind::Catalog => return catalog_arrived(load, &buf),
+        LoadKind::Image => return on_image_arrived(load, buf),
+        LoadKind::Catalog => return on_catalog_arrived(load, &buf),
         LoadKind::Gltf => {}
     }
     let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
@@ -309,7 +309,7 @@ async fn arrival(kind: LoadKind, load: Load, buf: Vec<u8>) {
 
 /// The transport failed, not the asset: it is wanted again, and the request scheduler
 /// decides the wait.
-pub fn load_rejected(key: u64, how: Ended) {
+pub fn on_load_rejected(key: u64, how: Ended) {
     let Some((kind, load)) = ended(key, how) else {
         return;
     };

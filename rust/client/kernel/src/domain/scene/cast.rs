@@ -91,7 +91,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
     let wanted = |frame| {
         terrain
             .in_frame(frame)
-            .is_some_and(|t| terrain.get(t).is_some() && window::tile_wanted(t))
+            .is_some_and(|t| terrain.get(t).is_some() && window::is_tile_wanted(t))
     };
     kept().send(
         pxl_render::gpu::api::device_generation(),

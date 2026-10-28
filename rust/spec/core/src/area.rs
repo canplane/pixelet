@@ -90,7 +90,7 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
 /// no node a shard or finer straddles the area's edge, so it holds for every
 /// node in the shard. Whether the shard is past the area, and whether it and
 /// the eight shards about it are all served, `inside`: then no node in it
-/// is past, nor walled (`walled`), nor has a leaf cell gone beside it
+/// is past, nor walled (`is_walled`), nor has a leaf cell gone beside it
 /// (`gone_ring`), which a leaf cell's reach out of the shard ends in the eight.
 /// `UNKNOWN` coarser than a shard, or before it is asked.
 /// One word: known, then which of the nine shards are served, bit `(dy +
@@ -127,7 +127,7 @@ impl Shard {
         let s = zoom - SHARD_ZOOM;
         Shard(SHARD_KNOWN | found(area, [c[0] >> s, c[1] >> s]) << SHARD_SERVED_SHIFT)
     }
-    const fn known(self) -> bool {
+    const fn is_known(self) -> bool {
         self.0 & SHARD_KNOWN != 0
     }
     /// Which of the nine shards about it are served, bit `(dy + 1)·3 +
@@ -139,7 +139,7 @@ impl Shard {
 
     /// Past the area: known so.
     pub const fn past(self) -> bool {
-        self.known() && self.served() & OWN == 0
+        self.is_known() && self.served() & OWN == 0
     }
     /// Known to lie, a leaf cell about it too, inside the area.
     pub const fn inside(self) -> bool {
@@ -158,7 +158,7 @@ impl Shard {
             (leaf[1] >> t) - (c[1] >> s),
         ];
         debug_assert!(
-            self.known() && d[0].abs() <= 1 && d[1].abs() <= 1,
+            self.is_known() && d[0].abs() <= 1 && d[1].abs() <= 1,
             "a leaf in the node's shard's nine"
         );
         self.served() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
@@ -190,7 +190,7 @@ pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// ground beside one past the area. A node wider than a shard may hold the
 /// area's edge; one no wider in a shard known `inside` cannot, and else is
 /// asked at its corners a leaf cell out.
-pub fn walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
+pub fn is_walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
     if cell < LEAF_CELL {
         return false;
     }
@@ -274,7 +274,7 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
 /// byte its own look, high the leaf cells about it gone, `gone_ring`), with
 /// the area's edge laid, the one rule a column is read by (pxl-spec-core
 /// `window::ground`) and the ways' fill walls one by
-/// (`way::Columns::walled`), on the CPU and a GPU alike: at a leaf's cells
+/// (`way::Columns::is_walled`), on the CPU and a GPU alike: at a leaf's cells
 /// or finer, ground beside a gone leaf cell, of those the column touches
 /// (`ring`), is the wall, bedrock (`UNKNOWN`) up to its own face. A gone
 /// cell is bedrock already, its look `UNKNOWN` (gone is past), and its top

@@ -16,7 +16,7 @@ use pxl_spec_core::cast::{self, Detail, Met, Query, Until};
 use pxl_spec_core::{beam, observed, raster, tally};
 
 use crate::beam::{resumed, sample_put, Beamed, Leaving, Words};
-use crate::observed::{seen_at, tallied, Seen, Writ, Writing};
+use crate::observed::{add_tally, seen_at, Seen, Writ, Writing};
 use crate::raster::{boxed, picked, NONE};
 use crate::world::{Looks, World};
 
@@ -146,7 +146,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
         Until::Beam,
         &mut Leaving(&mut *w, base),
     );
-    tallied(seen, o.tally(), tally::BEAM, met.visits);
+    add_tally(seen, o.tally(), tally::BEAM, met.visits);
     w.set(base + beam::LINE_T, o.handed(&aim, met.stop.t).to_bits());
     w.set(base + beam::LINE_VISITS, met.visits);
 }
@@ -248,7 +248,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
         o.sample_cell(s),
         &mut (),
     );
-    tallied(seen, o.tally(), tally::SAMPLE, met.visits);
+    add_tally(seen, o.tally(), tally::SAMPLE, met.visits);
     let met = Met {
         visits: met.visits + before,
         ..met
@@ -396,6 +396,6 @@ pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(
         o.cell_of(at),
         keep,
     );
-    tallied(seen, o.tally(), tally::MISS, met.visits);
+    add_tally(seen, o.tally(), tally::MISS, met.visits);
     (aim, met, before)
 }

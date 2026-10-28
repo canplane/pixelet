@@ -334,7 +334,7 @@ pub struct CompanionProps {
 /// figures' own floors are.
 pub fn focus_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
     let c = companion();
-    c.floor.kept();
+    c.floor.forget_touched();
     c.floor.of(World::now(), goal, ask)
 }
 
@@ -356,11 +356,11 @@ fn figure_for<'a>(
 
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let c = companion();
-    c.beside.kept();
+    c.beside.forget_touched();
     // Looked at each frame turn, a focus not asked of this one too.
-    c.floor.kept();
+    c.floor.forget_touched();
     for f in [&mut c.person, &mut c.pet].into_iter().flatten() {
-        f.drawn.kept();
+        f.drawn.forget_touched();
     }
     let Some(p) = props else {
         for slot in [&mut c.person, &mut c.pet] {

@@ -54,7 +54,7 @@ fn seen_store(w: &mut Seen, i: u32, v: u32) {
 /// `visits`, the nodes a walk of `observer`'s asked, added to its lane
 /// `lane` of the head where the walks count (pxl-spec-core
 /// `observed::TALLY_ON`, `tally`).
-pub(crate) fn tallied(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
+pub(crate) fn add_tally(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
     if seen_load(w, observed::TALLY_ON) != 0 {
         // SAFETY: as `seen_at`.
         unsafe {

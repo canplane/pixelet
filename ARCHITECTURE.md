@@ -337,7 +337,7 @@ in its own **residency** (`domain/layer/residency.rs`):
   farthest nothing holds hard and the view does not read.
 - A region goes from unresolved to coarse to as fine as it is observed, and
   never back. The view is loading until something has reached the screen and
-  every tile demanded shows, exact or coarser (`Residency::shown`).
+  every tile demanded shows, exact or coarser (`Residency::is_shown`).
 - Nothing is prefetched: a view converges to exact on its misses alone.
 
 The GPU holds the ground's cells in **windows**. A ray observes a zoom's cells
@@ -532,7 +532,9 @@ cast        the screen's rays; decor grown; the sun's map; the
             occlusion prepass
 world pass  grown decor → rays at their depth → grown impostors
             → sky and stars at the far plane → listed actors,
-            cumulus, impostors → high cloud planes → puck, ghosts
+            cumulus, impostors → high cloud planes → puck, ghosts,
+            each toned into the world's color, linear
+finish      the world's color encoded onto the canvas once
 over        markers → debug lines → display cases
 ```
 

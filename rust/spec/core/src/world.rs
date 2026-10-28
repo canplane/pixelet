@@ -404,13 +404,13 @@ impl Placed {
             } else {
                 overwrite::Held::NOTHING
             };
-            if h.holds() && h.folded() && d < PLACED_LEVELS {
+            if h.holds() && h.is_folded() && d < PLACED_LEVELS {
                 (self.held[d], self.index[d], self.next[d + 1]) = (h, c, 0);
                 self.depth += 1;
                 continue;
             }
             self.next[d] += 1;
-            if d == PLACED_LEVELS && h.holds() && !h.folded() && h.zoom() == UNIT_ZOOM {
+            if d == PLACED_LEVELS && h.holds() && !h.is_folded() && h.zoom() == UNIT_ZOOM {
                 return (c, lanes.data(h.slot()), true);
             }
         }

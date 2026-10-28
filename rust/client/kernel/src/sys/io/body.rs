@@ -105,7 +105,7 @@ const _: () = {
     }
 };
 
-pub const fn slotted(stream: Stream) -> bool {
+pub const fn is_slotted(stream: Stream) -> bool {
     let mut k = 0;
     while k < SLOTTED.len() {
         if SLOTTED[k] as u8 == stream as u8 {
@@ -151,7 +151,7 @@ fn held() -> &'static mut Slots {
 /// heap had no room for it or for a run of slots, each refusal waiting on
 /// what refused it.
 pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refused> {
-    if !stream.is_some_and(slotted) || n > SLOT_BYTES {
+    if !stream.is_some_and(is_slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refused::now);
     }
     let s = held();

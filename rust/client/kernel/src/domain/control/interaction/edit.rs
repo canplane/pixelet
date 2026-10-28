@@ -34,7 +34,7 @@ use pxl_spec::bake::constant::EntryAt;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
-fn carved(at: &Q3) -> bool {
+fn is_carved(at: &Q3) -> bool {
     World::now().asset_of(at).value() == Some(PLACED_ASSET | AIR)
 }
 
@@ -61,7 +61,7 @@ fn submit(write: Write) {
 /// at that depth (without the carve, every cube stacked on matching ground
 /// was dropped).
 fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
-    if zoom > GROUND.cell() || !carved(at) {
+    if zoom > GROUND.cell() || !is_carved(at) {
         return false;
     }
     let Cube::Ground(look) = cube else {
@@ -115,7 +115,7 @@ pub fn place_decor(at: &Q3, decor_id: DecorId) {
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
-    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && carved(at))
+    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(at))
         .then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
@@ -193,7 +193,7 @@ pub fn remove(at: EntryAt) {
         .grown_over(&cube(at.zoom(), at.at()))
         .into_iter()
         .filter_map(|i| i.grown_in())
-        .filter(|&c| carved(&base_of(GROUND.cell(), c)))
+        .filter(|&c| is_carved(&base_of(GROUND.cell(), c)))
         .collect();
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
@@ -202,7 +202,7 @@ pub fn remove(at: EntryAt) {
         .asset_of(&middle(at))
         .exact()
     {
-        Some(v) if v != VOID && !pxl_spec_core::answer::placed(v) => AIR,
+        Some(v) if v != VOID && !pxl_spec_core::answer::is_placed(v) => AIR,
         None => AIR,
         Some(_) => VOID,
     };

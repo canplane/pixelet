@@ -48,7 +48,7 @@ pub fn install(last_words: Option<LastWords>) {
             }
             return;
         }
-        if stopped() {
+        if is_stopped() {
             return;
         }
         say(Stop::Panic(info));
@@ -68,7 +68,7 @@ fn bug(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
 
 /// Past its report a bug panics where it cannot trap, and that panic is its
 /// way out, not a second fault.
-fn stopped() -> bool {
+fn is_stopped() -> bool {
     *STOPPED.get(|| false)
 }
 

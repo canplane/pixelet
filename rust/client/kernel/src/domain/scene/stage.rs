@@ -44,7 +44,7 @@ static DRAWN: Global<Option<u32>> = Global::new();
 
 /// Whether the screen holds a frame of the world: one drawn on the device
 /// there is, as a device that went took what it drew.
-pub fn screen_drawn() -> bool {
+pub fn is_screen_drawn() -> bool {
     *DRAWN.get(|| None) == Some(pxl_render::gpu::api::device_generation())
 }
 
@@ -156,7 +156,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     let landed = core::cell::Cell::new(false);
     let mut terrain_landed = |b: u32, ticket: u32, landing: Landing<'_>| {
         landed.set(true);
-        crate::domain::layer::terrain::window::landed(b, ticket, landing);
+        crate::domain::layer::terrain::window::on_landed(b, ticket, landing);
     };
     let out = render_frame(FrameInput {
         lists,
@@ -207,7 +207,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         request_world_tick();
     }
     // An image whose texture the frame took needs its file no more.
-    pxl_render::gpu::api::take_landed(crate::sys::io::loader::image_landed);
+    pxl_render::gpu::api::take_landed(crate::sys::io::loader::on_image_landed);
     // What the renderer holds, drawn this frame or not.
     let held = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
     let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));

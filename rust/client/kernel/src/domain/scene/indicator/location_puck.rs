@@ -230,7 +230,7 @@ impl LocationPuck {
         };
         // Looked at each turn, so each change is seen once.
         let mut grounded = core::mem::take(&mut self.grounded);
-        grounded.kept();
+        grounded.forget_touched();
         let center_pos = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
         self.grounded = grounded;
         let Some(center_pos) = center_pos else {

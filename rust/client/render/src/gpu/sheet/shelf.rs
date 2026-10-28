@@ -215,7 +215,7 @@ impl Sheet {
 
     /// Whether a live slot holds its drawing, which one added or marked
     /// dirty lacks until a sync paints it.
-    pub fn painted(&self, slot: u32) -> bool {
+    pub fn is_painted(&self, slot: u32) -> bool {
         let s = slot as usize;
         self.state.get(s) == Some(&LIVE) && !self.dirty.contains(slot)
     }

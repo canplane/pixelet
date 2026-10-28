@@ -283,7 +283,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "    /// Written to the settings' kept slot and read from it; one schema.json".into(),
         "    /// marks `kept` false is held for the session alone.".into(),
-        "    pub fn kept(self) -> bool {".into(),
+        "    pub fn is_kept(self) -> bool {".into(),
         if session.is_empty() {
             "        true".to_string()
         } else {
