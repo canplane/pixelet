@@ -18,6 +18,15 @@ pub fn cell_there(distance: f64) -> f64 {
     CELL * distance
 }
 
+/// How long a motion at `speed` u/s takes to carry what it moves the seen
+/// step (`SEEN_STEP_CELLS`) of the camera cell `distance` from the eye
+/// (`cell_there`), in seconds: the quantum a clock animating it is stepped
+/// by, its words standing between steps. Infinite where nothing is drawn
+/// (`distance` infinite) or nothing moves.
+pub fn seen_step_s(distance: f64, speed: f64) -> f64 {
+    crate::domain::view::param::SEEN_STEP_CELLS * cell_there(distance) / speed
+}
+
 /// The screen as the eye sees it: its axes and the tangents of its half-angles.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Lens {

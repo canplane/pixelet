@@ -20,8 +20,10 @@ use crate::domain::scene::indicator::param::{
     ZONE_FOOTPRINT_U,
 };
 use crate::domain::scene::scene;
+use crate::domain::view::lens::seen_step_s;
 use crate::sys::mem::section;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::edge::{request_world_tick, wake_at};
+use xpute_guest::clock::now;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
 // one-cell diagonal correction.
@@ -154,6 +156,40 @@ fn lay_zone(
     }
 }
 
+/// The beacon's fastest motion, in u/s: at its middle the bob's, and the
+/// spin's at its tips, the octahedron's radius out (pxl-render param.rs
+/// `puck::beacon::RADIUS`), at right angles and at their peaks together.
+fn beacon_speed() -> f64 {
+    libm::hypot(
+        BEACON_BOB * BEACON_BOB_RATE,
+        BEACON_SPIN_RATE * f64::from(pxl_render::param::puck::beacon::RADIUS),
+    )
+}
+
+/// A clock stepped a seen step at a time (`lens::seen_step_s`), `step_ms`
+/// apart, at `at`: `time` takes what passed since it last stepped once a
+/// step has, and where it is held (`step_ms` none) it holds and starts
+/// again from the next `at` it runs, never catching up on what passed held.
+/// When it next steps, for the turn to wake at; none while held.
+fn step_clock(
+    time: &mut f64,
+    stepped_ms: &mut Option<f64>,
+    at: f64,
+    step_ms: Option<f64>,
+) -> Option<f64> {
+    let Some(step_ms) = step_ms else {
+        *stepped_ms = None;
+        return None;
+    };
+    let since = *stepped_ms.get_or_insert(at);
+    if at - since >= step_ms {
+        *time += (at - since) / 1000.0;
+        *stepped_ms = Some(at);
+        return Some(at + step_ms);
+    }
+    Some(since + step_ms)
+}
+
 /// The box's center relative to the zone's (3), its border flags (4), and
 /// the faces open to the air it draws (1, a bit a face): the stride
 /// puck_zone.wgsl reads (pxl-render frame/shader/word.rs
@@ -168,7 +204,9 @@ struct Zone {
     target: [f64; 2],
     shown: Option<[f64; 2]>,
     night: bool,
+    /// The bob's and the spin's clock, in seconds, and when it last stepped.
     time: f64,
+    stepped_ms: Option<f64>,
     visible: bool,
 }
 
@@ -268,6 +306,7 @@ impl LocationPuck {
                         shown: None,
                         night: false,
                         time: 0.0,
+                        stepped_ms: None,
                         visible: false,
                     });
                 }
@@ -288,12 +327,12 @@ impl LocationPuck {
         request_world_tick();
     }
 
-    /// Whether anything is animating and wants frames. The puck is drawn
-    /// where an actor would be (domain/scene/actor.rs `tick`): in the frustum and
-    /// spanning a camera cell at its distance; and it moves, its beacon
-    /// sliding to its target or bobbing, only where the move spans one, so a
-    /// frame is asked only for what can be seen to change. Else the beacon
-    /// stands at its target and its time holds.
+    /// Whether the beacon slides and wants frames. The puck is drawn where
+    /// an actor would be (domain/scene/actor.rs `tick`): in the frustum and
+    /// spanning a camera cell at its distance; and its beacon slides to its
+    /// target, a frame a step, only where the slide spans one. Its bob and
+    /// spin are stepped a seen step at a time where the bob spans one, the
+    /// turn woken for the next (`step_clock`); else they hold.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.zone.as_mut() else {
             return false;
@@ -312,11 +351,14 @@ impl LocationPuck {
         } else {
             *shown = p.target;
         }
-        let bobs = p.visible && 2.0 * BEACON_BOB >= cell_there;
-        if bobs {
-            p.time += dt;
+        // Measured to the beacon, over the zone's center by its bias.
+        let beacon = v3::add(&to, &[shown[0], shown[1], BEACON_Z_BIAS]);
+        let step_ms = (p.visible && 2.0 * BEACON_BOB >= cell_there)
+            .then(|| 1000.0 * seen_step_s(v3::len(&beacon), beacon_speed()));
+        if let Some(next) = step_clock(&mut p.time, &mut p.stepped_ms, now(), step_ms) {
+            wake_at(next);
         }
-        slides || bobs
+        slides
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {

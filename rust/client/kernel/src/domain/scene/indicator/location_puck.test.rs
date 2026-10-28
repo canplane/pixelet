@@ -79,3 +79,39 @@ fn the_zone_asks_each_cell_once_and_lays_the_same_bytes() {
         assert_eq!(asked, cells.len(), "a cell asked more than once");
     }
 }
+
+#[test]
+fn a_stepped_clock_steps_once_a_step_has_passed_and_wakes_for_the_next() {
+    let (mut time, mut stepped) = (0.0, None);
+    // The first turn starts it: nothing has passed.
+    assert_eq!(
+        step_clock(&mut time, &mut stepped, 1000.0, Some(50.0)),
+        Some(1050.0)
+    );
+    assert_eq!(time, 0.0);
+    // Short of a step it stands, and the wake stays where it was.
+    assert_eq!(
+        step_clock(&mut time, &mut stepped, 1030.0, Some(50.0)),
+        Some(1050.0)
+    );
+    assert_eq!(time, 0.0);
+    // Past it, it takes all that passed.
+    assert_eq!(
+        step_clock(&mut time, &mut stepped, 1080.0, Some(50.0)),
+        Some(1130.0)
+    );
+    assert_eq!(time, 0.08);
+}
+
+#[test]
+fn a_held_clock_takes_nothing_of_what_passed_while_held() {
+    let (mut time, mut stepped) = (2.0, None);
+    step_clock(&mut time, &mut stepped, 0.0, Some(50.0));
+    assert_eq!(step_clock(&mut time, &mut stepped, 10.0, None), None);
+    // A minute later it runs again: from there, with no jump.
+    assert_eq!(
+        step_clock(&mut time, &mut stepped, 60_010.0, Some(50.0)),
+        Some(60_060.0)
+    );
+    assert_eq!(time, 2.0);
+}

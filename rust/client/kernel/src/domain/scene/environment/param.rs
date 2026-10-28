@@ -23,10 +23,5 @@ pub const CLOUD_SALT: u32 = 0x0c0c;
 /// stays. Whole, the field ran to the horizon a cloud a cell, a band of dots.
 /// Set by eye.
 pub const CLOUD_SPACING_CELLS: f64 = 16.0;
-/// The share of a camera grid cell the clouds drift a step, at the nearest
-/// drawn, set by eye: a twelfth of a cell, 1/1152 rad, is not seen to move
-/// by itself, and a whole cell's step at once was seen as the clouds
-/// stopping and jumping.
-pub const CLOUD_DRIFT_CELLS: f64 = 1.0 / 12.0;
 /// Where the clouds are gone, faded from half of it: a product number.
 pub const CLOUD_GONE_KM: f64 = 64.0;
