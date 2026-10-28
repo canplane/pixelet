@@ -11,7 +11,7 @@ use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::split_distance;
 use crate::space::coord::zoom::{units, Zoom};
-use crate::space::layer::lattice::demand_reach;
+use crate::space::layer::lattice::{demand_reach, draw_reach};
 
 /// The distances a layer's `zoom` is required over: from where the grid's
 /// cell its tiles fold into begins (0 for the leaves) to where the next
@@ -23,11 +23,10 @@ pub fn band(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<
     } else {
         split_distance(lattice.grid_zoom(zoom))
     };
-    let coarser = lattice.grid_zoom(zoom - 1);
     let to = if zoom == top {
         demand_reach(lattice, zoom)
     } else {
-        split_distance(coarser)
+        draw_reach(lattice, zoom)
     };
     (from <= o.reach).then_some((from, to))
 }

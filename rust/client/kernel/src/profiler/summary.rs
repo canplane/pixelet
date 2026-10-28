@@ -226,7 +226,7 @@ fn side(out: &mut [f64]) {
         let ray = crate::domain::query::Ray {
             origin,
             direction,
-            reach: crate::domain::view::observation::eye_reach().unwrap_or(0.0),
+            reach: crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0),
         };
         let detail = crate::domain::query::by_distance();
         let hit = crate::domain::query::World::now()

@@ -100,7 +100,7 @@ impl CloudPass {
 
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
     /// place on the map in the world's doubles; `reach_km` how far it
-    /// observes: past it no sheet is drawn. The field moves with the wind,
+    /// draws: past it no sheet is drawn. The field moves with the wind,
     /// so its words are the clouds' own.
     pub fn lay_out(&mut self, over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
         self.words[SHOWN] = shown as f32;

@@ -16,7 +16,7 @@ fn fs(v: VertexOut) -> FragOut {
   let ddx = dpdx(uv);
   let ddy = dpdy(uv);
   if (eye_word(EYE_STEPS) != 0u) {
-    // A ray that met nothing at the end of what the eye observes, nearer than
+    // A ray that met nothing at the end of what the eye draws, nearer than
     // the far plane's 0 the sky stands at; one that met a face at the depth
     // the lit pixel is drawn at (`behind`), so what is laid on the face shows
     // as it does there.

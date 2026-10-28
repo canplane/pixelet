@@ -137,8 +137,8 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
 // What the eye sees along `dir` where nothing was drawn: the sky where it
 // rises; where it falls, the land it meets, the plane under the eye at its
 // ground's height, seen through the air to it and lit as the terrain is, so
-// the drawn edge is no seam. Its picture comes in over the octave to the
-// earth layer's reach; nearer, the ground is the voxels', or the air's alone.
+// the drawn edge is no seam. Its land comes in over the octave to where the
+// rays end; nearer, the ground is the voxels', or the air's alone.
 fn beyond(dir: vec3f) -> vec3f {
   if (!falls_to_land(dir)) {
     var sky = sky_view(dir, atmos_sun_dir()) * shown();
@@ -154,6 +154,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
   let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
-  return seen.scattered + seen.through * clamp(octaves + 1.0, 0.0, 1.0) * lit;
+  let land = clamp(log2(d / atmos_drawn()) + 1.0, 0.0, 1.0);
+  return seen.scattered + seen.through * land * lit;
 }
 

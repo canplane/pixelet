@@ -49,7 +49,8 @@ pub struct Observation {
     pub eye: [f64; 3],
     /// None for every direction.
     pub frustum: Option<Frustum>,
-    /// How far the layers' demand reaches: never past the top's `Lattice::demand_reach`.
+    /// How far the layers' demand reaches: never past the top's
+    /// (layer/lattice.rs `demand_reach`).
     pub reach: f64,
     /// The ground under the eye as last known; not part of what is required.
     pub ground: f64,

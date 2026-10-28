@@ -23,11 +23,19 @@ pub const fn coarsest(lattice: Lattice) -> Zoom {
     lattice.read_zoom(GROUND.cell_zoom(super::tile::TOP_ZOOM))
 }
 
+/// How far from the eye the view draws with `zoom` its coarsest:
+/// where the grid asks the cell a zoom coarser, which nothing holds, so a ray
+/// past it would cross cells finer than its distance asks.
+pub const fn draw_reach(lattice: Lattice, zoom: Zoom) -> f64 {
+    split_distance(lattice.grid_zoom(zoom - 1))
+}
+
 /// How far from an observer's foot a demand at `zoom` can lie: where a
-/// window holds the grid's cell a zoom coarser from (`WINDOW_MARGIN`).
-/// Bounds the run along the ground too.
+/// window holds the grid's cell a zoom coarser from (`WINDOW_MARGIN`), as
+/// far past `draw_reach` as it holds every finer cell past where it is
+/// drawn. Bounds the run along the ground too.
 pub const fn demand_reach(lattice: Lattice, zoom: Zoom) -> f64 {
-    split_distance(lattice.grid_zoom(zoom - 1)) * WINDOW_MARGIN
+    draw_reach(lattice, zoom) * WINDOW_MARGIN
 }
 
 /// A lattice placed in the world: the tiles and cells a node, a point or an

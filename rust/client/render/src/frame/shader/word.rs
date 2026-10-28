@@ -122,8 +122,8 @@ uniform! {
 pub const SKY_FLOATS: usize = floats(sky::FIELDS);
 
 uniform! {
-    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 8 to 10 and
-    /// 35 are free.
+    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 8 to 10 are
+    /// free.
     atmos {
         RAYLEIGH_SCATTERING: Vec3 = 0,
         BOTTOM_RADIUS: F32 = 3,
@@ -148,6 +148,9 @@ uniform! {
         MOON_LIGHT: F32 = 31,
         /// As it reaches the air, against the sun's white.
         MOON_COLOR: Vec3 = 32,
+        /// Where the eye's rays end, in units (pxl-spec-core `eye::REACH`):
+        /// past it the land is the Earth's picture whole.
+        DRAWN: F32 = 35,
         /// Lights the ground, never drawn: drawn, the sky went pale blue.
         NIGHT_SKY: Vec3 = 36,
         /// The Earth's face under the eye: at sea level the terrain floated on it.
@@ -171,7 +174,7 @@ uniform! {
         /// How much of the clouds the kernel shows (pxl-kernel
         /// domain/scene/environment/cloud.rs `clouds_shown`).
         SHOWN: F32 = 0,
-        /// How far the eye observes, in km: past it no sheet is drawn.
+        /// How far the eye draws, in km: past it no sheet is drawn.
         REACH: F32 = 1,
         /// The lattice's units around; the cells the wind has moved it
         /// under the map; the field's lattice unit the eye is over and its

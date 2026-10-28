@@ -183,9 +183,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let moved = drift(f64::from(env[ENV_SKY + 1]));
     let base = layer_u();
     let largest = CLOUD_WIDTH[1];
-    // As far as the eye observes, a flat layer hiding under no horizon, and no
+    // As far as the eye draws, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is a sprite's worth.
-    let reach = crate::domain::view::observation::eye_reach()
+    let reach = crate::domain::view::observation::eye_draw_reach()
         .unwrap_or(0.0)
         .min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
