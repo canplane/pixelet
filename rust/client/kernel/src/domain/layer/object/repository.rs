@@ -2,8 +2,7 @@
 
 //! Where placed objects are kept and come from, the one way the object
 //! layer's records are read and written: what is asked for arrives and a
-//! write is sent, each `<key, id>`. How they are kept is this file's alone;
-//! for now every leaf is in the page's storage, all asked for at once.
+//! write is sent, each `<key, id>`. How they are kept is this file's alone.
 
 use pxl_spec::space::hierarchy::morton::key_of;
 use xpute_guest::clock::now;
@@ -105,11 +104,13 @@ fn decode(bytes: &[u8]) -> Result<(), MarshalError> {
     Ok(())
 }
 
-/// Asks for every tile.
+/// Asks for the layer's records.
 pub fn open() {
     file::open_kept(Kept::Objects);
 }
 
+/// The whole store as one blob in the page's storage (`Kept::Objects`), so
+/// one open asks for every leaf at once.
 fn keep(blob: Vec<u8>) {
     file::write_kept(Kept::Objects, &blob);
 }
