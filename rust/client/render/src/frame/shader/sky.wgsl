@@ -48,23 +48,23 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let east = cross(axis, north);
   let lon = atan2(dot(normal, east), -dot(normal, axis));
   let lat = asin(clamp(dot(normal, north), -1.0, 1.0));
-  var face = SKY_MOON_MAP_MEAN;
+  var face = MOON_MAP_MEAN;
   if (sky_mapped() > 0.5) {
     let uv = vec2f(lon / PI + 0.5, 0.5 - lat / PI);
     let lod = log2(max(MOON_MAP_RADIUS_TEXELS * w, 1e-6));
     face = textureSampleLevel(moon_map, moon_sampler, uv, 0, lod).r;
   }
-  let albedo = SKY_MOON_ALBEDO * face / SKY_MOON_MAP_MEAN;
+  let albedo = MOON_ALBEDO * face / MOON_MAP_MEAN;
 
   let sun = atmos_sun_dir();
   let lit = max(dot(normal, sun), 0.0);
   let seen = max(-dot(normal, dir), 1e-4);
   let radiance = albedo / PI * 2.0 * lit / (lit + seen);
-  let shown_at = atmos_white() * min(exposure(), SKY_MOON_FACE_SHOWN * PI / SKY_MOON_ALBEDO);
+  let shown_at = atmos_white() * min(exposure(), SKY_MOON_FACE_SHOWN * PI / MOON_ALBEDO);
   var light = radiance * shown_at;
   if (atmos_moon_light() > 0.0) {
     let earth = 0.5 * (1.0 + dot(sun, axis));
-    light += vec3f(SKY_MOON_EARTHSHINE_SHOWN * earth * face / SKY_MOON_MAP_MEAN);
+    light += vec3f(SKY_MOON_EARTHSHINE_SHOWN * earth * face / MOON_MAP_MEAN);
   }
   return transmittance_to_top(r, mu) * light * edge;
 }
@@ -76,7 +76,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   // Derivatives, so taken where every pixel takes them.
   let sun_a = length(cross(dir, atmos_sun_dir())) / (atmos_sun_angular_radius() * SKY_DISC_SCALE);
   let sun_w = max(fwidth(sun_a), 1e-4);
-  let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (SKY_MOON_ANGULAR_RADIUS * SKY_DISC_SCALE);
+  let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * SKY_DISC_SCALE);
   let moon_a = length(across);
   let moon_w = max(fwidth(moon_a), 1e-4);
   var color = beyond(dir) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
