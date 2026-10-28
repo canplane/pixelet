@@ -5,8 +5,7 @@
 //! language, no CommonJS file, each generated shader made from the sources the
 //! tree holds now, the layers' order, where nothing names what is above it,
 //! the screen's pixels read only at the screen, and each workgroup's size
-//! its constant. A rule Rust alone keeps is clippy's (rust/clippy.toml); how
-//! the tree is written is the convention skill's.
+//! its constant. A rule Rust alone keeps is clippy's (rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -379,7 +378,7 @@ fn ordered(
 
 /// The tree's files, a path a line from `root`: git's, tracked and not
 /// ignored, where `root` is a checkout's own top; else, as in an export
-/// laid out under a checkout's ignored target (the collaboration skill),
+/// laid out under a checkout's ignored target,
 /// every file under it but the builds' and the packages', which git there
 /// would list none of. Outside any checkout, an error.
 fn listed(root: &std::path::Path) -> Result<String, String> {

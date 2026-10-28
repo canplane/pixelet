@@ -5,23 +5,22 @@ description: Upload baked tiles, ingested models and textures to the R2 bucket t
 
 # Publishing the bucket
 
-How a set or an asset gets into the bucket `pixelet-tiles`, and how to know it
-arrived. What the bucket holds, and how the Worker serves it, is
-[infra/README.md](../../../infra/README.md) §4; producing a set is
+How a tile set or an asset gets into the bucket `pixelet-tiles`, and how to
+confirm it arrived. What the bucket holds and how the Worker serves it is
+[infra/README.md](../../../infra/README.md) §4; building a set is
 [bake-tiles](../bake-tiles/SKILL.md).
 
-The versions the client requests are the bucket's `source`, which
-`./script/publish.py` alone writes and the client reads at boot, so a publish is
-never a commit or a deploy. An object's name carries no extension, so **its
-content-type and content-encoding are stored with it at upload**: a manual
-upload must set both.
+The client reads which versions to request from the bucket's `source` object at
+boot, and only `./script/publish.py` writes it, so publishing needs no commit or
+deploy. Object names have no extension, so **content-type and content-encoding
+are stored with each object at upload**: a manual upload must set both.
 
 ## One-time setup
 
-In the Cloudflare dashboard: create the bucket, named as
-`ts/server/edge/wrangler.jsonc`'s `r2_buckets[0].bucket_name` and kept
+In the Cloudflare dashboard, create the bucket with the name in
+`ts/server/edge/wrangler.jsonc` (`r2_buckets[0].bucket_name`) and keep it
 **private**; create an R2 API token (an S3-compatible key ID and secret); note
-the account ID. Then, in a profile of its own so a default AWS profile is left
+the account ID. Then make a separate AWS profile so the default one is left
 alone:
 
 ```bash
@@ -29,43 +28,41 @@ aws configure --profile r2          # region: auto
 aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
 ```
 
-`publish.py` uses exactly that profile, since a set is too many objects to put
-one by one; `$R2`, where set, stands in for its endpoint. A manual `aws s3 sync`
-needs `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` too, since the CLI's
-checksum headers are refused by R2; `publish.py` sets it for itself.
+`publish.py` uses that profile (`$R2`, if set, overrides its endpoint). A manual
+`aws s3 sync` also needs `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`,
+because R2 refuses the CLI's checksum headers; `publish.py` sets it itself.
 
 ## Upload
 
-**A publish costs one Class A operation an object**, and nothing stops at the
-free month's million: the plan's fail-closed limit covers reads, not writes. A
-terrain version is every tile, so a few in a month is past it. Before an upload
-and after:
+**Every object uploaded is one Class A operation, and nothing stops you at the
+free million a month**: the plan's fail-closed limit covers reads, not writes.
+A terrain version is every tile, so a few of them use up the month. Check usage
+before and after, against the object count `publish` prints:
 
 ```bash
 ./.agents/skills/publish-bucket/usage.py     # Class A this month against the million
 ```
 
-and set the object count `publish` prints against what is left. Deleting an old
-version is free.
+Deleting an old version is free.
 
 ```bash
 make bake-<kind> ARGS="--stage publish"    # terrain, place or division
 ./script/publish.py <kind>
 ```
 
-`publish` names the version, uploads the copy with the manifest's
-content-encoding, checks the stored count, then writes `source`.
+`publish` names the version, uploads with the manifest's content-encoding,
+checks the stored count, then writes `source`.
+
 ```bash
-./script/publish.py serve <kind> <version>              # serve a held version again: how to go back
+./script/publish.py serve <kind> <version>              # serve an older version again: how to roll back
 ./script/publish.py override <shard> <kind> <version>   # one shard and the tiles under it; - drops it
 ```
 
-**Never overwrite an existing version in place**, of any kind: publish a new one
-and serve it.
+**Never overwrite an existing version**, of any kind: publish a new one and
+serve it.
 
-For places and divisions, a tile no reader asks for is no object, and the client
-reads its ground from the tile over it, so a missing tile is never an error to
-repair.
+A missing place or division tile is not an error: no reader asked for it, and
+the client reads the tile above it.
 
 ### Earth
 
@@ -90,41 +87,46 @@ for t in glb:model/gltf-binary png:image/png webp:image/webp; do
 done
 ```
 
-One sync per type, so each object keeps its content-type; no `Content-Encoding`,
-since glb, png and webp are already compressed. **Commit both regenerated tables
-with the asset change, and upload before deploying**: a key the shipped table
-names that is not in the bucket is a 404 on the live site.
+One sync per type, so each object gets its content-type. No `Content-Encoding`:
+glb, png and webp are already compressed. **Commit both regenerated tables with
+the asset change, and upload before deploying**: a key the shipped table names
+but the bucket lacks is a 404 on the live site.
 
 ## Verify what is stored
 
 ```bash
-# expect the manifest's ContentEncoding on a tile;
-# ContentType model/gltf-binary and no ContentEncoding on a glb
+# a tile: expect the manifest's ContentEncoding;
+# a glb: expect ContentType model/gltf-binary and no ContentEncoding
 aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2
 aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profile r2
 ```
 
 ## Verify what is served
 
-The bucket can be right while the serving path is not. The smoke checks the
-served bytes, and CI runs it after every deploy; run it by hand after a publish,
-which is not a deploy:
+The bucket can be right while serving is wrong. CI runs the smoke after every
+deploy; after a publish (which is not a deploy), run it yourself:
 
 ```bash
 ./script/smoke.py https://plei.me
 ```
 
-It fails on a tile packed twice (the Worker's `Response` lost
-`encodeBody: "manual"`, `serve`), on a second ask off the edge cache that
-differs from the first (`STORED_ENCODING`), on an unbaked page answered with
-anything but an empty 204 (HTML means `run_worker_first` is missing), and on an
-asset with the wrong type or a `content-encoding`. It only warns when the second
-ask did not hit the cache, which leaves that path unchecked.
+It fails when:
+
+- a tile is compressed twice: the Worker's `Response` lost
+  `encodeBody: "manual"` (`serve`);
+- a second request, served from the edge cache, differs from the first
+  (`STORED_ENCODING`);
+- an unbaked page returns anything but an empty 204 (HTML means
+  `run_worker_first` is missing);
+- an asset has the wrong type or a `content-encoding`.
+
+It only warns when the second request missed the cache, which leaves that path
+unchecked.
 
 ## Purging the edge cache
 
-Only after fixing a serving bug whose wrong bytes are already cached: a URL of a
-version or an asset never changes meaning.
+Only after fixing a serving bug whose wrong bytes are already cached; a version's
+or an asset's URL never changes meaning.
 
 ```bash
 # everything on the zone
@@ -139,4 +141,4 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache
 ```
 
 The token needs `Zone → Cache Purge`. `cache.delete(request)` inside the Worker
-is no substitute: it clears only the colo that ran it.
+is no substitute: it clears only the data center that ran it.
