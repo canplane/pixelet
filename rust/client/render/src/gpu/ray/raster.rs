@@ -6,8 +6,10 @@
 //! (raster.wgsl), the nearest face a pixel's ray enters kept with its
 //! sample, in passes timed together (span `sraster`), which the cast's
 //! pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
-//! box's face asked once a box (`face_cs`, span `face`). Its args, boxes
-//! and targets are written whole each frame before they are read.
+//! box's face asked once a box (`face_cs`, span `face`). Its targets are
+//! written whole each frame before they are read; its args, boxes and faces
+//! each frame its samples are cast, and kept where only the pixels are cast
+//! again over them.
 
 use pxl_spec_core::{beam, eye, raster, sun};
 
@@ -109,9 +111,10 @@ impl Raster {
     /// What a frame that casts needs, before its dispatches: the boxes made
     /// again where the `grid`'s samples outgrow them; its targets at the
     /// rays' `size`; the raster's view off the `eye`'s words; the args
-    /// cleared; its groups over the cast's `eye`, `beams` and the eye's
-    /// `head` (pxl-spec-core `sun::MOVED_SIZE`), and, for the faces'
-    /// asking, the world's query's buffers (`world`: the window, the
+    /// cleared where the samples are cast again (`samples_cast`), else the
+    /// boxes they left kept; its groups over the cast's `eye`, `beams` and
+    /// the eye's `head` (pxl-spec-core `sun::MOVED_SIZE`), and, for the
+    /// faces' asking, the world's query's buffers (`world`: the window, the
     /// tiles' frames, the service area's index, the overwrites, the ways'
     /// pool).
     pub(super) fn prepare(
@@ -120,6 +123,7 @@ impl Raster {
         e: &[u32],
         size: [u32; 2],
         grid: &beam::Grid,
+        samples_cast: bool,
         [eye, beams, head]: [u32; 3],
         world: [u32; 5],
     ) {
@@ -189,11 +193,13 @@ impl Raster {
             0.0,
         ];
         g.write_buffer(self.uniform, 0, bytes(&uniform));
-        let mut args = [0u32; raster::ARGS_WORDS as usize];
-        args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-        args[raster::ARGS_FACES as usize + 1] = 1;
-        args[raster::ARGS_FACES as usize + 2] = 1;
-        g.write_buffer(self.args, 0, bytes(&args));
+        if samples_cast {
+            let mut args = [0u32; raster::ARGS_WORDS as usize];
+            args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+            args[raster::ARGS_FACES as usize + 1] = 1;
+            args[raster::ARGS_FACES as usize + 2] = 1;
+            g.write_buffer(self.args, 0, bytes(&args));
+        }
         let [window, ground, shards, overwrites, pool] = world;
         let bound = [
             eye, beams, head, self.boxes, window, ground, shards, overwrites, pool,
@@ -236,18 +242,28 @@ impl Raster {
         }
     }
 
-    /// The boxes written off the samples, a thread a sample of `grid`, and
-    /// drawn into its targets as many as their args say, cleared first: in
-    /// passes of their own, timed together (span `sraster`).
-    pub(super) fn draw(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp], grid: &beam::Grid) {
+    /// The boxes written off the samples, a thread a sample of `grid`, where
+    /// they were cast again (`samples_cast`), else the last kept; and drawn
+    /// into its targets as many as their args say, cleared first: in passes
+    /// of their own, timed together (span `sraster`).
+    pub(super) fn draw(
+        &self,
+        g: &Gpu,
+        encoder: u32,
+        stamps: &mut [Stamp],
+        grid: &beam::Grid,
+        samples_cast: bool,
+    ) {
         let stamp = &mut stamps[GpuSpanName::sraster as usize];
-        let pass = g.compute_pass(encoder, stamp.pass());
-        g.set_bind_group(pass, 0, self.groups[0], &[]);
-        g.set_pipeline(pass, self.boxes_built.pipeline);
-        let w = compute::SAMPLE_BOX_WORKGROUP;
-        let [x, y] = grid.samples;
-        g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
-        g.end(pass);
+        if samples_cast {
+            let pass = g.compute_pass(encoder, stamp.pass());
+            g.set_bind_group(pass, 0, self.groups[0], &[]);
+            g.set_pipeline(pass, self.boxes_built.pipeline);
+            let w = compute::SAMPLE_BOX_WORKGROUP;
+            let [x, y] = grid.samples;
+            g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+            g.end(pass);
+        }
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -264,7 +280,11 @@ impl Raster {
         g.draw_indirect(pass, self.args, 0);
         g.end(pass);
         // What lies about each box's face, before the pixels read it off
-        // their pick's sample.
+        // their pick's sample: what the samples' last cast left, where they
+        // stand.
+        if !samples_cast {
+            return;
+        }
         let pass = g.compute_pass(encoder, stamps[GpuSpanName::face as usize].pass());
         g.set_bind_group(pass, 0, self.groups[2], &[]);
         g.set_pipeline(pass, self.faces_built.pipeline);

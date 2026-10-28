@@ -766,6 +766,7 @@ impl RaysPass {
                 &cast.eye,
                 c.size,
                 &c.grid,
+                self.kind == FrameKind::cast,
                 [c.eye, c.beams, c.eye_head],
                 [c.window, ground, c.shards, c.overwrites, pool],
             );
@@ -922,7 +923,8 @@ impl RaysPass {
                 }
                 let mut group = c.group;
                 if span == GpuSpanName::pixel {
-                    c.raster.draw(g, encoder, stamps, &c.grid);
+                    c.raster
+                        .draw(g, encoder, stamps, &c.grid, kind == FrameKind::cast);
                     group = c.pixel_group;
                 }
                 let pass = g.compute_pass(encoder, stamps[span as usize].pass());
