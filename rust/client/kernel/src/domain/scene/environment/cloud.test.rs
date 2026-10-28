@@ -10,6 +10,8 @@ fn drift_step_s_as_written(seen: f64) -> f64 {
 
 #[test]
 fn the_clouds_step_as_they_did_at_every_distance() {
+    let _g = crate::sys::serial();
+    let was = clouds().seen;
     for seen in [0.5, 3.0, 47.25, 1.0e3, 6.4e4, 3.1e6, f64::INFINITY] {
         clouds().seen = seen;
         assert_eq!(
@@ -18,4 +20,5 @@ fn the_clouds_step_as_they_did_at_every_distance() {
             "at {seen}"
         );
     }
+    clouds().seen = was;
 }
