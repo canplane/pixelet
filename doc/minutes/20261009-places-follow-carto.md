@@ -46,11 +46,15 @@ filled with its row's color. The label is the place's `names.primary`, which is
 what Carto's `name` is, in Carto's text style but a marker's font, so the world
 has one size of text: a halo, set under the icon (`text-dy`), wrapped at the
 cell a place keeps to itself (below;
-`pxl-kernel domain/scene/marker/arrangement.rs` `spacing_px`), where it was
+`pxl-kernel domain/scene/marker/arrangement.rs` `SPACING_PX`), where it was
 first six em, twice Carto's, which broke a Korean name of five syllables in two,
 in its row's label color. A map label is Carto's, so it is not translated; the
 address line the shell writes from the divisions is UI text and keeps the
 language setting.
+
+> **Note (10-28):** the label no longer wraps at the place's cell. It wraps at
+> `SPACING_PX`, 193 CSS pixels, a constant of the UI's: the place's cell on a
+> view 1080 CSS pixels high at 50°, and on any other view more or less of it.
 
 ## Zoom, as the grid's cell
 
@@ -93,6 +97,11 @@ read past a cell to close it: two places a pixel apart across a cell's edge are
 each first in their own cell, so their icons and names may meet, where Carto
 would drop one; and fewer places show than Carto's, which spaces icons only an
 icon apart.
+
+> **Note (10-28):** the cell is sixteen camera grid cells, an angle, and its
+> pixels are the screen's: some 190 CSS pixels only on a view 1080 high at
+> 50°. A name holds in it there, since it wraps at 193 CSS pixels
+> (`SPACING_PX`), and elsewhere a name may be wider or narrower than its cell.
 
 The order is the icon zoom, then the GERS id: a place shown from a coarser zoom
 goes before one that appears only finer. Carto orders by id alone, so a

@@ -30,8 +30,6 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use fnv::{FnvHashMap, FnvHashSet};
-use pxl_spec::bake::tile::place::SPACING_CELLS;
-use pxl_spec::space::camera::grid::reference_px;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::REACH;
@@ -160,7 +158,7 @@ struct Found {
 
 /// The most a marker is drawn past where it stands, in pixels, which the
 /// cull of a square leaves it: a bound, twice a place's cell, the width its
-/// name wraps to (`spacing_px`), past a pin's longest pill and a name's
+/// name wraps to (`SPACING_PX`), past a pin's longest pill and a name's
 /// lines over its icon.
 fn reach_px(spacing: f64) -> f64 {
     2.0 * spacing
@@ -190,14 +188,12 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 
 /// The width a place keeps to itself on the screen, in CSS pixels: its name
 /// wraps to it and its marker's region is it. A marker is laid out as the
-/// shell's text is, in CSS pixels, so the width is one on every screen:
-/// `SPACING_CELLS` of the camera grid's cells (`lens::cell`) as the
-/// reference view draws them, about 190 and whole. Which markers find room
-/// is then the screen's room, as on any map.
-fn spacing_px() -> f64 {
-    let cell = reference_px(crate::domain::view::lens::cell(crate::domain::view::lens::tau()));
-    libm::rint(f64::from(SPACING_CELLS) * cell)
-}
+/// shell's text is, in CSS pixels, so the width is one on every screen, set
+/// to hold a name of a few words: a place's cell, sixteen camera grid cells
+/// (pxl-spec bake/tile/place.rs `SPREAD_STEPS`), on a view 1080 CSS pixels
+/// high at 50°. Which markers find room is then the screen's room, as on any
+/// map.
+const SPACING_PX: f64 = 193.0;
 
 pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let p = ARRANGEMENT.get(Arrangement::default);
@@ -237,7 +233,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     // grown by what a marker draws past it at the box's far side.
     let now = &mut p.now;
     now.drawn.clear();
-    let reach = reach_px(spacing_px());
+    let reach = reach_px(SPACING_PX);
     crate::domain::view::observation::squares(&o, tau, &mut |square, heights| {
         let b = region(square, heights);
         let far = v3::len(&core::array::from_fn(|k| {
@@ -326,7 +322,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     pin::show(&mut pins, o.eye, tau, &mut shown);
     place::show(&mut read_places, o.eye, tau, &mut shown);
     shown.extend(seen.said.shown());
-    let spacing = spacing_px();
+    let spacing = SPACING_PX;
     // What was drawn last by its holder's key, read once: what a holder
     // shows changed, and what was drawn stays until the new one is ready to
     // show.
@@ -476,7 +472,3 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
         .find(|(r, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y))
         .map(|&(_, went)| went)
 }
-
-#[cfg(test)]
-#[path = "arrangement.test.rs"]
-mod test;

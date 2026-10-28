@@ -11,14 +11,13 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 
 // ---- the view's knobs: each set by itself, and nothing else here ----
 // What is drawn and how finely follows from these, with the field of view
-// and the reference view's CSS pixels (pxl-spec space/camera/grid.rs
-// `FOV_DEG`, `REFERENCE_VIEWPORT_H`, `RATIO_MAX`).
+// and the drawn pixels' ratio (pxl-spec space/camera/grid.rs `FOV_DEG`,
+// `RATIO_MAX`).
 
 /// The camera grid, the one knob of resolution: the view's cells a radian,
-/// a cell 1/`CELLS_A_RADIAN` radians about the eye whatever the screen
-/// (pxl-spec space/camera/grid.rs `cell_css_px`: about twelve CSS pixels at
-/// the reference view). An angle, so what is observed is the display's
-/// pixels' to draw, never theirs to decide.
+/// a cell 1/`CELLS_A_RADIAN` radians about the eye whatever the screen. An
+/// angle, so what is observed is the display's pixels' to draw, never
+/// theirs to decide.
 pub const CELLS_A_RADIAN: f32 = 96.0;
 
 /// How many times finer than the view's a grid the bands and windows are

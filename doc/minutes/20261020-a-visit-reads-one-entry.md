@@ -243,10 +243,9 @@ the probe was kept.
     so the rays through a node are many.
 
     > **Note (10-28):** `target_cell_px` is gone. It was the τ 1 cell,
-    > 1/192 rad, in drawn pixels at ratio 2. The view's cell is 1/96 rad,
-    > about twelve CSS pixels at the reference view (pxl-spec
-    > space/camera/grid.rs `cell_css_px`), so its drawn pixels at ratio 2
-    > are about 24.
+    > 1/192 rad, in drawn pixels at ratio 2. The view's cell is 1/96 rad
+    > (pxl-spec-core grid.rs `CELLS_A_RADIAN`), an angle, never pixels: on
+    > a view 1080 CSS pixels high at 50°, about 24 drawn pixels at ratio 2.
   - The world is composed 68,677 times a frame, not 146 million.
 - **A frame after a drag.** The eye moved 1.21 units (12 CSS px at the focus)
   and the table was the one the frame before left:

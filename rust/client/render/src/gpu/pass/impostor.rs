@@ -21,8 +21,10 @@ use crate::gpu::pass::model::{
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::Uploads;
 
-/// Impostors cover fewer pixels than the model tier's floor (twelve at the
-/// reference viewport), so this is several times any one's drawn size.
+/// Impostors span less than the model tier's floor, a camera grid cell
+/// (pxl-spec-core `grid::CELLS_A_RADIAN`), 48 drawn pixels on a view 2160
+/// CSS pixels high at ratio 2, so this is several times any one's drawn
+/// size.
 const SPRITE: u32 = 128;
 const FIT_BYTES: u32 = 16;
 

@@ -45,7 +45,7 @@ pub enum Design {
 
 impl Design {
     /// As it is laid out where a place keeps `spacing` pixels to itself
-    /// (`arrangement.rs` `spacing_px`), and the width of the region it keeps
+    /// (`arrangement.rs` `SPACING_PX`), and the width of the region it keeps
     /// (`set.rs`): a place's name wrapped to it, and its region it; any
     /// other's region its own width (0, which the candidates widen to it).
     pub fn spaced(mut self, spacing: f64) -> (Design, f64) {
