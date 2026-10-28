@@ -51,7 +51,7 @@ fn tick(start: Seen) -> Tick<8> {
 }
 
 #[test]
-fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
+fn phase_order() {
     let mut t = tick(Seen::default());
     t.on_tick(Phase::report, |_| seen(|s| s.order.push("report")), 0);
     t.on_tick(Phase::cosmetic, |_| seen(|s| s.order.push("cosmetic")), 0);
@@ -67,7 +67,7 @@ fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
 }
 
 #[test]
-fn tick_within_a_phase_steps_run_in_registration_order() {
+fn step_order() {
     let mut t = tick(Seen::default());
     t.on_tick(Phase::visible, |_| seen(|s| s.order.push("1")), 0);
     t.on_tick(Phase::visible, |_| seen(|s| s.order.push("2")), 0);
@@ -77,7 +77,7 @@ fn tick_within_a_phase_steps_run_in_registration_order() {
 }
 
 #[test]
-fn tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_get() {
+fn shared_budget() {
     let mut t = tick(Seen {
         a: -1.0,
         ..Default::default()
@@ -96,7 +96,7 @@ fn tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_g
 }
 
 #[test]
-fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
+fn content_share_reserved() {
     let mut t = tick(Seen::default());
     t.on_tick(
         Phase::visible,
@@ -131,7 +131,7 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
 }
 
 #[test]
-fn tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again() {
+fn self_unregister() {
     let mut t = tick(Seen::default());
     let id = t.on_tick(
         Phase::cosmetic,
@@ -151,7 +151,7 @@ fn tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again() {
 }
 
 #[test]
-fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_step_after_it() {
+fn unregister_earlier_no_skip() {
     let mut t = tick(Seen::default());
     let first = t.on_tick(Phase::visible, |_| seen(|s| s.order.push("first")), 0);
     t.on_tick(
@@ -172,7 +172,7 @@ fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_s
 }
 
 #[test]
-fn tick_the_report_phase_sees_every_phase_before_it() {
+fn report_sees_all() {
     let mut t = tick(Seen {
         a: -1.0,
         ..Default::default()
@@ -197,7 +197,7 @@ fn tick_the_report_phase_sees_every_phase_before_it() {
 const COST: f64 = 0.3;
 
 #[test]
-fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ceiling() {
+fn silent_storm_capped() {
     let mut t = tick(Seen::default());
     t.on_tick(
         Phase::visible,
@@ -223,7 +223,7 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
 }
 
 #[test]
-fn tick_what_the_turn_spent_before_the_tick_comes_off_the_budget() {
+fn prior_spend_deducted() {
     let mut t = tick(Seen::default());
     t.on_tick(Phase::visible, |c| seen(|s| s.a = c.pass.remaining()), 0);
     let edge = now();
@@ -234,7 +234,7 @@ fn tick_what_the_turn_spent_before_the_tick_comes_off_the_budget() {
 }
 
 #[test]
-fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
+fn interaction_spend_deducted() {
     let mut t = tick(Seen::default());
     t.on_tick(Phase::interaction, |_| burn(1.5), 0);
     t.on_tick(

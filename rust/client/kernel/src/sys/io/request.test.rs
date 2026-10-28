@@ -93,7 +93,7 @@ fn failed_with<S: Serve>(l: &mut RequestScheduler<S>, key: u64, errnum: Errno, a
 }
 
 #[test]
-fn saying_the_same_set_again_changes_nothing() {
+fn same_set_no_change() {
     let mut l = scheduler();
     let want = [(1u64, ask(Why::Demand, 0.0))];
     l.declare(Stream::terrain, &want, 0.0);
@@ -110,7 +110,7 @@ fn saying_the_same_set_again_changes_nothing() {
 }
 
 #[test]
-fn an_answer_is_asked_once() {
+fn answer_asked_once() {
     let mut l = scheduler();
     l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.pump(0.0);
@@ -129,7 +129,7 @@ fn an_answer_is_asked_once() {
 }
 
 #[test]
-fn a_failure_waits_rather_than_asking_straight_back() {
+fn failure_backs_off() {
     let mut l = scheduler();
     l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.pump(0.0);
@@ -158,7 +158,7 @@ fn a_failure_waits_rather_than_asking_straight_back() {
 }
 
 #[test]
-fn an_object_that_fails_is_dropped_and_holds_nothing_else_back() {
+fn failed_object_dropped() {
     let mut l = scheduler();
     let want = [(1u64, ask(Why::Demand, 0.0)), (2, ask(Why::Demand, 1.0))];
     l.declare(Stream::terrain, &want, 0.0);
@@ -184,7 +184,7 @@ fn an_object_that_fails_is_dropped_and_holds_nothing_else_back() {
 }
 
 #[test]
-fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
+fn heap_refusal_waits_release() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
@@ -225,7 +225,7 @@ fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
 }
 
 #[test]
-fn a_release_between_the_refusal_and_its_settling_is_not_waited_for_again() {
+fn early_release_not_rewaited() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
@@ -255,7 +255,7 @@ fn a_release_between_the_refusal_and_its_settling_is_not_waited_for_again() {
 }
 
 #[test]
-fn a_failing_server_holds_every_start_then_probes_one_then_is_given_up() {
+fn failing_server_probe() {
     let mut l = scheduler();
     let want: Vec<(u64, Ask)> = (0..4).map(|k| (k, ask(Why::Demand, k as f64))).collect();
     l.declare(Stream::terrain, &want, 0.0);
@@ -290,7 +290,7 @@ fn a_failing_server_holds_every_start_then_probes_one_then_is_given_up() {
 }
 
 #[test]
-fn what_was_out_when_the_server_failed_counts_as_one_failure() {
+fn outage_counts_once() {
     let mut l = scheduler();
     l.declare(
         Stream::terrain,
@@ -306,7 +306,7 @@ fn what_was_out_when_the_server_failed_counts_as_one_failure() {
 }
 
 #[test]
-fn a_current_demand_is_said_whatever_old_work_is_draining() {
+fn current_demand_said() {
     let mut l = scheduler();
     l.declare(Stream::terrain, &[(1, unseen(0.0)), (2, unseen(1.0))], 0.0);
     l.pump(0.0);
@@ -340,7 +340,7 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
 }
 
 #[test]
-fn a_running_attempt_is_never_stopped_for_a_better_want() {
+fn running_attempt_kept() {
     let mut l = scheduler();
     l.set_credits(1);
     l.declare(Stream::terrain, &[(1, unseen(5.0))], 0.0);
@@ -391,7 +391,7 @@ impl Serve for Restless {
 }
 
 #[test]
-fn every_want_is_served_at_rest() {
+fn wants_served_at_rest() {
     let mut l = RequestScheduler::new(Restless, BOUNDS);
     l.set_credits(2);
     let mut wanted: Vec<(u64, Ask)> = (0..12)
@@ -419,7 +419,7 @@ fn every_want_is_served_at_rest() {
 }
 
 #[test]
-fn an_asset_shares_the_credits_and_is_never_withdrawn() {
+fn asset_shares_credits() {
     let mut l = scheduler();
     l.set_credits(1);
     l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
@@ -438,7 +438,7 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
 }
 
 #[test]
-fn a_want_whose_object_failed_says_so_while_it_is_wanted() {
+fn failed_want_reported() {
     let mut l = scheduler();
     let want = [(1u64, ask(Why::Demand, 0.0))];
     l.declare(Stream::terrain, &want, 0.0);

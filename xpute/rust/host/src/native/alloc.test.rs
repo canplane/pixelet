@@ -36,7 +36,7 @@ fn in_heap(p: *const u8) -> bool {
 }
 
 #[test]
-fn the_guests_blocks_are_its_memorys_and_others_the_systems() {
+fn block_ownership() {
     let g = guest();
     let theirs = g.run(|| Box::into_raw(Box::new([7u8; 100])).expose_provenance());
     assert!(in_heap(core::ptr::with_exposed_provenance(theirs)));
@@ -47,7 +47,7 @@ fn the_guests_blocks_are_its_memorys_and_others_the_systems() {
 }
 
 #[test]
-fn a_block_goes_back_to_whichever_holds_its_address() {
+fn free_by_address() {
     let g = guest();
     // The heap's block, let go here, goes back to the heap.
     let made = g.run(|| vec![1u32; 1000]);
@@ -59,7 +59,7 @@ fn a_block_goes_back_to_whichever_holds_its_address() {
 }
 
 #[test]
-fn a_block_that_grows_across_the_line_moves() {
+fn grow_across_moves() {
     let g = guest();
     let mut v = vec![3u8; 16];
     assert!(!in_heap(v.as_ptr()));
@@ -76,7 +76,7 @@ fn a_block_that_grows_across_the_line_moves() {
 }
 
 #[test]
-fn the_heap_ends_with_the_memory() {
+fn heap_ends_with_memory() {
     let g = guest();
     let (at, bytes) = g.memory();
     let end = at.as_ptr().addr() + bytes;

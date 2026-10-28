@@ -564,7 +564,7 @@ mod tests {
     /// What is placed answers, on each axis, the halves its children hold
     /// anything in; a leaf all of it; nothing, none.
     #[test]
-    fn what_is_placed_is_its_children_s_halves_on_every_axis() {
+    fn placed_is_child_halves() {
         let zoom = 10;
         let branch = Held::branch(1, zoom);
         // Child 0 (low x, y, z) alone: the low half on every axis.

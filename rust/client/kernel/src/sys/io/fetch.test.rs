@@ -14,7 +14,7 @@ const FIXTURE: &str = include_str!(concat!(
 ));
 
 #[test]
-fn the_host_s_fixture_names_each_tile_as_pxl_spec_does() {
+fn fixture_tile_names() {
     let fixture = read_json(FIXTURE).expect("the fixture is JSON");
     let tiles = fixture.get("tiles").expect("its tiles");
     let mut n = 0;

@@ -688,7 +688,7 @@ mod tests {
     /// A z span becomes the steps of the node it meets, rounded out, the
     /// node whole across; none where the node does not meet it.
     #[test]
-    fn a_span_along_z_is_its_steps_rounded_out() {
+    fn z_span_rounded_out() {
         let zoom = crate::LEAF_CELL - 6;
         // The node of side 64 leaf cells over [128, 192), 16 steps a leaf
         // cell: [138, 140) is its steps [160, 192).
@@ -727,7 +727,7 @@ mod tests {
     }
 
     #[test]
-    fn a_coarse_top_keeps_the_eighths_its_mean_fills() {
+    fn coarse_top_eighths() {
         // Cells of eight leaf cells.
         let cell = LEAF_CELL - 3;
         assert_eq!(top(cell, 16.0), (2, FULL));

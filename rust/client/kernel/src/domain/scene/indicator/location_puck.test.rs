@@ -49,7 +49,7 @@ fn rough(at: &Q3) -> Option<f64> {
 }
 
 #[test]
-fn the_zone_asks_each_cell_once_and_lays_the_same_bytes() {
+fn zone_cells_once() {
     let cell = units(GROUND.cell());
     for center in [[0.0, 0.0, 3.0], [10.0, -7.0, 5.0], [-123.0, 456.0, -2.0]] {
         let center = center.map(|v| v * cell);
@@ -88,7 +88,7 @@ fn the_zone_asks_each_cell_once_and_lays_the_same_bytes() {
 }
 
 #[test]
-fn the_beacon_holds_still_over_a_stall_rather_than_leaping() {
+fn beacon_holds_on_stall() {
     let _g = crate::sys::serial();
     let mut puck = LocationPuck {
         zone: Some(Zone {

@@ -48,7 +48,7 @@ fn host(
 /// Each host counts its own frames: one at its latency holds back no other,
 /// and its frames end as the device is polled.
 #[test]
-fn each_host_paces_its_own_frames() {
+fn host_paces_frames() {
     let (adapter, device, queue) = device();
     let (mut busy, mut other) = (
         host(&adapter, &device, &queue, 1),
@@ -65,7 +65,7 @@ fn each_host_paces_its_own_frames() {
 /// A frame's callback takes it off its count whether the queue calls it or
 /// lets it go uncalled.
 #[test]
-fn a_frame_ends_whether_its_callback_is_called_or_let_go() {
+fn frame_ends_either_way() {
     let count = Arc::new(AtomicU32::new(0));
     let called = Unfinished::count(&count);
     let dropped = Unfinished::count(&count);
@@ -79,7 +79,7 @@ fn a_frame_ends_whether_its_callback_is_called_or_let_go() {
 /// A device that goes with a frame's work never done lets its callbacks go,
 /// and the frames they counted are released with them.
 #[test]
-fn a_gone_devices_frames_are_released() {
+fn lost_device_frames_released() {
     let (adapter, device, queue) = device();
     let mut h = host(&adapter, &device, &queue, 1);
     let count = h.unfinished.clone();
@@ -104,7 +104,7 @@ fn a_gone_devices_frames_are_released() {
 /// newer one unbinds its own, once. A window's surface needs a window, so
 /// the slot is claimed as `bind` claims it, without one.
 #[test]
-fn an_old_handle_binds_and_unbinds_no_newer_surface() {
+fn stale_handle_inert() {
     let (adapter, device, queue) = device();
     let mut h = host(&adapter, &device, &queue, 2);
     // Slot 3, generations 1 and 2 (`slot | generation << 16`).
@@ -134,7 +134,7 @@ fn an_old_handle_binds_and_unbinds_no_newer_surface() {
 /// bytes the record holds: turn K's ticket, K + 1, stands at the done word
 /// as the guest left it, and the next turn waits for its DONE.
 #[test]
-fn every_record_reads_back_its_bytes_on_a_device() {
+fn records_read_back() {
     let g = Golden::load(GOLDEN);
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());

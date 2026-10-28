@@ -12,7 +12,7 @@ fn show(e: Option<Element<f64, i32>>) -> String {
 }
 
 #[test]
-fn heaps_pop_what_the_record_holds() {
+fn matches_record() {
     let v = Golden::load(GOLDEN);
     let (mut a, mut b): (Elements, Elements) = (Vec::new(), Vec::new());
     v.each("steps", |k| {

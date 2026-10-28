@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn the_hull_clears_every_requirement_and_never_sags() {
+fn hull_clears_no_sag() {
     let reqs = vec![(0.0, 0.0), (3.0, 5.0), (5.0, 2.0), (8.0, 6.0), (10.0, 0.0)];
     let hull = upper_hull(reqs.clone());
     for &(u, y) in &reqs {

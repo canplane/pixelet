@@ -10,7 +10,7 @@ const SPAN: usize = TILE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
 
 #[test]
-fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
+fn area_majority_fold() {
     assert_eq!(majority([7, 7, 7, 1], GROUND.cell()), 7);
     assert_eq!(majority([7, 7, 1, 2], GROUND.cell()), 7);
     assert_eq!(majority([1, 7, 2, 7], GROUND.cell() - 1), 7);
@@ -44,7 +44,7 @@ fn fold(children: [&Ground; 4], zoom: Zoom) -> Vec<u8> {
 }
 
 #[test]
-fn a_uniform_tile_folds_to_itself() {
+fn uniform_tile_fold() {
     let p = plane(|_, _| ground::subway);
     assert!(fold([&p, &p, &p, &p], LEAF_ZOOM - 1)
         .iter()
@@ -52,7 +52,7 @@ fn a_uniform_tile_folds_to_itself() {
 }
 
 #[test]
-fn an_area_one_cell_wide_is_a_tie_and_a_dot_goes() {
+fn thin_area_tie() {
     // A one-cell strip ties 2:2 in every parent, so a leaf's parent's
     // south-west tie child keeps it only where x is even.
     let lot = plane(|x, _| if x == 10 { ground::parking } else { 0 });
@@ -76,7 +76,7 @@ fn an_area_one_cell_wide_is_a_tie_and_a_dot_goes() {
 }
 
 #[test]
-fn a_feature_two_cells_wide_survives_a_fold() {
+fn two_cell_feature_survives() {
     let road = plane(|x, _| if x == 10 || x == 11 { 3 } else { 0 });
     let empty = plane(|_, _| 0);
     let out = fold([&road, &empty, &empty, &empty], LEAF_ZOOM - 1);
@@ -84,7 +84,7 @@ fn a_feature_two_cells_wide_survives_a_fold() {
 }
 
 #[test]
-fn each_child_lands_in_its_own_quarter() {
+fn child_quarters() {
     let q = [
         plane(|_, _| 1),
         plane(|_, _| 2),
@@ -126,7 +126,7 @@ fn fold_grids_held(f: impl Fn(i64, i64) -> i64 + Copy, held: impl Fn(usize) -> b
 /// Folding from the four children alone matches the bake bit for bit except
 /// the outermost padding sample.
 #[test]
-fn elevation_folded_from_the_four_children_differs_only_in_its_outermost_padding() {
+fn elevation_fold_padding() {
     let f = |x: i64, y: i64| 7 * x - 3 * y + 11;
     let whole = fold_grids(f);
     let four = fold_grids_held(f, |k| [5, 6, 9, 10].contains(&k));
@@ -146,7 +146,7 @@ fn elevation_folded_from_the_four_children_differs_only_in_its_outermost_padding
 }
 
 #[test]
-fn elevation_keeps_the_center_sample_convention() {
+fn elevation_center_sample() {
     // A ramp of height 2m folds to 4i + 1 exactly: the parent's center in child samples.
     let out = fold_grids(|mx, _| 2 * mx);
     let pad = ELE_PAD as i64;
@@ -157,7 +157,7 @@ fn elevation_keeps_the_center_sample_convention() {
 }
 
 #[test]
-fn elevation_reads_the_skirt_from_the_neighbors() {
+fn elevation_skirt() {
     // The outermost padding lies four child samples past the block, in the neighbors.
     let out = fold_grids(|mx, my| {
         100 * mx.div_euclid(TILE_ELE_SPAN as i64) + my.div_euclid(TILE_ELE_SPAN as i64)
@@ -168,7 +168,7 @@ fn elevation_reads_the_skirt_from_the_neighbors() {
 }
 
 #[test]
-fn elevation_rounds_its_halves_to_even() {
+fn elevation_round_half_even() {
     // Rounding half up would drift every fold upward.
     let lows = fold_grids(|mx, _| mx.rem_euclid(2));
     assert!(
@@ -185,7 +185,7 @@ fn elevation_rounds_its_halves_to_even() {
 }
 
 #[test]
-fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
+fn volume_majority_fold() {
     let (a, b, empty) = (5, 9, 0);
     assert_eq!(
         majority(
@@ -227,7 +227,7 @@ fn zero_tile() -> TerrainTile {
 
 /// Zero tiles fold to the zero tile.
 #[test]
-fn the_zero_tile_folds_to_itself() {
+fn zero_tile_fold() {
     let zero = zero_tile();
     assert_eq!(
         fold_terrain(

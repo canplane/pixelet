@@ -74,7 +74,7 @@ fn folded<const PLACE: bool>() -> Vec<Zoom> {
 }
 
 #[test]
-fn a_kind_is_folded_up_to_its_coarsest_and_no_further() {
+fn fold_to_coarsest() {
     assert_eq!(
         folded::<false>(),
         (Count::<false>::COARSEST..=LEAF_ZOOM).collect::<Vec<_>>()

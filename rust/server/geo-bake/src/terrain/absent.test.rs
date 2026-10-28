@@ -16,7 +16,7 @@ fn absence() -> (Absence, Tile, Tile) {
 }
 
 #[test]
-fn inside_the_coverage_absence_is_sea_and_past_it_unknown() {
+fn absence_sea_or_unknown() {
     let (absence, inside, west) = absence();
     assert_eq!(absence.at(inside).ground.cells[0], ground::water);
     assert_eq!(absence.at(west).ground.cells[0], sentinel::unknown);

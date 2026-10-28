@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 #[tokio::test]
-async fn success_and_failure_are_not_reported_as_empty_or_timeout() {
+async fn outcomes_reported() {
     let mut ok = Command::new("sh");
     ok.args(["-c", "exit 0"]);
     supervise(ok, Instant::now() + Duration::from_secs(2))
@@ -20,7 +20,7 @@ async fn success_and_failure_are_not_reported_as_empty_or_timeout() {
 }
 
 #[test]
-fn complete_artifacts_are_moved_from_staging_and_abandoned_work_is_not_published() {
+fn staging_publish() {
     let base = std::env::temp_dir().join(format!("pxl-demand-publication-{}", std::process::id()));
     let runner = Runner::new(1, Limits::default()).unwrap();
     let data = Dataset::open(&base, super::super::Kind::Place, &runner).unwrap();
@@ -40,7 +40,7 @@ fn complete_artifacts_are_moved_from_staging_and_abandoned_work_is_not_published
 }
 
 #[tokio::test]
-async fn waiting_does_not_renew_the_execution_budget() {
+async fn wait_keeps_budget() {
     let command = Command::new("/nonexistent/should-not-start");
     let expired = Instant::now() - Duration::from_secs(1);
     assert!(matches!(
@@ -50,7 +50,7 @@ async fn waiting_does_not_renew_the_execution_budget() {
 }
 
 #[tokio::test]
-async fn a_free_worker_goes_to_what_a_client_waits_on_before_a_folds_older_ask() {
+async fn client_wait_first() {
     let workers = Arc::new(Workers {
         state: Mutex::new((1, VecDeque::new())),
     });

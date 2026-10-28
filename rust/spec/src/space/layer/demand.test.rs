@@ -39,7 +39,7 @@ fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
 }
 
 #[test]
-fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
+fn demand_within_reach() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
@@ -49,7 +49,7 @@ fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
 }
 
 #[test]
-fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
+fn parents_in_coarser() {
     for zoom in TOP_ZOOM + 1..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let above = demands(zoom - 1, foot);
@@ -66,7 +66,7 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 /// The reach, over the window's margin, is exactly where the view stops
 /// asking for a zoom.
 #[test]
-fn the_fault_bound_is_where_a_zoom_ends() {
+fn fault_bound_zoom_end() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         let r = demand_reach(GROUND, zoom) / WINDOW_MARGIN;
         assert_eq!(
@@ -79,7 +79,7 @@ fn the_fault_bound_is_where_a_zoom_ends() {
 }
 
 #[test]
-fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
+fn zoom_by_distance() {
     let mut last = i32::MAX;
     // Inside the world: no cell is coarser than z0's, and none finer than a
     // position names (`FINEST_ZOOM`), even scaled finer by 2^3 below.
@@ -111,7 +111,7 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
 /// no farther: just short of `draw_reach` a ray asks the zoom's own cells,
 /// and at it the coarser's.
 #[test]
-fn the_view_draws_a_zoom_to_where_the_grid_asks_a_coarser_cell() {
+fn view_zoom_extent() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         let r = draw_reach(GROUND, zoom);
         assert_eq!(

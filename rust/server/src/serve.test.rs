@@ -34,7 +34,7 @@ async fn get(uri: &str, token: Option<&str>) -> StatusCode {
 }
 
 #[tokio::test]
-async fn the_internal_prefix_is_gated_even_where_nothing_is_mounted() {
+async fn internal_prefix_gated() {
     assert_eq!(
         get("/root/internal/anything", None).await,
         StatusCode::UNAUTHORIZED
@@ -52,6 +52,6 @@ async fn the_internal_prefix_is_gated_even_where_nothing_is_mounted() {
 }
 
 #[tokio::test]
-async fn the_gate_does_not_reach_past_its_own_prefix() {
+async fn gate_scoped_to_prefix() {
     assert_eq!(get("/root/anything", None).await, StatusCode::NOT_FOUND);
 }

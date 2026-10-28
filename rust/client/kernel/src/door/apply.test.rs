@@ -17,7 +17,7 @@ fn surface(n: f64) -> Result<u32, Errno> {
 }
 
 #[test]
-fn a_number_the_shell_sends_is_refused_unless_it_is_what_the_field_holds() {
+fn shell_number_checked() {
     assert_eq!(surface(13.0), Ok(13));
     for n in [f64::NAN, f64::INFINITY, -1.0, 2.5, 1e20] {
         assert_eq!(surface(n), Err(Errno::EINVAL), "{n} is no u32");
@@ -59,7 +59,7 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
 /// A view field asked lands as the controls take it, after the coming in; one
 /// absent is kept, but a view far out still comes in and one nearer stays.
 #[test]
-fn a_go_to_asks_its_view_after_the_going_and_keeps_what_it_leaves_out() {
+fn go_to_asks_after() {
     use crate::domain::control::param::DEFAULT_DIST;
     let _g = crate::sys::serial();
     let pi = core::f64::consts::PI;

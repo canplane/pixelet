@@ -228,7 +228,7 @@ mod tests {
     /// asked off its line, is what the world holds there; one in another
     /// root is asked from that root.
     #[test]
-    fn an_asset_asked_off_the_footing_is_the_world_s() {
+    fn footing_asset_is_worlds() {
         let f = footing(&mut Step, UNIT_ZOOM, [6, 3]);
         assert_eq!(f.ends, Ends::Stop);
         assert_eq!(f.top.0, -1, "the top of the cell under z = 0");
@@ -281,7 +281,7 @@ mod tests {
     /// ray's line and climbed over where it resumed; the assets about the
     /// stop asked off it are the world's.
     #[test]
-    fn a_walk_keeps_the_line_down_to_where_it_stops() {
+    fn walk_keeps_line() {
         let s = FINEST_ZOOM - UNIT_ZOOM;
         let o = [(6 << s) + 17, (3 << s) + 90, 9 << s];
         let detail = Detail {
@@ -346,7 +346,7 @@ mod tests {
     /// A line straight down to a node holds the assets about it as the
     /// world does, its own among them.
     #[test]
-    fn an_asset_asked_off_a_line_to_a_node_is_the_world_s() {
+    fn line_asset_is_worlds() {
         let at = [3, 2, 1];
         let l = line(&mut Step, UNIT_ZOOM, at);
         for x in 1..6 {

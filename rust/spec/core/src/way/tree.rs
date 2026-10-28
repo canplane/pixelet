@@ -451,7 +451,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_scratch_holds_the_families_it_is_made_for() {
+    fn scratch_holds_families() {
         // At a square's most, the layout it had before it grew: its spans,
         // its freed families' count and ids, its records' count and records.
         assert_eq!(
@@ -476,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn a_build_is_cramped_past_its_scratch_only() {
+    fn cramped_past_scratch() {
         assert!(!is_cramped(8, 1, 7));
         assert!(is_cramped(8, 1, 8));
         // Past the square's most is `past`'s, asked first.

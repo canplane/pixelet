@@ -7,7 +7,7 @@ use crate::math::rng::u32_to_unit;
 const GOLDEN: &str = include_str!("../../../../spec/golden/math/rng.64.tsv");
 
 #[test]
-fn rng_computes_what_the_record_holds() {
+fn matches_record() {
     let v = Golden::load(GOLDEN);
     v.each("", |k| {
         let seed = v.u64(&format!("{k}.seed"));

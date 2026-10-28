@@ -6,7 +6,7 @@ use crate::golden::Golden;
 const GOLDEN: &str = include_str!("../../../../spec/golden/math/scalar.tsv");
 
 #[test]
-fn scalar_computes_what_the_record_holds() {
+fn matches_record() {
     let v = Golden::load(GOLDEN);
     v.each("", |k| {
         let (x, s) = (v.f64(&format!("{k}.x")), v.f64(&format!("{k}.s")));
@@ -35,12 +35,12 @@ fn scalar_computes_what_the_record_holds() {
 }
 
 #[test]
-fn the_tolerance_is_the_records() {
+fn record_tolerance() {
     assert_eq!(EPS.to_bits(), Golden::load(GOLDEN).f64("eps").to_bits());
 }
 
 #[test]
-fn a_half_way_case_rounds_toward_positive_infinity() {
+fn half_rounds_up() {
     assert_eq!(round_half_up(2.5), 3.0);
     assert_eq!(round_half_up(-2.5), -2.0);
     assert_eq!(round_half_up(-2.4), -2.0);

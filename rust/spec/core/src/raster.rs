@@ -106,7 +106,7 @@ pub fn is_flipped(right: [f32; 3], up: [f32; 3], forward: [f32; 3]) -> bool {
 /// them): two triangles a face, the faces in their order across X, then
 /// Y, then Z, low side first, each wound counter-clockwise seen from
 /// outside, so a face turned to the eye is wound counter-clockwise on the
-/// screen (`a_face_turned_to_the_eye_is_wound_counter_clockwise`) and the
+/// screen (`facing_face_ccw`) and the
 /// raster culls the faces turned away; each triangle wound the other way
 /// where `flipped`.
 pub fn corner(k: u32, flipped: bool) -> [u32; 3] {
@@ -152,7 +152,7 @@ mod tests {
     /// counter-clockwise on the screen where its outward normal is turned
     /// to the eye, clockwise where it is turned away: a front face is kept.
     #[test]
-    fn a_face_turned_to_the_eye_is_wound_counter_clockwise() {
+    fn facing_face_ccw() {
         // An eye looking north, then one turned and pitched down.
         let views: [[[f32; 3]; 3]; 2] = [
             [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]],
@@ -200,7 +200,7 @@ mod tests {
 
     /// An id names its sample again, and says whether it lacks.
     #[test]
-    fn an_id_names_its_sample() {
+    fn id_names_sample() {
         for (s, lacks) in [(0, false), (7, true), ((1 << 25) - 1, false)] {
             let id = id_of(s, lacks);
             assert_ne!(id, 0);

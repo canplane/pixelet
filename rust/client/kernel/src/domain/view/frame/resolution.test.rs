@@ -19,7 +19,7 @@ fn windows(k: &mut Scale, load: f64, n: u32, timed: bool) -> u32 {
 /// judged again before its settling windows, and the step above is taken
 /// back only after `SCALE_UP_WINDOWS` windows in which it fits.
 #[test]
-fn timed_steps_down_at_once_and_up_once_the_step_above_fits() {
+fn timed_steps() {
     let mut k = Scale::NEW;
     assert_eq!(windows(&mut k, 1.5, 1, true), 1);
     assert_eq!(k.step, 1);
@@ -41,7 +41,7 @@ fn timed_steps_down_at_once_and_up_once_the_step_above_fits() {
 /// them: reads on one frame in three judge it as soon as every frame would,
 /// by the frames that took them, and a window none landed in is not judged.
 #[test]
-fn timed_windows_count_every_frame_and_judge_by_the_reads() {
+fn timed_windows() {
     let frame = param::SCALE_BUDGET_FLOOR_MS;
     let frames = (param::SCALE_WINDOW_MS / frame).ceil() as u32;
     let mut k = Scale::NEW;
@@ -64,7 +64,7 @@ fn timed_windows_count_every_frame_and_judge_by_the_reads() {
 /// goes over within its trust steps back and doubles the hold, and one that
 /// outlasts it stands.
 #[test]
-fn untimed_probes_up_and_a_failed_probe_doubles_the_hold() {
+fn untimed_probe_backoff() {
     let mut k = Scale::NEW;
     assert_eq!(windows(&mut k, param::SCALE_MISSED + 0.5, 1, false), 1);
     assert_eq!(k.step, 1);
@@ -104,7 +104,7 @@ fn untimed_probes_up_and_a_failed_probe_doubles_the_hold() {
 /// judged before it: a drag, a pause and a drag step up as one drag would,
 /// timed or untimed.
 #[test]
-fn a_pause_keeps_the_quiet_windows_judged() {
+fn pause_keeps_windows() {
     let settle = param::SCALE_SETTLE_WINDOWS;
     let mut k = Scale::NEW;
     assert_eq!(windows(&mut k, 1.5, 1, true), 1);

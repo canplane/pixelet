@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn mem_json_states_the_fixed_ranges_and_the_heap_flows_as_they_are() {
+fn mem_json_matches_layout() {
     let note = include_str!(concat!(
         env!("PXL_REPO"),
         "/spec/client/kernel/sys/mem/mem.json"

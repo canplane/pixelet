@@ -14,7 +14,7 @@ fn kept_of(pairs: &[(u32, u32)]) -> Vec<u8> {
 
 /// The stored form is a contract with storage, which outlives a build.
 #[test]
-fn what_is_kept_reads_back_and_a_default_is_not_kept() {
+fn kept_round_trip() {
     let mut s = Settings::DEFAULT;
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
     let ao = AoMode::ALL
@@ -41,7 +41,7 @@ fn what_is_kept_reads_back_and_a_default_is_not_kept() {
 }
 
 #[test]
-fn a_kept_pair_is_a_setting_s_number_and_its_value() {
+fn kept_pair_format() {
     let ao = AoMode::ALL
         .into_iter()
         .find(|&o| o as u32 != Settings::DEFAULT.get(SettingKey::ao))
@@ -52,7 +52,7 @@ fn a_kept_pair_is_a_setting_s_number_and_its_value() {
 }
 
 #[test]
-fn what_the_schema_does_not_hold_is_left_at_the_default() {
+fn unknown_stays_default() {
     let unknown = SettingKey::SLOTS as u32 + 1000;
     for kept in [
         kept_of(&[(SettingKey::ao as u32, 99)]),
@@ -70,7 +70,7 @@ fn what_the_schema_does_not_hold_is_left_at_the_default() {
 }
 
 #[test]
-fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
+fn reads_past_unknown_pair() {
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
     let back = read_kept(&kept_of(&[
         (SettingKey::SLOTS as u32 + 1000, 1),
@@ -89,7 +89,7 @@ fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
 /// the slot reads as its default. A dev one this build does not offer
 /// takes no change at all (`is_offered`), so only the offered are changed.
 #[test]
-fn a_session_s_setting_is_neither_kept_nor_read() {
+fn session_setting_not_kept() {
     let _g = crate::sys::serial();
     let session: Vec<SettingKey> = SettingKey::ALL
         .into_iter()
@@ -161,7 +161,7 @@ fn held_after_a_change() -> bool {
 /// The slot is read on the storage root a turn after its file lands, and
 /// nothing is written before; what was read is not written back.
 #[test]
-fn the_settings_are_read_from_their_slot_and_nothing_is_written_before() {
+fn read_before_write() {
     let _g = crate::sys::serial();
     open_slot();
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
@@ -188,7 +188,7 @@ fn the_settings_are_read_from_their_slot_and_nothing_is_written_before() {
 
 /// An empty slot is the defaults, written from the first change.
 #[test]
-fn an_empty_slot_is_the_defaults() {
+fn empty_slot_defaults() {
     let _g = crate::sys::serial();
     open_slot();
     file::on_kept_answered(Kept::Settings, Err(file::Opened::Absent));
@@ -201,7 +201,7 @@ fn an_empty_slot_is_the_defaults() {
 /// slot held before), is refused: the defaults, nothing written over it until
 /// the host sets it aside and empties the slot, and then what changed meanwhile.
 #[test]
-fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
+fn bad_slot_refused() {
     let _g = crate::sys::serial();
     for answer in [
         Err(file::Opened::Failed {
@@ -233,7 +233,7 @@ fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
 /// One that fails to open otherwise is not the host's to set aside: the
 /// defaults, never written over this session.
 #[test]
-fn an_unreadable_slot_is_never_written_over() {
+fn unreadable_slot_kept() {
     let _g = crate::sys::serial();
     open_slot();
     file::on_kept_answered(

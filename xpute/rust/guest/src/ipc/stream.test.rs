@@ -16,7 +16,7 @@ fn stream(words: usize) -> Stream {
 }
 
 #[test]
-fn a_transaction_past_the_range_is_dropped_whole_and_the_next_one_records() {
+fn overflow_drops_whole() {
     let mut s = stream(16);
     s.record(1, &[7], &[], None);
     let before = s.left();

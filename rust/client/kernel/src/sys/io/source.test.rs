@@ -15,7 +15,7 @@ fn formats() -> Vec<u32> {
 // Read off the source parsed, never declared: a declaration is the process's
 // once, and the world's tests walk ground no shard of this one serves.
 #[test]
-fn a_source_serves_by_its_shards() {
+fn source_serves_by_shard() {
     let s = parse(4, &formats(), ["0103300", "01033210"]).expect("a declaration the client reads");
     for served in [
         "01033",
@@ -33,7 +33,7 @@ fn a_source_serves_by_its_shards() {
 }
 
 #[test]
-fn a_declaration_the_client_cannot_follow_is_refused_whole() {
+fn unfollowable_declaration_refused() {
     let f = formats();
     // A terrain format past the one this client reads, and none for the Earth.
     let mut unread = f.clone();

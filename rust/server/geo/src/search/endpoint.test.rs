@@ -31,7 +31,7 @@ async fn get(uri: &str) -> StatusCode {
 }
 
 #[tokio::test]
-async fn a_query_outside_the_length_bounds_is_refused_before_the_database() {
+async fn query_length_refused() {
     assert_eq!(get("/geo/search").await, StatusCode::BAD_REQUEST);
     assert_eq!(get("/geo/search?q=").await, StatusCode::BAD_REQUEST);
     assert_eq!(get("/geo/search?q=%20%20").await, StatusCode::BAD_REQUEST);
@@ -44,7 +44,7 @@ async fn a_query_outside_the_length_bounds_is_refused_before_the_database() {
 }
 
 #[tokio::test]
-async fn the_length_bound_counts_characters_rather_than_bytes() {
+async fn length_counts_chars() {
     // 100 three-byte characters are 300 bytes; a byte cap would refuse them.
     let wide = "€".repeat(MAX_QUERY_LEN);
     assert_ne!(
@@ -60,7 +60,7 @@ async fn the_length_bound_counts_characters_rather_than_bytes() {
 }
 
 #[test]
-fn near_takes_a_pair_of_finite_numbers_and_nothing_else() {
+fn near_finite_pair() {
     let near = parse_near(Some("127.03,37.5")).unwrap();
     assert_eq!((near.lon, near.lat), (127.03, 37.5));
 
@@ -73,7 +73,7 @@ fn near_takes_a_pair_of_finite_numbers_and_nothing_else() {
 }
 
 #[test]
-fn limit_is_clamped_and_a_bad_one_is_the_default_rather_than_a_refusal() {
+fn limit_clamped() {
     assert_eq!(parse_limit(Some("5")), 5);
     assert_eq!(parse_limit(None), DEFAULT_LIMIT);
     assert_eq!(parse_limit(Some("0")), DEFAULT_LIMIT);

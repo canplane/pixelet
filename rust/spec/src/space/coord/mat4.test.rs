@@ -11,7 +11,7 @@ fn assert_almost(a: f64, b: f64, tol: f64) {
 }
 
 #[test]
-fn a_matrix_times_its_inverse_is_the_identity() {
+fn inverse_identity() {
     let (mut r, mut t, mut m, mut inv, mut p) = (new(), new(), new(), new(), new());
     rotation_z(&mut r, 0.7);
     translation(&mut t, 5.0, -3.0, 2.0);
@@ -25,7 +25,7 @@ fn a_matrix_times_its_inverse_is_the_identity() {
 }
 
 #[test]
-fn look_at_puts_the_target_on_the_camera_s_z_axis_up_on_y() {
+fn look_at_axes() {
     let mut view = new();
     look_at(
         &mut view,
@@ -45,7 +45,7 @@ fn look_at_puts_the_target_on_the_camera_s_z_axis_up_on_y() {
 }
 
 #[test]
-fn the_frustum_s_planes_hold_the_target_and_reject_what_is_behind_the_eye() {
+fn frustum_holds_target() {
     let (mut view, mut proj, mut vp) = (new(), new(), new());
     look_at(
         &mut view,

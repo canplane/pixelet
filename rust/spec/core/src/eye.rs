@@ -86,7 +86,7 @@ mod tests {
     /// A ball before the eye within its view is seen, one past a side or
     /// behind it by more than its radius not.
     #[test]
-    fn the_eye_sees_what_lies_within_its_view() {
+    fn eye_sees_view() {
         let axes = [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
         let tan = [1.0, 0.5];
         assert!(sees(axes, tan, [0.0, 10.0, 0.0], 0.0));

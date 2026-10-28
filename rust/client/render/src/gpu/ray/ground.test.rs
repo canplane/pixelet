@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn a_build_that_ran_out_is_judged_by_the_pool_it_was_built_in() {
+fn ran_out_judged_by_pool() {
     // Built in the pool as it is, below its most: it grows, built again.
     assert_eq!(ran_out(16, 16, 64), RanOut::Grow);
     // Built in a pool since grown, landing a frame late: built again, the
@@ -15,7 +15,7 @@ fn a_build_that_ran_out_is_judged_by_the_pool_it_was_built_in() {
 }
 
 #[test]
-fn a_build_that_ran_out_says_of_what() {
+fn ran_out_says_what() {
     // `STARVED` is the pool's; `CRAMPED` the scratch's.
     assert_eq!(short_of(way::tree::STARVED), Some(Short::Pool));
     assert_eq!(short_of(way::tree::CRAMPED), Some(Short::Scratch));
@@ -28,7 +28,7 @@ fn a_build_that_ran_out_says_of_what() {
 }
 
 #[test]
-fn a_scratch_at_its_most_is_as_it_was() {
+fn scratch_peak_unchanged() {
     // 18.01 MiB, `HANDED` squares of `SCRATCH_WORDS`.
     assert_eq!(
         scratch_bytes(way::tree::SQUARE_FAMILIES),

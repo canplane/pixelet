@@ -582,7 +582,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_screen_is_reached_however_it_is_named() {
+    fn screen_reach_any_name() {
         for (text, at) in [
             ("use crate::domain::view::frame::screen::size;", vec![1]),
             ("use crate::domain::view::frame::{\n    pose::view,\n    screen::units_per_px_at,\n};", vec![1]),
@@ -605,7 +605,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_listed_entries_bind_the_rays() {
+    fn listed_entries_bind_rays() {
         let entry = |name: &str, param: &str| {
             format!("#[spirv(compute(threads(8, 8, 1), entry_point_name = \"{name}\"))]\npub fn {name}(\n    {param}\n) {{\n    let x = 1;\n}}\n")
         };
@@ -620,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    fn a_workgroup_is_read_against_its_constant() {
+    fn workgroup_vs_constant() {
         let text = "const LANES: u32 = 64;\n#[spirv(compute(threads(64, 1, 1), entry_point_name = \"way_cs\"))]\n";
         assert_eq!(threads(text, "way_cs"), Some([64, 1, 1]));
         assert_eq!(threads(text, "way_free_cs"), None);

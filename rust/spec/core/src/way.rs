@@ -949,7 +949,7 @@ mod tests {
     /// over another, beside it or over and under it can lie, at zooms from
     /// the leaves to three coarser.
     #[test]
-    fn the_bound_is_the_hull_of_what_lined_writes() {
+    fn bound_is_hull() {
         let mut seed = 0x2545_f491_u32;
         let mut next = |m: u32| {
             seed ^= seed << 13;

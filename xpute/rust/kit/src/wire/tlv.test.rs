@@ -27,7 +27,7 @@ fn show(v: &TlvValue) -> String {
 }
 
 #[test]
-fn tlv_computes_what_the_typescript_computes() {
+fn matches_typescript() {
     let v = Golden::load(GOLDEN);
     let mut w = TlvWriter::new(4);
     w.u8(200)

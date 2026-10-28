@@ -340,7 +340,7 @@ mod tests {
     /// A node stands over a box where their columns meet, X round the
     /// world, and not beside it.
     #[test]
-    fn a_node_stands_over_the_boxes_its_columns_meet() {
+    fn node_over_boxes() {
         // A leaf cell's own node, and the node four cells a side holding it.
         let (leaf, wide) = (LEAF_CELL, LEAF_CELL - 2);
         let b = [10, 20, 11, 21];
@@ -362,7 +362,7 @@ mod tests {
     /// A node reads a written family where what was handed it answers from
     /// one of that family's slots, and not where it holds nothing.
     #[test]
-    fn a_node_reads_the_families_its_slot_lies_in() {
+    fn node_reads_families() {
         use crate::overwrite::{Held, FAMILY};
         let held = |slot: u32| Held::branch(slot, 9).word();
         assert!(reads_written(held(40), 40));

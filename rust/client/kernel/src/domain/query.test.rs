@@ -132,7 +132,7 @@ fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
 }
 
 #[test]
-fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
+fn no_surface_placed_stands() {
     let _g = serial();
     let leaf = top().children()[0];
     let void = drawn(
@@ -194,7 +194,7 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
 /// A deck stands on its own, not on the ground under it: over a void cell
 /// the query meets its slab where the renderer draws it.
 #[test]
-fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
+fn deck_over_void_met() {
     use pxl_spec::bake::separation::{Builder, Form, POINT_SCALE};
     let _g = serial();
     let leaf = top().children()[0];
@@ -233,7 +233,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
 /// A ray in the frame that runs on round the world meets, past the
 /// antimeridian, the ground and the objects stored under the world's name for them.
 #[test]
-fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
+fn ray_across_antimeridian() {
     let _g = serial();
     let n = 1i32 << LEAF_ZOOM;
     let flat = || {
@@ -315,7 +315,7 @@ fn flat_at_five() -> (TileCache<TerrainTile>, [f64; 2]) {
 /// top: its ray falls through what is over the world and meets the ground
 /// where its line does.
 #[test]
-fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
+fn ray_from_above_meets_ground() {
     let _g = serial();
     let (tile_cache, at) = flat_at_five();
     let store = Store::default();
@@ -345,7 +345,7 @@ fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
 /// the finest zoom placed in it, and stands on what is left as it is held:
 /// on the half cubes over a dug lower half.
 #[test]
-fn a_dig_is_met_as_the_cells_asked_fold_it() {
+fn dig_met_as_folded() {
     use crate::domain::layer::object::store::AIR;
     use pxl_spec_core::answer::{side, EIGHTHS};
     let _g = serial();
@@ -396,7 +396,7 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
 /// finer than the leaves' cells, is met whole by a pick, which asks it as it
 /// is placed.
 #[test]
-fn a_half_cube_is_met_as_it_is_placed() {
+fn half_cube_met() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
@@ -422,7 +422,7 @@ fn a_half_cube_is_met_as_it_is_placed() {
 /// lies and however small: its cell is read as columns at the finest zoom
 /// placed in it.
 #[test]
-fn a_walker_stands_on_a_cube_of_any_tier_anywhere_in_its_cell() {
+fn walker_stands_any_tier() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let red = cube_id(Cube::Object(cube::Object::red));
@@ -449,7 +449,7 @@ fn a_walker_stands_on_a_cube_of_any_tier_anywhere_in_its_cell() {
 /// In a stack with a cell left out, what stands in the gap stands on the
 /// cube under it.
 #[test]
-fn a_gap_in_a_stack_is_floored_by_the_cube_under_it() {
+fn stack_gap_floored() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
@@ -470,7 +470,7 @@ fn a_gap_in_a_stack_is_floored_by_the_cube_under_it() {
 /// blocker as far as its own column is open over its head, then settles; with
 /// a ceiling first it stops there, and an axis that is blocked is slid along.
 #[test]
-fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
+fn walker_climbs_or_slides() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
@@ -521,7 +521,7 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
 /// whichever its height is closer to; a solid with no clear cell over it is
 /// no floor.
 #[test]
-fn a_height_stands_on_the_floor_nearest_it() {
+fn height_nearest_floor() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
@@ -548,7 +548,7 @@ fn a_height_stands_on_the_floor_nearest_it() {
 /// A reading reports the columns its queries read: a support its own
 /// cell's, a walk every cell it passes, joined.
 #[test]
-fn a_reading_reports_the_columns_its_queries_read() {
+fn reading_reports_columns() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let store = Store::default();
@@ -573,7 +573,7 @@ fn a_reading_reports_the_columns_its_queries_read() {
 }
 
 #[test]
-fn what_is_placed_in_a_box_is_what_the_store_holds_there() {
+fn box_placed_matches_store() {
     let _g = serial();
     let unit = pxl_spec_core::UNIT_ZOOM;
     let mut store = Store::default();
@@ -626,7 +626,7 @@ fn what_is_placed_in_a_box_is_what_the_store_holds_there() {
 /// held from the start, and no cell of the square stands outside the bound
 /// read over it at any zoom over a square.
 #[test]
-fn a_square_landing_after_the_fold_is_read_with_its_spike() {
+fn late_square_spike() {
     use crate::domain::layer::terrain::window::{on_landed, refold, test::unland, Windowed};
     use pxl_render::gpu::renderer::Landing;
     use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE, WINDOW};
@@ -704,7 +704,7 @@ fn a_square_landing_after_the_fold_is_read_with_its_spike() {
 /// runs it) and folds the windows over none, so no node over a square of
 /// the eye's leaves keeps a bound of cells gone.
 #[test]
-fn a_device_gone_leaves_no_bound_over_the_squares_it_held() {
+fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::window::{test::lose, Windowed};
     use pxl_spec_core::ground::UNBOUNDED;
     use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE};
@@ -728,7 +728,7 @@ fn a_device_gone_leaves_no_bound_over_the_squares_it_held() {
 /// place of the cell under it, air or a cube: it grows on the world
 /// unplaced (pxl-spec-core `scatter::grown`).
 #[test]
-fn a_grown_decor_stands_where_it_grew_whatever_is_put_over_or_under_it() {
+fn grown_decor_stays() {
     use crate::domain::layer::object::store::AIR;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
@@ -761,7 +761,7 @@ fn a_grown_decor_stands_where_it_grew_whatever_is_put_over_or_under_it() {
 /// cube; one under it or over it leaves it growing (pxl-spec-core
 /// `scatter::Grounds::is_edited`).
 #[test]
-fn a_grown_decor_goes_only_where_an_edit_holds_its_box() {
+fn grown_decor_edit_removes() {
     use crate::domain::layer::object::store::AIR;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();

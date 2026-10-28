@@ -138,14 +138,14 @@ mod tests {
     }
 
     #[test]
-    fn a_flat_run_has_no_line_and_no_corner() {
+    fn flat_run_unlined() {
         let (w, asked) = bits(TOP, &ground(&[]));
         assert_eq!(w, 0);
         assert_eq!(asked, 12);
     }
 
     #[test]
-    fn a_lone_cell_is_lined_all_round() {
+    fn lone_cell_lined() {
         let (w, _) = bits(TOP, &[]);
         assert_eq!(w, 0b1111 << LINE_SHIFT);
         let (w, _) = bits(WEST, &[]);
@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn a_wall_closes_in_its_edge_and_its_corners_once() {
+    fn wall_closes_once() {
         // A wall along +x, its cells one up beside the cell's every y,
         // the edge +u of a top (u = x): no line there, the edge rising, and
         // the corners at it closed by the edge, not again by the diagonal.
@@ -164,14 +164,14 @@ mod tests {
     }
 
     #[test]
-    fn a_cell_at_a_corner_alone_closes_that_corner() {
+    fn corner_cell_closes() {
         // One cell up at −x, +y: corner −u+v, 1.
         let (w, _) = bits(TOP, &ground(&[[-1, 1, 1]]));
         assert_eq!(w, 1 << (CORNER_SHIFT + 1));
     }
 
     #[test]
-    fn a_step_down_is_lined() {
+    fn step_down_lined() {
         // The ground dropping one past +y: the edge +v (v = y) of the top
         // meets the air.
         let mut low = ground(&[]);
@@ -185,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn a_side_face_reads_its_own_axes() {
+    fn side_face_axes() {
         // The west face (−x, u = y, v = z) of a cell on flat ground: the
         // ground running on in front of it closes its foot in, across −v;
         // above and to either side the air, lined.
@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn x_goes_round_beside_the_world_s_edge() {
+    fn x_wraps_at_edge() {
         let z = 3;
         let last = (1 << (z - 1)) - 1;
         assert_eq!(beside(z, [last, 0, 0], [1, 0, 0]), [-(1 << (z - 1)), 0, 0]);

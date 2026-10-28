@@ -8,7 +8,7 @@ fn block() -> Block {
 }
 
 #[test]
-fn no_more_than_most_are_kept_and_one_past_it_is_freed_with_its_frame_holding_nothing() {
+fn keeps_at_most() {
     let mut k = Kept::new(4);
     for record in 0..3 {
         k.keep(Some(record), block(), 2);
@@ -44,7 +44,7 @@ fn no_more_than_most_are_kept_and_one_past_it_is_freed_with_its_frame_holding_no
 }
 
 #[test]
-fn past_a_full_stream_the_packets_nothing_wants_are_freed_unsent() {
+fn full_stream_frees_unwanted() {
     let mut k = Kept::new(4);
     for record in 0..4 {
         k.keep(Some(record), block(), 4);
@@ -71,7 +71,7 @@ fn past_a_full_stream_the_packets_nothing_wants_are_freed_unsent() {
 }
 
 #[test]
-fn a_frame_forgotten_holds_nothing_and_counts_none() {
+fn forgotten_frame_empty() {
     let mut k = Kept::new(2);
     k.keep(Some(0), block(), 2);
     k.forget(0);

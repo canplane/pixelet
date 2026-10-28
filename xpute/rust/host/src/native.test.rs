@@ -29,7 +29,7 @@ fn guest() -> Guest {
 }
 
 #[test]
-fn the_memory_is_aligned_zero_and_the_base() {
+fn memory_aligned_zeroed() {
     let (at, bytes) = guest().memory();
     assert_eq!(bytes, MEMORY_BYTES as usize);
     assert!(at.as_ptr().addr().is_multiple_of(PAGE_BYTES as usize));
@@ -42,7 +42,7 @@ fn the_memory_is_aligned_zero_and_the_base() {
 }
 
 #[test]
-fn a_call_runs_on_the_guests_named_thread() {
+fn call_on_guest_thread() {
     let (name, marked) = guest().run(|| {
         (
             std::thread::current().name().map(str::to_owned),
@@ -55,7 +55,7 @@ fn a_call_runs_on_the_guests_named_thread() {
 }
 
 #[test]
-fn callers_on_several_threads_take_turns() {
+fn callers_take_turns() {
     let g = guest();
     let sums: Vec<u64> = std::thread::scope(|s| {
         let calls: Vec<_> = (0..4u64)
@@ -73,14 +73,14 @@ fn while_idle_runs_here() {
 }
 
 #[test]
-fn a_second_boot_is_refused() {
+fn second_boot_refused() {
     guest();
     let again = std::panic::catch_unwind(|| native::boot(&plan(HEAP_AT)));
     assert!(again.is_err());
 }
 
 #[test]
-fn a_heap_off_a_page_or_past_the_memory_is_refused_before_the_boot() {
+fn bad_heap_refused() {
     // The slab aligns a block by its offset from the heap's first byte.
     assert!(std::panic::catch_unwind(|| native::boot(&plan(100))).is_err());
     assert!(std::panic::catch_unwind(|| native::boot(&plan(MEMORY_BYTES))).is_err());
@@ -90,7 +90,7 @@ fn a_heap_off_a_page_or_past_the_memory_is_refused_before_the_boot() {
 }
 
 #[test]
-fn the_first_intr_installs_the_plans_clock() {
+fn first_intr_installs_clock() {
     let boot = || guest().boot_info(&plan(HEAP_AT));
     assert_eq!(
         guest().run(move || native::intr(0.0, boot, |_, _| xpute_guest::clock::now())),
@@ -99,7 +99,7 @@ fn the_first_intr_installs_the_plans_clock() {
 }
 
 #[test]
-fn while_idle_from_the_guests_own_thread_or_inside_a_call_is_refused() {
+fn bad_while_idle_refused() {
     let g = guest();
     let inner = g.run(move || std::panic::catch_unwind(move || g.while_idle(|| ())).is_err());
     assert!(inner, "the guest's thread would wait for its caller");
@@ -117,14 +117,14 @@ fn while_idle_from_the_guests_own_thread_or_inside_a_call_is_refused() {
 }
 
 #[test]
-fn a_call_from_the_guests_own_thread_is_refused() {
+fn self_call_refused() {
     let g = guest();
     let inner = g.run(move || std::panic::catch_unwind(move || g.run(|| ())).is_err());
     assert!(inner, "it would wait for itself");
 }
 
 #[test]
-fn the_base_is_the_guests_thread_to_set() {
+fn base_set_by_guest() {
     guest();
     assert!(std::panic::catch_unwind(|| unsafe { xpute_guest::mem::set(0, 0) }).is_err());
 }

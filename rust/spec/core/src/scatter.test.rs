@@ -6,7 +6,7 @@ use super::*;
 /// each as `stands` does, over every decor of the catalog and the patches of
 /// squares at the leaves and coarser.
 #[test]
-fn a_patch_contest_is_each_candidate_standing() {
+fn patch_contest() {
     let (mut compared, mut lost) = (0, 0);
     for decor in &DECORS {
         for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, TOP_ZOOM + 1] {
@@ -54,7 +54,7 @@ fn a_patch_contest_is_each_candidate_standing() {
 /// Decor is drawn where the rays ask the leaf cell's zoom or finer at its
 /// distance, and nowhere they ask coarser.
 #[test]
-fn decor_is_drawn_at_the_leaves_or_finer_and_never_coarser() {
+fn decor_at_leaves_or_finer() {
     let detail = Detail {
         range: [0, crate::FINEST_ZOOM],
         eye: [0.0; 3],

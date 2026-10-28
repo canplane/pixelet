@@ -29,7 +29,7 @@ fn shown_at(tile: &PlaceTile, zoom: Zoom) -> Vec<&str> {
 }
 
 #[test]
-fn a_tile_comes_back_as_it_went() {
+fn tile_round_trip() {
     let tile = PlaceTile::leaf(
         leaf(),
         [
@@ -42,7 +42,7 @@ fn a_tile_comes_back_as_it_went() {
 }
 
 #[test]
-fn a_kind_carto_draws_no_point_for_is_not_held() {
+fn undrawn_kind_dropped() {
     let tile = PlaceTile::leaf(
         leaf(),
         [(point(1, 2), called("School", "elementary_school", "1"))],
@@ -51,7 +51,7 @@ fn a_kind_carto_draws_no_point_for_is_not_held() {
 }
 
 #[test]
-fn a_cell_keeps_its_first_by_the_zoom_its_kind_shows_from_then_id() {
+fn cell_keeps_first() {
     // Sixteen leaf cells apart: one place's cell through Carto's z17, apart from z18.
     let tile = PlaceTile::leaf(
         leaf(),
@@ -67,7 +67,7 @@ fn a_cell_keeps_its_first_by_the_zoom_its_kind_shows_from_then_id() {
 }
 
 #[test]
-fn a_parent_is_what_its_children_show_from_its_zoom_on() {
+fn parent_from_children() {
     let child = PlaceTile::leaf(
         leaf(),
         [
@@ -87,7 +87,7 @@ fn a_parent_is_what_its_children_show_from_its_zoom_on() {
 }
 
 #[test]
-fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
+fn icon_kinds_ship_symbol() {
     for category in 1..=CATEGORIES.len() as u16 {
         if ICON_ZOOM[usize::from(category - 1)] != 0 {
             assert!(
@@ -100,7 +100,7 @@ fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
 }
 
 #[test]
-fn no_grid_cell_reads_a_tile_coarser_than_the_coarsest() {
+fn no_tile_past_coarsest() {
     use crate::space::layer::tile::TOP_ZOOM;
     const {
         assert!(

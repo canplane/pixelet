@@ -3,13 +3,13 @@
 use super::*;
 
 #[test]
-fn the_view_s_field_is_53_13_degrees() {
+fn field_of_view() {
     let deg = fov().to_degrees();
     assert!((deg - 53.130_102_354_155_99).abs() < 1e-12, "{deg}");
 }
 
 #[test]
-fn a_zoom_s_cells_are_drawn_from_where_a_side_spans_spans_of_the_view_s() {
+fn zoom_cell_distance() {
     use crate::space::coord::zoom::{units, UNIT_ZOOM};
     for z in [0, UNIT_ZOOM, UNIT_ZOOM + 5] {
         assert_eq!(

@@ -23,7 +23,7 @@ fn ring(cap: u32, slot: u32) -> (Ring, Box<[u8]>) {
 }
 
 #[test]
-fn ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
+fn order_and_full() {
     let (r, _buf) = ring(4, 64);
     let ack = frame::ACKREQ;
     for round in 0..3u32 {
@@ -53,7 +53,7 @@ fn ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
 }
 
 #[test]
-fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_before_them() {
+fn payload_per_slot() {
     let (r, _buf) = ring(8, 64);
     let pkt = |n: u32| {
         let mut t: TreeView<'_> = TreeView::new();

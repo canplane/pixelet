@@ -11,7 +11,7 @@ fn read(kept: Kept, text: &[u8]) -> Option<Vec<u8>> {
 
 /// What an owner keeps reads back as it wrote it, its slot's format first.
 #[test]
-fn a_kept_file_is_its_format_then_its_owner_s_bytes() {
+fn kept_file_format() {
     let _g = crate::sys::serial();
     for kept in Kept::ALL {
         on_emptied(kept);
@@ -30,7 +30,7 @@ fn a_kept_file_is_its_format_then_its_owner_s_bytes() {
 /// Another format, a file not base64, or the objects' blob as it was kept
 /// before it carried its format, is refused until the slot is emptied.
 #[test]
-fn a_file_of_another_format_is_refused_until_emptied() {
+fn foreign_format_refused() {
     let _g = crate::sys::serial();
     let foreign = BASE64
         .encode([format::OBJECTS.wrapping_add(1), 1, 2])
@@ -50,7 +50,7 @@ fn a_file_of_another_format_is_refused_until_emptied() {
 }
 
 #[test]
-fn an_object_s_path_is_its_number_in_decimal() {
+fn object_path_decimal() {
     for n in [0, 1, 9, 10, 702561541869797376, u64::MAX] {
         assert_eq!(Path::of(n).as_str(), n.to_string());
     }

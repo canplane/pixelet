@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn a_word_is_little_endian_wherever_it_lies() {
+fn little_endian() {
     let mut bytes = [0u8; 12];
     let mut m = Memory::of(&mut bytes);
     m.set_word(5, 0x0403_0201);
@@ -13,7 +13,7 @@ fn a_word_is_little_endian_wherever_it_lies() {
 }
 
 #[test]
-fn a_write_lands_only_where_it_names() {
+fn write_in_place() {
     let mut bytes = [9u8; 8];
     Memory::of(&mut bytes).write(2, &[1, 2]);
     assert_eq!(bytes, [9, 9, 1, 2, 9, 9, 9, 9]);
@@ -21,14 +21,14 @@ fn a_write_lands_only_where_it_names() {
 
 #[test]
 #[should_panic(expected = "run past the memory")]
-fn a_range_past_the_end_is_refused() {
+fn past_end_refused() {
     let mut bytes = [0u8; 8];
     Memory::of(&mut bytes).word(6);
 }
 
 #[test]
 #[should_panic(expected = "run past the memory")]
-fn a_range_that_wraps_is_refused() {
+fn wrap_refused() {
     let mut bytes = [0u8; 8];
     Memory::of(&mut bytes).read(usize::MAX, 2);
 }

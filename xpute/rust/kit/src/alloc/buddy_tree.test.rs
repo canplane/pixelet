@@ -45,7 +45,7 @@ range!(Full, FULL_AT);
 range!(Reused, REUSED_AT);
 
 #[test]
-fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() {
+fn block_contents_survive() {
     let heap: BuddyMalloc<Spread> = BuddyMalloc::new();
     let (base, end) = (Spread::base(), Spread::end());
     let sizes = [1usize, 4096, 4097, 8192, 100, 16384, 40, 65536];
@@ -98,7 +98,7 @@ fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() 
 }
 
 #[test]
-fn two_buddies_freed_are_the_block_they_came_from() {
+fn buddies_merge() {
     let heap: BuddyMalloc<Buddies> = BuddyMalloc::new();
     let one = 1 << MIN;
     // SAFETY: the range is the test's own, here and below.
@@ -117,7 +117,7 @@ fn two_buddies_freed_are_the_block_they_came_from() {
 }
 
 #[test]
-fn a_request_past_the_range_is_refused_and_leaves_what_is_live_alone() {
+fn oversize_refused() {
     let heap: BuddyMalloc<Full> = BuddyMalloc::new();
     let one = 1 << MIN;
     // SAFETY: the range is the test's own, here and below.
@@ -147,7 +147,7 @@ fn a_request_past_the_range_is_refused_and_leaves_what_is_live_alone() {
 }
 
 #[test]
-fn what_is_freed_is_handed_out_again_rather_than_more_of_the_range() {
+fn freed_reused() {
     let heap: BuddyMalloc<Reused> = BuddyMalloc::new();
     let size = 1 << (MIN + 2);
     // SAFETY: the range is the test's own, here and below.

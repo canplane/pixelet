@@ -264,7 +264,7 @@ fn folded(rows: &[Slot], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS a
 /// by the cells a ray reads in its place, a coarser window's: every one of
 /// them lies in the bound a node over the block reads (`window::fold`).
 #[test]
-fn a_block_not_yet_held_whole_is_bounded_by_what_is_read_in_its_place() {
+fn partial_block_bounded() {
     let (rows, ground) = windows();
     let joined = folded(&rows, &ground, false);
     let w = Windows {
@@ -310,7 +310,7 @@ fn a_block_not_yet_held_whole_is_bounded_by_what_is_read_in_its_place() {
 /// stands with no bound over a block a square of which the window does not
 /// hold, with the same assets about it off its line, and asks fewer nodes.
 #[test]
-fn a_footing_stands_where_it_does_with_no_bound_over_a_block_not_held_whole() {
+fn footing_without_bound() {
     let (rows, ground) = windows();
     let (none, folded) = (folded(&rows, &ground, true), folded(&rows, &ground, false));
     let world = |joined| Asked {

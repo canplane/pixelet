@@ -316,7 +316,7 @@ fn want(w: &Windows, win: u32, s: u32) -> [i32; 2] {
 const CENTRE: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
 
 #[test]
-fn a_square_two_windows_want_is_held_once() {
+fn shared_square_held_once() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
@@ -351,7 +351,7 @@ fn a_square_two_windows_want_is_held_once() {
 }
 
 #[test]
-fn a_square_one_window_leaves_is_kept_while_another_wants_it() {
+fn left_square_kept() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
@@ -403,7 +403,7 @@ fn a_square_one_window_leaves_is_kept_while_another_wants_it() {
 }
 
 #[test]
-fn windows_apart_hold_their_squares_in_their_own_berths() {
+fn apart_windows_own_berths() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
@@ -423,7 +423,7 @@ fn windows_apart_hold_their_squares_in_their_own_berths() {
 }
 
 #[test]
-fn a_landing_shows_in_every_window_wanting_the_square() {
+fn landing_shows_everywhere() {
     let _g = crate::sys::serial();
     // The fold after the landing reads the squares' cells.
     PLANES.set(Planes {
@@ -471,7 +471,7 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
 }
 
 #[test]
-fn a_square_waiting_on_the_heap_is_handed_again_once_a_page_is_given_back() {
+fn heap_wait_rehanded() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;

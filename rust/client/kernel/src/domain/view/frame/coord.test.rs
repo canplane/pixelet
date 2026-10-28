@@ -10,7 +10,7 @@ use xpute_kit::math::rng::SplitMix64;
 /// Taken back by its cell, a point the floats leave a hair under itself
 /// would fall a 256th of a unit each trip; on whichever lap it is read.
 #[test]
-fn a_canonical_point_comes_back_through_floats() {
+fn canonical_round_trip() {
     let one = q3::ONE;
     let mut rng = SplitMix64::new(0x9e37_79b9_7f4a_7c15);
     let mut next = |span: i64| (u64::from(rng.next_u32()) % (2 * span as u64 + 1)) as i64 - span;
@@ -46,7 +46,7 @@ fn a_canonical_point_comes_back_through_floats() {
 
 /// Either side of the seam, a point a unit past it is a unit from the eye.
 #[test]
-fn x_is_continuous_across_the_seam() {
+fn x_continuous_at_seam() {
     let east = world::point(ROUND / 2.0 - 1.0, 0.0, 0.0);
     let west = world::point(-ROUND / 2.0 + 1.0, 0.0, 0.0);
     let eye = ROUND / 2.0;

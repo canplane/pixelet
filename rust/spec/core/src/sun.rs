@@ -726,7 +726,7 @@ mod tests {
     }
 
     #[test]
-    fn a_texel_starts_where_it_lies_on_the_near_plane() {
+    fn texel_starts_on_near_plane() {
         let s = down();
         let (o, ray, from) = ray([100, 200, 300], &s, &starts_of([100, 200, 300], &s), [0, 0]);
         // The top-left texel's middle: half the box across to the left, up.
@@ -742,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn a_face_square_to_the_sun_takes_no_slope() {
+    fn square_face_no_slope() {
         let s = down();
         assert_eq!(depth(&s, &met(Ends::Stop, 2.0, 2)), 0.25);
         assert_eq!(depth(&s, &met(Ends::On, 8.0, 0)), 1.0);
@@ -750,7 +750,7 @@ mod tests {
     }
 
     #[test]
-    fn a_leaning_face_is_pushed_back_by_its_slope() {
+    fn leaning_face_pushed_back() {
         // The sun 45 degrees over x: a top face changes a texel's side in
         // depth across a texel, which is pushed back `SLOPE_BIAS` times.
         let r = core::f32::consts::FRAC_1_SQRT_2;
@@ -774,7 +774,7 @@ mod tests {
     }
 
     #[test]
-    fn a_plane_keeps_its_depth_along_itself() {
+    fn plane_keeps_depth() {
         // The same box: a top face's depth deepens a texel's side a texel
         // across, toward the sun's going, and not at all down.
         let r = core::f32::consts::FRAC_1_SQRT_2;
@@ -800,7 +800,7 @@ mod tests {
     }
 
     #[test]
-    fn its_words_are_its_fields_a_vec4_each() {
+    fn words_are_fields() {
         let s = Sun {
             corner: [-7, 9],
             rim: 0.75,
@@ -817,7 +817,7 @@ mod tests {
 
     /// A point lies on the texel whose ray starts above it.
     #[test]
-    fn a_point_lies_on_the_texel_over_it() {
+    fn point_on_texel() {
         let s = down();
         let (_, _, from) = ray([0; 3], &s, &starts_of([0; 3], &s), [1, 0]);
         // Texel (1, 0)'s start, from the eye, and a point straight under it.
@@ -828,7 +828,7 @@ mod tests {
     /// A point along a texel's ray lies on that texel, whatever the sun's
     /// slant, the box's corner and its anchors' rounding.
     #[test]
-    fn a_point_on_a_texels_ray_lies_on_it() {
+    fn point_on_texel_ray() {
         let r = core::f32::consts::FRAC_1_SQRT_2;
         let s = Sun::of(
             [
@@ -858,7 +858,7 @@ mod tests {
 
     /// The way up runs a tile a step, along the sun's slant across the box.
     #[test]
-    fn the_way_up_runs_a_tile_a_step() {
+    fn way_up_tile_steps() {
         // The sun 45 degrees over x, a box 4 units wide in 16 texels: a
         // unit up moves a point a texel's worth of units across, 4 texels.
         let r = core::f32::consts::FRAC_1_SQRT_2;
@@ -892,7 +892,7 @@ mod tests {
     /// where one stood on lies at `t − up_at(k) + [−2, 1]²`), whatever the
     /// sun's slant.
     #[test]
-    fn the_reach_reads_every_tile_a_receiver_up_the_way_reads() {
+    fn reach_covers_receivers() {
         for (sx, sz) in [
             (0.0f32, 1.0f32),
             (0.3, 0.95),
@@ -944,7 +944,7 @@ mod tests {
     /// A receiver reads the disk of `rim` about the box's middle, and a
     /// pass past it its pad.
     #[test]
-    fn a_receiver_reads_the_disk_within_the_rim() {
+    fn receiver_reads_disk() {
         let s = Sun { rim: 0.5, ..down() };
         // A box 16 texels a side: its middle is 8, the disk 4 texels out.
         assert!(s.read(16, [8, 8], 0.0));
@@ -955,7 +955,7 @@ mod tests {
     }
 
     #[test]
-    fn a_slot_holds_its_world_texel_wherever_the_box_lies() {
+    fn slot_holds_texel() {
         let mut s = Sun::of(
             [
                 [2.0, 0.0, 0.0],

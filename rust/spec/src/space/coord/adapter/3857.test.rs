@@ -25,7 +25,7 @@ fn round_trip(x: f64, y: f64, z: f64) -> [f64; 3] {
 }
 
 #[test]
-fn epsg3857_project_unproject_round_trips_a_real_world_scale_coordinate_roughly_seoul() {
+fn round_trip_seoul() {
     // About (127.03, 37.50).
     let x_m = 14139274.0;
     let y_m = 4508140.0;
@@ -36,7 +36,7 @@ fn epsg3857_project_unproject_round_trips_a_real_world_scale_coordinate_roughly_
 }
 
 #[test]
-fn epsg3857_project_wraps_x_across_the_antimeridian_instead_of_growing_unbounded() {
+fn x_wraps_antimeridian() {
     let p = project(mer_from_u(ROUND) * 1.5 + 1000.0, 0.0, 0.0);
     let out = unproject(&p);
     // 1.5 world widths east wraps to -0.5.
@@ -44,7 +44,7 @@ fn epsg3857_project_wraps_x_across_the_antimeridian_instead_of_growing_unbounded
 }
 
 #[test]
-fn epsg3857_project_keeps_the_clamped_north_edge_below_the_signed_y_seam() {
+fn north_edge_below_seam() {
     let coord = project(0.0, half_world(), 0.0);
 
     assert_eq!(coord[1], i32::MAX);
@@ -55,7 +55,7 @@ fn epsg3857_project_keeps_the_clamped_north_edge_below_the_signed_y_seam() {
 }
 
 #[test]
-fn the_way_between_two_positions_takes_the_short_way_across_the_antimeridian() {
+fn short_way_across_antimeridian() {
     let east = project(half_world() - 1.0, 0.0, 0.0);
     let west = project(-half_world() + 1.0, 0.0, 0.0);
     let delta = world::between(&east, &west);
@@ -64,7 +64,7 @@ fn the_way_between_two_positions_takes_the_short_way_across_the_antimeridian() {
 }
 
 #[test]
-fn epsg3857_tile_bbox_preserves_the_exclusive_positive_world_boundary() {
+fn tile_bbox_exclusive_edge() {
     // The last tile before X's positive edge at 2^23 units.
     let last = (1i32 << 23) / crate::space::coord::zoom::units(Z15) as i32 - 1;
     let tile_idx = [last, last];

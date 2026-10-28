@@ -8,7 +8,7 @@ use pxl_spec::space::camera::grid::CELL;
 /// Decor's tiers are angles: the model's and the sprite's edges are their
 /// shares of the view's cell (`CELL`), whatever the window's height.
 #[test]
-fn decor_s_edges_are_shares_of_the_cell_on_every_screen() {
+fn decor_edges_cell_shares() {
     let _g = crate::sys::serial();
     let edges = (DECOR_MODEL_CELLS * CELL, DECOR_SPRITE_CELLS * CELL);
     for h in [600.0, 844.0, 1080.0, 1440.0, 2160.0] {
@@ -23,7 +23,7 @@ fn decor_s_edges_are_shares_of_the_cell_on_every_screen() {
 /// one, so it is one set wherever it is drawn: every kind's zooms are the
 /// leaf cell's bit or none.
 #[test]
-fn decor_grows_at_the_leaves_window_alone() {
+fn decor_leaf_window_only() {
     let leaf = 1 << (LEAF_CELL - FIRST_CELL);
     // From a tuft to a ship: what a coarser window's cells would show too.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {

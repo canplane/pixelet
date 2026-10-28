@@ -23,7 +23,7 @@ fn digits_of(key: u128) -> (u128, u32) {
 }
 
 #[test]
-fn a_coarser_key_s_digits_prefix_a_finer_one_s() {
+fn coarse_key_prefix() {
     for p in POINTS {
         for fine in 0..=UNIT_ZOOM {
             for coarse in 0..=fine {
@@ -43,7 +43,7 @@ fn a_coarser_key_s_digits_prefix_a_finer_one_s() {
 
 /// Z has no digit until its extent is reached, so to z8 a cube is its column.
 #[test]
-fn a_3d_key_is_the_2d_one_to_z8() {
+fn key_3d_extends_2d() {
     for p in POINTS {
         for zoom in 0..=8 {
             let [x, y, z] = at(p, zoom);
@@ -58,7 +58,7 @@ fn a_3d_key_is_the_2d_one_to_z8() {
 }
 
 #[test]
-fn a_key_reads_back_as_its_node() {
+fn key_round_trip() {
     for p in POINTS {
         for zoom in 0..=UNIT_ZOOM + 3 {
             let node = ancestor_of(p.map(|v| v << 3), UNIT_ZOOM + 3 - zoom);
@@ -75,7 +75,7 @@ fn a_key_reads_back_as_its_node() {
 
 /// Each zoom's digits are the child slot the hierarchy numbers, so a key is a walk down it.
 #[test]
-fn a_digit_is_the_child_s_slot() {
+fn digit_is_child_slot() {
     for p in POINTS {
         for zoom in 1..=UNIT_ZOOM {
             let [x, y, _] = at(p, zoom);

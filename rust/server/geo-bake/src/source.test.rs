@@ -15,7 +15,7 @@ fn kinds(each: impl Fn(BaseLayer) -> Kind) -> Kinds {
 }
 
 #[test]
-fn a_shard_is_served_only_where_every_kind_holds_it_and_four_siblings_are_their_parent() {
+fn shard_served_when_all_kinds() {
     let all = ["01033000", "01033001", "01033002", "01033003", "01033010"];
     let kinds = kinds(|l| match l {
         BaseLayer::division => kind(&all[..4]),
@@ -36,7 +36,7 @@ fn a_shard_is_served_only_where_every_kind_holds_it_and_four_siblings_are_their_
 }
 
 #[test]
-fn a_key_or_path_no_client_reads_is_never_written() {
+fn unread_keys_unwritten() {
     assert!(tiles(["010330001"]).is_err(), "finer than a shard");
     let shards = || Some(tiles(["01033000"]).expect("a shard"));
     let kinds = kinds(|l| Kind {
@@ -63,7 +63,7 @@ fn a_key_or_path_no_client_reads_is_never_written() {
 }
 
 #[test]
-fn an_override_names_its_shard_and_path_whatever_the_fold() {
+fn override_names_shard() {
     let kinds = kinds(|l| match l {
         BaseLayer::earth => Kind {
             shard: None,
@@ -86,7 +86,7 @@ fn an_override_names_its_shard_and_path_whatever_the_fold() {
 }
 
 #[test]
-fn an_override_on_a_shard_not_every_kind_holds_is_refused_for_it_would_serve_it() {
+fn partial_shard_override_refused() {
     let kinds = kinds(|l| match l {
         BaseLayer::earth => Kind {
             shard: None,

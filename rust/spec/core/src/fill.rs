@@ -540,7 +540,7 @@ mod tests {
     /// columns, slabs, piers and bores over and beside one another, at the
     /// leaves and coarser.
     #[test]
-    fn a_tree_reads_back_what_the_ways_write_at_every_cell() {
+    fn tree_matches_ways() {
         let mut seed = 0x9e37_79b9_u32;
         let mut next = |m: u32| {
             seed ^= seed << 13;

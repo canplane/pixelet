@@ -28,7 +28,7 @@ fn door() -> (Door, Box<[u8]>) {
 }
 
 #[test]
-fn door_a_command_is_not_started_with_room_for_its_signals_but_not_its_reply() {
+fn command_needs_reply_room() {
     let (d, _buf) = door();
     for _ in 0..CQ - MOST_SIGNALS {
         d.post(0, 2, 0, 0);
@@ -47,7 +47,7 @@ fn door_a_command_is_not_started_with_room_for_its_signals_but_not_its_reply() {
 }
 
 #[test]
-fn door_keeps_the_rings_peaks_until_they_are_taken_and_starts_again_from_zero() {
+fn ring_peaks() {
     let (d, _buf) = door();
     // Three commands start before the reserve runs out, so five of eight wait.
     for _ in 0..CQ - (MOST_SIGNALS + 1) - 2 {

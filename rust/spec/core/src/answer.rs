@@ -261,7 +261,7 @@ mod tests {
 
     /// A join holds both boxes; none joins to the other.
     #[test]
-    fn a_join_holds_both_boxes() {
+    fn join_holds_both() {
         let a = box_word([0, 0, 1], [400, 1024, 2]);
         let b = box_word([2, 4, 600], [1024, 6, 700]);
         assert_eq!(box_of(box_join(a, b)), ([0, 0, 1], [1024, 1024, 700]));

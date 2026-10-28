@@ -28,7 +28,7 @@ fn third_person() {
 
 /// The orbit's distance third person, none first.
 #[test]
-fn the_focus_is_the_eye_pushed_the_radius_along_the_look() {
+fn focus_along_look() {
     let _g = serial();
     third_person();
     let mut rng = Rng(0x5eed);
@@ -60,7 +60,7 @@ fn the_focus_is_the_eye_pushed_the_radius_along_the_look() {
 /// A change of person moves the camera about the focus, never the
 /// center; under a tracker it waits until the tracker lets go.
 #[test]
-fn a_change_of_person_leaves_the_focus() {
+fn person_change_keeps_focus() {
     let _g = serial();
     third_person();
     // A canonical point keeps 256ths of a unit: the first change lands within
@@ -130,7 +130,7 @@ fn a_change_of_person_leaves_the_focus() {
 }
 
 #[test]
-fn a_look_tilts_over_its_whole_domain() {
+fn look_tilt_domain() {
     for n in 0..=360 {
         let polar = n as f64 * core::f64::consts::PI / 360.0;
         for azimuth in [0.0, 1.1, -2.7] {
@@ -159,7 +159,7 @@ fn a_look_tilts_over_its_whole_domain() {
 
 /// Spherical coordinates' own degeneracy: the turn is still a rotation there.
 #[test]
-fn at_a_pole_every_heading_looks_the_same_way() {
+fn pole_headings_agree() {
     let pi = core::f64::consts::PI;
     for theta in [0.0, pi] {
         let first = look_dir(theta, 0.0);

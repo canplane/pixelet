@@ -4,7 +4,7 @@ use super::*;
 use crate::asset::{decor_ids, decor_num_id};
 
 #[test]
-fn every_cube_round_trips_through_its_leaf_value_and_has_a_color() {
+fn cube_round_trip() {
     for &cube in ALL_CUBES.iter() {
         assert_eq!(cube_of(cube_id(cube)), Some(cube));
         assert!(cube_rgb(cube).is_some(), "{cube:?}");
@@ -12,7 +12,7 @@ fn every_cube_round_trips_through_its_leaf_value_and_has_a_color() {
 }
 
 #[test]
-fn no_sentinel_air_or_decor_is_a_cube() {
+fn non_cubes() {
     for value in [
         sentinel::void as u32,
         sentinel::unknown as u32,

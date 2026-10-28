@@ -7,7 +7,7 @@ fn runs() -> usize {
 }
 
 #[test]
-fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_last_is_back() {
+fn bodies_share_run() {
     let _g = crate::sys::serial();
     let before = runs();
     let longest = longest(Stream::terrain);
@@ -71,7 +71,7 @@ fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_la
 }
 
 #[test]
-fn every_other_body_is_a_heap_block_of_its_own() {
+fn other_bodies_own_block() {
     let _g = crate::sys::serial();
     let before = runs();
     for stream in [Some(Stream::place), Some(Stream::division), None] {
@@ -85,7 +85,7 @@ fn every_other_body_is_a_heap_block_of_its_own() {
 }
 
 #[test]
-fn no_more_than_body_slots_are_out_and_one_given_back_ends_the_wait() {
+fn slots_cap_and_wake() {
     let _g = crate::sys::serial();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..BODY_SLOTS)
@@ -102,7 +102,7 @@ fn no_more_than_body_slots_are_out_and_one_given_back_ends_the_wait() {
 }
 
 #[test]
-fn the_peak_is_the_most_slots_out_since_it_was_last_taken() {
+fn slot_peak() {
     let _g = crate::sys::serial();
     take_peak();
     let a = take(Some(Stream::terrain), 1).unwrap();
@@ -115,7 +115,7 @@ fn the_peak_is_the_most_slots_out_since_it_was_last_taken() {
 }
 
 #[test]
-fn a_slot_costs_less_than_the_buddy_block_it_replaces() {
+fn slot_cheaper_than_block() {
     assert_eq!(SLOTS, 7, "at today's packets, as sys/io/body.rs says");
     for stream in SLOTTED {
         assert!(
@@ -126,7 +126,7 @@ fn a_slot_costs_less_than_the_buddy_block_it_replaces() {
 }
 
 #[test]
-fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
+fn slot_refusal_waits_slots() {
     use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
@@ -153,7 +153,7 @@ fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
 }
 
 #[test]
-fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
+fn run_refusal_waits_heap() {
     let _g = crate::sys::serial();
     let refused = crate::sys::io::room::Refused::run();
     assert!(!refused.over());
@@ -164,7 +164,7 @@ fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
 }
 
 #[test]
-fn a_slot_given_back_after_a_refusal_asks_a_turn() {
+fn slot_return_asks_turn() {
     let _g = crate::sys::serial();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..BODY_SLOTS)

@@ -15,7 +15,7 @@ fn sys() -> Sys {
 }
 
 #[test]
-fn file_a_descriptor_is_found_by_its_owner_once_its_slot_is_taken_again() {
+fn descriptor_owner() {
     let (mut sys, mut files) = (sys(), Files::<_, 8>::new());
     let a = files.open(&mut sys, 7, "a", "first");
     files.close(&mut sys, a);

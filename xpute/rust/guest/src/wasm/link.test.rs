@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn a_module_imports_its_memory_and_puts_its_stack_first() {
+fn memory_import_stack_first() {
     let plan = LinkPlan {
         stack_bytes: 1 << 20,
         global_base: None,
@@ -16,7 +16,7 @@ fn a_module_imports_its_memory_and_puts_its_stack_first() {
 }
 
 #[test]
-fn a_front_and_a_floor_follow_the_stack() {
+fn front_floor_after_stack() {
     let plan = LinkPlan {
         stack_bytes: 1 << 20,
         global_base: Some(1 << 21),
@@ -30,7 +30,7 @@ fn a_front_and_a_floor_follow_the_stack() {
 
 #[test]
 #[should_panic(expected = "WebAssembly pages")]
-fn a_floor_is_whole_pages() {
+fn floor_whole_pages() {
     args(&LinkPlan {
         stack_bytes: 1 << 20,
         global_base: None,

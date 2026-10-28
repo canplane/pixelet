@@ -6,7 +6,7 @@ use super::*;
 use crate::look::color::linear;
 
 #[test]
-fn the_moon_map_is_as_wide_as_the_sky_reads_it() {
+fn moon_map_width() {
     // download_moon writes the map; the sky binds and reads it at
     // `MOON_TEXELS` a side, so a map cut anew at another size must move it.
     let png = std::fs::read(Path::new(env!("PXL_REPO")).join("asset/content/sky/moon.png"))
@@ -20,7 +20,7 @@ fn the_moon_map_is_as_wide_as_the_sky_reads_it() {
 }
 
 #[test]
-fn the_moon_map_shipped_means_what_the_sky_scales_by() {
+fn moon_map_scale() {
     // download_moon's mean, over the shipped map: its gray in linear light,
     // each texel weighed by the disc's area it covers, which the 8-bit map
     // holds to within a few ten-thousandths of the raw one it was cut from.

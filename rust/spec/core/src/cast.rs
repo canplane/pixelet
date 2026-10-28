@@ -1025,7 +1025,7 @@ mod tests {
     /// A node held from one origin is the same world node held from
     /// another a little off, across a root's edge and X's seam alike.
     #[test]
-    fn a_node_moves_to_another_origin() {
+    fn node_moves_origin() {
         let edges = [0i32, -1, 5, i32::MAX - 3, i32::MIN + 2, 1 << 20];
         for &a in &edges {
             for d in [-700i32, -1, 0, 1, 700] {
@@ -1110,7 +1110,7 @@ mod tests {
     }
 
     #[test]
-    fn a_share_s_box_has_the_share_s_volume() {
+    fn share_box_volume() {
         for k in 1..=EIGHTHS {
             let (lo, hi) = kept_bounds(([0.0; 3], [1.0; 3]), kept_word(0, k));
             let volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2]);
@@ -1128,7 +1128,7 @@ mod tests {
     }
 
     #[test]
-    fn a_ray_stops_where_it_enters_the_box() {
+    fn ray_stops_at_entry() {
         // An eighth kept is a box half the side, a quarter in from each face.
         let met = along(1, 0.5, 0.5);
         assert_eq!(met.ends, Ends::Stop);
@@ -1171,7 +1171,7 @@ mod tests {
     /// A ray passes a split whole where it misses the split's box on any
     /// axis, and enters it where it meets it.
     #[test]
-    fn a_ray_passes_a_split_whose_box_it_misses_on_any_axis() {
+    fn ray_passes_missed_split() {
         use crate::answer::box_word;
         let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
         let o = [steps(5.0), steps(0.4), steps(0.6)];
@@ -1248,7 +1248,7 @@ mod tests {
     }
 
     #[test]
-    fn a_ray_through_the_cell_beside_the_box_passes() {
+    fn ray_beside_box_passes() {
         let met = along(1, 0.1, 0.5);
         assert_eq!(met.ends, Ends::On);
         let met = along(4, 0.5, 0.05);

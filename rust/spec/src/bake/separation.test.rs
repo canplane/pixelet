@@ -24,7 +24,7 @@ fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
 }
 
 #[test]
-fn a_narrow_line_along_a_diagonal_is_one_band() {
+fn diagonal_line_one_band() {
     let d = one(&[[0.0, 0.0], [40.0, 40.0]], &[10, 10], 0.5);
     let mut covered = fnv::FnvHashSet::default();
     d.crossing_grid(NOWHERE, [0.0, 0.0], 1.0, [40, 40], |x, y, _, _| {
@@ -47,7 +47,7 @@ fn first_child(d: &Separation) -> [Option<&Separation>; 16] {
 }
 
 #[test]
-fn a_line_is_kept_up_the_pyramid_by_its_width_alone() {
+fn line_kept_by_width() {
     // Two cells wide: one cell a zoom coarser, kept at its own width.
     let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
     let up = fold_separation(first_child(&wide), 14);
@@ -59,7 +59,7 @@ fn a_line_is_kept_up_the_pyramid_by_its_width_alone() {
 }
 
 #[test]
-fn each_form_is_drawn_from_its_surface() {
+fn form_from_surface() {
     use crate::asset::cube::ground as t;
     let over = |form: Form, top: f32| Crossing {
         low: top,

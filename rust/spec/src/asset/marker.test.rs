@@ -14,7 +14,7 @@ fn markers() -> Vec<EntryAt> {
 /// count is its children's summed and what is shown only splits as the eye
 /// comes nearer; past the marker's own cell it stays there.
 #[test]
-fn a_markers_cell_nests_in_the_one_a_grid_zoom_coarser() {
+fn marker_cell_nests() {
     use crate::space::hierarchy::tree::parent_of;
     for at in markers() {
         for cell in 10..40 {
@@ -33,7 +33,7 @@ fn a_markers_cell_nests_in_the_one_a_grid_zoom_coarser() {
 /// (pxl-spec-core window.rs), so no cell's count is split between two
 /// squares, wherever the square is no finer than the marker.
 #[test]
-fn a_markers_cell_lies_in_its_square() {
+fn marker_cell_in_square() {
     use pxl_spec_core::window::{squares_zoom, SQUARE_SHIFT};
     for at in markers() {
         for cell in MARKER_SHOWN_FROM as Zoom..=at.zoom() + SQUARE_SHIFT {
