@@ -31,7 +31,6 @@ fn main() {
         if name == "constant.wgsl" {
             shipped += &words();
             shipped += &params();
-            shipped += &spec_params();
         }
         shipped += &accessors(&text);
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
@@ -327,19 +326,9 @@ fn params() -> String {
     out
 }
 
-/// The pxl-spec-core settings (its param.rs) a hand-written shader names,
-/// each by its path as `params` names render's (`night::FALL` is
-/// `NIGHT_FALL`), so one shared with render's would not build.
-fn spec_params() -> String {
-    let [from, to] = pxl_spec_core::param::night::FALL.map(|v| v as f32);
-    let spread = pxl_spec_core::param::sun::SPREAD;
-    format!(
-        "const NIGHT_FALL: vec2f = vec2f({from:?}, {to:?});\nconst SUN_SPREAD: f32 = {spread:?};\n"
-    )
-}
-
 /// What the host lays out and every shader reads (frame/shader/word.rs), as
-/// WGSL: a uniform's floats as its vec4s.
+/// WGSL: a uniform's floats as its vec4s; and the pxl-spec-core values every
+/// shader may name, the world's height and the sun's taps apart.
 fn words() -> String {
     use word::*;
     let vec4s = |name: &str, floats: usize| {
@@ -376,6 +365,10 @@ fn words() -> String {
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-spec-core).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),
+        // The receiver's taps apart in the sun's map, which the map's read
+        // pad is sized by (pxl-spec-core param.rs `sun::SPREAD`, sun.rs
+        // `READ_PAD`).
+        format!("const SUN_SPREAD: f32 = {:?};\n", pxl_spec_core::param::sun::SPREAD),
     ]
     .concat()
 }
