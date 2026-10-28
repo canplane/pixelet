@@ -3,9 +3,10 @@
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
 //! pointer casts in offset crates, each rounding half to even in every
 //! language, no CommonJS file, each generated shader made from the sources the
-//! tree holds now, and the layers' order, where nothing names what is above
-//! it. A rule Rust alone keeps is clippy's (rust/clippy.toml); how the tree is
-//! written is the convention skill's.
+//! tree holds now, the layers' order, where nothing names what is above it,
+//! and the screen's pixels read only at the screen. A rule Rust alone keeps
+//! is clippy's (rust/clippy.toml); how the tree is written is the convention
+//! skill's.
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -107,6 +108,72 @@ const SPEC_CORE_ORDER: [(&str, u8); 25] = [
     ("decor", 3),
     ("face", 3),
 ];
+
+/// What the world shows is decided in angles, the camera grid's cell; a
+/// pixel enters only at the screen (ARCHITECTURE.md, "The camera grid").
+/// The kernel reads the view's CSS pixels through one module, the screen
+/// (domain/view/frame/screen.rs), and only these name it: the view's own
+/// frame, the camera's gestures, the markers' layout and selection, the
+/// stage's viewport words and the shell. A path is a file, or a folder by
+/// its trailing slash.
+const SCREEN_USERS: [&str; 7] = [
+    "rust/client/kernel/src/domain/view/frame/",
+    "rust/client/kernel/src/domain/control/camera/controller.rs",
+    "rust/client/kernel/src/domain/control/camera/input.rs",
+    "rust/client/kernel/src/domain/scene/marker/arrangement.rs",
+    "rust/client/kernel/src/domain/scene/marker/selection.rs",
+    "rust/client/kernel/src/domain/scene/stage.rs",
+    "rust/client/kernel/src/shell.rs",
+];
+
+/// The lines of `text`, a kernel source, comments left out, that reach the
+/// screen: a path through it (`screen::`), a group naming it (`frame::{…
+/// screen …}`, over as many lines as it runs), a glob or an alias of the
+/// frame that would reach it unnamed, or a re-export of it, which would lend
+/// it to a module the list does not name.
+fn screen_reached(text: &str) -> Vec<usize> {
+    let code: String = text
+        .lines()
+        .map(|l| l.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let reach = Regex::new(
+        r"\bscreen::|\bframe::\{[^}]*\bscreen\b|\bframe::\*|\bframe\s+as\b|\bpub\s+use\b[^;]*\bscreen\b",
+    )
+    .expect("the screen's pattern");
+    let mut lines: Vec<usize> = reach
+        .find_iter(&code)
+        .map(|m| code[..m.start()].matches('\n').count() + 1)
+        .collect();
+    lines.dedup();
+    lines
+}
+
+/// On the GPU the screen's size is the eye's rays' image's (pxl-shader
+/// cast.rs `Rays`), bound only to the passes that draw a pixel's ray or read
+/// the rays drawn: the cast and its walks again, and the sun's receivers. The
+/// beam, the cells, the samples, decor and the sun's map read the eye's
+/// angles alone.
+const SHADER: &str = "rust/client/shader/src/";
+const RAYS_ENTRIES: [&str; 4] = ["cast_cs", "miss_cs", "miss_list_cs", "sun_mark_cs"];
+
+/// Every entry point in `text`, a shader's source, whose parameters bind
+/// the rays' image, by its name or a path to it, and is not one of
+/// `RAYS_ENTRIES`, each with its line: the parameters from its
+/// `entry_point_name` to the body's opening brace.
+fn rays_bound(text: &str) -> Vec<(usize, String)> {
+    let entry = Regex::new(r#"entry_point_name\s*=\s*"(\w+)""#).expect("an entry's pattern");
+    let rays = Regex::new(r"&\s*(?:\w+::)*Rays\b").expect("the rays' pattern");
+    let mut out = Vec::new();
+    for c in entry.captures_iter(text) {
+        let (at, name) = (c.get(0).map_or(0, |m| m.start()), &c[1]);
+        let end = text[at..].find(") {").map_or(text.len(), |k| at + k);
+        if rays.is_match(&text[at..end]) && !RAYS_ENTRIES.contains(&name) {
+            out.push((text[..at].matches('\n').count() + 1, name.to_string()));
+        }
+    }
+    out
+}
 
 /// xpute's words are host, guest and their contract (AGENTS.md): pixelet's
 /// appear nowhere under it.
@@ -215,14 +282,57 @@ fn ordered(
     problems
 }
 
+/// The tree's files, a path a line from `root`: git's, tracked and not
+/// ignored, where `root` is a checkout's own top; else, as in an export
+/// laid out under a checkout's ignored target (the collaboration skill),
+/// every file under it but the builds' and the packages', which git there
+/// would list none of. Outside any checkout, an error.
+fn listed(root: &std::path::Path) -> Result<String, String> {
+    let top = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("git rev-parse: {e}"))?;
+    if !top.status.success() {
+        return Err("git rev-parse: not in a checkout".into());
+    }
+    let top = String::from_utf8(top.stdout).map_err(|e| format!("git rev-parse: {e}"))?;
+    let own = std::path::Path::new(top.trim())
+        .canonicalize()
+        .is_ok_and(|t| root.canonicalize().is_ok_and(|r| r == t));
+    if own {
+        let out = Command::new("git")
+            .args(["ls-files", "-co", "--exclude-standard"])
+            .current_dir(root)
+            .output()
+            .map_err(|e| format!("git ls-files: {e}"))?;
+        return String::from_utf8(out.stdout).map_err(|e| format!("git ls-files: {e}"));
+    }
+    fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut String) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for e in entries.flatten() {
+            let p = e.path();
+            let name = e.file_name();
+            if ["target", "node_modules", ".git"].iter().any(|n| name == *n) {
+                continue;
+            }
+            // A link is not followed, as git lists a link and not what it names.
+            if e.file_type().is_ok_and(|t| t.is_dir()) {
+                walk(&p, root, out);
+            } else if let Ok(rel) = p.strip_prefix(root) {
+                out.push_str(&rel.to_string_lossy());
+                out.push('\n');
+            }
+        }
+    }
+    let mut out = String::new();
+    walk(root, root, &mut out);
+    Ok(out)
+}
+
 fn run() -> Result<Vec<String>, String> {
     let root = root();
-    let out = Command::new("git")
-        .args(["ls-files", "-co", "--exclude-standard"])
-        .current_dir(&root)
-        .output()
-        .map_err(|e| format!("git ls-files: {e}"))?;
-    let listed = String::from_utf8(out.stdout).map_err(|e| format!("git ls-files: {e}"))?;
+    let listed = listed(&root)?;
     // The tree as it stands: a file deleted and not yet committed is gone, so
     // a removal is checked before it is committed.
     let files: Vec<&str> = listed
@@ -279,6 +389,22 @@ fn run() -> Result<Vec<String>, String> {
 
     problems.extend(ordered(&files, &read, KERNEL, &KERNEL_ORDER, &KERNEL_HEADS, &KERNEL_BESIDE));
     problems.extend(ordered(&files, &read, SPEC_CORE, &SPEC_CORE_ORDER, &[], &[]));
+    for f in files.iter().filter(|f| {
+        f.starts_with(KERNEL) && f.ends_with(".rs") && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
+    }) {
+        for line in screen_reached(&read(f).unwrap_or_default()) {
+            problems.push(format!(
+                "{f}:{line}: reaches the screen's pixels where the world is decided in angles; only SCREEN_USERS may (check_rules.rs)"
+            ));
+        }
+    }
+    for f in files.iter().filter(|f| f.starts_with(SHADER) && f.ends_with(".rs")) {
+        for (line, name) in rays_bound(&read(f).unwrap_or_default()) {
+            problems.push(format!(
+                "{f}:{line}: `{name}` binds the rays' image, the screen's size, past the passes that draw a pixel; only RAYS_ENTRIES may (check_rules.rs)"
+            ));
+        }
+    }
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
@@ -303,7 +429,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders and the layers' order hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order and the screen's pixels hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -314,5 +440,48 @@ fn main() -> ExitCode {
             eprintln!("[check-rules] {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_screen_is_reached_however_it_is_named() {
+        for (text, at) in [
+            ("use crate::domain::view::frame::screen::size;", vec![1]),
+            ("use crate::domain::view::frame::{\n    pose::view,\n    screen::units_per_px_at,\n};", vec![1]),
+            ("use crate::domain::view::frame::{pose, screen};", vec![1]),
+            ("use crate::domain::view::frame::*;\nfn f() { size(); }", vec![1]),
+            ("use crate::domain::view::frame as f;", vec![1]),
+            ("pub use crate::domain::view::frame::screen::size as px;", vec![1]),
+            ("let w = f::screen::size()[0];", vec![1]),
+        ] {
+            assert_eq!(screen_reached(text), at, "{text}");
+        }
+        for text in [
+            "use crate::domain::view::frame::pose::view;",
+            "// a comment naming frame::screen::size",
+            "/// The screen as the eye sees it.",
+            "let screen_drawn = 1;",
+        ] {
+            assert!(screen_reached(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn only_the_listed_entries_bind_the_rays() {
+        let entry = |name: &str, param: &str| {
+            format!("#[spirv(compute(threads(8, 8, 1), entry_point_name = \"{name}\"))]\npub fn {name}(\n    {param}\n) {{\n    let x = 1;\n}}\n")
+        };
+        let rays = "#[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,";
+        let pathed = "#[spirv(descriptor_set = 0, binding = 3)] rays: &crate::cast::Rays,";
+        assert!(rays_bound(&entry("cast_cs", rays)).is_empty());
+        assert_eq!(rays_bound(&entry("cell_cs", rays)).len(), 1);
+        assert_eq!(rays_bound(&entry("cell_cs", pathed)).len(), 1);
+        // A helper after an entry, or its body, is not the entry's binding.
+        let after = entry("cell_cs", "id: UVec3,") + "fn written(rays: &Rays) {}\n";
+        assert!(rays_bound(&after).is_empty());
     }
 }

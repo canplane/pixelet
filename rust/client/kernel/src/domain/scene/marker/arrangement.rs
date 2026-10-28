@@ -18,7 +18,7 @@ use crate::domain::query::{at_zoom, Ray, World};
 use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
-use crate::domain::view::frame::pose::ndc_to_px;
+use crate::domain::view::frame::screen::{ndc_to_px, units_per_px_at};
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::mem::section;
 use crate::sys::sched::tick::TickContext;
@@ -234,7 +234,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         let far = v3::len(&core::array::from_fn(|k| {
             (b.min[k] - o.eye[k]).abs().max((b.max[k] - o.eye[k]).abs())
         }));
-        let pad = reach * crate::domain::view::frame::pose::units_per_px_at(far);
+        let pad = reach * units_per_px_at(far);
         if frame.sees_box(b.min.map(|v| v - pad), b.max.map(|v| v + pad)) {
             now.drawn.push(square);
         }
