@@ -267,7 +267,7 @@ kernel/src/
 
   > Checked (2026-10-25): it does not resolve by moving the files. The shaders
   > take the decor rows as constants: `scatter.rs` loops over `DECORS` and sizes
-  > `GROUPS`, `drawn::REGIONS`, `PARAM_WORDS` and `GROWS_WORDS` by them, all
+  > `GROUPS`, `drawn::REGIONS`, `DRAWING_WORDS` and `GROWS_WORDS` by them, all
   > compiled into the checked-in WGSL. Reading the decors at boot means the
   > scatter reads them from a buffer instead.
 - **Bounds at boot.** `.fixed`'s block slots and render's draw groups are sized

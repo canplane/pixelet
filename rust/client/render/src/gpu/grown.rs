@@ -34,8 +34,8 @@ pub struct DecorFrame<'a> {
     /// Per kind, the window zooms it is grown at, a bit each over the first
     /// window's (`decor_cs`).
     pub shown: &'a [u32],
-    /// pxl-spec-core `scatter::drawn`'s frame words, `PARAM_WORDS` of them.
-    pub params: &'a [u32],
+    /// pxl-spec-core `scatter::drawn`'s drawing words, `DRAWING_WORDS` of them.
+    pub drawing: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
     /// variant and turn, then its box's min corner in leaf cells, its base
     /// sunk under it by none, as it stands where it is placed; read where
@@ -83,7 +83,7 @@ pub struct Grown {
     /// (`scatter::GROWS_AT`).
     grows: u32,
     shown: u32,
-    params: u32,
+    drawing: u32,
     rows: u32,
     meshes: u32,
     regions: u32,
@@ -127,7 +127,7 @@ pub struct Grown {
     /// next frame drawn with decor grows every slot.
     stale: bool,
     /// What the count, args and place passes read past the records, as they
-    /// last ran: the eye's place and zooms, the frame's words, the meshes,
+    /// last ran: the eye's place and zooms, the drawing words, the meshes,
     /// the anchor and the records' room; and whether this frame runs them,
     /// which it does where that moved or the records did.
     counted: Read,
@@ -172,7 +172,7 @@ impl Grown {
                 storage | buffer_usage::INDIRECT,
             ),
             shown: buffer(word_bytes(DECORS.len()), storage),
-            params: buffer(word_bytes(drawn::PARAM_WORDS as usize), storage),
+            drawing: buffer(word_bytes(drawn::DRAWING_WORDS as usize), storage),
             rows,
             meshes: buffer(word_bytes(GROUPS as usize), storage),
             regions: buffer(word_bytes(2 * drawn::REGIONS as usize), storage),
@@ -354,7 +354,7 @@ impl Grown {
             grows.eye[eye::RANGE + 1],
             self.room,
         ]);
-        c.read(f.params);
+        c.read(f.drawing);
         c.read(meshes);
         c.read(&f.translation);
         c.mark(self.marking || placed_moved || regroup);
@@ -362,7 +362,7 @@ impl Grown {
         if !self.counting {
             return;
         }
-        g.write_buffer(self.params, 0, bytes(f.params));
+        g.write_buffer(self.drawing, 0, bytes(f.drawing));
         g.write_buffer(self.meshes, 0, bytes(meshes));
         g.write_buffer(self.regions, 0, bytes(&[0u32; 2 * drawn::REGIONS as usize]));
         // Each region's uniform, its index the lanes' base until the args
@@ -427,7 +427,7 @@ impl Grown {
                 &self.count,
                 &[
                     eye,
-                    self.params,
+                    self.drawing,
                     self.rows,
                     self.records,
                     self.regions,
@@ -441,7 +441,7 @@ impl Grown {
             group(
                 &self.place,
                 &[
-                    self.params,
+                    self.drawing,
                     self.rows,
                     self.records,
                     self.regions,
@@ -549,7 +549,7 @@ impl Grown {
     /// The decor placed, while decor is on (`Instances`).
     pub fn placed(&self) -> Option<Instances> {
         (self.on && self.instances != 0).then_some(Instances {
-            params: self.params,
+            drawing: self.drawing,
             regions: self.regions,
             instances: self.instances,
             room: self.room,
@@ -568,11 +568,11 @@ impl Grown {
 }
 
 /// The decor placed as a reader beside the draws reads it (pxl-shader
-/// decor.rs `Instances`, read by sun.rs `sun_mark_drawn_cs`): its frame's
+/// decor.rs `Instances`, read by sun.rs `sun_mark_drawn_cs`): its drawing
 /// words, its regions and its instances, and the slots they hold.
 #[derive(Clone, Copy)]
 pub struct Instances {
-    pub params: u32,
+    pub drawing: u32,
     pub regions: u32,
     pub instances: u32,
     pub room: u32,

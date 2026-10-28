@@ -357,7 +357,7 @@ pub fn decor_count_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] params: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] drawing: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] grown: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] regions: &mut [u32],
@@ -373,7 +373,7 @@ pub fn decor_count_cs(
         while n < count {
             count_one(
                 eye,
-                params,
+                drawing,
                 rows,
                 grown,
                 regions,
@@ -388,7 +388,7 @@ pub fn decor_count_cs(
 /// `decor_count_cs` for the record at word `i`.
 fn count_one(
     eye: &Eye,
-    params: &[u32],
+    drawing: &[u32],
     rows: &[Decor],
     grown: &mut [u32],
     regions: &mut [u32],
@@ -410,17 +410,17 @@ fn count_one(
     let here = cell == scatter::PLACED_AT || scatter::drawn_at(detail, d2, cell);
     let group = scatter::first_group(rows, decor) + variant;
     let hide = drawn::HIDE as usize;
-    let hidden = params[hide + 3] != 0
-        && corner[0] == params[hide] as i32
-        && corner[1] == params[hide + 1] as i32
-        && corner[2] == params[hide + 2] as i32;
+    let hidden = drawing[hide + 3] != 0
+        && corner[0] == drawing[hide] as i32
+        && corner[1] == drawing[hide + 1] as i32
+        && corner[2] == drawing[hide + 2] as i32;
     let d = spirv_std::num_traits::Float::sqrt(d2);
     let d = if d > 1e-3 { d } else { 1e-3 };
-    let across = f32::from_bits(params[(drawn::EXTENTS + group) as usize]) / d;
+    let across = f32::from_bits(drawing[(drawn::EXTENTS + group) as usize]) / d;
     let tier = drawn::tier(
         across,
-        f32::from_bits(params[drawn::MODEL_ANGLE as usize]),
-        f32::from_bits(params[drawn::SPRITE_ANGLE as usize]),
+        f32::from_bits(drawing[drawn::MODEL_ANGLE as usize]),
+        f32::from_bits(drawing[drawn::SPRITE_ANGLE as usize]),
     );
     let region = if hidden || !here || tier == drawn::GONE {
         drawn::NONE
@@ -484,7 +484,7 @@ pub fn decor_args_cs(
 pub fn decor_place_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] params: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] drawing: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grown: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] regions: &mut [u32],
@@ -500,7 +500,7 @@ pub fn decor_place_cs(
         let mut n = 0;
         while n < count {
             place_one(
-                params,
+                drawing,
                 rows,
                 grown,
                 regions,
@@ -515,7 +515,7 @@ pub fn decor_place_cs(
 
 /// `decor_place_cs` for the record at word `i`.
 fn place_one(
-    params: &[u32],
+    drawing: &[u32],
     rows: &[Decor],
     grown: &[u32],
     regions: &mut [u32],
@@ -545,11 +545,11 @@ fn place_one(
         return;
     }
     // [rust-gpu] Each by a call, not a closure over a binding's slice.
-    let x = from_anchor(params, grown, i, 0) + across as f32 / 2.0;
-    let y = from_anchor(params, grown, i, 1) + deep as f32 / 2.0;
+    let x = from_anchor(drawing, grown, i, 0) + across as f32 / 2.0;
+    let y = from_anchor(drawing, grown, i, 1) + deep as f32 / 2.0;
     // Its base as drawn: under its box's corner by its footing's kept top.
     let sink = grown[i + 4] as f32 / (1 << pxl_spec_core::FRAC_W) as f32;
-    let z = from_anchor(params, grown, i, 2) - sink;
+    let z = from_anchor(drawing, grown, i, 2) - sink;
     let (room, slot) = (room as usize, slot as usize);
     instances[slot] = x.to_bits();
     instances[room + slot] = y.to_bits();
@@ -561,10 +561,10 @@ fn place_one(
 
 /// The corner of the record at word `i` on `axis` about the anchor, in
 /// unit cells (`place_one`).
-fn from_anchor(params: &[u32], grown: &[u32], i: usize, axis: usize) -> f32 {
+fn from_anchor(drawing: &[u32], grown: &[u32], i: usize, axis: usize) -> f32 {
     let anchor = drawn::ANCHOR as usize + axis;
     about(
-        (grown[i + 1 + axis] as i32).wrapping_sub(params[anchor] as i32),
+        (grown[i + 1 + axis] as i32).wrapping_sub(drawing[anchor] as i32),
         axis as u32,
     ) as f32
 }
@@ -587,11 +587,11 @@ const _: () = assert!(
 );
 
 /// The decor placed this frame as its draws read it (`decor_place_cs`):
-/// its frame's words, its regions and its instances. What a reader beside
+/// its drawing words, its regions and its instances. What a reader beside
 /// the draws asks of it, how many and where each stands, decor answers
 /// here, so none names its lanes (pxl-shader sun.rs `sun_mark_drawn_cs`).
 pub(crate) struct Instances<'a> {
-    pub(crate) params: &'a [u32],
+    pub(crate) drawing: &'a [u32],
     pub(crate) regions: &'a [u32],
     pub(crate) instances: &'a [u32],
 }
@@ -622,7 +622,7 @@ impl Instances<'_> {
     /// The anchor on `axis` from a Q3 `o`, in units.
     fn anchored(&self, axis: u32, o: i32) -> f32 {
         let w = pxl_spec_core::FRAC_W;
-        let a = at(self.params, drawn::ANCHOR + axis) as i32;
+        let a = at(self.drawing, drawn::ANCHOR + axis) as i32;
         about(a.wrapping_sub(o >> w), axis) as f32 - (o & ((1 << w) - 1)) as f32 / (1 << w) as f32
     }
 

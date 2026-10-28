@@ -68,26 +68,26 @@ fn shown() -> [u32; DECORS.len()] {
 /// The frame's hand-over, kept so a settled frame asks the heap for nothing,
 /// and made again only where what it is made of changed.
 struct Handed {
-    /// Made with the params, from the variants' extents.
+    /// Made with the drawing words, from the variants' extents.
     shown: [u32; DECORS.len()],
-    params: [u32; drawn::PARAM_WORDS as usize],
+    drawing: [u32; drawn::DRAWING_WORDS as usize],
     placed: Vec<[u32; scatter::GROWN_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`edited`, `frame`).
     edits: [[i32; 4]; overwrite::EDITS as usize],
     edited: usize,
     translation: [f32; 3],
-    /// What the params were last made of, by value.
+    /// What the drawing words were last made of, by value.
     seen: Option<Seen>,
     /// The cell the placed decor was last walked about, and what it left out.
     walked: Option<Walked>,
 }
 
-/// What the params are made of: the unit the eye stands in (its anchor), the
-/// ground's decor the eraser leaves out, and
-/// whether the catalog that measures the variants is read. A new input goes
-/// here or the params never see it change. The eye within its unit moves
-/// only the translation.
+/// What the drawing words are made of: the unit the eye stands in (its
+/// anchor), the ground's decor the eraser leaves out, and whether the
+/// catalog that measures the variants is read. A new input goes here or the
+/// drawing words never see it change. The eye within its unit moves only
+/// the translation.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     anchor: V3,
@@ -112,7 +112,7 @@ static HANDED: Global<Handed> = Global::new();
 fn handed() -> &'static mut Handed {
     HANDED.get(|| Handed {
         shown: [0; DECORS.len()],
-        params: [0; drawn::PARAM_WORDS as usize],
+        drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
         edits: [[0; 4]; overwrite::EDITS as usize],
         edited: 0,
@@ -142,7 +142,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     };
     if h.seen != Some(seen) {
         h.seen = Some(seen);
-        params(&mut h.params, seen);
+        drawing(&mut h.drawing, seen);
         h.shown = shown();
     }
     // Out to the reach from anywhere in the anchor's unit: every unit of the
@@ -212,8 +212,8 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
         .any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
 }
 
-/// The params of a hand-over `seen` makes.
-fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
+/// The drawing words of a hand-over `seen` makes.
+fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Seen) {
     let anchor = seen.anchor;
     p.fill(0);
     p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
@@ -277,7 +277,7 @@ pub fn frame() -> DecorFrame<'static> {
         } else {
             &[0; DECORS.len()]
         },
-        params: &h.params,
+        drawing: &h.drawing,
         placed: &h.placed,
         translation: h.translation,
         edits: &h.edits[..edited],
