@@ -292,6 +292,15 @@ pub const EARTH_TILE_BITS: u32 = 4;
 /// The Moon's near side as download_moon cuts it, a side in texels; the
 /// disc's radius is half of it.
 pub const MOON_TEXELS: u32 = 512;
+/// The Moon's angular radius: its equatorial radius, 1738.1 km, over its
+/// mean distance, 384,400 km.
+pub const MOON_ANGULAR_RADIUS: f32 = 1738.1 / 384_400.0;
+/// The Moon's geometric albedo.
+pub const MOON_ALBEDO: f32 = 0.12;
+/// The map's mean reflectance over the disc, as download_moon prints it from
+/// the raw map (word.test.rs holds the shipped map to it): the map is scaled
+/// by `MOON_ALBEDO` over it.
+pub const MOON_MAP_MEAN: f32 = 0.2459;
 
 /// The air's froxels a side and deep (gpu/atmosphere.rs `froxel`):
 /// Hillaire 2020's aerial-perspective volume, 32³, as Unreal's

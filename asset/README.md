@@ -74,8 +74,8 @@ make download-moon
 
 It fetches the CGI Moon Kit's 1K color map into `raw/sky/moon/`, cuts the near
 side, takes it to gray reflectance and writes `content/sky/moon.png`, and prints
-the face's mean, which pxl-render `param.rs` `sky::moon::MAP_MEAN` has to
-equal. Run the ingest afterward.
+the face's mean, which pxl-render frame/shader/word.rs `MOON_MAP_MEAN` has
+to equal. Run the ingest afterward.
 
 The Earth's picture is not here: it is the earth layer's, its source in
 `infra/earth/` and both its forms, the tiles and the picture whole, in the

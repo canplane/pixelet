@@ -3,7 +3,7 @@
 //! The settings that shape how the world is drawn and lit, each one literal
 //! with why it is what it is: a subject a module, read by the code beside
 //! it and handed by build.rs to every render shader (constant.wgsl's tail),
-//! each named by its path (`sky::moon::ALBEDO` is `SKY_MOON_ALBEDO`), so no
+//! each named by its path (`sky::sun::LIMB` is `SKY_SUN_LIMB`), so no
 //! shader holds a value of its own that its source could leave behind.
 
 /// A setting's value as build.rs writes it into WGSL; an `F64` is the
@@ -309,12 +309,6 @@ pub mod sky {
 
     pub mod moon {
         params! {
-            ANGULAR_RADIUS: f32 = 0.004522;
-            ALBEDO: f32 = 0.12;
-            /// The map's mean over the disc (printed by download_moon, and
-            /// param.test.rs holds the shipped map to it) scales it to
-            /// `ALBEDO`.
-            MAP_MEAN: f32 = 0.2459;
             /// The eye adapts to the Moon, so its seas show where the sky's
             /// exposure would drown the disc white.
             FACE_SHOWN: f32 = 0.6;

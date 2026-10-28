@@ -3,8 +3,8 @@
 //! The moon's face for sky.wgsl: NASA SVS's CGI Moon Kit map cut to the near
 //! side, as linear-light luminance in 8-bit sRGB, to `asset/content/sky/moon.png`,
 //! the map kept in `asset/raw/sky/moon/`.
-//! The printed mean reflectance must equal pxl-render `param.rs`
-//! `sky::moon::MAP_MEAN`.
+//! The printed mean reflectance must equal pxl-render frame/shader/word.rs
+//! `MOON_MAP_MEAN`.
 //! Credit: NASA's Scientific Visualization Studio.
 //!
 //!   make download-moon
@@ -63,7 +63,7 @@ fn run() -> Result<(), String> {
     face.save_with_format(&out, ImageFormat::Png)
         .map_err(|e| e.to_string())?;
     println!(
-        "[moon] {side}x{h} -> {}; the face's mean reflectance, sky::moon::MAP_MEAN: {:.4}",
+        "[moon] {side}x{h} -> {}; the face's mean reflectance, MOON_MAP_MEAN: {:.4}",
         out.display(),
         sum / weight
     );
