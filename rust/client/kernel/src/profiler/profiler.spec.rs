@@ -45,7 +45,9 @@ impl Wake {
 
 pub mod LIMITS {
     pub const REASONS: u32 = 4;
+    pub const REASON_WORDS: u32 = 3;
     pub const STEP_SLOTS: u32 = 32;
+    pub const WINDOW_MS: u32 = 60000;
     pub const ZOOMS: u32 = 24;
 }
 

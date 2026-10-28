@@ -15,6 +15,7 @@ use pxl_render::gpu::span_spec::FRAME_KINDS;
 use xpute_guest::sched::tick::PHASES;
 
 const REASONS: usize = LIMITS::REASONS as usize;
+const REASON_WORDS: usize = LIMITS::REASON_WORDS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
 const CATEGORIES: usize = STREAM_NAMES;
@@ -102,7 +103,7 @@ pub struct TaskSummary {
     pub lat_p95: f64,
     pub reason_count: f64,
     /// (reason, status, count) each, commonest first.
-    pub reasons: [[f64; 3]; REASONS],
+    pub reasons: [[f64; REASON_WORDS]; REASONS],
     pub phase_n: f64,
     /// NaN for a phase no run in the window reported.
     pub phase_mean: [f64; TASK_PHASES],
