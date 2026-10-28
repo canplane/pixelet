@@ -54,4 +54,4 @@ in five; UIKit's switch in the same place took every one
 view never takes a touch from a UIKit control; it has no such promise for a
 SwiftUI one.
 
-The convention skill holds `@expo/ui` to `panel.ios.tsx`.
+`@expo/ui` is imported by `panel.ios.tsx` alone.
