@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 
 use pxl_tool::asset::table::{Pack, Row};
 use pxl_tool::asset::{glb, pack, symbol, table};
-use pxl_tool::fmt::formatted;
+use pxl_tool::fmt::format_text;
 use pxl_tool::root;
 
 /// Mirrored by the Worker's `KEY_RE` and the shell's `asset_url`.
@@ -54,7 +54,7 @@ fn named(rel: &str, bytes: &[u8]) -> String {
 }
 
 fn write_formatted(path: &Path, text: &str) -> Result<(), String> {
-    let text = formatted(&path.to_string_lossy(), text.to_string())?;
+    let text = format_text(&path.to_string_lossy(), text.to_string())?;
     std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 

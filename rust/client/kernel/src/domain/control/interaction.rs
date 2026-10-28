@@ -177,7 +177,7 @@ impl Picked {
 /// What the hover picks at `ndc_x`, `ndc_y`,
 /// from the pose as the camera holds it now, which a door event or a
 /// controller may have moved since the turn composed the view.
-pub(crate) fn picked(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
+pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
     let pose = crate::domain::control::camera::controller::pose()?;
     let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
@@ -194,7 +194,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
     let hover = &mut interaction().hover;
-    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
+    let Some(Picked { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
         *hover = Hover::default();
         return;
     };

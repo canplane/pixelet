@@ -168,7 +168,7 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
 }
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
-fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
+fn on_ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));
     settle(key, ended, None);
     what
@@ -310,7 +310,7 @@ async fn arrival(kind: LoadKind, load: Load, buf: Vec<u8>) {
 /// The transport failed, not the asset: it is wanted again, and the request scheduler
 /// decides the wait.
 pub fn on_load_rejected(key: u64, how: Ended) {
-    let Some((kind, load)) = ended(key, how) else {
+    let Some((kind, load)) = on_ended(key, how) else {
         return;
     };
     *loader().at(kind, load) = None;

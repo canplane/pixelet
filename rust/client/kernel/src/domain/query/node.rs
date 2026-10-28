@@ -145,7 +145,7 @@ impl World<'_> {
     /// coarser than asked and nothing under it filling, air its size, which
     /// its zoom against `asked` tells. The four looks a cell is drawn by are the GPU's to
     /// draw. `lines` are the ground's lines the walk asking it read, which
-    /// its own steps from (`line_walked`).
+    /// its own steps from (`walk_line`).
     pub(super) fn node(
         &self,
         at: &mut At,
@@ -240,7 +240,7 @@ impl ground::Held for Reading<'_, '_> {
         let line = self
             .world
             .terrain
-            .line_walked(self.lines, (zoom, [c[0], c[1]]), cells[1]);
+            .walk_line(self.lines, (zoom, [c[0], c[1]]), cells[1]);
         match self.take(
             self.world
                 .terrain

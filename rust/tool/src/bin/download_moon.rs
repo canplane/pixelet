@@ -38,7 +38,7 @@ fn to_srgb(v: f64) -> u8 {
 }
 
 fn run() -> Result<(), String> {
-    let body = pxl_tool::fetch::kept(SOURCE, &root().join("asset/raw/sky/moon"))?;
+    let body = pxl_tool::fetch::fetch_kept(SOURCE, &root().join("asset/raw/sky/moon"))?;
     let map = image::load_from_memory_with_format(&body, ImageFormat::Jpeg)
         .map_err(|e| e.to_string())?
         .to_rgb8();

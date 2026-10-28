@@ -6,7 +6,7 @@
 //!
 //! The reading is ours, not the codegen's, for the one meaning SPIR-V has no
 //! word for: WGSL's `workgroupUniformLoad`. The shader crate says it as the
-//! barriers about a load of the workgroup's memory (`workgroup_uniform_load`),
+//! barriers about a load of the workgroup's memory (way.rs `load_shared`),
 //! and `uniform_loads` reads exactly that triple back into the statement, so
 //! WebGPU sees a value every lane shares where the shader means one.
 

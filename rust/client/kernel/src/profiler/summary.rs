@@ -249,7 +249,7 @@ fn side(out: &mut [f64]) {
     });
     let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the tool held strikes there, as the hover picks it.
-    let picked = pointed.and_then(|[x, y]| interaction::picked(x, y));
+    let picked = pointed.and_then(|[x, y]| interaction::pick_at(x, y));
     let struck = picked.as_ref().map_or(f64::NAN, |p| match p.hit.struck {
         crate::domain::query::Struck::Ground => 0.0,
         crate::domain::query::Struck::Object(_) => 1.0,

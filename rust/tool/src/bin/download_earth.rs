@@ -25,7 +25,7 @@ fn run() -> Result<(), String> {
         .collect();
     let raw = root().join("infra/earth/raw");
     for url in &urls {
-        pxl_tool::fetch::kept(url, &raw)?;
+        pxl_tool::fetch::fetch_kept(url, &raw)?;
     }
     println!("[earth] {} files in {}", urls.len(), raw.display());
     Ok(())

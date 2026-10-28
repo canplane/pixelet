@@ -7,7 +7,7 @@ use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
 use crate::spec::{file, pascal, snake, ts_doc};
 
 /// Only a list of u32 is packed.
-fn packed(f: &Field) -> Result<(), String> {
+fn check_packed(f: &Field) -> Result<(), String> {
     if f.ty == "u32" {
         Ok(())
     } else {
@@ -38,7 +38,7 @@ fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
 fn ts_write(spec: &Spec, f: &Field, value: &str) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list && kind == Kind::Number {
-        packed(f)?;
+        check_packed(f)?;
         return Ok(format!(
             ".array(SequenceType.U32_ARRAY, Uint32Array.from({value}))"
         ));
@@ -74,7 +74,7 @@ fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
                 f.ty, f.name
             ));
         }
-        packed(f)?;
+        check_packed(f)?;
         return Ok(format!("Array.from(b.at({i}).get<U32Array>())"));
     }
     if kind == Kind::Record {

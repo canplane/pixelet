@@ -18,7 +18,7 @@ use std::thread;
 use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
 
-use crate::fmt::formatted;
+use crate::fmt::format_text;
 use crate::root;
 
 pub struct Output {
@@ -61,7 +61,7 @@ pub fn generate(write: bool) -> Result<(), String> {
             .into_iter()
             .map(|o| {
                 scope.spawn(move || {
-                    formatted(&o.path, o.text).map(|text| Output { path: o.path, text })
+                    format_text(&o.path, o.text).map(|text| Output { path: o.path, text })
                 })
             })
             .collect();

@@ -17,7 +17,7 @@ use xpute_guest::global::Global;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::{Asks, Base};
 use crate::sys::io::demand::Stream;
-use crate::sys::io::fetch::{answered, body, next_answered, on_answer_settled, release, Answered};
+use crate::sys::io::fetch::{answered, body, on_answer_settled, release, take_answered, Answered};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
@@ -97,7 +97,7 @@ const fn layer<L: Observed>() -> Layer {
     Layer {
         stream: L::STREAM,
         frames: Residency::<L>::FRAMES,
-        arrived: arrived::<L>,
+        arrived: on_arrived::<L>,
     }
 }
 
@@ -451,7 +451,7 @@ pub fn admit_arrived(pass: &Pass) {
                 subject,
                 block,
                 mut phases,
-            }) = next_answered(&OF)
+            }) = take_answered(&OF)
             else {
                 return false;
             };
@@ -479,7 +479,11 @@ pub fn admit_arrived(pass: &Pass) {
 }
 
 /// None is no object for `p`.
-fn arrived<L: Observed>(p: Tile, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
+fn on_arrived<L: Observed>(
+    p: Tile,
+    block: Option<Block>,
+    phases: &mut Phases,
+) -> Result<(), Failure> {
     let Some(b) = block else {
         L::demand().absent(p);
         return Ok(());

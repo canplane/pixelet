@@ -102,7 +102,7 @@ pub fn answered(of: &[Stream]) -> usize {
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
-pub fn next_answered(of: &[Stream]) -> Option<Answered> {
+pub fn take_answered(of: &[Stream]) -> Option<Answered> {
     let all = ANSWERED.get(List::new);
     let at = all.iter().position(|a| of.contains(&a.stream))?;
     Some(all.remove(at))

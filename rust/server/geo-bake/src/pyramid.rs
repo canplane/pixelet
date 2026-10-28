@@ -42,7 +42,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// As tile `at` is stored: its packet, as `encode` makes it, and what of
     /// it the set keeps beside its tiles for `fits_set` (`FITS`), where the
     /// kind keeps anything; one pass makes both.
-    fn stored(&self, at: Tile) -> Result<(Vec<u8>, Option<String>), String> {
+    fn encode_stored(&self, at: Tile) -> Result<(Vec<u8>, Option<String>), String> {
         Ok((self.encode(at)?, None))
     }
     fn decode(raw: &[u8]) -> Result<Self, String>;
@@ -57,11 +57,11 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
 
-    /// Refused where the set as it will be (`set`) holds what no reader
-    /// can: a fact of the whole set, not of a tile, asked before a commit
-    /// moves anything, of what each tile's `stored` kept; `workers` tiles at
-    /// once. What the set will keep of its tiles (`FITS`), where the kind
-    /// keeps anything; none for most kinds.
+    /// Refused where the set as it will be (`set`) holds what no reader can: a
+    /// fact of the whole set, not of a tile, asked before a commit moves
+    /// anything, of what each tile's `encode_stored` kept; `workers` tiles at
+    /// once. What the set will keep of its tiles (`FITS`), where the kind keeps
+    /// anything; none for most kinds.
     fn fits_set(_set: &Staged<'_>, _workers: usize) -> Result<Option<Vec<(Tile, String)>>, String> {
         Ok(None)
     }
@@ -83,8 +83,8 @@ impl<L: Base> Absent<L> for L {
 /// Inside a set, beside its tiles; no tile is named so.
 pub const MANIFEST: &str = "manifest.json";
 
-/// Inside a set, what it keeps of each of its tiles (`Base::stored`), a line
-/// a tile, its name and what was kept: so a commit asks what the set will
+/// Inside a set, what it keeps of each of its tiles (`Base::encode_stored`), a
+/// line a tile, its name and what was kept: so a commit asks what the set will
 /// hold of these, never of the tiles read and made again. Not published.
 /// A stage keeps each staged tile's beside it, `<name>.fit`. No tile is
 /// named so.
@@ -114,7 +114,7 @@ impl TileSet {
         self.root.join(format!("{}.fit", p.name()))
     }
 
-    /// A tile as `Base::stored` made it, and beside it what was kept, or
+    /// A tile as `Base::encode_stored` made it, and beside it what was kept, or
     /// none: the kept first, so a tile written is never beside another's.
     pub fn write_stored(&self, p: Tile, packed: &[u8], fit: Option<&str>) -> Result<(), String> {
         fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
@@ -277,7 +277,7 @@ impl Staged<'_> {
             .map_err(|e| format!("{}: {e}", p.name()))
     }
 
-    /// What the set as it will be keeps of `p` (`Base::stored`), as
+    /// What the set as it will be keeps of `p` (`Base::encode_stored`), as
     /// `content` reads its tile: the stage's beside a staged tile, none for
     /// one gone, else the set's (`base`, its `fits`). `None` where the set
     /// keeps nothing, one baked before it did, so it is not known.
@@ -471,7 +471,7 @@ fn fold_band<L: Base>(
             }
             let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
                 .map(|t| {
-                    t.stored(parent)
+                    t.encode_stored(parent)
                         .map_err(|e| format!("{}: {e}", parent.name()))
                 })
                 .transpose()?;

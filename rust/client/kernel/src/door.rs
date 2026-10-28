@@ -233,7 +233,7 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
         }
     }
-    if let Some(shown) = s.sent.moved() {
+    if let Some(shown) = s.sent.take_moved() {
         let buf = SNAPSHOT.get(Vec::new);
         let len = loop {
             if let Some(len) = crate::shell::ui_snapshot(&shown, buf) {

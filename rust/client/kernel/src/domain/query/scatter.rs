@@ -79,7 +79,7 @@ impl Grounds for Asked<'_, '_> {
             .is_some_and(pxl_spec_core::answer::is_placed)
     }
 
-    fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {
+    fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {
         p.next(&self.lanes)
     }
 }

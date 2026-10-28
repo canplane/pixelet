@@ -76,7 +76,7 @@ fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
 /// Word `i` of the workgroup's `w` as every lane reads it alike: the
 /// barriers about the one load, which pxl-shader-build reads back as
 /// WGSL's `workgroupUniformLoad`, so a loop bound on it is uniform.
-fn shared(w: &Shared, i: u32) -> u32 {
+fn load_shared(w: &Shared, i: u32) -> u32 {
     spirv_std::arch::workgroup_memory_barrier_with_group_sync();
     // SAFETY: masked under the array's length.
     let v = unsafe { *w.index_unchecked((i & (LANES - 1)) as usize) };
@@ -270,7 +270,7 @@ pub fn way_free_cs(
 /// has no ways, nothing taken nor kept, or where the pool or its scratch ran
 /// out, the families it took given back, and its records' count saying
 /// which (`tree::STARVED`, `tree::CRAMPED`). A level's numbers are what
-/// every lane reads alike (`shared`), the loops' bounds.
+/// every lane reads alike (`load_shared`), the loops' bounds.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "way_tree_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn way_tree_cs(
@@ -331,12 +331,12 @@ pub fn way_tree_cs(
         set_shared(levels, t, cells, cell);
         set_shared(levels, t, held, state);
     }
-    let (cell, first) = (shared(levels, cells), shared(levels, 0));
+    let (cell, first) = (load_shared(levels, cells), load_shared(levels, 0));
     let (mut j, mut zoom) = (0, cell - window::SQUARE_SHIFT);
-    let mut ok = shared(levels, held) == HELD;
+    let mut ok = load_shared(levels, held) == HELD;
     while ok && zoom < cell {
         settle();
-        let (from, n) = (shared(levels, 2 * j), shared(levels, 2 * j + 1));
+        let (from, n) = (load_shared(levels, 2 * j), load_shared(levels, 2 * j + 1));
         let square = fill::Fresh { ground, base };
         // The flagged, counted, then given their families together.
         let (mut flagged, mut c) = (0, 0);
@@ -347,7 +347,7 @@ pub fn way_tree_cs(
             let i = c + t;
             let flag = tree::flag(&pool, &square, 0, cell, zoom, slot(stack, from, i)) & (i < n);
             scan(sums, t, flag as u32);
-            flagged += shared(sums, lanes - 1);
+            flagged += load_shared(sums, lanes - 1);
             c += lanes;
         }
         if t == 0 {
@@ -371,8 +371,8 @@ pub fn way_tree_cs(
             set_shared(levels, t, 2 * j + 3, 8 * flagged);
             set_shared(levels, t, held, if fits { HELD } else { short });
         }
-        ok = shared(levels, held) == HELD;
-        let next = shared(levels, 2 * j + 2);
+        ok = load_shared(levels, held) == HELD;
+        let next = load_shared(levels, 2 * j + 2);
         let (mut before, mut c) = (0, 0);
         while ok && c < n {
             let i = c + t;
@@ -384,7 +384,7 @@ pub fn way_tree_cs(
             } else if i < n {
                 tree::empty(&mut pool, s);
             }
-            before += shared(sums, lanes - 1);
+            before += load_shared(sums, lanes - 1);
             c += lanes;
         }
         (j, zoom) = (j + 1, zoom + 1);
@@ -407,7 +407,7 @@ pub fn way_tree_cs(
         }
     }
     settle();
-    let (from, n) = (shared(levels, 2 * j), shared(levels, 2 * j + 1));
+    let (from, n) = (load_shared(levels, 2 * j), load_shared(levels, 2 * j + 1));
     // Every loop a lane's share steps the same chunks, its bound what every
     // lane reads alike, so the barriers after it are in uniform control
     // flow, which WebGPU takes only there.
@@ -426,7 +426,7 @@ pub fn way_tree_cs(
     while ok && j > 0 {
         settle();
         (j, zoom) = (j - 1, zoom - 1);
-        let (from, n) = (shared(levels, 2 * j), shared(levels, 2 * j + 1));
+        let (from, n) = (load_shared(levels, 2 * j), load_shared(levels, 2 * j + 1));
         let mut c = 0;
         while c < n {
             let s = slot(stack, from, c + t);

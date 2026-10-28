@@ -112,7 +112,7 @@ fn run() -> Result<(), String> {
                         let terrain = bake_leaf(reader, tile)?;
                         let at = Tile::new(LEAF_ZOOM, tile);
                         let (packet, fit) = terrain
-                            .stored(at)
+                            .encode_stored(at)
                             .map_err(|e| format!("{}: {e}", at.name()))?;
                         let packed = pack(&packet, Level::Stored).map_err(|e| e.to_string())?;
                         set.write_stored(at, &packed, fit.as_deref())?;
@@ -129,7 +129,11 @@ fn run() -> Result<(), String> {
             })?;
         }
     }
-    run.finish::<TerrainTile, _>(|run| Ok(Absence::new(run.baked()?)), &leaf::READS, false)
+    run.finish::<TerrainTile, _>(
+        |run| Ok(Absence::new(run.read_baked()?)),
+        &leaf::READS,
+        false,
+    )
 }
 
 fn main() -> ExitCode {

@@ -175,7 +175,7 @@ pub fn cast_cs(
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
     let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
-    let at = listed(marks, observed::MARKS, whole);
+    let at = enlist(marks, observed::MARKS, whole);
     if at < observed::MARKS {
         seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
     }
@@ -197,7 +197,7 @@ pub(crate) fn add_count(args: &mut [u32], on: bool, lane: u32, v: u32) {
 /// past the list's `room` has the walk over `whole` workgroups dispatched
 /// instead (`ray::MISS_ARGS_WHOLE`). Its place, which the caller writes
 /// where it is under `room`.
-pub(crate) fn listed(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
+pub(crate) fn enlist(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
     let at = add(args, ray::MISS_ARGS_COUNT, 1);
     if at < room {
         most(

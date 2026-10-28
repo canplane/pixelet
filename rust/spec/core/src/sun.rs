@@ -552,7 +552,7 @@ pub const fn sample_words(size: u32) -> u32 {
 /// The slots whose ray took no pick, listed for their walk (pxl-shader
 /// `sun_miss_cs`) apart from the slots that took theirs (`sun_cs`), as the
 /// eye's missed pixels are walked apart from the pixels that took their
-/// pick, by the same listing and dispatch (pxl-shader cast.rs `listed`,
+/// pick, by the same listing and dispatch (pxl-shader cast.rs `enlist`,
 /// `ray::MISS_ARGS_WORDS`): a walk holds its workgroup as long as its
 /// slowest lane. Past the samples: how many, copied in once the slots are
 /// done, as the eye's count is (`observed::MARKS_COUNT`), then a slot each,

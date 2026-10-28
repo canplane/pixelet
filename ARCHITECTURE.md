@@ -930,12 +930,12 @@ set deleted and every shard baked again.
 A set holds only what a client can. A terrain tile is refused as it is made
 where a square of it would not fill or build as a client's does
 (`pxl-spec bake/tile/terrain.rs` `fill_fit`, `pxl-geo-bake terrain.rs`
-`stored`). That one pass also says what each square's tree of ways takes, and
-the set keeps it beside its tiles (`pyramid.rs` `FITS`). Whether those trees fit
-the client's pool wherever the eye is is a fact of the whole set, since a window
-lies across tiles. The commit answers it before anything moves, from what each
-tile kept, the stage's over the set's (`terrain/pool.rs` `fits`). So at the
-pool's cap no square of a published set is refused
+`encode_stored`). That one pass also says what each square's tree of ways
+takes, and the set keeps it beside its tiles (`pyramid.rs` `FITS`). Whether
+those trees fit the client's pool wherever the eye is is a fact of the whole
+set, since a window lies across tiles. The commit answers it before anything
+moves, from what each tile kept, the stage's over the set's (`terrain/pool.rs`
+`fits`). So at the pool's cap no square of a published set is refused
 ([What the view holds](#what-the-view-holds);
 `pxl-spec-core way/tree.rs` `POOL_FAMILIES`).
 

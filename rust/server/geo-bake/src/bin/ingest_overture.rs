@@ -249,7 +249,7 @@ fn run() -> Result<(), String> {
         NoTls,
     )
     .map_err(|e| e.to_string())?;
-    let (release, accessed_at) = (pinned("version")?, pinned("accessed_at")?);
+    let (release, accessed_at) = (read_pin("version")?, read_pin("accessed_at")?);
     println!(
         "[ingest] release {release}, {} shards{}",
         shards.len(),
@@ -269,7 +269,7 @@ fn run() -> Result<(), String> {
                 .query_one("SELECT to_regclass($1::text) IS NOT NULL", &[&ty.table])
                 .map_err(|e| e.to_string())?
                 .get(0);
-            if exists && !keyed(&mut client, ty.table, &["gers_id"])? {
+            if exists && !is_keyed(&mut client, ty.table, &["gers_id"])? {
                 return Err(format!(
                     "{}: keyed otherwise than by gers_id; run with --whole",
                     ty.table
@@ -306,7 +306,7 @@ fn run() -> Result<(), String> {
 }
 
 /// Whether a table is keyed as this script keys it.
-fn keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, String> {
+fn is_keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, String> {
     let key: Vec<String> = client
         .query(
             "SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
@@ -1014,7 +1014,7 @@ fn overture(args: &[&str]) -> Result<Output, String> {
 }
 /// A field of `source.json`'s pin: the release (Overture's name for its
 /// version) and when it was taken, which the catalog repeats.
-fn pinned(field: &str) -> Result<String, String> {
+fn read_pin(field: &str) -> Result<String, String> {
     let path = Path::new(SOURCE);
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let meta: Value =

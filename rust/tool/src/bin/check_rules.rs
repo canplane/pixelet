@@ -381,7 +381,7 @@ fn ordered(
 /// laid out under a checkout's ignored target,
 /// every file under it but the builds' and the packages', which git there
 /// would list none of. Outside any checkout, an error.
-fn listed(root: &std::path::Path) -> Result<String, String> {
+fn list_files(root: &std::path::Path) -> Result<String, String> {
     let top = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(root)
@@ -431,7 +431,7 @@ fn listed(root: &std::path::Path) -> Result<String, String> {
 
 fn run() -> Result<Vec<String>, String> {
     let root = root();
-    let listed = listed(&root)?;
+    let listed = list_files(&root)?;
     // The tree as it stands: a file deleted and not yet committed is gone, so
     // a removal is checked before it is committed.
     let files: Vec<&str> = listed

@@ -87,7 +87,7 @@ impl Grounds for Growing<'_> {
         answer::is_placed(support::asset(&mut self.world, &line, zoom, c))
     }
 
-    fn placed(&self, p: &mut pxl_spec_core::world::Placed) -> ([i32; 3], u32, bool) {
+    fn next_placed(&self, p: &mut pxl_spec_core::world::Placed) -> ([i32; 3], u32, bool) {
         p.next(&self.world)
     }
 }

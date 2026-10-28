@@ -729,7 +729,7 @@ fn rs_leaf(
 
 /// The names `json` may read past its own, from the specs it uses: each
 /// laid out over its own uses, a name owned by one file, no use circular.
-fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>, String> {
+fn read_used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>, String> {
     let d = DATA_SPECS
         .iter()
         .find(|d| d.json == json)
@@ -744,7 +744,7 @@ fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>,
     path.push(d.json);
     let mut names: Vec<(String, Node)> = Vec::new();
     for &u in d.uses {
-        let below = used(u, path)?;
+        let below = read_used(u, path)?;
         let Node::Obj(entries) = laid_out(read(u)?, &below)? else {
             return Err(format!("{u}: not a table"));
         };
@@ -765,7 +765,7 @@ fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>,
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
     for d in &DATA_SPECS {
-        let uses = used(d.json, &mut Vec::new())?;
+        let uses = read_used(d.json, &mut Vec::new())?;
         let spec = laid_out(read(d.json)?, &uses)?;
         if let Some(k) = spec
             .named()

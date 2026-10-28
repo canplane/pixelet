@@ -35,7 +35,7 @@ fn bearing(deg: Option<f64>) -> bool {
 /// A UI command: asks for a turn, and has this one raise what it asks of the
 /// host at its falling edge, so a sensor close sent after the strobe stopped is
 /// still heard.
-fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
+fn ask_turn(s: &mut State) -> Result<Option<i32>, MarshalError> {
     crate::sys::sched::edge::request_world_tick();
     s.asked = true;
     Ok(Some(0))
@@ -112,7 +112,7 @@ pub(super) fn apply(
             settings_open();
             crate::domain::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
-            applied(s)
+            ask_turn(s)
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
@@ -221,7 +221,7 @@ pub(super) fn apply(
             if !crate::domain::control::navigation::follow_mode::following() {
                 crate::domain::control::camera::controller::reset_azimuth();
             }
-            applied(s)
+            ask_turn(s)
         }
         Command::INPUT_GO_TO => {
             let p = abi::InputGoTo::read(packet(pkt)?)?;
@@ -235,7 +235,7 @@ pub(super) fn apply(
                     polar: p.polar,
                 },
             );
-            applied(s)
+            ask_turn(s)
         }
         Command::INPUT_POSE => {
             let p = abi::InputPose::read(packet(pkt)?)?;
@@ -248,11 +248,11 @@ pub(super) fn apply(
                 [p.x, p.y, p.z],
                 [p.qx, p.qy, p.qz, p.qw],
             );
-            applied(s)
+            ask_turn(s)
         }
         Command::INPUT_POSE_END => {
             crate::domain::control::camera::controller::tracked_end();
-            applied(s)
+            ask_turn(s)
         }
         Command::SENSOR_POSITION => {
             let p = abi::SensorPosition::read(packet(pkt)?)?;
@@ -329,7 +329,7 @@ pub(super) fn apply(
         }
         Command::INPUT_LOCATE => {
             ui::location_enable();
-            applied(s)
+            ask_turn(s)
         }
         Command::WORLD_VIEW => {
             if abi::WorldView::read(packet(pkt)?)?.shown {
@@ -337,7 +337,7 @@ pub(super) fn apply(
             } else {
                 ui::sensors_close();
             }
-            applied(s)
+            ask_turn(s)
         }
         Command::GPU_READY => {
             pxl_render::gpu::api::on_device_answered();
@@ -392,11 +392,11 @@ pub(super) fn apply(
             if changed == Some(true) && p.key == SettingKey::profiler {
                 profiler_follow(p.value == 1);
             }
-            applied(s)
+            ask_turn(s)
         }
         Command::CHAT_SEND => {
             crate::domain::scene::marker::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
-            applied(s)
+            ask_turn(s)
         }
         Command::PREVIEW_OPEN => {
             let p = abi::PreviewOpen::read(packet(pkt)?)?;
@@ -410,7 +410,7 @@ pub(super) fn apply(
                 ),
                 Errno::EINVAL,
             )?;
-            applied(s)
+            ask_turn(s)
         }
         Command::PREVIEW_CLOSE => {
             refuse_unless(
@@ -419,18 +419,18 @@ pub(super) fn apply(
                 ),
                 Errno::EBADF,
             )?;
-            applied(s)
+            ask_turn(s)
         }
         // Records only while the profiler setting is on: a window opened with the
         // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
             refuse_unless(settings_store().profiler, Errno::EPERM)?;
             refuse_unless(profiler_window_start(), Errno::ENOMEM)?;
-            applied(s)
+            ask_turn(s)
         }
         Command::PROFILER_STOP => {
             profiler_window_stop();
-            applied(s)
+            ask_turn(s)
         }
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => {

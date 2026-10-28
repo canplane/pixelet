@@ -29,7 +29,7 @@ impl crate::pyramid::Base for TerrainTile {
     const LATTICE: pxl_spec::space::layer::lattice::Lattice = GROUND;
 
     fn encode(&self, at: Tile) -> Result<Vec<u8>, String> {
-        self.stored(at).map(|(packet, _)| packet)
+        self.encode_stored(at).map(|(packet, _)| packet)
     }
 
     /// Refused where a record's room does not hold its lines (pxl-spec
@@ -37,7 +37,7 @@ impl crate::pyramid::Base for TerrainTile {
     /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),
     /// or would not fill or build as a client's does (`terrain::fill_fit`);
     /// what that build takes is kept beside the tile (pool.rs `line`).
-    fn stored(&self, at: Tile) -> Result<(Vec<u8>, Option<String>), String> {
+    fn encode_stored(&self, at: Tile) -> Result<(Vec<u8>, Option<String>), String> {
         self.separation
             .fits()
             .map_err(|[lines, points]| format!("its ways hold {lines} lines and {points} points, past MAX_LINES ({MAX_LINES}) or MAX_POINTS ({MAX_POINTS})"))?;

@@ -608,7 +608,7 @@ pub trait Grounds {
     fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::Placed::next`).
-    fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
+    fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
 }
 
 /// Decor the ground grows, where it stands: its variant, its heading in
@@ -853,7 +853,7 @@ pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
 /// Whether placed decor claims a cell of the box from `at` (unit cells),
 /// `cells` a side: one whose corner, posed as placed (`placed_pose`), holds
 /// a box meeting it, each placed leaf near enough asked of the world's
-/// (`Grounds::placed`).
+/// (`Grounds::next_placed`).
 pub fn is_claimed(q: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
     let lo = [
         at[0] - CLAIM_REACH[0],
@@ -867,7 +867,7 @@ pub fn is_claimed(q: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
     ];
     let mut placed = placed_in(lo, hi);
     loop {
-        let (c, word, more) = q.placed(&mut placed);
+        let (c, word, more) = q.next_placed(&mut placed);
         if !more {
             return false;
         }

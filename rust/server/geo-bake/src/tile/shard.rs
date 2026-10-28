@@ -433,7 +433,7 @@ impl Run {
 
     /// The shards the set holds once what is staged is in: what its fold
     /// reads as baked, and nothing else.
-    pub fn baked(&self) -> Result<Coverage, String> {
+    pub fn read_baked(&self) -> Result<Coverage, String> {
         let held = self.stage.will_hold()?.ok_or(format!(
             "{}: its manifest names no shards it holds, so which are baked is unknown",
             self.stage.set.root.display()

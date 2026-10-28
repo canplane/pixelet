@@ -64,7 +64,7 @@ impl Residency<TerrainTile> {
     /// coarser one its own as an ancestor read it, so nodes beside or under
     /// each other share their lines down to where they part, and pay a
     /// look-up a zoom only past it.
-    pub fn line_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
+    pub fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
         self.seek(lines, bound_tile(node, cell))
     }
 
@@ -81,7 +81,7 @@ impl Residency<TerrainTile> {
         }
     }
 
-    /// `relief` over `node`'s cells at `cell`, its line walked (`line_walked`).
+    /// `relief` over `node`'s cells at `cell`, its line walked (`walk_line`).
     pub fn relief_walked(
         &self,
         lines: &mut Lines,
@@ -90,14 +90,14 @@ impl Residency<TerrainTile> {
         cell: Zoom,
     ) -> Answer<Bounds> {
         self.relief(
-            &self.line_walked(lines, node, cell),
+            &self.walk_line(lines, node, cell),
             place,
             node,
             [cell, cell],
         )
     }
 
-    /// `bound`, its line walked (`line_walked`): a walk in key order pays one
+    /// `bound`, its line walked (`walk_line`): a walk in key order pays one
     /// look-up a node.
     pub fn bound_walked(
         &self,
@@ -105,7 +105,7 @@ impl Residency<TerrainTile> {
         node: Node<2>,
         cell: Zoom,
     ) -> Answer<Option<Aabb>> {
-        self.bound(&self.line_walked(lines, node, cell), node, cell)
+        self.bound(&self.walk_line(lines, node, cell), node, cell)
     }
 }
 

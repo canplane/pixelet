@@ -158,7 +158,7 @@ pub struct Sent {
 impl Sent {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
-    pub fn moved(&mut self) -> Option<Shown> {
+    pub fn take_moved(&mut self) -> Option<Shown> {
         let (now, (_, words)) = (
             shown(),
             crate::domain::control::interaction::edit::marker_waiting(),
