@@ -11,7 +11,7 @@ use crate::space::coord::zoom::{units, Zoom};
 // ---- the view's knobs, beside pxl-spec-core grid.rs's ----
 
 /// The vertical field of view, in degrees: the view's (pxl-kernel
-/// domain/view/frame/pose.rs `ray_of`) and the reference view's.
+/// domain/view/frame/pose.rs `ray_of`).
 pub const FOV_DEG: f64 = 50.0;
 
 /// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
@@ -22,10 +22,6 @@ pub const FOV_DEG: f64 = 50.0;
 /// Communications, 2025, doi:10.1038/s41467-025-64679-2): 94 / 46.9 is 2.
 pub const RATIO_MAX: f64 = 2.0;
 
-/// The reference view's height in CSS pixels, at `FOV_DEG`: where a size
-/// set in CSS pixels is read.
-pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
-
 // ---- derived from the knobs ----
 
 /// The grid the bands and windows are sized for (pxl-spec-core
@@ -35,22 +31,6 @@ pub const SPLIT: f64 = pxl_spec_core::grid::SPLIT as f64;
 /// The view's camera grid cell, an angle in radians: τ over `SPLIT` at the
 /// view's τ, 1/`CELLS_A_RADIAN` (pxl-kernel domain/view/lens.rs `cell`).
 pub const CELL: f64 = Tau::VIEW.scale() / SPLIT;
-
-/// Pixels a unit at unit distance spans, for a viewport `viewport_h` high
-/// and `fov_deg` across it.
-pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
-    viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
-}
-
-/// An angle about the eye in CSS pixels at the reference view.
-pub fn reference_px(angle: f64) -> f64 {
-    angle * px_per_unit(REFERENCE_VIEWPORT_H, FOV_DEG)
-}
-
-/// The view's cell in CSS pixels at the reference view: about twelve.
-pub fn cell_css_px() -> f64 {
-    reference_px(CELL)
-}
 
 /// Where ground starts being drawn with cells at `cell_zoom` at `Tau::FINEST`,
 /// going out: where its side spans two of the camera grid's cells.

@@ -1,26 +1,20 @@
 // pxl-kernel/domain/scene/decor/drawn.test.rs
 
 use super::*;
+use crate::domain::scene::decor::param::{DECOR_MODEL_CELLS, DECOR_SPRITE_CELLS};
 use crate::domain::view::frame::pose::view_resize;
-use pxl_spec::space::camera::grid::{cell_css_px, reference_px, REFERENCE_VIEWPORT_H};
+use pxl_spec::space::camera::grid::CELL;
 
-/// Decor's tiers are angles: the model's and the sprite's edges are the same
-/// whatever the window's height, and at the reference view they are the
-/// cells they were set by, in CSS pixels (`cell_css_px`).
+/// Decor's tiers are angles: the model's and the sprite's edges are their
+/// shares of the view's cell (`CELL`), whatever the window's height.
 #[test]
-fn decor_s_edges_are_angles_the_reference_view_draws_as_set() {
+fn decor_s_edges_are_shares_of_the_cell_on_every_screen() {
     let _g = crate::sys::serial();
-    let at = |h: f64| {
+    let edges = (DECOR_MODEL_CELLS * CELL, DECOR_SPRITE_CELLS * CELL);
+    for h in [600.0, 844.0, 1080.0, 1440.0, 2160.0] {
         view_resize(h * 16.0 / 9.0, h);
-        (decor_model_angle(), decor_sprite_angle())
-    };
-    let reference = at(REFERENCE_VIEWPORT_H);
-    for h in [600.0, 844.0, 1440.0, 2160.0] {
-        assert_eq!(at(h), reference, "{h}");
+        let (model, sprite) = (decor_model_angle(), decor_sprite_angle());
+        assert!((model - edges.0).abs() < 1e-15, "{h}: {model}");
+        assert!((sprite - edges.1).abs() < 1e-15, "{h}: {sprite}");
     }
-    let cell = cell_css_px();
-    let model = crate::domain::scene::decor::param::DECOR_MODEL_CELLS * cell;
-    let sprite = crate::domain::scene::decor::param::DECOR_SPRITE_CELLS * cell;
-    assert!((reference_px(reference.0) - model).abs() < 1e-9, "{}", reference_px(reference.0));
-    assert!((reference_px(reference.1) - sprite).abs() < 1e-9, "{}", reference_px(reference.1));
 }

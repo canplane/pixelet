@@ -151,9 +151,9 @@ fn layer_u() -> f64 {
 }
 
 /// The share of a camera grid cell the clouds drift a step, at the nearest
-/// drawn: about a CSS pixel at the reference view, under which a drift is
-/// not seen to move. A whole cell's step, a dozen pixels at once, was seen as
-/// the clouds stopping and jumping.
+/// drawn, set by eye: a twelfth of a cell, 1/1152 rad, is not seen to move
+/// by itself, and a whole cell's step at once was seen as the clouds
+/// stopping and jumping.
 const DRIFT_CELLS: f64 = 1.0 / 12.0;
 
 /// How long the wind takes to carry the clouds `DRIFT_CELLS` of a camera

@@ -34,9 +34,8 @@ const ICON_STEPS: Zoom = MARK_STEPS;
 /// The one knob of how far apart places stand, in zooms: an icon's cell is
 /// this many coarser than the camera grid's, and the cell a place keeps to
 /// itself this many coarser again. At 2 an icon's cell spans four grid
-/// cells, some 48 pixels round the drawn icon (22), and a place keeps four
-/// icons a side, some 190 pixels, which also holds a name of a few words; at
-/// 1 places stood too close for their names. A product choice.
+/// cells round the drawn icon, and a place keeps four icons a side, sixteen
+/// cells; at 1 places stood too close for their names. A product choice.
 const SPREAD_STEPS: Zoom = 2;
 
 /// A cell an icon wide at its tile's zoom of Carto's, `SPREAD_STEPS` coarser
@@ -50,11 +49,6 @@ pub const PLACE_LATTICE: Lattice =
 /// icon's own cell, places a few metres apart stood side by side as near as
 /// the view came.
 const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
-
-/// The camera grid's cells across the cell a place keeps to itself, which
-/// its name wraps to.
-pub const SPACING_CELLS: u32 =
-    1 << (PLACE_LATTICE.grid_zoom(LEAF_ZOOM) - LEAF_ZOOM - SPACING_STEPS);
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
 pub const PLACE_FIRST: Zoom = {
