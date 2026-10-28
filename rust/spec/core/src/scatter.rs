@@ -415,32 +415,32 @@ pub mod drawn {
     /// adds the region's first slot once the regions are laid out.
     pub const UNIFORM_WORDS: u32 = 64;
     pub const UNIFORM_INDEX: u32 = 7;
-    /// The frame's words: a pixel's units at one unit's distance, the
-    /// model's and the sprite's floors in pixels, the anchor the lanes'
-    /// positions are about (unit cells, X wrapping), the left-out decor's
-    /// corner and whether there is one, then each group's extent.
-    pub const UPP: u32 = 0;
-    pub const MODEL_PX: u32 = 1;
-    pub const SPRITE_PX: u32 = 2;
+    /// The frame's words: the model's and the sprite's floors, each an
+    /// angle about the eye in radians, the anchor the lanes' positions are
+    /// about (unit cells, X wrapping), the left-out decor's corner and
+    /// whether there is one, then each group's extent.
+    pub const MODEL_ANGLE: u32 = 0;
+    pub const SPRITE_ANGLE: u32 = 1;
     pub const ANCHOR: u32 = 4;
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
     pub const PARAM_WORDS: u32 = EXTENTS + GROUPS;
 
-    /// What a thing spanning `px` pixels is drawn as: a model at
-    /// `model_px` or more, else a sprite at `sprite_px` or more, else
-    /// nothing. A group's region is `2·group` past its tier where drawn.
+    /// What a thing spanning `across` radians about the eye is drawn as: a
+    /// model at `model` or more, else a sprite at `sprite` or more, else
+    /// nothing, each an angle, so no screen decides it. A group's region is
+    /// `2·group` past its tier where drawn.
     pub const MODEL: u32 = 0;
     pub const SPRITE: u32 = 1;
     pub const GONE: u32 = 2;
 
-    /// The tier of what spans `px` pixels, against the model's and the
+    /// The tier of what spans `across` radians, against the model's and the
     /// sprite's floors: the one rule decor's count and the CPU's clouds
     /// both size by.
-    pub fn tier(px: f32, model_px: f32, sprite_px: f32) -> u32 {
-        if px >= model_px {
+    pub fn tier(across: f32, model: f32, sprite: f32) -> u32 {
+        if across >= model {
             MODEL
-        } else if px >= sprite_px {
+        } else if across >= sprite {
             SPRITE
         } else {
             GONE

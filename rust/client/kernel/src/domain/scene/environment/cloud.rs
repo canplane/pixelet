@@ -28,11 +28,11 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
 use crate::domain::query::model::asset::model_of;
-use crate::domain::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
+use crate::domain::scene::decor::drawn::{decor_model_angle, decor_sprite_angle, sprite_reach};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::scene;
-use crate::domain::view::frame::pose::{km_per_u, units_per_px_at};
+use crate::domain::view::frame::pose::km_per_u;
 use crate::domain::view::observation::eye;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
@@ -149,12 +149,19 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
-/// How long the wind takes to carry the clouds a pixel at the nearest drawn,
-/// in seconds (`units_per_px_at`): what drifts less is not seen to move. A
-/// camera cell's step, a dozen pixels at once, was seen as the clouds
-/// stopping and jumping. Infinite while none is drawn.
+/// The share of a camera grid cell the clouds drift a step, at the nearest
+/// drawn: about a CSS pixel at the reference view, under which a drift is
+/// not seen to move. A whole cell's step, a dozen pixels at once, was seen as
+/// the clouds stopping and jumping.
+const DRIFT_CELLS: f64 = 1.0 / 12.0;
+
+/// How long the wind takes to carry the clouds `DRIFT_CELLS` of a camera
+/// cell at the nearest drawn (`lens::cell_there`), in seconds: their words
+/// stand between steps, so a drawn cloud lags the wind by up to that, an
+/// angle, the same on every screen. Infinite while none is drawn.
 pub fn drift_step_s() -> f64 {
-    units_per_px_at(clouds().seen) / libm::hypot(WIND[0], WIND[1])
+    DRIFT_CELLS * crate::domain::view::lens::cell_there(clouds().seen)
+        / libm::hypot(WIND[0], WIND[1])
 }
 
 /// Where the clouds are gone, faded from half of it: a product number.
@@ -219,9 +226,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             let d = near([x, y]).max(1e-3);
             if d <= reach
                 && drawn::tier(
-                    (largest / units_per_px_at(d)) as f32,
-                    decor_gone_px() as f32,
-                    decor_sprite_px() as f32,
+                    (largest / d) as f32,
+                    decor_model_angle() as f32,
+                    decor_sprite_angle() as f32,
                 ) != drawn::GONE
             {
                 c.wanted.push([x, y]);
@@ -491,8 +498,8 @@ fn present_patch(
     opacity: f32,
     sprites: &mut Vec<u32>,
 ) {
-    let (model_px, sprite_px) = (decor_gone_px() as f32, decor_sprite_px() as f32);
-    let tier = |px: f64| drawn::tier(px as f32, model_px, sprite_px);
+    let (model, sprite) = (decor_model_angle() as f32, decor_sprite_angle() as f32);
+    let tier = |across: f64| drawn::tier(across as f32, model, sprite);
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
@@ -524,8 +531,8 @@ fn present_patch(
         };
         let first = at;
         sprites.clear();
-        let gone = tier(extent * most / units_per_px_at(nearest)) == drawn::GONE;
-        let modeled = tier(extent * least / units_per_px_at(farthest)) == drawn::MODEL;
+        let gone = tier(extent * most / nearest) == drawn::GONE;
+        let modeled = tier(extent * least / farthest) == drawn::MODEL;
         for i in 0..if gone { 0 } else { count as usize } {
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
@@ -547,7 +554,7 @@ fn present_patch(
                 continue;
             }
             let d = libm::sqrt(d2).max(1e-3);
-            let t = tier(extent * f(4) / units_per_px_at(d));
+            let t = tier(extent * f(4) / d);
             if t == drawn::MODEL {
                 changed |= list[at] != i as u32;
                 list[at] = i as u32;

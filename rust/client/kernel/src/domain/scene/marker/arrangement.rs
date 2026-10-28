@@ -31,7 +31,7 @@ use xpute_kit::status::errno::Errno;
 
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::tile::place::SPACING_CELLS;
-use pxl_spec::space::camera::grid::px_per_unit;
+use pxl_spec::space::camera::grid::{px_per_unit, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::REACH;
@@ -112,15 +112,13 @@ struct Arrangement {
 
 /// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
 /// its view (the observation holds its frustum), the grid's τ, the places
-/// setting, the spacing names wrap to, the pin being written and the
-/// chat's line and where it hangs. A new input goes here or the step never sees
-/// it change.
+/// setting, the pin being written and the chat's line and where it hangs. A
+/// new input goes here or the step never sees it change.
 #[derive(Clone, PartialEq)]
 struct Seen {
     o: pxl_spec::space::camera::eye::Observation,
     tau: pxl_spec::space::camera::grid::Tau,
     places: bool,
-    spacing: f64,
     drafted: Option<(EntryAt, u64)>,
     said: line::Said,
 }
@@ -190,17 +188,15 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
     Some(high - hit.t)
 }
 
-/// The cell a place keeps to itself, as wide as the camera grid's cells are
-/// at the view's own τ, its drawn pixels counted as the CSS pixels a name is
-/// laid out in, so it is one width at every ratio: its name wraps to it and
-/// its marker's region is it. Not the τ in force, which coarsens while
-/// the view moves and would lay every name out again; whole pixels, so only
-/// the view's size or angle does.
+/// The width a place keeps to itself on the screen, in CSS pixels: its name
+/// wraps to it and its marker's region is it. A marker is laid out as the
+/// shell's text is, in CSS pixels, so the width is one on every screen:
+/// `SPACING_CELLS` of the camera grid's cells (`lens::cell`) as the
+/// reference view draws them, about 190 and whole. Which markers find room
+/// is then the screen's room, as on any map.
 fn spacing_px() -> f64 {
-    let v = crate::domain::view::frame::pose::view();
-    let drawn = v.height * crate::domain::view::frame::resolution::display_ratio();
     let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau())
-        * px_per_unit(drawn, crate::domain::view::param::FOV);
+        * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG);
     libm::rint(f64::from(SPACING_CELLS) * cell)
 }
 
@@ -230,7 +226,6 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         o,
         tau,
         places: settings_store().place,
-        spacing: spacing_px(),
         drafted: pin::drafted(),
         said: line::said(o.eye, tau),
     };
@@ -243,7 +238,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     // grown by what a marker draws past it at the box's far side.
     let now = &mut p.now;
     now.drawn.clear();
-    let reach = reach_px(seen.spacing);
+    let reach = reach_px(spacing_px());
     crate::domain::view::observation::squares(&o, tau, &mut |square, heights| {
         let b = region(square, heights);
         let far = v3::len(&core::array::from_fn(|k| {
@@ -332,7 +327,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     pin::show(&mut pins, o.eye, tau, &mut shown);
     place::show(&mut read_places, o.eye, tau, &mut shown);
     shown.extend(seen.said.shown());
-    let spacing = seen.spacing;
+    let spacing = spacing_px();
     // What was drawn last by its holder's key, read once: what a holder
     // shows changed, and what was drawn stays until the new one is ready to
     // show.
@@ -482,3 +477,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
         .find(|(r, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y))
         .map(|&(_, went)| went)
 }
+
+#[cfg(test)]
+#[path = "arrangement.test.rs"]
+mod test;
