@@ -189,10 +189,8 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 /// The width a place keeps to itself on the screen, in CSS pixels: its name
 /// wraps to it and its marker's region is it. A marker is laid out as the
 /// shell's text is, in CSS pixels, so the width is one on every screen, set
-/// to hold a name of a few words: a place's cell, sixteen camera grid cells
-/// (pxl-spec bake/tile/place.rs `SPREAD_STEPS`), on a view 1080 CSS pixels
-/// high at 50°. Which markers find room is then the screen's room, as on any
-/// map.
+/// by eye to hold a name of a few words. Which markers find room is then the
+/// screen's room, as on any map.
 const SPACING_PX: f64 = 193.0;
 
 pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {

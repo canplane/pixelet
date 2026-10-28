@@ -13,7 +13,7 @@ pub const DEFAULT_AZIMUTH: f64 = 0.0;
 /// From straight down (0) toward horizontal (PI / 2): 60°, the eye 30° above
 /// the ground plane.
 pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
-/// Felt-right against the scale bar: about 0.18 m on a 1080px viewport at
+/// Felt-right against the scale bar: about 0.19 m on a 1080px viewport at
 /// Seoul's latitude.
 pub const MIN_DIST: f64 = 2.0;
 /// Looking straight down from here the ground wants step 2^11, which the
