@@ -7,6 +7,7 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
+use crate::frame::shader::word::DECOR_GROUPS;
 
 use crate::gpu::api::{Gpu, Image};
 use crate::gpu::grown::Drawn;
@@ -18,7 +19,10 @@ use crate::gpu::pass::model::{
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
 
-pub const GROUPS: usize = 64;
+const _: () = assert!(
+    pxl_spec_core::scatter::GROUPS as usize <= DECOR_GROUPS,
+    "a decor variant past the draw groups"
+);
 
 pub struct DecorPass {
     lit: Built,
@@ -27,7 +31,7 @@ pub struct DecorPass {
     prepass: Built,
     uniforms: DrawUniforms,
     /// Each group's mesh, 0 for a model not yet registered, and its skin's image.
-    groups: [(u32, Option<Image>); GROUPS],
+    groups: [(u32, Option<Image>); DECOR_GROUPS],
 }
 
 impl DecorPass {
@@ -38,12 +42,12 @@ impl DecorPass {
             depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
-            groups: [(0, None); GROUPS],
+            groups: [(0, None); DECOR_GROUPS],
         }
     }
 
     pub fn set_models(&mut self, groups: &[(u32, Option<Image>, Extent)]) {
-        for (group, &(mesh, image, _)) in groups.iter().take(GROUPS).enumerate() {
+        for (group, &(mesh, image, _)) in groups.iter().take(DECOR_GROUPS).enumerate() {
             self.groups[group] = (mesh, image);
         }
     }

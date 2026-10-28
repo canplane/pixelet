@@ -25,6 +25,9 @@ pub const PLACED: u32 = 0;
 
 use crate::answer::FULL;
 
+/// `FULL`'s bits: a share shifted past them is none.
+const FULL_BITS: u32 = FULL.trailing_zeros();
+
 /// The edits a frame hands what reads them at most (pxl-kernel
 /// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box
 /// of leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel
@@ -156,7 +159,7 @@ pub struct Held(u32);
 /// A held slot's branch bit, over its zoom.
 const FOLDED: u32 = 1 << 5;
 const ZOOM_MASK: u32 = FOLDED - 1;
-const SLOT_SHIFT: u32 = 6;
+const SLOT_SHIFT: u32 = FOLDED.trailing_zeros() + 1;
 
 impl Held {
     /// Nothing is placed under the node.
@@ -515,8 +518,9 @@ fn cells_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
     if !held.folded() {
         return voxel(low(word));
     }
-    let eighth = if 3 * d + 3 < 16 {
-        FULL >> (3 * d + 3)
+    let shift = crate::answer::KEPT_BITS * (d + 1);
+    let eighth = if shift <= FULL_BITS {
+        FULL >> shift
     } else {
         0
     };

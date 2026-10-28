@@ -24,8 +24,8 @@ fn airmass(sin_alt: f32) -> f32 {
 
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut {
-  let at = catalog[2u * i];
-  let color = catalog[2u * i + 1u].rgb;
+  let at = catalog[STAR_RECORD_VEC4S * i];
+  let color = catalog[STAR_RECORD_VEC4S * i + 1u].rgb;
   let dir = (stars_sky() * vec4f(at.xyz, 0.0)).xyz;
 
   var o: StarOut;

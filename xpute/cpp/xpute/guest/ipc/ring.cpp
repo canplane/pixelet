@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "xpute/kit/status/bug.hpp"
+#include "xpute/kit/wire/xtp/spec.hpp"
 
 namespace xpute {
 
@@ -12,9 +13,9 @@ static bool power_of_two(std::uint32_t n) noexcept {
     return n != 0 && (n & (n - 1)) == 0;
 }
 
-// Payloads are padded to 8 bytes.
+// Payloads are padded to XTP's word (`WORD_SZ`).
 static constexpr std::uint64_t padded(std::uint64_t n) noexcept {
-    return (n + 7) / 8 * 8;
+    return (n + xtp::WORD_SZ - 1) / xtp::WORD_SZ * xtp::WORD_SZ;
 }
 
 Ring::Ring(Memory mem, std::uint32_t at) noexcept
@@ -24,7 +25,7 @@ Ring::Ring(Memory mem, std::uint32_t at) noexcept
 
 Ring Ring::init(Memory mem, std::uint32_t at, std::uint32_t cap, std::uint32_t slot_base, std::uint32_t slot_bytes) noexcept {
     ensure(power_of_two(cap), Errno::einval, cap);
-    ensure(power_of_two(slot_bytes) && slot_bytes % 8 == 0, Errno::einval, slot_bytes);
+    ensure(power_of_two(slot_bytes) && slot_bytes % xtp::WORD_SZ == 0, Errno::einval, slot_bytes);
     std::memset(mem.at(at), 0, ring_bytes(cap));
     mem.set_word(at + 4 * ring::CAP, cap);
     mem.set_word(at + 4 * ring::SLOT_BYTES, slot_bytes);
@@ -83,9 +84,9 @@ Result<std::span<const std::uint8_t>> Ring::packet(const Frame &f) const noexcep
     std::uint32_t base = slot_base_, slot = slot_bytes_;
     if (f.packet_at < base) return marshal_error(Errno::ebadmsg);
     std::uint64_t off = f.packet_at - base;
-    if (off % slot != 0 || off + 16 > slots_bytes(cap(), slot)) return marshal_error(Errno::ebadmsg);
+    if (off % slot != 0 || off + xtp::HDR_SZ > slots_bytes(cap(), slot)) return marshal_error(Errno::ebadmsg);
     // The header, then the payload its second word names, to the word.
-    std::uint64_t n = padded(16 + std::uint64_t{mem_.word(f.packet_at + 8)});
+    std::uint64_t n = padded(xtp::HDR_SZ + std::uint64_t{mem_.word(f.packet_at + xtp::WORD_SZ)});
     if (n > slot) return marshal_error(Errno::ebadmsg);
     return std::span<const std::uint8_t>(mem_.at(f.packet_at), static_cast<std::size_t>(n));
 }

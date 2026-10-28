@@ -17,7 +17,8 @@
 
 use crate::cast::{Detail, Ends, Met, Ray};
 use crate::{axis, FRAC_W};
-use crate::param::sun::SAMPLE;
+use crate::param::sun::{SAMPLE, SPREAD};
+use core::f32::consts::SQRT_2;
 
 /// The sun's cast as the eye's words hold it (`eye::SUN`), a frame's
 /// constants worked out once off the light box (`Sun::of`), each a vec4's
@@ -194,8 +195,7 @@ impl Sun {
     /// Whether box texel `p` of the map `size` a side lies where a receiver
     /// may read it, grown by `pad` texels: within `rim` of the box's
     /// half-width about its middle, where the eye stands, as past it a
-    /// shadow has faded to nothing (pxl-render shadow.wgsl `sun_lit`). The
-    /// box is snapped by under a texel, which `READ_PAD` holds.
+    /// shadow has faded to nothing (pxl-render shadow.wgsl `sun_lit`).
     pub fn read(&self, size: u32, p: [i32; 2], pad: f32) -> bool {
         let half = size as f32 / 2.0;
         let (x, y) = (p[0] as f32 + 0.5 - half, p[1] as f32 + 0.5 - half);
@@ -449,7 +449,7 @@ pub const TILE: u32 = 8;
 pub const BEAM: u32 = TILE;
 pub const BEAM_WINDOW: u32 = 5;
 const _: () = assert!(
-    BEAM_WINDOW as f32 >= 4.899,
+    BEAM_WINDOW as f32 >= 2.0 * crate::cast::SQRT_6,
     "a beam ray through `Y` lies within 2√6 spacings"
 );
 
@@ -459,6 +459,21 @@ const _: () = assert!(
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
 /// every sun ray starts apart.
 pub const LINE_ORIGIN: u32 = crate::beam::LINE_WORDS;
+
+/// How far past the disk a receiver reads the map reaches, in texels, at
+/// worst (pxl-render shadow.wgsl `sun_lit`): its corner tap `SPREAD` each
+/// way, and past it the neighbour its linear compare filters in, a texel
+/// each way, so both along a diagonal. The rim is measured at the
+/// receiver's offset point, so its normal offset adds none; and the fade
+/// and `Sun::read` both measure from the snapped box's middle, its one
+/// matrix (pxl-render gpu/shadow.rs `aim`), so its snap adds none.
+pub const READ_PAD: f32 = (SPREAD + FILTER) * SQRT_2;
+const FILTER: f32 = 1.0;
+
+/// The tiles a receiver that reads a slot may stand in, across and down from
+/// the slot's tile, from the first to the last: a tap reads that far
+/// (pxl-shader sun.rs `sun_reach_cs`).
+pub const READ_TILES: [i32; 2] = [-2, 1];
 pub const LINE_WORDS: u32 = LINE_ORIGIN + 3;
 /// What a cell hands its texels: their start, f32 bits, and the beam ray
 /// whose line they resume from, by its index (`line`).
@@ -503,7 +518,7 @@ pub const fn beam_words(size: u32) -> u32 {
 /// width`, and a Q3 step's rounding of each ray's start on the near plane,
 /// two.
 pub fn margin(width: f32) -> f32 {
-    2.0 * libm::sqrtf(6.0) * width + 2.0 / (1u32 << FRAC_W) as f32
+    2.0 * crate::cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
 }
 
 /// The sun's map as the eye's rays are cast, every slot every frame
@@ -917,7 +932,8 @@ mod tests {
                         let reached = (0..=up.1).any(|k| {
                             let o = Sun::up_at(up, k);
                             let d = [t[0] - o[0] - stood[0], t[1] - o[1] - stood[1]];
-                            (-1..=2).contains(&d[0]) && (-1..=2).contains(&d[1])
+                            let read = -READ_TILES[1]..=-READ_TILES[0];
+                            read.contains(&d[0]) && read.contains(&d[1])
                         });
                         assert!(reached, "sun {sx} {sz} base {base:?} h {h} tap {a} {b}");
                     }

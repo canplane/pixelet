@@ -60,7 +60,7 @@ fn face_image(normal: vec3f) -> u32 {
 
 // Gradients are passed in because the read is inside a branch.
 fn sample_tap(layer: f32, image: u32, uv: vec2f, ddx: vec2f, ddy: vec2f, fallback: vec3f) -> vec3f {
-  let l = u32(clamp(layer, 0.0, 255.0) + 0.5);
+  let l = u32(clamp(layer, 0.0, NO_LAYER) + 0.5);
   if (l >= arrayLength(&layer_slot)) {
     return fallback;
   }

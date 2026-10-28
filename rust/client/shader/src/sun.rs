@@ -485,11 +485,6 @@ pub fn sun_cs(
     );
 }
 
-const _: () = assert!(
-    pxl_spec_core::ray::MISS_LANES == 64,
-    "`sun_miss_cs` is a workgroup of `ray::MISS_LANES` slots, as `miss_list_cs` is"
-);
-
 /// The world's depth from the sun into each slot `sun_cs` listed: a thread
 /// a slot, `ray::MISS_LANES` a workgroup and `ray::MISS_ACROSS` workgroups
 /// a row, each past the count returning at once, as the eye's listed pixels
@@ -703,7 +698,7 @@ pub fn sun_reach_cs(
     if !s.read(
         side,
         middle,
-        pxl_spec_core::param::sun::READ_PAD + t as f32 * core::f32::consts::FRAC_1_SQRT_2,
+        pxl_spec_core::sun::READ_PAD + t as f32 * core::f32::consts::FRAC_1_SQRT_2,
     ) {
         return;
     }
@@ -714,10 +709,11 @@ pub fn sun_reach_cs(
     let mut k = 0;
     while k <= up.1 && !read {
         let o = Sun::up_at(up, k);
-        let mut b = -2;
-        while b <= 1 && !read {
-            let mut a = -2;
-            while a <= 1 && !read {
+        let [first, last] = pxl_spec_core::sun::READ_TILES;
+        let mut b = first;
+        while b <= last && !read {
+            let mut a = first;
+            while a <= last && !read {
                 read = stood(&*list, side, cast, [t[0] - o[0] + a, t[1] - o[1] + b]);
                 a += 1;
             }

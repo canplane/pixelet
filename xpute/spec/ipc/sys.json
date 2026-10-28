@@ -61,6 +61,42 @@
     }
   },
 
+  "args": {
+    "$type": "u32",
+    "$doc": [
+      "How many words of arguments each call's record takes, as its `op` lists them; OPENAT's",
+      "and ABORT's end in bytes after them."
+    ],
+    "OPENAT": {
+      "$value": 3
+    },
+    "READ": {
+      "$value": 3
+    },
+    "WRITE": {
+      "$value": 3
+    },
+    "CLOSE": {
+      "$value": 1
+    },
+    "ABORT": {
+      "$value": 7
+    }
+  },
+
+  "abort": {
+    "$type": "u32",
+    "$doc": ["Where ABORT's two values lie among its arguments, each low word then high."],
+    "A": {
+      "$value": 3,
+      "$doc": ["a."]
+    },
+    "B": {
+      "$value": 5,
+      "$doc": ["b."]
+    }
+  },
+
   "flag": {
     "$type": "u32",
     "$doc": ["How OPENAT opens."],

@@ -14,6 +14,7 @@ use pxl_spec_core::{beam, eye, raster, sun};
 use super::cast::HEAD_BINDING;
 
 use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER_SAMPLE_BOX};
+use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
     Load, Stamp,
@@ -89,7 +90,7 @@ impl Raster {
             boxes: 0,
             room: 0,
             uniform: g.buffer(
-                word_bytes(UNIFORM),
+                word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             picks: 0,
@@ -160,8 +161,8 @@ impl Raster {
         let [w, h] = size.map(|s| s.max(1) as f32);
         let reach = f32::from_bits(e[eye::REACH]);
         let pixel = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
-        let turn = 36 * u32::from(raster::flipped(r, u, f));
-        let uniform = [
+        let turn = BOX_VERTICES * u32::from(raster::flipped(r, u, f));
+        let uniform: [f32; RASTER_FLOATS] = [
             r[0],
             r[1],
             r[2],
@@ -272,9 +273,6 @@ impl Raster {
     }
 }
 
-/// The raster's view's words (raster.wgsl `Raster`).
-const UNIFORM: usize = 24;
-
 impl Raster {
     /// The sun's buffers and its targets at the map's `size`, made once;
     /// whether they are.
@@ -289,7 +287,7 @@ impl Raster {
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
             s.uniform = g.buffer(
-                word_bytes(UNIFORM),
+                word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
@@ -334,9 +332,9 @@ impl Raster {
         };
         let (r, d) = (unit(v.across), unit(v.down));
         let up = [-d[0], -d[1], -d[2]];
-        let turn = 36 * u32::from(raster::flipped(r, up, v.dir));
+        let turn = BOX_VERTICES * u32::from(raster::flipped(r, up, v.dir));
         let n = size as f32;
-        let uniform = [
+        let uniform: [f32; RASTER_FLOATS] = [
             r[0],
             r[1],
             r[2],

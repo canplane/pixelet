@@ -73,6 +73,10 @@ fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
     }
 }
 
+/// `cast_cs`'s workgroup a side, a square of pixels (pxl-tool check_rules.rs
+/// `WORKGROUPS`).
+const CAST_SIDE: u32 = 8;
+
 /// Each pixel's ray: the cell the raster kept at it (pxl-spec-core
 /// `raster`; pxl-render gpu/ray/raster.rs), the nearest a sample stopped at
 /// that its ray enters across the axis that sample entered by, tested again
@@ -173,7 +177,7 @@ pub fn cast_cs(
     counted(marks, on, tally::WALKED, 1);
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
-    let whole = [size.x.div_ceil(8), size.y.div_ceil(8)];
+    let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
     let at = listed(marks, observed::MARKS, whole);
     if at < observed::MARKS {
         seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);

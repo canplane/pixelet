@@ -24,7 +24,7 @@ struct Box {
   layer: u32,
 };
 
-const XY_STEPS: f32 = 256.0;
+const XY_STEPS: f32 = f32(BOX_XY_STEPS);
 
 fn box_pair(word: u32, step: f32) -> vec2f {
   return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
@@ -51,7 +51,6 @@ const FACE_CORNER = array<vec3f, 24>(
   vec3f(-0.5, -0.5, -0.5), vec3f(-0.5, 0.5, -0.5), vec3f(0.5, 0.5, -0.5), vec3f(0.5, -0.5, -0.5),
 );
 const FACE_TRIANGLES = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
-const BOX_VERTICES: u32 = 36u;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

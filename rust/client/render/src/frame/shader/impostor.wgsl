@@ -4,7 +4,7 @@
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;
-@group(2) @binding(2) var<uniform> fits: array<vec4f, 64>;
+@group(2) @binding(2) var<uniform> fits: array<vec4f, DECOR_GROUPS>;
 
 struct VertexIn {
   @builtin(instance_index) i: u32,

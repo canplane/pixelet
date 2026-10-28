@@ -42,8 +42,9 @@ pub trait Range {
     fn end() -> usize;
 }
 
-/// Enough free list heads for any pair of exponents in a 32-bit address space.
-const MAX_BUCKETS: usize = 33;
+/// Enough free list heads for any pair of exponents in the address space,
+/// 0 through `ADDRESS_BITS`.
+const MAX_BUCKETS: usize = super::ADDRESS_BITS + 1;
 
 /// A circular free list threaded through the free blocks, so the smallest
 /// block must hold one.

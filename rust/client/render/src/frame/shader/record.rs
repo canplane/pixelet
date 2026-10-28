@@ -343,12 +343,20 @@ const BOX_LANES: [Lane; 2] = [
 ];
 const PUCK_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
 const PUCK_BEACON_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
+/// A debug line's vertex, its place and its colour, a segment's two read as
+/// one instance; a debug face's vertex, its place.
+pub const DEBUG_VERTEX_BYTES: u32 = 28;
+pub const DEBUG_FACE_VERTEX_BYTES: u32 = 12;
 const DEBUG_LANES: [Lane; 1] = [Lane {
-    stride: 56,
+    stride: 2 * DEBUG_VERTEX_BYTES,
     step: PER_INSTANCE,
-    attributes: &[[0, 0, F32X3], [1, 12, F32X4], [2, 28, F32X3]],
+    attributes: &[
+        [0, 0, F32X3],
+        [1, 12, F32X4],
+        [2, DEBUG_VERTEX_BYTES, F32X3],
+    ],
 }];
-const DEBUG_FACE_LANES: [Lane; 1] = [vertex(12, &[[0, 0, F32X3]])];
+const DEBUG_FACE_LANES: [Lane; 1] = [vertex(DEBUG_FACE_VERTEX_BYTES, &[[0, 0, F32X3]])];
 
 /// `a` then `b`: a group laid out as another and more.
 const fn and<const N: usize, const M: usize, const R: usize>(

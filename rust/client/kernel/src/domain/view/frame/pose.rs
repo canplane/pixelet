@@ -13,7 +13,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
 use crate::domain::view::param::FALLBACK_G4326;
-use pxl_spec::space::camera::grid::FOV_DEG as FOV;
+use pxl_spec::space::camera::grid::{fov, HALF_TAN};
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -168,7 +168,7 @@ fn compose() {
     // plane holds every height's precision.
     mat4::perspective(
         &mut v.proj,
-        FOV.to_radians(),
+        fov(),
         v.width / v.height,
         crate::domain::view::param::NEAR,
     );
@@ -185,7 +185,7 @@ fn compose() {
 /// since the turn composed the view.
 pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
     let v = view();
-    let tan = libm::tan(FOV.to_radians() / 2.0);
+    let tan = HALF_TAN;
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();

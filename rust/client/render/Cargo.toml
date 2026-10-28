@@ -31,6 +31,10 @@ pxl-spec-core.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
 naga = { version = "30", features = ["wgsl-in"] }
 
+[dev-dependencies]
+# The Moon's shipped map read back, so its mean holds `sky::moon::MAP_MEAN`
+# (param.test.rs).
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [lints]
 workspace = true

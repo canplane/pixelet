@@ -22,7 +22,8 @@
 /// face (pxl-shader `face_cs`), `FACES_LANES` boxes a workgroup
 /// (`ARGS_FACES`), its workgroups raised as boxes are written, the other
 /// two 1. One dispatch's 65535 workgroups hold 4.2M boxes, a box a sample
-/// at most and a sample 16 pixels: past 67 Mpx.
+/// at most; the samples are `param::beam::SAMPLE` a camera grid cell a side,
+/// about 270 thousand on a 16:9 view whatever its pixels.
 /// Then the boxes' buffer, `BOX_WORDS` a box: its planes in units from the
 /// eye's origin, lowest then highest, f32 bits, its sample's number
 /// (`id_of`), and the axis its sample entered across, with `EYED` where the

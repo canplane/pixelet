@@ -13,13 +13,17 @@ use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
 /// (4); the Moon's colour and a pad (4), the sun's being white; the stars'
 /// fade, clock and the anchor's longitude (4); air (4); the stars' frame
 /// (12).
-pub const ENV_FLOATS: usize = 32;
+pub const ENV_FLOATS: usize = ENV_STARS + ENV_STAR_FRAME_FLOATS;
 pub const ENV_SUN: usize = 0;
 pub const ENV_MOON: usize = 4;
 pub const ENV_MOON_COLOR: usize = 8;
 pub const ENV_SKY: usize = 12;
 pub const ENV_AIR: usize = 16;
 pub const ENV_STARS: usize = 20;
+/// The stars' frame, three columns a vec4 each, their `w` unread.
+pub const ENV_STAR_FRAME_FLOATS: usize = 3 * 4;
+/// Its third column, the celestial pole.
+pub const ENV_POLE: usize = ENV_STARS + 2 * 4;
 
 #[derive(Clone, Copy)]
 pub struct Light {

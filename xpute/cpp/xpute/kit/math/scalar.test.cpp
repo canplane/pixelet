@@ -31,6 +31,11 @@ XPUTE_TEST(scalar_computes_what_the_record_holds) {
     });
 }
 
+XPUTE_TEST(scalar_the_tolerance_is_the_records) {
+    Golden v = Golden::load("spec/golden/math/scalar.tsv");
+    XPUTE_CHECK_EQ(std::bit_cast<std::uint64_t>(EPS), std::bit_cast<std::uint64_t>(v.f64("eps")), "eps");
+}
+
 XPUTE_TEST(scalar_a_half_way_case_rounds_toward_positive_infinity) {
     XPUTE_CHECK(round_half_up(2.5) == 3.0);
     XPUTE_CHECK(round_half_up(-2.5) == -2.0);

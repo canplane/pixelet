@@ -99,13 +99,15 @@ fn main() {
         use pxl_spec_core::raster::{
             corner, BOX_AXIS, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR,
         };
-        let corners: Vec<String> = (0..72)
-            .map(|k| corner(k % 36, k >= 36))
+        let n = word::BOX_VERTICES;
+        let corners: Vec<String> = (0..2 * n)
+            .map(|k| corner(k % n, k >= n))
             .map(|c| format!("vec3f({}.0, {}.0, {}.0)", c[0], c[1], c[2]))
             .collect();
         let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
         let raster = format!(
-            "const RASTER_CORNERS = array<vec3f, 72>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            "const RASTER_CORNERS = array<vec3f, {}>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            2 * n,
             corners.join(", "),
             EYED - 1
         );
@@ -168,6 +170,14 @@ fn main() {
 /// its stops.
 fn debug_looks() -> String {
     use debug_look::{grid, share, steps};
+    // A world's cell spans (1, `SPANS`] of the view's cells where the rays
+    // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
+    // squared is within (1, `SPANS`²]: the tints' bounds are those.
+    let spans = pxl_spec_core::grid::SPANS;
+    assert!(
+        share::finer::most == 1.0 && share::within::most == spans * spans,
+        "debug_look.json's share bounds are the split's"
+    );
     let srgb = |c: u32| [c >> 16, c >> 8, c].map(|v| (v & 255) as f32 / 255.0);
     let light = |c: u32| {
         srgb(c).map(|v| {
@@ -322,7 +332,10 @@ fn params() -> String {
 /// `NIGHT_FALL`), so one shared with render's would not build.
 fn spec_params() -> String {
     let [from, to] = pxl_spec_core::param::night::FALL.map(|v| v as f32);
-    format!("const NIGHT_FALL: vec2f = vec2f({from:?}, {to:?});\n")
+    let spread = pxl_spec_core::param::sun::SPREAD;
+    format!(
+        "const NIGHT_FALL: vec2f = vec2f({from:?}, {to:?});\nconst SUN_SPREAD: f32 = {spread:?};\n"
+    )
 }
 
 /// What the host lays out and every shader reads (frame/shader/word.rs), as
@@ -341,6 +354,20 @@ fn words() -> String {
         vec4s("CLOUDS", CLOUDS_FLOATS),
         vec4s("STARS", STARS_FLOATS),
         vec4s("AO", AO_FLOATS),
+        vec4s("MARKER", MARKER_FLOATS),
+        vec4s("STAR_RECORD", STAR_RECORD_FLOATS),
+        format!("const MARKER_INSTANCE_FLOATS: u32 = {MARKER_INSTANCE_FLOATS}u;\nconst PUCK_ZONE_INSTANCE_FLOATS: u32 = {PUCK_ZONE_INSTANCE_FLOATS}u;\n"),
+        format!("const AO_DOWNSCALE: u32 = {AO_DOWNSCALE}u;\nconst AO_NOISE_SIDE: u32 = {AO_NOISE_SIDE}u;\nconst DECOR_GROUPS: u32 = {DECOR_GROUPS}u;\n"),
+        [
+            ("TRANSMITTANCE_SIZE", TRANSMITTANCE_SIZE),
+            ("MULTISCATTER_SIZE", MULTISCATTER_SIZE),
+            ("SKY_VIEW_SIZE", SKY_VIEW_SIZE),
+            ("IRRADIANCE_SIZE", IRRADIANCE_SIZE),
+        ]
+        .map(|(name, (w, h))| format!("const {name}: vec2f = vec2f({w}.0, {h}.0);\n"))
+        .concat(),
+        format!("const SHEET_FILL: u32 = {SHEET_FILL}u;\nconst SHEET_STROKE: u32 = {SHEET_STROKE}u;\nconst SHEET_TRIANGLE: u32 = {SHEET_TRIANGLE}u;\nconst SHEET_TEXT: u32 = {SHEET_TEXT}u;\nconst SHEET_HALO: u32 = {SHEET_HALO}u;\n"),
+        format!("const BOX_XY_STEPS: u32 = {BOX_XY_STEPS}u;\nconst BOX_VERTICES: u32 = {BOX_VERTICES}u;\n"),
         format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\n"),
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
@@ -427,6 +454,7 @@ fn assemble(out: &Path) {
     };
     let constant = read("constant");
     let (mut sources, mut stages) = (String::new(), String::new());
+    let mut rastered = false;
     for (kind, parts) in part::PARTS.iter().enumerate() {
         let generated = parts.len() == 1 && parts[0].ends_with(".gen");
         let mut text = if generated {
@@ -440,6 +468,22 @@ fn assemble(out: &Path) {
         }
         let module = naga::front::wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
+        // The raster's view as the host writes it (frame/shader/word.rs `RASTER_FLOATS`).
+        let raster = module
+            .types
+            .iter()
+            .find(|(_, t)| t.name.as_deref() == Some("Raster"));
+        if let Some((_, ty)) = raster {
+            rastered = true;
+            let naga::TypeInner::Struct { span, .. } = ty.inner else {
+                panic!("raster.wgsl's `Raster` is a struct")
+            };
+            assert_eq!(
+                span as usize,
+                4 * word::RASTER_FLOATS,
+                "raster.wgsl's `Raster` against `RASTER_FLOATS`"
+            );
+        }
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
@@ -479,6 +523,7 @@ fn assemble(out: &Path) {
             .collect();
         stages += &format!("    &[{}],\n", entries.join(", "));
     }
+    assert!(rastered, "no shader holds raster.wgsl's `Raster`");
     let root = out.parent().expect("OUT_DIR");
     std::fs::write(
         root.join("sources.rs"),

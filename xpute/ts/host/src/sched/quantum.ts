@@ -22,8 +22,12 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 
 export const FRAME_WINDOW = 64;
 const MAX_FRAME_GAP_MS = 50;
-/** The longest interval turns are paced at: 60 Hz. */
-const PACED_MAX_MS = 1000 / 60;
+/** The slowest rate turns are paced at. */
+const PACED_MIN_HZ = 60;
+/** The longest interval turns are paced at. */
+const PACED_MAX_MS = 1000 / PACED_MIN_HZ;
+/** The display's refresh until gaps are seen: taken as 60 Hz, whatever the pacing. */
+const FIRST_REFRESH_MS = 1000 / 60;
 
 /** The guest waits on something only the host brings: an input or an arrival. */
 export const NO_WAKE: f64 = -1;
@@ -44,7 +48,7 @@ export interface Grant {
 }
 
 export class Quantum {
-  private readonly gaps = new Float64Array(FRAME_WINDOW).fill(1000 / 60);
+  private readonly gaps = new Float64Array(FRAME_WINDOW).fill(FIRST_REFRESH_MS);
   private readonly sorted = new Float64Array(FRAME_WINDOW);
   private gap_at = 0;
   private overrun_ms = 0;

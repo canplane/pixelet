@@ -39,7 +39,7 @@
   // The origins the Worker relays to (infra/README.md): relayed through this
   // same Worker so /geo/* and /api/* stay same-origin with the app, and no
   // CORS policy exists to configure or get wrong. Vars rather than literals
-  // in cloudflare-worker/index.ts, so another box — or a local one — is a
+  // in ts/server/edge/index.ts, so another box — or a local one — is a
   // config change. A hostname is a box and a root is a service, and the two
   // do not have to match: both roots reach the same VM, where Caddy sends
   // each to the container that answers it.

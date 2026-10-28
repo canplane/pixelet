@@ -45,6 +45,26 @@ pub mod op {
     pub const KEYS: &[&str] = &["OPENAT", "READ", "WRITE", "CLOSE", "ABORT", "PROGRAM"];
 }
 
+/// How many words of arguments each call's record takes, as its `op` lists them; OPENAT's
+/// and ABORT's end in bytes after them.
+pub mod args {
+    pub const OPENAT: u32 = 3;
+    pub const READ: u32 = 3;
+    pub const WRITE: u32 = 3;
+    pub const CLOSE: u32 = 1;
+    pub const ABORT: u32 = 7;
+    pub const KEYS: &[&str] = &["OPENAT", "READ", "WRITE", "CLOSE", "ABORT"];
+}
+
+/// Where ABORT's two values lie among its arguments, each low word then high.
+pub mod abort {
+    /// a.
+    pub const A: u32 = 3;
+    /// b.
+    pub const B: u32 = 5;
+    pub const KEYS: &[&str] = &["A", "B"];
+}
+
 /// How OPENAT opens.
 pub mod flag {
     /// To read, whole.

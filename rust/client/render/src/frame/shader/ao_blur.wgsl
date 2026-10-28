@@ -13,7 +13,7 @@ struct Run {
 @group(0) @binding(5) var<uniform> run: Run;
 
 // N8AO's generateDenoiseSamples(4, 11).
-const DISC = array<vec2f, 4>(
+const DISC = array<vec2f, AO_DENOISE_SAMPLES>(
   vec2f(0.353553, 0.000000),
   vec2f(0.000000, -0.594604),
   vec2f(-0.805927, 0.000000),
@@ -46,7 +46,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var count = 1.0;
   var disc = DISC;
   for (var k = 0; k < AO_DENOISE_SAMPLES; k++) {
-    let at = uv + (spin * disc[k]) * texel * AO_DENOISE_RADIUS;
+    let at = uv + (spin * disc[k]) * texel * (AO_DENOISE_RADIUS / f32(AO_DOWNSCALE));
     let tap = textureSampleLevel(src, src_sampler, at, 0.0);
     let tap_normal = tap.gba * 2.0 - 1.0;
     let tap_depth = depth_at(vec2i(at * ao_half()));

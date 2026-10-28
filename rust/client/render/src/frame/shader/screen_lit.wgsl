@@ -66,8 +66,8 @@ fn fs(v: VertexOut) -> FragOut {
 // finer than its threshold.
 //
 // A world's cell spans (1, 2] of the view's cells at its distance
-// (pxl-spec-core grid.rs `cell_at`, `CELLS_A_RADIAN` sides its split
-// distance), so its share of a cell squared is within (1, 4]: green there,
+// (pxl-spec-core grid.rs `cell_at`, `CELLS_A_RADIAN` / 2 sides its
+// split distance), so its share of a cell squared is within (1, 4]: green there,
 // finer blue, coarser red (debug_look.json `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   if (frame_gizmo() < 0.5) {

@@ -30,9 +30,11 @@ use crate::frame::shader::word::frame::{
     RIM_INTENSITY, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ,
     VIGNETTE,
 };
-use crate::frame::shader::word::{sky, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
+use crate::frame::shader::word::{
+    sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
+};
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::ao::ScreenAo;
+use crate::gpu::ao::{ScreenAo, MAP_BINDING};
 use crate::gpu::api::{
     buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
@@ -50,7 +52,7 @@ use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, skins_lost, FrameGroups, Stage};
-use crate::gpu::pass::puck::PuckPass;
+use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
@@ -63,9 +65,8 @@ use crate::gpu::star::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
-use crate::look::environment::{ENV_AIR, ENV_STARS, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_POLE, ENV_SUN};
 
-const BOX_VERTICES: u32 = 36;
 const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(
@@ -467,7 +468,7 @@ impl Renderer {
             frame_layout(g, &mut pipelines),
             frame_buffer,
             shadow.entries(1),
-            [ao.blank_entry(7); 2],
+            [ao.blank_entry(MAP_BINDING); 2],
             air,
         );
         let query_set = if device.timestamps { g.spans() } else { 0 };
@@ -525,7 +526,7 @@ impl Renderer {
             view_entry(4, self.pack.view),
             buffer_entry(5, self.pack.table),
             sampler_entry(6, self.pack.sampler),
-            self.ao.entry(7),
+            self.ao.entry(MAP_BINDING),
         ];
         e.extend(self.atmosphere.entries());
         e
@@ -547,7 +548,7 @@ impl Renderer {
         self.models.rebind(
             g,
             self.frame_buffer,
-            [self.ao.entry(7), self.ao.blank_entry(7)],
+            [self.ao.entry(MAP_BINDING), self.ao.blank_entry(MAP_BINDING)],
         );
     }
 
@@ -585,7 +586,7 @@ impl Renderer {
             reach * env[ENV_AIR + 1],
         );
         self.stars.lay_out(&m, env, width);
-        self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
+        self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
         self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
@@ -637,7 +638,7 @@ impl Renderer {
         self.atmosphere.lay_out(g, env);
     }
 
-    /// A box is one instance shared by 36 vertices; a draw's first box is its first
+    /// A box is one instance shared by `BOX_VERTICES`; a draw's first box is its first
     /// instance. Both vertex slots bind the same buffer; the record index rides
     /// on the first vertex.
     fn draw_boxes(&self, g: &Gpu, pass: u32, draws: &Draws) {
@@ -1134,12 +1135,12 @@ impl Renderer {
         let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
         for d in draws.iter().filter(|_| counted) {
             let tris = match d[4] {
-                PIPELINE_GHOST_BOX => d[1] * 12,
+                PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_IMPOSTOR => 2 * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
-                PIPELINE_PUCK_ZONE => 12 * d[1],
-                PIPELINE_PUCK_BEACON => 8,
+                PIPELINE_PUCK_ZONE => BOX_VERTICES / 3 * d[1],
+                PIPELINE_PUCK_BEACON => BEACON_VERTICES / 3,
                 PIPELINE_MARKER => 2 * d[1],
                 // Two a segment, and the faces'.
                 PIPELINE_DEBUG => d[1] + d[2] / 3,

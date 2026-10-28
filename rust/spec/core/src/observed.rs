@@ -41,7 +41,7 @@ use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
 use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::world::AT_WORDS;
-use crate::{wrap_index, Zoom, LEAF_CELL};
+use crate::{wrap_index, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit a slot of the
@@ -139,9 +139,13 @@ pub const SUN_BEAM_PASS: u32 = 3;
 pub const SUN_SAMPLES_PASS: u32 = 4;
 pub const SUN_MISSED_PASS: u32 = 5;
 
+/// A key's tag's bits, under its two zooms' (`key`).
+const TAG_BITS: u32 = 20;
+const _: () = assert!(TAG_BITS + 2 * ZOOM_BITS == 32, "a key is the tag and two zooms");
+
 /// The frames one clearing's keys tell apart (`tag`), before the next: as
-/// many as the tag's 20 bits hold `PASSES` tags of.
-pub const FRAMES: u32 = (1 << 20) / PASSES - 1;
+/// many as the tag's `TAG_BITS` hold `PASSES` tags of.
+pub const FRAMES: u32 = (1 << TAG_BITS) / PASSES - 1;
 
 /// Entry `i`'s first word.
 pub const fn entry_at(i: u32) -> u32 {
@@ -193,7 +197,7 @@ fn mix(h: u32, v: u32) -> u32 {
 
 /// The key of an entry the walk tagged `tag` wrote, asked at `[far, near]`.
 pub const fn key(tag: u32, [far, near]: [Zoom; 2]) -> u32 {
-    tag | far << 20 | near << 26
+    tag | far << TAG_BITS | near << (TAG_BITS + ZOOM_BITS)
 }
 
 /// A walk's tag: its frame's number and its pass, the beam rays' 0, the
@@ -205,12 +209,14 @@ pub const fn tag(frame: u32, pass: u32) -> u32 {
 
 /// The tag a key holds.
 pub const fn tag_of(key: u32) -> u32 {
-    key & 0xF_FFFF
+    key & ((1 << TAG_BITS) - 1)
 }
 
 /// Whether a key says its entry holds the node asked at `asked`.
 pub const fn holds(key: u32, [far, near]: [Zoom; 2]) -> bool {
-    key != 0 && (key >> 20) & 63 == far && key >> 26 == near
+    key != 0
+        && (key >> TAG_BITS) & ((1 << ZOOM_BITS) - 1) == far
+        && key >> (TAG_BITS + ZOOM_BITS) == near
 }
 
 /// A kind as a word, and back.
@@ -319,7 +325,7 @@ pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, slot: u32) ->
     moved[(k / 32) as usize] & 1 << (k % 32) != 0
 }
 
-const _: () = assert!(crate::FINEST_ZOOM < 64, "a key holds a zoom in six bits");
+const _: () = assert!(crate::FINEST_ZOOM < 1 << ZOOM_BITS, "a key holds a zoom in its bits");
 
 #[cfg(test)]
 mod tests {

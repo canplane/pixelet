@@ -8,9 +8,16 @@
 
 use std::path::Path;
 
-/// Carto's symbols are 14 pixels, drawn at the sheet's two device pixels a
-/// pixel (pxl-render gpu/sheet.rs `SHEET_SCALE`).
-pub const SYMBOL_PX: u32 = 28;
+/// Carto's symbols, drawn at the sheet's device pixels a pixel.
+pub const SYMBOL_PX: u32 = CARTO_PX * SHEET_RATIO;
+
+/// Carto's symbols' side, in pixels.
+const CARTO_PX: u32 = 14;
+
+/// The sheet's device pixels a pixel (pxl-render gpu/sheet.rs `SHEET_SCALE`),
+/// pxl-spec space/camera/grid.rs `RATIO_MAX`, which no generator may depend
+/// on, held equal by a test that reads it.
+const SHEET_RATIO: u32 = 2;
 
 pub struct Symbol {
     /// As Carto gives it.
@@ -156,3 +163,7 @@ pub fn render_ts(symbols: &[Symbol]) -> String {
     ts.push_str("};\n");
     ts
 }
+
+#[cfg(test)]
+#[path = "symbol.test.rs"]
+mod test;

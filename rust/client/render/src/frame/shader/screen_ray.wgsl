@@ -204,8 +204,8 @@ fn footprint(p: mat2x3f) -> vec3f {
 // cosine of the ray off the forward axis, and a cell observed there spans
 // at least that cell (the eye decides): the step is at most `SNAP / cos` of
 // a cell, under one for any field of view short of 150°, however edge on
-// the face is seen. `BEHIND` adds 2^-14 of the distance, where a cell is a
-// thousandth of it.
+// the face is seen. `BEHIND` adds 2^-14 of the distance, where a cell is at
+// least 1/96 of it (pxl-spec-core `grid::CELL`).
 fn behind(h: Hit, p: mat2x3f) -> f32 {
   let f = eye_vec3(EYE_FORWARD);
   return BEHIND + SNAP * max(abs(dot(p[0], f)), abs(dot(p[1], f))) / dot(h.at, f);

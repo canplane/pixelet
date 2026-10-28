@@ -18,10 +18,11 @@ pub mod spec;
 pub type Fd = u32;
 
 // Each call's arguments, which its record takes as an array of this length.
-pub const OPENAT_ARGS: usize = 3;
-pub const READ_ARGS: usize = 3;
-pub const WRITE_ARGS: usize = 3;
-pub const CLOSE_ARGS: usize = 1;
+pub const OPENAT_ARGS: usize = spec::args::OPENAT as usize;
+pub const READ_ARGS: usize = spec::args::READ as usize;
+pub const WRITE_ARGS: usize = spec::args::WRITE as usize;
+pub const CLOSE_ARGS: usize = spec::args::CLOSE as usize;
+const ABORT_ARGS: usize = spec::args::ABORT as usize;
 
 /// The most one descriptor records in a turn, its name `path` bytes long: its
 /// open, a read or a write, and its close, twice where it is stopped.
@@ -113,15 +114,12 @@ impl Sys {
     /// Drops the turn's other calls and publishes the report alone, at once.
     pub fn abort(&mut self, errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
         self.stream.publish();
-        let args = [
-            errnum as i32 as u32,
-            at.line(),
-            at.column(),
-            a as u32,
-            (a >> 32) as u32,
-            b as u32,
-            (b >> 32) as u32,
-        ];
+        let mut args: [u32; ABORT_ARGS] =
+            [errnum as i32 as u32, at.line(), at.column(), 0, 0, 0, 0];
+        for (i, v) in [(spec::abort::A, a), (spec::abort::B, b)] {
+            args[i as usize] = v as u32;
+            args[i as usize + 1] = (v >> 32) as u32;
+        }
         self.stream
             .record(spec::op::ABORT, &args, &[], Some(at.file().as_bytes()));
         self.stream.publish();

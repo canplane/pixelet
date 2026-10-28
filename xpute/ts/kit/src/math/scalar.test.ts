@@ -9,6 +9,7 @@ import {
   approx_eq,
   ceil_to_step,
   clamp,
+  EPS,
   floor_to_step,
   inv_lerp,
   lerp,
@@ -50,4 +51,9 @@ Deno.test("scalar computes what the record holds", async () => {
     same("round_to_step", round_to_step(x, s));
     same("ceil_to_step", ceil_to_step(x, s));
   });
+});
+
+Deno.test("the tolerance is the record's", async () => {
+  const v = await Golden.load("golden/math/scalar.tsv");
+  assertEquals(bits(EPS), bits(v.f64("eps")));
 });

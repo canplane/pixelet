@@ -273,7 +273,7 @@ fn function_() {
                                         let _e227 = atomicAdd((&global_6.member[_e223]), 1u);
                                         let _e228 = (_e219 & 255u);
                                         let _e231 = ((_e219 >> bitcast<u32>(8i)) & 255u);
-                                        let _e234 = ((_e219 >> bitcast<u32>(16i)) & 3u);
+                                        let _e234 = ((_e219 >> bitcast<u32>(16u)) & 3u);
                                         if (_e228 < _e50) {
                                         } else {
                                             phi_786_ = true;

@@ -10,11 +10,11 @@ use crate::space::coord::zoom::{units, Zoom};
 
 // ---- the view's knobs, beside pxl-spec-core grid.rs's ----
 
-/// The vertical field of view, in degrees: the view's (pxl-kernel
-/// domain/view/frame/pose.rs `ray_of`). The angle whose half's tangent is
-/// 1/2, so the view's height spans a unit at unit distance
-/// (doc/experiment/20261028-the-cell-and-the-fov.md).
-pub const FOV_DEG: f64 = 53.130_102_354_155_99;
+/// The tangent of half the vertical field of view, the view's (pxl-kernel
+/// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
+/// distance, a field of 53.13° (`fov`;
+/// doc/experiment/20261028-the-cell-and-the-fov.md).
+pub const HALF_TAN: f64 = 0.5;
 
 /// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
 /// and where more pixels stop being seen. The CSS reference pixel subtends
@@ -25,6 +25,11 @@ pub const FOV_DEG: f64 = 53.130_102_354_155_99;
 pub const RATIO_MAX: f64 = 2.0;
 
 // ---- derived from the knobs ----
+
+/// The vertical field of view, in radians (`HALF_TAN`).
+pub fn fov() -> f64 {
+    2.0 * libm::atan(HALF_TAN)
+}
 
 /// The view's cells a radian (pxl-spec-core `grid::CELLS_A_RADIAN`).
 pub const CELLS_A_RADIAN: f64 = pxl_spec_core::grid::CELLS_A_RADIAN as f64;
@@ -41,11 +46,11 @@ pub const SPLIT: f64 = pxl_spec_core::grid::SPLIT as f64;
 /// (pxl-spec-core `grid::CELL`).
 pub const CELL: f64 = 1.0 / CELLS_A_RADIAN;
 
-/// Where ground starts being drawn with cells at `cell_zoom`, going out:
-/// where its side spans two of the view's cells. A window holds them out to
-/// `WINDOW_MARGIN` times as far.
+/// Where ground starts being drawn with cells at `cell_zoom`, going out: where
+/// its side spans `SPANS` of the view's cells (pxl-spec-core `grid`). A window
+/// holds them out to `WINDOW_MARGIN` times as far.
 pub const fn split_distance(cell_zoom: Zoom) -> f64 {
-    CELLS_A_RADIAN * units(cell_zoom) / 2.0
+    CELLS_A_RADIAN * units(cell_zoom) / pxl_spec_core::grid::SPANS as f64
 }
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared: the

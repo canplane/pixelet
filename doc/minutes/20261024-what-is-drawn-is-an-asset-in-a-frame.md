@@ -281,10 +281,10 @@ kernel/src/
   > (`slots_of` over `MAX_LIVE_UPLOADS`, which sums the catalogs' `MODELS_MAX`),
   > the turn's task pool (`sched/edge.rs` `TASKS`, a const generic over
   > `load::LOAD_FILES`), the loader's tables and the renderer's
-  > `gpu/pass/decor.rs` `GROUPS` are sized by the compiled catalog, and `.fixed`
-  > is asserted against the phone's heap at compile time. Laid at boot, each
-  > needs a bound of its own (a most models, a most loads) or to move to the
-  > heap.
+  > `frame/shader/word.rs` `DECOR_GROUPS` are sized by the compiled catalog,
+  > and `.fixed` is asserted against the phone's heap at compile time. Laid at
+  > boot, each needs a bound of its own (a most models, a most loads) or to
+  > move to the heap.
 - **The spec tree.** `spec/spec/block/` holds the one catalog; whether it
   becomes `spec/spec/asset/`, and what the file table is named then.
 

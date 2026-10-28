@@ -40,7 +40,7 @@ use pxl_spec::space::layer::tile::tile_at;
 /// What it reads, and where `make download-earth` keeps it.
 const SOURCE: &str = "infra/earth/source.json";
 const RAW: &str = "infra/earth/raw";
-const GLOBAL: (u32, u32) = (2048, 1024);
+const GLOBAL: (u32, u32) = pxl_spec::bake::tile::earth::PICTURE;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.

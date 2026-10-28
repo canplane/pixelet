@@ -42,6 +42,24 @@ export const op = {
   PROGRAM: 2147483648 as number,
 } as const;
 
+/** How many words of arguments each call's record takes, as its `op` lists them; OPENAT's
+ * and ABORT's end in bytes after them. */
+export const args = {
+  OPENAT: 3 as number,
+  READ: 3 as number,
+  WRITE: 3 as number,
+  CLOSE: 1 as number,
+  ABORT: 7 as number,
+} as const;
+
+/** Where ABORT's two values lie among its arguments, each low word then high. */
+export const abort = {
+  /** a. */
+  A: 3 as number,
+  /** b. */
+  B: 5 as number,
+} as const;
+
 /** How OPENAT opens. */
 export const flag = {
   /** To read, whole. */

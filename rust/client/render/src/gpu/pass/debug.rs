@@ -4,7 +4,9 @@
 //! camera grid over all of it, off the frame's cell and the sky's ray.
 
 use crate::frame::draw::{uniform_of, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
-use crate::frame::shader::record::PIPELINE_DEBUG_FACE;
+use crate::frame::shader::record::{
+    DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
+};
 use crate::gpu::api::{buffer_entry, bytes, pass_desc, Gpu, Load, Stamp};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -105,7 +107,13 @@ impl DebugPass {
             for (k, _, buffer, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
                 let (group, offset) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(pass, 0, buffer, lines * 28, faces * 12);
+                g.set_vertex_buffer(
+                    pass,
+                    0,
+                    buffer,
+                    lines * DEBUG_VERTEX_BYTES,
+                    faces * DEBUG_FACE_VERTEX_BYTES,
+                );
                 g.draw(pass, faces, 1, 0, 0);
             }
             g.end(pass);
@@ -131,7 +139,7 @@ impl DebugPass {
             for (k, _, buffer, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
                 let (group, offset) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(pass, 0, buffer, 0, lines * 28);
+                g.set_vertex_buffer(pass, 0, buffer, 0, lines * DEBUG_VERTEX_BYTES);
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }
