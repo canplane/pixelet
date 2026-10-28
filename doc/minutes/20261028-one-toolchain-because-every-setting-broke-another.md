@@ -1,7 +1,7 @@
 # One toolchain, because every setting broke another
 
 **2026-10-28** — recorded with the user, reconstructed from history. Written
-against main at `4679ea4d4`. It records why the TypeScript side left pnpm + Node
+against main at `c9e157b79`. It records why the TypeScript side left pnpm + Node
 for a Deno workspace in January 2026, a move whose commit (`361c796e6`, "full
 platform rewrite — xpute runtime, pxl engine, Deno migration") lists what it
 deleted but never says why. That commit is a squash: its author date is
