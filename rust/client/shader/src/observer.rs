@@ -1,17 +1,16 @@
 // pxl-shader/observer.rs
 
 //! What a cast asks of the one it casts for (`Observer`), the eye or the
-//! sun's map, and the passes every cast takes, written once over it
-//! (doc/minutes/20261022-a-cell-casts-a-beam.md): each corner's beam ray
-//! (`beam`), each cell's start off them (`cell`), each sample's walk
-//! (`sample`) and box (`sample_box`), a ray's pick (`took`), the sky about it
-//! (`sky`) or a walk of its own (`resolve`), and its walk resumed off the
-//! beam (`resume`, `walked`), each casting what its observer needs alone
-//! (`Observer::needs`). An entry is a pass's call for its observer (beam.rs,
-//! cast.rs, raster.rs, sun.rs); its lattice, its rays and what its walks
-//! leave are its own (eye.rs `Eye`, sun.rs `Map`). A pass both observers
-//! take is one entry, its observer the one its head names (either.rs
-//! `Either`), so a pass is one module whichever casts it.
+//! sun's map, and the passes every cast takes, written once over it: each
+//! corner's beam ray (`beam`), each cell's start off them (`cell`), each
+//! sample's walk (`sample`) and box (`sample_box`), a ray's pick (`took`),
+//! the sky about it (`sky`) or a walk of its own (`resolve`), and its walk
+//! resumed off the beam (`resume`, `walked`), each casting what its observer
+//! needs alone (`Observer::needs`). An entry is a pass's call for its
+//! observer (beam.rs, cast.rs, raster.rs, sun.rs); its lattice, its rays and
+//! what its walks leave are its own (eye.rs `Eye`, sun.rs `Map`). A pass both
+//! observers take is one entry, its observer the one its head names
+//! (either.rs `Either`), so a pass is one module whichever casts it.
 
 use pxl_spec_core::cast::{self, Detail, Met, Query, Until};
 use pxl_spec_core::{beam, observed, raster, tally};

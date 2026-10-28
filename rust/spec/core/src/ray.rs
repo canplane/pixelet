@@ -19,11 +19,10 @@ pub const WORDS: u32 = 4;
 pub const FACES: u32 = 3;
 
 /// The first word's fields: the value, one of the catalog's whichever
-/// source holds it (doc/minutes/20261005-the-ground-is-a-carto-palette.md,
-/// "One value space"); the face it entered through, 2·axis plus one where
-/// its outward normal points down the axis; the zoom of the cell it
-/// stopped on, six bits; the eighths of its cube the cell keeps, 0 for all
-/// eight (`answer::kept`), so the screen pass draws the box it is
+/// source holds it; the face it entered through, 2·axis plus one where its
+/// outward normal points down the axis; the zoom of the cell it stopped on,
+/// six bits; the eighths of its cube the cell keeps, 0 for all eight
+/// (`answer::kept`), so the screen pass draws the box it is
 /// (`answer::side`).
 pub use crate::answer::VALUE_BITS;
 pub const FACE_BITS: u32 = 3;

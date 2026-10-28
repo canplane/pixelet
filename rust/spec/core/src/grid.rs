@@ -1,11 +1,9 @@
 // pxl-spec-core/grid.rs
 
-//! gpu-portable: the camera grid, the one knob of resolution
-//! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
-//! "The descent"): a cell is an angle about the eye, and the zoom a node is
-//! drawn at, at a distance, is the one at which it spans a cell there. What the
-//! descent asks at a distance and how far the ground's windows reach both
-//! follow from it.
+//! gpu-portable: the camera grid, the one knob of resolution: a cell is an
+//! angle about the eye, and the zoom a node is drawn at, at a distance, is
+//! the one at which it spans a cell there. What the descent asks at a
+//! distance and how far the ground's windows reach both follow from it.
 
 use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 

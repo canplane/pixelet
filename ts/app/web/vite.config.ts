@@ -543,8 +543,7 @@ export default defineConfig(({ mode }) => {
   const isDev = appEnv === "development";
 
   // Three local servers, one per root plus the tiles a deployment reads out of
-  // the bucket instead. See
-  // doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md.
+  // the bucket instead.
   const geoBase = env.VITE_GEO_BASE_URL || geoBaseDefault;
   const tileBase = env.VITE_TILE_BASE_URL || tileBaseDefault;
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;

@@ -820,9 +820,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// cave may take it (`ground::face_cell`), the way's look where a bore's
 /// air is beside it — under or over it, or across one of its four faces,
 /// the first in `near`'s order — so a cave never opens into a way, whatever
-/// carves the ground
-/// (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md,
-/// "Separation"); else `NOTHING`. Read off the spans in place, the
+/// carves the ground; else `NOTHING`. Read off the spans in place, the
 /// column's own first: a cell it writes reads none beside it.
 pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
     let (face, n) = k.head(c);

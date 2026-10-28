@@ -112,8 +112,7 @@ struct Drawn {
 // source holds it: at the ground's cell or finer, its swatch and its layer
 // in all four taps; coarser, one colour as it reads from afar, the ground's
 // the mean of the four looks its cell folds where its face's own is among
-// them (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md,
-// "the 2 × 2 is by design").
+// them.
 fn drawn(c: vec3u) -> Drawn {
   let value = ray_value(c.x);
   let l = look(value);
@@ -202,7 +201,7 @@ fn footprint(p: mat2x3f) -> vec3f {
 // reaches it only once `SNAP·w·|a_x·n| ≥ side`. But `w·|a_x|` is a pixel's
 // width at the hit's distance, a cell of the camera grid there over the
 // cosine of the ray off the forward axis, and a cell observed there spans
-// at least that cell (the eye decides): the step is at most `SNAP / cos` of
+// at least that cell: the step is at most `SNAP / cos` of
 // a cell, under one for any field of view short of 150°, however edge on
 // the face is seen. `BEHIND` adds 2^-14 of the distance, where a cell is at
 // least 1/96 of it (pxl-spec-core `grid::CELL`).

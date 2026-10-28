@@ -4,15 +4,15 @@
   // wrangler through Deno.
   //
   // `name` becomes the *.workers.dev subdomain; a custom domain is attached
-  // in the dashboard afterward. Rationale for this shape — one Worker, one
-  // origin, no CORS — is in doc/minutes/20260816-deployment-hosting.md.
+  // in the dashboard afterward. One Worker serves it all from one origin, so
+  // there is no CORS to configure.
   "name": "pixelet",
   "main": "index.ts",
 
   // The demo answers on its own hostname, not on *.workers.dev. That is not
   // cosmetic: WAF and rate-limiting rules attach to a zone, and a workers.dev
   // subdomain is not one — there is no way to bound requests per IP while the
-  // app lives there. See doc/minutes/20260816-deployment-hosting.md.
+  // app lives there.
   //
   // `custom_domain: true` means wrangler owns the DNS record and the
   // certificate for this hostname; neither has to be created by hand, and

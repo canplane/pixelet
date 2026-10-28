@@ -12,8 +12,7 @@ use crate::space::coord::zoom::{units, Zoom};
 
 /// The tangent of half the vertical field of view, the view's (pxl-kernel
 /// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
-/// distance, a field of 53.13° (`fov`;
-/// doc/experiment/20261028-the-cell-and-the-fov.md).
+/// distance, a field of 53.13° (`fov`).
 pub const HALF_TAN: f64 = 0.5;
 
 /// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,

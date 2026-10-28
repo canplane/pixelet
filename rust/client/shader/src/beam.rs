@@ -165,9 +165,8 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A
 
 /// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
-/// root, from the root at it (doc/minutes/20261022-a-cell-casts-a-beam.md,
-/// "Where a pixel resumes"); through `q`, reading or writing, its line left
-/// where it ends to `keep`.
+/// root, from the root at it; through `q`, reading or writing, its line
+/// left where it ends to `keep`.
 pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
     q: &mut Q,
     origin: [i32; 3],

@@ -1,13 +1,11 @@
 // pxl-spec-core/world.rs
 
 //! gpu-portable: the world's one query, what is in a node at its zoom, the
-//! layers read in the order each is written over the one before
-//! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md): what is
+//! layers read in the order each is written over the one before: what is
 //! placed over all, then the separation, the ways, over the ground and its
 //! caves. Asked by every reader of the world, the GPU's cast and the CPU's
-//! alike (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md
-//! "The query between them"): each source answers from its own level of
-//! detail, and what it holds stays behind it.
+//! alike: each source answers from its own level of detail, and what it holds
+//! stays behind it.
 
 use crate::answer::{
     box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
@@ -106,23 +104,21 @@ impl At {
 /// placed in it where that fills it whole, air included, else the ground's
 /// asset with what the ways and what is placed write over it (their tree's
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
-/// `way::tree::read`), one value whichever source holds it
-/// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
-/// space"), keeping the eighths of its cube they fill together over it
-/// (`answer::cover`, `answer::eighths`, `answer::KEPT_SHIFT`), air where
-/// that is none; `PLACED_ASSET` over a placed value, the source control tells an
-/// edit by, which nothing drawn reads. Its second word is the four looks
-/// the ground's asset is drawn by (`ground::Cell::four`, `ground::word`),
-/// none for any other. Coarser, a split where
-/// any layer may fill under it at a zoom asked, each by its own bound —
-/// what is placed (`overwrite::over`), the ground's (`ground::slab`), the
-/// ways' (`way::slab`), each meeting the node (`ground::meets`) — its
-/// asset words the box in its own steps they lie in, every axis alike
-/// (`answer::box_word`, `overwrite::bound`, `ground::box_along_z`);
-/// else air, a cell of air its size, its value void; where the ground is
-/// not held, the lack. Whether a cell is the zoom asked's or coarser air is
-/// the asker's: its zoom against the finest asked (`near`), past the
-/// ground's cells, where nothing finer is, a cell either way.
+/// `way::tree::read`), one value whichever source holds it, keeping the
+/// eighths of its cube they fill together over it (`answer::cover`,
+/// `answer::eighths`, `answer::KEPT_SHIFT`), air where that is none;
+/// `PLACED_ASSET` over a placed value, the source control tells an edit by,
+/// which nothing drawn reads. Its second word is the four looks the ground's
+/// asset is drawn by (`ground::Cell::four`, `ground::word`), none for any
+/// other. Coarser, a split where any layer may fill under it at a zoom asked,
+/// each by its own bound — what is placed (`overwrite::over`), the ground's
+/// (`ground::slab`), the ways' (`way::slab`), each meeting the node
+/// (`ground::meets`) — its asset words the box in its own steps they lie in,
+/// every axis alike (`answer::box_word`, `overwrite::bound`,
+/// `ground::box_along_z`); else air, a cell of air its size, its value void;
+/// where the ground is not held, the lack. Whether a cell is the zoom asked's
+/// or coarser air is the asker's: its zoom against the finest asked (`near`),
+/// past the ground's cells, where nothing finer is, a cell either way.
 #[allow(clippy::too_many_arguments)]
 pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     held: &mut H,

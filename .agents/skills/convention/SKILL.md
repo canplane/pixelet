@@ -64,12 +64,10 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
   `// @xpute/host/ipc/doorbell.ts`). A file that is moved takes its new path.
 - Code is cited as its path and then its name in backticks
   (`domain/scene/marker/arrangement.rs` `tap`). A citation that is moved or
-  renamed is fixed with it, in the live minutes too. A live minute's claim the
-  code no longer holds is rewritten where it stands to what holds, with no
-  status, "since then" or dated note laid over it: layered notes read as a
-  structure decaying when it is only the record moving, and what the minute
-  said before is git's. `doc/minutes/archive/` and `doc/experiment/` name the
-  files of their day and are not kept up.
+  renamed is fixed with it.
+- Code, its comments and the spec cite no minute and no experiment, which are
+  reference (`doc/README.md`). A reason a reader needs is written where it is
+  needed, in a sentence.
 - A comment says only what a reader would otherwise get wrong — an invariant, a
   hazard, where a number comes from — in a sentence. It tells no history and
   does not restate the code or a document.

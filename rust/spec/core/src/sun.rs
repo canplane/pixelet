@@ -426,15 +426,14 @@ impl Starts {
 /// slots' pass (pxl-shader `sun_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The sun's beam (pxl-shader beam.rs `beam_cs`, `cell_cs`, the eye's entries;
-/// doc/minutes/20261022-a-cell-casts-a-beam.md): a beam ray at every `BEAM`-th
-/// texel of the box across and down, `BEAM_WINDOW` past it on each side, each
-/// walked from the world's root along the sun's rays until a cell that fills or
-/// lacks or a split narrower than `2√2` beam spacings (`Sun::detail`,
-/// `cast::Spacing`), leaving its line and how far it got less `margin`;
-/// each `BEAM`-square cell of the box starts at the least of the beam rays
-/// within `BEAM_WINDOW` of its corners, and its texels resume from that ray's
-/// line there.
+/// The sun's beam (pxl-shader beam.rs `beam_cs`, `cell_cs`, the eye's entries):
+/// a beam ray at every `BEAM`-th texel of the box across and down,
+/// `BEAM_WINDOW` past it on each side, each walked from the world's root along
+/// the sun's rays until a cell that fills or lacks or a split narrower than
+/// `2√2` beam spacings (`Sun::detail`, `cast::Spacing`), leaving its line and
+/// how far it got less `margin`; each `BEAM`-square cell of the box starts at
+/// the least of the beam rays within `BEAM_WINDOW` of its corners, and its
+/// texels resume from that ray's line there.
 ///
 /// Why that is a texel's root walk, as the eye's proof has it with the
 /// rays parallel: take `X`, the cell a texel's ray ends at, `e` its entry,
