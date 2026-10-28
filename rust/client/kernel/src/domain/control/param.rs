@@ -2,6 +2,9 @@
 
 //! The camera's defaults, gestures and smoothing.
 
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
+
 // ---- the camera ----
 
 /// The orbit eye's least height over its floor: one cell, so the eye is never
@@ -13,13 +16,19 @@ pub const DEFAULT_AZIMUTH: f64 = 0.0;
 /// From straight down (0) toward horizontal (PI / 2): 60°, the eye 30° above
 /// the ground plane.
 pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
-/// The orbit's nearest, in units from the focus, felt right: two leaf cells,
-/// about 3.8 m at Seoul's latitude.
+/// How many of its end cell's sides a dolly's limit stands from the focus,
+/// both ends alike: 4/3 of the way into the band the grid draws that cell
+/// over, a side `s` from 48·s to 96·s (pxl-spec space/camera/grid.rs
+/// `split_distance`).
+pub const DOLLY_END_CELLS: f64 = 64.0;
+/// The orbit's nearest, in units from the focus, about 3.8 m at Seoul's
+/// latitude: `DOLLY_END_CELLS` of the 2^-5 cell the grid asks there.
 pub const MIN_DIST: f64 = 2.0;
-/// Looking straight down from here the ground wants step 2^11, which the
-/// pyramid's top zoom draws (about 24 km on the scale bar); past it no zoom
-/// is coarse enough.
-pub const MAX_DIST: f64 = 262144.0;
+/// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
+/// holds, the pyramid's top's, so looking straight down the grid never asks
+/// a coarser cell than a zoom draws.
+pub const MAX_DIST: f64 =
+    DOLLY_END_CELLS * units(GROUND.cell_zoom(pxl_spec_core::param::tile::TOP_ZOOM));
 
 // ---- the camera's settling and the ground it keeps to ----
 
