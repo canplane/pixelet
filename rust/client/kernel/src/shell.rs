@@ -34,7 +34,7 @@ use crate::domain::layer::division::{named, naming};
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::domain::scene::stage::screen_drawn;
-use crate::domain::view::frame::pose::units_per_px_at;
+use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::setting::store::{settings_loaded, settings_store, SettingKey};
 use crate::sys::io::file::{self, Kept};
 use crate::turn::world_platform;

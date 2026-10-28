@@ -27,8 +27,10 @@ pub struct View {
     /// The camera as composed this turn; None before it stands anywhere.
     pub pose: Option<ObserverPose>,
 
-    pub width: f64,
-    pub height: f64,
+    /// Its size in CSS pixels, read past the frame only through the screen
+    /// (`domain/view/frame/screen.rs`).
+    pub(super) width: f64,
+    pub(super) height: f64,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -75,12 +77,6 @@ impl View {
 }
 
 static VIEW: Global<View> = Global::new();
-
-/// The units a logical pixel spans at `dist` from the eye: what a drag at
-/// that distance moves, and what a thing there is worth on the screen.
-pub fn units_per_px_at(dist: f64) -> f64 {
-    2.0 * dist * libm::tan(FOV * core::f64::consts::PI / 360.0) / view().height
-}
 
 pub fn view() -> &'static mut View {
     VIEW.get(View::new)
@@ -202,12 +198,6 @@ pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direc
         ndc_y * tan,
         -1.0,
     );
-}
-
-/// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.
-pub fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
-    let v = view();
-    [(x * 0.5 + 0.5) * v.width, (-y * 0.5 + 0.5) * v.height]
 }
 
 #[cfg(test)]
