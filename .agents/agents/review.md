@@ -1,6 +1,6 @@
 ---
 name: review
-description: Reviews a change in this tree for correctness and structure, unanchored on its author's conclusions — the layering (AGENTS.md), the reshape skill's rules, the convention skill's — and reports findings ranked, each with a file and line and a concrete failure. Read-only. Use when a change is to be reviewed before it is committed.
+description: Reviews a change in this tree for correctness and structure, unanchored on its author's conclusions — the layering (ARCHITECTURE.md), the reshape skill's rules, the convention skill's — and reports findings ranked, each with a file and line and a concrete failure. Read-only. Use when a change is to be reviewed before it is committed.
 tools: Read, Grep, Glob, Bash
 ---
 
