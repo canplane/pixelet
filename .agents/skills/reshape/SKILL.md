@@ -37,6 +37,14 @@ symmetry and is no option either. The touch rule placed coarse cells by bits
 only the ground set, so a terrace of placed cubes would look otherwise than
 the ground's; it was built across three sessions and reverted whole.
 
+An option is weighed by whether it is right, never by what changing to it
+costs: how many places it touches, how far the present form has spread, how
+much is built on it. The cheapest change is none, so a cost-weighed proposal
+always ends at leaving it. The present form has no standing of its own.
+And the answer is one: the right form, stated as the decision, or the reason
+it cannot be decided yet. A middle form that keeps part of the wrong one is
+not offered as a virtue.
+
 ## Proving it
 
 - By equal output over real data, not by a timing: for the ground's fill,
