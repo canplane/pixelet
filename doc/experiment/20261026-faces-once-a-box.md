@@ -3,7 +3,7 @@
 **2026-10-26.** `sample_cs` asked what lies about the face each sample
 stopped on (`World::faced`, up to twelve blocks of the world's query) for all
 of about 0.9M samples, and `cast_cs` reads that word only off a box's own
-sample, the one its pick names: about 50k. This asks it once a box.
+sample, the one its visible sample names: about 50k. This asks it once a box.
 
 ## How
 

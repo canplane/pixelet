@@ -146,8 +146,8 @@ cast:
   shared with `boxes_cs`) and drawn by the eye's raster pipeline in an
   orthographic mode off `Sun`'s words. The draw goes in the box's order
   (`Sun::texel`), laid from box texel (0, 0)'s start.
-- Every slot takes its pick where its own ray enters it (`sun_cs`, the eye's
-  `picked`). The rest are listed by the eye's `listed` into the eye's
+- Every slot takes its visible sample where its own ray enters it (`sun_cs`, the
+  eye's `taken`). The rest are listed by the eye's `listed` into the eye's
   dispatch layout (`ray::MISS_ARGS_*`) and walked apart (`sun_miss_cs`), as
   the eye's `cast_cs` and `miss_list_cs` split.
 - The sun's beam rays, samples and missed slots walk the observed pyramid
@@ -168,16 +168,16 @@ What the first cuts showed (rough, single loads):
 
 - **Blocks smaller than the samples.** Asked at the eye's zooms near the
   eye, a block the sun's ray stops at is a texel or less. Each box covered
-  about one texel, and 3–5% of texels took a pick. The sun's rays now ask the
-  world no finer than `Sun::finest`, the zoom whose block spans
+  about one texel, and 3–5% of texels took a visible sample. The sun's rays now
+  ask the world no finer than `Sun::finest`, the zoom whose block spans
   `BLOCK_SAMPLES` (8) samples. With the world loaded, 88% of texels took a
-  pick. The cost is shadow detail under that block size near the eye, which
-  the check does not see (it walks at the same zooms).
+  visible sample. The cost is shadow detail under that block size near the eye,
+  which the check does not see (it walks at the same zooms).
   **2026-10-27: the cap is gone.** A coarse block cast its shadow on the fine
   ground the eye draws inside it, as gray blobs edged by its faces, the map's
   unit no longer the eye's. Counted with `ray_counts`, panning: on the start
-  view 68.6% of texels took a pick (99.2% capped), the boxes 156k a cast
-  (24k), the walks' nodes 11.2M (0.34M), `sun_walk` p95 about 28 ms (0.7);
+  view 68.6% of texels took a visible sample (99.2% capped), the boxes 156k a
+  cast (24k), the walks' nodes 11.2M (0.34M), `sun_walk` p95 about 28 ms (0.7);
   at mid altitude 78.4% (17.7% capped, its texels meeting nothing walked
   too), 10.4M (3.55M). The 3–5% above was not seen again. What is left
   walking is near the eye, where a block the eye asks is a sample's spacing
@@ -192,9 +192,10 @@ What the first cuts showed (rough, single loads):
   `sun_raster` 1–3, and every moving frame cast the whole map where the
   kept map cast about a quarter of it. With the misses walked apart and the
   sun's walks on the pyramid, on the start view 96.9% of slots took the
-  pick and each of `sun_beam`, `sun_sample`, `sun_raster`, `sun_pick` and
-  `sun_walk` was under 1.5 ms at p95 (1c5455121's single load). The user
-  judges it smooth while moving; it was not measured on the fixed path.
+  visible sample and each of `sun_beam`, `sun_sample`, `sun_raster`,
+  `sun_texel` and `sun_walk` was under 1.5 ms at p95 (1c5455121's single
+  load). The user judges it smooth while moving; it was not measured on the
+  fixed path.
 - **Against 9/26 (e78eeec55), read off the code.** That shadow pass drew the
   chunk meshes' boxes, which the mesher had built once per chunk, again from
   the light. It paid no ray. Here the boxes are found each frame by the

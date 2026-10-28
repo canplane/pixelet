@@ -70,7 +70,7 @@ pub mod raster {
     /// rasterizer's rounding. The face stays in its plane, so a pixel's depth
     /// is still where its ray meets the face, and what the growth alone covers
     /// fails the fragment's exact test (raster.wgsl `fs`): it costs fragments
-    /// and changes no pick.
+    /// and changes no visible sample.
     pub const GROWN: f32 = 0.25;
 }
 

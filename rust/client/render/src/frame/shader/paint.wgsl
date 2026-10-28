@@ -93,7 +93,8 @@ fn line_at(d: f32, pixel: f32) -> f32 {
 }
 
 fn paint(s: Surface) -> vec3f {
-  // Only leaf cells carry layers; the samples are skipped, not taken and discarded.
+  // Only leaf cells carry layers; the taps are skipped, not taken and
+  // discarded.
   let textured = s.taps.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   var albedo = s.rgb;
   if (textured) {

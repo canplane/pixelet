@@ -1,6 +1,6 @@
 // pxl-spec-core/raster.rs
 
-//! gpu-portable: the samples' stops drawn as boxes, so the rasterizer picks
+//! gpu-portable: the samples' stops drawn as boxes, so the rasterizer keeps
 //! each drawn pixel's cell (pxl-shader raster.rs `sample_box_cs`, cast.rs
 //! `cast_cs`; pxl-render gpu/ray/raster.rs, raster.wgsl). Each sample that
 //! stopped is a box, the cell as the cast stops on it (`cast::drawn`),

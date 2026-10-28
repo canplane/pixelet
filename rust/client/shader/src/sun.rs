@@ -6,8 +6,8 @@
 //! their cells' starts, the samples and their boxes, which the raster
 //! draws, each the entry the eye's takes too (beam.rs `beam_cs`,
 //! `cell_cs`, `sample_cs`; raster.rs `sample_box_cs`) handed the sun's head
-//! (`Moved`); every slot taking its pick or the sky (`sun_cs`) and the
-//! rest walked (`sun_miss_cs`).
+//! (`Moved`); every slot taking its visible sample or the sky (`sun_cs`) and
+//! the rest walked (`sun_miss_cs`).
 
 use pxl_spec_core::cast::{self, Detail};
 use pxl_spec_core::fill::put;
@@ -27,17 +27,17 @@ use crate::world::World;
 /// The world's depth from the sun, a slot of the sun's clipmap each
 /// (pxl-spec-core `sun`): the slot's texel of the light box, and its ray
 /// from the box's near plane along the sun's rays, its cell taken off the
-/// raster's pick or walked through the world's one query to the cell that
+/// visible sample or walked through the world's one query to the cell that
 /// fills (`cast::first`) as the eye's are, and the word it leaves there,
 /// every frame the map is cast. Its one layer read and written in place,
 /// the one format family WebGPU lets a shader do both to, as the rays' are.
 type SunWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
-/// The raster's pick at each texel of the box, in the
+/// The visible sample at each texel of the box, in the
 /// box's order (pxl-spec-core `sun::Sun::texel`): its sample's number
 /// (`raster::id_of`), 0 where it kept none, read as an array of one layer,
 /// as the eye's pixels read theirs.
-type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
+type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// What the sun's cast is handed beside the eye's words, a uniform
 /// (pxl-spec-core `sun::MOVED_HEAD`): its number, whether it is counted,
@@ -371,7 +371,7 @@ impl Observer for Map {
     }
 
     /// What feeds a tile this cast casts (`sun::reads_at`): a ray its own
-    /// slot's tile; a sample the slots its box may be picked by, a tile
+    /// slot's tile; a sample the slots that may take its box, a tile
     /// either way, beyond the four it lies about (`sample_before`), as a box
     /// fewer is a slot walked more; a cell, a tile, as a sample does; a beam
     /// ray the cells whose window holds it (`window`), each as a cell does.
@@ -423,7 +423,7 @@ const _: () = assert!(
 );
 
 /// The world's depth from the sun into every slot: a workgroup a tile
-/// (`sun::TILE`), a thread a slot, each taking the raster's pick where its
+/// (`sun::TILE`), a thread a slot, each taking the visible sample where its
 /// own ray enters it (observer.rs `took`), or the sky where no sample about
 /// it met anything (observer.rs `sky`), as the eye's pixels do (cast.rs
 /// `cast_cs`), and the word it leaves there; the rest listed for their walk
@@ -437,7 +437,7 @@ pub fn sun_cs(
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-    #[spirv(descriptor_set = 0, binding = 15)] picks: &Picks,
+    #[spirv(descriptor_set = 0, binding = 15)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 17)] misses: &mut [u32],
 ) {
     let t = pxl_spec_core::sun::TILE;
@@ -456,15 +456,15 @@ pub fn sun_cs(
     let aim = m.aim(at);
     let p = m.sun.texel(n, at);
     // [naga] Fetched at u32s, as the raster wrote them.
-    let kept: UVec4 = picks.fetch(UVec3::new(p[0], p[1], 0));
+    let kept: UVec4 = visibility.fetch(UVec3::new(p[0], p[1], 0));
     let (took, stop, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
-    if took == Takes::Pick {
+    if took == Takes::Sample {
         let met = cast::Met {
             ends: cast::Ends::Stop,
             stop,
             visits: 0,
         };
-        add_count(misses, counts(moved), tally::PICKED, 1);
+        add_count(misses, counts(moved), tally::TOOK, 1);
         // SAFETY: within the map, bounded by its size above.
         unsafe { sun.write(slot, m.word(&aim, &met)) };
         return;

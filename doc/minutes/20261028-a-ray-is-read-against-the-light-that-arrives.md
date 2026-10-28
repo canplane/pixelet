@@ -99,7 +99,7 @@ is touched.
   pixel takes it only where its own ray enters it. The widening only decides
   which boxes are candidates; nothing on the screen is drawn larger than it
   is. A sample that stopped short of what lies behind leaves that pixel's
-  ray to refuse the pick and walk again.
+  ray to refuse the visible sample and walk again.
 - **The zoom is untouched.** It stays the distance's, so there is no patchy
   coarsening of the kind a stand would bring.
 - **It is deterministic.** It is decided in one frame. TAA's counterpart would

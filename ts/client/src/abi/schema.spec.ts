@@ -152,7 +152,7 @@ export const SETTINGS = {
   },
   /** The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
    * cast once more from the sun as the eye's rays are, beams and samples on
-   * the observed pyramid, the boxes they stop at drawn and a texel's pick
+   * the observed pyramid, the boxes they stop at drawn and a texel's sample
    * taken, the rest walked (pxl-shader sun.rs), recast only where what it
    * reads moves; decor and the actors drawn into it depth only, and a 3x3
    * compare per fragment; 16 MB of map. */
@@ -223,7 +223,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
+  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
   ray_counts: {
     key: 20 as number,
     kind: "toggle",
@@ -371,7 +371,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
    * cast once more from the sun as the eye's rays are, beams and samples on
-   * the observed pyramid, the boxes they stop at drawn and a texel's pick
+   * the observed pyramid, the boxes they stop at drawn and a texel's sample
    * taken, the rest walked (pxl-shader sun.rs), recast only where what it
    * reads moves; decor and the actors drawn into it depth only, and a 3x3
    * compare per fragment; 16 MB of map. */

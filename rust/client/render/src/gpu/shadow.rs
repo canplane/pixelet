@@ -4,7 +4,7 @@
 //! orthographic about the eye and as wide as the casters reach (the
 //! kernel's `STAGE_AT::SHADOWS`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
-//! rays are, off samples and the raster's pick (pxl-shader `sun_cs`), into
+//! rays are, off samples and the visible sample (pxl-shader `sun_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-spec-core `sun`); laid into the map
 //! each frame in the box's own order

@@ -115,14 +115,14 @@ first the largest:
 What is proposed, not yet ordered:
 
 - **For 1, remove the samples' answer.** A pixel walks from its cell's beam, the
-  path 20261022 proved (`resumed`), and the candidate pick, its axis test and
-  the samples' block and lack words go. Making the samples a second beam level
-  was weighed and set aside: a proxy that is taken removes the beam's levels, so
-  it would be built to be thrown away, while the pixel's own walk from a start
-  is what a proxy feeds as well. It costs more than now: about ten visits a
-  pixel (20261022, As built), and face bits a pixel's own unless a sample
-  stopped on the same block. Whether the sample pass stays only to share face
-  bits is decided by measuring.
+  path 20261022 proved (`resumed`), and the candidate visible sample, its axis
+  test and the samples' block and lack words go. Making the samples a second
+  beam level was weighed and set aside: a proxy that is taken removes the beam's
+  levels, so it would be built to be thrown away, while the pixel's own walk
+  from a start is what a proxy feeds as well. It costs more than now: about ten
+  visits a pixel (20261022, As built), and face bits a pixel's own unless a
+  sample stopped on the same block. Whether the sample pass stays only to share
+  face bits is decided by measuring.
 - **For 2,** a few steps of scale, each held a while once taken. Done (cause 2).
 - **Then the proxy is measured** against that exact cast, whose start is the
   only thing a proxy changes.
@@ -226,9 +226,9 @@ not the descent or the writing a cell's pixels share, so a split between
 raster and ray has to give the raster that shared work, not only the start.
 
 The split taken is the other way round, a decision on today's measurements
-rather than a rule for every pass: the samples still walk, and the raster picks
+rather than a rule for every pass: the samples still walk, and the raster keeps
 each pixel's block off the blocks they stopped at
-([the raster picks](../experiment/20261026-the-raster-picks.md), "Taken").
+([the raster keeps](../experiment/20261026-the-raster-keeps.md), "Taken").
 The shared discovery stays where cells share it; the per-pixel 4 × 4 lookup,
 the costly part, is the raster's depth test; and the boxes are derived from the
 samples, with no chunk, mesh or frontier beside them.

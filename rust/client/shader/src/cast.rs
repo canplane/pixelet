@@ -21,10 +21,10 @@ use crate::{add, most};
 /// pxl-spec-core `ray`): the cast writes them.
 pub(crate) type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
-/// The raster's pick at each drawn pixel (pxl-render gpu/ray/raster.rs): its
+/// The visible sample at each drawn pixel (pxl-render gpu/ray/raster.rs): its
 /// sample's number (pxl-spec-core `raster::id_of`), 0 where it kept none,
 /// read as an array of one layer.
-type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
+type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on and the
 /// face it entered through, then how far as f32 bits, then the four looks
@@ -100,7 +100,7 @@ pub fn cast_cs(
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
-    #[spirv(descriptor_set = 0, binding = 13)] picks: &Picks,
+    #[spirv(descriptor_set = 0, binding = 13)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
 ) {
     let size: UVec3 = rays.query_size();
@@ -112,9 +112,10 @@ pub fn cast_cs(
     let aim = eye.aim(px);
     let ray = aim.ray;
     // [naga] Fetched at u32s, as the raster wrote them.
-    let kept: UVec4 = picks.fetch(UVec3::new(id.x, id.y, 0));
-    // The cell off its pick, the sky, or a walk of its own (observer.rs
-    // `resolve`), the nearest cell entered at the reach where none is.
+    let kept: UVec4 = visibility.fetch(UVec3::new(id.x, id.y, 0));
+    // The cell off its visible sample, the sky, or a walk of its own
+    // (observer.rs `resolve`), the nearest cell entered at the reach where none
+    // is.
     let (took, hit, k) = observer::resolve(eye, beams, px, &aim, kept.x);
     let steps = eye.origin.w != 0;
     let on = seen_at(seen, observed::TALLY_ON) != 0;
@@ -145,14 +146,14 @@ pub fn cast_cs(
         );
         return;
     }
-    if took == Takes::Pick {
+    if took == Takes::Sample {
         // What lies about its face, the sample's, and the nodes the
         // sample's walk visited, which the steps view shows as this pixel's.
         let (faces, visits) = (
             seen_at(beams, k + beam::SAMPLE_FACES),
             seen_at(beams, k + beam::SAMPLE_VISITS),
         );
-        add_count(marks, on, tally::PICKED, 1);
+        add_count(marks, on, tally::TOOK, 1);
         write_ray(
             rays,
             id,
@@ -171,7 +172,7 @@ pub fn cast_cs(
     }
     // Neither: marked and listed for its walk (`miss_list_cs`), which reads
     // and writes the pyramid. No walk is this pass's own, so a lane that
-    // takes its pick pays none of a walk's footprint.
+    // takes its visible sample pays none of a walk's footprint.
     add_count(marks, on, tally::WALKED, 1);
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
@@ -183,11 +184,11 @@ pub fn cast_cs(
 }
 
 /// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
-/// `tally::PICKED` on) in its walk again's args `args`, where `on`
+/// `tally::TOOK` on) in its walk again's args `args`, where `on`
 /// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
 pub(crate) fn add_count(args: &mut [u32], on: bool, lane: u32, v: u32) {
     if on {
-        add(args, ray::MISS_ARGS_TALLY + lane - tally::PICKED, v);
+        add(args, ray::MISS_ARGS_TALLY + lane - tally::TOOK, v);
     }
 }
 

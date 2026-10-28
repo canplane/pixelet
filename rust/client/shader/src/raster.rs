@@ -3,8 +3,8 @@
 //! The samples' stops handed to the rasterizer (pxl-spec-core `raster`):
 //! each stopped sample's box written for the raster's draw (`sample_box_cs`),
 //! which pxl-render raster.wgsl draws and pxl-shader cast.rs `cast_cs`
-//! reads each pixel's pick off; and what lies about each box's face asked
-//! once a box (`face_cs`).
+//! reads each pixel's visible sample off; and what lies about each box's face
+//! asked once a box (`face_cs`).
 
 use pxl_spec_core::cast::{Ends, Met, Stop};
 use pxl_spec_core::{beam, cast, raster, support, way};
@@ -95,11 +95,11 @@ pub(crate) fn boxed<W: Words + ?Sized>(
     box_at
 }
 
-/// The cell a ray from `origin` takes off the raster's pick, the sample at
+/// The cell a ray from `origin` takes off the visible sample, the sample at
 /// word `k` of `w`: where the ray enters it (`cast::entry`) across the axis
 /// the sample entered by, the eye's pixels and the sun's slots alike, and
 /// whether it does.
-pub(crate) fn picked<W: Words + ?Sized>(
+pub(crate) fn taken<W: Words + ?Sized>(
     w: &W,
     k: u32,
     origin: [i32; 3],

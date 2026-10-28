@@ -3,10 +3,10 @@
 //! What a cast asks of the one it casts for (`Observer`), the eye or the
 //! shadow map, and the passes every cast takes, written once over it: each
 //! corner's beam ray (`beam`), each cell's start off them (`cell`), each
-//! sample's walk (`sample`) and box (`sample_box`), a ray's pick (`took`),
-//! the sky about it (`sky`) or a walk of its own (`resolve`), and its walk
-//! resumed off the beam (`resume`, `walked`), each casting what its observer
-//! needs alone (`Observer::needs`). An entry is a pass's call for its
+//! sample's walk (`sample`) and box (`sample_box`), a ray's visible sample
+//! (`took`), the sky about it (`sky`) or a walk of its own (`resolve`), and its
+//! walk resumed off the beam (`resume`, `walked`), each casting what its
+//! observer needs alone (`Observer::needs`). An entry is a pass's call for its
 //! observer (beam.rs, cast.rs, raster.rs, sun.rs); its lattice, its rays and
 //! what its walks leave are its own (eye.rs `Eye`, sun.rs `Map`). A pass both
 //! observers take is one entry, its observer the one its head names
@@ -17,7 +17,7 @@ use pxl_spec_core::{beam, observed, raster, tally};
 
 use crate::beam::{resumed, sample_put, Beamed, Leaving, Words};
 use crate::observed::{add_tally, seen_at, Seen, Writ, Writing};
-use crate::raster::{boxed, picked, NONE};
+use crate::raster::{boxed, taken, NONE};
 use crate::world::{Looks, World};
 
 /// A ray as an observer aims it: where it starts, its way and reach, and
@@ -292,31 +292,31 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
 }
 
 /// What a ray at `at` aimed `aim` takes (`resolve`): the cell off the
-/// raster's pick, the sky, or a walk of its own.
+/// visible sample, the sky, or a walk of its own.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub(crate) enum Takes {
-    Pick,
+    Sample,
     Sky,
     Walk,
 }
 
-/// What the ray at `at` aimed `aim` takes, `pick` the raster's there: the
-/// cell it enters as the sample picked entered it (`took`), its stop and
-/// that sample's first word; else the sky where no sample about it met
-/// anything and it picked none (`sky`); else a walk of its own, which its
+/// What the ray at `at` aimed `aim` takes, `visible` the visibility buffer's
+/// there: the cell it enters as the visible sample entered it (`took`), its
+/// stop and that sample's first word; else the sky where no sample about it met
+/// anything and none was visible (`sky`); else a walk of its own, which its
 /// pass lists for the walk again. The eye's pixels and the sun's slots alike.
 pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
     o: &O,
     w: &W,
     at: O::At,
     aim: &Aim,
-    pick: u32,
+    visible: u32,
 ) -> (Takes, cast::Stop<u32>, u32) {
-    if pick != 0 && pick & raster::LACK == 0 {
-        let (stop, k, enters) = took(o, w, aim, pick);
+    if visible != 0 && visible & raster::LACK == 0 {
+        let (stop, k, enters) = took(o, w, aim, visible);
         if enters {
-            return (Takes::Pick, stop, k);
+            return (Takes::Sample, stop, k);
         }
     }
     let none = cast::Stop {
@@ -326,26 +326,26 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
         at: 0u32,
         asset: [0; 2],
     };
-    if pick == 0 && sky(o, w, at) {
+    if visible == 0 && sky(o, w, at) {
         (Takes::Sky, none, 0)
     } else {
         (Takes::Walk, none, 0)
     }
 }
 
-/// The cell the ray aimed `aim` takes off the raster's pick `pick`, a
+/// The cell the ray aimed `aim` takes off the visible sample `visible`, a
 /// sample's number that lacks not (`raster::sample_of`): where it enters it
-/// as that sample entered it (raster.rs `picked`), the sample's first word,
+/// as that sample entered it (raster.rs `taken`), the sample's first word,
 /// and whether it does.
 pub(crate) fn took<O: Observer, W: Words + ?Sized>(
     o: &O,
     w: &W,
     aim: &Aim,
-    pick: u32,
+    visible: u32,
 ) -> (cast::Stop<u32>, u32, bool) {
-    let (n, s) = (o.samples()[0], raster::sample_of(pick));
+    let (n, s) = (o.samples()[0], raster::sample_of(visible));
     let k = o.sample_at([s % n, s / n]);
-    let (stop, enters) = picked(w, k, aim.origin, &aim.ray);
+    let (stop, enters) = taken(w, k, aim.origin, &aim.ray);
     (stop, k, enters)
 }
 
@@ -370,7 +370,7 @@ fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2]) -> bool {
 }
 
 /// The ray at `at` walked again from its cell's start through the observed
-/// pyramid writing what it asks, a ray its pick and the pyramid left
+/// pyramid writing what it asks, a ray its visible sample and the pyramid left
 /// unmet, its line left where it ends to `keep`: its aim, its met and the
 /// nodes its beam ray visited.
 pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(

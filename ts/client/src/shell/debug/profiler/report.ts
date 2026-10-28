@@ -29,7 +29,7 @@ const spread = (s: Spread) =>
  * (profiler.json FRAME's rays, eye and sun lanes) at its last frame less
  * those at its first, where any frame's counts were read back: an observer's line each where it cast — the nodes its
  * beam rays, its samples and its walk again asked a cast, its pixels or
- * slots that took the raster's pick and that walked, the nodes its walk
+ * slots that took the visible sample and that walked, the nodes its walk
  * again asked a walking one, and the boxes it drew a cast. */
 const raysText = (first: Frame, last: Frame) => {
   const f = Object.fromEntries(
@@ -49,7 +49,7 @@ const raysText = (first: Frame, last: Frame) => {
       beam: number;
       sample: number;
       miss: number;
-      picked: number;
+      took: number;
       walked: number;
       boxes: number;
     },
@@ -62,8 +62,8 @@ const raysText = (first: Frame, last: Frame) => {
         name.padEnd(7)
       } cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${
         perCast(o.beam)
-      }  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   picked ${
-        share(o.picked)
+      }  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   took ${
+        share(o.took)
       }  walked ${share(o.walked)} (${
         n1(o.miss / Math.max(1, o.walked))
       } nodes each)   boxes ${perCast(o.boxes)} a cast`,
@@ -74,7 +74,7 @@ const raysText = (first: Frame, last: Frame) => {
       beam: f.eye_beam,
       sample: f.eye_sample,
       miss: f.eye_miss,
-      picked: f.eye_picked,
+      took: f.eye_took,
       walked: f.eye_walked,
       boxes: f.eye_boxes,
     }),
@@ -82,7 +82,7 @@ const raysText = (first: Frame, last: Frame) => {
       beam: f.sun_beam,
       sample: f.sun_sample,
       miss: f.sun_miss,
-      picked: f.sun_picked,
+      took: f.sun_took,
       walked: f.sun_walked,
       boxes: f.sun_boxes,
     }),

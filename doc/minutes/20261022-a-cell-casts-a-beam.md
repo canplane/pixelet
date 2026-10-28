@@ -12,7 +12,7 @@ Per cell: a beam ray at each of the grid's corners walks the shared descent and
 stops early; each cell takes its start from the beam rays about it; samples
 four a cell a side (`param::beam::SAMPLE`) walk on from that start; the raster
 hands each pixel the nearest block a sample stopped at that its own ray enters
-([the raster picks](../experiment/20261026-the-raster-picks.md)), tested again
+([the raster keeps](../experiment/20261026-the-raster-keeps.md)), tested again
 exactly (`cast::entry`); a pixel none is handed walks on from its cell's start
 itself. The proof below is that a walk from a cell's start, a sample's or a
 pixel's, ends where the walk from the root ends. A pixel that takes a sample's
@@ -133,7 +133,7 @@ resume alike (pxl-shader observer.rs `resume`, `walked`).
 - **Beam rays:** one a corner of the grid, each a full walk.
 - **The window:** a minimum over the corners about each cell, once a cell.
 - **Samples:** four a cell a side, each a walk from its cell's start.
-- **Pixels:** the raster's pick, and a walk from the cell's start only for the
+- **Pixels:** the visible sample, and a walk from the cell's start only for the
   pixels it hands nothing.
 
 What the rays asked is kept between frames in the observed pyramid

@@ -217,8 +217,8 @@ impl Sun {
     /// The box's texel a slot of the map holds, `size` a power of two its
     /// side: the slot's world texel, less the box's corner. The sun's raster
     /// (`SAMPLE`) is drawn in the box's order, as the map is laid, and a
-    /// slot reads its pick at this texel: drawn in the slots' order, a box
-    /// would split at the seam where the slots wrap.
+    /// slot reads its visible sample at this texel: drawn in the slots' order,
+    /// a box would split at the seam where the slots wrap.
     pub fn texel(&self, size: u32, slot: [u32; 2]) -> [u32; 2] {
         let at = |k: usize| (slot[k] as i32).wrapping_sub(self.corner[k]) as u32 & (size - 1);
         [at(0), at(1)]
@@ -526,10 +526,10 @@ pub fn margin(width: f32) -> f32 {
 /// as boxes by the eye's writer (pxl-shader raster.rs `boxed`) and drawn
 /// from the sun by the eye's raster, orthographic (pxl-render raster.wgsl),
 /// in the box's order (`Sun::texel`), each texel keeping the nearest its own
-/// ray enters; and a slot whose ray enters its pick, tested again with its
-/// own ray as the eye's pixels test theirs (`cast::entry`), takes it
+/// ray enters; and a slot whose ray enters its visible sample, tested again
+/// with its own ray as the eye's pixels test theirs (`cast::entry`), takes it
 /// (`sun_cs`); the rest are listed and walked apart (`misses_at`). A cell
-/// no sample stopped at may stand in front of the one picked, as in the
+/// no sample stopped at may stand in front of the visible one, as in the
 /// eye's. The raster's `EYED` case has no
 /// sun's: every ray starts on the near plane, before every box.
 ///
@@ -549,14 +549,14 @@ pub const fn sample_words(size: u32) -> u32 {
     sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
 
-/// The slots whose ray took no pick, listed for their walk (pxl-shader
-/// `sun_miss_cs`) apart from the slots that took theirs (`sun_cs`), as the
-/// eye's missed pixels are walked apart from the pixels that took their
-/// pick, by the same listing and dispatch (pxl-shader cast.rs `enlist`,
-/// `ray::MISS_ARGS_WORDS`): a walk holds its workgroup as long as its
-/// slowest lane. Past the samples: how many, copied in once the slots are
-/// done, as the eye's count is (`observed::MARKS_COUNT`), then a slot each,
-/// its X and its Y over 16 bits.
+/// The slots whose ray took no visible sample, listed for their walk
+/// (pxl-shader `sun_miss_cs`) apart from the slots that took theirs
+/// (`sun_cs`), as the eye's missed pixels are walked apart from the pixels
+/// that took their visible sample, by the same listing and dispatch
+/// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
+/// workgroup as long as its slowest lane. Past the samples: how many, copied
+/// in once the slots are done, as the eye's count is
+/// (`observed::MARKS_COUNT`), then a slot each, its X and its Y over 16 bits.
 pub const fn misses_count(size: u32) -> u32 {
     sample_words(size)
 }

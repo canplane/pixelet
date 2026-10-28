@@ -76,7 +76,7 @@ regression, not an answer. What stands:
   nothing (`0c84382cd`).
 - The rays find and the raster hands out
   ([the ray finds, the raster hands out](./20261026-the-ray-finds-the-raster-hands-out.md)).
-  The stages are beam, cell start, samples, the raster's pick, the pixel and
+  The stages are beam, cell start, samples, the visible sample, the pixel and
   the walk again (`ac7785f21`, `bf1a3e20a`).
 - A cell keeping less than its cube is drawn as its kept box, eighths floating
   in the cell (`answer::kept`, `cast::kept_bounds`).
@@ -129,8 +129,8 @@ axis of the screen. That is the gap.
     "Proposing it" (`de7483394`).
 - **Shadows and AO raised as costs.** They do not matter here. The user: what
   matters is going entirely empty.
-- **A pixel walking again when its pick is far beyond its neighbours'.** It
-  guesses at the observation instead of following the rule.
+- **A pixel walking again when its visible sample is far beyond its
+  neighbours'.** It guesses at the observation instead of following the rule.
 - **Reverting the prune, or τ.** Either regresses the horizon (10:17) or the
   display's independence (14:47). The user took the horizon's regression over
   the rows on 10-28, and the prune is gone; τ is gone too, the view's grid the
@@ -225,9 +225,9 @@ on 10-14 for it ([the eye decides](./20261014-the-eye-decides.md),
 - **The structure holds both again.** Only the boxes the samples stopped at
   are rasterized (condition 1), and they are handed to every pixel
   (condition 2). [A cell casts a beam](./20261022-a-cell-casts-a-beam.md)
-  records it as "the cut was taken". The pick's axis refusal and the walk again
-  answer part of it; by 10-14's proof the rest returns as rows. The rows are
-  that proof come back, not a new problem.
+  records it as "the cut was taken". The visible sample's axis refusal and the
+  walk again answer part of it; by 10-14's proof the rest returns as rows. The
+  rows are that proof come back, not a new problem.
 - **The ray's rule is a floor.** Among the five things whose removal brings
   their problem back, 10-14 names "the ray's rule — the zoom its distance asks,
   and a stop at the first block that fills". So the zoom stays the distance's,

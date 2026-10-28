@@ -92,7 +92,7 @@ pub(super) struct CastBuffers {
     /// The world's depth from the sun, a texel of the shadow map each
     /// (`sun_cs`), cast with the eye's rays where the shadows are on.
     sun_built: Built,
-    /// The slots that took no pick walked apart (`sun_miss_cs`).
+    /// The slots that took no visible sample walked apart (`sun_miss_cs`).
     sun_miss_built: Built,
     /// The tiles of the sun's box its receivers stand on in a cast
     /// (pxl-spec-core `sun::stands_at`): where the eye's rays meet the world
@@ -170,9 +170,9 @@ pub(super) struct CastBuffers {
     /// the samples stand, and the pixels are cast again off them.
     jitter: [u32; 2],
     /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
-    /// pick at each pixel the pixels read (`cast_cs`), over a group of
-    /// their own (`pixel_group`): the eye, the rays, the beam's words, the
-    /// pyramid and the raster's picks (`pixel_bound`), made again exactly
+    /// visible sample at each pixel the pixels read (`cast_cs`), over a group
+    /// of their own (`pixel_group`): the eye, the rays, the beam's words, the
+    /// pyramid and the visibility buffer (`pixel_bound`), made again exactly
     /// when one of them is another.
     raster: Raster,
     pixel_group: u32,
@@ -180,8 +180,8 @@ pub(super) struct CastBuffers {
     /// What the sun's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
-    /// The list, the sun's picks and its boxes the sun's groups were made
-    /// over, made again where one is another.
+    /// The list, the sun's visibility buffer and its boxes the sun's groups
+    /// were made over, made again where one is another.
     sun_grouped: [u32; 3],
 }
 
@@ -221,7 +221,7 @@ pub(super) const HEAD_BINDING: u32 = 11;
 /// passes of those bind it over the sun's buffers (`sun_groups`); the
 /// sun's own bind its world and its clipmap (`SUN_GROUP`), past the floor's
 /// storage buffers were they one group; the pixels' (`cast_cs`) read the
-/// raster's picks and no world (`pixel_group`).
+/// visibility buffer and no world (`pixel_group`).
 const WORLD_GROUP: [u32; compute::MISS_GROUP.len() + 3] = {
     let mut g = [0; compute::MISS_GROUP.len() + 3];
     let mut k = 0;
@@ -770,7 +770,7 @@ impl RaysPass {
                 [c.eye, c.beams, c.eye_head],
                 [c.window, ground, c.shards, c.overwrites, pool],
             );
-            let pixel_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.picks_array];
+            let pixel_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.visibility_array];
             if pixel_bound != c.pixel_bound {
                 release(c.pixel_group);
                 c.pixel_group = pixel_group(g, &c.built, pixel_bound, c.marks);
@@ -795,7 +795,7 @@ impl RaysPass {
             regions,
             instances,
         ];
-        let grouped = [c.sun_list, c.raster.sun_picks(), c.raster.sun.boxes];
+        let grouped = [c.sun_list, c.raster.sun_visibility(), c.raster.sun.boxes];
         if sun_bound != c.sun_bound || grouped != c.sun_grouped {
             for group in c.sun_groups {
                 release(group);
@@ -818,7 +818,7 @@ impl RaysPass {
                     c.sun_moved,
                     c.sun_list,
                     c.raster.sun.boxes,
-                    c.raster.sun_picks(),
+                    c.raster.sun_visibility(),
                     c.raster.sun.args,
                     c.sun_misses,
                 ],
@@ -876,7 +876,7 @@ impl RaysPass {
             // A pass a dispatch, each timed in its own span, so the cast's
             // parts are read apart: `cast` holds the forgetting alone; the
             // samples' boxes drawn between the samples and the pixels, which
-            // take the raster's pick (ray/raster.rs, span `sraster`). Where
+            // take the visible sample (ray/raster.rs, span `sraster`). Where
             // only the jitter moved (`FrameKind::pixels`), the beam rays, the
             // cells' starts and the samples stand, and the rest is cast again
             // off them.
@@ -958,9 +958,9 @@ impl RaysPass {
         }
         if c.sun_cast {
             // The beam, the samples, their boxes drawn, the slots taking
-            // their pick, a workgroup a tile (pxl-spec-core `sun::TILE`),
-            // and the rest walked off their list as the eye's missed pixels
-            // are: each a pass timed in its own span.
+            // their visible sample, a workgroup a tile (pxl-spec-core
+            // `sun::TILE`), and the rest walked off their list as the eye's
+            // missed pixels are: each a pass timed in its own span.
             let stamp = stamps[GpuSpanName::sun_beam as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
             // The tiles its receivers read marked first, timed with the
@@ -1015,7 +1015,7 @@ impl RaysPass {
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
             c.raster.sun_draw(g, encoder, stamp);
-            let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_pick as usize].pass());
+            let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_slot as usize].pass());
             g.set_bind_group(pass, 0, c.sun_groups[0], &[]);
             g.set_pipeline(pass, c.sun_built.pipeline);
             let tiles = shadow::SIZE / sun::TILE;
@@ -1158,17 +1158,17 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
 }
 
 /// The pixels' group 0 over `bound`: the eye, the rays, the beam's words,
-/// the pyramid, which the marked pixels are listed in, the raster's picks,
+/// the pyramid, which the marked pixels are listed in, the visibility buffer,
 /// a one-layer array, and the words the marked are counted in (`marks`).
 /// No world: a pixel walks nothing of its own (`cast_cs`).
 fn pixel_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
-    let [eye, rays, beams, seen, picks] = bound;
+    let [eye, rays, beams, seen, visibility] = bound;
     let entries = [
         buffer_entry(0, eye),
         view_entry(3, rays),
         buffer_entry(8, beams),
         buffer_entry(9, seen),
-        view_entry(13, picks),
+        view_entry(13, visibility),
         buffer_entry(14, marks),
     ];
     g.bind_group(built.layouts[0], &entries)
@@ -1199,9 +1199,9 @@ fn sun_list(g: &Gpu, whole: bool) -> u32 {
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
 /// which the sun's walks read and write as the eye's do; the clipmap; its
 /// head (`moved`), the beam's lines, the samples and the misses (`list`),
-/// the raster's boxes, picks and args, and the misses' dispatch; the eye's
-/// rays, which the mark reads, and the decor's drawing words, regions and
-/// instances, which the drawn mark reads. The slots', its world's (the
+/// the raster's boxes, visibility buffer and args, and the misses' dispatch;
+/// the eye's rays, which the mark reads, and the decor's drawing words, regions
+/// and instances, which the drawn mark reads. The slots', its world's (the
 /// passes the eye's rays take too, over `WORLD_GROUP`, its list where the
 /// eye's beam rays' buffer lies and its head where the eye's), its boxes'
 /// (the eye's raster's pass), the misses' walk's, the two marks' and the
@@ -1210,7 +1210,7 @@ fn sun_groups(
     g: &Gpu,
     [walk, world, boxes_built, miss, mark, mark_drawn, reach]: [&Built; 7],
     bound: [u32; 12],
-    [seen, moved, list, boxes, picks, args, misses]: [u32; 7],
+    [seen, moved, list, boxes, visibility, args, misses]: [u32; 7],
 ) -> [u32; 7] {
     let [eye, window, ground, looks, shards, overwrites, pool, sun, rays, drawing, regions, instances] =
         bound;
@@ -1228,7 +1228,7 @@ fn sun_groups(
         (HEAD_BINDING, buffer_entry(HEAD_BINDING, moved)),
         (12, buffer_entry(12, list)),
         (14, buffer_entry(14, boxes)),
-        (15, view_entry(15, picks)),
+        (15, view_entry(15, visibility)),
         (16, buffer_entry(16, args)),
         (17, buffer_entry(17, misses)),
         (18, buffer_entry(18, drawing)),

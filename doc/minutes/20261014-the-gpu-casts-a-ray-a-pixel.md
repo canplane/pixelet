@@ -12,10 +12,10 @@ retreated from if it did not pay, and it holds.
 
 A ray a pixel of the render resolution starts from its cell's beam
 ([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). A pixel takes the
-raster's pick, the nearest block any sample stopped at that its ray enters, or
+visible sample, the nearest block any sample stopped at that its ray enters, or
 the sky where no sample about it met anything, and walks itself only where
 neither is (pxl-shader observer.rs `resolve`, cast.rs `cast_cs`, `miss_cs`;
-[the raster picks](../experiment/20261026-the-raster-picks.md)). The render
+[the raster keeps](../experiment/20261026-the-raster-keeps.md)). The render
 resolution is the display's times a scale the load sets by default: one of
 `SCALE_STEPS` steps between whole and `SCALE_MIN`, each a like share of the
 last; where the GPU's time is read, a window over its budget by more than

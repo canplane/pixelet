@@ -89,7 +89,7 @@ pub const SHADER_FORGET: u32 = 43;
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 44;
 /// The world's depth from the sun into its clipmap, generated with the cast
-/// from pxl-spec-core's `sun`: every slot taking the raster's pick, a
+/// from pxl-spec-core's `sun`: every slot taking the visible sample, a
 /// workgroup a tile, a compute entry; that depth laid into the map
 /// (sun_map.wgsl, gpu/shadow.rs); and the slots that took none walked
 /// apart (pxl-spec-core `sun::misses_at`), a compute entry of its own.

@@ -142,7 +142,7 @@ It is the antialiasing a mip gives a texture. The pack's textures already
 have theirs (gpu/pack.rs: a mip chain, sampled anisotropic).
 
 - Here every pixel would walk. The cast is fast because a pixel takes the
-  raster's pick of the samples' boxes and only the missed walk. A composite
+  visible sample of the samples' boxes and only the missed walk. A composite
   along a ray cannot be taken from the samples about it across a depth edge.
 - A walk for every pixel to its first stop measured about 250 ms a frame. A
   composite walks further, until opaque; grazing rays skim the terrain

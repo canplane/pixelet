@@ -1,4 +1,4 @@
-# The raster picks
+# The raster keeps
 
 **2026-10-26.** The cast's `pixel` pass hands each pixel the nearest of the
 blocks the 4 × 4 samples about it stopped at that its ray enters, and it was
@@ -25,7 +25,7 @@ pixels walked, and `pixel` doubled. Testing in the fragment ended that.
 
 ## Numbers
 
-| Span     | As built (p95) | Raster picks (p95, two loads) |
+| Span     | As built (p95) | Raster keeps (p95, two loads) |
 | -------- | -------------- | ----------------------------- |
 | `sraster`|                | 2.9 / 2.9 ms                  |
 | `pixel`  | 34.8 ms        | 11.4 / 11.5 ms                |
@@ -34,13 +34,13 @@ The other spans as built. 14–46k boxes a frame of about 0.92M stopped samples.
 
 Against the eye's own walk, in the same frames, with steps on:
 
-| Load              | Pixels picked, raster / 4 × 4 | Unlike the eye, raster / 4 × 4 |
+| Load              | Pixels taken, raster / 4 × 4  | Unlike the eye, raster / 4 × 4 |
 | ----------------- | ----------------------------- | ------------------------------ |
 | loading, 25% lack | 75.08% / 75.03%               | 0.04% / 0.03% of stops         |
 | warm, no lack     | 99.68% / 99.29%               | 0.90% / 0.76% of stops         |
 
 Every difference from the eye is the eye stopping nearer: a block no sample
-stopped at stands in front of the one picked. Of the raster's in the warm
+stopped at stands in front of the one taken. Of the raster's in the warm
 load, 1.18M are the 4 × 4 rule's own, 489k are pixels the 4 × 4 rule walked
 (no neighbour's block entered) where the raster took a block from a sample
 further off, and 61k another block.
@@ -68,7 +68,7 @@ of neighbouring samples that stopped on it.
 
 Each fragment reads the pixel's 16 samples' stops (11 words each) and keeps
 only a box one of them stopped on, writing the depth of its entry itself
-(a variant the branch does not keep). Exact: picks differ on 191 pixels of 173M (0.00%), and the
+(a variant the branch does not keep). Exact: visible samples differ on 191 pixels of 173M (0.00%), and the
 raster's and the 4 × 4 rule's words differ from the eye's walk on the same
 1.04% of stops. But not cheaper: `sraster` 18.1 ms + `pixel` 16.6 ms against
 `pixel` 34.8 ms as built. The reads a fragment and the depth written by the
@@ -81,16 +81,16 @@ No reads a fragment (a variant the branch does not keep): samples merge into a b
 aligned 8 × 8 group, each box carrying a mask of the group's samples that
 stopped on it, and the fragment keeps it where that mask meets the pixel's
 4 × 4; the depth is the rasterized one, so early depth testing stays. Exact
-again (picks differ on 116 of 192M, the same 1.00% unlike the eye as the
+again (visible samples differ on 116 of 192M, the same 1.00% unlike the eye as the
 4 × 4 rule), and dearer still: 75.7k boxes, `sraster` 23.3 ms + `pixel`
 17.1 ms. A block spanning several groups is drawn once a group it spans.
 
 ## Held to the 4 × 4, where it differs
 
-The wide raster as before, and the pixel pass accepting its pick at once when
+The wide raster as before, and the pixel pass accepting its visible sample at once when
 the box's sample is in the pixel's 4 × 4, else when one of its 16 samples
-stopped the same way, else running the 4 × 4 loop (setting 20 = 2 at 71782ee9d). Exact (picks
-differ on 227 of 146M; 0.79% unlike the eye for both). But 87.6% of pixels
+stopped the same way, else running the 4 × 4 loop (setting 20 = 2 at 71782ee9d). Exact (visible
+samples differ on 227 of 146M; 0.79% unlike the eye for both). But 87.6% of pixels
 take the second test, 16 samples read, and only 11.5% the first: a box's
 sample is the top-left of its run, rarely in the pixel's own 4 × 4. At
 2056 × 1113, `sraster` 2.5 + `pixel` 27.6 ms against `pixel` 31.8 ms as
@@ -108,12 +108,12 @@ built. The loop's cost was reading the 16 samples more than testing them.
 
 The saving comes from the wider choice itself: held to the rule exactly, the
 raster costs what the loop did. In the exact cuts `pixel` also walks more
-(0.9% of pixels with no pick, against 0.3%), and a walk costs its warp.
+(0.9% of pixels with no visible sample, against 0.3%), and a walk costs its warp.
 
 ## Taken: the wide choice
 
 The raster, any sample, is the cast now (cast-raster-pick): the 4 × 4 loop is
-gone from `cast_cs`, which reads the raster's pick, and the setting, the hybrid
+gone from `cast_cs`, which reads the visible sample, and the setting, the hybrid
 and the check with it. It is a design decision on these measurements, not a
 rule for every pass. It was chosen because the parts divide where the costs
 are: the shared discovery, the beams and samples writing the observed pyramid,

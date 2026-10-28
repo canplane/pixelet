@@ -28,9 +28,9 @@ use crate::gpu::span_spec::GpuSpanName;
 /// its boxes, room for `room` samples, made again where the grid's samples
 /// outgrow them; the raster's view, a uniform; its targets at the rays'
 /// size: a pixel's sample (r32uint, drawn into as 2D and read as a
-/// one-layer array, `picks`) and the depth it is tested by; and the groups
-/// of the boxes' writing, their drawing and their faces' asking, made again
-/// exactly when what they bind is another (`bound`).
+/// one-layer array, `visibility`, the visibility buffer) and the depth it is
+/// tested by; and the groups of the boxes' writing, their drawing and their
+/// faces' asking, made again exactly when what they bind is another (`bound`).
 pub(super) struct Raster {
     /// The boxes' writing, the eye's and the shadow map's (pxl-shader
     /// raster.rs `sample_box_cs`), each over its own group.
@@ -41,16 +41,16 @@ pub(super) struct Raster {
     boxes: u32,
     room: u32,
     uniform: u32,
-    picks: u32,
-    picks_view: u32,
-    pub(super) picks_array: u32,
+    visibility: u32,
+    visibility_view: u32,
+    pub(super) visibility_array: u32,
     depth: u32,
     depth_view: u32,
     size: [u32; 2],
     groups: [u32; 3],
     bound: [u32; 9],
     /// The sun's, made where its shadows are first cast (`sun_made`); and a
-    /// pick of none, bound where it is not.
+    /// visibility buffer naming no sample, bound where it is not.
     pub(super) sun: SunRaster,
     blank_array: u32,
 }
@@ -65,9 +65,9 @@ pub(super) struct SunRaster {
     pub(super) boxes: u32,
     pub(super) args: u32,
     uniform: u32,
-    picks: u32,
-    picks_view: u32,
-    picks_array: u32,
+    visibility: u32,
+    visibility_view: u32,
+    visibility_array: u32,
     depth: u32,
     depth_view: u32,
     group: u32,
@@ -95,9 +95,9 @@ impl Raster {
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            picks: 0,
-            picks_view: 0,
-            picks_array: 0,
+            visibility: 0,
+            visibility_view: 0,
+            visibility_array: 0,
             depth: 0,
             depth_view: 0,
             size: [0; 2],
@@ -138,9 +138,9 @@ impl Raster {
         }
         if size != self.size {
             for v in [
-                self.picks_view,
-                self.picks_array,
-                self.picks,
+                self.visibility_view,
+                self.visibility_array,
+                self.visibility,
                 self.depth_view,
                 self.depth,
             ] {
@@ -148,9 +148,9 @@ impl Raster {
             }
             let [w, h] = size;
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            self.picks = g.texture(w, h, 1, Format::r32uint, 1, usage);
-            self.picks_view = g.view(self.picks, false, 0, 1, 0, 1);
-            self.picks_array = g.view(self.picks, true, 0, 1, 0, 1);
+            self.visibility = g.texture(w, h, 1, Format::r32uint, 1, usage);
+            self.visibility_view = g.view(self.visibility, false, 0, 1, 0, 1);
+            self.visibility_array = g.view(self.visibility, true, 0, 1, 0, 1);
             self.depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
             self.size = size;
@@ -267,7 +267,7 @@ impl Raster {
         let pass = g.pass(
             encoder,
             &pass_desc(
-                self.picks_view,
+                self.visibility_view,
                 Load::Clear,
                 self.depth_view,
                 Load::Clear,
@@ -280,7 +280,7 @@ impl Raster {
         g.draw_indirect(pass, self.args, 0);
         g.end(pass);
         // What lies about each box's face, before the pixels read it off
-        // their pick's sample: what the samples' last cast left, where they
+        // their visible sample: what the samples' last cast left, where they
         // stand.
         if !samples_cast {
             return;
@@ -312,9 +312,9 @@ impl Raster {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            s.picks = g.texture(size, size, 1, Format::r32uint, 1, usage);
-            s.picks_view = g.view(s.picks, false, 0, 1, 0, 1);
-            s.picks_array = g.view(s.picks, true, 0, 1, 0, 1);
+            s.visibility = g.texture(size, size, 1, Format::r32uint, 1, usage);
+            s.visibility_view = g.view(s.visibility, false, 0, 1, 0, 1);
+            s.visibility_array = g.view(s.visibility, true, 0, 1, 0, 1);
             s.depth = g.texture(size, size, 1, Format::depth32float, 1, usage);
             s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
             s.group = g.bind_group(
@@ -325,11 +325,11 @@ impl Raster {
         s.group != 0
     }
 
-    /// The sun's picks as its cast reads them, an array of one layer; a
-    /// pick of none where they are not made.
-    pub(super) fn sun_picks(&self) -> u32 {
+    /// The sun's visibility buffer as its cast reads it, an array of one layer;
+    /// one naming no sample where it is not made.
+    pub(super) fn sun_visibility(&self) -> u32 {
         if self.sun.group != 0 {
-            self.sun.picks_array
+            self.sun.visibility_array
         } else {
             self.blank_array
         }
@@ -397,7 +397,7 @@ impl Raster {
         let pass = g.pass(
             encoder,
             &pass_desc(
-                s.picks_view,
+                s.visibility_view,
                 Load::Clear,
                 s.depth_view,
                 Load::Clear,

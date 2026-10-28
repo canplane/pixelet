@@ -26,7 +26,7 @@ export const GPU_SPAN_NAMES = [
   "sun_beam",
   "sun_sample",
   "sun_raster",
-  "sun_pick",
+  "sun_slot",
   "sun_walk",
   "grow",
   "shadow",

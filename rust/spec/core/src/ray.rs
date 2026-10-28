@@ -52,7 +52,7 @@ const _: () = assert!(MISS >> (KEPT_SHIFT + KEPT_BITS) != 0);
 /// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the
 /// count listed or not (`MISS_ARGS_COUNT`); then what its pixels, or the
 /// sun's slots, counted where the `ray_counts` setting asks (`tally::RAYS`
-/// lanes from `tally::PICKED`, `MISS_ARGS_TALLY`). Each frame's start
+/// lanes from `tally::TOOK`, `MISS_ARGS_TALLY`). Each frame's start
 /// (`MISS_ARGS_EMPTY`) dispatches neither and counts none.
 pub const MISS_LANES: u32 = 64;
 pub const MISS_ACROSS: u32 = 64;

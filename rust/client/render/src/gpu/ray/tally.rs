@@ -129,12 +129,7 @@ impl Tally {
                     tally::BEAM,
                     tally::WALKS,
                 ),
-                (
-                    from.args[k],
-                    ray::MISS_ARGS_TALLY,
-                    tally::PICKED,
-                    tally::RAYS,
-                ),
+                (from.args[k], ray::MISS_ARGS_TALLY, tally::TOOK, tally::RAYS),
                 (from.boxes[k], raster::ARGS_INSTANCES, tally::BOXES, 1),
             ] {
                 let to = word_bytes(tally::at(o, lane) as usize);
