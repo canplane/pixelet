@@ -49,7 +49,7 @@ fn air_held_at(uv: vec2f, k: f32) -> vec3f {
 // (Hillaire 2020's aerial-perspective volume, 32 a side and deep,
 // frame/shader/word.rs `AIR_FROXELS`). What the air lets through is this
 // ray's own, e^-τ(d), per channel, taken as the march takes it
-// (atmos_march.wgsl `gather`): from where the ray enters the air to the
+// (atmos_march.wgsl `gather_between`): from where the ray enters the air to the
 // ground at the latest. What it scatters is that ray's 1 - e^-τ(d) times the
 // light per share taken (atmos_view.wgsl `air_held`), read off the volume
 // smooth (`air_held_at`). Only that slow factor is read off the grid; the
