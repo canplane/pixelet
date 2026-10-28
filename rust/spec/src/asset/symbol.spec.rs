@@ -8,6 +8,9 @@
 
 pub const SYMBOL_PX: u32 = 28;
 
+/// The device pixels a pixel the masks are rasterized at.
+pub const SYMBOL_RATIO: u32 = 2;
+
 /// Each symbol's path as Carto gives it, sorted.
 pub const SYMBOLS: [&str; 68] = [
     "symbols/amenity/aerodrome.svg",
