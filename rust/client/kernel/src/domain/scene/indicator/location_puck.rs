@@ -32,12 +32,19 @@ const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.cell());
 
 /// Which of its sides (top, bottom, right, left) lie on the zone's border.
 struct ZoneSample {
+    /// In the ground's cells from the center.
+    at: [i32; 2],
     off: V3,
     borders: [f64; 4],
 }
 
+/// How far the zone reaches from its center along an axis, in cells.
+fn zone_reach() -> i32 {
+    ZONE_RADIUS_CELL.ceil() as i32
+}
+
 fn zone_samples() -> impl Iterator<Item = ZoneSample> {
-    let range = ZONE_RADIUS_CELL.ceil() as i32;
+    let range = zone_reach();
     let flag = |b: bool| if b { 1.0 } else { 0.0 };
     (-range..=range)
         .flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64)))
@@ -51,6 +58,7 @@ fn zone_samples() -> impl Iterator<Item = ZoneSample> {
             let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
             let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
             Some(ZoneSample {
+                at: [dx as i32, dy as i32],
                 off: [
                     dx * units(GROUND.cell()),
                     dy * units(GROUND.cell()),
@@ -80,6 +88,70 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
     };
     let night = scene.environment.night();
     scene.puck.step(draw, device_coord, night);
+}
+
+/// The zone's instances about `center_pos` into `lane`, ZONE_INSTANCE_FLOATS
+/// floats an instance: each cell's ground asked of `ground` once, of the
+/// zone and of the ring its sides look across to, `rise` the room it is
+/// kept in.
+fn lay_zone(
+    center_pos: V3,
+    mut ground: impl FnMut(&Q3) -> Option<f64>,
+    rise: &mut Vec<Option<f64>>,
+    lane: &mut Vec<f32>,
+) {
+    lane.clear();
+    let cell = units(GROUND.cell());
+    const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let ring = zone_reach() + 1;
+    let across = (2 * ring + 1) as usize;
+    let index = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
+    rise.clear();
+    rise.resize(across * across, None);
+    for s in zone_samples() {
+        for d in [[0, 0]].iter().chain(&BESIDE) {
+            let at = [s.at[0] + d[0], s.at[1] + d[1]];
+            if rise[index(at)].is_none() {
+                let off = [
+                    s.off[0] + f64::from(d[0]) * cell,
+                    s.off[1] + f64::from(d[1]) * cell,
+                ];
+                let v = v3::add(&center_pos, &[off[0], off[1], s.off[2]]);
+                // An unloaded neighbor tile falls back to the center's height; 0 would
+                // sink or launch that instance.
+                let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
+                rise[index(at)] = Some(ground - center_pos[2]);
+            }
+        }
+    }
+    // The box on the ground's cell `d` from the sample, relative to the center.
+    let box_at = |s: &ZoneSample, d: [i32; 2]| {
+        let delta_ele = rise[index([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
+        let off = [
+            s.off[0] + f64::from(d[0]) * cell,
+            s.off[1] + f64::from(d[1]) * cell,
+        ];
+        v3::center(&[off[0], off[1], s.off[2] + delta_ele], cell)
+    };
+    for s in zone_samples() {
+        let v = box_at(&s, [0, 0]);
+        // A side is open over a lower cell beside it, the top always, the
+        // bottom never: bit k for face k, in the box's order (+x, -x, +y,
+        // -y, +z, -z).
+        let open = BESIDE.iter().enumerate().fold(1 << 4, |open, (k, &d)| {
+            open | u32::from(box_at(&s, d)[2] < v[2]) << k
+        });
+        lane.extend([
+            v[0] as f32,
+            v[1] as f32,
+            v[2] as f32,
+            s.borders[0] as f32,
+            s.borders[1] as f32,
+            s.borders[2] as f32,
+            s.borders[3] as f32,
+            open as f32,
+        ]);
+    }
 }
 
 /// The box's center relative to the zone's (3), its border flags (4), and
@@ -113,6 +185,9 @@ pub struct LocationPuck {
     grounded: Asked<Seen, Option<V3>>,
     /// The zone grounded this step, kept so a step allocates nothing.
     lane: Vec<f32>,
+    /// Each cell's ground over the zone's center, of the zone and the ring
+    /// about it, kept as `lane` is.
+    rise: Vec<Option<f64>>,
     /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
     /// which `held` holds, so grounding it again to the same heights draws
     /// nothing anew.
@@ -165,49 +240,16 @@ impl LocationPuck {
         let raw = [pos[0], pos[1], center_z];
         let center_pos = v3::floor(&raw, units(GROUND.cell()));
 
-        let mut lane = core::mem::take(&mut self.lane);
-        lane.clear();
-        let cell = units(GROUND.cell());
-        // The box on the ground's cell `off` from the center, relative to it.
-        let box_at = |off: V3| {
-            let v = v3::add(&center_pos, &off);
-            let coord = world::point(v[0], v[1], v[2]);
-            // An unloaded neighbor tile falls back to the center's height; 0 would sink
-            // or launch that instance.
-            let delta_ele = world
-                .surface_support(&coord)
-                .value()
-                .flatten()
-                .unwrap_or(center_pos[2])
-                - center_pos[2];
-            v3::center(&[off[0], off[1], off[2] + delta_ele], cell)
-        };
-        for s in zone_samples() {
-            let v = box_at(s.off);
-            // A side is open over a lower cell beside it, the top always, the
-            // bottom never: bit k for face k, in the box's order (+x, -x, +y,
-            // -y, +z, -z).
-            let side = |k: usize, d: [f64; 2]| {
-                let open =
-                    box_at([s.off[0] + d[0] * cell, s.off[1] + d[1] * cell, s.off[2]])[2] < v[2];
-                u32::from(open) << k
-            };
-            let open = side(0, [1.0, 0.0])
-                | side(1, [-1.0, 0.0])
-                | side(2, [0.0, 1.0])
-                | side(3, [0.0, -1.0])
-                | 1 << 4;
-            lane.extend([
-                v[0] as f32,
-                v[1] as f32,
-                v[2] as f32,
-                s.borders[0] as f32,
-                s.borders[1] as f32,
-                s.borders[2] as f32,
-                s.borders[3] as f32,
-                open as f32,
-            ]);
-        }
+        let (mut lane, mut rise) = (
+            core::mem::take(&mut self.lane),
+            core::mem::take(&mut self.rise),
+        );
+        lay_zone(
+            center_pos,
+            |at| world.surface_support(at).value().flatten(),
+            &mut rise,
+            &mut lane,
+        );
         if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != lane {
             self.held.write(draw, bytes(&lane));
             match self.zone.as_mut() {
@@ -233,7 +275,7 @@ impl LocationPuck {
             core::mem::swap(&mut self.drawn, &mut lane);
             request_world_tick();
         }
-        self.lane = lane;
+        (self.lane, self.rise) = (lane, rise);
         Some(center_pos)
     }
 
@@ -310,3 +352,7 @@ impl LocationPuck {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "location_puck.test.rs"]
+mod test;
