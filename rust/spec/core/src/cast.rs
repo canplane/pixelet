@@ -675,8 +675,8 @@ pub fn origin_line<Q: Query>(q: &mut Q, o: [i32; 3], detail: Detail) -> u32 {
 }
 
 /// What was handed each node over where a walk starts, by its zoom: the
-/// line it resumes from, as a beam ray left it (`Keep`), read only where
-/// the walk climbs over its start.
+/// line it resumes from, as a beam ray left it (`Keep`), read where the
+/// walk climbs over its start, and where it ends for what keeps its line.
 pub trait Over<A: Copy> {
     fn over(&self, zoom: Zoom) -> A;
 }
@@ -692,16 +692,24 @@ impl<A: Copy> Over<A> for Rooted<A> {
     }
 }
 
-/// What a walk leaves of its line where it ends (`walk`), for the walks
-/// that resume from it: the node it ended at, what was handed it (`live`),
-/// and what was handed every node over it, its stack by zoom. A walk none
-/// resumes from leaves nothing (`()`), and holds no copy of its stack.
+/// What a walk leaves where it ends (`walk`), for what reads on from it:
+/// its met, whose stop is the node it ended at and what was handed it
+/// (`Stop::node`, `Stop::at`), and what was handed every node over that,
+/// its stack by zoom, `over`'s where the walk started under it (`LINE`). A
+/// walk nothing reads on from leaves nothing (`()`), and reads nothing of
+/// `over` for it.
 pub trait Keep<A: Copy> {
-    fn keep(&mut self, node: &Node, live: A, stack: &[A; DEPTH]);
+    /// Whether it reads the line, so the walk's stack is whole where it
+    /// ends.
+    const LINE: bool = true;
+
+    fn keep(&mut self, met: &Met<A>, stack: &[A; DEPTH]);
 }
 
 impl<A: Copy> Keep<A> for () {
-    fn keep(&mut self, _: &Node, _: A, _: &[A; DEPTH]) {}
+    const LINE: bool = false;
+
+    fn keep(&mut self, _: &Met<A>, _: &[A; DEPTH]) {}
 }
 
 /// The first cell `ray` meets within its reach that `until` stops at, at
@@ -893,8 +901,9 @@ pub fn walk<Q: Query>(
                     at,
                     asset: i.asset,
                 };
-                keep.keep(&n, at, &stack);
-                return Met { ends, stop, visits };
+                let met = Met { ends, stop, visits };
+                leave(keep, &met, &mut stack, low, over);
+                return met;
             }
         }
         // Every way on makes the next node: what is handed it is decided here,
@@ -937,12 +946,13 @@ pub fn walk<Q: Query>(
                     at,
                     asset: AIR,
                 };
-                keep.keep(&n, at, &stack);
-                return Met {
+                let met = Met {
                     ends: Ends::On,
                     stop,
                     visits,
                 };
+                leave(keep, &met, &mut stack, low, over);
+                return met;
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
@@ -1001,6 +1011,26 @@ pub fn walk<Q: Query>(
             q.child(&parent, n.zoom, node)
         };
     }
+}
+
+/// The walk's line left to `keep` where it ends at `met`: its stack, under
+/// `over`'s where it started under it, at `low`, made whole first where
+/// `keep` reads it (`Keep::LINE`).
+fn leave<A: Copy, K: Keep<A>>(
+    keep: &mut K,
+    met: &Met<A>,
+    stack: &mut [A; DEPTH],
+    low: Zoom,
+    over: &impl Over<A>,
+) {
+    if K::LINE {
+        let mut z = 0;
+        while z < low {
+            stack[z as usize] = over.over(z);
+            z += 1;
+        }
+    }
+    keep.keep(met, stack);
 }
 
 #[cfg(test)]

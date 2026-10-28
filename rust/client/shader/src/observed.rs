@@ -5,9 +5,9 @@
 //! what the query reads changed (`forget_cs`).
 
 use pxl_spec_core::answer::In;
-use pxl_spec_core::cast::Query;
+use pxl_spec_core::cast::{self, Met, Query};
 use pxl_spec_core::observed;
-use pxl_spec_core::world::At;
+use pxl_spec_core::world::{self, At};
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -108,6 +108,39 @@ fn is_node(seen: &Seen, w: u32, zoom: u32, c: [i32; 3]) -> bool {
 pub(crate) struct Writ {
     pub(crate) entry: u32,
     pub(crate) at: At,
+}
+
+/// What a writing walk leaves of its line where it ends (`cast::Keep`), as
+/// the world's one query holds it, without the walk's slots: what was
+/// handed its stop and each node over it, by zoom. What lies about the face
+/// it stopped on is asked off it (world.rs `World::faced`), none walked down
+/// again.
+pub(crate) struct Lined {
+    pub(crate) live: At,
+    pub(crate) stack: [At; cast::DEPTH],
+}
+
+impl Lined {
+    /// Before its walk, which leaves its own over it wherever it ends, so
+    /// nothing of this is read.
+    pub(crate) fn before() -> Lined {
+        let none = At::of_words([0; world::AT_WORDS as usize]);
+        Lined {
+            live: none,
+            stack: [none; cast::DEPTH],
+        }
+    }
+}
+
+impl cast::Keep<Writ> for Lined {
+    fn keep(&mut self, met: &Met<Writ>, stack: &[Writ; cast::DEPTH]) {
+        self.live = met.stop.at.at;
+        let mut z = 0;
+        while z < met.stop.node.zoom {
+            self.stack[z as usize] = stack[z as usize].at;
+            z += 1;
+        }
+    }
 }
 
 /// The observed pyramid as a beam ray's walk, a sample's, or a pixel's that

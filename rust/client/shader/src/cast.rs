@@ -5,14 +5,14 @@
 //! `miss_cs` over every pixel where the list was full).
 
 use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{beam, observed, ray, tally, way};
+use pxl_spec_core::{beam, observed, ray, support, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
 
 use crate::beam::Beams;
 use crate::eye::{grid, Eye};
-use crate::observed::{seen_at, seen_put, Seen};
+use crate::observed::{seen_at, seen_put, Lined, Seen};
 use crate::observer::{self, Observer, Takes};
 use crate::world::{face_of, World};
 use crate::{add, most};
@@ -217,7 +217,8 @@ pub(crate) fn listed(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
 
 /// Pixel `id`'s ray again from its cell's start, writing what it asks into
 /// the observed pyramid (`Writing`), and what lies about the face it
-/// stopped on (`World::faced`): its words.
+/// stopped on, asked off the line the walk kept (`World::faced`): its
+/// words.
 #[allow(clippy::too_many_arguments)]
 fn missed(
     eye: &Eye,
@@ -241,8 +242,12 @@ fn missed(
         eye,
         pool: way::tree::Read(pool),
     };
-    let (aim, met, before) = observer::walked(eye, world, seen, beams, pixel_tan(eye, id, size));
-    let faces = world.faced(aim.origin, &aim.ray, &met);
+    let mut lined = Lined::before();
+    let (aim, met, before) =
+        observer::walked(eye, world, seen, beams, pixel_tan(eye, id, size), &mut lined);
+    let faces = world.faced(aim.origin, &aim.ray, &met, |_, _, _| {
+        support::Line::kept(aim.origin, &met.stop.node, lined.live, &lined.stack)
+    });
     let met = Met {
         visits: met.visits + before,
         ..met

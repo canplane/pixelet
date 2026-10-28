@@ -167,7 +167,8 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A
 /// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it (doc/minutes/20261022-a-cell-casts-a-beam.md,
-/// "Where a pixel resumes"); through `q`, reading or writing.
+/// "Where a pixel resumes"); through `q`, reading or writing, its line left
+/// where it ends to `keep`.
 pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
     q: &mut Q,
     origin: [i32; 3],
@@ -176,6 +177,7 @@ pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
     t: f32,
     line: &Beamed<'a, W>,
     node: cast::Node,
+    keep: &mut impl cast::Keep<Q::At>,
 ) -> Met<Q::At>
 where
     Beamed<'a, W>: cast::Over<Q::At>,
@@ -191,7 +193,7 @@ where
     } else {
         (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t)
     };
-    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, &mut ())
+    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep)
 }
 
 /// The eye's line, asked once ahead of its beam rays (eye.rs
@@ -263,7 +265,8 @@ pub fn beam_cs(
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
 
 impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
-    fn keep(&mut self, n: &cast::Node, live: Writ, stack: &[Writ; cast::DEPTH]) {
+    fn keep(&mut self, met: &Met<Writ>, stack: &[Writ; cast::DEPTH]) {
+        let (n, live) = (&met.stop.node, met.stop.at);
         let base = self.1;
         let w = &mut *self.0;
         node_put(w, base + beam::LINE_NODE, n);

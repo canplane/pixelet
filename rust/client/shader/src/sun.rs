@@ -518,7 +518,7 @@ pub fn sun_miss_cs(
     let w = at(list, pxl_spec_core::sun::misses_at(n) + i);
     let slot = UVec3::new(w & 0xffff, w >> 16, 0);
     let world = world(eye, window, ground, looks, shards, overwrites, pool);
-    let (aim, met, _) = observer::walked(&m, world, seen, list, [slot.x, slot.y]);
+    let (aim, met, _) = observer::walked(&m, world, seen, list, [slot.x, slot.y], &mut ());
     // SAFETY: a slot `sun_cs` listed, within the map.
     unsafe { sun.write(slot, m.word(&aim, &met)) };
 }
