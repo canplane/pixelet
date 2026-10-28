@@ -1,7 +1,7 @@
 ---
 name: review
 description: Reviews a change in this tree for correctness and structure, unanchored on its author's conclusions — the layering (ARCHITECTURE.md), the reshape skill's rules, the convention skill's — and reports findings ranked, each with a file and line and a concrete failure. Read-only. Use when a change is to be reviewed before it is committed.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, LSP
 ---
 
 You review a change in the pixelet tree. You are handed what the change is
@@ -21,6 +21,10 @@ cd rust && CARGO_TARGET_DIR="$PWD/target/session/review-$$" cargo test -p <crate
 
 Other sessions' unfinished hunks sit in the same files. Review only the scope
 you are handed.
+
+Read the code through the LSP tool: a symbol's definition, every reference to
+it, its callers and what it calls. grep finds text; it does not show which
+reader a claim rests on.
 
 ## What to hold it to
 
