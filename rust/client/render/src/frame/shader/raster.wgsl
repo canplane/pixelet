@@ -164,12 +164,10 @@ fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
   return vec2f(reach, 0.0);
 }
 
-// The drawn pixel's tangents across and up at its middle `at`, as
-// pxl-shader cast.rs `pixel_tan` forms them.
+// The drawn pixel's tangents across and up at its middle `at` (pixel.wgsl
+// `pixel_tan`), off the raster's own view.
 fn raster_tan(at: vec2f) -> vec2f {
-  let ndc_x = at.x / raster.screen.y * 2.0 - 1.0;
-  let ndc_y = 1.0 - at.y / raster.screen.z * 2.0;
-  return vec2f(ndc_x * raster.right.w, ndc_y * raster.up.w);
+  return pixel_tan(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
 }
 
 // Whether the ray from `o` along the unit `u` enters the box `lo`..`hi`

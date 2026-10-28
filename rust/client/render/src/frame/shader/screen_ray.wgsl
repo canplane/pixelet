@@ -48,9 +48,8 @@ fn eye_tan() -> vec2f {
 
 // That ray's direction before it is made a unit: linear in `frag`.
 fn aim(frag: vec2f, size: vec2f) -> vec3f {
-  let ndc = vec2f(frag.x / size.x * 2.0 - 1.0, 1.0 - frag.y / size.y * 2.0);
-  let tan = eye_tan();
-  return eye_vec3(EYE_FORWARD) + ndc.x * tan.x * eye_vec3(EYE_RIGHT) + ndc.y * tan.y * eye_vec3(EYE_UP);
+  let t = pixel_tan(frag, size, eye_tan());
+  return eye_vec3(EYE_FORWARD) + t.x * eye_vec3(EYE_RIGHT) + t.y * eye_vec3(EYE_UP);
 }
 
 // How far behind its face a ray's depth is written (`behind`): the world is

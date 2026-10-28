@@ -264,6 +264,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "eye",
         "paint",
         "debug_look",
+        "pixel",
         "screen_ray",
         "screen_lit"
     ],
@@ -329,6 +330,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "ray",
         "eye",
         "paint",
+        "pixel",
         "screen_ray",
         "screen_depth"
     ],
@@ -337,7 +339,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SAMPLE_BOX
     &["sample_box.gen"],
     // SHADER_RASTER
-    &["raster_box", "raster"],
+    &["raster_box", "pixel", "raster"],
     // SHADER_MISS_LIST
     &["miss_list.gen"],
     // SHADER_FACE
