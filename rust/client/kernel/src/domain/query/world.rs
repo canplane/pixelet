@@ -11,7 +11,7 @@ use pxl_spec::bake::constant::EntryAt;
 
 use super::changed::Columns;
 use crate::domain::layer::object::store::{Store, Walk};
-use crate::domain::layer::residency::{Lines, Residency};
+use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -21,7 +21,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 /// as one.
 #[derive(Clone, Copy)]
 pub struct World<'a> {
-    pub(super) terrain: &'a Residency<TerrainTile>,
+    pub(super) terrain: &'a TileCache<TerrainTile>,
     pub(super) objects: &'a Store,
     /// Whether decor is struck, as the boxes it claims; else a ray passes
     /// through decor.
@@ -41,7 +41,7 @@ impl World<'static> {
     /// camera's clearance, an edit's reads and decor's footing.
     pub fn now() -> World<'static> {
         let objects: &'static Store = crate::domain::layer::object::store::objects();
-        World::new(TerrainTile::residency(), objects)
+        World::new(TerrainTile::tile_cache(), objects)
     }
 
     /// As `now`, and decor is struck too, where the frame holds it: the
@@ -55,7 +55,7 @@ impl World<'static> {
 }
 
 impl<'a> World<'a> {
-    pub fn new(terrain: &'a Residency<TerrainTile>, objects: &'a Store) -> World<'a> {
+    pub fn new(terrain: &'a TileCache<TerrainTile>, objects: &'a Store) -> World<'a> {
         World {
             terrain,
             objects,

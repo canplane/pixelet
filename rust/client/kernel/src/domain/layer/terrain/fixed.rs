@@ -14,7 +14,7 @@ use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
 use pxl_spec_core::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
 
-use crate::domain::layer::residency::Residency;
+use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::mem::fixed::lane_bytes;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec_core::window::SQUARES;
@@ -22,7 +22,7 @@ use pxl_spec_core::window::SQUARES;
 /// `.fixed.terrain`, handed in at boot.
 pub static RANGE: crate::sys::mem::fixed::Held = crate::sys::mem::fixed::Held::new();
 
-const FRAMES: u32 = Residency::<TerrainTile>::FRAMES;
+const SLOTS: u32 = TileCache::<TerrainTile>::SLOTS;
 
 /// The separation's lanes, a plane each in order: line starts, points, tops,
 /// width, kind, form, clear; each its length and its element's bytes, which
@@ -48,7 +48,7 @@ const fn separation_plane(k: usize) -> u32 {
     let mut at = 0;
     let mut j = 0;
     while j < k {
-        at += FRAMES * separation_lane_bytes(j);
+        at += SLOTS * separation_lane_bytes(j);
         j += 1;
     }
     at

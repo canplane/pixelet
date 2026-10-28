@@ -211,8 +211,8 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
         let (gx, gy) = (gap(x0, o.eye[0]), gap(y0, o.eye[1]));
         gx * gx + gy * gy + over * over
     };
-    let residency = TerrainTile::residency();
-    // The floor's tiles are the top's no demand lines (domain/layer/residency/floor.rs).
+    let tile_cache = TerrainTile::tile_cache();
+    // The floor's tiles are the top's no demand lines (domain/layer/tile_cache/floor.rs).
     let mut lined: FnvHashSet<Tile> = FnvHashSet::default();
     ByEye {
         lattice: TerrainTile::LATTICE,
@@ -259,7 +259,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                         false => Mark::Drawn,
                     }
                 }
-                None => match residency.line(tile).drawn {
+                None => match tile_cache.line(tile).drawn {
                     None => Mark::NoTile,
                     Some(s) if floor_only(s) => Mark::FloorOnly,
                     Some(_) => Mark::Unbuilt,

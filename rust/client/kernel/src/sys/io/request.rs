@@ -68,7 +68,7 @@ pub enum Blame {
 }
 
 /// How many of a stream's wants are held at once. A layer's tiles: at most
-/// its residency's frames, since it asks only for what it can hold, which the
+/// its tile cache's slots, since it asks only for what it can hold, which the
 /// layer says (`open`). An asset: one a slot, the catalog and the sphere.
 pub type Bounds = [usize; Stream::ALL.len()];
 

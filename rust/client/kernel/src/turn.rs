@@ -402,9 +402,9 @@ fn changes_step() {
     let [places, earth, divisions] = MOVED.get(Default::default);
     let shared = crate::domain::query::changed::take();
     crate::domain::scene::decor::drawn::note_edited(crate::domain::query::changed::written());
-    PlaceTile::residency().take_moved(places);
-    Earth::residency().take_moved(earth);
-    DivisionTile::residency().take_moved(divisions);
+    PlaceTile::tile_cache().take_moved(places);
+    Earth::tile_cache().take_moved(earth);
+    DivisionTile::tile_cache().take_moved(divisions);
     if shared {
         TerrainTile::demand().on_moved();
     }

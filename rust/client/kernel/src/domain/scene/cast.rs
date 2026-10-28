@@ -87,16 +87,16 @@ pub fn overwrites() -> Overwrites<'static> {
 /// Each square the windows want to `write`, while it takes them: off the
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
-    let terrain = TerrainTile::residency();
-    let wanted = |frame| {
+    let terrain = TerrainTile::tile_cache();
+    let wanted = |slot| {
         terrain
-            .in_frame(frame)
+            .in_slot(slot)
             .is_some_and(|t| terrain.get(t).is_some() && window::is_tile_wanted(t))
     };
     kept().send(
         pxl_render::gpu::api::device_generation(),
-        &mut |frame, pkt| {
-            let Some(t) = terrain.in_frame(frame) else {
+        &mut |slot, pkt| {
+            let Some(t) = terrain.in_slot(slot) else {
                 return Offered::Taken;
             };
             let Some(held) = terrain.get(t) else {

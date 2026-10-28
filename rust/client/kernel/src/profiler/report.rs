@@ -1,7 +1,7 @@
 // pxl-kernel/profiler/report.rs
 
 //! A frame turn's record: what the turn measured of itself, what the renderer
-//! made of its frame, and the layers' residency, taken once its frame is
+//! made of its frame, and the layers' tile caches, taken once its frame is
 //! drawn, so every figure in it is that one turn's.
 
 use pxl_render::gpu::span_spec::FrameKind;
@@ -124,7 +124,7 @@ pub fn profiler_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
     let rings = ring_sample();
     let body_slots_peak = f64::from(crate::sys::io::body::take_peak());
-    let terrain_refused = TerrainTile::residency().take_refusals() as f64;
+    let terrain_refused = TerrainTile::tile_cache().take_refusals() as f64;
     let host = core::mem::take(HOST.get(HostFrame::default));
     if !profiler_recording() {
         return;
@@ -133,10 +133,10 @@ pub fn profiler_frame(t: FrameTurn) {
         profiler_record_gpu(r.frame, r.spans, r.px);
     }
     let mut tiles = TileSample::default();
-    for (p, _) in TerrainTile::residency().held() {
+    for (p, _) in TerrainTile::tile_cache().held() {
         tiles.by_zoom[p.zoom as usize] += 1.0;
     }
-    tiles.place = PlaceTile::residency().held().count() as f64;
+    tiles.place = PlaceTile::tile_cache().held().count() as f64;
     let counts = Stream::ALL.map(stream_counts);
     let record = FrameSample {
         // As the stage ended, before the record is taken.

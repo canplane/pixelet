@@ -17,7 +17,7 @@ use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use pxl_spec_core::window::{squares_zoom, SQUARE_SHIFT};
 
-use crate::domain::layer::residency::floor;
+use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
 use crate::domain::query::{Walked, World};
 use crate::domain::view::frame::pose::view;
@@ -90,7 +90,7 @@ pub fn observation() -> Option<Observation> {
 
 /// The eye's windows' squares (pxl-spec-core window.rs), the ground about
 /// the eye cut into one partition: from the coarsest squares within the
-/// floor's ring (residency/floor.rs `ring`), the far edge cut by the ground,
+/// floor's ring (tile_cache/floor.rs `ring`), the far edge cut by the ground,
 /// a square splits into its four while its nearest point is nearer than its
 /// cells' split distance (pxl-spec space/camera/grid.rs `split_distance`),
 /// the rule a ray's descent asks by, taken about the eye's height; each square left is at the zoom
@@ -145,7 +145,7 @@ pub fn squares(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
 }
 
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the
-/// source's `top` the floor's (residency/floor.rs `ring`), past it the
+/// source's `top` the floor's (tile_cache/floor.rs `ring`), past it the
 /// zoom's band (pxl-spec layer/demand.rs `band`); none past the far edge.
 pub fn reach(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
     if zoom == top {

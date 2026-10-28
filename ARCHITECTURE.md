@@ -324,20 +324,20 @@ every tile within that zoom's band about the eye (`domain/view/observation.rs`
 `ByEye`), mapped to the layer's tiles (`domain/view/demand.rs` `observe`). It is
 a function of the eye alone, never of what the rays met. A tile it names that is
 not held is a miss. Every layer is asked this way and holds what it is asked for
-in its own **residency** (`domain/layer/residency.rs`):
+in its own **tile cache** (`domain/layer/tile_cache.rs`):
 
 - Every observation has an answer: the coarsest zoom the declaration supplies
   whole is held all around the eye, the **floor**
-  (`domain/layer/residency/floor.rs`).
+  (`domain/layer/tile_cache/floor.rs`).
 - A tile is held hard for the floor or for demand while it is demanded, or else
-  as cache; only the hard set is correctness. The slots tiles are held in, the
-  **residency frames**, are counted at compile time and asserted to hold all
-  that can be held hard at once and one frame more to land in
-  (`Residency::FRAMES`). A tile that arrives takes a free one, or else the
-  farthest nothing holds hard and the view does not read.
+  as cache; only the hard set is correctness. The tile cache's **slots**, which
+  tiles are held in, are counted at compile time and asserted to hold all that
+  can be held hard at once and one slot more to land in (`TileCache::SLOTS`). A
+  tile that arrives takes a free one, or else the farthest nothing holds hard
+  and the view does not read.
 - A region goes from unresolved to coarse to as fine as it is observed, and
   never back. The view is loading until something has reached the screen and
-  every tile demanded shows, exact or coarser (`Residency::is_shown`).
+  every tile demanded shows, exact or coarser (`TileCache::is_shown`).
 - Nothing is prefetched: a view converges to exact on its misses alone.
 
 The GPU holds the ground's cells in **windows**. A ray observes a zoom's cells
@@ -414,7 +414,7 @@ with its own bound:
 | Query      | what a node holds, a point, or first on a ray | —; it holds nothing                                                                    | `domain/query.rs`                                         |
 | Drawing    | what each pixel's ray meets                   | the screen's rays                                                                      | `domain/scene/cast.rs`, `pxl-render gpu/ray/cast.rs`      |
 | Demand     | which records an observation requires         | a zoom's reach about the eye (`reach_tiles`)                                           | `pxl-spec space/layer/demand.rs`, `domain/view/demand.rs` |
-| Residency  | which records are held, and why               | its residency frames, asserted at compile time                                         | `domain/layer/residency.rs`                               |
+| Tile cache | which records are held, and why               | its slots, asserted at compile time                                                    | `domain/layer/tile_cache.rs`                              |
 | Scheduling | which waiting work runs now                   | a turn's time and the fetches let out at once ([Reads](#reads-and-the-one-scheduler)) | `sys/io/request.rs`, `sys/io/policy.rs`                   |
 
 Every number a person would tune is named once, with its reason, in a `param.rs`

@@ -16,12 +16,12 @@ use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
 
-use crate::domain::layer::residency::Residency;
+use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{Asks, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
 
-static DIVISION: Global<Residency<DivisionTile>> = Global::new();
+static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
 /// `.fixed.division`, handed in at boot.
 pub static RANGE: crate::sys::mem::fixed::Held = crate::sys::mem::fixed::Held::new();
@@ -30,7 +30,7 @@ pub static RANGE: crate::sys::mem::fixed::Held = crate::sys::mem::fixed::Held::n
 const RECORD_BYTES: u32 = crate::sys::mem::fixed::lane_bytes(CELLS, 4);
 
 /// A record a frame, end to end.
-pub const DIVISION_BYTES: u32 = Residency::<DivisionTile>::FRAMES * RECORD_BYTES;
+pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * RECORD_BYTES;
 
 impl Base for DivisionTile {
     const STREAM: Stream = Stream::division;
@@ -42,8 +42,8 @@ impl Base for DivisionTile {
         self.occupancy
     }
 
-    fn residency() -> &'static mut Residency<DivisionTile> {
-        DIVISION.get(Residency::default)
+    fn tile_cache() -> &'static mut TileCache<DivisionTile> {
+        DIVISION.get(TileCache::default)
     }
 
     /// Its cells into its record; its divisions, a handful over the focus,
@@ -74,13 +74,13 @@ pub fn line(focus: Option<Q3>) -> Option<Tile> {
 /// held over it, the held parent while the tile under it is on its way, and
 /// the cell in it. A tile's identity fixes what it names.
 pub fn naming(at: &Q3) -> Option<(Tile, u32)> {
-    let from = line(Some(*at)).and_then(|p| DivisionTile::residency().drawn_from(p))?;
+    let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().drawn_from(p))?;
     Some((from, GROUND.cell_of(from.zoom, at).index()))
 }
 
 /// The divisions named at `naming`'s cell, broad to narrow.
 pub fn each_division((from, cell): (Tile, u32), each: impl FnMut(&Division)) {
-    if let Some(tile) = DivisionTile::residency().get(from) {
+    if let Some(tile) = DivisionTile::tile_cache().get(from) {
         tile.name_at(cell).for_each(each);
     }
 }

@@ -9,7 +9,7 @@
 //! draws and lays its cells; they come back into `.fixed.terrain`, and the
 //! square is present from then on (`on_landed`). Nothing of a tile is kept for
 //! a square still to come: one that enters asks its tile again
-//! (`Residency::again`), which the browser's cache answers.
+//! (`TileCache::again`), which the browser's cache answers.
 
 use pxl_spec::bake::tile::terrain::{
     handed, square_lines, GroundId, TerrainTile, ELE_LANE, LOOK_LANE,
@@ -148,8 +148,8 @@ struct Windows {
     /// one that went took them all.
     on: u32,
     ticket: u32,
-    /// What the slots were last stepped over: the residency's revision
-    /// (`Residency::revision`), and whether a fill handed a square or let a
+    /// What the slots were last stepped over: the tile cache's revision
+    /// (`TileCache::revision`), and whether a fill handed a square or let a
     /// packet go since, which moves what is due and what is asked again.
     read: u32,
     filled: bool,
@@ -299,13 +299,13 @@ const _: () = assert!(
 /// more given up (`berth`); the tiles a window now wants but holds no
 /// packet for are asked again, and the squares due found (`due`). The
 /// slots are stepped only where a window moved a square or its zoom, the
-/// device went, the residency moved (`Residency::revision`) or a fill
+/// device went, the tile cache moved (`TileCache::revision`) or a fill
 /// handed: of those alone are they made. Before the turn's arrivals and its
 /// stage. True where the tiles the windows apart from the eye's want
 /// changed.
 pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = windows();
-    let terrain = TerrainTile::residency();
+    let terrain = TerrainTile::tile_cache();
     let lost = core::mem::replace(&mut w.on, on) != on;
     // The device that went took its pool: no square holds a tree of it.
     if lost {
@@ -538,7 +538,7 @@ pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
         Landing::Built(records) => match mirror().lay(records) {
             Ok(()) => {
                 held.present = true;
-                TerrainTile::residency().moved_at(tile_of(held.cell, held.square).0);
+                TerrainTile::tile_cache().moved_at(tile_of(held.cell, held.square).0);
                 0
             }
             Err(Unlaid::Heap) => {
@@ -573,10 +573,10 @@ pub fn refold() {
 /// Only a square whose tile can hand it now: one waiting on its tile does
 /// not hold a place another could take.
 fn due(w: &mut Windows) {
-    let terrain = TerrainTile::residency();
+    let terrain = TerrainTile::tile_cache();
     let handable = |t: Tile| {
         crate::domain::layer::terrain::tile::kept_for(t)
-            || terrain.get(t).is_some() && terrain.frame(t).is_none()
+            || terrain.get(t).is_some() && terrain.slot(t).is_none()
     };
     w.due.clear();
     for win in 0..WINDOWS {
@@ -610,12 +610,12 @@ fn due(w: &mut Windows) {
 /// each once: void tiles, whose squares are filled off their looks alone
 /// (`Handed::Void`).
 pub fn voids() -> List<Tile, { HANDED as usize }> {
-    let (w, terrain) = (windows(), TerrainTile::residency());
+    let (w, terrain) = (windows(), TerrainTile::tile_cache());
     let mut voids = List::new();
     for &b in w.due.iter() {
         let held = w.berths[b as usize];
         let t = tile_of(held.cell, held.square).0;
-        if terrain.get(t).is_some() && terrain.frame(t).is_none() && !voids.contains(&t) {
+        if terrain.get(t).is_some() && terrain.slot(t).is_none() && !voids.contains(&t) {
             voids.push(t);
         }
     }

@@ -12,7 +12,7 @@ use xpute_guest::mem::heap::Block;
 
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
-use residency::Residency;
+use tile_cache::TileCache;
 
 pub mod division;
 pub mod earth;
@@ -21,8 +21,8 @@ pub mod kept;
 pub mod object;
 pub mod place;
 mod query;
-pub mod residency;
 pub mod terrain;
+pub mod tile_cache;
 
 pub use answer::Answer;
 pub use query::Query;
@@ -54,7 +54,7 @@ pub trait Base: Clone + 'static {
     /// the bake folds up to and no further.
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
-    /// What it asks of the view; its residency is sized so.
+    /// What it asks of the view; its tile cache is sized so.
     const ASKS: Asks = Asks::View;
 
     /// The coarsest zoom the layer's own source supplies whole, where one
@@ -78,11 +78,11 @@ pub trait Base: Clone + 'static {
     const PINNED: u32 = 0;
 
     /// Its records, which it alone holds.
-    fn residency() -> &'static mut Residency<Self>;
+    fn tile_cache() -> &'static mut TileCache<Self>;
 
     fn receive(tile: Tile, record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
 
-    /// The packet a tile came in, once the frame `record` took the tile or
+    /// The packet a tile came in, once the slot `record` took the tile or
     /// none did: freed, or kept where the GPU takes the tile off it
     /// (`kept::Kept`).
     fn keep(_record: Option<u32>, block: Block) {

@@ -27,7 +27,7 @@
 //!
 //! - the ground: by its one rule (pxl-spec-core `ground::slab`, as a cell's
 //!   asset asks `Cell::opens` of one cell) over the lowest and highest the windows
-//!   hold under the node (`Residency::relief`, off the finest window holding
+//!   hold under the node (`TileCache::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
 //! - the ways: by their own rule (pxl-spec-core `way::slab`) over their
@@ -57,8 +57,8 @@ use pxl_spec_core::window::{self, Found};
 use pxl_spec_core::world;
 
 use super::world::World;
-use crate::domain::layer::residency::Lines;
 use crate::domain::layer::terrain::window::{pool, Windowed};
+use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
 
@@ -139,7 +139,7 @@ impl World<'_> {
     /// What is in `at`'s node, asked from `far` to `near`, the zooms a reader
     /// asks within it: the world's one query (pxl-spec-core `world::node`),
     /// the ground read as the GPU reads it, off what it drew and read back
-    /// (`Windowed`), down the node's line through the residency
+    /// (`Windowed`), down the node's line through the tile cache
     /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
     /// box in its own steps; the asset of a cell at the zoom asked, void for air; or,
     /// coarser than asked and nothing under it filling, air its size, which
@@ -172,7 +172,7 @@ impl World<'_> {
 }
 
 /// The ground as a node's reading holds it (pxl-spec-core `ground::Held`):
-/// the world's residency down the node's line, the lines its walk read,
+/// the world's tile cache down the node's line, the lines its walk read,
 /// and the first tile it found lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
     world: &'r World<'a>,

@@ -40,7 +40,7 @@ impl World<'_> {
     /// the ceiling rise with the face, so every column's hold where the
     /// lowest ceiling and the highest bedrock do: the ground's bound over
     /// the nodes holding `space` at its leaf cells, the fewest at the zoom
-    /// of its widest side, two a side at most (`Residency::relief`). An
+    /// of its widest side, two a side at most (`TileCache::relief`). An
     /// aligned cube is one node, its own columns; a box that is not is
     /// bounded by the nodes about it, which only refuses more.
     pub fn editable(&self, space: &Aabb) -> bool {

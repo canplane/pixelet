@@ -71,7 +71,7 @@ impl Stream {
     }
 }
 
-/// Why a tile is asked for, strongest first: the hold residency keeps it by.
+/// Why a tile is asked for, strongest first: the hold the tile cache keeps it by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Why {
     Floor,

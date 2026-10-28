@@ -32,7 +32,7 @@ use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::meta::placed;
 use crate::domain::layer::object::store::tree_key;
-use crate::domain::layer::residency::Line;
+use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor::strike::{reach, strike};
 use pxl_spec_core::area::{self, Shard};
 use pxl_spec_core::cast;

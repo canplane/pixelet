@@ -109,7 +109,7 @@ fn shown() -> Shown {
         // the area loading, and would flash its toast each time.
         status: match (crate::domain::view::observation::eye(), is_screen_drawn()) {
             (None, _) => GroundStatus::Idle,
-            (Some(_), true) if TerrainTile::residency().is_shown() => GroundStatus::Success,
+            (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
             _ => GroundStatus::Loading,
         },
         is_off_center: off_center().is_off_center,

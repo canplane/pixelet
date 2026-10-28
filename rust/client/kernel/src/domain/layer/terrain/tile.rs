@@ -10,7 +10,7 @@
 
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::kept::Kept;
-use crate::domain::layer::residency::Residency;
+use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
@@ -31,7 +31,7 @@ use pxl_spec::bake::tile::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-static TERRAIN: Global<Residency<TerrainTile>> = Global::new();
+static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 
 impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
@@ -43,8 +43,8 @@ impl Base for TerrainTile {
         self.occupancy
     }
 
-    fn residency() -> &'static mut Residency<TerrainTile> {
-        TERRAIN.get(Residency::default)
+    fn tile_cache() -> &'static mut TileCache<TerrainTile> {
+        TERRAIN.get(TileCache::default)
     }
 
     fn empty() -> Option<TerrainTile> {
@@ -71,8 +71,8 @@ impl Base for TerrainTile {
     /// zoom's packet no window reads takes no place of `most_kept`.
     fn keep(record: Option<u32>, block: Block) {
         let wanted = |r: &u32| {
-            TerrainTile::residency()
-                .in_frame(*r)
+            TerrainTile::tile_cache()
+                .in_slot(*r)
                 .is_some_and(crate::domain::layer::terrain::window::is_tile_wanted)
         };
         match record {
@@ -94,11 +94,11 @@ impl Base for TerrainTile {
 /// (`again_room`, domain/layer/terrain/window.rs `step`).
 pub fn most_kept() -> u32 {
     let credits = crate::sys::io::request::most_credits().max(1);
-    BODY_SLOTS.saturating_sub(credits + Residency::<Earth>::FRAMES)
+    BODY_SLOTS.saturating_sub(credits + TileCache::<Earth>::SLOTS)
 }
 
 const _: () = assert!(
-    BODY_SLOTS > MAX_CREDITS + Residency::<Earth>::FRAMES,
+    BODY_SLOTS > MAX_CREDITS + TileCache::<Earth>::SLOTS,
     "the body slots keep a terrain packet beside a body on every credit and the Earth's"
 );
 
@@ -107,7 +107,7 @@ const _: () = assert!(
 /// is fetched only to be freed past `most_kept`.
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
-    let coming = TerrainTile::residency()
+    let coming = TerrainTile::tile_cache()
         .asked_again(|p| !crate::sys::io::request::has_object_failed(Stream::terrain, p.subject()));
     most_kept().saturating_sub(kept().count() + coming)
 }
@@ -116,13 +116,13 @@ pub fn again_room() -> u32 {
 static KEPT: Global<Kept> = Global::new();
 
 pub fn kept() -> &'static mut Kept {
-    KEPT.get(|| Kept::new(Residency::<TerrainTile>::FRAMES))
+    KEPT.get(|| Kept::new(TileCache::<TerrainTile>::SLOTS))
 }
 
 /// Whether `tile`'s packet is kept, its squares still to be handed.
 pub fn kept_for(tile: Tile) -> bool {
-    TerrainTile::residency()
-        .frame(tile)
+    TerrainTile::tile_cache()
+        .slot(tile)
         .is_some_and(|f| kept().waiting(f))
 }
 

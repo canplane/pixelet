@@ -28,11 +28,11 @@ fn changed() -> &'static mut Changed {
     CHANGED.get(Changed::default)
 }
 
-/// The frame turn's changes, taken from the ground's residency and the
+/// The frame turn's changes, taken from the ground's tile cache and the
 /// object store in place of the last turn's; true where any moved.
 pub(crate) fn take() -> bool {
     let c = changed();
-    TerrainTile::residency().take_moved(&mut c.ground);
+    TerrainTile::tile_cache().take_moved(&mut c.ground);
     crate::domain::layer::object::store::take_written(&mut c.written);
     !c.ground.is_empty() || !c.written.is_empty()
 }
@@ -46,7 +46,7 @@ pub fn written() -> &'static [Aabb] {
 /// whose answer moved, touches the columns over `xy`, its corners in units,
 /// X on any lap. Taken once a frame turn, in its visible phase, after its
 /// arrivals are admitted, and held until the next; what moves between frame
-/// turns waits in the residency and the store for the next take. So a
+/// turns waits in the tile cache and the store for the next take. So a
 /// reader asking every frame turn, in its effects or its interaction phase,
 /// sees each change exactly once.
 pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {

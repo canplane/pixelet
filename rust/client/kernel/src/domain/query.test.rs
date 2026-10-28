@@ -18,7 +18,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 
 use crate::domain::layer::object::store::Store;
-use crate::domain::layer::residency::Residency;
+use crate::domain::layer::tile_cache::TileCache;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 use crate::domain::layer::object::store::Write;
@@ -42,12 +42,12 @@ struct Leaf {
 
 /// The tiles held, and over each its line up to the coarsest zoom the
 /// source supplies whole, as the floor holds it all around the eye
-/// (`domain/layer/residency/floor.rs`): a tile's coarser pictures here are the
+/// (`domain/layer/tile_cache/floor.rs`): a tile's coarser pictures here are the
 /// same ground, each marking its children held; their cells held in the
 /// windows about `centre`, in units.
-fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
+fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
-    let mut residency = Residency::default();
+    let mut tile_cache = TileCache::default();
     let mut admitted: Vec<Tile> = Vec::new();
     let mut cells = Vec::new();
     for (
@@ -73,7 +73,7 @@ fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
                     ..tile.clone()
                 },
             };
-            residency
+            tile_cache
                 .admit(q, |_| None, |_| Ok::<_, ()>(picture))
                 .unwrap();
         }
@@ -84,10 +84,10 @@ fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
         .iter()
         .map(|&q| (q, crate::sys::io::demand::Ask::PLAIN))
         .collect();
-    residency.ask(&asks);
+    tile_cache.ask(&asks);
     // Their cells as a GPU would hand them back, at once.
     crate::domain::layer::terrain::window::test::hold(centre, &cells);
-    residency
+    tile_cache
 }
 
 /// A leaf as a client holds it once its cells are back: each cell's height and look given.
@@ -144,10 +144,10 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     );
     let (x0, y0, _) = leaf.rect();
     let at = [x0 + 10.5, y0 + 10.5];
-    let residency = resident(at, &[(leaf, void)]);
+    let tile_cache = resident(at, &[(leaf, void)]);
 
     let empty = Store::default();
-    let access = World::new(&residency, &empty);
+    let access = World::new(&tile_cache, &empty);
     assert_eq!(
         access
             .surface_of(
@@ -178,7 +178,7 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
         OBJECT_COARSEST,
         red,
     );
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     assert_eq!(
         access.surface_support(&point(at[0], at[1])),
         Answer::Exact(Some(6.0))
@@ -215,9 +215,9 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
     );
     let (x0, y0, _) = leaf.rect();
     let at = [x0 + 20.5, y0 + 10.5];
-    let residency = resident(at, &[(leaf, void)]);
+    let tile_cache = resident(at, &[(leaf, void)]);
     let store = Store::default();
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     assert_eq!(
         access.surface_support(&point(at[0], at[1])),
         Answer::Exact(Some(10.0))
@@ -248,11 +248,11 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     };
     let tile = |x: i32| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
     let seam = pxl_spec::space::coord::world::ROUND / 2.0;
-    let residency = resident(
+    let tile_cache = resident(
         [seam, 100.5],
         &[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())],
     );
-    let top = World::new(&residency, &Store::default())
+    let top = World::new(&tile_cache, &Store::default())
         .surface_of(
             GROUND.cell(),
             GROUND
@@ -268,7 +268,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let mut store = Store::default();
     let red = cube_id(Cube::Object(cube::Object::red));
     write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
 
     let ground = access
         .first_hit(&down([seam + 20.5, 100.5]), at_zoom(LEAF_ZOOM))
@@ -295,7 +295,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
 }
 
-fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
+fn flat_at_five() -> (TileCache<TerrainTile>, [f64; 2]) {
     let leaf = top().children()[0];
     let flat = drawn(
         vec![5; CELLS],
@@ -317,9 +317,9 @@ fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
 #[test]
 fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
     let _g = serial();
-    let (residency, at) = flat_at_five();
+    let (tile_cache, at) = flat_at_five();
     let store = Store::default();
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     let top = access
         .first_hit(&down(at), at_zoom(LEAF_ZOOM))
         .value()
@@ -349,7 +349,7 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
     use crate::domain::layer::object::store::AIR;
     use pxl_spec_core::answer::{side, EIGHTHS};
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
     let dug = |n: usize| {
         let mut store = Store::default();
@@ -372,7 +372,7 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
             4.5 + f64::from(side(left)) / 2.0
         };
         let store = dug(n);
-        let access = World::new(&residency, &store);
+        let access = World::new(&tile_cache, &store);
         let at = [x + half / 2.0, y + half / 2.0];
         let hit = access
             .first_hit(&down(at), at_zoom(LEAF_ZOOM))
@@ -398,12 +398,12 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
 #[test]
 fn a_half_cube_is_met_as_it_is_placed() {
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
     let mut store = Store::default();
     let red = cube_id(Cube::Object(cube::Object::red));
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     let at = [x + half / 2.0, y + half / 2.0];
     let hit = access
         .first_hit(&down(at), held())
@@ -424,7 +424,7 @@ fn a_half_cube_is_met_as_it_is_placed() {
 #[test]
 fn a_walker_stands_on_a_cube_of_any_tier_anywhere_in_its_cell() {
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let red = cube_id(Cube::Object(cube::Object::red));
     for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
         let (cell, side) = (units(GROUND.cell()), units(zoom));
@@ -436,7 +436,7 @@ fn a_walker_stands_on_a_cube_of_any_tier_anywhere_in_its_cell() {
             zoom,
             red,
         );
-        let access = World::new(&residency, &store);
+        let access = World::new(&tile_cache, &store);
         let at = point(x + 0.1, y + 0.1);
         assert_eq!(
             access.surface_support(&at),
@@ -451,13 +451,13 @@ fn a_walker_stands_on_a_cube_of_any_tier_anywhere_in_its_cell() {
 #[test]
 fn a_gap_in_a_stack_is_floored_by_the_cube_under_it() {
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
     let red = cube_id(Cube::Object(cube::Object::red));
     for z in [5.0, 7.0] {
         write(&mut store, [x, y, z], OBJECT_COARSEST, red);
     }
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     let gap = world::point(x + 0.5, y + 0.5, 6.5);
     assert_eq!(
         access.floor_under(&gap, LEAF_ZOOM),
@@ -472,7 +472,7 @@ fn a_gap_in_a_stack_is_floored_by_the_cube_under_it() {
 #[test]
 fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
     let red = cube_id(Cube::Object(cube::Object::red));
     // A wall three cubes high in the column east of the walker's.
@@ -483,7 +483,7 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
     let floor = |p: Q3| q3::to_real(i64::from(p[2])) - units(GROUND.cell()) / 2.0;
     let east = world::point(x + 1.5, y + 0.5, 0.0);
     {
-        let access = World::new(&residency, &store);
+        let access = World::new(&tile_cache, &store);
         let to = access.step_slide(&from, &east, &from, true, true).unwrap();
         assert_eq!(
             (q3::to_real(i64::from(to[0])), floor(to)),
@@ -493,7 +493,7 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
     }
     // A roof over the walker two cells up: the climb meets it first.
     write(&mut store, [x, y, 7.0], OBJECT_COARSEST, red);
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     let to = access.step_slide(&from, &east, &from, true, true).unwrap();
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
@@ -523,12 +523,12 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
 #[test]
 fn a_height_stands_on_the_floor_nearest_it() {
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
     let red = cube_id(Cube::Object(cube::Object::red));
     // A deck a cube thick, its top at 10, with the ground at 5 under it.
     write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     let near = |z: f64| access.support_nearest(&world::point(x + 0.5, y + 0.5, z));
     assert_eq!(
         near(6.0),
@@ -538,7 +538,7 @@ fn a_height_stands_on_the_floor_nearest_it() {
     assert_eq!(near(12.0), Answer::Exact(Some(10.0)), "the deck");
     // A cube right under the deck's: its top has no clear cell over it.
     write(&mut store, [x, y, 8.0], OBJECT_COARSEST, red);
-    let access = World::new(&residency, &store);
+    let access = World::new(&tile_cache, &store);
     assert_eq!(
         access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)),
         Answer::Exact(Some(10.0))
@@ -550,10 +550,10 @@ fn a_height_stands_on_the_floor_nearest_it() {
 #[test]
 fn a_reading_reports_the_columns_its_queries_read() {
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let store = Store::default();
     let read = changed::Columns::default();
-    let access = World::new(&residency, &store).reading(&read);
+    let access = World::new(&tile_cache, &store).reading(&read);
     let cell = units(GROUND.cell());
     let at = [x + 0.5 * cell, y + 0.5 * cell];
     let c = at.map(|v| libm::floor(v / cell) * cell);
@@ -643,7 +643,7 @@ fn a_square_landing_after_the_fold_is_read_with_its_spike() {
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
-    let residency = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
+    let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
     // The spike's column in the eye's leaves' window.
     let (first, _) = Windowed.origin(LEAF_CELL);
@@ -671,12 +671,12 @@ fn a_square_landing_after_the_fold_is_read_with_its_spike() {
             .unwrap()
             .point[2]
     };
-    let held = met(&World::new(&residency, &store));
+    let held = met(&World::new(&tile_cache, &store));
     let (b, ticket) = unland(LEAF_CELL, spike);
     // As the stage lands a read-back: each landing, then one fold.
     on_landed(b, ticket, Landing::Built(&[0]));
     refold();
-    assert_eq!(met(&World::new(&residency, &store)), held, "the spike met");
+    assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
     let q = cells::square_of(spike).0;
     let mut outside = 0;
     for k in 0..SQUARE * SQUARE {
@@ -731,9 +731,9 @@ fn a_device_gone_leaves_no_bound_over_the_squares_it_held() {
 fn a_grown_decor_stands_where_it_grew_whatever_is_put_over_or_under_it() {
     use crate::domain::layer::object::store::AIR;
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let near = |store: &Store| {
-        let world = World::new(&residency, store);
+        let world = World::new(&tile_cache, store);
         let space = pxl_spec::space::coord::aabb::Aabb {
             min: [x - 8.0, y - 8.0, world::REACH.min[2]],
             max: [x + 8.0, y + 8.0, world::REACH.max[2]],
@@ -764,9 +764,9 @@ fn a_grown_decor_stands_where_it_grew_whatever_is_put_over_or_under_it() {
 fn a_grown_decor_goes_only_where_an_edit_holds_its_box() {
     use crate::domain::layer::object::store::AIR;
     let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
+    let (tile_cache, [x, y]) = flat_at_five();
     let empty = Store::default();
-    let world = World::new(&residency, &empty);
+    let world = World::new(&tile_cache, &empty);
     let space = pxl_spec::space::coord::aabb::Aabb {
         min: [x - 8.0, y - 8.0, world::REACH.min[2]],
         max: [x + 8.0, y + 8.0, world::REACH.max[2]],
@@ -778,7 +778,7 @@ fn a_grown_decor_goes_only_where_an_edit_holds_its_box() {
     let [cx, cy, cz] = tree.grown_in().unwrap();
     let decor = pxl_spec::asset::decor::Decor::of(pxl_spec::asset::DecorId::of(tree.id).unwrap());
     let grows = |store: &Store| {
-        let world = World::new(&residency, store);
+        let world = World::new(&tile_cache, store);
         super::scatter::grown_at(
             &mut super::scatter::Asked::new(&world),
             decor,

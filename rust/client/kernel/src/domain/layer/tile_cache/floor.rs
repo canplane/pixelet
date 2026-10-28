@@ -1,4 +1,4 @@
-// pxl-kernel/domain/layer/residency/floor.rs
+// pxl-kernel/domain/layer/tile_cache/floor.rs
 
 //! The floor: every observation has an answer at some zoom, because a
 //! fallback's tiles are held hard over every observed piece of ground. It is

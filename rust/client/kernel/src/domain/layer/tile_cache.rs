@@ -1,7 +1,7 @@
-// pxl-kernel/domain/layer/residency.rs
+// pxl-kernel/domain/layer/tile_cache.rs
 
-//! Residency: which of a layer's tiles are held, in which frame, and what
-//! answers a tile that is not. Any tile fits any frame. Tiles the fallback
+//! The tile cache: which of a layer's tiles are held, in which slot, and what
+//! answers a tile that is not. Any tile fits any slot. Tiles the fallback
 //! asks for are held hard; the rest is cache. A tile is readable while it is
 //! held and asked for, on its own, so a missing ancestor never hides a
 //! resident descendant; a tile held only as cache is bytes kept for when it
@@ -10,7 +10,7 @@
 //! falls back to the nearest resident tile over it (`drawn_from`).
 //!
 //! Capacity is asserted, not observed, since thrash here would be silent:
-//! frames cover everything held hard plus everything demand can name at once
+//! slots cover everything held hard plus everything demand can name at once
 //! (the reach), so a view at rest converges to exact.
 
 pub mod floor;
@@ -27,11 +27,11 @@ use crate::sys::io::demand::Ask;
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
 
-/// No frame for an empty tile, whose body is its own. One asked for again
+/// No slot for an empty tile, whose body is its own. One asked for again
 /// (`again`) is read meanwhile and fetched once more.
 struct Held<L> {
     body: L,
-    frame: Option<u32>,
+    slot: Option<u32>,
     again: bool,
 }
 
@@ -53,22 +53,22 @@ impl<L> Entry<L> {
         self.held.is_none() && self.ask.is_none()
     }
 
-    /// Held in a frame of its own, not as an empty tile.
-    fn is_framed(&self) -> bool {
-        self.held.as_ref().is_some_and(|h| h.frame.is_some())
+    /// Held in a slot of its own, not as an empty tile.
+    fn is_slotted(&self) -> bool {
+        self.held.as_ref().is_some_and(|h| h.slot.is_some())
     }
 }
 
-pub struct Residency<L: Base> {
+pub struct TileCache<L: Base> {
     tiles: FnvHashMap<Tile, Entry<L>>,
-    /// The tile each frame holds: the frames' side of `Held::frame`, one
-    /// association read both ways — a tile's frame by every reader of a
-    /// tile (`frame`, `is_framed`; domain/layer/earth.rs `earth_window`,
+    /// The tile each slot holds: the slots' side of `Held::slot`, one
+    /// association read both ways — a tile's slot by every reader of a
+    /// tile (`slot`, `is_slotted`; domain/layer/earth.rs `earth_window`,
     /// domain/layer/terrain/tile.rs `kept_for`, domain/layer/terrain/window.rs `voids`),
-    /// a frame's tile by the GPU's hand-offs, which walk the frames
+    /// a slot's tile by the GPU's hand-offs, which walk the slots
     /// (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`). Written only
-    /// where a frame is taken or given up (`put`, `remove`).
-    in_frame: Vec<Option<Tile>>,
+    /// where a slot is taken or given up (`put`, `remove`).
+    in_slot: Vec<Option<Tile>>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Tile>,
@@ -83,9 +83,9 @@ pub struct Residency<L: Base> {
     refused: u32,
 }
 
-/// What a layer's residency holds at once, from what it asks for. A layer
+/// What a layer's tile cache holds at once, from what it asks for. A layer
 /// holds only what it asks for (`Base::ASKS`).
-impl<L: Base> Residency<L> {
+impl<L: Base> TileCache<L> {
     /// The zooms the layer's pyramid holds, its leaves to the coarsest it is read at.
     pub const ZOOMS: u32 = (L::LEAF - L::COARSEST + 1);
 
@@ -119,33 +119,33 @@ impl<L: Base> Residency<L> {
     /// What is held hard at most.
     const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
 
-    /// A frame for a tile nothing holds hard to land in. The floor alone holds
+    /// A slot for a tile nothing holds hard to land in. The floor alone holds
     /// every tile it asks for hard, and asks for at most `floor::tiles`, so a
-    /// tile it asks for finds a frame free or held only as cache.
+    /// tile it asks for finds a slot free or held only as cache.
     const WORKSPACE: u32 = matches!(L::ASKS, Asks::View) as u32;
 
     /// Convergence: the misses and their lines share each zoom's ring, so a tile
     /// the view reads never gives up another the view reads.
-    pub const FRAMES: u32 = Self::PINNED_TILES + Self::DEMAND_TILES;
+    pub const SLOTS: u32 = Self::PINNED_TILES + Self::DEMAND_TILES;
 
-    /// Tiles residency knows of at once: every framed tile and every asked
-    /// one, and what is asked is at most the frames.
-    const ENTRIES: u32 = 2 * Self::FRAMES;
+    /// Tiles the cache knows of at once: every slotted tile and every asked
+    /// one, and what is asked is at most the slots.
+    const ENTRIES: u32 = 2 * Self::SLOTS;
 
     const SAFE: () = assert!(
-        Self::FRAMES >= Self::HARD_TILES + Self::WORKSPACE,
-        "safety: no frame for a tile nothing holds hard to land in"
+        Self::SLOTS >= Self::HARD_TILES + Self::WORKSPACE,
+        "safety: no slot for a tile nothing holds hard to land in"
     );
 }
 
-impl<L: Base> Default for Residency<L> {
+impl<L: Base> Default for TileCache<L> {
     fn default() -> Self {
         let () = Self::SAFE;
-        Residency {
+        TileCache {
             tiles: FnvHashMap::with_capacity_and_hasher(Self::ENTRIES as usize, Default::default()),
-            in_frame: vec![None; Self::FRAMES as usize],
-            // Lowest first, as the frames are taken.
-            free: (0..Self::FRAMES).rev().collect(),
+            in_slot: vec![None; Self::SLOTS as usize],
+            // Lowest first, as the slots are taken.
+            free: (0..Self::SLOTS).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
             moved: Vec::new(),
             revision: 0,
@@ -177,7 +177,7 @@ pub struct Line {
 
 /// The lines of a walk's last tile and the tiles over it, by zoom, so a walk
 /// to a tile beside it steps down only from where their lines part. Good
-/// while the residency it was walked over is unchanged.
+/// while the tile cache it was walked over is unchanged.
 pub struct Lines {
     at: [Option<Line>; LEAF_ZOOM as usize + 1],
 }
@@ -211,7 +211,7 @@ impl Line {
     }
 }
 
-impl<L: Base> Residency<L> {
+impl<L: Base> TileCache<L> {
     fn entry(&self, p: Tile) -> Option<&Entry<L>> {
         self.tiles.get(&p)
     }
@@ -235,14 +235,14 @@ impl<L: Base> Residency<L> {
         self.readable(p).is_some_and(|h| !h.again)
     }
 
-    /// Held in a frame of its own, not as an empty tile.
-    fn is_framed(&self, p: Tile) -> bool {
-        self.entry(p).is_some_and(Entry::is_framed)
+    /// Held in a slot of its own, not as an empty tile.
+    fn is_slotted(&self, p: Tile) -> bool {
+        self.entry(p).is_some_and(Entry::is_slotted)
     }
 
-    /// The frame a held tile is in; none for an empty one.
-    pub fn frame(&self, p: Tile) -> Option<u32> {
-        self.readable(p)?.frame
+    /// The slot a held tile is in; none for an empty one.
+    pub fn slot(&self, p: Tile) -> Option<u32> {
+        self.readable(p)?.slot
     }
 
     pub fn get(&self, p: Tile) -> Option<&L> {
@@ -320,11 +320,11 @@ impl<L: Base> Residency<L> {
     }
 
     /// Empty tiles and tiles answered above are kept only while asked:
-    /// they cost no frame, so nothing would ever evict them. Framed tiles are
+    /// they cost no slot, so nothing would ever evict them. Slotted tiles are
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &FnvHashMap<Tile, Ask>) {
         xpute_kit::ensure!(
-            asks.len() <= Self::FRAMES as usize,
+            asks.len() <= Self::SLOTS as usize,
             ENOTRECOVERABLE,
             asks.len()
         );
@@ -345,7 +345,7 @@ impl<L: Base> Residency<L> {
             self.tiles
                 .iter()
                 .filter(|&(_, e)| {
-                    e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.frame.is_none())
+                    e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.slot.is_none())
                 })
                 .map(|(&p, _)| p),
         );
@@ -363,15 +363,15 @@ impl<L: Base> Residency<L> {
         self.entry(p)?.ask
     }
 
-    /// A frame for arriving `p`: its own, a free one, or a victim among frames
+    /// A slot for arriving `p`: its own, a free one, or a victim among slots
     /// held only as cache. None only for a tile no longer asked for, counted;
     /// for one asked for, none means the capacity bound is broken.
-    fn frame_for(
+    fn slot_for(
         &mut self,
         p: Tile,
         victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>,
     ) -> Option<u32> {
-        if self.is_framed(p) {
+        if self.is_slotted(p) {
             return self.remove(p);
         }
         if let Some(free) = self.free.pop() {
@@ -382,7 +382,7 @@ impl<L: Base> Residency<L> {
             &mut self
                 .tiles
                 .iter()
-                .filter(|(_, e)| e.is_framed() && e.ask.is_none())
+                .filter(|(_, e)| e.is_slotted() && e.ask.is_none())
                 .map(|(&q, _)| q),
         ) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
@@ -396,10 +396,10 @@ impl<L: Base> Residency<L> {
         core::mem::take(&mut self.refused)
     }
 
-    /// The frame is emptied first, so a body that fails to decode leaves it free
+    /// The slot is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
-    /// `victim` picks which frame goes when one must, among the tiles of the
-    /// frames held only as cache, so a policy changes what is held next and
+    /// `victim` picks which slot goes when one must, among the tiles of the
+    /// slots held only as cache, so a policy changes what is held next and
     /// never what is correct; none where none may. They come in no order the
     /// state fixes, so a policy picks by a total one.
     pub fn admit<E>(
@@ -408,7 +408,7 @@ impl<L: Base> Residency<L> {
         victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>,
         receive: impl FnOnce(u32) -> Result<L, E>,
     ) -> Result<(), E> {
-        let Some(record) = self.frame_for(p, victim) else {
+        let Some(record) = self.slot_for(p, victim) else {
             return Ok(());
         };
         match receive(record) {
@@ -472,34 +472,34 @@ impl<L: Base> Residency<L> {
         core::mem::swap(out, &mut self.moved);
     }
 
-    fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
+    fn put(&mut self, p: Tile, body: L, slot: Option<u32>) {
         if let Some(was) = self
             .entry_mut(p)
             .held
             .replace(Held {
                 body,
-                frame,
+                slot,
                 again: false,
             })
-            .and_then(|h| h.frame)
+            .and_then(|h| h.slot)
         {
-            self.in_frame[was as usize] = None;
+            self.in_slot[was as usize] = None;
         }
-        if let Some(f) = frame {
-            self.in_frame[f as usize] = Some(p);
+        if let Some(f) = slot {
+            self.in_slot[f as usize] = Some(p);
         }
         self.moved.push(p);
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// A framed tile held is fetched once more, read meanwhile: what a
+    /// A slotted tile held is fetched once more, read meanwhile: what a
     /// layer that keeps nothing of a packet asks when it needs it again.
     pub fn again(&mut self, p: Tile) {
         if let Some(h) = self
             .tiles
             .get_mut(&p)
             .and_then(|e| e.held.as_mut())
-            .filter(|h| h.frame.is_some())
+            .filter(|h| h.slot.is_some())
         {
             h.again = true;
         }
@@ -526,12 +526,12 @@ impl<L: Base> Residency<L> {
         self.moved.push(p);
     }
 
-    /// The tile held in frame `record`.
-    pub fn in_frame(&self, record: u32) -> Option<Tile> {
-        self.in_frame[record as usize]
+    /// The tile held in slot `record`.
+    pub fn in_slot(&self, record: u32) -> Option<Tile> {
+        self.in_slot[record as usize]
     }
 
-    /// Returns the frame `p` was in, if any, for the caller to fill or free.
+    /// Returns the slot `p` was in, if any, for the caller to fill or free.
     fn remove(&mut self, p: Tile) -> Option<u32> {
         let std::collections::hash_map::Entry::Occupied(mut e) = self.tiles.entry(p) else {
             return None;
@@ -540,11 +540,11 @@ impl<L: Base> Residency<L> {
         if e.get().idle() {
             e.remove();
         }
-        if let Some(f) = held.frame {
-            self.in_frame[f as usize] = None;
+        if let Some(f) = held.slot {
+            self.in_slot[f as usize] = None;
         }
         self.moved.push(p);
         self.revision = self.revision.wrapping_add(1);
-        held.frame
+        held.slot
     }
 }

@@ -1,7 +1,7 @@
 // pxl-kernel/domain/view/demand.rs
 
 //! The pyramid as the client holds it, for every layer on the ground: the
-//! tiles held (residency.rs) and what an observation asks for of them.
+//! tiles held (tile_cache.rs) and what an observation asks for of them.
 //!
 //! Asks are the live eye's demand, as the estimator names it, merged with
 //! the fallback's tiles and a destination's, the best reason per tile.
@@ -29,8 +29,8 @@ use fnv::FnvHashMap;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::domain::layer::residency::floor;
-use crate::domain::layer::residency::{Lines, Residency};
+use crate::domain::layer::tile_cache::floor;
+use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::query::Walked;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::io::demand::Order;
@@ -88,7 +88,7 @@ impl Observed for Earth {
 /// A layer's own, by the stream its tiles come in (`Base::STREAM`).
 pub struct Layer {
     pub stream: Stream,
-    /// The most tiles it asks for at once, its residency's frames.
+    /// The most tiles it asks for at once, its tile cache's slots.
     pub frames: u32,
     arrived: fn(Tile, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
@@ -96,7 +96,7 @@ pub struct Layer {
 const fn layer<L: Observed>() -> Layer {
     Layer {
         stream: L::STREAM,
-        frames: Residency::<L>::FRAMES,
+        frames: TileCache::<L>::SLOTS,
         arrived: on_arrived::<L>,
     }
 }
@@ -136,10 +136,10 @@ pub struct Demand<L: Observed> {
     moved: bool,
     /// Where an observation builds the estimator's tiles and its asks, kept
     /// so observing stops allocating once warm. Empty between observations:
-    /// what was asked is the residency's (`Residency::ask`).
+    /// what was asked is the tile cache's (`TileCache::ask`).
     demand: Vec<Tile>,
     asks: FnvHashMap<Tile, Ask>,
-    /// The residency's revision as it idled it (`idle`), none while it steps.
+    /// The tile cache's revision as it idled it (`idle`), none while it steps.
     idled: Option<u32>,
 }
 
@@ -155,7 +155,7 @@ impl<L: Observed> Default for Demand<L> {
             gone: Vec::new(),
             moved: false,
             asks: FnvHashMap::with_capacity_and_hasher(
-                Residency::<L>::FRAMES as usize,
+                TileCache::<L>::SLOTS as usize,
                 Default::default(),
             ),
             idled: None,
@@ -173,9 +173,9 @@ impl<L: Observed> Demand<L> {
     pub fn absent(&mut self, p: Tile) {
         match L::empty() {
             Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => {
-                L::residency().set(p, empty)
+                L::tile_cache().set(p, empty)
             }
-            _ => L::residency().answer_above(p),
+            _ => L::tile_cache().answer_above(p),
         }
     }
 
@@ -202,7 +202,7 @@ impl<L: Observed> Demand<L> {
                 )
             })
         };
-        L::residency().admit(p, farthest, receive)
+        L::tile_cache().admit(p, farthest, receive)
     }
 
     /// Builds the asks for `o`: the estimator's demand, the floor and the
@@ -233,7 +233,7 @@ impl<L: Observed> Demand<L> {
             demand.sort_unstable_by_key(|p| key_of::<2>(p.zoom, p.at));
             demand.dedup();
             for &p in &demand {
-                let at = L::residency().seek(&mut lines, p).source.unwrap_or(p);
+                let at = L::tile_cache().seek(&mut lines, p).source.unwrap_or(p);
                 ask(
                     &mut asks,
                     at,
@@ -266,7 +266,7 @@ impl<L: Observed> Demand<L> {
                 read[p.zoom as usize] += 1;
             }
             xpute_kit::ensure!(
-                read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES),
+                read.iter().all(|&n| n <= TileCache::<L>::ZOOM_DEMAND_TILES),
                 ENOTRECOVERABLE,
                 *read.iter().max().unwrap_or(&0)
             );
@@ -310,13 +310,13 @@ impl<L: Observed> Demand<L> {
                 <= if matches!(L::ASKS, Asks::Floor) {
                     0
                 } else {
-                    Residency::<L>::DESTINATION_TILES + L::PINNED
+                    TileCache::<L>::DESTINATION_TILES + L::PINNED
                 },
             ENOTRECOVERABLE,
             named
         );
 
-        L::residency().ask(&asks);
+        L::tile_cache().ask(&asks);
         // The asks in key order, in the demand's room (nothing reads it
         // between observations): each line read steps from its neighbour's
         // (`seek`), not from the top.
@@ -324,11 +324,11 @@ impl<L: Observed> Demand<L> {
         demand.extend(asks.keys().copied());
         demand.sort_unstable_by_key(|p| p.key());
         let unanswered = |p: Tile, lines: &mut Lines| {
-            let r = L::residency();
+            let r = L::tile_cache();
             !r.resident(p) && (!r.seek(lines, p).settled || r.is_again_held(p))
         };
         // A tile no served shard is over or under is answered as its absence
-        // is, and never asked for: every ask judged against the residency as
+        // is, and never asked for: every ask judged against the tile cache as
         // the asks left it, before any absence is written, so which are
         // absent depends on no order they are taken in.
         if let Some(layer) = L::STREAM.bake() {
@@ -413,18 +413,18 @@ impl<L: Observed> Demand<L> {
     }
 
     /// A layer the view does not show keeps what it holds and asks for
-    /// nothing: its residency let go of its asks again only where what it
-    /// holds moved since it last was (`Residency::revision`), as asking
+    /// nothing: its tile cache let go of its asks again only where what it
+    /// holds moved since it last was (`TileCache::revision`), as asking
     /// nothing of what is unchanged changes nothing.
     pub fn idle(&mut self) {
-        if self.idled.is_some_and(|r| r == L::residency().revision()) {
+        if self.idled.is_some_and(|r| r == L::tile_cache().revision()) {
             return;
         }
         self.wants.clear();
-        L::residency().ask(&self.asks);
+        L::tile_cache().ask(&self.asks);
         declare(L::STREAM, &[]);
         self.last = None;
-        self.idled = Some(L::residency().revision());
+        self.idled = Some(L::tile_cache().revision());
     }
 }
 

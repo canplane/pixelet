@@ -16,14 +16,14 @@ use pxl_spec_core::area::Shard;
 use pxl_spec_core::ground::{Bounds, Cell};
 use pxl_spec_core::window::{self as cells, Found};
 
-use crate::domain::layer::residency::{Line, Lines, Residency};
 use crate::domain::layer::terrain::window::Windowed;
+use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
 use crate::sys::io::source;
 
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::space::coord::aabb::Aabb;
 
-impl Residency<TerrainTile> {
+impl TileCache<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
     /// cells, in leaf cells, and the ways apart (pxl-spec-core
     /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off
@@ -109,7 +109,7 @@ impl Residency<TerrainTile> {
     }
 }
 
-impl Residency<TerrainTile> {
+impl TileCache<TerrainTile> {
     /// `tile`'s line, stepped down from `from`'s, a tile over it or itself:
     /// a look-up a zoom between them.
     fn down(&self, from: &Line, tile: Tile) -> Line {
@@ -143,7 +143,7 @@ fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     }
 }
 
-impl Query for Residency<TerrainTile> {
+impl Query for TileCache<TerrainTile> {
     type Cursor = Line;
 
     fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {

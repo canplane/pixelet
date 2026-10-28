@@ -81,7 +81,7 @@ const FROXEL_GROUP: [u32; 24] = [
     UNIFORM,
 ];
 
-/// A layer for each tile the earth layer's floor holds at once: its residency's frames.
+/// A layer for each tile the earth layer's floor holds at once: its tile cache's slots.
 pub const EARTH_LAYERS: u32 = REACH_TILES;
 /// A tile's layer plus one in four bits, eight to a word.
 const _: () = assert!(

@@ -10,7 +10,7 @@ use super::decor::Strike;
 use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
-use crate::domain::layer::residency::Lines;
+use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::{Answer, Base};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;

@@ -23,7 +23,7 @@
 //! by the slots less one for the most credits granted and every Earth
 //! frame (domain/layer/terrain/tile.rs `most_kept`), a packet past it, or one no
 //! window wants a square of, freed once decoded. The kept thus leave a
-//! slot for every credit, and a body on one finds one: the residency,
+//! slot for every credit, and a body on one finds one: the tile cache,
 //! which the query and the controls read, fills with no frame drawn.
 //!
 //! A body is refused a slot in two cases, and its want waits on what can

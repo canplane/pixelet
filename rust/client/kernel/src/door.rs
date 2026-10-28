@@ -116,7 +116,7 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     executor::install();
     crate::sys::stop::install(last_words);
     let gpu_stream = layout::install(&b);
-    // A layer asks for no more tiles than its residency frames.
+    // A layer asks for no more tiles than its tile cache's slots.
     crate::sys::io::request::open(|c| {
         crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames)
     });
