@@ -159,7 +159,7 @@ pub fn pan(dx: f64, dy: f64) {
 }
 
 /// By `cx`, `cy` of the distance to the focus, across and up the screen, so
-/// a held key's speed is smooth across zooms and alike at any τ.
+/// a held key's speed is smooth across zooms.
 pub fn pan_across(cx: f64, cy: f64) {
     let d = across();
     pan_by(cx * d, cy * d);

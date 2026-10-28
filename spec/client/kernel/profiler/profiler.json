@@ -314,7 +314,6 @@
       "dist": 1,
       "polar": 1,
       "azimuth": 1,
-      "tau": 1,
       "center_lon": 1,
       "center_lat": 1,
       "center_z": 1,

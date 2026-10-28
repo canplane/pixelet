@@ -22,8 +22,8 @@ pub struct Eye {
     pub origin: IVec4,
     /// The unit forward, and the reach.
     pub forward_far: Vec4,
-    /// The unit right, and τ.
-    pub right_tau: Vec4,
+    /// The unit right, and a pad.
+    pub right: Vec4,
     /// The unit up, and a pad.
     pub up: Vec4,
     /// The tangents of the screen's half-angles across and up.
@@ -56,7 +56,7 @@ const _: () = {
     assert!(
         offset_of!(Eye, origin) == at(eye::ORIGIN)
             && offset_of!(Eye, forward_far) == at(eye::FORWARD)
-            && offset_of!(Eye, right_tau) == at(eye::RIGHT)
+            && offset_of!(Eye, right) == at(eye::RIGHT)
     );
     assert!(
         offset_of!(Eye, up) == at(eye::UP)
@@ -76,11 +76,10 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
     (
         [eye.origin.x, eye.origin.y, eye.origin.z],
         Detail {
-            tau: eye.right_tau.w,
             range: [eye.range.x, eye.range.y],
             eye: [0.0; 3],
             spacing: cast::Spacing {
-                angle: pxl_spec_core::beam::spacing(eye.right_tau.w),
+                angle: pxl_spec_core::grid::CELL,
                 across: 0.0,
             },
         },
@@ -91,7 +90,7 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
 pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
     let v3 = |v: Vec4| [v.x, v.y, v.z];
     cast::Ray::new(
-        cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty),
+        cast::through(v3(eye.forward_far), v3(eye.right), v3(eye.up), tx, ty),
         eye.forward_far.w,
     )
 }

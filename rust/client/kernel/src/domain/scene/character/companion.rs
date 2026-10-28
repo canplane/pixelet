@@ -33,7 +33,6 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::asset::actor::IDLE_CLIP;
 use pxl_spec::asset::marker::marker_shows;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -332,10 +331,9 @@ pub struct CompanionProps {
     /// Whether the keys steer it, and whether the map follows the device.
     pub steered: bool,
     pub following: bool,
-    /// The eye, which decides whether it walks or the world is a map, and the
-    /// τ the world is drawn at: what it is drawn standing on.
+    /// The eye, which decides whether it walks or the world is a map, and
+    /// what it is drawn standing on.
     pub eye: Q3,
-    pub tau: Tau,
 }
 
 /// The floor the focus `goal` is drawn on: `ask`'s of the world, kept while
@@ -448,11 +446,11 @@ pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
 }
 
 /// Where the person's line hangs, over its head, while the person shows it,
-/// seen from `eye` at `tau`: while the person is drawn (its stance is set
+/// seen from `eye`: while the person is drawn (its stance is set
 /// only while it holds its actor), and where the camera grid's cell at its
 /// feet is one a marker shows at (`marker_shows`), so a line reads where
 /// the markers about it do.
-pub fn line_hangs(eye: V3, tau: Tau) -> Option<Q3> {
+pub fn line_hangs(eye: V3) -> Option<Q3> {
     let person = companion().person.as_ref()?;
     let feet = person.stance?.at;
     let over = [
@@ -460,7 +458,7 @@ pub fn line_hangs(eye: V3, tau: Tau) -> Option<Q3> {
         feet[1],
         feet[2] + person.variant.height_u + HEAD_CLEARANCE_U,
     ];
-    marker_shows(cell_at(eye, tau, feet)).then(|| world_to_canonical(&over))
+    marker_shows(cell_at(eye, feet)).then(|| world_to_canonical(&over))
 }
 
 /// (model, image handle) for the shell's skinned pass: the image as the
@@ -491,7 +489,7 @@ fn walk_to(
 }
 
 /// The floor `stands` as the eye's rays draw it under `at`: the world asked
-/// at the zoom the camera grid at `tau` takes there from the eye, kept in
+/// at the zoom the camera grid takes there from the eye, kept in
 /// `asked` while none of it moves. A coarser answer is taken where that zoom
 /// is not held, as a ray draws the ground it has.
 fn drawn_floor(
@@ -505,7 +503,7 @@ fn drawn_floor(
     let r2 = (0..3)
         .map(|k| (center[k] - eye[k]) * (center[k] - eye[k]))
         .sum();
-    let zoom = GROUND.z_at(p.tau, r2);
+    let zoom = GROUND.z_at(r2);
     asked.of(World::now(), (at, stands, zoom), |w| {
         w.floor_under(&world_to_canonical(&center), zoom)
             .value()

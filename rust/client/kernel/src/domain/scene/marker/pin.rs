@@ -18,7 +18,6 @@ use pxl_render::look::marker::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::object::is_marker;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
@@ -115,17 +114,17 @@ pub(super) fn read(square: Square, columns: &Aabb, pins: &mut Vec<Pin>) {
     });
 }
 
-/// What `pins` show seen from `eye` at `tau`, into `out`: the one waiting
+/// What `pins` show seen from `eye`, into `out`: the one waiting
 /// for its words, wherever it is, then each pin where its own point's cell
 /// shows a marker (`marker_shows`), a pin's cell's pins but that one
 /// together: one is itself, more their count, which a tap takes to where it
 /// stands. A cell lies in its square, finer than it, so a square's pins are
 /// counted among themselves.
-pub(super) fn show(pins: &mut [Pin], eye: V3, tau: Tau, out: &mut Vec<Instance>) {
+pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
     let drafted = draft().map(|d| d.at);
     out.extend(draft().map(|d| one(d.at, pill(&d.words), pin_at(d.at).0)));
     for p in pins.iter_mut() {
-        p.grid = cell_at(eye, tau, p.base);
+        p.grid = cell_at(eye, p.base);
         p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
     }
     pins.sort_unstable_by_key(|p| (p.square, p.cell));

@@ -16,7 +16,6 @@ use crate::domain::layer::residency::{Lines, Residency};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 
 /// The world's query: the resident ground and the placed objects, read
@@ -42,12 +41,11 @@ impl World<'static> {
         World::new(TerrainTile::residency(), objects)
     }
 
-    /// As `now`, and decor is struck too, where the frame drawing at `tau`
-    /// holds it: the pointer's pick, which alone asks what a decor thing is.
-    pub fn striking_decor(self, tau: Tau) -> World<'static> {
+    /// As `now`, and decor is struck too, where the frame holds it: the
+    /// pointer's pick, which alone asks what a decor thing is.
+    pub fn striking_decor(self) -> World<'static> {
         let decor = Grown {
             models: crate::domain::query::model::models(),
-            tau,
         };
         World {
             decor: Some(decor),

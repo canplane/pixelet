@@ -73,8 +73,7 @@ pub fn stage_write() {
     s[STAGE_AT::FOV] = pxl_spec::space::camera::grid::FOV_DEG;
     // The camera grid's cell angle: the footprint a drawn cell covers per
     // unit of distance, square on.
-    let tau = crate::domain::view::lens::tau();
-    s[STAGE_AT::CELL] = crate::domain::view::lens::cell(tau);
+    s[STAGE_AT::CELL] = pxl_spec::space::camera::grid::CELL;
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade {
         crate::domain::scene::param::EDGE_STRENGTH
     } else {
@@ -101,7 +100,7 @@ pub fn stage_write() {
     s[STAGE_AT::CLOUDS] = crate::domain::scene::environment::cloud::clouds_shown();
     // Out to where the grid's cells one zoom coarser than the ground's leaf begin.
     s[STAGE_AT::SHADOWS] = if settings.shadows {
-        tau.split_distance(GROUND.cell() - 1)
+        pxl_spec::space::camera::grid::split_distance(GROUND.cell() - 1)
     } else {
         0.0
     };

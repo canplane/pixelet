@@ -245,29 +245,28 @@ pub mod SUMMARY {
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
-        pub const tau: u32 = 3;
-        pub const center_lon: u32 = 4;
-        pub const center_lat: u32 = 5;
-        pub const center_z: u32 = 6;
-        pub const hover_x: u32 = 7;
-        pub const hover_y: u32 = 8;
-        pub const hover_z: u32 = 9;
-        pub const hover_lon: u32 = 10;
-        pub const hover_lat: u32 = 11;
-        pub const hover_alt: u32 = 12;
-        pub const cell: u32 = 13;
-        pub const struck: u32 = 14;
-        pub const held: u32 = 15;
-        pub const drawn: u32 = 16;
-        pub const folded: u32 = 17;
-        pub const place_x: u32 = 18;
-        pub const place_y: u32 = 19;
-        pub const place_z: u32 = 20;
-        pub const place_zoom: u32 = 21;
-        pub const blocked: u32 = 22;
-        pub const WORDS: u32 = 23;
+        pub const center_lon: u32 = 3;
+        pub const center_lat: u32 = 4;
+        pub const center_z: u32 = 5;
+        pub const hover_x: u32 = 6;
+        pub const hover_y: u32 = 7;
+        pub const hover_z: u32 = 8;
+        pub const hover_lon: u32 = 9;
+        pub const hover_lat: u32 = 10;
+        pub const hover_alt: u32 = 11;
+        pub const cell: u32 = 12;
+        pub const struck: u32 = 13;
+        pub const held: u32 = 14;
+        pub const drawn: u32 = 15;
+        pub const folded: u32 = 16;
+        pub const place_x: u32 = 17;
+        pub const place_y: u32 = 18;
+        pub const place_z: u32 = 19;
+        pub const place_zoom: u32 = 20;
+        pub const blocked: u32 = 21;
+        pub const WORDS: u32 = 22;
     }
-    pub const WORDS: u32 = 516;
+    pub const WORDS: u32 = 515;
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.

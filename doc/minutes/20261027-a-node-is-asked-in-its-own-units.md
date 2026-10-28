@@ -27,7 +27,7 @@ rule each change is held to.
 - **The ray is a cone.** It widens with distance, and at each distance it
   steps in the grid of the zoom whose cell is that width (`grid::cell_at`), one
   rule shared with what is fetched and held (`window::RADIUS`) and with the
-  beams' spacing (`beam::spacing`). The container a step lands in is the
+  beams' spacing (`grid::CELL`). The container a step lands in is the
   cone's; the box inside it is what is drawn there, in eighths, floating as the
   LOD always has. The two are independent.
 - **What the ray cannot tell apart is passed.** A ray has a cone, as wide as
@@ -85,6 +85,10 @@ rule each change is held to.
   cells, and enters about twice that many nodes, every node over them on its
   path included, plus the near-eye floor where a block is wider than the cone,
   plus the levels it descends. It holds whatever the world holds.
+
+  > **Note (10-28):** τ is gone. The cone's cell is the view's,
+  > 1/`CELLS_A_RADIAN` (96) radians (pxl-spec-core grid.rs `CELL`), and the
+  > windows are sized `WINDOW_MARGIN` (2) times finer, `SPLIT` (192).
 - **The horizon costs what any direction does.** Without the pruning a ray
   grazing a surface passed a node only where it cleared all of its box, so it
   went down to nodes about as tall as its clearance, about `1/s` of them an

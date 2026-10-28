@@ -67,6 +67,9 @@ The last group is the structure taken. The coarse rays here are the camera
 grid's own: the corners of its cells, so the beam's spacing is the grid's cell
 (`grid::SPLIT` scaled by τ) and does not depend on the screen.
 
+> **Note (10-28):** τ is gone; the spacing is the view's cell, `grid::CELL`,
+> 1/`CELLS_A_RADIAN` radians.
+
 ## The beam
 
 A **beam ray** is cast through each corner of the camera grid's cells. It walks

@@ -216,7 +216,6 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
 
 fn side(out: &mut [f64]) {
     use crate::domain::control::interaction::{self, collision};
-    let tau = crate::domain::view::lens::tau();
     let pointed = interaction::pointed();
     // What the pointer meets, exactly, at the zooms the eye asks, whatever
     // the tool could strike there, and the zoom the rays draw it at.
@@ -229,7 +228,7 @@ fn side(out: &mut [f64]) {
             direction,
             reach: crate::domain::view::observation::eye_reach().unwrap_or(0.0),
         };
-        let detail = crate::domain::query::by_distance(tau);
+        let detail = crate::domain::query::by_distance();
         let hit = crate::domain::query::World::now()
             .first_hit(&ray, detail)
             .value()
@@ -241,7 +240,7 @@ fn side(out: &mut [f64]) {
     });
     let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the tool held strikes there, as the hover picks it.
-    let picked = pointed.and_then(|[x, y]| interaction::picked(x, y, tau));
+    let picked = pointed.and_then(|[x, y]| interaction::picked(x, y));
     let struck = picked.as_ref().map_or(f64::NAN, |p| match p.hit.struck {
         crate::domain::query::Struck::Ground => 0.0,
         crate::domain::query::Struck::Object(_) => 1.0,
@@ -264,7 +263,6 @@ fn side(out: &mut [f64]) {
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
-            tau: crate::domain::view::lens::tau().scale(),
             center_lon,
             center_lat,
             center_z,

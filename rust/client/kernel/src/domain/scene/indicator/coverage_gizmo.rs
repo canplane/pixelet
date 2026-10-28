@@ -15,7 +15,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::grid::cell_at;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -33,7 +33,6 @@ use crate::domain::query::World;
 use crate::domain::scene::indicator::gizmo_spec;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::view;
-use crate::domain::view::lens::tau;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
@@ -157,7 +156,7 @@ pub fn coverage_gizmo_step(show: bool) {
         (eye[1] / span).floor() * span,
         0.0,
     ];
-    let outline = outline(&o, tau(), top);
+    let outline = outline(&o, top);
     let mut lines = Lines::default();
     for &(n, mark) in &outline.squares {
         lines.piece(rect(n), mark);
@@ -190,16 +189,16 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 
 /// The goal, as the markers' squares cut the ground
 /// (domain/view/observation.rs `squares`): each eye window's squares,
-/// finest first, a square where the zoom its nearest point asks
-/// (`Tau::cell_at`, about the eye's height, as a ray's descent asks) is its
-/// window's or finer, within the reach, and not wholly under the finer
+/// finest first, a square where the zoom its nearest point asks (pxl-spec
+/// space/camera/grid.rs `cell_at`, about the eye's height, as a ray's
+/// descent asks) is its window's or finer, within the reach, and not wholly under the finer
 /// window's squares, which are read there instead; none coarser than the
 /// source's top, which nothing asks for. A piece is drawn where its square is present, or where a coarser
 /// window's square is, which the cast reads in its place (pxl-spec-core
 /// `window::step`): from the floor where that square's tile is the floor's
 /// alone. One not drawn is marked by its line: no tile on it, only the
 /// floor's, or a tile and its square not yet filled.
-fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
+fn outline(o: &Observation, top: Zoom) -> Outline {
     let held: [Option<[Slot; SLOTS as usize]>; EYE_WINDOWS as usize] =
         core::array::from_fn(|w| eye_slots(window::eye_cell(w as u32)));
     let present = |cell: Zoom, q: [i32; 2]| {
@@ -216,7 +215,6 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
     // The floor's tiles are the top's no demand lines (domain/layer/residency/floor.rs).
     let mut lined: FnvHashSet<Tile> = FnvHashSet::default();
     ByEye {
-        tau,
         lattice: TerrainTile::LATTICE,
         top,
     }
@@ -243,7 +241,7 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
                 .map(|c| (c, [p[0] >> (cell - c), p[1] >> (cell - c)]))
                 .find(|&(c, at)| present(c, at));
             let r2 = near(rect((pz, p)));
-            if r2 > o.reach * o.reach || tau.cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
+            if r2 > o.reach * o.reach || cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
                 continue;
             }
             read.insert((pz, p));

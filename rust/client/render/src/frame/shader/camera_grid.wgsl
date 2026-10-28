@@ -1,8 +1,8 @@
 // pxl-render/frame/shader/camera_grid.wgsl
 
 // The camera grid fixed to the screen: the sphere about the eye cut into cells
-// of one solid angle, a cell's angle squared (`frame_cell`, pxl-kernel
-// domain/view/lens.rs `cell`, τ / `SPLIT`), in rings a cell apart about the
+// of one solid angle, a cell's angle squared (`frame_cell`, pxl-spec
+// space/camera/grid.rs `CELL`), in rings a cell apart about the
 // optical axis, each ring cut into as many as fit, so a cell here holds the
 // area the eye decides a cell's zoom by (pxl-spec-core grid.rs). Its lines
 // are `GRID_COLOR` (debug_look.json).

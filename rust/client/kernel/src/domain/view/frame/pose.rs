@@ -118,7 +118,8 @@ pub fn km_per_u() -> f64 {
 
 /// The view `width` × `height` CSS pixels: what its matrices are made of,
 /// made again only where one moved. The pixels it is drawn with are the
-/// drawing's alone (`lens::tau`).
+/// drawing's alone: the camera grid is an angle (pxl-spec
+/// space/camera/grid.rs `CELL`).
 pub fn view_resize(width: f64, height: f64) {
     let v = view();
     let (width, height) = (width.max(1.0), height.max(1.0));

@@ -131,7 +131,7 @@ pub(super) struct CastBuffers {
     sun_misses: u32,
     /// What a tile of the sun's map holds follows, as the sun's cast last
     /// read it (`Read`): the light's frame (`Shadow::frame`), whether
-    /// shadows are cast, the light box, the eye's place, quality and zooms,
+    /// shadows are cast, the light box, the eye's place and zooms,
     /// and whether the world under it moved; one moving begins an epoch
     /// (`sun_epoch`).
     sun_content: Read,
@@ -625,7 +625,7 @@ impl RaysPass {
         c.grown.prepare(g, cast.decor, grows, meshes, world);
         // The sun's map is cast, every slot a receiver reads, as the eye's
         // rays are (pxl-spec-core `sun`), where what it reads moved: the
-        // light's frame or box, the eye's place, quality or zooms, which the
+        // light's frame or box, the eye's place or zooms, which the
         // zooms its rays ask follow, or the world under it; and where what
         // says which tiles are read moved, the look, the actors' places and
         // decor placed again (`sun_mark_cs`, `sun_mark_drawn_cs`). A
@@ -643,7 +643,6 @@ impl RaysPass {
         r.read(&[sun_map.1, u32::from(shadows)]);
         r.read(&cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS]);
         r.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
-        r.read(&cast.eye[eye::TAU..eye::TAU + 1]);
         r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
         r.mark(world_moved);
         let held = r.end();

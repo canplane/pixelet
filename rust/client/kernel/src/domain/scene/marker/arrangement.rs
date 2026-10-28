@@ -109,13 +109,12 @@ struct Arrangement {
 }
 
 /// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
-/// its view (the observation holds its frustum), the grid's τ, the places
+/// its view (the observation holds its frustum), the places
 /// setting, the pin being written and the chat's line and where it hangs. A
 /// new input goes here or the step never sees it change.
 #[derive(Clone, PartialEq)]
 struct Seen {
     o: pxl_spec::space::camera::eye::Observation,
-    tau: pxl_spec::space::camera::grid::Tau,
     places: bool,
     drafted: Option<(EntryAt, u64)>,
     said: line::Said,
@@ -214,13 +213,11 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         p.moved_places.clear();
         return;
     };
-    let tau = crate::domain::view::lens::tau();
     let seen = Seen {
         o,
-        tau,
         places: settings_store().place,
         drafted: pin::drafted(),
-        said: line::said(o.eye, tau),
+        said: line::said(o.eye),
     };
     if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
         return;
@@ -232,7 +229,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let now = &mut p.now;
     now.drawn.clear();
     let reach = reach_px(SPACING_PX);
-    crate::domain::view::observation::squares(&o, tau, &mut |square, heights| {
+    crate::domain::view::observation::squares(&o, &mut |square, heights| {
         let b = region(square, heights);
         let far = v3::len(&core::array::from_fn(|k| {
             (b.min[k] - o.eye[k]).abs().max((b.max[k] - o.eye[k]).abs())
@@ -317,8 +314,8 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     // Each shown at the zoom the grid's cell at its own point is.
     let mut shown = core::mem::take(&mut p.shown);
     shown.clear();
-    pin::show(&mut pins, o.eye, tau, &mut shown);
-    place::show(&mut read_places, o.eye, tau, &mut shown);
+    pin::show(&mut pins, o.eye, &mut shown);
+    place::show(&mut read_places, o.eye, &mut shown);
     shown.extend(seen.said.shown());
     let spacing = SPACING_PX;
     // What was drawn last by its holder's key, read once: what a holder

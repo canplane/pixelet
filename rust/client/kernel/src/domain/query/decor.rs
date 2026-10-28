@@ -15,11 +15,11 @@
 pub mod asset;
 pub mod strike;
 
-use pxl_spec::space::layer::lattice::{demand_reach, Cells};
+use pxl_spec::space::layer::lattice::Cells;
 
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::asset::DecorId;
-use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::grid::split_distance;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{cube, index_of, units, Zoom, SHARD_ZOOM};
@@ -41,11 +41,10 @@ use pxl_spec_core::cast;
 use pxl_spec_core::overwrite::{self, Held};
 use pxl_spec_core::window::Found;
 
-/// How decor is struck: against its models, where the frame drawing at `tau` holds it.
+/// How decor is struck: against its models, where the frame holds it.
 #[derive(Clone, Copy)]
 pub(super) struct Grown<'a> {
     pub(super) models: &'a Models,
-    pub(super) tau: Tau,
 }
 
 /// One ray's decor strike, carried along its ground walk.
@@ -336,10 +335,10 @@ impl<'a> World<'a> {
 
     /// The strike a ray carries, where decor is struck at all.
     pub(super) fn strike(&self, ray: &Ray) -> Option<Strike<'a>> {
-        let Grown { models, tau } = self.decor?;
-        // Held as it is out to where the leaves' tiles end.
-        let held = match GROUND.z_at(tau, 0.0) {
-            LEAF_ZOOM => (demand_reach(GROUND, LEAF_ZOOM) / tau.scale()).min(ray.reach),
+        let Grown { models } = self.decor?;
+        // Held as it is out to where the view draws the leaves' tiles.
+        let held = match GROUND.z_at(0.0) {
+            LEAF_ZOOM => split_distance(GROUND.grid_zoom(LEAF_ZOOM - 1)).min(ray.reach),
             _ => return None,
         };
         let reach = reach();

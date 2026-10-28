@@ -10,7 +10,7 @@
 
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_distance, SPLIT};
+use pxl_spec::space::camera::grid::{split_distance, SPLIT, WINDOW_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
@@ -27,27 +27,26 @@ use pxl_spec::bake::constant::EntryAt;
 use pxl_spec_core::window::FIRST_CELL;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
-/// cell, the model's edge, an angle about the eye in radians (`lens::cell`),
-/// so no screen's size or ratio moves it. No fade: the edge is per instance,
+/// cell, the model's edge, an angle about the eye in radians (pxl-spec
+/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it. No fade: the edge is per instance,
 /// so it staggers.
 pub fn decor_model_angle() -> f64 {
     crate::domain::scene::decor::param::DECOR_MODEL_CELLS
-        * crate::domain::view::lens::cell(crate::domain::view::lens::tau())
+        * pxl_spec::space::camera::grid::CELL
 }
 
 /// The sprite's edge, `DECOR_SPRITE_CELLS` of a camera cell, as an angle as
 /// the model's is (`decor_model_angle`).
 pub fn decor_sprite_angle() -> f64 {
     crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
-        * crate::domain::view::lens::cell(crate::domain::view::lens::tau())
+        * pxl_spec::space::camera::grid::CELL
 }
 
-/// How far a thing `extent_u` wide is a sprite's worth at the finest τ
-/// (`Tau::FINEST`), whose cells are the view's over pxl-spec-core
-/// `grid::WINDOW_MARGIN`: where it spans `DECOR_SPRITE_CELLS` of them,
+/// How far a thing `extent_u` wide is a sprite's worth as a window holds it:
+/// where it spans `DECOR_SPRITE_CELLS` of the window's cells (`SPLIT`),
 /// `WINDOW_MARGIN` times as far as `decor_sprite_angle` puts the sprite's
-/// edge, an upper bound. `decor_shown` takes both its sides at that
-/// τ, so its zooms are the view's.
+/// edge, an upper bound. `decor_shown` takes both its sides at the
+/// window's, so its zooms are the view's.
 pub const fn sprite_reach(extent_u: f64) -> f64 {
     extent_u * SPLIT / crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
 }
@@ -55,7 +54,7 @@ pub const fn sprite_reach(extent_u: f64) -> f64 {
 /// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
 /// `cell_zoom` are drawn: as it spans where that zoom begins.
 fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_distance(cell_zoom) <= sprite_reach(extent_u)
+    split_distance(cell_zoom) * WINDOW_MARGIN <= sprite_reach(extent_u)
 }
 
 /// Each kind's window zooms where it is a sprite's worth, a bit each.

@@ -78,7 +78,7 @@ regression, not an answer. What stands:
 - The query asks a node and answers a box in its own units, every axis alike
   (`cf769abc1`; [a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
 - The ray is a cone (`cast::Spacing`). The eye's cone is an angle, the grid's
-  cell (`beam::spacing`). The sun's is its texel. Control is exact.
+  cell (`grid::CELL`). The sun's is its texel. Control is exact.
 
   > **Note (10-28):** with the prune gone, nothing reads a ray's cone. What
   > is left is how far apart a beam's rays lie (`cast::Spacing`), the eye's
@@ -93,6 +93,9 @@ regression, not an answer. What stands:
   > its note of 10-28).
 - Every view is cast at one τ, an angle, so the display draws and decides
   nothing (`0c84382cd`).
+
+  > **Note (10-28):** τ is gone: the view's grid is the only one, a cell
+  > 1/`CELLS_A_RADIAN` radians (pxl-spec-core grid.rs `CELL`).
 - The rays find and the raster hands out
   ([the ray finds, the raster hands out](./20261026-the-ray-finds-the-raster-hands-out.md)).
   The stages are beam, cell start, samples, the raster's pick, the pixel and
@@ -114,6 +117,9 @@ for the loss. Both are code readings, not yet confirmed on the screen:
 1. **The zoom is the distance's alone, while the samples are sparse.**
    - `cast::Detail` takes `grid::cell_at(d² · τ²)`, isotropic, so a cell's
      extent across the screen along a slant shrinks with the slant's sine.
+
+     > **Note (10-28):** τ is gone; it takes `grid::cell_at(d²)`, at the
+     > view's cells.
    - Since 10-23 a pixel no longer walks: 4 × 4 samples a cell do
      (`beam::SAMPLE`). A pixel takes the nearest box a sample stopped at that
      its ray enters, and walks only where its ray enters none.

@@ -15,7 +15,6 @@ use crate::domain::query::{cell_at, World};
 use crate::domain::scene::marker::design::Design;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{stands, symbol_of, PLACE_FIRST, PLACE_LATTICE};
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::REACH;
@@ -85,10 +84,10 @@ pub(super) fn read(square: Square, found: &mut Vec<Place>) {
     });
 }
 
-/// What `read` read, seen from `eye` at `tau`, into `out`: each place as
+/// What `read` read, seen from `eye`, into `out`: each place as
 /// Carto shows it at the zoom the camera grid's cell where it stands is,
 /// no finer than its tile was read at, standing on what is drawn there.
-pub(super) fn show(read: &mut [Place], eye: V3, tau: Tau, out: &mut Vec<Instance>) {
+pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
     for p in read {
         // Its cell is the grid's at what it stands on: as last asked, or
         // first at its square's finest.
@@ -97,7 +96,7 @@ pub(super) fn show(read: &mut [Place], eye: V3, tau: Tau, out: &mut Vec<Instance
             None => top_at(p, GROUND.read_zoom(p.finest)),
         };
         let [x, y, _] = q3::unpack(&p.ground.mid());
-        let cell = cell_at(eye, tau, [x, y, first.unwrap_or(0.0)]).min(p.finest);
+        let cell = cell_at(eye, [x, y, first.unwrap_or(0.0)]).min(p.finest);
         let Some(design) = point_of(p.category, p.from, p.name.as_ref(), carto_zoom(cell)) else {
             continue;
         };

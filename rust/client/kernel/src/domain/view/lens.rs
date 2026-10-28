@@ -1,35 +1,23 @@
 // pxl-kernel/domain/view/lens.rs
 
-//! The camera grid through the screen: the quality the eye's rays are cast
-//! at (`tau`), and what the GPU's cast of the screen's rays reads
+//! The camera grid through the screen: the cell a distance holds
+//! (`cell_there`), and what the GPU's cast of the screen's rays reads
 //! (`gpu_cast`), a ray a drawn pixel, one rule wherever the eye is
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md, "What is
 //! drawn").
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{Tau, SPLIT};
+use pxl_spec::space::camera::grid::CELL;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::origin;
 use pxl_spec_core::{beam, eye};
 
 use crate::domain::query::asked;
 
-/// The camera grid's cell at `tau`, as an angle.
-pub fn cell(tau: Tau) -> f64 {
-    tau.scale() / SPLIT
-}
-
 /// The camera grid's cell `distance` from the eye, in units: what spans it is
 /// observed there, and a motion that carries something this far is seen.
 pub fn cell_there(distance: f64) -> f64 {
-    cell(tau()) * distance
-}
-
-/// The quality: every view's (`Tau::VIEW`), an angle whatever the screen,
-/// so what is observed at a distance is the same at any ratio and any
-/// height; the display's pixels draw it and decide nothing of it.
-pub fn tau() -> Tau {
-    Tau::VIEW
+    CELL * distance
 }
 
 /// The screen as the eye sees it: its axes and the tangents of its half-angles.
@@ -70,14 +58,13 @@ impl Lens {
 /// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
-/// and the reach; the unit right and τ; the unit up; the tangents of the
+/// and the reach; the unit right; the unit up; the tangents of the
 /// screen's half-angles across and up and the zooms a cell is asked at;
 /// the camera grid the cast lays over the screen off them, once. A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
 pub fn gpu_cast(
     o: &Observation,
-    tau: Tau,
     steps: bool,
     words: &mut [u32; eye::WORDS],
 ) -> Option<()> {
@@ -90,7 +77,6 @@ pub fn gpu_cast(
     put(eye::FORWARD, &lens.forward.map(w));
     put(eye::REACH, &[w(o.reach)]);
     put(eye::RIGHT, &lens.right.map(w));
-    put(eye::TAU, &[w(tau.scale())]);
     put(eye::UP, &lens.up.map(w));
     put(eye::TAN, &lens.tan.map(w));
     put(eye::RANGE, &asked());
@@ -98,7 +84,7 @@ pub fn gpu_cast(
     // this one (pxl-spec-core `beam::Grid`).
     put(
         eye::GRID,
-        &beam::Grid::of(lens.tan.map(|t| t as f32), tau.scale() as f32).words(),
+        &beam::Grid::of(lens.tan.map(|t| t as f32)).words(),
     );
     Some(())
 }
