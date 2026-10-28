@@ -12,6 +12,7 @@ use crate::gpu::pass::model::{
     draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::Uploads;
 
 pub struct SkinnedPass {
@@ -25,7 +26,7 @@ pub struct SkinnedPass {
 impl SkinnedPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
         SkinnedPass {
-            lit: pipelines.build(g, PIPELINE_SKINNED, g.canvas()),
+            lit: pipelines.build(g, PIPELINE_SKINNED, WORLD_COLOR),
             depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             skins: Vec::new(),

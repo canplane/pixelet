@@ -17,6 +17,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::FrameKind;
+use crate::gpu::surface::WORLD_COLOR;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
@@ -45,7 +46,7 @@ pub struct RaysPass {
 
 impl RaysPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
-        let built = pipelines.build(g, PIPELINE_SCREEN_RAY, g.canvas());
+        let built = pipelines.build(g, PIPELINE_SCREEN_RAY, WORLD_COLOR);
         let depth = pipelines.build(g, PIPELINE_SCREEN_PREPASS, Format::depth32float);
         let words = look_words();
         let looks = g.buffer(

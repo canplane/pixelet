@@ -1,5 +1,6 @@
-// Yale Bright Star Catalog stars as quads at infinity, dimmed by the air. Added
-// after the encode, which a point this small cannot tell apart.
+// Yale Bright Star Catalog stars as quads at infinity, dimmed by the air.
+// Added untoned to the world's color, which a point this small cannot tell
+// apart: over a dark sky the encode shows it as it shows the star's own light.
 
 // Its words' fields and accessors are frame/shader/word.rs `stars`'s, which
 // build.rs writes here. The viewport and the up are the frame's, the Moon
@@ -65,5 +66,5 @@ fn fs(i: StarOut) -> @location(0) vec4f {
   let r2 = dot(i.at, i.at);
   let halo_sigma = i.sigma * SKY_STAR_HALO_SIGMA;
   let a = exp(-r2 / (2.0 * i.sigma * i.sigma)) + i.halo * exp(-r2 / (2.0 * halo_sigma * halo_sigma));
-  return vec4f(to_srgb(i.light * a), 0.0);
+  return vec4f(i.light * a, 0.0);
 }

@@ -1,4 +1,4 @@
-// The vignette and the sRGB encoding every pass ends on.
+// The vignette and the sRGB encoding the canvas is written in.
 
 fn to_srgb(c: vec3f) -> vec3f {
   let x = clamp(c, vec3f(0.0), vec3f(1.0));

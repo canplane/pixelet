@@ -21,5 +21,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let sun = atmos_white() * sun_transmittance(r, atmos_sun_dir().z);
   let other = atmos_moon_color() * atmos_white() * sun_transmittance(r, atmos_moon_dir().z);
   let lit = color * (sun * max(dot(n, atmos_sun_dir()), 0.0) + other * max(dot(n, atmos_moon_dir()), 0.0)) / PI * PUCK_BEACON_LIT;
-  return vec4f(finish(lit + color * glow, i.clip.xy), 1.0);
+  return vec4f(tone(lit + color * glow), 1.0);
 }

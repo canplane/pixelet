@@ -7,12 +7,19 @@ use xpute_guest::abi::handle::{handle_slot, Table as Handles};
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::round;
 
+use crate::gpu::api::Format;
+
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;
 
 /// A box animating in passes through a size a frame, each of which would
 /// otherwise be a new depth and color target.
 pub const SETTLE_TURNS: u32 = 4;
+
+/// The world's color as its passes leave it, toned and linear, blended there
+/// and encoded onto the canvas once (gpu/finish.rs): a float, so the finish's
+/// dither falls between levels the canvas has and none the color had.
+pub const WORLD_COLOR: Format = Format::rgba16float;
 
 #[derive(Clone, Copy, Default)]
 pub struct Surface {
@@ -34,6 +41,10 @@ pub struct Surface {
     /// (gpu/renderer.rs, stage 2).
     pub depth: u32,
     pub depth_view: u32,
+    /// The color its passes draw into (`WORLD_COLOR`), made with the depth,
+    /// which the finish encodes onto the canvas.
+    pub color: u32,
+    pub color_view: u32,
     /// The eye's rays as the cast leaves them, a drawn pixel each, made with
     /// the depth: `ray::WORDS` layers of `r32uint`, a word of the ray's a
     /// layer (pxl-spec-core `ray`).
@@ -43,8 +54,15 @@ pub struct Surface {
 
 impl Surface {
     /// What it holds on the GPU, every one made again with its size.
-    pub fn targets(&self) -> [u32; 4] {
-        [self.depth_view, self.depth, self.rays_view, self.rays]
+    pub fn targets(&self) -> [u32; 6] {
+        [
+            self.depth_view,
+            self.depth,
+            self.color_view,
+            self.color,
+            self.rays_view,
+            self.rays,
+        ]
     }
 
     pub fn buffer_px(&self) -> (u32, u32) {

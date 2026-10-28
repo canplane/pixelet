@@ -8,6 +8,7 @@ use crate::gpu::api::{buffer_entry, buffer_usage, bytes, Entry, Gpu};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::{buffer_size, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
@@ -111,8 +112,8 @@ impl PuckPass {
         air: [Entry; AIR_ENTRIES],
         align: u32,
     ) -> PuckPass {
-        let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, g.canvas());
-        let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, g.canvas());
+        let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, WORLD_COLOR);
+        let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, WORLD_COLOR);
         let (box_p, box_uv, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
         let [r, gr, b] = linear_rgb(indicator::ACTION);

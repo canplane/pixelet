@@ -53,7 +53,7 @@ fn fs(v: VertexOut) -> FragOut {
   // The depth `behind` the face along the ray, so what is laid on it wins.
   let clip = frame_view_proj() * vec4f(h.at * (1.0 + behind(h, steps)), 1.0);
   var o: FragOut;
-  o.color = vec4f(finish(cell_share(paint(s), c.x, h), v.clip.xy), 1.0);
+  o.color = vec4f(tone(cell_share(paint(s), c.x, h)), 1.0);
   o.depth = clip.z / clip.w;
   return o;
 }

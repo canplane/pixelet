@@ -17,6 +17,7 @@ use crate::gpu::pass::model::{
     DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::{Draws, Uploads};
 
 const _: () = assert!(
@@ -37,8 +38,8 @@ pub struct DecorPass {
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
         DecorPass {
-            lit: pipelines.build(g, PIPELINE_DECOR, g.canvas()),
-            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, g.canvas()),
+            lit: pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR),
+            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, WORLD_COLOR),
             depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),

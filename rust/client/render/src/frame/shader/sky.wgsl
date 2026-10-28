@@ -80,6 +80,5 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let moon_a = length(across);
   let moon_w = max(fwidth(moon_a), 1e-4);
   var color = beyond(dir) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
-  // On the encoded value, where a step is one step at every brightness.
-  return vec4f(finish(color, v.clip.xy), 1.0);
+  return vec4f(tone(color), 1.0);
 }

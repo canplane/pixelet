@@ -42,6 +42,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
+use crate::gpu::finish::Finish;
 use crate::gpu::grown::DecorFrame;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::Mips;
@@ -62,7 +63,9 @@ use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
-use crate::gpu::surface::{on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
+use crate::gpu::surface::{
+    on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES, WORLD_COLOR,
+};
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
 use crate::look::environment::{ENV_AIR, ENV_POLE, ENV_SUN};
@@ -415,6 +418,7 @@ pub struct Renderer {
     skinned: SkinnedPass,
     puck: PuckPass,
     marker: MarkerPass,
+    finish: Finish,
     debug: DebugPass,
     screen: RaysPass,
     /// The frame's whole input as the last frame drew it (stage 2): the
@@ -449,7 +453,7 @@ impl Renderer {
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let pack = Pack::new(g);
-        let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
+        let sky_built = pipelines.build(g, PIPELINE_SKY, WORLD_COLOR);
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
         let mut sky_entries = vec![
             buffer_entry(0, frame_buffer),
@@ -478,12 +482,13 @@ impl Renderer {
             query_set,
             read_px: 0.0,
             read_frame: 0.0,
-            ghost: pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()),
+            ghost: pipelines.build(g, PIPELINE_GHOST_BOX, WORLD_COLOR),
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air, device.align),
             marker: MarkerPass::new(g, &mut pipelines, frame_buffer, device.align),
+            finish: Finish::new(g, &mut pipelines),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
@@ -938,7 +943,7 @@ impl Renderer {
         let pass = g.pass(
             encoder,
             &pass_desc(
-                canvas_view,
+                world.color_view,
                 Load::Clear,
                 world.depth_view,
                 Load::Clear,
@@ -986,6 +991,14 @@ impl Renderer {
         self.decor
             .draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
+        self.finish.draw(
+            g,
+            encoder,
+            self.frame_buffer,
+            world.color_view,
+            canvas_view,
+            &mut stamps[SPAN_WORLD],
+        );
         self.marker.draw(
             g,
             encoder,
@@ -1212,6 +1225,8 @@ fn targets(g: &Gpu, s: &mut Surface) {
     let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
     s.depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
+    s.color = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
+    s.color_view = g.view(s.color, false, 0, 1, 0, 1);
     // The world's alone holds the cast's rays.
     (s.rays, s.rays_view) = (0, 0);
     if s.role == surface_role::WORLD {

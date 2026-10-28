@@ -16,6 +16,7 @@ use crate::gpu::api::{
     buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, Stamp,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::finish::Finish;
 use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::Pipelines;
@@ -29,6 +30,7 @@ pub struct Case {
     frame_buffer: u32,
     frames: FrameGroups,
     pub skinned: SkinnedPass,
+    finish: Finish,
     /// What its picture is made of as last drawn: its frame words, its
     /// actor's draw and uniform, its skin and its surface; it stands, and
     /// its surface keeps its picture, while they do.
@@ -66,6 +68,7 @@ impl Case {
                 air,
             ),
             skinned: SkinnedPass::new(g, pipelines, align),
+            finish: Finish::new(g, pipelines),
             read: Read::default(),
         }
     }
@@ -74,6 +77,7 @@ impl Case {
         self.frames.release();
         release(self.frame_buffer);
         self.skinned.release();
+        self.finish.release();
     }
 
     /// Its actor's draw `own` into `s`, the world's `frame` aimed at the
@@ -133,11 +137,10 @@ impl Case {
             return;
         }
         g.write_buffer(self.frame_buffer, 0, bytes(&frame));
-        let view_id = g.current(s.handle);
         let pass = g.pass(
             encoder,
             &pass_desc(
-                view_id,
+                s.color_view,
                 Load::Clear,
                 s.depth_view,
                 Load::Clear,
@@ -154,6 +157,10 @@ impl Case {
             (self.frames.frame, &mut 0),
         );
         g.end(pass);
+        // Encoded onto its canvas at its own frame's words, no vignette.
+        let view_id = g.current(s.handle);
+        self.finish
+            .draw(g, encoder, self.frame_buffer, s.color_view, view_id, stamp);
         release(view_id);
     }
 }

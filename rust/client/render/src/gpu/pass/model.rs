@@ -15,6 +15,7 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::{put_f32, put_u32, Scratch};
+use crate::gpu::surface::WORLD_COLOR;
 
 fn frame_group(
     g: &Gpu,
@@ -99,7 +100,7 @@ pub enum Stage {
 
 /// A layout is shared by its words, so one group 0 serves every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
-    pipelines.build(g, PIPELINE_SKINNED, g.canvas()).layouts[0]
+    pipelines.build(g, PIPELINE_SKINNED, WORLD_COLOR).layouts[0]
 }
 
 /// Group 0 as the world image's models read it, the occlusion its map, and

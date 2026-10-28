@@ -28,6 +28,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
+use crate::gpu::surface::WORLD_COLOR;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
@@ -153,7 +154,7 @@ impl Grown {
             )
         };
         g.write_buffer(rows, 0, bytes(words));
-        let drawn_by = pipelines.build(g, PIPELINE_DECOR, g.canvas());
+        let drawn_by = pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR);
         let draw_layouts = [drawn_by.layouts[1], drawn_by.layouts[3]];
         let uniforms = buffer(
             word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize),
