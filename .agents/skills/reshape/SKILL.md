@@ -49,7 +49,9 @@ not offered as a virtue.
 ## Proving it
 
 - By equal output over real data, not by a timing, where a tool shows it: for
-  the ground's fill, `fill_digest` ([verify-change](../verify-change/SKILL.md)).
+  the ground's fill, `fill_digest`'s lines over out/terrain from an export of
+  the commit before and of the change, `--diff`ed (pxl-geo-bake
+  bin/fill_digest.rs), each side kept once for the machine.
   Where none does, by a test that fails when the change is wrong and by its
   generated files being what their sources make, and the proof says so.
 - A timing comes once, at the end: the commit before and the change each

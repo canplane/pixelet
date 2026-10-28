@@ -44,7 +44,7 @@ code is.
   query? Is there machinery added that removes nothing? Is something left
   dead: an item no one calls, a doc or citation naming what is gone?
 - **Proof.** Does the evidence match the claim? Equal output over real data
-  for a change that must keep it (`fill_digest`, the verify-change skill), and
+  for a change that must keep it (`fill_digest`, the reshape skill), and
   a test that fails when the code is broken.
 
 ## What to report

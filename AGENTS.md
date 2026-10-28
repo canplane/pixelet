@@ -3,7 +3,6 @@
 - A skill holds one role, its description says which, and a rule goes to the
   skill whose role it is, or to a new one — never to one it merely sits near.
 - The skills are in `.agents/skills/`, each its role: `cargo` running cargo,
-  `verify-change` what a change runs while working, Rust or TypeScript,
   `collaboration` sessions sharing the checkout, `convention` how the tree is
   written, `reshape` how a change to structure or speed is found, proposed and
   proven, `write-documents` the documents people read, `deploy` checking once
