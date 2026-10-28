@@ -46,7 +46,8 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let sun_dir = v3::norm(&light.sun);
     let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
-    let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
+    let [from, to] = pxl_spec_core::param::night::FALL;
+    let night = 1.0 - smoothstep(from, to, sun_dir[2]);
     let elongation = libm::acos(v3::dot(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
     // Wherever the Moon is up; by day the sun outshines it.

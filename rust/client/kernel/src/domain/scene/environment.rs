@@ -144,9 +144,10 @@ impl EnvironmentDraw {
         }
     }
 
-    /// The sun under the horizon, as drawn.
+    /// The sun under the horizon, as drawn: past where night begins to fall
+    /// (pxl-spec-core param.rs `night::FALL`).
     pub fn night(&self) -> bool {
-        self.started && self.sun[2] < 0.0
+        self.started && v3::norm(&self.sun)[2] < pxl_spec_core::param::night::FALL[1]
     }
 
     /// Unix milliseconds: the sky's days and the clouds' time, each held and

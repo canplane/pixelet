@@ -31,6 +31,7 @@ fn main() {
         if name == "constant.wgsl" {
             shipped += &words();
             shipped += &params();
+            shipped += &spec_params();
         }
         shipped += &accessors(&text);
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
@@ -314,6 +315,14 @@ fn params() -> String {
         };
     }
     out
+}
+
+/// The pxl-spec-core settings (its param.rs) a hand-written shader names,
+/// each by its path as `params` names render's (`night::FALL` is
+/// `NIGHT_FALL`), so one shared with render's would not build.
+fn spec_params() -> String {
+    let [from, to] = pxl_spec_core::param::night::FALL.map(|v| v as f32);
+    format!("const NIGHT_FALL: vec2f = vec2f({from:?}, {to:?});\n")
 }
 
 /// What the host lays out and every shader reads (frame/shader/word.rs), as

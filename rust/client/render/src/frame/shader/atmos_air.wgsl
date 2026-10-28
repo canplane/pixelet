@@ -128,9 +128,10 @@ fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
   return global;
 }
 
-// On where night falls on them, as the sky's night falls (look/environment.rs).
+// On where night falls on them, as the sky's night falls (pxl-spec-core
+// param.rs `night::FALL`).
 fn city_shown(lights: f32, up: vec3f) -> vec3f {
-  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
+  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(NIGHT_FALL.x, NIGHT_FALL.y, dot(up, atmos_sun_dir())));
 }
 
 // What the eye sees along `dir` where nothing was drawn: the sky where it
