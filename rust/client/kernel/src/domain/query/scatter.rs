@@ -3,10 +3,10 @@
 //! How the ground grows decor on its own: never stored, a pure function of
 //! each decor's seed (the catalog's, spec/spec/asset/decor.json) and the
 //! world as its one query answers it, so a cell grows the same wherever it
-//! is read. It stands on the ground's own top, the world's ray down its
-//! column from over it (`World::ground_top`, `World::footing_over`), and
-//! which way it faces and whether it grows are the world's cells about it
-//! (pxl-spec-core `scatter::grown`).
+//! is read. Where it stands, which way it faces and whether it grows are
+//! the world unplaced, the ground's alone, its column's footing
+//! and the cells about it (`World::footing`); only an edit in its box, asked
+//! of the world as edited, takes it away (pxl-spec-core `scatter::grown`).
 
 use pxl_spec::asset::cube::sentinel;
 use pxl_spec::asset::decor::Decor;
@@ -24,9 +24,11 @@ use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
 
 /// The world as decor's growth asks it on the CPU (pxl-spec-core
-/// `Grounds`): the world's one query and its ray, and what is placed.
+/// `Grounds`): the world's one query and its ray, unplaced (`unplaced`,
+/// the ground's alone) and as edited, and what is placed.
 pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
+    unplaced: World<'w>,
     lanes: store::Lanes<'a>,
 }
 
@@ -34,14 +36,16 @@ impl<'a, 'w> Asked<'a, 'w> {
     pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
         Asked {
             world,
+            unplaced: world.unplaced(),
             lanes: world.objects.lanes(),
         }
     }
 }
 
 /// The world's one query on the CPU, each ask answered with what its tiles
-/// lacked: a column's footing with its line (`World::footing_over`), each cell
-/// about it asked off that line (`World::asset_about`).
+/// lacked: a column's footing with its line (`World::footing`) and each cell
+/// about it asked off that line (`World::asset_about`), of the world
+/// unplaced; a cell's edit asked of the world as edited (`World::asset`).
 impl Grounds for Asked<'_, '_> {
     type Footing = Footing<At>;
 
@@ -49,14 +53,10 @@ impl Grounds for Asked<'_, '_> {
         &pxl_spec_core::decor::DECORS
     }
 
-    fn ground(&mut self, cell: Zoom, g: [i32; 2]) -> Option<i32> {
-        self.world.ground_top(cell, g)
-    }
-
     /// None where the world lacked a tile on the way: decor grows on what
     /// is held as its tiles say.
-    fn footing(&mut self, cell: Zoom, g: [i32; 2], over: i32) -> (Footing<At>, (i32, f32), bool) {
-        let (answer, f) = self.world.footing_over(cell, g, over);
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Footing<At>, (i32, f32), bool) {
+        let (answer, f) = self.unplaced.footing(cell, g);
         match answer {
             crate::domain::layer::Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
@@ -65,10 +65,18 @@ impl Grounds for Asked<'_, '_> {
 
     /// Void where the world holds nothing there.
     fn asset(&mut self, f: &Footing<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-        self.world
+        self.unplaced
             .asset_about(&f.line, zoom, c)
             .value()
             .unwrap_or(u32::from(sentinel::void))
+    }
+
+    /// An edit where the world holds one there, as far as it is held.
+    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
+        self.world
+            .asset((zoom, c))
+            .value()
+            .is_some_and(pxl_spec_core::answer::placed)
     }
 
     fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {

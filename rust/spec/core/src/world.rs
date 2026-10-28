@@ -75,6 +75,19 @@ impl At {
         }
     }
 
+    /// `of` with nothing placed: the node as the world unplaced holds it,
+    /// the ground's alone, which decor grows on (`scatter::Grounds::footing`);
+    /// nothing placed stays nothing down a descent (`overwrite::child`).
+    pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> At {
+        At {
+            cave: Cave::of(zoom, c),
+            placed: overwrite::Held::NOTHING,
+            shard: Shard::UNKNOWN,
+            ground: Found::NONE,
+            ways: overwrite::Held::NOTHING,
+        }
+    }
+
     /// What its child `c` at `zoom` is handed: each source stepped a zoom
     /// down, what is placed off `lanes` and the ways off `pool`.
     pub fn child(&self, lanes: &impl Lanes, pool: &impl Lanes, (zoom, c): (Zoom, [i32; 3])) -> At {

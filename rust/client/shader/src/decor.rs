@@ -7,14 +7,16 @@
 //! placed for their draws (`decor_count_cs`, `decor_args_cs`,
 //! `decor_place_cs`).
 
+use pxl_spec_core::answer::{self, In};
+use pxl_spec_core::cast::{Ends, Query};
 use pxl_spec_core::decor::{Decor, COUNTS};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::lattice::GROUND;
-use pxl_spec_core::cast::Ends;
-use pxl_spec_core::support;
-use pxl_spec_core::world::At;
 use pxl_spec_core::scatter::{self, drawn, mark, marked, Grounds, MARKS, SQUARE_PATCHES};
+use pxl_spec_core::support;
 use pxl_spec_core::window::{self, FIRST_CELL, SLOTS};
+use pxl_spec_core::overwrite::Cut;
+use pxl_spec_core::world::{self, At};
 use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::memory::{Scope, Semantics};
@@ -30,9 +32,39 @@ struct Growing<'a> {
     rows: &'a [Decor],
 }
 
+/// The cast's world unplaced, nothing placed and no preview's cuts: the
+/// ground's alone, as decor grows on it (pxl-spec-core `world::At::unplaced`).
+struct Unplaced<'w, 'a>(&'w mut World<'a, Unlooked>);
+
+impl Query for Unplaced<'_, '_> {
+    type At = At;
+
+    fn root(&mut self, node: [i32; 3]) -> At {
+        At::unplaced((0, node))
+    }
+
+    fn child(&mut self, at: &At, zoom: u32, node: [i32; 3]) -> At {
+        at.child(&*self.0, &self.0.pool, (zoom, node))
+    }
+
+    fn node(
+        &mut self,
+        at: &mut At,
+        zoom: u32,
+        c: [i32; 3],
+        asked: [u32; 2],
+        _t0: f32,
+    ) -> In<[u32; 2]> {
+        let w = *self.0;
+        world::node(self.0, &w, &w, &w.pool, at, (zoom, c), asked, [Cut::NONE; 2])
+    }
+}
+
 /// The query's support on the cast's world (pxl-spec-core `support`): a
-/// column's footing, its line kept, each asset about it asked off that
-/// line; and what is placed in a box (`world::placed_in`).
+/// column's footing of the world unplaced (`Unplaced`), its line
+/// kept, each asset about it asked off that line; a cell's edit asked of
+/// the world as edited down its own line; and what is placed in a box
+/// (`world::placed_in`).
 impl Grounds for Growing<'_> {
     type Footing = support::Footing<At>;
 
@@ -40,19 +72,19 @@ impl Grounds for Growing<'_> {
         self.rows
     }
 
-    fn ground(&mut self, cell: u32, g: [i32; 2]) -> Option<i32> {
-        let (c, f) = window::ground(&self.world, window::Found::NONE, cell, g);
-        (f.here() && c.grounded()).then_some(c.top)
-    }
-
-    fn footing(&mut self, cell: u32, g: [i32; 2], over: i32) -> (Self::Footing, (i32, f32), bool) {
-        let f = support::footing_over(&mut self.world, cell, g, over);
+    fn footing(&mut self, cell: u32, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool) {
+        let f = support::footing(&mut Unplaced(&mut self.world), cell, g);
         let (top, met) = (f.top, f.ends == Ends::Stop);
         (f, top, met)
     }
 
     fn asset(&mut self, f: &Self::Footing, zoom: u32, c: [i32; 3]) -> u32 {
-        support::asset(&mut self.world, &f.line, zoom, c)
+        support::asset(&mut Unplaced(&mut self.world), &f.line, zoom, c)
+    }
+
+    fn edited(&mut self, zoom: u32, c: [i32; 3]) -> bool {
+        let line = support::line(&mut self.world, zoom, c);
+        answer::placed(support::asset(&mut self.world, &line, zoom, c))
     }
 
     fn placed(&self, p: &mut pxl_spec_core::world::Placed) -> ([i32; 3], u32, bool) {
@@ -243,10 +275,11 @@ pub fn decor_stand_cs(
 /// record: `x` its candidate's index in its patch, `y` the patch, `z` the
 /// slot and decor listed, as `decor_stand_cs` laid them. Each record
 /// `STOOD` grows on its cell (`scatter::grown`), naming the slot's window
-/// zoom, the one it is drawn at where the rays ask it (`decor_count_cs`);
-/// else it is `UNGROWN`. Only a decor shown at that zoom is listed
-/// (`decor_mark_cs`). What it grows is the windows' squares', the ways over
-/// them and what is placed alone, never the eye's.
+/// zoom; else it is `UNGROWN`. Only a decor shown at that zoom is listed
+/// (`decor_mark_cs`). What it grows on is the windows' squares and the ways
+/// over them alone, what is placed left out (`Unplaced`); what is placed
+/// and the eye's cuts only take it away where they hold its box
+/// (`Grounds::edited`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "decor_cs"))]
 pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,
