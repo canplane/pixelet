@@ -94,7 +94,11 @@ impl World<'_> {
     pub(super) fn start(&self, node: Node<3>) -> At {
         At {
             node,
-            handed: world::At::of(&self.objects.lanes(), node),
+            handed: if self.unplaced {
+                world::At::unplaced(node)
+            } else {
+                world::At::of(&self.objects.lanes(), node)
+            },
         }
     }
 

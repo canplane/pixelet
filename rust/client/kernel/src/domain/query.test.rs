@@ -724,55 +724,11 @@ fn a_device_gone_leaves_no_bound_over_the_squares_it_held() {
     assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
 }
 
-/// A grown decor's footing is sought from over the ground's own top: where
-/// nothing is over the ground it is the world's from its top, under a cube
-/// put over the ground it stays as it was, and where the ground's top cell
-/// is carved it is met short of that cell, so the decor is taken away and
-/// never moved down (pxl-spec-core `scatter::grown`).
+/// What the ground grows stands where it grew whatever is put over it or in
+/// place of the cell under it, air or a cube: it grows on the world
+/// unplaced (pxl-spec-core `scatter::grown`).
 #[test]
-fn a_footing_from_over_the_ground_meets_its_top_cell_whatever_is_over_it() {
-    use crate::domain::layer::object::store::AIR;
-    let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
-    let cell = GROUND.cell();
-    let g = GROUND.cell_of(LEAF_ZOOM, &point(x, y)).node().1;
-    let bare = Store::default();
-    let world = World::new(&residency, &bare);
-    let top = world.ground_top(cell, g).unwrap();
-    let over = world.footing_over(cell, g, top).0;
-    assert_eq!(world.footing(cell, g).0, over);
-    assert_eq!(
-        over.exact().flatten().map(|(floor, _)| floor),
-        Some(top - 1)
-    );
-
-    let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
-    write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
-    let world = World::new(&residency, &store);
-    assert_ne!(
-        world.footing(cell, g).0,
-        over,
-        "the world's from its top meets the cube"
-    );
-    assert_eq!(world.ground_top(cell, g), Some(top));
-    assert_eq!(world.footing_over(cell, g, top).0, over);
-
-    let mut store = Store::default();
-    write(&mut store, [x, y, 4.0], OBJECT_COARSEST, AIR);
-    let world = World::new(&residency, &store);
-    assert_eq!(world.ground_top(cell, g), Some(top));
-    let carved = world.footing_over(cell, g, top).0.exact().flatten();
-    assert!(
-        carved.is_some_and(|(floor, _)| floor < top - 1),
-        "{carved:?}"
-    );
-}
-
-/// What the ground grows stands where it grew whatever is put over it, and
-/// is taken away, never moved down, where the cell under it is carved.
-#[test]
-fn a_grown_decor_stays_under_what_is_put_over_it_and_goes_where_carved() {
+fn a_grown_decor_stands_where_it_grew_whatever_is_put_over_or_under_it() {
     use crate::domain::layer::object::store::AIR;
     let _g = serial();
     let (residency, [x, y]) = flat_at_five();
@@ -794,14 +750,59 @@ fn a_grown_decor_stays_under_what_is_put_over_it_and_goes_where_carved() {
     write(&mut store, column(6), OBJECT_COARSEST, red);
     assert_eq!(near(&store), bare, "a cube over it moves nothing");
 
-    let mut store = Store::default();
-    write(&mut store, column(-1), OBJECT_COARSEST, AIR);
-    let carved = near(&store);
-    assert!(!carved.contains(&tree), "the carve takes it away");
-    assert!(
-        !carved
-            .iter()
-            .any(|i| i.grown_in().is_some_and(|c| [c[0], c[1]] == [cx, cy])),
-        "and grows none lower in its column: {carved:?}"
+    for (under, what) in [(AIR, "a carve"), (red, "a cube")] {
+        let mut store = Store::default();
+        write(&mut store, column(-1), OBJECT_COARSEST, under);
+        assert_eq!(near(&store), bare, "{what} under it moves nothing");
+    }
+}
+
+/// Only an edit in its own box takes what the ground grows away, air or a
+/// cube; one under it or over it leaves it growing (pxl-spec-core
+/// `scatter::Grounds::edited`).
+#[test]
+fn a_grown_decor_goes_only_where_an_edit_holds_its_box() {
+    use crate::domain::layer::object::store::AIR;
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let empty = Store::default();
+    let world = World::new(&residency, &empty);
+    let space = pxl_spec::space::coord::aabb::Aabb {
+        min: [x - 8.0, y - 8.0, world::REACH.min[2]],
+        max: [x + 8.0, y + 8.0, world::REACH.max[2]],
+    };
+    let tree = *world
+        .grown_over(&space)
+        .first()
+        .expect("a decor grows about the eye");
+    let [cx, cy, cz] = tree.grown_in().unwrap();
+    let decor = pxl_spec::asset::decor::Decor::of(pxl_spec::asset::DecorId::of(tree.id).unwrap());
+    let grows = |store: &Store| {
+        let world = World::new(&residency, store);
+        super::scatter::grown_at(
+            &mut super::scatter::Asked::new(&world),
+            decor,
+            [cx, cy],
+            true,
+        )
+        .map(|(_, grows)| grows)
+    };
+    assert_eq!(
+        grows(&Store::default()),
+        Some(true),
+        "it grows on bare ground"
     );
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for (dz, value, what, kept) in [
+        (0, AIR, "air in its box", false),
+        (0, red, "a cube in its box", false),
+        (-1, AIR, "air under it", true),
+        (-1, red, "a cube under it", true),
+        (6, red, "a cube over it", true),
+    ] {
+        let mut store = Store::default();
+        let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
+        write(&mut store, at, OBJECT_COARSEST, value);
+        assert_eq!(grows(&store), Some(kept), "{what}");
+    }
 }

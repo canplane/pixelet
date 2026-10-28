@@ -584,30 +584,28 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
     best.filter(|b| stands(decor, LEAF_ZOOM, b))
 }
 
-/// What growing decor asks of the world, as either side holds it: the
-/// ground's own top as the windows hold it, the query's support, a
-/// column's footing and the assets about it, what is placed in a box, and
-/// the catalog's rows where it reads them.
+/// What growing decor asks of the world, as either side holds it: of the
+/// world unplaced (`world::At::unplaced`), the ground's alone, its column's
+/// footing and the assets about it; of the world as edited, whether an edit holds a
+/// cell and what is placed in a box; and the catalog's rows where it reads
+/// them.
 pub trait Grounds {
     /// A footing as this side keeps it: what its assets are asked off.
     type Footing;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
-    /// The ground's own top in column `g` at `cell`, what is placed or
-    /// carved aside: the cell over its top cell (`ground::Cell::top`), as
-    /// the windows hold it (`window::ground`); none where it has no ground
-    /// or the world lacks it.
-    fn ground(&mut self, cell: Zoom, g: [i32; 2]) -> Option<i32>;
-    /// The footing down column `g` at `cell` from the cell `over` down, the
-    /// query's support (`support::footing_over`), as this side asks it; its
-    /// top (`cast::top`), false where nothing fills there or the world
-    /// lacks it.
-    fn footing(&mut self, cell: Zoom, g: [i32; 2], over: i32) -> (Self::Footing, (i32, f32), bool);
-    /// What is in the cell `c` of `zoom` about the footing `f`, the
-    /// world's one query's answer (`support::asset`): `void`, the ground's
-    /// value, or `PLACED_ASSET` over what is placed.
+    /// The footing down column `g` at `cell` of the world unplaced,
+    /// what is placed left out: the query's support (`support::footing`) as
+    /// this side asks it; its top (`cast::top`), false where nothing fills
+    /// there or the world lacks it.
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool);
+    /// What is in the cell `c` of `zoom` about the footing `f`, the world
+    /// unplaced's answer (`support::asset`): `void` or the ground's value.
     fn asset(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
+    /// Whether an edit holds the cell `c` of `zoom` in the world as edited,
+    /// something placed or air (`answer::placed`).
+    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::Placed::next`).
     fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
@@ -636,17 +634,15 @@ impl Grown {
 }
 
 /// Where candidate `c` of `decor` stands at `cell`: on its column's footing
-/// from over the ground's own top (`Grounds::ground`), and only where that
-/// is the ground's top cell, so what is put over it leaves it standing and
-/// what takes its place or the cell under it takes it away, never moving it
-/// (`support::footing_over`); facing as the cells beside it at the footing's
-/// level vote (`asks`); then, where `boxed`, whether it grows there:
-/// every cell of its box void and every one under its base a look it
-/// grows on, whichever layer holds it, each asked of the world's one query
-/// at `cell`; air placed in it or under it no void; and no placed decor
-/// claims its room (`claimed`). Every cell both ask is asked at one place
-/// about one footing (`asks`). Where it stands, whether it does, and
-/// whether it grows there, true where not `boxed`.
+/// in the world unplaced, the ground's alone, so no edit moves
+/// it or takes it from under it; facing as the cells beside it at the
+/// footing's level vote there (`asks`); then, where `boxed`, whether it
+/// grows there: every cell of its box void and every one under its base a
+/// look it grows on, as the ground holds them; no edit in its box, air
+/// included (`Grounds::edited`); and no placed decor claims its room
+/// (`claimed`). Every cell both ask is asked at one place about one footing
+/// (`asks`). Where it stands, whether it does, and whether it grows there,
+/// true where not `boxed`.
 pub fn grown(
     q: &mut impl Grounds,
     decor: &Decor,
@@ -656,11 +652,8 @@ pub fn grown(
 ) -> (Grown, bool, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
-    let Some(top) = q.ground(cell, at) else {
-        return (Grown::NONE, false, false);
-    };
-    let (f, (floor, rise), here) = q.footing(cell, at, top);
-    if !here || floor != top - 1 {
+    let (f, (floor, rise), here) = q.footing(cell, at);
+    if !here {
         return (Grown::NONE, false, false);
     }
     let g = Grown {
@@ -754,7 +747,7 @@ fn asks<Q: Grounds>(
             let holds = if b[2] == lo[2] {
                 decor.allows(value(v))
             } else {
-                v == sentinel::void as u32
+                v == sentinel::void as u32 && !q.edited(cell, b)
             };
             if !holds {
                 return (g, false);

@@ -26,6 +26,9 @@ pub struct World<'a> {
     /// Whether decor is struck, as the boxes it claims; else a ray passes
     /// through decor.
     pub(super) decor: bool,
+    /// Whether it is unplaced, nothing placed asked of it: the ground's alone
+    /// (pxl-spec-core `world::At::unplaced`).
+    pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
     pub(super) carve: Option<EntryAt>,
@@ -57,9 +60,22 @@ impl<'a> World<'a> {
             terrain,
             objects,
             decor: false,
+            unplaced: false,
             hide: None,
             carve: None,
             reading: None,
+        }
+    }
+
+    /// As it is unplaced: nothing placed and no preview's cuts asked of it,
+    /// the ground's alone, which decor grows on (pxl-spec-core
+    /// `scatter::Grounds::footing`).
+    pub(super) fn unplaced(self) -> World<'a> {
+        World {
+            unplaced: true,
+            hide: None,
+            carve: None,
+            ..self
         }
     }
 

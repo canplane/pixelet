@@ -61,20 +61,7 @@ impl<A: Copy> Keep<A> for Footing<A> {
 /// alone, from the top of the world (`HEIGHT_BITS`), whichever layer holds
 /// it; its line kept for the assets asked about it (`asset`).
 pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
-    let top = ((1i32 << (HEIGHT_BITS - 1)) << FRAC_W) - 1;
-    footing_from(q, cell, g, top)
-}
-
-/// `footing`, its ray from the middle of the column's cell `z` down: what
-/// is over that cell is never met.
-pub fn footing_over<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2], z: i32) -> Footing<Q::At> {
-    let s = FINEST_ZOOM - cell;
-    footing_from(q, cell, g, z.wrapping_shl(s).wrapping_add((1 << s) >> 1))
-}
-
-/// `footing` from the height `from`, in the finest grid's steps.
-fn footing_from<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2], from: i32) -> Footing<Q::At> {
-    let (o, ray, detail) = down(cell, g, from);
+    let (o, ray, detail) = down(cell, g);
     let at = Node::ROOT.index(o);
     let root = q.root(at);
     let mut f = Footing {
@@ -94,12 +81,13 @@ fn footing_from<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2], from: i32) -> Foot
     f
 }
 
-/// The ray down column `g` at `cell`: from the height `from` over the
+/// The ray down column `g` at `cell`: from the top of the world over the
 /// column's middle, straight down, at the cells of `cell` alone.
-fn down(cell: Zoom, g: [i32; 2], from: i32) -> ([i32; 3], Ray, Detail) {
+fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
     let s = FINEST_ZOOM - cell;
     let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
-    let o = [mid(g[0]), mid(g[1]), from];
+    let top = ((1i32 << (HEIGHT_BITS - 1)) << FRAC_W) - 1;
+    let o = [mid(g[0]), mid(g[1]), top];
     let ray = Ray::new([0.0, 0.0, -1.0], (1u32 << HEIGHT_BITS) as f32);
     (
         o,
