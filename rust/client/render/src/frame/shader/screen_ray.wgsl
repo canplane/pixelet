@@ -23,7 +23,8 @@
 // The eye the rays left (pxl-spec-core `eye`): its Q3 steps (`EYE_ORIGIN`),
 // FRAC_W bits a unit and wrapping, a cell's place on the lattice read off
 // their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
-// and the axes and tangents each ray's direction is formed of.
+// the axes and tangents each ray's direction is formed of; and where each
+// pixel's ray goes through it (`EYE_JITTER`).
 @group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;
 
 fn eye_word(k: u32) -> u32 {
@@ -46,9 +47,15 @@ fn eye_tan() -> vec2f {
   return vec2f(bitcast<f32>(eye_word(EYE_TAN)), bitcast<f32>(eye_word(EYE_TAN + 1u)));
 }
 
+// Where this frame's rays go through their pixels (pxl-spec-core
+// `eye::JITTER`), off their middles, in drawn pixels.
+fn eye_jitter() -> vec2f {
+  return vec2f(bitcast<f32>(eye_word(EYE_JITTER)), bitcast<f32>(eye_word(EYE_JITTER + 1u)));
+}
+
 // That ray's direction before it is made a unit: linear in `frag`.
 fn aim(frag: vec2f, size: vec2f) -> vec3f {
-  let t = pixel_tan(frag, size, eye_tan());
+  let t = pixel_tan(frag + eye_jitter(), size, eye_tan());
   return eye_vec3(EYE_FORWARD) + t.x * eye_vec3(EYE_RIGHT) + t.y * eye_vec3(EYE_UP);
 }
 

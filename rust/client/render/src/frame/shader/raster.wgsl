@@ -38,7 +38,8 @@ struct Raster {
   // pixels across and up; how far the eye's rays reach.
   screen: vec4f,
   // The sun's: where box texel (0, 0)'s ray starts, in units from where
-  // its boxes are laid.
+  // its boxes are laid. The eye's: where each pixel's ray goes through it,
+  // off its middle, in drawn pixels (pxl-spec-core `eye::JITTER`).
   first: vec4f,
 };
 
@@ -130,12 +131,15 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   }
   // The cast's projection (pxl-shader cast.rs `pixel_tan`), reversed and
   // infinite: depth RASTER_NEAR over the view depth, which along a pixel's
-  // ray falls as the ray's distance grows.
+  // ray falls as the ray's distance grows; moved against the rays' offset,
+  // so a pixel's middle draws what its own ray goes through.
+  let depth = dot(p, raster.forward.xyz);
+  let off = raster.first.xy / raster.screen.yz * vec2f(2.0, -2.0);
   o.clip = vec4f(
-    dot(p, raster.right.xyz) / raster.right.w,
-    dot(p, raster.up.xyz) / raster.up.w,
+    dot(p, raster.right.xyz) / raster.right.w - off.x * depth,
+    dot(p, raster.up.xyz) / raster.up.w - off.y * depth,
     raster.forward.w,
-    dot(p, raster.forward.xyz),
+    depth,
   );
   return o;
 }
@@ -164,8 +168,8 @@ fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
   return vec2f(reach, 0.0);
 }
 
-// The drawn pixel's tangents across and up at its middle `at` (pixel.wgsl
-// `pixel_tan`), off the raster's own view.
+// The drawn pixel's tangents across and up at `at`, where its ray goes
+// through it (pixel.wgsl `pixel_tan`), off the raster's own view.
 fn raster_tan(at: vec2f) -> vec2f {
   return pixel_tan(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
 }
@@ -211,7 +215,7 @@ fn fs(i: RasterOut) -> @location(0) vec4u {
     let at = i.clip.xy - 0.5;
     o = raster.first.xyz + at.x * raster.right.w * raster.right.xyz + at.y * raster.up.w * raster.up.xyz;
   } else {
-    let tan = raster_tan(i.clip.xy);
+    let tan = raster_tan(i.clip.xy + raster.first.xy);
     let s = raster.forward.xyz + tan.x * raster.right.xyz + tan.y * raster.up.xyz;
     u = s / sqrt(dot(s, s));
   }

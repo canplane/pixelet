@@ -108,6 +108,12 @@ uniform! {
         /// The canvas's device pixels, where `VIEWPORT` is the world's: what
         /// is drawn over the world, after the finish, is laid out in them.
         SCREEN: Vec2 = 52,
+        /// Where this frame's pixels sample the world, off their middles, in
+        /// clip units, X right and Y up: pxl-spec-core `eye::JITTER`'s offset
+        /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
+        /// height) of `VIEWPORT`. What is drawn into the world's color is
+        /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
+        JITTER: Vec2 = 54,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);

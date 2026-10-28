@@ -99,7 +99,7 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
   let b = box_of(words, d);
   let c = box_corner(v % BOX_VERTICES, b, d.place.xyz);
   var o: VertexOut;
-  o.clip = frame_view_proj() * vec4f(c.world, 1.0);
+  o.clip = jittered(frame_view_proj() * vec4f(c.world, 1.0));
   let local = c.local;
   let size = c.size;
   let normal = FACE_NORMAL[c.face];

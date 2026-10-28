@@ -71,7 +71,7 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
 
 @fragment
 fn fs(v: VertexOut) -> @location(0) vec4f {
-  let dir = normalize(sky_ray() * vec3f(v.ndc, 1.0));
+  let dir = normalize(sky_ray() * vec3f(v.ndc + frame_jitter(), 1.0));
   let r = camera_r();
   // Derivatives, so taken where every pixel takes them.
   let sun_a = length(cross(dir, atmos_sun_dir())) / (atmos_sun_angular_radius() * SKY_DISC_SCALE);

@@ -183,8 +183,8 @@ impl Raster {
             w,
             h,
             reach,
-            0.0,
-            0.0,
+            f32::from_bits(e[eye::JITTER]),
+            f32::from_bits(e[eye::JITTER + 1]),
             0.0,
             0.0,
         ];

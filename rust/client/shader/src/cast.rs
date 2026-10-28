@@ -54,12 +54,13 @@ const _: () = assert!(
     "what lies about a ray's face is its last word"
 );
 
-/// The tangents across and up of the middle of drawn pixel `p` of the
+/// The tangents across and up of where drawn pixel `p`'s ray goes through it,
+/// its middle off by the eye's jitter (pxl-spec-core `eye::JITTER`), of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
 pub(crate) fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
-    let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
-    let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
+    let ndc_x = (p.x as f32 + 0.5 + eye.jitter.x) / size.x as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p.y as f32 + 0.5 + eye.jitter.y) / size.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
 }
 
