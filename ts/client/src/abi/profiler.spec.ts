@@ -29,7 +29,9 @@ export const WAKES = ["next", "timer", "none"] as const;
 
 export const LIMITS = {
   REASONS: 4 as number,
+  REASON_WORDS: 3 as number,
   STEP_SLOTS: 32 as number,
+  WINDOW_MS: 60000 as number,
   ZOOMS: 24 as number,
 } as const;
 

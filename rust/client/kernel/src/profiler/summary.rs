@@ -198,7 +198,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
                 if i < shown {
                     [counted[i].0, counted[i].1, counted[i].2]
                 } else {
-                    [0.0; 3]
+                    [0.0; LIMITS::REASON_WORDS as usize]
                 }
             }),
             phase_n: phase_n as f64,

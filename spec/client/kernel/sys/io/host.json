@@ -37,6 +37,49 @@
       ]
     }
   },
+  "LAYOUT": {
+    "$type": "u32",
+    "$packed": true,
+    "$doc": [
+      "TEXT_LAYOUT's arguments, a word each after its call, then the text's bytes at",
+      "`WORDS`: the weight, px and max width as f32 bits, where its answer goes and",
+      "how many lines it may hold."
+    ],
+    "weight": 1,
+    "px": 1,
+    "max_width": 1,
+    "at": 1,
+    "lines": 1
+  },
+  "LAYOUT_ANSWER": {
+    "$type": "u32",
+    "$packed": true,
+    "$doc": ["TEXT_LAYOUT's answer at its `at`: how many lines, then `LINE` apiece."],
+    "count": 1
+  },
+  "LINE": {
+    "$type": "u32",
+    "$packed": true,
+    "$doc": ["A line of TEXT_LAYOUT's answer: its end, a byte offset, and its width as f32 bits."],
+    "end": 1,
+    "width": 1
+  },
+  "RASTER": {
+    "$type": "u32",
+    "$packed": true,
+    "$doc": [
+      "TEXT_RASTER's arguments, a word each after its call, then the text's bytes at",
+      "`WORDS`: the weight and px as f32 bits, the color, where its pixels go, their",
+      "width and height, and x as f32 bits."
+    ],
+    "weight": 1,
+    "px": 1,
+    "color": 1,
+    "at": 1,
+    "width": 1,
+    "height": 1,
+    "x": 1
+  },
   "root": {
     "$type": "u32",
     "$doc": [

@@ -13,8 +13,8 @@ pub const DEFAULT_AZIMUTH: f64 = 0.0;
 /// From straight down (0) toward horizontal (PI / 2): 60°, the eye 30° above
 /// the ground plane.
 pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
-/// Felt-right against the scale bar: about 0.19 m on a 1080px viewport at
-/// Seoul's latitude.
+/// The orbit's nearest, in units from the focus, felt right: two leaf cells,
+/// about 3.8 m at Seoul's latitude.
 pub const MIN_DIST: f64 = 2.0;
 /// Looking straight down from here the ground wants step 2^11, which the
 /// pyramid's top zoom draws (about 24 km on the scale bar); past it no zoom
@@ -57,11 +57,12 @@ pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
 /// movement swallowed them.
 pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
 /// A held movement key pans this share of the distance to the focus a
-/// second (`controller::pan_across`): a product number, a wide view crossed
-/// in about two seconds at any distance, 10-12's fifty camera-grid cells of
-/// 96 a distance. Not the grid's cells, whose count a distance moves with
-/// how finely the world is drawn and not with how fast a view should pan.
-pub const KEY_PAN_PER_S: f64 = 50.0 / 96.0;
+/// second (`controller::pan_across`): a product number, a 16:9 width at the
+/// focus crossed in about 3.4 s at any distance and any pitch, the view's
+/// height in about 2 looking straight down. Not the grid's cells, whose
+/// count a distance moves with how finely the world is drawn and not with
+/// how fast a view should pan.
+pub const KEY_PAN_PER_S: f64 = 0.520_833_333_333_333_4;
 
 // ---- smoothing ----
 
@@ -71,3 +72,7 @@ pub const CAM_DAMP: f64 = 10.0;
 pub const CLIMB_RISE_DAMP: f64 = 20.0;
 /// Slower than the controls ease, so passing over a ridge does not bob the view.
 pub const CLIMB_RELAX_DAMP: f64 = 5.0;
+const _: () = assert!(
+    CLIMB_RISE_DAMP > CAM_DAMP && CLIMB_RELAX_DAMP < CAM_DAMP,
+    "the climb rises faster and relaxes slower than the controls ease"
+);

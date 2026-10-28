@@ -254,10 +254,11 @@ const _: () = assert!(
 );
 
 /// A frame that dropped a vsync while moving: its interval ran past the
-/// paced one by half a refresh or more, so the next frame landed a refresh
-/// late at least — the host's own test (xpute host sched/quantum.ts
-/// `observe`). Still frames take a larger budget on purpose, and a repeated
-/// image is no visible stutter.
+/// paced one by half a refresh or more, so it landed a refresh late at least.
+/// Half a refresh is the jitter the host's pacing allows a frame, skipping
+/// one nearer the last turn than the paced interval less that (xpute host
+/// sched/strobe.ts `turn`). Still frames take a larger budget on purpose, and
+/// a repeated image is no visible stutter.
 pub fn missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }

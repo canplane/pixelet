@@ -31,7 +31,11 @@
   "LIMITS": {
     "$type": "u32",
     "REASONS": 4,
+    "REASON_WORDS": 3,
+    "$REASON_WORDS": "A reason's words: its fail, its detail and how many (TASK_SUMMARY.reasons).",
     "STEP_SLOTS": 32,
+    "WINDOW_MS": 60000,
+    "$WINDOW_MS": "How far back the rings keep, the kernel's frames and tasks and the shell's long frames alike: the last minute.",
     "ZOOMS": 24,
     "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's tiles, past the leaves for the objects' finer cells (pxl-spec-core lattice.rs `Lattice::tile_zoom`)."
   },
@@ -249,7 +253,7 @@
     "lat_p50": 1,
     "lat_p95": 1,
     "reason_count": 1,
-    "reasons": "3 * LIMITS.REASONS",
+    "reasons": "LIMITS.REASON_WORDS * LIMITS.REASONS",
     "phase_n": 1,
     "phase_mean": "TASK_PHASE_NAMES"
   },

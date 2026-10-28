@@ -12,7 +12,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { te } from "@xpute/kit/codec/encoding.ts";
 import { text_of } from "@xpute/host/ipc/stream.ts";
 
-import { op } from "@/abi/host.spec.ts";
+import { LAYOUT, LAYOUT_ANSWER, LINE, op, RASTER } from "@/abi/host.spec.ts";
 import { bracket } from "@/bracket.tsx";
 
 const word = new DataView(new ArrayBuffer(4));
@@ -70,43 +70,48 @@ export function text_call(code: u32, w: U32Array, a: u32): void {
   switch (code) {
     case op.TEXT_LAYOUT: {
       const [weight, px, max_width, at, lines] = [
-        w[a],
-        float(w[a + 1]),
-        float(w[a + 2]),
-        w[a + 3],
-        w[a + 4],
+        w[a + LAYOUT.weight],
+        float(w[a + LAYOUT.px]),
+        float(w[a + LAYOUT.max_width]),
+        w[a + LAYOUT.at],
+        w[a + LAYOUT.lines],
       ];
-      const text = text_of(w, a + 5);
+      const text = text_of(w, a + LAYOUT.WORDS);
       const width = (s: string) => bracket.text.width(weight, px, s);
       const ends = line_ends(text, max_width, width).slice(0, lines);
-      const out = new DataView(w.buffer, at, 4 * (1 + 2 * lines));
-      out.setUint32(0, ends.length, true);
+      const out = new DataView(
+        w.buffer,
+        at,
+        4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
+      );
+      out.setUint32(4 * LAYOUT_ANSWER.count, ends.length, true);
       let start = 0;
       let start_byte = 0;
       ends.forEach((end, i) => {
         const line = text.slice(start, end);
         start_byte += te.encode(line).length;
-        out.setUint32(4 * (1 + 2 * i), start_byte, true);
-        out.setFloat32(4 * (2 + 2 * i), width(line.trim()), true);
+        const l = LAYOUT_ANSWER.WORDS + LINE.WORDS * i;
+        out.setUint32(4 * (l + LINE.end), start_byte, true);
+        out.setFloat32(4 * (l + LINE.width), width(line.trim()), true);
         start = end;
       });
       break;
     }
     case op.TEXT_RASTER: {
       const [weight, px, rgba, at, width, height, x] = [
-        w[a],
-        float(w[a + 1]),
-        w[a + 2],
-        w[a + 3],
-        w[a + 4],
-        w[a + 5],
-        float(w[a + 6]),
+        w[a + RASTER.weight],
+        float(w[a + RASTER.px]),
+        w[a + RASTER.color],
+        w[a + RASTER.at],
+        w[a + RASTER.width],
+        w[a + RASTER.height],
+        float(w[a + RASTER.x]),
       ];
       bracket.text.raster(
         weight,
         px,
         rgba,
-        text_of(w, a + 7),
+        text_of(w, a + RASTER.WORDS),
         x,
         width,
         height,

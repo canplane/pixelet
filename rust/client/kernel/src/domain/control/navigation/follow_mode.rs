@@ -18,8 +18,10 @@ use xpute_guest::global::Global;
 /// the store's 1.5° dead zone, and this smooths it before it reaches azimuth.
 const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 
-/// Longer than the geolocation retry delay, so a recoverable gap gets its
-/// retry first.
+/// How long following outlasts a location that is not ready, set by eye: a
+/// gap the location recovers from, a fix lost indoors or the watch starting
+/// again, keeps following, and a dead one lets it go before the camera reads
+/// as frozen behind a disabled button.
 const SENSOR_GRACE_MS: f64 = 12000.0;
 
 struct Follow {

@@ -23,6 +23,7 @@ import {
 } from "@/abi/demand.spec.ts";
 import {
   FRAME,
+  LIMITS,
   READ,
   RINGS,
   SPREAD,
@@ -250,7 +251,7 @@ function task_summaries(s: F64Array): TaskSummary[] {
     const reasons = Array.from(
       { length: s[a + TASK_SUMMARY.reason_count] },
       (_, i) => {
-        const w = a + TASK_SUMMARY.reasons + 3 * i;
+        const w = a + TASK_SUMMARY.reasons + LIMITS.REASON_WORDS * i;
         return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
       },
     );

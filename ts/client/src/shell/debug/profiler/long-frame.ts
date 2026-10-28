@@ -5,8 +5,10 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { bracket, type LongFrame } from "@/bracket.tsx";
+import { LIMITS } from "@/abi/profiler.spec.ts";
 
-const WINDOW_MS = 60_000;
+// The kernel's rings' window, one number (profiler.json `LIMITS.WINDOW_MS`).
+const WINDOW_MS = LIMITS.WINDOW_MS;
 const LIMIT = 1_024;
 
 const ring: LongFrame[] = [];
