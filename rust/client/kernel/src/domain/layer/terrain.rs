@@ -4,7 +4,6 @@
 
 pub mod fixed;
 pub mod mirror;
-pub mod param;
 mod query;
 pub mod tile;
 pub mod window;

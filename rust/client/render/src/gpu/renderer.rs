@@ -138,16 +138,15 @@ pub struct GroundSquares<'a> {
     /// the module's memory (`joined_cs`; pxl-spec-core
     /// `window::EYE_JOINED_WORDS`).
     pub joined: u32,
-    /// The ways' pool's families at first and at most (pxl-kernel domain/layer/terrain/param.rs
-    /// `WAYS_POOL_BYTES`): it starts at the first and doubles each time a
-    /// build runs out, never past the most, nor `way::tree::POOL_FAMILIES`
-    /// (`GroundBuffers::grow`).
-    pub pool: [u32; 2],
-    /// The families each handed square's scratch holds a tree of, at first and
-    /// at most (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_BYTES`): it starts at the
-    /// first and doubles each time a build outgrows it, never past the most,
-    /// nor `way::tree::SQUARE_FAMILIES` (`GroundBuffers::grow_scratch`).
-    pub scratch: [u32; 2],
+    /// The ways' pool's families at first (pxl-kernel domain/scene/param.rs
+    /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
+    /// to `way::tree::POOL_FAMILIES` (`GroundBuffers::grow`).
+    pub pool: u32,
+    /// The families each handed square's scratch holds a tree of at first
+    /// (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_FIRST_BYTES`): it
+    /// doubles each time a build outgrows it, up to
+    /// `way::tree::SQUARE_FAMILIES` (`GroundBuffers::grow_scratch`).
+    pub scratch: u32,
     /// A read's records' room at first, in bytes: every read's is doubled
     /// past a square's records that outgrew it, up to
     /// `way::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
