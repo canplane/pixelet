@@ -59,9 +59,8 @@ Neither runs the GPU hosts: `make -C xpute test-gpu` needs a GPU and Chrome
 `xpute/spec/gpu/`, xpute's `gpu` crates and packages, or how pxl-render
 encodes.
 
-While working, none of this runs; what a change runs is the verify-change
-skill's ([verify-change](../verify-change/SKILL.md)). Before sending it is the
-whole `check` and `test`, once, never a narrowed one.
+While working, none of this runs. Before sending it is the whole `check` and
+`test`, once, never a narrowed one.
 
 ## Squash
 

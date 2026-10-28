@@ -29,5 +29,7 @@ cargo's incremental build. `sccache --show-stats` says what was taken from it.
 The wrapper drops the target's variable before sccache keys the compile, so it
 is named the usual way, as above.
 
-What a change runs while working is the verify-change skill's
-([verify-change](../verify-change/SKILL.md)).
+What a change makes again: pxl-spec-core code a shader uses, or pxl-shader,
+takes `cargo shader-wgsl` and then Tint (`deno test -A src/shader.test.ts` in
+`ts/app/web`), as a shader Tint refuses fails the frame without a word; `spec/`
+JSON takes `cargo spec --write`.
