@@ -12,6 +12,7 @@
 use crate::space::layer::lattice::Cells;
 use fnv::FnvHashSet;
 
+use crate::asset::marker::MARK_STEPS;
 use crate::asset::symbol::SYMBOLS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::tile::{occupancy_of, Occupancy};
@@ -29,7 +30,7 @@ use crate::param::place::SPREAD_STEPS;
 pub const PLACE_LAST: Zoom = 19;
 
 /// An icon's cell: a mark's, which a power of two makes nest.
-const ICON_STEPS: Zoom = crate::param::marker::STEPS;
+const ICON_STEPS: Zoom = MARK_STEPS;
 
 /// A cell an icon wide at its tile's zoom of Carto's, `SPREAD_STEPS` coarser
 /// than the camera grid: which zoom of Carto's a place is drawn at there,
