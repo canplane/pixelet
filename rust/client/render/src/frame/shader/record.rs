@@ -26,7 +26,6 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_WAY_TREE => "way_tree_cs",
         SHADER_WAY_FREED => "way_freed_cs",
         SHADER_BEAM => "beam_cs",
-        SHADER_ORIGIN => "origin_cs",
         SHADER_CELL => "cell_cs",
         SHADER_MISS => "miss_cs",
         SHADER_FORGET => "forget_cs",
