@@ -14,7 +14,8 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile};
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 
 use crate::util::{pack, unpack, write_atomic, Level};
 

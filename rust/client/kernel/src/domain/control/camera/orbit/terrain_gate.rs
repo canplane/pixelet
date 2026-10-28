@@ -13,12 +13,13 @@ use xpute_kit::math::scalar::wrap;
 use crate::domain::control::camera::orbit::orbit_eye_offset;
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::EYE_CLEARANCE_U;
+use crate::domain::control::param::{CLIMB_PASSES, GATE_STEP_SAMPLES};
 use crate::domain::query::changed::Asked;
 use crate::domain::query::{over, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use pxl_spec::space::coord::zoom::{index_of, units};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 
 /// The target is part of the pose: the eye is `target + offset`, and a gate
 /// that read only the offset could be walked through by panning.
@@ -85,10 +86,6 @@ fn eye(at: &ViewPose) -> (V3, Q3) {
     (world, world_to_canonical(&world))
 }
 
-/// Testing only where a step lands lets the camera tunnel, since the orbit's
-/// step damps through everything between.
-const STEP_SAMPLES: u32 = 16;
-
 /// A step may not end deeper in the ground than it started. A blanket
 /// exemption for an already-blocked start once opened the gate for good.
 fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
@@ -108,8 +105,8 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
 
     let mut last = *from;
-    for i in 1..=STEP_SAMPLES {
-        let at = between(from, to, i as f64 / STEP_SAMPLES as f64);
+    for i in 1..=GATE_STEP_SAMPLES {
+        let at = between(from, to, i as f64 / GATE_STEP_SAMPLES as f64);
         // The last clear sample, not the crossing: on the boundary, the next frame's
         // rounding would decide which side the eye is on.
         if penetration(&at).is_some_and(|deep| deep > limit) {
@@ -148,7 +145,8 @@ fn in_solid(at: &ViewPose) -> bool {
 /// What lies between the eye and the focus is not asked: that hides the
 /// center but is not the eye running into anything.
 fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
-    (1..=STEP_SAMPLES).all(|i| !in_solid(&between(from, to, i as f64 / STEP_SAMPLES as f64)))
+    (1..=GATE_STEP_SAMPLES)
+        .all(|i| !in_solid(&between(from, to, i as f64 / GATE_STEP_SAMPLES as f64)))
 }
 
 /// How far toward `to` the orbit gets from `from`, as the controls ask it.
@@ -163,10 +161,6 @@ pub fn allowed_view(to: Intent, from: Intent) -> Intent {
         azimuth: reached.azimuth,
     }
 }
-
-/// Steepening moves the eye and so the ground under it; two passes settle it,
-/// the remainder being smaller than a cell.
-const CLIMB_PASSES: u32 = 2;
 
 /// The shallowest pitch that clears terrain, solved as `acos(h / dist)`
 /// rather than scanned: a scan's fixed angles made the camera judder on flat

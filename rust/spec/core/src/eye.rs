@@ -59,19 +59,6 @@ const _: () = assert!(
         && SUN.is_multiple_of(4)
 );
 
-/// The slope a caster's depth in the sun's map is pushed back by, as a
-/// rasterizer's polygon offset: its greatest slope, in depth a texel
-/// (`sun::slope`), times this. The raster casters' depth pipelines take it
-/// (pxl-render record.rs `depth_only`), and the world's cast adds it
-/// (pxl-shader `sun_cs`), so the two kinds of caster shadow alike. A
-/// receiver compares each tap at its own plane's depth there (pxl-render
-/// shadow.wgsl), so the push covers only the texels a tap filters, a texel
-/// each way, along the steeper axis; the receiver's texel of normal offset
-/// covers the other. At 2, with each tap compared at the receiver's own
-/// depth, a step a unit high shadowed the ground below it in stripes a
-/// texel apart: the taps up the slope saw past the step.
-pub const SLOPE_BIAS: f32 = 1.0;
-
 /// Whether a ball `radius` units wide about `v`, units from the eye, lies
 /// at all in the view of the eye looking along `forward`, `right` across
 /// and `up`, the screen's half-angles' tangents `tan`: before it, and past

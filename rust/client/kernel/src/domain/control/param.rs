@@ -21,6 +21,24 @@ pub const MIN_DIST: f64 = 2.0;
 /// is coarse enough.
 pub const MAX_DIST: f64 = 262144.0;
 
+// ---- the camera's settling and the ground it keeps to ----
+
+/// The free eye's and its look's settling, each sub-pixel at any distance.
+pub const FREE_EYE_EPS: f64 = 0.001;
+pub const FREE_LOOK_EPS: f64 = 0.0001;
+/// The orbit's center, distance, polar and azimuth settling, each sub-pixel
+/// at any distance the view is looked across.
+pub const ORBIT_CENTER_EPS: f64 = 0.001;
+pub const ORBIT_DIST_EPS: f64 = 0.001;
+pub const ORBIT_POLAR_EPS: f64 = 0.0001;
+pub const ORBIT_AZIMUTH_EPS: f64 = 0.0001;
+/// Testing only where a step lands lets the camera tunnel, since the orbit's
+/// step damps through everything between.
+pub const GATE_STEP_SAMPLES: u32 = 16;
+/// Steepening moves the eye and so the ground under it; two passes settle it,
+/// the remainder being smaller than a cell.
+pub const CLIMB_PASSES: u32 = 2;
+
 // ---- input ----
 
 /// Stated against the screen, not as rad/px, to match azimuth's 1:1 arcball:
@@ -49,3 +67,7 @@ pub const KEY_PAN_PER_S: f64 = 50.0 / 96.0;
 
 pub const ROT_DAMP: f64 = 10.0;
 pub const CAM_DAMP: f64 = 10.0;
+/// Faster than the controls ease: late to rise is the eye briefly inside a hill.
+pub const CLIMB_RISE_DAMP: f64 = 20.0;
+/// Slower than the controls ease, so passing over a ridge does not bob the view.
+pub const CLIMB_RELAX_DAMP: f64 = 5.0;

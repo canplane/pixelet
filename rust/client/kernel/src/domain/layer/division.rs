@@ -7,13 +7,14 @@
 //! decoded into straight from the packet; its divisions, a handful, are on
 //! the heap.
 
-use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS, DIVISION_LEAF};
+use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{index_of, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::residency::Residency;
@@ -36,7 +37,7 @@ impl Base for DivisionTile {
     const STREAM: Stream = Stream::division;
     const LATTICE: Lattice = GROUND;
     const ASKS: Asks = Asks::Line;
-    const LEAF: Zoom = DIVISION_LEAF;
+    const LEAF: Zoom = pxl_spec::param::division::LEAF;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy

@@ -275,7 +275,7 @@ pub fn cell_cs(
 
 /// Each sample of its observer's lattice, a thread each (observer.rs
 /// `sample`): the screen's (pxl-spec-core `beam::Grid::samples`) or the
-/// sun's map's (`sun::SAMPLE`). The node and asset it stopped at left for
+/// sun's map's (`param::sun::SAMPLE`). The node and asset it stopped at left for
 /// the raster (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where
 /// it went on to its reach, and whether what it stopped at lacks. What lies
 /// about the face it entered is asked only of a sample that draws a box,

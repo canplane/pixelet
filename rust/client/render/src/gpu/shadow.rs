@@ -27,6 +27,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
+use crate::param::shadow::DEPTH_STEP;
 
 /// The map's side in texels.
 pub const SIZE: u32 = 2048;
@@ -34,13 +35,6 @@ const _: () = assert!(
     SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
-
-/// The share of the box's depth its planes step along the sun by, on a grid
-/// fixed in the world as its texels are across: a step casts the world
-/// again, since every texel's ray starts on the near plane. The box is as
-/// much deeper than the sphere of its reach, half a step each side, so the
-/// sphere lies within it wherever the step leaves it.
-const DEPTH_STEP: f64 = 0.2;
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
 /// start in Q3 and what rounding to it left.

@@ -1,18 +1,18 @@
 // pxl-geo-bake/division.rs
 
-//! The divisions layer's leaf, a tile at `DIVISION_LEAF`, read from Overture
-//! as it holds them. A cell is in the deepest division whose area holds its
-//! center; under that, in the child with no area whose point is nearest,
-//! and so on down, the points looked for within the bakes' reach of the tile
-//! (`coverage.rs` `BAKE_REACH`) and no further. A cell in no area is in none.
-//! Equal distances go to the lesser id, and a division already on the way
-//! down is not taken again.
+//! The divisions layer's leaf, a tile at pxl-spec `param::division::LEAF`, read
+//! from Overture as it holds them. A cell is in the deepest division whose area
+//! holds its center; under that, in the child with no area whose point is
+//! nearest, and so on down, the points looked for within the bakes' reach of
+//! the tile (`coverage.rs` `BAKE_REACH`) and no further. A cell in no area is
+//! in none. Equal distances go to the lesser id, and a division already on the
+//! way down is not taken again.
 
 use fnv::FnvHashMap;
 
 use postgres::types::ToSql;
 use postgres::Client;
-use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE};
+use pxl_spec::bake::tile::division::{Division, DivisionTile, NONE};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
@@ -75,11 +75,11 @@ impl Numbered {
 /// None where no cell is in a division.
 pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>, String> {
     let db = |e: postgres::Error| e.to_string();
-    let [min, max] = get_tile_bbox(DIVISION_LEAF, tile);
+    let [min, max] = get_tile_bbox(pxl_spec::param::division::LEAF, tile);
     let side = max[0] - min[0];
     let n = TILE_CELLS as usize;
     let step = side / n as f64;
-    let cell_u = units(GROUND.cell_zoom(DIVISION_LEAF));
+    let cell_u = units(GROUND.cell_zoom(pxl_spec::param::division::LEAF));
     let local = |p: [f64; 2]| {
         [
             u_from_mer(p[0] - min[0]) / cell_u,
@@ -246,7 +246,7 @@ impl crate::pyramid::Base for DivisionTile {
     const LAYER: pxl_spec::bake::published::BaseLayer =
         pxl_spec::bake::published::BaseLayer::division;
 
-    const LEAF: pxl_spec::space::coord::zoom::Zoom = DIVISION_LEAF;
+    const LEAF: pxl_spec::space::coord::zoom::Zoom = pxl_spec::param::division::LEAF;
 
     const LATTICE: pxl_spec::space::layer::lattice::Lattice =
         pxl_spec::space::layer::lattice::GROUND;

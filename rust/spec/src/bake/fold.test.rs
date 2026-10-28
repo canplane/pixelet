@@ -3,7 +3,8 @@
 use super::*;
 
 use crate::asset::cube::ground;
-use crate::space::layer::tile::{neighborhood, Tile, LEAF_ZOOM};
+use crate::space::layer::tile::{neighborhood, Tile};
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use pxl_spec_core::ground::majority;
 
 const SPAN: usize = TILE_CELLS as usize;

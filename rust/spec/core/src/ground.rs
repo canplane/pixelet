@@ -25,7 +25,12 @@ use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
 use crate::window::Found;
-use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, LEAF_CELL, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
+use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
+use crate::param::ground::BEDROCK_DEPTH;
+use crate::param::ground::FILLER_DEPTH;
+use crate::param::ground::HEADROOM;
+use crate::param::ground::SANDSTONE_DEPTH;
 
 // The catalog's looks this rule names, read into a word.
 /// The catalog's void and unknown as the words a look is read into.
@@ -40,7 +45,8 @@ const STONE: u32 = ground::stone as u32;
 
 /// Inner elevation samples across one leaf tile: a tile is about twice its
 /// side in units in meters wide and the source is about 30 m, rounded to 32 m.
-pub const TILE_ELE_SPAN: u32 = 1 << (UNIT_ZOOM - LEAF_ZOOM + 1 - 5);
+pub const TILE_ELE_SPAN: u32 =
+    1 << (UNIT_ZOOM - LEAF_ZOOM + 1 - crate::param::ground::ELE_SPACING_LOG2_M);
 
 /// Two samples of padding give the bicubic a 4×4 kernel at every edge texel,
 /// and let the ground height 32 cells past the tile be read without the
@@ -53,24 +59,11 @@ pub const fn ele_index(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
 }
 
-/// A layer of ground cells under a face, in leaf cells, before the stone.
-const FILLER_DEPTH: i32 = 3;
-/// Sandstone under a sand or beach face's filler, in leaf cells.
-const SANDSTONE_DEPTH: i32 = 2;
-/// The bedrock's top under a face, this far under it or under sea level,
-/// whichever is lower, in leaf cells (`bedrock`).
-pub const BEDROCK_DEPTH: i32 = 64;
-
 /// The bedrock's top under a face at `face` leaf cells, in leaf cells: the
 /// lowest a cube may reach there, every walk's, edit's and column's.
 pub fn bedrock(face: i32) -> i32 {
     face.min(SEA_LEVEL) - BEDROCK_DEPTH
 }
-
-/// Leaf cells over the ground or sea level, whichever is higher, a cube
-/// may reach: Minecraft's 320 over its −64, held from sea level so a shore
-/// is not buried.
-pub const HEADROOM: i32 = 128;
 
 /// The highest a cube may reach over a face at `face` leaf cells, in leaf
 /// cells: every edit's ceiling, as `bedrock` is its floor.

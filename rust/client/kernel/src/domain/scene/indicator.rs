@@ -10,3 +10,4 @@ pub mod ghost;
 #[path = "indicator/gizmo.spec.rs"]
 pub mod gizmo_spec;
 pub mod location_puck;
+pub mod param;

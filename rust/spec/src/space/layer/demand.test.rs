@@ -6,6 +6,7 @@ use crate::space::coord::zoom::FINEST_ZOOM;
 use crate::space::layer::lattice::demand_reach;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::tile::*;
+use pxl_spec_core::param::tile::TOP_ZOOM;
 
 /// The ground tile a distance folds from, past the pyramid's ends too, as
 /// the rule reads it: squared.

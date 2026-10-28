@@ -41,8 +41,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let tangent = normalize(cross(helper, normal));
   let bitangent = cross(normal, tangent);
   let tbn = mat3x3f(tangent, bitangent, normal) * rotation_z(noise.r * TAU);
-  // N8AO scales the falloff by a fifth when the radius is in world units.
-  let falloff = AO_RADIUS * AO_DISTANCE_FALLOFF * 0.2;
+  let falloff = AO_RADIUS * AO_DISTANCE_FALLOFF * AO_FALLOFF_SHARE;
   var occluded = 0.0;
   var total = 0.0;
   var offset_move = noise.g;

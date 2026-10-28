@@ -62,17 +62,17 @@ A Carto zoom is a ground resolution: at zoom c a web tile's 256 pixels span one
 tile of the pyramid at c, so its 16-pixel icon is a cell of that tile at c + 4.
 Places are kept in that lattice (`PLACE_LATTICE`) and read as every layer is, at
 its scale on the camera grid (`Lattice::scaled`), two steps coarser than the
-grid (`pxl-spec bake/tile/place.rs` `SPREAD_STEPS`): an icon's cell spans four
-grid cells, some 48 pixels round a drawn icon of 22 against Carto's 16, so the
-kinds shown at a distance are about Carto's at that size on the screen. The zoom
-a place is drawn at is the tile zoom of the grid's cell there, past the leaf
-too. The grid's cell is the distance's from the eye, so which Carto zoom a place
-is drawn at is decided in 3D, by the chunk the top of what stands there is in,
-as everything drawn is. Nothing measures pixels: the grid's cell, an angle,
-stands for Carto's icon, so the demand is the grid's and bounded as every
-layer's is, and the quality setting that coarsens the grid coarsens the places
-with it, as it does the ground. Measuring Carto's pixels on the screen instead
-would make the tiles a zoom asks for grow with the screen, which nothing bounds.
+grid (`pxl-spec param.rs` `place::SPREAD_STEPS`): an icon's cell spans four grid
+cells, some 48 pixels round a drawn icon of 22 against Carto's 16, so the kinds
+shown at a distance are about Carto's at that size on the screen. The zoom a
+place is drawn at is the tile zoom of the grid's cell there, past the leaf too.
+The grid's cell is the distance's from the eye, so which Carto zoom a place is
+drawn at is decided in 3D, by the chunk the top of what stands there is in, as
+everything drawn is. Nothing measures pixels: the grid's cell, an angle, stands
+for Carto's icon, so the demand is the grid's and bounded as every layer's is,
+and the quality setting that coarsens the grid coarsens the places with it, as
+it does the ground. Measuring Carto's pixels on the screen instead would make
+the tiles a zoom asks for grow with the screen, which nothing bounds.
 
 ## Which places, where they would meet
 

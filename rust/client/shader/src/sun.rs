@@ -167,7 +167,7 @@ fn sun_of(eye: &Eye) -> Sun {
 /// zooms its rays ask at, with its beam rays' spacing (`Sun::detail`). Its
 /// lattice is the box's texels, a slot each: a beam ray every
 /// `sun::BEAM`-th, `sun::BEAM_WINDOW` past the box on each side, a sample
-/// every `sun::SAMPLE`-th slot, which wrap as the slots do.
+/// every `param::sun::SAMPLE`-th slot, which wrap as the slots do.
 pub(crate) struct Map {
     sun: Sun,
     starts: Starts,
@@ -201,7 +201,7 @@ impl Map {
 
     /// Its samples across and down, a side.
     fn across(&self) -> u32 {
-        self.size / pxl_spec_core::sun::SAMPLE
+        self.size / pxl_spec_core::param::sun::SAMPLE
     }
 
     /// The word a slot leaves for the walk `met` of its ray aimed `aim`.
@@ -317,7 +317,7 @@ impl Observer for Map {
     }
 
     fn point(&self, s: [u32; 2]) -> [u32; 2] {
-        let d = pxl_spec_core::sun::SAMPLE;
+        let d = pxl_spec_core::param::sun::SAMPLE;
         [s[0] * d, s[1] * d]
     }
 
@@ -335,7 +335,7 @@ impl Observer for Map {
     /// Not about it within a sample of the box's edge, where the slots wrap:
     /// a sample past it lies at the box's other side.
     fn sample_before(&self, slot: [u32; 2]) -> ([u32; 2], bool) {
-        let d = pxl_spec_core::sun::SAMPLE;
+        let d = pxl_spec_core::param::sun::SAMPLE;
         let p = self.sun.texel(self.size, slot);
         let (r, n) = ([slot[0] % d, slot[1] % d], self.size);
         let inside = p[0] >= r[0] && p[0] - r[0] + d < n && p[1] >= r[1] && p[1] - r[1] + d < n;
@@ -378,7 +378,7 @@ impl Observer for Map {
     fn needs<W: Words + ?Sized>(&self, w: &W, level: Level, at: [u32; 2]) -> bool {
         const _: () = assert!(
             pxl_spec_core::sun::BEAM == pxl_spec_core::sun::TILE
-                && pxl_spec_core::sun::SAMPLE <= pxl_spec_core::sun::TILE,
+                && pxl_spec_core::param::sun::SAMPLE <= pxl_spec_core::sun::TILE,
             "a cell is a tile, and a sample's slots lie within a tile of it"
         );
         let t = pxl_spec_core::sun::TILE as i32;
@@ -703,7 +703,7 @@ pub fn sun_reach_cs(
     if !s.read(
         side,
         middle,
-        pxl_spec_core::sun::READ_PAD + t as f32 * core::f32::consts::FRAC_1_SQRT_2,
+        pxl_spec_core::param::sun::READ_PAD + t as f32 * core::f32::consts::FRAC_1_SQRT_2,
     ) {
         return;
     }

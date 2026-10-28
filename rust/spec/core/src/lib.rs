@@ -23,6 +23,7 @@ pub mod cube;
 pub mod decor;
 pub mod eye;
 pub mod face;
+pub mod param;
 pub mod fill;
 pub mod grid;
 pub mod ground;
@@ -46,17 +47,9 @@ pub type Zoom = u32;
 /// of them (pxl-spec space/coord/zoom.rs).
 pub const UNIT_ZOOM: Zoom = 24;
 
-/// The finest tile zoom (pxl-spec space/layer/tile.rs).
-pub const LEAF_ZOOM: Zoom = 15;
-
-/// The coarsest tile zoom, the pyramid's top: what a layer is kept in runs
-/// from it to the leaves, and a source declares its own top at it or finer
-/// (its `top_zoom`).
-pub const TOP_ZOOM: Zoom = 4;
-
 /// A tile is 2^9 cells a side, so a leaf tile's cells are at this zoom: the
 /// ground's finest cell (`lattice::GROUND`).
-pub const LEAF_CELL: Zoom = LEAF_ZOOM + 9;
+pub const LEAF_CELL: Zoom = param::tile::LEAF_ZOOM + param::tile::STEPS;
 
 /// Sea level, in leaf cells: the height heights are counted from, where the
 /// water stands and under which the Earth past the service area is rock.

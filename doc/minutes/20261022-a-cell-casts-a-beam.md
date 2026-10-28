@@ -6,7 +6,7 @@ weighed.
 **Status (2026-10-23): changed in two ways.** The window is each cell's own, the
 slope at that cell's corner farthest from the axis, not the screen's edge's for
 every cell (`beam::cell_window`). And a pixel no longer walks from its cell's
-start: samples four a cell a side do (`beam::SAMPLE`, `sample_cs`), and a pixel
+start: samples four a cell a side do (`param::beam::SAMPLE`, `sample_cs`), and a pixel
 takes the nearest of the blocks the 4 × 4 samples about it stopped at that its
 own ray enters, walking only where none is (`cast_cs`). The image is no longer
 held to the root walk's: the cut was taken, so "Sparser samples lose coverage"

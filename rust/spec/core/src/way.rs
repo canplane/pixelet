@@ -21,37 +21,25 @@
 pub mod tree;
 
 use crate::cube::{sentinel, Ground};
-use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
+use crate::{cells_of_m, Zoom, LEAF_CELL};
+use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
+use crate::param::way::BEAM_PILLAR_INTERVAL_M;
+use crate::param::way::DECK_THICKNESS_M;
+use crate::param::way::LINE_PAST;
+use crate::param::way::PIER_MIN_RISE_M;
+use crate::param::way::STACKED_DECK_HEADROOM_M;
+use crate::param::way::WIDE_BEAM_PIER_INTERVAL_M;
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
 
-/// The farthest past half its width a line is drawn, in its tile's cells.
-pub const LINE_PAST: f32 = 1.0;
-
-/// A deck's slab under its surface, in ground metres: Arnis's
-/// `DECK_STRUCTURE_DEPTH`.
-pub const DECK_THICKNESS_M: f32 = 2.0;
-
-/// Clear height a deck keeps over a deck under it, in ground metres: Arnis's
-/// `STACKED_DECK_HEADROOM`.
-pub const STACKED_DECK_HEADROOM_M: f32 = 6.0;
-
 // From louis-e/arnis `c96872e`, Copyright (c) 2022-2026 Louis Erbkamm, under
 // the Apache License, Version 2.0 (THIRD_PARTY_NOTICES.md); changed to stand
-// on a deck's line rather than place Minecraft blocks. A bridge the source names no
-// structure for is Arnis's beam bridge (`pier_interval`, `place_pier_bent`):
-// a bent every 8 m, 12 m once its half width passes two cells, of one-cell
-// columns.
-pub const BEAM_PILLAR_INTERVAL_M: f32 = 8.0;
-pub const WIDE_BEAM_PIER_INTERVAL_M: f32 = 12.0;
+// on a deck's line rather than place Minecraft blocks.
 
 /// Arnis's `LOWER_DECK_GAP`, a cell short of the stacked headroom: a deck at
 /// least this far under a pier's blocks it.
 const LOWER_DECK_GAP_M: f32 = STACKED_DECK_HEADROOM_M - 1.0;
-
-/// Arnis's `place_pillar`: a deck this near the ground rests on it.
-const PIER_MIN_RISE_M: f32 = 2.0;
 
 /// What a pier is drawn as.
 pub const PIER: u32 = Ground::building as u32;

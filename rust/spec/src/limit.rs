@@ -13,7 +13,8 @@
 //! outer face stands on the area's edge at every zoom (pxl-spec-core
 //! area.rs `laid`).
 
-pub use pxl_spec_core::ground::{bedrock, ceiling, BEDROCK_DEPTH, HEADROOM};
+pub use pxl_spec_core::ground::{bedrock, ceiling};
+
 
 /// Whether a leaf column is the area's edge or past it: it or one of the eight
 /// about it is past, `past` asked of each by its offset in leaf columns. The

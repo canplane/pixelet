@@ -8,7 +8,6 @@
 @group(0) @binding(17) var earth_tiles: texture_2d_array<f32>;
 @group(0) @binding(22) var air_volume: texture_3d<f32>;
 
-
 /* the air before a point */
 
 // The cubic B-spline about texel coordinate `x` along one axis as two
@@ -93,7 +92,6 @@ fn moon_view(dir: vec3f) -> vec3f {
   return table_view(moon_view_lut, dir, atmos_moon_dir());
 }
 
-
 /* the Earth past the terrain */
 
 // Where a point lies on the map, as Mercator's longitude and ordinate.
@@ -135,9 +133,6 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
   return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
 }
 
-// Doubled, picked by eye beside the original; the cities are not its to scale.
-const EARTH_GAIN: f32 = 2.0;
-
 // What the eye sees along `dir` where nothing was drawn: the sky where it
 // rises; where it falls, the land it meets, the plane under the eye at its
 // ground's height, seen through the air to it and lit as the terrain is, so
@@ -157,7 +152,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let octaves = log2(d / atmos_earth_reach());
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
-  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
+  let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
   return seen.scattered + seen.through * clamp(octaves + 1.0, 0.0, 1.0) * lit;
 }
 

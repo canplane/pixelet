@@ -16,9 +16,8 @@ use pxl_spec_core::LEAF_CELL;
 
 // ---- scatter: pxl-spec-core's, for the CPU's readers of one cell ----
 
-pub use pxl_spec_core::scatter::{
-    before, each_candidate, meet, scatter_at, side_of, Candidate, ALIGN_NEIGHBOR_RADIUS,
-};
+pub use pxl_spec_core::scatter::{before, each_candidate, meet, scatter_at, side_of, Candidate};
+
 
 // ---- piers ----
 

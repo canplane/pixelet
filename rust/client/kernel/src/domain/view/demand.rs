@@ -27,7 +27,8 @@ use xpute_kit::status::errno::Errno;
 use fnv::FnvHashMap;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 
 use crate::domain::layer::residency::floor;
 use crate::domain::layer::residency::{Lines, Residency};

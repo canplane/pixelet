@@ -6,7 +6,9 @@
 //! alike. What places it in the world, a position's cell or a tile's
 //! neighbors, is pxl-spec's (space/layer/lattice.rs `Cells`).
 
-use crate::{count, Zoom, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
+use crate::{count, Zoom, FINEST_ZOOM, LEAF_CELL};
+
+use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 
 /// Where a cell's center lies in it, as a share of its side from its low
 /// corner: what a cell is painted, sampled and crossed at.
@@ -109,10 +111,10 @@ impl Lattice {
     }
 }
 
-/// The ground's tile is 512 cells a side, its one knob: every length the
-/// ground keeps in cells follows it. A grid cell is drawn from its own
-/// record: its height its tile's own surface there, its four looks the four
-/// a zoom finer's (pxl-spec bake/fold.rs).
+/// The ground's tile is 512 cells a side (param.rs `tile::STEPS`): every length
+/// the ground keeps in cells follows it. A grid cell is drawn from its own
+/// record: its height its tile's own surface there, its four looks the four a
+/// zoom finer's (pxl-spec bake/fold.rs).
 pub const GROUND: Lattice = Lattice::new(LEAF_CELL).scaled(0);
 
 /// Cells a ground tile is on a side, at every zoom.

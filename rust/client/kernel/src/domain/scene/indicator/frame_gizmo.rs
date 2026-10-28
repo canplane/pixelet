@@ -18,7 +18,7 @@ use crate::domain::view::frame::coord::to_world;
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_render::look::color::linear_rgb;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use xpute_guest::global::Global;
 
 /// Half the cross a point is drawn as.

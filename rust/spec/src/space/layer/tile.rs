@@ -15,12 +15,9 @@ use crate::space::hierarchy::tree::{
     ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node,
 };
 use pxl_spec_core::wrap_index;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::TOP_ZOOM;
 
-/// The leaves' zoom: the finest tile any layer is kept in, a page of the
-/// world 2^15 round.
-pub use pxl_spec_core::LEAF_ZOOM;
-/// The top: the coarsest tile any layer is kept in.
-pub use pxl_spec_core::TOP_ZOOM;
 const _: () = assert!(
     morton::bits::<2>(LEAF_ZOOM) < 63,
     "a tile's key fits its subject's word"

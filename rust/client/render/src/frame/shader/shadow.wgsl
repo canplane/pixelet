@@ -4,20 +4,13 @@
 // casters' reach, so the shadows end where they do with no edge. A pass
 // drawing the map binds a blank one here and reads as lit.
 
-// Taps a texel and a half apart, so the filtered edge spans about a unit: one
-// texel apart, the edge cut each cell's shadow out as a hard square.
-const SHADOW_SPREAD: f32 = 1.5;
-
-// The share of the casters' reach past which a shadow fades to nothing at it.
-const SHADOW_FADE: f32 = 0.75;
-
 @group(0) @binding(1) var shadow_map: texture_depth_2d;
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
 
 // How much the depth of a plane with normal `n` changes a texel across and
 // a texel down the map, as a share of the box's depth: pxl-spec-core
 // `sun::slope`, the one statement of it, which the casters' push takes too
-// (`Sun::of`, `eye::SLOPE_BIAS`). Its steps are the light box's own: the
+// (`Sun::of`, `param::sun::SLOPE_BIAS`). Its steps are the light box's own: the
 // box is orthographic, so each row of its matrix is the world's step along
 // that axis of the box over its length squared, a texel's across and down
 // and the box's whole depth along the sun's rays.

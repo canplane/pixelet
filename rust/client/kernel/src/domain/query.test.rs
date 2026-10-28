@@ -15,7 +15,8 @@ use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_LANE};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::residency::Residency;

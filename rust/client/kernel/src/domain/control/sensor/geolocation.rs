@@ -14,7 +14,7 @@ use crate::domain::control::sensor::reading::{device_location_store, Pose};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

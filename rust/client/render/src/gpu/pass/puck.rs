@@ -10,8 +10,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{buffer_size, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
-
-const BEACON_RADIUS: f32 = 0.3;
+use crate::param::puck::beacon;
 
 fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
     let faces: [[[f32; 3]; 3]; 6] = [
@@ -43,7 +42,7 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
 }
 
 fn octahedron_lanes() -> ([f32; 72], [f32; 72]) {
-    let r = BEACON_RADIUS;
+    let r = beacon::RADIUS;
     let (mut position, mut normal) = ([0.0; 72], [0.0; 72]);
     let len = 3f32.sqrt();
     let mut k = 0;

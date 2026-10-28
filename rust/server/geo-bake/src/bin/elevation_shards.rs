@@ -21,7 +21,8 @@ use pxl_geo_bake::elevation::{BLOCK, BLOCK_ZOOM};
 use pxl_spec::bake::constant::TILE_ELE_SPAN;
 use pxl_spec::space::coord::adapter::epsg3857::mer_from_u;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{tile_at, tile_rows};
+use pxl_spec_core::param::tile::LEAF_ZOOM;
 use xpute_kit::math::scalar::round;
 
 fn run() -> Result<(), String> {

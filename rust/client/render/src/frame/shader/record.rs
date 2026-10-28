@@ -189,8 +189,8 @@ const fn blended(shader: u32, cull: u32) -> Head {
     }
 }
 
-/// The sun's map's casters' alike, raster and cast (pxl-spec-core `eye::SLOPE_BIAS`).
-const DEPTH_SLOPE_BIAS: f32 = pxl_spec_core::eye::SLOPE_BIAS;
+/// The sun's map's casters' alike, raster and cast (pxl-spec-core `param::sun::SLOPE_BIAS`).
+const DEPTH_SLOPE_BIAS: f32 = pxl_spec_core::param::sun::SLOPE_BIAS;
 
 /// Depth alone: plain less-than, no fragment stage, both sides, pushed back
 /// by its slope as a rasterizer's polygon offset.

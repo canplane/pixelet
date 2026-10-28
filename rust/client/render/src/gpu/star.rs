@@ -17,12 +17,11 @@ use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::look::environment::{ENV_SKY, ENV_STARS};
+use crate::param::sky::star::DRAWN_ABOVE;
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
-
-const SHOWN: f32 = 0.001;
 
 pub struct StarPass {
     built: Built,
@@ -82,7 +81,7 @@ impl StarPass {
     pub fn lay_out(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
-        if u[INTENSITY] <= SHOWN {
+        if u[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
         put_mat(u, VIEW_PROJ, view_proj);
@@ -102,7 +101,7 @@ impl StarPass {
     }
 
     pub fn draw(&self, g: &Gpu, pass: u32) {
-        if self.words[INTENSITY] <= SHOWN {
+        if self.words[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
         g.set_pipeline(pass, self.built.pipeline);

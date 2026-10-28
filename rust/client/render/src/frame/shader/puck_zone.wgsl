@@ -1,8 +1,5 @@
 // Unlit and half transparent, so the zone reads as an indicator rather than a surface.
 
-const ZONE_FILL_OPACITY: f32 = 0.4;
-const ZONE_BORDER_WIDTH: f32 = 0.04;
-
 @group(2) @binding(0) var<storage, read> zone: array<f32>;
 
 struct VertexIn {
@@ -40,11 +37,11 @@ fn aastep(thres: f32, value: f32) -> f32 {
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
-  let bw = ZONE_BORDER_WIDTH;
+  let bw = PUCK_ZONE_BORDER_WIDTH;
   let top = aastep(1.0 - bw, i.uv.y) * i.borders.x;
   let bottom = (1.0 - aastep(bw, i.uv.y)) * i.borders.y;
   let right = aastep(1.0 - bw, i.uv.x) * i.borders.z;
   let left = (1.0 - aastep(bw, i.uv.x)) * i.borders.w;
   let border = max(max(top, bottom), max(left, right));
-  return vec4f(finish(draw_color(), i.clip.xy), mix(ZONE_FILL_OPACITY, 1.0, border));
+  return vec4f(finish(draw_color(), i.clip.xy), mix(PUCK_ZONE_FILL_OPACITY, 1.0, border));
 }

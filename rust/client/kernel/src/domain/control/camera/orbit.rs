@@ -27,6 +27,10 @@ use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::domain::control::navigation::support::target;
 use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
+use crate::domain::control::param::{
+    CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP, ORBIT_AZIMUTH_EPS, ORBIT_CENTER_EPS, ORBIT_DIST_EPS,
+    ORBIT_POLAR_EPS,
+};
 use crate::domain::control::param::{MAX_DIST, MIN_DIST};
 use crate::domain::param::POS_DAMP;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
@@ -54,18 +58,6 @@ pub fn orbit_eye_offset(dist: f64, polar: f64, azimuth: f64) -> V3 {
     look_dir(polar, azimuth).map(|v| -v * dist)
 }
 
-// Sub-pixel at any distance the view is looked across.
-const CENTER_EPS: f64 = 0.001;
-const DIST_EPS: f64 = 0.001;
-const POLAR_EPS: f64 = 0.0001;
-const AZIMUTH_EPS: f64 = 0.0001;
-
-/// Faster than the controls ease: late to rise is the eye briefly inside a hill.
-const CLIMB_RISE_DAMP: f64 = 20.0;
-
-/// Slower than the controls ease, so passing over a ridge does not bob the view.
-const CLIMB_RELAX_DAMP: f64 = 5.0;
-
 /// Gated by terrain where the controls are written, so turning back moves at
 /// once. `climb` limits only a tilt asked: a zoom it answers by pitching the
 /// drawn look, which would stick if written into the controls.
@@ -80,7 +72,7 @@ pub fn ask(partial: IntentPatch) -> Intent {
 }
 
 pub fn zoom_settling() -> bool {
-    (camera_state().intent.dist - orbit().dist).abs() > DIST_EPS
+    (camera_state().intent.dist - orbit().dist).abs() > ORBIT_DIST_EPS
 }
 
 /// `delta_y` in CSS pixels.
@@ -135,9 +127,9 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let was = (drawn_center, o.dist, cam.polar, cam.azimuth);
 
     let to = target(&mut o.to, drawn_center);
-    let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
+    let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, ORBIT_CENTER_EPS);
 
-    let ([dist], m) = approach_vec([o.dist], [vs.dist], CAM_DAMP, delta, DIST_EPS);
+    let ([dist], m) = approach_vec([o.dist], [vs.dist], CAM_DAMP, delta, ORBIT_DIST_EPS);
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
@@ -152,9 +144,9 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let ([polar], m) = approach_vec([cam.polar], [polar], rate, delta, POLAR_EPS);
+    let ([polar], m) = approach_vec([cam.polar], [polar], rate, delta, ORBIT_POLAR_EPS);
     moving |= m;
-    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
+    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, ORBIT_AZIMUTH_EPS);
     moving |= m;
     (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
 

@@ -990,7 +990,7 @@ impl RaysPass {
             let w = compute::CELL_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
-            let n = shadow::SIZE / sun::SAMPLE;
+            let n = shadow::SIZE / pxl_spec_core::param::sun::SAMPLE;
             let stamp = stamps[GpuSpanName::sun_sample as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);

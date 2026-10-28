@@ -6,18 +6,20 @@
 
 pub mod celestial_position;
 pub mod cloud;
+pub mod param;
 
 use pxl_render::gpu::renderer::sky_steps;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
+use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::setting::schema_spec::SkyTime;
 use crate::domain::view::setting::store::settings_store;
-use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::clock::wall_now;
+use crate::sys::sched::edge::wake_at;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use xpute_guest::clock::now;
 
@@ -28,10 +30,6 @@ pub fn environment_step() {
     let next_ms = scene().environment.observe(wall_now());
     wake_at(now() + next_ms);
 }
-
-/// The sun and moon follow a jump of the anchor, and the stars fade in, over
-/// 1/EASE_RATE s, and never step.
-const EASE_RATE: f64 = 1.5;
 
 /// The cosine of the sun's and the moon's zenith angles at `days`, seen from
 /// `[lon, lat]`: each one's direction's up, the positions standing at a
@@ -228,7 +226,7 @@ impl EnvironmentDraw {
             (self.sun, self.moon) = (sun, moon);
             self.started = true;
         }
-        self.eased = (self.eased + frame.delta_s * EASE_RATE).min(1.0);
+        self.eased = (self.eased + frame.delta_s * SKY_EASE_RATE).min(1.0);
         let along = |from: [f64; 3], to: [f64; 3]| {
             if self.eased < 1.0 {
                 core::array::from_fn(|k| from[k] + (to[k] - from[k]) * self.eased)
@@ -238,7 +236,7 @@ impl EnvironmentDraw {
         };
         (self.sun, self.moon) = (along(self.from[0], sun), along(self.from[1], moon));
         // The stars start dark and fade in, the first frame included.
-        self.stars = (self.stars + frame.delta_s * EASE_RATE).min(1.0);
+        self.stars = (self.stars + frame.delta_s * SKY_EASE_RATE).min(1.0);
         // Height over the sea under the eye, which the camera stands over.
         let km_per_u = km_per_u();
         let over = frame.camera[2];

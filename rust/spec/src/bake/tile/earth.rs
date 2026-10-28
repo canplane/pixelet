@@ -11,7 +11,7 @@ use crate::bake::malformed;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::demand_reach;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use crate::space::layer::tile::TOP_ZOOM;
+use pxl_spec_core::param::tile::TOP_ZOOM;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 

@@ -14,3 +14,4 @@ pub mod frame;
 pub mod gpu;
 pub mod look;
 pub mod mesh;
+pub mod param;

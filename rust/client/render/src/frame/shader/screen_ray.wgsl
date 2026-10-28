@@ -211,9 +211,6 @@ fn behind(h: Hit, p: mat2x3f) -> f32 {
   return BEHIND + SNAP * max(abs(dot(p[0], f)), abs(dot(p[1], f))) / dot(h.at, f);
 }
 
-// #1a1006 as a ratio: a warm contact shadow rather than gray.
-const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
-
 // How much a rising edge closes a face `d` cells from it: over one cell
 // and no further. Squared, not smoothstep: a smoothstep sits flat against
 // the wall and reads as a dark strip with an edge rather than a gradient.
