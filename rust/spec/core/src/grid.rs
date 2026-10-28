@@ -9,22 +9,33 @@
 
 use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 
-/// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
-/// and where more pixels stop being seen. The CSS reference pixel subtends
-/// 0.0213° (CSS Values and Units: 96 dpi at 28 inches), 46.9 a degree, and
-/// the fovea resolves 94 a degree at most (Ashraf, Chapiro & Mantiuk,
-/// "Resolution limit of the eye: how many pixels can we see?", Nature
-/// Communications, 2025, doi:10.1038/s41467-025-64679-2): 94 / 46.9 is 2.
-pub const RATIO_MAX: f32 = 2.0;
+// ---- the view's knobs: each set by itself, and nothing else here ----
+// What is drawn and how finely follows from these, with the field of view
+// and the reference view's CSS pixels (pxl-spec space/camera/grid.rs
+// `FOV_DEG`, `REFERENCE_VIEWPORT_H`, `RATIO_MAX`).
 
-/// The camera grid, the one knob of resolution: a cell is an angle of
-/// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs), stated
-/// at `RATIO_MAX`: 96 a radian a CSS pixel asks, in drawn pixels. Every
-/// view is cast at τ `RATIO_MAX` whatever its ratio (pxl-spec
-/// space/camera/grid.rs `Tau::VIEW`), its cells as wide as a ratio of one
-/// asks, so what is observed is the display's pixels' to draw, never theirs
-/// to decide; whatever is sized by `SPLIT` holds at every τ.
-pub const SPLIT: f32 = 96.0 * RATIO_MAX;
+/// The camera grid, the one knob of resolution: the view's cells a radian,
+/// a cell 1/`CELLS_A_RADIAN` radians about the eye whatever the screen
+/// (pxl-spec space/camera/grid.rs `cell_css_px`: about twelve CSS pixels at
+/// the reference view). An angle, so what is observed is the display's
+/// pixels' to draw, never theirs to decide.
+pub const CELLS_A_RADIAN: f32 = 96.0;
+
+/// How many times finer than the view's a grid the bands and windows are
+/// sized for (`SPLIT`, `window::RADIUS`): a window holds its zoom's cells
+/// out to `WINDOW_MARGIN` times where the view stops drawing them, so the
+/// view casts at τ `WINDOW_MARGIN` and the finest a view may ask, τ 1
+/// (pxl-spec space/camera/grid.rs `Tau::FINEST`), is held too. Whether a
+/// margin of 1 keeps up with a moving eye is unmeasured.
+pub const WINDOW_MARGIN: f32 = 2.0;
+
+// ---- derived from the knobs ----
+
+/// The grid the bands and windows are sized for, cells a radian: the view's
+/// `WINDOW_MARGIN` times finer. A cell of the view is 1/`SPLIT` radians
+/// scaled by τ (pxl-spec space/camera/grid.rs `Tau::VIEW`, which is
+/// `WINDOW_MARGIN`), so whatever is sized by `SPLIT` holds at every τ.
+pub const SPLIT: f32 = CELLS_A_RADIAN * WINDOW_MARGIN;
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared,
 /// in units: the widest cell whose split distance (`SPLIT` of its sides,

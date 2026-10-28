@@ -13,7 +13,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
 use crate::domain::view::param::FALLBACK_G4326;
-use crate::domain::view::param::FOV;
+use pxl_spec::space::camera::grid::FOV_DEG as FOV;
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.

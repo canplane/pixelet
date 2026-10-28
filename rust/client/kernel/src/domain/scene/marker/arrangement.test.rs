@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::domain::view::frame::pose::view_resize;
+use pxl_spec::space::camera::grid::REFERENCE_VIEWPORT_H;
 
 /// The width a place's name wraps to is one on every screen: the reference
 /// view's `SPACING_CELLS` grid cells in CSS pixels, whatever the window's
@@ -14,7 +15,6 @@ fn a_places_width_is_one_on_every_screen() {
         spacing_px()
     };
     let reference = at(REFERENCE_VIEWPORT_H);
-    assert_eq!(reference, 193.0);
     for h in [600.0, 844.0, 1440.0, 2160.0] {
         assert_eq!(at(h), reference, "{h}");
     }

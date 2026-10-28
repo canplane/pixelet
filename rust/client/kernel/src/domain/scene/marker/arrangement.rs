@@ -31,7 +31,7 @@ use xpute_kit::status::errno::Errno;
 
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::tile::place::SPACING_CELLS;
-use pxl_spec::space::camera::grid::{px_per_unit, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H};
+use pxl_spec::space::camera::grid::reference_px;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::REACH;
@@ -195,8 +195,7 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 /// reference view draws them, about 190 and whole. Which markers find room
 /// is then the screen's room, as on any map.
 fn spacing_px() -> f64 {
-    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau())
-        * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG);
+    let cell = reference_px(crate::domain::view::lens::cell(crate::domain::view::lens::tau()));
     libm::rint(f64::from(SPACING_CELLS) * cell)
 }
 

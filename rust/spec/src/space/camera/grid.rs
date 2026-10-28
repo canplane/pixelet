@@ -1,23 +1,40 @@
 // pxl-spec/space/camera/grid.rs
 
 //! The camera grid, the one resolution: a cell is an angle about the eye,
-//! its zoom the distance's.
+//! its zoom the distance's (pxl-spec-core grid.rs, which holds its knobs).
+//! The node a cell is drawn with, whole, spans at least one cell from any
+//! direction; one cell of the grid is one thing drawn, and what lies inside
+//! it is its layer's to fold.
 
 use crate::space::coord::zoom::{units, Zoom};
 
-/// The camera grid, the one knob of resolution: a cell is an angle of
-/// 1/`SPLIT` radians about the eye, and the node it is drawn with, whole,
-/// spans at least one cell from any direction, so a zoom's node is drawn
-/// from half `SPLIT` of its sides away out to `SPLIT` of them. Pixels are a screen's, derived from it
-/// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
-/// inside it is its layer's to fold (pxl-spec-core, which a GPU's cast sizes
-/// its cells by too).
+// ---- the view's knobs, beside pxl-spec-core grid.rs's ----
+
+/// The vertical field of view, in degrees: the view's (pxl-kernel
+/// domain/view/frame/pose.rs `ray_of`) and the reference view's.
+pub const FOV_DEG: f64 = 50.0;
+
+/// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
+/// and where more pixels stop being seen. The CSS reference pixel subtends
+/// 0.0213° (CSS Values and Units: 96 dpi at 28 inches), 46.9 a degree, and
+/// the fovea resolves 94 a degree at most (Ashraf, Chapiro & Mantiuk,
+/// "Resolution limit of the eye: how many pixels can we see?", Nature
+/// Communications, 2025, doi:10.1038/s41467-025-64679-2): 94 / 46.9 is 2.
+pub const RATIO_MAX: f64 = 2.0;
+
+/// The reference view's height in CSS pixels, at `FOV_DEG`: where a size
+/// set in CSS pixels is read.
+pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
+
+// ---- derived from the knobs ----
+
+/// The grid the bands and windows are sized for (pxl-spec-core
+/// `grid::SPLIT`).
 pub const SPLIT: f64 = pxl_spec_core::grid::SPLIT as f64;
 
-/// The view `SPLIT` is stated at: 1080 CSS px high, drawn at
-/// `RATIO_MAX`, and 50° across it.
-pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
-pub const REFERENCE_FOV_DEG: f64 = 50.0;
+/// The view's camera grid cell, an angle in radians: τ over `SPLIT` at the
+/// view's τ, 1/`CELLS_A_RADIAN` (pxl-kernel domain/view/lens.rs `cell`).
+pub const CELL: f64 = Tau::VIEW.scale() / SPLIT;
 
 /// Pixels a unit at unit distance spans, for a viewport `viewport_h` high
 /// and `fov_deg` across it.
@@ -25,13 +42,14 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }
 
-/// Drawn pixels per CSS pixel at most (pxl-spec-core `grid::RATIO_MAX`).
-pub const RATIO_MAX: f64 = pxl_spec_core::grid::RATIO_MAX as f64;
+/// An angle about the eye in CSS pixels at the reference view.
+pub fn reference_px(angle: f64) -> f64 {
+    angle * px_per_unit(REFERENCE_VIEWPORT_H, FOV_DEG)
+}
 
-/// The drawn pixels a camera grid's cell spans, at the reference view: about
-/// twelve, at every ratio. A node drawn for it spans that to twice that.
-pub fn target_cell_px() -> f64 {
-    px_per_unit(REFERENCE_VIEWPORT_H * RATIO_MAX, REFERENCE_FOV_DEG) / SPLIT
+/// The view's cell in CSS pixels at the reference view: about twelve.
+pub fn cell_css_px() -> f64 {
+    reference_px(CELL)
 }
 
 /// Where ground starts being drawn with cells at `cell_zoom` at `Tau::FINEST`,
@@ -49,11 +67,10 @@ pub struct Tau(f64);
 impl Tau {
     pub const FINEST: Tau = Tau(1.0);
 
-    /// Every view's, whatever its screen: the cell a ratio of one asks of
-    /// `SPLIT`, which is stated at `RATIO_MAX`, so about twelve CSS pixels at
-    /// the reference view. How many pixels a display draws it with is the
-    /// drawing's, never what is observed.
-    pub const VIEW: Tau = Tau(RATIO_MAX);
+    /// Every view's, whatever its screen: `SPLIT` scaled to the view's cell
+    /// (`CELL`), which is pxl-spec-core `grid::WINDOW_MARGIN`. How many pixels
+    /// a display draws it with is the drawing's, never what is observed.
+    pub const VIEW: Tau = Tau(pxl_spec_core::grid::WINDOW_MARGIN as f64);
 
     /// At least 1: a finer quality than the criterion breaks the reach.
     pub fn of(scale: f64) -> Tau {

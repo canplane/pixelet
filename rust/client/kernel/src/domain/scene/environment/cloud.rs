@@ -73,15 +73,16 @@ pub const PATCHES_MAX: usize = {
 /// field, the cumulus gathered in clumps with bare country between.
 const SHARE: f64 = 0.5;
 const SALT: u32 = 0x0c0c;
-/// The fewest camera cells a cell of the field spans as it is drawn: past
-/// where it spans fewer, each octave farther shows a quarter of the clouds,
-/// the same quarter at every distance, so a cloud seen nearer stays. Whole,
-/// the field ran to the horizon a cloud a cell, a band of dots. Set by eye.
-const SPACING_CELLS: f64 = 32.0;
+/// The fewest of the view's camera cells a cell of the field spans as it is
+/// drawn: past where it spans fewer, each octave farther shows a quarter of
+/// the clouds, the same quarter at every distance, so a cloud seen nearer
+/// stays. Whole, the field ran to the horizon a cloud a cell, a band of dots.
+/// Set by eye.
+const SPACING_CELLS: f64 = 16.0;
 
 /// How far from the eye the thinning starts, in units: where a cell spans
-/// `SPACING_CELLS` camera cells.
-const THIN_FROM: f64 = CELL * pxl_spec::space::camera::grid::SPLIT / SPACING_CELLS;
+/// `SPACING_CELLS` of the view's camera cells.
+const THIN_FROM: f64 = CELL / pxl_spec::space::camera::grid::CELL / SPACING_CELLS;
 
 /// Whether the cloud whose middle lies at `local` about its patch's corner
 /// shows `d2` square units from the eye: its hash under (THIN_FROM / d)²,

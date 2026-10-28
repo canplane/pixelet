@@ -70,7 +70,7 @@ pub fn stage_write() {
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
-    s[STAGE_AT::FOV] = crate::domain::view::param::FOV;
+    s[STAGE_AT::FOV] = pxl_spec::space::camera::grid::FOV_DEG;
     // The camera grid's cell angle: the footprint a drawn cell covers per
     // unit of distance, square on.
     let tau = crate::domain::view::lens::tau();

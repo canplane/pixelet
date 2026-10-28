@@ -43,9 +43,10 @@ pub fn decor_sprite_angle() -> f64 {
 }
 
 /// How far a thing `extent_u` wide is a sprite's worth at the finest τ
-/// (`Tau::FINEST`), whose cells are half the view's: where it spans
-/// `DECOR_SPRITE_CELLS` of them, twice as far as `decor_sprite_angle` puts the
-/// sprite's edge, an upper bound. `decor_shown` takes both its sides at that
+/// (`Tau::FINEST`), whose cells are the view's over pxl-spec-core
+/// `grid::WINDOW_MARGIN`: where it spans `DECOR_SPRITE_CELLS` of them,
+/// `WINDOW_MARGIN` times as far as `decor_sprite_angle` puts the sprite's
+/// edge, an upper bound. `decor_shown` takes both its sides at that
 /// τ, so its zooms are the view's.
 pub const fn sprite_reach(extent_u: f64) -> f64 {
     extent_u * SPLIT / crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
