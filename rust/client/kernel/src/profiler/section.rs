@@ -49,6 +49,9 @@ pub struct FramesSection {
     pub n: f64,
     pub seconds: f64,
     pub moving: f64,
+    /// The moving frames' intervals summed: a second over their mean
+    /// interval is the rate they were drawn at.
+    pub moving_ms: f64,
     pub missed: f64,
     pub overran: f64,
     /// Intervals whose turns ran past them.
@@ -77,7 +80,8 @@ const _: () = assert!(
 
 words!(FramesSection, SUMMARY::frames::WORDS,
     present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
-    moving => SUMMARY::frames::moving, missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
+    moving => SUMMARY::frames::moving, moving_ms => SUMMARY::frames::moving_ms,
+    missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
     long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
     interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy,
     tick => SUMMARY::frames::tick, gpu => SUMMARY::frames::gpu,

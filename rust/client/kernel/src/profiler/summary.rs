@@ -104,6 +104,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         n,
         seconds,
         moving: moving().count() as f64,
+        moving_ms: moving().map(|f| f.interval_ms).sum(),
         missed: moving().filter(|f| missed(f)).count() as f64,
         overran: count(&overran),
         long: count(&long),

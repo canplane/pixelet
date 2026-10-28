@@ -281,6 +281,7 @@
       "n": 1,
       "seconds": 1,
       "moving": 1,
+      "moving_ms": 1,
       "missed": 1,
       "overran": 1,
       "long": 1,
