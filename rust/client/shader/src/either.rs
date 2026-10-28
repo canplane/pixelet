@@ -1,6 +1,6 @@
 // pxl-shader/either.rs
 
-//! The observer of a pass both the eye and the sun's map take (observer.rs
+//! The observer of a pass both the eye and the shadow map take (observer.rs
 //! `Observer`), chosen by the head the pass is handed: one entry a pass, so
 //! a pass is one module whichever casts it (beam.rs, raster.rs).
 
@@ -10,7 +10,7 @@ use crate::observer::{Aim, Level, Observer};
 use crate::sun::{self, Map, Moved};
 
 /// The observer of a pass both take, read off the head it is handed
-/// (pxl-spec-core `sun::MOVED_SIZE`): the sun's map where the head names
+/// (pxl-spec-core `sun::MOVED_SIZE`): the shadow map where the head names
 /// one, else the eye, whose head is all zero. Each call is its observer's;
 /// no walk asks which, so the walk is one in the module whichever casts.
 /// Both walk the same world, its looks too, which only what a stop is drawn
@@ -30,7 +30,7 @@ impl<'a> Either<'a> {
         }
     }
 
-    /// Whether it is the sun's map.
+    /// Whether it is the shadow map.
     pub(crate) fn sun(&self) -> bool {
         self.sun
     }

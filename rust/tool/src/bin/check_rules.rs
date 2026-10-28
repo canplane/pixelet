@@ -152,7 +152,7 @@ fn screen_reached(text: &str) -> Vec<usize> {
 /// On the GPU the screen's size is the eye's rays' image's (pxl-shader
 /// cast.rs `Rays`), bound only to the passes that draw a pixel's ray or read
 /// the rays drawn: the cast and its walks again, and the sun's receivers. The
-/// beam, the cells, the samples, decor and the sun's map read the eye's
+/// beam, the cells, the samples, decor and the shadow map read the eye's
 /// angles alone.
 const SHADER: &str = "rust/client/shader/src/";
 const RAYS_ENTRIES: [&str; 4] = ["cast_cs", "miss_cs", "miss_list_cs", "sun_mark_cs"];

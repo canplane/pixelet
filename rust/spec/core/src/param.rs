@@ -82,7 +82,7 @@ pub mod scatter {
 }
 
 pub mod sun {
-    /// The slope a caster's depth in the sun's map is pushed back by, as a
+    /// The slope a caster's depth in the shadow map is pushed back by, as a
     /// rasterizer's polygon offset: its greatest slope, in depth a texel
     /// (sun.rs `slope`), times this. The raster casters' depth pipelines take it
     /// (pxl-render record.rs `depth_only`), and the world's cast adds it
@@ -95,11 +95,11 @@ pub mod sun {
     /// texel apart: the taps up the slope saw past the step.
     pub const SLOPE_BIAS: f32 = 1.0;
 
-    /// The sun's map's slots between samples, across and down (sun.rs
+    /// The shadow map's slots between samples, across and down (sun.rs
     /// `samples_at`).
     pub const SAMPLE: u32 = 4;
 
-    /// The receiver's taps apart in the sun's map, in texels, a 3×3 grid
+    /// The receiver's taps apart in the shadow map, in texels, a 3×3 grid
     /// (pxl-render shadow.wgsl `sun_lit`): the filtered edge spans about
     /// four texels, half a unit where a texel is 1/8 u, where taps a texel
     /// apart cut each cell's shadow out as a hard square.

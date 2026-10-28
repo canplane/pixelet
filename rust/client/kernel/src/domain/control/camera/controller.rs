@@ -1,6 +1,6 @@
 // pxl-kernel/domain/control/camera/controller.rs
 
-//! The camera (an eye and a look) and which controller moves it. The orbit
+//! The camera (an eye and its facing) and which controller moves it. The orbit
 //! turns about a point `dist` ahead of the eye, the free camera about the eye
 //! itself; the focus is that point, derived and never kept. A tracker
 //! overrides either while it holds the pose, since a tracked turn can roll.
@@ -22,26 +22,26 @@ use crate::sys::sched::tick::TickContext;
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
-// A look in spherical coordinates about the world's Z, θ = polar and
+// A facing in spherical coordinates about the world's Z, θ = polar and
 // φ = azimuth: θ from straight down, clamped to [0, π]; φ from north toward
-// east, wrapped. At either pole φ still names the direction the look returns
+// east, wrapped. At either pole φ still names the direction the facing returns
 // along. The orbit adds r = dist. There is no roll control.
-pub fn look_domain(polar: f64, azimuth: f64) -> (f64, f64) {
+pub fn facing_domain(polar: f64, azimuth: f64) -> (f64, f64) {
     (
         polar.clamp(0.0, core::f64::consts::PI),
         wrap(azimuth, -core::f64::consts::PI, core::f64::consts::PI),
     )
 }
 
-pub fn look_dir(polar: f64, azimuth: f64) -> V3 {
+pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
     let (st, ct) = (libm::sin(polar), libm::cos(polar));
     let (sp, cp) = (libm::sin(azimuth), libm::cos(azimuth));
     [st * sp, st * cp, -ct]
 }
 
 /// Straight down at polar 0 with the azimuth up the screen; at the poles the
-/// azimuth only turns the screen about the look.
-pub fn look_rotation(polar: f64, azimuth: f64) -> Mat4 {
+/// azimuth only turns the screen about the facing.
+pub fn facing_rotation(polar: f64, azimuth: f64) -> Mat4 {
     let mut about_z = mat4::new();
     mat4::rotation_z(&mut about_z, azimuth);
     let (s, c) = (libm::sin(polar), libm::cos(polar));
@@ -105,7 +105,7 @@ pub fn focus_world() -> Option<V3> {
         return Some(pose()?.eye);
     }
     let (e, c) = (eye_world()?, camera());
-    let (d, r) = (look_dir(c.polar, c.azimuth), dist());
+    let (d, r) = (facing_dir(c.polar, c.azimuth), dist());
     Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
@@ -233,7 +233,7 @@ pub fn pose() -> Option<ObserverPose> {
             let cam = camera();
             Some(ObserverPose {
                 eye: eye_world()?,
-                rotation: look_rotation(cam.polar, cam.azimuth),
+                rotation: facing_rotation(cam.polar, cam.azimuth),
             })
         }
     }

@@ -27,7 +27,7 @@ pub struct World<'a> {
     /// through decor.
     pub(super) decor: bool,
     /// Whether it is unplaced, nothing placed asked of it: the ground's alone
-    /// (pxl-spec-core `world::At::unplaced`).
+    /// (pxl-spec-core `world::Handed::unplaced`).
     pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,

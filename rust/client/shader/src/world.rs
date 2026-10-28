@@ -9,7 +9,7 @@ use pxl_spec_core::cast::{self, Ends, Met, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
 use pxl_spec_core::window::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL};
-use pxl_spec_core::world::{self, At};
+use pxl_spec_core::world::{self, Handed};
 use pxl_spec_core::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
 
@@ -193,13 +193,13 @@ impl<L: Looks> ground::Held for World<'_, L> {
 /// source holds it, and the four looks the ground's asset is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
 impl<L: Looks> Query for World<'_, L> {
-    type At = At;
+    type At = Handed;
 
-    fn root(&mut self, node: [i32; 3]) -> At {
-        At::of(self, (0, node))
+    fn root(&mut self, node: [i32; 3]) -> Handed {
+        Handed::of(self, (0, node))
     }
 
-    fn child(&mut self, at: &At, zoom: u32, node: [i32; 3]) -> At {
+    fn child(&mut self, at: &Handed, zoom: u32, node: [i32; 3]) -> Handed {
         at.child(self, &self.pool, (zoom, node))
     }
 
@@ -207,7 +207,7 @@ impl<L: Looks> Query for World<'_, L> {
     /// (pxl-spec-core `world::node`).
     fn node(
         &mut self,
-        at: &mut At,
+        at: &mut Handed,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -232,7 +232,7 @@ impl<L: Looks> World<'_, L> {
         origin: [i32; 3],
         ray: &cast::Ray,
         met: &Met<A>,
-        line: impl FnOnce(&mut Self, u32, [i32; 3]) -> support::Line<At>,
+        line: impl FnOnce(&mut Self, u32, [i32; 3]) -> support::Line<Handed>,
     ) -> u32 {
         if met.ends != Ends::Stop {
             return 0;

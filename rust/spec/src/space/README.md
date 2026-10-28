@@ -170,11 +170,12 @@ no coarse zoom: their query folds a node's leaves when it is asked. Were objects
 ever resident by tile, their branches would be a layer of the pyramid, and a
 family of equal leaves joined its occupancy.
 
-A reader that crosses two trees walks each its own way and puts the answers
-together (pxl-kernel domain/query/ray.rs `first_hit`). A ray reads the ground
-again from each point along it, since a tile over it may be missing and a
-descent would stall on the gap, and it walks the objects' bounds nearest first,
-since none is missing.
+A ray crosses the pyramid and the objects in one descent (pxl-spec-core
+`cast.rs` `first`, which pxl-kernel domain/query/ray.rs `first_hit` takes on the
+CPU), each node answered from the ground and what is placed together
+(pxl-spec-core `world.rs` `node`). Where the tile a node needs is missing, the
+answer says so: a coarser tile answers in its place, or, with none held, the ray
+stops there and tells nothing past it.
 
 ## What else is here
 

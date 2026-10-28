@@ -28,7 +28,7 @@
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
 //! answer's kind and asset, what was handed the node after it was asked
-//! (`world::At::words`), and the node, its zoom and its index, which tell
+//! (`world::Handed::words`), and the node, its zoom and its index, which tell
 //! it from another node of the same slot (`forgets` reads its column). A
 //! walk writes a slot only once it has claimed it, its key swapped to
 //! `CLAIMED` in one compare-and-swap, and writes the key last; a writing
@@ -40,7 +40,7 @@ use crate::answer::Kind;
 use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
 use crate::window::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
-use crate::world::AT_WORDS;
+use crate::world::HANDED_WORDS;
 use crate::{wrap_index, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
@@ -89,12 +89,12 @@ pub const FORGETS_MOVED: u32 = 2;
 pub const W_KEY: u32 = 0;
 pub const W_KIND: u32 = 1;
 pub const W_ASSET: u32 = 2;
-pub const W_AT: u32 = 4;
+pub const W_HANDED: u32 = 4;
 /// The node: its zoom, then its index on X, Y and Z.
-pub const W_NODE: u32 = W_AT + AT_WORDS;
-/// What was handed it of what is placed, its `At`'s second word
-/// (`world::At::words`).
-pub const W_PLACED: u32 = W_AT + 1;
+pub const W_NODE: u32 = W_HANDED + HANDED_WORDS;
+/// What was handed it of what is placed, its `Handed`'s second word
+/// (`world::Handed::words`).
+pub const W_PLACED: u32 = W_HANDED + 1;
 pub const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles
@@ -264,7 +264,7 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
     across && b[1] < n[3] && b[3] > n[1]
 }
 
-/// Whether what was handed a node of what is placed, its `At`'s word
+/// Whether what was handed a node of what is placed, its `Handed`'s word
 /// `placed` (`overwrite::Held`), answers from a slot of the family written
 /// whose first slot is `first`. A write folds up its own path in place, and
 /// that path's nodes stand over its box (`over_box`); but where it splits a

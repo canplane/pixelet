@@ -35,7 +35,7 @@ pub(super) struct CastBuffers {
     /// The beam rays (`beam_cs`, a thread a corner), where each cell's
     /// rays start off them (`cell_cs`, a thread a cell), the samples walked
     /// from those starts (`sample_cs`, a thread a sample): the eye's over
-    /// the cast's group and the sun's map's over the sun's (`sun_groups`),
+    /// the cast's group and the shadow map's over the sun's (`sun_groups`),
     /// each told by the head it binds (`eye_head`, `sun_moved`); and the
     /// eye's buffer (pxl-spec-core `beam`): a line a corner, a start a
     /// cell, a stop a sample, as the eye's words lay the frame's `grid`, none
@@ -89,7 +89,7 @@ pub(super) struct CastBuffers {
     /// (`refold`). The CPU folds its own over the bricks it holds
     /// (pxl-kernel domain/layer/terrain/window.rs `fold`).
     joined_built: Built,
-    /// The world's depth from the sun, a texel of the sun's map each
+    /// The world's depth from the sun, a texel of the shadow map each
     /// (`sun_cs`), cast with the eye's rays where the shadows are on.
     sun_built: Built,
     /// The slots that took no pick walked apart (`sun_miss_cs`).
@@ -117,7 +117,7 @@ pub(super) struct CastBuffers {
     /// stands.
     sun_epoch: u32,
     /// Whether all the sun's cast is made (`sun_made`): its list and its
-    /// raster's buffers and targets; before then no sun's map is cast.
+    /// raster's buffers and targets; before then no shadow map is cast.
     sun_ready: bool,
     /// The beam's lines, the samples and the misses (pxl-spec-core
     /// `sun::list_words`), made where shadows are first cast.
@@ -126,7 +126,7 @@ pub(super) struct CastBuffers {
     /// The misses' walk's dispatch and count, as the eye's are
     /// (pxl-spec-core `ray::MISS_ARGS_WORDS`).
     sun_misses: u32,
-    /// What a tile of the sun's map holds follows, as the sun's cast last
+    /// What a tile of the shadow map holds follows, as the sun's cast last
     /// read it (`Read`): the light's frame (`Shadow::frame`), whether
     /// shadows are cast, the light box, the eye's place and zooms,
     /// and whether the world under it moved; one moving begins an epoch
@@ -217,7 +217,7 @@ pub(super) const HEAD_BINDING: u32 = 11;
 
 /// The cast's world's group, every kernel's over it bar the sun's own and
 /// the pixels': the one the missed pixels' cast binds, and the head the
-/// passes both observers take read their observer by. The sun's map's
+/// passes both observers take read their observer by. The shadow map's
 /// passes of those bind it over the sun's buffers (`sun_groups`); the
 /// sun's own bind its world and its clipmap (`SUN_GROUP`), past the floor's
 /// storage buffers were they one group; the pixels' (`cast_cs`) read the
@@ -621,7 +621,7 @@ impl RaysPass {
             eye: &cast.eye,
         };
         c.grown.prepare(g, cast.decor, grows, meshes, world);
-        // The sun's map is cast, every slot a receiver reads, as the eye's
+        // The shadow map is cast, every slot a receiver reads, as the eye's
         // rays are (pxl-spec-core `sun`), where what it reads moved: the
         // light's frame or box, the eye's place or zooms, which the
         // zooms its rays ask follow, or the world under it; and where what
@@ -1138,7 +1138,7 @@ impl RaysPass {
 /// surface's rays, the bricks' looks, the service area's index, the
 /// overwrites, the ways' pool, the beam rays' lines and the cells' starts,
 /// the observed pyramid, and the head (`WORLD_GROUP`): the eye's, or, over
-/// the sun's list and head, the sun's map's (`sun_groups`).
+/// the sun's list and head, the shadow map's (`sun_groups`).
 fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
     let [eye, window, ground, rays, looks, shards, overwrites, pool, beams, seen, head] = bound;
     let entries = [

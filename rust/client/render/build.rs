@@ -367,7 +367,7 @@ fn words() -> String {
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-spec-core).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),
-        // The receiver's taps apart in the sun's map, which the map's read
+        // The receiver's taps apart in the shadow map, which the map's read
         // pad is sized by (pxl-spec-core param.rs `sun::SPREAD`, sun.rs
         // `READ_PAD`).
         format!("const SUN_SPREAD: f32 = {:?};\n", pxl_spec_core::param::sun::SPREAD),

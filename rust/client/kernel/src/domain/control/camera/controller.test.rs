@@ -130,11 +130,11 @@ fn person_change_keeps_focus() {
 }
 
 #[test]
-fn look_tilt_domain() {
+fn facing_tilt_domain() {
     for n in 0..=360 {
         let polar = n as f64 * core::f64::consts::PI / 360.0;
         for azimuth in [0.0, 1.1, -2.7] {
-            let r = look_rotation(polar, azimuth);
+            let r = facing_rotation(polar, azimuth);
             let row = |i: usize| [r[i], r[4 + i], r[8 + i]];
             let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
             for i in 0..3 {
@@ -147,7 +147,7 @@ fn look_tilt_domain() {
                 }
             }
             let back = row(2);
-            let forward = look_dir(polar, azimuth);
+            let forward = facing_dir(polar, azimuth);
             assert!(
                 (0..3).all(|k| (forward[k] + back[k]).abs() < 1e-12),
                 "tilt {polar}, heading {azimuth}: looks along {:?}, not {forward:?}",
@@ -162,9 +162,9 @@ fn look_tilt_domain() {
 fn pole_headings_agree() {
     let pi = core::f64::consts::PI;
     for theta in [0.0, pi] {
-        let first = look_dir(theta, 0.0);
+        let first = facing_dir(theta, 0.0);
         for phi in [0.7, -2.1, 3.0] {
-            let d = look_dir(theta, phi);
+            let d = facing_dir(theta, phi);
             assert!(
                 (0..3).all(|k| (d[k] - first[k]).abs() < 1e-12),
                 "θ {theta}: φ {phi} looks along {d:?}, not {first:?}"
@@ -173,7 +173,7 @@ fn pole_headings_agree() {
     }
     for theta in [0.0, 1e-12, 1e-6, pi - 1e-6, pi - 1e-12, pi] {
         for phi in [0.0, 1.3, -2.9] {
-            let r = look_rotation(theta, phi);
+            let r = facing_rotation(theta, phi);
             assert!(r.iter().all(|v| v.is_finite()), "θ {theta}, φ {phi}: {r:?}");
             let row = |i: usize| [r[i], r[4 + i], r[8 + i]];
             for i in 0..3 {

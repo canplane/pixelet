@@ -7,11 +7,11 @@
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::domain::approach::{approach_angle, approach_vec};
-use crate::domain::control::camera::controller::look_domain;
+use crate::domain::control::camera::controller::facing_domain;
 use crate::domain::control::camera::controller::{camera, eye_world, focus, set_eye_world};
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::navigation::support::target;
-use crate::domain::control::param::{CAM_DAMP, FREE_EYE_EPS, FREE_LOOK_EPS, ROT_DAMP};
+use crate::domain::control::param::{CAM_DAMP, FREE_EYE_EPS, FREE_FACING_EPS, ROT_DAMP};
 use crate::domain::param::POS_DAMP;
 use xpute_guest::global::Global;
 
@@ -47,10 +47,10 @@ pub(crate) fn turn(delta: f64) -> bool {
     }
     let vs = camera_state().intent;
     let cam = camera();
-    let ([polar], m) = approach_vec([cam.polar], [vs.polar], CAM_DAMP, delta, FREE_LOOK_EPS);
+    let ([polar], m) = approach_vec([cam.polar], [vs.polar], CAM_DAMP, delta, FREE_FACING_EPS);
     moving |= m;
-    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, FREE_LOOK_EPS);
+    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, FREE_FACING_EPS);
     moving |= m;
-    (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
+    (cam.polar, cam.azimuth) = facing_domain(polar, azimuth);
     moving
 }

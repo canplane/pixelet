@@ -37,9 +37,9 @@ pub const MAX_DIST: f64 =
 
 // ---- the camera's settling and the ground it keeps to ----
 
-/// The free eye's and its look's settling, each sub-pixel at any distance.
+/// The free eye's and its facing's settling, each sub-pixel at any distance.
 pub const FREE_EYE_EPS: f64 = 0.001;
-pub const FREE_LOOK_EPS: f64 = 0.0001;
+pub const FREE_FACING_EPS: f64 = 0.0001;
 /// The orbit's center, distance, polar and azimuth settling, each sub-pixel
 /// at any distance the view is looked across.
 pub const ORBIT_CENTER_EPS: f64 = 0.001;

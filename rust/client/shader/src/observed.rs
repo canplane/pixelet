@@ -7,7 +7,7 @@
 use pxl_spec_core::answer::In;
 use pxl_spec_core::cast::{self, Met, Query};
 use pxl_spec_core::observed;
-use pxl_spec_core::world::{self, At};
+use pxl_spec_core::world::{self, Handed};
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -107,7 +107,7 @@ fn is_node(seen: &Seen, w: u32, zoom: u32, c: [i32; 3]) -> bool {
 #[derive(Clone, Copy)]
 pub(crate) struct Writ {
     pub(crate) entry: u32,
-    pub(crate) at: At,
+    pub(crate) at: Handed,
 }
 
 /// What a writing walk leaves of its line where it ends (`cast::Keep`), as
@@ -116,15 +116,15 @@ pub(crate) struct Writ {
 /// it stopped on is asked off it (world.rs `World::faced`), none walked down
 /// again.
 pub(crate) struct Lined {
-    pub(crate) live: At,
-    pub(crate) stack: [At; cast::DEPTH],
+    pub(crate) live: Handed,
+    pub(crate) stack: [Handed; cast::DEPTH],
 }
 
 impl Lined {
     /// Before its walk, which leaves its own over it wherever it ends, so
     /// nothing of this is read.
     pub(crate) fn before() -> Lined {
-        let none = At::of_words([0; world::AT_WORDS as usize]);
+        let none = Handed::of_words([0; world::HANDED_WORDS as usize]);
         Lined {
             live: none,
             stack: [none; cast::DEPTH],
@@ -204,8 +204,8 @@ impl<L: Looks> Query for Writing<'_, L> {
                             free = observed::NONE;
                             break;
                         }
-                        let a = w + observed::W_AT;
-                        let at = At::of_words([
+                        let a = w + observed::W_HANDED;
+                        let at = Handed::of_words([
                             seen_at(self.seen, a),
                             seen_at(self.seen, a + 1),
                             seen_at(self.seen, a + 2),
@@ -263,7 +263,7 @@ impl<L: Looks> Query for Writing<'_, L> {
             seen_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
             seen_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
             let words = n.at.words();
-            let a = w + observed::W_AT;
+            let a = w + observed::W_HANDED;
             seen_put(self.seen, a, words[0]);
             seen_put(self.seen, a + 1, words[1]);
             seen_put(self.seen, a + 2, words[2]);

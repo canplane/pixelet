@@ -123,7 +123,7 @@ pub(crate) fn picked<W: Words + ?Sized>(
 
 /// Each sample of its observer's lattice, a thread each: written as a box
 /// for the raster's draw (observer.rs `sample_box`), the screen's or the
-/// sun's map's as its head names (either.rs `Either`); and, the screen's, the
+/// shadow map's as its head names (either.rs `Either`); and, the screen's, the
 /// dispatch that asks its face raised to hold it (`raster::ARGS_FACES`),
 /// as its pixels draw the face.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_box_cs"))]

@@ -20,7 +20,7 @@ use xpute_kit::math::scalar::clamp;
 
 use crate::domain::approach::{approach_angle, approach_vec};
 use crate::domain::control::camera::controller::{
-    camera, focus, focus_world, look_dir, look_domain, set_eye_world,
+    camera, facing_dir, facing_domain, focus, focus_world, set_eye_world,
 };
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
@@ -55,12 +55,12 @@ pub fn orbit() -> &'static mut OrbitState {
 }
 
 pub fn orbit_eye_offset(dist: f64, polar: f64, azimuth: f64) -> V3 {
-    look_dir(polar, azimuth).map(|v| -v * dist)
+    facing_dir(polar, azimuth).map(|v| -v * dist)
 }
 
 /// Gated by terrain where the controls are written, so turning back moves at
 /// once. `climb` limits only a tilt asked: a zoom it answers by pitching the
-/// drawn look, which would stick if written into the controls.
+/// drawn facing, which would stick if written into the controls.
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state();
     let mut asked = c.merged(partial);
@@ -133,8 +133,8 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
-    // `climb` pitches the look toward straight down instead of shortening dist:
-    // rising fast and relaxing slowly while the ground bounds it.
+    // `climb` pitches the facing toward straight down instead of shortening
+    // dist: rising fast and relaxing slowly while the ground bounds it.
     let polar = match settings_store().orbit_obstacle {
         OrbitObstacleMode::climb => climb_polar(o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
@@ -148,7 +148,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     moving |= m;
     let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, ORBIT_AZIMUTH_EPS);
     moving |= m;
-    (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
+    (cam.polar, cam.azimuth) = facing_domain(polar, azimuth);
 
     // Written only where something moved, so nothing is written back at rest.
     if (center, o.dist, cam.polar, cam.azimuth) != was {

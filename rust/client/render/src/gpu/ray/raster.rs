@@ -32,7 +32,7 @@ use crate::gpu::span_spec::GpuSpanName;
 /// of the boxes' writing, their drawing and their faces' asking, made again
 /// exactly when what they bind is another (`bound`).
 pub(super) struct Raster {
-    /// The boxes' writing, the eye's and the sun's map's (pxl-shader
+    /// The boxes' writing, the eye's and the shadow map's (pxl-shader
     /// raster.rs `sample_box_cs`), each over its own group.
     pub(super) boxes_built: Built,
     faces_built: Built,

@@ -68,11 +68,11 @@ pub(super) fn coarsest() -> Zoom {
 }
 
 /// A node as a descent reaches it, X on the asker's lap, and what its
-/// ancestors found, handed to its children (pxl-spec-core `world::At`).
+/// ancestors found, handed to its children (pxl-spec-core `world::Handed`).
 #[derive(Clone, Copy)]
 pub(super) struct At {
     pub(super) node: Node<3>,
-    pub(super) handed: world::At,
+    pub(super) handed: world::Handed,
 }
 
 impl World<'_> {
@@ -95,9 +95,9 @@ impl World<'_> {
         At {
             node,
             handed: if self.unplaced {
-                world::At::unplaced(node)
+                world::Handed::unplaced(node)
             } else {
-                world::At::of(&self.objects.lanes(), node)
+                world::Handed::of(&self.objects.lanes(), node)
             },
         }
     }

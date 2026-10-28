@@ -82,7 +82,9 @@ Every size in the world is one number, its zoom. X goes once round the world in
 is half as wide (`pxl-spec space/coord/zoom.rs`). A **cell** is the granule at a
 zoom, possibly empty. A **tile** is what is fetched and stored as one, and a
 layer's tile has the same number of cells a side at every zoom. The **pyramid**
-is the tree of all tiles: a tile at z covers the 2 × 2 under it at z + 1. A
+is the tree of all tiles: a tile at z covers the 2 × 2 under it at z + 1. The
+same zooms, cut through the height as well, make an octree of nodes, eight under
+each, and that octree is what a ray descends (The query, the only seam). A
 **shard** is the coarsest cube, a tile as wide as the world is tall with the
 world's whole height over it (`pxl-spec-core lib.rs` `SHARD_ZOOM`); the world is
 ingested, baked and kept a shard at a time.
@@ -202,16 +204,16 @@ pointed at (`pxl-kernel domain/control/interaction.rs` `Picked`).
 
 One **camera** looks, and every controller moves it
 (`domain/control/camera/controller.rs` `Camera`). It is an **eye** and the
-direction it faces, the camera's **look**, in spherical coordinates about the
+direction it faces, the camera's **facing**, in spherical coordinates about the
 world's Z: θ the polar angle from straight down, φ the azimuth from north toward
 east. Nothing else keeps a copy.
 
 The free camera turns about its eye; the orbit turns about a point a distance
-ahead of the eye along the look. The point a camera turns about is the
+ahead of the eye along the facing. The point a camera turns about is the
 **focus**, the eye itself in the free camera, derived and never kept
 (`controller.rs` `focus`). The character stands there, and a change from one
 camera to the other moves the camera about the focus, never the focus. Code past
-the controllers reads the eye, the look and the focus.
+the controllers reads the eye, the facing and the focus.
 
 The **pose** is the eye and the turn from the world's axes to the camera's
 (`domain/view/frame/pose.rs`). The world stays in its own axes, in doubles; what
@@ -298,9 +300,10 @@ a cell at the zoom its distance asks
    +-- not known ----------------------> the ray stops there
 ```
 
-A reader that asks about the cells beside one it reached asks them off that
-descent's line, from the deepest node holding each (`pxl-spec-core support.rs`
-`asset`), never again from the top.
+A descent leaves its **line**: the node it reached and every node over it, each
+with what was handed it (`pxl-spec-core support.rs` `Line`). A reader that asks
+about the cells beside one it reached asks them off that line, from the deepest
+node holding each (`support.rs` `asset`), never again from the top.
 
 Control asks the same world, one ray at a time, at the zoom the eye's rays draw
 there, so what control meets is what is drawn (`pxl-kernel domain/query/ray.rs`
@@ -352,7 +355,7 @@ and a place the camera is travelling to one, at the leaves
   and no held cell moves. A brick at a zoom is held once however many windows
   want it, and kept while any does.
 - A brick is filled on the GPU as its tile lands (`pxl-render
-  gpu/ray/ground.rs` `grids`): its cells, a pyramid of bounds over them, its
+  gpu/ray/ground.rs` `grids`): its cells, a min-max mipmap over them, its
   **levels**, and its ways as a tree in one pool every brick shares
   (pxl-spec-core `way::tree`). All three are read back into the kernel, so the
   CPU's query and the GPU's cast meet the same bridge or tunnel.
@@ -476,14 +479,15 @@ pass** paints them with the one function every lit face uses
 (`frame/shader/screen_ray.wgsl` `pixel_ray`, `frame/shader/paint.wgsl` `paint`):
 its swatch or image, shaded edges, light, and the air before it.
 
-## The sun's map
+## The shadow map
 
-Shadows read the **sun's map**, the world's depth from the sun in a square box
-of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world and
-held in a map slot by its index modulo the map's side (`pxl-spec-core sun.rs`
-`Sun`). The sun is an observer as the eye is: one set of passes, written once
-over an interface both implement (`pxl-shader observer.rs` `Observer`), asks the
-world at the eye's zooms, so a shadow has the detail of what it falls on
+Shadows are read off the shadow map, the world's depth from the sun in a square
+box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
+and held in a map slot by its index modulo the map's side
+(`pxl-spec-core sun.rs` `Sun`). The sun is an observer as the eye is: one set of
+passes, written once over an interface both implement (`pxl-shader observer.rs`
+`Observer`), asks the world at the eye's zooms, so a shadow has the detail of
+what it falls on
 ([a receiver marks what it reads](./doc/minutes/20261027-a-receiver-marks-what-it-reads.md)).
 
 It casts only what a receiver reads:
@@ -516,7 +520,7 @@ by the pipeline that draws them, each with its mesh and uniform, for what the
 kernel decides to draw beside the world — the cumulus clouds, the actors, the
 location puck that shows where the device is, an edit's ghost box, the markers
 and the debug lines. An actor's draw also records where it stands
-(`DrawList::stand`), for the sun's map. The rays and the grown decor are not in
+(`DrawList::stand`), for the shadow map. The rays and the grown decor are not in
 it.
 
 The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
@@ -528,7 +532,7 @@ whether it wants another turn. Its passes are modules by what they draw
 ```text
 ahead       impostor atlases, fresh bricks filled, the atmosphere's
             tables, the air's volume
-cast        the screen's rays; decor grown; the sun's map; the
+cast        the screen's rays; decor grown; the shadow map; the
             occlusion prepass
 world pass  grown decor → rays at their depth → grown impostors
             → sky and stars at the far plane → listed actors,
@@ -1017,7 +1021,11 @@ them.
 | Minecraft Beta's `replaceBlocksForBiome` ([doc/minutes/archive/20261011-the-ground-under-its-face.md](./doc/minutes/archive/20261011-the-ground-under-its-face.md)) | `pxl-spec-core ground.rs` `Cell::asset`                                                                                             | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
 | Minecraft's map colors                                                                                                                                              | `spec/spec/asset/color.json` underground                                                                                            | The colors of soil, sandstone and stone                                                                                                  |
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c))                              | `pxl-kernel domain/query/support.rs` `step_slide`                                                                                   | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
-| Amanatides and Woo's voxel traversal                                                                                                                                | `pxl-kernel domain/query/ray.rs`, `domain/query/support.rs`                                                                         | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
+| Amanatides and Woo's voxel traversal                                                                                                                                | `pxl-spec-core cast.rs` `walk`, `pxl-kernel domain/query/support.rs`                                                                | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
+| Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                                                       | `pxl-spec-core cast.rs` `walk`                                                                                                      | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |
+| Laine and Karras's beams; Reshetov et al. ([doc/minutes/20261022-a-cell-casts-a-beam.md](./doc/minutes/20261022-a-cell-casts-a-beam.md))                            | `pxl-shader beam.rs`, `pxl-spec-core cast.rs` `Until::Beam`                                                                         | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
+| Tevs, Ihrke and Seidel's maximum mipmaps ([doc/minutes/20261028-a-tile-is-asked-where-it-lies.md](./doc/minutes/20261028-a-tile-is-asked-where-it-lies.md))         | `pxl-spec-core window.rs` `bounded`                                                                                                 | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
+| The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `sun.rs` `Sun`                                                                                           | A zoom's square about a centre, each part held at its place modulo the side, so it follows the centre and nothing held moves             |
 | OpenStreetMap Carto                                                                                                                                                 | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/asset/`                                                              | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
 | Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/marker.rs`                                                                                                         | A marker's line pitch                                                                                                                    |
 | OpenMapTiles' schema                                                                                                                                                | `spec/spec/asset/marker.json`                                                                                                       | A marker shows from z14, as its `poi` layer does                                                                                         |

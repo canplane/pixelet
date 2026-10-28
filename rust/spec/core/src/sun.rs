@@ -305,7 +305,7 @@ pub const MOVED_COUNTED: usize = 1;
 /// place, the light and the world it was cast for still do (`reads_at`).
 pub const MOVED_EPOCH: usize = 2;
 /// The map's side, which the slots' lattice is laid by. A pass the eye's
-/// rays and the sun's map share is handed the eye's own head, all zero, in
+/// rays and the shadow map share is handed the eye's own head, all zero, in
 /// its place (pxl-shader either.rs `Either`): a head naming no map is the
 /// eye's.
 pub const MOVED_SIZE: usize = 3;
@@ -338,7 +338,7 @@ pub const ANCHOR: i32 = 2048;
 pub const STARTS_AT: usize = 2;
 pub const STARTS_VEC4S: usize = 11;
 
-/// The actors the host draws, receivers of the sun's map as decor is
+/// The actors the host draws, receivers of the shadow map as decor is
 /// (pxl-shader sun.rs `sun_mark_drawn_cs`), past the starts: how many, the
 /// first word of a vec4, then each where it stands, units from the eye, a
 /// vec4 each, as many as `ACTORS`; any past them marks nothing.
@@ -453,7 +453,7 @@ const _: () = assert!(
 );
 
 /// What a beam ray leaves, in words: the eye's beam rays' line
-/// (`beam::LINE_T`, `beam::LINE_NODE`, `beam::LINE_AT`), how far a cell's
+/// (`beam::LINE_T`, `beam::LINE_NODE`, `beam::LINE_HANDED`), how far a cell's
 /// texels may start from it in its first word, then its origin
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
 /// every sun ray starts apart.
@@ -520,7 +520,7 @@ pub fn margin(width: f32) -> f32 {
     2.0 * crate::cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
 }
 
-/// The sun's map as the eye's rays are cast, every slot every frame
+/// The shadow map as the eye's rays are cast, every slot every frame
 /// (pxl-spec-core `raster`): a sample every `SAMPLE` slots across and down
 /// walked (pxl-shader beam.rs `sample_cs`), the cells they stopped at written
 /// as boxes by the eye's writer (pxl-shader raster.rs `boxed`) and drawn

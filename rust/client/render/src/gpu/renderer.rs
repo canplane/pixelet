@@ -208,7 +208,7 @@ pub struct Cast<'a> {
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
     /// Where each actor drawn stands, units from the eye, as its draw is
-    /// placed (frame/draw.rs `Lists::stands`): receivers of the sun's map as
+    /// placed (frame/draw.rs `Lists::stands`): receivers of the shadow map as
     /// decor is (pxl-spec-core `sun::ACTORS_AT`).
     pub actors: &'a [[f32; 3]],
     /// Whether what the eye's cast and the sun's walked and took is counted
@@ -407,7 +407,7 @@ pub struct Renderer {
     bind_group: u32,
     models: FrameGroups,
     shadow: Shadow,
-    /// Whether the sun's map is cast and drawn this frame (`STAGE_AT::SHADOWS`).
+    /// Whether the shadow map is cast and drawn this frame (`STAGE_AT::SHADOWS`).
     shadows: bool,
     ao: ScreenAo,
     screen_ao: bool,
@@ -638,7 +638,7 @@ impl Renderer {
             (eye_world[1] / MERCATOR_RADIUS_U) as f32,
             MERCATOR_RADIUS_U as f32,
         ]);
-        // The sun's map, as wide as the casters reach; none where the
+        // The shadow map, as wide as the casters reach; none where the
         // shadows are off.
         let far = s[STAGE_AT::SHADOWS];
         self.shadows = far > 0.0;
@@ -930,7 +930,7 @@ impl Renderer {
         frame_begin();
         let encoder = g.encoder();
         self.screen.dispatch(g, encoder, &mut stamps);
-        // The sun's map: the world's depth from the sun, where the rays hold
+        // The shadow map: the world's depth from the sun, where the rays hold
         // the world it was cast with, then decor's and the actors' drawn over it.
         if self.shadows {
             let pass = self.shadow.begin(

@@ -585,7 +585,7 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 }
 
 /// What growing decor asks of the world, as either side holds it: of the
-/// world unplaced (`world::At::unplaced`), the ground's alone, its column's
+/// world unplaced (`world::Handed::unplaced`), the ground's alone, its column's
 /// footing and the assets about it; of the world as edited, whether an edit holds a
 /// cell and what is placed in a box; and the catalog's rows where it reads
 /// them.

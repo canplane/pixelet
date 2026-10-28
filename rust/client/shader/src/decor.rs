@@ -16,7 +16,7 @@ use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::scatter::{self, drawn, is_marked, mark, Grounds, BRICK_PATCHES, MARKS};
 use pxl_spec_core::support;
 use pxl_spec_core::window::{self, ENTRIES, FIRST_CELL};
-use pxl_spec_core::world::{self, At};
+use pxl_spec_core::world::{self, Handed};
 use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::memory::{Scope, Semantics};
@@ -33,23 +33,23 @@ struct Growing<'a> {
 }
 
 /// The cast's world unplaced, nothing placed and no preview's cuts: the
-/// ground's alone, as decor grows on it (pxl-spec-core `world::At::unplaced`).
+/// ground's alone, as decor grows on it (pxl-spec-core `world::Handed::unplaced`).
 struct Unplaced<'w, 'a>(&'w mut World<'a, Unlooked>);
 
 impl Query for Unplaced<'_, '_> {
-    type At = At;
+    type At = Handed;
 
-    fn root(&mut self, node: [i32; 3]) -> At {
-        At::unplaced((0, node))
+    fn root(&mut self, node: [i32; 3]) -> Handed {
+        Handed::unplaced((0, node))
     }
 
-    fn child(&mut self, at: &At, zoom: u32, node: [i32; 3]) -> At {
+    fn child(&mut self, at: &Handed, zoom: u32, node: [i32; 3]) -> Handed {
         at.child(&*self.0, &self.0.pool, (zoom, node))
     }
 
     fn node(
         &mut self,
-        at: &mut At,
+        at: &mut Handed,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -75,7 +75,7 @@ impl Query for Unplaced<'_, '_> {
 /// the world as edited down its own line; and what is placed in a box
 /// (`world::placed_in`).
 impl Grounds for Growing<'_> {
-    type Footing = support::Footing<At>;
+    type Footing = support::Footing<Handed>;
 
     fn rows(&self) -> &[Decor] {
         self.rows

@@ -1,7 +1,7 @@
 // pxl-shader/observer.rs
 
 //! What a cast asks of the one it casts for (`Observer`), the eye or the
-//! sun's map, and the passes every cast takes, written once over it: each
+//! shadow map, and the passes every cast takes, written once over it: each
 //! corner's beam ray (`beam`), each cell's start off them (`cell`), each
 //! sample's walk (`sample`) and box (`sample_box`), a ray's pick (`took`),
 //! the sky about it (`sky`) or a walk of its own (`resolve`), and its walk

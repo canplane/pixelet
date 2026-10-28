@@ -2,7 +2,7 @@
 
 //! The world's depth from the sun into its clipmap (pxl-spec-core `sun`),
 //! every slot each frame it is cast, by the passes the eye's rays take,
-//! the sun's map their observer (`Map`; observer.rs): the beam rays and
+//! the shadow map their observer (`Map`; observer.rs): the beam rays and
 //! their cells' starts, the samples and their boxes, which the raster
 //! draws, each the entry the eye's takes too (beam.rs `beam_cs`,
 //! `cell_cs`, `sample_cs`; raster.rs `sample_box_cs`) handed the sun's head
@@ -161,7 +161,7 @@ fn sun_of(eye: &Eye) -> Sun {
     }
 }
 
-/// The sun's map as an observer (observer.rs `Observer`), off the eye's
+/// The shadow map as an observer (observer.rs `Observer`), off the eye's
 /// words and the head the cast is handed: the sun's cast (`sun::Sun`),
 /// where its rays start (`sun::Starts`), its side, and the eye's place and
 /// zooms its rays ask at, with its beam rays' spacing (`Sun::detail`). Its
@@ -523,7 +523,7 @@ pub fn sun_miss_cs(
     unsafe { sun.write(slot, m.word(&aim, &met)) };
 }
 
-/// The world's receivers of the sun's map: the drawn pixels' rays (cast.rs
+/// The world's receivers of the shadow map: the drawn pixels' rays (cast.rs
 /// `Rays`), a thread a square of them `sun::MARK` a side, each read, the
 /// tile the point it met the world at lies on marked stood on
 /// (`sun::stands_at`), a run on one tile once; nothing where it met
@@ -599,7 +599,7 @@ fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
     }
 }
 
-/// The drawn receivers of the sun's map, each the eye sees standing as the
+/// The drawn receivers of the shadow map, each the eye sees standing as the
 /// world's do (`sun_mark_cs`): the actors the host draws, a thread each
 /// (`sun::ACTORS_AT`); then the decor grown, a thread a slot of its
 /// instances (pxl-render gpu/grown.rs), as many as are placed, where each

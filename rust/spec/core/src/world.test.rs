@@ -123,16 +123,16 @@ struct Asked<'a> {
 }
 
 impl Query for Asked<'_> {
-    type At = At;
-    fn root(&mut self, node: [i32; 3]) -> At {
-        At::of(&Nothing, (0, node))
+    type At = Handed;
+    fn root(&mut self, node: [i32; 3]) -> Handed {
+        Handed::of(&Nothing, (0, node))
     }
-    fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
+    fn child(&mut self, at: &Handed, zoom: Zoom, node: [i32; 3]) -> Handed {
         at.child(&Nothing, &Nothing, (zoom, node))
     }
     fn node(
         &mut self,
-        at: &mut At,
+        at: &mut Handed,
         zoom: Zoom,
         c: [i32; 3],
         asked: [Zoom; 2],
