@@ -36,7 +36,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// one rule per axis by the sign of that axis's normal: n > 0 starts at
 /// grid_ceil(max), n < 0 ends at grid_floor(min), n = 0 takes the
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
-/// decor met in front of it).
+/// placed cube's entry, as it is stored).
 #[allow(clippy::needless_range_loop)]
 pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Q3 {
     let Aabb {

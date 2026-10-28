@@ -69,4 +69,30 @@ impl Aabb {
     pub fn bounded(self) -> bool {
         self.min.iter().chain(&self.max).all(|c| c.is_finite())
     }
+
+    /// Where a ray from `origin` along `direction` enters it, at `t`
+    /// along it, and the axis it enters across: of its near planes, the last
+    /// the ray reaches. None where the ray misses it, or starts inside it.
+    pub fn enters(self, origin: V3, direction: V3) -> Option<(f64, usize)> {
+        let (mut near, mut far, mut axis) = (f64::NEG_INFINITY, f64::INFINITY, 2);
+        for k in 0..3 {
+            if direction[k] == 0.0 {
+                if origin[k] < self.min[k] || self.max[k] < origin[k] {
+                    return None;
+                }
+                continue;
+            }
+            let [a, b] = [self.min[k], self.max[k]].map(|p| (p - origin[k]) / direction[k]);
+            let (lo, hi) = if a < b { (a, b) } else { (b, a) };
+            if lo > near {
+                (near, axis) = (lo, k);
+            }
+            far = far.min(hi);
+        }
+        (0.0 <= near && near <= far).then_some((near, axis))
+    }
 }
+
+#[cfg(test)]
+#[path = "aabb.test.rs"]
+mod test;

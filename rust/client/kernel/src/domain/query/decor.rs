@@ -3,14 +3,14 @@
 //! Decor as the world answers it: what the ground grows, evaluated cell by
 //! cell as the frame grows it (`grown_at`), off the ground's cells about the
 //! cell, each read as asked (`World::surfaces`), and what objects place, each
-//! struck by its model. A ray strikes it as the ground walk passes, only
+//! struck as the box it claims. A ray strikes it as the ground walk passes, only
 //! where the frame draws it as held, at the leaf cells: a fold strikes none of
 //! it. The walk follows the detail rule, not a partition the view chose,
 //! which may differ at its edges.
 //!
 //! Under it is the decors' runtime half, beside the catalog
 //! (spec/spec/asset/decor.json): their models as they arrive (`assets`),
-//! and a decor thing struck by its model (`strike`).
+//! and a decor thing struck as the box it claims (`strike`).
 
 pub mod asset;
 pub mod strike;
@@ -34,21 +34,13 @@ use crate::domain::layer::object::meta::placed;
 use crate::domain::layer::object::store::tree_key;
 use crate::domain::layer::residency::Line;
 use crate::domain::query::decor::strike::{reach, strike};
-use crate::domain::query::model::registry::Models;
 use pxl_spec_core::area::{self, Shard};
 use pxl_spec_core::cast;
 use pxl_spec_core::overwrite::{self, Held};
 use pxl_spec_core::window::Found;
 
-/// How decor is struck: against its models, where the frame holds it.
-#[derive(Clone, Copy)]
-pub(super) struct Grown<'a> {
-    pub(super) models: &'a Models,
-}
-
 /// One ray's decor strike, carried along its ground walk.
-pub(super) struct Strike<'a> {
-    models: &'a Models,
+pub(super) struct Strike {
     /// How far any decor reaches from where it stands, and in leaf cells.
     pub(super) reach: f64,
     around: i32,
@@ -56,7 +48,9 @@ pub(super) struct Strike<'a> {
     pub(super) held: f64,
     /// The cell met last, whose neighbors are struck already.
     last: Option<[i32; 2]>,
-    pub(super) best: Option<(f64, Instance)>,
+    /// The nearest struck, where along the ray, and the axis it entered
+    /// its box across (`strike`).
+    pub(super) best: Option<(f64, Instance, usize)>,
     /// What is placed about the nodes the walk went through (`Around`).
     pub(super) about: Around,
     /// The finest zoom whose nodes are as wide as the reach: a node finer
@@ -71,7 +65,7 @@ pub(super) struct Strike<'a> {
     box_zoom: Zoom,
 }
 
-impl Strike<'_> {
+impl Strike {
     /// The zoom a node at `zoom` is looked about at: its own, or the finest
     /// whose nodes are as wide as the reach.
     pub(super) fn about_zoom(&self, zoom: Zoom) -> Zoom {
@@ -274,49 +268,26 @@ impl<'a> World<'a> {
         })
     }
 
-    /// A decor the ground grows on the leaves whose box shares room with `space`.
-    pub fn grown_claim(&self, space: &Aabb) -> Option<Instance> {
-        let mut met = None;
-        self.each_grown_over(space, true, |_, i, grows| {
-            met = Some(i).filter(|_| grows);
-            met.is_some()
-        });
-        met
-    }
-
     /// Every decor the ground's scatter stands on the leaves whose box shares
     /// room with `space`, whether or not its footing is there now: what an
     /// erase took away included.
     pub fn grown_over(&self, space: &Aabb) -> Vec<Instance> {
-        let mut out = Vec::new();
-        self.each_grown_over(space, false, |_, i, _| {
-            out.push(i);
-            false
-        });
-        out
-    }
-
-    /// Until `each` says it has what it wants, with whether each grows
-    /// where `boxed` (`grown_in`).
-    fn each_grown_over(
-        &self,
-        space: &Aabb,
-        boxed: bool,
-        mut each: impl FnMut(&Decor, Instance, bool) -> bool,
-    ) {
         let (r, unit) = (reach(), units(GROUND.cell()));
         let cells = |k: usize| {
             libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32
         };
+        let mut out = Vec::new();
         for y in cells(1) {
             for x in cells(0) {
-                if self.grown_in([x, y], boxed, |decor, i, grows| {
-                    claim(&i).is_some_and(|c| c.shares(*space)) && each(decor, i, grows)
-                }) {
-                    return;
-                }
+                self.grown_in([x, y], false, |_, i, _| {
+                    if claim(&i).is_some_and(|c| c.shares(*space)) {
+                        out.push(i);
+                    }
+                    false
+                });
             }
         }
+        out
     }
 
     /// What the ground grows of `decor` standing in the leaf cell `at` lies
@@ -333,8 +304,10 @@ impl<'a> World<'a> {
     }
 
     /// The strike a ray carries, where decor is struck at all.
-    pub(super) fn strike(&self, ray: &Ray) -> Option<Strike<'a>> {
-        let Grown { models } = self.decor?;
+    pub(super) fn strike(&self, ray: &Ray) -> Option<Strike> {
+        if !self.decor {
+            return None;
+        }
         // Held as it is out to where the view draws the leaves' tiles.
         let held = match GROUND.z_at(0.0) {
             LEAF_ZOOM => draw_reach(GROUND, LEAF_ZOOM).min(ray.reach),
@@ -345,7 +318,6 @@ impl<'a> World<'a> {
         let (za, zb) = (ray.at(0.0)[2], ray.at(held)[2]);
         let band = [za.min(zb) - reach, za.max(zb) + reach];
         Some(Strike {
-            models,
             reach,
             around,
             held,
@@ -360,7 +332,7 @@ impl<'a> World<'a> {
 
     /// Strikes the decor standing near the leaf cell `cell` the walk is in:
     /// those not near the cell met before it, since a walk only moves on.
-    pub(super) fn strike_near(&self, s: &mut Strike<'a>, ray: &Ray, (zoom, at): Node<3>) {
+    pub(super) fn strike_near(&self, s: &mut Strike, ray: &Ray, (zoom, at): Node<3>) {
         let cell = [at[0], at[1]];
         let (r, last) = (s.around, s.last.replace(cell));
         let near = |a: [i32; 2], b: [i32; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
@@ -414,7 +386,7 @@ impl<'a> World<'a> {
     /// before its children and no later along the ray, so under the held
     /// span as they are; and it entered no other node at that zoom since,
     /// a node it comes back to being as fine or finer.
-    pub(super) fn may_strike(&self, s: &Strike<'a>, (zoom, c): Node<3>, shard: Shard) -> bool {
+    pub(super) fn may_strike(&self, s: &Strike, (zoom, c): Node<3>, shard: Shard) -> bool {
         let z = s.about_zoom(zoom);
         let a = c.map(|v| v >> (zoom - z));
         let low = cube(zoom, c).min[2] - s.reach;
@@ -435,7 +407,7 @@ impl<'a> World<'a> {
         ground || s.about.holds((z, a))
     }
 
-    fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i32; 2]) {
+    fn grown_near(&self, s: &mut Strike, ray: &Ray, cell: [i32; 2]) {
         self.grown_in(cell, true, |_, i, grows| {
             if grows {
                 meet(s, ray, i);
@@ -451,13 +423,12 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 }
 
 fn meet(s: &mut Strike, ray: &Ray, i: Instance) {
-    if let Some(t) = strike(
-        s.models,
+    if let Some((t, axis)) = strike(
         &i,
         ray.origin,
         ray.direction,
         s.best.map_or(s.held, |b| b.0),
     ) {
-        s.best = Some((t, i));
+        s.best = Some((t, i, axis));
     }
 }

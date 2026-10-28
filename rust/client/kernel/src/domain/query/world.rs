@@ -10,7 +10,6 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::bake::constant::EntryAt;
 
 use super::changed::Columns;
-use super::decor::Grown;
 use crate::domain::layer::object::store::{Store, Walk};
 use crate::domain::layer::residency::{Lines, Residency};
 use crate::domain::layer::Answer;
@@ -24,8 +23,9 @@ use pxl_spec::space::coord::aabb::Aabb;
 pub struct World<'a> {
     pub(super) terrain: &'a Residency<TerrainTile>,
     pub(super) objects: &'a Store,
-    /// How decor is struck; none, and a ray passes through decor.
-    pub(super) decor: Option<Grown<'a>>,
+    /// Whether decor is struck, as the boxes it claims; else a ray passes
+    /// through decor.
+    pub(super) decor: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
     pub(super) carve: Option<EntryAt>,
@@ -44,11 +44,8 @@ impl World<'static> {
     /// As `now`, and decor is struck too, where the frame holds it: the
     /// pointer's pick, which alone asks what a decor thing is.
     pub fn striking_decor(self) -> World<'static> {
-        let decor = Grown {
-            models: crate::domain::query::model::models(),
-        };
         World {
-            decor: Some(decor),
+            decor: true,
             ..self
         }
     }
@@ -59,7 +56,7 @@ impl<'a> World<'a> {
         World {
             terrain,
             objects,
-            decor: None,
+            decor: false,
             hide: None,
             carve: None,
             reading: None,
