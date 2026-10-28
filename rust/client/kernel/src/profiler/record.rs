@@ -13,7 +13,7 @@ use core::mem::size_of;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{FrameSample, WorstFrame};
+use crate::profiler::frame::{FrameSample, GpuSample, WorstFrame, GPU_SPANS};
 use crate::profiler::section::RecSection;
 use crate::profiler::task::TaskRow;
 
@@ -121,6 +121,9 @@ struct Profiler {
     /// This turn's frame task's time, which the turn's end takes out of the
     /// time its tasks ran.
     frame_task_ms: f64,
+    /// Whether this turn served the shell's read of the profiler: what it
+    /// asked as it fell is no wake of the world's.
+    read_turn: bool,
 }
 
 static PROFILER: Global<Profiler> = Global::new();
@@ -142,6 +145,7 @@ fn profiler() -> &'static mut Profiler {
         scratch: Box::default(),
         open: None,
         frame_task_ms: 0.0,
+        read_turn: false,
     })
 }
 
@@ -246,19 +250,56 @@ pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, settled: bool, fr
     if !l.recording {
         return;
     }
+    let at = now();
     l.frame_task_ms = frame_task_ms;
-    let Some(mut f) = l.open.replace(s) else {
+    if let Some(mut f) = l.open.replace(s) {
+        (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
+        land(l, f);
+    }
+    // Landing it is the profiler's too, out of the frame task's time.
+    let ms = now() - at;
+    l.frame_task_ms += ms;
+    if let Some(f) = l.open.as_mut() {
+        f.profiler_ms += ms;
+    }
+}
+
+/// The GPU's read of the frame the renderer numbered `frame`, as it lands a
+/// frame or two after it: written into that frame's record, the one in
+/// progress or one landed, and into a worst frame's that holds it.
+pub fn profiler_record_gpu(frame: f64, spans: [f64; GPU_SPANS], px: f64) {
+    let l = profiler();
+    if !l.recording || frame == 0.0 {
         return;
+    }
+    let read = |g: &mut GpuSample| {
+        if g.frame == frame {
+            (g.read, g.spans, g.px) = (1.0, spans, px);
+        }
     };
-    (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
-    land(l, f);
+    if let Some(f) = l.open.as_mut() {
+        read(&mut f.gpu);
+    }
+    // Back from the newest to the frame it timed, however late it landed.
+    for f in l.frame_ring[l.frame_head..l.frame_len].iter_mut().rev() {
+        read(&mut f.gpu);
+        if f.gpu.frame != 0.0 && f.gpu.frame <= frame {
+            break;
+        }
+    }
+    for w in &mut l.worst[..l.worst_len] {
+        read(&mut w.sample.gpu);
+        read(&mut w.prev.gpu);
+    }
 }
 
 /// A turn's end, frame turn or not: its time into the interval in progress,
-/// rise to fall, its tasks' part, and what it asked as it fell.
+/// rise to fall, its tasks' part, and what it asked as it fell, unless the
+/// turn served the shell's read of the profiler.
 pub fn profiler_record_turn(turn_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f64) {
     let l = profiler();
     let frame_task_ms = core::mem::take(&mut l.frame_task_ms);
+    let read_turn = core::mem::take(&mut l.read_turn);
     let Some(f) = l.open.as_mut().filter(|_| l.recording) else {
         return;
     };
@@ -266,12 +307,26 @@ pub fn profiler_record_turn(turn_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f
     f.busy_ms += turn_ms;
     // The frame task runs inside the poll, so this is never negative.
     f.tasks_ms += poll_ms - frame_task_ms;
-    (f.wake, f.wake_in_ms) = (wake, wake_in_ms);
+    if !read_turn {
+        (f.wake, f.wake_in_ms) = (wake, wake_in_ms);
+    }
 }
 
+/// The shell's read of the profiler, `ms` long, served this turn: the
+/// profiler's cost to the interval in progress (`profiler_ms`).
+pub fn profiler_record_read(ms: f64) {
+    let l = profiler();
+    l.read_turn = true;
+    if let Some(f) = l.open.as_mut().filter(|_| l.recording) {
+        f.profiler_ms += ms;
+    }
+}
+
+/// A still interval is long on purpose, so only a moving frame is among the
+/// worst.
 fn land(l: &mut Profiler, s: FrameSample) {
     let at = l.worst[..l.worst_len].partition_point(|w| w.sample.interval_ms >= s.interval_ms);
-    if at < l.worst.len() {
+    if s.settled == 0.0 && at < l.worst.len() {
         let prev = l.frame_ring[..l.frame_len].last().copied();
         let kept = l.worst_len.min(l.worst.len() - 1);
         l.worst.copy_within(at..kept, at + 1);

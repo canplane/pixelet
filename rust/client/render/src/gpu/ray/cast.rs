@@ -1051,9 +1051,7 @@ impl RaysPass {
 
     /// The counts' sums since boot (ray/tally.rs `RAY_SUMS`).
     pub fn tally_sums(&self) -> [f64; tally::RAY_SUMS] {
-        self.cast
-            .as_ref()
-            .map_or([0.0; tally::RAY_SUMS], |c| c.tally.sums())
+        super::tally::Tally::sums()
     }
 
     pub fn sun_casts(&self) -> bool {

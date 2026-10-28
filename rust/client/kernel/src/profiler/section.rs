@@ -7,7 +7,7 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::profiler::frame::{FrameSample, GPU_SPANS};
+use crate::profiler::frame::{FrameSample, EFFECTS, GPU_SPANS};
 use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
 use crate::profiler::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
@@ -58,11 +58,19 @@ pub struct FramesSection {
     /// Intervals whose turns ran past them.
     pub long: f64,
     pub turns: f64,
-    /// Frames a GPU read landed with: the GPU's figures are over these alone.
+    /// Frames a GPU read timed: the GPU's figures are over these alone.
     pub gpu_read: f64,
     pub interval: Spread,
     pub busy: Spread,
     pub tick: Spread,
+    /// The other parts of `busy`, and what they leave of it, unmeasured.
+    pub effects: Spread,
+    pub stage: Spread,
+    pub tasks: Spread,
+    pub profiler: Spread,
+    pub rest: Spread,
+    /// Each effect's p95, in EFFECT_NAMES' order.
+    pub effects_p95: [f64; EFFECTS],
     pub gpu: Spread,
     /// The p95 alone of each phase and each span: what is read of them.
     pub phases_p95: [f64; PHASES.len()],
@@ -71,6 +79,9 @@ pub struct FramesSection {
     pub kinds: [f64; FRAME_KINDS],
     pub wakes: [f64; WAKES],
     pub heap_used_delta_bytes: f64,
+    /// The window's first frame and its last: what is summed since boot is
+    /// the window's as the one less the other.
+    pub first: FrameSample,
     pub last: FrameSample,
 }
 
@@ -85,11 +96,14 @@ words!(FramesSection, SUMMARY::frames::WORDS,
     missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
     long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
     interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy,
-    tick => SUMMARY::frames::tick, gpu => SUMMARY::frames::gpu,
+    tick => SUMMARY::frames::tick, effects => SUMMARY::frames::effects,
+    stage => SUMMARY::frames::stage, tasks => SUMMARY::frames::tasks,
+    profiler => SUMMARY::frames::profiler, rest => SUMMARY::frames::rest,
+    effects_p95 => SUMMARY::frames::effects_p95, gpu => SUMMARY::frames::gpu,
     phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95,
     kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
     heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes,
-    last => SUMMARY::frames::last,
+    first => SUMMARY::frames::first, last => SUMMARY::frames::last,
 );
 
 #[repr(C)]

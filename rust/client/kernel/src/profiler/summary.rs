@@ -6,7 +6,7 @@
 
 use crate::domain::control::camera::controller;
 use crate::profiler::frame::FrameSample;
-use crate::profiler::frame::{long, missed, overran};
+use crate::profiler::frame::{long, missed, overran, unmeasured};
 use crate::profiler::record::{
     profiler_frames_since, profiler_recording_state, profiler_scratch, profiler_tasks_since,
 };
@@ -97,7 +97,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
 
     let count = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     // A span the frame did not run reads 0 and is left out.
-    // The GPU's figures over the frames a read landed with, each read once.
+    // The GPU's figures over the frames a read timed, each read once.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
     FramesSection {
         present: 1.0,
@@ -112,6 +112,14 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         interval: spread(scratch, moving().map(|f| f.interval_ms)),
         busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
+        effects: spread(scratch, frames.iter().map(|f| f.effects_ms)),
+        stage: spread(scratch, frames.iter().map(|f| f.stage_ms)),
+        tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
+        profiler: spread(scratch, frames.iter().map(|f| f.profiler_ms)),
+        rest: spread(scratch, frames.iter().map(unmeasured)),
+        effects_p95: core::array::from_fn(|k| {
+            spread(scratch, frames.iter().map(|f| f.effects[k])).p95
+        }),
         gpu_read: count(&|f| f.gpu.read != 0.0),
         gpu: spread(
             scratch,
@@ -130,6 +138,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
         heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
+        first: *first,
         last: *last,
     }
 }

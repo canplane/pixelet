@@ -8,6 +8,7 @@ import type { Frame, Spread, TaskRecord, TaskSummary } from "@/abi/profiler.ts";
 import { drawn, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { fps, type ProfilerReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
+import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { bracket, type LongFrame } from "@/bracket.tsx";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
@@ -24,13 +25,21 @@ const pastText = (
   : `off-turn ${n1(f.interval_ms - f.busy_ms)}`);
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
-/** The `ray_counts` setting's sums since boot as the last frame holds them
- * (profiler.json FRAME's rays, eye and sun lanes), where any frame's counts
- * were read back: an observer's line each where it cast — the nodes its
+/** The `ray_counts` setting's counts over the window: its sums since boot
+ * (profiler.json FRAME's rays, eye and sun lanes) at its last frame less
+ * those at its first, where any frame's counts were read back: an observer's line each where it cast — the nodes its
  * beam rays, its samples and its walk again asked a cast, its pixels or
  * slots that took the raster's pick and that walked, the nodes its walk
  * again asked a walking one, and the boxes it drew a cast. */
-const raysText = (f: Frame) => {
+const raysText = (first: Frame, last: Frame) => {
+  const f = Object.fromEntries(
+    Object.keys(last).filter((k) => /^(rays_frames|eye_|sun_)/.test(k)).map((
+      k,
+    ) => [
+      k,
+      (last[k as keyof Frame] as f64) - (first[k as keyof Frame] as f64),
+    ]),
+  ) as Record<string, f64>;
   if (f.rays_frames === 0) return [];
   const observer = (
     name: string,
@@ -109,6 +118,14 @@ export function taskLine(r: TaskRecord): string {
   }${why}`;
 }
 
+/** The frame turn's longest effect, by its name, where any ran. */
+const worstEffectText = (f: Frame) => {
+  const k = f.effects.reduce((w, ms, i) => (ms > f.effects[w] ? i : w), 0);
+  return f.effects_ms > 0
+    ? `  worst ${EFFECT_NAMES[k] ?? "-"} ${n1(f.effects[k])}`
+    : "";
+};
+
 /** Geometry, textures and heap only mean anything as deltas from `prev`. */
 export function frameLine(s: Frame, prev: Frame | null): string {
   const [draws, triangles] = drawn(s);
@@ -121,11 +138,15 @@ export function frameLine(s: Frame, prev: Frame | null): string {
     valueText("kind_name", s.kind_name)
   }  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${
     pastText(s)
-  }  tick ${n1(s.tick_ms)}/${n1(s.budget_ms)}${
-    s.settled ? " (still)" : ""
-  }  gpu ${s.gpu_read ? n1(gpuMs(s)) : "-"}  draws ${draws} tris ${
-    tris(triangles)
-  }  uploads ${s.uploads}  heap used ${bytes(s.heap_used_bytes)}${d}`;
+  }  effects ${n1(s.effects_ms)}${worstEffectText(s)}  tick ${n1(s.tick_ms)}/${
+    n1(s.budget_ms)
+  }${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  tasks ${
+    n1(s.tasks_ms)
+  }  profiler ${n1(s.profiler_ms)}  gpu ${
+    s.gpu_read ? n1(gpuMs(s)) : "-"
+  }  draws ${draws} tris ${tris(triangles)}  uploads ${s.uploads}  heap used ${
+    bytes(s.heap_used_bytes)
+  }${d}`;
 }
 
 /** What the place hears its long frames by, where that is less than both sources. */
@@ -180,15 +201,30 @@ function windowSection(r: ProfilerReport): string[] {
     }${last.settled ? " (still)" : ""}   phase p95 ${
       f.phases.map((p) => `${p.name} ${n1(p.p95)}`).join("  ")
     }`,
+    `  effects ${spread(f.effects)} ms   p95 ${
+      f.effects_p95.filter((e) => e.p95 > 0).map((e) =>
+        `${e.name} ${n1(e.p95)}`
+      ).join("  ") || "-"
+    }`,
+    `  stage   ${
+      spread(f.stage)
+    } ms   (the pump, the stage's write and the render)`,
+    `  tasks   ${spread(f.tasks)} ms`,
+    `  profiler ${
+      spread(f.profiler)
+    } ms   (its own record and the shell's reads)`,
+    `  rest    ${
+      spread(f.rest)
+    } ms   (busy unmeasured: the door's commands, rise and fall)`,
     f.gpu_read > 0
       ? `  gpu     ${
         spread(f.gpu)
-      } ms   (over the ${f.gpu_read} frames a read landed with)`
+      } ms   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
-    ...raysText(last),
+    ...raysText(f.first, last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
-    `  steps   ${steps}   (ms per frame, max)`,
+    `  steps   ${steps}   (ms a run and max, since the recording started)`,
     `  heap used Δ ${
       signedBytes(f.heap_used_delta_bytes)
     }   (the high-water mark)`,
@@ -236,7 +272,7 @@ export function profilerReportText(r: ProfilerReport): string {
     for (const rec of r.recent) out.push(taskLine(rec));
   }
   if (r.worst.length > 0) {
-    out.push(`--- worst ${r.worst.length} frames since recording ---`);
+    out.push(`--- worst ${r.worst.length} moving frames since recording ---`);
     for (const w of r.worst) out.push(frameLine(w.sample, w.prev));
   }
   if (r.longs.length > 0) {

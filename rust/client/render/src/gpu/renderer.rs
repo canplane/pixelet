@@ -265,11 +265,15 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     /// Whether a GPU read landed with this frame: its spans are then that
-    /// read's and `gpu_px` the world's pixels the frame it timed drew, what
-    /// the spans were measured over; else both are 0, as nothing was
-    /// measured with this frame.
+    /// read's, `gpu_px` the world's pixels the frame it timed drew, what the
+    /// spans were measured over, and `gpu_frame` that frame's number (`frame`
+    /// as it was); else they are 0, as nothing was measured with this frame.
     pub gpu_read: bool,
     pub gpu_px: f64,
+    pub gpu_frame: f64,
+    /// This frame's number, from 1, a frame the renderer encoded each; 0
+    /// where it stood and drew nothing.
+    pub frame: f64,
     /// The upload table's uploads and their bytes, the depth targets' bytes
     /// and the texture pack's: each as counted, in bytes.
     pub uploads: f64,
@@ -349,6 +353,11 @@ pub fn sky_steps() -> [Option<f32>; 2] {
 
 static REDRAW: Global<bool> = Global::new();
 
+/// The frames encoded since boot, drawn or dropped, the last one's number
+/// (`FrameStat::frame`): beside the renderer, so a lost device's next
+/// renderer numbers on.
+static DRAWN_FRAMES: Global<f64> = Global::new();
+
 pub fn gpu_lost() {
     RENDERER.set(None);
     skins_lost();
@@ -374,9 +383,10 @@ pub struct Renderer {
     /// The spans' queries (`Gpu::spans`); 0 where the device keeps no
     /// timestamps, and no frame is timed.
     query_set: u32,
-    /// The world's pixels of the frame whose spans' read is on its way: one
-    /// read at most is (`Gpu::submit_frame`).
+    /// The world's pixels and the number of the frame whose spans' read is
+    /// on its way: one read at most is (`Gpu::submit_frame`).
     read_px: f64,
+    read_frame: f64,
     pipelines: Pipelines,
     frame_buffer: u32,
     frame: Frame,
@@ -467,6 +477,7 @@ impl Renderer {
             align: device.align,
             query_set,
             read_px: 0.0,
+            read_frame: 0.0,
             ghost: pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()),
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
@@ -859,7 +870,9 @@ impl Renderer {
             && !gridded
         {
             self.frame_read = read;
-            let stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
+            let mut stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
+            // Nothing drawn, so no number a read could name.
+            stat.frame = 0.0;
             self.order = order;
             return (FrameKind::stood, stat);
         }
@@ -1009,13 +1022,20 @@ impl Renderer {
         // The read that landed is the one that was on its way; this frame's
         // takes its place where one was asked.
         let gpu_read = q != 0 && g.gpu_landed();
-        let (gpu_spans, gpu_px) = if gpu_read {
-            (core::array::from_fn(|k| g.gpu_ms(k as u32)), self.read_px)
+        let (gpu_spans, gpu_px, gpu_frame) = if gpu_read {
+            (
+                core::array::from_fn(|k| g.gpu_ms(k as u32)),
+                self.read_px,
+                self.read_frame,
+            )
         } else {
-            ([0.0; GPU_SPAN_NAMES], 0.0)
+            ([0.0; GPU_SPAN_NAMES], 0.0, 0.0)
         };
+        let frame = DRAWN_FRAMES.get(|| 0.0);
+        *frame += 1.0;
         if asked {
             self.read_px = f64::from(world.width) * f64::from(world.height);
+            self.read_frame = *frame;
         }
         let skipped = !frame_commit();
         if skipped {
@@ -1039,6 +1059,7 @@ impl Renderer {
         let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
         stat.gpu_px = gpu_px;
+        stat.gpu_frame = gpu_frame;
         self.order = order;
         (kind, stat)
     }
@@ -1144,6 +1165,8 @@ impl Renderer {
         FrameStat {
             gpu_read: false,
             gpu_px: 0.0,
+            gpu_frame: 0.0,
+            frame: *DRAWN_FRAMES.get(|| 0.0),
             uploads: b.count as f64,
             upload_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the markers' regions'.

@@ -200,25 +200,21 @@ fn world_tasks() {
     }
 }
 
-/// Longest effect of the last turn and its EFFECT_NAMES index: a turn is only
-/// as cooperative as its longest step.
-static WORST_EFFECT: Global<(f64, Option<u32>)> = Global::new();
+/// Each effect's time in the last turn, in EFFECT_NAMES' order.
+static EFFECTS: Global<[f64; spec::EFFECT_NAMES]> = Global::new();
 
-pub fn worst_effect() -> (f64, Option<u32>) {
-    *WORST_EFFECT.get(|| (0.0, None))
+pub fn effect_times() -> [f64; spec::EFFECT_NAMES] {
+    *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES])
 }
 
 /// Effects are not budgeted, so nothing in them may be real work. They were
 /// untimed until a fold here took 70 ms of a turn whose tick was 1.5 ms
 /// (2026-09-23).
 macro_rules! effect {
-    ($worst:ident, $name:ident, $step:expr) => {{
+    ($times:ident, $name:ident, $step:expr) => {{
         let at = now();
         $step;
-        let ms = now() - at;
-        if ms > $worst.0 {
-            $worst = (ms, Some(EffectName::$name as u32));
-        }
+        $times[EffectName::$name as usize] += now() - at;
     }};
 }
 
@@ -226,50 +222,50 @@ macro_rules! effect {
 pub fn world_turn() -> f64 {
     let at = now();
     let platform = world_platform();
-    let mut worst = (0.0f64, None);
+    let mut times = [0.0; spec::EFFECT_NAMES];
     // First, so the turn they are read in is the first to see them.
-    effect!(worst, settings, {
+    effect!(times, settings, {
         if crate::domain::view::setting::store::settings_load_step() {
             crate::profiler::window::profiler_follow(
                 crate::domain::view::setting::store::settings_store().profiler,
             );
         }
     });
-    effect!(worst, navigation, off_center_step());
-    effect!(worst, bootstrap, map_bootstrap_step());
+    effect!(times, navigation, off_center_step());
+    effect!(times, bootstrap, map_bootstrap_step());
     effect!(
-        worst,
+        times,
         orientation,
         orientation_watchdog_step(platform.orientation)
     );
-    effect!(worst, follow, follow_mode_step());
-    effect!(worst, destination, {
+    effect!(times, follow, follow_mode_step());
+    effect!(times, destination, {
         // What the walker found under an unknown Z, let go where it moved.
         crate::domain::control::navigation::support::support_step();
         crate::domain::control::navigation::destination::destination_step()
     });
-    effect!(worst, decor, decor_models_step());
+    effect!(times, decor, decor_models_step());
     effect!(
-        worst,
+        times,
         objects,
         crate::domain::layer::object::repository::step()
     );
-    effect!(worst, edit, {
+    effect!(times, edit, {
         let edits = crate::domain::control::interaction::edit::pending_step();
         // A new preview moves the world as drawn where it was and where it is.
         if crate::domain::layer::object::preview::set(edits).is_some() {
             request_world_tick();
         }
     });
-    effect!(worst, hover, ghost_step());
+    effect!(times, hover, ghost_step());
     // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
-    effect!(worst, puck, location_puck_step(off_center().device_coord));
+    effect!(times, puck, location_puck_step(off_center().device_coord));
     effect!(
-        worst,
+        times,
         settings,
         crate::domain::view::setting::store::settings_keep_step()
     );
-    *WORST_EFFECT.get(|| (0.0, None)) = worst;
+    *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times;
     now() - at
 }
 

@@ -184,7 +184,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     frame: null,
     gpu: f !== null && (
       <>
-        {/* Over the frames a GPU read landed with; none landed is no measure, not 0. */}
+        {/* Over the frames a GPU read timed; none timed is no measure, not 0. */}
         <Row
           k="gpu p95"
           v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms` : "no timestamps"}
