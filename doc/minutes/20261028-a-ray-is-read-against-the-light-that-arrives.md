@@ -108,7 +108,7 @@ The user, before this record: "그냥 뭐든간에 하나라도 걸치면 그냥
   view moves and no frame's image is its own. The user asked for a
   deterministic answer, which rules it out.
 - **Symmetry holds.** Boxes and a cone, so every source alike. Each observer
-  keeps its own cone. Control and physics keep `Cone::EXACT` and are
+  keeps its own cone. Control and physics keep `Spacing::NONE` and are
   unchanged.
 
 ## Open

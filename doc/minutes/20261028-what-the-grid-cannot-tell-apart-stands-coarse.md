@@ -77,8 +77,13 @@ regression, not an answer. What stands:
 
 - The query asks a node and answers a box in its own units, every axis alike
   (`cf769abc1`; [a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
-- The ray is a cone (`cast::Cone`). The eye's cone is an angle, the grid's cell
-  (`beam::spacing`). The sun's is its texel. Control is exact.
+- The ray is a cone (`cast::Spacing`). The eye's cone is an angle, the grid's
+  cell (`beam::spacing`). The sun's is its texel. Control is exact.
+
+  > **Note (10-28):** with the prune gone, nothing reads a ray's cone. What
+  > is left is how far apart a beam's rays lie (`cast::Spacing`), the eye's
+  > the grid's cell and the sun's `sun::BEAM` texels; control's is none
+  > (`Spacing::NONE`).
 - The prune passes what the cone cannot tell apart, so the horizon costs what
   any direction does (`cast.rs` `walk`, `meets_box`).
 

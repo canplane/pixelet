@@ -41,20 +41,20 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
     [d[0] / l, d[1] / l, d[2] / l]
 }
 
-/// A ray's cone, as wide as `across + angle · d` units at `d` from the eye
-/// (`Detail::eye`): the eye's an angle, its camera grid's cell
-/// (`beam::spacing`); parallel rays' a width, the sun's texel. Only a beam
-/// reads it: its rays lie `Detail::apart` cones apart, which its widening
-/// and `narrow` take (`Until::Beam`). An asker that casts no beam, control
-/// and physics, fills in none (`EXACT`).
+/// How far apart a beam's rays lie, `across + angle · d` units at `d` from
+/// the eye (`Detail::eye`): the eye's an angle, its camera grid's cell
+/// (`beam::spacing`); the sun's, whose rays are parallel, a width, `sun::BEAM`
+/// of its map's texels. Only a beam reads it, its widening and `narrow`
+/// (`Until::Beam`); an asker that casts no beam, control and physics, fills
+/// in none (`NONE`).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Cone {
+pub struct Spacing {
     pub angle: f32,
     pub across: f32,
 }
 
-impl Cone {
-    pub const EXACT: Cone = Cone {
+impl Spacing {
+    pub const NONE: Spacing = Spacing {
         angle: 0.0,
         across: 0.0,
     };
@@ -72,17 +72,14 @@ impl Cone {
 /// The distance is the eye's, `eye` units from the walk's origin: none for
 /// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
-/// at the zooms the eye's rays ask it (`reach`). `cone` is the ray's own
-/// (`Cone`), and `apart` how many of its widths a beam ray lies from the
-/// next of its grid (`Until::Beam`, `narrow`): 1 for the eye's, whose
-/// cone is the grid's cell, `sun::BEAM` for the sun's.
+/// at the zooms the eye's rays ask it (`reach`). `spacing` is how far a
+/// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
     pub tau: f32,
     pub range: [Zoom; 2],
     pub eye: [f32; 3],
-    pub cone: Cone,
-    pub apart: f32,
+    pub spacing: Spacing,
 }
 
 impl Detail {
@@ -840,10 +837,10 @@ pub fn walk<Q: Query>(
                 // it clear it too; else it stops at one it may not share with
                 // them, and enters every other.
                 Kind::Split if until == Until::Beam => {
-                    // The grid's rays `apart` cones apart at the node's far
-                    // corner: a split narrower than `2√2` of that may lie
-                    // between them (`narrow`, pxl-spec-core `sun::BEAM`).
-                    let width = detail.apart * detail.cone.width(libm::sqrtf(reach[0]));
+                    // The grid's rays' spacing at the node's far corner: a
+                    // split narrower than `2√2` of that may lie between them
+                    // (`narrow`).
+                    let width = detail.spacing.width(libm::sqrtf(reach[0]));
                     let narrow = narrow(side * side, width * width);
                     let meets = meets_box(2.0 * core::f32::consts::SQRT_2 * width);
                     into = meets && !narrow;
@@ -1071,8 +1068,7 @@ mod tests {
             tau: 1.0,
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
-            cone: Cone::EXACT,
-            apart: 0.0,
+            spacing: Spacing::NONE,
         };
         first(&mut One { kept }, o, &ray, detail, Until::Opaque)
     }
@@ -1148,11 +1144,10 @@ mod tests {
             tau: 1.0,
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
-            cone: Cone {
+            spacing: Spacing {
                 angle: 1.0 / 192.0,
                 across: 0.0,
             },
-            apart: 1.0,
         };
         let walk =
             |b: crate::answer::BoxWords| first(&mut Boxed(b), o, &ray, detail, Until::Opaque);
@@ -1181,7 +1176,7 @@ mod tests {
         // starts 2^14 units over the origin.
         let beam = |width: f32| {
             let detail = Detail {
-                cone: Cone {
+                spacing: Spacing {
                     angle: 0.0,
                     across: width,
                 },
@@ -1198,9 +1193,10 @@ mod tests {
         assert_eq!(beam(1.0).visits, 1);
         assert!(beam(1.0e4).visits > 1);
         // Nothing is passed for being thin: a slab one step thick about the
-        // origin, 2^14 units, is entered by a ray whose cone is far wider.
+        // origin, 2^14 units, is entered by a ray whose beam's spacing is far
+        // wider, which no walk but a beam's reads.
         let wide = Detail {
-            cone: Cone {
+            spacing: Spacing {
                 angle: 0.0,
                 across: 1.0e5,
             },

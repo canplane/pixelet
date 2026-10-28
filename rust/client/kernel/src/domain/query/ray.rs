@@ -26,7 +26,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::answer::{self, In, Kind};
 pub(super) use pxl_spec_core::cast::Until;
-use pxl_spec_core::cast::{self, Cone, Detail, Ends, Query};
+use pxl_spec_core::cast::{self, Detail, Ends, Query, Spacing};
 use pxl_spec_core::support::{Footing, Line};
 
 /// The zooms a cell is asked at: no coarser than a tile draws and no finer
@@ -45,8 +45,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
         tau: 1.0,
         range: [z, z],
         eye: [0.0; 3],
-        cone: Cone::EXACT,
-        apart: 0.0,
+        spacing: Spacing::NONE,
     }
 }
 
@@ -60,8 +59,7 @@ pub fn held() -> Detail {
         tau: 1.0,
         range: [finest, finest],
         eye: [0.0; 3],
-        cone: Cone::EXACT,
-        apart: 0.0,
+        spacing: Spacing::NONE,
     }
 }
 
@@ -73,8 +71,7 @@ pub fn by_distance(tau: Tau) -> Detail {
         tau: tau.scale() as f32,
         range: asked(),
         eye: [0.0; 3],
-        cone: Cone::EXACT,
-        apart: 0.0,
+        spacing: Spacing::NONE,
     }
 }
 
