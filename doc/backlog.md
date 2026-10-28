@@ -14,18 +14,20 @@ Nothing now.
 
 ## P1
 
-- **What made it smooth, measured, and the whole cost against 9/26.** Once
-  the structure's work is done and the code tidied: which commits and which
-  reuse made moving smooth, each by its "off", and the frame against
-  e78eeec55, so the gain of rays with the raster only handing out is known
-  and a regression of it is seen —
-  [20261026-what-made-it-smooth.md](./experiment/20261026-what-made-it-smooth.md).
+Nothing now.
 
 ## P2
 
 Nothing now.
 
 ## Parked, with the reason on file
+
+- **What made it smooth, measured, and the whole cost against 9/26.** Which
+  commits and which reuse made moving smooth, each by its "off", and the
+  frame against e78eeec55, so the gain of rays with the raster only handing
+  out is known and a regression of it is seen. Parked by the user
+  (2026-10-28) —
+  [20261026-what-made-it-smooth.md](./experiment/20261026-what-made-it-smooth.md).
 
 - **A query over what is drawn, for an agent to read.** An agent debugging the
   view guesses a pixel's cause from its color in a screenshot. The profiler's
