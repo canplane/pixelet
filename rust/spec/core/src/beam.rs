@@ -316,10 +316,11 @@ mod tests {
 
     #[test]
     fn the_largest_beam_fits_a_storage_binding() {
-        // 4112 × 2338 drawn, a ratio of 2, at a 50° screen and τ at its
+        // 4112 × 2338 drawn, a ratio of 2, at the view's FOV (the tangent of
+        // its half 1/2, pxl-spec space/camera/grid.rs `FOV_DEG`) and τ at its
         // least, within the 33,554,432 words a storage binding holds on
         // every device (pxl-render floor.rs).
-        let up = 0.466_307_67;
+        let up = 0.5;
         let words = Grid::of([up * 4112.0 / 2338.0, up], 1.0).size();
         assert!(words <= 33_554_432, "{words} words");
     }

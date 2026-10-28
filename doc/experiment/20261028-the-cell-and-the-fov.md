@@ -66,3 +66,7 @@ one place. Today they sit apart:
 - the cell size is hidden in `SPLIT`'s 96;
 - the FOV is written twice (kernel `FOV` and pxl-spec `REFERENCE_FOV_DEG`);
 - a test writes the 12 px cell as a literal.
+
+**Then (10-28):** with the knobs gathered (`FOV_DEG` in pxl-spec
+space/camera/grid.rs, `CELLS_A_RADIAN` in pxl-spec-core grid.rs), the user
+took C: 53.13°, the cell kept at 1/96 rad.

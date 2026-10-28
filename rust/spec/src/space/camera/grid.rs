@@ -11,8 +11,10 @@ use crate::space::coord::zoom::{units, Zoom};
 // ---- the view's knobs, beside pxl-spec-core grid.rs's ----
 
 /// The vertical field of view, in degrees: the view's (pxl-kernel
-/// domain/view/frame/pose.rs `ray_of`).
-pub const FOV_DEG: f64 = 50.0;
+/// domain/view/frame/pose.rs `ray_of`). The angle whose half's tangent is
+/// 1/2, so the view's height spans a unit at unit distance
+/// (doc/experiment/20261028-the-cell-and-the-fov.md).
+pub const FOV_DEG: f64 = 53.130_102_354_155_99;
 
 /// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
 /// and where more pixels stop being seen. The CSS reference pixel subtends
@@ -78,3 +80,7 @@ impl Tau {
         pxl_spec_core::grid::cell_at((r2 * (self.0 * self.0)) as f32)
     }
 }
+
+#[cfg(test)]
+#[path = "grid.test.rs"]
+mod test;
