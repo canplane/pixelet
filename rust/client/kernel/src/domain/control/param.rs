@@ -21,6 +21,11 @@ pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
 /// over, a side `s` from 48·s to 96·s (pxl-spec space/camera/grid.rs
 /// `split_distance`).
 pub const DOLLY_END_CELLS: f64 = 64.0;
+const _: () = assert!(
+    DOLLY_END_CELLS >= pxl_spec::space::camera::grid::CELLS_A_RADIAN / 2.0
+        && DOLLY_END_CELLS < pxl_spec::space::camera::grid::CELLS_A_RADIAN,
+    "a dolly's limit lies in the band its end cell is drawn over"
+);
 /// The orbit's nearest, in units from the focus, about 3.8 m at Seoul's
 /// latitude: `DOLLY_END_CELLS` of the 2^-5 cell the grid asks there.
 pub const MIN_DIST: f64 = 2.0;
