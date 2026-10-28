@@ -49,4 +49,20 @@ impl World<'_> {
                 })
             })
     }
+
+    /// The ground's own top in the column `c` of `cell`, what is placed or
+    /// carved aside: the cell over its top cell (pxl-spec-core
+    /// `ground::Cell::top`), as the GPU reads it (`window::ground`); none
+    /// where it has no ground or the windows do not hold it.
+    pub(super) fn ground_top(&self, cell: Zoom, c: [i32; 2]) -> Option<i32> {
+        let side = units(cell);
+        let middle = c.map(|v| (f64::from(v) + 0.5) * side);
+        self.read(middle, middle, cell);
+        let line = self.terrain.cursor((cell, c), cell);
+        self.terrain
+            .column(&line, Found::NONE, (cell, c))
+            .exact()
+            .filter(|col| col.grounded())
+            .map(|col| col.top)
+    }
 }

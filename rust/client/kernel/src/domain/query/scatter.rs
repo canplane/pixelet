@@ -3,10 +3,10 @@
 //! How the ground grows decor on its own: never stored, a pure function of
 //! each decor's seed (the catalog's, spec/spec/asset/decor.json) and the
 //! world as its one query answers it, so a cell grows the same wherever it
-//! is read and whichever layer holds what it stands on. It reads no tile:
-//! where it stands is its column's footing, the world's ray down it
-//! (`World::footing`), and which way it faces and whether it grows the
-//! world's cells about it (pxl-spec-core `scatter::grown`).
+//! is read. It stands on the ground's own top, the world's ray down its
+//! column from over it (`World::ground_top`, `World::footing_over`), and
+//! which way it faces and whether it grows are the world's cells about it
+//! (pxl-spec-core `scatter::grown`).
 
 use pxl_spec::asset::cube::sentinel;
 use pxl_spec::asset::decor::Decor;
@@ -40,7 +40,7 @@ impl<'a, 'w> Asked<'a, 'w> {
 }
 
 /// The world's one query on the CPU, each ask answered with what its tiles
-/// lacked: a column's footing with its line (`World::footing`), each cell
+/// lacked: a column's footing with its line (`World::footing_over`), each cell
 /// about it asked off that line (`World::asset_about`).
 impl Grounds for Asked<'_, '_> {
     type Footing = Footing<At>;
@@ -49,10 +49,14 @@ impl Grounds for Asked<'_, '_> {
         &pxl_spec_core::decor::DECORS
     }
 
+    fn ground(&mut self, cell: Zoom, g: [i32; 2]) -> Option<i32> {
+        self.world.ground_top(cell, g)
+    }
+
     /// None where the world lacked a tile on the way: decor grows on what
     /// is held as its tiles say.
-    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Footing<At>, (i32, f32), bool) {
-        let (answer, f) = self.world.footing(cell, g);
+    fn footing(&mut self, cell: Zoom, g: [i32; 2], over: i32) -> (Footing<At>, (i32, f32), bool) {
+        let (answer, f) = self.world.footing_over(cell, g, over);
         match answer {
             crate::domain::layer::Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),

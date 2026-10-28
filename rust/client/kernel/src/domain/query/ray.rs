@@ -284,11 +284,33 @@ impl<'a> World<'a> {
         cell: Zoom,
         g: [i32; 2],
     ) -> (Answer<Option<(i32, f32)>>, Footing<At>) {
+        self.footed(cell, g, |w| pxl_spec_core::support::footing(w, cell, g))
+    }
+
+    /// `footing` from the column's cell `over` down (pxl-spec-core
+    /// `support::footing_over`).
+    pub(super) fn footing_over(
+        &self,
+        cell: Zoom,
+        g: [i32; 2],
+        over: i32,
+    ) -> (Answer<Option<(i32, f32)>>, Footing<At>) {
+        self.footed(cell, g, |w| {
+            pxl_spec_core::support::footing_over(w, cell, g, over)
+        })
+    }
+
+    fn footed(
+        &self,
+        cell: Zoom,
+        g: [i32; 2],
+        walk: impl FnOnce(&mut Walker<'_, 'a>) -> Footing<At>,
+    ) -> (Answer<Option<(i32, f32)>>, Footing<At>) {
         let mut walker = self.walker();
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
-        let f = pxl_spec_core::support::footing(&mut walker, cell, g);
+        let f = walk(&mut walker);
         let met = (f.ends == Ends::Stop).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
