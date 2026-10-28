@@ -26,7 +26,7 @@ fn tone(input: vec3f) -> vec3f {
 }
 
 fn vignette(frag: vec2f) -> f32 {
-  return vignette_of(frag, frame_viewport(), frame_vignette());
+  return vignette_of(frag, frame_screen(), frame_vignette());
 }
 
 fn dither(q: vec2f) -> f32 {

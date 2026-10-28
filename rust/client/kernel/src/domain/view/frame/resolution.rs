@@ -2,10 +2,10 @@
 
 //! Device pixels per CSS pixel a surface is drawn at: the display's, and the
 //! world's as the `resolution` setting says. The world's rays are cast at the
-//! display's pixels times `scale` each way, and the page shows the buffer in
-//! the layout box whatever its size (pxl-render gpu/surface.rs), so the frame
-//! is upscaled within itself: render resolution apart from display resolution
-//! where a screen outgrows its GPU (Unreal's screen percentage). `fixed` draws
+//! display's pixels times `scale` each way, and the renderer's finish brings
+//! them up to the canvas's, the display's (pxl-render gpu/finish.rs): render
+//! resolution apart from display resolution where a screen outgrows its GPU
+//! (Unreal's screen percentage). `fixed` draws
 //! whole, `low` a device pixel a CSS pixel, and `auto` one of `SCALE_STEPS`
 //! steps between whole and `SCALE_MIN`, each a like share of the last, so
 //! every move lays the pixels on one of a few grids.
@@ -226,7 +226,7 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
         k.restart();
     } else if started {
         k.restart();
-    } else if pace.moving && pace.paced_ms > 0.0 && s.buffer_px() == (s.width, s.height) {
+    } else if pace.moving && pace.paced_ms > 0.0 && s.render_px() == (s.width, s.height) {
         let drawn = f64::from(s.width) * f64::from(s.height);
         let timed = pxl_render::gpu::api::device().is_some_and(|d| d.timestamps);
         let spent = if timed {

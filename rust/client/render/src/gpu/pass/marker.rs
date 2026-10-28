@@ -145,7 +145,7 @@ struct Set {
 pub struct MarkerPass {
     built: Built,
     region_built: Built,
-    /// The regions' numbers and their depth, the world's size.
+    /// The regions' numbers and their depth, the canvas's size.
     numbers: u32,
     numbers_view: u32,
     regions: u32,
@@ -315,7 +315,7 @@ impl MarkerPass {
         flush.whole || drawn
     }
 
-    /// The regions' depth at the world's size, and each set's groups and
+    /// The regions' depth at the canvas's size, and each set's groups and
     /// uniform, made here so drawing makes nothing that outlives its frame.
     pub fn prepare(
         &mut self,

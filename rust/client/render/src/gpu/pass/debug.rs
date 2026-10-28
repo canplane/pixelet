@@ -12,8 +12,8 @@ use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
 
-/// Their faces go into the world's depth, cleared once the world is done
-/// with it, and their lines are drawn against those faces alone, so a gizmo
+/// Their faces go into the canvas's depth, cleared once what is drawn over
+/// the world is done with it, and their lines are drawn against those faces alone, so a gizmo
 /// hides gizmos and nothing of the world hides one. Each set takes its own
 /// translation, a draw's uniform a set.
 pub struct DebugPass {

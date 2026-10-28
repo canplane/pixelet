@@ -77,7 +77,8 @@ pub const PIPELINE_SCREEN_PREPASS: u32 = 33;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
 pub const PIPELINE_RASTER: u32 = 34;
-/// The world's color onto the canvas, encoded once (gpu/finish.rs).
+/// The world's color onto the canvas, encoded once, and its depth carried to
+/// the canvas's size (gpu/finish.rs).
 pub const PIPELINE_SCREEN_FINISH: u32 = 35;
 pub const PIPELINES: u32 = 36;
 
@@ -577,10 +578,16 @@ const fn plan_of(id: u32) -> Plan {
             &[&SKY_GROUP],
         ),
         PIPELINE_MIP => plan(screen(SHADER_MIP), &[], &[&SKIN]),
+        // The world's depth carried to the canvas's size, which what is drawn
+        // over the world is tested against.
         PIPELINE_SCREEN_FINISH => plan(
-            screen(SHADER_SCREEN_FINISH),
+            Head {
+                depth_write: true,
+                depth_compare: ALWAYS,
+                ..screen(SHADER_SCREEN_FINISH)
+            },
             &[],
-            &[&[[0, UNIFORM], [1, TEXTURE]]],
+            &[&[[0, UNIFORM], [1, TEXTURE], [2, DEPTH]]],
         ),
         PIPELINE_IMPOSTOR => plan(
             Head {

@@ -1,7 +1,8 @@
 // pxl-render/gpu/surface.rs
 
-//! The canvases the kernel draws into. The page scales whatever buffer exists
-//! into the layout box, so a stale or smaller buffer still shows whole.
+//! The canvases the kernel draws into, each at its display's device pixels,
+//! the world inside it at its own (`render_px`). The page scales whatever
+//! buffer exists into the layout box, so a stale one still shows whole.
 
 use xpute_guest::abi::handle::{handle_slot, Table as Handles};
 use xpute_guest::global::Global;
@@ -30,12 +31,14 @@ pub struct Surface {
     pub dpr: f64,
     /// The device pixels per CSS pixel the kernel has it drawn at (pxl-kernel
     /// domain/view/frame/resolution.rs): the display's, or under load a share of
-    /// them, the page scaling the buffer up.
+    /// them, the finish bringing them up to the canvas's (`render_px`).
     pub ratio: f64,
     pub configured: bool,
     pub width: u32,
     pub height: u32,
-    pub wanted: (u32, u32),
+    /// The world's size and the canvas's last asked, which hold
+    /// `SETTLE_TURNS` before the targets are made at them.
+    pub wanted: ((u32, u32), (u32, u32)),
     pub waited: u32,
     /// The frame's depth, the world's and over it what moves on its own
     /// (gpu/renderer.rs, stage 2).
@@ -45,6 +48,12 @@ pub struct Surface {
     /// which the finish encodes onto the canvas.
     pub color: u32,
     pub color_view: u32,
+    /// The canvas's size, its device pixels (`screen_px`), and the depth
+    /// at it the finish carries the world's to (gpu/finish.rs), which what
+    /// is drawn over the world is tested against.
+    pub screen: (u32, u32),
+    pub screen_depth: u32,
+    pub screen_depth_view: u32,
     /// The eye's rays as the cast leaves them, a drawn pixel each, made with
     /// the depth: `ray::WORDS` layers of `r32uint`, a word of the ray's a
     /// layer (pxl-spec-core `ray`).
@@ -54,18 +63,29 @@ pub struct Surface {
 
 impl Surface {
     /// What it holds on the GPU, every one made again with its size.
-    pub fn targets(&self) -> [u32; 6] {
+    pub fn targets(&self) -> [u32; 8] {
         [
             self.depth_view,
             self.depth,
             self.color_view,
             self.color,
+            self.screen_depth_view,
+            self.screen_depth,
             self.rays_view,
             self.rays,
         ]
     }
 
-    pub fn buffer_px(&self) -> (u32, u32) {
+    /// The canvas's device pixels: the display's, whatever the world is drawn
+    /// at.
+    pub fn screen_px(&self) -> (u32, u32) {
+        (self.px_w.max(1), self.px_h.max(1))
+    }
+
+    /// The world's pixels: the canvas's at the kernel's share of them
+    /// (`ratio` over the display's), which the finish brings up to the
+    /// canvas.
+    pub fn render_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
         let k = self.ratio / dpr;

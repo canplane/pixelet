@@ -105,6 +105,9 @@ uniform! {
         /// Whether the camera gizmo is drawn, its tint on the rays' cells
         /// with it (screen_lit.wgsl `cell_share`).
         GIZMO: F32 = 51,
+        /// The canvas's device pixels, where `VIEWPORT` is the world's: what
+        /// is drawn over the world, after the finish, is laid out in them.
+        SCREEN: Vec2 = 52,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);

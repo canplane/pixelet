@@ -27,8 +27,8 @@ use crate::frame::draw::{
 use crate::frame::shader::record::PIPELINE_SKY;
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, LIGHT_VIEW_PROJ, LOW_SPEC, MAP,
-    RIM_INTENSITY, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ,
-    VIGNETTE,
+    RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT,
+    VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -560,7 +560,15 @@ impl Renderer {
     }
 
     /// `reach` how far the eye draws, in units; none without an eye.
-    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: f32) {
+    fn lay_out(
+        &mut self,
+        g: &Gpu,
+        width: u32,
+        height: u32,
+        screen: (u32, u32),
+        env: &[f32],
+        reach: f32,
+    ) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
         proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
@@ -604,6 +612,8 @@ impl Renderer {
         u[CORNER_AO] = s[STAGE_AT::CORNER_AO] as f32;
         u[VIEWPORT] = width as f32;
         u[VIEWPORT + 1] = height as f32;
+        u[SCREEN] = screen.0 as f32;
+        u[SCREEN + 1] = screen.1 as f32;
         u[VIGNETTE] = 1.0;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
@@ -749,7 +759,14 @@ impl Renderer {
         let reach = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
-        self.lay_out(g, world.width, world.height, input.environment, reach);
+        self.lay_out(
+            g,
+            world.width,
+            world.height,
+            world.screen,
+            input.environment,
+            reach,
+        );
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
         if let Some(c) = cast.as_mut() {
@@ -813,8 +830,8 @@ impl Renderer {
         self.puck.prepare(g, &draws, uniforms, lists_moved, b);
         self.marker.prepare(
             g,
-            world.depth_view,
-            (world.width, world.height),
+            world.screen_depth_view,
+            world.screen,
             &draws,
             uniforms,
             b,
@@ -991,19 +1008,21 @@ impl Renderer {
         self.decor
             .draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
+        // At the canvas's size, as what is drawn over it: counted with the
+        // markers', not the world's pixels.
         self.finish.draw(
             g,
             encoder,
             self.frame_buffer,
-            world.color_view,
+            world,
             canvas_view,
-            &mut stamps[SPAN_WORLD],
+            &mut stamps[SPAN_MARKER],
         );
         self.marker.draw(
             g,
             encoder,
             canvas_view,
-            world.depth_view,
+            world.screen_depth_view,
             &draws,
             b,
             &mut stamps[SPAN_MARKER],
@@ -1012,7 +1031,7 @@ impl Renderer {
             g,
             encoder,
             canvas_view,
-            world.depth_view,
+            world.screen_depth_view,
             &draws,
             b,
             &mut stamps[SPAN_DEBUG],
@@ -1182,8 +1201,12 @@ impl Renderer {
             frame: *DRAWN_FRAMES.get(|| 0.0),
             uploads: b.count as f64,
             upload_bytes: b.bytes as f64,
-            // The depth targets at the world's size: its own, one f32 a pixel, AO's and the markers' regions'.
-            depth_bytes: px * 4.0 + self.ao.depth_bytes() + self.marker.depth_bytes(),
+            // The depth targets: the world's own and the canvas's, one f32 a
+            // pixel, AO's and the markers' regions'.
+            depth_bytes: px * 4.0
+                + f64::from(world.screen.0) * f64::from(world.screen.1) * 4.0
+                + self.ao.depth_bytes()
+                + self.marker.depth_bytes(),
             pack_bytes: self.pack.bytes as f64,
             census,
             gpu_spans,
@@ -1195,20 +1218,20 @@ impl Renderer {
 /// A new size is applied once it has held SETTLE_TURNS turns; until then the
 /// page scales the old buffer.
 fn targets(g: &Gpu, s: &mut Surface) {
-    let (width, height) = s.buffer_px();
+    let ((width, height), screen) = (s.render_px(), s.screen_px());
     if !s.configured {
         g.configure(s.handle);
         s.configured = true;
         s.depth = 0;
     }
     let made = s.depth != 0;
-    if made && s.width == width && s.height == height {
+    if made && s.width == width && s.height == height && s.screen == screen {
         s.waited = 0;
         return;
     }
     if made {
-        if s.wanted != (width, height) {
-            s.wanted = (width, height);
+        if s.wanted != ((width, height), screen) {
+            s.wanted = ((width, height), screen);
             s.waited = 0;
         }
         s.waited += 1;
@@ -1218,7 +1241,7 @@ fn targets(g: &Gpu, s: &mut Surface) {
         }
     }
     s.waited = 0;
-    g.resize(s.handle, width, height);
+    g.resize(s.handle, screen.0, screen.1);
     for id in s.targets() {
         release(id);
     }
@@ -1227,6 +1250,8 @@ fn targets(g: &Gpu, s: &mut Surface) {
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
     s.color = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
     s.color_view = g.view(s.color, false, 0, 1, 0, 1);
+    s.screen_depth = g.texture(screen.0, screen.1, 1, Format::depth32float, 1, usage);
+    s.screen_depth_view = g.view(s.screen_depth, false, 0, 1, 0, 1);
     // The world's alone holds the cast's rays.
     (s.rays, s.rays_view) = (0, 0);
     if s.role == surface_role::WORLD {
@@ -1237,6 +1262,7 @@ fn targets(g: &Gpu, s: &mut Surface) {
     }
     s.width = width;
     s.height = height;
+    s.screen = screen;
 }
 
 /// A frame's cast handed and never drawn: the edits its decor named, held

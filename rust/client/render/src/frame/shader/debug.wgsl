@@ -29,7 +29,7 @@ const SIDES = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
 fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color: vec4f, @location(2) b: vec3f) -> VertexOut {
   let ca = frame_view_proj() * vec4f(a + draw_translation(), 1.0);
   let cb = frame_view_proj() * vec4f(b + draw_translation(), 1.0);
-  let viewport = frame_viewport();
+  let viewport = frame_screen();
   let along = (cb.xy / max(cb.w, 1e-6) - ca.xy / max(ca.w, 1e-6)) * viewport;
   let dir = select(vec2f(1.0, 0.0), normalize(along), dot(along, along) > 1e-12);
   // Half the width each side, in clip units at w = 1.
