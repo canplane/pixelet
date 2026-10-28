@@ -123,7 +123,9 @@ pub fn inputs(root: &Path) -> Result<Vec<String>, String> {
         let entries = std::fs::read_dir(&path).map_err(|e| format!("{at}: {e}"))?;
         for entry in entries {
             let name = entry.map_err(|e| format!("{at}: {e}"))?.file_name();
-            let name = name.to_str().ok_or_else(|| format!("{at}: a name not UTF-8"))?;
+            let name = name
+                .to_str()
+                .ok_or_else(|| format!("{at}: a name not UTF-8"))?;
             // A build's own output and a tool's hidden state are no source.
             if name == "target" || name.starts_with('.') {
                 continue;
@@ -145,8 +147,7 @@ pub fn inputs(root: &Path) -> Result<Vec<String>, String> {
 fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     if f.ends_with(".rs") {
-        let stream: proc_macro2::TokenStream =
-            text.parse().map_err(|e| format!("{f}: {e:?}"))?;
+        let stream: proc_macro2::TokenStream = text.parse().map_err(|e| format!("{f}: {e:?}"))?;
         tokens(stream, &mut out);
     } else if f.ends_with(".toml") {
         let mut value: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
@@ -189,7 +190,8 @@ fn tokens(stream: proc_macro2::TokenStream, out: &mut Vec<u8>) {
     while k < trees.len() {
         if let TokenTree::Punct(p) = &trees[k] {
             if p.as_char() == '#' {
-                let bang = matches!(trees.get(k + 1), Some(TokenTree::Punct(q)) if q.as_char() == '!');
+                let bang =
+                    matches!(trees.get(k + 1), Some(TokenTree::Punct(q)) if q.as_char() == '!');
                 let at = k + 1 + usize::from(bang);
                 if let Some(TokenTree::Group(g)) = trees.get(at) {
                     let doc = g.delimiter() == Delimiter::Bracket
@@ -205,7 +207,11 @@ fn tokens(stream: proc_macro2::TokenStream, out: &mut Vec<u8>) {
             TokenTree::Ident(i) => out.extend(format!("i{i} ").into_bytes()),
             TokenTree::Literal(l) => out.extend(format!("l{l} ").into_bytes()),
             TokenTree::Punct(p) => {
-                let joint = if p.spacing() == Spacing::Joint { 'j' } else { 'a' };
+                let joint = if p.spacing() == Spacing::Joint {
+                    'j'
+                } else {
+                    'a'
+                };
                 out.extend(format!("p{}{joint} ", p.as_char()).into_bytes());
             }
             TokenTree::Group(g) => {

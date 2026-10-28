@@ -206,7 +206,11 @@ mod tests {
             }
             In {
                 kind: Kind::Cell,
-                asset: if node[2] < height(node[0]) { STONE } else { AIR },
+                asset: if node[2] < height(node[0]) {
+                    STONE
+                } else {
+                    AIR
+                },
             }
         }
     }

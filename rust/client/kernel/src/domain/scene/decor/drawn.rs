@@ -31,15 +31,13 @@ use pxl_spec_core::window::FIRST_CELL;
 /// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it. No fade: the edge is per instance,
 /// so it staggers.
 pub fn decor_model_angle() -> f64 {
-    crate::domain::scene::decor::param::DECOR_MODEL_CELLS
-        * pxl_spec::space::camera::grid::CELL
+    crate::domain::scene::decor::param::DECOR_MODEL_CELLS * pxl_spec::space::camera::grid::CELL
 }
 
 /// The sprite's edge, `DECOR_SPRITE_CELLS` of a camera cell, as an angle as
 /// the model's is (`decor_model_angle`).
 pub fn decor_sprite_angle() -> f64 {
-    crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
-        * pxl_spec::space::camera::grid::CELL
+    crate::domain::scene::decor::param::DECOR_SPRITE_CELLS * pxl_spec::space::camera::grid::CELL
 }
 
 /// How far a thing `extent_u` wide is a sprite's worth as a window holds it:

@@ -136,7 +136,13 @@ fn walk(l: &impl Lanes, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h:
                 2 * at[1] + (k >> 1 & 1),
                 2 * at[2] + (k >> 2),
             ];
-            walk(l, overwrite::child(l, held, zoom + 1, c), (zoom + 1, cell), c, h);
+            walk(
+                l,
+                overwrite::child(l, held, zoom + 1, c),
+                (zoom + 1, cell),
+                c,
+                h,
+            );
         }
     }
 }

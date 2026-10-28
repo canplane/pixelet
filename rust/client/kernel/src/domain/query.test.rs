@@ -151,7 +151,10 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     let access = World::new(&residency, &empty);
     assert_eq!(
         access
-            .surface_of(GROUND.cell(), GROUND.cell_of(LEAF_ZOOM, &point(at[0], at[1])).node().1)
+            .surface_of(
+                GROUND.cell(),
+                GROUND.cell_of(LEAF_ZOOM, &point(at[0], at[1])).node().1
+            )
             .value()
             .unwrap(),
         None
@@ -251,7 +254,13 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
         &[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())],
     );
     let top = World::new(&residency, &Store::default())
-        .surface_of(GROUND.cell(), GROUND.cell_of(LEAF_ZOOM, &point(-seam + 20.5, 100.5)).node().1)
+        .surface_of(
+            GROUND.cell(),
+            GROUND
+                .cell_of(LEAF_ZOOM, &point(-seam + 20.5, 100.5))
+                .node()
+                .1,
+        )
         .value()
         .flatten()
         .unwrap()

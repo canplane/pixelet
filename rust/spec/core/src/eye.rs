@@ -64,12 +64,7 @@ const _: () = assert!(
 /// and `up`, the screen's half-angles' tangents `tan`: before it, and past
 /// none of its sides by more than its radius, each side's distance to a
 /// point its offset over the side's slope (`√(1 + tan²)`).
-pub fn sees(
-    [forward, right, up]: [[f32; 3]; 3],
-    tan: [f32; 2],
-    v: [f32; 3],
-    radius: f32,
-) -> bool {
+pub fn sees([forward, right, up]: [[f32; 3]; 3], tan: [f32; 2], v: [f32; 3], radius: f32) -> bool {
     let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let f = dot(v, forward);
     let side = |o: f32, t: f32| libm::fabsf(o) - t * f <= radius * libm::sqrtf(1.0 + t * t);

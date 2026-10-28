@@ -116,8 +116,9 @@ fn held(
                 let Some(tile) = set.read::<TerrainTile>(p)? else {
                     continue;
                 };
-                terrain::fill_fit(p, &tile, |_, _| {})
-                    .map_err(|(at, why)| format!("{}: {}", p.name(), crate::terrain::unfit(at, why)))?
+                terrain::fill_fit(p, &tile, |_, _| {}).map_err(|(at, why)| {
+                    format!("{}: {}", p.name(), crate::terrain::unfit(at, why))
+                })?
             }
         };
         if fit == Fit::default() {

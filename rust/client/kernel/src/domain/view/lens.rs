@@ -63,11 +63,7 @@ impl Lens {
 /// the camera grid the cast lays over the screen off them, once. A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
-pub fn gpu_cast(
-    o: &Observation,
-    steps: bool,
-    words: &mut [u32; eye::WORDS],
-) -> Option<()> {
+pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
     let lens = Lens::of(o)?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();

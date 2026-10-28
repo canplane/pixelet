@@ -21,7 +21,6 @@
 pub mod tree;
 
 use crate::cube::{sentinel, Ground};
-use crate::{cells_of_m, Zoom, LEAF_CELL};
 use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 use crate::param::way::BEAM_PILLAR_INTERVAL_M;
 use crate::param::way::DECK_THICKNESS_M;
@@ -29,6 +28,7 @@ use crate::param::way::LINE_PAST;
 use crate::param::way::PIER_MIN_RISE_M;
 use crate::param::way::STACKED_DECK_HEADROOM_M;
 use crate::param::way::WIDE_BEAM_PIER_INTERVAL_M;
+use crate::{cells_of_m, Zoom, LEAF_CELL};
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
@@ -764,7 +764,11 @@ fn at(k: &impl Kept, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
 /// follow (pxl-shader `way_tree_cs`, whose leaves read it).
 fn near(k: u32) -> [i32; 3] {
     // Its axis, y, x then z, and its side.
-    let (i, s) = if k < 4 { (k.wrapping_sub(1), -1) } else { (6 - k, 1) };
+    let (i, s) = if k < 4 {
+        (k.wrapping_sub(1), -1)
+    } else {
+        (6 - k, 1)
+    };
     let on = |axis: u32| if k != 0 && i == axis { s } else { 0 };
     [on(1), on(0), on(2)]
 }
@@ -977,7 +981,11 @@ mod tests {
                     col.1[j] = ([lo, lo + 1 + next(30) as i32], v);
                 }
                 col.2 = n;
-                col.0 = if k == 0 && next(8) == 0 { i32::MIN } else { face };
+                col.0 = if k == 0 && next(8) == 0 {
+                    i32::MIN
+                } else {
+                    face
+                };
             }
             let k = Five(five);
             let mut hull = crate::ground::EMPTY;
@@ -986,12 +994,21 @@ mod tests {
                 if v == NOTHING {
                     continue;
                 }
-                let end = if v == AIR { ((z + 1) * s).min(top) } else { (z + 1) * s };
+                let end = if v == AIR {
+                    ((z + 1) * s).min(top)
+                } else {
+                    (z + 1) * s
+                };
                 if z * s < end {
                     hull = [hull[0].min(z * s), hull[1].max(end)];
                 }
             }
-            assert_eq!(bound(&k, [0, 0], cell, top), hull, "{:?} at {cell}, top {top}", k.0);
+            assert_eq!(
+                bound(&k, [0, 0], cell, top),
+                hull,
+                "{:?} at {cell}, top {top}",
+                k.0
+            );
         }
     }
 }

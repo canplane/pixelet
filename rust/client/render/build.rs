@@ -4,17 +4,17 @@
 
 use std::path::Path;
 
+#[path = "src/frame/shader/debug_look.spec.rs"]
+mod debug_look;
+#[path = "src/param.rs"]
+#[allow(dead_code)]
+mod param;
 #[path = "src/frame/shader/part.rs"]
 #[allow(dead_code)]
 mod part;
 #[path = "src/frame/shader/word.rs"]
 #[allow(dead_code)]
 mod word;
-#[path = "src/frame/shader/debug_look.spec.rs"]
-mod debug_look;
-#[path = "src/param.rs"]
-#[allow(dead_code)]
-mod param;
 
 fn main() {
     let dir = Path::new("src/frame/shader");

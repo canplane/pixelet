@@ -103,7 +103,10 @@ pub const fn root_word(family: u32, z0: i32) -> u32 {
 
 /// A root word's family's first slot and its first slot's Z.
 pub const fn root_slot(w: u32) -> (u32, i32) {
-    (overwrite::FAMILY * (w & (POOL_FAMILIES - 1)), w as i32 >> ROOT_ID_BITS)
+    (
+        overwrite::FAMILY * (w & (POOL_FAMILIES - 1)),
+        w as i32 >> ROOT_ID_BITS,
+    )
 }
 
 /// A root word's family id bits, `POOL_FAMILIES`'s.
@@ -423,7 +426,10 @@ pub fn lay(pool: &mut impl Pool, records: &[u32]) {
         let mut k = 0;
         while k < overwrite::FAMILY {
             pool.set_heap(first + k, crate::at(records, at + 1 + k));
-            pool.set_data(first + k, crate::at(records, at + 1 + overwrite::FAMILY + k));
+            pool.set_data(
+                first + k,
+                crate::at(records, at + 1 + overwrite::FAMILY + k),
+            );
             k += 1;
         }
         r += 1;

@@ -519,11 +519,7 @@ fn cells_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
         return voxel(low(word));
     }
     let shift = crate::answer::KEPT_BITS * (d + 1);
-    let eighth = if shift <= FULL_BITS {
-        FULL >> shift
-    } else {
-        0
-    };
+    let eighth = if shift <= FULL_BITS { FULL >> shift } else { 0 };
     high(word) + 2 > eighth
 }
 

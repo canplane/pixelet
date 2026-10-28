@@ -84,8 +84,7 @@ pub(super) fn grown_at(
     boxed: bool,
 ) -> Option<(Instance, bool)> {
     let candidate = scatter_at(decor.row, cell)?;
-    let (g, stood, grows) =
-        core_scatter::grown(asked, decor.row, GROUND.cell(), &candidate, boxed);
+    let (g, stood, grows) = core_scatter::grown(asked, decor.row, GROUND.cell(), &candidate, boxed);
     stood.then(|| (instance(decor, &g), grows))
 }
 

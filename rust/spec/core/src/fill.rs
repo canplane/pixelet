@@ -338,10 +338,7 @@ pub fn keep(sq: &impl window::Square, scratch: &mut [u32], mine: u32, i: u32) ->
     if i >= SPANS_COLUMNS {
         return 0;
     }
-    let c = [
-        (i % SPANS_ACROSS) as i32 - 1,
-        (i / SPANS_ACROSS) as i32 - 1,
-    ];
+    let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
     let edge = |v: i32| v == -1 || v == SQUARE as i32;
     let (s, fits) = if edge(c[0]) && edge(c[1]) {
         (way::Spans::NONE, true)
@@ -569,18 +566,15 @@ mod tests {
             // A patch of columns with ways, the rest none; every column's face.
             let patch = [next(48) as i32, next(48) as i32];
             for i in 0..SPANS_COLUMNS {
-                let c = [
-                    (i % SPANS_ACROSS) as i32 - 1,
-                    (i / SPANS_ACROSS) as i32 - 1,
-                ];
+                let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
                 let top = tops[i as usize];
                 let mut s = way::Spans::NONE;
                 s.face = ground::face_cell(
                     cell,
                     ground::face_height(cell, ground::cells(cell, top as f32)),
                 );
-                let inside = (0..16).contains(&(c[0] - patch[0]))
-                    && (0..16).contains(&(c[1] - patch[1]));
+                let inside =
+                    (0..16).contains(&(c[0] - patch[0])) && (0..16).contains(&(c[1] - patch[1]));
                 if inside {
                     s.n = next(4);
                     for j in 0..s.n as usize {
@@ -597,7 +591,11 @@ mod tests {
                 put(&mut scratch, at, head_word(&s, true));
                 for j in 0..s.n {
                     let w = at + 1 + 2 * j;
-                    put(&mut scratch, w, crate::answer::bound_word(s.run[j as usize]) as u32);
+                    put(
+                        &mut scratch,
+                        w,
+                        crate::answer::bound_word(s.run[j as usize]) as u32,
+                    );
                     put(&mut scratch, w + 1, s.value[j as usize]);
                 }
             }
@@ -626,7 +624,10 @@ mod tests {
                         way::NOTHING => ground::VOID,
                         v => v,
                     };
-                    assert_eq!(got, want, "round {round}, cell {cell}, column {x}, {y}, z {z}");
+                    assert_eq!(
+                        got, want,
+                        "round {round}, cell {cell}, column {x}, {y}, z {z}"
+                    );
                 }
             }
         }

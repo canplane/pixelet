@@ -4,7 +4,6 @@
 //! it: each value one literal, a subject a module, its reason beside it.
 //! What follows from them is computed by name where it is used.
 
-
 pub mod division {
     use crate::space::coord::zoom::Zoom;
 

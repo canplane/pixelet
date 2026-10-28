@@ -255,7 +255,10 @@ impl Stage {
             // What the set will keep of its tiles, beside it until they are
             // all moved (`finish_commit`).
             if let Some(fits) = fits {
-                let text: String = fits.iter().map(|(p, fit)| format!("{} {fit}\n", p.name())).collect();
+                let text: String = fits
+                    .iter()
+                    .map(|(p, fit)| format!("{} {fit}\n", p.name()))
+                    .collect();
                 let path = self.next_fits();
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
                 crate::util::write_atomic(&path, text.as_bytes()).map_err(|e| io(&path, e))?;

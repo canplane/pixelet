@@ -12,7 +12,10 @@ fn a_patch_contest_is_each_candidate_standing() {
         for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, TOP_ZOOM + 1] {
             let side = 1i32 << (SQUARE_SHIFT + LEAF_ZOOM - zoom);
             for q in [[7, -3], [-12, 40]] {
-                let region = [[q[0] * side, q[1] * side], [(q[0] + 1) * side, (q[1] + 1) * side]];
+                let region = [
+                    [q[0] * side, q[1] * side],
+                    [(q[0] + 1) * side, (q[1] + 1) * side],
+                ];
                 let mut p = 0;
                 loop {
                     let (born, b, real) = patch_of(zoom, region, p);
@@ -42,5 +45,8 @@ fn a_patch_contest_is_each_candidate_standing() {
         }
     }
     assert!(compared > 1000, "only {compared} candidates compared");
-    assert!(lost > 0, "no candidate was beaten, so the contest was not tried");
+    assert!(
+        lost > 0,
+        "no candidate was beaten, so the contest was not tried"
+    );
 }
