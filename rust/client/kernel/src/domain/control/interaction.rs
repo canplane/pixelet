@@ -285,4 +285,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
             }
         }
     }
+    // What the tap wrote is under the pointer, which may not move again: the
+    // world is picked again there.
+    hover_at(ndc_x, ndc_y);
 }
