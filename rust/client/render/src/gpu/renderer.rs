@@ -316,10 +316,8 @@ pub fn pixels_ms(spans: &[f64]) -> f64 {
 
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, the screen's lens
 /// off the view's planes (pxl-spec `Frustum::lens`, as the cast's eye takes
-/// it): its right and up by their tangents, and its forward, taken in f64
-/// before they are narrowed, a direction unprojected in the shader holding
-/// only ~1e-3 rad, which the secant carries out to kilometres at the
-/// horizon. Zero without a screen.
+/// it): its right and up by their tangents, and its forward, each taken in
+/// f64 before it is narrowed. Zero without a screen.
 fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4) {
     let mut planes = Frustum::default();
     mat4::frustum_planes(&mut planes.planes, view_proj);
