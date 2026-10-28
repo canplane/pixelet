@@ -14,9 +14,10 @@
 // Its bits: a positive float's order is its bits'.
 @group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, 2>;
 
-// What the canvas writes of a linear color, in its levels.
+// What the canvas writes of a linear color, in its levels (finish.wgsl
+// `encoded`), where the vignette leaves it whole: the most it moves anywhere.
 fn levels(c: vec3f) -> vec3f {
-  return to_srgb(c) * 255.0;
+  return encoded(c, 1.0) * 255.0;
 }
 
 // How far the light's height moves over one texel of the transmittance
