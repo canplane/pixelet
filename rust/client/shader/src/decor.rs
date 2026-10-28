@@ -40,8 +40,13 @@ impl Grounds for Growing<'_> {
         self.rows
     }
 
-    fn footing(&mut self, cell: u32, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool) {
-        let f = support::footing(&mut self.world, cell, g);
+    fn ground(&mut self, cell: u32, g: [i32; 2]) -> Option<i32> {
+        let (c, f) = window::ground(&self.world, window::Found::NONE, cell, g);
+        (f.here() && c.grounded()).then_some(c.top)
+    }
+
+    fn footing(&mut self, cell: u32, g: [i32; 2], over: i32) -> (Self::Footing, (i32, f32), bool) {
+        let f = support::footing_over(&mut self.world, cell, g, over);
         let (top, met) = (f.top, f.ends == Ends::Stop);
         (f, top, met)
     }

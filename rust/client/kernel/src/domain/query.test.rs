@@ -720,3 +720,85 @@ fn a_device_gone_leaves_no_bound_over_the_squares_it_held() {
     lose();
     assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
 }
+
+/// A grown decor's footing is sought from over the ground's own top: where
+/// nothing is over the ground it is the world's from its top, under a cube
+/// put over the ground it stays as it was, and where the ground's top cell
+/// is carved it is met short of that cell, so the decor is taken away and
+/// never moved down (pxl-spec-core `scatter::grown`).
+#[test]
+fn a_footing_from_over_the_ground_meets_its_top_cell_whatever_is_over_it() {
+    use crate::domain::layer::object::store::AIR;
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let cell = GROUND.cell();
+    let g = GROUND.cell_of(LEAF_ZOOM, &point(x, y)).node().1;
+    let bare = Store::default();
+    let world = World::new(&residency, &bare);
+    let top = world.ground_top(cell, g).unwrap();
+    let over = world.footing_over(cell, g, top).0;
+    assert_eq!(world.footing(cell, g).0, over);
+    assert_eq!(
+        over.exact().flatten().map(|(floor, _)| floor),
+        Some(top - 1)
+    );
+
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
+    let world = World::new(&residency, &store);
+    assert_ne!(
+        world.footing(cell, g).0,
+        over,
+        "the world's from its top meets the cube"
+    );
+    assert_eq!(world.ground_top(cell, g), Some(top));
+    assert_eq!(world.footing_over(cell, g, top).0, over);
+
+    let mut store = Store::default();
+    write(&mut store, [x, y, 4.0], OBJECT_COARSEST, AIR);
+    let world = World::new(&residency, &store);
+    assert_eq!(world.ground_top(cell, g), Some(top));
+    let carved = world.footing_over(cell, g, top).0.exact().flatten();
+    assert!(
+        carved.is_some_and(|(floor, _)| floor < top - 1),
+        "{carved:?}"
+    );
+}
+
+/// What the ground grows stands where it grew whatever is put over it, and
+/// is taken away, never moved down, where the cell under it is carved.
+#[test]
+fn a_grown_decor_stays_under_what_is_put_over_it_and_goes_where_carved() {
+    use crate::domain::layer::object::store::AIR;
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let near = |store: &Store| {
+        let world = World::new(&residency, store);
+        let space = pxl_spec::space::coord::aabb::Aabb {
+            min: [x - 8.0, y - 8.0, world::REACH.min[2]],
+            max: [x + 8.0, y + 8.0, world::REACH.max[2]],
+        };
+        world.grown_over(&space)
+    };
+    let bare = near(&Store::default());
+    let tree = *bare.first().expect("a decor grows about the eye");
+    let [cx, cy, cz] = tree.grown_in().unwrap();
+    let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
+
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(&mut store, column(6), OBJECT_COARSEST, red);
+    assert_eq!(near(&store), bare, "a cube over it moves nothing");
+
+    let mut store = Store::default();
+    write(&mut store, column(-1), OBJECT_COARSEST, AIR);
+    let carved = near(&store);
+    assert!(!carved.contains(&tree), "the carve takes it away");
+    assert!(
+        !carved
+            .iter()
+            .any(|i| i.grown_in().is_some_and(|c| [c[0], c[1]] == [cx, cy])),
+        "and grows none lower in its column: {carved:?}"
+    );
+}

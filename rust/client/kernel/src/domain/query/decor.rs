@@ -259,7 +259,7 @@ impl Around {
 impl<'a> World<'a> {
     /// What the ground stands on the leaf `cell`, each decor's, handed to
     /// `each` until `each` says it has what it wants: each on its column's
-    /// footing (`World::footing`), with, where `boxed`, whether it grows
+    /// footing (`World::footing_over`), with, where `boxed`, whether it grows
     /// there as the frame drawing it draws it (`grown_at`), true where not.
     /// Nothing where the world does not hold the column.
     fn grown_in(
