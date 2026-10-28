@@ -18,12 +18,12 @@ pub(crate) type HeldTile = (
 
 /// What `hold` leaves held: the bricks' words up to their last that is
 /// not zero, the pool's families taken as records (pxl-spec-core
-/// `way::tree::lay`), the slots and the berths.
+/// `way::tree::lay`), the entries and the slots.
 struct Built {
     cells: Vec<u32>,
     records: Vec<u32>,
+    entries: Vec<Entry>,
     slots: Vec<Slot>,
-    berths: Vec<Berth>,
 }
 
 /// What windows are built over: a centre and the tiles held.
@@ -33,7 +33,7 @@ type Over = ([f64; 2], Vec<HeldTile>);
 /// built once, and each `hold` after takes a copy.
 static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
 
-const CELLS_WORDS: usize = (BRICKS * CELLS_LANE_BYTES / 4) as usize;
+const CELLS_WORDS: usize = (SLOTS * CELLS_LANE_BYTES / 4) as usize;
 const POOL_WORDS: usize = 16 * pxl_spec_core::way::tree::POOL_FAMILIES as usize;
 
 /// The pool's mirror holding `records`, a brick's most at a time.
@@ -53,7 +53,7 @@ fn mirrored(records: &[u32]) {
 }
 
 /// The eye's and the focus's windows about `centre`, in units, X then Y,
-/// each brick the tiles `held` cover present in its berth, the focus's
+/// each brick the tiles `held` cover present in its slot, the focus's
 /// windows the eye's finest two again: per tile, a cell's own look
 /// and its height, row by row from its first, and its lines; each brick's
 /// columns, its tops and its ways' spans as its fill keeps them
@@ -75,8 +75,8 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             let b = Built {
                 cells: upto(planes().cells),
                 records,
+                entries: windows().entries.to_vec(),
                 slots: windows().slots.to_vec(),
-                berths: windows().berths.to_vec(),
             };
             built.push(((centre, held.to_vec()), b));
             built.len() - 1
@@ -93,19 +93,19 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     });
     mirrored(&b.records);
     WINDOWS_STATE.set(fresh());
+    windows().entries.copy_from_slice(&b.entries);
     windows().slots.copy_from_slice(&b.slots);
-    windows().berths.copy_from_slice(&b.berths);
     fold(windows());
 }
 
 /// The brick at `cell` holding cell `g` absent, a fill on its way to it,
 /// and the windows folded without it, as a turn's step leaves them before
-/// it lands: its berth and that fill's ticket, which `on_landed` takes.
+/// it lands: its slot and that fill's ticket, which `on_landed` takes.
 pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
     let w = windows();
-    let b = berth_of(w, cell, window::brick_of(g).0).expect("held");
-    (w.berths[b as usize].present, w.berths[b as usize].ticket) = (false, 7);
-    for i in of_slot(b % SLOTS) {
+    let b = slot_of(w, cell, window::brick_of(g).0).expect("held");
+    (w.slots[b as usize].present, w.slots[b as usize].ticket) = (false, 7);
+    for i in of_entry(b % ENTRIES) {
         show(w, i);
     }
     fold(w);
@@ -113,9 +113,9 @@ pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
 }
 
 /// The device gone, as a turn's step finds it: every brick's cells given
-/// up (`berth`).
+/// up (`assign_slots`).
 pub(crate) fn lose() {
-    berth(windows(), true);
+    assign_slots(windows(), true);
 }
 
 /// `hold`'s windows, built: the families their trees took, as records.
@@ -136,19 +136,19 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             continue;
         }
         let first = window::origin(cell, cell_at(cell, centre));
-        w.slots[(BRICKS + win) as usize] = Slot {
+        w.entries[(SLOTS + win) as usize] = Entry {
             brick: first,
             present: 1,
             ticket: 0,
         };
-        for s in 0..SLOTS {
-            w.slots[(win * SLOTS + s) as usize].brick = wanted(cell, first, s);
+        for s in 0..ENTRIES {
+            w.entries[(win * ENTRIES + s) as usize].brick = wanted(cell, first, s);
         }
     }
-    berth(w, false);
-    for b in 0..BRICKS {
-        let Berth { cell, brick, .. } = w.berths[b as usize];
-        if w.berths[b as usize].is_free() {
+    assign_slots(w, false);
+    for b in 0..SLOTS {
+        let Slot { cell, brick, .. } = w.slots[b as usize];
+        if w.slots[b as usize].is_free() {
             continue;
         }
         let (t, place) = tile_of(cell, brick);
@@ -224,9 +224,9 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         next += taken;
         let at = (b * CELLS_LANE_BYTES / 4) as usize;
         planes().cells[at..at + window::BACK_WORDS as usize].copy_from_slice(&lane);
-        w.berths[b as usize].present = true;
+        w.slots[b as usize].present = true;
     }
-    for i in 0..BRICKS {
+    for i in 0..SLOTS {
         show(w, i);
     }
     // Every family taken, a record each: its id, its heap words, its data.
@@ -261,7 +261,7 @@ fn fill_columns(
 
 /// The eye's windows laid out about `eye` and the focus's about `focus`, in
 /// units, X then Y, as `step` lays a window that moved, no destination's;
-/// their bricks berthed (`berth`), what was held before kept.
+/// their bricks slotted (`assign_slots`), what was held before kept.
 fn lay(w: &mut Windows, eye: [f64; 2], focus: [f64; 2]) {
     for win in 0..WINDOWS {
         let (centre_of, cell) = layout(win);
@@ -271,29 +271,29 @@ fn lay(w: &mut Windows, eye: [f64; 2], focus: [f64; 2]) {
             Centre::Destination => continue,
         };
         let first = window::origin(cell, cell_at(cell, p));
-        w.slots[(BRICKS + win) as usize] = Slot {
+        w.entries[(SLOTS + win) as usize] = Entry {
             brick: first,
             present: 1,
             ticket: 0,
         };
-        for s in 0..SLOTS {
-            w.slots[(win * SLOTS + s) as usize].brick = wanted(cell, first, s);
+        for s in 0..ENTRIES {
+            w.entries[(win * ENTRIES + s) as usize].brick = wanted(cell, first, s);
         }
     }
-    berth(w, false);
+    assign_slots(w, false);
 }
 
 /// Every brick held present, as if each had landed, its cells as they
 /// came back, all zero unless a test held its own (`hold`): the windows
-/// fold over them wherever they are laid again (`berth`).
+/// fold over them wherever they are laid again (`assign_slots`).
 fn land_all(w: &mut Windows) {
     PLANES.get(|| Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
-    for b in w.berths.iter_mut().filter(|b| !b.is_free()) {
+    for b in w.slots.iter_mut().filter(|b| !b.is_free()) {
         b.present = true;
     }
-    for i in 0..BRICKS {
+    for i in 0..SLOTS {
         show(w, i);
     }
 }
@@ -303,14 +303,14 @@ fn leaf(c: [f64; 2]) -> [f64; 2] {
     c.map(|v| (v + 0.5) * units(LEAF_CELL))
 }
 
-/// The berths holding a brick at `cell`.
+/// The slots holding a brick at `cell`.
 fn held_at(w: &Windows, cell: Zoom) -> usize {
-    w.berths.iter().filter(|b| b.cell == cell).count()
+    w.slots.iter().filter(|b| b.cell == cell).count()
 }
 
-/// The brick window `win` wants in slot `s`.
+/// The brick window `win` wants in entry `s`.
 fn want(w: &Windows, win: u32, s: u32) -> [i32; 2] {
-    w.slots[(win * SLOTS + s) as usize].brick
+    w.entries[(win * ENTRIES + s) as usize].brick
 }
 
 const CENTRE: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
@@ -322,29 +322,29 @@ fn shared_brick_held_once() {
     let w = windows();
     lay(w, leaf(CENTRE), leaf(CENTRE));
     assert_eq!(
-        w.berths.iter().filter(|b| !b.is_free()).count(),
-        (EYE_WINDOWS * SLOTS) as usize,
-        "the focus's windows take no berth"
+        w.slots.iter().filter(|b| !b.is_free()).count(),
+        (EYE_WINDOWS * ENTRIES) as usize,
+        "the focus's windows take no slot"
     );
     for focus in EYE_WINDOWS..EYE_WINDOWS + 2 {
         let cell = layout(focus).1;
         let eye = cell - FIRST_CELL;
-        for s in 0..SLOTS {
+        for s in 0..ENTRIES {
             assert_eq!(want(w, focus, s), want(w, eye, s));
             assert_eq!(
-                berth_of(w, cell, want(w, focus, s)),
-                Some(eye * SLOTS + s),
-                "in the eye's own berth"
+                slot_of(w, cell, want(w, focus, s)),
+                Some(eye * ENTRIES + s),
+                "in the eye's own slot"
             );
         }
     }
     land_all(w);
     for focus in EYE_WINDOWS..EYE_WINDOWS + 2 {
-        for s in 0..SLOTS {
-            let row = w.slots[(focus * SLOTS + s) as usize];
+        for s in 0..ENTRIES {
+            let row = w.entries[(focus * ENTRIES + s) as usize];
             assert!(
-                row.holds(row.brick) && row.berth() == (layout(focus).1 - FIRST_CELL) * SLOTS + s,
-                "the focus's rows name the eye's berths"
+                row.holds(row.brick) && row.slot() == (layout(focus).1 - FIRST_CELL) * ENTRIES + s,
+                "the focus's rows name the eye's slots"
             );
         }
     }
@@ -362,17 +362,17 @@ fn left_brick_kept() {
     // the focus's still wants, and wants a column the focus's does not.
     let on = leaf([CENTRE[0] + f64::from(BRICK), CENTRE[1]]);
     lay(w, on, leaf(CENTRE));
-    assert_eq!(held_at(w, LEAF_CELL), (SLOTS + window::ACROSS) as usize);
-    for s in 0..SLOTS {
+    assert_eq!(held_at(w, LEAF_CELL), (ENTRIES + window::ACROSS) as usize);
+    for s in 0..ENTRIES {
         let q = want(w, focus, s);
         assert!(
             Windowed.present(LEAF_CELL, q).1,
             "the focus's bricks stay present"
         );
-        assert!(w.slots[(focus * SLOTS + s) as usize].holds(q));
+        assert!(w.entries[(focus * ENTRIES + s) as usize].holds(q));
     }
-    let new: Vec<u32> = (0..SLOTS)
-        .filter(|&s| !w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s)))
+    let new: Vec<u32> = (0..ENTRIES)
+        .filter(|&s| !w.entries[(eye * ENTRIES + s) as usize].holds(want(w, eye, s)))
         .collect();
     assert_eq!(
         new.len(),
@@ -380,30 +380,30 @@ fn left_brick_kept() {
         "the eye's new column alone is absent"
     );
     for &s in &new {
-        let b = berth_of(w, LEAF_CELL, want(w, eye, s)).unwrap();
+        let b = slot_of(w, LEAF_CELL, want(w, eye, s)).unwrap();
         assert!(
-            w.berths[b as usize].is_absent() && b != eye * SLOTS + s,
-            "in a free berth, the eye's own still holding the focus's brick"
+            w.slots[b as usize].is_absent() && b != eye * ENTRIES + s,
+            "in a free slot, the eye's own still holding the focus's brick"
         );
     }
     // Back where it was, the eye finds the column it left present.
     land_all(w);
     lay(w, leaf(CENTRE), leaf(CENTRE));
-    for s in 0..SLOTS {
+    for s in 0..ENTRIES {
         assert!(
-            w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s)),
+            w.entries[(eye * ENTRIES + s) as usize].holds(want(w, eye, s)),
             "not filled again"
         );
     }
     assert_eq!(
         held_at(w, LEAF_CELL),
-        SLOTS as usize,
+        ENTRIES as usize,
         "the column no window wants is given up"
     );
 }
 
 #[test]
-fn apart_windows_own_berths() {
+fn apart_windows_own_slots() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
@@ -413,10 +413,10 @@ fn apart_windows_own_berths() {
         leaf([CENTRE[0] + 100.0 * f64::from(BRICK), CENTRE[1]]),
     );
     for win in 0..EYE_WINDOWS + 2 {
-        for s in 0..SLOTS {
+        for s in 0..ENTRIES {
             assert_eq!(
-                berth_of(w, layout(win).1, want(w, win, s)),
-                Some(win * SLOTS + s)
+                slot_of(w, layout(win).1, want(w, win, s)),
+                Some(win * ENTRIES + s)
             );
         }
     }
@@ -434,40 +434,40 @@ fn landing_shows_everywhere() {
     let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
     lay(w, leaf(CENTRE), leaf(CENTRE));
     let q = want(w, eye, 0);
-    let b = berth_of(w, LEAF_CELL, q).unwrap();
-    w.berths[b as usize].ticket = 7;
-    for i in of_slot(0) {
+    let b = slot_of(w, LEAF_CELL, q).unwrap();
+    w.slots[b as usize].ticket = 7;
+    for i in of_entry(0) {
         show(w, i);
     }
     on_landed(b, 6, Landing::Refused);
     assert_eq!(
-        w.berths[b as usize].ticket, 7,
+        w.slots[b as usize].ticket, 7,
         "another fill's landing lays nothing"
     );
     on_landed(b, 7, Landing::Built(&[0]));
     refold();
     for win in [eye, focus] {
-        let row = w.slots[(win * SLOTS) as usize];
-        assert!(row.holds(q) && row.berth() == b);
+        let row = w.entries[(win * ENTRIES) as usize];
+        assert!(row.holds(q) && row.slot() == b);
     }
     // Refused while a window wants it, then given up with the last.
-    w.berths[b as usize] = Berth {
+    w.slots[b as usize] = Slot {
         present: false,
         ticket: REFUSED,
-        ..w.berths[b as usize]
+        ..w.slots[b as usize]
     };
     let far = leaf([CENTRE[0] + 100.0 * f64::from(BRICK), CENTRE[1]]);
     lay(w, leaf(CENTRE), far);
     assert_eq!(
-        w.berths[b as usize].ticket, REFUSED,
+        w.slots[b as usize].ticket, REFUSED,
         "the eye still wants it"
     );
     assert!(
-        !berth_wants(w, tile_of(LEAF_CELL, q).0, b),
+        !slot_wants(w, tile_of(LEAF_CELL, q).0, b),
         "nor is its tile kept for it"
     );
     lay(w, far, far);
-    assert_eq!(berth_of(w, LEAF_CELL, q), None);
+    assert_eq!(slot_of(w, LEAF_CELL, q), None);
 }
 
 #[test]
@@ -486,29 +486,29 @@ fn heap_wait_rehanded() {
     lay(w, leaf(CENTRE), leaf(CENTRE));
     let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
     let q = want(w, eye, 0);
-    let b = berth_of(w, LEAF_CELL, q).unwrap();
+    let b = slot_of(w, LEAF_CELL, q).unwrap();
     // As `on_landed` leaves it where the heap refused the mirror its chunk.
-    (w.berths[b as usize].ticket, w.heap) = (WAITING, Some(Refused::now()));
+    (w.slots[b as usize].ticket, w.heap) = (WAITING, Some(Refused::now()));
     assert!(!wake(w), "no page given back: it waits");
     lay(w, leaf(CENTRE), leaf(CENTRE));
     assert_eq!(
-        w.berths[b as usize].ticket, WAITING,
+        w.slots[b as usize].ticket, WAITING,
         "unhanded while it waits"
     );
     assert!(
-        !berth_wants(w, tile_of(LEAF_CELL, q).0, b),
+        !slot_wants(w, tile_of(LEAF_CELL, q).0, b),
         "nor its tile kept for it"
     );
     RELEASES.fetch_add(1, Ordering::Relaxed);
     assert!(wake(w) && w.heap.is_none());
-    berth(w, false);
+    assign_slots(w, false);
     assert!(
-        w.berths[b as usize].is_absent() && berth_wants(w, tile_of(LEAF_CELL, q).0, b),
+        w.slots[b as usize].is_absent() && slot_wants(w, tile_of(LEAF_CELL, q).0, b),
         "absent, to be handed again"
     );
     for win in [eye, focus] {
         assert_eq!(
-            w.slots[(win * SLOTS) as usize].ticket,
+            w.entries[(win * ENTRIES) as usize].ticket,
             0,
             "its rows show it"
         );

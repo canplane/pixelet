@@ -5,10 +5,10 @@
 //! from the eye (pxl-spec space/layer/demand.rs `band`, the top's by its
 //! reach), so a window `WINDOW` cells a side about it holds every cell it
 //! can observe there. A window is `ACROSS` bricks a side, each brick
-//! held in the slot its place names modulo `ACROSS`, so the window follows
+//! held in the entry its place names modulo `ACROSS`, so the window follows
 //! its centre a brick at a time and no held cell moves. Windows at one
-//! zoom hold a brick in the same slot, so a brick at a zoom is held once,
-//! in a berth of that slot, however many windows want it (`Slot`). A brick
+//! zoom hold a brick in the same entry, so a brick at a zoom is held once,
+//! in a slot of that entry, however many windows want it (`Entry`). A brick
 //! is present once its cells are drawn; a reader of one absent reads the
 //! coarser window's (`step`).
 
@@ -21,10 +21,10 @@ pub const BRICK_SHIFT: u32 = 6;
 pub const BRICK: u32 = 1 << BRICK_SHIFT;
 pub const BRICK_CELLS: u32 = BRICK * BRICK;
 /// Bricks a window holds a side, and in all: as many as hold `RADIUS`
-/// about a centre anywhere in a brick, to a power of two, as `slot` masks
+/// about a centre anywhere in a brick, to a power of two, as `entry` masks
 /// by it.
 pub const ACROSS: u32 = ((2 * RADIUS + BRICK).div_ceil(BRICK)).next_power_of_two();
-pub const SLOTS: u32 = ACROSS * ACROSS;
+pub const ENTRIES: u32 = ACROSS * ACROSS;
 /// A window's side in cells.
 pub const WINDOW: u32 = ACROSS * BRICK;
 /// The eye's coarsest window's cells' zoom: the top's.
@@ -42,13 +42,13 @@ pub const fn eye_cell(w: u32) -> Zoom {
 /// walking and editing read; a destination's one, at the zoom its line says
 /// its ground, found exactly (pxl-kernel domain/layer/terrain/window.rs).
 pub const WINDOWS: u32 = EYE_WINDOWS + 3;
-/// The berths every window's bricks are held in, `WINDOWS` a slot, berth
-/// `k × SLOTS + s` slot `s`'s `k`-th (pxl-kernel domain/layer/terrain/window.rs
-/// `Berth`): no more bricks want a slot than there are windows, so the
+/// The slots every window's bricks are held in, `WINDOWS` an entry, slot
+/// `k × ENTRIES + s` entry `s`'s `k`-th (pxl-kernel domain/layer/terrain/window.rs
+/// `Slot`): no more bricks want an entry than there are windows, so the
 /// most the GPU holds, and so the most of their cells read back at once,
 /// where no two windows at a zoom overlap. A brick two of them want takes
 /// one.
-pub const BRICKS: u32 = WINDOWS * SLOTS;
+pub const SLOTS: u32 = WINDOWS * ENTRIES;
 /// What the GPU's fill costs a frame, measured at dpr 2 on an M-series Mac
 /// (2026-10-17, the `fill` span): its passes whatever it is handed, and each
 /// brick more; handed one brick a frame it took 2.2 ms, sixteen 5.5 ms.
@@ -60,7 +60,7 @@ pub const FILL_SHARE_MS: f32 = 4.0;
 /// domain/layer/terrain/window.rs `due`): its share less its passes, over a brick.
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
 
-/// A brick handed to the GPU's fill, in words: its berth, where it lies in
+/// A brick handed to the GPU's fill, in words: its slot, where it lies in
 /// its tile (`place_word`, in bricks), its cells' zoom, its window's as the
 /// window holds it (pxl-kernel domain/layer/terrain/window.rs `Window::cell`; a
 /// destination's moves with its line), never derived from the index; its
@@ -108,7 +108,7 @@ pub const fn place_of(w: u32) -> [u32; 2] {
 }
 
 /// The brick a fresh brick's first cell (`FRESH_FIRST`) lies in, at its
-/// cells' zoom: what a reader of the handed records finds its slot by.
+/// cells' zoom: what a reader of the handed records finds its entry by.
 pub const fn fresh_brick(first: [u32; 2]) -> [i32; 2] {
     [
         first[0] as i32 >> BRICK_SHIFT,
@@ -134,8 +134,8 @@ pub const fn bricks_zoom(cell: Zoom) -> Zoom {
     cell - BRICK_SHIFT
 }
 
-/// The slot brick `q` is held in.
-pub fn slot(q: [i32; 2]) -> u32 {
+/// The entry brick `q` is held in.
+pub fn entry(q: [i32; 2]) -> u32 {
     let m = (ACROSS - 1) as i32;
     ((q[1] & m) as u32) * ACROSS + (q[0] & m) as u32
 }
@@ -308,26 +308,26 @@ pub const fn handed_at(k: u32) -> u32 {
 }
 
 /// The windows as one side holds them: per window, a zoom's cells about
-/// its centre, which brick each slot holds once present, and the berths
+/// its centre, which brick each entry holds once present, and the slots
 /// their cells are held in.
 pub trait Bricks {
-    /// The berth brick `q` at `cell` is held present in, which the reads
-    /// below take (`Slot::berth`); false where no window holds it.
+    /// The slot brick `q` at `cell` is held present in, which the reads
+    /// below take (`Entry::slot`); false where no window holds it.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool);
-    /// The brick the eye's window at `cell` wants in `slot`, and whether
+    /// The brick the eye's window at `cell` wants in `entry`, and whether
     /// present: `present` the other way.
-    fn brick(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool);
-    /// The four looks of cell `i` of the brick in `berth` (`ground::looks`).
-    fn look(&self, cell: Zoom, berth: u32, i: u32) -> u32;
-    /// Column word `i` of the brick in `berth` (`COLUMN_WORDS`), `i` to
+    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool);
+    /// The four looks of cell `i` of the brick in `slot` (`ground::looks`).
+    fn look(&self, cell: Zoom, slot: u32, i: u32) -> u32;
+    /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELLS`.
-    fn column(&self, cell: Zoom, berth: u32, i: u32) -> u32;
-    /// Entry `at` of level `j` of the brick in `berth`, its bounds
+    fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
+    /// Entry `at` of level `j` of the brick in `slot`, its bounds
     /// (`ground::Bounds`) as bound words (`answer::bound_word`): its
     /// columns' joined (`join`), level 0 one.
-    fn level(&self, cell: Zoom, berth: u32, j: u32, at: [u32; 2]) -> [i32; 2];
+    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
     /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
-    fn laid(&self, cell: Zoom, berth: u32, i: u32) -> u32;
+    fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the eye's window at `cell`'s levels over its bricks
     /// (`JOINED_WORDS`, `fold`), as this side folded them over the bricks
     /// it holds; the zero entry, none, where it holds no fold.
@@ -336,8 +336,8 @@ pub trait Bricks {
     /// bricks are counted from (`fold`), and whether it is laid out
     /// (`ORIGIN_AT`).
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool);
-    /// The root of the brick in `berth`'s ways' tree (`ROOT_AT`), 0 for none.
-    fn root(&self, cell: Zoom, berth: u32) -> u32;
+    /// The root of the brick in `slot`'s ways' tree (`ROOT_AT`), 0 for none.
+    fn root(&self, cell: Zoom, slot: u32) -> u32;
 }
 
 /// One brick as its fill reads it, for the ways' one rule
@@ -479,7 +479,7 @@ impl<Q: Brick> crate::way::Columns for Q {
 
 /// Where a node's cells at `cell`, a brick's or fewer, are held, as `step`
 /// finds them: the zoom they were asked at, the window holding them present
-/// (its zoom `from`, at `cell` or coarser, and the berth), or none; one word,
+/// (its zoom `from`, at `cell` or coarser, and the slot), or none; one word,
 /// as a descent carries it down beside what is placed (`overwrite::Held`).
 /// `step` reads only the brick at `cell` holding them and the bricks over
 /// it, so every node whose cells lie in that brick has this answer: a
@@ -488,13 +488,13 @@ impl<Q: Brick> crate::way::Columns for Q {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Found(u32);
 
-/// A berth, which a GPU and the CPU name alike (`BRICKS`).
-const FOUND_BERTH_BITS: u32 = BRICKS.next_power_of_two().trailing_zeros();
-const FOUND_HERE: u32 = 1 << FOUND_BERTH_BITS;
-const FOUND_FROM_SHIFT: u32 = FOUND_BERTH_BITS + 1;
+/// A slot, which a GPU and the CPU name alike (`SLOTS`).
+const FOUND_SLOT_BITS: u32 = SLOTS.next_power_of_two().trailing_zeros();
+const FOUND_HERE: u32 = 1 << FOUND_SLOT_BITS;
+const FOUND_FROM_SHIFT: u32 = FOUND_SLOT_BITS + 1;
 const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + crate::ZOOM_BITS;
 const FOUND_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
-/// A `Found`'s word's bits: its berth, here, and its two zooms.
+/// A `Found`'s word's bits: its slot, here, and its two zooms.
 const FOUND_BITS: u32 = FOUND_CELL_SHIFT + crate::ZOOM_BITS;
 const _: () = assert!(FOUND_BITS <= 32);
 const _: () = assert!(
@@ -505,12 +505,12 @@ const _: () = assert!(
 impl Found {
     pub const NONE: Found = Found(0);
 
-    const fn of(cell: Zoom, from: Zoom, berth: u32, here: bool) -> Found {
+    const fn of(cell: Zoom, from: Zoom, slot: u32, here: bool) -> Found {
         Found(
             cell << FOUND_CELL_SHIFT
                 | from << FOUND_FROM_SHIFT
-                | (here as u32) << FOUND_BERTH_BITS
-                | berth,
+                | (here as u32) << FOUND_SLOT_BITS
+                | slot,
         )
     }
     /// The zoom its cells were asked at.
@@ -521,7 +521,7 @@ impl Found {
     pub const fn from(self) -> Zoom {
         (self.0 >> FOUND_FROM_SHIFT) & FOUND_ZOOM_MASK
     }
-    pub const fn berth(self) -> u32 {
+    pub const fn slot(self) -> u32 {
         self.0 & (FOUND_HERE - 1)
     }
     pub const fn here(self) -> bool {
@@ -563,16 +563,16 @@ pub fn step(w: &impl Bricks, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, [
     let (floor, mut f) = if known {
         (
             above.cell(),
-            Found::of(cell, above.from(), above.berth(), above.here()),
+            Found::of(cell, above.from(), above.slot(), above.here()),
         )
     } else {
         (FIRST_CELL - 1, Found::of(cell, FIRST_CELL, 0, false))
     };
     let mut c = cell;
     while c > floor {
-        let (berth, here) = w.present(c, brick_of(cell_at(cell, c, g)).0);
+        let (slot, here) = w.present(c, brick_of(cell_at(cell, c, g)).0);
         if here {
-            f = Found::of(cell, c, berth, true);
+            f = Found::of(cell, c, slot, true);
             break;
         }
         c -= 1;
@@ -602,11 +602,11 @@ pub fn cell(w: &impl Bricks, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32
     if !f.here() {
         return (VOID, 0, laid_half(VOID, 0), f);
     }
-    let (from, berth, i) = (f.from(), f.berth(), index_of(at));
+    let (from, slot, i) = (f.from(), f.slot(), index_of(at));
     (
-        w.look(from, berth, i),
-        w.column(from, berth, i),
-        w.laid(from, berth, i),
+        w.look(from, slot, i),
+        w.column(from, slot, i),
+        w.laid(from, slot, i),
         f,
     )
 }
@@ -636,9 +636,9 @@ pub fn ground(
 /// Entry `at` of level `j` of a brick, from 1, over the level under it,
 /// written before: the join of the four under it, each source's its own
 /// (`ground::joined`), as bound words.
-pub fn join(w: &impl Bricks, cell: Zoom, berth: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
+pub fn join(w: &impl Bricks, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
     let under = |q: u32| {
-        crate::ground::bounds_of(w.level(cell, berth, j - 1, [2 * x + q % 2, 2 * y + q / 2]))
+        crate::ground::bounds_of(w.level(cell, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]))
     };
     let mut b = under(0);
     let mut q = 1;
@@ -655,7 +655,7 @@ pub const WINDOW_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 
 /// The levels over a window's bricks, from one over a brick
 /// (`LEVELS + 1`) to the window whole: a node wider than a brick bounded
-/// by the join of the bricks it covers, folded where the windows' slots
+/// by the join of the bricks it covers, folded where the windows' entries
 /// are written (`fold`) and read as one entry (`bounded`), not joined
 /// again at every node that asks.
 pub const JOINED_LEVELS: u32 = WINDOW_LEVELS - LEVELS;
@@ -666,31 +666,31 @@ pub const JOINED_ENTRIES: u32 = joined_index(JOINED_LEVELS + 1, [0, 0]);
 /// X then Y, each with its sign flipped (`key_word`), so the zero entry,
 /// as fresh memory holds it, names no brick; then the join's bounds, the
 /// ground's and the ways' (`ground::bounds_word`): a row of the windows'
-/// buffer, an `IVec4` as their slot table's are, after it (`JOINED_AT`).
+/// buffer, an `IVec4` as their entry table's are, after it (`JOINED_AT`).
 pub const JOINED_WORDS: u32 = 4;
 /// A row of the windows' table, as the kernel writes it (pxl-kernel
 /// domain/layer/terrain/window.rs `table`) and the GPU reads it (pxl-shader
-/// `World`), an `IVec4` of its buffer: the brick a slot's window wants
-/// there; where its cells are present, the berth holding them plus one
-/// (`berth`), which another window at its zoom may have filled, 0 while
+/// `World`), an `IVec4` of its buffer: the brick an entry's window wants
+/// there; where its cells are present, the slot holding them plus one
+/// (`slot`), which another window at its zoom may have filled, 0 while
 /// they are not; and the fill they are on their way from, 0 where none is.
 /// Neither: wanted, its tile not yet handed it.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Slot {
+pub struct Entry {
     pub brick: [i32; 2],
     pub present: i32,
     pub ticket: u32,
 }
 
 const _: () = assert!(
-    core::mem::size_of::<Slot>() == 16,
-    "a slot is a row of four words"
+    core::mem::size_of::<Entry>() == 16,
+    "an entry is a row of four words"
 );
 
-impl Slot {
-    pub const fn absent(brick: [i32; 2]) -> Slot {
-        Slot {
+impl Entry {
+    pub const fn absent(brick: [i32; 2]) -> Entry {
+        Entry {
             brick,
             present: 0,
             ticket: 0,
@@ -698,8 +698,8 @@ impl Slot {
     }
 
     /// The row the buffer's four words hold.
-    pub fn of([x, y, z, w]: [i32; 4]) -> Slot {
-        Slot {
+    pub fn of([x, y, z, w]: [i32; 4]) -> Entry {
+        Entry {
             brick: [x, y],
             present: z,
             ticket: w as u32,
@@ -716,19 +716,19 @@ impl Slot {
         self.present != 0 && self.brick[0] == q[0] && self.brick[1] == q[1]
     }
 
-    /// The berth its brick's cells are held in, while present.
-    pub fn berth(&self) -> u32 {
+    /// The slot its brick's cells are held in, while present.
+    pub fn slot(&self) -> u32 {
         (self.present - 1) as u32
     }
 }
 
 /// The row of the windows' buffer each window's first brick is at: past
-/// every window's slots, a row a window shaped as a slot's (`Slot`), its
+/// every window's entries, a row a window shaped as an entry's (`Entry`), its
 /// brick the window's first and `present` 1 while it is laid out
 /// (`Bricks::origin`).
-pub const ORIGIN_AT: u32 = BRICKS;
+pub const ORIGIN_AT: u32 = SLOTS;
 /// The row of the windows' buffer the eye's windows' entries begin at:
-/// past their slots and their first bricks.
+/// past their entries and their first bricks.
 pub const JOINED_AT: u32 = ORIGIN_AT + WINDOWS;
 /// The eye's windows' entries, as the GPU lays them: window `cell −
 /// FIRST_CELL` a run of `JOINED_ENTRIES`.
@@ -753,14 +753,14 @@ const fn key_word(v: i32) -> u32 {
 
 /// Entry `b` of level `l` over a brick, its Morton index there
 /// (`joined_index`), of the eye's window at `cell`, folded off the level
-/// under it: what a ray reads at `cell` in the block of `2^l` slots a side
-/// at `b`, aligned as the slots are (`ACROSS` a multiple of the block's
+/// under it: what a ray reads at `cell` in the block of `2^l` entries a side
+/// at `b`, aligned as the entries are (`ACROSS` a multiple of the block's
 /// side), the join of its four halves' joins, each read once where the
 /// level under it laid it (`Bricks::joined`; at level 1 a brick's own,
 /// `held_brick`); keyed by the window's first brick (`Bricks::origin`),
 /// so an entry of a window since moved names another. A block in the
 /// window's range is a node's bricks; one across its seam, where the
-/// slots wrap, holds what the window holds of the two nodes either side,
+/// entries wrap, holds what the window holds of the two nodes either side,
 /// which bounds either from over. The zero entry where the window is not
 /// laid out or no window holds a brick of the block, a lack. A level is
 /// folded once the one under it is.
@@ -774,7 +774,10 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
     while laid && k < 4 {
         let (dx, dy) = ((k & 1) * half, (k >> 1) * half);
         let got = if l == 1 {
-            let (q, _) = w.brick(cell, slot([((x << l) + dx) as i32, ((y << l) + dy) as i32]));
+            let (q, _) = w.brick(
+                cell,
+                entry([((x << l) + dx) as i32, ((y << l) + dy) as i32]),
+            );
             held_brick(w, cell, q)
         } else {
             unfold(
@@ -831,7 +834,7 @@ fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> crate::ground::Bounds
 
 /// What the eye's window at `cell` holds of a node wider than a brick,
 /// its first cell there `g` and `2^l` bricks a side, `l` from 1: one
-/// entry, its slot block's (`fold`), the node's bricks exactly where it
+/// entry, its entry block's (`fold`), the node's bricks exactly where it
 /// lies in the window's range and a superset where it crosses the seam; a
 /// node wider than the window the window whole, the top block. And whether
 /// no other window need be read: the node lies in the window, or the entry
@@ -945,13 +948,13 @@ fn bounded(
     }
     let (f, p) = step(w, *place, cell, g);
     *place = f;
-    let (from, berth) = (f.from(), f.berth());
+    let (from, slot) = (f.from(), f.slot());
     if !f.here() {
         return ([[0, 0]; 2], from, false, false);
     }
     let (j, at) = entry_at(zoom, from, p);
     (
-        crate::ground::bounds_of(w.level(from, berth, j, at)),
+        crate::ground::bounds_of(w.level(from, slot, j, at)),
         from,
         true,
         true,

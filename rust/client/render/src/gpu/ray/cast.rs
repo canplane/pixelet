@@ -58,8 +58,8 @@ pub(super) struct CastBuffers {
     /// reading walk counts them in (`marks`, pxl-spec-core
     /// `ray::MISS_ARGS_WORDS`); the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
-    /// (`forget`), or the nodes over the eye's windows' slots that moved
-    /// (`moved`, a bit a slot, against the slots as `slots` last held them)
+    /// (`forget`), or the nodes over the eye's windows' entries that moved
+    /// (`moved`, a bit an entry, against the entries as `entries` last held them)
     /// and over the boxes of what is placed or cut that changed (`boxes`,
     /// `holding` of them, as decor's growth holds them, gpu/grown.rs
     /// `hold`), and those handed a slot of a family of what is placed that
@@ -80,12 +80,12 @@ pub(super) struct CastBuffers {
     written: [u32; observed::WRITTEN as usize],
     writes: usize,
     sent: Option<Forgot>,
-    slots: Vec<i32>,
+    entries: Vec<i32>,
     forgets: u32,
     cuts: [u32; eye::CUTS],
     /// The eye's windows folded over their bricks (`joined_cs`), over its
-    /// group, the window buffer's rows past their slot table
-    /// (`window::JOINED_AT`), written where the windows' slots moved
+    /// group, the window buffer's rows past their entry table
+    /// (`window::JOINED_AT`), written where the windows' entries moved
     /// (`refold`). The CPU folds its own over the bricks it holds
     /// (pxl-kernel domain/layer/terrain/window.rs `fold`).
     joined_built: Built,
@@ -186,7 +186,7 @@ pub(super) struct CastBuffers {
 }
 
 /// What a cast's head handed the pyramid's forgetting (pxl-spec-core
-/// `observed::HEAD_WORDS`): whether all of it, the slots that moved, the
+/// `observed::HEAD_WORDS`): whether all of it, the entries that moved, the
 /// boxes and the families written; put back where its frame is dropped.
 struct Forgot {
     all: bool,
@@ -304,7 +304,7 @@ impl RaysPass {
             written: [0; observed::WRITTEN as usize],
             writes: 0,
             sent: None,
-            slots: Vec::new(),
+            entries: Vec::new(),
             forgets: observed::FORGETS_NONE,
             cuts: [0; eye::CUTS],
             joined_built,
@@ -575,23 +575,23 @@ impl RaysPass {
             || overwrites_grow
             || (overwrites_moved && edits.is_empty())
             || c.frame >= observed::FRAMES;
-        // The eye's windows' slots that hold another brick, or whose brick
+        // The eye's windows' entries that hold another brick, or whose brick
         // the turn handed: what is over them is asked again.
         c.cuts = cuts;
-        let eye_rows = (window::EYE_WINDOWS * window::SLOTS) as usize;
+        let eye_rows = (window::EYE_WINDOWS * window::ENTRIES) as usize;
         if window_moved {
             let rows = &cast.window[..4 * eye_rows];
             for k in 0..eye_rows {
                 let row = &rows[4 * k..4 * k + 4];
-                if c.slots.get(4 * k..4 * k + 4) != Some(row) {
+                if c.entries.get(4 * k..4 * k + 4) != Some(row) {
                     c.moved[k / 32] |= 1 << (k % 32);
                 }
             }
-            c.slots.clear();
-            c.slots.extend_from_slice(rows);
+            c.entries.clear();
+            c.entries.extend_from_slice(rows);
         }
-        // A brick handed moves the eye's slot that wants it, whichever
-        // window's berth it is filled into.
+        // A brick handed moves the eye's entry that wants it, whichever
+        // window's slot it is filled into.
         if let Some(gb) = self.ground.as_ref() {
             for f in &gb.handed[..fresh as usize] {
                 let (cell, q) = (
@@ -599,7 +599,7 @@ impl RaysPass {
                     window::fresh_brick([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]),
                 );
                 let w = cell.wrapping_sub(window::FIRST_CELL);
-                let k = (w * window::SLOTS + window::slot(q)) as usize;
+                let k = (w * window::ENTRIES + window::entry(q)) as usize;
                 let row = &cast.window[4 * k..4 * k + 4];
                 if w < window::EYE_WINDOWS && [row[0], row[1]] == q {
                     c.moved[k / 32] |= 1 << (k % 32);
@@ -701,7 +701,7 @@ impl RaysPass {
                 observed::FORGETS_NONE
             };
             // The head before the frame's dispatches: what it forgets and over
-            // which slots; forgotten whole, its first frame, else the next.
+            // which entries; forgotten whole, its first frame, else the next.
             let mut head = [0u32; observed::HEAD_WORDS as usize];
             c.frame = if c.forgets == observed::FORGETS_ALL {
                 1
@@ -828,7 +828,7 @@ impl RaysPass {
         self.regroup(g, [rays.0, eye]);
     }
 
-    /// The eye's windows folded over their bricks where their slots moved
+    /// The eye's windows folded over their bricks where their entries moved
     /// (`joined_cs`): ahead of the frame, as the fold outlives it.
     pub fn fold(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
         let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else {

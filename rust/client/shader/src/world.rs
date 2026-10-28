@@ -8,7 +8,7 @@ use pxl_spec_core::area::Area;
 use pxl_spec_core::cast::{self, Ends, Met, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
-use pxl_spec_core::window::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, FIRST_CELL, SLOTS};
+use pxl_spec_core::window::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL};
 use pxl_spec_core::world::{self, At};
 use pxl_spec_core::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
@@ -38,19 +38,19 @@ pub(crate) fn brick_at(brick: u32) -> u32 {
 /// look (`Unlooked`).
 #[derive(Clone, Copy)]
 pub struct World<'a, L> {
-    /// The windows' table (pxl-spec-core `window::Slot`): every window's
-    /// slots, a row each, the brick it wants, the berth holding it plus one
-    /// while present (`Slot::berth`) and the fill it is on its way from,
+    /// The windows' table (pxl-spec-core `window::Entry`): every window's
+    /// entries, a row each, the brick it wants, the slot holding it plus one
+    /// while present (`Entry::slot`) and the fill it is on its way from,
     /// the eye's windows first, from the top's; then each window's first
     /// brick (`window::ORIGIN_AT`) and the eye's windows' folds
     /// (`window::JOINED_AT`).
     pub(crate) window: &'a [IVec4],
-    /// Per berth (`window::BRICKS`), its brick's columns (`height_cs`,
+    /// Per slot (`window::SLOTS`), its brick's columns (`height_cs`,
     /// `way_cs`), their levels (`bound_cs`), their runs (`way_cs`) and its
     /// cells as laid (`height_cs`) (`window::BRICK_WORDS`), whichever
     /// window filled it.
     pub(crate) ground: &'a [u32],
-    /// Per berth, in the same order, its cells' four looks (`Looks`).
+    /// Per slot, in the same order, its cells' four looks (`Looks`).
     pub(crate) looks: L,
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row.
@@ -118,24 +118,24 @@ impl<L: Looks> Area for World<'_, L> {
 }
 
 impl<L> World<'_, L> {
-    /// Row `r` of the windows' table (`window::Slot`).
-    fn row(&self, r: u32) -> window::Slot {
+    /// Row `r` of the windows' table (`window::Entry`).
+    fn row(&self, r: u32) -> window::Entry {
         let h = at(self.window, r);
-        window::Slot::of([h.x, h.y, h.z, h.w])
+        window::Entry::of([h.x, h.y, h.z, h.w])
     }
 }
 
-/// The eye's windows, as the GPU holds them: a brick in the berth its
-/// slot's row names, whichever window filled it.
+/// The eye's windows, as the GPU holds them: a brick in the slot its
+/// entry's row names, whichever window filled it.
 impl<L: Looks> Bricks for World<'_, L> {
-    /// The berth brick `q` is held in, while the eye's window holds it
+    /// The slot brick `q` is held in, while the eye's window holds it
     /// present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
-        let row = self.row((cell - FIRST_CELL) * SLOTS + window::slot(q));
-        (row.berth(), row.holds(q))
+        let row = self.row((cell - FIRST_CELL) * ENTRIES + window::entry(q));
+        (row.slot(), row.holds(q))
     }
-    fn brick(&self, cell: u32, slot: u32) -> ([i32; 2], bool) {
-        self.row((cell - FIRST_CELL) * SLOTS + slot).held()
+    fn brick(&self, cell: u32, entry: u32) -> ([i32; 2], bool) {
+        self.row((cell - FIRST_CELL) * ENTRIES + entry).held()
     }
     /// Off the windows' rows past their table (`joined_cs`).
     fn joined(&self, cell: u32, e: u32) -> [u32; window::JOINED_WORDS as usize] {
@@ -145,24 +145,24 @@ impl<L: Looks> Bricks for World<'_, L> {
         );
         [r.x as u32, r.y as u32, r.z as u32, r.w as u32]
     }
-    /// The window's row past every window's slots (`window::ORIGIN_AT`).
+    /// The window's row past every window's entries (`window::ORIGIN_AT`).
     fn origin(&self, cell: u32) -> ([i32; 2], bool) {
         self.row(window::ORIGIN_AT + (cell - FIRST_CELL)).held()
     }
-    fn look(&self, _: u32, berth: u32, i: u32) -> u32 {
-        self.looks.look(berth * BRICK_CELLS + i)
+    fn look(&self, _: u32, slot: u32, i: u32) -> u32 {
+        self.looks.look(slot * BRICK_CELLS + i)
     }
-    fn column(&self, _: u32, berth: u32, i: u32) -> u32 {
-        column_of(self.ground, brick_at(berth), i)
+    fn column(&self, _: u32, slot: u32, i: u32) -> u32 {
+        column_of(self.ground, brick_at(slot), i)
     }
-    fn level(&self, _: u32, berth: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        level_of(self.ground, brick_at(berth), j, at)
+    fn level(&self, _: u32, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        level_of(self.ground, brick_at(slot), j, at)
     }
-    fn laid(&self, _: u32, berth: u32, i: u32) -> u32 {
-        fill::laid_of(self.ground, brick_at(berth), i)
+    fn laid(&self, _: u32, slot: u32, i: u32) -> u32 {
+        fill::laid_of(self.ground, brick_at(slot), i)
     }
-    fn root(&self, _: u32, berth: u32) -> u32 {
-        fill::root_of(self.ground, brick_at(berth))
+    fn root(&self, _: u32, slot: u32) -> u32 {
+        fill::root_of(self.ground, brick_at(slot))
     }
 }
 

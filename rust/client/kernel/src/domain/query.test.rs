@@ -700,7 +700,7 @@ fn late_brick_spike() {
 }
 
 /// The device that went took every brick it held: the turn that sees it
-/// gives up their cells (domain/layer/terrain/window.rs `berth`, as `step`
+/// gives up their cells (domain/layer/terrain/window.rs `assign_slots`, as `step`
 /// runs it) and folds the windows over none, so no node over a brick of
 /// the eye's leaves keeps a bound of cells gone.
 #[test]

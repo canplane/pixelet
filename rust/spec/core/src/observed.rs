@@ -14,7 +14,7 @@
 //! One buffer of words:
 //!
 //! - its head: the frame's number, what is forgotten, and the eye's
-//!   windows' slots that moved (`HEAD_WORDS`);
+//!   windows' entries that moved (`HEAD_WORDS`);
 //! - the entries, a slot each (`ENTRIES_AT`);
 //! - the pixels the frame's reading walk marked missed, listed for the walk
 //!   that writes the pyramid (`MARKS_AT`).
@@ -39,13 +39,13 @@
 use crate::answer::Kind;
 use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
-use crate::window::{eye_cell, slot, ACROSS, BRICK_SHIFT, EYE_WINDOWS, SLOTS};
+use crate::window::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
 use crate::world::AT_WORDS;
 use crate::{wrap_index, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
-/// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit a slot of the
-/// eye's windows, a window's `SLOTS` bits in turn, set where the brick it
+/// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
+/// eye's windows, a window's `window::ENTRIES` bits in turn, set where the brick it
 /// holds moved or was handed since the last cast; and the boxes of leaf
 /// cells whose columns what is placed or a preview's cuts changed since the
 /// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
@@ -58,7 +58,7 @@ use crate::{wrap_index, Zoom, LEAF_CELL, ZOOM_BITS};
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
-pub const MOVED_WORDS: u32 = (EYE_WINDOWS * SLOTS).div_ceil(32);
+pub const MOVED_WORDS: u32 = (EYE_WINDOWS * window::ENTRIES).div_ceil(32);
 pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN: u32 = 32;
@@ -238,13 +238,13 @@ pub const fn kind_of(w: u32) -> Kind {
 }
 
 /// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
-/// `moved` the moved slots' words (`MOVED_AT`), as a walk holds them, never
+/// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them, never
 /// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
 /// the bricks under it alone — its cells' and their windows' over them
 /// (`window::step`), a wider node's the block of bricks its own size
 /// (`window::bounded`) — and what was handed it found its cells there, so a
 /// node no moved brick lies under answers as it did. A node a window's
-/// whole side wide or wider reads every slot of the window.
+/// whole side wide or wider reads every entry of the window.
 /// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
 /// leaf cells `[x0, y0, x1, y1)`, X round the world: its own columns as a
 /// box of leaf cells (`overwrite::cut_box`) meet it. A node's answer, and what
@@ -293,11 +293,11 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             [lo[0] >> BRICK_SHIFT, lo[1] >> BRICK_SHIFT],
             [hi[0] >> BRICK_SHIFT, hi[1] >> BRICK_SHIFT],
         );
-        // As wide as the window or wider, every slot; else each brick.
+        // As wide as the window or wider, every entry; else each brick.
         let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
         if wide {
             let mut k = 0;
-            while k < SLOTS {
+            while k < window::ENTRIES {
                 if moved_in(moved, w, k) {
                     return true;
                 }
@@ -308,7 +308,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             while qy <= q1[1] {
                 let mut qx = q0[0];
                 while qx <= q1[0] {
-                    if moved_in(moved, w, slot([qx, qy])) {
+                    if moved_in(moved, w, window::entry([qx, qy])) {
                         return true;
                     }
                     qx += 1;
@@ -321,10 +321,10 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
     false
 }
 
-/// Whether slot `slot` of the eye's window `w` moved, among the moved
-/// slots' words.
-pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, slot: u32) -> bool {
-    let k = w * SLOTS + slot;
+/// Whether entry `entry` of the eye's window `w` moved, among the moved
+/// entries' words.
+pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, entry: u32) -> bool {
+    let k = w * window::ENTRIES + entry;
     moved[(k / 32) as usize] & 1 << (k % 32) != 0
 }
 

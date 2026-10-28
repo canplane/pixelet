@@ -1,7 +1,7 @@
 // pxl-shader/decor.rs
 
 //! The decor the ground grows in the eye's windows (pxl-spec-core
-//! `scatter`): the slots that grow again listed (`decor_mark_cs`), which
+//! `scatter`): the entries that grow again listed (`decor_mark_cs`), which
 //! candidates stand, a patch at a time (`decor_stand_cs`), each that does
 //! grown (`decor_cs`), and the records counted, laid out and
 //! placed for their draws (`decor_count_cs`, `decor_args_cs`,
@@ -15,7 +15,7 @@ use pxl_spec_core::lattice::GROUND;
 use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::scatter::{self, drawn, is_marked, mark, Grounds, BRICK_PATCHES, MARKS};
 use pxl_spec_core::support;
-use pxl_spec_core::window::{self, FIRST_CELL, SLOTS};
+use pxl_spec_core::window::{self, ENTRIES, FIRST_CELL};
 use pxl_spec_core::world::{self, At};
 use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
@@ -129,10 +129,10 @@ fn is_changed(grows: &[u32], cell: u32, reads: [i32; 4]) -> bool {
     false
 }
 
-/// The eye's slots whose decor grows again this frame, a thread a slot,
-/// listed with each decor shown at the slot's window zoom (`shown_at`) for
+/// The eye's entries whose decor grows again this frame, a thread an entry,
+/// listed with each decor shown at the entry's window zoom (`shown_at`) for
 /// `decor_cs` (pxl-spec-core `scatter::GROWS_AT`), the decors the catalog's
-/// rows as handed (`rows`), its count the dispatch's. A slot grows whole
+/// rows as handed (`rows`), its count the dispatch's. An entry grows whole
 /// where every one does, decor having been off, or its records were not
 /// grown for its brick (`scatter::grown_for`), its head then laid anew and
 /// no patch bearing; else, where a box of the frame's meets what it reads
@@ -147,7 +147,7 @@ pub fn decor_mark_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] shown: &[u32],
 ) {
     let s = id.x;
-    if s >= scatter::EYE_SLOTS {
+    if s >= scatter::EYE_ENTRIES {
         return;
     }
     let held = at(window, s);
@@ -155,7 +155,7 @@ pub fn decor_mark_cs(
         return;
     }
     let (cell, q, h) = (
-        window::eye_cell(s / SLOTS),
+        window::eye_cell(s / ENTRIES),
         [held.x, held.y],
         scatter::head_at(s),
     );
@@ -205,15 +205,15 @@ pub fn decor_mark_cs(
 const PATCH_LANES: u32 = 32;
 const _: () = assert!(BRICK_PATCHES <= PATCH_LANES);
 
-/// Which candidates of a slot `decor_mark_cs` listed stand, a patch a
-/// thread: `x` the patch among those meeting the slot's brick
-/// (pxl-spec-core `scatter::patch_of`), `z` the slot and decor listed. Its
-/// stream is drawn once (`scatter::each_in_patch`): where the slot grows
+/// Which candidates of an entry `decor_mark_cs` listed stand, a patch a
+/// thread: `x` the patch among those meeting the entry's brick
+/// (pxl-spec-core `scatter::patch_of`), `z` the entry and decor listed. Its
+/// stream is drawn once (`scatter::each_in_patch`): where the entry grows
 /// whole, every candidate it bears is asked and how many is written
 /// (`scatter::bears_at`); else only one that reads what a box of the
 /// frame's holds (`scatter::reads`, `is_changed`). Their contest is drawn once
 /// for them all (`scatter::beaten`, each `stands`'s answer). Each asked
-/// writes its own record (`scatter::slot_record`): `STOOD`, its cell, seed
+/// writes its own record (`scatter::entry_record`): `STOOD`, its cell, seed
 /// and born zoom, where it lies in the brick and stands, for `decor_cs`
 /// to grow; else `UNGROWN`. What it reads is the decor's stream alone,
 /// never the world.
@@ -226,7 +226,7 @@ pub fn decor_stand_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] grows: &[u32],
 ) {
     let (brick, j, whole) = listed(grows, id.z);
-    let (p, cell) = (id.x, window::eye_cell(brick / SLOTS));
+    let (p, cell) = (id.x, window::eye_cell(brick / ENTRIES));
     if p >= BRICK_PATCHES {
         return;
     }
@@ -258,7 +258,7 @@ pub fn decor_stand_cs(
             } else {
                 put(
                     out,
-                    slot_word(rows, brick, j, p, i as u32),
+                    entry_word(rows, brick, j, p, i as u32),
                     scatter::UNGROWN,
                 );
             }
@@ -269,7 +269,7 @@ pub fn decor_stand_cs(
     i = 0;
     while i < bears as usize {
         if is_marked(&asked, i) {
-            let (r, c) = (slot_word(rows, brick, j, p, i as u32), candidates[i]);
+            let (r, c) = (entry_word(rows, brick, j, p, i as u32), candidates[i]);
             if is_marked(&beaten, i) {
                 put(out, r, scatter::UNGROWN);
             } else {
@@ -284,10 +284,10 @@ pub fn decor_stand_cs(
     }
 }
 
-/// The decor a slot's stood candidates grow (`decor_stand_cs`), a thread a
+/// The decor an entry's stood candidates grow (`decor_stand_cs`), a thread a
 /// record: `x` its candidate's index in its patch, `y` the patch, `z` the
-/// slot and decor listed, as `decor_stand_cs` laid them. Each record
-/// `STOOD` grows on its cell (`scatter::grown`), naming the slot's window
+/// entry and decor listed, as `decor_stand_cs` laid them. Each record
+/// `STOOD` grows on its cell (`scatter::grown`), naming the entry's window
 /// zoom; else it is `UNGROWN`. Only a decor shown at that zoom is listed
 /// (`decor_mark_cs`). What it grows on is the windows' bricks and the ways
 /// over them alone, what is placed left out (`Unplaced`); what is placed
@@ -311,7 +311,7 @@ pub fn decor_cs(
     if id.x >= rows[j as usize].room() || id.y >= BRICK_PATCHES {
         return;
     }
-    let r = slot_word(rows, brick, j, id.y, id.x) as usize;
+    let r = entry_word(rows, brick, j, id.y, id.x) as usize;
     if r + 4 >= out.len() || out[r] != scatter::STOOD {
         return;
     }
@@ -320,7 +320,7 @@ pub fn decor_cs(
         seed: out[r + 3],
         born: out[r + 4],
     };
-    let cell = window::eye_cell(brick / SLOTS);
+    let cell = window::eye_cell(brick / ENTRIES);
     let mut world = Growing {
         world: World {
             window,
@@ -345,27 +345,27 @@ pub fn decor_cs(
     }
 }
 
-/// The `z`-th slot and decor `decor_mark_cs` listed, and whether the slot
+/// The `z`-th entry and decor `decor_mark_cs` listed, and whether the entry
 /// grows whole (pxl-spec-core `scatter::GROWS_AT`).
 fn listed(grows: &[u32], z: u32) -> (u32, u32, bool) {
     let w = at(grows, scatter::GROWS_AT + z);
     (w & 0xffff, w >> 16 & 0xff, w & scatter::WHOLE != 0)
 }
 
-/// The first word of slot `s`'s record of candidate `i` of the `p`-th patch
-/// of decor `k` (pxl-spec-core `scatter::slot_record`).
-fn slot_word(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
-    scatter::record_at(scatter::slot_record(rows, s, k, p, i))
+/// The first word of entry `s`'s record of candidate `i` of the `p`-th patch
+/// of decor `k` (pxl-spec-core `scatter::entry_record`).
+fn entry_word(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
+    scatter::record_at(scatter::entry_record(rows, s, k, p, i))
 }
 
 /// Lanes a decor pass's workgroup has (`decor_count_cs`, `decor_place_cs`).
 const RECORD_LANES: u32 = 64;
 
-/// Whether workgroup `g` of a decor pass reads records: past the slots,
-/// placed decor's always; a slot's where the windows still hold the brick
+/// Whether workgroup `g` of a decor pass reads records: past the entries,
+/// placed decor's always; an entry's where the windows still hold the brick
 /// they were grown for (`scatter::grown_for`).
 fn is_held(grown: &[u32], window: &[IVec4], g: u32) -> bool {
-    if g >= scatter::EYE_SLOTS {
+    if g >= scatter::EYE_ENTRIES {
         return true;
     }
     let (h, q) = (scatter::head_at(g), at(window, g));
@@ -375,23 +375,23 @@ fn is_held(grown: &[u32], window: &[IVec4], g: u32) -> bool {
 
 /// The `k`-th run of records workgroup `g` of a decor pass reads, as record
 /// numbers (pxl-spec-core `scatter::record_at`): the first and how many,
-/// where it reads any (`is_held`). A workgroup a slot, each run the records a
-/// decor's patch bears (`scatter::bears_at`); past the slots, a workgroup
+/// where it reads any (`is_held`). A workgroup an entry, each run the records a
+/// decor's patch bears (`scatter::bears_at`); past the entries, a workgroup
 /// `scatter::RUNS` of placed decor's, a record a run. A pass reads the
 /// records the patches bear, not the room.
 fn records(grown: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
-    if g < scatter::EYE_SLOTS {
+    if g < scatter::EYE_ENTRIES {
         let (j, p) = (k / BRICK_PATCHES, k % BRICK_PATCHES);
         let (bears, room) = (
             at(grown, scatter::bears_at(g, j, p)),
             rows[j as usize].room(),
         );
         (
-            scatter::slot_record(rows, g, j, p, 0),
+            scatter::entry_record(rows, g, j, p, 0),
             if bears < room { bears } else { room },
         )
     } else {
-        let n = (g - scatter::EYE_SLOTS) * scatter::RUNS + k;
+        let n = (g - scatter::EYE_ENTRIES) * scatter::RUNS + k;
         (
             scatter::SLOT_RECORDS + n,
             u32::from(n < at(grown, scatter::PLACED_HEAD)),
@@ -399,7 +399,7 @@ fn records(grown: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
     }
 }
 
-/// Each record for the eye this frame, a workgroup a slot's or a run of
+/// Each record for the eye this frame, a workgroup an entry's or a run of
 /// placed decor's (`records`), its region written into its first word and
 /// counted: nothing where the rays ask a coarser zoom at its distance than
 /// the leaves' cells (`scatter::drawn_at`), grown or placed, or where it

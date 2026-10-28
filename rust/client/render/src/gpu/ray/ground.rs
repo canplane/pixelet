@@ -6,8 +6,8 @@
 
 use pxl_spec_core::way;
 use pxl_spec_core::window::{
-    self, BACK_WORDS, BRICK, BRICKS, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FRESH_BRICK,
-    FRESH_WORDS, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT,
+    self, BACK_WORDS, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FRESH_BRICK,
+    FRESH_WORDS, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SLOTS,
 };
 use xpute_guest::mem::off_of;
 
@@ -31,12 +31,12 @@ const FREE: u32 = u32::MAX;
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 pub(super) struct GroundBuffers {
-    /// Per berth of the windows' bricks (`window::BRICKS`), its columns,
+    /// Per slot of the windows' bricks (`window::SLOTS`), its columns,
     /// levels, cells as laid and root, which `height_cs`, `bound_cs` and
     /// `way_tree_cs` write in the turn it is handed (pxl-spec-core
     /// `window::BRICK_WORDS`).
     pub(super) ground: u32,
-    /// Per berth, its cells' four looks (`LOOKS_BYTES`).
+    /// Per slot, its cells' four looks (`LOOKS_BYTES`).
     pub(super) looks: u32,
     /// The bricks the turn handed, `window::HANDED` at most, a record each
     /// (`window::HANDED_WORDS`): its words, then its looks, its tile's
@@ -44,9 +44,9 @@ pub(super) struct GroundBuffers {
     /// `bound_cs`'s and `way_cs`'s one per `id.z`.
     pub(super) fresh: u32,
     pub(super) fresh_len: u32,
-    /// Per berth (`window::BRICKS`), its cells' way back: the fill
+    /// Per slot (`window::SLOTS`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked).
-    asked: [CellsBack; BRICKS as usize],
+    asked: [CellsBack; SLOTS as usize],
     /// The bricks the frame handed, their words (`window::fresh`), in the
     /// order handed, each with a read of its own (`hand` hands none past the
     /// reads free): a fill's records live in its frame's scratch, so its
@@ -351,17 +351,17 @@ const BRICK_BYTES: u32 = BRICK_WORDS * 4;
 
 /// The windows' bricks on the GPU, in bytes: one storage buffer, bound
 /// whole by the cast's, the levels' and the ways' groups.
-const GROUND_BYTES: u64 = BRICKS as u64 * BRICK_BYTES as u64;
+const GROUND_BYTES: u64 = SLOTS as u64 * BRICK_BYTES as u64;
 const _: () = assert!(
     crate::frame::shader::floor::fits(GROUND_BYTES, true),
     "GROUND_BYTES: the windows' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The windows' bricks' cells' four looks, a word a cell in the berths'
+/// The windows' bricks' cells' four looks, a word a cell in the slots'
 /// order: written by the fill off each handed brick (`height_cs`), read
 /// by the cast at a hit (pxl-shader `World`'s `Looks`). Their own
 /// buffer, as the bricks' binding has no room for them.
-const LOOKS_BYTES: u64 = BRICKS as u64 * BRICK_CELLS as u64 * 4;
+const LOOKS_BYTES: u64 = SLOTS as u64 * BRICK_CELLS as u64 * 4;
 const _: () = assert!(
     crate::frame::shader::floor::fits(LOOKS_BYTES, true),
     "LOOKS_BYTES: the bricks' looks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
@@ -422,7 +422,7 @@ impl RaysPass {
                 looks,
                 fresh,
                 fresh_len: 0,
-                asked: [CellsBack::default(); BRICKS as usize],
+                asked: [CellsBack::default(); SLOTS as usize],
                 handed: [[0; FRESH_WORDS as usize]; HANDED as usize],
                 reads: core::array::from_fn(|_| {
                     buffer(

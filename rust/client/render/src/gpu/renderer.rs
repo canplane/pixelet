@@ -129,7 +129,7 @@ pub struct EarthTiles<'a> {
 }
 
 /// The ground's windows as the GPU holds them (pxl-spec-core `window`,
-/// their bricks in `BRICKS` berths): the bricks to hand it, and where
+/// their bricks in `SLOTS` slots): the bricks to hand it, and where
 /// their cells come back.
 pub struct GroundBricks<'a> {
     /// Hands each brick whose cells the GPU is to draw to the writer.
@@ -191,10 +191,10 @@ pub struct Cast<'a> {
     /// The eye (pxl-spec-core `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
     /// domain/scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
-    /// The windows' table (pxl-spec-core `window::Slot`; pxl-kernel
+    /// The windows' table (pxl-spec-core `window::Entry`; pxl-kernel
     /// domain/layer/terrain/window.rs `table`), four words a row: every window's
-    /// slots, the eye's first, from the top's, each the brick it wants, X
-    /// and Y, the berth holding it plus one while present (`Slot::berth`)
+    /// entries, the eye's first, from the top's, each the brick it wants, X
+    /// and Y, the slot holding it plus one while present (`Entry::slot`)
     /// and the fill it is on its way from; then each window's first brick
     /// (`window::ORIGIN_AT`).
     pub window: &'a [i32],

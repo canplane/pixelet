@@ -509,7 +509,7 @@ impl Grown {
             g.set_bind_group(pass, 0, self.groups[0], &[]);
             g.dispatch(
                 pass,
-                scatter::EYE_SLOTS.div_ceil(compute::DECOR_MARK_WORKGROUP[0]),
+                scatter::EYE_ENTRIES.div_ceil(compute::DECOR_MARK_WORKGROUP[0]),
                 1,
                 1,
             );
@@ -529,7 +529,7 @@ impl Grown {
         // A workgroup a slot, reading the records its patches bear, then
         // placed decor's, `scatter::RUNS` a workgroup (pxl-shader
         // `records`): the records held, not the room.
-        let records = scatter::EYE_SLOTS + self.placed_count.div_ceil(scatter::RUNS);
+        let records = scatter::EYE_ENTRIES + self.placed_count.div_ceil(scatter::RUNS);
         let passes = [
             (&self.count, records),
             (&self.args_built, 1),

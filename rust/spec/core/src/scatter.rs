@@ -21,7 +21,7 @@ use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, COUNTS, DECORS, PATCH};
 use crate::lattice::GROUND;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::window::{BRICK_SHIFT, EYE_WINDOWS, SLOTS};
+use crate::window::{BRICK_SHIFT, ENTRIES, EYE_WINDOWS};
 use crate::world::{placed_in, Placed};
 use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
@@ -195,9 +195,9 @@ const _: () = assert!(
 /// it (`Grown::sink`).
 pub const GROWN_WORDS: u32 = 5;
 
-/// The eye's windows' bricks, a slot each: what the GPU grows decor in,
-/// slot `s` the brick the windows' table holds at `s`.
-pub const EYE_SLOTS: u32 = EYE_WINDOWS * SLOTS;
+/// The eye's windows' bricks, an entry each: what the GPU grows decor in,
+/// entry `s` the brick the windows' table holds at `s`.
+pub const EYE_ENTRIES: u32 = EYE_WINDOWS * ENTRIES;
 
 /// A record no decor stands at: its candidate stands or grows not where it
 /// is, so it is drawn as nothing (`drawn::NONE` its region).
@@ -212,43 +212,43 @@ const _: () = assert!(
     "no record's first word is `STOOD` or `UNGROWN`: its zoom's bits are never all set"
 );
 
-/// The GPU's decor in one buffer of words: a head per eye slot, then each
-/// slot's `BRICK_GROWN` records, then placed decor's head and its records.
-/// A slot's records are its candidates', each at its own place
-/// (`slot_record`), so one grown again rewrites its own alone. A head is
-/// the brick they were grown for, X and Y, and 1 once they were — a slot
+/// The GPU's decor in one buffer of words: a head per eye entry, then each
+/// entry's `BRICK_GROWN` records, then placed decor's head and its records.
+/// An entry's records are its candidates', each at its own place
+/// (`entry_record`), so one grown again rewrites its own alone. A head is
+/// the brick they were grown for, X and Y, and 1 once they were — an entry
 /// whose brick the windows no longer hold there is skipped by it
 /// (`grown_for`) — then how many candidates each patch of each decor bears,
 /// as many of its records as are read (`bears_at`). Placed decor's head is
 /// its count.
 pub const BEARS_AT: u32 = 3;
 pub const HEAD_WORDS: u32 = BEARS_AT + RUNS;
-const SLOTS_AT: u32 = EYE_SLOTS * HEAD_WORDS;
-/// Records the slots hold, every one, ahead of placed decor's.
-pub const SLOT_RECORDS: u32 = EYE_SLOTS * BRICK_GROWN;
+const SLOTS_AT: u32 = EYE_ENTRIES * HEAD_WORDS;
+/// Records the entries hold, every one, ahead of placed decor's.
+pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_GROWN;
 pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * GROWN_WORDS;
 pub const PLACED_HEAD_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (pxl-shader decor.rs
-/// `records`): a slot's, each decor's patches in turn; placed decor's, a
+/// `records`): an entry's, each decor's patches in turn; placed decor's, a
 /// record each.
 pub const RUNS: u32 = DECORS.len() as u32 * BRICK_PATCHES;
 
-/// Slot `s`'s head.
+/// Entry `s`'s head.
 pub const fn head_at(s: u32) -> u32 {
     s * HEAD_WORDS
 }
 
-/// The word of slot `s`'s head counting what the `p`-th patch of decor `k`
+/// The word of entry `s`'s head counting what the `p`-th patch of decor `k`
 /// bears.
 pub const fn bears_at(s: u32, k: u32, p: u32) -> u32 {
     head_at(s) + BEARS_AT + k * BRICK_PATCHES + p
 }
 
-/// Slot `s`'s record of candidate `i` of the `p`-th patch of `rows`' decor
+/// Entry `s`'s record of candidate `i` of the `p`-th patch of `rows`' decor
 /// `k`, as a record number (`record_at`): the decors' rooms laid in the
 /// catalog's order, a patch's room each (`Decor::room`).
-pub fn slot_record(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
+pub fn entry_record(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
     let (mut first, mut j) = (0, 0);
     while j < k {
         first += rows[j as usize].room();
@@ -257,7 +257,7 @@ pub fn slot_record(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
     s * BRICK_GROWN + first * BRICK_PATCHES + p * rows[k as usize].room() + i
 }
 
-/// Record `n`'s first word, the slots' first, slot by slot, then placed
+/// Record `n`'s first word, the entries' first, entry by entry, then placed
 /// decor's.
 pub const fn record_at(n: u32) -> u32 {
     if n < SLOT_RECORDS {
@@ -267,7 +267,7 @@ pub const fn record_at(n: u32) -> u32 {
     }
 }
 
-/// Whether a slot's head says its records were grown for the brick `q`.
+/// Whether an entry's head says its records were grown for the brick `q`.
 pub const fn grown_for(head: [u32; 3], q: [i32; 2]) -> bool {
     head[2] == 1 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
 }
@@ -284,10 +284,10 @@ const _: () = assert!(crate::window::FIRST_CELL > EVERY);
 
 /// What `decor_mark_cs` reads and lists and `decor_stand_cs` and `decor_cs`
 /// are dispatched by, in words: each one's workgroups across, up and the
-/// slot-decor pairs listed, a pad (`STAND_ARGS`, `GROW_ARGS`); whether every
-/// slot grows whole, decor having been off (`GROWS_EVERY`), and how many
+/// entry-decor pairs listed, a pad (`STAND_ARGS`, `GROW_ARGS`); whether every
+/// entry grows whole, decor having been off (`GROWS_EVERY`), and how many
 /// boxes (`GROWS_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
-/// list, a slot, its decor (`<< 16`) and whether it grows whole (`WHOLE`)
+/// list, an entry, its decor (`<< 16`) and whether it grows whole (`WHOLE`)
 /// each, in no order.
 pub const STAND_ARGS: u32 = 0;
 pub const GROW_ARGS: u32 = 4;
@@ -298,7 +298,7 @@ pub const GROWS_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
 pub const WHOLE: u32 = 1 << 31;
 
 /// The words of what `decor_mark_cs` lists.
-pub const GROWS_WORDS: u32 = GROWS_AT + EYE_SLOTS * DECORS.len() as u32;
+pub const GROWS_WORDS: u32 = GROWS_AT + EYE_ENTRIES * DECORS.len() as u32;
 
 /// How far about its own, in its window's cells, a candidate's growth reads
 /// the world (`grown`): the cells its pose votes on, its box, and the placed
@@ -906,7 +906,7 @@ impl Decor {
     }
 
     /// The most candidates a patch of it bears, its counts' longest: a
-    /// patch's room among a slot's records (`slot_record`).
+    /// patch's room among an entry's records (`entry_record`).
     pub const fn room(&self) -> u32 {
         let [top, finer] = self.counts;
         if top.len > finer.len {

@@ -188,13 +188,13 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     let before = *place;
     let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], is_cell);
     if place.from() != before.from()
-        || place.berth() != before.berth()
+        || place.slot() != before.slot()
         || place.here() != before.here()
     {
         *trail = if place.here() {
             crate::way::tree::cursor(
                 pool,
-                bricks.root(place.from(), place.berth()),
+                bricks.root(place.from(), place.slot()),
                 place.from(),
                 zoom,
                 c,

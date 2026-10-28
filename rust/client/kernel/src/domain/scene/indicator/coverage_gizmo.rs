@@ -22,11 +22,11 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::window::{self, Slot, EYE_WINDOWS, FIRST_CELL, SLOTS};
+use pxl_spec_core::window::{self, Entry, ENTRIES, EYE_WINDOWS, FIRST_CELL};
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
-use crate::domain::layer::terrain::window::{eye_slots, tile_of};
+use crate::domain::layer::terrain::window::{eye_entries, tile_of};
 use crate::domain::layer::Base as _;
 use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
@@ -199,10 +199,10 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 /// alone. One not drawn is marked by its line: no tile on it, only the
 /// floor's, or a tile and its brick not yet filled.
 fn outline(o: &Observation, top: Zoom) -> Outline {
-    let held: [Option<[Slot; SLOTS as usize]>; EYE_WINDOWS as usize] =
-        core::array::from_fn(|w| eye_slots(window::eye_cell(w as u32)));
+    let held: [Option<[Entry; ENTRIES as usize]>; EYE_WINDOWS as usize] =
+        core::array::from_fn(|w| eye_entries(window::eye_cell(w as u32)));
     let present = |cell: Zoom, q: [i32; 2]| {
-        held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[window::slot(q) as usize].holds(q))
+        held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[window::entry(q) as usize].holds(q))
     };
     let over = (o.eye[2] - o.ground).max(0.0);
     let near = |(x0, y0, side): (f64, f64, f64)| {
@@ -228,12 +228,12 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
         if GROUND.tile_zoom(cell) < top as i32 {
             continue;
         }
-        let Some(slots) = held[(cell - FIRST_CELL) as usize] else {
+        let Some(entries) = held[(cell - FIRST_CELL) as usize] else {
             continue;
         };
         let pz = window::bricks_zoom(cell);
-        for slot in slots {
-            let p = slot.brick;
+        for entry in entries {
+            let p = entry.brick;
             let tile = tile_of(cell, p).0;
             // The brick drawn in its place: its own, or the finest coarser one present.
             let drawn = (FIRST_CELL..=cell)

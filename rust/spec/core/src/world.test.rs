@@ -10,10 +10,10 @@ use crate::fill::{column_of, laid_of, level_of, put, root_of, Fresh};
 use crate::ground::Bounds;
 use crate::support::{asset, footing};
 use crate::window::{
-    self, bound_over, column_top, fold, join, joined_index, laid_half, level_index, of_index, slot,
-    Slot, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, COLUMNS_AT, EYE_WINDOWS,
-    FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LEVELS, LEVELS_AT,
-    LEVEL_ENTRY_WORDS, ORIGIN_AT, SLOTS, WINDOW, WINDOWS,
+    self, bound_over, column_top, entry, fold, join, joined_index, laid_half, level_index,
+    of_index, Entry, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, COLUMNS_AT, ENTRIES,
+    EYE_WINDOWS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LEVELS,
+    LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT, WINDOW, WINDOWS,
 };
 use std::{vec, vec::Vec};
 
@@ -39,34 +39,34 @@ fn height([x, y]: [i32; 2]) -> i32 {
 const TOWER: core::ops::Range<i32> = 40..48;
 
 /// The windows as one side holds them, laid out as a GPU's are (pxl-shader
-/// world.rs `World`): every window's slots then their first bricks
-/// (`ORIGIN_AT`), the eye's windows' entries, and each berth's brick.
+/// world.rs `World`): every window's entries then their first bricks
+/// (`ORIGIN_AT`), the eye's windows' entries, and each slot's brick.
 #[derive(Clone, Copy)]
 struct Windows<'a> {
-    rows: &'a [Slot],
+    rows: &'a [Entry],
     joined: &'a [[u32; JOINED_WORDS as usize]],
     ground: &'a [u32],
 }
 
 impl Bricks for Windows<'_> {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
-        let row = self.rows[((cell - FIRST_CELL) * SLOTS + slot(q)) as usize];
-        (row.berth(), row.holds(q))
+        let row = self.rows[((cell - FIRST_CELL) * ENTRIES + entry(q)) as usize];
+        (row.slot(), row.holds(q))
     }
-    fn brick(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
-        self.rows[((cell - FIRST_CELL) * SLOTS + slot) as usize].held()
+    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
+        self.rows[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
     }
     fn look(&self, _: Zoom, _: u32, _: u32) -> u32 {
         ground::word([stone as u32; 4])
     }
-    fn column(&self, _: Zoom, berth: u32, i: u32) -> u32 {
-        column_of(self.ground, berth * BRICK_WORDS, i)
+    fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
+        column_of(self.ground, slot * BRICK_WORDS, i)
     }
-    fn level(&self, _: Zoom, berth: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        level_of(self.ground, berth * BRICK_WORDS, j, at)
+    fn level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        level_of(self.ground, slot * BRICK_WORDS, j, at)
     }
-    fn laid(&self, _: Zoom, berth: u32, i: u32) -> u32 {
-        laid_of(self.ground, berth * BRICK_WORDS, i)
+    fn laid(&self, _: Zoom, slot: u32, i: u32) -> u32 {
+        laid_of(self.ground, slot * BRICK_WORDS, i)
     }
     fn joined(&self, cell: Zoom, e: u32) -> [u32; JOINED_WORDS as usize] {
         self.joined[((cell - FIRST_CELL) * JOINED_ENTRIES + e) as usize]
@@ -74,8 +74,8 @@ impl Bricks for Windows<'_> {
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
         self.rows[(ORIGIN_AT + cell - FIRST_CELL) as usize].held()
     }
-    fn root(&self, _: Zoom, berth: u32) -> u32 {
-        root_of(self.ground, berth * BRICK_WORDS)
+    fn root(&self, _: Zoom, slot: u32) -> u32 {
+        root_of(self.ground, slot * BRICK_WORDS)
     }
 }
 
@@ -155,9 +155,9 @@ impl Query for Asked<'_> {
 
 /// The windows from the first to `CELL`, each about `EYE`, every brick
 /// held but `CELL`'s east half; each held brick's columns, cells as laid
-/// and levels, a berth each. Its entries are not folded.
-fn windows() -> (Vec<Slot>, Vec<u32>) {
-    let mut rows = vec![Slot::absent([0, 0]); (ORIGIN_AT + WINDOWS) as usize];
+/// and levels, a slot each. Its entries are not folded.
+fn windows() -> (Vec<Entry>, Vec<u32>) {
+    let mut rows = vec![Entry::absent([0, 0]); (ORIGIN_AT + WINDOWS) as usize];
     let mut ground = Vec::new();
     for cell in FIRST_CELL..=CELL {
         let s = LEAF_CELL - cell;
@@ -165,24 +165,24 @@ fn windows() -> (Vec<Slot>, Vec<u32>) {
             (EYE[0] >> s >> BRICK_SHIFT) - ACROSS as i32 / 2,
             (EYE[1] >> s >> BRICK_SHIFT) - ACROSS as i32 / 2,
         ];
-        rows[(ORIGIN_AT + cell - FIRST_CELL) as usize] = Slot {
+        rows[(ORIGIN_AT + cell - FIRST_CELL) as usize] = Entry {
             brick: first,
             present: 1,
             ticket: 0,
         };
-        for k in 0..SLOTS {
+        for k in 0..ENTRIES {
             let q = [
                 first[0] + (k % ACROSS) as i32,
                 first[1] + (k / ACROSS) as i32,
             ];
-            let row = &mut rows[((cell - FIRST_CELL) * SLOTS + slot(q)) as usize];
-            *row = Slot::absent(q);
+            let row = &mut rows[((cell - FIRST_CELL) * ENTRIES + entry(q)) as usize];
+            *row = Entry::absent(q);
             if cell == CELL && k % ACROSS >= ACROSS / 2 {
                 continue;
             }
-            let berth = (ground.len() as u32) / BRICK_WORDS;
-            row.present = berth as i32 + 1;
-            let base = berth * BRICK_WORDS;
+            let slot = (ground.len() as u32) / BRICK_WORDS;
+            row.present = slot as i32 + 1;
+            let base = slot * BRICK_WORDS;
             ground.resize(ground.len() + BRICK_WORDS as usize, 0);
             for i in 0..BRICK_CELLS {
                 let [x, y] = of_index(i);
@@ -227,7 +227,7 @@ fn windows() -> (Vec<Slot>, Vec<u32>) {
 /// Each window's entries folded a level at a time, as `joined_cs` folds
 /// them; `zero`, the zero entry, none, over a block a brick of which the
 /// window does not hold present: no bound, which only splits more.
-fn folded(rows: &[Slot], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS as usize]> {
+fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS as usize]> {
     let mut joined = vec![[0; JOINED_WORDS as usize]; (EYE_WINDOWS * JOINED_ENTRIES) as usize];
     for l in 1..=JOINED_LEVELS {
         let blocks = (ACROSS >> l) * (ACROSS >> l);
@@ -241,7 +241,7 @@ fn folded(rows: &[Slot], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS a
                 .map(|b| {
                     let [x, y] = of_index(b);
                     let unheld = (0..4).any(|k| {
-                        let s = slot([(2 * x + k % 2) as i32, (2 * y + k / 2) as i32]);
+                        let s = entry([(2 * x + k % 2) as i32, (2 * y + k / 2) as i32]);
                         !w.brick(cell, s).1
                     });
                     if zero && l == 1 && unheld {
@@ -275,7 +275,7 @@ fn partial_block_bounded() {
     let (first, _) = w.origin(CELL);
     let (zoom, side) = (CELL - LEVELS - 1, 2 * BRICK as i32);
     let mut unheld = 0;
-    for k in 0..SLOTS / 4 {
+    for k in 0..ENTRIES / 4 {
         let c = [
             (first[0] >> 1) + (k % (ACROSS / 2)) as i32,
             (first[1] >> 1) + (k / (ACROSS / 2)) as i32,
@@ -303,7 +303,7 @@ fn partial_block_bounded() {
             );
         }
     }
-    assert_eq!(unheld, SLOTS / 8);
+    assert_eq!(unheld, ENTRIES / 8);
 }
 
 /// A footing down any column of the half held window stands where it

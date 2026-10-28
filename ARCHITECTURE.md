@@ -347,7 +347,7 @@ one at every zoom drawn; the focus two, at the leaves and the zoom over them;
 and a place the camera is travelling to one, at the leaves
 (`domain/layer/terrain/window.rs`):
 
-- A window is a few **bricks** of cells a side, each held in the slot of the
+- A window is a few **bricks** of cells a side, each held in the entry of the
   window its place names, so the window follows its centre a brick at a time
   and no held cell moves. A brick at a zoom is held once however many windows
   want it, and kept while any does.
@@ -364,18 +364,18 @@ and a place the camera is travelling to one, at the leaves
 
 ```text
   one axis of a window, ACROSS bricks a side (drawn as 8); brick x is
-  held in slot x mod ACROSS
+  held in entry x mod ACROSS
 
   brick x     12   13   14   15   16   17   18   19
             ┌────┬────┬────┬────┬────┬────┬────┬────┐
-  slot      │ 4  │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │
+  entry     │ 4  │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │
             └────┴────┴────┴────┴────┴────┴────┴────┘
-  the centre moves a brick east: 20 enters and takes slot 4, which 12
+  the centre moves a brick east: 20 enters and takes entry 4, which 12
   leaves; 13 to 19 stay where they are
 
   brick x          13   14   15   16   17   18   19   20
                  ┌────┬────┬────┬────┬────┬────┬────┬────┐
-  slot           │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │ 4  │
+  entry          │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │ 4  │
                  └────┴────┴────┴────┴────┴────┴────┴────┘
 ```
 
