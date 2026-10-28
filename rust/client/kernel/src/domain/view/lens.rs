@@ -8,7 +8,6 @@
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::CELL;
-use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::origin;
 use pxl_spec_core::{beam, eye};
 
@@ -52,40 +51,6 @@ impl Stepped {
     }
 }
 
-/// The screen as the eye sees it: its axes and the tangents of its half-angles.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Lens {
-    forward: V3,
-    right: V3,
-    up: V3,
-    tan: [f64; 2],
-}
-
-impl Lens {
-    /// From the frustum's planes (left, right, bottom, top, near, far; normals
-    /// in): the axes are differences of opposite normals and the tangents their
-    /// ratios. None without a screen.
-    fn of(o: &Observation) -> Option<Lens> {
-        let planes = o.frustum?.planes;
-        let n = |k: usize| -> V3 { [planes[k * 4], planes[k * 4 + 1], planes[k * 4 + 2]] };
-        let forward = unit(n(4))?;
-        let right = unit(v3::sub(&n(0), &n(1)))?;
-        let up = unit(v3::sub(&n(2), &n(3)))?;
-        let tan = [
-            v3::dot(&n(0), &forward) / v3::dot(&n(0), &right),
-            v3::dot(&n(2), &forward) / v3::dot(&n(2), &up),
-        ];
-        tan.iter()
-            .all(|t| t.is_finite() && *t > 0.0)
-            .then_some(Lens {
-                forward,
-                right,
-                up,
-                tan,
-            })
-    }
-}
-
 /// What a GPU's cast of the screen's rays reads of the eye (pxl-spec-core
 /// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
@@ -97,7 +62,7 @@ impl Lens {
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
 pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
-    let lens = Lens::of(o)?;
+    let lens = o.frustum?.lens()?;
     let reach = crate::domain::view::observation::eye_draw_reach()?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
@@ -117,11 +82,6 @@ pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> 
         &beam::Grid::of(lens.tan.map(|t| t as f32)).words(),
     );
     Some(())
-}
-
-fn unit(v: V3) -> Option<V3> {
-    let l = v3::len(&v);
-    (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }
 
 #[cfg(test)]
