@@ -133,7 +133,7 @@ pub struct GroundSquares<'a> {
     pub upload: &'a mut TerrainUpload,
     /// Told each square whose cells came back, and the fill they are of
     /// (`CellsBack::ticket`).
-    pub landed: &'a mut CellsLanded,
+    pub landed: &'a mut CellsLanded<'a>,
     /// The ways' pool's families at first (pxl-kernel domain/scene/param.rs
     /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
     /// to `way::tree::POOL_FAMILIES` (`GroundBuffers::grow`).
@@ -177,8 +177,9 @@ pub const RECORD_ROOMS_BYTES: u64 =
     READS as u64 * (way::tree::RECORDS_BYTES as u64).next_power_of_two();
 
 /// A square whose cells came back, the fill they are of
-/// (`CellsBack::ticket`), and how its ways' tree landed.
-pub type CellsLanded = dyn FnMut(u32, u32, Landing<'_>);
+/// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
+/// borrow its caller's for the frame.
+pub type CellsLanded<'a> = dyn FnMut(u32, u32, Landing<'_>) + 'a;
 
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the

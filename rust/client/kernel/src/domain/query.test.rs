@@ -618,15 +618,16 @@ fn what_is_placed_in_a_box_is_what_the_store_holds_there() {
     assert_eq!(asked, held);
 }
 
-/// A square that lands after the windows were folded without it is read at
-/// once with what it holds (domain/layer/terrain/window.rs `fold`): a spike
+/// A square that lands after the windows were folded without it is read
+/// with what it holds once the landings are folded, as the stage folds them
+/// (domain/layer/terrain/window.rs `refold`): a spike
 /// a cell wide in it, over ground at five and taller than a node over the
 /// square, is met where a walker's ray down it met it while the square was
 /// held from the start, and no cell of the square stands outside the bound
 /// read over it at any zoom over a square.
 #[test]
 fn a_square_landing_after_the_fold_is_read_with_its_spike() {
-    use crate::domain::layer::terrain::window::{landed, test::unland, Windowed};
+    use crate::domain::layer::terrain::window::{landed, refold, test::unland, Windowed};
     use pxl_render::gpu::renderer::Landing;
     use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE, WINDOW};
     use pxl_spec_core::LEAF_CELL;
@@ -672,7 +673,9 @@ fn a_square_landing_after_the_fold_is_read_with_its_spike() {
     };
     let held = met(&World::new(&residency, &store));
     let (b, ticket) = unland(LEAF_CELL, spike);
+    // As the stage lands a read-back: each landing, then one fold.
     landed(b, ticket, Landing::Built(&[0]));
+    refold();
     assert_eq!(met(&World::new(&residency, &store)), held, "the spike met");
     let q = cells::square_of(spike).0;
     let mut outside = 0;

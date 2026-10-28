@@ -425,7 +425,7 @@ fn windows_apart_hold_their_squares_in_their_own_berths() {
 #[test]
 fn a_landing_shows_in_every_window_wanting_the_square() {
     let _g = crate::sys::serial();
-    // The landing folds the windows over the squares' cells.
+    // The fold after the landing reads the squares' cells.
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
@@ -445,6 +445,7 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
         "another fill's landing lays nothing"
     );
     landed(b, 7, Landing::Built(&[0]));
+    refold();
     for win in [eye, focus] {
         let row = w.slots[(win * SLOTS) as usize];
         assert!(row.holds(q) && row.berth() == b);

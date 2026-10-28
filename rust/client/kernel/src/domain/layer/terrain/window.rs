@@ -255,12 +255,13 @@ fn planes() -> &'static mut Planes {
 
 /// The eye's windows' levels over their squares folded again, a level at a
 /// time, as the GPU folds its own (pxl-spec-core `window::fold`; pxl-shader
-/// `joined_cs`), over the squares as they are held here: where a square a
-/// window wants or its presence moved (`berth`, a turn's step's, and
-/// `landed`), the only writers of either, before they return, so no read of
-/// a bound (`Windowed`) finds one of other squares than its read of the
-/// cells does. Read through the windows it is handed (`Holding`), which its
-/// writer holds while it runs.
+/// `joined_cs`), over the squares as they are held here. The writers of a
+/// square a window wants or its presence are `berth`, a turn's step's,
+/// which folds before it returns, and the landings of a frame's read-back
+/// (`landed`), folded once after all of them (`refold`): no read of a bound
+/// (`Windowed`) comes between a write and its fold, so none finds one of
+/// other squares than its read of the cells does. Read through the windows
+/// it is handed (`Holding`), which its writer holds while it runs.
 fn fold(w: &mut Windows) {
     for l in 1..=window::JOINED_LEVELS {
         let blocks = (window::ACROSS >> l) * (window::ACROSS >> l);
@@ -525,7 +526,8 @@ const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 /// wants it; its families refused the mirror's room by the heap, it is absent
 /// and `WAITING` on the heap. A fill no berth waits on lays
 /// nothing: its families may be another's by now. Every window's slot
-/// holding the square shows it (`show`).
+/// holding the square shows it (`show`). The windows are folded over it
+/// once the read-back's landings are all in (`refold`).
 pub fn landed(b: u32, ticket: u32, landing: Landing) {
     let w = windows();
     let held = &mut w.berths[b as usize];
@@ -553,7 +555,14 @@ pub fn landed(b: u32, ticket: u32, landing: Landing) {
     for i in of_slot(b % SLOTS) {
         show(w, i);
     }
-    fold(w);
+}
+
+/// The windows folded again over the squares a frame's read-back landed
+/// (`landed`), once after all of them: the stage's, as soon as the frame it
+/// renders returns (domain/scene/stage.rs `stage_render`), between whose
+/// landings nothing reads a bound here, the renderer reading only the GPU's.
+pub fn refold() {
+    fold(windows());
 }
 
 /// The berths this turn hands, nearest first, as many as a frame's fill
