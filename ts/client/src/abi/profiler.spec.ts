@@ -263,19 +263,19 @@ export const SUMMARY = {
     phases_p95: 48 as number,
     gpu_spans_p95: 53 as number,
     kinds: 76 as number,
-    wakes: 84 as number,
-    heap_used_delta_bytes: 87 as number,
-    first: 88 as number,
-    last: 246 as number,
-    WORDS: 404 as number,
+    wakes: 85 as number,
+    heap_used_delta_bytes: 88 as number,
+    first: 89 as number,
+    last: 247 as number,
+    WORDS: 405 as number,
   },
   tasks: {
-    AT: 407 as number,
+    AT: 408 as number,
     slots: 0 as number,
     WORDS: 120 as number,
   },
   steps: {
-    AT: 527 as number,
+    AT: 528 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
@@ -284,7 +284,7 @@ export const SUMMARY = {
    * The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_distance`).
    * The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `pick_at`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`). */
   view: {
-    AT: 688 as number,
+    AT: 689 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -309,7 +309,7 @@ export const SUMMARY = {
     blocked: 21 as number,
     WORDS: 22 as number,
   },
-  WORDS: 710 as number,
+  WORDS: 711 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words. */

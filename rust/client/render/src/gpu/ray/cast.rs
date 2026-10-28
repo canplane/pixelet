@@ -12,7 +12,7 @@ use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
 use super::tally::{self, Counted, Tally};
-use super::RaysPass;
+use super::{casts_pixels, RaysPass};
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
     SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
@@ -161,10 +161,14 @@ pub(super) struct CastBuffers {
     overwrite_room: usize,
     overwrite_revision: Option<u32>,
     grown: Grown,
-    /// What the last cast read (`Read`), and whether this frame's is the
-    /// same: the rays and the decor grown over them stand, and nothing is
-    /// cast.
+    /// What the last cast read (`Read`) but the jitter, and whether this
+    /// frame's is the same: the samples and the decor grown over them
+    /// stand, and only the pixels are cast again where the jitter moved.
     read: Read,
+    /// Where each pixel's ray went through it last (pxl-spec-core
+    /// `eye::JITTER`). It moving alone, the beam rays, the cells' starts and
+    /// the samples stand, and the pixels are cast again off them.
+    jitter: [u32; 2],
     /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
     /// pick at each pixel the pixels read (`cast_cs`), over a group of
     /// their own (`pixel_group`): the eye, the rays, the beam's words, the
@@ -348,6 +352,7 @@ impl RaysPass {
             overwrite_revision: None,
             grown: Grown::new(g, pipelines),
             read: Read::default(),
+            jitter: [0; 2],
             raster,
             pixel_group: 0,
             pixel_bound: [0; 5],
@@ -420,11 +425,16 @@ impl RaysPass {
         r.read(&[*room as u32, *revision, rays.0]);
         // And the ground's squares, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        self.kind = if r.end() && fresh == 0 && c.group != 0 {
-            FrameKind::standing
-        } else {
-            FrameKind::cast
+        let stands = r.end() && fresh == 0 && c.group != 0;
+        let jitter = [eye[eye::JITTER], eye[eye::JITTER + 1]];
+        let jittered = jitter != c.jitter;
+        c.jitter = jitter;
+        self.kind = match (stands, jittered) {
+            (true, false) => FrameKind::standing,
+            (true, true) => FrameKind::pixels,
+            (false, _) => FrameKind::cast,
         };
+        let casts = casts_pixels(self.kind);
         xpute_kit::ensure!(
             cast.window.len() == (4 * window::JOINED_AT) as usize,
             ENOTRECOVERABLE,
@@ -634,11 +644,13 @@ impl RaysPass {
         r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
         r.mark(world_moved);
         let held = r.end();
-        // The look, where the actors stand and decor placed again: which
-        // tiles are read, not what a tile holds.
+        // The look and where each pixel's ray goes through it, where the
+        // actors stand and decor placed again: which tiles are read, not
+        // what a tile holds.
         let l = &mut c.sun_receivers;
         l.begin();
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
+        l.read(&cast.eye[eye::JITTER..eye::JITTER + 2]);
         l.read(cast.actors);
         l.mark(c.grown.counts());
         let sun_moved = !held || !l.end();
@@ -651,7 +663,7 @@ impl RaysPass {
         // epoch begins. Else what they stood on stands, marked in the epoch
         // already, so none of it is the cast's to cast anew
         // (`sun_reach_cs`).
-        c.sun_world |= self.kind == FrameKind::cast || !held;
+        c.sun_world |= casts || !held;
         if c.sun_cast {
             // The head (pxl-spec-core `sun::MOVED_WORDS`).
             let mut head = [0u32; sun::MOVED_WORDS];
@@ -677,10 +689,10 @@ impl RaysPass {
             g.write_buffer(c.sun_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
             c.raster.sun_prepare(g, &cast.eye, shadow::SIZE);
         }
-        if eye_moved || c.sun_cast {
+        if eye_moved || jittered || c.sun_cast {
             g.write_buffer(c.eye, 0, bytes(&cast.eye));
         }
-        if self.kind == FrameKind::cast {
+        if casts {
             c.forgets = if c.forget {
                 observed::FORGETS_ALL
             } else if c.moved.iter().any(|&m| m != 0) || c.holding != 0 || c.writes != 0 {
@@ -724,6 +736,8 @@ impl RaysPass {
             c.sent = None;
         }
         let frame = tally::Frame {
+            // A full cast's alone, so what a cast asks is not shared out
+            // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.sun_cast],
             rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
         };
@@ -746,7 +760,7 @@ impl RaysPass {
             c.group = cast_group(g, &c.miss_built, bound);
             c.bound = bound;
         }
-        if self.kind == FrameKind::cast {
+        if casts {
             c.raster.prepare(
                 g,
                 &cast.eye,
@@ -846,9 +860,9 @@ impl RaysPass {
     /// the map's pass, which is not drawn at the world's pixels
     /// (`PER_PIXEL`).
     pub fn dispatch(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
-        let grows = self.grows();
+        let (grows, casts, kind) = (self.grows(), self.casts_pixels(), self.kind);
         let Some(c) = self.cast.as_mut() else { return };
-        if self.kind == FrameKind::cast {
+        if casts {
             // The observed pyramid forgotten first where it is; then the
             // beam rays writing it, a corner each; each cell's start off them;
             // the samples writing it, each from its cell's start; their
@@ -861,7 +875,10 @@ impl RaysPass {
             // A pass a dispatch, each timed in its own span, so the cast's
             // parts are read apart: `cast` holds the forgetting alone; the
             // samples' boxes drawn between the samples and the pixels, which
-            // take the raster's pick (ray/raster.rs, span `sraster`).
+            // take the raster's pick (ray/raster.rs, span `sraster`). Where
+            // only the jitter moved (`FrameKind::pixels`), the beam rays, the
+            // cells' starts and the samples stand, and the rest is cast again
+            // off them.
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::cast as usize].pass());
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != observed::FORGETS_NONE {
@@ -900,6 +917,9 @@ impl RaysPass {
                     compute::CAST_WORKGROUP,
                 ),
             ] {
+                if kind == FrameKind::pixels && span != GpuSpanName::pixel {
+                    continue;
+                }
                 let mut group = c.group;
                 if span == GpuSpanName::pixel {
                     c.raster.draw(g, encoder, stamps, &c.grid);

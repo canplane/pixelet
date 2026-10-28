@@ -37,7 +37,8 @@
     "plain",
     "standing",
     "cast",
-    "stood"
+    "stood",
+    "pixels"
   ],
-  "$FRAME_KINDS": "What the renderer made of a frame turn, where it decides it (pxl-render gpu/renderer.rs `render_frame`, `FrameKind`): `none` before it was asked; `unready` with no device or surface; `held` where the surfaces would block (not admitted); `dropped` where the frame did not fit the GPU stream; `plain` drawn with nothing cast; `standing` drawn on the standing ray lane; `cast` drawn with a cast; `stood` where nothing the frame reads changed, so nothing is drawn or submitted and the canvases keep what they show."
+  "$FRAME_KINDS": "What the renderer made of a frame turn, where it decides it (pxl-render gpu/renderer.rs `render_frame`, `FrameKind`): `none` before it was asked; `unready` with no device or surface; `held` where the surfaces would block (not admitted); `dropped` where the frame did not fit the GPU stream; `plain` drawn with nothing cast; `standing` drawn on the standing ray lane; `cast` drawn with a cast; `stood` where nothing the frame reads changed, so nothing is drawn or submitted and the canvases keep what they show; `pixels` drawn with the pixels cast again over samples that stood, where only the eye's jitter moved (pxl-spec-core `eye::JITTER`)."
 }

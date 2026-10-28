@@ -23,6 +23,13 @@ use cast::CastBuffers;
 use ground::GroundBuffers;
 pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
 
+/// Whether a frame of `kind` casts the pixels' rays, whole or off the
+/// samples that stand: the rays, their depth and where they met the world
+/// are laid again.
+fn casts_pixels(kind: FrameKind) -> bool {
+    kind == FrameKind::cast || kind == FrameKind::pixels
+}
+
 pub struct RaysPass {
     built: Built,
     /// The same pixels' depth alone, into the occlusion's prepass.
@@ -39,7 +46,8 @@ pub struct RaysPass {
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
     /// What this frame does with the cast, as `prepare` decided it: nothing
-    /// cast (`plain`), the rays standing (`standing`), or a cast run
+    /// cast (`plain`), the rays standing (`standing`), the pixels cast
+    /// again over the samples that stand (`pixels`), or a cast run
     /// (`cast`).
     pub kind: FrameKind,
 }
@@ -65,6 +73,11 @@ impl RaysPass {
             cast: None,
             kind: FrameKind::plain,
         }
+    }
+
+    /// Whether this frame casts the pixels' rays (`casts_pixels`).
+    pub fn casts_pixels(&self) -> bool {
+        casts_pixels(self.kind)
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is

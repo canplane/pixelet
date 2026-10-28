@@ -886,7 +886,7 @@ impl Renderer {
         // rays that stood: nothing is drawn, nothing submitted, and the
         // canvases keep the frame they show.
         if read.end()
-            && self.screen.kind != FrameKind::cast
+            && !self.screen.casts_pixels()
             && !self.screen.grows()
             && !self.screen.sun_casts()
             && !gridded
@@ -947,7 +947,7 @@ impl Renderer {
         ]);
         // The world's depth is the rays', so a cast that laid them again
         // lays the occlusion again.
-        a.mark(ao_remade || self.screen.grows() || self.screen.kind == FrameKind::cast);
+        a.mark(ao_remade || self.screen.grows() || self.screen.casts_pixels());
         let ao_moved = !a.end();
         if self.screen_ao && ao_moved {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);

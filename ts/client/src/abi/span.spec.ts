@@ -41,4 +41,5 @@ export const FRAME_KINDS = [
   "standing",
   "cast",
   "stood",
+  "pixels",
 ] as const;

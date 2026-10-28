@@ -230,19 +230,19 @@ pub mod SUMMARY {
         pub const phases_p95: u32 = 48;
         pub const gpu_spans_p95: u32 = 53;
         pub const kinds: u32 = 76;
-        pub const wakes: u32 = 84;
-        pub const heap_used_delta_bytes: u32 = 87;
-        pub const first: u32 = 88;
-        pub const last: u32 = 246;
-        pub const WORDS: u32 = 404;
+        pub const wakes: u32 = 85;
+        pub const heap_used_delta_bytes: u32 = 88;
+        pub const first: u32 = 89;
+        pub const last: u32 = 247;
+        pub const WORDS: u32 = 405;
     }
     pub mod tasks {
-        pub const AT: u32 = 407;
+        pub const AT: u32 = 408;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 527;
+        pub const AT: u32 = 528;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -251,7 +251,7 @@ pub mod SUMMARY {
     /// The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_distance`).
     /// The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `pick_at`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: u32 = 688;
+        pub const AT: u32 = 689;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -276,7 +276,7 @@ pub mod SUMMARY {
         pub const blocked: u32 = 21;
         pub const WORDS: u32 = 22;
     }
-    pub const WORDS: u32 = 710;
+    pub const WORDS: u32 = 711;
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.
