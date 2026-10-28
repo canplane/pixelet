@@ -22,7 +22,8 @@ use crate::raster::{boxed, picked, NONE};
 use crate::world::{Looks, World};
 
 /// A ray as an observer aims it: where it starts, its way and reach, and
-/// the zooms it asks with the cone it passes by (`cast::Detail`).
+/// the zooms it asks with the spacing its beam rays lie apart by
+/// (`cast::Detail`).
 #[derive(Clone, Copy)]
 pub(crate) struct Aim {
     pub(crate) origin: [i32; 3],
@@ -43,8 +44,8 @@ pub(crate) enum Level {
 
 /// An observer as the passes ask it: its lattice of beam rays' corners,
 /// their cells and its samples, where each one's words lie, and the ray at
-/// a point of it. Its rays ask the zooms the eye asks at each point and
-/// pass by a cone of their own (`Aim::detail`).
+/// a point of it. Its rays ask the zooms the eye asks at each point, and
+/// its beam rays lie apart by a spacing of its own (`Aim::detail`).
 pub(crate) trait Observer {
     /// Where on its lattice a ray is aimed: the eye's tangents across and
     /// up, the map's slot.

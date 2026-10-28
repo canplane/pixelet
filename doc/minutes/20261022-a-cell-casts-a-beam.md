@@ -85,6 +85,12 @@ as an eye's ray does (`cast::walk`), with two differences:
   > its parent's, and the prune only grows going down, so the beam ray's
   > pruned and grown box of any node over it holds that point; what is left
   > is the second order in the cell's angle, `O(s² d)`, of the rays' parting.
+  >
+  > **Note (10-28):** nothing is pruned any more. The beam's box is grown by
+  > `2√2 · s · d` alone, and the proof holds through the narrow node's own
+  > box, which a pixel's ray meets as the beam ray's does
+  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md),
+  > its note of 10-28).
 - **It stops early.** It stops at the entry of the first block that fills or
   lacks, as any walk ends, and of the first split narrower than `2√2 · s · d`,
   where `s` is the cell's angle and `d` the node's farthest distance from the

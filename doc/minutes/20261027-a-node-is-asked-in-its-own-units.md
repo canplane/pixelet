@@ -53,12 +53,29 @@ rule each change is held to.
   wider than the cone there: the ground's reaches down to the node's floor or
   spans two blocks, what is placed answers halves. A source answering thinner
   boxes would be passed crossed at a slant.
+
+  > **Note (10-28):** nothing is passed any more, by the eye or the sun's
+  > map. The cone is read only by a beam, whose rays lie `apart` cones apart
+  > (`cast::Cone`). At grazing angles a passed cell left its row missing
+  > whole, which no pick could bring back. With the eye's prune off the rows
+  > went, at about a millisecond of GPU p95 at the horizon
+  > ([the rows, seen](../experiment/20261028-the-rows-seen.md)), which the
+  > user took over the rows on 10-28. The sun's
+  > prune, the same machinery, bought nothing that could be measured or seen
+  > ([the sun without its
+  > prune](../experiment/20261028-the-sun-without-its-prune.md)). The
+  > mitigations tried with the prune kept held neither the frame nor the
+  > rows ([the cone touches](../experiment/20261028-the-cone-touches.md),
+  > [the ring](../experiment/20261028-the-ring.md)).
 - **A walk resumed is a walk of its own.** A pixel resumed inside a node never
   tests that node again, so it may stop on content the root's walk would
   have passed in that node's pruned strip: no later, within half a cone,
   and from whichever line it starts. A pick is exact while the eye prunes, so a pointer may
   strike a thing thinner than half a cone the eye no longer draws: the two
   observe on quanta of their own.
+
+  > **Note (10-28):** with nothing passed (above), a resumed walk and the
+  > root's meet the same cells, and the eye draws what a pointer strikes.
 
 ## What follows
 
@@ -77,6 +94,11 @@ rule each change is held to.
   turning, rough, a load each: the beam span 10.9–12.4 ms to 3.7 at p95, GPU
   p50 17.9 ms to 13.0 and p95 17.0, 59.6 fps; on the fixed path the frame as
   it was (GPU p50 10.4 ms, 51.9 fps).
+
+  > **Note (10-28):** this was the prune's (above), and goes with it. The
+  > eye's horizon pays about a millisecond of GPU p95 again
+  > ([the rows, seen](../experiment/20261028-the-rows-seen.md)).
+
 - **The step is a quantum, kept under the grid.** A box rounded out to a step
   of its node stands over what it holds by up to that step, and a ray grazing
   it clears it that much later. At an eighth of the node (the first cut,

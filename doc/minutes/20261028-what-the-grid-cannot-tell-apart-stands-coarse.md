@@ -81,6 +81,11 @@ regression, not an answer. What stands:
   (`beam::spacing`). The sun's is its texel. Control is exact.
 - The prune passes what the cone cannot tell apart, so the horizon costs what
   any direction does (`cast.rs` `walk`, `meets_box`).
+
+  > **Note (10-28):** the prune is gone, the eye's and the sun's, and with it
+  > the rows; the eye's horizon costs about a millisecond of GPU p95 again
+  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md),
+  > its note of 10-28).
 - Every view is cast at one τ, an angle, so the display draws and decides
   nothing (`0c84382cd`).
 - The rays find and the raster hands out
@@ -121,6 +126,10 @@ for the loss. Both are code readings, not yet confirmed on the screen:
      apart can step over it.
    - Passing a cell as air is a leak in 20260928's sense: the neighbour cell
      then observes what lies behind.
+
+   > **Note (10-28):** this was the rows' cause
+   > ([the rows, seen](../experiment/20261028-the-rows-seen.md)), and the
+   > prune is gone.
 
 Both apply don't-care by distance, isotropically. September applied it by each
 axis of the screen. That is the gap.
