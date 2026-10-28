@@ -209,8 +209,8 @@ impl Sun {
 
     /// `detail`, the eye's zooms at every point as the eye asks them
     /// (`cast::Detail::eye`), so the map holds the cells the eye draws; its
-    /// cone the map's texel, which passes what a texel cannot tell apart
-    /// (`cast::Cone`), and its beam rays `BEAM` of them apart.
+    /// cone the map's texel (`cast::Cone`), and its beam rays `BEAM` of them
+    /// apart.
     pub fn detail(&self, mut detail: Detail) -> Detail {
         detail.cone = crate::cast::Cone {
             angle: 0.0,

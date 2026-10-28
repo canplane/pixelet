@@ -73,7 +73,16 @@ blend it. That needs transparency the opaque cells here do not have.
   the result is not relevant for very small voxels". It does not pass it. The
   prune passes, and so it errs toward holes.
 
+  > **Note (10-28):** the prune is gone
+  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md),
+  > its note of 10-28).
+
 ## The direction: stop where the cone touches
+
+> **Note (10-28):** not taken. Built, it held the visits and cost five to
+> seven times the sample and raster passes
+> ([the cone touches](../experiment/20261028-the-cone-touches.md)). The
+> prune was taken off instead.
 
 The user, before this record: "그냥 뭐든간에 하나라도 걸치면 그냥 거기서
 멈추면?" In English: stop the moment anything at all is touched.
