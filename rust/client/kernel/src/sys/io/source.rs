@@ -16,8 +16,8 @@ use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 use pxl_spec_core::area::{self, Area};
+use pxl_spec_core::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 

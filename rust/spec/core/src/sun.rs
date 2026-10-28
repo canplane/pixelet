@@ -16,8 +16,8 @@
 //! established is kept for the next, so no policy says what still stands.
 
 use crate::cast::{Detail, Ends, Met, Ray};
-use crate::{axis, FRAC_W};
 use crate::param::sun::{SAMPLE, SPREAD};
+use crate::{axis, FRAC_W};
 use core::f32::consts::SQRT_2;
 
 /// The sun's cast as the eye's words hold it (`eye::SUN`), a frame's

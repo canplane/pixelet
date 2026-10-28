@@ -13,8 +13,8 @@
 //! what is grown.
 
 use pxl_spec_core::decor::{COUNTS, DECORS};
-use pxl_spec_core::{eye, overwrite, window};
 use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_PATCHES};
+use pxl_spec_core::{eye, overwrite, window};
 
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
@@ -293,7 +293,9 @@ impl Grown {
                 ]);
                 (scatter::square_box(cell, q), cell)
             });
-            let held = self.held[..self.marked].iter().map(|&b| (b, scatter::EVERY));
+            let held = self.held[..self.marked]
+                .iter()
+                .map(|&b| (b, scatter::EVERY));
             let mut n = 0;
             for (b, zoom) in held.chain(fresh).take(scatter::MARKED as usize) {
                 let at = n * scatter::BOX_WORDS as usize;
@@ -349,11 +351,7 @@ impl Grown {
         let c = &mut self.counted;
         c.begin();
         c.read(&grows.eye[eye::ORIGIN..eye::ORIGIN + 3]);
-        c.read(&[
-            grows.eye[eye::RANGE],
-            grows.eye[eye::RANGE + 1],
-            self.room,
-        ]);
+        c.read(&[grows.eye[eye::RANGE], grows.eye[eye::RANGE + 1], self.room]);
         c.read(f.drawing);
         c.read(meshes);
         c.read(&f.translation);
@@ -405,10 +403,7 @@ impl Grown {
                 &self.mark,
                 &[window, self.records, self.grows, self.rows, self.shown],
             ),
-            group(
-                &self.stand,
-                &[window, self.records, self.rows, self.grows],
-            ),
+            group(&self.stand, &[window, self.records, self.rows, self.grows]),
             group(
                 &self.grow,
                 &[

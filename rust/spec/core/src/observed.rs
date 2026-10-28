@@ -141,7 +141,10 @@ pub const SUN_MISSED_PASS: u32 = 5;
 
 /// A key's tag's bits, under its two zooms' (`key`).
 const TAG_BITS: u32 = 20;
-const _: () = assert!(TAG_BITS + 2 * ZOOM_BITS == 32, "a key is the tag and two zooms");
+const _: () = assert!(
+    TAG_BITS + 2 * ZOOM_BITS == 32,
+    "a key is the tag and two zooms"
+);
 
 /// The frames one clearing's keys tell apart (`tag`), before the next: as
 /// many as the tag's `TAG_BITS` hold `PASSES` tags of.
@@ -325,7 +328,10 @@ pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, slot: u32) ->
     moved[(k / 32) as usize] & 1 << (k % 32) != 0
 }
 
-const _: () = assert!(crate::FINEST_ZOOM < 1 << ZOOM_BITS, "a key holds a zoom in its bits");
+const _: () = assert!(
+    crate::FINEST_ZOOM < 1 << ZOOM_BITS,
+    "a key holds a zoom in its bits"
+);
 
 #[cfg(test)]
 mod tests {

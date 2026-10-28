@@ -20,11 +20,11 @@ use crate::cave::node_seed;
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, COUNTS, DECORS, PATCH};
 use crate::lattice::GROUND;
-use crate::world::{placed_in, Placed};
-use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
-use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, UNIT_ZOOM};
-use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
+use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
+use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
+use crate::world::{placed_in, Placed};
+use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, UNIT_ZOOM};
 
 const PATCH_SHIFT: u32 = PATCH.trailing_zeros();
 const _: () = assert!(

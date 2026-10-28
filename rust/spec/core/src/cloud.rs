@@ -7,9 +7,9 @@
 //! GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
 //! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_KEPT`.
 
-use crate::UNIT_ZOOM;
 use crate::param::cloud::LATTICE_SHAMT;
 use crate::param::cloud::WIND;
+use crate::UNIT_ZOOM;
 
 /// The lattice's units around the world, X's 2^24 units over a lattice unit's.
 pub const LATTICE_COUNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);

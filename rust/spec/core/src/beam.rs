@@ -17,7 +17,6 @@ use crate::grid::CELL;
 use crate::param::beam::NEAR;
 use crate::param::beam::SAMPLE;
 
-
 /// The camera grid as a frame lays it over the screen, worked out once,
 /// from the screen's tangents (`of`), where the kernel writes the
 /// eye's words (pxl-kernel domain/view/lens.rs `gpu_cast`, pxl-spec-core

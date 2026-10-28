@@ -6,15 +6,15 @@
 
 use pxl_spec_core::way;
 use pxl_spec_core::window::{
-    self, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_SQUARE, FRESH_WORDS, HANDED,
-    HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS,
+    self, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_SQUARE, FRESH_WORDS, HANDED, HANDED_WORDS, LEVELS,
+    LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS,
 };
 use xpute_guest::mem::off_of;
 
 use super::RaysPass;
 use crate::frame::shader::record::{
-    compute, dynamic, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE,
-    SHADER_WAY_FREED, SHADER_WAY_TREE,
+    compute, dynamic, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_FREED,
+    SHADER_WAY_TREE,
 };
 use crate::gpu::api::{
     buffer_entry, buffer_range_entry, buffer_usage, bytes, release, room, word_bytes,
@@ -411,10 +411,8 @@ impl RaysPass {
                 pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
             );
             let (pool, stack) = pool_buffers(g, families);
-            let free_built =
-                pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP);
-            let tree_built =
-                pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP);
+            let free_built = pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP);
+            let tree_built = pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP);
             let freed_built =
                 pipelines.build_compute(g, SHADER_WAY_FREED, &compute::WAY_FREED_GROUP);
             let mut gb = GroundBuffers {

@@ -24,13 +24,13 @@ use crate::cave::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
-use crate::window::Found;
-use crate::{Zoom, LEAF_CELL, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
-use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
 use crate::param::ground::BEDROCK_DEPTH;
 use crate::param::ground::FILLER_DEPTH;
 use crate::param::ground::HEADROOM;
 use crate::param::ground::SANDSTONE_DEPTH;
+use crate::param::tile::{LEAF_ZOOM, TOP_ZOOM};
+use crate::window::Found;
+use crate::{Zoom, LEAF_CELL, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
 /// The catalog's void and unknown as the words a look is read into.

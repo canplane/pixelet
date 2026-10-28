@@ -5,7 +5,6 @@
 //! reason beside it. What follows from them is computed by name where it is
 //! used.
 
-
 pub mod beam {
     /// Samples a camera grid cell a side: the lattice whose stops a pixel takes
     /// the nearest of (beam.rs `SAMPLE_NODE`).

@@ -14,8 +14,8 @@
 
 use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
 use crate::lattice::{GROUND, TILE_CELLS};
-use crate::{wrap_index, Zoom, LEAF_CELL};
 use crate::param::tile::TOP_ZOOM;
+use crate::{wrap_index, Zoom, LEAF_CELL};
 
 /// A square's side in cells, as a shift.
 pub const SQUARE_SHIFT: u32 = 6;

@@ -348,7 +348,10 @@ fn ordered(
     let level = |m: &str| order.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
     let mut problems = Vec::new();
     let mut unplaced = std::collections::BTreeSet::new();
-    for f in files.iter().filter(|f| f.starts_with(root) && f.ends_with(".rs")) {
+    for f in files
+        .iter()
+        .filter(|f| f.starts_with(root) && f.ends_with(".rs"))
+    {
         let me = standing(f, root);
         let Some(mine) = level(&me) else {
             if !["lib", "domain"].contains(&me.as_str()) && !beside.contains(&me.as_str()) {
@@ -401,11 +404,16 @@ fn listed(root: &std::path::Path) -> Result<String, String> {
         return String::from_utf8(out.stdout).map_err(|e| format!("git ls-files: {e}"));
     }
     fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut String) {
-        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for e in entries.flatten() {
             let p = e.path();
             let name = e.file_name();
-            if ["target", "node_modules", ".git"].iter().any(|n| name == *n) {
+            if ["target", "node_modules", ".git"]
+                .iter()
+                .any(|n| name == *n)
+            {
                 continue;
             }
             // A link is not followed, as git lists a link and not what it names.
@@ -479,10 +487,26 @@ fn run() -> Result<Vec<String>, String> {
         problems.push(format!("{f}: CommonJS; the tree's scripts are ES modules"));
     }
 
-    problems.extend(ordered(&files, &read, KERNEL, &KERNEL_ORDER, &KERNEL_HEADS, &KERNEL_BESIDE));
-    problems.extend(ordered(&files, &read, SPEC_CORE, &SPEC_CORE_ORDER, &[], &[]));
+    problems.extend(ordered(
+        &files,
+        &read,
+        KERNEL,
+        &KERNEL_ORDER,
+        &KERNEL_HEADS,
+        &KERNEL_BESIDE,
+    ));
+    problems.extend(ordered(
+        &files,
+        &read,
+        SPEC_CORE,
+        &SPEC_CORE_ORDER,
+        &[],
+        &[],
+    ));
     for f in files.iter().filter(|f| {
-        f.starts_with(KERNEL) && f.ends_with(".rs") && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
+        f.starts_with(KERNEL)
+            && f.ends_with(".rs")
+            && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
     }) {
         for line in screen_reached(&read(f).unwrap_or_default()) {
             problems.push(format!(
@@ -490,7 +514,10 @@ fn run() -> Result<Vec<String>, String> {
             ));
         }
     }
-    for f in files.iter().filter(|f| f.starts_with(SHADER) && f.ends_with(".rs")) {
+    for f in files
+        .iter()
+        .filter(|f| f.starts_with(SHADER) && f.ends_with(".rs"))
+    {
         for (line, name) in rays_bound(&read(f).unwrap_or_default()) {
             problems.push(format!(
                 "{f}:{line}: `{name}` binds the rays' image, the screen's size, past the passes that draw a pixel; only RAYS_ENTRIES may (check_rules.rs)"
@@ -514,7 +541,11 @@ fn run() -> Result<Vec<String>, String> {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
             // Make's `$(shell …)` is the build tool's, not pixelet's shell.
             if pixelet.is_match(&line.replace("$(shell", "")) {
-                problems.push(format!("{f}:{}: names pixelet's word under xpute: {}", n + 1, line.trim()));
+                problems.push(format!(
+                    "{f}:{}: names pixelet's word under xpute: {}",
+                    n + 1,
+                    line.trim()
+                ));
             }
         }
     }

@@ -18,7 +18,6 @@ use pxl_spec_core::LEAF_CELL;
 
 pub use pxl_spec_core::scatter::{before, each_candidate, meet, scatter_at, side_of, Candidate};
 
-
 // ---- piers ----
 
 /// A tile's cells in the world, so a station is the world's and not a tile's.

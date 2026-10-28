@@ -409,8 +409,8 @@ pub fn fill_fit(
     held: &TerrainTile,
     mut each: impl FnMut(u32, &Built<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {
-    use pxl_spec_core::window::{HANDED_WORDS, SQUARE, SQUARE_WORDS};
     use pxl_spec_core::way::tree::{ROOT_NODES, SCRATCH_WORDS, SQUARE_FAMILIES};
+    use pxl_spec_core::window::{HANDED_WORDS, SQUARE, SQUARE_WORDS};
     let mut fit = Fit::default();
     if held.separation.is_empty() {
         return Ok(fit);

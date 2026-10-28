@@ -157,7 +157,8 @@ impl TileSet {
         let mut out = FnvHashMap::default();
         for line in text.lines() {
             let (name, fit) = line.split_once(' ').unwrap_or((line, ""));
-            let p = Tile::of_name(name).ok_or_else(|| format!("{}: {name} names no tile", path.display()))?;
+            let p = Tile::of_name(name)
+                .ok_or_else(|| format!("{}: {name} names no tile", path.display()))?;
             out.insert(p, fit.to_string());
         }
         Ok(Some(out))
@@ -204,7 +205,9 @@ impl TileSet {
 
 fn remove_file(path: &Path) -> Result<(), String> {
     match fs::remove_file(path) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(format!("{}: {e}", path.display()))
+        }
         _ => Ok(()),
     }
 }

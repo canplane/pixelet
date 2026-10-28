@@ -14,9 +14,9 @@ use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{
     ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node,
 };
-use pxl_spec_core::wrap_index;
 use pxl_spec_core::param::tile::LEAF_ZOOM;
 use pxl_spec_core::param::tile::TOP_ZOOM;
+use pxl_spec_core::wrap_index;
 
 const _: () = assert!(
     morton::bits::<2>(LEAF_ZOOM) < 63,

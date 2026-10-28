@@ -15,7 +15,6 @@
 
 pub use pxl_spec_core::ground::{bedrock, ceiling};
 
-
 /// Whether a leaf column is the area's edge or past it: it or one of the eight
 /// about it is past, `past` asked of each by its offset in leaf columns. The
 /// wall is laid on the edge's ground, and a walker keeps off the edge, so it

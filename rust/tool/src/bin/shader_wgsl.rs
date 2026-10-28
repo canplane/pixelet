@@ -37,8 +37,7 @@ use pxl_tool::shader::{header, inputs, inputs_digest, made_from, stale, DIR, ENT
 /// The image rustup runs in, by its digest: its compiler builds SPIRV-Tools
 /// (rustc_codegen_spirv's `use-compiled-tools`), so a tag that moved could
 /// move the output.
-const IMAGE: &str =
-    "rust@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6";
+const IMAGE: &str = "rust@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6";
 /// The machine's one home for the build: the toolchain, the crates and the
 /// target, a Docker volume rather than any checkout's directory, so a
 /// checkout, an export or a worktree each compiles only what its sources
@@ -49,7 +48,8 @@ const HOME: &str = "pxl-shader";
 /// anew under the lock, so cargo, which judges a path crate by its files'
 /// times, never takes another run's build for this one's.
 const WORK: &str = "/cache/w";
-const BUILT: &str = "/cache/target/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
+const BUILT: &str =
+    "/cache/target/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
 /// How many sources' entries the machine keeps made, the most lately used.
 const KEPT: usize = 100;
 
@@ -214,7 +214,10 @@ fn run() -> Result<bool, String> {
             }
         }
         if !named {
-            eprintln!("stale: {} names other sources; run `cargo shader-wgsl`", stamp.display());
+            eprintln!(
+                "stale: {} names other sources; run `cargo shader-wgsl`",
+                stamp.display()
+            );
         }
         return Ok(current);
     }
