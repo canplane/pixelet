@@ -76,8 +76,8 @@ boundary `AGENTS.md`'s.
   hazard, where a number comes from — in a sentence. It tells no history and
   does not restate the code or a document.
 - The tree is written in English, the shell's translations aside
-  (`ts/client/src/shell/locale/`). What the user said is put in English as their
-  point, never quoted.
+  (`ts/client/src/shell/locale/`), and what the user said in another language is
+  written in English too.
 
 ## Code
 
