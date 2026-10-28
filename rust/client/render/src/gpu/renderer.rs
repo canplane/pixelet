@@ -134,10 +134,6 @@ pub struct GroundSquares<'a> {
     /// Told each square whose cells came back, and the fill they are of
     /// (`CellsBack::ticket`).
     pub landed: &'a mut CellsLanded,
-    /// Where the eye's windows folded over their squares come back to in
-    /// the module's memory (`joined_cs`; pxl-spec-core
-    /// `window::EYE_JOINED_WORDS`).
-    pub joined: u32,
     /// The ways' pool's families at first (pxl-kernel domain/scene/param.rs
     /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
     /// to `way::tree::POOL_FAMILIES` (`GroundBuffers::grow`).

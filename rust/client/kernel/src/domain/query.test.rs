@@ -617,3 +617,106 @@ fn what_is_placed_in_a_box_is_what_the_store_holds_there() {
     assert_eq!(asked.len(), 3, "{asked:?}");
     assert_eq!(asked, held);
 }
+
+/// A square that lands after the windows were folded without it is read at
+/// once with what it holds (domain/layer/terrain/window.rs `fold`): a spike
+/// a cell wide in it, over ground at five and taller than a node over the
+/// square, is met where a walker's ray down it met it while the square was
+/// held from the start, and no cell of the square stands outside the bound
+/// read over it at any zoom over a square.
+#[test]
+fn a_square_landing_after_the_fold_is_read_with_its_spike() {
+    use crate::domain::layer::terrain::window::{landed, test::unland, Windowed};
+    use pxl_render::gpu::renderer::Landing;
+    use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE, WINDOW};
+    use pxl_spec_core::LEAF_CELL;
+    let _g = serial();
+    let leaf = top().children()[0];
+    let mut heights = vec![5; CELLS];
+    heights[200 * SPAN + 300] = 400;
+    let spiked = drawn(
+        heights,
+        Ground {
+            cells: vec![ground::land; SPAN * SPAN].into(),
+        },
+        Default::default(),
+    );
+    let (x0, y0, _) = leaf.rect();
+    let residency = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
+    let store = Store::default();
+    // The spike's column in the eye's leaves' window.
+    let (first, _) = Windowed.origin(LEAF_CELL);
+    let top = |g: [i32; 2]| cells::column_top(cells::cell(&Windowed, Found::NONE, LEAF_CELL, g).1);
+    let spike = (0..WINDOW as i32 * WINDOW as i32)
+        .map(|k| {
+            let w = WINDOW as i32;
+            [
+                first[0] * SQUARE as i32 + k % w,
+                first[1] * SQUARE as i32 + k / w,
+            ]
+        })
+        .find(|&g| top(g) == 400)
+        .expect("the spike held");
+    let side = units(GROUND.cell());
+    let at = [
+        (f64::from(spike[0]) + 0.5) * side,
+        (f64::from(spike[1]) + 0.5) * side,
+    ];
+    let met = |access: &World| {
+        access
+            .first_hit(&down(at), at_zoom(LEAF_ZOOM))
+            .value()
+            .flatten()
+            .unwrap()
+            .point[2]
+    };
+    let held = met(&World::new(&residency, &store));
+    let (b, ticket) = unland(LEAF_CELL, spike);
+    landed(b, ticket, Landing::Built(&[0]));
+    assert_eq!(met(&World::new(&residency, &store)), held, "the spike met");
+    let q = cells::square_of(spike).0;
+    let mut outside = 0;
+    for k in 0..SQUARE * SQUARE {
+        let g = [
+            q[0] * SQUARE as i32 + (k % SQUARE) as i32,
+            q[1] * SQUARE as i32 + (k / SQUARE) as i32,
+        ];
+        let h = top(g);
+        for zoom in TOP_ZOOM..LEAF_CELL - LEVELS {
+            let s = LEAF_CELL - zoom;
+            let (b, _, _) = cells::bound_over(
+                &Windowed,
+                &mut Found::NONE.clone(),
+                [LEAF_CELL, LEAF_CELL],
+                (zoom, [g[0] >> s, g[1] >> s]),
+            );
+            outside += u32::from(h < b[0][0] || h > b[0][1]);
+        }
+    }
+    assert_eq!(outside, 0, "cells outside the bound over them");
+}
+
+/// The device that went took every square it held: the turn that sees it
+/// gives up their cells (domain/layer/terrain/window.rs `berth`, as `step`
+/// runs it) and folds the windows over none, so no node over a square of
+/// the eye's leaves keeps a bound of cells gone.
+#[test]
+fn a_device_gone_leaves_no_bound_over_the_squares_it_held() {
+    use crate::domain::layer::terrain::window::{test::lose, Windowed};
+    use pxl_spec_core::ground::UNBOUNDED;
+    use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE};
+    use pxl_spec_core::LEAF_CELL;
+    let _g = serial();
+    let _held = flat_at_five();
+    let (first, _) = Windowed.origin(LEAF_CELL);
+    let zoom = LEAF_CELL - LEVELS - 1;
+    let over = || {
+        let s = LEAF_CELL - zoom;
+        let g = [first[0] * SQUARE as i32 >> s, first[1] * SQUARE as i32 >> s];
+        let mut place = Found::NONE;
+        cells::bound_over(&Windowed, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
+    };
+    assert_ne!(over(), [UNBOUNDED; 2], "held");
+    lose();
+    assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
+}
