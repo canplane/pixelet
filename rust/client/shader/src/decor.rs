@@ -350,8 +350,8 @@ fn records(grown: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
 /// counted: nothing where the rays ask another zoom at its
 /// distance than the one it was grown at (`scatter::drawn_at`), or where it
 /// is the decor left out; else sized for the screen (pxl-spec-core
-/// `scatter::drawn`), a model where its group's extent spans `MODEL_PX` at
-/// its distance, a sprite down to `SPRITE_PX`, else nothing.
+/// `scatter::drawn`), a model where its group's extent spans `MODEL_ANGLE`
+/// at its distance, a sprite down to `SPRITE_ANGLE`, else nothing.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_count_cs"))]
 pub fn decor_count_cs(
     #[spirv(workgroup_id)] group: UVec3,
@@ -416,12 +416,11 @@ fn count_one(
         && corner[2] == params[hide + 2] as i32;
     let d = spirv_std::num_traits::Float::sqrt(d2);
     let d = if d > 1e-3 { d } else { 1e-3 };
-    let px = f32::from_bits(params[(drawn::EXTENTS + group) as usize])
-        / (d * f32::from_bits(params[drawn::UPP as usize]));
+    let across = f32::from_bits(params[(drawn::EXTENTS + group) as usize]) / d;
     let tier = drawn::tier(
-        px,
-        f32::from_bits(params[drawn::MODEL_PX as usize]),
-        f32::from_bits(params[drawn::SPRITE_PX as usize]),
+        across,
+        f32::from_bits(params[drawn::MODEL_ANGLE as usize]),
+        f32::from_bits(params[drawn::SPRITE_ANGLE as usize]),
     );
     let region = if hidden || !here || tier == drawn::GONE {
         drawn::NONE

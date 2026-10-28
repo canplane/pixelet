@@ -3,16 +3,14 @@
 //! What the GPU's decor takes each frame (pxl-render gpu/grown.rs), which
 //! grows what the ground grows and draws it with placed decor: what only
 //! the CPU knows, handed over and never read back. Each kind's zooms where
-//! it is a sprite's worth, a pixel's size and the tiers' floors, the anchor
+//! it is a sprite's worth, the tiers' floors as angles, the anchor
 //! a decor is drawn about, the decor the eraser leaves out, each
 //! variant's extent, placed decor as records, and the boxes the objects
 //! were written in, where what the ground grows may have changed.
 
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{
-    px_per_unit, split_distance, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H, SPLIT,
-};
+use pxl_spec::space::camera::grid::{split_distance, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
@@ -23,32 +21,32 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::query::World;
-use crate::domain::view::frame::pose::units_per_px_at;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec_core::window::FIRST_CELL;
 
-/// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
-/// down to `DECOR_SPRITE_CELLS` of a camera cell. No fade: the edge is per
-/// instance, so it staggers.
-pub fn decor_gone_px() -> f64 {
-    crate::domain::scene::decor::param::DECOR_MODEL_PX
+/// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
+/// cell, the model's edge, an angle about the eye in radians (`lens::cell`),
+/// so no screen's size or ratio moves it. No fade: the edge is per instance,
+/// so it staggers.
+pub fn decor_model_angle() -> f64 {
+    crate::domain::scene::decor::param::DECOR_MODEL_CELLS
+        * crate::domain::view::lens::cell(crate::domain::view::lens::tau())
 }
 
-/// The sprite's edge in CSS pixels, as `units_per_px_at` counts them: its
-/// share of the camera grid's cell (`lens::cell`) at the reference view, so
-/// the same at any display ratio.
-pub fn decor_sprite_px() -> f64 {
-    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau());
+/// The sprite's edge, `DECOR_SPRITE_CELLS` of a camera cell, as an angle as
+/// the model's is (`decor_model_angle`).
+pub fn decor_sprite_angle() -> f64 {
     crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
-        * cell
-        * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG)
+        * crate::domain::view::lens::cell(crate::domain::view::lens::tau())
 }
 
-/// How far a thing `extent_u` wide is a sprite's worth: where it spans
-/// `DECOR_SPRITE_CELLS` of the camera grid's cells, an angle about the eye
-/// whatever the screen.
+/// How far a thing `extent_u` wide is a sprite's worth at the finest τ
+/// (`Tau::FINEST`), whose cells are half the view's: where it spans
+/// `DECOR_SPRITE_CELLS` of them, twice as far as `decor_sprite_angle` puts the
+/// sprite's edge, an upper bound. `decor_shown` takes both its sides at that
+/// τ, so its zooms are the view's.
 pub const fn sprite_reach(extent_u: f64) -> f64 {
     extent_u * SPLIT / crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
 }
@@ -85,15 +83,14 @@ struct Handed {
     walked: Option<Walked>,
 }
 
-/// What the params are made of: the unit the eye stands in (its anchor), a
-/// pixel's size there, the ground's decor the eraser leaves out, and
+/// What the params are made of: the unit the eye stands in (its anchor), the
+/// ground's decor the eraser leaves out, and
 /// whether the catalog that measures the variants is read. A new input goes
 /// here or the params never see it change. The eye within its unit moves
 /// only the translation.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     anchor: V3,
-    upp: f64,
     scattered: Option<[i32; 3]>,
     read: bool,
 }
@@ -140,7 +137,6 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
     let seen = Seen {
         anchor,
-        upp: units_per_px_at(1.0),
         scattered,
         read: catalog().is_some(),
     };
@@ -158,7 +154,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         .iter()
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
-        / (decor_sprite_px() * seen.upp);
+        / decor_sprite_angle();
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
         zoom -= 1;
@@ -220,9 +216,8 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
 fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
     let anchor = seen.anchor;
     p.fill(0);
-    p[drawn::UPP as usize] = (seen.upp as f32).to_bits();
-    p[drawn::MODEL_PX as usize] = (decor_gone_px() as f32).to_bits();
-    p[drawn::SPRITE_PX as usize] = (decor_sprite_px() as f32).to_bits();
+    p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
+    p[drawn::SPRITE_ANGLE as usize] = (decor_sprite_angle() as f32).to_bits();
     let at = drawn::ANCHOR as usize;
     p[at] = wrapped(anchor[0] as i32);
     p[at + 1] = anchor[1] as i32 as u32;
@@ -288,3 +283,7 @@ pub fn frame() -> DecorFrame<'static> {
         edits: &h.edits[..edited],
     }
 }
+
+#[cfg(test)]
+#[path = "drawn.test.rs"]
+mod test;
