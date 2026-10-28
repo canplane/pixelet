@@ -95,3 +95,13 @@ the TypeScript's `voxel_scan.ts` ported byte for byte (`34fa737f6`), and strata,
 bedrock, caves, decks and objects were each added into it since. The
 representation of the rare case — more than one surface in a cell — became every
 cell's.
+
+## What determinism covers
+
+The determinism above is aimed at designs that patched revisions together to
+force a drawing: chunks, meshers and frontiers whose image depended on the
+order and the revision they were built in, until the raster grew into a
+monster. It holds for how the world is observed and built: traversal order,
+scheduling, and geometry that depends on a revision. It is not a ban on
+accumulating over time in the frame: a history filter over what is drawn,
+such as TAA or a temporal upscale, lies outside it (the user, 2026-10-28).
