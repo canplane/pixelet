@@ -85,7 +85,7 @@ regression, not an answer. What stands:
   > the grid's cell and the sun's `sun::BEAM` texels; control's is none
   > (`Spacing::NONE`).
 - The prune passes what the cone cannot tell apart, so the horizon costs what
-  any direction does (`cast.rs` `walk`, `meets_box`).
+  any direction does (`cast.rs` `meet`, `meets_box`).
 
   > **Note (10-28):** the prune is gone, the eye's and the sun's, and with it
   > the rows; the eye's horizon costs about a millisecond of GPU p95 again
