@@ -281,7 +281,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   function select(result: SearchResult) {
     kernel_command(
       Command.INPUT_GO_TO,
-      encode_input_go_to(kernel_room, result.lon, result.lat),
+      encode_input_go_to(kernel_room, result.lon, result.lat, null, null, null),
     );
     onClose();
   }
