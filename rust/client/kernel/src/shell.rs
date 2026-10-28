@@ -13,7 +13,7 @@ use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::domain::control::camera::controller::{dist, Motion};
 use crate::domain::control::camera::input::dragging;
-use crate::domain::control::camera::state::camera_state;
+use crate::domain::control::camera::state::{camera_state, IntentPatch};
 use crate::domain::control::cmd::Tracking;
 use crate::domain::control::cmd::{
     CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState,
@@ -255,13 +255,15 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// A search's place: a view far out comes in.
-pub fn go_to_degrees(lon: f64, lat: f64) {
+/// A search's place and the view asked with it: a view far out comes in,
+/// and the view is asked after, so a dist asked wins over the coming in.
+pub fn go_to_degrees(lon: f64, lat: f64, view: IntentPatch) {
     crate::domain::control::navigation::destination::go_on_ground(
         epsg4326::project(&[lon, lat, 0.0]),
         Motion::Snap,
     );
     crate::domain::control::camera::controller::come_in_to_default();
+    crate::domain::control::camera::controller::set_intent(view);
 }
 
 /// The compass is asked for where it is used (`tracking_action`).
