@@ -1,6 +1,6 @@
 # A slot and its payload: what following the ring's own precedents cost
 
-**2026-09-17** —
+**2026-09-17** — kept up to what the code holds.
 [The ring and its precedents](./archive/20260914-the-ring-and-its-precedents.md)
 was written three days ago and already said what the ring should be. Under
 io_uring it says the closest precedent is "the split between a fixed entry and a
@@ -12,11 +12,8 @@ when one fills.
 
 Nothing here is new prior art. It is the prior art on file, applied.
 
-> Since resized: the numbers below are that day's. The rings' depths, the
-> addresses and the map have changed since, and
-> `spec/client/kernel/sys/mem/mem.json` holds the current ones, with the map in
-> ARCHITECTURE.md's "The memory map". The shape this records, a slot and its
-> payload, still holds.
+The rings' depths and addresses are `spec/client/kernel/sys/mem/mem.json`'s,
+with the map in ARCHITECTURE.md's "The memory map".
 
 ## What was wrong, three faces of one thing
 
@@ -69,21 +66,22 @@ than where it is pushed.
 
 ## A slot in two places
 
-The descriptors are 36 KiB a ring and the payloads are 8 MiB (the submission
-ring's; the completion ring's are now 68 KiB and 16 MiB), so keeping them in one
-block made the small one as coarse as the large one. virtio keeps its descriptor
-table, avail ring and used ring in three separate areas; AF_XDP keeps its rings
-in one mapping and its UMEM in another; NVMe programs its queue base addresses
-and its data goes by PRP/SGL. The ratio is the tell:
+The submission ring's descriptors are 12 KiB and its payloads 2 MiB, the
+completion ring's 20 KiB and 4 MiB (pxl-kernel door/layout.rs `rings`), so
+keeping them in one block made the small one as coarse as the large one. virtio
+keeps its descriptor table, avail ring and used ring in three separate areas;
+AF_XDP keeps its rings in one mapping and its UMEM in another; NVMe programs its
+queue base addresses and its data goes by PRP/SGL. The ratio is the tell:
 
 ```
 AF_XDP      rings 32–64 KiB  :  UMEM 8 MiB        1 : 128
 here, was   65,536 B         :  983,008 B         1 : 15
-here, now   36 KiB           :  8 MiB             1 : 227
+here, now   12 KiB           :  2 MiB             1 : 170
 ```
 
-The header carries where a ring's payloads begin (word 4), so a `Ring` is still
-made from one address.
+The header carries where a ring's payloads begin (word 4,
+xpute/spec/ipc/ring.json `SLOT_BASE`), so a `Ring` is still made from one
+address (xpute-guest ipc/ring.rs `Ring::new`).
 
 ## Sizing, from the references rather than from the traffic
 
@@ -111,22 +109,16 @@ payload is one block wherever one has to come from, and "a packet is at most a
 page, and past that it is bulk" is a sentence that can be said without looking
 at any command.
 
-_Superseded: there are two rings and no spill, and the completion ring is twice
-the submission's — `SQ_CAP` 2,048, `CQ_CAP` 4,096
-(spec/client/kernel/sys/mem/mem.json), since a turn answers what it was sent and
-raises its own signals besides._
+**There are two rings and no spill, and the completion ring is twice the
+submission's.** `SQ_CAP` is 512 and `CQ_CAP` 1,024
+(spec/client/kernel/sys/mem/mem.json). io_uring's default is CQ twice SQ, and
+its own manual page says why that is not a universal ratio — "adequate for
+regular file or storage workloads, but may be too small for networked
+workloads". The ratio here is not taken from io_uring's and is no claim about
+the traffic: a turn answers what it was sent and raises its own signals besides.
 
-**The depth is 2,048 and the three are equal.** io_uring's default is CQ twice
-SQ, and its own manual page says why that is not a universal ratio — "adequate
-for regular file or storage workloads, but may be too small for networked
-workloads". A ratio here would be a claim about this traffic, and this traffic
-is moving: the renderer came into the module, so what used to go out as draw
-lists no longer crosses, and what the shell still sends is on its way in behind
-it. Equal is the choice that makes no claim.
-
-`2,048 × 4 KiB = 8 MiB` a ring, which is xdpsock's UMEM exactly, by two numbers
-neither of which was chosen to land there. (The completion ring's payloads are
-now `4,096 × 4 KiB = 16 MiB`.)
+`512 × 4 KiB = 2 MiB` of payloads for the submission ring, and
+`1,024 × 4 KiB = 4 MiB` for the completion ring.
 
 ## What was considered and not taken
 
@@ -140,9 +132,7 @@ now `4,096 × 4 KiB = 16 MiB`.)
   The free list would have two pushers and two poppers, and splitting it back
   into two SPSC lists fixes the division again; and AF_XDP does not balance
   either — the application moves buffers, so the split stays a decision somebody
-  makes. Against that, the thing being optimized is free: an untouched page of
-  linear memory costs address space and not RAM, so over-provisioning both sides
-  dominates.
+  makes.
 - **Runtime resize.** `io_uring_resize_rings()` exists. It would cost the one
   property the addresses were made constant for.
 - **Keeping one shared area and sizing it against the traffic.** Measuring which
@@ -152,8 +142,9 @@ now `4,096 × 4 KiB = 16 MiB`.)
 ## Where they sit, and why the linker has to be told
 
 Constant addresses, because a block of the heap moves whenever the code above it
-changes, and the address is published to the shell at boot the way virtio writes
-its queue addresses into device registers and AF_XDP registers its UMEM. A
+changes, and the address is published to the host at boot, in the directory
+(xpute-guest ipc/directory.rs `write_directory`), the way virtio writes its
+queue addresses into device registers and AF_XDP registers its UMEM. A
 published address that moves per build is a discovered address wearing a
 constant's clothes.
 
@@ -161,35 +152,37 @@ The linker owns the bottom of the memory, so it has to be kept out of the range.
 `--global-base` is how it is told where its own data may begin, and the same
 arithmetic has to produce that flag and the addresses the code uses — which is
 why both come out of one file of numbers, `spec/client/kernel/sys/mem/mem.json`:
-its generated `sys/mem/mem.spec.rs` is what `rust/client-bracket/wasm/build.rs`
-emits as the link argument and what `rust/client/kernel/src/door/layout.rs` lays
-the rings from. There is no second place to get them wrong.
+it is generated as the kernel's `sys/mem/mem.spec.rs`, which
+`rust/client/kernel/src/door/layout.rs` lays the rings from, and as the
+`mem.spec.rs` beside `rust/client-bracket/wasm/build.rs`, which hands it to the
+linker through xpute-guest wasm/link.rs `link`. There is no second place to get
+them wrong.
 
-The map as the code now holds it (mem.json, door/layout.rs; a descriptor range
-is `ring_bytes` rounded up to a page):
+The map as the code holds it (mem.json, door/layout.rs; a descriptor range is
+`ring_bytes` rounded up to a page):
 
 ```
 addr                          bytes          what
 ────────────────────────────────────────────────────────────────────────
 0            1,048,576          1.00 MiB     stack, descending  STACK_BYTES
-1,048,576    1,085,440         36 KiB        sq descriptors     RING_DESC_AT
-1,085,440    1,155,072         68 KiB        cq descriptors
-2,097,152   10,485,760          8 MiB        sq payloads  2,048 × 4 KiB  RING_SLOT_AT
-10,485,760  27,262,976         16 MiB        cq payloads  4,096 × 4 KiB
-33,550,336  33,554,432          4 KiB        the directory      DIRECTORY_AT
+1,048,576    1,060,864         12 KiB        sq descriptors     RING_DESC_AT
+1,060,864    1,081,344         20 KiB        cq descriptors
+1,572,864    3,670,016          2 MiB        sq payloads  512 × 4 KiB  RING_SLOT_AT
+3,670,016    7,864,320          4 MiB        cq payloads  1,024 × 4 KiB
+8,384,512    8,388,608          4 KiB        the directory      DIRECTORY_AT
 ────────────────────────────────────────────────────────────────────────
-33,554,432                                   .rodata .data .bss   ← --global-base
+8,388,608                                    .rodata .data .bss   ← --global-base
 ────────────────────────────────────────────────────────────────────────
 page past the data                           .fixed — the terrain and the rest
 past .fixed                    end           heap
 ```
 
 Two ranges that grow without moving each other: the rings have everything under
-32 MiB and the module's data everything over it. `.fixed` begins at the first
-page past the module's data (pxl-kernel sys/mem/section.rs `fixed_at`) and the
-heap past it.
+8 MiB (mem.json `GLOBAL_BASE`) and the module's data everything over it.
+`.fixed` begins at the first page past the module's data (pxl-kernel
+sys/mem/section.rs `fixed_at`) and the heap past it.
 
-**The slack under the directory, about 6 MiB, costs address space, not RAM.**
+**The slack under the directory, about 508 KiB, costs address space, not RAM.**
 Linear memory is backed by the OS on first touch, so an untouched gap is not
 resident. The exception this repository has already met is accounting rather
 than residency: JavaScriptCore reports the whole reservation as the page's
@@ -200,10 +193,11 @@ does that.
 
 **The stack stays at the bottom, and that is the only guard there is.** rustc
 passes `--stack-first` and `-z stack-size=1048576` to wasm-ld for
-wasm32-unknown-unknown by default, and build.rs now passes both itself from
-`STACK_BYTES`; the linked module's `__stack_pointer` initializes to 1,048,576.
-With the stack first, an overflow goes below zero, wraps as an unsigned 32-bit
-address, lands outside the memory and traps. With the default layout it would
+wasm32-unknown-unknown by default, and build.rs passes both too, from
+`STACK_BYTES` through xpute-guest wasm/link.rs `link`; the linked module's
+`__stack_pointer` initializes to 1,048,576. With the stack first, an overflow
+goes below zero, wraps as an unsigned 32-bit address, lands outside the memory
+and traps. With the default layout it would
 write over `.data` silently instead, which is the reason Rust and Zig both pass
 the flag and why LLVM has an open issue to make it wasm-ld's default. There is
 no MMU here and so no guard page: the wraparound is the whole of the protection,
@@ -211,61 +205,43 @@ and moving the stack anywhere else gives it up.
 
 ## What crosses by address now
 
-_Superseded in its particulars: of the commands below only `WORLD_SNAPSHOT` is
-left, a block the kernel holds named by address and length
-(spec/client/kernel/domain/control/cmd.json); `FETCH_BODY`, `VOLUME_READ`,
-`OBJECT_COLUMNS`, `LOAD_UPDATE` and `REPLY_BYTES` are gone, and a reply is the
-completion's result word (xpute-guest ipc/door.rs `Door::drain`)._
+`WORLD_SNAPSHOT`, which was the UI's JSON as a string, is a block the kernel
+holds, named by its address and length, `at` and `len`
+(spec/client/kernel/domain/control/cmd.json `WORLD_SNAPSHOT`).
 
-`FETCH_BODY` already did it — the shell asks for room, writes the body, and
-names the block — so terrain never touched a slot. The rest now matches:
+A reply is the completion's result word (xpute-guest ipc/door.rs `Door::drain`),
+so there is no reply scratch. `REPLY_BYTES` was 256 KiB — a single constant that
+alone decided how big the shared area had to be.
 
-|                  | before                           | now                                 |
-| ---------------- | -------------------------------- | ----------------------------------- |
-| `VOLUME_READ`    | band rows copied into the packet | a block the kernel holds, named     |
-| `OBJECT_COLUMNS` | keys copied into the packet      | the same                            |
-| `WORLD_SNAPSHOT` | the UI's JSON as a string        | the same                            |
-| `LOAD_UPDATE`    | a model's bytes inline           | a block the shell asks the heap for |
-
-The reply scratch is one slot, so a reply too large is refused where it is
-written rather than where it is pushed. `REPLY_BYTES` was 256 KiB — a single
-constant that alone decided how big the shared area had to be.
-
-What stays inline is what a slot is for: the signals, the chunk paint's 1,536
-bytes, the URLs, the zone and instance and keyframe lanes the kernel reads in
-place without copying. Those last are the slot doing UMEM's job already, and
-moving them to blocks would add a round trip to remove a copy that is not
-happening.
+What stays inline is what a slot is for: the commands' packets, which the kernel
+reads in place in their slots without copying (xpute-guest ipc/ring.rs
+`Ring::packet`). That is the slot doing UMEM's job already, and moving them to
+blocks would add a round trip to remove a copy that is not happening.
 
 ## A full ring is a wait, not a panic
 
-_Superseded: the spill is gone. The host reads the completion ring dry before it
-rings again, so overrunning it is a sizing bug (`Door::post` answers ENOSPC),
-and `drain` stops before a command when the completion ring has no room for what
-one command may leave, its signals and its reply (xpute-guest ipc/door.rs
-`Door::has_room`)._
-
 `Outbox::post` tried the completion ring, then the spill, and asserted. The
-spill is io_uring's backlog — "never dropping events but providing backpressure
-on submits" — but io_uring has the second half too: a submission is refused
-`-EBUSY` while the backlog stands, and the application must reap completions and
-try again. There was no second half here.
+spill was io_uring's backlog — "never dropping events but providing
+backpressure on submits" — but io_uring has the second half too: a submission
+is refused `-EBUSY` while the backlog stands, and the application must reap
+completions and try again. There was no second half here.
 
-There is now: `drain` stops before applying a command when the spill has no room
-for what it might raise, and what is left stays in the submission ring in order.
-The submission side already answered EAGAIN, so both directions wait.
+There is no spill now. The host reads the completion ring dry before it rings
+again, so overrunning it is a sizing bug: a completion that does not fit is
+ENOSPC (xpute-guest ipc/door.rs `Door::post`). `drain` stops before a command
+when the completion ring has no room for what one command may leave, its
+signals and its reply (`Door::has_room`), and what is left stays in the
+submission ring in order. The submission side answers EAGAIN, and the host
+rings until there is room (@xpute/host ipc/doorbell.ts `Doorbell` `submit`), so
+both directions wait.
 
 io_uring needs a backlog at all because completions arrive from hardware and
 cannot be refused mid-operation. Here everything inside a drain is synchronous,
-so the stop is enough — the spill remains for the tick, which emits as the
-builder walks and has no equally clean place to stop.
+so the stop is enough.
 
 ## What this leaves open
 
-_`MOST_SIGNALS` is gone: the kernel's bound is `SIGNALS` (pxl-kernel door.rs),
-what a turn raises after its drain._
-
-- `MOST_SIGNALS` is 64: what one command may raise before `drain` checks again.
-  It bounds a command, not a turn, because a tick is not a submission.
+- The kernel's bound is `SIGNALS` (pxl-kernel door.rs), what a turn raises
+  after its drain.
 - Nothing was run. This is `cargo clippy -D warnings` and `deno task check`,
   both green, and no more than that.
