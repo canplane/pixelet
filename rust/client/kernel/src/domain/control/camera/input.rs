@@ -463,9 +463,8 @@ pub fn camera_keys(x: i32, y: i32) {
     request_world_tick();
 }
 
-/// Where the pointer is to be picked again, the camera standing where this
-/// step leaves it; what it is over is pxl-kernel pointer.rs's to decide.
-pub fn camera_input_step() -> Option<[f64; 2]> {
+/// What the pointer and the keys asked of the camera since the last step.
+pub fn camera_input_step() {
     let s = input();
     if s.keys != [0.0; 2] {
         let at = now();
@@ -476,7 +475,6 @@ pub fn camera_input_step() -> Option<[f64; 2]> {
         by_hand(|| crate::domain::control::camera::controller::pan_across(way[0], way[1]));
         request_world_tick();
     }
-    let rehover = core::mem::take(&mut s.hover_pending) && s.drag_mode == DragMode::None;
     if s.drag_pending {
         s.drag_pending = false;
         match s.drag_mode {
@@ -494,7 +492,16 @@ pub fn camera_input_step() -> Option<[f64; 2]> {
     if let Some(delta_y) = s.pending_wheel_delta_y.take() {
         crate::domain::control::camera::controller::wheel(delta_y);
     }
-    rehover.then_some([s.pointer_x, s.pointer_y])
+}
+
+/// Where the pointer is to be picked again, the camera standing where the
+/// tick leaves it: where it moved over the screen, or where it hovers still
+/// and the view `moved` under it (a wheel's zoom, a glide, the keys). What
+/// it is over is pxl-kernel pointer.rs's to decide.
+pub fn rehover_at(moved: bool) -> Option<[f64; 2]> {
+    let s = input();
+    let asked = core::mem::take(&mut s.hover_pending) || moved && s.hovering;
+    (asked && s.drag_mode == DragMode::None).then_some([s.pointer_x, s.pointer_y])
 }
 
 pub fn pinching() -> bool {

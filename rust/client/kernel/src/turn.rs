@@ -13,7 +13,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};
 
-use crate::domain::control::camera::input::camera_input_step;
+use crate::domain::control::camera::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
@@ -131,19 +131,21 @@ fn scene_tick(ctx: &mut TickContext) {
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    if let Some([x, y]) = camera_input_step() {
-        crate::pointer::hover(x, y);
-    }
+    camera_input_step();
 }
 
 /// The camera's last writer, then the view composed where it stands: after
 /// every writer of the pose (the door's events, the turn's effects, the
-/// controllers), before the phases that observe it.
+/// controllers), before the phases that observe it. The pointer is picked
+/// again from there, so what it is over follows a view moved under it.
 fn camera_tick(ctx: &mut TickContext) {
     crate::domain::control::camera::controller::camera_step(ctx);
-    crate::domain::view::frame::pose::view_compose(
+    let moved = crate::domain::view::frame::pose::view_compose(
         crate::domain::control::camera::controller::pose(),
     );
+    if let Some([x, y]) = rehover_at(moved) {
+        crate::pointer::hover(x, y);
+    }
 }
 
 fn environment_tick(_: &mut TickContext) {
