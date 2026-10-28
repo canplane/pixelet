@@ -31,7 +31,7 @@ Fixture door() {
 
 } // namespace
 
-XPUTE_TEST(door_a_command_is_not_started_with_room_for_its_signals_but_not_its_reply) {
+XPUTE_TEST(door_command_needs_reply_room) {
     Fixture f = door();
     const Door &d = f.door;
     for (std::uint32_t k = 0; k < CQ - MOST_SIGNALS; k++) d.post(0, 2, 0, 0);
@@ -43,7 +43,7 @@ XPUTE_TEST(door_a_command_is_not_started_with_room_for_its_signals_but_not_its_r
     XPUTE_CHECK_EQ(d.pending(), true, "it waits for the next turn rather than overrunning this one");
 }
 
-XPUTE_TEST(door_a_signal_s_packet_is_written_in_place_and_a_packet_that_does_not_read_is_answered_with_its_errno) {
+XPUTE_TEST(door_signal_packet_errno) {
     Fixture f = door();
     const Door &d = f.door;
     d.raise(9, 1, [](xtp::PacketWriter &w) { w.u32(41); });
@@ -64,7 +64,7 @@ XPUTE_TEST(door_a_signal_s_packet_is_written_in_place_and_a_packet_that_does_not
     XPUTE_CHECK(got && got->tag == 5 && got->result == static_cast<std::int32_t>(Errno::ebadmsg));
 }
 
-XPUTE_TEST(door_keeps_the_rings_peaks_until_they_are_taken_and_starts_again_from_zero) {
+XPUTE_TEST(door_ring_peaks) {
     Fixture f = door();
     const Door &d = f.door;
     // Three commands start before the reserve runs out, so five of eight wait.

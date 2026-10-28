@@ -9,7 +9,7 @@
 
 using namespace xpute;
 
-XPUTE_TEST(rng_computes_what_the_record_holds) {
+XPUTE_TEST(rng_matches_record) {
     Golden v = Golden::load("spec/golden/math/rng.64.tsv");
     v.each("", [&v](const std::string &k) {
         std::uint64_t seed = v.u64(k + ".seed");

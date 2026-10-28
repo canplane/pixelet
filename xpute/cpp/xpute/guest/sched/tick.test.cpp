@@ -53,7 +53,7 @@ std::vector<int> range(int n) {
 
 } // namespace
 
-XPUTE_TEST(tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in) {
+XPUTE_TEST(tick_phase_order) {
     Tick<8> t = tick();
     t.on_tick(Phase::report, [](TickContext &) { seen.order.push_back("report"); }, 0);
     t.on_tick(Phase::cosmetic, [](TickContext &) { seen.order.push_back("cosmetic"); }, 0);
@@ -64,7 +64,7 @@ XPUTE_TEST(tick_phases_run_in_their_fixed_order_whatever_order_they_registered_i
     XPUTE_CHECK((seen.order == std::vector<std::string_view>(PHASES.begin(), PHASES.end())));
 }
 
-XPUTE_TEST(tick_within_a_phase_steps_run_in_registration_order) {
+XPUTE_TEST(tick_step_order) {
     Tick<8> t = tick();
     t.on_tick(Phase::visible, [](TickContext &) { seen.order.push_back("1"); }, 0);
     t.on_tick(Phase::visible, [](TickContext &) { seen.order.push_back("2"); }, 0);
@@ -73,7 +73,7 @@ XPUTE_TEST(tick_within_a_phase_steps_run_in_registration_order) {
     XPUTE_CHECK((seen.order == std::vector<std::string_view>{"1", "2", "3"}));
 }
 
-XPUTE_TEST(tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_get) {
+XPUTE_TEST(tick_shared_budget) {
     Tick<8> t = tick(Seen{.a = -1});
     t.on_tick(Phase::visible, [](TickContext &c) { burn(c.pass.total_ms * 0.75); }, 0);
     t.on_tick(Phase::content, [](TickContext &c) { seen.a = c.pass.remaining(); }, 0);
@@ -82,7 +82,7 @@ XPUTE_TEST(tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_do
     XPUTE_CHECK(seen.a <= r.budget_ms * 0.3);
 }
 
-XPUTE_TEST(tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it) {
+XPUTE_TEST(tick_content_share_reserved) {
     Tick<8> t = tick();
     t.on_tick(
         Phase::visible,
@@ -98,7 +98,7 @@ XPUTE_TEST(tick_the_visible_phase_cannot_take_the_content_share_and_content_sees
     XPUTE_CHECK(seen.b >= r.budget_ms * 0.1);
 }
 
-XPUTE_TEST(tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again) {
+XPUTE_TEST(tick_self_unregister) {
     Tick<8> t = tick();
     std::uint32_t id = t.on_tick(
         Phase::cosmetic,
@@ -113,7 +113,7 @@ XPUTE_TEST(tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again) {
     XPUTE_CHECK(seen.runs == 1);
 }
 
-XPUTE_TEST(tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_step_after_it) {
+XPUTE_TEST(tick_unregister_earlier_no_skip) {
     Tick<8> t = tick();
     std::uint32_t first = t.on_tick(Phase::visible, [](TickContext &) { seen.order.push_back("first"); }, 0);
     t.on_tick(
@@ -129,7 +129,7 @@ XPUTE_TEST(tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_sk
     XPUTE_CHECK((seen.order == std::vector<std::string_view>{"first", "second", "third"}));
 }
 
-XPUTE_TEST(tick_the_report_phase_sees_every_phase_before_it) {
+XPUTE_TEST(tick_report_sees_all) {
     Tick<8> t = tick(Seen{.a = -1});
     t.on_tick(Phase::visible, [](TickContext &) { burn(2); }, 0);
     t.on_tick(
@@ -144,7 +144,7 @@ XPUTE_TEST(tick_the_report_phase_sees_every_phase_before_it) {
     XPUTE_CHECK(seen.b == 0);
 }
 
-XPUTE_TEST(tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step) {
+XPUTE_TEST(tick_busy_storm_capped) {
     Tick<8> t = tick();
     t.on_tick(Phase::visible, [](TickContext &c) { seen.runs = c.pass.run(range(2000), [](int) { return burn(COST), true; }).ran; }, 0);
     TickReport r = t.run(0.016, QUOTA_MS, now());
@@ -153,14 +153,14 @@ XPUTE_TEST(tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_o
     XPUTE_CHECK(r.phase_ms[static_cast<std::size_t>(Phase::visible)] <= r.budget_ms + COST);
 }
 
-XPUTE_TEST(tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ceiling) {
+XPUTE_TEST(tick_silent_storm_capped) {
     Tick<8> t = tick();
     t.on_tick(Phase::visible, [](TickContext &c) { c.pass.run(range(2000), [](int) { return burn(COST), false; }); }, 0);
     TickReport r = t.run(0.016, QUOTA_MS, now());
     XPUTE_CHECK(r.phase_ms[static_cast<std::size_t>(Phase::visible)] <= r.budget_ms + POLICY.hard_slack_ms + COST);
 }
 
-XPUTE_TEST(tick_what_the_turn_spent_before_the_tick_comes_off_the_budget) {
+XPUTE_TEST(tick_prior_spend_deducted) {
     Tick<8> t = tick();
     t.on_tick(Phase::visible, [](TickContext &c) { seen.a = c.pass.remaining(); }, 0);
     double edge = now();
@@ -169,7 +169,7 @@ XPUTE_TEST(tick_what_the_turn_spent_before_the_tick_comes_off_the_budget) {
     XPUTE_CHECK(seen.a <= QUOTA_MS * 0.8 - 2 + 0.01);
 }
 
-XPUTE_TEST(tick_what_the_interaction_phase_spends_comes_off_the_budget) {
+XPUTE_TEST(tick_interaction_spend_deducted) {
     Tick<8> t = tick();
     t.on_tick(Phase::interaction, [](TickContext &) { burn(1.5); }, 0);
     t.on_tick(

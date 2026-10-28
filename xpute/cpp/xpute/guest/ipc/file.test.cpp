@@ -9,7 +9,7 @@
 
 using namespace xpute;
 
-XPUTE_TEST(file_a_descriptor_is_found_by_its_owner_once_its_slot_is_taken_again) {
+XPUTE_TEST(file_descriptor_owner) {
     std::vector<std::uint64_t> words(128);
     Sys sys(Memory(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8), 0, 256);
     Files<std::string, 8> files;

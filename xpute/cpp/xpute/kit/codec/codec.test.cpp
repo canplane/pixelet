@@ -15,7 +15,7 @@ static std::span<const std::uint8_t> bytes_of(std::string_view s) {
 }
 
 // RFC 4648's vectors, which the URL alphabet shares with the standard one.
-XPUTE_TEST(codec_base64url_writes_and_reads_the_rfc_s_vectors_without_padding) {
+XPUTE_TEST(codec_base64url_rfc_vectors) {
     const std::pair<std::string_view, std::string_view> cases[] = {
         {"", ""}, {"f", "Zg"}, {"fo", "Zm8"}, {"foo", "Zm9v"}, {"foob", "Zm9vYg"}, {"fooba", "Zm9vYmE"}, {"foobar", "Zm9vYmFy"},
     };
@@ -30,7 +30,7 @@ XPUTE_TEST(codec_base64url_writes_and_reads_the_rfc_s_vectors_without_padding) {
     }
 }
 
-XPUTE_TEST(codec_base64url_uses_the_url_alphabet_and_refuses_what_no_encoding_is) {
+XPUTE_TEST(codec_base64url_alphabet) {
     const std::array<std::uint8_t, 2> high{0xfb, 0xff};
     std::array<char, 4> text{};
     std::size_t n = base64url_encode(high, text);
@@ -42,7 +42,7 @@ XPUTE_TEST(codec_base64url_uses_the_url_alphabet_and_refuses_what_no_encoding_is
     XPUTE_CHECK(!base64url_decode("Zh", out).ok());
 }
 
-XPUTE_TEST(codec_hex_is_two_lowercase_digits_a_byte_and_reads_either_case) {
+XPUTE_TEST(codec_hex) {
     const std::array<std::uint8_t, 4> in{0x00, 0x7f, 0xab, 0xff};
     std::array<char, 8> text{};
     XPUTE_CHECK_EQ(std::string_view(text.data(), hex_encode(in, text)), std::string_view("007fabff"), "hex wrote another text");
@@ -54,7 +54,7 @@ XPUTE_TEST(codec_hex_is_two_lowercase_digits_a_byte_and_reads_either_case) {
 }
 
 // FNV-1a's published values, which the other languages compute too.
-XPUTE_TEST(codec_fnv1a64_is_the_published_word) {
+XPUTE_TEST(codec_fnv1a64) {
     XPUTE_CHECK_EQ(fnv1a64(""), FNV64_OFFSET, "the empty string");
     XPUTE_CHECK_EQ(fnv1a64("a"), std::uint64_t{0xaf63dc4c8601ec8cu}, "\"a\"");
     XPUTE_CHECK_EQ(fnv1a64("foobar"), std::uint64_t{0x85944171f73967e8u}, "\"foobar\"");

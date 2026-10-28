@@ -26,7 +26,7 @@ static std::string decoded(JsonStr s) {
     return out;
 }
 
-XPUTE_TEST(json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json) {
+XPUTE_TEST(json_in_place_read) {
     std::optional<JsonValue> doc = read_json(R"( {"a": [1, -2.5e1, true, null, "x\"y"], "b": {"k": "\uD83D\uDE00 \u00e9\n"}, "a": "last"} )");
     XPUTE_CHECK(doc && doc->type_of() == JsonType::object);
     XPUTE_CHECK(doc->get("a")->as_str()->eq_str("last"));
@@ -52,7 +52,7 @@ XPUTE_TEST(json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_
     XPUTE_CHECK(!read_json(std::string(200, '[') + std::string(200, ']')));
 }
 
-XPUTE_TEST(json_is_what_the_host_s_json_parse_takes) {
+XPUTE_TEST(json_matches_host_parse) {
     Golden v = Golden::load("spec/golden/codec/json.tsv");
     v.each("grammar", [&](const std::string &k) {
         std::string got = read_json(text_of(v, k + ".text")) ? "json" : "refused";
@@ -60,7 +60,7 @@ XPUTE_TEST(json_is_what_the_host_s_json_parse_takes) {
     });
 }
 
-XPUTE_TEST(json_reads_a_value_as_deep_as_the_record_and_refuses_one_deeper) {
+XPUTE_TEST(json_depth_limit) {
     Golden v = Golden::load("spec/golden/codec/json.tsv");
     std::uint64_t most = v.u64("depth.most");
     auto nested = [](std::uint64_t n) { return std::string(n, '[') + "0" + std::string(n, ']'); };
@@ -68,7 +68,7 @@ XPUTE_TEST(json_reads_a_value_as_deep_as_the_record_and_refuses_one_deeper) {
     XPUTE_CHECK(!read_json(nested(most + 1)).has_value());
 }
 
-XPUTE_TEST(json_a_number_past_the_doubles_reads_as_the_host_reads_it) {
+XPUTE_TEST(json_big_number_as_host) {
     Golden v = Golden::load("spec/golden/codec/json.tsv");
     v.each("number", [&](const std::string &k) {
         std::optional<double> n = read_json(v.s(k + ".text"))->as_f64();
@@ -80,7 +80,7 @@ XPUTE_TEST(json_a_number_past_the_doubles_reads_as_the_host_reads_it) {
     });
 }
 
-XPUTE_TEST(json_quoted_escapes_a_quote_a_backslash_and_every_control_character) {
+XPUTE_TEST(json_quoted_escapes) {
     std::string out;
     quoted("a\"b\\c\nd\x01", [&](std::string_view piece) { out += piece; });
     XPUTE_CHECK_EQ(out, std::string(R"("a\"b\\c\nd\u0001")"), "quoted wrote another text");

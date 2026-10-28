@@ -40,7 +40,7 @@ bool all(const void *p, std::size_t n, std::uint8_t byte) {
 
 } // namespace
 
-XPUTE_TEST(buddy_what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go) {
+XPUTE_TEST(buddy_block_contents_survive) {
     using R = TestRange<0>;
     static BuddyMalloc<R> heap;
     const std::size_t sizes[] = {1, 4096, 4097, 8192, 100, 16384, 40, 65536};
@@ -66,7 +66,7 @@ XPUTE_TEST(buddy_what_was_written_in_a_block_is_still_there_after_its_neighbors_
     for (auto &[p, size, byte] : kept) XPUTE_CHECK_EQ(all(p, size, byte), true, "a block was written over");
 }
 
-XPUTE_TEST(buddy_two_buddies_freed_are_the_block_they_came_from) {
+XPUTE_TEST(buddy_buddies_merge) {
     static BuddyMalloc<TestRange<1>> heap;
     void *a = heap.malloc(PAGE);
     void *b = heap.malloc(PAGE);
@@ -77,7 +77,7 @@ XPUTE_TEST(buddy_two_buddies_freed_are_the_block_they_came_from) {
     XPUTE_CHECK_EQ(heap.malloc(PAGE * 2), low, "the pair did not join");
 }
 
-XPUTE_TEST(buddy_a_request_past_the_range_is_refused_and_leaves_what_is_live_alone) {
+XPUTE_TEST(buddy_oversize_refused) {
     static BuddyMalloc<TestRange<2>> heap;
     void *first = heap.malloc(PAGE);
     XPUTE_CHECK(first != nullptr);
@@ -91,7 +91,7 @@ XPUTE_TEST(buddy_a_request_past_the_range_is_refused_and_leaves_what_is_live_alo
     XPUTE_CHECK_EQ(all(first, PAGE, 0x5a), true, "a refusal wrote over a live block");
 }
 
-XPUTE_TEST(buddy_what_is_freed_is_handed_out_again_rather_than_more_of_the_range) {
+XPUTE_TEST(buddy_freed_reused) {
     static BuddyMalloc<TestRange<3>> heap;
     std::size_t size = std::size_t{1} << (MIN + 2);
     void *p = heap.malloc(size);
@@ -105,7 +105,7 @@ XPUTE_TEST(buddy_what_is_freed_is_handed_out_again_rather_than_more_of_the_range
     XPUTE_CHECK(heap.releases() >= 8);
 }
 
-XPUTE_TEST(slab_what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go) {
+XPUTE_TEST(slab_slot_contents_survive) {
     static SlabMalloc<TestRange<4>> heap;
     const std::size_t sizes[] = {1, 16, 17, 24, 64, 200, 1000, 4096, 9000};
     std::vector<std::tuple<void *, std::size_t, std::uint8_t>> live;
@@ -128,7 +128,7 @@ XPUTE_TEST(slab_what_was_written_in_a_slot_is_still_there_after_its_neighbors_co
     for (auto &[p, size, byte] : kept) XPUTE_CHECK_EQ(all(p, size, byte), true, "a slot was written over");
 }
 
-XPUTE_TEST(slab_a_run_goes_back_to_the_pages_when_its_last_slot_does) {
+XPUTE_TEST(slab_empty_run_returned) {
     static SlabMalloc<TestRange<5>> heap;
     void *first = heap.alloc(24, 8);
     XPUTE_CHECK(first != nullptr);
@@ -148,7 +148,7 @@ XPUTE_TEST(slab_a_run_goes_back_to_the_pages_when_its_last_slot_does) {
     XPUTE_CHECK_EQ(heap.pages().live(), std::size_t{0}, "the last slot of a run did not give the run back");
 }
 
-XPUTE_TEST(slab_a_request_of_a_page_or_more_is_the_page_allocator_s_own) {
+XPUTE_TEST(slab_page_requests_delegated) {
     static SlabMalloc<TestRange<6>> heap;
     for (std::size_t size : {PAGE, PAGE + 1, PAGE * 4}) {
         std::size_t before = heap.pages().live(), run = heap.run_live(), slot = heap.slot_live();
@@ -162,7 +162,7 @@ XPUTE_TEST(slab_a_request_of_a_page_or_more_is_the_page_allocator_s_own) {
     }
 }
 
-XPUTE_TEST(slab_what_is_out_in_slots_is_inside_the_runs_it_is_carved_from) {
+XPUTE_TEST(slab_slots_inside_runs) {
     static SlabMalloc<TestRange<7>> heap;
     const std::size_t sizes[] = {16, 24, 64, 300, 1000, PAGE, PAGE * 3};
     std::vector<std::pair<void *, std::size_t>> live;

@@ -48,7 +48,7 @@ std::string show(const tlv::Value &v) {
 } // namespace
 
 // Across a protocol: the bytes are the other languages', to the last one.
-XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
+XPUTE_TEST(tlv_matches_other_languages) {
     Golden v = Golden::load("spec/golden/wire/tlv.tsv");
     std::vector<std::uint8_t> buf;
     tlv::Writer w(buf);
@@ -119,7 +119,7 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
     XPUTE_CHECK_EQ(got, v.s("huge.read"), "a length past the buffer");
 }
 
-XPUTE_TEST(tlv_a_sealed_writer_refuses) {
+XPUTE_TEST(tlv_sealed_writer_refuses) {
     std::vector<std::uint8_t> buf;
     tlv::Writer w(buf);
     w.finish();

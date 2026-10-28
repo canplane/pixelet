@@ -16,7 +16,7 @@
 
 using namespace xpute;
 
-XPUTE_TEST(deque_holds_what_the_record_holds) {
+XPUTE_TEST(deque_matches_record) {
     Golden v = Golden::load("spec/golden/collection/deque.tsv");
     std::array<std::uint32_t, 8> buf{};
     Deque<std::uint32_t> d{buf};
@@ -50,7 +50,7 @@ static std::string show(const E &e) {
     return std::to_string(static_cast<long long>(e.key)) + ":" + std::to_string(e.val);
 }
 
-XPUTE_TEST(heaps_pop_what_the_record_holds) {
+XPUTE_TEST(heap_matches_record) {
     Golden v = Golden::load("spec/golden/collection/heap.tsv");
     std::vector<E> a, b;
     v.each("steps", [&](const std::string &k) {
@@ -93,7 +93,7 @@ SlotArena arena(std::uint32_t init_cap, std::uint32_t max_cap) {
 
 } // namespace
 
-XPUTE_TEST(arena_a_rewind_drops_nothing_so_a_slot_s_own_buffer_is_there_the_next_time) {
+XPUTE_TEST(arena_rewind_keeps_buffers) {
     SlotArena a = arena(4, 1 << 10);
     for (std::uint32_t i = 0; i < 4; i++) {
         Slot *slot = *a.alloc();
@@ -112,7 +112,7 @@ XPUTE_TEST(arena_a_rewind_drops_nothing_so_a_slot_s_own_buffer_is_there_the_next
     for (std::uint32_t i = 0; i < 4; i++) XPUTE_CHECK_EQ(a.get(i).kept.capacity(), caps[i], "a rewind gave a slot's buffer back");
 }
 
-XPUTE_TEST(arena_growth_doubles_past_the_cap_and_carries_what_was_written) {
+XPUTE_TEST(arena_growth_doubles) {
     SlotArena a = arena(2, 1 << 10);
     XPUTE_CHECK(a.cap() == 2);
     for (std::uint32_t i = 0; i < 5; i++) (*a.alloc())->mark = i;
@@ -125,7 +125,7 @@ XPUTE_TEST(arena_growth_doubles_past_the_cap_and_carries_what_was_written) {
     XPUTE_CHECK_EQ(a.cap(), cap, "an alloc after reserve grew again");
 }
 
-XPUTE_TEST(arena_growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was) {
+XPUTE_TEST(arena_growth_past_max_refused) {
     SlotArena a = arena(2, 4);
     for (std::uint32_t i = 0; i < 4; i++) (*a.alloc())->mark = i + 10;
     XPUTE_CHECK(a.cap() == 4);
@@ -138,7 +138,7 @@ XPUTE_TEST(arena_growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was) 
     XPUTE_CHECK(!a.reserve(1).ok());
 }
 
-XPUTE_TEST(arena_a_scope_rewinds_to_where_it_began) {
+XPUTE_TEST(arena_scope_rewinds) {
     SlotArena a = arena(8, 1 << 10);
     (*a.alloc())->mark = 1;
     XPUTE_CHECK(a.len() == 1);
@@ -173,7 +173,7 @@ template <std::size_t N> std::vector<int> values(const List<Counted, N> &l) {
 
 } // namespace
 
-XPUTE_TEST(list_keeps_its_order_through_remove_and_retain_and_ends_each_value_once) {
+XPUTE_TEST(list_order_and_drop) {
     int ended = 0;
     {
         List<Counted, 8> l;

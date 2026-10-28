@@ -326,7 +326,7 @@ const Program PROGRAMS[] = {
 
 } // namespace
 
-XPUTE_TEST(gpu_every_program_writes_the_words_its_record_holds) {
+XPUTE_TEST(gpu_programs_match_record) {
     Golden g = Golden::load("spec/golden/gpu/programs.tsv");
     std::vector<std::string> recorded;
     g.each("program", [&](const std::string &k) { recorded.push_back(g.s(k)); });

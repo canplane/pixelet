@@ -32,7 +32,7 @@ template <class F> std::string encoded(F &&build, std::uint32_t init = 1024, std
 
 } // namespace
 
-XPUTE_TEST(xtp_the_tree_encodes_to_the_bytes_the_other_languages_write) {
+XPUTE_TEST(xtp_tree_matches_other_languages) {
     Golden v = Golden::load("spec/golden/wire/xtp/encode.tsv");
     auto check = [&v](const char *name, auto &&build) {
         std::string k;
@@ -89,7 +89,7 @@ XPUTE_TEST(xtp_the_tree_encodes_to_the_bytes_the_other_languages_write) {
     check("graft", [](TreeView<> &t) { t.graft(inner); });
 }
 
-XPUTE_TEST(xtp_the_tree_is_refused_past_its_cap_and_a_cap_outside_a_packet_s_sizes) {
+XPUTE_TEST(xtp_tree_cap_refused) {
     auto big = [](TreeView<> &t) { t.str(std::string_view("0123456789abcdef0123456789abcdef")); };
     XPUTE_CHECK_EQ(encoded(big, 16, 48), "errno:" + std::to_string(static_cast<int>(Errno::eoverflow)), "past the cap");
     XPUTE_CHECK_EQ(encoded([](TreeView<> &t) { t.nil(); }, 16, 4), "errno:" + std::to_string(static_cast<int>(Errno::einval)), "a cap under a header");

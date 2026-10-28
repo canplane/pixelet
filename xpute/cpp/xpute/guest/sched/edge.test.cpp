@@ -84,7 +84,7 @@ Task<> waits_for_notice() {
 
 } // namespace
 
-XPUTE_TEST(edge_a_spent_quota_parks_the_task_until_the_next_rising_edge) {
+XPUTE_TEST(edge_spent_quota_parks) {
     reset();
     edge.rise(4);
     XPUTE_CHECK(spawn(spends_then_goes_on(), 0));
@@ -100,7 +100,7 @@ XPUTE_TEST(edge_a_spent_quota_parks_the_task_until_the_next_rising_edge) {
     XPUTE_CHECK((seen == std::vector{1, 2}));
 }
 
-XPUTE_TEST(edge_the_falling_edge_asks_for_the_earliest_wait_or_for_nothing) {
+XPUTE_TEST(edge_falling_edge_earliest_wait) {
     reset();
     edge.rise(4);
     edge.wake_at(test_clock() + 300);
@@ -112,7 +112,7 @@ XPUTE_TEST(edge_the_falling_edge_asks_for_the_earliest_wait_or_for_nothing) {
     XPUTE_CHECK(edge.fall() == 0);
 }
 
-XPUTE_TEST(edge_a_waiting_task_is_woken_by_its_notice_and_asks_for_no_turn) {
+XPUTE_TEST(edge_notice_wakes_task) {
     reset();
     XPUTE_CHECK(spawn(waits_for_notice(), 0));
     poll();
@@ -131,7 +131,7 @@ XPUTE_TEST(edge_a_waiting_task_is_woken_by_its_notice_and_asks_for_no_turn) {
     XPUTE_CHECK((seen == std::vector{7, 7}));
 }
 
-XPUTE_TEST(task_an_awaited_task_runs_in_its_awaiter_s_place_and_its_wait_is_the_awaiter_s) {
+XPUTE_TEST(task_awaited_runs_in_place) {
     reset();
     XPUTE_CHECK(spawn(awaits_a_task(), 0));
     poll();

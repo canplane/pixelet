@@ -44,7 +44,7 @@ std::vector<std::uint8_t> packet_of(std::uint32_t n) {
 
 } // namespace
 
-XPUTE_TEST(ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses) {
+XPUTE_TEST(ring_order_and_full) {
     Fixture f = fixture(4, 64);
     const Ring &r = f.ring;
     for (std::uint32_t round = 0; round < 3; round++) {
@@ -61,7 +61,7 @@ XPUTE_TEST(ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses
     XPUTE_CHECK_EQ(r.head() == 12 && r.tail() == 12, true, "positions only grow");
 }
 
-XPUTE_TEST(ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a_slot_is_refused_whatever_the_ring_holds) {
+XPUTE_TEST(ring_in_place_packet) {
     Fixture f = fixture(8, 64);
     const Ring &r = f.ring;
     XPUTE_CHECK(r.push_in_place(1, 2, 0, 0, [](std::span<std::uint8_t> out) { return pair(out, 5); }) == Errno::ok);
@@ -91,7 +91,7 @@ XPUTE_TEST(ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a
     XPUTE_CHECK(*root.at(0)->get_number() == 6.0);
 }
 
-XPUTE_TEST(ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_before_them) {
+XPUTE_TEST(ring_payload_per_slot) {
     Fixture f = fixture(8, 64);
     const Ring &r = f.ring;
     for (std::uint32_t n = 1; n <= 8; n++) XPUTE_CHECK(r.push(n, 0x0101, 0, 0, packet_of(n)) == Errno::ok);

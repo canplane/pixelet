@@ -9,7 +9,7 @@
 using namespace xpute;
 using namespace xpute::abi;
 
-XPUTE_TEST(handle_a_full_table_refuses) {
+XPUTE_TEST(handle_full_table_refuses) {
     Table<std::monostate, 3> t;
     std::uint32_t h0 = *t.insert({});
     XPUTE_CHECK(t.insert({}).has_value());
@@ -19,7 +19,7 @@ XPUTE_TEST(handle_a_full_table_refuses) {
     XPUTE_CHECK(t.insert({}).has_value());
 }
 
-XPUTE_TEST(handle_a_removed_handle_names_nothing_even_once_its_slot_is_taken_again) {
+XPUTE_TEST(handle_removed_stale) {
     Table<int, 4> t;
     std::uint32_t a = *t.insert(1);
     XPUTE_CHECK(a != 0);
@@ -38,7 +38,7 @@ XPUTE_TEST(handle_a_removed_handle_names_nothing_even_once_its_slot_is_taken_aga
     XPUTE_CHECK(t.get(0) == nullptr);
 }
 
-XPUTE_TEST(handle_a_rollback_removes_what_its_epoch_took) {
+XPUTE_TEST(handle_rollback_epoch) {
     Table<std::uint8_t, 8> t;
     std::uint32_t kept = *t.insert(1);
     t.begin();
