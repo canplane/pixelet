@@ -71,8 +71,7 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
     sky::star::ALL,
 ];
 
-/// The screen's ambient occlusion (the passes frame/shader/ao_*.wgsl, and
-/// `TINT` frame/shader/screen_ray.wgsl's).
+/// The screen's ambient occlusion (the passes frame/shader/ao_*.wgsl).
 pub mod ao {
     params! {
         RADIUS: f32 = 1.5;
@@ -86,8 +85,6 @@ pub mod ao {
         /// N8AO's denoise radius, 12 of the screen's pixels, which ao_blur.wgsl
         /// takes to the passes' resolution (`AO_DOWNSCALE`).
         DENOISE_RADIUS: f32 = 12.0;
-        /// #1a1006 as a ratio: a warm contact shadow rather than gray.
-        TINT: [f32; 3] = [1.0, 0.615, 0.231];
     }
 }
 

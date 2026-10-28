@@ -223,7 +223,7 @@ fn occlusion_of(d: f32) -> f32 {
 // corners leave it to the light.
 struct Creases {
   edge: f32,
-  open: vec3f,
+  open: f32,
 };
 
 // Off the face's own bits (pxl-spec-core `face`), edge `k` +u, -u, +v, -v
@@ -233,10 +233,10 @@ struct Creases {
 // every size side by side show one line and perspective alone thins it far
 // off (`line_at`). The closing in: each edge a cell rises across, and each
 // corner one rises across alone, takes its share of what the last left,
-// over a cell, tinted warm.
+// over a cell.
 fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
   if (frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) {
-    return Creases(0.0, vec3f(1.0));
+    return Creases(0.0, 1.0);
   }
   let u = (h.axis + 1u) % 3u;
   let v = (h.axis + 2u) % 3u;
@@ -262,7 +262,7 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
     }
   }
   let k = frame_corner_ao() * (1.0 - open);
-  return Creases(edge, (1.0 - k) * mix(vec3f(1.0), AO_TINT, k));
+  return Creases(edge, 1.0 - k);
 }
 
 // The face's texture coordinate: the world's position, one repeat a unit.
