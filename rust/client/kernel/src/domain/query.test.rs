@@ -618,18 +618,18 @@ fn box_placed_matches_store() {
     assert_eq!(asked, held);
 }
 
-/// A square that lands after the windows were folded without it is read
+/// A brick that lands after the windows were folded without it is read
 /// with what it holds once the landings are folded, as the stage folds them
 /// (domain/layer/terrain/window.rs `refold`): a spike
 /// a cell wide in it, over ground at five and taller than a node over the
-/// square, is met where a walker's ray down it met it while the square was
-/// held from the start, and no cell of the square stands outside the bound
-/// read over it at any zoom over a square.
+/// brick, is met where a walker's ray down it met it while the brick was
+/// held from the start, and no cell of the brick stands outside the bound
+/// read over it at any zoom over a brick.
 #[test]
-fn late_square_spike() {
+fn late_brick_spike() {
     use crate::domain::layer::terrain::window::{on_landed, refold, test::unland, Windowed};
     use pxl_render::gpu::renderer::Landing;
-    use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE, WINDOW};
+    use pxl_spec_core::window::{self as cells, Bricks, Found, BRICK, LEVELS, WINDOW};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let leaf = top().children()[0];
@@ -652,8 +652,8 @@ fn late_square_spike() {
         .map(|k| {
             let w = WINDOW as i32;
             [
-                first[0] * SQUARE as i32 + k % w,
-                first[1] * SQUARE as i32 + k / w,
+                first[0] * BRICK as i32 + k % w,
+                first[1] * BRICK as i32 + k / w,
             ]
         })
         .find(|&g| top(g) == 400)
@@ -677,12 +677,12 @@ fn late_square_spike() {
     on_landed(b, ticket, Landing::Built(&[0]));
     refold();
     assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
-    let q = cells::square_of(spike).0;
+    let q = cells::brick_of(spike).0;
     let mut outside = 0;
-    for k in 0..SQUARE * SQUARE {
+    for k in 0..BRICK * BRICK {
         let g = [
-            q[0] * SQUARE as i32 + (k % SQUARE) as i32,
-            q[1] * SQUARE as i32 + (k / SQUARE) as i32,
+            q[0] * BRICK as i32 + (k % BRICK) as i32,
+            q[1] * BRICK as i32 + (k / BRICK) as i32,
         ];
         let h = top(g);
         for zoom in TOP_ZOOM..LEAF_CELL - LEVELS {
@@ -699,15 +699,15 @@ fn late_square_spike() {
     assert_eq!(outside, 0, "cells outside the bound over them");
 }
 
-/// The device that went took every square it held: the turn that sees it
+/// The device that went took every brick it held: the turn that sees it
 /// gives up their cells (domain/layer/terrain/window.rs `berth`, as `step`
-/// runs it) and folds the windows over none, so no node over a square of
+/// runs it) and folds the windows over none, so no node over a brick of
 /// the eye's leaves keeps a bound of cells gone.
 #[test]
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::window::{test::lose, Windowed};
     use pxl_spec_core::ground::UNBOUNDED;
-    use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE};
+    use pxl_spec_core::window::{self as cells, Bricks, Found, BRICK, LEVELS};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();
@@ -715,7 +715,7 @@ fn device_loss_drops_bounds() {
     let zoom = LEAF_CELL - LEVELS - 1;
     let over = || {
         let s = LEAF_CELL - zoom;
-        let g = [first[0] * SQUARE as i32 >> s, first[1] * SQUARE as i32 >> s];
+        let g = [first[0] * BRICK as i32 >> s, first[1] * BRICK as i32 >> s];
         let mut place = Found::NONE;
         cells::bound_over(&Windowed, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
     };

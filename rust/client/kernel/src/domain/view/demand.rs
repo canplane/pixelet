@@ -89,14 +89,14 @@ impl Observed for Earth {
 pub struct Layer {
     pub stream: Stream,
     /// The most tiles it asks for at once, its tile cache's slots.
-    pub frames: u32,
+    pub slots: u32,
     arrived: fn(Tile, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
 const fn layer<L: Observed>() -> Layer {
     Layer {
         stream: L::STREAM,
-        frames: TileCache::<L>::SLOTS,
+        slots: TileCache::<L>::SLOTS,
         arrived: on_arrived::<L>,
     }
 }

@@ -21,7 +21,7 @@ use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, COUNTS, DECORS, PATCH};
 use crate::lattice::GROUND;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
+use crate::window::{BRICK_SHIFT, EYE_WINDOWS, SLOTS};
 use crate::world::{placed_in, Placed};
 use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
@@ -158,11 +158,11 @@ pub fn patch_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2
     (top, [0, 0], false)
 }
 
-/// The most patches `patch_of` names over a window's square at any zoom: a
-/// square at the leaves, its side `window::SQUARE` leaf cells, aligned to
+/// The most patches `patch_of` names over a window's brick at any zoom: a
+/// brick at the leaves, its side `window::BRICK` leaf cells, aligned to
 /// it, so a patch as wide or wider holds it whole.
-pub const SQUARE_PATCHES: u32 = {
-    let side = crate::window::SQUARE_SHIFT;
+pub const BRICK_PATCHES: u32 = {
+    let side = crate::window::BRICK_SHIFT;
     let (mut born, mut sum) = (LEAF_ZOOM + 1, 0);
     while born > TOP_ZOOM {
         born -= 1;
@@ -173,16 +173,16 @@ pub const SQUARE_PATCHES: u32 = {
     sum
 };
 
-/// The most decor one square grows, every decor's together: a patch bears no more
+/// The most decor one brick grows, every decor's together: a patch bears no more
 /// than its counts' thresholds (`Decor::room`), and no more patches than
-/// `SQUARE_PATCHES` meet a square.
-pub const SQUARE_GROWN: u32 = {
+/// `BRICK_PATCHES` meet a brick.
+pub const BRICK_GROWN: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < DECORS.len() {
         sum += DECORS[k].room();
         k += 1;
     }
-    sum * SQUARE_PATCHES
+    sum * BRICK_PATCHES
 };
 
 const _: () = assert!(
@@ -195,8 +195,8 @@ const _: () = assert!(
 /// it (`Grown::sink`).
 pub const GROWN_WORDS: u32 = 5;
 
-/// The eye's windows' squares, a slot each: what the GPU grows decor in,
-/// slot `s` the square the windows' table holds at `s`.
+/// The eye's windows' bricks, a slot each: what the GPU grows decor in,
+/// slot `s` the brick the windows' table holds at `s`.
 pub const EYE_SLOTS: u32 = EYE_WINDOWS * SLOTS;
 
 /// A record no decor stands at: its candidate stands or grows not where it
@@ -213,11 +213,11 @@ const _: () = assert!(
 );
 
 /// The GPU's decor in one buffer of words: a head per eye slot, then each
-/// slot's `SQUARE_GROWN` records, then placed decor's head and its records.
+/// slot's `BRICK_GROWN` records, then placed decor's head and its records.
 /// A slot's records are its candidates', each at its own place
 /// (`slot_record`), so one grown again rewrites its own alone. A head is
-/// the square they were grown for, X and Y, and 1 once they were — a slot
-/// whose square the windows no longer hold there is skipped by it
+/// the brick they were grown for, X and Y, and 1 once they were — a slot
+/// whose brick the windows no longer hold there is skipped by it
 /// (`grown_for`) — then how many candidates each patch of each decor bears,
 /// as many of its records as are read (`bears_at`). Placed decor's head is
 /// its count.
@@ -225,14 +225,14 @@ pub const BEARS_AT: u32 = 3;
 pub const HEAD_WORDS: u32 = BEARS_AT + RUNS;
 const SLOTS_AT: u32 = EYE_SLOTS * HEAD_WORDS;
 /// Records the slots hold, every one, ahead of placed decor's.
-pub const SLOT_RECORDS: u32 = EYE_SLOTS * SQUARE_GROWN;
+pub const SLOT_RECORDS: u32 = EYE_SLOTS * BRICK_GROWN;
 pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * GROWN_WORDS;
 pub const PLACED_HEAD_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (pxl-shader decor.rs
 /// `records`): a slot's, each decor's patches in turn; placed decor's, a
 /// record each.
-pub const RUNS: u32 = DECORS.len() as u32 * SQUARE_PATCHES;
+pub const RUNS: u32 = DECORS.len() as u32 * BRICK_PATCHES;
 
 /// Slot `s`'s head.
 pub const fn head_at(s: u32) -> u32 {
@@ -242,7 +242,7 @@ pub const fn head_at(s: u32) -> u32 {
 /// The word of slot `s`'s head counting what the `p`-th patch of decor `k`
 /// bears.
 pub const fn bears_at(s: u32, k: u32, p: u32) -> u32 {
-    head_at(s) + BEARS_AT + k * SQUARE_PATCHES + p
+    head_at(s) + BEARS_AT + k * BRICK_PATCHES + p
 }
 
 /// Slot `s`'s record of candidate `i` of the `p`-th patch of `rows`' decor
@@ -254,7 +254,7 @@ pub fn slot_record(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
         first += rows[j as usize].room();
         j += 1;
     }
-    s * SQUARE_GROWN + first * SQUARE_PATCHES + p * rows[k as usize].room() + i
+    s * BRICK_GROWN + first * BRICK_PATCHES + p * rows[k as usize].room() + i
 }
 
 /// Record `n`'s first word, the slots' first, slot by slot, then placed
@@ -267,13 +267,13 @@ pub const fn record_at(n: u32) -> u32 {
     }
 }
 
-/// Whether a slot's head says its records were grown for the square `q`.
+/// Whether a slot's head says its records were grown for the brick `q`.
 pub const fn grown_for(head: [u32; 3], q: [i32; 2]) -> bool {
     head[2] == 1 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
 }
 
 /// The boxes a frame's growth is asked over at most: the edits and cuts
-/// held (`overwrite::BOXES`), and each square handed this frame, which
+/// held (`overwrite::BOXES`), and each brick handed this frame, which
 /// reaches its window's zoom alone.
 pub const MARKED: u32 = crate::overwrite::BOXES + crate::window::HANDED;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
@@ -305,9 +305,9 @@ pub const GROWS_WORDS: u32 = GROWS_AT + EYE_SLOTS * DECORS.len() as u32;
 /// decor that may claim it, none wider than the widest decor.
 const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
 
-/// The leaf cells, `[x0, y0, x1, y1)`, of square `q` of the window at `cell`.
-pub const fn square_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
-    let k = SQUARE_SHIFT + LEAF_CELL - cell;
+/// The leaf cells, `[x0, y0, x1, y1)`, of brick `q` of the window at `cell`.
+pub const fn brick_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
+    let k = BRICK_SHIFT + LEAF_CELL - cell;
     [q[0] << k, q[1] << k, (q[0] + 1) << k, (q[1] + 1) << k]
 }
 
@@ -324,15 +324,15 @@ pub const fn reads(cell: Zoom, c: [i32; 2]) -> [i32; 4] {
     ]
 }
 
-/// The leaf cells any candidate in square `q` of the window at `cell` reads
+/// The leaf cells any candidate in brick `q` of the window at `cell` reads
 /// (`reads`).
-pub const fn square_reads(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
-    let ([x0, y0, x1, y1], r) = (square_box(cell, q), READ_REACH << (LEAF_CELL - cell));
+pub const fn brick_reads(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
+    let ([x0, y0, x1, y1], r) = (brick_box(cell, q), READ_REACH << (LEAF_CELL - cell));
     [x0 - r, y0 - r, x1 + r, y1 + r]
 }
 
 /// Whether the box `b` of leaf cells meets the leaf cells `reads`
-/// (`reads`, `square_reads`), each X on any lap, X round the world.
+/// (`reads`, `brick_reads`), each X on any lap, X round the world.
 pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     let wide = reads[2] - reads[0];
     // The box's first column from the region's, the short way round.
@@ -464,7 +464,7 @@ pub fn before(a: &Candidate, b: &Candidate) -> bool {
     a.born < b.born || (a.born == b.born && a.seed < b.seed)
 }
 
-/// Whether the squares two candidates claim, `sa` and `sb` cells from their
+/// Whether the bricks two candidates claim, `sa` and `sb` cells from their
 /// cells up, share a cell.
 pub fn meet(a: &Candidate, sa: i32, b: &Candidate, sb: i32) -> bool {
     a.cell[0] < b.cell[0] + sb
@@ -487,22 +487,22 @@ pub fn variant_of(decor: &Decor, draws: &mut SplitMix32) -> u32 {
     mul_hi(draws.next_u32(), decor.variants)
 }
 
-/// The square a candidate claims, which holds its box however it turns.
+/// The brick a candidate claims, which holds its box however it turns.
 pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
     let [x, y, _] = decor.sizes[variant_of(decor, &mut SplitMix32::new(c.seed)) as usize];
     x.max(y) as i32
 }
 
-/// Whether `d`, its square `sd` a side, keeps `c`, its `sc`, from standing:
-/// it stands before it and claims a cell of its square. The one rule of the
+/// Whether `d`, its brick `sd` a side, keeps `c`, its `sc`, from standing:
+/// it stands before it and claims a cell of its brick. The one rule of the
 /// contest (`stands`).
 pub fn beats(d: &Candidate, sd: i32, c: &Candidate, sc: i32) -> bool {
     before(d, c) && meet(d, sd, c, sc)
 }
 
-/// The leaf cells a candidate of `decor` beating `c`, its square `side` a
+/// The leaf cells a candidate of `decor` beating `c`, its brick `side` a
 /// side, stands in (`beats`): as far before it as the widest decor's
-/// square reaches, to the end of its own.
+/// brick reaches, to the end of its own.
 pub fn rivals(decor: &Decor, c: &Candidate, side: i32) -> [[i32; 2]; 2] {
     let reach = decor.widest() as i32 - 1;
     [

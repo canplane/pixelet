@@ -10,7 +10,7 @@
 //!
 //! - the ground: its column off the windows, as the GPU drew it and the CPU
 //!   read it back, and the area's edge laid on it; the ways off the tree the
-//!   GPU built of its square, its families read back into the pool's mirror,
+//!   GPU built of its brick, its families read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-spec-core `window::ground`,
 //!   `way::tree`);
 //! - the caves: the hash pyramid's node at that zoom, its value

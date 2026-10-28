@@ -83,10 +83,10 @@ pub(super) struct CastBuffers {
     slots: Vec<i32>,
     forgets: u32,
     cuts: [u32; eye::CUTS],
-    /// The eye's windows folded over their squares (`joined_cs`), over its
+    /// The eye's windows folded over their bricks (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
     /// (`window::JOINED_AT`), written where the windows' slots moved
-    /// (`refold`). The CPU folds its own over the squares it holds
+    /// (`refold`). The CPU folds its own over the bricks it holds
     /// (pxl-kernel domain/layer/terrain/window.rs `fold`).
     joined_built: Built,
     /// The world's depth from the sun, a texel of the sun's map each
@@ -423,7 +423,7 @@ impl RaysPass {
         let shards_moved = r.read(shards);
         // A surface made again holds no rays.
         r.read(&[*room as u32, *revision, rays.0]);
-        // And the ground's squares, written this frame or not.
+        // And the ground's bricks, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
         let stands = r.end() && fresh == 0 && c.group != 0;
         let jitter = [eye[eye::JITTER], eye[eye::JITTER + 1]];
@@ -548,7 +548,7 @@ impl RaysPass {
             }
             c.overwrite_revision = Some(o.revision);
         }
-        // What the world's query reads moved: the windows, the squares the
+        // What the world's query reads moved: the windows, the bricks the
         // turn handed (their cells, looks and ways), the service area, what
         // is placed, a preview's cuts. What the observed pyramid kept is
         // forgotten; so it is once its frames would outrun a key's tag.
@@ -575,7 +575,7 @@ impl RaysPass {
             || overwrites_grow
             || (overwrites_moved && edits.is_empty())
             || c.frame >= observed::FRAMES;
-        // The eye's windows' slots that hold another square, or whose square
+        // The eye's windows' slots that hold another brick, or whose brick
         // the turn handed: what is over them is asked again.
         c.cuts = cuts;
         let eye_rows = (window::EYE_WINDOWS * window::SLOTS) as usize;
@@ -590,13 +590,13 @@ impl RaysPass {
             c.slots.clear();
             c.slots.extend_from_slice(rows);
         }
-        // A square handed moves the eye's slot that wants it, whichever
+        // A brick handed moves the eye's slot that wants it, whichever
         // window's berth it is filled into.
         if let Some(gb) = self.ground.as_ref() {
             for f in &gb.handed[..fresh as usize] {
                 let (cell, q) = (
                     f[FRESH_CELL as usize],
-                    window::fresh_square([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]),
+                    window::fresh_brick([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]),
                 );
                 let w = cell.wrapping_sub(window::FIRST_CELL);
                 let k = (w * window::SLOTS + window::slot(q)) as usize;
@@ -828,7 +828,7 @@ impl RaysPass {
         self.regroup(g, [rays.0, eye]);
     }
 
-    /// The eye's windows folded over their squares where their slots moved
+    /// The eye's windows folded over their bricks where their slots moved
     /// (`joined_cs`): ahead of the frame, as the fold outlives it.
     pub fn fold(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
         let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else {
@@ -962,7 +962,7 @@ impl RaysPass {
             let stamp = stamps[GpuSpanName::sun_beam as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
             // The tiles its receivers read marked first, timed with the
-            // beam: where the eye's rays meet the world, a thread a square
+            // beam: where the eye's rays meet the world, a thread a brick
             // of pixels `sun::MARK` a side (`sun_mark_cs`), and where the
             // decor and the actors drawn stand, a thread each
             // (`sun_mark_drawn_cs`); then those they read, a thread a tile
@@ -1133,7 +1133,7 @@ impl RaysPass {
 
 /// The cast's group 0 over `bound`: the eye, the window and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
-/// surface's rays, the squares' looks, the service area's index, the
+/// surface's rays, the bricks' looks, the service area's index, the
 /// overwrites, the ways' pool, the beam rays' lines and the cells' starts,
 /// the observed pyramid, and the head (`WORLD_GROUP`): the eye's, or, over
 /// the sun's list and head, the sun's map's (`sun_groups`).
@@ -1193,7 +1193,7 @@ fn sun_list(g: &Gpu, whole: bool) -> u32 {
 }
 
 /// The sun's cast's groups 0, over `bound`: the eye, the window, the
-/// tiles' frames, the squares' looks, the service area's index, the
+/// tiles' frames, the bricks' looks, the service area's index, the
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
 /// which the sun's walks read and write as the eye's do; the clipmap; its
 /// head (`moved`), the beam's lines, the samples and the misses (`list`),

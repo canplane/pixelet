@@ -2,7 +2,7 @@
 
 //! gpu-portable: the ways off the ground, as a cell asks them — a bridge's
 //! deck and its piers, a tunnel's bore and the way's ground about it, an
-//! approach's embankment or cutting — one rule for a square's fill, which
+//! approach's embankment or cutting — one rule for a brick's fill, which
 //! keeps each column's spans once and builds its ways' tree off them, which
 //! the descent on both sides reads (pxl-spec bake/separation.rs keeps the
 //! lines, solved offline). A cell is asked of the lines over its column,
@@ -14,7 +14,7 @@
 //! a reader reads a cell's own column alone. What is under half a cell in any dimension at a
 //! zoom is absent there, as the fold drops a line under half a cell wide: a
 //! slab or a bore fills a cell where it holds half its height or more, and
-//! a pier, a leaf cell square, stands only in columns no more than two leaf
+//! a pier, a leaf cell brick, stands only in columns no more than two leaf
 //! cells wide. Index loops, no `Option` (a crossing none is is `Crossing::NONE`), words
 //! for tags, nothing a GPU lacks (`hypot`).
 
@@ -96,7 +96,7 @@ pub fn covers(width: f32, distance: f32) -> bool {
 }
 
 /// How far from its line a way reaches anything drawn, in its tile's cells:
-/// its reach (`reach`), and a cell past it, so a tile's lines and a square's
+/// its reach (`reach`), and a cell past it, so a tile's lines and a brick's
 /// hold every line whose air or slab can stand in the ring of cells about
 /// them, a thin way's included.
 pub fn footprint(width: f32) -> f32 {
@@ -202,7 +202,7 @@ pub struct Stations {
 /// A bent's spacing for the narrow beam (`w` 0) and the wide (1), metres.
 pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVAL_M];
 
-/// What a square's lines open with (pxl-spec-core window.rs `LINES_*`): its
+/// What a brick's lines open with (pxl-spec-core window.rs `LINES_*`): its
 /// tile's leaf cells a ground metre (pxl-spec `Frame::per_m`), then its
 /// stations, step, phase and leaf, each a float's bits.
 pub const HEADER_WORDS: u32 = 8;
@@ -245,7 +245,7 @@ fn bent(half: i32) -> ([i32; 3], u32) {
 
 /// Whether the column of `side` about `at` holds the pier at the station
 /// nearest `near` on `[a, a + d)`, in the tile's cells; half-open, so a
-/// joint's station is one segment's. A pier is a leaf cell square, its bent
+/// joint's station is one segment's. A pier is a leaf cell brick, its bent
 /// laid out in leaf cells: a column more than two leaf cells wide holds none,
 /// as it is under half of it; one of two holds it where one of its four leaf
 /// cells does.
@@ -374,7 +374,7 @@ pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Crossing
     let d = [b[0] - a[0], b[1] - a[1]];
     let len2 = d[0] * d[0] + d[1] * d[1];
     let near = [a[0] + d[0] * t, a[1] + d[1] * t];
-    // the column's square spans this much of the segment either side of `t`
+    // the column's brick spans this much of the segment either side of `t`
     let reach = if len2 > 0.0 {
         side / 2.0 * (d[0].abs() + d[1].abs()) / len2
     } else {
@@ -455,10 +455,10 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
     }
 }
 
-/// The columns a square's fill reads its ways off (`window::Square`): each
+/// The columns a brick's fill reads its ways off (`window::Brick`): each
 /// one's segments, in its own tile's cells, with its center there and the
 /// tile's stations, and its ground — its look as read, and its face's height
-/// in leaf cells. A column the square does not hold has no segment.
+/// in leaf cells. A column the brick does not hold has no segment.
 pub trait Columns {
     /// The cells' zoom, and leaf cells a ground metre over the ground.
     fn cell(&self) -> Zoom;
@@ -662,7 +662,7 @@ pub const SPANS: usize = 10;
 /// And its face cell (`ground::face_cell`), under which a bore's air
 /// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
 /// or it is past the area, where nothing does. What its cells are read
-/// off, its visits found once: a square's fill keeps them (pxl-spec-core
+/// off, its visits found once: a brick's fill keeps them (pxl-spec-core
 /// fill.rs `spans`, read through `Kept`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spans {
@@ -720,7 +720,7 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     (spans, fits)
 }
 
-/// A square's columns' spans and the ring's about it as its fill keeps
+/// A brick's columns' spans and the ring's about it as its fill keeps
 /// them (pxl-spec-core fill.rs `spans`), read in place: column `c`'s face
 /// cell and how many spans it has (`Spans`), and its `j`-th span and its
 /// value.

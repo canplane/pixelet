@@ -1,6 +1,6 @@
 // pxl-kernel/domain/layer/terrain/window.test.rs
 //
-// The windows as a test holds them: about a centre, each square of the
+// The windows as a test holds them: about a centre, each brick of the
 // tiles given present at once, its cells as a GPU would hand them back.
 
 use super::*;
@@ -16,7 +16,7 @@ pub(crate) type HeldTile = (
     pxl_spec::bake::separation::Separation,
 );
 
-/// What `hold` leaves held: the squares' words up to their last that is
+/// What `hold` leaves held: the bricks' words up to their last that is
 /// not zero, the pool's families taken as records (pxl-spec-core
 /// `way::tree::lay`), the slots and the berths.
 struct Built {
@@ -33,15 +33,15 @@ type Over = ([f64; 2], Vec<HeldTile>);
 /// built once, and each `hold` after takes a copy.
 static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
 
-const CELLS_WORDS: usize = (SQUARES * CELLS_LANE_BYTES / 4) as usize;
+const CELLS_WORDS: usize = (BRICKS * CELLS_LANE_BYTES / 4) as usize;
 const POOL_WORDS: usize = 16 * pxl_spec_core::way::tree::POOL_FAMILIES as usize;
 
-/// The pool's mirror holding `records`, a square's most at a time.
+/// The pool's mirror holding `records`, a brick's most at a time.
 fn mirrored(records: &[u32]) {
-    use pxl_spec_core::way::tree::{RECORD_WORDS, SQUARE_FAMILIES};
+    use pxl_spec_core::way::tree::{BRICK_FAMILIES, RECORD_WORDS};
     let m = mirror();
     m.clear();
-    for families in records.chunks((SQUARE_FAMILIES * RECORD_WORDS) as usize) {
+    for families in records.chunks((BRICK_FAMILIES * RECORD_WORDS) as usize) {
         let mut laid = vec![(families.len() / RECORD_WORDS as usize) as u32];
         laid.extend_from_slice(families);
         assert_eq!(
@@ -53,9 +53,9 @@ fn mirrored(records: &[u32]) {
 }
 
 /// The eye's and the focus's windows about `centre`, in units, X then Y,
-/// each square the tiles `held` cover present in its berth, the focus's
+/// each brick the tiles `held` cover present in its berth, the focus's
 /// windows the eye's finest two again: per tile, a cell's own look
-/// and its height, row by row from its first, and its lines; each square's
+/// and its height, row by row from its first, and its lines; each brick's
 /// columns, its tops and its ways' spans as its fill keeps them
 /// (`fill_columns`), and its levels as a GPU folds them (pxl-spec-core
 /// `fill::level`), read back. Built once a run for a centre and its tiles
@@ -98,12 +98,12 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     fold(windows());
 }
 
-/// The square at `cell` holding cell `g` absent, a fill on its way to it,
+/// The brick at `cell` holding cell `g` absent, a fill on its way to it,
 /// and the windows folded without it, as a turn's step leaves them before
 /// it lands: its berth and that fill's ticket, which `on_landed` takes.
 pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
     let w = windows();
-    let b = berth_of(w, cell, window::square_of(g).0).expect("held");
+    let b = berth_of(w, cell, window::brick_of(g).0).expect("held");
     (w.berths[b as usize].present, w.berths[b as usize].ticket) = (false, 7);
     for i in of_slot(b % SLOTS) {
         show(w, i);
@@ -112,7 +112,7 @@ pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
     (b, 7)
 }
 
-/// The device gone, as a turn's step finds it: every square's cells given
+/// The device gone, as a turn's step finds it: every brick's cells given
 /// up (`berth`).
 pub(crate) fn lose() {
     berth(windows(), true);
@@ -125,7 +125,7 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     });
     // The trees built into a pool in one lane, as the GPU's.
     let mut pool = vec![0; POOL_WORDS];
-    // The pool's families, each square's tree taken after the one before's, as
+    // The pool's families, each brick's tree taken after the one before's, as
     // the GPU's stack hands them, family 0 none's.
     let mut next = 1;
     WINDOWS_STATE.set(fresh());
@@ -136,22 +136,22 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             continue;
         }
         let first = window::origin(cell, cell_at(cell, centre));
-        w.slots[(SQUARES + win) as usize] = Slot {
-            square: first,
+        w.slots[(BRICKS + win) as usize] = Slot {
+            brick: first,
             present: 1,
             ticket: 0,
         };
         for s in 0..SLOTS {
-            w.slots[(win * SLOTS + s) as usize].square = wanted(cell, first, s);
+            w.slots[(win * SLOTS + s) as usize].brick = wanted(cell, first, s);
         }
     }
     berth(w, false);
-    for b in 0..SQUARES {
-        let Berth { cell, square, .. } = w.berths[b as usize];
+    for b in 0..BRICKS {
+        let Berth { cell, brick, .. } = w.berths[b as usize];
         if w.berths[b as usize].is_free() {
             continue;
         }
-        let (t, place) = tile_of(cell, square);
+        let (t, place) = tile_of(cell, brick);
         let Some((_, looks_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t)
         else {
             continue;
@@ -159,13 +159,13 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         let side = GROUND.tile_cells();
         let at = |k: u32| {
             let [x, y] = window::of_index(k);
-            ((place[1] * SQUARE + y) * side + place[0] * SQUARE + x) as usize
+            ((place[1] * BRICK + y) * side + place[0] * BRICK + x) as usize
         };
         let (mut segments, mut lines) = (
-            vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize],
+            vec![(0, 0); window::WAYS_BRICK_SEGMENTS as usize],
             vec![0; window::LINES_WORDS as usize],
         );
-        let n = pxl_spec::bake::tile::terrain::square_lines(
+        let n = pxl_spec::bake::tile::terrain::brick_lines(
             t,
             separation,
             place,
@@ -180,14 +180,14 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             height: |c: [i32; 2]| {
                 i32::from(
                     heights[at(window::index_of([
-                        c[0].clamp(0, SQUARE as i32 - 1) as u32,
-                        c[1].clamp(0, SQUARE as i32 - 1) as u32,
+                        c[0].clamp(0, BRICK as i32 - 1) as u32,
+                        c[1].clamp(0, BRICK as i32 - 1) as u32,
                     ]))],
                 )
             },
         };
         let (mut lane, mut scratch) = (
-            vec![0u32; window::SQUARE_WORDS as usize],
+            vec![0u32; window::BRICK_WORDS as usize],
             vec![0u32; pxl_spec_core::way::tree::SCRATCH_WORDS as usize],
         );
         fill_columns(
@@ -201,8 +201,8 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             lane[(window::LAID_AT + k) as usize] = half(0) | half(1) << 16;
         }
         for j in 0..=LEVELS {
-            for y in 0..SQUARE >> j {
-                for x in 0..SQUARE >> j {
+            for y in 0..BRICK >> j {
+                for x in 0..BRICK >> j {
                     pxl_spec_core::fill::level(
                         &mut lane,
                         0,
@@ -219,14 +219,14 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         }
         // Its ways' tree into the pool's mirror, its root word naming it.
         let [taken, _, root] = pxl_spec_core::fill::tree(&lane, &scratch, cell, &mut pool, next);
-        assert_ne!(taken, u32::MAX, "a square's tree past the pool");
+        assert_ne!(taken, u32::MAX, "a brick's tree past the pool");
         lane[window::ROOT_AT as usize] = root;
         next += taken;
         let at = (b * CELLS_LANE_BYTES / 4) as usize;
         planes().cells[at..at + window::BACK_WORDS as usize].copy_from_slice(&lane);
         w.berths[b as usize].present = true;
     }
-    for i in 0..SQUARES {
+    for i in 0..BRICKS {
         show(w, i);
     }
     // Every family taken, a record each: its id, its heap words, its data.
@@ -240,18 +240,18 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     records
 }
 
-/// A square's columns as a GPU's fill writes them (pxl-spec-core
+/// A brick's columns as a GPU's fill writes them (pxl-spec-core
 /// `fill::heights`, `fill::spans`), over cells whose tops are given
 /// (`top`) rather than drawn off samples: each column's word, its top, into
 /// `lane`; and the spans of its columns and its ring off its lines
 /// (`fill::keep`) into its `scratch`.
 fn fill_columns(
-    sq: &impl window::Square,
+    sq: &impl window::Brick,
     top: impl Fn(u32) -> i32,
     lane: &mut [u32],
     scratch: &mut [u32],
 ) {
-    for i in 0..SQUARE_CELLS {
+    for i in 0..BRICK_CELLS {
         lane[(window::COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
     }
     for i in 0..window::SPANS_COLUMNS {
@@ -261,7 +261,7 @@ fn fill_columns(
 
 /// The eye's windows laid out about `eye` and the focus's about `focus`, in
 /// units, X then Y, as `step` lays a window that moved, no destination's;
-/// their squares berthed (`berth`), what was held before kept.
+/// their bricks berthed (`berth`), what was held before kept.
 fn lay(w: &mut Windows, eye: [f64; 2], focus: [f64; 2]) {
     for win in 0..WINDOWS {
         let (centre_of, cell) = layout(win);
@@ -271,19 +271,19 @@ fn lay(w: &mut Windows, eye: [f64; 2], focus: [f64; 2]) {
             Centre::Destination => continue,
         };
         let first = window::origin(cell, cell_at(cell, p));
-        w.slots[(SQUARES + win) as usize] = Slot {
-            square: first,
+        w.slots[(BRICKS + win) as usize] = Slot {
+            brick: first,
             present: 1,
             ticket: 0,
         };
         for s in 0..SLOTS {
-            w.slots[(win * SLOTS + s) as usize].square = wanted(cell, first, s);
+            w.slots[(win * SLOTS + s) as usize].brick = wanted(cell, first, s);
         }
     }
     berth(w, false);
 }
 
-/// Every square held present, as if each had landed, its cells as they
+/// Every brick held present, as if each had landed, its cells as they
 /// came back, all zero unless a test held its own (`hold`): the windows
 /// fold over them wherever they are laid again (`berth`).
 fn land_all(w: &mut Windows) {
@@ -293,7 +293,7 @@ fn land_all(w: &mut Windows) {
     for b in w.berths.iter_mut().filter(|b| !b.is_free()) {
         b.present = true;
     }
-    for i in 0..SQUARES {
+    for i in 0..BRICKS {
         show(w, i);
     }
 }
@@ -303,20 +303,20 @@ fn leaf(c: [f64; 2]) -> [f64; 2] {
     c.map(|v| (v + 0.5) * units(LEAF_CELL))
 }
 
-/// The berths holding a square at `cell`.
+/// The berths holding a brick at `cell`.
 fn held_at(w: &Windows, cell: Zoom) -> usize {
     w.berths.iter().filter(|b| b.cell == cell).count()
 }
 
-/// The square window `win` wants in slot `s`.
+/// The brick window `win` wants in slot `s`.
 fn want(w: &Windows, win: u32, s: u32) -> [i32; 2] {
-    w.slots[(win * SLOTS + s) as usize].square
+    w.slots[(win * SLOTS + s) as usize].brick
 }
 
 const CENTRE: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
 
 #[test]
-fn shared_square_held_once() {
+fn shared_brick_held_once() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
@@ -343,7 +343,7 @@ fn shared_square_held_once() {
         for s in 0..SLOTS {
             let row = w.slots[(focus * SLOTS + s) as usize];
             assert!(
-                row.holds(row.square) && row.berth() == (layout(focus).1 - FIRST_CELL) * SLOTS + s,
+                row.holds(row.brick) && row.berth() == (layout(focus).1 - FIRST_CELL) * SLOTS + s,
                 "the focus's rows name the eye's berths"
             );
         }
@@ -351,23 +351,23 @@ fn shared_square_held_once() {
 }
 
 #[test]
-fn left_square_kept() {
+fn left_brick_kept() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
     lay(w, leaf(CENTRE), leaf(CENTRE));
     land_all(w);
-    // The eye a square on at the leaves: its window there leaves a column
+    // The eye a brick on at the leaves: its window there leaves a column
     // the focus's still wants, and wants a column the focus's does not.
-    let on = leaf([CENTRE[0] + f64::from(SQUARE), CENTRE[1]]);
+    let on = leaf([CENTRE[0] + f64::from(BRICK), CENTRE[1]]);
     lay(w, on, leaf(CENTRE));
     assert_eq!(held_at(w, LEAF_CELL), (SLOTS + window::ACROSS) as usize);
     for s in 0..SLOTS {
         let q = want(w, focus, s);
         assert!(
             Windowed.present(LEAF_CELL, q).1,
-            "the focus's squares stay present"
+            "the focus's bricks stay present"
         );
         assert!(w.slots[(focus * SLOTS + s) as usize].holds(q));
     }
@@ -383,7 +383,7 @@ fn left_square_kept() {
         let b = berth_of(w, LEAF_CELL, want(w, eye, s)).unwrap();
         assert!(
             w.berths[b as usize].is_absent() && b != eye * SLOTS + s,
-            "in a free berth, the eye's own still holding the focus's square"
+            "in a free berth, the eye's own still holding the focus's brick"
         );
     }
     // Back where it was, the eye finds the column it left present.
@@ -410,7 +410,7 @@ fn apart_windows_own_berths() {
     lay(
         w,
         leaf(CENTRE),
-        leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]),
+        leaf([CENTRE[0] + 100.0 * f64::from(BRICK), CENTRE[1]]),
     );
     for win in 0..EYE_WINDOWS + 2 {
         for s in 0..SLOTS {
@@ -425,7 +425,7 @@ fn apart_windows_own_berths() {
 #[test]
 fn landing_shows_everywhere() {
     let _g = crate::sys::serial();
-    // The fold after the landing reads the squares' cells.
+    // The fold after the landing reads the bricks' cells.
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
@@ -456,7 +456,7 @@ fn landing_shows_everywhere() {
         ticket: REFUSED,
         ..w.berths[b as usize]
     };
-    let far = leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]);
+    let far = leaf([CENTRE[0] + 100.0 * f64::from(BRICK), CENTRE[1]]);
     lay(w, leaf(CENTRE), far);
     assert_eq!(
         w.berths[b as usize].ticket, REFUSED,

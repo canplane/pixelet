@@ -2,7 +2,7 @@
 
 //! What the GPU's cast of the eye's rays reads (pxl-render gpu/renderer.rs
 //! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
-//! windows as a table of the squares each holds, and each square the
+//! windows as a table of the bricks each holds, and each brick the
 //! windows want handed to the GPU once, off its tile's packet
 //! (domain/layer/terrain/window.rs `fill`).
 
@@ -84,7 +84,7 @@ pub fn overwrites() -> Overwrites<'static> {
     }
 }
 
-/// Each square the windows want to `write`, while it takes them: off the
+/// Each brick the windows want to `write`, while it takes them: off the
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::tile_cache();
@@ -106,7 +106,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         },
         &wanted,
     );
-    // The due squares' void tiles, not every tile held.
+    // The due bricks' void tiles, not every tile held.
     for p in window::voids() {
         if window::fill(p, Handed::Void, write) == Offered::Full {
             return;

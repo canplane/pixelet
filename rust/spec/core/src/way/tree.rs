@@ -1,26 +1,26 @@
 // pxl-spec-core/way/tree.rs
 
-//! gpu-portable: a square's ways as cells, in a tree of the placed tree's
+//! gpu-portable: a brick's ways as cells, in a tree of the placed tree's
 //! shape (pxl-spec-core overwrite.rs), so a reader asks them by the one
-//! rule it asks what is placed by: from the square's own nodes along z down
+//! rule it asks what is placed by: from the brick's own nodes along z down
 //! to its cells, a node's eight slots a family, children only where they
 //! differ, each branch its eight folded (`overwrite::fold`), its leaves what
-//! the ways write at its cells (`way::lined`, read off the square's spans). A
-//! reader asks a square's ways only of a node the square's or under it, a
-//! wider one the windows' bound over its squares (`window::bound_over`), so
-//! the tree holds nothing over the square. Its families are taken from one
-//! pool every square's tree shares, off a free stack, and a square's root
+//! the ways write at its cells (`way::lined`, read off the brick's spans). A
+//! reader asks a brick's ways only of a node the brick's or under it, a
+//! wider one the windows' bound over its bricks (`window::bound_over`), so
+//! the tree holds nothing over the brick. Its families are taken from one
+//! pool every brick's tree shares, off a free stack, and a brick's root
 //! word names the family of its nodes along z (`root_word`,
 //! `window::ROOT_AT`), from which a reader steps down as the placed tree's
 //! does (`cursor`).
 //!
-//! Built a level at a time, one square to a workgroup (pxl-shader
+//! Built a level at a time, one brick to a workgroup (pxl-shader
 //! `way_tree_cs`), top-down then back up:
 //!
-//! - the square's nodes along z its ways' bound meets are the first
+//! - the brick's nodes along z its ways' bound meets are the first
 //!   level's candidates, a slot each of its root family (`span`, `root`);
 //! - each candidate coarser than the cells is flagged where its z meets
-//!   the ways' bound in the square's levels (`flag`): a flagged one takes a
+//!   the ways' bound in the brick's levels (`flag`): a flagged one takes a
 //!   family for its children,
 //!   the next level's candidates (`branch`), the rest hold nothing
 //!   (`empty`); a level's families come off the stack together, `fits` the
@@ -35,7 +35,7 @@
 //! where its leaf or fold is written after (`pack`).
 
 use crate::overwrite::{self, Held, Lanes, AIR as PLACED_AIR, BRANCH};
-use crate::window::{Squares, SQUARE_SHIFT};
+use crate::window::{Bricks, BRICK_SHIFT};
 use crate::{ground, Zoom, LEAF_CELL};
 
 /// The tree's lanes as its builder writes them, a word a slot.
@@ -81,21 +81,21 @@ impl Lanes for Read<'_> {
     }
 }
 
-/// The most families the pool grows to, eight slots each, every square's
+/// The most families the pool grows to, eight slots each, every brick's
 /// tree's: a bake's set fits it wherever the eye is (pxl-spec
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
 /// The pool starts smaller and grows as a build runs out, up to this
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`), as the CPU's
 /// mirror does (pxl-kernel domain/layer/terrain/mirror.rs); a build past
-/// what it holds is refused (`fits`), its square left absent. Family 0
+/// what it holds is refused (`fits`), its brick left absent. Family 0
 /// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
-/// so a root word 0 is a square with no tree, read as nothing without a
+/// so a root word 0 is a brick with no tree, read as nothing without a
 /// family of its own (`root_word`).
 pub const POOL_FAMILIES: u32 = 1 << 20;
 
-/// A square's root word (`window::ROOT_AT`): its root family's id, under
+/// A brick's root word (`window::ROOT_AT`): its root family's id, under
 /// `POOL_FAMILIES`, and over it the Z of the node its first slot holds, in
-/// the bits left; 0, family 0, where the square has no tree.
+/// the bits left; 0, family 0, where the brick has no tree.
 pub const fn root_word(family: u32, z0: i32) -> u32 {
     family | (z0 as u32) << ROOT_ID_BITS
 }
@@ -112,22 +112,22 @@ pub const fn root_slot(w: u32) -> (u32, i32) {
 const ROOT_ID_BITS: u32 = POOL_FAMILIES.trailing_zeros();
 const _: () = assert!(
     POOL_FAMILIES.is_power_of_two()
-        && (i16::MIN as i32 >> SQUARE_SHIFT) >= -(1 << (31 - ROOT_ID_BITS)),
-    "a root word holds every family's id and a square's Z, the leaves' i16 over its side"
+        && (i16::MIN as i32 >> BRICK_SHIFT) >= -(1 << (31 - ROOT_ID_BITS)),
+    "a root word holds every family's id and a brick's Z, the leaves' i16 over its side"
 );
 
-/// The most of a square's own nodes along z its root family holds, a slot
-/// each: a square is a node `SQUARE_SHIFT` zooms over its cells, and its
+/// The most of a brick's own nodes along z its root family holds, a slot
+/// each: a brick is a node `BRICK_SHIFT` zooms over its cells, and its
 /// ways' bound meets no more of them than this; a tile past it fails its
 /// bake (pxl-spec bake/tile/terrain.rs `fill_fit`), its build refused as one
 /// `past` its families. The most of the staged z15 set is 4 (2026-10-27).
 pub const ROOT_NODES: u32 = overwrite::FAMILY;
 
-/// The square's own nodes along z its ways' bound `[lo, hi)` (leaf cells,
+/// The brick's own nodes along z its ways' bound `[lo, hi)` (leaf cells,
 /// `ground::Bounds`) meets, its cells at `cell`: the first's Z and how
 /// many, none where the bound is empty.
 pub fn span([lo, hi]: [i32; 2], cell: Zoom) -> (i32, u32) {
-    let d = LEAF_CELL - (cell - SQUARE_SHIFT);
+    let d = LEAF_CELL - (cell - BRICK_SHIFT);
     if lo >= hi {
         (0, 0)
     } else {
@@ -135,15 +135,15 @@ pub fn span([lo, hi]: [i32; 2], cell: Zoom) -> (i32, u32) {
     }
 }
 
-/// What the node `at` of `zoom` holds of the square's ways' tree whose root
-/// word is `root`, its cells at `cell`, the node the square's or under it:
-/// the square's own node along z over it in the root family, then down
+/// What the node `at` of `zoom` holds of the brick's ways' tree whose root
+/// word is `root`, its cells at `cell`, the node the brick's or under it:
+/// the brick's own node along z over it in the root family, then down
 /// (`overwrite::down`), as `overwrite::cursor` steps; nothing where the root
 /// holds no node there. A descent asks this once, where it finds the
-/// square (pxl-spec-core world.rs `node`).
+/// brick (pxl-spec-core world.rs `node`).
 pub fn cursor(lanes: &impl Lanes, root: u32, cell: Zoom, zoom: Zoom, at: [i32; 3]) -> Held {
     let (first, z0) = root_slot(root);
-    let top = cell - SQUARE_SHIFT;
+    let top = cell - BRICK_SHIFT;
     if root == 0 || zoom < top {
         return Held::NOTHING;
     }
@@ -158,17 +158,17 @@ pub fn cursor(lanes: &impl Lanes, root: u32, cell: Zoom, zoom: Zoom, at: [i32; 3
 /// words.
 pub const FAMILY_WORDS: u32 = 2 * overwrite::FAMILY;
 
-/// The most families one square's build takes before its fold gives any
-/// back: the most of the format-12 set (2026-10-18, its windows' squares
+/// The most families one brick's build takes before its fold gives any
+/// back: the most of the format-12 set (2026-10-18, its windows' bricks
 /// lined as before the face cell, which only lines more); a tile past it
 /// fails its bake (pxl-geo-bake terrain/pool.rs), and what a build keeps a
-/// square, its records and the families its fold gives back, is held to it.
-pub const SQUARE_FAMILIES: u32 = 24_067;
+/// brick, its records and the families its fold gives back, is held to it.
+pub const BRICK_FAMILIES: u32 = 24_067;
 
 /// No slot: a fold that gives no family back.
 pub const NONE: u32 = u32::MAX;
 
-/// A handed square's scratch past its spans (`window::TREE_AT`), a frame's,
+/// A handed brick's scratch past its spans (`window::TREE_AT`), a frame's,
 /// for a tree of `families` at most: the families its build gave back, their
 /// count first, for the pushes after it (pxl-shader `way_freed_cs`); then
 /// the families its tree holds from `records_at`, their count first, a
@@ -176,75 +176,75 @@ pub const NONE: u32 = u32::MAX;
 /// which the read-back carries to the CPU's mirror. A build takes no more
 /// than its scratch holds (`is_cramped`), so neither runs past its room. The
 /// renderer starts it small and grows it (pxl-render gpu/ray/ground.rs
-/// `GroundBuffers::grow_scratch`), every square's alike, so a frame's
-/// scratch is `window::HANDED` of them and each square's length is a
+/// `GroundBuffers::grow_scratch`), every brick's alike, so a frame's
+/// scratch is `window::HANDED` of them and each brick's length is a
 /// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
-/// `SQUARE_FAMILIES` it is `SCRATCH_WORDS`.
+/// `BRICK_FAMILIES` it is `SCRATCH_WORDS`.
 pub const FREED_AT: u32 = crate::window::TREE_AT;
 pub const RECORD_WORDS: u32 = 1 + FAMILY_WORDS;
 
-/// A square's scratch for a tree of `families` at most, in words.
+/// A brick's scratch for a tree of `families` at most, in words.
 pub const fn scratch_words(families: u32) -> u32 {
     FREED_AT + 2 + families * (1 + RECORD_WORDS)
 }
 
-/// The families a square's scratch of `words` holds a tree of, no more than
-/// `SQUARE_FAMILIES`: `scratch_words`'s inverse, none where it holds none.
+/// The families a brick's scratch of `words` holds a tree of, no more than
+/// `BRICK_FAMILIES`: `scratch_words`'s inverse, none where it holds none.
 pub const fn scratch_families(words: u32) -> u32 {
     if words < FREED_AT + 2 {
         return 0;
     }
     let families = (words - FREED_AT - 2) / (1 + RECORD_WORDS);
-    if families < SQUARE_FAMILIES {
+    if families < BRICK_FAMILIES {
         families
     } else {
-        SQUARE_FAMILIES
+        BRICK_FAMILIES
     }
 }
 
-/// Where a square's records begin in its scratch for a tree of `families`.
+/// Where a brick's records begin in its scratch for a tree of `families`.
 pub const fn records_at(families: u32) -> u32 {
     FREED_AT + 1 + families
 }
 
-/// A square's scratch at its most, a tree of `SQUARE_FAMILIES`: what a bake
-/// or a test fills one square in.
-pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_FAMILIES);
+/// A brick's scratch at its most, a tree of `BRICK_FAMILIES`: what a bake
+/// or a test fills one brick in.
+pub const SCRATCH_WORDS: u32 = scratch_words(BRICK_FAMILIES);
 
 /// A build's records' count where its tree would take more families than its
-/// scratch holds (`is_cramped`), short of the square's own most: no record
+/// scratch holds (`is_cramped`), short of the brick's own most: no record
 /// kept and its root word 0, which the renderer reads as the scratch's to
-/// grow; `STARVED` the pool's, and `NONE` the square's own most (pxl-render
-/// gpu/ray/ground.rs `Short`). Each past any count of a square's, so a count
-/// of none is a square built with no ways, its root word 0.
+/// grow; `STARVED` the pool's, and `NONE` the brick's own most (pxl-render
+/// gpu/ray/ground.rs `Short`). Each past any count of a brick's, so a count
+/// of none is a brick built with no ways, its root word 0.
 pub const CRAMPED: u32 = NONE - 1;
 pub const STARVED: u32 = NONE - 2;
-const _: () = assert!(STARVED > SQUARE_FAMILIES, "no count of records is a mark");
+const _: () = assert!(STARVED > BRICK_FAMILIES, "no count of records is a mark");
 
-/// A candidate's word: its X and Y in the square at its zoom,
-/// `SQUARE_SHIFT` bits each, and its Z.
-const REL_MASK: u32 = (1 << SQUARE_SHIFT) - 1;
-const Z_SHIFT: u32 = 2 * SQUARE_SHIFT;
+/// A candidate's word: its X and Y in the brick at its zoom,
+/// `BRICK_SHIFT` bits each, and its Z.
+const REL_MASK: u32 = (1 << BRICK_SHIFT) - 1;
+const Z_SHIFT: u32 = 2 * BRICK_SHIFT;
 const _: () = assert!(
     32 - Z_SHIFT > 16,
     "a cell's Z, an i16 at the leaves, in a candidate's word"
 );
 
-/// The candidate word of the node `at`, its X and Y in the square.
+/// The candidate word of the node `at`, its X and Y in the brick.
 fn pack(at: [i32; 3]) -> u32 {
-    (at[2] as u32) << Z_SHIFT | (at[1] as u32) << SQUARE_SHIFT | at[0] as u32
+    (at[2] as u32) << Z_SHIFT | (at[1] as u32) << BRICK_SHIFT | at[0] as u32
 }
 
-/// A candidate word's node, its X and Y in the square.
+/// A candidate word's node, its X and Y in the brick.
 fn unpack(w: u32) -> [i32; 3] {
     [
         (w & REL_MASK) as i32,
-        ((w >> SQUARE_SHIFT) & REL_MASK) as i32,
+        ((w >> BRICK_SHIFT) & REL_MASK) as i32,
         (w as i32) >> Z_SHIFT,
     ]
 }
 
-/// The first level: the square's own nodes along z from `z0`, in the family
+/// The first level: the brick's own nodes along z from `z0`, in the family
 /// at `root` as `cursor` reads them, each a candidate.
 pub fn root(pool: &mut impl Pool, z0: i32, root: u32) {
     let mut k = 0;
@@ -256,10 +256,10 @@ pub fn root(pool: &mut impl Pool, z0: i32, root: u32) {
 }
 
 /// Whether the candidate at `slot`, a node of `zoom`, takes a family for
-/// its children: it is coarser than the square's cells at `cell`, and its
-/// Z meets where the square's ways write under it, the ways' bound of the
-/// square's levels at its size (`window::Squares::level`, its slot `s`).
-pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, cell: Zoom, zoom: Zoom, slot: u32) -> bool {
+/// its children: it is coarser than the brick's cells at `cell`, and its
+/// Z meets where the brick's ways write under it, the ways' bound of the
+/// brick's levels at its size (`window::Bricks::level`, its slot `s`).
+pub fn flag(pool: &impl Pool, w: &impl Bricks, s: u32, cell: Zoom, zoom: Zoom, slot: u32) -> bool {
     let at = unpack(pool.data(slot));
     if zoom >= cell {
         return false;
@@ -271,26 +271,26 @@ pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, cell: Zoom, zoom: Zoom, 
 }
 
 /// Whether a level's families, a flagged candidate's each, may be taken
-/// together: the pool has `flagged` left of `left`, and the square, having
-/// taken `taken`, stays within `SQUARE_FAMILIES`. None is taken past either:
+/// together: the pool has `flagged` left of `left`, and the brick, having
+/// taken `taken`, stays within `BRICK_FAMILIES`. None is taken past either:
 /// the tree is refused, its root word 0 and its records' count `STARVED`,
 /// which the renderer reads as the pool's to grow or, at its cap, the
-/// square's to stay absent; its count `NONE` where it is `past` the square's most,
+/// brick's to stay absent; its count `NONE` where it is `past` the brick's most,
 /// absent at once (pxl-render gpu/renderer.rs `Landing`). The bake bounds
-/// a set's and a square's (pxl-geo-bake terrain/pool.rs).
+/// a set's and a brick's (pxl-geo-bake terrain/pool.rs).
 pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
     flagged <= left && !past(taken, flagged)
 }
 
-/// Whether a level's `flagged` families take a square that has taken `taken`
-/// past its most, `SQUARE_FAMILIES`: refused whatever the pool holds, so its
+/// Whether a level's `flagged` families take a brick that has taken `taken`
+/// past its most, `BRICK_FAMILIES`: refused whatever the pool holds, so its
 /// build keeps `NONE` for its records' count rather than `STARVED`, which
 /// the pool's growth answers (pxl-shader `way_tree_cs`).
 pub fn past(taken: u32, flagged: u32) -> bool {
-    flagged > SQUARE_FAMILIES - taken
+    flagged > BRICK_FAMILIES - taken
 }
 
-/// Whether a level's `flagged` families take a square that has taken `taken`
+/// Whether a level's `flagged` families take a brick that has taken `taken`
 /// past the `families` its scratch holds (`scratch_families`), whose freed
 /// families and records each have room for so many: not taken, its build
 /// keeping `CRAMPED` for its records' count, which the scratch's growth
@@ -324,7 +324,7 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
     pool.set_data(slot, ground::VOID);
 }
 
-/// The candidate at `slot`, a cell of the square: a leaf of what the ways
+/// The candidate at `slot`, a cell of the brick: a leaf of what the ways
 /// write there (`way::lined`, off the spans its fill kept), nothing where
 /// they write none. A bore's air is placed air in the tree, filling what it
 /// holds (`overwrite::voxel`), and the ground's void where a reader reads
@@ -387,7 +387,7 @@ pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
 }
 
 /// The first slot of the family under the branch at `slot`, `NONE` under a
-/// leaf: a square's old tree walked, its families given back before it is
+/// leaf: a brick's old tree walked, its families given back before it is
 /// built again.
 pub fn under(pool: &impl Pool, slot: u32) -> u32 {
     let h = pool.heap(slot);
@@ -398,28 +398,28 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
     }
 }
 
-/// A square's records at their most as the read-back carries them: its
+/// A brick's records at their most as the read-back carries them: its
 /// scratch from `records_at` on, their count, then a family its tree holds
 /// each.
-pub const RECORDS_WORDS: u32 = 1 + SQUARE_FAMILIES * RECORD_WORDS;
+pub const RECORDS_WORDS: u32 = 1 + BRICK_FAMILIES * RECORD_WORDS;
 const _: () = assert!(
-    RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_FAMILIES),
+    RECORDS_WORDS == SCRATCH_WORDS - records_at(BRICK_FAMILIES),
     "the records end the scratch"
 );
 
-/// A square's records in bytes at their most: the most a read-back
+/// A brick's records in bytes at their most: the most a read-back
 /// copies off its scratch, which copies what its room holds
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::record_bytes`).
 pub const RECORDS_BYTES: u32 = RECORDS_WORDS * 4;
 
-/// A square's records (`RECORDS_WORDS`) laid into `pool` at the slots they
+/// A brick's records (`RECORDS_WORDS`) laid into `pool` at the slots they
 /// came from, each its family's id and its eight heap and eight data words:
 /// the CPU's mirror of the GPU's pool, where they land, so a cursor reads
 /// one tree on both sides.
 pub fn lay(pool: &mut impl Pool, records: &[u32]) {
     let n = crate::at(records, 0);
     let mut r = 0;
-    while r < n && r < SQUARE_FAMILIES {
+    while r < n && r < BRICK_FAMILIES {
         let at = 1 + r * RECORD_WORDS;
         let first = overwrite::FAMILY * crate::at(records, at);
         let mut k = 0;
@@ -452,13 +452,13 @@ mod tests {
 
     #[test]
     fn scratch_holds_families() {
-        // At a square's most, the layout it had before it grew: its spans,
+        // At a brick's most, the layout it had before it grew: its spans,
         // its freed families' count and ids, its records' count and records.
         assert_eq!(
             SCRATCH_WORDS,
-            crate::window::TREE_AT + 1 + SQUARE_FAMILIES + 1 + SQUARE_FAMILIES * RECORD_WORDS
+            crate::window::TREE_AT + 1 + BRICK_FAMILIES + 1 + BRICK_FAMILIES * RECORD_WORDS
         );
-        for families in [1, 539, 1078, SQUARE_FAMILIES] {
+        for families in [1, 539, 1078, BRICK_FAMILIES] {
             assert_eq!(scratch_families(scratch_words(families)), families);
             // A word short holds a family fewer.
             assert_eq!(scratch_families(scratch_words(families) - 1), families - 1);
@@ -469,8 +469,8 @@ mod tests {
             );
         }
         assert_eq!(
-            scratch_families(scratch_words(SQUARE_FAMILIES) + 1000),
-            SQUARE_FAMILIES
+            scratch_families(scratch_words(BRICK_FAMILIES) + 1000),
+            BRICK_FAMILIES
         );
         assert_eq!(scratch_families(FREED_AT + 1), 0);
     }
@@ -479,7 +479,7 @@ mod tests {
     fn cramped_past_scratch() {
         assert!(!is_cramped(8, 1, 7));
         assert!(is_cramped(8, 1, 8));
-        // Past the square's most is `past`'s, asked first.
-        assert!(past(1, SQUARE_FAMILIES));
+        // Past the brick's most is `past`'s, asked first.
+        assert!(past(1, BRICK_FAMILIES));
     }
 }

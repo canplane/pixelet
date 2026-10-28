@@ -2,12 +2,12 @@
 
 //! Whether a set's ways' trees fit the client's pool wherever the eye is
 //! (pxl-spec-core `way::tree::POOL_FAMILIES`): a fact of the set, not of a
-//! tile, as a window is a fixed grid of squares about the eye laid at any
-//! square, across tiles. Each square's tree is built as a GPU builds it
+//! tile, as a window is a fixed grid of bricks about the eye laid at any
+//! brick, across tiles. Each brick's tree is built as a GPU builds it
 //! (pxl-spec `terrain::fill_fit`), once, as its tile is made, and what it
 //! takes kept beside the tile (`line`, pyramid.rs `FITS`); each window's
 //! most is the most any placement of it holds, a sliding sum over its
-//! zoom's squares; the windows together need `terrain::pool_needs`.
+//! zoom's bricks; the windows together need `terrain::pool_needs`.
 
 use std::collections::BTreeMap;
 
@@ -17,18 +17,18 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::way::tree::POOL_FAMILIES;
-use pxl_spec_core::window::{ACROSS, SQUARE};
+use pxl_spec_core::window::{ACROSS, BRICK};
 
 use crate::pyramid::Staged;
 
-/// The squares a tile is a side.
-const SIDE: u32 = TILE_CELLS / SQUARE;
+/// The bricks a tile is a side.
+const SIDE: u32 = TILE_CELLS / BRICK;
 
-/// A zoom's squares, each the families its tree holds, by its index at its
-/// cells; and the most a square takes before its fold.
+/// A zoom's bricks, each the families its tree holds, by its index at its
+/// cells; and the most a brick takes before its fold.
 #[derive(Default)]
 struct Held {
-    squares: BTreeMap<Zoom, FnvHashMap<[i32; 2], u64>>,
+    bricks: BTreeMap<Zoom, FnvHashMap<[i32; 2], u64>>,
     taken: u64,
     /// Each tile's that takes anything, as the set will keep it.
     kept: Vec<(Tile, String)>,
@@ -36,7 +36,7 @@ struct Held {
 
 /// The set's ways' trees fit the pool, and what it will keep of each tile
 /// that takes anything; where they do not, the window that holds the most
-/// at the zoom that needs it, its first square and its tiles named.
+/// at the zoom that needs it, its first brick and its tiles named.
 pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, String> {
     let tiles: Vec<Tile> = set.tiles()?.into_values().flatten().collect();
     let base = set.base.fits()?;
@@ -55,15 +55,15 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
     for part in parts {
         let part = part?;
         all.taken = all.taken.max(part.taken);
-        for (zoom, squares) in part.squares {
-            all.squares.entry(zoom).or_default().extend(squares);
+        for (zoom, bricks) in part.bricks {
+            all.bricks.entry(zoom).or_default().extend(bricks);
         }
         all.kept.extend(part.kept);
     }
     let worst: BTreeMap<Zoom, ([i32; 2], u64)> = all
-        .squares
+        .bricks
         .iter()
-        .map(|(&cell, squares)| (cell, most(squares)))
+        .map(|(&cell, bricks)| (cell, most(bricks)))
         .collect();
     let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1), all.taken);
     if needs <= u64::from(POOL_FAMILIES) {
@@ -91,7 +91,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
     under.sort_unstable();
     under.dedup();
     Err(format!(
-        "its ways' trees need {needs} of the pool's {POOL_FAMILIES} families: the window at cells {cell} from square ({}, {}) holds {n}, over tiles {}, and a square takes {} before its fold",
+        "its ways' trees need {needs} of the pool's {POOL_FAMILIES} families: the window at cells {cell} from brick ({}, {}) holds {n}, over tiles {}, and a brick takes {} before its fold",
         first[0],
         first[1],
         under.join(" "),
@@ -99,7 +99,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
     ))
 }
 
-/// The squares of `tiles` the set holds, each its tree's families: as each
+/// The bricks of `tiles` the set holds, each its tree's families: as each
 /// tile kept them, or made again from the tile where the set as it is
 /// keeps nothing (`base` none, a set baked before it did).
 fn held(
@@ -125,13 +125,13 @@ fn held(
             continue;
         }
         let cell = GROUND.cell_zoom(p.zoom);
-        let squares = out.squares.entry(cell).or_default();
+        let bricks = out.bricks.entry(cell).or_default();
         for &(k, held) in &fit.held {
             let at = [
                 p.at[0] * SIDE as i32 + (k % SIDE) as i32,
                 p.at[1] * SIDE as i32 + (k / SIDE) as i32,
             ];
-            squares.insert(at, u64::from(held));
+            bricks.insert(at, u64::from(held));
         }
         out.taken = out.taken.max(u64::from(fit.taken));
         out.kept.push((p, line(&fit)));
@@ -139,8 +139,8 @@ fn held(
     Ok(out)
 }
 
-/// What a tile takes as the set keeps it beside the tile: the most a square
-/// takes, then each square with ways as its index and the families it holds.
+/// What a tile takes as the set keeps it beside the tile: the most a brick
+/// takes, then each brick with ways as its index and the families it holds.
 pub fn line(fit: &Fit) -> String {
     let mut out = fit.taken.to_string();
     for (k, held) in &fit.held {
@@ -162,14 +162,14 @@ fn of_line(line: &str) -> Result<Fit, String> {
     Ok(Fit { held, taken })
 }
 
-/// The placement of `ACROSS` squares a side holding the most of `squares`:
-/// its first square, and how many.
-fn most(squares: &FnvHashMap<[i32; 2], u64>) -> ([i32; 2], u64) {
+/// The placement of `ACROSS` bricks a side holding the most of `bricks`:
+/// its first brick, and how many.
+fn most(bricks: &FnvHashMap<[i32; 2], u64>) -> ([i32; 2], u64) {
     let across = ACROSS as i32;
-    // Each square summed into the columns of `ACROSS` over it, then those
+    // Each brick summed into the columns of `ACROSS` over it, then those
     // into the rows of `ACROSS` beside them: each placement's sum by its first.
     let mut columns: FnvHashMap<[i32; 2], u64> = FnvHashMap::default();
-    for (&[x, y], &n) in squares {
+    for (&[x, y], &n) in bricks {
         for d in 0..across {
             *columns.entry([x, y - d]).or_default() += n;
         }

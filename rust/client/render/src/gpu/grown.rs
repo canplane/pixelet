@@ -13,7 +13,7 @@
 //! what is grown.
 
 use pxl_spec_core::decor::{COUNTS, DECORS};
-use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_PATCHES};
+use pxl_spec_core::scatter::{self, drawn, BRICK_PATCHES, GROUPS};
 use pxl_spec_core::{eye, overwrite, window};
 
 use crate::frame::draw::PIPELINE_DECOR;
@@ -52,20 +52,20 @@ pub struct DecorFrame<'a> {
 }
 
 /// What decor's growth reads besides the frame's decor, none of it the
-/// eye's place: the windows' table, a preview's cuts, and the squares filled
-/// this frame. A slot grows whole where its square is another; else a
+/// eye's place: the windows' table, a preview's cuts, and the bricks filled
+/// this frame. A slot grows whole where its brick is another; else a
 /// candidate grows again only where a box meets what it reads
-/// (`scatter::reads`): an edit, a cut as it was or is, or a square filled at
+/// (`scatter::reads`): an edit, a cut as it was or is, or a brick filled at
 /// its window's zoom. The overwrites' every write names its box (the
 /// frame's `edits`), and the service area's index is made once, before any
-/// square is held, so neither grows a slot by itself. A square filled
+/// brick is held, so neither grows a slot by itself. A brick filled
 /// reaches its own window's zoom alone: a finer candidate reading it where
-/// its own window lacks a square grows again when that square is filled, at
+/// its own window lacks a brick grows again when that brick is filled, at
 /// its own zoom, and is drawn off the coarser one until then.
 pub struct Grows<'a> {
     pub window: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
-    /// The squares handed this frame (pxl-spec-core `window::FRESH_WORDS`).
+    /// The bricks handed this frame (pxl-spec-core `window::FRESH_WORDS`).
     pub fresh: &'a [[u32; window::FRESH_WORDS as usize]],
     /// The eye as the cast's (pxl-spec-core `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
@@ -281,23 +281,23 @@ impl Grown {
         w.read(grows.window);
         let moved = !w.end();
         self.marked = self.holding;
-        // A square filled at a coarser window than the leaves' grows no decor.
+        // A brick filled at a coarser window than the leaves' grows no decor.
         let fresh = grows
             .fresh
             .iter()
             .any(|f| f[window::FRESH_CELL as usize] == pxl_spec_core::LEAF_CELL);
         self.marking = self.stale || moved || fresh || self.marked != 0;
         if self.marking {
-            // The boxes held, at every zoom, then each square handed, at
+            // The boxes held, at every zoom, then each brick handed, at
             // its window's alone.
             let mut boxes = [0u32; (scatter::MARKED * scatter::BOX_WORDS) as usize];
             let fresh = grows.fresh.iter().map(|f| {
                 let cell = f[window::FRESH_CELL as usize];
-                let q = window::fresh_square([
+                let q = window::fresh_brick([
                     f[window::FRESH_FIRST as usize],
                     f[window::FRESH_FIRST as usize + 1],
                 ]);
-                (scatter::square_box(cell, q), cell)
+                (scatter::brick_box(cell, q), cell)
             });
             let held = self.held[..self.marked]
                 .iter()
@@ -314,12 +314,12 @@ impl Grown {
                 self.grows,
                 0,
                 bytes(&[
-                    SQUARE_PATCHES.div_ceil(s[0]),
+                    BRICK_PATCHES.div_ceil(s[0]),
                     1,
                     0,
                     0,
                     (COUNTS as u32).div_ceil(w[0]),
-                    SQUARE_PATCHES.div_ceil(w[1]),
+                    BRICK_PATCHES.div_ceil(w[1]),
                     0,
                     0,
                     u32::from(self.stale),

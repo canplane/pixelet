@@ -56,7 +56,7 @@ impl Base for Earth {
     /// The texels are kept until the GPU has them: every frame's, whose
     /// slots terrain's bound leaves them (domain/layer/terrain/tile.rs `most_kept`).
     fn keep(record: Option<u32>, block: Block) {
-        kept().keep(record, block, EARTH_FRAMES);
+        kept().keep(record, block, EARTH_SLOTS);
     }
 }
 
@@ -73,7 +73,7 @@ fn kept() -> &'static mut Kept {
 /// sent.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     let kept = kept();
-    for record in 0..EARTH_FRAMES {
+    for record in 0..EARTH_SLOTS {
         if kept.sent_on(record).is_some_and(|s| s != on) {
             if let Some(p) = Earth::tile_cache().in_slot(record) {
                 Earth::tile_cache().again(p);
@@ -124,4 +124,4 @@ pub fn earth_window(
 }
 
 /// The frames the GPU keeps a layer for.
-pub const EARTH_FRAMES: u32 = TileCache::<Earth>::SLOTS;
+pub const EARTH_SLOTS: u32 = TileCache::<Earth>::SLOTS;

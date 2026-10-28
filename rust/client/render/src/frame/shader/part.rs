@@ -37,11 +37,11 @@ pub const SHADER_SCREEN_RAY: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-spec-core's descent (pxl-tool bin/shader_wgsl.rs): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
-/// Each newly held square's levels over its columns, a level a dispatch,
+/// Each newly held brick's levels over its columns, a level a dispatch,
 /// generated with the cast from pxl-spec-core's `fill::level` and
 /// `window::join`: its one compute entry.
 pub const SHADER_BOUND: u32 = 27;
-/// Each newly held square's columns' ground tops off its samples,
+/// Each newly held brick's columns' ground tops off its samples,
 /// generated with the cast from pxl-spec-core's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHT: u32 = 28;
@@ -61,14 +61,14 @@ pub const SHADER_WAY: u32 = 33;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN_STAND`'s and `SHADER_GROWN`'s dispatches: its one compute entry.
 pub const SHADER_GROWN_MARK: u32 = 34;
-/// The eye's windows folded over their squares, generated with the cast
+/// The eye's windows folded over their bricks, generated with the cast
 /// from pxl-spec-core's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
 /// The air's volume, a column of froxels a workgroup (atmos_froxel.wgsl):
 /// its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 36;
-/// Each handed square's ways as a tree of cells in one pool (pxl-spec-core
-/// `way::tree`), generated with the cast: a re-filled square's old families
+/// Each handed brick's ways as a tree of cells in one pool (pxl-spec-core
+/// `way::tree`), generated with the cast: a re-filled brick's old families
 /// given back, its tree built off the pool's stack, the families its build
 /// gave back pushed after: a compute entry each.
 pub const SHADER_WAY_FREE: u32 = 37;

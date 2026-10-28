@@ -347,42 +347,42 @@ one at every zoom drawn; the focus two, at the leaves and the zoom over them;
 and a place the camera is travelling to one, at the leaves
 (`domain/layer/terrain/window.rs`):
 
-- A window is a few **squares** of cells a side, each held in the slot of the
-  window its place names, so the window follows its centre a square at a time
-  and no held cell moves. A square at a zoom is held once however many windows
+- A window is a few **bricks** of cells a side, each held in the slot of the
+  window its place names, so the window follows its centre a brick at a time
+  and no held cell moves. A brick at a zoom is held once however many windows
   want it, and kept while any does.
-- A square is filled on the GPU as its tile lands (`pxl-render
+- A brick is filled on the GPU as its tile lands (`pxl-render
   gpu/ray/ground.rs` `grids`): its cells, a pyramid of bounds over them, its
-  **levels**, and its ways as a tree in one pool every square shares
+  **levels**, and its ways as a tree in one pool every brick shares
   (pxl-spec-core `way::tree`). All three are read back into the kernel, so the
   CPU's query and the GPU's cast meet the same bridge or tunnel.
-- A square whose tree the pool cannot hold at its cap stays absent while a
-  window wants it. Where a square is not present, a reader reads the coarser
+- A brick whose tree the pool cannot hold at its cap stays absent while a
+  window wants it. Where a brick is not present, a reader reads the coarser
   window's (pxl-spec-core `window::step`).
-- Nothing of a tile is kept for a square still to come: a square that enters
+- Nothing of a tile is kept for a brick still to come: a brick that enters
   asks its tile again, and the browser's cache answers.
 
 ```text
-  one axis of a window, ACROSS squares a side (drawn as 8); square x is
+  one axis of a window, ACROSS bricks a side (drawn as 8); brick x is
   held in slot x mod ACROSS
 
-  square x    12   13   14   15   16   17   18   19
+  brick x     12   13   14   15   16   17   18   19
             ┌────┬────┬────┬────┬────┬────┬────┬────┐
   slot      │ 4  │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │
             └────┴────┴────┴────┴────┴────┴────┴────┘
-  the centre moves a square east: 20 enters and takes slot 4, which 12
+  the centre moves a brick east: 20 enters and takes slot 4, which 12
   leaves; 13 to 19 stay where they are
 
-  square x         13   14   15   16   17   18   19   20
+  brick x          13   14   15   16   17   18   19   20
                  ┌────┬────┬────┬────┬────┬────┬────┬────┐
   slot           │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │ 4  │
                  └────┴────┴────┴────┴────┴────┴────┴────┘
 ```
 
-## What stands over the squares
+## What stands over the bricks
 
 Decor and the markers stand beside the ground, and both are gathered over the
-eye's windows' squares.
+eye's windows' bricks.
 
 Decor is grown on the GPU from the same windows the rays read (`pxl-render
 gpu/grown.rs`). The candidates of a patch, the cells a decor may stand in, are
@@ -396,8 +396,8 @@ sprite below it. Placed decor is handed in as records the GPU draws beside it
 A **marker** is drawn flat to the camera: a place, a pin someone put up, or the
 chat's line. Each kind reads its own, and one arrangement draws them together
 (`domain/scene/marker/arrangement.rs`). The places and the pins are read over
-the squares, taken as one partition of the ground at the zooms the eye asks
-(`domain/view/observation.rs` `squares`), each standing at its cell's center on
+the bricks, taken as one partition of the ground at the zooms the eye asks
+(`domain/view/observation.rs` `bricks`), each standing at its cell's center on
 the surface drawn there. A place shows what Carto shows at the zoom its spot is
 drawn at (`domain/scene/marker/place.rs` `point_of`), so where nothing is drawn
 there is no place. The chat's line hangs over its speaker's head
@@ -526,7 +526,7 @@ whether it wants another turn. Its passes are modules by what they draw
 (`gpu/ray/`, `gpu/pass/`):
 
 ```text
-ahead       impostor atlases, fresh squares filled, the atmosphere's
+ahead       impostor atlases, fresh bricks filled, the atmosphere's
             tables, the air's volume
 cast        the screen's rays; decor grown; the sun's map; the
             occlusion prepass
@@ -928,14 +928,14 @@ runs. A change of a provider's release, the code or the coverage is a purge: the
 set deleted and every shard baked again.
 
 A set holds only what a client can. A terrain tile is refused as it is made
-where a square of it would not fill or build as a client's does
+where a brick of it would not fill or build as a client's does
 (`pxl-spec bake/tile/terrain.rs` `fill_fit`, `pxl-geo-bake terrain.rs`
-`encode_stored`). That one pass also says what each square's tree of ways
+`encode_stored`). That one pass also says what each brick's tree of ways
 takes, and the set keeps it beside its tiles (`pyramid.rs` `FITS`). Whether
 those trees fit the client's pool wherever the eye is is a fact of the whole
 set, since a window lies across tiles. The commit answers it before anything
 moves, from what each tile kept, the stage's over the set's (`terrain/pool.rs`
-`fits`). So at the pool's cap no square of a published set is refused
+`fits`). So at the pool's cap no brick of a published set is refused
 ([What the view holds](#what-the-view-holds);
 `pxl-spec-core way/tree.rs` `POOL_FAMILIES`).
 

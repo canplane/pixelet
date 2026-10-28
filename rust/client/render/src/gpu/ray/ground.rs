@@ -1,13 +1,13 @@
 // pxl-render/gpu/ray/ground.rs
 
-//! The windows' squares on the GPU: each handed square filled in its turn
+//! The windows' bricks on the GPU: each handed brick filled in its turn
 //! (`height_cs`, `way_cs`, `bound_cs`, the ways' tree) and its cells and
 //! its tree's records read back where the CPU looks them up.
 
 use pxl_spec_core::way;
 use pxl_spec_core::window::{
-    self, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_SQUARE, FRESH_WORDS, HANDED, HANDED_WORDS, LEVELS,
-    LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS,
+    self, BACK_WORDS, BRICK, BRICKS, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FRESH_BRICK,
+    FRESH_WORDS, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT,
 };
 use xpute_guest::mem::off_of;
 
@@ -21,40 +21,40 @@ use crate::gpu::api::{
     write_buffer_bytes, Gpu, Stamp, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{CellsBack, GroundSquares, Landing};
+use crate::gpu::renderer::{CellsBack, GroundBricks, Landing};
 
-/// The buffers squares' cells come back through: what a frame hands, a
+/// The buffers bricks' cells come back through: what a frame hands, a
 /// mapping still out a frame more (pxl-spec-core `window::HANDED`).
 const READS: usize = crate::gpu::renderer::READS as usize;
-/// A buffer of them carrying no square.
+/// A buffer of them carrying no brick.
 const FREE: u32 = u32::MAX;
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 pub(super) struct GroundBuffers {
-    /// Per berth of the windows' squares (`window::SQUARES`), its columns,
+    /// Per berth of the windows' bricks (`window::BRICKS`), its columns,
     /// levels, cells as laid and root, which `height_cs`, `bound_cs` and
     /// `way_tree_cs` write in the turn it is handed (pxl-spec-core
-    /// `window::SQUARE_WORDS`).
+    /// `window::BRICK_WORDS`).
     pub(super) ground: u32,
     /// Per berth, its cells' four looks (`LOOKS_BYTES`).
     pub(super) looks: u32,
-    /// The squares the turn handed, `window::HANDED` at most, a record each
+    /// The bricks the turn handed, `window::HANDED` at most, a record each
     /// (`window::HANDED_WORDS`): its words, then its looks, its tile's
     /// samples and its lines, which only its fill reads; `height_cs`'s,
     /// `bound_cs`'s and `way_cs`'s one per `id.z`.
     pub(super) fresh: u32,
     pub(super) fresh_len: u32,
-    /// Per berth (`window::SQUARES`), its cells' way back: the fill
+    /// Per berth (`window::BRICKS`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked).
-    asked: [CellsBack; SQUARES as usize],
-    /// The squares the frame handed, their words (`window::fresh`), in the
+    asked: [CellsBack; BRICKS as usize],
+    /// The bricks the frame handed, their words (`window::fresh`), in the
     /// order handed, each with a read of its own (`hand` hands none past the
     /// reads free): a fill's records live in its frame's scratch, so its
     /// read is taken in its frame.
     pub(super) handed: [[u32; FRESH_WORDS as usize]; HANDED as usize],
     /// The buffers cells are copied into and mapped back through, as many as
-    /// a frame hands squares a mapping still out a frame more (`READS`);
-    /// each one's square and the fill it carries (`FREE` where none), and
+    /// a frame hands bricks a mapping still out a frame more (`READS`);
+    /// each one's brick and the fill it carries (`FREE` where none), and
     /// its mapping's own word (`read_back`), which the host writes: held
     /// where the guest's allocator puts it, inside the region the host
     /// addresses, as an arriving image's word is. A static is outside it on
@@ -62,7 +62,7 @@ pub(super) struct GroundBuffers {
     reads: [u32; READS],
     held: [(u32, u32); READS],
     mapping: Box<[u32; READS]>,
-    /// Each read's records, mapped beside its square's words into its room
+    /// Each read's records, mapped beside its brick's words into its room
     /// on the heap, as many bytes as the room holds, the buffer of its size
     /// (none before its first read), and its mapping's word: a read lands
     /// with both. Every room is made `record_bytes` as its read is next
@@ -71,14 +71,14 @@ pub(super) struct GroundBuffers {
     record_rooms: [Box<[u32]>; READS],
     record_mapping: Box<[u32; READS]>,
     record_bytes: u32,
-    /// What each read's square was built in, indexed by `Short`: the pool's
-    /// families and the families a square's scratch held (`ran_out`).
+    /// What each read's brick was built in, indexed by `Short`: the pool's
+    /// families and the families a brick's scratch held (`ran_out`).
     built_in: [[u32; 2]; READS],
     /// Whether a build ran out of the pool, or of the scratch, since it last
     /// grew, indexed by `Short` (`grow`, `grow_scratch`).
     ran_out: [bool; 2],
     /// The ways' pool, which the cast reads, its families and its free stack;
-    /// and the handed squares' scratch, the families each square's holds a
+    /// and the handed bricks' scratch, the families each brick's holds a
     /// tree of (`way::tree::scratch_words`), whose records each read copies
     /// in the frame they are built: nothing in it outlives its frame.
     pub(super) pool: u32,
@@ -98,11 +98,11 @@ pub(super) struct GroundBuffers {
     /// the columns of, and the scratch it keeps the spans in.
     ways_built: Built,
     ways_group: u32,
-    /// A re-filled square's old ways' tree given back, its new one built,
+    /// A re-filled brick's old ways' tree given back, its new one built,
     /// the families the build gave back pushed (pxl-spec-core `way::tree`):
     /// each pass and its group, over the ways' pool, heap words then data
     /// words (`pool_bytes`), its free stack, the count taken then the ids,
-    /// family 0 never among them, a word a family, and each handed square's
+    /// family 0 never among them, a word a family, and each handed brick's
     /// scratch past its build (`way::tree::FREED_AT`).
     free_built: Built,
     free_group: u32,
@@ -135,18 +135,18 @@ fn pool_buffers(g: &Gpu, families: u32) -> (u32, u32) {
     )
 }
 
-/// The handed squares' scratch, each square's for a tree of `families`, in
-/// bytes: `HANDED` of them, every square's alike, so each finds its own off
+/// The handed bricks' scratch, each brick's for a tree of `families`, in
+/// bytes: `HANDED` of them, every brick's alike, so each finds its own off
 /// the buffer's length (pxl-spec-core fill.rs `scratch_at`).
 const fn scratch_bytes(families: u32) -> u32 {
     HANDED * way::tree::scratch_words(families) * 4
 }
 const _: () = assert!(
-    crate::frame::shader::floor::fits(scratch_bytes(way::tree::SQUARE_FAMILIES) as u64, true),
+    crate::frame::shader::floor::fits(scratch_bytes(way::tree::BRICK_FAMILIES) as u64, true),
     "the scratch at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The handed squares' scratch, each square's for a tree of `families`,
+/// The handed bricks' scratch, each brick's for a tree of `families`,
 /// which its records are copied out of.
 fn scratch_buffer(g: &Gpu, families: u32) -> u32 {
     g.buffer(
@@ -156,7 +156,7 @@ fn scratch_buffer(g: &Gpu, families: u32) -> u32 {
 }
 
 /// What a build may run out of, each grown as builds do: the ways' pool
-/// (`grow`) and the handed squares' scratch (`grow_scratch`), an index of
+/// (`grow`) and the handed bricks' scratch (`grow_scratch`), an index of
 /// `GroundBuffers::built_in` and `ran_out`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Short {
@@ -166,8 +166,8 @@ enum Short {
 
 /// What a build whose records' count is `n` ran out of (pxl-shader
 /// `way_tree_cs`): `STARVED` the pool, `CRAMPED` the scratch; neither
-/// for a tree built, none counted where the square has no ways, nor for one
-/// past the square's own most (`NONE`), which no growth lets it build.
+/// for a tree built, none counted where the brick has no ways, nor for one
+/// past the brick's own most (`NONE`), which no growth lets it build.
 fn short_of(n: u32) -> Option<Short> {
     match n {
         way::tree::STARVED => Some(Short::Pool),
@@ -261,12 +261,12 @@ impl GroundBuffers {
     }
 
     /// The ways' pool twice as large, never past `way::tree::POOL_FAMILIES`,
-    /// the bake's bound, at which no square of a baked set is refused, once a
+    /// the bake's bound, at which no brick of a baked set is refused, once a
     /// build ran out of it (`read_back`): its heap words and its stack
     /// copied where they were, its data words to the new data's first, so
     /// every id a tree or a read in flight names holds what it held, and the
     /// stack's slots past the old hold the new families free (pxl-shader
-    /// `TAKEN`). Ahead of the turn's squares, so their builds and the cast
+    /// `TAKEN`). Ahead of the turn's bricks, so their builds and the cast
     /// read the new one; the cast's groups follow its id (`prepare`).
     ///
     /// A known gap: a device out of memory may fail to make the doubled
@@ -302,15 +302,15 @@ impl GroundBuffers {
         self.ways_groups(g);
     }
 
-    /// Each square's tree room in the scratch twice as many families, never
-    /// past `way::tree::SQUARE_FAMILIES`, the bake's bound on a square's, once
+    /// Each brick's tree room in the scratch twice as many families, never
+    /// past `way::tree::BRICK_FAMILIES`, the bake's bound on a brick's, once
     /// a build outgrew it (`read_back`); its spans stay as
     /// they are (`window::TREE_AT`), so the buffer grows by less than twice.
-    /// Nothing is copied: a square's records are copied into its read in the
+    /// Nothing is copied: a brick's records are copied into its read in the
     /// frame it is filled in, before any turn grows it. Ahead of the turn's
-    /// squares, so their passes lay theirs out by the new length.
+    /// bricks, so their passes lay theirs out by the new length.
     fn grow_scratch(&mut self, g: &Gpu) {
-        let families = (2 * self.scratch_families).min(way::tree::SQUARE_FAMILIES);
+        let families = (2 * self.scratch_families).min(way::tree::BRICK_FAMILIES);
         if families <= self.scratch_families {
             return;
         }
@@ -324,7 +324,7 @@ impl GroundBuffers {
     /// another, its buffer with it, the old room given back first, so no
     /// two of a read's are held at once; where the heap refuses it, a room
     /// of the count alone, whose read lands short and is filled again, as a
-    /// square waits on the heap. A read's first room is made here.
+    /// brick waits on the heap. A read's first room is made here.
     fn room(&mut self, g: &Gpu, k: usize) {
         let words = (self.record_bytes / 4) as usize;
         if self.record_rooms[k].len() == words {
@@ -346,30 +346,30 @@ impl GroundBuffers {
     }
 }
 
-/// A square on the GPU, in bytes.
-const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
+/// A brick on the GPU, in bytes.
+const BRICK_BYTES: u32 = BRICK_WORDS * 4;
 
-/// The windows' squares on the GPU, in bytes: one storage buffer, bound
+/// The windows' bricks on the GPU, in bytes: one storage buffer, bound
 /// whole by the cast's, the levels' and the ways' groups.
-const GROUND_BYTES: u64 = SQUARES as u64 * SQUARE_BYTES as u64;
+const GROUND_BYTES: u64 = BRICKS as u64 * BRICK_BYTES as u64;
 const _: () = assert!(
     crate::frame::shader::floor::fits(GROUND_BYTES, true),
-    "GROUND_BYTES: the windows' squares bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+    "GROUND_BYTES: the windows' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The windows' squares' cells' four looks, a word a cell in the berths'
-/// order: written by the fill off each handed square (`height_cs`), read
+/// The windows' bricks' cells' four looks, a word a cell in the berths'
+/// order: written by the fill off each handed brick (`height_cs`), read
 /// by the cast at a hit (pxl-shader `World`'s `Looks`). Their own
-/// buffer, as the squares' binding has no room for them.
-const LOOKS_BYTES: u64 = SQUARES as u64 * SQUARE_CELLS as u64 * 4;
+/// buffer, as the bricks' binding has no room for them.
+const LOOKS_BYTES: u64 = BRICKS as u64 * BRICK_CELLS as u64 * 4;
 const _: () = assert!(
     crate::frame::shader::floor::fits(LOOKS_BYTES, true),
-    "LOOKS_BYTES: the squares' looks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+    "LOOKS_BYTES: the bricks' looks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
 /// `bound_cs`'s group: its level at a dynamic offset (`SLOT_STRIDE`), the
 /// fresh frames, the frames it writes the levels of, and the handed
-/// squares' scratch it reads the spans in. The cast's and `joined_cs`'s one
+/// bricks' scratch it reads the spans in. The cast's and `joined_cs`'s one
 /// group is the cast's, which binds all of theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
@@ -381,9 +381,9 @@ impl RaysPass {
     /// into the turn's stream as it has room, the packets they live in let
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
-    pub fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundSquares) {
+    pub fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundBricks) {
         let families = ground.pool.min(way::tree::POOL_FAMILIES);
-        let scratch_families = ground.scratch.clamp(1, way::tree::SQUARE_FAMILIES);
+        let scratch_families = ground.scratch.clamp(1, way::tree::BRICK_FAMILIES);
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
@@ -422,7 +422,7 @@ impl RaysPass {
                 looks,
                 fresh,
                 fresh_len: 0,
-                asked: [CellsBack::default(); SQUARES as usize],
+                asked: [CellsBack::default(); BRICKS as usize],
                 handed: [[0; FRESH_WORDS as usize]; HANDED as usize],
                 reads: core::array::from_fn(|_| {
                     buffer(
@@ -469,7 +469,7 @@ impl RaysPass {
         if core::mem::take(&mut gb.ran_out[Short::Scratch as usize]) {
             gb.grow_scratch(g);
         }
-        // A square handed takes a read its frame: none past those free.
+        // A brick handed takes a read its frame: none past those free.
         let free = gb
             .held
             .iter()
@@ -488,15 +488,15 @@ impl RaysPass {
             {
                 return false;
             }
-            let (square, at) = (
-                q.fresh[window::FRESH_SQUARE as usize],
+            let (brick, at) = (
+                q.fresh[window::FRESH_BRICK as usize],
                 window::handed_at(fresh) * 4,
             );
             g.write_buffer(gb.fresh, at, bytes(&q.fresh));
             g.write_buffer(gb.fresh, at + LOOKS_AT * 4, q.looks);
             g.write_buffer(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
             g.write_buffer(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
-            gb.asked[square as usize] = q.back;
+            gb.asked[brick as usize] = q.back;
             gb.handed[fresh as usize] = q.fresh;
             fresh += 1;
             true
@@ -504,10 +504,10 @@ impl RaysPass {
         gb.fresh_len = fresh;
     }
 
-    /// The squares this turn handed filled: their tops from their samples,
+    /// The bricks this turn handed filled: their tops from their samples,
     /// their ways' spans, their levels a dispatch, level 0 a column's own and
     /// each over the one before, and their ways' trees. Ahead of the frame,
-    /// as they outlive it, so no square the window names is cast before its
+    /// as they outlive it, so no brick the window names is cast before its
     /// cells are written, even when the frame proper is dropped. Whether it
     /// recorded any.
     pub fn grids(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
@@ -515,7 +515,7 @@ impl RaysPass {
             return false;
         };
         let pass = g.compute_pass(encoder, stamp.pass());
-        // A re-filled square's old ways' families given back, off its root word
+        // A re-filled brick's old ways' families given back, off its root word
         // before its build writes another (pxl-spec-core `way::tree`).
         g.set_pipeline(pass, c.free_built.pipeline);
         g.set_bind_group(pass, 0, c.free_group, &[]);
@@ -525,12 +525,12 @@ impl RaysPass {
         let w = compute::HEIGHT_WORKGROUP;
         g.dispatch(
             pass,
-            SQUARE.div_ceil(w[0]),
-            SQUARE.div_ceil(w[1]),
+            BRICK.div_ceil(w[0]),
+            BRICK.div_ceil(w[1]),
             c.fresh_len,
         );
         // A column a thread, over the tops just drawn: each column's spans
-        // once, the square's and its ring's (pxl-spec-core fill.rs `spans`),
+        // once, the brick's and its ring's (pxl-spec-core fill.rs `spans`),
         // which the levels and the trees read.
         g.set_pipeline(pass, c.ways_built.pipeline);
         g.set_bind_group(pass, 0, c.ways_group, &[]);
@@ -543,12 +543,12 @@ impl RaysPass {
         g.set_pipeline(pass, c.bound_built.pipeline);
         for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
-            let side = (SQUARE >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
+            let side = (BRICK >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
             g.dispatch(pass, side, side, c.fresh_len);
         }
-        // Each square's ways as cells, a workgroup a square, over its spans
+        // Each brick's ways as cells, a workgroup a brick, over its spans
         // and the levels just folded; then what its build gave back pushed,
-        // a dispatch after, so no push lands under another square's ids
+        // a dispatch after, so no push lands under another brick's ids
         // while it reads them.
         g.set_pipeline(pass, c.tree_built.pipeline);
         g.set_bind_group(pass, 0, c.tree_group, &[]);
@@ -560,18 +560,18 @@ impl RaysPass {
         true
     }
 
-    /// The squares the grids wrote mapped back where the CPU looks them up,
-    /// once the encoder that wrote them is submitted: a square's columns,
+    /// The bricks the grids wrote mapped back where the CPU looks them up,
+    /// once the encoder that wrote them is submitted: a brick's columns,
     /// levels, cells as laid and root lie together (`window::BACK_WORDS`), so one mapping
     /// brings them all.
     ///
-    /// A square asked takes a free buffer of `READS`, which maps once at a
+    /// A brick asked takes a free buffer of `READS`, which maps once at a
     /// time and lands whatever fill it carried. One that landed for the
-    /// square's latest fill is told `landed`. One that landed for an earlier
-    /// fill is discarded: its bytes went into the square's cells while the
-    /// kernel holds the square on its way (or absent, if it moved), which
+    /// brick's latest fill is told `landed`. One that landed for an earlier
+    /// fill is discarded: its bytes went into the brick's cells while the
+    /// kernel holds the brick on its way (or absent, if it moved), which
     /// nothing reads, and the latest fill's landing writes them again before
-    /// it is told. A square with no buffer free waits, Sent, for a later
+    /// it is told. A brick with no buffer free waits, Sent, for a later
     /// turn. A mapping still on its way is looked at only when a turn runs:
     /// nothing asks a turn for it.
     ///
@@ -581,19 +581,19 @@ impl RaysPass {
     /// surface's present takes (wgpu-core's `Device::poll` reads its
     /// `snatchable_lock` across the fence wait, `Surface::present` writes
     /// it), so none waits.
-    pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundSquares) {
+    pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundBricks) {
         let landed = &mut *ground.landed;
-        let most = [way::tree::POOL_FAMILIES, way::tree::SQUARE_FAMILIES];
+        let most = [way::tree::POOL_FAMILIES, way::tree::BRICK_FAMILIES];
         let Some(c) = self.ground.as_mut() else {
             return;
         };
-        // A read lands with its square's words and its records both: told
-        // where it is of the square's latest fill, discarded where a later
+        // A read lands with its brick's words and its records both: told
+        // where it is of the brick's latest fill, discarded where a later
         // fill asked again, whose own read brings it. A build that ran out
         // of the pool or the scratch it was built in keeps no record, its
         // count saying which (`short_of`), which grows ahead of the next
-        // turn's squares where it is as built still and may (`ran_out`,
-        // `grow`, `grow_scratch`), the square filled again; one past its
+        // turn's bricks where it is as built still and may (`ran_out`,
+        // `grow`, `grow_scratch`), the brick filled again; one past its
         // own most is refused at once; one whose records outgrew its read is
         // filled again, every read's room grown past them.
         for k in 0..READS {
@@ -608,7 +608,7 @@ impl RaysPass {
             c.asked[s as usize].ticket = 0;
             let room = &c.record_rooms[k];
             let n = room.first().copied().unwrap_or(0);
-            let words = 1 + n.min(way::tree::SQUARE_FAMILIES) * way::tree::RECORD_WORDS;
+            let words = 1 + n.min(way::tree::BRICK_FAMILIES) * way::tree::RECORD_WORDS;
             let landing = if n == way::tree::NONE {
                 Landing::Refused
             } else if let Some(short) = short_of(n) {
@@ -633,7 +633,7 @@ impl RaysPass {
             };
             landed(s, ticket, landing);
         }
-        // Each square the frame handed, its words and its build's records
+        // Each brick the frame handed, its words and its build's records
         // copied in its frame, into a read `hand` kept free for it: as much
         // of its records as the read's room holds, and its scratch's do.
         let fresh = core::mem::take(&mut c.fresh_len);
@@ -644,7 +644,7 @@ impl RaysPass {
         let mut taken = [false; READS];
         let mut free = 0;
         for h in 0..fresh {
-            let s = c.handed[h as usize][FRESH_SQUARE as usize];
+            let s = c.handed[h as usize][FRESH_BRICK as usize];
             let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else {
                 break;
             };
@@ -652,7 +652,7 @@ impl RaysPass {
             c.room(g, k);
             g.copy_buffer(
                 e,
-                (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4),
+                (c.ground, s * BRICK_BYTES + COLUMNS_AT * 4),
                 (c.reads[k], 0),
                 BACK_WORDS * 4,
             );

@@ -4,13 +4,13 @@ use super::*;
 
 /// A patch's contest drawn once for all its candidates (`beaten`) answers
 /// each as `stands` does, over every decor of the catalog and the patches of
-/// squares at the leaves and coarser.
+/// bricks at the leaves and coarser.
 #[test]
 fn patch_contest() {
     let (mut compared, mut lost) = (0, 0);
     for decor in &DECORS {
         for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, TOP_ZOOM + 1] {
-            let side = 1i32 << (SQUARE_SHIFT + LEAF_ZOOM - zoom);
+            let side = 1i32 << (BRICK_SHIFT + LEAF_ZOOM - zoom);
             for q in [[7, -3], [-12, 40]] {
                 let region = [
                     [q[0] * side, q[1] * side],

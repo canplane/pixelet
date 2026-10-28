@@ -104,7 +104,7 @@ pub struct FrameInput<'a> {
     pub earth_tiles: EarthTiles<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
-    pub ground: GroundSquares<'a>,
+    pub ground: GroundBricks<'a>,
     /// The eye's rays cast on the GPU into the world surface's rays the
     /// screen pass draws, a drawn pixel each; none without an eye, and none
     /// drawn.
@@ -129,30 +129,30 @@ pub struct EarthTiles<'a> {
 }
 
 /// The ground's windows as the GPU holds them (pxl-spec-core `window`,
-/// their squares in `SQUARES` berths): the squares to hand it, and where
+/// their bricks in `BRICKS` berths): the bricks to hand it, and where
 /// their cells come back.
-pub struct GroundSquares<'a> {
-    /// Hands each square whose cells the GPU is to draw to the writer.
+pub struct GroundBricks<'a> {
+    /// Hands each brick whose cells the GPU is to draw to the writer.
     pub upload: &'a mut TerrainUpload,
-    /// Told each square whose cells came back, and the fill they are of
+    /// Told each brick whose cells came back, and the fill they are of
     /// (`CellsBack::ticket`).
     pub landed: &'a mut CellsLanded<'a>,
     /// The ways' pool's families at first (pxl-kernel domain/scene/param.rs
     /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
     /// to `way::tree::POOL_FAMILIES` (`GroundBuffers::grow`).
     pub pool: u32,
-    /// The families each handed square's scratch holds a tree of at first
+    /// The families each handed brick's scratch holds a tree of at first
     /// (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_FIRST_BYTES`): it
     /// doubles each time a build outgrows it, up to
-    /// `way::tree::SQUARE_FAMILIES` (`GroundBuffers::grow_scratch`).
+    /// `way::tree::BRICK_FAMILIES` (`GroundBuffers::grow_scratch`).
     pub scratch: u32,
     /// A read's records' room at first, in bytes: every read's is doubled
-    /// past a square's records that outgrew it, up to
+    /// past a brick's records that outgrew it, up to
     /// `way::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
     pub records: u32,
 }
 
-/// How a square's fill landed: its cells are back in every case.
+/// How a brick's fill landed: its cells are back in every case.
 pub enum Landing<'a> {
     /// Its ways' tree built: the families it holds, their count first, a
     /// record each (pxl-spec-core `way::tree::lay`).
@@ -163,23 +163,23 @@ pub enum Landing<'a> {
     /// the refill frees.
     Again,
     /// Its tree refused, the pool or the scratch at its most having run out,
-    /// or the square past its own (`way::tree::past`): the square stays
+    /// or the brick past its own (`way::tree::past`): the brick stays
     /// absent.
     Refused,
 }
 
-/// The read-backs a square's cells and its ways' records come back in
+/// The read-backs a brick's cells and its ways' records come back in
 /// (gpu/ray/ground.rs `GroundBuffers::read_back`): two frames' fills, so one
 /// frame's mappings are still landing while the next is copied.
 pub const READS: u32 = 2 * HANDED;
 
 /// The pool's records the renderer keeps on the heap at their worst, in
-/// the buddy's blocks: every read's room at a square's most
+/// the buddy's blocks: every read's room at a brick's most
 /// (`GroundBuffers::room`), each a power of two as the heap gives it.
 pub const RECORD_ROOMS_BYTES: u64 =
     READS as u64 * (way::tree::RECORDS_BYTES as u64).next_power_of_two();
 
-/// A square whose cells came back, the fill they are of
+/// A brick whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
 /// borrow its caller's for the frame.
 pub type CellsLanded<'a> = dyn FnMut(u32, u32, Landing<'_>) + 'a;
@@ -193,9 +193,9 @@ pub struct Cast<'a> {
     pub eye: [u32; eye::WORDS],
     /// The windows' table (pxl-spec-core `window::Slot`; pxl-kernel
     /// domain/layer/terrain/window.rs `table`), four words a row: every window's
-    /// slots, the eye's first, from the top's, each the square it wants, X
+    /// slots, the eye's first, from the top's, each the brick it wants, X
     /// and Y, the berth holding it plus one while present (`Slot::berth`)
-    /// and the fill it is on its way from; then each window's first square
+    /// and the fill it is on its way from; then each window's first brick
     /// (`window::ORIGIN_AT`).
     pub window: &'a [i32],
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
@@ -228,7 +228,7 @@ pub struct Overwrites<'a> {
     pub written: &'a [u32],
 }
 
-/// Where a square's cells, which the GPU draws, come back to in the
+/// Where a brick's cells, which the GPU draws, come back to in the
 /// kernel's memory: its columns, levels, laid cells and root
 /// (pxl-spec-core `window::BACK_WORDS`); and the fill's ticket, never 0,
 /// which the kernel is told once this fill's are in.
@@ -238,12 +238,12 @@ pub struct CellsBack {
     pub ticket: u32,
 }
 
-/// A square handed to the GPU's fill, the record the ground's windows hand
+/// A brick handed to the GPU's fill, the record the ground's windows hand
 /// on (pxl-kernel domain/layer/terrain/window.rs `fill`): its words
 /// (pxl-spec-core `window::fresh`), its four looks a cell, its tile's
 /// padded samples, its lines as far as they are written
 /// (`window::LINES_AT`), and where its cells come back to.
-pub struct FreshSquare<'a> {
+pub struct FreshBrick<'a> {
     pub fresh: [u32; FRESH_WORDS as usize],
     pub looks: &'a [u8],
     pub samples: &'a [i16],
@@ -251,8 +251,8 @@ pub struct FreshSquare<'a> {
     pub back: CellsBack,
 }
 
-/// Takes a square while the turn's stream has room for it.
-pub type TerrainWrite<'a> = dyn FnMut(FreshSquare<'_>) -> bool + 'a;
+/// Takes a brick while the turn's stream has room for it.
+pub type TerrainWrite<'a> = dyn FnMut(FreshBrick<'_>) -> bool + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
@@ -732,7 +732,7 @@ impl Renderer {
         read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
         let mut cast = input.cast;
         // What the frame cannot put off is recorded before what can wait:
-        // the cast pass made first, then the squares' uploads, which take
+        // the cast pass made first, then the bricks' uploads, which take
         // only the room left.
         if cast.is_some() {
             self.screen.make(g, &mut self.pipelines);

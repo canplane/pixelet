@@ -6,7 +6,7 @@
 //! casts for (observer.rs), a pass both observers take one entry
 //! (either.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
 //! observed pyramid (observed.rs), the world's depth from the sun (sun.rs),
-//! each handed square's ground (ground.rs) and ways (way.rs), and the decor
+//! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
 //! the ground grows (decor.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
 //! name pxl-tool shader.rs `ENTRIES` reads.

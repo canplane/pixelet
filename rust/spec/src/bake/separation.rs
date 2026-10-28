@@ -151,7 +151,7 @@ impl Separation {
     }
 
     /// Each segment that may be over a column of a grid, by the point it
-    /// starts at, with the column: column (i, j) the square of side `step`
+    /// starts at, with the column: column (i, j) the brick of side `step`
     /// about `origin + (i + ½, j + ½) · step` in the tile's cells, a segment
     /// over it where the column's center is within its way's reach of its
     /// box. Row by row, each segment's in turn, in the points' order.
@@ -228,9 +228,9 @@ impl Separation {
     }
 
     /// Each segment of a line that can rise or sink, by its line and its
-    /// place in it, with every square of a tile of `side` cells cut `across`
+    /// place in it, with every brick of a tile of `side` cells cut `across`
     /// a side, row by row, that its footprint reaches: the one sweep a
-    /// window's square's entries and its lines both read.
+    /// window's brick's entries and its lines both read.
     pub fn reaches(
         &self,
         side: f64,
@@ -238,7 +238,7 @@ impl Separation {
         mut each: impl FnMut(usize, usize, &Line<'_>, usize),
     ) {
         let step = side / f64::from(across);
-        let square = |v: f64| ((v / step).floor() as i64).clamp(0, i64::from(across) - 1) as usize;
+        let brick = |v: f64| ((v / step).floor() as i64).clamp(0, i64::from(across) - 1) as usize;
         for (d, line) in self
             .iter()
             .enumerate()
@@ -254,8 +254,8 @@ impl Separation {
                 if x1 < 0.0 || y1 < 0.0 || x0 > side || y0 > side {
                     continue;
                 }
-                for y in square(y0)..=square(y1) {
-                    for x in square(x0)..=square(x1) {
+                for y in brick(y0)..=brick(y1) {
+                    for x in brick(x0)..=brick(x1) {
                         each(y * across as usize + x, d, &line, s);
                     }
                 }
@@ -636,8 +636,8 @@ impl Lanes<'_> {
     }
 
     /// Into a client's record: every lane but `coarsest`, which only a fold
-    /// reads; a client reads a square's lines whole (bake/tile/terrain.rs
-    /// `square_lines`).
+    /// reads; a client reads a brick's lines whole (bake/tile/terrain.rs
+    /// `brick_lines`).
     pub fn into_room(&self, room: Room) -> Separation {
         fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
             let dst = &mut dst[..src.len()];

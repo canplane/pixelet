@@ -15,9 +15,9 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
-use pxl_spec_core::way::tree::{ROOT_NODES, SQUARE_FAMILIES};
+use pxl_spec_core::way::tree::{BRICK_FAMILIES, ROOT_NODES};
 use pxl_spec_core::way::SPANS;
-use pxl_spec_core::window::SQUARE;
+use pxl_spec_core::window::BRICK;
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub const CELL_U: f64 = units(GROUND.cell());
@@ -33,7 +33,7 @@ impl crate::pyramid::Base for TerrainTile {
     }
 
     /// Refused where a record's room does not hold its lines (pxl-spec
-    /// `Separation::fits`), or a window's square would hold more of its
+    /// `Separation::fits`), or a window's brick would hold more of its
     /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),
     /// or would not fill or build as a client's does (`terrain::fill_fit`);
     /// what that build takes is kept beside the tile (pool.rs `line`).
@@ -41,8 +41,8 @@ impl crate::pyramid::Base for TerrainTile {
         self.separation
             .fits()
             .map_err(|[lines, points]| format!("its ways hold {lines} lines and {points} points, past MAX_LINES ({MAX_LINES}) or MAX_POINTS ({MAX_POINTS})"))?;
-        terrain::ways_fit(&self.separation, SQUARE)
-            .map_err(|([qx, qy], n)| format!("its square ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_SQUARE_SEGMENTS ({})", terrain::WAYS_SQUARE_SEGMENTS))?;
+        terrain::ways_fit(&self.separation, BRICK)
+            .map_err(|([qx, qy], n)| format!("its brick ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_BRICK_SEGMENTS ({})", terrain::WAYS_BRICK_SEGMENTS))?;
         let fit = terrain::fill_fit(at, self, |_, _| {}).map_err(|(at, why)| unfit(at, why))?;
         let packet = terrain::encode(self).map_err(|e| format!("{e:?}"))?;
         Ok((packet, (fit != Fit::default()).then(|| pool::line(&fit))))
@@ -75,11 +75,11 @@ impl crate::pyramid::Base for TerrainTile {
     }
 }
 
-/// Why square `at` of a tile does not fit (`terrain::fill_fit`), said.
+/// Why brick `at` of a tile does not fit (`terrain::fill_fit`), said.
 pub fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
     match why {
-        Unfit::Spans(spans) => format!("its square ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),
-        Unfit::Nodes(nodes) => format!("its square ({qx}, {qy}) has its ways meet {nodes} of its nodes along z, past ROOT_NODES ({ROOT_NODES})"),
-        Unfit::Families => format!("its square ({qx}, {qy}) takes more than SQUARE_FAMILIES ({SQUARE_FAMILIES}) of its ways' tree's families"),
+        Unfit::Spans(spans) => format!("its brick ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),
+        Unfit::Nodes(nodes) => format!("its brick ({qx}, {qy}) has its ways meet {nodes} of its nodes along z, past ROOT_NODES ({ROOT_NODES})"),
+        Unfit::Families => format!("its brick ({qx}, {qy}) takes more than BRICK_FAMILIES ({BRICK_FAMILIES}) of its ways' tree's families"),
     }
 }

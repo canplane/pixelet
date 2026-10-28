@@ -118,7 +118,7 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     let gpu_stream = layout::install(&b);
     // A layer asks for no more tiles than its tile cache's slots.
     crate::sys::io::request::open(|c| {
-        crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames)
+        crate::domain::view::demand::of_stream(c).map_or(0, |l| l.slots)
     });
     crate::turn::boot();
     let [margin, batch, settle] = quantum_entries(&crate::sys::sched::tick::QUANTUM);

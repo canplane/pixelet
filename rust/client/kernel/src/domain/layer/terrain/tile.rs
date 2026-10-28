@@ -67,7 +67,7 @@ impl Base for TerrainTile {
     }
 
     /// What its windows want of it is the GPU's, off the packet: kept only
-    /// where a window wants one of its squares, so an ancestor's or another
+    /// where a window wants one of its bricks, so an ancestor's or another
     /// zoom's packet no window reads takes no place of `most_kept`.
     fn keep(record: Option<u32>, block: Block) {
         let wanted = |r: &u32| {
@@ -112,14 +112,14 @@ pub fn again_room() -> u32 {
     most_kept().saturating_sub(kept().count() + coming)
 }
 
-/// The tiles whose squares the windows want filled, off their packets.
+/// The tiles whose bricks the windows want filled, off their packets.
 static KEPT: Global<Kept> = Global::new();
 
 pub fn kept() -> &'static mut Kept {
     KEPT.get(|| Kept::new(TileCache::<TerrainTile>::SLOTS))
 }
 
-/// Whether `tile`'s packet is kept, its squares still to be handed.
+/// Whether `tile`'s packet is kept, its bricks still to be handed.
 pub fn kept_for(tile: Tile) -> bool {
     TerrainTile::tile_cache()
         .slot(tile)

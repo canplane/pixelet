@@ -257,7 +257,7 @@ pub enum SettingKey {
     view = 13,
     /// The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`).
     profiler = 14,
-    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs).
+    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs).
     world_gizmo = 15,
     /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them.
     camera_gizmo = 16,

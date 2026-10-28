@@ -15,7 +15,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec_core::window::{squares_zoom, SQUARE_SHIFT};
+use pxl_spec_core::window::{bricks_zoom, BRICK_SHIFT};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
@@ -88,22 +88,22 @@ pub fn observation() -> Option<Observation> {
     })
 }
 
-/// The eye's windows' squares (pxl-spec-core window.rs), the ground about
-/// the eye cut into one partition: from the coarsest squares within the
+/// The eye's windows' bricks (pxl-spec-core window.rs), the ground about
+/// the eye cut into one partition: from the coarsest bricks within the
 /// floor's ring (tile_cache/floor.rs `ring`), the far edge cut by the ground,
-/// a square splits into its four while its nearest point is nearer than its
+/// a brick splits into its four while its nearest point is nearer than its
 /// cells' split distance (pxl-spec space/camera/grid.rs `split_distance`),
-/// the rule a ray's descent asks by, taken about the eye's height; each square left is at the zoom
+/// the rule a ray's descent asks by, taken about the eye's height; each brick left is at the zoom
 /// its nearest point asks, and handed with the heights the world stands
 /// between in it. A function of the eye and the world alone, never of what
 /// a ray met; a column it knows nothing of yet is handed none, as nothing
 /// there is to stand in.
-pub fn squares(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
+pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else {
         return;
     };
     let over = (o.eye[2] - o.ground).max(0.0);
-    let coarsest = GROUND.grid_zoom(top).max(SQUARE_SHIFT);
+    let coarsest = GROUND.grid_zoom(top).max(BRICK_SHIFT);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
@@ -115,16 +115,16 @@ pub fn squares(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
             over,
         )
     };
-    let zoom = squares_zoom(coarsest);
+    let zoom = bricks_zoom(coarsest);
     // Its room kept from one walk to the next.
     static STACK: Global<Vec<(Zoom, [i32; 2])>> = Global::new();
     let mut stack = core::mem::take(STACK.get(Vec::new));
     stack.clear();
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
-    // Depth first, so each square's lines step from its neighbour's.
+    // Depth first, so each brick's lines step from its neighbour's.
     let (world, mut walked) = (World::now(), Walked::default());
     while let Some((zoom, xy)) = stack.pop() {
-        let (cell, d) = (zoom + SQUARE_SHIFT, near(zoom, xy));
+        let (cell, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
         if d > o.reach {
             continue;
         }

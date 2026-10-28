@@ -1,7 +1,7 @@
 // pxl-kernel/domain/layer/terrain/mirror.rs
 
 //! The GPU's ways' pool as the CPU mirrors it (pxl-spec-core `way::tree`):
-//! each landing square's families laid at the ids the GPU gave them
+//! each landing brick's families laid at the ids the GPU gave them
 //! (window.rs `on_landed`), which a cursor reads as the cast reads the GPU's.
 //! On the heap, a chunk at a time as the ids laid reach past it: the GPU's
 //! stack hands ids from the lowest up (pxl-shader `TAKEN`), so the mirror
@@ -9,7 +9,7 @@
 //! words each, never past the pool's most (pxl-spec-core way/tree.rs `POOL_FAMILIES`).
 
 use pxl_spec_core::overwrite::Lanes;
-use pxl_spec_core::way::tree::{self, Pool, FAMILY_WORDS, RECORD_WORDS, SQUARE_FAMILIES};
+use pxl_spec_core::way::tree::{self, Pool, BRICK_FAMILIES, FAMILY_WORDS, RECORD_WORDS};
 use xpute_guest::global::Global;
 
 /// A chunk's families, 64 KiB of them: what the mirror grows by.
@@ -33,7 +33,7 @@ pub struct Mirror {
 
 static MIRROR: Global<Mirror> = Global::new();
 
-/// Why a square's families were not laid: one lies past the pool's cap,
+/// Why a brick's families were not laid: one lies past the pool's cap,
 /// which asking again never changes; or the heap refused a chunk, which a
 /// page given back may (sys/io/room.rs `Refused`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,20 +42,20 @@ pub enum Unlaid {
     Heap,
 }
 
-/// The mirror, empty before any square lands.
+/// The mirror, empty before any brick lands.
 pub fn mirror() -> &'static mut Mirror {
     MIRROR.get(Mirror::default)
 }
 
 impl Mirror {
-    /// A square's records (pxl-spec-core `way::tree::lay`) laid at their
+    /// A brick's records (pxl-spec-core `way::tree::lay`) laid at their
     /// families' ids, the chunks they reach grown first; nothing laid where
-    /// one lies past the cap or the heap refuses a chunk, which the square's
+    /// one lies past the cap or the heap refuses a chunk, which the brick's
     /// landing takes as its tree refused or waiting on the heap
-    /// (domain/layer/terrain/window.rs `on_landed`). A square with no ways has
+    /// (domain/layer/terrain/window.rs `on_landed`). A brick with no ways has
     /// none, and reaches no chunk.
     pub fn lay(&mut self, records: &[u32]) -> Result<(), Unlaid> {
-        let n = records.first().map_or(0, |&n| n.min(SQUARE_FAMILIES));
+        let n = records.first().map_or(0, |&n| n.min(BRICK_FAMILIES));
         if n == 0 {
             return Ok(());
         }
@@ -98,7 +98,7 @@ impl Mirror {
     }
 
     /// Every family let go: the device that held the pool went, every
-    /// square with it, and nothing reads a tree until one lands again.
+    /// brick with it, and nothing reads a tree until one lands again.
     pub fn clear(&mut self) {
         self.chunks = Vec::new();
     }

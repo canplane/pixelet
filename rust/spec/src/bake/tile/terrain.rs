@@ -22,7 +22,7 @@ pub const GROUND_LANE: usize = (TILE_CELLS * TILE_CELLS) as usize;
 pub const LOOK_LANE: usize = 4 * GROUND_LANE;
 pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 /// Bins a side a tile's ways are cut into, each `1 << WAYS_SHIFT` cells a
-/// side, as a window's square lays its lines by them (`square_lines`).
+/// side, as a window's brick lays its lines by them (`brick_lines`).
 pub use pxl_spec_core::window::{WAYS_ACROSS, WAYS_SHIFT};
 
 /// The most a packet takes: every lane at its longest, a look a cell four
@@ -40,10 +40,10 @@ pub const MAX_PACKET_BYTES: usize = {
     HEADER + branch(4) + seq(ELE_LANE * 2) + seq(LOOK_LANE) + SCALAR + separation
 };
 
-/// The most entries a window's square holds of the ways (pxl-spec-core
-/// `window::WAYS_SQUARE_SEGMENTS`); a tile past it fails its bake
+/// The most entries a window's brick holds of the ways (pxl-spec-core
+/// `window::WAYS_BRICK_SEGMENTS`); a tile past it fails its bake
 /// (`ways_fit`).
-pub const WAYS_SQUARE_SEGMENTS: usize = pxl_spec_core::window::WAYS_SQUARE_SEGMENTS as usize;
+pub const WAYS_BRICK_SEGMENTS: usize = pxl_spec_core::window::WAYS_BRICK_SEGMENTS as usize;
 
 /// What a ground cell holds: the id of a cube of the ground's palette, a
 /// Carto look, which fits a byte (`asset/cube.json`).
@@ -70,23 +70,23 @@ pub struct TerrainTile {
     pub occupancy: Occupancy,     // which children are tiles: none is asked for that is not
 }
 
-/// Whether every square of `square` cells a side a tile is cut into holds
-/// its ways' entries within `WAYS_SQUARE_SEGMENTS`; the first that does not,
-/// its place in squares and its count, where one does not.
-pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], usize)> {
+/// Whether every brick of `brick` cells a side a tile is cut into holds
+/// its ways' entries within `WAYS_BRICK_SEGMENTS`; the first that does not,
+/// its place in bricks and its count, where one does not.
+pub fn ways_fit(separation: &Separation, brick: u32) -> Result<(), ([u32; 2], usize)> {
     let mut entries = [0usize; (WAYS_ACROSS * WAYS_ACROSS) as usize];
     separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _, _| {
         entries[k] += 1
     });
-    let (bins, squares) = (square >> WAYS_SHIFT, TILE_CELLS / square);
-    for qy in 0..squares {
-        for qx in 0..squares {
+    let (bins, bricks) = (brick >> WAYS_SHIFT, TILE_CELLS / brick);
+    for qy in 0..bricks {
+        for qx in 0..bricks {
             let n: usize = (0..bins * bins)
                 .map(|b| {
                     entries[((qy * bins + b / bins) * WAYS_ACROSS + qx * bins + b % bins) as usize]
                 })
                 .sum();
-            if n > WAYS_SQUARE_SEGMENTS {
+            if n > WAYS_BRICK_SEGMENTS {
                 return Err(([qx, qy], n));
             }
         }
@@ -94,14 +94,14 @@ pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], u
     Ok(())
 }
 
-/// The lines of the window's square at `place` (in squares) of `tile`, as
+/// The lines of the window's brick at `place` (in bricks) of `tile`, as
 /// the GPU asks them (pxl-spec-core window.rs `LINES_*`), into `out`, a
-/// square's `LINES_WORDS`: the tile's header, each bin's entries, and the
+/// brick's `LINES_WORDS`: the tile's header, each bin's entries, and the
 /// segments a bin reaches, each once, in their lines' order — the reach
-/// `ways_fit` counts, so none holds more than `WAYS_SQUARE_SEGMENTS`. The
+/// `ways_fit` counts, so none holds more than `WAYS_BRICK_SEGMENTS`. The
 /// words written, the rest left as they were; `scratch` the room it works
-/// in, `WAYS_SQUARE_SEGMENTS` pairs, kept between squares.
-pub fn square_lines(
+/// in, `WAYS_BRICK_SEGMENTS` pairs, kept between bricks.
+pub fn brick_lines(
     tile: Tile,
     separation: &Separation,
     place: [u32; 2],
@@ -110,12 +110,12 @@ pub fn square_lines(
 ) -> usize {
     use pxl_spec_core::way::{header, HEADER_WORDS, SEGMENT_WORDS};
     use pxl_spec_core::window::{
-        LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE, WAYS_BINS,
+        BRICK, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, WAYS_BINS,
     };
     xpute_kit::ensure!(out.len() == LINES_WORDS as usize, ENOTRECOVERABLE);
-    xpute_kit::ensure!(scratch.len() == WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE);
-    let bins = SQUARE >> WAYS_SHIFT;
-    // Each bin of the square a segment's footprint reaches, and the point it starts at.
+    xpute_kit::ensure!(scratch.len() == WAYS_BRICK_SEGMENTS, ENOTRECOVERABLE);
+    let bins = BRICK >> WAYS_SHIFT;
+    // Each bin of the brick a segment's footprint reaches, and the point it starts at.
     let mut count = 0;
     separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
         let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
@@ -129,7 +129,7 @@ pub fn square_lines(
             count += 1;
         }
     });
-    xpute_kit::ensure!(count <= WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE, count);
+    xpute_kit::ensure!(count <= WAYS_BRICK_SEGMENTS, ENOTRECOVERABLE, count);
     let scratch = &mut scratch[..count];
     let frame = Frame::of(tile);
     out[..HEADER_WORDS as usize].copy_from_slice(&header(frame.per_m(), &frame.stations()));
@@ -163,8 +163,8 @@ pub fn square_lines(
     LINES_SEGMENTS_AT as usize + n * SEGMENT_WORDS
 }
 
-/// A window's square as its fill reads it (pxl-spec-core `window::Square`):
-/// its cells' zoom and place in its tile, its lines as `square_lines` lays
+/// A window's brick as its fill reads it (pxl-spec-core `window::Brick`):
+/// its cells' zoom and place in its tile, its lines as `brick_lines` lays
 /// them, cell `i` as laid off its four looks (`looks`, its own look, none
 /// about it gone), and column `c`'s height,
 /// counted from its first cell, its ring included (`height`).
@@ -176,7 +176,7 @@ pub struct Laid<'a, L, H> {
     pub height: H,
 }
 
-impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_spec_core::window::Square for Laid<'_, L, H> {
+impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_spec_core::window::Brick for Laid<'_, L, H> {
     fn cell(&self) -> Zoom {
         self.cell
     }
@@ -196,15 +196,15 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_spec_core::window::Square fo
     }
 }
 
-/// Cell `i` of the square at `place` (in squares), in its tile's cells.
-fn square_cell(place: [u32; 2], i: u32) -> [u32; 2] {
-    use pxl_spec_core::window::{of_index, SQUARE};
+/// Cell `i` of the brick at `place` (in bricks), in its tile's cells.
+fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
+    use pxl_spec_core::window::{of_index, BRICK};
     let [x, y] = of_index(i);
-    [place[0] * SQUARE + x, place[1] * SQUARE + y]
+    [place[0] * BRICK + x, place[1] * BRICK + y]
 }
 
-/// The window's square at `place` (in squares) of `tile` as its fill reads
-/// it, its lines `lines` (`square_lines`): its looks four a cell as a client
+/// The window's brick at `place` (in bricks) of `tile` as its fill reads
+/// it, its lines `lines` (`brick_lines`): its looks four a cell as a client
 /// hands them (`handed`) and its heights off the tile's samples `ele` as
 /// `height_cs` draws them (`ground::height`), its ring's too.
 fn laid<'a>(
@@ -215,13 +215,13 @@ fn laid<'a>(
     lines: &'a [u32],
 ) -> Laid<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
     let looks = move |i: u32| {
-        let at = square_cell(place, i);
+        let at = brick_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
         pxl_spec_core::ground::word(four_looks(&ground.cells, c).map(u32::from))
     };
     let height = move |c: [i32; 2]| {
         let at = [0, 1].map(|a| {
-            (place[a] * pxl_spec_core::window::SQUARE) as f32
+            (place[a] * pxl_spec_core::window::BRICK) as f32
                 + c[a] as f32
                 + pxl_spec_core::lattice::CELL_CENTER
         });
@@ -236,10 +236,10 @@ fn laid<'a>(
     }
 }
 
-/// The window's square at `place` (in squares) of `tile` handed into
+/// The window's brick at `place` (in bricks) of `tile` handed into
 /// `record` as a client hands it to a GPU's fill (pxl-spec-core window.rs
 /// `HANDED_WORDS`): its looks four a cell (`handed`), its tile's padded
-/// samples, and its lines (`square_lines`, with `scratch`); the rest zero.
+/// samples, and its lines (`brick_lines`, with `scratch`); the rest zero.
 fn record(
     tile: Tile,
     held: &TerrainTile,
@@ -247,10 +247,10 @@ fn record(
     scratch: &mut [(u32, u32)],
     record: &mut [u32],
 ) {
-    use pxl_spec_core::window::{ELE_AT, LINES_AT, LINES_WORDS, LOOKS_AT, SQUARE_CELLS};
+    use pxl_spec_core::window::{BRICK_CELLS, ELE_AT, LINES_AT, LINES_WORDS, LOOKS_AT};
     record.fill(0);
-    for i in 0..SQUARE_CELLS {
-        let at = square_cell(place, i);
+    for i in 0..BRICK_CELLS {
+        let at = brick_cell(place, i);
         record[(LOOKS_AT + i) as usize] = pxl_spec_core::ground::word(
             four_looks(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize).map(u32::from),
         );
@@ -259,7 +259,7 @@ fn record(
         record[ELE_AT as usize + k] =
             u32::from(pair[0] as u16) | u32::from(pair.get(1).map_or(0, |&v| v as u16)) << 16;
     }
-    square_lines(
+    brick_lines(
         tile,
         &held.separation,
         place,
@@ -268,30 +268,30 @@ fn record(
     );
 }
 
-/// The window's square at `place` (in squares) of `tile`, handed into
+/// The window's brick at `place` (in bricks) of `tile`, handed into
 /// `handed` (`record`) and filled into `lane`, its spans into `kept`, its
 /// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-spec-core
-/// `fill::square`): the most spans a column makes.
-pub fn square_spans(
+/// `fill::brick`): the most spans a column makes.
+pub fn brick_spans(
     tile: Tile,
     held: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
     [handed, lane, kept]: [&mut [u32]; 3],
 ) -> u32 {
-    use pxl_spec_core::window::SQUARE;
+    use pxl_spec_core::window::BRICK;
     record(tile, held, place, scratch, handed);
     let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
-    let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * SQUARE) as i32);
+    let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
     let first = [pxl_spec_core::wrap_index(cell, first[0]), first[1]];
-    pxl_spec_core::fill::square(handed, lane, kept, place, cell, first)
+    pxl_spec_core::fill::brick(handed, lane, kept, place, cell, first)
 }
 
 /// The families the windows' trees take wherever the eye is, of the pool
 /// (pxl-spec-core `way::tree::POOL_FAMILIES`): each eye's window's most at
 /// its cells (`worst`, the most any placement of it holds), the others'
-/// each the most of any, and the squares handed a frame each the most a
-/// square takes before its fold gives families back (`taken`). A square
+/// each the most of any, and the bricks handed a frame each the most a
+/// brick takes before its fold gives families back (`taken`). A brick
 /// without ways takes none.
 pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
     use pxl_spec_core::window::{EYE_WINDOWS, FIRST_CELL, HANDED, WINDOWS};
@@ -303,16 +303,16 @@ pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
 }
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
-/// its piers standing as none blocks them, by the rule its squares' columns
+/// its piers standing as none blocks them, by the rule its bricks' columns
 /// are read by, their rings included (`way::column`) — so a line every span
 /// of which fills no cell there (`way::fills_any`) is none at that zoom,
 /// and is not stored.
 pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
-    use pxl_spec_core::window::{LINES_WORDS, SQUARE};
+    use pxl_spec_core::window::{BRICK, LINES_WORDS};
     let lines = &held.separation;
-    let squares = TILE_CELLS / SQUARE;
+    let bricks = TILE_CELLS / BRICK;
     let (mut scratch, mut words) = (
-        vec![(0, 0); WAYS_SQUARE_SEGMENTS],
+        vec![(0, 0); WAYS_BRICK_SEGMENTS],
         vec![0; LINES_WORDS as usize],
     );
     let mut kept = separation::Builder::default();
@@ -329,17 +329,17 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
         let [lo, hi] = line.bounds();
         let reach = line.footprint();
         let span = |k: usize| {
-            let first = ((lo[k] - reach) / f64::from(SQUARE)).floor().max(0.0) as u32;
-            let last = ((hi[k] + reach) / f64::from(SQUARE))
+            let first = ((lo[k] - reach) / f64::from(BRICK)).floor().max(0.0) as u32;
+            let last = ((hi[k] + reach) / f64::from(BRICK))
                 .floor()
-                .min(f64::from(squares - 1)) as u32;
+                .min(f64::from(bricks - 1)) as u32;
             first..=last
         };
         let seen = span(1).any(|qy| {
             span(0).any(|qx| {
-                let n = square_lines(tile, &one, [qx, qy], &mut scratch, &mut words);
+                let n = brick_lines(tile, &one, [qx, qy], &mut scratch, &mut words);
                 let sq = laid(tile, &held.ground, &held.ele, [qx, qy], &words[..n]);
-                let ring = -1..=SQUARE as i32;
+                let ring = -1..=BRICK as i32;
                 ring.clone().any(|y| {
                     ring.clone()
                         .any(|x| pxl_spec_core::way::column(&sq, [x, y]).0.n > 0)
@@ -362,9 +362,9 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
     }
 }
 
-/// What a tile's windows' squares take of a client's ways (`fill_fit`):
-/// each square with ways, by its index in the tile row by row, and the
-/// families its tree holds once folded; and the most a square takes before
+/// What a tile's windows' bricks take of a client's ways (`fill_fit`):
+/// each brick with ways, by its index in the tile row by row, and the
+/// families its tree holds once folded; and the most a brick takes before
 /// its fold gives families back. Empty for a tile without ways.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Fit {
@@ -372,7 +372,7 @@ pub struct Fit {
     pub taken: u32,
 }
 
-/// Why a square does not fill as a client fills it (`fill_fit`).
+/// Why a brick does not fill as a client fills it (`fill_fit`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unfit {
     /// A column making more than `way::SPANS` spans, how many.
@@ -380,12 +380,12 @@ pub enum Unfit {
     /// Its ways meeting more than `way::tree::ROOT_NODES` of its own nodes
     /// along z, its tree's root's: how many.
     Nodes(u32),
-    /// Its tree taking more than `way::tree::SQUARE_FAMILIES` families.
+    /// Its tree taking more than `way::tree::BRICK_FAMILIES` families.
     Families,
 }
 
-/// A square as `fill_fit` filled and built it: its words and its kept
-/// spans (pxl-spec-core `fill::square`), its cells' zoom, and its ways' tree
+/// A brick as `fill_fit` filled and built it: its words and its kept
+/// spans (pxl-spec-core `fill::brick`), its cells' zoom, and its ways' tree
 /// in a pool of its own, its root word (`way::tree::root_word`) and the
 /// families its build took and holds.
 pub struct Built<'a> {
@@ -398,35 +398,35 @@ pub struct Built<'a> {
     pub held: u32,
 }
 
-/// Each square of `tile`'s windows filled (`square_spans`) and its ways'
+/// Each brick of `tile`'s windows filled (`brick_spans`) and its ways'
 /// tree built (pxl-spec-core `fill::tree`) as a client fills and builds
-/// them, row by row of its squares, once, each handed to `each` as built
+/// them, row by row of its bricks, once, each handed to `each` as built
 /// with its index in the tile, which a proof reads (pxl-geo-bake
-/// bin/fill_digest.rs): the first square that does not fit and why, else
+/// bin/fill_digest.rs): the first brick that does not fit and why, else
 /// what the tile takes of the client's ways (`Fit`).
 pub fn fill_fit(
     tile: Tile,
     held: &TerrainTile,
     mut each: impl FnMut(u32, &Built<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {
-    use pxl_spec_core::way::tree::{ROOT_NODES, SCRATCH_WORDS, SQUARE_FAMILIES};
-    use pxl_spec_core::window::{HANDED_WORDS, SQUARE, SQUARE_WORDS};
+    use pxl_spec_core::way::tree::{BRICK_FAMILIES, ROOT_NODES, SCRATCH_WORDS};
+    use pxl_spec_core::window::{BRICK, BRICK_WORDS, HANDED_WORDS};
     let mut fit = Fit::default();
     if held.separation.is_empty() {
         return Ok(fit);
     }
-    let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS];
+    let mut scratch = vec![(0, 0); WAYS_BRICK_SEGMENTS];
     let (mut handed, mut lane, mut kept) = (
         vec![0; HANDED_WORDS as usize],
-        vec![0; SQUARE_WORDS as usize],
+        vec![0; BRICK_WORDS as usize],
         vec![0; SCRATCH_WORDS as usize],
     );
-    // A square's room: the most a build takes, past the family none holds.
-    let mut pool = vec![0; 16 * (SQUARE_FAMILIES as usize + 1)];
-    let side = TILE_CELLS / SQUARE;
+    // A brick's room: the most a build takes, past the family none holds.
+    let mut pool = vec![0; 16 * (BRICK_FAMILIES as usize + 1)];
+    let side = TILE_CELLS / BRICK;
     for k in 0..side * side {
         let place = [k % side, k / side];
-        let spans = square_spans(
+        let spans = brick_spans(
             tile,
             held,
             place,
@@ -474,7 +474,7 @@ impl TerrainTile {
     /// Where the source has nothing at all, as a client holds it: void
     /// cells at sea level, which give no surface, so nothing is drawn while
     /// the ground is still known and stays asked for, and no child, so none
-    /// is asked for under it. Its windows' squares are filled from it as a
+    /// is asked for under it. Its windows' bricks are filled from it as a
     /// packet's are (`ground`, and samples all zero).
     pub fn void() -> TerrainTile {
         TerrainTile {

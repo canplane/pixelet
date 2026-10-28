@@ -22,7 +22,7 @@
 //! so they are bounded apart from it: the Earth's by its frames, terrain's
 //! by the slots less one for the most credits granted and every Earth
 //! frame (domain/layer/terrain/tile.rs `most_kept`), a packet past it, or one no
-//! window wants a square of, freed once decoded. The kept thus leave a
+//! window wants a brick of, freed once decoded. The kept thus leave a
 //! slot for every credit, and a body on one finds one: the tile cache,
 //! which the query and the controls read, fills with no frame drawn.
 //!
@@ -35,8 +35,8 @@
 //! which the want is asked again.
 //!
 //! In a drawn frame a terrain packet is given back once no window wants
-//! one of its squares absent (domain/layer/terrain/window.rs `fill`): each frame
-//! hands `HANDED` squares only of tiles kept or void (`due`), a square
+//! one of its bricks absent (domain/layer/terrain/window.rs `fill`): each frame
+//! hands `HANDED` bricks only of tiles kept or void (`due`), a brick
 //! handed is wanted no more, and a packet whose tile left or that no
 //! window wants is given back on that upload too, the stream full or not
 //! (domain/layer/kept.rs `send`). Tiles whose packets were freed are asked again

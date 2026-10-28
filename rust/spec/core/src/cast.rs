@@ -95,12 +95,12 @@ pub fn narrow(side2: f32, width2: f32) -> bool {
 }
 
 /// The spacings a node is narrow under (`narrow`): twice the width that
-/// holds one ray for certain, `2√2`; and its square, exact.
+/// holds one ray for certain, `2√2`; and its brick, exact.
 pub const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
 const NARROW_SQUARED: f32 = 8.0;
 const _: () = assert!(
     NARROW * NARROW - NARROW_SQUARED < 1e-6 && NARROW_SQUARED - NARROW * NARROW < 1e-6,
-    "`NARROW_SQUARED` is `NARROW`'s square"
+    "`NARROW_SQUARED` is `NARROW`'s brick"
 );
 
 /// √6, as an f32 rounds it: a cube `NARROW` spacings wide spans `√3 ·

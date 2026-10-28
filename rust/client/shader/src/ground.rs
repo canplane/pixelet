@@ -1,26 +1,26 @@
 // pxl-shader/ground.rs
 
-//! Each handed square's ground, filled once as it is handed: its columns'
+//! Each handed brick's ground, filled once as it is handed: its columns'
 //! tops off its tile's samples (`height_cs`) and its levels (`bound_cs`),
 //! which the CPU reads back; and the eye's windows' levels folded over
-//! their squares (`joined_cs`).
+//! their bricks (`joined_cs`).
 
 use pxl_spec_core::fill;
-use pxl_spec_core::window::{self, FIRST_CELL, SQUARE};
+use pxl_spec_core::window::{self, BRICK, FIRST_CELL};
 use pxl_spec_core::{at, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 use spirv_std::spirv;
 
 use crate::eye::Eye;
-use crate::world::{square_at, Unlooked, World};
+use crate::world::{brick_at, Unlooked, World};
 
-/// The eye's windows folded over their squares, a thread an entry
+/// The eye's windows folded over their bricks, a thread an entry
 /// (pxl-spec-core `window::fold`), each a row of the windows' buffer past
 /// their slot table (`window::JOINED_AT`): each window's levels over a
-/// square, the join of its aligned blocks of squares, which a node wider
-/// than a square reads as one entry (`window::bound_over`), a level a dispatch
+/// brick, the join of its aligned blocks of bricks, which a node wider
+/// than a brick reads as one entry (`window::bound_over`), a level a dispatch
 /// off the one under it. Run where the windows' slots moved; a present
-/// square's levels stand while it does.
+/// brick's levels stand while it does.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "joined_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn joined_cs(
@@ -65,7 +65,7 @@ pub fn joined_cs(
     }
 }
 
-/// The columns' ground tops of the squares `fresh` names, the squares
+/// The columns' ground tops of the bricks `fresh` names, the bricks
 /// handed their tiles' samples this turn, one a `z`, each a record as
 /// handed (`window::HANDED_WORDS`); a thread a column (`ground::height`)
 /// off the samples in it, an even column's laying its cell and the next
@@ -78,14 +78,14 @@ pub fn height_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] looks: &mut [u32],
 ) {
-    if id.x >= SQUARE || id.y >= SQUARE {
+    if id.x >= BRICK || id.y >= BRICK {
         return;
     }
     fill::heights(ground, fresh, id.z, [id.x, id.y]);
     fill::look(looks, fresh, id.z, [id.x, id.y]);
 }
 
-/// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
+/// Level `level.x` of the bricks `fresh` names, one a `z`: level 0 each
 /// column's own, its top and the spans kept in its scratch (`fill::level`),
 /// a higher one over the level under it, written before (`window::join`): a
 /// dispatch a level, from 0 up.
@@ -98,12 +98,12 @@ pub fn bound_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] scratch: &[u32],
 ) {
     let j = level.x;
-    let side = SQUARE >> j;
+    let side = BRICK >> j;
     if id.x >= side || id.y >= side {
         return;
     }
     let rec = window::handed_at(id.z);
-    let base = square_at(at(fresh, rec + window::FRESH_SQUARE));
+    let base = brick_at(at(fresh, rec + window::FRESH_BRICK));
     let kept = fill::Scratch {
         words: scratch,
         at: fill::scratch_at(scratch, id.z),

@@ -15,7 +15,7 @@ use crate::area::Shard;
 use crate::cave::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, AIR, CELL, PLACED, SPLIT};
-use crate::window::{Found, Squares};
+use crate::window::{Bricks, Found};
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own, so a
@@ -24,7 +24,7 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 /// objects' tree), what is known of the service area at its shard
 /// (`area::Shard`), where the windows held the ground's cells of a node
 /// over it (`window::Found`, `window::step`), and the ways' cursor in the
-/// tree of the square `ground` names (`way::tree`). The CPU's and a GPU's
+/// tree of the brick `ground` names (`way::tree`). The CPU's and a GPU's
 /// alike.
 #[derive(Clone, Copy)]
 pub struct At {
@@ -106,7 +106,7 @@ impl At {
 /// layer answers, so a stop's shard is its own whichever layer stops it;
 /// where the ground's cells of a node over it were held becomes its own
 /// (`ground::node`), and the ways' cursor is stepped from its parent's where
-/// that names the same square, found from that square's root where it names
+/// that names the same brick, found from that brick's root where it names
 /// another, as the cells' place itself is found again (`window::step`). A
 /// preview's `carve` and `hide` (`overwrite::Cut`) are read with what is
 /// placed.
@@ -133,9 +133,9 @@ impl At {
 /// or coarser air is the asker's: its zoom against the finest asked (`near`),
 /// past the ground's cells, where nothing finer is, a cell either way.
 #[allow(clippy::too_many_arguments)]
-pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
+pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     held: &mut H,
-    squares: &W,
+    bricks: &W,
     lanes: &L,
     pool: &P,
     at: &mut At,
@@ -194,7 +194,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         *trail = if place.here() {
             crate::way::tree::cursor(
                 pool,
-                squares.root(place.from(), place.berth()),
+                bricks.root(place.from(), place.berth()),
                 place.from(),
                 zoom,
                 c,

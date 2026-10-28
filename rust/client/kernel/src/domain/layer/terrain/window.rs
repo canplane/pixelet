@@ -3,16 +3,16 @@
 //! The ground's cells as the kernel holds them: a window a zoom about each
 //! centre a reader declares — the eye, the focus where walking and editing
 //! happen, a destination being gone to — each as deep as its reader reads
-//! (pxl-spec-core `window`). A square at a zoom is held once, in a berth,
+//! (pxl-spec-core `window`). A brick at a zoom is held once, in a berth,
 //! however many windows want it (`Berth`). It is filled from its tile as it
 //! lands: its four looks and its tile's samples handed to the GPU, which
 //! draws and lays its cells; they come back into `.fixed.terrain`, and the
-//! square is present from then on (`on_landed`). Nothing of a tile is kept for
-//! a square still to come: one that enters asks its tile again
+//! brick is present from then on (`on_landed`). Nothing of a tile is kept for
+//! a brick still to come: one that enters asks its tile again
 //! (`TileCache::again`), which the browser's cache answers.
 
 use pxl_spec::bake::tile::terrain::{
-    handed, square_lines, GroundId, TerrainTile, ELE_LANE, LOOK_LANE,
+    brick_lines, handed, GroundId, TerrainTile, ELE_LANE, LOOK_LANE,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -21,8 +21,8 @@ use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
 use pxl_spec_core::window::{
-    self, Slot, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES,
-    SQUARE_CELLS, SQUARE_SHIFT, WINDOWS,
+    self, Bricks, Slot, BRICK, BRICKS, BRICK_CELLS, BRICK_SHIFT, EYE_WINDOWS, FIRST_CELL, HANDED,
+    LEVELS, SLOTS, WINDOWS,
 };
 use pxl_spec_core::wrap_index;
 use pxl_spec_core::LEAF_CELL;
@@ -40,7 +40,7 @@ use crate::sys::io::room::Refused;
 use crate::sys::io::source::Declared;
 use crate::sys::mem::fixed::lane;
 use pxl_render::gpu::api::DONE;
-use pxl_render::gpu::renderer::{CellsBack, FreshSquare, Landing};
+use pxl_render::gpu::renderer::{CellsBack, FreshBrick, Landing};
 
 /// Who a window is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -68,30 +68,30 @@ const fn layout(w: u32) -> (Centre, Zoom) {
     }
 }
 
-/// A window: its cells' zoom. Its first square is its row past the slots
+/// A window: its cells' zoom. Its first brick is its row past the slots
 /// (`first_of`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Window {
     cell: Zoom,
 }
 
-/// Where a square of the ground is held: its row of the GPU's squares
+/// Where a brick of the ground is held: its row of the GPU's bricks
 /// (pxl-render gpu/ray/ground.rs `GROUND_BYTES`) and its lane of cells back
-/// in `.fixed.terrain` (`cells`), one a square at a zoom however many
-/// windows want it. Windows at one zoom want a square in the same slot
+/// in `.fixed.terrain` (`cells`), one a brick at a zoom however many
+/// windows want it. Windows at one zoom want a brick in the same slot
 /// (`window::slot`), so it is held in one of that slot's berths, `WINDOWS`
-/// of them (`of_slot`); no more squares want a slot than there are
-/// windows, so a square wanted always finds one free (`berth`), and
-/// windows that overlap take no berth more than the squares they want. A
+/// of them (`of_slot`); no more bricks want a slot than there are
+/// windows, so a brick wanted always finds one free (`berth`), and
+/// windows that overlap take no berth more than the bricks they want. A
 /// window takes its own where it is free: windows that never overlapped
-/// hold their squares as if alone, but once two have overlapped and
-/// parted, one may hold its squares in the other's.
+/// hold their bricks as if alone, but once two have overlapped and
+/// parted, one may hold its bricks in the other's.
 #[derive(Clone, Copy)]
 struct Berth {
-    /// Its square's cells' zoom, 0 where it holds none (`is_free`), no
+    /// Its brick's cells' zoom, 0 where it holds none (`is_free`), no
     /// window's.
     cell: Zoom,
-    square: [i32; 2],
+    brick: [i32; 2],
     present: bool,
     /// The fill its cells are on their way from, 0 where none is, or
     /// `REFUSED`, or `WAITING`.
@@ -103,7 +103,7 @@ const _: () = assert!(FIRST_CELL > 0, "a free berth's zoom is no window's");
 impl Berth {
     const FREE: Berth = Berth {
         cell: 0,
-        square: [i32::MIN; 2],
+        brick: [i32::MIN; 2],
         present: false,
         ticket: 0,
     };
@@ -112,12 +112,12 @@ impl Berth {
         self.cell == 0
     }
 
-    /// Whether it holds square `q` at `cell`, present or not.
+    /// Whether it holds brick `q` at `cell`, present or not.
     fn holds(&self, cell: Zoom, q: [i32; 2]) -> bool {
-        self.cell == cell && self.square == q
+        self.cell == cell && self.brick == q
     }
 
-    /// Wanted, its tile not yet handed it: holding a square, neither present
+    /// Wanted, its tile not yet handed it: holding a brick, neither present
     /// nor on its way nor refused.
     fn is_absent(&self) -> bool {
         !self.is_free() && !self.present && self.ticket == 0
@@ -132,24 +132,24 @@ fn of_slot(s: u32) -> impl Iterator<Item = u32> {
 
 struct Windows {
     windows: [Window; WINDOWS as usize],
-    /// Every window's slots, each its square and its berth's state, then
-    /// each window's first square, a row shaped as a slot's, its square the
+    /// Every window's slots, each its brick and its berth's state, then
+    /// each window's first brick, a row shaped as a slot's, its brick the
     /// first and present while it is laid out, none while its centre is not
     /// (pxl-spec-core `window::ORIGIN_AT`): the GPU's table as it is
     /// (`table`).
-    slots: [Slot; (SQUARES + WINDOWS) as usize],
-    /// The squares the windows want, each in one berth (`Berth`).
-    berths: [Berth; SQUARES as usize],
-    /// The eye's windows' levels over their squares, folded over the
-    /// squares as they are held here (`fold`), the zero entry, none, before
+    slots: [Slot; (BRICKS + WINDOWS) as usize],
+    /// The bricks the windows want, each in one berth (`Berth`).
+    berths: [Berth; BRICKS as usize],
+    /// The eye's windows' levels over their bricks, folded over the
+    /// bricks as they are held here (`fold`), the zero entry, none, before
     /// any is.
     joined: [[u32; window::JOINED_WORDS as usize]; (EYE_WINDOWS * window::JOINED_ENTRIES) as usize],
-    /// The device the slots' squares were handed to (`device_generation`):
+    /// The device the slots' bricks were handed to (`device_generation`):
     /// one that went took them all.
     on: u32,
     ticket: u32,
     /// What the slots were last stepped over: the tile cache's revision
-    /// (`TileCache::revision`), and whether a fill handed a square or let a
+    /// (`TileCache::revision`), and whether a fill handed a brick or let a
     /// packet go since, which moves what is due and what is asked again.
     read: u32,
     filled: bool,
@@ -161,7 +161,7 @@ struct Windows {
     pinned: List<Tile, { PINNED_TILES as usize }>,
     /// The berths this turn hands the fill (`due`).
     due: List<u32, { HANDED as usize }>,
-    /// The heap as it was when it first refused a square's families the
+    /// The heap as it was when it first refused a brick's families the
     /// mirror's room, while one waits on it (`WAITING`).
     heap: Option<Refused>,
 }
@@ -172,9 +172,9 @@ fn windows() -> &'static mut Windows {
     WINDOWS_STATE.get(fresh)
 }
 
-/// Window `win`'s first square, none while its centre is not.
+/// Window `win`'s first brick, none while its centre is not.
 fn first_of(w: &Windows, win: u32) -> Option<[i32; 2]> {
-    let (first, laid) = w.slots[(SQUARES + win) as usize].held();
+    let (first, laid) = w.slots[(BRICKS + win) as usize].held();
     laid.then_some(first)
 }
 
@@ -184,8 +184,8 @@ fn fresh() -> Windows {
         windows: core::array::from_fn(|w| Window {
             cell: layout(w as u32).1,
         }),
-        slots: [Slot::absent([i32::MIN; 2]); (SQUARES + WINDOWS) as usize],
-        berths: [Berth::FREE; SQUARES as usize],
+        slots: [Slot::absent([i32::MIN; 2]); (BRICKS + WINDOWS) as usize],
+        berths: [Berth::FREE; BRICKS as usize],
         joined: [[0; window::JOINED_WORDS as usize];
             (EYE_WINDOWS * window::JOINED_ENTRIES) as usize],
         on: 0,
@@ -208,7 +208,7 @@ fn cell_at(cell: Zoom, p: [f64; 2]) -> [i32; 2] {
     ]
 }
 
-/// The square window `first` holds in slot `s`.
+/// The brick window `first` holds in slot `s`.
 fn wanted(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
     let m = (window::ACROSS - 1) as i32;
     let at = |o: i32, k: i32| o + ((k - (o & m)) & m);
@@ -216,12 +216,12 @@ fn wanted(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
         at(first[0], (s % window::ACROSS) as i32),
         at(first[1], (s / window::ACROSS) as i32),
     ];
-    [wrap_index(cell - SQUARE_SHIFT, q[0]), q[1]]
+    [wrap_index(cell - BRICK_SHIFT, q[0]), q[1]]
 }
 
-/// The tile square `q` at `cell` lies in, and where in it, in squares.
+/// The tile brick `q` at `cell` lies in, and where in it, in bricks.
 pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
-    let per = (GROUND.tile_cells() >> SQUARE_SHIFT) as i32;
+    let per = (GROUND.tile_cells() >> BRICK_SHIFT) as i32;
     let zoom = cell - GROUND.tile_cell_shamt();
     let t = tile_at(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
     (
@@ -230,11 +230,11 @@ pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
     )
 }
 
-/// Every square's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
+/// Every brick's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
 /// cells as they come back; a test's own. Its ways' trees' families are the
 /// heap's (mirror.rs).
 pub(crate) struct Planes {
-    /// Each square's words as they came back, whole (`window::BACK_WORDS`),
+    /// Each brick's words as they came back, whole (`window::BACK_WORDS`),
     /// `CELLS_LANE_BYTES` apart.
     pub cells: &'static mut [u32],
 }
@@ -247,20 +247,20 @@ fn planes() -> &'static mut Planes {
         // SAFETY: the planes are the windows' alone, plain numbers, zeroed at boot.
         unsafe {
             Planes {
-                cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES / 4) as usize),
+                cells: lane(r, cells_off(0), (BRICKS * CELLS_LANE_BYTES / 4) as usize),
             }
         }
     })
 }
 
-/// The eye's windows' levels over their squares folded again, a level at a
+/// The eye's windows' levels over their bricks folded again, a level at a
 /// time, as the GPU folds its own (pxl-spec-core `window::fold`; pxl-shader
-/// `joined_cs`), over the squares as they are held here. The writers of a
-/// square a window wants or its presence are `berth`, a turn's step's,
+/// `joined_cs`), over the bricks as they are held here. The writers of a
+/// brick a window wants or its presence are `berth`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
 /// (`on_landed`), folded once after all of them (`refold`): no read of a bound
 /// (`Windowed`) comes between a write and its fold, so none finds one of
-/// other squares than its read of the cells does. Read through the windows
+/// other bricks than its read of the cells does. Read through the windows
 /// it is handed (`Holding`), which its writer holds while it runs.
 fn fold(w: &mut Windows) {
     for l in 1..=window::JOINED_LEVELS {
@@ -275,30 +275,30 @@ fn fold(w: &mut Windows) {
     }
 }
 
-/// The GPU's ways' pool as the CPU mirrors it, the landed squares' families
+/// The GPU's ways' pool as the CPU mirrors it, the landed bricks' families
 /// at the GPU's slots, which a cursor reads as the cast reads the GPU's
 /// (pxl-spec-core `way::tree`).
 pub fn pool() -> &'static Mirror {
     mirror()
 }
 
-/// Berth `b`'s words as they came back: a square's words whole, from its
-/// first, which pxl-spec-core reads a square's words by (`fill::column_of`).
+/// Berth `b`'s words as they came back: a brick's words whole, from its
+/// first, which pxl-spec-core reads a brick's words by (`fill::column_of`).
 fn cells(b: u32) -> &'static [u32] {
     let at = (b * CELLS_LANE_BYTES / 4) as usize;
     &planes().cells[at..at + window::BACK_WORDS as usize]
 }
 
 const _: () = assert!(
-    window::COLUMNS_AT == 0 && window::BACK_WORDS == window::SQUARE_WORDS,
-    "a square comes back whole"
+    window::COLUMNS_AT == 0 && window::BACK_WORDS == window::BRICK_WORDS,
+    "a brick comes back whole"
 );
 
 /// The turn's windows: each centre where it now stands (`at`, in units, X
-/// then Y, by `Centre`; none where it is not), a square no window holds any
+/// then Y, by `Centre`; none where it is not), a brick no window holds any
 /// more given up (`berth`); the tiles a window now wants but holds no
-/// packet for are asked again, and the squares due found (`due`). The
-/// slots are stepped only where a window moved a square or its zoom, the
+/// packet for are asked again, and the bricks due found (`due`). The
+/// slots are stepped only where a window moved a brick or its zoom, the
 /// device went, the tile cache moved (`TileCache::revision`) or a fill
 /// handed: of those alone are they made. Before the turn's arrivals and its
 /// stage. True where the tiles the windows apart from the eye's want
@@ -307,7 +307,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = windows();
     let terrain = TerrainTile::tile_cache();
     let lost = core::mem::replace(&mut w.on, on) != on;
-    // The device that went took its pool: no square holds a tree of it.
+    // The device that went took its pool: no brick holds a tree of it.
     if lost {
         mirror().clear();
     }
@@ -338,9 +338,9 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             core::mem::replace(&mut w.windows[win as usize], Window { cell }).cell,
             first_of(w, win),
         );
-        w.slots[(SQUARES + win) as usize] = match first {
+        w.slots[(BRICKS + win) as usize] = match first {
             Some(f) => Slot {
-                square: f,
+                brick: f,
                 present: 1,
                 ticket: 0,
             },
@@ -354,7 +354,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         return false;
     }
     w.kept = kept;
-    // A window that did not move wants its squares where they are.
+    // A window that did not move wants its bricks where they are.
     for win in 0..WINDOWS {
         let (cell, first) = (w.windows[win as usize].cell, first_of(w, win));
         let Some(f) = first.filter(|_| changed[win as usize]) else {
@@ -363,8 +363,8 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         for s in 0..SLOTS {
             let slot = &mut w.slots[(win * SLOTS + s) as usize];
             let want = wanted(cell, f, s);
-            if moved[win as usize] || lost || slot.square != want {
-                slot.square = want;
+            if moved[win as usize] || lost || slot.brick != want {
+                slot.brick = want;
                 terrain.moved_at(tile_of(cell, want).0);
             }
         }
@@ -373,13 +373,13 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     // Tiles are asked again only as far as their packets could be kept,
     // in berth order, or they would come back only to be freed: while no
     // frame is drawn, so none gives a packet back, the rest are asked once
-    // room is given back instead. Only an absent square's tile is asked of
+    // room is given back instead. Only an absent brick's tile is asked of
     // again.
     let mut room = crate::domain::layer::terrain::tile::again_room();
-    for b in 0..SQUARES {
+    for b in 0..BRICKS {
         let held = w.berths[b as usize];
         if held.is_absent() {
-            let t = tile_of(held.cell, held.square).0;
+            let t = tile_of(held.cell, held.brick).0;
             if room > 0
                 && !crate::domain::layer::terrain::tile::kept_for(t)
                 && !terrain.is_again_held(t)
@@ -402,7 +402,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             continue;
         }
         for s in 0..SLOTS {
-            let t = tile_of(cell, w.slots[(win * SLOTS + s) as usize].square).0;
+            let t = tile_of(cell, w.slots[(win * SLOTS + s) as usize].brick).0;
             if !w.pinned.contains(&t) {
                 w.pinned.push(t);
             }
@@ -411,7 +411,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     was[..] != w.pinned[..]
 }
 
-/// Each square waiting on the heap absent again, to be handed again, where
+/// Each brick waiting on the heap absent again, to be handed again, where
 /// the heap gave a page back since it refused one the mirror's room
 /// (`WAITING`): true where it did.
 fn wake(w: &mut Windows) -> bool {
@@ -425,23 +425,23 @@ fn wake(w: &mut Windows) -> bool {
     true
 }
 
-/// Each square a laid window wants held in one berth: the device that went
+/// Each brick a laid window wants held in one berth: the device that went
 /// took every berth's cells; a berth no window wants any more is given up,
-/// a fill on its way to it laying nothing (`on_landed`); and a square wanted
+/// a fill on its way to it laying nothing (`on_landed`); and a brick wanted
 /// that no berth holds takes a free one of its slot's, its window's own
 /// first, absent. Then every slot's row shows its berth (`show`), and the
 /// windows are folded over them (`fold`).
 fn berth(w: &mut Windows, lost: bool) {
-    for b in 0..SQUARES as usize {
+    for b in 0..BRICKS as usize {
         let held = w.berths[b];
         if held.is_free() {
             continue;
         }
-        let s = window::slot(held.square);
+        let s = window::slot(held.brick);
         let wants = |win: u32| {
             w.windows[win as usize].cell == held.cell
                 && first_of(w, win).is_some()
-                && w.slots[(win * SLOTS + s) as usize].square == held.square
+                && w.slots[(win * SLOTS + s) as usize].brick == held.brick
         };
         if !(0..WINDOWS).any(wants) {
             w.berths[b] = Berth::FREE;
@@ -455,42 +455,42 @@ fn berth(w: &mut Windows, lost: bool) {
             continue;
         }
         for s in 0..SLOTS {
-            let (own, q) = (win * SLOTS + s, w.slots[(win * SLOTS + s) as usize].square);
+            let (own, q) = (win * SLOTS + s, w.slots[(win * SLOTS + s) as usize].brick);
             if berth_of(w, cell, q).is_some() {
                 continue;
             }
             let free = |b: &u32| w.berths[*b as usize].is_free();
             let b = Some(own).filter(free).or_else(|| of_slot(s).find(free));
-            // No more squares want a slot than it has berths.
+            // No more bricks want a slot than it has berths.
             let b = b.or_bug(Errno::ENOTRECOVERABLE);
             w.berths[b as usize] = Berth {
                 cell,
-                square: q,
+                brick: q,
                 present: false,
                 ticket: 0,
             };
         }
     }
-    for i in 0..SQUARES {
+    for i in 0..BRICKS {
         show(w, i);
     }
     fold(w);
 }
 
-/// The berth holding square `q` at `cell`, present or not.
+/// The berth holding brick `q` at `cell`, present or not.
 fn berth_of(w: &Windows, cell: Zoom, q: [i32; 2]) -> Option<u32> {
     of_slot(window::slot(q)).find(|&b| w.berths[b as usize].holds(cell, q))
 }
 
-/// Slot `i`'s row of the table: its square, and its berth's state, present
+/// Slot `i`'s row of the table: its brick, and its berth's state, present
 /// there (`Slot::present`, the berth plus one), on its way, refused or
 /// absent; absent while its window is not laid out.
 fn show(w: &mut Windows, i: u32) {
-    let (win, square) = (i / SLOTS, w.slots[i as usize].square);
-    let held = first_of(w, win).and_then(|_| berth_of(w, w.windows[win as usize].cell, square));
+    let (win, brick) = (i / SLOTS, w.slots[i as usize].brick);
+    let held = first_of(w, win).and_then(|_| berth_of(w, w.windows[win as usize].cell, brick));
     w.slots[i as usize] = match held {
         Some(b) => Slot {
-            square,
+            brick,
             present: if w.berths[b as usize].present {
                 b as i32 + 1
             } else {
@@ -498,19 +498,19 @@ fn show(w: &mut Windows, i: u32) {
             },
             ticket: w.berths[b as usize].ticket,
         },
-        None => Slot::absent(square),
+        None => Slot::absent(brick),
     };
 }
 
-/// A berth's ticket while its square's ways' tree is refused, the pool or
-/// the scratch at its cap (pxl-render gpu/ray/ground.rs `Short`), the square
+/// A berth's ticket while its brick's ways' tree is refused, the pool or
+/// the scratch at its cap (pxl-render gpu/ray/ground.rs `Short`), the brick
 /// past its own most or its families past the mirror's cap (`on_landed`), none
 /// of which asking again changes: never a fill's (`fill`), and not absent,
-/// so the square is not handed again every turn, nor its tile asked or kept
+/// so the brick is not handed again every turn, nor its tile asked or kept
 /// for it, while a window wants it (`berth`). A reader reads the coarser
-/// window's, as for any square absent.
+/// window's, as for any brick absent.
 const REFUSED: u32 = u32::MAX;
-/// A berth's ticket while the heap refused its square's families the
+/// A berth's ticket while the heap refused its brick's families the
 /// mirror's room (`mirror::Unlaid::Heap`): not absent, as `REFUSED`, until
 /// the heap gives a page back (`Windows::heap`), when it is absent again
 /// and handed again (`step`).
@@ -526,7 +526,7 @@ const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 /// wants it; its families refused the mirror's room by the heap, it is absent
 /// and `WAITING` on the heap. A fill no berth waits on lays
 /// nothing: its families may be another's by now. Every window's slot
-/// holding the square shows it (`show`). The windows are folded over it
+/// holding the brick shows it (`show`). The windows are folded over it
 /// once the read-back's landings are all in (`refold`).
 pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
     let w = windows();
@@ -538,7 +538,7 @@ pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
         Landing::Built(records) => match mirror().lay(records) {
             Ok(()) => {
                 held.present = true;
-                TerrainTile::tile_cache().moved_at(tile_of(held.cell, held.square).0);
+                TerrainTile::tile_cache().moved_at(tile_of(held.cell, held.brick).0);
                 0
             }
             Err(Unlaid::Heap) => {
@@ -557,7 +557,7 @@ pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
     }
 }
 
-/// The windows folded again over the squares a frame's read-back landed
+/// The windows folded again over the bricks a frame's read-back landed
 /// (`on_landed`), once after all of them: the stage's, as soon as the frame it
 /// renders returns (domain/scene/stage.rs `stage_render`), between whose
 /// landings nothing reads a bound here, the renderer reading only the GPU's.
@@ -566,11 +566,11 @@ pub fn refold() {
 }
 
 /// The berths this turn hands, nearest first, as many as a frame's fill
-/// takes: the eye's windows coarsest first, since a reader of a square
+/// takes: the eye's windows coarsest first, since a reader of a brick
 /// absent reads the coarser window's (pxl-spec-core `window::step`), then the
-/// focus's and a destination's; in a window by how far its square lies from
-/// the centre. A square another window listed first is not listed again.
-/// Only a square whose tile can hand it now: one waiting on its tile does
+/// focus's and a destination's; in a window by how far its brick lies from
+/// the centre. A brick another window listed first is not listed again.
+/// Only a brick whose tile can hand it now: one waiting on its tile does
 /// not hold a place another could take.
 fn due(w: &mut Windows) {
     let terrain = TerrainTile::tile_cache();
@@ -585,7 +585,7 @@ fn due(w: &mut Windows) {
         };
         let mut near = List::<(i64, u32), { SLOTS as usize }>::new();
         for i in win * SLOTS..(win + 1) * SLOTS {
-            let q = w.slots[i as usize].square;
+            let q = w.slots[i as usize].brick;
             let Some(b) = berth_of(w, cell, q) else {
                 continue;
             };
@@ -606,15 +606,15 @@ fn due(w: &mut Windows) {
     }
 }
 
-/// The tiles of the squares this turn hands (`due`) held with no frame,
-/// each once: void tiles, whose squares are filled off their looks alone
+/// The tiles of the bricks this turn hands (`due`) held with no frame,
+/// each once: void tiles, whose bricks are filled off their looks alone
 /// (`Handed::Void`).
 pub fn voids() -> List<Tile, { HANDED as usize }> {
     let (w, terrain) = (windows(), TerrainTile::tile_cache());
     let mut voids = List::new();
     for &b in w.due.iter() {
         let held = w.berths[b as usize];
-        let t = tile_of(held.cell, held.square).0;
+        let t = tile_of(held.cell, held.brick).0;
         if terrain.get(t).is_some() && terrain.slot(t).is_none() && !voids.contains(&t) {
             voids.push(t);
         }
@@ -622,12 +622,12 @@ pub fn voids() -> List<Tile, { HANDED as usize }> {
     voids
 }
 
-/// How far square `q` at `cell` lies from the centre of the window whose
-/// first square is `first`, squared, in cells, X the short way round: the
-/// centre as the window places it, the middle of the square's worth of
+/// How far brick `q` at `cell` lies from the centre of the window whose
+/// first brick is `first`, squared, in cells, X the short way round: the
+/// centre as the window places it, the middle of the brick's worth of
 /// cells its first holds it over (`window::origin`).
 fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
-    let mid = |v: i32| i64::from(v) * i64::from(SQUARE) + i64::from(SQUARE / 2);
+    let mid = |v: i32| i64::from(v) * i64::from(BRICK) + i64::from(BRICK / 2);
     let centre = |v: i32| mid(v) + i64::from(window::RADIUS);
     let round = 1i64 << cell;
     let dx = (mid(q[0]) - centre(first[0])).rem_euclid(round);
@@ -643,7 +643,7 @@ pub fn pinned() -> &'static [Tile] {
     &windows().pinned
 }
 
-/// The eye's window at `cell`'s slots as it holds them, each square
+/// The eye's window at `cell`'s slots as it holds them, each brick
 /// present or still wanted (`Slot`); none while its centre is not. A debug
 /// reader's (domain/scene/indicator/coverage_gizmo.rs): a copy, moving nothing.
 pub fn eye_slots(cell: Zoom) -> Option<[Slot; SLOTS as usize]> {
@@ -657,7 +657,7 @@ pub fn eye_slots(cell: Zoom) -> Option<[Slot; SLOTS as usize]> {
     }))
 }
 
-/// The windows' slots and their first squares, as the GPU's cast reads
+/// The windows' slots and their first bricks, as the GPU's cast reads
 /// them (pxl-shader `World::present`, `World::origin`): a row a slot
 /// (pxl-spec-core `window::Slot`), then a row a window (`window::ORIGIN_AT`).
 pub fn table() -> &'static [i32] {
@@ -667,7 +667,7 @@ pub fn table() -> &'static [i32] {
     unsafe { core::slice::from_raw_parts(rows.as_ptr().cast::<i32>(), 4 * rows.len()) }
 }
 
-/// What a tile hands its squares: its packet and the tile as it is held, its
+/// What a tile hands its bricks: its packet and the tile as it is held, its
 /// lines; or a void tile's own
 /// looks over samples all zero.
 pub enum Handed<'a> {
@@ -675,7 +675,7 @@ pub enum Handed<'a> {
     Void,
 }
 
-/// A square's four looks a cell, cut from its tile's, the tile's own
+/// A brick's four looks a cell, cut from its tile's, the tile's own
 /// expanded where it holds one a cell, and its lines and the room they are
 /// laid in: lanes of `.fixed.terrain` (fixed.rs `FILL_LANE_BYTES`).
 struct Fill {
@@ -690,31 +690,31 @@ static FILL: Global<Fill> = Global::new();
 /// A void tile's samples.
 static ZEROS: [i16; ELE_LANE] = [0; ELE_LANE];
 
-/// Whether berth `b` holds a square of `tile` a window wants, absent.
+/// Whether berth `b` holds a brick of `tile` a window wants, absent.
 fn berth_wants(w: &Windows, tile: Tile, b: u32) -> bool {
     let held = w.berths[b as usize];
     held.is_absent()
         && held.cell == GROUND.cell_zoom(tile.zoom)
-        && tile_of(held.cell, held.square).0 == tile
+        && tile_of(held.cell, held.brick).0 == tile
 }
 
-/// Whether a window wants one of `tile`'s squares, absent: its packet is
+/// Whether a window wants one of `tile`'s bricks, absent: its packet is
 /// kept for it while one does.
 pub fn is_tile_wanted(tile: Tile) -> bool {
     let w = windows();
-    (0..SQUARES).any(|b| berth_wants(w, tile, b))
+    (0..BRICKS).any(|b| berth_wants(w, tile, b))
 }
 
-/// Each square the turn hands (`due`) in `tile`, filled from `from` while
+/// Each brick the turn hands (`due`) in `tile`, filled from `from` while
 /// `write` takes them: its own looks here, its four looks and the tile's
-/// samples to the GPU. Taken where no window wants another of its squares;
+/// samples to the GPU. Taken where no window wants another of its bricks;
 /// kept where one still does, for a later turn; full where the stream ran
 /// out first.
-pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> bool) -> Offered {
+pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> bool) -> Offered {
     let cell = GROUND.cell_zoom(tile.zoom);
     let w = windows();
     let wants = |w: &Windows, b: u32| berth_wants(w, tile, b);
-    let rest = |w: &Windows| match (0..SQUARES).any(|i| wants(w, i)) {
+    let rest = |w: &Windows| match (0..BRICKS).any(|i| wants(w, i)) {
         true => Offered::Kept,
         false => Offered::Taken,
     };
@@ -727,9 +727,9 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
         unsafe {
             Fill {
                 room: lane(r, fill_off(0), LOOK_LANE),
-                cut: lane(r, fill_off(1), 4 * SQUARE_CELLS as usize),
+                cut: lane(r, fill_off(1), 4 * BRICK_CELLS as usize),
                 lines: lane(r, fill_off(2), window::LINES_WORDS as usize),
-                scratch: lane(r, fill_off(3), window::WAYS_SQUARE_SEGMENTS as usize),
+                scratch: lane(r, fill_off(3), window::WAYS_BRICK_SEGMENTS as usize),
             }
         }
     });
@@ -759,18 +759,18 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
         if !wants(w, b) {
             continue;
         }
-        let key = w.berths[b as usize].square;
+        let key = w.berths[b as usize].brick;
         let place = tile_of(cell, key).1;
-        // The square's cells out of the tile's, four looks a cell, each at
-        // its index in the square (`window::index_of`).
+        // The brick's cells out of the tile's, four looks a cell, each at
+        // its index in the brick (`window::index_of`).
         let side = GROUND.tile_cells() as usize;
-        let (x0, y0) = ((place[0] * SQUARE) as usize, (place[1] * SQUARE) as usize);
-        for i in 0..SQUARE_CELLS {
+        let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
+        for i in 0..BRICK_CELLS {
             let [x, y] = window::of_index(i);
             let from = 4 * ((y0 + y as usize) * side + x0 + x as usize);
             cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&lane[from..from + 4]);
         }
-        let written = square_lines(tile, &held.separation, place, scratch, lines);
+        let written = brick_lines(tile, &held.separation, place, scratch, lines);
         // Under `DONE`, which a read's word holds once it lands, so no
         // ticket reads as landed before it is: 1 to `DONE` − 1, never
         // `REFUSED`, which is past them.
@@ -779,13 +779,13 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
             cells: off_of_slice(cells(b)) as u32,
             ticket: w.ticket,
         };
-        let shard = Shard::UNKNOWN.at(&Declared, (window::squares_zoom(cell), key));
-        let taken = write(FreshSquare {
+        let shard = Shard::UNKNOWN.at(&Declared, (window::bricks_zoom(cell), key));
+        let taken = write(FreshBrick {
             fresh: window::fresh(
                 b,
                 window::place_word(place),
                 cell,
-                [key[0] << SQUARE_SHIFT, key[1] << SQUARE_SHIFT],
+                [key[0] << BRICK_SHIFT, key[1] << BRICK_SHIFT],
                 shard,
             ),
             looks: cut,
@@ -806,7 +806,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
 }
 
 /// The windows as the CPU holds them, for pxl-spec-core's one reading of a
-/// cell (`window::step`, `window::bound_over`): each square's columns,
+/// cell (`window::step`, `window::bound_over`): each brick's columns,
 /// levels and ways' tree's root as the GPU drew them, read back (its tree's
 /// families in the pool's mirror, `pool`), the eye's windows' levels over
 /// them folded here (`fold`); and the service area they end at
@@ -827,7 +827,7 @@ impl Area for Windowed {
 /// kernel's (`fold`, which runs while its writer holds them).
 struct Holding<'a>(&'a Windows);
 
-impl Squares for Holding<'_> {
+impl Bricks for Holding<'_> {
     /// Present as the GPU holds it: its cells back, in the berth holding
     /// it, whichever windows want it.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
@@ -836,7 +836,7 @@ impl Squares for Holding<'_> {
         (held.unwrap_or(0), held.is_some())
     }
 
-    fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
+    fn brick(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
         self.0.slots[((cell - FIRST_CELL) * SLOTS + slot) as usize].held()
     }
 
@@ -846,7 +846,7 @@ impl Squares for Holding<'_> {
         word([self.laid(cell, b, i) & 0xff; 4])
     }
 
-    /// As this side folded it over its squares (`fold`).
+    /// As this side folded it over its bricks (`fold`).
     fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
         self.0.joined[((cell - FIRST_CELL) * window::JOINED_ENTRIES + e) as usize]
     }
@@ -874,12 +874,12 @@ impl Squares for Holding<'_> {
 }
 
 /// The kernel's windows as they are held (`Holding`).
-impl Squares for Windowed {
+impl Bricks for Windowed {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         Holding(windows()).present(cell, q)
     }
-    fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
-        Holding(windows()).square(cell, slot)
+    fn brick(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
+        Holding(windows()).brick(cell, slot)
     }
     fn look(&self, cell: Zoom, b: u32, i: u32) -> u32 {
         Holding(windows()).look(cell, b, i)
@@ -904,7 +904,7 @@ impl Squares for Windowed {
     }
 }
 
-const _: () = assert!(LEVELS <= SQUARE_SHIFT);
+const _: () = assert!(LEVELS <= BRICK_SHIFT);
 
 #[cfg(test)]
 #[path = "window.test.rs"]

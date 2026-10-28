@@ -160,8 +160,8 @@ const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
 /// (sys/io/body.rs), and a body on every credit in the buddy's block for the
 /// longest other kind, each freed as it is decoded; the ways' pool's
 /// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_FAMILIES`),
-/// the renderer's rooms for the squares' records, every read's at a
-/// square's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
+/// the renderer's rooms for the bricks' records, every read's at a
+/// brick's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (profiler/record.rs), each
 /// in the buddy's blocks, a power of two. Each is refused past its cap, and
 /// waits or stays absent where the heap refuses it. The rest of the heap

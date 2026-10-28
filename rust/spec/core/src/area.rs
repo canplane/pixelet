@@ -251,7 +251,7 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
 /// each is past or not off the shard's bits (`Shard::past_leaf`), and a
 /// cell's own look answers its own. They lie a leaf cell past `l`, inside
 /// its shard's nine wherever `node`'s shard is `l`'s, as a leaf window's
-/// square is, a node far narrower than a shard.
+/// brick is, a node far narrower than a shard.
 pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
     if shard.inside() {
         return 0;
@@ -280,7 +280,7 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
 /// cell is bedrock already, its look `UNKNOWN` (gone is past), and its top
 /// the Earth's at sea level as its fill lays it (pxl-spec-core
 /// `fill::heights`): the wall at sea level, so a cell of it is the Earth's
-/// (`earth`). A column read off a square coarser than a leaf's cells, a
+/// (`earth`). A column read off a brick coarser than a leaf's cells, a
 /// stand-in, has none gone about it, so no wall: the stand-in is the world
 /// at its zoom, and the wall is a fact of the leaves it does not hold.
 pub fn laid(laid: u32, cell: Zoom, b: [i32; 2]) -> u32 {

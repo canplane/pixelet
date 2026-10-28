@@ -4,13 +4,13 @@
 //! on a pill at its own cell, or where more than one stands in a pin's cell
 //! (`marker_cell`), their count at the cell's middle on a pin's pill in its
 //! colors turned over, the pins' own rule (`asset/marker.json`); the one
-//! waiting for its words wherever it is. A pin is read with the square it
+//! waiting for its words wherever it is. A pin is read with the brick it
 //! stands in and shown at the camera grid's cell where it stands, its own
 //! point's, so it shows and is counted as the zoom drawn there says.
 
 use core::hash::Hasher;
 
-use super::arrangement::{surface, Instance, Key, Square, Went};
+use super::arrangement::{surface, Brick, Instance, Key, Went};
 use crate::domain::layer::object::preview::draft;
 use crate::domain::query::{cell_at, World};
 use crate::domain::scene::marker::design::Design;
@@ -36,13 +36,13 @@ pub(super) enum Held {
     Cell(Cell),
 }
 
-/// A pin read from a drawn square: its pill, where it stands and its base;
+/// A pin read from a drawn brick: its pill, where it stands and its base;
 /// and as the last run showed it, the camera grid's cell zoom at its base
 /// and its pin's cell, none where it did not show, and where its cell's
 /// count stood, of the cell it was then.
 #[derive(Clone)]
 pub(super) struct Pin {
-    pub(super) square: Square,
+    pub(super) brick: Brick,
     at: EntryAt,
     design: Design,
     stands: Q3,
@@ -90,9 +90,9 @@ fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
     }
 }
 
-/// The pins put up over `square`, whose columns are `columns`, by the square
-/// their base is in, so no pin is another square's too.
-pub(super) fn read(square: Square, columns: &Aabb, pins: &mut Vec<Pin>) {
+/// The pins put up over `brick`, whose columns are `columns`, by the brick
+/// their base is in, so no pin is another brick's too.
+pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
     let world = World::now();
     world.placed_in(columns, &mut |e| {
         if !is_marker(e.state) {
@@ -101,7 +101,7 @@ pub(super) fn read(square: Square, columns: &Aabb, pins: &mut Vec<Pin>) {
         let (stands, base) = pin_at(e.id());
         if (0..3).all(|k| (columns.min[k]..columns.max[k]).contains(&base[k])) {
             pins.push(Pin {
-                square,
+                brick,
                 at: e.id(),
                 design: pill(world.words(e).unwrap_or_default()),
                 stands,
@@ -118,7 +118,7 @@ pub(super) fn read(square: Square, columns: &Aabb, pins: &mut Vec<Pin>) {
 /// for its words, wherever it is, then each pin where its own point's cell
 /// shows a marker (`marker_shows`), a pin's cell's pins but that one
 /// together: one is itself, more their count, which a tap takes to where it
-/// stands. A cell lies in its square, finer than it, so a square's pins are
+/// stands. A cell lies in its brick, finer than it, so a brick's pins are
 /// counted among themselves.
 pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
     let drafted = draft().map(|d| d.at);
@@ -127,8 +127,8 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
         p.grid = cell_at(eye, p.base);
         p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
     }
-    pins.sort_unstable_by_key(|p| (p.square, p.cell));
-    for run in pins.chunk_by_mut(|a, b| a.square == b.square && a.cell == b.cell) {
+    pins.sort_unstable_by_key(|p| (p.brick, p.cell));
+    for run in pins.chunk_by_mut(|a, b| a.brick == b.brick && a.cell == b.cell) {
         let Some(cell) = run[0].cell else { continue };
         let mut left = run.iter().filter(|p| Some(p.at) != drafted);
         let Some(first) = left.next() else { continue };

@@ -17,7 +17,7 @@ convenience:
 
 - `frame_gizmo.rs`, behind the `world_gizmo` setting: the focus's cell and the
   frames' rings, as debug lines;
-- `coverage_gizmo.rs`, behind the same setting: the eye's windows' squares by
+- `coverage_gizmo.rs`, behind the same setting: the eye's windows' bricks by
   how they stand, their tiles and shards, as translucent lines over the ground;
 - `camera_gizmo.rs`, behind the `camera_gizmo` setting: the camera grid's cells,
   drawn per pixel by the renderer (pxl-render `frame/shader/camera_grid.wgsl`),

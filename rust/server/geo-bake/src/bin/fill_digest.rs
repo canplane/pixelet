@@ -1,6 +1,6 @@
 // pxl-geo-bake/bin/fill_digest.rs
 
-//! Every square of a terrain set filled and its ways' tree built as a client
+//! Every brick of a terrain set filled and its ways' tree built as a client
 //! fills and builds them, in the bake's own pass (pxl-spec
 //! `terrain::fill_fit`), each one line of what a reader reads of it: its
 //! levels' words, the families its tree took and holds, and its tree under
@@ -17,7 +17,7 @@
 //!   cargo run --profile server -p pxl-geo-bake --bin fill_digest -- [set]
 //!       the lines of `set` (default out/terrain), made or found: their path
 //!   cargo run --profile server -p pxl-geo-bake --bin fill_digest -- --diff <a> <b>
-//!       the squares two such files differ in, and what each holds
+//!       the bricks two such files differ in, and what each holds
 
 use std::collections::BTreeMap;
 use std::hash::Hasher;
@@ -147,7 +147,7 @@ fn walk(l: &impl Lanes, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h:
     }
 }
 
-/// A square's line: its levels' words, the families its build took and
+/// A brick's line: its levels' words, the families its build took and
 /// holds, and its tree under each of its own nodes along z its ways meet
 /// and two past either end.
 fn line(name: &str, k: u32, b: &Built<'_>) -> String {
@@ -157,7 +157,7 @@ fn line(name: &str, k: u32, b: &Built<'_>) -> String {
         levels.write_u32(*w);
     }
     let (z0, nodes) = fill::root_span(b.lane, 0, b.cell);
-    let top = b.cell - window::SQUARE_SHIFT;
+    let top = b.cell - window::BRICK_SHIFT;
     let (l, mut sub) = (Read(b.pool), FnvHasher::default());
     if nodes > 0 {
         for z in z0 - 2..z0 + nodes as i32 + 2 {
@@ -174,7 +174,7 @@ fn line(name: &str, k: u32, b: &Built<'_>) -> String {
     )
 }
 
-/// The lines of every square of the set's tiles with ways, sorted.
+/// The lines of every brick of the set's tiles with ways, sorted.
 fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
     let tiles: Vec<_> = set.by_zoom()?.into_values().flatten().collect();
     let parts: Vec<Result<Vec<String>, String>> = std::thread::scope(|s| {
@@ -190,7 +190,7 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
                         let tile = TerrainTile::decode(&raw)?;
                         let name = p.name();
                         terrain::fill_fit(p, &tile, |k, b| out.push(line(&name, k, b)))
-                            .map_err(|(at, why)| format!("{name}: square {at:?} {why:?}"))?;
+                            .map_err(|(at, why)| format!("{name}: brick {at:?} {why:?}"))?;
                     }
                     Ok(out)
                 })
@@ -225,7 +225,7 @@ fn made(set: &Path, workers: usize) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// A file's lines by square, each its fields.
+/// A file's lines by brick, each its fields.
 fn read(path: &str) -> Result<BTreeMap<String, Vec<String>>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
     Ok(text
@@ -238,7 +238,7 @@ fn read(path: &str) -> Result<BTreeMap<String, Vec<String>>, String> {
         .collect())
 }
 
-/// The squares `a` and `b` both hold that differ, a field at a time, and
+/// The bricks `a` and `b` both hold that differ, a field at a time, and
 /// how many each holds alone and in all.
 fn diff(a: &str, b: &str) -> Result<bool, String> {
     let (a, b) = (read(a)?, read(b)?);
@@ -254,7 +254,7 @@ fn diff(a: &str, b: &str) -> Result<bool, String> {
         }
     }
     println!(
-        "{both} squares in both, {differ} differ; {} in the first alone, {} in the second",
+        "{both} bricks in both, {differ} differ; {} in the first alone, {} in the second",
         a.len() - both,
         b.len() - both
     );

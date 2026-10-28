@@ -15,7 +15,7 @@ fn unprojected(view_proj: &mat4::Mat4, x: f64, y: f64) -> V3 {
 }
 
 #[test]
-fn a_pixels_ray_off_the_lens_is_the_unprojected_one() {
+fn lens_ray_unprojects() {
     let (mut view, mut proj, mut vp) = (mat4::new(), mat4::new(), mat4::new());
     // An eye at the origin looking down past the horizon, as the sky's eye-relative view is.
     look_at(&mut view, [0.0; 3], [3.0, 40.0, -7.0], [0.0, 0.0, 1.0]);

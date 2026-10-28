@@ -123,15 +123,15 @@ fn run() -> Result<(), String> {
         height: rows,
         m: m.clone(),
     };
-    let (mut worst, mut squares): (f64, f64) = (0.0, 0.0);
+    let (mut worst, mut bricks): (f64, f64) = (0.0, 0.0);
     for r in 0..fine.height {
         for c in 0..fine.width {
             let (lat, lng) = (90.0 - r as f64 / per as f64, c as f64 / per as f64);
             let miss = (coarse.bilinear(lat, lng) - fine.at(r, c)).abs();
-            (worst, squares) = (worst.max(miss), squares + miss * miss);
+            (worst, bricks) = (worst.max(miss), bricks + miss * miss);
         }
     }
-    let rms = (squares / (fine.width * fine.height) as f64).sqrt();
+    let rms = (bricks / (fine.width * fine.height) as f64).sqrt();
     let values: Vec<String> = m.iter().map(|v| format!("{v}")).collect();
     let json = format!(
         "{{\n  \"$doc\": [\n    \"EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,\",\n    \"the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's\",\n    \"5' grid (egm2008-5) by pxl-tool/bin/bake_geoid.rs; bilinear between these misses it by at\",\n    \"most {worst:.1} m, {rms:.1} m RMS.\"\n  ],\n  \"GEOID_STEP_DEG\": {{\n    \"$value\": {STEP_DEG},\n    \"$doc\": [\"The grid's spacing; rows from 90N down, {cols} columns from 0E east.\"]\n  }},\n  \"GEOID_M\": {{\n    \"$type\": \"f32\",\n    \"$value\": [\n      {}\n    ]\n  }}\n}}\n",

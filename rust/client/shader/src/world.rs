@@ -8,7 +8,7 @@ use pxl_spec_core::area::Area;
 use pxl_spec_core::cast::{self, Ends, Met, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
-use pxl_spec_core::window::{self, Found, Squares, FIRST_CELL, SLOTS, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_spec_core::window::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, FIRST_CELL, SLOTS};
 use pxl_spec_core::world::{self, At};
 use pxl_spec_core::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
@@ -23,31 +23,31 @@ fn cut(e: IVec4) -> Cut {
     }
 }
 
-/// Square `square`'s first word in the ground's buffer (pxl-spec-core
-/// `window::SQUARE_WORDS`).
-pub(crate) fn square_at(square: u32) -> u32 {
-    square * SQUARE_WORDS
+/// Brick `brick`'s first word in the ground's buffer (pxl-spec-core
+/// `window::BRICK_WORDS`).
+pub(crate) fn brick_at(brick: u32) -> u32 {
+    brick * BRICK_WORDS
 }
 
 /// The world as the GPU holds it (pxl-kernel domain/scene/cast.rs fills it): the
-/// squares the eye's windows hold, their columns, levels and runs, the
+/// bricks the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`).
-/// The squares' cells' four looks are `L`'s: their own buffer for the
+/// The bricks' cells' four looks are `L`'s: their own buffer for the
 /// cast's walks, every observer's alike, none where a pass reads no cell's
 /// look (`Unlooked`).
 #[derive(Clone, Copy)]
 pub struct World<'a, L> {
     /// The windows' table (pxl-spec-core `window::Slot`): every window's
-    /// slots, a row each, the square it wants, the berth holding it plus one
+    /// slots, a row each, the brick it wants, the berth holding it plus one
     /// while present (`Slot::berth`) and the fill it is on its way from,
     /// the eye's windows first, from the top's; then each window's first
-    /// square (`window::ORIGIN_AT`) and the eye's windows' folds
+    /// brick (`window::ORIGIN_AT`) and the eye's windows' folds
     /// (`window::JOINED_AT`).
     pub(crate) window: &'a [IVec4],
-    /// Per berth (`window::SQUARES`), its square's columns (`height_cs`,
+    /// Per berth (`window::BRICKS`), its brick's columns (`height_cs`,
     /// `way_cs`), their levels (`bound_cs`), their runs (`way_cs`) and its
-    /// cells as laid (`height_cs`) (`window::SQUARE_WORDS`), whichever
+    /// cells as laid (`height_cs`) (`window::BRICK_WORDS`), whichever
     /// window filled it.
     pub(crate) ground: &'a [u32],
     /// Per berth, in the same order, its cells' four looks (`Looks`).
@@ -61,13 +61,13 @@ pub struct World<'a, L> {
     /// The eye, whose preview cuts are read where something placed or cut
     /// is asked about, not held through the descent.
     pub(crate) eye: &'a Eye,
-    /// The ways' pool (pxl-spec-core `way::tree`), every square's tree,
+    /// The ways' pool (pxl-spec-core `way::tree`), every brick's tree,
     /// which every pass that asks the world's query reads.
     pub(crate) pool: way::tree::Read<'a>,
 }
 
-/// Where the squares' cells' four looks are read: a word a cell
-/// (`ground::looks`), `window::SQUARE_CELLS` a square in the squares' order,
+/// Where the bricks' cells' four looks are read: a word a cell
+/// (`ground::looks`), `window::BRICK_CELLS` a brick in the bricks' order,
 /// as the fill wrote them off the handed record (`height_cs`).
 pub trait Looks: Copy {
     fn look(&self, i: u32) -> u32;
@@ -125,16 +125,16 @@ impl<L> World<'_, L> {
     }
 }
 
-/// The eye's windows, as the GPU holds them: a square in the berth its
+/// The eye's windows, as the GPU holds them: a brick in the berth its
 /// slot's row names, whichever window filled it.
-impl<L: Looks> Squares for World<'_, L> {
-    /// The berth square `q` is held in, while the eye's window holds it
+impl<L: Looks> Bricks for World<'_, L> {
+    /// The berth brick `q` is held in, while the eye's window holds it
     /// present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
         let row = self.row((cell - FIRST_CELL) * SLOTS + window::slot(q));
         (row.berth(), row.holds(q))
     }
-    fn square(&self, cell: u32, slot: u32) -> ([i32; 2], bool) {
+    fn brick(&self, cell: u32, slot: u32) -> ([i32; 2], bool) {
         self.row((cell - FIRST_CELL) * SLOTS + slot).held()
     }
     /// Off the windows' rows past their table (`joined_cs`).
@@ -150,19 +150,19 @@ impl<L: Looks> Squares for World<'_, L> {
         self.row(window::ORIGIN_AT + (cell - FIRST_CELL)).held()
     }
     fn look(&self, _: u32, berth: u32, i: u32) -> u32 {
-        self.looks.look(berth * SQUARE_CELLS + i)
+        self.looks.look(berth * BRICK_CELLS + i)
     }
     fn column(&self, _: u32, berth: u32, i: u32) -> u32 {
-        column_of(self.ground, square_at(berth), i)
+        column_of(self.ground, brick_at(berth), i)
     }
     fn level(&self, _: u32, berth: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        level_of(self.ground, square_at(berth), j, at)
+        level_of(self.ground, brick_at(berth), j, at)
     }
     fn laid(&self, _: u32, berth: u32, i: u32) -> u32 {
-        fill::laid_of(self.ground, square_at(berth), i)
+        fill::laid_of(self.ground, brick_at(berth), i)
     }
     fn root(&self, _: u32, berth: u32) -> u32 {
-        fill::root_of(self.ground, square_at(berth))
+        fill::root_of(self.ground, brick_at(berth))
     }
 }
 

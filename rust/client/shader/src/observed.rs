@@ -282,7 +282,7 @@ impl<L: Looks> Query for Writing<'_, L> {
 
 /// What the observed pyramid kept forgotten, a thread a slot, where what
 /// the world's query reads changed (pxl-spec-core `observed::FORGETS`):
-/// every slot's key, or the key of each slot over a square that moved
+/// every slot's key, or the key of each slot over a brick that moved
 /// (`observed::forgets`), over a box of what is placed or cut that changed
 /// (`observed::over_box`), or handed a slot of a family of what is placed
 /// that was written (`observed::reads_written`).

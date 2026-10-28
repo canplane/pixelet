@@ -9,7 +9,7 @@
 
 use std::rc::Rc;
 
-use super::arrangement::{cell_zoom, surface, Instance, Key, Square, Went};
+use super::arrangement::{cell_zoom, surface, Brick, Instance, Key, Went};
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::{cell_at, World};
 use crate::domain::scene::marker::design::Design;
@@ -24,12 +24,12 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Cell};
 use pxl_spec_core::wrap_index;
 
-/// A place read from a drawn square: what Carto shows of it, the ground leaf
-/// cell it stands in, the finest camera grid cell its square draws, which
+/// A place read from a drawn brick: what Carto shows of it, the ground leaf
+/// cell it stands in, the finest camera grid cell its brick draws, which
 /// its tile was read at, and the surface it stood on as last asked, of the
 /// detail it was asked at.
 pub(super) struct Place {
-    pub(super) square: Square,
+    pub(super) brick: Brick,
     key: Key,
     category: u16,
     from: Zoom,
@@ -39,18 +39,18 @@ pub(super) struct Place {
     top: Option<(Zoom, Option<f64>)>,
 }
 
-/// The places standing in `square`, read where its cells are tiles' cells
+/// The places standing in `brick`, read where its cells are tiles' cells
 /// at its finest, each read from the tile that says it exactly: those Carto
 /// shows at the zoom those cells are drawn at, and so at none coarser
 /// either (`point_of`).
-pub(super) fn read(square: Square, found: &mut Vec<Place>) {
-    let finest = cell_zoom(square);
+pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
+    let finest = cell_zoom(brick);
     let zoom = carto_zoom(finest);
     if zoom < PLACE_FIRST as i32 {
         return;
     }
     let t = PLACE_LATTICE.read_zoom(finest);
-    let (z, column) = square;
+    let (z, column) = brick;
     // The tile over the column, or its tiles under it: `n` a side from the first.
     let ([x0, y0], n) = if t <= z {
         (ancestor_of(column, z - t), 1)
@@ -60,7 +60,7 @@ pub(super) fn read(square: Square, found: &mut Vec<Place>) {
     let tiles = (y0..y0 + n)
         .filter(|y| tile_rows(t).contains(y))
         .flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
-    // The square as the world names it, once round the world.
+    // The brick as the world names it, once round the world.
     let named = [wrap_index(z, column[0]), column[1]];
     World::now().places_in(tiles, &mut |src, place, h| {
         if point_of(h.place.category, h.from, None, zoom).is_none() {
@@ -72,7 +72,7 @@ pub(super) fn read(square: Square, found: &mut Vec<Place>) {
             return;
         }
         found.push(Place {
-            square,
+            brick,
             key: Key::Place(src, place),
             category: h.place.category,
             from: h.from,
@@ -90,7 +90,7 @@ pub(super) fn read(square: Square, found: &mut Vec<Place>) {
 pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
     for p in read {
         // Its cell is the grid's at what it stands on: as last asked, or
-        // first at its square's finest.
+        // first at its brick's finest.
         let first = match p.top {
             Some((_, top)) => top,
             None => top_at(p, GROUND.read_zoom(p.finest)),

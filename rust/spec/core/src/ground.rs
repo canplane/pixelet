@@ -411,7 +411,7 @@ pub trait Held: Area {
     /// The lowest and highest the ground's cells at `cell` reach over the
     /// node `(zoom, c)`, and the ways' over them, apart (`Bounds`), off the
     /// finest held tile they are read from (`window::bound_over`); bounds no
-    /// tighter than the heights' whole range (`UNBOUNDED`) where no square
+    /// tighter than the heights' whole range (`UNBOUNDED`) where no brick
     /// it reads is held, which only splits more; false where no tile over
     /// it is held.
     /// `place` is where the cells at `cells`' finest of a node over it were

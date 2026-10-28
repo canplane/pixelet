@@ -39,13 +39,13 @@
 use crate::answer::Kind;
 use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
-use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
+use crate::window::{eye_cell, slot, ACROSS, BRICK_SHIFT, EYE_WINDOWS, SLOTS};
 use crate::world::AT_WORDS;
 use crate::{wrap_index, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit a slot of the
-/// eye's windows, a window's `SLOTS` bits in turn, set where the square it
+/// eye's windows, a window's `SLOTS` bits in turn, set where the brick it
 /// holds moved or was handed since the last cast; and the boxes of leaf
 /// cells whose columns what is placed or a preview's cuts changed since the
 /// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
@@ -78,7 +78,7 @@ pub const fn tally_at(observer: u32, lane: u32) -> u32 {
 
 /// What a frame forgets: nothing; everything, where what every node is
 /// asked of moved (the service area) or the keys' frames ran out; the nodes
-/// over the squares that moved (`forgets`), over a box of what is placed or
+/// over the bricks that moved (`forgets`), over a box of what is placed or
 /// cut that changed (`over_box`), or handed a slot of a family of what is
 /// placed that was written (`reads_written`).
 pub const FORGETS_NONE: u32 = 0;
@@ -237,13 +237,13 @@ pub const fn kind_of(w: u32) -> Kind {
     }
 }
 
-/// Whether the node of `zoom` at column `[x, y]` reads a square that moved,
+/// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
 /// `moved` the moved slots' words (`MOVED_AT`), as a walk holds them, never
 /// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
-/// the squares under it alone — its cells' and their windows' over them
-/// (`window::step`), a wider node's the block of squares its own size
+/// the bricks under it alone — its cells' and their windows' over them
+/// (`window::step`), a wider node's the block of bricks its own size
 /// (`window::bounded`) — and what was handed it found its cells there, so a
-/// node no moved square lies under answers as it did. A node a window's
+/// node no moved brick lies under answers as it did. A node a window's
 /// whole side wide or wider reads every slot of the window.
 /// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
 /// leaf cells `[x0, y0, x1, y1)`, X round the world: its own columns as a
@@ -281,7 +281,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
     while w < EYE_WINDOWS {
         let c = eye_cell(w);
         // The node's cells at the window's zoom, first and last, then its
-        // squares.
+        // bricks.
         let (lo, hi) = if zoom <= c {
             let s = c - zoom;
             ([x << s, y << s], [((x + 1) << s) - 1, ((y + 1) << s) - 1])
@@ -290,10 +290,10 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             ([x >> s, y >> s], [x >> s, y >> s])
         };
         let (q0, q1) = (
-            [lo[0] >> SQUARE_SHIFT, lo[1] >> SQUARE_SHIFT],
-            [hi[0] >> SQUARE_SHIFT, hi[1] >> SQUARE_SHIFT],
+            [lo[0] >> BRICK_SHIFT, lo[1] >> BRICK_SHIFT],
+            [hi[0] >> BRICK_SHIFT, hi[1] >> BRICK_SHIFT],
         );
-        // As wide as the window or wider, every slot; else each square.
+        // As wide as the window or wider, every slot; else each brick.
         let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
         if wide {
             let mut k = 0;

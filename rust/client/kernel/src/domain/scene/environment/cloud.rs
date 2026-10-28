@@ -3,7 +3,7 @@
 //! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`),
 //! drawn as decor is and held as decor is not. It claims no cell, so
 //! nothing is built around it and a tower stands through it; it is no layer
-//! and no window's square holds it. It is laid on the field's own map,
+//! and no window's brick holds it. It is laid on the field's own map,
 //! which the wind carries (`pxl-spec-core cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, a
 //! sprite or nothing by its size on the screen (`present_patch`), by the

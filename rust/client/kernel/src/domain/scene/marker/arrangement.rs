@@ -1,12 +1,12 @@
 // pxl-kernel/domain/scene/marker/arrangement.rs
 
 //! The markers' arrangement: where each is drawn, read by its own source
-//! over the eye's windows' squares, as decor is grown over them
-//! (domain/view/observation.rs `squares`), and shown at the zoom the camera
+//! over the eye's windows' bricks, as decor is grown over them
+//! (domain/view/observation.rs `bricks`), and shown at the zoom the camera
 //! grid's cell at its own point is: a place as Carto draws it at that zoom
 //! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,
 //! hung over its speaker's head where its speaker shows it (`line.rs`). A
-//! square is only what a source is read over. Each source hands the
+//! brick is only what a source is read over. Each source hands the
 //! arrangement an `Instance`, and the arrangement asks each the same: its
 //! design, its size, its slot and whether it is ready (`design.rs`), and
 //! where a tap on it goes.
@@ -36,20 +36,20 @@ use pxl_spec::space::coord::world::REACH;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::window::SQUARE_SHIFT;
+use pxl_spec_core::window::BRICK_SHIFT;
 
-/// A square of the eye's windows the markers are read over, by its zoom
+/// A brick of the eye's windows the markers are read over, by its zoom
 /// and place, X running on round the world as the view's frame does
-/// (domain/view/observation.rs `squares`).
-pub(super) type Square = Node<2>;
+/// (domain/view/observation.rs `bricks`).
+pub(super) type Brick = Node<2>;
 
 /// Its cells' zoom: the camera grid's at its nearest point, its finest.
-pub(super) fn cell_zoom((zoom, _): Square) -> Zoom {
-    zoom + SQUARE_SHIFT
+pub(super) fn cell_zoom((zoom, _): Brick) -> Zoom {
+    zoom + BRICK_SHIFT
 }
 
-/// The box over `square` between `heights`.
-pub(super) fn region((zoom, [x, y]): Square, [low, high]: [f64; 2]) -> Aabb {
+/// The box over `brick` between `heights`.
+pub(super) fn region((zoom, [x, y]): Brick, [low, high]: [f64; 2]) -> Aabb {
     let span = units(zoom);
     let (x0, y0) = (f64::from(x) * span, f64::from(y) * span);
     Aabb {
@@ -66,26 +66,26 @@ struct Arrangement {
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], Went)>,
-    /// Kept so a settled turn asks the heap for nothing; a square's in a
+    /// Kept so a settled turn asks the heap for nothing; a brick's in a
     /// run, as each source reads it (`pin.rs`, `place.rs`).
     pins: Vec<pin::Pin>,
     places: Vec<place::Place>,
     /// What the sources show this run, its room kept.
     shown: Vec<Instance>,
-    /// The drawn squares `pins` and `places` were read from: a square drawn
+    /// The drawn bricks `pins` and `places` were read from: a brick drawn
     /// still keeps what was read from it, so an eye move casts rays only in
-    /// the squares it enters.
+    /// the bricks it enters.
     found_for: Option<Found>,
     /// The same, read this turn.
     now: Found,
     /// Places, ground or objects moved since they were read.
     moved: bool,
     /// The place tiles whose answer moved, beside the ground's
-    /// (domain/query/changed.rs): a square they touch is read again.
+    /// (domain/query/changed.rs): a brick they touch is read again.
     moved_places: Vec<Tile>,
-    /// The squares this turn would read, by how far from the eye, with
+    /// The bricks this turn would read, by how far from the eye, with
     /// their columns.
-    entering: Vec<(f64, Square, Aabb)>,
+    entering: Vec<(f64, Brick, Aabb)>,
     sized: Vec<Instance>,
     /// Last turn's `sized`, its buffer reused.
     spare: Vec<Instance>,
@@ -104,7 +104,7 @@ struct Arrangement {
     /// and nothing left waiting, the designs it laid out stand.
     last: Option<Seen>,
     /// The last run left a design not laid out or not painted, which a later
-    /// turn has, or a square not read yet: the next runs again.
+    /// turn has, or a brick not read yet: the next runs again.
     waiting: bool,
 }
 
@@ -145,18 +145,18 @@ pub(super) struct Instance {
 
 static ARRANGEMENT: Global<Arrangement> = Global::new();
 
-/// What `pins` and `places` were read from: the drawn squares, and whether
-/// places were on. What a square holds is read over its whole columns, so
+/// What `pins` and `places` were read from: the drawn bricks, and whether
+/// places were on. What a brick holds is read over its whole columns, so
 /// it stands while no change touches them, whatever heights the world
 /// stands between in it.
 #[derive(Default, PartialEq)]
 struct Found {
-    drawn: Vec<Square>,
+    drawn: Vec<Brick>,
     places: bool,
 }
 
 /// The most a marker is drawn past where it stands, in pixels, which the
-/// cull of a square leaves it: a bound, twice a place's cell, the width its
+/// cull of a brick leaves it: a bound, twice a place's cell, the width its
 /// name wraps to (`SPACING_PX`), past a pin's longest pill and a name's
 /// lines over its icon.
 fn reach_px(spacing: f64) -> f64 {
@@ -223,16 +223,16 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         return;
     }
     p.last = Some(seen.clone());
-    // The eye's windows' squares in view (domain/view/observation.rs
-    // `squares`), as decor's are: the box the world stands in over each,
+    // The eye's windows' bricks in view (domain/view/observation.rs
+    // `bricks`), as decor's are: the box the world stands in over each,
     // grown by what a marker draws past it at the box's far side; none past
     // where the rays end, over ground the sky's Earth stands for.
     let now = &mut p.now;
     now.drawn.clear();
     let reach = reach_px(SPACING_PX);
     let drawn = crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0);
-    crate::domain::view::observation::squares(&o, &mut |square, heights| {
-        let b = region(square, heights);
+    crate::domain::view::observation::bricks(&o, &mut |brick, heights| {
+        let b = region(brick, heights);
         if o.measure(&b).near > drawn {
             return;
         }
@@ -241,16 +241,16 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         }));
         let pad = reach * units_per_px_at(far);
         if frame.sees_box(b.min.map(|v| v - pad), b.max.map(|v| v + pad)) {
-            now.drawn.push(square);
+            now.drawn.push(brick);
         }
     });
     now.drawn.sort_unstable();
     // Places are a setting; what someone placed is always shown.
     now.places = settings_store().place;
     let places = now.places;
-    // What was read stands for a square still drawn whose columns no change
+    // What was read stands for a brick still drawn whose columns no change
     // touches (domain/query/changed.rs), while places did not turn: a
-    // square left or touched drops its run, and only one entered or touched
+    // brick left or touched drops its run, and only one entered or touched
     // is read, as many a turn as a pass of the tick's budget reads and at
     // least one, nearest the eye first; the rest are not read yet, so a
     // later turn reads them.
@@ -260,9 +260,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         _ => &[],
     };
     let moved_places = &p.moved_places;
-    let columns = |s: Square| region(s, [REACH.min[2], REACH.max[2]]);
-    let drawn = |s: &Square| now.drawn.binary_search(s).is_ok();
-    let stands = |&s: &Square| {
+    let columns = |s: Brick| region(s, [REACH.min[2], REACH.max[2]]);
+    let drawn = |s: &Brick| now.drawn.binary_search(s).is_ok();
+    let stands = |&s: &Brick| {
         let r = columns(s);
         before.binary_search(&s).is_ok()
             && !crate::domain::query::changed::within(
@@ -272,8 +272,8 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     };
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
-    pins.retain(|s| drawn(&s.square) && stands(&s.square));
-    read_places.retain(|s| drawn(&s.square) && stands(&s.square));
+    pins.retain(|s| drawn(&s.brick) && stands(&s.brick));
+    read_places.retain(|s| drawn(&s.brick) && stands(&s.brick));
     let entering = &mut p.entering;
     entering.clear();
     entering.extend(now.drawn.iter().filter(|s| !stands(s)).map(|&s| {
@@ -290,10 +290,10 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         .pass
         .run(
             entering.iter(),
-            |&(_, square, columns)| {
-                pin::read(square, &columns, &mut pins);
+            |&(_, brick, columns)| {
+                pin::read(brick, &columns, &mut pins);
                 if places {
-                    place::read(square, &mut read_places);
+                    place::read(brick, &mut read_places);
                 }
                 true
             },

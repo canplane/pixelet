@@ -18,9 +18,9 @@
     "$doc": [
       "The coarsest camera grid cell a marker shows at: z19, 32 of them across",
       "a z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at",
-      "(layers/poi/poi.yaml). What someone puts up, by the cells of the square",
+      "(layers/poi/poi.yaml). What someone puts up, by the cells of the brick",
       "it is read from (pxl-kernel domain/scene/marker/pin.rs); a chat line's",
-      "bubble, which no square holds, by the cell where its speaker stands,",
+      "bubble, which no brick holds, by the cell where its speaker stands,",
       "which its speaker judges (pxl-kernel",
       "domain/scene/character/companion.rs `line_hangs`)."
     ]
