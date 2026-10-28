@@ -6,7 +6,7 @@
 //! On the heap, a chunk at a time as the ids laid reach past it: the GPU's
 //! stack hands ids from the lowest up (pxl-shader `TAKEN`), so the mirror
 //! holds the families up to the most ever taken at once, a family's sixteen
-//! words each, never past the pool's cap (domain/layer/terrain/param.rs `WAYS_POOL_BYTES`).
+//! words each, never past the pool's most (pxl-spec-core way/tree.rs `POOL_FAMILIES`).
 
 use pxl_spec_core::overwrite::Lanes;
 use pxl_spec_core::way::tree::{self, Pool, FAMILY_WORDS, RECORD_WORDS, SQUARE_FAMILIES};
@@ -16,15 +16,11 @@ use xpute_guest::global::Global;
 const CHUNK_FAMILIES: u32 = 1024;
 const CHUNK_WORDS: usize = (CHUNK_FAMILIES * FAMILY_WORDS) as usize;
 
-/// The families the cap holds.
-const MOST_FAMILIES: u32 =
-    crate::domain::layer::terrain::param::WAYS_POOL_BYTES / (4 * FAMILY_WORDS);
-
 /// The mirror at the cap as the heap holds it, in the buddy's blocks: its
 /// chunks, each a power of two, and the list of them
 /// (door/layout.rs `HEAP_FLOWS_BYTES`).
 pub const MIRROR_BYTES: u64 = {
-    let chunks = MOST_FAMILIES.div_ceil(CHUNK_FAMILIES) as u64;
+    let chunks = tree::POOL_FAMILIES.div_ceil(CHUNK_FAMILIES) as u64;
     chunks * (CHUNK_WORDS as u64 * 4).next_power_of_two()
         + (chunks * size_of::<Box<[u32]>>() as u64).next_power_of_two()
 };
@@ -78,7 +74,7 @@ impl Mirror {
     /// The chunks grown to hold family `family`; refused where it lies past
     /// the cap or the heap refuses, the chunks grown so far kept.
     fn reach(&mut self, family: u32) -> Result<(), Unlaid> {
-        if family >= MOST_FAMILIES {
+        if family >= tree::POOL_FAMILIES {
             return Err(Unlaid::Cap);
         }
         let need = (family / CHUNK_FAMILIES + 1) as usize;

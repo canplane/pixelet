@@ -159,7 +159,7 @@ const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
 /// (sys/io/body.rs), and a body on every credit in the buddy's block for the
 /// longest other kind, each freed as it is decoded; the ways' pool's
-/// mirror at its cap (domain/layer/terrain/mirror.rs, domain/layer/terrain/param.rs `WAYS_POOL_BYTES`),
+/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_FAMILIES`),
 /// the renderer's rooms for the squares' records, every read's at a
 /// square's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (profiler/record.rs), each

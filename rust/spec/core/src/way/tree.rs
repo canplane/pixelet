@@ -85,10 +85,10 @@ impl Lanes for Read<'_> {
 /// The most families the pool grows to, eight slots each, every square's
 /// tree's: a bake's set fits it wherever the eye is (pxl-spec
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
-/// The pool starts smaller and grows as a build runs out
-/// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`), up to the kernel's
-/// cap (pxl-kernel domain/layer/terrain/param.rs `WAYS_POOL_BYTES`), no more than this; a build
-/// past what it holds is refused (`fits`), its square left absent. Family 0
+/// The pool starts smaller and grows as a build runs out, up to this
+/// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`), as the CPU's
+/// mirror does (pxl-kernel domain/layer/terrain/mirror.rs); a build past
+/// what it holds is refused (`fits`), its square left absent. Family 0
 /// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
 /// so a root word 0 is a square with no tree, read as nothing without a
 /// family of its own (`root_word`).

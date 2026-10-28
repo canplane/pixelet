@@ -260,15 +260,22 @@ impl GroundBuffers {
         );
     }
 
-    /// The ways' pool twice as large, never past `most` families, once a
+    /// The ways' pool twice as large, never past `way::tree::POOL_FAMILIES`,
+    /// the bake's bound, at which no square of a baked set is refused, once a
     /// build ran out of it (`read_back`): its heap words and its stack
     /// copied where they were, its data words to the new data's first, so
     /// every id a tree or a read in flight names holds what it held, and the
     /// stack's slots past the old hold the new families free (pxl-shader
     /// `TAKEN`). Ahead of the turn's squares, so their builds and the cast
     /// read the new one; the cast's groups follow its id (`prepare`).
-    fn grow(&mut self, g: &Gpu, most: u32) {
-        let families = (2 * self.families).min(most).min(way::tree::POOL_FAMILIES);
+    ///
+    /// A known gap: a device out of memory may fail to make the doubled
+    /// buffer, and nothing hears it, the host keeping no error scope, so the
+    /// renderer reads on with a buffer the device holds as an error. The
+    /// last doubling holds the old pool beside the new, 32 MiB with 64,
+    /// until the copy is submitted; the scratch's growth has the same gap.
+    fn grow(&mut self, g: &Gpu) {
+        let families = (2 * self.families).min(way::tree::POOL_FAMILIES);
         if families <= self.families {
             return;
         }
@@ -296,15 +303,14 @@ impl GroundBuffers {
     }
 
     /// Each square's tree room in the scratch twice as many families, never
-    /// past `most`, once a build outgrew it (`read_back`); its spans stay as
+    /// past `way::tree::SQUARE_FAMILIES`, the bake's bound on a square's, once
+    /// a build outgrew it (`read_back`); its spans stay as
     /// they are (`window::TREE_AT`), so the buffer grows by less than twice.
     /// Nothing is copied: a square's records are copied into its read in the
     /// frame it is filled in, before any turn grows it. Ahead of the turn's
     /// squares, so their passes lay theirs out by the new length.
-    fn grow_scratch(&mut self, g: &Gpu, most: u32) {
-        let families = (2 * self.scratch_families)
-            .min(most)
-            .min(way::tree::SQUARE_FAMILIES);
+    fn grow_scratch(&mut self, g: &Gpu) {
+        let families = (2 * self.scratch_families).min(way::tree::SQUARE_FAMILIES);
         if families <= self.scratch_families {
             return;
         }
@@ -376,12 +382,8 @@ impl RaysPass {
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
     pub fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundSquares) {
-        let families = ground.pool[0]
-            .min(ground.pool[1])
-            .min(way::tree::POOL_FAMILIES);
-        let scratch_families = ground.scratch[0]
-            .min(ground.scratch[1])
-            .clamp(1, way::tree::SQUARE_FAMILIES);
+        let families = ground.pool.min(way::tree::POOL_FAMILIES);
+        let scratch_families = ground.scratch.clamp(1, way::tree::SQUARE_FAMILIES);
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
@@ -462,10 +464,10 @@ impl RaysPass {
             gb
         });
         if core::mem::take(&mut gb.ran_out[Short::Pool as usize]) {
-            gb.grow(g, ground.pool[1]);
+            gb.grow(g);
         }
         if core::mem::take(&mut gb.ran_out[Short::Scratch as usize]) {
-            gb.grow_scratch(g, ground.scratch[1]);
+            gb.grow_scratch(g);
         }
         // A square handed takes a read its frame: none past those free.
         let free = gb
@@ -581,10 +583,7 @@ impl RaysPass {
     /// it), so none waits.
     pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundSquares) {
         let (landed, joined) = (&mut *ground.landed, ground.joined);
-        let most = [
-            ground.pool[1].min(way::tree::POOL_FAMILIES),
-            ground.scratch[1].min(way::tree::SQUARE_FAMILIES),
-        ];
+        let most = [way::tree::POOL_FAMILIES, way::tree::SQUARE_FAMILIES];
         // The fold, once its mapping is free: a frame-old copy reads safely,
         // as an entry answers only for the cell whose key it holds.
         if let Some(c) = self

@@ -44,7 +44,7 @@ fn a_landing_grows_the_mirror_to_its_highest_family_and_reads_back_at_its_slots(
 fn an_family_past_the_cap_is_refused_and_nothing_laid() {
     let mut m = Mirror::default();
     assert_eq!(
-        m.lay(&records(&[1, MOST_FAMILIES])),
+        m.lay(&records(&[1, tree::POOL_FAMILIES])),
         Err(Unlaid::Cap),
         "past the cap, which no asking again changes"
     );
