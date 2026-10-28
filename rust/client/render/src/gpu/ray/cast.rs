@@ -38,9 +38,8 @@ pub(super) struct CastBuffers {
     /// the cast's group and the sun's map's over the sun's (`sun_groups`),
     /// each told by the head it binds (`eye_head`, `sun_moved`); and the
     /// eye's buffer (pxl-spec-core `beam`): a line a corner, a start a
-    /// cell, a stop a sample, as the eye's words lay the frame's `grid`,
-    /// none a pixel's; room for `beam_room` words
-    /// (doc/minutes/20261022-a-cell-casts-a-beam.md).
+    /// cell, a stop a sample, as the eye's words lay the frame's `grid`, none
+    /// a pixel's; room for `beam_room` words.
     beam_built: Built,
     cells_built: Built,
     sample_built: Built,

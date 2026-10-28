@@ -2,9 +2,7 @@
 
 //! The camera grid through the screen: the cell a distance holds
 //! (`cell_there`), and what the GPU's cast of the screen's rays reads
-//! (`gpu_cast`), a ray a drawn pixel, one rule wherever the eye is
-//! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md, "What is
-//! drawn").
+//! (`gpu_cast`), a ray a drawn pixel, one rule wherever the eye is.
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::CELL;

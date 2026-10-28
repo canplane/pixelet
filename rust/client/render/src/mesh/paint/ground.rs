@@ -16,17 +16,15 @@ use crate::mesh::paint::palette::{layer_mean, rgb255, sentinel_layer};
 const BYTES: usize = u8::MAX as usize + 1;
 
 /// Each value's look as a ray's pixel paints it (frame/shader/screen_ray.wgsl
-/// `drawn`), by value alone, whichever source holds it
-/// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
-/// space"), four words, its colours in linear light, which a pixel lights
-/// in, worked out here once a look rather than at every pixel: its swatch's
-/// red and green, its blue with its layer over it, then what it reads as
-/// from afar (`layer_mean`), red and green, then blue; each channel 16 bits
-/// of the unit (WGSL `unpack2x16unorm`), which darks keep without bands. A
-/// cube the catalog teaches is its
-/// painter's (object.rs `look_of`), a ground look's the cube of that look; a
-/// value none is, the bedrock's `unknown` and the bytes no look names among
-/// them, is drawn as `unknown`.
+/// `drawn`), by value alone, whichever source holds it, four words, its
+/// colours in linear light, which a pixel lights in, worked out here once a
+/// look rather than at every pixel: its swatch's red and green, its blue
+/// with its layer over it, then what it reads as from afar (`layer_mean`),
+/// red and green, then blue; each channel 16 bits of the unit (WGSL
+/// `unpack2x16unorm`), which darks keep without bands. A cube the catalog
+/// teaches is its painter's (object.rs `look_of`), a ground look's the cube
+/// of that look; a value none is, the bedrock's `unknown` and the bytes no
+/// look names among them, is drawn as `unknown`.
 pub fn look_words() -> Vec<[u32; 4]> {
     let unknown = (
         color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb)),

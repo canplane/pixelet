@@ -5,9 +5,8 @@
 //! serves Carto's zoom z; the leaf serves every zoom past it too. Where icons
 //! would meet, a cell an icon wide keeps one, the first by the zoom its category
 //! shows from and then its id, so what is shown only grows with the zoom and
-//! a tile is its children with what shows from its zoom on
-//! (doc/minutes/20261009-places-follow-carto.md). It is one XTP tree, as every
-//! other baked tile is.
+//! a tile is its children with what shows from its zoom on. It is one XTP
+//! tree, as every other baked tile is.
 
 use crate::space::layer::lattice::Cells;
 use fnv::FnvHashSet;

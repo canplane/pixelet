@@ -36,9 +36,8 @@ pub const STACK_BYTES: u32 = 1048576;
 /// Native's JavaScript thread has 1 MiB and wgpu's depth has no bound to state.
 pub const THREAD_STACK_BYTES: u32 = 8388608;
 
-/// Frames the submission ring holds, and so payloads: one a slot
-/// (doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
-/// the ring checks, since a position is taken modulo it by masking.
+/// Frames the submission ring holds, and so payloads: one a slot. A power of
+/// two, which the ring checks, since a position is taken modulo it by masking.
 ///
 /// Sized to what a turn is sent, not to a burst: a full ring loses nothing, since
 /// the shell rings with no quota until there is room (@xpute/host/ipc/doorbell.ts

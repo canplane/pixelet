@@ -17,7 +17,8 @@ worse with each one (the user: "구조적으로 통째로 최적화를 해야지
   again, across layers and kinds, and make it one; the work falls away with
   it. The fill's runs were a second form of the kept spans: three dispatches
   and a bake budget went with them (720052574).
-- Read the code for it. A timing finds no structure.
+- Read the code for it. A timing finds no structure, and a minute is
+  reference, not what binds today (`doc/README.md`).
 - A change that adds machinery, a special case, a toggle, a buffer or a
   kernel, without removing a concept elsewhere, is suspect.
 

@@ -17,8 +17,7 @@
 // `text-name: [name]`), the icon's fill and the label's. Each value is the
 // one Carto's rules give for those tags at that zoom, colors computed from
 // its variables (`darken` as LESS does). A category with no row is one Carto
-// draws no point for, so it is neither carried in a tile nor drawn
-// (doc/minutes/20261009-places-follow-carto.md).
+// draws no point for, so it is neither carried in a tile nor drawn.
 
 /// Each category's Overture name, category k at `CATEGORIES[k - 1]`.
 pub const CATEGORIES: [&str; 256] = [

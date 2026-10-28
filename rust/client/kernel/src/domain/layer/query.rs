@@ -1,14 +1,13 @@
 // pxl-kernel/domain/layer/query.rs
 
 //! The query: the form the terrain and the object store share, the only
-//! place either's storage shape is known
-//! (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md, "The
-//! query"). It is asked of a node of the one hierarchy, a cube by its zoom
-//! and index, the same of both; how each answers is its own, and each is
-//! read as itself: places, divisions and the Earth answer none. It
-//! knows nothing of the view: what node is asked, and how fine its cells, are
-//! said by the asker. Neither form fetches, holds or asks for anything: an
-//! answer is exact, coarser with the tile it lacked, or nothing and that tile.
+//! place either's storage shape is known. It is asked of a node of the one
+//! hierarchy, a cube by its zoom and index, the same of both; how each
+//! answers is its own, and each is read as itself: places, divisions and the
+//! Earth answer none. It knows nothing of the view: what node is asked, and
+//! how fine its cells, are said by the asker. Neither form fetches, holds or
+//! asks for anything: an answer is exact, coarser with the tile it lacked, or
+//! nothing and that tile.
 //!
 //! The decision's two forms are these two methods' readers: the first hit
 //! along a direction is a descent over `bound`, and a value at a point is

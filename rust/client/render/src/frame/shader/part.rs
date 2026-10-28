@@ -76,8 +76,7 @@ pub const SHADER_WAY_TREE: u32 = 38;
 pub const SHADER_WAY_FREED: u32 = 39;
 /// The camera grid's beam rays, a thread a corner, and where each cell's
 /// pixels start off them, generated with the cast from pxl-spec-core's
-/// `beam` (doc/minutes/20261022-a-cell-casts-a-beam.md): a compute entry
-/// each.
+/// `beam`: a compute entry each.
 pub const SHADER_BEAM: u32 = 40;
 pub const SHADER_CELL: u32 = 41;
 /// The pixels the cast's reading walk missed, walked again writing the
