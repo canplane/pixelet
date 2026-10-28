@@ -774,10 +774,10 @@ impl RaysPass {
                 c.pixel_bound = pixel_bound;
             }
         }
-        let [params, regions, instances] = c
+        let [drawing, regions, instances] = c
             .grown
             .placed()
-            .map_or([c.sun_none; 3], |p| [p.params, p.regions, p.instances]);
+            .map_or([c.sun_none; 3], |p| [p.drawing, p.regions, p.instances]);
         let sun_bound = [
             c.eye,
             c.window,
@@ -788,7 +788,7 @@ impl RaysPass {
             pool,
             sun_map.0,
             rays.0,
-            params,
+            drawing,
             regions,
             instances,
         ];
@@ -1193,7 +1193,7 @@ fn sun_list(g: &Gpu, whole: bool) -> u32 {
 /// which the sun's walks read and write as the eye's do; the clipmap; its
 /// head (`moved`), the beam's lines, the samples and the misses (`list`),
 /// the raster's boxes, picks and args, and the misses' dispatch; the eye's
-/// rays, which the mark reads, and the decor's frame words, regions and
+/// rays, which the mark reads, and the decor's drawing words, regions and
 /// instances, which the drawn mark reads. The slots', its world's (the
 /// passes the eye's rays take too, over `WORLD_GROUP`, its list where the
 /// eye's beam rays' buffer lies and its head where the eye's), its boxes'
@@ -1205,7 +1205,7 @@ fn sun_groups(
     bound: [u32; 12],
     [seen, moved, list, boxes, picks, args, misses]: [u32; 7],
 ) -> [u32; 7] {
-    let [eye, window, ground, looks, shards, overwrites, pool, sun, rays, params, regions, instances] =
+    let [eye, window, ground, looks, shards, overwrites, pool, sun, rays, drawing, regions, instances] =
         bound;
     let entries = [
         (0, buffer_entry(0, eye)),
@@ -1224,7 +1224,7 @@ fn sun_groups(
         (15, view_entry(15, picks)),
         (16, buffer_entry(16, args)),
         (17, buffer_entry(17, misses)),
-        (18, buffer_entry(18, params)),
+        (18, buffer_entry(18, drawing)),
         (19, buffer_entry(19, regions)),
         (20, buffer_entry(20, instances)),
     ];

@@ -415,16 +415,17 @@ pub mod drawn {
     /// adds the region's first slot once the regions are laid out.
     pub const UNIFORM_WORDS: u32 = 64;
     pub const UNIFORM_INDEX: u32 = 7;
-    /// The frame's words: the model's and the sprite's floors, each an
-    /// angle about the eye in radians, the anchor the lanes' positions are
-    /// about (unit cells, X wrapping), the left-out decor's corner and
-    /// whether there is one, then each group's extent.
+    /// The drawing words, what a frame's decor is drawn by: the model's and
+    /// the sprite's floors, each an angle about the eye in radians, the
+    /// anchor the lanes' positions are about (unit cells, X wrapping), the
+    /// left-out decor's corner and whether there is one, then each group's
+    /// extent.
     pub const MODEL_ANGLE: u32 = 0;
     pub const SPRITE_ANGLE: u32 = 1;
     pub const ANCHOR: u32 = 4;
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
-    pub const PARAM_WORDS: u32 = EXTENTS + GROUPS;
+    pub const DRAWING_WORDS: u32 = EXTENTS + GROUPS;
 
     /// What a thing spanning `across` radians about the eye is drawn as: a
     /// model at `model` or more, else a sprite at `sprite` or more, else

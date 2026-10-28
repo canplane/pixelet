@@ -621,7 +621,7 @@ pub fn sun_mark_drawn_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 18)] params: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 18)] drawing: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 20)] instances: &[u32],
 ) {
@@ -640,7 +640,7 @@ pub fn sun_mark_drawn_cs(
         ]
     } else {
         let placed = Instances {
-            params,
+            drawing,
             regions,
             instances,
         };
