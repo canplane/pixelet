@@ -87,8 +87,7 @@ fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
             tau: 1.0,
             range: [cell, cell],
             eye: [0.0; 3],
-            cone: cast::Cone::EXACT,
-            apart: 0.0,
+            spacing: cast::Spacing::NONE,
         },
     )
 }

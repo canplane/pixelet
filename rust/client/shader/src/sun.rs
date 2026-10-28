@@ -164,10 +164,10 @@ fn sun_of(eye: &Eye) -> Sun {
 /// The sun's map as an observer (observer.rs `Observer`), off the eye's
 /// words and the head the cast is handed: the sun's cast (`sun::Sun`),
 /// where its rays start (`sun::Starts`), its side, and the eye's place and
-/// zooms its rays ask at, with the map's texel for their cone
-/// (`Sun::detail`). Its lattice is the box's texels, a slot each: a beam ray
-/// every `sun::BEAM`-th, `sun::BEAM_WINDOW` past the box on each side, a
-/// sample every `sun::SAMPLE`-th slot, which wrap as the slots do.
+/// zooms its rays ask at, with its beam rays' spacing (`Sun::detail`). Its
+/// lattice is the box's texels, a slot each: a beam ray every
+/// `sun::BEAM`-th, `sun::BEAM_WINDOW` past the box on each side, a sample
+/// every `sun::SAMPLE`-th slot, which wrap as the slots do.
 pub(crate) struct Map {
     sun: Sun,
     starts: Starts,
@@ -270,7 +270,7 @@ impl Observer for Map {
 
     /// Its stop less `sun::margin`, none before the near plane.
     fn handed(&self, aim: &Aim, t: f32) -> f32 {
-        let width = aim.detail.apart * aim.detail.cone.width(0.0);
+        let width = aim.detail.spacing.width(0.0);
         let t = t - pxl_spec_core::sun::margin(width);
         if t > 0.0 {
             t

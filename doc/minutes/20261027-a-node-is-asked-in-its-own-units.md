@@ -31,7 +31,7 @@ rule each change is held to.
   cone's; the box inside it is what is drawn there, in eighths, floating as the
   LOD always has. The two are independent.
 - **What the ray cannot tell apart is passed.** A ray has a cone, as wide as
-  `across + angle · d` at `d` (`cast::Cone`): the eye's an angle, its grid's
+  `across + angle · d` at `d` (`cast::Spacing`): the eye's an angle, its grid's
   cell; the sun's a width, its texel; control and physics none, held to what
   is there, an observer with a quantum of its own. A ray tests a split's box
   shrunk by half its cone at the node's nearest point, so what is thinner, or
@@ -55,8 +55,8 @@ rule each change is held to.
   boxes would be passed crossed at a slant.
 
   > **Note (10-28):** nothing is passed any more, by the eye or the sun's
-  > map. The cone is read only by a beam, whose rays lie `apart` cones apart
-  > (`cast::Cone`). At grazing angles a passed cell left its row missing
+  > map. The cone is read only by a beam, as how far apart its rays lie, the
+  > sun's `sun::BEAM` texels (`cast::Spacing`, which `apart` folded into). At grazing angles a passed cell left its row missing
   > whole, which no pick could bring back. With the eye's prune off the rows
   > went, at about a millisecond of GPU p95 at the horizon
   > ([the rows, seen](../experiment/20261028-the-rows-seen.md)), which the

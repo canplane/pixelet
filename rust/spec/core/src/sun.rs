@@ -209,14 +209,12 @@ impl Sun {
 
     /// `detail`, the eye's zooms at every point as the eye asks them
     /// (`cast::Detail::eye`), so the map holds the cells the eye draws; its
-    /// cone the map's texel (`cast::Cone`), and its beam rays `BEAM` of them
-    /// apart.
+    /// beam rays `BEAM` of the map's texels apart (`cast::Spacing`).
     pub fn detail(&self, mut detail: Detail) -> Detail {
-        detail.cone = crate::cast::Cone {
+        detail.spacing = crate::cast::Spacing {
             angle: 0.0,
-            across: length(self.across),
+            across: BEAM as f32 * length(self.across),
         };
-        detail.apart = BEAM as f32;
         detail
     }
 
@@ -437,7 +435,7 @@ pub const TILE: u32 = 8;
 /// texel of the box across and down, `BEAM_WINDOW` past it on each side, each
 /// walked from the world's root along the sun's rays until a cell that fills or
 /// lacks or a split narrower than `2√2` beam spacings (`Sun::detail`,
-/// `cast::Detail::apart`), leaving its line and how far it got less `margin`;
+/// `cast::Spacing`), leaving its line and how far it got less `margin`;
 /// each `BEAM`-square cell of the box starts at the least of the beam rays
 /// within `BEAM_WINDOW` of its corners, and its texels resume from that ray's
 /// line there.
