@@ -567,9 +567,8 @@ impl Renderer {
                 .or_bug(Errno::ENOTRECOVERABLE),
         );
         put_mat(&mut b.proj, 0, &proj);
-        b.px_k = (s[STAGE_AT::VIEWPORT + 1]
-            / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0)))
-            as f32;
+        b.px_k =
+            (s[STAGE_AT::VIEWPORT + 1] / (2.0 * pxl_spec::space::camera::grid::HALF_TAN)) as f32;
 
         let u = &mut self.frame;
         m.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
