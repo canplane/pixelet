@@ -68,9 +68,9 @@ pub fn stage_write() {
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
-    let [width, height] = crate::domain::view::frame::screen::size();
-    s[STAGE_AT::VIEWPORT] = width;
-    s[STAGE_AT::VIEWPORT + 1] = height;
+    s[STAGE_AT::VIEWPORT_WIDTH] = crate::domain::view::frame::screen::size()[0];
+    // The markers are drawn at the size the kernel lays them out at.
+    s[STAGE_AT::PX_PER_UNIT] = crate::domain::view::frame::screen::px_per_unit();
     // The camera grid's cell angle: the footprint a drawn cell covers per
     // unit of distance, square on.
     s[STAGE_AT::CELL] = pxl_spec::space::camera::grid::CELL;

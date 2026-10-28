@@ -15,7 +15,7 @@ const DEPTH_BIAS_U: f32 = 1.0;
 const DEPTH_BIAS_CELLS: f32 = 1.5;
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process. view, proj, translation and px_k, then the
+// Safari's WebGPU its GPU process. view, proj, translation and px_per_unit, then the
 // number before the set's first marker.
 @group(1) @binding(0) var<uniform> marker_words: array<vec4f, MARKER_VEC4S>;
 
@@ -50,13 +50,13 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placed {
 
   let anchor_view = (marker_view() * vec4f(anchor, 1.0)).xyz;
   let depth = max(-anchor_view.z, 1e-3);
-  let size = size_px * depth / marker_px_k();
+  let size = size_px * depth / marker_px_per_unit();
   let drop = size.y * (frac - 0.5);
   let center_view = anchor_view + vec3f(0.0, drop, 0.0);
   // A region reaches a pixel past its sprite above and below, so an anchor on
   // the sprite's edge, a bubble's tail tip, is inside its own region whatever
   // the subpixel it falls on; on the edge it flickered as it moved.
-  let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / marker_px_k()));
+  let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / marker_px_per_unit()));
 
   var p: Placed;
   p.clip = marker_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
