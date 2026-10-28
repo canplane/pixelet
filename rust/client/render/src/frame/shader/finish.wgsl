@@ -33,9 +33,15 @@ fn dither(q: vec2f) -> f32 {
   return fract(p.x * p.y);
 }
 
+// A linear color as the canvas encodes it, darkened by `by`, the vignette
+// where it is drawn: toned, then sRGB, before the dither.
+fn encoded(color: vec3f, by: f32) -> vec3f {
+  return to_srgb(tone(color) * by);
+}
+
 // The encoded color, half a step of noise added: the screen keeps 8 bits, and
 // a gentle gradient left whole, the sea's toward its horizon, broke into
 // steps one apart, drawn out along it into lines.
 fn finish(color: vec3f, frag: vec2f) -> vec3f {
-  return to_srgb(tone(color) * vignette(frag)) + (dither(frag) - 0.5) / 255.0;
+  return encoded(color, vignette(frag)) + (dither(frag) - 0.5) / 255.0;
 }

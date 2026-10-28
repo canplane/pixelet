@@ -193,6 +193,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "frame",
         "encode",
+        "finish",
         "atmos_medium",
         "atmos_bind",
         "atmos_lut",
