@@ -159,6 +159,10 @@ pub fn reach(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option
 /// is a function of the eye alone, never of what the rays met, so what is
 /// asked, and so what is read, cannot depend on what was held before: the
 /// rays only see it arrive.
+/// It asks by x and y alone, the eye's height no part of it: a ray picks a
+/// cell's zoom by its distance in 3D (pxl-spec-core `grid::cell_at`), never
+/// shorter than its distance across the ground, so more is asked than is
+/// read and never less.
 pub struct ByEye {
     /// The layer's, whose tiles' cells say which zoom a distance asks for.
     pub lattice: Lattice,
