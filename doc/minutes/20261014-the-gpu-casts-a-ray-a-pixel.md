@@ -2,30 +2,27 @@
 
 **2026-10-14** — decided in the conversation.
 
-**Status (2026-10-24): holds, and is no longer an experiment.** A ray a pixel of
-the render resolution, its start its cell's beam
-([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)); a pixel takes the
-nearest block the samples about it stopped at that its ray enters, and walks
-itself only where none is (pxl-shader cast.rs `cast_cs`). The render resolution
-is the display's times a scale the load sets by default: one of `SCALE_STEPS`
-steps between whole and `SCALE_MIN`, each a like share of the last; where the
-GPU's time is read, a window over its budget by more than `SCALE_BAND` steps
-down at once, and a step up waits until the step above fits for
-`SCALE_UP_WINDOWS` windows in a row (pxl-kernel domain/view/frame/resolution.rs,
-domain/view/param.rs); the frame is upscaled within itself. The `rays` setting
-below is gone, and the overwrites run on the GPU (One kind, one side).
-
-_Since 2026-10-26 a pixel's block is the raster's pick, not the samples about
-it: the nearest block any sample stopped at that its ray enters (pxl-shader
-cast.rs `cast_cs`; [the raster picks](../experiment/20261026-the-raster-picks.md))._
-
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md)),
 and a ray reaches it by asking the world whether a node is empty
 ([a ray asks the world](./20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)).
 This decides where that ray runs: on the GPU, one a pixel, from one source that
-the CPU compiles too. It is an experiment pushed on the web first. If it does
-not pay, it is retreated from.
+the CPU compiles too. It was pushed on the web first as an experiment, to be
+retreated from if it did not pay, and it holds.
+
+A ray a pixel of the render resolution starts from its cell's beam
+([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). A pixel takes the
+raster's pick, the nearest block any sample stopped at that its ray enters, or
+the sky where no sample about it met anything, and walks itself only where
+neither is (pxl-shader observer.rs `resolve`, cast.rs `cast_cs`, `miss_cs`;
+[the raster picks](../experiment/20261026-the-raster-picks.md)). The render
+resolution is the display's times a scale the load sets by default: one of
+`SCALE_STEPS` steps between whole and `SCALE_MIN`, each a like share of the
+last; where the GPU's time is read, a window over its budget by more than
+`SCALE_BAND` steps down at once, and a step up waits until the step above fits
+for `SCALE_UP_WINDOWS` windows in a row (pxl-kernel
+domain/view/frame/resolution.rs, domain/view/param.rs); the frame is upscaled
+within itself.
 
 ## Why a ray a pixel
 
@@ -77,25 +74,22 @@ only data and call records cross:
   (`a42022dfd`).
 
 The bytes come from their owner's range while it lives until the page replays
-the turn, else from a copy into the stream. The ground goes up as a window a
-zoom, origin and layer a tile, in `earth_window`'s shape. A tile not held is
-answered by the coarser zoom.
+the turn, else from a copy into the stream. The ground goes up as the squares
+of a window a zoom, each filled on the GPU as its tile lands, and where a
+square is not present a reader reads the coarser window's (pxl-spec-core
+`window::step`; ARCHITECTURE.md, "What the view holds").
 
-_Superseded below: the separation (pxl-spec-core way.rs, `ways*.gen.wgsl`),
-what is placed (pxl-spec-core overwrite.rs) and decor (`decor*.gen.wgsl`) now
-run on the GPU, and the CPU's cast draws nothing._
-
-**One kind, one side.** The GPU's query answers the ground and the caves.
-Separation, what is placed and decor are the CPU's alone for now. That is this
-experiment's stated gap. The `rays` setting chooses the CPU's cast (the default)
-or the GPU's at grid, half or full resolution.
+**One kind, one side.** The GPU's query answers the ground, the caves, the
+separation (pxl-spec-core way.rs, `way*.gen.wgsl`), what is placed
+(pxl-spec-core overwrite.rs) and decor (`decor*.gen.wgsl`), and the CPU's cast
+draws nothing.
 
 **A known break on the device path.** Naga's Metal backend breaks a
 `loop { … continuing { break if … } }` an iteration early (gfx-rs/wgpu#4558, fix
 PR #10459 open). The web goes through the browser's own compiler and is not
 affected. `node_seed` is unrolled for it (`[naga]`).
 
-## Where it stands, measured
+## As first measured
 
 The setup:
 
@@ -165,13 +159,12 @@ the step's work.
 
 ## What follows, in order, each measured alone
 
-_History: the order as set on 2026-10-14. Steps 1 to 3 are now a square's fill
-on the GPU as it lands (pxl-spec-core fill.rs: `height_cs`, `bound_cs`, the
-area laid on a cell), 6 is the beam, and 7 the overwrites above; what the code
-holds is in ARCHITECTURE.md (Windows and squares; Drawing)._
-
-The rule for every step: 0 differing rays, then fps at full and half. A step
-that does not pay is reverted.
+The order as set on 2026-10-14. The rule for every step: 0 differing rays,
+then fps at full and half. A step that does not pay is reverted. Steps 1 to 3
+are built as a square's fill on the GPU as it lands (pxl-spec-core fill.rs,
+pxl-shader `height_cs`, `bound_cs`, the area laid on a cell), 6 as the beam, and 7 as the
+overwrites above; what the code holds is in ARCHITECTURE.md ("What the view
+holds", "A ray a pixel").
 
 1. **The ground's cell grid.** When a tile becomes held, a compute pass runs the
    one `ground::read` over its 512 × 512 cells once and writes the result. A
@@ -190,5 +183,4 @@ that does not pay is reverted.
 5. **Textures or storage buffers** for the grid, by the 2D cache.
 6. **The beam**, last. The reference measures it at a fraction.
 7. **Then the overwrites.** Separation, what is placed and decor go to the GPU's
-   query, and paint parity follows. Only then does the CPU's drawing cast go,
-   with the `rays` setting.
+   query, and paint parity follows. Only then does the CPU's drawing cast go.

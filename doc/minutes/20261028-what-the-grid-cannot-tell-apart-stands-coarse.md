@@ -77,25 +77,16 @@ regression, not an answer. What stands:
 
 - The query asks a node and answers a box in its own units, every axis alike
   (`cf769abc1`; [a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
-- The ray is a cone (`cast::Spacing`). The eye's cone is an angle, the grid's
-  cell (`grid::CELL`). The sun's is its texel. Control is exact.
-
-  > **Note (10-28):** with the prune gone, nothing reads a ray's cone. What
-  > is left is how far apart a beam's rays lie (`cast::Spacing`), the eye's
-  > the grid's cell and the sun's `sun::BEAM` texels; control's is none
-  > (`Spacing::NONE`).
-- The prune passes what the cone cannot tell apart, so the horizon costs what
-  any direction does (`cast.rs` `walk`, `meets_box`).
-
-  > **Note (10-28):** the prune is gone, the eye's and the sun's, and with it
-  > the rows; the eye's horizon costs about a millisecond of GPU p95 again
-  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md),
-  > its note of 10-28).
-- Every view is cast at one τ, an angle, so the display draws and decides
+- Nothing reads a ray's cone but a beam, as how far apart its rays lie
+  (`cast::Spacing`): the eye's the grid's cell (`grid::CELL`), the sun's
+  `sun::BEAM` texels; control's is none (`Spacing::NONE`).
+- Nothing is passed: a ray enters every split whose box it meets (`cast.rs`
+  `walk`, `meets_box`), the eye's and the sun's alike, so the rows are gone and
+  the eye's horizon pays about a millisecond of GPU p95 more for it
+  ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
+- Every view is cast at the view's grid, a cell 1/`CELLS_A_RADIAN` radians
+  (pxl-spec-core grid.rs `CELL`), an angle, so the display draws and decides
   nothing (`0c84382cd`).
-
-  > **Note (10-28):** τ is gone: the view's grid is the only one, a cell
-  > 1/`CELLS_A_RADIAN` radians (pxl-spec-core grid.rs `CELL`).
 - The rays find and the raster hands out
   ([the ray finds, the raster hands out](./20261026-the-ray-finds-the-raster-hands-out.md)).
   The stages are beam, cell start, samples, the raster's pick, the pixel and
@@ -112,37 +103,32 @@ regression. It belongs to the structure.
 
 A whole cube is not don't-care. A cell at its zoom spans at least the grid
 from any direction, by the zoom rule itself. Two readings of the code account
-for the loss. Both are code readings, not yet confirmed on the screen:
+for the loss. The second was the rows' cause: with it off the rows went
+([the rows, seen](../experiment/20261028-the-rows-seen.md)). The first is a
+code reading, not confirmed on the screen:
 
 1. **The zoom is the distance's alone, while the samples are sparse.**
-   - `cast::Detail` takes `grid::cell_at(d² · τ²)`, isotropic, so a cell's
+   - `cast::Detail` takes `grid::cell_at(d²)`, isotropic, so a cell's
      extent across the screen along a slant shrinks with the slant's sine.
-
-     > **Note (10-28):** τ is gone; it takes `grid::cell_at(d²)`, at the
-     > view's cells.
-   - Since 10-23 a pixel no longer walks: 4 × 4 samples a cell do
-     (`param::beam::SAMPLE`). A pixel takes the nearest box a sample stopped at that
-     its ray enters, and walks only where its ray enters none.
+   - 4 × 4 samples a cell walk (`param::beam::SAMPLE`). A pixel takes the
+     nearest box a sample stopped at that its ray enters, and walks only where
+     its ray enters none.
    - A row thinner on screen than a sample's spacing has no box, so its pixels
      take the box behind it.
-   - [A cell casts a beam](./20261022-a-cell-casts-a-beam.md) foresaw it. Its
-     Status says the cut was taken and "Sparser samples lose coverage" is
+   - [A cell casts a beam](./20261022-a-cell-casts-a-beam.md) foresaw it. It
+     says the cut was taken and "Sparser samples lose coverage" is
      answered by the fallback walk, not avoided. Its proof holds for a walk
      from a cell's start, not for the box a pixel takes from a sample.
-2. **The prune passes as air what is as thick as a cone.**
-   - Each inner side of a split's box shrinks by half a cone (`meets_box`), so
-     content up to a cone thick is passed, not drawn coarse.
-   - A cell near the near end of its band keeps a core `s − c` thick, where `s`
+2. **The prune passed as air what was as thick as a cone.** It is gone.
+   - Each inner side of a split's box shrank by half a cone, so content up to
+     a cone thick was passed, not drawn coarse.
+   - A cell near the near end of its band kept a core `s − c` thick, where `s`
      is its side and `c` the cone, at most one cone. Samples a quarter-cone
-     apart can step over it.
+     apart could step over it.
    - Passing a cell as air is a leak in 20260928's sense: the neighbour cell
      then observes what lies behind.
 
-   > **Note (10-28):** this was the rows' cause
-   > ([the rows, seen](../experiment/20261028-the-rows-seen.md)), and the
-   > prune is gone.
-
-Both apply don't-care by distance, isotropically. September applied it by each
+Both applied don't-care by distance, isotropically, and the first still does. September applied it by each
 axis of the screen. That is the gap.
 
 ## What was tried and why each broke the philosophy
@@ -159,7 +145,9 @@ axis of the screen. That is the gap.
 - **A pixel walking again when its pick is far beyond its neighbours'.** It
   guesses at the observation instead of following the rule.
 - **Reverting the prune, or τ.** Either regresses the horizon (10:17) or the
-  display's independence (14:47).
+  display's independence (14:47). The user took the horizon's regression over
+  the rows on 10-28, and the prune is gone; τ is gone too, the view's grid the
+  only one, and the display still decides nothing.
 - **A finer grid, or denser samples.** Either moves the threshold and keeps the
   hole.
 - **The prune's cone at each ray's own width.** The idea was a sample's quarter
@@ -225,7 +213,7 @@ core, and where the two part the user's stands.
   node? Read so far, and not yet decided: with the zoom at the footprint, a
   grazing ray stops at a coarse node, and the prune becomes cutting the
   descent there and drawing that node's box. It no longer means passing its
-  content as air. The cost is the look. A node is a cube, so one coarse
+  content as air; the prune that passed it as air is gone. The cost is the look. A node is a cube, so one coarse
   enough along the screen's depth is as coarse across it (pixelet-d6, 10-27
   10:16).
 - **Concern: the observed pyramid's room.** The observation cache is keyed to
@@ -249,8 +237,8 @@ on 10-14 for it ([the eye decides](./20261014-the-eye-decides.md),
 
   10-14 dropped the second: "A pixel is not the final form of the rule, only
   its finest setting: one ray a cell, with the cell shrunk to a pixel."
-- **The structure holds both again.** Since 10-23 only the boxes the samples
-  stopped at are rasterized (condition 1), and they are handed to every pixel
+- **The structure holds both again.** Only the boxes the samples stopped at
+  are rasterized (condition 1), and they are handed to every pixel
   (condition 2). [A cell casts a beam](./20261022-a-cell-casts-a-beam.md)
   records it as "the cut was taken". The pick's axis refusal and the walk again
   answer part of it; by 10-14's proof the rest returns as rows. The rows are
@@ -259,9 +247,9 @@ on 10-14 for it ([the eye decides](./20261014-the-eye-decides.md),
   their problem back, 10-14 names "the ray's rule — the zoom its distance asks,
   and a stop at the first block that fills". So the zoom stays the distance's,
   and no density field is needed for the rows: a ray a pixel answers them, as
-  ESVO, GigaVoxels and Teardown draw. The prune passes blocks that fill, which
-  stands against the same floor. How the horizon is bounded without it, or
-  with it changed, is still open.
+  ESVO, GigaVoxels and Teardown draw. The prune passed blocks that fill, which
+  stood against the same floor, and it is gone; the eye's horizon pays about a
+  millisecond of GPU p95 more for it.
 
 ## The experiment
 
@@ -284,4 +272,4 @@ on 10-14 for it ([the eye decides](./20261014-the-eye-decides.md),
   rule.
 - **Cost.** The pixel walks `bf1a3e20a` removed come back. They are timed once,
   at the end, against the backlog's baseline.
-- **Confirming the two readings.** Seen side by side on the screen, not timed.
+- **Confirming the first reading.** Seen side by side on the screen, not timed.
