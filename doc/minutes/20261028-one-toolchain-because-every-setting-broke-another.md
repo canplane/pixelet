@@ -18,26 +18,17 @@ marked.
 > possible: give the server and the client the same tools — bundle the server
 > with Vite too.
 
-## The user's words
+## The user's account
 
-- "설정 하나 고치면 패키지 파일이 없다고 으름장을 미친듯이 냈었다. nest 자체는
-  크게 이슈가 아니었어. 무거운게 아니라, 빌드나 린트 자체가 터지는게
-  문제였던거지. js.map 같은거 말이야."
-  - In English: change one setting and it raged that package files were missing.
-    Nest itself was not much of an issue. It was not that anything was heavy;
-    the build or the lint itself blew up — things like `.js.map`.
-- "공용 패키지에 빌드 캐시가 sibling으로 자꾸 남았었어. .js 같은 걸 계속
-  만들어서, .gitignore인지 vscode setting인지에서 그 캐시를 ignore하게
-  만들었어야 했다."
-  - In English: the shared package kept leaving build output as siblings, making
-    `.js` files over and over, and they had to be ignored in `.gitignore` or the
-    VS Code settings.
-- "결국 그 고통을 겪고 설정은 최대한 대칭적으로, 도구는 작게 환원하는 생각이
-  커진 거 같음. 서버나 클라나 도구를 갖게 두자. 예컨대 서버도 vite로 번들해라
-  같은거."
-  - In English: after that pain, the idea grew of keeping configs as symmetric
-    as possible and reducing the tools to a small set — let the server and the
-    client hold the same tools, e.g. bundle the server with Vite too.
+- Changing one setting made the tools complain that package files were missing.
+  NestJS itself was not much of an issue. The trouble was not weight: the build
+  or the lint itself broke, with files like `.js.map` as an example.
+- The shared package kept leaving a build cache as siblings of its sources,
+  `.js` files made over and over, and it had to be ignored in `.gitignore` or
+  the VS Code settings.
+- After that pain, as the user recalls it, the idea grew of keeping configs as
+  symmetric as possible and reducing the tools to a few: let the server and the
+  client have the same tools, for instance bundle the server with Vite too.
 
 ## What the history shows
 

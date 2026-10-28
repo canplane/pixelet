@@ -17,9 +17,8 @@ Nothing in it is built yet.
 
 ## The relativity
 
-The user: "래스터는 빛이 도착하는거잖아. 반대로, 상대성으로 생각하는거라구."
-In English: a raster is the light arriving; think of it the other way round,
-by relativity.
+The user's point: a raster is the light arriving, so think of it the other way
+round, by relativity.
 
 Image order walks the screen and asks the world. Object order walks the world
 and projects it onto the screen. [The eye decides](./20261014-the-eye-decides.md)
@@ -84,8 +83,8 @@ blend it. That needs transparency the opaque cells here do not have.
 > ([the cone touches](../experiment/20261028-the-cone-touches.md)). The
 > prune was taken off instead.
 
-The user, before this record: "그냥 뭐든간에 하나라도 걸치면 그냥 거기서
-멈추면?" In English: stop the moment anything at all is touched.
+The user asked, before this record, why not stop the moment anything at all
+is touched.
 
 - **It is the prune turned around.** The prune shrinks a box by half the cone
   and passes what it then misses: it erodes, and holes follow. Stopping where
