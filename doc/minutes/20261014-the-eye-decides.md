@@ -189,59 +189,44 @@ Raster keeps its pyramid in screen space and rebuilds it every frame from the
 frame before. The ray keeps its pyramid in world space, and the GPU folds it
 once, as a square lands (`bound_cs`).
 
-What the rays need was then streamed the way GigaVoxels streams it: the tiles a
-descent lacked were part of the observation, and demand followed them
-(`view/sight.rs`, since removed). That no longer holds: demand is a function of
-the eye alone, never of what the rays met
+What the rays need is not streamed the way GigaVoxels streams it, demand
+following the tiles a descent lacked: demand is a function of the eye alone,
+never of what the rays met
 (`rust/client/kernel/src/domain/view/observation.rs` `ByEye`).
 
 ## Where it points
 
-_Since carried out in part: the grid, the bound and the overwrites are the GPU's
-(the decision's Status), the beam is
-[a cell casts a beam](./20261022-a-cell-casts-a-beam.md), and the chunk no
-longer draws (below)._
-
-**Cost.** The decision records the price: at full resolution a few frames a
-second, at half about thirteen. The descent itself is cheap. What costs is each
-step's query, which reads a tile's samples and computes a height again for every
+**Cost.** The decision recorded the price: at full resolution a few frames a
+second, at half about thirteen. The descent itself is cheap. What cost was each
+step's query, which read a tile's samples and computed a height again for every
 pixel at every step. The decision's order of work — the ground's cell grid
 first, then the bound from it, the wall, the step's size, the storage, the beam,
-and last what is laid over the ground — is aimed at that, each step measured
-alone and reverted if it does not pay. If the whole does not pay, the retreat is
-the first middle road, chunks chosen by rays, from
-`checkpoint/20261012-eye-axis` with the runs gone.
-
-> Since a square's columns are filled on the GPU as it lands (pxl-shader
-> ground.rs `height_cs`), a step reads its cell's column, and no longer reads a
-> tile's samples or runs the bicubic again.
+and last what is laid over the ground — was aimed at that, each step measured
+alone and reverted if it did not pay. A square's columns are filled on the GPU
+as it lands (pxl-shader ground.rs `height_cs`), so a step reads its cell's
+column; the grid, the bound and the overwrites are the GPU's; and the beam is
+[a cell casts a beam](./20261022-a-cell-casts-a-beam.md).
 
 **Two reductions in view.** Neither adds a mechanism; each hands a role the rays
 already play to the rays alone.
 
-- _Which tiles matter._ Fetching then followed the rays' lacks (now the eye
-  alone, above), but evicting ranks tiles by whether a box around each is in the
+- _Which tiles matter._ Fetching follows the eye alone (above), and evicting
+  ranks tiles by whether a box around each is in the
   frustum and by distance (`rust/client/kernel/src/sys/io/demand.rs` `Order`,
   through `rust/spec/src/space/camera/eye.rs` `measure`). A tile behind a
   mountain is in the frustum and no ray reads it. GigaVoxels marks what the rays
   read and evicts what they did not; here the descent already counts the nodes
   it asks about (`c44070e06`). The same order also ranks every layer's work,
   which this did not look into.
-- _The chunk._ What a chunk then did was draw the blocks the CPU's rays stopped
-  on (`chunk/domain.rs`, since removed). The decision's last step moves what is
-  laid over the ground — the separation, what is placed, decor — to the GPU's
-  query, and then retires the CPU's drawing cast. After that a chunk has nothing
-  left to do, and the axis loses a rung: scene, view, query, layer. Sparse voxel
-  renderers have no chunk either, only pages of data and rays. Done but for the
-  rung: a chunk draws nothing, and is now only the address by which what stands
-  in the world, decor and places, is gathered about the eye
-  (`rust/client/kernel/src/domain/chunk.rs`, `domain/view/observation.rs`
-  `cubes`).
-
-  > Since 2026-10-26, the rung is gone too: there is no chunk, not even as an
-  > address. Decor is grown and the markers are read over the eye's windows'
-  > squares (`rust/client/kernel/src/domain/view/observation.rs` `squares`,
-  > `domain/scene/marker/arrangement.rs`).
+- _The chunk._ A chunk drew the blocks the CPU's rays stopped on. The
+  decision's last step moved what is laid over the ground — the separation,
+  what is placed, decor — to the GPU's query, and retired the CPU's drawing
+  cast, so a chunk had nothing left to do, and the axis lost a rung: scene,
+  view, query, layer. Sparse voxel renderers have no chunk either, only pages
+  of data and rays. There is no chunk, not even as an address: decor is grown
+  and the markers are read over the eye's windows' squares
+  (`rust/client/kernel/src/domain/view/observation.rs` `squares`,
+  `domain/scene/marker/arrangement.rs`).
 
 **The floor.** Below these, five things remain, and removing any one brings its
 problem back: the tree, or the cost is linear in the world; the bound, or no

@@ -3,27 +3,25 @@
 **2026-10-20** — ordered in the conversation: recorded, then carried out as
 written and nothing beyond it. The checks below came back with their counts.
 
-**Status (2026-10-24): built, as the observed pyramid** (pxl-spec-core
-observed.rs). It is filled where the rays asked: the beam rays, the samples, and
-the pixels whose reading walk missed (`ray::MISS`), walked again from their
-cell's start in the same pass (pxl-shader cast.rs `miss_list_cs`, off the list
-`cast_cs` makes of them). An entry's key is its walk's tag and the zooms asked
-(`key(tag, [far, near])`); entries are kept between frames and forgotten over
-the squares that moved (`forgets`), or whole where what every node is asked of
-moved (`FORGETS_ALL`). It is not the open-addressed Morton table sketched under
-The structure: nodes are kept in tiles of eight siblings under the world's roots
-(`keeps`), each entry naming its children's tile. _Since 2026-10-26 it is a
-keyed table after all: a bucket of four slots by the hash of the node's zoom and
-index (`entry_of`), the node's words in the entry telling it from another of the
-same bucket, one finding no free slot taking one over (`victim`); no tiles, no
-stack, no children's word, and no larger than the tiles were._
-
 A ray asks the world whether a node is empty
 ([a ray asks the world](./20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)),
 one a pixel on the GPU
 ([the GPU casts a ray a pixel](./20261014-the-gpu-casts-a-ray-a-pixel.md)). This
-records why that cast misses the deploy gate, and the structure that would fix
-it.
+records why that cast missed the deploy gate, and the structure that fixes it.
+
+It is built as the observed pyramid (pxl-spec-core observed.rs), filled where
+the rays asked: the beam rays, the samples, and the pixels that take neither
+the raster's pick nor the sky (`ray::MISS`; pxl-shader observer.rs
+`resolve`), walked from their cell's start (pxl-shader cast.rs
+`miss_list_cs`, `miss_cs`, off the list `cast_cs` makes of them). It is a table
+of slots keyed by the node's zoom and index, a bucket of `BUCKET` slots by its
+hash (`entry_of`), the node's words in the entry telling it from another of
+the same bucket, one finding no free slot taking one over (`victim`); only
+nodes under the world's roots are kept (`keeps`). An entry's key is its walk's
+tag and the zooms asked (`key(tag, [far, near])`); entries are kept between
+frames and forgotten over the squares that moved (`forgets`), or whole where
+what every node is asked of moved (`FORGETS_ALL`). It is not the
+open-addressed Morton table sketched under The structure.
 
 ## What failed
 
@@ -51,11 +49,8 @@ may compose the query whole.
     fallback and `held_of`;
   - the caves' hash and the shard;
   - the ways' cursor, rerooted where the square changes;
-  - the three slabs joined.
-
-  > Since 2026-10-27: each source gives a box in the node's own steps, and the
-  > three boxes are joined
-  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
+  - each source's box in the node's own steps, joined
+    ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
 
   That is a fact of the node, not of the ray. Every ray through the node works
   it out again, every frame. Descent reuses what it established within one ray,
@@ -85,8 +80,8 @@ may compose the query whole.
 - **One function.** The table is filled by the same `world::node` the CPU asks.
   One rule stays one function, and the table is its output stored.
 
-**Eye-independent answers.** Today a coarse node unions the zooms asked across
-it, `[max(far, z + 1), near]`. Those zooms depend on the eye, so that answer
+**Eye-independent answers.** A coarse node unions the zooms asked across it
+(`cast::asked`). Those zooms depend on the eye, so that answer
 cannot be stored. What is stored is the node's own:
 
 - the world at its zoom (its fold);
@@ -103,17 +98,18 @@ function of the world and the eye alone.
 
 ## Alternatives weighed
 
-- **Filled where the sources land: chosen.** The image stays a function of the
+- **Filled where the sources land: chosen first, and ruled out by the checks
+  (below).** The image stays a function of the
   world and the eye. One table is written at arrival and read at every visit, as
   in voxel hashing (Nießner, Zollhöfer, Izadi, Stamminger 2013).
-- **Filled on a ray's request: rejected.** In GigaVoxels (Crassin, Neyret,
+- **Filled on a ray's request: rejected, then taken within the frame.** In GigaVoxels (Crassin, Neyret,
   Lefebvre, Eisemann 2009) a ray that misses requests the node, a producer
   composes it into a node pool, and the next frame reads it.
   - **Gain:** only observed nodes are made.
   - **Loss:** a node filled a frame late shows a frame late.
   - Filling within the frame and resuming each ray from its stop avoids that,
-    but adds passes. It is the structure taken if check 4 below rules out
-    filling where the sources land.
+    but adds passes. It is the structure taken, since checks 1 and 4 below
+    rule out filling where the sources land.
 - **Kept as is, query trimmed: rejected.** Reading only the window entry a
   visit, and the value and four looks at the stop, was estimated statically at
   1.3–2×. That is short of the gate.
@@ -187,9 +183,8 @@ and data, never estimated.
 - `world::node` answers an `In<[u32; 2]>`: a `Kind` (`Split`, `Cell` or
   `Lacks`) and two words.
   - For a cell, the words are its asset and its four looks.
-  - For a split, they are its slab word.
-
-  > Since 2026-10-27: its box in its own steps on every axis (`answer::box_word`).
+  - For a split, they are its box in its own steps on every axis
+    (`answer::box_word`).
 - Its `block` flag is the node's zoom against the zoom asked, which the ray has,
   so it is not stored.
 - Each piece of state it threads follows from the node's line alone:
@@ -201,51 +196,45 @@ and data, never estimated.
 - So the answer is a function of the node and the zooms asked. A record of the
   kind and two words holds it.
 
-**3. The zooms asked, as the walk forms them.**
+**3. The zooms asked.**
 
-- `asking` is `[detail.at(t1²·|d|²), detail.at(|near|²)]` (`cast::walk`):
-  - `near` is the asked zoom at the node's nearest point to the eye, a function
-    of the node and the eye.
-  - `far` is the asked zoom at the ray's exit from the node, which differs ray
-    by ray.
-- So no stored answer is exact for every ray through the node.
+- A ray asks within a node from the zoom at its nearest point to the eye,
+  `near`, a function of the node and the eye, to the zoom at the ray's exit
+  from it, which differs ray by ray.
+- So no answer keyed by a ray's own zooms is exact for every ray through the
+  node.
 - An eye-independent bound would read every zoom under the node, finer than a
   far ray asks. 20261013 forbids that, and filling at arrival would need it.
-- Filled within the frame, the entry can be keyed by the node and the eye's
-  pair: `near` as now, and `far` at the node's farthest point from the eye.
+- Filled within the frame, the entry is keyed by the node and the eye's pair:
+  `near`, and `far` at the node's farthest corner from the eye (`cast::asked`,
+  `reach`).
   - That range holds every ray's range and adds only coarser zooms.
   - 20261013 allows that ("more cautiously, which only splits more").
   - No zoom finer than asked is read, and the ray stops on the same block.
 
 **So** the structure taken is the one this record names for that case: one
 table, filled within the frame from the rays' misses, each ray resuming from its
-stop. Each entry is keyed by the node and its asked pair. Nothing is built yet:
-what filling within the frame costs (how many passes a frame, how many misses)
-is not counted here.
+stop. Each entry is keyed by the node and its asked pair. What filling within
+the frame costs, how many passes a frame and how many misses, is counted
+below.
 
 ## Filling within the frame, counted
 
 The E120 eye's rays were walked on the CPU over the r12 tiles
-(`out/terrain.publish`), through the cast's own walk: `cast::start`, then
-`cast::first_from` a ray, and `world::node`. The view was dpr 2, 3652 × 2226 =
+(`out/terrain.publish`), through the cast's own walk: `cast::first` a ray
+(pxl-spec-core cast.rs, over `cast::walk`), and `world::node`. The view was dpr 2, 3652 × 2226 =
 8,129,352 rays. Each visit's key was recorded: the node, the `near` the walk
 asks, and `far` at the node's farthest point from the eye. Neither the log nor
 the probe was kept.
-
-> Since renamed: `cast::start` and `cast::first_from` are gone; a walk from the
-> world's root is `cast::first` (pxl-spec-core cast.rs, over `cast::walk`).
 
 - **The walk matches the GPU's.** A ray visits 18.00 nodes on average, where the
   GPU's cast decodes 18.0 at E120 (the same walk log).
 - **The table is small.** A frame's 146,351,342 visits read 68,677 distinct
   keys, so each key is visited about 2,100 times a frame.
-  - The camera grid's cell spans about twelve drawn pixels (`target_cell_px`),
-    so the rays through a node are many.
-
-    > **Note (10-28):** `target_cell_px` is gone. It was the τ 1 cell,
-    > 1/192 rad, in drawn pixels at ratio 2. The view's cell is 1/96 rad
-    > (pxl-spec-core grid.rs `CELLS_A_RADIAN`), an angle, never pixels: on
-    > a view 1080 CSS pixels high at 50°, about 24 drawn pixels at ratio 2.
+  - The camera grid's cell then spanned about twelve drawn pixels, so the
+    rays through a node are many. The view's cell is 1/96 rad (pxl-spec-core
+    grid.rs `CELLS_A_RADIAN`), an angle, never pixels: on a view 1080 CSS
+    pixels high at 50°, about 24 drawn pixels at ratio 2.
   - The world is composed 68,677 times a frame, not 146 million.
 - **A frame after a drag.** The eye moved 1.21 units (12 CSS px at the focus)
   and the table was the one the frame before left:
@@ -262,17 +251,13 @@ the probe was kept.
   - what a lean visit costs on the GPU;
   - when the table drops keys no frame reads any more.
 
-## What disappears when it is built
+## What disappears where an entry holds the node
 
-_As built (Status), only the reading walk is free of these (pxl-shader
-observed.rs `Reading`); the walks that write the pyramid still compose a node
-its entry does not hold, from what was handed it, and keep that in the entry
-(`Writing`, `world::At::words`)._
-
-_Note (2026-10-27): no walk only reads the pyramid any more. The pixel pass
-walks nothing, taking the raster's pick or the sky and listing the rest for
-the walk again (pxl-shader cast.rs `cast_cs`), so the reading walk and its
-`Reading` are gone; every walk writes it (`Writing`)._
+Every walk writes the pyramid (pxl-shader observed.rs `Writing`): it composes
+a node its entry does not hold, from what was handed it, and keeps that in the
+entry (`world::At::words`). The pixel pass walks nothing, taking the raster's
+pick or the sky and listing the rest for the walk again (pxl-shader cast.rs
+`cast_cs`). Where an entry holds the node, a walk is free of:
 
 - Every source's composition inside the cast: placed, ground, zoom loop,
   fallback, `held_of`, caves, shard, the ways' cursor and the slab join.
