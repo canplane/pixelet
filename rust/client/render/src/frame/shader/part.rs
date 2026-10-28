@@ -123,7 +123,9 @@ pub const SHADER_SUN_REACH: u32 = 56;
 pub const SHADER_GROWN_STAND: u32 = 57;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
 pub const SHADER_SCREEN_FINISH: u32 = 58;
-pub const SHADERS: u32 = 59;
+/// The world's color gathered over frames (screen_resolve.wgsl).
+pub const SHADER_SCREEN_RESOLVE: u32 = 59;
+pub const SHADERS: u32 = 60;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -356,4 +358,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["decor_stand.gen"],
     // SHADER_SCREEN_FINISH
     &["frame", "encode", "finish", "screen_finish"],
+    // SHADER_SCREEN_RESOLVE
+    &["frame", "screen_resolve"],
 ];

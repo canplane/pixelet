@@ -80,7 +80,9 @@ pub const PIPELINE_RASTER: u32 = 34;
 /// The world's color onto the canvas, encoded once, and its depth carried to
 /// the canvas's size (gpu/finish.rs).
 pub const PIPELINE_SCREEN_FINISH: u32 = 35;
-pub const PIPELINES: u32 = 36;
+/// The world's color gathered over frames (gpu/resolve.rs).
+pub const PIPELINE_SCREEN_RESOLVE: u32 = 36;
+pub const PIPELINES: u32 = 37;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -588,6 +590,18 @@ const fn plan_of(id: u32) -> Plan {
             },
             &[],
             &[&[[0, UNIFORM], [1, TEXTURE], [2, DEPTH]]],
+        ),
+        PIPELINE_SCREEN_RESOLVE => plan(
+            screen(SHADER_SCREEN_RESOLVE),
+            &[],
+            &[&[
+                [0, UNIFORM],
+                [1, TEXTURE],
+                [2, DEPTH],
+                [3, TEXTURE],
+                [4, SAMPLER],
+                [5, UNIFORM],
+            ]],
         ),
         PIPELINE_IMPOSTOR => plan(
             Head {

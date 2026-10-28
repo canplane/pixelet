@@ -17,6 +17,7 @@ pub mod put;
 pub mod ray;
 pub mod read;
 pub mod renderer;
+pub mod resolve;
 pub mod shadow;
 pub mod sheet;
 #[path = "gpu/span.spec.rs"]

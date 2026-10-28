@@ -17,9 +17,10 @@ pub const SURFACES: usize = 9;
 /// otherwise be a new depth and color target.
 pub const SETTLE_TURNS: u32 = 4;
 
-/// The world's color as its passes leave it, toned and linear, blended there
-/// and encoded onto the canvas once (gpu/finish.rs): a float, so the finish's
-/// dither falls between levels the canvas has and none the color had.
+/// The world's color as its passes leave it, toned and linear, blended
+/// there, gathered over frames (gpu/resolve.rs) and encoded onto the canvas
+/// once (gpu/finish.rs): a float, so the finish's dither falls between
+/// levels the canvas has and none the color had.
 pub const WORLD_COLOR: Format = Format::rgba16float;
 
 #[derive(Clone, Copy, Default)]
@@ -45,7 +46,8 @@ pub struct Surface {
     pub depth: u32,
     pub depth_view: u32,
     /// The color its passes draw into (`WORLD_COLOR`), made with the depth,
-    /// which the finish encodes onto the canvas.
+    /// which the world's gathers over frames (`history`) and the finish
+    /// encodes onto the canvas.
     pub color: u32,
     pub color_view: u32,
     /// The canvas's size, its device pixels (`screen_px`), and the depth
@@ -59,11 +61,16 @@ pub struct Surface {
     /// layer (pxl-spec-core `ray`).
     pub rays: u32,
     pub rays_view: u32,
+    /// The world's color gathered over frames, two of `WORLD_COLOR` made
+    /// with the depth, the last frame's read as this one's is written, in
+    /// turn (gpu/resolve.rs): the world's alone.
+    pub history: [u32; 2],
+    pub history_view: [u32; 2],
 }
 
 impl Surface {
     /// What it holds on the GPU, every one made again with its size.
-    pub fn targets(&self) -> [u32; 8] {
+    pub fn targets(&self) -> [u32; 12] {
         [
             self.depth_view,
             self.depth,
@@ -73,6 +80,10 @@ impl Surface {
             self.screen_depth,
             self.rays_view,
             self.rays,
+            self.history_view[0],
+            self.history[0],
+            self.history_view[1],
+            self.history[1],
         ]
     }
 

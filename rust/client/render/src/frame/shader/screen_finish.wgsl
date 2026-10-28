@@ -1,7 +1,8 @@
 // pxl-render/frame/shader/screen_finish.wgsl
 
-// The world's color, toned and blended linear by its passes, brought from the
-// world's pixels up to the canvas's and encoded onto it once (finish.wgsl
+// The world's color, toned and blended linear by its passes and the world's
+// gathered over frames (screen_resolve.wgsl), brought from the world's
+// pixels up to the canvas's and encoded onto it once (finish.wgsl
 // `finish`), premultiplied by its alpha for a surface that shows through
 // where nothing was drawn; and the world's depth carried up with it, the
 // nearest of what a canvas pixel covers, which what is drawn over the world

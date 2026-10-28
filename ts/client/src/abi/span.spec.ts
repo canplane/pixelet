@@ -11,6 +11,7 @@ export const GPU_SPAN_NAMES = [
   "prepass",
   "ao",
   "world",
+  "resolve",
   "marker",
   "debug",
   "case",

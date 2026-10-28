@@ -1,10 +1,11 @@
 // pxl-render/gpu/finish.rs
 
 //! The canvas from the world's color: what its passes left there, toned and
-//! blended linear (gpu/surface.rs `WORLD_COLOR`), brought from the world's
-//! pixels up to the canvas's and encoded once (screen_finish.wgsl), at the
-//! frame's vignette; and the world's depth carried up to the canvas's size
-//! with it (`Surface::screen_depth`).
+//! blended linear (gpu/surface.rs `WORLD_COLOR`), the world's gathered over
+//! frames (gpu/resolve.rs), brought from the world's pixels up to the
+//! canvas's and encoded once (screen_finish.wgsl), at the frame's vignette;
+//! and the world's depth carried up to the canvas's size with it
+//! (`Surface::screen_depth`).
 
 use crate::frame::shader::record::PIPELINE_SCREEN_FINISH;
 use crate::gpu::api::{buffer_entry, pass_desc, release, view_entry, Gpu, Load, Stamp};
@@ -32,26 +33,28 @@ impl Finish {
         release(self.group);
     }
 
-    /// `s`'s color onto `canvas` and its depth into its screen's, a pass of
-    /// its own, by the frame words in `frame`, its time counted in `stamp`'s
-    /// span.
+    /// `color`, `s`'s world color as it is shown, onto `canvas` and `s`'s
+    /// depth into its screen's, a pass of its own, by the frame words in
+    /// `frame`, its time counted in `stamp`'s span.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
         g: &Gpu,
         encoder: u32,
         frame: u32,
         s: &Surface,
+        color: u32,
         canvas: u32,
         stamp: &mut Stamp,
     ) {
-        let bound = [frame, s.color_view, s.depth_view];
+        let bound = [frame, color, s.depth_view];
         if bound != self.bound {
             release(self.group);
             self.group = g.bind_group(
                 self.built.layouts[0],
                 &[
                     buffer_entry(0, frame),
-                    view_entry(1, s.color_view),
+                    view_entry(1, color),
                     view_entry(2, s.depth_view),
                 ],
             );

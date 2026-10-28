@@ -164,8 +164,15 @@ impl Case {
         g.end(pass);
         // Encoded onto its canvas at its own frame's words, no vignette.
         let view_id = g.current(s.handle);
-        self.finish
-            .draw(g, encoder, self.frame_buffer, s, view_id, stamp);
+        self.finish.draw(
+            g,
+            encoder,
+            self.frame_buffer,
+            s,
+            s.color_view,
+            view_id,
+            stamp,
+        );
         release(view_id);
     }
 }
