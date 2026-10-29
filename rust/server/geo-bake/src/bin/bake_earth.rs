@@ -140,14 +140,14 @@ impl<const N: usize> Plate<'_, N> {
     /// The mean over a box of longitude and latitude, in degrees, each pixel
     /// weighed by how much of it the box covers; a box narrower than a pixel is
     /// widened to one, so a coarse source is read as a tent, not as steps.
-    fn mean(&self, [lng0, lng1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
+    fn mean(&self, [lon0, lon1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
         let span = |a: f64, b: f64| {
             let (mid, half) = ((a + b) / 2.0, ((b - a).abs() / 2.0).max(0.5));
             (mid - half, mid + half)
         };
         let (x0, x1) = span(
-            (lng0 + 180.0) / 360.0 * self.width as f64,
-            (lng1 + 180.0) / 360.0 * self.width as f64,
+            (lon0 + 180.0) / 360.0 * self.width as f64,
+            (lon1 + 180.0) / 360.0 * self.width as f64,
         );
         let (y0, y1) = span(
             (90.0 - lat1) / 180.0 * self.height as f64,
@@ -172,10 +172,10 @@ impl<const N: usize> Plate<'_, N> {
 }
 
 /// Longitude and latitude, in degrees, of a point of the plane in units.
-fn lng_lat(x: f64, y: f64) -> [f64; 2] {
-    let [lng, lat, _] =
+fn lon_lat(x: f64, y: f64) -> [f64; 2] {
+    let [lon, lat, _] =
         epsg4326::from_mercator(&[epsg3857::merc_from_u(x), epsg3857::merc_from_u(y), 0.0]);
-    [lng, lat]
+    [lon, lat]
 }
 
 fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
@@ -190,14 +190,14 @@ fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
                 q3::to_real(i64::from(base[0])),
                 q3::to_real(i64::from(base[1])),
             );
-            let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side, y + side));
-            let [r, g, b] = day.mean([lng0, lng1], [lat0, lat1]).map(to_srgb);
+            let ([lon0, lat0], [lon1, lat1]) = (lon_lat(x, y), lon_lat(x + side, y + side));
+            let [r, g, b] = day.mean([lon0, lon1], [lat0, lat1]).map(to_srgb);
             let at = idx as usize * 4;
             rgba[at..at + 4].copy_from_slice(&[
                 r,
                 g,
                 b,
-                lights_byte(night.mean([lng0, lng1], [lat0, lat1])[0]),
+                lights_byte(night.mean([lon0, lon1], [lat0, lat1])[0]),
             ]);
         }
     }
@@ -219,12 +219,12 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
                         90.0 - j as f64 * 180.0 / h as f64,
                     ];
                     for (i, texel) in row.chunks_mut(4).enumerate() {
-                        let lng = [
+                        let lon = [
                             i as f64 * 360.0 / w as f64 - 180.0,
                             (i + 1) as f64 * 360.0 / w as f64 - 180.0,
                         ];
-                        let [r, g, b] = day.mean(lng, lat).map(to_srgb);
-                        texel.copy_from_slice(&[r, g, b, lights_byte(night.mean(lng, lat)[0])]);
+                        let [r, g, b] = day.mean(lon, lat).map(to_srgb);
+                        texel.copy_from_slice(&[r, g, b, lights_byte(night.mean(lon, lat)[0])]);
                     }
                 }
             });

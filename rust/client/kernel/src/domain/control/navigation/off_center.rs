@@ -19,8 +19,8 @@ static OFF_CENTER: Global<bool> = Global::new();
 /// At its altitude; where the device gives none, its Z unknown.
 fn device_coord() -> Option<Q3> {
     device_location_store().location.map(|l| {
-        let [lng, lat] = l.coords;
-        let at = epsg4326::project(&[lng, lat, l.alt.unwrap_or(0.0)]);
+        let [lon, lat] = l.coords;
+        let at = epsg4326::project(&[lon, lat, l.alt.unwrap_or(0.0)]);
         if l.alt.is_some() {
             at
         } else {

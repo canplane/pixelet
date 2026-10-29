@@ -259,7 +259,7 @@ impl EnvironmentDraw {
             ground_km: ground * km_per_u,
             km_per_u,
             lat: lat.to_radians(),
-            lng: lon.to_radians(),
+            lon: lon.to_radians(),
             star_frame: self.star_frame,
         };
         write_environment(&mut self.out, &light);

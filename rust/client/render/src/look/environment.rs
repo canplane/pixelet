@@ -35,7 +35,7 @@ pub struct Light {
     pub alt_km: f64,
     pub km_per_u: f64,
     pub lat: f64,
-    pub lng: f64,
+    pub lon: f64,
     /// Where the sky draws its own ground, so the terrain does not stand over it.
     pub ground_km: f64,
     /// The equatorial frame to the local one, as rows.
@@ -62,7 +62,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     put3(o, ENV_MOON_COLOR, f32s(&moon_color));
     o[ENV_SKY] = (light.stars * night) as f32;
     o[ENV_SKY + 1] = light.time as f32;
-    o[ENV_SKY + 2] = light.lng as f32;
+    o[ENV_SKY + 2] = light.lon as f32;
 
     o[ENV_AIR] = light.alt_km as f32;
     o[ENV_AIR + 1] = light.km_per_u as f32;

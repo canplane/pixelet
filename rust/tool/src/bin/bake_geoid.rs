@@ -35,10 +35,10 @@ impl Grid {
         self.m[row * self.width + col % self.width]
     }
 
-    /// Bilinear at `lat`, `lng` in degrees, `lng` from 0 east.
-    fn bilinear(&self, lat: f64, lng: f64) -> f64 {
+    /// Bilinear at `lat`, `lon` in degrees, `lon` from 0 east.
+    fn bilinear(&self, lat: f64, lon: f64) -> f64 {
         let per = (self.height - 1) as f64 / 180.0;
-        let (r, c) = ((90.0 - lat) * per, lng.rem_euclid(360.0) * per);
+        let (r, c) = ((90.0 - lat) * per, lon.rem_euclid(360.0) * per);
         let (r0, c0) = (r.floor() as usize, c.floor() as usize);
         let (fr, fc) = (r - r0 as f64, c - c0 as f64);
         let r1 = (r0 + 1).min(self.height - 1);
@@ -126,8 +126,8 @@ fn run() -> Result<(), String> {
     let (mut worst, mut bricks): (f64, f64) = (0.0, 0.0);
     for r in 0..fine.height {
         for c in 0..fine.width {
-            let (lat, lng) = (90.0 - r as f64 / per as f64, c as f64 / per as f64);
-            let miss = (coarse.bilinear(lat, lng) - fine.at(r, c)).abs();
+            let (lat, lon) = (90.0 - r as f64 / per as f64, c as f64 / per as f64);
+            let miss = (coarse.bilinear(lat, lon) - fine.at(r, c)).abs();
             (worst, bricks) = (worst.max(miss), bricks + miss * miss);
         }
     }

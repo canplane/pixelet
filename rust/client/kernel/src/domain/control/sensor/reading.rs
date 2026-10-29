@@ -113,10 +113,10 @@ impl DeviceLocationStore {
         }
 
         // Dead zone: ~1.1 m horizontally, 0.5 m in altitude.
-        let lng_diff = (prev.coords[0] - coords[0]).abs();
+        let lon_diff = (prev.coords[0] - coords[0]).abs();
         let lat_diff = (prev.coords[1] - coords[1]).abs();
         let is_significant_change =
-            lat_diff > 0.00001 || lng_diff > 0.00001 || is_delta_over(prev.alt, alt, 0.5);
+            lat_diff > 0.00001 || lon_diff > 0.00001 || is_delta_over(prev.alt, alt, 0.5);
 
         if !is_significant_change && prev.accuracy == accuracy && prev.course == course {
             return;
