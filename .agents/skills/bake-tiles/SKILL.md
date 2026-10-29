@@ -32,10 +32,8 @@ The bakes read the geo database directly:
 docker compose -f infra/local/docker-compose.yml up -d
 ```
 
-A missing or partial table needs an ingest, not a bake: the bake refuses and
-names the ingest to run
-([infra/geo/README.md](../../../infra/geo/README.md)). **Never `down -v` to
-"reset" the database**: the volume is several gigabytes of ingested data.
+A missing or partial table needs an ingest; the bake names it
+([infra/geo/README.md](../../../infra/geo/README.md)). **Never `down -v`.**
 
 ## Stages and flags
 
@@ -60,13 +58,10 @@ make bake-terrain ARGS="--stage fold --stage commit"
 
 ## Verifying
 
-1. **Zero failures.** The leaf stage's line reports `failed=`; above zero, tiles
-   are missing, so repeat the stage.
+1. **Zero failures** in the leaf stage's `failed=`.
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
-   It bakes a missing tile with the same functions but compresses at zstd's
-   fast level, so compare the decompressed packets, not the files. Run
-   `make serve-tile`, not `dev`, which proxies every route to the live
-   deployment:
+   Compare the decompressed packets, not the files. Run `make serve-tile`, not
+   `dev`:
 
    ```bash
    v=$(curl -s localhost:3001/tile/source | jq -r .version.terrain)
@@ -74,24 +69,19 @@ make bake-terrain ARGS="--stage fold --stage commit"
    zstd -dcq ./out/terrain/<name> | shasum
    ```
 
-   For a tile coarser than z13 the server first bakes everything under it, so
-   the first request takes seconds to a minute. A mismatch means the two paths
-   have drifted: investigate before publishing.
+   A tile coarser than z13 takes up to a minute on its first request. On a
+   mismatch, investigate before publishing.
 3. **Places:** the manifest's `zooms` reach the coarsest the client reads
    (pxl-spec `lattice.rs` `coarsest`), and a leaf decodes
-   (`pxl-spec bake/tile/place.rs` `decode`). The client draws places only with
-   the `place` setting on, which is off by default, so a world without them is
-   not a failed bake.
+   (`pxl-spec bake/tile/place.rs` `decode`). Places draw only with the `place`
+   setting on (off by default).
 4. **Divisions:** `failed=` is zero and a tile decodes
    (`pxl-spec bake/tile/division.rs` `decode`).
 
 ## Versions
 
-**Every bake gets a new version name**, and a published version is never
-rewritten; to go back, run `./script/publish.py serve <kind> <version>`. Bump
-the kind's `FORMAT` (`spec/spec/bake/published.json`) only when how the client
+**Every bake gets a new version name.** Bump the kind's `FORMAT` (`spec/spec/bake/published.json`) only when how the client
 reads a tile changes (its format in `pxl-spec bake/`).
 
-The dev tile server keeps tiles it baked on demand in `out/oven/` across
-restarts. After a re-ingest or a bake change, run `rm -rf out/oven`, or it keeps
-serving the old tiles.
+After a re-ingest or a bake change, `rm -rf out/oven` (the dev tile server's
+cache).

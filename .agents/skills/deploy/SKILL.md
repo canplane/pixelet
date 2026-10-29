@@ -1,18 +1,14 @@
 ---
 name: deploy
-description: Send a finished line out, in one order — check and test once, squash main into its archive and checkpoint, push to deploy and watch CI, export xpute last — and what to do when the smoke fails. Use before squashing main, before any `git push origin main:deploy`, before exporting xpute, and while a deploy runs.
+description: Send a finished line out, in one order — check and test once, squash main into its archive and checkpoint, push to the deploy branch and watch CI, export xpute last — and what to do when the smoke fails. Use only when the user asks to deploy, squash main or export xpute. Not for a plain `git push origin main`.
 ---
 
 # Deploying
 
-Do these steps in this order. You may skip a step, but never reorder them. A
-squash changes main's hash, and the deploy and the xpute export record that
-hash, so anything done before the squash has to be done again after it.
+Do these steps in this order. Skip a step if you like; never reorder them.
 
-1. **Commit everything.** A fix found later goes into the next round, which
-   starts again from step 1.
-2. **Check and test once** on that tree (below). Nothing after this step
-   changes a file, so the result still holds.
+1. **Commit everything.** A fix found later starts a new round from step 1.
+2. **Check and test once** on that tree (below). Change no file after it.
 3. **Squash** main into one commit, keeping the originals in the archive and
    putting the checkpoint on the squash.
 4. **Deploy**, if one was asked for: push the squash and watch CI.
@@ -20,21 +16,18 @@ hash, so anything done before the squash has to be done again after it.
 
 ## Check and test
 
-CI runs no checks; it only builds, deploys, smokes and records. A check that
-fails after the push wastes a build number, so run everything first. Uploading
-to the bucket is [publish-bucket](../publish-bucket/SKILL.md), not a deploy.
+CI runs no checks. Uploading to the bucket is
+[publish-bucket](../publish-bucket/SKILL.md).
 
-Run from a tree whose HEAD is the commit to send, with nothing uncommitted (the
-checks read the working tree, and another session's edits would be in it):
+Run from a tree whose HEAD is the commit to send, with nothing uncommitted:
 
 ```bash
 make -j8 check && make -j8 test
 ```
 
-Always run the full `check` and `test`, never a subset. Neither covers the GPU
-hosts: if the change touches a GPU call (`xpute/spec/gpu/`, xpute's `gpu`
-crates and packages, or how pxl-render encodes), also run
-`make -C xpute test-gpu`, which needs a GPU and Chrome (`$CHROME`).
+If the change touches a GPU call (`xpute/spec/gpu/`, xpute's `gpu` crates and
+packages, or how pxl-render encodes), also run `make -C xpute test-gpu` (a GPU
+and Chrome, `$CHROME`).
 
 ## Squash
 
@@ -101,9 +94,8 @@ that takes a new build number and redeploys both halves.
 
 ## Export xpute
 
-xpute's repository (`github.com/canplane/xpute`) gets one commit per round, made
-from the squash, because its message names the source commit. Clone it under
-the session's scratch directory, never next to the checkout:
+xpute's repository (`github.com/canplane/xpute`) gets one commit per round,
+made from the squash. Clone it under the session's scratch directory:
 
 ```bash
 ./xpute/script/export.py --to <clone>            # prints the stamp, pixelet@<squash>
@@ -116,4 +108,4 @@ saying what xpute became, a paragraph per part, ending
 `Taken from pixelet@<squash>.` No Co-Authored-By or session line. If the
 repository's last commit is this line's own earlier export, replace it: reset
 the clone to the commit before it and push with `--force-with-lease` against
-the one it replaces, so the line stays one commit there too.
+the one it replaces.
