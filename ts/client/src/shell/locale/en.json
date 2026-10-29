@@ -68,8 +68,8 @@
           "description": "Darkens contact areas and inside corners so cubes look grounded instead of floating. Light on performance."
         },
         "screen": {
-          "label": "Detailed (SSAO)",
-          "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."
+          "label": "Everything (SSAO)",
+          "description": "Adds soft shading to everything on screen, decor and characters too, not just cubes. The most demanding option, as it processes the whole screen."
         }
       },
       "shadows": {
