@@ -67,8 +67,8 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-/// The lanes, in order: tasks, frames, the worst frames and the summary's
-/// scratch (summary.rs).
+/// The lanes, in order: tasks, frames, the worst frames and the read's
+/// scratch (read.rs).
 const LANES: [u32; 4] = [
     (TASK_LIMIT * size_of::<TaskRow>()) as u32,
     (FRAME_LIMIT * size_of::<FrameSample>()) as u32,
@@ -113,7 +113,7 @@ struct Profiler {
     stopped_at: Option<f64>,
     worst: Box<[WorstFrame]>,
     worst_len: usize,
-    /// The summary's, where it sorts what it spreads (summary.rs).
+    /// The read's, where it sorts what it spreads (read.rs).
     scratch: Box<[f64]>,
     /// The interval in progress: the last frame turn's record, which every
     /// turn after it adds its time to until the next frame turn closes it.
@@ -153,7 +153,7 @@ pub fn profiler_recording() -> bool {
     profiler().recording
 }
 
-/// The recording as the summary's section holds it, each flag 0 or 1.
+/// The recording as NOW's rec section holds it, each flag 0 or 1.
 pub fn profiler_recording_state() -> RecSection {
     let l = profiler();
     RecSection {
@@ -217,7 +217,7 @@ pub fn profiler_release() {
     );
 }
 
-/// The summary's scratch, empty while the lanes are not held.
+/// The read's scratch, empty while the lanes are not held.
 pub(crate) fn profiler_scratch() -> &'static mut [f64] {
     &mut profiler().scratch
 }

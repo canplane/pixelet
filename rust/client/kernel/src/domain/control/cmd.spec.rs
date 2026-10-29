@@ -657,7 +657,7 @@ pub enum Command {
     PROFILER_START = 0x1901,
     /// The window frozen, so what is exported holds still.
     PROFILER_STOP = 0x1902,
-    /// The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)
+    /// The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics
     /// over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
     /// number past the door is finite, so no window is infinite.
     PROFILER_READ = 0x1903,

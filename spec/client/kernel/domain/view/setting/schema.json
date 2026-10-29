@@ -269,7 +269,7 @@
     },
     "view": {
       "number": 13,
-      "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],
+      "$doc": ["Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"

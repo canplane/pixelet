@@ -171,8 +171,8 @@ pub mod SPREAD {
     pub const WORDS: u32 = 3;
 }
 
-/// One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported.
-pub mod TASK_SUMMARY {
+/// One stream's tasks in the window, at STATS.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported.
+pub mod STREAM_STATS {
     pub const n: u32 = 0;
     pub const ok: u32 = 1;
     pub const aborted: u32 = 2;
@@ -186,8 +186,8 @@ pub mod TASK_SUMMARY {
     pub const WORDS: u32 = 24;
 }
 
-/// One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES.
-pub mod STEP {
+/// One registered step's timing, at STATS.steps.slots + its index × WORDS. `name` indexes STEP_NAMES.
+pub mod STEP_STATS {
     pub const phase: u32 = 0;
     pub const name: u32 = 1;
     pub const ms: u32 = 2;
@@ -196,17 +196,10 @@ pub mod STEP {
     pub const WORDS: u32 = 5;
 }
 
-/// The summary PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and the summary's WORDS where the last ends, both laid out by the generator.
-pub mod SUMMARY {
-    pub mod rec {
-        pub const AT: u32 = 0;
-        pub const recording: u32 = 0;
-        pub const elapsed_ms: u32 = 1;
-        pub const truncated: u32 = 2;
-        pub const WORDS: u32 = 3;
-    }
+/// The window's statistics PROFILER_READ computes, over its `window_ms`: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and WORDS where the last ends, both laid out by the generator.
+pub mod STATS {
     pub mod frames {
-        pub const AT: u32 = 3;
+        pub const AT: u32 = 0;
         pub const present: u32 = 0;
         pub const n: u32 = 1;
         pub const seconds: u32 = 2;
@@ -237,22 +230,34 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 402;
     }
     pub mod tasks {
-        pub const AT: u32 = 405;
+        pub const AT: u32 = 402;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 525;
+        pub const AT: u32 = 522;
         pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
+    }
+    pub const WORDS: u32 = 683;
+}
+
+/// What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STATS lays out its own. Every word an f64.
+pub mod NOW {
+    pub mod rec {
+        pub const AT: u32 = 0;
+        pub const recording: u32 = 0;
+        pub const elapsed_ms: u32 = 1;
+        pub const truncated: u32 = 2;
+        pub const WORDS: u32 = 3;
     }
     /// Where the camera, its pivot and the pointer are as the read finds them, recording or not: `eye_x`..`eye_z`, `dist`, `pivot_x`..`pivot_z`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, angles in radians, `pivot_lon` and `pivot_lat` in degrees and `pivot_alt` in meters, a zoom as its number, and NaN where there is none.
     /// The eye is where the camera looks from and the pivot the point it turns about, the eye itself in the first-person camera, where the character stands (pxl-kernel domain/control/camera/controller.rs `eye_world`, `pivot`).
     /// The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_dist`).
     /// The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `pick_at`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: u32 = 686;
+        pub const AT: u32 = 3;
         pub const eye_x: u32 = 0;
         pub const eye_y: u32 = 1;
         pub const eye_z: u32 = 2;
@@ -280,23 +285,29 @@ pub mod SUMMARY {
         pub const blocked: u32 = 24;
         pub const WORDS: u32 = 25;
     }
-    pub const WORDS: u32 = 711;
+    pub const WORDS: u32 = 28;
 }
 
-/// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.
+/// What PROFILER_READ answers with the address of: u32 words, where STATS and NOW lie in the module's memory and their words.
 pub mod READ {
-    pub const summary_at: u32 = 0;
-    pub const summary_words: u32 = 1;
+    pub const stats_at: u32 = 0;
+    pub const stats_words: u32 = 1;
+    pub const now_at: u32 = 2;
+    pub const now_words: u32 = 3;
+    pub const WORDS: u32 = 4;
+}
+
+/// Where one ring lies: its address in the module's memory and its record count.
+pub mod RING {
+    pub const at: u32 = 0;
+    pub const cnt: u32 = 1;
     pub const WORDS: u32 = 2;
 }
 
-/// What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count.
+/// What PROFILER_RINGS answers with the address of: u32 words, a RING apiece.
 pub mod RINGS {
-    pub const frames_at: u32 = 0;
-    pub const frames_cnt: u32 = 1;
-    pub const tasks_at: u32 = 2;
-    pub const tasks_cnt: u32 = 3;
-    pub const worst_at: u32 = 4;
-    pub const worst_cnt: u32 = 5;
+    pub const frames: u32 = 0;
+    pub const tasks: u32 = 2;
+    pub const worst: u32 = 4;
     pub const WORDS: u32 = 6;
 }

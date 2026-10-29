@@ -255,7 +255,7 @@ pub enum SettingKey {
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
     res = 12,
-    /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
+    /// Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section).
     view = 13,
     /// The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`).
     profiler = 14,

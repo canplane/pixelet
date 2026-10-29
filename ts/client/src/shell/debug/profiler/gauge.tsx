@@ -50,7 +50,7 @@ const geo = (
 ) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
 const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-/** What the pick met, by the kernel's code (profiler.json `SUMMARY.view`). */
+/** What the pick met, by the kernel's code (profiler.json `NOW.view`). */
 const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
 
 /** A unit to an eighth, the finest cell (z27), with no trailing zeros. */

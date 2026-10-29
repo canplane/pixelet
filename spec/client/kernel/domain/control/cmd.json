@@ -1365,7 +1365,7 @@
           "name": "PROFILER_READ",
           "value": 6403,
           "$doc": [
-            "The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)",
+            "The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics",
             "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
             "number past the door is finite, so no window is infinite."
           ],

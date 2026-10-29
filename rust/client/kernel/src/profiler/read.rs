@@ -1,8 +1,9 @@
-// pxl-kernel/profiler/summary.rs
+// pxl-kernel/profiler/read.rs
 
-//! The profiler window reduced into profiler.json's SUMMARY, read in
-//! place by the panel and the report so both agree. Sections go only through
-//! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
+//! What PROFILER_READ reads: the profiler window reduced into profiler.json's
+//! STATS, and what holds as it reads into its NOW, each read in place by the
+//! panel and the report so both agree. Sections go only through `put`;
+//! indexing lanes by hand let sections drift out of order (2026-09-23).
 
 use crate::domain::control::camera::controller;
 use crate::profiler::frame::FrameSample;
@@ -12,9 +13,9 @@ use crate::profiler::record::{
 };
 use crate::profiler::section::TASK_PHASES;
 use crate::profiler::section::{
-    FramesSection, Spread, Step, StepsSection, TaskSummary, TasksSection, ViewSection,
+    FramesSection, Spread, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
 };
-use crate::profiler::spec::{LIMITS, SUMMARY};
+use crate::profiler::spec::{LIMITS, NOW, STATS};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sys::io::failure::Outcome;
@@ -25,20 +26,23 @@ use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-const WORDS: usize = SUMMARY::WORDS as usize;
+const STATS_WORDS: usize = STATS::WORDS as usize;
+const NOW_WORDS: usize = NOW::WORDS as usize;
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 
-struct Summary {
+struct Read {
     /// On the heap, not a static: a native build's statics are outside the shell-readable memory.
-    words: Box<[f64; WORDS]>,
+    stats: Box<[f64; STATS_WORDS]>,
+    now: Box<[f64; NOW_WORDS]>,
 }
 
-static SUMMARY_WORDS: Global<Summary> = Global::new();
+static READ: Global<Read> = Global::new();
 
-fn summary() -> &'static mut Summary {
-    SUMMARY_WORDS.get(|| Summary {
-        words: Box::new([0.0; WORDS]),
+fn read() -> &'static mut Read {
+    READ.get(|| Read {
+        stats: Box::new([0.0; STATS_WORDS]),
+        now: Box::new([0.0; NOW_WORDS]),
     })
 }
 
@@ -64,25 +68,31 @@ fn spread(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Spread {
     }
 }
 
-/// No window is the whole recording.
-pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
-    let (out, scratch) = (&mut summary().words[..], profiler_scratch());
+/// The window's statistics; no window is the whole recording.
+pub fn profiler_stats(window_ms: Option<f64>) -> &'static [f64] {
+    let (out, scratch) = (&mut read().stats[..], profiler_scratch());
     out.fill(0.0);
     let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
-
-    put(out, SUMMARY::rec::AT, &profiler_recording_state());
-
     put(
         out,
-        SUMMARY::frames::AT,
+        STATS::frames::AT,
         &frames(scratch, profiler_frames_since(since)),
     );
     put(
         out,
-        SUMMARY::tasks::AT,
+        STATS::tasks::AT,
         &tasks(scratch, profiler_tasks_since(since)),
     );
-    side(out);
+    put(out, STATS::steps::AT, &steps());
+    out
+}
+
+/// What holds as it reads, the window aside.
+pub fn profiler_now() -> &'static [f64] {
+    let out = &mut read().now[..];
+    out.fill(0.0);
+    put(out, NOW::rec::AT, &profiler_recording_state());
+    put(out, NOW::view::AT, &view());
     out
 }
 
@@ -195,7 +205,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
                 .filter(|r| r.outcome == ok)
                 .map(|r| r.end_ms - r.enqueue_ms),
         );
-        *slot = TaskSummary {
+        *slot = StreamStats {
             n: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
@@ -223,7 +233,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
     section
 }
 
-fn side(out: &mut [f64]) {
+fn view() -> ViewSection {
     use crate::domain::control::interaction::{self, collision};
     let pointed = interaction::pointed();
     // What the pointer meets, exactly, at the zooms the eye asks, whatever
@@ -268,50 +278,48 @@ fn side(out: &mut [f64]) {
     let [pivot_lon, pivot_lat, pivot_alt] =
         pivot.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
-    put(
-        out,
-        SUMMARY::view::AT,
-        &ViewSection {
-            eye_x,
-            eye_y,
-            eye_z,
-            dist: controller::dist(),
-            polar: controller::polar(),
-            azimuth: controller::azimuth(),
-            pivot_x,
-            pivot_y,
-            pivot_z,
-            pivot_lon,
-            pivot_lat,
-            pivot_alt,
-            hover_x,
-            hover_y,
-            hover_z,
-            cell: zoom(cell),
-            struck,
-            held: zoom(picked.as_ref().map(|p| p.held())),
-            drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
-            folded: picked
-                .as_ref()
-                .map_or(f64::NAN, |p| f64::from(u8::from(p.is_folded()))),
-            place_x,
-            place_y,
-            place_z,
-            place_zoom: zoom(tool.map(|t| t.zoom())),
-            blocked: tool.zip(place).map_or(f64::NAN, |(t, p)| {
-                f64::from(u8::from(collision::is_placement_blocked(t, &p)))
-            }),
-        },
-    );
+    ViewSection {
+        eye_x,
+        eye_y,
+        eye_z,
+        dist: controller::dist(),
+        polar: controller::polar(),
+        azimuth: controller::azimuth(),
+        pivot_x,
+        pivot_y,
+        pivot_z,
+        pivot_lon,
+        pivot_lat,
+        pivot_alt,
+        hover_x,
+        hover_y,
+        hover_z,
+        cell: zoom(cell),
+        struck,
+        held: zoom(picked.as_ref().map(|p| p.held())),
+        drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
+        folded: picked
+            .as_ref()
+            .map_or(f64::NAN, |p| f64::from(u8::from(p.is_folded()))),
+        place_x,
+        place_y,
+        place_z,
+        place_zoom: zoom(tool.map(|t| t.zoom())),
+        blocked: tool.zip(place).map_or(f64::NAN, |(t, p)| {
+            f64::from(u8::from(collision::is_placement_blocked(t, &p)))
+        }),
+    }
+}
 
-    // Per step: a cooperative scheduler is only as cooperative as its longest step.
+/// Per step: a cooperative scheduler is only as cooperative as its longest step.
+fn steps() -> StepsSection {
     let mut steps = StepsSection::default();
     for s in tick_step_stats()
         .iter()
         .filter(|s| s.count > 0)
         .take(STEP_SLOTS)
     {
-        steps.slots[steps.cnt as usize] = Step {
+        steps.slots[steps.cnt as usize] = StepStats {
             phase: s.phase as u8 as f64,
             name: s.name as f64,
             ms: s.ms,
@@ -320,5 +328,5 @@ fn side(out: &mut [f64]) {
         };
         steps.cnt += 1.0;
     }
-    put(out, SUMMARY::steps::AT, &steps);
+    steps
 }

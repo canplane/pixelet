@@ -9,12 +9,12 @@
 //! (ts/client/src/bracket.tsx `longFrame`), or exports as a Chrome trace.
 
 pub mod frame;
+pub mod read;
 pub mod record;
 pub mod report;
 pub mod section;
 #[path = "profiler/profiler.spec.rs"]
 pub mod spec;
-pub mod summary;
 pub mod task;
 pub mod window;
 pub mod word;

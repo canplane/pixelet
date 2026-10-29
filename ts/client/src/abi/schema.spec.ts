@@ -177,7 +177,7 @@ export const SETTINGS = {
     },
     section: "display",
   },
-  /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
+  /** Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section). */
   view: {
     key: 13 as number,
     kind: "toggle",
@@ -383,7 +383,7 @@ export const SETTINGS_SHIPPED = {
     },
     section: "display",
   },
-  /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
+  /** Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section). */
   view: {
     key: 13 as number,
     kind: "toggle",

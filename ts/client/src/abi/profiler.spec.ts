@@ -204,8 +204,8 @@ export const SPREAD = {
   WORDS: 3 as number,
 } as const;
 
-/** One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. */
-export const TASK_SUMMARY = {
+/** One stream's tasks in the window, at STATS.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. */
+export const STREAM_STATS = {
   n: 0 as number,
   ok: 1 as number,
   aborted: 2 as number,
@@ -219,8 +219,8 @@ export const TASK_SUMMARY = {
   WORDS: 24 as number,
 } as const;
 
-/** One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES. */
-export const STEP = {
+/** One registered step's timing, at STATS.steps.slots + its index × WORDS. `name` indexes STEP_NAMES. */
+export const STEP_STATS = {
   phase: 0 as number,
   name: 1 as number,
   ms: 2 as number,
@@ -229,17 +229,10 @@ export const STEP = {
   WORDS: 5 as number,
 } as const;
 
-/** The summary PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and the summary's WORDS where the last ends, both laid out by the generator. */
-export const SUMMARY = {
-  rec: {
-    AT: 0 as number,
-    recording: 0 as number,
-    elapsed_ms: 1 as number,
-    truncated: 2 as number,
-    WORDS: 3 as number,
-  },
+/** The window's statistics PROFILER_READ computes, over its `window_ms`: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and WORDS where the last ends, both laid out by the generator. */
+export const STATS = {
   frames: {
-    AT: 3 as number,
+    AT: 0 as number,
     present: 0 as number,
     n: 1 as number,
     seconds: 2 as number,
@@ -270,22 +263,34 @@ export const SUMMARY = {
     WORDS: 402 as number,
   },
   tasks: {
-    AT: 405 as number,
+    AT: 402 as number,
     slots: 0 as number,
     WORDS: 120 as number,
   },
   steps: {
-    AT: 525 as number,
+    AT: 522 as number,
     cnt: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
+  },
+  WORDS: 683 as number,
+} as const;
+
+/** What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STATS lays out its own. Every word an f64. */
+export const NOW = {
+  rec: {
+    AT: 0 as number,
+    recording: 0 as number,
+    elapsed_ms: 1 as number,
+    truncated: 2 as number,
+    WORDS: 3 as number,
   },
   /** Where the camera, its pivot and the pointer are as the read finds them, recording or not: `eye_x`..`eye_z`, `dist`, `pivot_x`..`pivot_z`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, angles in radians, `pivot_lon` and `pivot_lat` in degrees and `pivot_alt` in meters, a zoom as its number, and NaN where there is none.
    * The eye is where the camera looks from and the pivot the point it turns about, the eye itself in the first-person camera, where the character stands (pxl-kernel domain/control/camera/controller.rs `eye_world`, `pivot`).
    * The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_dist`).
    * The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `pick_at`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`). */
   view: {
-    AT: 686 as number,
+    AT: 3 as number,
     eye_x: 0 as number,
     eye_y: 1 as number,
     eye_z: 2 as number,
@@ -313,23 +318,29 @@ export const SUMMARY = {
     blocked: 24 as number,
     WORDS: 25 as number,
   },
-  WORDS: 711 as number,
+  WORDS: 28 as number,
 } as const;
 
-/** What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words. */
+/** What PROFILER_READ answers with the address of: u32 words, where STATS and NOW lie in the module's memory and their words. */
 export const READ = {
-  summary_at: 0 as number,
-  summary_words: 1 as number,
+  stats_at: 0 as number,
+  stats_words: 1 as number,
+  now_at: 2 as number,
+  now_words: 3 as number,
+  WORDS: 4 as number,
+} as const;
+
+/** Where one ring lies: its address in the module's memory and its record count. */
+export const RING = {
+  at: 0 as number,
+  cnt: 1 as number,
   WORDS: 2 as number,
 } as const;
 
-/** What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count. */
+/** What PROFILER_RINGS answers with the address of: u32 words, a RING apiece. */
 export const RINGS = {
-  frames_at: 0 as number,
-  frames_cnt: 1 as number,
-  tasks_at: 2 as number,
-  tasks_cnt: 3 as number,
-  worst_at: 4 as number,
-  worst_cnt: 5 as number,
+  frames: 0 as number,
+  tasks: 2 as number,
+  worst: 4 as number,
   WORDS: 6 as number,
 } as const;

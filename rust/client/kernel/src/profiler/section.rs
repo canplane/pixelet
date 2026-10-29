@@ -1,6 +1,6 @@
 // pxl-kernel/profiler/section.rs
 
-//! Every summary section as a record held to profiler.json by `words!`.
+//! Every STATS and NOW section as a record held to profiler.json by `words!`.
 //! Written word by word, sections had shifted lanes, mirrored structures and
 //! unread fields that only an audit found (2026-09-23); a record makes each
 //! of those a compile error.
@@ -8,7 +8,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::profiler::frame::{FrameSample, EFFECTS, GPU_SPANS};
-use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
+use crate::profiler::spec::{FRAME, LIMITS, NOW, SPREAD, STATS, STEP_STATS, STREAM_STATS, WAKES};
 use crate::profiler::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use pxl_render::gpu::span_spec::FRAME_KINDS;
@@ -38,8 +38,8 @@ pub struct RecSection {
     pub truncated: f64,
 }
 
-words!(RecSection, SUMMARY::rec::WORDS,
-    recording => SUMMARY::rec::recording, elapsed_ms => SUMMARY::rec::elapsed_ms, truncated => SUMMARY::rec::truncated,
+words!(RecSection, NOW::rec::WORDS,
+    recording => NOW::rec::recording, elapsed_ms => NOW::rec::elapsed_ms, truncated => NOW::rec::truncated,
 );
 
 #[repr(C)]
@@ -86,29 +86,29 @@ pub struct FramesSection {
 }
 
 const _: () = assert!(
-    SUMMARY::frames::last + FRAME::WORDS <= SUMMARY::frames::WORDS,
-    "the last frame runs past the summary's frames section"
+    STATS::frames::last + FRAME::WORDS <= STATS::frames::WORDS,
+    "the last frame runs past STATS's frames section"
 );
 
-words!(FramesSection, SUMMARY::frames::WORDS,
-    present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
-    moving => SUMMARY::frames::moving, moving_ms => SUMMARY::frames::moving_ms,
-    missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
-    long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
-    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy,
-    tick => SUMMARY::frames::tick, effects => SUMMARY::frames::effects,
-    stage => SUMMARY::frames::stage, tasks => SUMMARY::frames::tasks,
-    profiler => SUMMARY::frames::profiler, rest => SUMMARY::frames::rest,
-    effects_p95 => SUMMARY::frames::effects_p95, gpu => SUMMARY::frames::gpu,
-    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95,
-    kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
-    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes,
-    first => SUMMARY::frames::first, last => SUMMARY::frames::last,
+words!(FramesSection, STATS::frames::WORDS,
+    present => STATS::frames::present, n => STATS::frames::n, seconds => STATS::frames::seconds,
+    moving => STATS::frames::moving, moving_ms => STATS::frames::moving_ms,
+    missed => STATS::frames::missed, overran => STATS::frames::overran,
+    long => STATS::frames::long, turns => STATS::frames::turns, gpu_read => STATS::frames::gpu_read,
+    interval => STATS::frames::interval, busy => STATS::frames::busy,
+    tick => STATS::frames::tick, effects => STATS::frames::effects,
+    stage => STATS::frames::stage, tasks => STATS::frames::tasks,
+    profiler => STATS::frames::profiler, rest => STATS::frames::rest,
+    effects_p95 => STATS::frames::effects_p95, gpu => STATS::frames::gpu,
+    phases_p95 => STATS::frames::phases_p95, gpu_spans_p95 => STATS::frames::gpu_spans_p95,
+    kinds => STATS::frames::kinds, wakes => STATS::frames::wakes,
+    heap_used_delta_bytes => STATS::frames::heap_used_delta_bytes,
+    first => STATS::frames::first, last => STATS::frames::last,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TaskSummary {
+pub struct StreamStats {
     pub n: f64,
     pub ok: f64,
     pub aborted: f64,
@@ -123,19 +123,19 @@ pub struct TaskSummary {
     pub phase_mean: [f64; TASK_PHASES],
 }
 
-words!(TaskSummary, TASK_SUMMARY::WORDS,
-    n => TASK_SUMMARY::n, ok => TASK_SUMMARY::ok, aborted => TASK_SUMMARY::aborted, error => TASK_SUMMARY::error,
-    lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_cnt => TASK_SUMMARY::reason_cnt, reasons => TASK_SUMMARY::reasons,
-    phase_n => TASK_SUMMARY::phase_n, phase_mean => TASK_SUMMARY::phase_mean,
+words!(StreamStats, STREAM_STATS::WORDS,
+    n => STREAM_STATS::n, ok => STREAM_STATS::ok, aborted => STREAM_STATS::aborted, error => STREAM_STATS::error,
+    lat_p50 => STREAM_STATS::lat_p50, lat_p95 => STREAM_STATS::lat_p95, reason_cnt => STREAM_STATS::reason_cnt, reasons => STREAM_STATS::reasons,
+    phase_n => STREAM_STATS::phase_n, phase_mean => STREAM_STATS::phase_mean,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TasksSection {
-    pub slots: [TaskSummary; CATEGORIES],
+    pub slots: [StreamStats; CATEGORIES],
 }
 
-words!(TasksSection, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
+words!(TasksSection, STATS::tasks::WORDS, slots => STATS::tasks::slots);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -167,20 +167,20 @@ pub struct ViewSection {
     pub blocked: f64,
 }
 
-words!(ViewSection, SUMMARY::view::WORDS,
-    eye_x => SUMMARY::view::eye_x, eye_y => SUMMARY::view::eye_y, eye_z => SUMMARY::view::eye_z,
-    dist => SUMMARY::view::dist, polar => SUMMARY::view::polar, azimuth => SUMMARY::view::azimuth,
-    pivot_x => SUMMARY::view::pivot_x, pivot_y => SUMMARY::view::pivot_y, pivot_z => SUMMARY::view::pivot_z,
-    pivot_lon => SUMMARY::view::pivot_lon, pivot_lat => SUMMARY::view::pivot_lat, pivot_alt => SUMMARY::view::pivot_alt,
-    hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
-    cell => SUMMARY::view::cell, struck => SUMMARY::view::struck, held => SUMMARY::view::held, drawn => SUMMARY::view::drawn,
-    folded => SUMMARY::view::folded, place_x => SUMMARY::view::place_x, place_y => SUMMARY::view::place_y, place_z => SUMMARY::view::place_z,
-    place_zoom => SUMMARY::view::place_zoom, blocked => SUMMARY::view::blocked,
+words!(ViewSection, NOW::view::WORDS,
+    eye_x => NOW::view::eye_x, eye_y => NOW::view::eye_y, eye_z => NOW::view::eye_z,
+    dist => NOW::view::dist, polar => NOW::view::polar, azimuth => NOW::view::azimuth,
+    pivot_x => NOW::view::pivot_x, pivot_y => NOW::view::pivot_y, pivot_z => NOW::view::pivot_z,
+    pivot_lon => NOW::view::pivot_lon, pivot_lat => NOW::view::pivot_lat, pivot_alt => NOW::view::pivot_alt,
+    hover_x => NOW::view::hover_x, hover_y => NOW::view::hover_y, hover_z => NOW::view::hover_z,
+    cell => NOW::view::cell, struck => NOW::view::struck, held => NOW::view::held, drawn => NOW::view::drawn,
+    folded => NOW::view::folded, place_x => NOW::view::place_x, place_y => NOW::view::place_y, place_z => NOW::view::place_z,
+    place_zoom => NOW::view::place_zoom, blocked => NOW::view::blocked,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Step {
+pub struct StepStats {
     /// Indices into PHASES and STEP_NAMES.
     pub phase: f64,
     pub name: f64,
@@ -189,15 +189,15 @@ pub struct Step {
     pub max_ms: f64,
 }
 
-words!(Step, STEP::WORDS,
-    phase => STEP::phase, name => STEP::name, ms => STEP::ms, cnt => STEP::cnt, max_ms => STEP::max_ms,
+words!(StepStats, STEP_STATS::WORDS,
+    phase => STEP_STATS::phase, name => STEP_STATS::name, ms => STEP_STATS::ms, cnt => STEP_STATS::cnt, max_ms => STEP_STATS::max_ms,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepsSection {
     pub cnt: f64,
-    pub slots: [Step; STEP_SLOTS],
+    pub slots: [StepStats; STEP_SLOTS],
 }
 
-words!(StepsSection, SUMMARY::steps::WORDS, cnt => SUMMARY::steps::cnt, slots => SUMMARY::steps::slots);
+words!(StepsSection, STATS::steps::WORDS, cnt => STATS::steps::cnt, slots => STATS::steps::slots);

@@ -468,8 +468,8 @@ fn read_timed(read: impl FnOnce() -> u32) -> u32 {
     addr
 }
 
-/// The address of READ's words (profiler.json): the summary over
-/// `window_ms`. Read in place rather than posted: `Door::post` asserts on a
+/// The address of READ's words (profiler.json): the statistics over
+/// `window_ms`, and what holds now. Read in place rather than posted: `Door::post` asserts on a
 /// full completion ring, and reading allocates nothing in the heap being
 /// measured. Valid until the next turn.
 fn profiler_read(window_ms: Option<f64>) -> u32 {
@@ -477,29 +477,38 @@ fn profiler_read(window_ms: Option<f64>) -> u32 {
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
     static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> =
         xpute_guest::global::Global::new();
-    let summary = crate::profiler::summary::profiler_summarize(window_ms);
+    let stats = crate::profiler::read::profiler_stats(window_ms);
+    let now = crate::profiler::read::profiler_now();
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
-    w[READ::summary_at as usize] = off_of_slice(&raw const *summary) as u32;
-    w[READ::summary_words as usize] = summary.len() as u32;
+    w[READ::stats_at as usize] = off_of_slice(&raw const *stats) as u32;
+    w[READ::stats_words as usize] = stats.len() as u32;
+    w[READ::now_at as usize] = off_of_slice(&raw const *now) as u32;
+    w[READ::now_words as usize] = now.len() as u32;
     off_of(w.as_ptr()) as u32
 }
 
 /// The address of RINGS's words: the three rings as they lie, which a
-/// reader of every record asks without the summary it would not read.
+/// reader of every record asks without the statistics it would not read.
 fn profiler_rings() -> u32 {
     use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
-    use crate::profiler::spec::RINGS;
+    use crate::profiler::spec::{RING, RINGS};
     // On the heap, as READ's words are.
     static WORDS: xpute_guest::global::Global<Box<[u32; RINGS::WORDS as usize]>> =
         xpute_guest::global::Global::new();
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
-    w[RINGS::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
-    w[RINGS::frames_cnt as usize] = frames.len() as u32;
-    w[RINGS::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
-    w[RINGS::tasks_cnt as usize] = tasks.len() as u32;
-    w[RINGS::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
-    w[RINGS::worst_cnt as usize] = worst.len() as u32;
+    for (ring, at, cnt) in [
+        (
+            RINGS::frames,
+            off_of_slice(&raw const *frames),
+            frames.len(),
+        ),
+        (RINGS::tasks, off_of_slice(&raw const *tasks), tasks.len()),
+        (RINGS::worst, off_of_slice(&raw const *worst), worst.len()),
+    ] {
+        w[(ring + RING::at) as usize] = at as u32;
+        w[(ring + RING::cnt) as usize] = cnt as u32;
+    }
     off_of(w.as_ptr()) as u32
 }
 
