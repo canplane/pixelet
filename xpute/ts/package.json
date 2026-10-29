@@ -3,14 +3,17 @@
   "type": "module",
   "packageManager": "pnpm@10.34.9",
   "engines": {
-    "node": "^22.18.0 || >=23.6.0"
+    "node": ">=24"
   },
   "scripts": {
-    "check": "prettier --check . && oxlint && tsc -p .",
+    "preinstall": "node script/require-pnpm.ts",
+    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
+    "typecheck": "tsc -p .",
     "test": "vitest run --exclude host/src/conformance.test.ts",
     "test:conformance": "vitest run host/src/conformance.test.ts",
     "test:gpu:web": "node gpu/script/browser.ts",
     "fmt": "prettier --write .",
+    "fmt:check": "prettier --check .",
     "lint": "oxlint"
   },
   "devDependencies": {

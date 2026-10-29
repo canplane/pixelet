@@ -1,6 +1,6 @@
 // tsc checks and emits nothing: Vite and Metro transform and bundle. Every
 // alias is here, and Vite, vitest and Metro read it from here
-// (build/import-map.ts).
+// (build/paths.ts).
 {
   "compilerOptions": {
     "target": "esnext",

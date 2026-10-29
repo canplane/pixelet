@@ -1,0 +1,4 @@
+# The Node this tree builds and runs with, as rust/rust-toolchain.toml is the
+# Rust its tree's. asdf and mise read it under ts/. pnpm's version is
+# package.json's `packageManager`, which corepack runs.
+nodejs 24.21.0

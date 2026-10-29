@@ -131,7 +131,8 @@ the policy belongs to the program.
 
 ## Running it
 
-Node 24 with pnpm (`make install` first), rustup (it installs what
+Node at the version `ts/.tool-versions` pins with pnpm (`make install`
+first), rustup (it installs what
 `rust/rust-toolchain.toml` names), a C++20
 compiler as `c++` or `$CXX`, GNU Make, and the [WASI
 SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
