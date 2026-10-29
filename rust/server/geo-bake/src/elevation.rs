@@ -98,7 +98,7 @@ struct Held {
 impl Raster {
     /// Refused unless the raster holds exactly the coverage's shards, each whole.
     pub fn open(client: &mut Client) -> Result<Raster, String> {
-        let want: BTreeSet<String> = Coverage::of_src()?.shards().map(|s| s.name()).collect();
+        let want: BTreeSet<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
         let have: BTreeSet<String> = client
             .query("SELECT shard FROM elevation_catalog", &[])
             .map_err(|e| e.to_string())?

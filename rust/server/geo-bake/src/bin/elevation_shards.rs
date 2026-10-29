@@ -25,7 +25,7 @@ use pxl_spec::space::layer::tile::{tile_at, tile_rows, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
 fn run() -> Result<(), String> {
-    let coverage = Coverage::of_src()?;
+    let coverage = Coverage::of_source()?;
     let stride = mer_from_u(units(LEAF_ZOOM)) / f64::from(TILE_ELE_SPAN);
     let block_u = units(LEAF_ZOOM) / f64::from(TILE_ELE_SPAN) * f64::from(BLOCK);
     let ring = (SHARD_APRON / block_u).ceil();

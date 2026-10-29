@@ -7,7 +7,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The westmost shard's first leaf, and the leaf west of it, which no shard holds.
 fn absence() -> (Absence, Tile, Tile) {
-    let coverage = Coverage::of_src().expect("the source's coverage");
+    let coverage = Coverage::of_source().expect("the source's coverage");
     let shard = coverage.shards().next().expect("a shard");
     let [x, y] = first_descendant_of(shard.at, LEAF_ZOOM - SHARD_ZOOM);
     let inside = Tile::new(LEAF_ZOOM, [x, y]);

@@ -86,11 +86,11 @@ pub struct Coverage {
     shards: BTreeSet<Shard>,
 }
 
-static SRC: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
+static SOURCE: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
 
 impl Coverage {
-    pub fn of_src() -> Result<Coverage, String> {
-        SRC.clone()
+    pub fn of_source() -> Result<Coverage, String> {
+        SOURCE.clone()
     }
 
     fn derive() -> Result<Coverage, String> {
@@ -225,7 +225,7 @@ impl Overture {
     pub fn reading(reads: &[&[&str]], need: &BTreeSet<Node>) -> Result<(Overture, Client), String> {
         let tables = tables_of(reads);
         let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-        let held: BTreeSet<String> = Coverage::of_src()?.shards().map(Node::name).collect();
+        let held: BTreeSet<String> = Coverage::of_source()?.shards().map(Node::name).collect();
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client

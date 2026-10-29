@@ -231,7 +231,7 @@ fn run() -> Result<(), String> {
     {
         return Err(format!("{t}: no Overture type this ingests"));
     }
-    let all: Vec<Shard> = Coverage::of_src()?.shards().map(Shard::of).collect();
+    let all: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
     if let Some(n) = named.iter().find(|n| !all.iter().any(|s| s.name == **n)) {
         return Err(format!(
             "{n}: no shard of the coverage (infra/geo/coverage.json)"

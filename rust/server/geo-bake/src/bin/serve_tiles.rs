@@ -300,7 +300,7 @@ fn run() -> Result<(), String> {
             )
         }
     };
-    let coverage: Vec<String> = Coverage::of_src()?.shards().map(|s| s.name()).collect();
+    let coverage: Vec<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
     let app = Arc::new(App {
         tiles,
         cache: cache.clone(),
