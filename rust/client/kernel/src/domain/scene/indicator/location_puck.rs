@@ -88,7 +88,7 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
     let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
         return;
     };
-    let night = scene.env.night();
+    let night = scene.environment.night();
     scene.puck.step(draw, device_coord, night);
 }
 

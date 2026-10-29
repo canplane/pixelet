@@ -24,7 +24,7 @@ export const EFFECT_NAMES = [
   "bootstrap",
   "orientation",
   "follow",
-  "destination",
+  "dst",
   "decor",
   "objects",
   "puck",

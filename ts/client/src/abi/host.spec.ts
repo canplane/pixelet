@@ -43,7 +43,7 @@ export const LAYOUT = {
 
 /** TEXT_LAYOUT's answer at its `at`: how many lines, then `LINE` apiece. */
 export const LAYOUT_ANSWER = {
-  count: 0 as number,
+  cnt: 0 as number,
   WORDS: 1 as number,
 } as const;
 

@@ -495,11 +495,11 @@ fn profiler_rings() -> u32 {
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
     w[RINGS::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
-    w[RINGS::frames_count as usize] = frames.len() as u32;
+    w[RINGS::frames_cnt as usize] = frames.len() as u32;
     w[RINGS::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
-    w[RINGS::tasks_count as usize] = tasks.len() as u32;
+    w[RINGS::tasks_cnt as usize] = tasks.len() as u32;
     w[RINGS::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
-    w[RINGS::worst_count as usize] = worst.len() as u32;
+    w[RINGS::worst_cnt as usize] = worst.len() as u32;
     off_of(w.as_ptr()) as u32
 }
 

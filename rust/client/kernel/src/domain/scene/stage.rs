@@ -164,11 +164,11 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         let s = stage_lane();
         let view_proj: [f64; 16] = core::array::from_fn(|k| s[STAGE_AT::EYE_VIEW_PROJ + k]);
         let eye = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
-        crate::domain::scene::region::take(&view_proj, eye, scene().env.sun())
+        crate::domain::scene::region::take(&view_proj, eye, scene().environment.sun())
     };
     let out = render_frame(FrameInput {
         lists,
-        env: &scene().env.out,
+        environment: &scene().environment.out,
         decor: &decor,
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],

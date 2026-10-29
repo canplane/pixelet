@@ -270,7 +270,7 @@ function task_summaries(s: F64Array): TaskSummary[] {
     const n = s[a + TASK_SUMMARY.n];
     if (n === 0) return;
     const reasons = Array.from(
-      { length: s[a + TASK_SUMMARY.reason_count] },
+      { length: s[a + TASK_SUMMARY.reason_cnt] },
       (_, i) => {
         const w = a + TASK_SUMMARY.reasons + LIMITS.REASON_WORDS * i;
         return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
@@ -298,13 +298,13 @@ function task_summaries(s: F64Array): TaskSummary[] {
 
 function steps_at(s: F64Array): Step[] {
   const at = SUMMARY.steps.AT;
-  return Array.from({ length: s[at + SUMMARY.steps.count] }, (_, i) => {
+  return Array.from({ length: s[at + SUMMARY.steps.cnt] }, (_, i) => {
     const w = at + SUMMARY.steps.slots + i * STEP.WORDS;
     return {
       phase: PHASES[s[w + STEP.phase]] ?? "?",
       name: STEP_NAMES[s[w + STEP.name]] ?? "?",
       ms: s[w + STEP.ms],
-      count: s[w + STEP.count],
+      count: s[w + STEP.cnt],
       max_ms: s[w + STEP.max_ms],
     };
   });
@@ -354,9 +354,9 @@ export function profiler_view(): Summary["view"] {
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   const r = u32s(call(Command.PROFILER_RINGS), RINGS.WORDS);
   return {
-    frames: [r[RINGS.frames_at], r[RINGS.frames_count]],
-    tasks: [r[RINGS.tasks_at], r[RINGS.tasks_count]],
-    worst: [r[RINGS.worst_at], r[RINGS.worst_count]],
+    frames: [r[RINGS.frames_at], r[RINGS.frames_cnt]],
+    tasks: [r[RINGS.tasks_at], r[RINGS.tasks_cnt]],
+    worst: [r[RINGS.worst_at], r[RINGS.worst_cnt]],
   };
 }
 
@@ -386,12 +386,12 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   );
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
-    const phase_count = w[o + TASK.phase_count];
+    const phase_count = w[o + TASK.phase_cnt];
     const phases: [string, f64][] = [];
     for (let k = 0; k < phase_count; k++) {
       phases.push([
         TASK_PHASE_NAMES[w[o + TASK.phase_ids + k]] ?? "?",
-        w[o + TASK.phase_values + k],
+        w[o + TASK.phase_vals + k],
       ]);
     }
     const start = w[o + TASK.start_ms];

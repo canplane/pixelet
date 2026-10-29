@@ -254,7 +254,7 @@ pub enum SettingKey {
     shadows = 11,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 12,
+    res = 12,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
     view = 13,
     /// The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`).
@@ -287,7 +287,7 @@ impl SettingKey {
         SettingKey::rim_light,
         SettingKey::ao,
         SettingKey::shadows,
-        SettingKey::resolution,
+        SettingKey::res,
         SettingKey::view,
         SettingKey::profiler,
         SettingKey::world_gizmo,
@@ -324,7 +324,7 @@ impl SettingKey {
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
             SettingKey::shadows => SettingKind::Toggle,
-            SettingKey::resolution => SettingKind::Choice,
+            SettingKey::res => SettingKind::Choice,
             SettingKey::view => SettingKind::Toggle,
             SettingKey::profiler => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
@@ -381,7 +381,7 @@ pub struct Settings {
     pub rim_light: bool,
     pub ao: AoMode,
     pub shadows: bool,
-    pub resolution: ResolutionMode,
+    pub res: ResolutionMode,
     pub view: bool,
     pub profiler: bool,
     pub world_gizmo: bool,
@@ -408,7 +408,7 @@ impl Settings {
         rim_light: true,
         ao: AoMode::corner,
         shadows: false,
-        resolution: ResolutionMode::auto,
+        res: ResolutionMode::auto,
         view: false,
         profiler: false,
         world_gizmo: false,
@@ -436,7 +436,7 @@ impl Settings {
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
             SettingKey::shadows => self.shadows as u32,
-            SettingKey::resolution => self.resolution as u32,
+            SettingKey::res => self.res as u32,
             SettingKey::view => self.view as u32,
             SettingKey::profiler => self.profiler as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
@@ -474,8 +474,8 @@ impl Settings {
                 None => return false,
             },
             SettingKey::shadows if value <= 1 => self.shadows = value == 1,
-            SettingKey::resolution => match ResolutionMode::of(value) {
-                Some(o) => self.resolution = o,
+            SettingKey::res => match ResolutionMode::of(value) {
+                Some(o) => self.res = o,
                 None => return false,
             },
             SettingKey::view if value <= 1 => self.view = value == 1,

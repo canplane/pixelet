@@ -26,7 +26,7 @@
         "label": "Textures",
         "description": "Textures cube faces instead of a flat color."
       },
-      "resolution": {
+      "res": {
         "label": "Resolution",
         "auto": {
           "label": "Auto",

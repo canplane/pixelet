@@ -40,7 +40,7 @@ pub fn scene() -> &'static mut Scene {
 pub struct Scene {
     pub ghost: GhostDraw,
     pub puck: LocationPuck,
-    pub env: EnvironmentDraw,
+    pub environment: EnvironmentDraw,
     pub debug: DebugLines,
     /// The coverage gizmo's (domain/scene/indicator/coverage_gizmo.rs).
     pub coverage: DebugLines,
@@ -52,7 +52,7 @@ impl Scene {
         companion_animate(draw, models, frame)
             | preview_animate(draw, models, frame)
             | self.puck.tick(frame)
-            | self.env.tick(frame)
+            | self.environment.tick(frame)
     }
 
     /// Begins the frame's list with the scene's own layers.

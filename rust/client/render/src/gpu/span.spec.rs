@@ -33,7 +33,7 @@ pub enum GpuSpanName {
     cell = 11,
     sample = 12,
     sraster = 13,
-    pixel = 14,
+    px = 14,
     miss = 15,
     sun_beam = 16,
     sun_sample = 17,
@@ -62,7 +62,7 @@ impl GpuSpanName {
         GpuSpanName::cell,
         GpuSpanName::sample,
         GpuSpanName::sraster,
-        GpuSpanName::pixel,
+        GpuSpanName::px,
         GpuSpanName::miss,
         GpuSpanName::sun_beam,
         GpuSpanName::sun_sample,
@@ -95,7 +95,7 @@ pub enum FrameKind {
     standing = 5,
     cast = 6,
     stood = 7,
-    pixels = 8,
+    px = 8,
 }
 
 impl FrameKind {
@@ -109,7 +109,7 @@ impl FrameKind {
         FrameKind::standing,
         FrameKind::cast,
         FrameKind::stood,
-        FrameKind::pixels,
+        FrameKind::px,
     ];
 
     /// The member a number names, or none for a number the set does not

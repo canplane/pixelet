@@ -166,7 +166,7 @@ export const SETTINGS = {
   },
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
-  resolution: {
+  res: {
     key: 12 as number,
     kind: "choice",
     default: "auto",
@@ -372,7 +372,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
-  resolution: {
+  res: {
     key: 12 as number,
     kind: "choice",
     default: "auto",

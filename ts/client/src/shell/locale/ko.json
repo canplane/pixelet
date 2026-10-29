@@ -26,7 +26,7 @@
         "label": "텍스처",
         "description": "큐브 표면에 단색 대신 텍스처를 표시합니다."
       },
-      "resolution": {
+      "res": {
         "label": "해상도",
         "auto": {
           "label": "자동",

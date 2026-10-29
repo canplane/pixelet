@@ -110,7 +110,7 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
         .as_chunks::<{ LINE::WORDS as usize }>()
         .0;
-    let cnt = answer.at[LAYOUT_ANSWER::count as usize] as usize;
+    let cnt = answer.at[LAYOUT_ANSWER::cnt as usize] as usize;
     let mut lines = Vec::with_capacity(cnt.min(pairs.len()));
     let mut start = 0;
     for pair in pairs.iter().take(cnt) {

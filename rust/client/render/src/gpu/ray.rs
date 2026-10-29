@@ -27,7 +27,7 @@ pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
 /// samples that stand: the rays, their depth and where they met the world
 /// are laid again.
 fn casts_px(kind: FrameKind) -> bool {
-    kind == FrameKind::cast || kind == FrameKind::pixels
+    kind == FrameKind::cast || kind == FrameKind::px
 }
 
 pub struct RaysPass {
@@ -47,7 +47,7 @@ pub struct RaysPass {
     cast: Option<CastBuffers>,
     /// What this frame does with the cast, as `prepare` decided it: nothing
     /// cast (`plain`), the rays standing (`standing`), the pixels cast
-    /// again over the samples that stand (`pixels`), or a cast run
+    /// again over the samples that stand (`px`), or a cast run
     /// (`cast`).
     pub kind: FrameKind,
 }

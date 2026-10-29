@@ -256,7 +256,7 @@
       "cost": "high",
       "section": "lighting"
     },
-    "resolution": {
+    "res": {
       "number": 12,
       "$doc": [
         "The pixels the world is filled at, the GPU's largest cost: two to a",

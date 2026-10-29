@@ -439,7 +439,7 @@ impl RaysPass {
         c.jitter = jitter;
         self.kind = match (stands, jittered) {
             (true, false) => FrameKind::standing,
-            (true, true) => FrameKind::pixels,
+            (true, true) => FrameKind::px,
             (false, _) => FrameKind::cast,
         };
         let (kind, casts) = (self.kind, casts_px(self.kind));
@@ -704,7 +704,7 @@ impl RaysPass {
         // Only the pixels within the region, where only they moved; a cast
         // whole casts every pixel. Its first pixel, in the eye's words
         // (pxl-spec-core `eye::JITTER`).
-        c.region = region.filter(|_| kind == FrameKind::pixels);
+        c.region = region.filter(|_| kind == FrameKind::px);
         let origin = c.region.map_or([0.0; 2], |r| r.at.map(|v| v as f32));
         if casts && origin != c.origin {
             g.write_buf(c.eye, word_bytes(eye::JITTER + 2), bytes(&origin));
@@ -906,7 +906,7 @@ impl RaysPass {
             // parts are read apart: `cast` holds the forgetting alone; the
             // samples' boxes drawn between the samples and the pixels, which
             // take the visible sample (ray/raster.rs, span `sraster`). Where
-            // only the jitter moved (`FrameKind::pixels`), the beam rays, the
+            // only the jitter moved (`FrameKind::px`), the beam rays, the
             // cells' starts and the samples stand, and the rest is cast again
             // off them.
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::cast as usize].pass());
@@ -941,17 +941,17 @@ impl RaysPass {
                     compute::SAMPLE_WORKGROUP,
                 ),
                 (
-                    GpuSpanName::pixel,
+                    GpuSpanName::px,
                     &c.built,
                     c.region.map_or(c.sz, |r| r.sz),
                     compute::CAST_WORKGROUP,
                 ),
             ] {
-                if kind == FrameKind::pixels && span != GpuSpanName::pixel {
+                if kind == FrameKind::px && span != GpuSpanName::px {
                     continue;
                 }
                 let mut group = c.group;
-                if span == GpuSpanName::pixel {
+                if span == GpuSpanName::px {
                     c.raster.draw(
                         g,
                         encoder,

@@ -9,7 +9,7 @@ pub mod cloud;
 pub mod param;
 
 use pxl_render::gpu::renderer::sky_steps;
-use pxl_render::look::environment::{write_env, Light, ENV_FLOATS};
+use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
@@ -27,8 +27,8 @@ use xpute_guest::clock::now;
 /// Runs before the markers' step: the sky moves with the wall clock and
 /// nothing else asks for a frame while the view is still, so the clock asks
 /// for one when its next step falls (`EnvironmentDraw::observe`).
-pub fn env_step() {
-    let next_ms = scene().env.observe(wall_now());
+pub fn environment_step() {
+    let next_ms = scene().environment.observe(wall_now());
     wake_at(now() + next_ms);
 }
 
@@ -262,7 +262,7 @@ impl EnvironmentDraw {
             lng: lon.to_radians(),
             star_frame: self.star_frame,
         };
-        write_env(&mut self.out, &light);
+        write_environment(&mut self.out, &light);
         self.eased < 1.0 || self.stars < 1.0
     }
 }

@@ -221,9 +221,9 @@
     "at_file": 1,
     "at_file_bytes": 1,
     "at_line": 1,
-    "phase_count": 1,
+    "phase_cnt": 1,
     "phase_ids": "TASK_PHASES_MAX",
-    "phase_values": "TASK_PHASES_MAX"
+    "phase_vals": "TASK_PHASES_MAX"
   },
   "WORST": {
     "$type": "u32",
@@ -254,7 +254,7 @@
     "error": 1,
     "lat_p50": 1,
     "lat_p95": 1,
-    "reason_count": 1,
+    "reason_cnt": 1,
     "reasons": "LIMITS.REASON_WORDS * LIMITS.REASONS",
     "phase_n": 1,
     "phase_mean": "TASK_PHASE_NAMES"
@@ -268,7 +268,7 @@
     "phase": 1,
     "name": 1,
     "ms": 1,
-    "count": 1,
+    "cnt": 1,
     "max_ms": 1
   },
   "SUMMARY": {
@@ -315,7 +315,7 @@
       "slots": "STREAM_NAMES * TASK_SUMMARY"
     },
     "steps": {
-      "count": 1,
+      "cnt": 1,
       "slots": "LIMITS.STEP_SLOTS * STEP"
     },
     "view": {
@@ -368,10 +368,10 @@
       "What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count."
     ],
     "frames_at": 1,
-    "frames_count": 1,
+    "frames_cnt": 1,
     "tasks_at": 1,
-    "tasks_count": 1,
+    "tasks_cnt": 1,
     "worst_at": 1,
-    "worst_count": 1
+    "worst_cnt": 1
   }
 }

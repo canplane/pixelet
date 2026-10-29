@@ -125,7 +125,7 @@ pub struct TaskSummary {
 
 words!(TaskSummary, TASK_SUMMARY::WORDS,
     n => TASK_SUMMARY::n, ok => TASK_SUMMARY::ok, aborted => TASK_SUMMARY::aborted, error => TASK_SUMMARY::error,
-    lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_cnt => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
+    lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_cnt => TASK_SUMMARY::reason_cnt, reasons => TASK_SUMMARY::reasons,
     phase_n => TASK_SUMMARY::phase_n, phase_mean => TASK_SUMMARY::phase_mean,
 );
 
@@ -190,7 +190,7 @@ pub struct Step {
 }
 
 words!(Step, STEP::WORDS,
-    phase => STEP::phase, name => STEP::name, ms => STEP::ms, cnt => STEP::count, max_ms => STEP::max_ms,
+    phase => STEP::phase, name => STEP::name, ms => STEP::ms, cnt => STEP::cnt, max_ms => STEP::max_ms,
 );
 
 #[repr(C)]
@@ -200,4 +200,4 @@ pub struct StepsSection {
     pub slots: [Step; STEP_SLOTS],
 }
 
-words!(StepsSection, SUMMARY::steps::WORDS, cnt => SUMMARY::steps::count, slots => SUMMARY::steps::slots);
+words!(StepsSection, SUMMARY::steps::WORDS, cnt => SUMMARY::steps::cnt, slots => SUMMARY::steps::slots);

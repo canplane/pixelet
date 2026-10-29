@@ -21,7 +21,7 @@ export const GPU_SPAN_NAMES = [
   "cell",
   "sample",
   "sraster",
-  "pixel",
+  "px",
   "miss",
   "sun_beam",
   "sun_sample",
@@ -42,5 +42,5 @@ export const FRAME_KINDS = [
   "standing",
   "cast",
   "stood",
-  "pixels",
+  "px",
 ] as const;

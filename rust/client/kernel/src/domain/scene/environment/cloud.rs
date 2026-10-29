@@ -157,7 +157,7 @@ pub fn clouds_shown() -> f64 {
     if !settings_store().clouds {
         return 0.0;
     }
-    let altitude_km = f64::from(scene().env.out[ENV_AIR]);
+    let altitude_km = f64::from(scene().environment.out[ENV_AIR]);
     let t = ((altitude_km - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);
     1.0 - t * t * (3.0 - 2.0 * t)
 }
@@ -173,7 +173,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let Some(eye) = eye() else { return };
-    let env = &scene().env.out;
+    let env = &scene().environment.out;
     // None, nothing is built or drawn, and what is held waits.
     let opacity = clouds_shown() as f32;
     if opacity <= 0.0 {

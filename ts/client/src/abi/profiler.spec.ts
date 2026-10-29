@@ -183,9 +183,9 @@ export const TASK = {
   at_file: 9 as number,
   at_file_bytes: 10 as number,
   at_line: 11 as number,
-  phase_count: 12 as number,
+  phase_cnt: 12 as number,
   phase_ids: 13 as number,
-  phase_values: 19 as number,
+  phase_vals: 19 as number,
   WORDS: 25 as number,
 } as const;
 
@@ -212,7 +212,7 @@ export const TASK_SUMMARY = {
   error: 3 as number,
   lat_p50: 4 as number,
   lat_p95: 5 as number,
-  reason_count: 6 as number,
+  reason_cnt: 6 as number,
   reasons: 7 as number,
   phase_n: 19 as number,
   phase_mean: 20 as number,
@@ -224,7 +224,7 @@ export const STEP = {
   phase: 0 as number,
   name: 1 as number,
   ms: 2 as number,
-  count: 3 as number,
+  cnt: 3 as number,
   max_ms: 4 as number,
   WORDS: 5 as number,
 } as const;
@@ -276,7 +276,7 @@ export const SUMMARY = {
   },
   steps: {
     AT: 525 as number,
-    count: 0 as number,
+    cnt: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
@@ -326,10 +326,10 @@ export const READ = {
 /** What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count. */
 export const RINGS = {
   frames_at: 0 as number,
-  frames_count: 1 as number,
+  frames_cnt: 1 as number,
   tasks_at: 2 as number,
-  tasks_count: 3 as number,
+  tasks_cnt: 3 as number,
   worst_at: 4 as number,
-  worst_count: 5 as number,
+  worst_cnt: 5 as number,
   WORDS: 6 as number,
 } as const;

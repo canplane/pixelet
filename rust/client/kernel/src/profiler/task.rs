@@ -35,5 +35,5 @@ words!(TaskRow, TASK::WORDS,
     stream => TASK::stream, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
     start_ms => TASK::start_ms, end_ms => TASK::end_ms, outcome => TASK::outcome,
     fail => TASK::fail, detail => TASK::detail,
-    at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_cnt => TASK::phase_count, phase_ids => TASK::phase_ids, phase_vals => TASK::phase_values,
+    at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_cnt => TASK::phase_cnt, phase_ids => TASK::phase_ids, phase_vals => TASK::phase_vals,
 );

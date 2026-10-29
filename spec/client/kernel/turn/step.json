@@ -21,7 +21,7 @@
     "bootstrap",
     "orientation",
     "follow",
-    "destination",
+    "dst",
     "decor",
     "objects",
     "puck",

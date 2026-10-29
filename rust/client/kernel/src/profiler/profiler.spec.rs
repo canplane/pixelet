@@ -150,9 +150,9 @@ pub mod TASK {
     pub const at_file: u32 = 9;
     pub const at_file_bytes: u32 = 10;
     pub const at_line: u32 = 11;
-    pub const phase_count: u32 = 12;
+    pub const phase_cnt: u32 = 12;
     pub const phase_ids: u32 = 13;
-    pub const phase_values: u32 = 19;
+    pub const phase_vals: u32 = 19;
     pub const WORDS: u32 = 25;
 }
 
@@ -179,7 +179,7 @@ pub mod TASK_SUMMARY {
     pub const error: u32 = 3;
     pub const lat_p50: u32 = 4;
     pub const lat_p95: u32 = 5;
-    pub const reason_count: u32 = 6;
+    pub const reason_cnt: u32 = 6;
     pub const reasons: u32 = 7;
     pub const phase_n: u32 = 19;
     pub const phase_mean: u32 = 20;
@@ -191,7 +191,7 @@ pub mod STEP {
     pub const phase: u32 = 0;
     pub const name: u32 = 1;
     pub const ms: u32 = 2;
-    pub const count: u32 = 3;
+    pub const cnt: u32 = 3;
     pub const max_ms: u32 = 4;
     pub const WORDS: u32 = 5;
 }
@@ -243,7 +243,7 @@ pub mod SUMMARY {
     }
     pub mod steps {
         pub const AT: u32 = 525;
-        pub const count: u32 = 0;
+        pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
     }
@@ -293,10 +293,10 @@ pub mod READ {
 /// What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count.
 pub mod RINGS {
     pub const frames_at: u32 = 0;
-    pub const frames_count: u32 = 1;
+    pub const frames_cnt: u32 = 1;
     pub const tasks_at: u32 = 2;
-    pub const tasks_count: u32 = 3;
+    pub const tasks_cnt: u32 = 3;
     pub const worst_at: u32 = 4;
-    pub const worst_count: u32 = 5;
+    pub const worst_cnt: u32 = 5;
     pub const WORDS: u32 = 6;
 }

@@ -168,7 +168,7 @@ fn share(step: i32) -> f64 {
 /// The share of the display's pixels, each way, the world is drawn at on a
 /// display of `device` pixels a CSS pixel: the setting's, `auto`'s by its step.
 fn scale(device: f64) -> f64 {
-    match settings_store().resolution {
+    match settings_store().res {
         ResolutionMode::auto => share(state().step),
         ResolutionMode::fixed => 1.0,
         ResolutionMode::low => 1.0 / device,
@@ -223,7 +223,7 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
     let k = state();
     let started = pace.moving && !k.moving;
     k.moving = pace.moving;
-    if settings_store().resolution != ResolutionMode::auto {
+    if settings_store().res != ResolutionMode::auto {
         (k.step, k.quiet) = (0, 0);
         k.restart();
     } else if started {

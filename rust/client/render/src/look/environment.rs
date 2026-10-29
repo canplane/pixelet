@@ -42,7 +42,7 @@ pub struct Light {
     pub star_frame: [V3; 3],
 }
 
-pub fn write_env(o: &mut [f32; ENV_FLOATS], light: &Light) {
+pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // Both lights, summed so the light does not snap where they cross at
     // dusk, each as it reaches the air, against a sun overhead at sea
     // level, which the shaders take as white (atmos_lut.wgsl

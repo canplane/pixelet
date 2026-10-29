@@ -93,7 +93,7 @@ type Frame = [f32; FRAME_FLOATS];
 
 pub struct FrameInput<'a> {
     pub lists: Lists<'a>,
-    pub env: &'a [f32],
+    pub environment: &'a [f32],
     /// 0 while it loads.
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
@@ -336,7 +336,7 @@ const PER_PX: [GpuSpanName; 11] = [
     GpuSpanName::cell,
     GpuSpanName::sample,
     GpuSpanName::sraster,
-    GpuSpanName::pixel,
+    GpuSpanName::px,
     GpuSpanName::miss,
 ];
 
@@ -842,7 +842,14 @@ impl Renderer {
         let reach = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
-        self.lay_out(g, world.width, world.height, world.screen, input.env, reach);
+        self.lay_out(
+            g,
+            world.width,
+            world.height,
+            world.screen,
+            input.environment,
+            reach,
+        );
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
         if let Some(c) = cast.as_mut() {
