@@ -1,14 +1,13 @@
 ---
 name: naming
-description: How a name in pixelet is chosen and spelled — a convention's or the 0405 checkpoint's word; abbreviations by default and the words that stay whole; the names chosen with the user; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming or renaming anything, in code, spec JSON or a backticked identifier in a document.
+description: How a name in pixelet is chosen and spelled — a convention's word; abbreviations by default and the words that stay whole; the names chosen with the user; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming or renaming anything, in code, spec JSON or a backticked identifier in a document.
 ---
 
 # Naming
 
 A name says what the thing is called where it comes from. Before naming or
 renaming, find that word: what the field calls it (graphics, GIS, game
-cameras, WAI-ARIA, the language's own idiom) and what
-`origin/checkpoint/20260405-rpc` called it. Use it, and say in the proposal
+cameras, WAI-ARIA, the language's own idiom). Use it, and say in the proposal
 where it comes from. A thing with no precedent is named with the user.
 
 ## Abbreviate by default
@@ -80,8 +79,8 @@ Abbreviate the binding, keep the type: `let idx: Index`, `let cfg: Config`,
 A plural names a collection only. One value is singular (`End`, `Take`,
 `Write`, `Occupancy`, the object layer's `OBJECT`).
 
-A plural abbreviates as 0405 did (`vals`); `counts`, `offsets`, `positions`
-and `sizes` stay whole.
+Of the plurals only `vals` abbreviates; `counts`, `offsets`, `positions` and
+`sizes` stay whole.
 
 ## Units
 

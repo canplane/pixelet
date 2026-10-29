@@ -241,9 +241,8 @@ field or a catalog entry, keeps the kernel's.
 ## Learn More
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) follows the kernel part by part,
-[AGENTS.md](./AGENTS.md) is how to work in the tree,
-[doc/backlog.md](./doc/backlog.md) what is queued next, and
-[doc/minutes/](./doc/minutes/) why things went the way they did.
+[AGENTS.md](./AGENTS.md) is how to work in the tree, and
+[doc/backlog.md](./doc/backlog.md) what is queued next.
 
 `xpute/` is xpute's repository root, developed here and copied out byte for
 byte by `xpute/script/export.py`; [xpute/README.md](./xpute/README.md) and

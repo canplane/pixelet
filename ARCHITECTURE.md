@@ -138,8 +138,7 @@ object/ext.rs` `class_of`), placed and erased with its leaf.
 Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`), by one
 table taken from Carto's rules (`spec/spec/bake/place_theme.json`). A cell one
 icon wide keeps one place, so each place carries the zoom it shows from, and a
-parent is its children with what shows from its zoom on
-([places follow Carto](./doc/minutes/20261009-places-follow-carto.md)).
+parent is its children with what shows from its zoom on.
 
 The **earth** layer is the planet's picture, baked at its top zoom only
 (`pxl-spec bake/tile/earth.rs`).
@@ -170,11 +169,10 @@ is a function of the cell, a seed and the ground's face, one rule on both sides
 (`pxl-spec-core scatter.rs`). Two grown decors never share a cell.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
-stands at its folded height, its look the majority of those it folds
-([the ground is a Carto palette](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)),
-and its top cell is filled to the share its height reaches (`pxl-spec-core
-ground.rs` `top`). What is placed and the ways fold to the kind most of their
-fill is (`overwrite.rs` `fold`).
+stands at its folded height, its look the majority of those it folds, and its
+top cell is filled to the share its height reaches (`pxl-spec-core ground.rs`
+`top`). What is placed and the ways fold to the kind most of their fill is
+(`overwrite.rs` `fold`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **kept eighths**. It is
@@ -279,14 +277,12 @@ alike (`pxl-spec-core world.rs` `node`, which `pxl-kernel domain/query/world.rs`
    way.rs`);
 4. then what is placed, air included.
 
-A ray descends the pyramid
-([a ray asks the world whether a node is empty](./doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)),
-by one function the CPU and the GPU compile alike (`pxl-spec-core cast.rs`
-`first`). A node coarser than the zoom its distance asks is not what is drawn
-there, so it is asked only whether anything under it fills at the zooms the ray
-asks; what those zooms fold away is not there to miss. Each part answers that
-from what it already keeps, a bound, a hash node or nothing held under the node
-(`pxl-kernel domain/query/node.rs` `World::node`).
+A ray descends the pyramid, by one function the CPU and the GPU compile alike
+(`pxl-spec-core cast.rs` `first`). A node coarser than the zoom its distance
+asks is not what is drawn there, so it is asked only whether anything under it
+fills at the zooms the ray asks; what those zooms fold away is not there to
+miss. Each part answers that from what it already keeps, a bound, a hash node or
+nothing held under the node (`pxl-kernel domain/query/node.rs` `World::node`).
 
 ```text
 a node coarser than the zoom its distance asks
@@ -436,12 +432,10 @@ This part turns the eye's rays and the kernel's list into a frame.
 Each drawn pixel is one ray on the GPU, walking the query's descent over the
 ground's windows, the caves, the ways and the objects' tree as the GPU holds
 them. What a ray stops on is the query's answer; the rasterizer only orders
-what the rays found
-([the ray finds, the raster hands out](./doc/minutes/20261026-the-ray-finds-the-raster-hands-out.md)).
+what the rays found.
 
-Neighboring rays share most of their descent, so the cast walks that part
-once an angular cell and hands the rest to the rasterizer
-([a cell casts a beam](./doc/minutes/20261022-a-cell-casts-a-beam.md)):
+Neighboring rays share most of their descent, so the cast walks that part once
+an angular cell and hands the rest to the rasterizer:
 
 ```text
   one angular cell of the camera grid
@@ -487,8 +481,7 @@ and held in a map slot by its index modulo the map's side
 (`pxl-spec-core sun.rs` `Sun`). The sun is an observer as the eye is: one set of
 passes, written once over an interface both implement (`pxl-shader observer.rs`
 `Observer`), asks the world at the eye's zooms, so a shadow has the detail of
-what it falls on
-([a receiver marks what it reads](./doc/minutes/20261027-a-receiver-marks-what-it-reads.md)).
+what it falls on.
 
 It casts only what a receiver reads:
 
@@ -583,8 +576,7 @@ Markers are one instanced quad over one texture packed shelf by shelf, the
 by who shows it, so equal designs share one place on the sheet
 (`domain/scene/marker/design.rs` `Design`). It is drawn on the GPU only when
 what it shows changes: its shapes as signed distances, its text as lines the
-platform drew, so shaping, bidirectional text and emoji are each platform's own
-([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
+platform drew, so shaping, bidirectional text and emoji are each platform's own.
 
 ---
 
@@ -873,16 +865,13 @@ order, ties broken by the row's own id, so no row order decides a cell
 (`terrain/pipeline/feature.rs` `Rank`). A cell takes the look of what covers its
 center as seen from above, so a tunnel paints nothing. Polygons are filled
 even-odd, and a way paints each cell whose center it covers by the rule the
-client's ways cross a column by (`pxl-spec-core way.rs` `on_way`)
-([the ground is a Carto palette](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)).
+client's ways cross a column by (`pxl-spec-core way.rs` `on_way`).
 
 Bridges and tunnels are solved from the tile and as much of its 1-ring as its
 structures reach, and never further, starting from Arnis's rules
-(`separation/solve.rs`;
-[as Arnis solves them](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)).
-A height leans on nothing further than a tile, so two neighbors solve the same
-height where they meet. A deck is a line in the terrain tile
-([ways off the ground](./doc/minutes/archive/20261001-ways-off-the-ground.md)).
+(`separation/solve.rs`). A height leans on nothing further than a tile, so two
+neighbors solve the same height where they meet. A deck is a line in the terrain
+tile.
 
 The elevation is sampled at the leaf's resolution, as heights in leaf cells at
 the tile's scale, with a **pad** of samples past each edge for the interpolant
@@ -964,11 +953,9 @@ scheduler](#reads-and-the-one-scheduler)'s. Going back is serving an older
 version again.
 
 The bucket is private and read only by the Worker, which serves a tile under its
-kind, version and name
-([deployment hosting](./doc/minutes/20260816-deployment-hosting.md)). A version
-never changes meaning, so a tile is cached as immutable. In development a tile
-server bakes on demand by the same functions and answers as the bucket does
-([infra/README.md](./infra/README.md)).
+kind, version and name. A version never changes meaning, so a tile is cached as
+immutable. In development a tile server bakes on demand by the same functions
+and answers as the bucket does ([infra/README.md](./infra/README.md)).
 
 ## Catalogs and assets
 
@@ -1019,20 +1006,20 @@ them.
 | Earth Engine's `MODE` pyramiding                                                                                                                                    | `pxl-spec bake/fold.rs`                                                                                                             | A 2 × 2 majority fold of the zoom under it                                                                                               |
 | Distant Horizons                                                                                                                                                    | `pxl-render mesh/paint/palette.rs`                                                                                                  | A distant cell drawn as the mean of what it folds                                                                                        |
 | Minecraft's `cube_all`, `cube_bottom_top`                                                                                                                           | `pxl-render gpu/pack.rs`                                                                                                            | Which face image a cube wears: its own side and bottom where the pack ships them, its top on every face where not                        |
-| Minecraft Beta's `replaceBlocksForBiome` ([doc/minutes/archive/20261011-the-ground-under-its-face.md](./doc/minutes/archive/20261011-the-ground-under-its-face.md)) | `pxl-spec-core ground.rs` `Cell::asset`                                                                                             | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
+| Minecraft Beta's `replaceBlocksForBiome`                                                                                                                            | `pxl-spec-core ground.rs` `Cell::asset`                                                                                             | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
 | Minecraft's map colors                                                                                                                                              | `spec/spec/asset/color.json` underground                                                                                            | The colors of soil, sandstone and stone                                                                                                  |
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c))                              | `pxl-kernel domain/query/support.rs` `step_slide`                                                                                   | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
 | Amanatides and Woo's voxel traversal                                                                                                                                | `pxl-spec-core cast.rs` `walk`, `pxl-kernel domain/query/support.rs`                                                                | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                                                       | `pxl-spec-core cast.rs` `walk`                                                                                                      | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |
-| Laine and Karras's beams; Reshetov et al. ([doc/minutes/20261022-a-cell-casts-a-beam.md](./doc/minutes/20261022-a-cell-casts-a-beam.md))                            | `pxl-shader beam.rs`, `pxl-spec-core cast.rs` `Until::Beam`                                                                         | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
-| Tevs, Ihrke and Seidel's maximum mipmaps ([doc/minutes/20261028-a-tile-is-asked-where-it-lies.md](./doc/minutes/20261028-a-tile-is-asked-where-it-lies.md))         | `pxl-spec-core window.rs` `bounded`                                                                                                 | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
+| Laine and Karras's beams; Reshetov et al.                                                                                                                           | `pxl-shader beam.rs`, `pxl-spec-core cast.rs` `Until::Beam`                                                                         | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
+| Tevs, Ihrke and Seidel's maximum mipmaps                                                                                                                            | `pxl-spec-core window.rs` `bounded`                                                                                                 | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
 | The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `sun.rs` `Sun`                                                                                           | A zoom's square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves             |
 | Burns and Hunt's visibility buffer (JCGT 2013)                                                                                                                      | `pxl-render gpu/ray/raster.rs` `Raster`, `frame/shader/raster.wgsl`                                                                 | Each pixel keeps the number of the nearest thing drawn over it, here a sample's box, and reads the rest off that                         |
 | OpenStreetMap Carto                                                                                                                                                 | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/asset/`                                                              | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
 | Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/marker.rs`                                                                                                         | A marker's line pitch                                                                                                                    |
 | OpenMapTiles' schema                                                                                                                                                | `spec/spec/asset/marker.json`                                                                                                       | A marker shows from z14, as its `poi` layer does                                                                                         |
 | [Arnis](https://github.com/louis-e/arnis)                                                                                                                           | `pxl-geo-bake separation/solve.rs`, `solve/`                                                                                        | Bridges and tunnels: clearances, ramps, decks, pillars                                                                                   |
-| osm2streets, osm2lanes                                                                                                                                              | the bake's way rules ([doc/minutes/archive/20261001-ways-off-the-ground.md](./doc/minutes/archive/20261001-ways-off-the-ground.md)) | Lane and buffer widths                                                                                                                   |
+| osm2streets, osm2lanes                                                                                                                                              | the bake's way rules                                                                                                                | Lane and buffer widths                                                                                                                   |
 | Overture's schema                                                                                                                                                   | `pxl-spec division.rs`, `pxl-geo-bake terrain/pipeline/overture/between.rs`                                                         | Places and divisions read as the schema defines them                                                                                     |
 | Bruneton; Hillaire (EGSR 2020)                                                                                                                                      | `pxl-render look/atmosphere.rs`                                                                                                     | The atmosphere's tables: transmittance and irradiance; multiple scattering and the sky view                                              |
 | Unreal's SkyAtmosphere, OPAC, Cornette–Shanks                                                                                                                       | `pxl-render look/atmosphere.rs`, `frame/shader/atmos_medium.wgsl`                                                                   | The Earth's scattering numbers, the haze, the Mie phase                                                                                  |
@@ -1043,5 +1030,5 @@ them.
 | Stöckli et al. (Blue Marble)                                                                                                                                        | `pxl-geo-bake bin/bake_earth.rs`                                                                                                    | The imagery's bytes read back as reflectance                                                                                             |
 | three.js                                                                                                                                                            | `pxl-kernel domain/scene/actor.rs`, `pxl-render frame/shader/atmos_view.wgsl`                                                       | A clip's cross-fade; Lambert as its standard material                                                                                    |
 | Howard Hinnant's date algorithm                                                                                                                                     | `pxl-geo-bake util.rs`                                                                                                              | A civil date from a day count                                                                                                            |
-| Figma                                                                                                                                                               | [doc/minutes/20260912-why-the-destination-is-wasm.md](./doc/minutes/20260912-why-the-destination-is-wasm.md)                        | A compiled engine in the page over one memory                                                                                            |
+| Figma                                                                                                                                                               | `pxl-wasm`                                                                                                                          | A compiled engine in the page over one memory                                                                                            |
 | iOS's interface guidelines, Material's motion, SF Symbols                                                                                                           | `ts/client/src/shell/ui/theme.ts`, `shell/ui/motion/transition.ts`, `shell/ui/icon.tsx`                                             | Touch targets and type scale, easing, the icons' names                                                                                   |

@@ -6,17 +6,11 @@ description: How the documents people read are written and reviewed — README.m
 # Writing the documents
 
 These documents are read by people who have not seen the code. Each one
-explains a mechanism in an order you can follow from the top; it is not a
-reference card or an essay.
+explains a mechanism in an order you can follow from the top.
 
-This skill does not cover what agents write for each other: `doc/` (the
-backlog, minutes and experiments), `AGENTS.md` and the skills. Their readers
-already know the tree.
-
-[reference.md](./reference.md) says what a document should be and which fault
-each rule came from. Read it before writing or restructuring a document, or when
-one reads badly for no clear reason. For an edit that keeps the order, the
-checks below are enough.
+[reference.md](./reference.md) holds the rules. Read it before writing or
+restructuring a document, or when one reads badly. For an edit that keeps the
+order, the checks below are enough.
 
 ## Before committing
 
@@ -35,11 +29,10 @@ checks below are enough.
   cutting a section, recheck counts and summaries ("in two parts"), table rows,
   sibling documents that use the same word, forward references, and sentences
   whose antecedent was cut.
-- **Prose wraps at 80 columns.** No formatter runs on `README.md`,
-  `ARCHITECTURE.md`, xpute's two or `infra/README.md`, so wrap them by hand the
-  way `deno fmt` wraps Markdown under `ts/`: break after the last word that fits
-  in 80 columns. Tables, figures and unbreakable links may run past. Rewrap only
-  the paragraphs you touched.
-- **Read the whole document from the top**, rendered, not as a diff. The checks
-  above each catch one kind of fault; only reading catches the rest (a
-  repetition, a misaligned diagram, a dangling pronoun, a stale count).
+- **No minute is linked.** A document cites the code, another document or an
+  outside source, never a record under `doc/`.
+- **Prose wraps at 80 columns** in `README.md`, `ARCHITECTURE.md`, xpute's two
+  and `infra/README.md`, by hand, the way `deno fmt` wraps Markdown under `ts/`:
+  break after the last word that fits in 80 columns. Rewrap only the paragraphs
+  you touched.
+- **Read the whole document from the top**, rendered, not as a diff.

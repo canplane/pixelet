@@ -235,7 +235,13 @@ export class TreeView extends NodeView {
     return this;
   }
 
-  /** A number lowers to i32 when it fits and f64 otherwise, a bigint to i64 (u64 needs `u64()`). */
+  /**
+   * A number lowers to i32 when it fits and f64 otherwise, a bigint to i64
+   * (u64 needs `u64()`). An object does not lower: which keys go and in what
+   * order is a schema's to say, and a schema that owns them lowers an object
+   * to an array with `to_tuple` and reads it back with `from_tuple`
+   * (wire/lower.ts).
+   */
   set<T extends NodeValue<NodeView>>(val: T): this {
     return this._set_node(val_to_node(val));
   }

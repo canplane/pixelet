@@ -18,7 +18,6 @@ import type {
   TypedArray,
   U8Array,
 } from "@xpute/kit/abi/array.ts";
-import type { Nullable } from "@xpute/kit/lang/type.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
@@ -128,20 +127,20 @@ export type LeafNode = ScalarNode | SequenceNode;
 export interface ScalarNode {
   readonly type: ScalarType;
 
-  val: Nullable<numeric>;
+  val: numeric | null;
 }
 
 export interface SequenceNode {
   readonly type: SequenceType;
 
-  val: Nullable<string | string[] | TypedArray | BigTypedArray>;
+  val: string | string[] | TypedArray | BigTypedArray | null;
 }
 
 export type SpecialNode = NilNode | BranchNode | GraftNode;
 export interface BranchNode {
   readonly type: SpecialType.BRANCH;
 
-  val: Nullable<Node[]>;
+  val: Node[] | null;
 }
 
 // A previously encoded packet spliced in; it must lay out as the inline subtree would.

@@ -9,9 +9,6 @@ sit and turn in the world's own space, and neither counter-rotates toward the
 eye. Their colors are this tier's own, pxl-render `look/color.rs` `indicator`
 (`ACTION`, `ERASE`), not a general palette.
 
-The tier's place among the others is
-[doc/minutes/archive/20260907-world-rendering-tiers.md](/doc/minutes/archive/20260907-world-rendering-tiers.md).
-
 Three files here are not indicators but debug views, kept in this folder for
 convenience:
 

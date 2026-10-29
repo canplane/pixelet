@@ -128,8 +128,7 @@ together (`Tile`, `layer/tile.rs`); the tile at a zoom over a leaf is
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_at`), and terrain's
 tile zoom is the one whose cells those are (pxl-spec-core `Lattice::tile_zoom`);
-the cast measures its own step against the same cell zoom
-([every size is a zoom](../../../../doc/minutes/archive/20261006-every-size-is-a-zoom.md)).
+the cast measures its own step against the same cell zoom.
 
 ## The trees share their geometry and nothing else
 

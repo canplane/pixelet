@@ -24,6 +24,4 @@ with the others (`../marker/arrangement.rs`).
 
 The folder is `character/`, not `actors/`, because "Character" is already what a
 user reads: the settings' Character section and the drawer's Character tab
-choose which variant the person and the pet use. The tier's place among the
-others is
-[doc/minutes/archive/20260907-world-rendering-tiers.md](/doc/minutes/archive/20260907-world-rendering-tiers.md).
+choose which variant the person and the pet use.
