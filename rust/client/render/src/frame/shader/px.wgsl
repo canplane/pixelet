@@ -1,4 +1,4 @@
-// pxl-render/frame/shader/pixel.wgsl
+// pxl-render/frame/shader/px.wgsl
 
 // A drawn pixel's tangents across and up at `at`, its middle or a fragment's
 // pos, of the `size` drawn, row 0 at the top, the screen's half-angle

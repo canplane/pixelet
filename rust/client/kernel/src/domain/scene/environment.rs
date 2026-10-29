@@ -4,7 +4,7 @@
 //! wall clock as inputs; the sun and moon placed, and the light and sky they
 //! give.
 
-pub mod celestial_position;
+pub mod celestial;
 pub mod cloud;
 pub mod param;
 
@@ -23,7 +23,7 @@ use crate::domain::view::setting::schema_spec::SkyTime;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::clock::wall_now;
 use crate::sys::sched::edge::wake_at;
-use celestial_position::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
+use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use pxl_render::param::night;
 use xpute_guest::clock::now;
 

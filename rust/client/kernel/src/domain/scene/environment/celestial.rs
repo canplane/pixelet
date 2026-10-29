@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/environment/celestial_position.rs
+// pxl-kernel/domain/scene/environment/celestial.rs
 
 //! Where the sun, the moon and the stars are, by the standard low-precision
 //! formulas: the sun to about 0.01°, the moon to roughly 0.3–1°.

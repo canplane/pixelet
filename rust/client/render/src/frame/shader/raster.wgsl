@@ -169,7 +169,7 @@ fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
 }
 
 // The drawn pixel's tangents across and up at `at`, where its ray goes
-// through it (pixel.wgsl `px_tan`), off the raster's own view.
+// through it (px.wgsl `px_tan`), off the raster's own view.
 fn raster_tan(at: vec2f) -> vec2f {
   return px_tan(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
 }

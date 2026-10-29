@@ -93,7 +93,7 @@ The stars are the Yale Bright Star Catalog (Hoffleit and Warren, 1991, CDS
 V/50): 9,096 stars to about sixth magnitude, eight bytes each, 72,768 bytes
 baked by `script/bake-stars.ts` and drawn as one instanced strip. They are
 turned by the sidereal time and the latitude through the same construction that
-places the sun and the moon (`celestial_position.rs`'s `equatorial_to_local`,
+places the sun and the moon (`celestial.rs`'s `equatorial_to_local`,
 tested against it at two cities). Brightness is the magnitude, color the
 temperature from B−V through Planck's law, dimmed by the airmass. Their size is
 in CSS pixels — in device pixels a dense screen halved them — and a star
