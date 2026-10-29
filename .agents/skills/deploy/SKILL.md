@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: Send a finished line out, in one order — check and test once, squash main into its archive and checkpoint, push to the deploy branch and watch CI, export xpute last — and what to do when the smoke fails. Use only when the user asks to deploy, squash main or export xpute. Not for a plain `git push origin main`.
+description: Send a finished line out, in one order — check and test once, squash main with its originals on `original`, push to the deploy branch and watch CI, export xpute last — and what to do when the smoke fails. Use only when the user asks to deploy, squash main or export xpute. Not for a plain `git push origin main`.
 ---
 
 # Deploying
@@ -9,8 +9,7 @@ Do these steps in this order. Skip a step if you like; never reorder them.
 
 1. **Commit everything.** A fix found later starts a new round from step 1.
 2. **Check and test once** on that tree (below). Change no file after it.
-3. **Squash** main into one commit, keeping the originals in the archive and
-   putting the checkpoint on the squash.
+3. **Squash** main since the last squash, its originals on `original`.
 4. **Deploy**, if one was asked for: push the squash and watch CI.
 5. **Export xpute**, once, from the squash.
 
@@ -31,31 +30,22 @@ and Chrome, `$CHROME`).
 
 ## Squash
 
-main is the last squash plus the commits since. Fold those commits into one
-commit on the last squash's parent, keep the originals in
-`archive/<date>-<line>`, and put `checkpoint/<date>-<line>` on the squash. Name
-the line after what it started with (`gpu-cast`), not its last change.
+main is the last squash plus the commits since. Squash those commits on the
+last squash, as the user says, keeping every original message.
 
-- **Originals as one line.** The archive holds the originals as a single line
-  from the last squash's parent. If this round already squashed once, the
-  commits after that squash sit on it: re-create each on the original before it
-  with `git commit-tree`, keeping its tree, author, date and message.
-- **The squash:** `git commit-tree <tip>^{tree} -p <base>`. Its message is the
-  line's subject, then this line, then what the line did, part by part:
+- **The originals** go on `original` as one line behind a marker, an empty
+  commit on its tip, and `original` moves only by fast-forward:
 
   ```
-  N commits from <base> to <tip>, kept whole in archive/<name>.
-  ```
-- **The archive:** one merge per round on top of the previous archive,
-  `-p <archive> -p <tip>`. Redoing a round replaces its merge; don't stack a
-  second one.
+  chore: original/<date>-<line>
 
+  What follows is the history that branch kept, from the state it began at (<previous date-line>).
   ```
-  merge(archive): main from <base> to <tip>, N commits, squashed into <squash>
-  ```
-- **Push** the archive, then main with `--force-with-lease` against the main it
-  replaces, then the checkpoint. Tell the sessions working in the checkout that
-  main was rewritten.
+
+  The date is the day of the squash; the line is the round's central change.
+- **Push** `original`, then main with `--force-with-lease` against the main it
+  replaces. Tell the sessions working in the checkout that main was rewritten.
+- **A checkpoint** goes on main only when the user asks for one.
 
 ## Deploy
 
