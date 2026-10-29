@@ -79,7 +79,7 @@ pub(super) fn execute<L: Base>(
     } else {
         fold_stored(&TileSet::new(cache), p, absent)?
     };
-    let packet = tile
+    let pkt = tile
         .map(|tile| {
             pack(
                 &tile.encode(p).map_err(|e| format!("{}: {e}", p.name()))?,
@@ -88,5 +88,5 @@ pub(super) fn execute<L: Base>(
             .map_err(|e| e.to_string())
         })
         .transpose()?;
-    job::write_packet(out, packet.as_deref())
+    job::write_pkt(out, pkt.as_deref())
 }

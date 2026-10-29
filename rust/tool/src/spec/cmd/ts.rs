@@ -175,14 +175,14 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if let Some(packet) = &c.packet {
+        if let Some(pkt) = &c.packet {
             // Written in place, its fields handed over as they are: no record is made for it.
-            uses.note(spec, packet, false)?;
+            uses.note(spec, pkt, false)?;
             let mut doc = vec![format!(
                 "Command.{}'s packet, written in place into `to`.",
                 c.name
             )];
-            for f in packet {
+            for f in pkt {
                 if let Some(d) = &f.doc {
                     if doc.len() == 1 {
                         doc.push(String::new());
@@ -192,11 +192,11 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             }
             tail.push(String::new());
             tail.extend(ts_doc(&doc, ""));
-            let params = packet
+            let params = pkt
                 .iter()
                 .map(|f| Ok(format!(", {}: {}", f.name, ts_type(spec, f)?)))
                 .collect::<Result<Vec<_>, String>>()?;
-            let writes = packet
+            let writes = pkt
                 .iter()
                 .map(|f| ts_write(spec, f, &f.name))
                 .collect::<Result<Vec<_>, String>>()?;
@@ -207,7 +207,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             ));
             tail.push(format!(
                 "  return to.writer({}){};",
-                packet.len(),
+                pkt.len(),
                 writes.concat()
             ));
             tail.push("}".into());

@@ -2,7 +2,7 @@
 
 //! The blocks bodies are read into. Terrain's and the Earth's packets run
 //! just past a mebibyte (a tile's looks and the Earth's texels are one
-//! each, pxl-spec `bake::tile::max_packet_bytes`), where the buddy would
+//! each, pxl-spec `bake::tile::max_pkt_bytes`), where the buddy would
 //! give each body a block of two. Their bodies take slots instead, each
 //! their longest packet in pages, carved from a run the heap gives whole
 //! and takes back once its last slot is free: a cache for one kind of

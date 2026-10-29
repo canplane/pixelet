@@ -29,7 +29,7 @@ impl crate::pyramid::Base for TerrainTile {
     const LATTICE: pxl_spec::space::layer::lattice::Lattice = GROUND;
 
     fn encode(&self, at: Tile) -> Result<Vec<u8>, String> {
-        self.encode_stored(at).map(|(packet, _)| packet)
+        self.encode_stored(at).map(|(pkt, _)| pkt)
     }
 
     /// Refused where a record's room does not hold its lines (pxl-spec
@@ -44,8 +44,8 @@ impl crate::pyramid::Base for TerrainTile {
         terrain::ways_fit(&self.separation, BRICK)
             .map_err(|([qx, qy], n)| format!("its brick ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_BRICK_SEGMENTS ({})", terrain::WAYS_BRICK_SEGMENTS))?;
         let fit = terrain::fill_fit(at, self, |_, _| {}).map_err(|(at, why)| unfit(at, why))?;
-        let packet = terrain::encode(self).map_err(|e| format!("{e:?}"))?;
-        Ok((packet, (fit != Fit::default()).then(|| pool::line(&fit))))
+        let pkt = terrain::encode(self).map_err(|e| format!("{e:?}"))?;
+        Ok((pkt, (fit != Fit::default()).then(|| pool::line(&fit))))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {

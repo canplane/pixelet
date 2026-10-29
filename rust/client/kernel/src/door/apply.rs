@@ -9,7 +9,7 @@ use xpute_guest::mem::{off_of, off_of_slice};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
+fn given<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
     or_refuse(*pkt, Errno::EBADMSG)
 }
 
@@ -70,7 +70,7 @@ pub(super) fn apply(
     };
     match cmd {
         Command::WORLD_FRAME => {
-            let p = abi::WorldFrame::read(packet(pkt)?)?;
+            let p = abi::WorldFrame::read(given(pkt)?)?;
             refuse_unless(
                 p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(),
                 Errno::EINVAL,
@@ -96,7 +96,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
-            let p = abi::WorldBoot::read(packet(pkt)?)?;
+            let p = abi::WorldBoot::read(given(pkt)?)?;
             super::on_host_attached(s);
             crate::domain::view::setting::store::set_development(p.development);
             crate::turn::set_world_platform(crate::turn::Platform {
@@ -115,7 +115,7 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::WORLD_SOURCE => {
-            let p = abi::WorldSource::read(packet(pkt)?)?;
+            let p = abi::WorldSource::read(given(pkt)?)?;
             refuse_unless(
                 crate::sys::io::source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(),
                 Errno::EINVAL,
@@ -124,7 +124,7 @@ pub(super) fn apply(
         }
         Command::WORLD_KEPT_EMPTIED => {
             use crate::sys::io::file::{self, Kept};
-            let p = abi::WorldKeptEmptied::read(packet(pkt)?)?;
+            let p = abi::WorldKeptEmptied::read(given(pkt)?)?;
             let kept = or_refuse(
                 Kept::of_slot(p.slot).filter(|&k| file::is_refused(k)),
                 Errno::EINVAL,
@@ -139,13 +139,13 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::INPUT_RECT => {
-            let p = abi::InputRect::read(packet(pkt)?)?;
+            let p = abi::InputRect::read(given(pkt)?)?;
             refuse_unless(p.width >= 0.0 && p.height >= 0.0, Errno::EINVAL)?;
             camera_input_rect(p);
             Ok(Some(0))
         }
         Command::INPUT_POINTER => {
-            let p = abi::InputPointer::read(packet(pkt)?)?;
+            let p = abi::InputPointer::read(given(pkt)?)?;
             match p.phase {
                 abi::PointerPhase::Down => {
                     camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y)
@@ -166,7 +166,7 @@ pub(super) fn apply(
         Command::INPUT_HOLD => {
             use pxl_spec::asset::cube::cube_of;
             use pxl_spec::asset::DecorId;
-            let p = abi::InputHold::read(packet(pkt)?)?;
+            let p = abi::InputHold::read(given(pkt)?)?;
             let mut holding = holding();
             holding.active_tool = p.tool;
             holding.object_tier = p.tier;
@@ -187,7 +187,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::INPUT_MARKER_WORDS => {
-            let text = abi::InputMarkerWords::read(packet(pkt)?)?.text;
+            let text = abi::InputMarkerWords::read(given(pkt)?)?.text;
             or_refuse(
                 crate::domain::control::interaction::edit::draft_words(text).ok(),
                 Errno::EMSGSIZE,
@@ -203,16 +203,16 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::INPUT_WHEEL => {
-            camera_wheel(abi::InputWheel::read(packet(pkt)?)?.delta_y);
+            camera_wheel(abi::InputWheel::read(given(pkt)?)?.delta_y);
             Ok(Some(0))
         }
         Command::INPUT_KEYS => {
-            let p = abi::InputKeys::read(packet(pkt)?)?;
+            let p = abi::InputKeys::read(given(pkt)?)?;
             camera_keys(p.x, p.y);
             Ok(Some(0))
         }
         Command::INPUT_TRACKING => {
-            ui::tracking_action(abi::InputTracking::read(packet(pkt)?)?.tracking);
+            ui::tracking_action(abi::InputTracking::read(given(pkt)?)?.tracking);
             request_world_tick();
             Ok(Some(0))
         }
@@ -224,7 +224,7 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::INPUT_GOTO => {
-            let p = abi::InputGoto::read(packet(pkt)?)?;
+            let p = abi::InputGoto::read(given(pkt)?)?;
             refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
             ui::go_to_deg(
                 p.lon,
@@ -238,7 +238,7 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::INPUT_XR_POSE => {
-            let p = abi::InputXrPose::read(packet(pkt)?)?;
+            let p = abi::InputXrPose::read(given(pkt)?)?;
             // A unit quaternion by the protocol; one of no length turns nothing.
             refuse_unless(
                 p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0,
@@ -255,7 +255,7 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::SENSOR_POS => {
-            let p = abi::SensorPos::read(packet(pkt)?)?;
+            let p = abi::SensorPos::read(given(pkt)?)?;
             refuse_unless(
                 on_earth(p.lon, p.lat) && p.accuracy.is_none_or(|a| a >= 0.0) && bearing(p.course),
                 Errno::EINVAL,
@@ -271,7 +271,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::SENSOR_FAILED => {
-            let p = abi::SensorFailed::read(packet(pkt)?)?;
+            let p = abi::SensorFailed::read(given(pkt)?)?;
             match p.sensor {
                 // A failure the platform named no cause for is Other's.
                 abi::Sensor::Geolocation => geolocation::geolocation_error(
@@ -282,7 +282,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::SENSOR_ORIENT => {
-            let p = abi::SensorOrient::read(packet(pkt)?)?;
+            let p = abi::SensorOrient::read(given(pkt)?)?;
             // DeviceOrientationEvent's ranges, closed: a reading at an end is still one.
             let within = |v: Option<f64>, half: f64| v.is_none_or(|v| (-half..=half).contains(&v));
             refuse_unless(
@@ -296,7 +296,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::SENSOR_PERMISSION => {
-            let p = abi::SensorPermission::read(packet(pkt)?)?;
+            let p = abi::SensorPermission::read(given(pkt)?)?;
             match p.sensor {
                 abi::Sensor::Geolocation => {
                     if p.answer == abi::PermissionAnswer::Granted {
@@ -312,7 +312,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::WORLD_VISIBILITY => {
-            let visible = abi::WorldVisibility::read(packet(pkt)?)?.visible;
+            let visible = abi::WorldVisibility::read(given(pkt)?)?.visible;
             geolocation::geolocation_visibility(visible, world_platform().geolocation);
             if visible {
                 device_orientation::orient_visible();
@@ -326,7 +326,7 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::WORLD_VIEW => {
-            if abi::WorldView::read(packet(pkt)?)?.shown {
+            if abi::WorldView::read(given(pkt)?)?.shown {
                 ui::sensors_open();
             } else {
                 ui::sensors_close();
@@ -340,14 +340,14 @@ pub(super) fn apply(
         }
         Command::SURFACE_OPEN => {
             let handle =
-                pxl_render::gpu::surface::surface_open(abi::SurfaceOpen::read(packet(pkt)?)?.role);
+                pxl_render::gpu::surface::surface_open(abi::SurfaceOpen::read(given(pkt)?)?.role);
             if handle != 0 {
                 request_world_tick();
             }
             Ok(Some(handle as i32))
         }
         Command::SURFACE_RESIZE => {
-            let p = abi::SurfaceResize::read(packet(pkt)?)?;
+            let p = abi::SurfaceResize::read(given(pkt)?)?;
             refuse_unless(p.device_pixel_ratio > 0.0, Errno::EINVAL)?;
             let role = pxl_render::gpu::surface::surface(p.surface).map_or(0, |s| s.role);
             let ratio = crate::domain::view::frame::resolution::surface_ratio(
@@ -369,7 +369,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::SURFACE_CLOSE => {
-            let surface = abi::SurfaceClose::read(packet(pkt)?)?.surface;
+            let surface = abi::SurfaceClose::read(given(pkt)?)?.surface;
             refuse_unless(
                 pxl_render::gpu::surface::surface(surface).is_some(),
                 Errno::EBADF,
@@ -378,7 +378,7 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::SETTING_SET => {
-            let p = abi::SettingSet::read(packet(pkt)?)?;
+            let p = abi::SettingSet::read(given(pkt)?)?;
             // A change before the slot is read would be read over.
             refuse_unless(are_settings_loaded(), Errno::EAGAIN)?;
             let changed = settings_store().set_setting(p.key, p.value);
@@ -389,11 +389,11 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::CHAT_SEND => {
-            crate::domain::scene::marker::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
+            crate::domain::scene::marker::append_chat_line(abi::ChatSend::read(given(pkt)?)?.text);
             ask_turn(s)
         }
         Command::PREVIEW_OPEN => {
-            let p = abi::PreviewOpen::read(packet(pkt)?)?;
+            let p = abi::PreviewOpen::read(given(pkt)?)?;
             refuse_unless(
                 pxl_render::gpu::surface::surface(p.surface).is_some(),
                 Errno::EBADF,
@@ -409,7 +409,7 @@ pub(super) fn apply(
         Command::PREVIEW_CLOSE => {
             refuse_unless(
                 crate::domain::scene::character::preview::preview_close(
-                    abi::PreviewClose::read(packet(pkt)?)?.surface,
+                    abi::PreviewClose::read(given(pkt)?)?.surface,
                 ),
                 Errno::EBADF,
             )?;
@@ -428,7 +428,7 @@ pub(super) fn apply(
         }
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => {
-            let window_ms = abi::ProfilerRead::read(packet(pkt)?)?.window_ms;
+            let window_ms = abi::ProfilerRead::read(given(pkt)?)?.window_ms;
             Ok(Some(read_timed(|| profiler_read(window_ms)) as i32))
         }
         Command::PROFILER_RINGS => Ok(Some(read_timed(profiler_rings) as i32)),
@@ -446,7 +446,7 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
             Ok(Some(val as i32))
         }
         xpute_cmd::Command::SYS_OPENED => {
-            let p = xpute_cmd::SysOpened::read(packet(pkt)?)?;
+            let p = xpute_cmd::SysOpened::read(given(pkt)?)?;
             crate::sys::io::file::on_opened(p.fd, p.res, p.detail);
             Ok(Some(0))
         }

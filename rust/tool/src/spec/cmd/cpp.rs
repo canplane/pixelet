@@ -174,13 +174,13 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 t.json, c.name
             ));
         }
-        if let Some(packet) = &c.packet {
+        if let Some(pkt) = &c.packet {
             out.extend([
                 String::new(),
                 format!("// Command::{}'s packet.", c.name),
                 format!("struct {name} {{"),
             ]);
-            for f in packet {
+            for f in pkt {
                 if let Some(doc) = &f.doc {
                     out.extend(crate::spec::line_comments(doc, "    "));
                 }
@@ -197,7 +197,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 "        if (!f) return f.error();".to_string(),
                 format!("        {name} out;"),
             ]);
-            for (i, f) in packet.iter().enumerate() {
+            for (i, f) in pkt.iter().enumerate() {
                 out.extend(
                     cpp_read(spec, f, i)?
                         .into_iter()

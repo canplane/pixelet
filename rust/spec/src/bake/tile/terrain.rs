@@ -28,8 +28,8 @@ pub use pxl_spec_core::window::{WAYS_ACROSS, WAYS_SHIFT};
 /// The most a packet takes: every lane at its longest, a look a cell four
 /// and the separation at a record's room (`separation::MAX_LINES`,
 /// `MAX_POINTS`), as `encode` lays them.
-pub const MAX_PACKET_BYTES: usize = {
-    use super::packet::{branch, seq, HEADER, SCALAR};
+pub const MAX_PKT_BYTES: usize = {
+    use super::pkt::{branch, seq, HEADER, SCALAR};
     use crate::bake::separation::{MAX_LINES, MAX_POINTS};
     let separation = branch(8)
         + seq((MAX_LINES + 1) * 4)

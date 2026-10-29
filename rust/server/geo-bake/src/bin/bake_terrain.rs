@@ -106,10 +106,10 @@ fn run() -> Result<(), String> {
                         };
                         let terrain = bake_leaf(reader, tile)?;
                         let at = Tile::new(LEAF_ZOOM, tile);
-                        let (packet, fit) = terrain
+                        let (pkt, fit) = terrain
                             .encode_stored(at)
                             .map_err(|e| format!("{}: {e}", at.name()))?;
-                        let packed = pack(&packet, Level::Stored).map_err(|e| e.to_string())?;
+                        let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
                         set.write_stored(at, &packed, fit.as_deref())?;
                         Ok(Done::Wrote {
                             bytes: packed.len() as u64,

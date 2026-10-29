@@ -240,8 +240,8 @@ pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
     }
 }
 
-pub(super) fn write_packet(out: &Path, packet: Option<&[u8]>) -> Result<(), String> {
-    let (path, bytes) = match packet {
+pub(super) fn write_pkt(out: &Path, pkt: Option<&[u8]>) -> Result<(), String> {
+    let (path, bytes) = match pkt {
         Some(bytes) => (out.join("packet"), bytes),
         None => (out.join("empty"), &b""[..]),
     };

@@ -69,7 +69,7 @@ const _: () = assert!(
 
 /// The most a packet takes, a tile past it failing its bake (`encode`): the
 /// set baked 2026-10-17 holds at most 107 KiB.
-pub const MAX_PACKET_BYTES: usize = 1 << 20;
+pub const MAX_PKT_BYTES: usize = 1 << 20;
 
 /// The longest name a tile holds, in code points; a longer one is cut to end
 /// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
@@ -325,7 +325,7 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
         &t,
         TreeEncoderOptions {
             init_cap: super::ENCODE_FROM,
-            max_cap: Some(MAX_PACKET_BYTES as u32),
+            max_cap: Some(MAX_PKT_BYTES as u32),
         },
     )
 }

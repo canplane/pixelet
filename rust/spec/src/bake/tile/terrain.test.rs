@@ -88,7 +88,7 @@ fn formats_round_trip() {
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 
-/// A tile at every lane's longest is as long as `MAX_PACKET_BYTES` says.
+/// A tile at every lane's longest is as long as `MAX_PKT_BYTES` says.
 #[test]
 fn full_tile_pkt_size() {
     use separation::{MAX_LINES, MAX_POINTS};
@@ -109,18 +109,18 @@ fn full_tile_pkt_size() {
         separation: full,
         ..tile(7)
     };
-    assert_eq!(encode(&tile).unwrap().len(), MAX_PACKET_BYTES);
+    assert_eq!(encode(&tile).unwrap().len(), MAX_PKT_BYTES);
     let earth =
         crate::bake::tile::earth::encode(&vec![0; crate::bake::tile::earth::EARTH_BYTES]).unwrap();
     assert_eq!(
         earth.len(),
-        crate::bake::tile::earth::PACKET_BYTES,
+        crate::bake::tile::earth::PKT_BYTES,
         "and an Earth tile is as long as its texels say"
     );
 }
 
 #[test]
-fn non_tile_packet_refused() {
+fn non_tile_pkt_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("old_format_tile")).unwrap();
     assert!(decode(&small).is_err());

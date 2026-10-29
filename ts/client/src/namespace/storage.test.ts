@@ -25,20 +25,20 @@ function storage(
   };
 }
 
-const PACKET = bytes_to_b64url(new Uint8Array([0x58, 0x54, 0x50, 0, 1, 2, 3]));
+const PKT = bytes_to_b64url(new Uint8Array([0x58, 0x54, 0x50, 0, 1, 2, 3]));
 
 Deno.test("migrate - the objects carry over with their format before them, and stay where they were", () => {
-  const s = storage({ "pxl:object:v15": PACKET });
+  const s = storage({ "pxl:object:v15": PKT });
   migrate(s);
   const slot = b64url_to_bytes(s.map.get(kept_key(kept.OBJECTS)!)!);
   assertEquals([...slot], [15, 0x58, 0x54, 0x50, 0, 1, 2, 3]);
   assertEquals(format.OBJECTS, 15);
-  assertEquals(s.map.get("pxl:object:v15"), PACKET);
+  assertEquals(s.map.get("pxl:object:v15"), PKT);
 });
 
 Deno.test("migrate - once: a slot that holds anything is not written", () => {
   const s = storage({
-    "pxl:object:v15": PACKET,
+    "pxl:object:v15": PKT,
     "pxl:kept:objects": "",
     "pxl:settings": "AQ",
     "pxl:kept:settings": "AQIB",

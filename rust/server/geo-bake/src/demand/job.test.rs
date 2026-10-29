@@ -26,14 +26,14 @@ fn staging_publish() {
     let data = Dataset::open(&base, super::super::Kind::Place, &runner).unwrap();
     let stage = Staging(data.cache.root.join("stage"));
     std::fs::create_dir(&stage.0).unwrap();
-    write_packet(&stage.0, Some(b"packet")).unwrap();
+    write_pkt(&stage.0, Some(b"packet")).unwrap();
     stage.publish(&data, "tile").unwrap();
     assert_eq!(
         std::fs::read(data.cache.root.join("tile")).unwrap(),
         b"packet"
     );
     assert!(!stage.0.join("packet").exists());
-    write_packet(&stage.0, Some(b"incomplete")).unwrap();
+    write_pkt(&stage.0, Some(b"incomplete")).unwrap();
     drop(stage);
     assert!(!data.cache.root.join("stage").exists());
     assert!(!data.cache.root.join("packet").exists());

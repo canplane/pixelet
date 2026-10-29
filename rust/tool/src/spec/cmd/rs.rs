@@ -319,9 +319,9 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if let Some(packet) = &c.packet {
+        if let Some(pkt) = &c.packet {
             let mut borrows = false;
-            for f in packet {
+            for f in pkt {
                 borrows |= f.list || spec.kind(&f.ty)? == Kind::Str;
             }
             let lt = if borrows { "<'a>" } else { "" };
@@ -331,7 +331,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 "#[derive(Clone, Copy, Debug)]".to_string(),
                 format!("pub struct {name}{lt} {{"),
             ]);
-            for f in packet {
+            for f in pkt {
                 if let Some(doc) = &f.doc {
                     out.extend(rs_doc(doc, "    ", "///"));
                 }
@@ -348,7 +348,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             ));
             out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
             out.push(format!("        Ok({name} {{"));
-            for (i, f) in packet.iter().enumerate() {
+            for (i, f) in pkt.iter().enumerate() {
                 out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
             }
             out.extend([
