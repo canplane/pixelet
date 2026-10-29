@@ -55,6 +55,8 @@ a block in front of it, as a frame drawn whole showed.
 - The clouds' drift draws the frame whole, at each of its steps.
 - In a `px` region frame the sun's cast still runs (its receivers read the
   jitter): `sun_beam` 1.6–4.3 ms p95, and the sun's map then drawn whole.
+  Its passes past the reach go no wider than the tiles it claims since
+  `c636c1738` (below); the marks and the reach still run each frame.
 - The finish encodes the whole canvas every frame: a canvas's texture is a
   new one each frame.
 - The actor's region sphere is what its mesh reaches as skinned at its clip's
@@ -77,3 +79,31 @@ time to noon again. Without the change it was not seen either, though at
 another view. Whether the change caused it was not settled, and what it saves
 was not measured against the frames before it, so it was taken out; the sun's
 cast in a jittered region frame is still open.
+
+## The sun's passes as wide as the tiles claimed
+
+The beam, the cells, the samples, their boxes and the slots were dispatched
+over the whole map at every sun cast, and returned per tile where it was not
+the cast's to cast (pxl-shader sun.rs `needs`). In a frame that moves only the
+jitter, the receivers move within the tiles already cast, the reach claims
+none, and every workgroup returned at once. Since `c636c1738` their workgroups
+come off a buffer of their own (pxl-spec-core `sun::ARGS_*`): none as a cast
+starts, each whole once `sun_reach_cs` claims a tile.
+
+On :5184, the view the page opens at, 4112×2338, shadows on, an idle minute
+after a minute's settling, the build before it and the build with it in turn
+on the same origin:
+
+| p95 (ms) | `sun_beam` | `sun_sample` | `sun_raster` | `sun_slot` | `sun_walk` | sum |
+|---|---|---|---|---|---|---|
+| before | 2.4 | 0.9 | 0.2 | 0.3 | 0.1 | 3.9 |
+| gated | 2.0 | 0.1 | 0.1 | 0.1 | 0.1 | 2.4 |
+
+GPU p50 31.8 before and 26.9 ms gated, but the spans the change does not touch
+(`world`, `resolve`) ran 1.1–1.4× slower in the run before, and the display's
+refresh read 16.7 ms there against 8.3; the p50 is not taken as the change's.
+`sun_beam` is now the marks and the reach alone.
+
+At this view nearly every frame was `px`, a region taken in 3 of 3507: the
+region frames under What was seen were at other views. Why the region was not
+taken here was not looked into.
