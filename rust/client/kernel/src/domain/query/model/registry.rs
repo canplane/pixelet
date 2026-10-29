@@ -39,6 +39,9 @@ struct Clip {
     /// The fastest, unscaled, in units a second, along its keys' chords; set
     /// with it.
     speed: f32,
+    /// How far any vertex lies from the origin as its first key skins it,
+    /// unscaled; set with it.
+    reach: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -69,6 +72,9 @@ pub struct Model {
     scale: f32,
     /// Unscaled bounding sphere for a hit test to reject by.
     radius: f32,
+    /// How far any vertex lies from its origin as its rest pose skins it,
+    /// unscaled: what it covers drawn (`reach`).
+    rest_reach: f32,
 }
 
 #[derive(Default)]
@@ -247,6 +253,7 @@ impl Models {
             order: Vec::new(),
             scale: 1.0,
             radius: 0.0,
+            rest_reach: 0.0,
         };
         self.models.push(model);
         Some(((self.models.len() - 1) as u32, at))
@@ -284,6 +291,7 @@ impl Models {
             channels: Vec::new(),
             motion: 0.0,
             speed: 0.0,
+            reach: 0.0,
         });
         (m.clips.len() - 1) as u32
     }
@@ -359,7 +367,14 @@ impl Models {
         }
         for c in 0..m.clips.len() {
             (m.clips[c].motion, m.clips[c].speed) = m.moved(c);
+            let first = m.clips[c]
+                .channels
+                .iter()
+                .flat_map(|ch| ch.times.first().copied())
+                .fold(0.0f32, f32::min);
+            m.clips[c].reach = m.reach_at(Some((c as u32, first)));
         }
+        m.rest_reach = m.reach_at(None);
     }
 
     pub fn mesh(&self, model: u32) -> Option<MeshRef> {
@@ -405,6 +420,59 @@ impl Model {
     /// The farthest any point of its mesh moves over a clip, unscaled.
     pub fn motion(&self, clip: u32) -> f32 {
         self.clips.get(clip as usize).map_or(0.0, |c| c.motion)
+    }
+
+    /// How far any vertex lies from the origin as drawn, unscaled, at a
+    /// clip's first key and as far as it moves from there, or at rest where
+    /// none plays: a sphere about where it stands that holds it.
+    pub fn reach(&self, clip: Option<u32>) -> f32 {
+        clip.and_then(|c| self.clips.get(c as usize))
+            .map_or(self.rest_reach, |c| c.reach + c.motion)
+    }
+
+    /// How far any vertex lies from the origin as the pose `at` skins it,
+    /// unscaled: each vertex its joints' palettes blended by its weights,
+    /// its lanes laid one after another a vertex count apart
+    /// (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2, joints 4,
+    /// weights 4; query/model/asset.rs).
+    fn reach_at(&self, at: Option<(u32, f32)>) -> f32 {
+        let n = self.joints();
+        if n == 0 {
+            return self.radius;
+        }
+        let (mut local, mut global) = (vec![[0.0; 10]; n], vec![[0.0; 16]; n]);
+        let mut palette = vec![0.0; n * 16];
+        self.pose(at, &mut local);
+        self.palette(&local, &mut global, &mut palette);
+        let count = self.vertex_cnt as usize;
+        let lane = |k: usize| k * count;
+        // SAFETY: the model's block, sealed: its vertex lanes first.
+        let w = unsafe {
+            core::slice::from_raw_parts(
+                mem::at::<u32>(self.at),
+                count * MODEL_VERTEX_WORDS as usize,
+            )
+        };
+        let mut far = 0.0f32;
+        for v in 0..count {
+            let p = [0, 1, 2].map(|k| f32::from_bits(w[lane(0) + v * 3 + k]));
+            let mut q = [0.0f32; 3];
+            for k in 0..4 {
+                let joint = w[lane(8) + v * 4 + k] as usize;
+                let weight = f32::from_bits(w[lane(12) + v * 4 + k]);
+                let Some(m) = palette
+                    .get(joint * 16..joint * 16 + 16)
+                    .filter(|_| weight != 0.0)
+                else {
+                    continue;
+                };
+                for r in 0..3 {
+                    q[r] += weight * (m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
+                }
+            }
+            far = far.max((q[0] * q[0] + q[1] * q[1] + q[2] * q[2]).sqrt());
+        }
+        far
     }
 
     /// The fastest any point of its mesh moves over a clip from one key to

@@ -185,12 +185,11 @@ pub fn stage_render(pace: Pace) {
         landed.set(true);
         window::on_landed(b, ticket, landing);
     };
-    // What the scene animates changed, where on the screen.
-    let (region, animated) = {
+    // What the scene animates changed, about the eye.
+    let (moved, animated) = {
         let s = stage_lane();
-        let view_proj: [f64; 16] = core::array::from_fn(|k| s[STAGE_AT::EYE_VIEW_PROJ + k]);
         let eye = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
-        region::take(&view_proj, eye, scene().environment.sun())
+        region::take(eye)
     };
     let out = render_frame(FrameInput {
         lists,
@@ -227,7 +226,7 @@ pub fn stage_render(pace: Pace) {
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
-        region,
+        moved,
         animated,
     });
     // What landed, folded once after all of it, before anything reads a

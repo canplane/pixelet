@@ -43,4 +43,5 @@ export const FRAME_KINDS = [
   "cast",
   "stood",
   "px",
+  "region",
 ] as const;

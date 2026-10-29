@@ -158,7 +158,7 @@ impl Actor {
         let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
         let (about, r) = (
             v3::sub(&stance.at, &frame.anchor),
-            f64::from(m.radius() * stance.scale),
+            f64::from(m.reach(self.cur.map(|p| p.clip)) * stance.scale),
         );
         // What spans a camera cell at the actor's distance is observed.
         let dist = v3::len(&v3::sub(&about, &frame.camera));
@@ -268,11 +268,13 @@ impl Actor {
         if m.handle() == 0 {
             return;
         }
-        // Seen, what it covers and shades as drawn (`region`): its rest's
-        // bound, grown by as far as its clip moves it.
+        // Seen, what it covers and shades as drawn (`region`): as far as
+        // its clips, the one it fades from too, reach about where it stands.
         if self.seen {
-            let clip = self.cur.map_or(0.0, |p| m.motion(p.clip));
-            let r = f64::from((m.radius() + clip) * stance.scale);
+            let reach = m
+                .reach(self.cur.map(|p| p.clip))
+                .max(self.previous.map_or(0.0, |p| m.reach(Some(p.clip))));
+            let r = f64::from(reach * stance.scale);
             let at = stance.at;
             let state = region::digest(&[
                 at[0],

@@ -146,11 +146,6 @@ impl EnvironmentDraw {
         }
     }
 
-    /// Toward the sun, as drawn, a unit vector.
-    pub fn sun(&self) -> [f64; 3] {
-        v3::norm(&self.sun)
-    }
-
     /// The sun under the horizon, as drawn: past where night begins to fall
     /// (pxl-render param.rs `night::FALL`).
     pub fn night(&self) -> bool {

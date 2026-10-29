@@ -74,7 +74,7 @@ pub struct Shadow {
     pub texel: f64,
     /// The sun the map is cast from, moved only when the real one has gone a
     /// step from it.
-    cast_from: Option<V3>,
+    pub cast_from: Option<V3>,
     /// The light's frame the clipmap's texels are cast in, numbered: moved
     /// where the sun the map is cast from, the reach or the depth step
     /// (`DEPTH_STEP`) moved, the rays' starts with it (`starts`).
@@ -338,20 +338,32 @@ impl Shadow {
 
     /// The map's pass, timed in `stamp`, the world's depth laid in first
     /// where `cast` (its cast holds this frame's world); else cleared to the
-    /// far plane, as nothing is cast there. The casters are drawn into it
-    /// next, then it ends.
-    pub fn begin(&self, g: &Gpu, encoder: u32, cast: bool, stamp: &mut Stamp) -> u32 {
+    /// far plane, as nothing is cast there. Where only the texels `rect`
+    /// holds, `[x, y, width, height]`, are drawn again, the rest kept as the
+    /// last frame left it, the pass is held to them, the world laid there
+    /// first (`PIPELINE_SUN_MAP` writes every texel it covers), which a
+    /// frame that casts alone may. The casters are drawn into it next, then
+    /// it ends.
+    pub fn begin(
+        &self,
+        g: &Gpu,
+        encoder: u32,
+        cast: bool,
+        rect: Option<[u32; 4]>,
+        stamp: &mut Stamp,
+    ) -> u32 {
+        let load = if rect.is_some() {
+            Load::Load
+        } else {
+            Load::Clear
+        };
         let pass = g.pass(
             encoder,
-            &pass_desc(
-                0,
-                Load::Clear,
-                self.map_view,
-                Load::Clear,
-                1.0,
-                stamp.pass(),
-            ),
+            &pass_desc(0, Load::Clear, self.map_view, load, 1.0, stamp.pass()),
         );
+        if let Some(r) = rect {
+            g.set_scissor(pass, r);
+        }
         if cast {
             g.set_pipeline(pass, self.lay.pipeline);
             g.set_bind_group(pass, 0, self.lay_group, &[]);

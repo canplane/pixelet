@@ -256,24 +256,24 @@ export const STAT = {
     phases_p95: 46 as number,
     gpu_spans_p95: 51 as number,
     kinds: 75 as number,
-    wakes: 84 as number,
-    heap_used_delta_bytes: 87 as number,
-    first: 88 as number,
-    last: 245 as number,
-    WORDS: 402 as number,
+    wakes: 85 as number,
+    heap_used_delta_bytes: 88 as number,
+    first: 89 as number,
+    last: 246 as number,
+    WORDS: 403 as number,
   },
   tasks: {
-    AT: 402 as number,
+    AT: 403 as number,
     slots: 0 as number,
     WORDS: 120 as number,
   },
   steps: {
-    AT: 522 as number,
+    AT: 523 as number,
     cnt: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 683 as number,
+  WORDS: 684 as number,
 } as const;
 
 /** What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64. */
