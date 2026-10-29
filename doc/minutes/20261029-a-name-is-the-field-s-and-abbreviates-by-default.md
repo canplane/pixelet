@@ -69,10 +69,12 @@ a thing is and where it is going.
   makes a type of an enum's name, so the type follows the name (`RES_MODES`
   gives `ResMode`).
 - **`zoom`,** because `z` is the coordinate.
-- **`environment`, and `source` where it means a source of data.** The tile
-  source's command was briefly `WORLD_SRC` and went back to `WORLD_SOURCE`: it
-  names where the world's data comes from, not a pointer to read from.
-- **`encode` and `decode`,** and `control`, the module's name.
+- **`environment`,** because `env` reads as a system's word, a process's
+  environment, where this is the world's sky and light.
+- **`source` where it means a source of data.** The tile source's command was
+  briefly `WORLD_SRC` and went back to `WORLD_SOURCE`: it names where the
+  world's data comes from, not a pointer to read from.
+- **`encode` and `decode`.**
 
 ### `size` and `sz`
 
@@ -81,9 +83,7 @@ it. They then kept `sz` for what is truly binary and low level, and put the
 test as domain against system: a word that could be reused outside this world
 is system. A GPU texture's pixel size the user put with `size`. So all of
 pixelet writes `size`, GPU textures included, and xpute, which is system
-code throughout, writes `sz` (`HDR_SZ`, `WORD_SZ`). A section's list of byte
-lengths is named after the field it fills, `bytes`, rather than given a plural
-`szs` the checkpoint never had.
+code throughout, writes `sz` (`HDR_SZ`, `WORD_SZ`).
 
 ### By language
 
@@ -98,9 +98,6 @@ lengths is named after the field it fills, `bytes`, rather than given a plural
   its 102 uses of `current`, `position` a style's), so abbreviating the few of
   its own would have set them against their camelCase neighbors. What comes from
   the kernel or the spec it reads as it is (`s.location.err`).
-- **xpute's names match across Rust, TypeScript and C++** (`pkt_at`,
-  `Frame.cnt`, `Section.off`), since its conformance traces hold the three to
-  one contract.
 
 ### Someone else's names
 
@@ -108,8 +105,8 @@ What the language, a library or the platform defines keeps its word. C++'s
 coroutine members are looked up by their spelling: when the sweep renamed
 `initial_suspend` and `return_value`, the first coroutine stopped compiling.
 The same holds for a JavaScript collection's `size`, a TypedArray's `buffer`,
-the wasm import `env.memory`, xpute's `gpu/` (WebGPU's vocabulary), OSM Carto's
-`feature`, and the render names that flow into WGSL.
+the wasm import `env.memory`, xpute's `gpu/` (WebGPU's vocabulary) and OSM
+Carto's `feature`.
 
 A wire name is ours when both of its ends ship in one deploy; the search's
 `distance_m` became `dist_m` on the wire too. A name kept in storage outlives a
