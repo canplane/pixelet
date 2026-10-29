@@ -705,20 +705,20 @@ struct Shard {
     name: String,
     /// Its place on the shard grid.
     at: [i32; 2],
-    m: [f64; 4],
+    merc: [f64; 4],
     deg: [f64; 4],
 }
 
 impl Shard {
     fn of(node: Node) -> Shard {
-        let m = node.held().map(|u| round(epsg3857::mer_from_u(u)));
-        let [w, s, _] = epsg4326::from_mercator(&[m[0], m[1], 0.0]);
-        let [e, n, _] = epsg4326::from_mercator(&[m[2], m[3], 0.0]);
+        let merc = node.held().map(|u| round(epsg3857::merc_from_u(u)));
+        let [w, s, _] = epsg4326::from_mercator(&[merc[0], merc[1], 0.0]);
+        let [e, n, _] = epsg4326::from_mercator(&[merc[2], merc[3], 0.0]);
         // The east edge at the seam reads back as -180.
         Shard {
             name: node.name(),
             at: node.at,
-            m,
+            merc,
             deg: [w, s, if e <= w { 180.0 } else { e }, n],
         }
     }
@@ -727,13 +727,13 @@ impl Shard {
     /// meters meets what the shard holds; its edges, rounded to the meter,
     /// are already `EPS` out (`SHARD_APRON`), so a feature on one is in both.
     fn meets(&self, [lo_x, lo_y, hi_x, hi_y]: [f64; 4]) -> bool {
-        let [left, bottom, right, top] = self.m;
+        let [left, bottom, right, top] = self.merc;
         lo_x <= right && hi_x >= left && lo_y <= top && hi_y >= bottom
     }
 }
 
 /// Longitude to x is linear and latitude to y increasing, so the extremes' projections are the projected extremes.
-fn span_m(wkb: &[u8]) -> Result<[f64; 4], String> {
+fn span_merc(wkb: &[u8]) -> Result<[f64; 4], String> {
     let mut deg = [
         f64::INFINITY,
         f64::INFINITY,
@@ -854,7 +854,7 @@ fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, Stri
                 if id.is_null(i) { "?" } else { id.value(i) }
             ));
         }
-        let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
+        let span = span_merc(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
         let nodes: Vec<&str> = match shards {
             Some(shards) => shards
                 .iter()
@@ -946,7 +946,7 @@ fn items(list: &dyn Array) -> Result<Value, String> {
 /// world's edge clamps latitude (`epsg4326`), so what lies past it is cut off
 /// rather than refused by the projection.
 fn projected(wkb: &str) -> String {
-    let lat = epsg4326::Y_TO_LAT(epsg3857::mer_from_u(REACH.max[1]));
+    let lat = epsg4326::Y_TO_LAT(epsg3857::merc_from_u(REACH.max[1]));
     format!("ST_Transform(ST_ClipByBox2D(ST_GeomFromWKB({wkb}, 4326), ST_MakeEnvelope(-180, -{lat:?}, 180, {lat:?}, 4326)), 3857)")
 }
 

@@ -102,11 +102,11 @@ pub struct SearchResult {
     pub lon: f64,
     pub lat: f64,
     /// The ground meters from `near` (`epsg4326::dist`); null without one.
-    pub distance_m: Option<f64>,
+    pub dist_m: Option<f64>,
 }
 
 /// The ground meters from `near` to `lon`, `lat`.
-fn distance_m(near: Option<&Near>, lon: f64, lat: f64) -> Option<f64> {
+fn dist_m(near: Option<&Near>, lon: f64, lat: f64) -> Option<f64> {
     near.map(|n| epsg4326::dist(&[n.lon, n.lat, 0.0], &[lon, lat, 0.0]))
 }
 
@@ -202,7 +202,7 @@ pub async fn search(
             context,
             lon: r.lon,
             lat: r.lat,
-            distance_m: distance_m(near, r.lon, r.lat),
+            dist_m: dist_m(near, r.lon, r.lat),
         });
     }
 
@@ -225,7 +225,7 @@ pub async fn search(
             context,
             lon: r.lon,
             lat: r.lat,
-            distance_m: distance_m(near, r.lon, r.lat),
+            dist_m: dist_m(near, r.lon, r.lat),
         });
 
     Ok(division_results

@@ -77,7 +77,7 @@ Meaning enters at an **adapter**, and only there:
 
 - `coord/adapter/3857.rs` — the DB's EPSG:3857 coordinates. Lengths are the
   plane's, in u, or the ground's, in meters; `scale_factor` relates them, and
-  `mer_from_u`/`u_from_mer` are the only way to or from Mercator's meter.
+  `merc_from_u`/`u_from_merc` are the only way to or from Mercator's meter.
 - `coord/adapter/4326.rs` — lon/lat, and the projection to and from 3857.
   3857's plane leaves out the poles (`CLAMP_LAT`), and the pyramid never
   leaves the plane.

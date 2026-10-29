@@ -15,7 +15,7 @@ use postgres::Client;
 use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::division::Subtype;
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
@@ -82,8 +82,8 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     let cell_u = units(GROUND.cell_zoom(DIVISION_LEAF));
     let local = |p: [f64; 2]| {
         [
-            u_from_mer(p[0] - min[0]) / cell_u,
-            u_from_mer(p[1] - min[1]) / cell_u,
+            u_from_merc(p[0] - min[0]) / cell_u,
+            u_from_merc(p[1] - min[1]) / cell_u,
         ]
     };
 
@@ -122,7 +122,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     }
 
     // ---- under the areas, the nearest point of a child, within the reach ----
-    let reach = mer_from_u(BAKE_REACH);
+    let reach = merc_from_u(BAKE_REACH);
     let ring: [&(dyn ToSql + Sync); 4] = [
         &(min[0] - reach),
         &(min[1] - reach),

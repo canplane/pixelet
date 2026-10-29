@@ -4,7 +4,7 @@
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{u_from_merc, G3857};
 use xpute_kit::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
@@ -79,8 +79,8 @@ pub struct Feature {
 /// In the tile's cells from its corner.
 pub fn local(p: G3857, tile_min: G3857) -> P {
     [
-        u_from_mer(p[0] - tile_min[0]) / CELL_U,
-        u_from_mer(p[1] - tile_min[1]) / CELL_U,
+        u_from_merc(p[0] - tile_min[0]) / CELL_U,
+        u_from_merc(p[1] - tile_min[1]) / CELL_U,
     ]
 }
 

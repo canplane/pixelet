@@ -273,9 +273,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }
 
   function distanceOf(result: SearchResult): string | null {
-    return result.distance_m === null
-      ? null
-      : formatDistance(result.distance_m);
+    return result.dist_m === null ? null : formatDistance(result.dist_m);
   }
 
   return (

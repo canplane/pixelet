@@ -174,7 +174,7 @@ impl<const N: usize> Plate<'_, N> {
 /// Longitude and latitude, in degrees, of a point of the plane in units.
 fn lng_lat(x: f64, y: f64) -> [f64; 2] {
     let [lng, lat, _] =
-        epsg4326::from_mercator(&[epsg3857::mer_from_u(x), epsg3857::mer_from_u(y), 0.0]);
+        epsg4326::from_mercator(&[epsg3857::merc_from_u(x), epsg3857::merc_from_u(y), 0.0]);
     [lng, lat]
 }
 

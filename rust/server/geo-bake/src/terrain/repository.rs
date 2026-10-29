@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, BBox3857};
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, BBox3857};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::elevation::Raster;
@@ -42,7 +42,7 @@ const _: () = assert!(
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
 pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
-    let r = mer_from_u(DRAWN_REACH_U);
+    let r = merc_from_u(DRAWN_REACH_U);
     [
         [min[0] - r, min[1] - r, min[2]],
         [max[0] + r, max[1] + r, max[2]],

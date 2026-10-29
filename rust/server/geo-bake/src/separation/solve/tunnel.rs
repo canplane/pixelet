@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::Form;
-use pxl_spec::space::coord::adapter::epsg3857::mer_from_u;
+use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
@@ -58,7 +58,7 @@ pub(super) const DEEPEST: i64 = -(TUNNEL_MAX_LAYERS_BELOW + 1);
 
 /// How far a portal's approaches can run for a road tunnel at `level`, in DB coordinates.
 pub(super) fn approach_reach(level: i64, scale: Scale) -> f64 {
-    mer_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
+    merc_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
 }
 
 /// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road tunnel's portal
@@ -188,7 +188,7 @@ fn road_bores(
                     // the stretch of the deck that passes it: a cell of it within a cell of the portal
                     (0..ys.len())
                         .min_by(|i, j| near(i).total_cmp(&near(j)))
-                        .filter(|k| near(k) <= mer_from_u(CELL_U))
+                        .filter(|k| near(k) <= merc_from_u(CELL_U))
                         .map(|k| ys[k])
                 })
                 .max();
@@ -215,7 +215,7 @@ fn road_bores(
                 && !ramp_ways.contains(part)
         })
     };
-    let step = mer_from_u(CELL_U);
+    let step = merc_from_u(CELL_U);
     // a way's last cell as `cells_along` counts them
     let last_cell = |part: &PartId| libm::ceil(src.ways[part].line.length() / step).max(1.0) as i32;
     // a way's cells from the end it is entered at, as far as its ground is held and no further than
@@ -404,8 +404,8 @@ fn road_bores(
                     .iter()
                     .map(|&[dx, dz]| {
                         [
-                            p[0] + mer_from_u(dx as f64 * CELL_U),
-                            p[1] + mer_from_u(dz as f64 * CELL_U),
+                            p[0] + merc_from_u(dx as f64 * CELL_U),
+                            p[1] + merc_from_u(dz as f64 * CELL_U),
                         ]
                     })
                     .filter(|q| src.loaded.contains(&tile_of(*q)))

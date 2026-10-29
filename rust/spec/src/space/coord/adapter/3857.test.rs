@@ -12,7 +12,7 @@ use crate::space::coord::{q3, world};
 const ROUND_TRIP_TOL: f64 = 0.5;
 
 fn half_world() -> f64 {
-    mer_from_u(ROUND / 2.0)
+    merc_from_u(ROUND / 2.0)
 }
 
 fn assert_almost(a: f64, b: f64, tol: f64) {
@@ -27,17 +27,17 @@ fn round_trip(x: f64, y: f64, z: f64) -> [f64; 3] {
 #[test]
 fn round_trip_seoul() {
     // About (127.03, 37.50).
-    let x_m = 14139274.0;
-    let y_m = 4508140.0;
-    let [x, y, z] = round_trip(x_m, y_m, 50.0);
-    assert_almost(x, x_m, ROUND_TRIP_TOL);
-    assert_almost(y, y_m, ROUND_TRIP_TOL);
+    let x_merc = 14139274.0;
+    let y_merc = 4508140.0;
+    let [x, y, z] = round_trip(x_merc, y_merc, 50.0);
+    assert_almost(x, x_merc, ROUND_TRIP_TOL);
+    assert_almost(y, y_merc, ROUND_TRIP_TOL);
     assert_almost(z, 50.0, ROUND_TRIP_TOL);
 }
 
 #[test]
 fn x_wraps_antimeridian() {
-    let p = project(mer_from_u(ROUND) * 1.5 + 1000.0, 0.0, 0.0);
+    let p = project(merc_from_u(ROUND) * 1.5 + 1000.0, 0.0, 0.0);
     let out = unproject(&p);
     // 1.5 world widths east wraps to -0.5.
     assert_almost(out[0], -half_world() + 1000.0, ROUND_TRIP_TOL);
@@ -60,7 +60,7 @@ fn short_way_across_antimeridian() {
     let west = project(-half_world() + 1.0, 0.0, 0.0);
     let delta = world::between(&east, &west);
 
-    assert_almost(mer_from_u(q3::to_real(delta[0])), 2.0, 0.01);
+    assert_almost(merc_from_u(q3::to_real(delta[0])), 2.0, 0.01);
 }
 
 #[test]

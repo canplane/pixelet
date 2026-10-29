@@ -157,7 +157,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                     .collect()
             });
             let own_joint = *joint_of.get(&node_idx).unwrap_or(&0);
-            let world_m = &worlds[node_idx as usize];
+            let world_mat = &worlds[node_idx as usize];
             for i in 0..cnt {
                 let v = v0 + i;
                 let (mut x, mut y, mut z) =
@@ -166,11 +166,11 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                     [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]
                 });
                 if still {
-                    let at = mat4::transform_point(&mut p, world_m, x as f64, y as f64, z as f64);
+                    let at = mat4::transform_point(&mut p, world_mat, x as f64, y as f64, z as f64);
                     (x, y, z) = (at[0] as f32, at[1] as f32, at[2] as f32);
                     let n = mat4::transform_dir(
                         &mut p,
-                        world_m,
+                        world_mat,
                         normal[0] as f64,
                         normal[1] as f64,
                         normal[2] as f64,
@@ -209,7 +209,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                 let at_y = if remap.is_some() || still {
                     y as f64
                 } else {
-                    mat4::transform_point(&mut p, world_m, x as f64, y as f64, z as f64)[1]
+                    mat4::transform_point(&mut p, world_mat, x as f64, y as f64, z as f64)[1]
                 };
                 lo = lo.min(at_y);
                 hi = hi.max(at_y);

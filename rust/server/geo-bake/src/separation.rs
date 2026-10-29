@@ -12,7 +12,7 @@ pub mod way;
 
 use postgres::Client;
 use pxl_spec::bake::separation::Form;
-use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, G3857};
 use pxl_spec::space::layer::tile::{LEAF_ZOOM, TOP_ZOOM};
 
 use crate::terrain::repository::TerrainRepository;
@@ -57,7 +57,7 @@ pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
     let n = points.len();
-    let cell = mer_from_u(CELL_U);
+    let cell = merc_from_u(CELL_U);
     let at = |i: usize| [points[i][0] / cell, points[i][1] / cell, points[i][2]];
     let triangle = |a: usize, b: usize, c: usize| {
         let (a, b, c) = (at(a), at(b), at(c));

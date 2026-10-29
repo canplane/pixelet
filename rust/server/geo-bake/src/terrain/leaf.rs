@@ -9,7 +9,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use postgres::types::ToSql;
 use postgres::Client;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::adapter::epsg3857::{self, mer_from_u};
+use pxl_spec::space::coord::adapter::epsg3857::{self, merc_from_u};
 
 use crate::separation::{self, source::Store};
 use crate::terrain::bake::assemble;
@@ -52,7 +52,7 @@ pub fn has_ground(client: &mut Client, tiles: &[[i32; 2]]) -> Result<Vec<bool>, 
     let ord: Vec<i32> = (0..tiles.len() as i32).collect();
     let col = |k: usize| -> Vec<f64> { bbox.iter().map(|b| b[k]).collect() };
     let (minx, miny, maxx, maxy) = (col(0), col(1), col(2), col(3));
-    let reach = mer_from_u(DRAWN_REACH_U);
+    let reach = merc_from_u(DRAWN_REACH_U);
     let params: [&(dyn ToSql + Sync); 6] = [&ord, &minx, &miny, &maxx, &maxy, &reach];
 
     let mut out = vec![false; tiles.len()];

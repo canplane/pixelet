@@ -24,7 +24,7 @@ export interface SearchResult {
   lon: f64;
   lat: f64;
   /** The ground meters from `near`, the server's (pxl-spec space/coord/adapter/4326.rs `dist`); null without one. */
-  distance_m: f64 | null;
+  dist_m: f64 | null;
 }
 
 /** Always the live API: free-text search has no page key to bake ahead. */

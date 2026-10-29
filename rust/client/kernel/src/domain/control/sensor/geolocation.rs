@@ -97,7 +97,7 @@ pub fn geolocation_fix(lng: f64, lat: f64, alt: Option<f64>, accuracy: f64, cour
         .tile()
         .rect();
     let [lng, lat, _] =
-        epsg4326::from_mercator(&[epsg3857::mer_from_u(x0), epsg3857::mer_from_u(y0), 0.0]);
+        epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
     let alt = alt.map(|h| h - epsg4326::geoid_m(lng, lat));
     device_location_store().set_location([lng, lat], alt, accuracy, course);
 }

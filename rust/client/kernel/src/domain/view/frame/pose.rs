@@ -94,8 +94,8 @@ pub fn sea_under_eye() -> V3 {
 pub fn globe_anchor() -> Option<G4326> {
     let [x, y, _] = view().pose?.eye;
     Some(epsg4326::from_mercator(&[
-        epsg3857::mer_from_u(nearest(x, 0.0)),
-        epsg3857::mer_from_u(y),
+        epsg3857::merc_from_u(nearest(x, 0.0)),
+        epsg3857::merc_from_u(y),
         0.0,
     ]))
 }

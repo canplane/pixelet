@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::Form;
-use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer};
+use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec_core::param::way::STACKED_DECK_HEADROOM_M;
 use pxl_spec_core::way;
@@ -109,8 +109,8 @@ impl Obstacles {
     fn of(src: &Ring, [origin, far]: [[f64; 2]; 2], scale: Scale) -> Obstacles {
         let cell = |p: [f64; 2]| {
             [
-                u_from_mer(p[0] - origin[0]) / CELL_U,
-                u_from_mer(p[1] - origin[1]) / CELL_U,
+                u_from_merc(p[0] - origin[0]) / CELL_U,
+                u_from_merc(p[1] - origin[1]) / CELL_U,
             ]
         };
         let mut out = Obstacles {
@@ -450,7 +450,7 @@ fn way_from<'a>(way: &'a Way, node: &End) -> Option<(Vec<[f64; 2]>, &'a End)> {
 /// Points a cell apart along a line, from its start.
 fn cells_along(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let line = Polyline::of(points.iter().copied());
-    let step = mer_from_u(CELL_U);
+    let step = merc_from_u(CELL_U);
     let n = libm::ceil(line.length() / step).max(1.0) as usize;
     (0..=n)
         .map(|k| line.at((k as f64 * step).min(line.length())))

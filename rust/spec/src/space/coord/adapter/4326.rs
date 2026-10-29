@@ -104,14 +104,14 @@ pub fn dist(a: &G4326, b: &G4326) -> f64 {
 pub type BBox4326 = [G4326; 2];
 
 pub fn get_tile_bbox(zoom: Zoom, tile: [i32; 2]) -> BBox4326 {
-    let [min_m, max_m] = epsg3857::get_tile_bbox(zoom, tile);
+    let [min_merc, max_merc] = epsg3857::get_tile_bbox(zoom, tile);
 
-    let min = from_mercator(&min_m);
-    let mut max = from_mercator(&max_m);
+    let min = from_mercator(&min_merc);
+    let mut max = from_mercator(&max_merc);
 
     // A bbox maximum is an exclusive endpoint, so keep +180° rather than
     // letting `from_mercator` turn it into -180°.
-    if max_m[0] > min_m[0] && max[0] < min[0] {
+    if max_merc[0] > min_merc[0] && max[0] < min[0] {
         max[0] = 180.0;
     }
 
