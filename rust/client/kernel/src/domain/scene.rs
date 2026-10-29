@@ -13,6 +13,7 @@ pub mod indicator;
 pub mod lane;
 pub mod marker;
 pub mod param;
+pub mod region;
 pub mod stage;
 
 use pxl_render::frame::draw::DrawList;

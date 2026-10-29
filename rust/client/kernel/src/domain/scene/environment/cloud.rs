@@ -31,6 +31,9 @@ use xpute_guest::sched::pass::Pass;
 use crate::domain::query::model;
 use crate::domain::query::model::asset::model_of;
 use crate::domain::scene::decor::drawn::{decor_model_angle, decor_sprite_angle, sprite_reach};
+use crate::domain::scene::environment::param::{
+    CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
+};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::scene;
@@ -145,19 +148,12 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
-/// The share of a camera grid cell the clouds drift a step, at the nearest
-/// drawn: about a CSS pixel at the reference view, under which a drift is
-/// not seen to move. A whole cell's step, a dozen pixels at once, was seen as
-/// the clouds stopping and jumping.
-const DRIFT_CELLS: f64 = 1.0 / 12.0;
-
-/// How long the wind takes to carry the clouds `DRIFT_CELLS` of a camera
-/// cell at the nearest drawn (`lens::cell_there`), in seconds: their words
-/// stand between steps, so a drawn cloud lags the wind by up to that, an
-/// angle, the same on every screen. Infinite while none is drawn.
+/// How long the wind takes to carry the clouds the seen step at the nearest
+/// drawn (`lens::seen_step_s`), in seconds: so a drawn cloud lags the wind
+/// by up to that, an angle, the same on every screen. Infinite while none
+/// is drawn.
 pub fn drift_step_s() -> f64 {
-    DRIFT_CELLS * crate::domain::view::lens::cell_there(clouds().seen)
-        / libm::hypot(WIND[0], WIND[1])
+    crate::domain::view::lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
@@ -592,3 +588,7 @@ fn present_patch(
         draw.rewrite_part(b.handle, b.at, b.idx, at as u32 * 4);
     }
 }
+
+#[cfg(test)]
+#[path = "cloud.test.rs"]
+mod test;

@@ -203,7 +203,7 @@ pub enum SettingKey {
     ao = 10,
     /// The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
     /// cast once more from the sun as the eye's rays are, beams and samples on
-    /// the observed pyramid, the boxes they stop at drawn and a texel's sample
+    /// the observed pyramid, the boxes they stop at drawn and a texel's pick
     /// taken, the rest walked (pxl-shader sun.rs), recast only where what it
     /// reads moves; decor and the actors drawn into it depth only, and a 3x3
     /// compare per fragment; 16 MB of map.
@@ -221,16 +221,14 @@ pub enum SettingKey {
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
+    /// Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's block or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl).
     ray_steps = 19,
-    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
-    ray_counts = 20,
-    /// The hour the sky is drawn at; SKY_TIMES says each.
-    sky_time = 21,
+    /// How the sun's shadow map is cast — the slots that took the raster's pick and the boxes it drew — counted on the GPU and summed since boot into the profiler's sun lanes (rust/client/render/src/gpu/ray/tally.rs, rust/client/shader/src/sun.rs). The counting's atomics run in the sun's spans, so time them with it off.
+    sun_counts = 20,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 20] = [
+    pub const ALL: [SettingKey; 21] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -251,11 +249,12 @@ impl SettingKey {
         SettingKey::person,
         SettingKey::pet,
         SettingKey::ray_steps,
+        SettingKey::sun_counts,
     ];
 
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a number not given out stays 0.
-    pub const SLOTS: usize = 20;
+    pub const SLOTS: usize = 21;
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
@@ -286,6 +285,7 @@ impl SettingKey {
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
+            SettingKey::sun_counts => SettingKind::Toggle,
         }
     }
 
@@ -305,10 +305,7 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::surface_follow
-                | SettingKey::orbit_obstacle
-                | SettingKey::ray_counts
-                | SettingKey::sky_time
+            SettingKey::surface_follow | SettingKey::ray_steps | SettingKey::sun_counts
         )
     }
 
@@ -341,6 +338,7 @@ pub struct Settings {
     pub person: u8,
     pub pet: u8,
     pub ray_steps: bool,
+    pub sun_counts: bool,
 }
 
 impl Settings {
@@ -366,6 +364,7 @@ impl Settings {
         person: 1,
         pet: 5,
         ray_steps: false,
+        sun_counts: false,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -392,6 +391,7 @@ impl Settings {
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
+            SettingKey::sun_counts => self.sun_counts as u32,
         }
     }
 
@@ -436,12 +436,8 @@ impl Settings {
                 Ok(n) => self.pet = n,
                 Err(_) => return false,
             },
-            SettingKey::ray_steps if val <= 1 => self.ray_steps = val == 1,
-            SettingKey::ray_counts if val <= 1 => self.ray_counts = val == 1,
-            SettingKey::sky_time => match SkyTime::of(val) {
-                Some(o) => self.sky_time = o,
-                None => return false,
-            },
+            SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
+            SettingKey::sun_counts if value <= 1 => self.sun_counts = value == 1,
             _ => return false,
         }
         true

@@ -24,67 +24,22 @@ const pastText = (f: Frame) =>
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
-/** The `ray_counts` setting's counts over the window: its sums since boot
- * (profiler.json FRAME's rays, eye and sun lanes) at its last frame less
- * those at its first, where any frame's counts were read back: an observer's line each where it cast — the nodes its
- * beam rays, its samples and its walk again asked a cast, its pixels or
- * slots that took the visible sample and that walked, the nodes its walk
- * again asked a walking one, and the boxes it drew a cast. */
-const raysText = (first: Frame, last: Frame) => {
-  const f = Object.fromEntries(
-    Object.keys(last).filter((k) => /^(rays_frames|eye_|sun_)/.test(k)).map((
-      k,
-    ) => [
-      k,
-      (last[k as keyof Frame] as f64) - (first[k as keyof Frame] as f64),
-    ]),
-  ) as Record<string, f64>;
-  if (f.rays_frames === 0) return [];
-  const observer = (
-    name: string,
-    casts: number,
-    rays: number,
-    o: {
-      beam: number;
-      sample: number;
-      miss: number;
-      took: number;
-      walked: number;
-      boxes: number;
-    },
-  ) => {
-    if (casts === 0) return [];
-    const perCast = (n: number) => n1(n / casts);
-    const share = (n: number) => `${fixed((100 * n) / Math.max(1, rays), 2)}%`;
-    return [
-      `  ${
-        name.padEnd(7)
-      } cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${
-        perCast(o.beam)
-      }  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   took ${
-        share(o.took)
-      }  walked ${share(o.walked)} (${
-        n1(o.miss / Math.max(1, o.walked))
-      } nodes each)   boxes ${perCast(o.boxes)} a cast`,
-    ];
-  };
+/** The `sun_counts` setting's sums since boot as the last frame holds them
+ * (profiler.json FRAME's sun lanes), where any frame's counts were read
+ * back: how many of the sun's map's slots took the raster's pick, and the
+ * boxes it drew. */
+const sunText = (f: Frame) => {
+  if (f.sun_frames === 0) return [];
+  const texels = Math.max(1, f.sun_texels);
+  const share = (n: number) => `${fixed((100 * n) / texels, 2)}%`;
+  const walked = f.sun_texels - f.sun_picked;
+  const perCast = (n: number) => n1(n / Math.max(1, f.sun_cast_frames));
   return [
-    ...observer("eye", f.eye_casts, f.eye_rays, {
-      beam: f.eye_beam,
-      sample: f.eye_sample,
-      miss: f.eye_miss,
-      took: f.eye_took,
-      walked: f.eye_walked,
-      boxes: f.eye_boxes,
-    }),
-    ...observer("sun", f.sun_casts, f.sun_rays, {
-      beam: f.sun_beam,
-      sample: f.sun_sample,
-      miss: f.sun_miss,
-      took: f.sun_took,
-      walked: f.sun_walked,
-      boxes: f.sun_boxes,
-    }),
+    `  sun     cast in ${f.sun_cast_frames} of ${f.sun_frames} frames since boot   picked ${
+      share(f.sun_picked)
+    } of slots  walked ${share(walked)}   boxes ${
+      perCast(f.sun_boxes)
+    } a frame`,
   ];
 };
 
@@ -233,7 +188,7 @@ function windowSection(r: ProfilerReport): string[] {
       } ms   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
-    ...raysText(f.first, last),
+    ...sunText(last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms a run and max, since the recording started)`,
     `  heap used Δ ${

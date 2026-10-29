@@ -7,7 +7,7 @@ struct type_6 {
     member: array<u32>,
 }
 
-struct type_13 {
+struct type_17 {
     member: f32,
     member_1: f32,
 }
@@ -77,7 +77,7 @@ var<storage> global_1: type_6;
 var<storage> global_2: type_6;
 @group(0) @binding(2)
 var<storage, read_write> global_3: type_6;
-var<private> global_4: type_13 = type_13(0f, 1f);
+var<private> global_4: type_17 = type_17(0f, 1f);
 
 fn function_() {
     var local: array<u32, 10>;

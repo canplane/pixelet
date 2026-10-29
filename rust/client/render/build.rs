@@ -104,15 +104,13 @@ fn main() {
         use pxl_spec_core::raster::{
             corner, BOX_AXIS, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR,
         };
-        let n = word::BOX_VERTICES;
-        let corners: Vec<String> = (0..2 * n)
-            .map(|k| corner(k % n, k >= n))
+        let corners: Vec<String> = (0..72)
+            .map(|k| corner(k % 36, k >= 36))
             .map(|c| format!("vec3f({}.0, {}.0, {}.0)", c[0], c[1], c[2]))
             .collect();
         let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
         let raster = format!(
-            "const RASTER_CORNERS = array<vec3f, {}>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
-            2 * n,
+            "const RASTER_CORNERS = array<vec3f, 72>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
             corners.join(", "),
             EYED - 1
         );
@@ -272,6 +270,8 @@ fn compute(dir: &Path) -> String {
                     "STORAGE"
                 } else if var.contains("texture_storage_2d_array<r32uint,read_write>") {
                     "STORAGE_TEXTURE_RW"
+                } else if var.contains("texture_2d_array<u32>") {
+                    "TEXTURE_UINT_ARRAY"
                 } else {
                     panic!("{name}: binding {binding} is of no kind a layout names: {var}");
                 };

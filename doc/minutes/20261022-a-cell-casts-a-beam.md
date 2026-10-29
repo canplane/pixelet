@@ -12,17 +12,20 @@ own ray enters, walking only where none is (`cast_cs`). The image is no longer
 held to the root walk's: the cut was taken, so "Sparser samples lose coverage"
 below is answered by the fallback walk, not avoided.
 
-Per cell: a beam ray at each of the grid's corners walks the shared descent and
-stops early; each cell takes its start from the beam rays about it; samples
-four a cell a side (`param::beam::SAMPLE`) walk on from that start; the raster
-hands each pixel the nearest block a sample stopped at that its own ray enters
-([the raster keeps](../experiment/20261026-the-raster-keeps.md)), tested again
-exactly (`cast::entry`); a pixel none is handed walks on from its cell's start
-itself. The proof below is that a walk from a cell's start, a sample's or a
-pixel's, ends where the walk from the root ends. A pixel that takes a sample's
-block is not held to its own root walk: that cut was taken, and "Sparser
-samples lose coverage" below is answered by the pixel's own walk where no
-sample's block holds it.
+_Since 2026-10-26 a pixel takes the nearest block any sample stopped at that
+its ray enters, which the raster picks, not only the 4 × 4 about it
+([the raster picks](../experiment/20261026-the-raster-picks.md))._
+
+_Superseded from here to As built where it says a pixel's block is the root
+walk's: by the Status above. The proof still holds for a walk from a cell's
+start, a sample's or a pixel's, not for the block a pixel takes from a sample._
+
+The cast walks the pyramid once per camera-grid cell, and each drawn pixel
+finishes only the last few nodes of its own ray from where its cell's walk left
+off. The descent, which is the log n part of a ray, is paid per cell; what a
+pixel pays does not grow with the depth of the world. The image is the one a ray
+per pixel walked from the root would draw: ray for ray on the CPU, and on a GPU
+up to its f32's last bit (As built).
 
 ## The problem it answers
 

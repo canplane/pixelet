@@ -626,13 +626,39 @@ pub struct Grown {
     pub sink: u32,
 }
 
-impl Grown {
-    pub const NONE: Grown = Grown {
-        variant: 0,
-        turn: 0,
-        at: [0; 3],
-        sink: 0,
-    };
+/// The footing down column `g` at `cell`: the first block that fills on
+/// the world's one ray straight down the column's middle, at `cell`'s
+/// blocks alone, from the top of the world (`HEIGHT_BITS`) — where a walker
+/// stands (pxl-kernel domain/query/support.rs `highest`), whichever layer holds
+/// it. Its top as drawn, at `cell` (`cast::top`); false where the ray
+/// meets none.
+pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {
+    let (o, ray, detail) = footing_ray(cell, g);
+    let met = crate::cast::first(q, o, &ray, detail, crate::cast::Until::Fills);
+    (
+        crate::cast::top(o, &met.stop.node, met.stop.block[0]),
+        met.ends == crate::cast::Ends::Stop,
+    )
+}
+
+/// The footing's ray down column `g` at `cell`: from the top of the world
+/// over the column's middle, straight down, at `cell`'s blocks alone.
+fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::cast::Detail) {
+    let s = crate::FINEST_ZOOM - cell;
+    let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
+    let top = ((1i32 << (crate::HEIGHT_BITS - 1)) << FRAC_W) - 1;
+    let o = [mid(g[0]), mid(g[1]), top];
+    let ray = crate::cast::Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
+    (
+        o,
+        ray,
+        crate::cast::Detail {
+            tau: 1.0,
+            range: [cell, cell],
+            eye: [0.0; 3],
+            beam: 0.0,
+        },
+    )
 }
 
 /// Where candidate `c` of `decor` stands at `cell`: on its column's footing
@@ -846,11 +872,9 @@ const CLAIM_REACH: [i32; 3] = {
     [wide as i32 - 1, wide as i32 - 1, tall as i32 - 1]
 };
 
-/// The tallest decor and the widest, in unit cells: as high over what it
-/// stands on as anything grown reaches, and as far across (pxl-spec-core
-/// sun.rs `Sun::up`, `Sun::ring`).
+/// The tallest decor, in unit cells: as high over what it stands on as
+/// anything grown reaches (pxl-shader sun.rs `sun_mark_cs`).
 pub const TALLEST: i32 = CLAIM_REACH[2] + 1;
-pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
 
 /// The nodes placed decor is first asked at, so a box with nothing placed
 /// near it is told so in a few looks: 8 unit cells a side.

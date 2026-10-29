@@ -1,19 +1,23 @@
 // pxl-kernel/domain/view/lens.rs
 
 //! The camera grid through the screen: the cell a distance holds
-//! (`cell_there`), and what the GPU's cast of the screen's rays reads
-//! (`gpu_cast`), a ray a drawn pixel, one rule wherever the eye is
-//! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md, "What is
-//! drawn").
+//! (`cell_there`), how long a motion takes to be seen there and a clock
+//! stepped by it (`seen_step_s`, `Stepped`), and what the GPU's cast of the
+//! screen's rays reads (`gpu_cast`), a ray a drawn pixel, one rule wherever
+//! the eye is.
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::CELL;
+use pxl_spec::space::camera::grid::{Tau, SPLIT};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::origin;
 use pxl_spec_core::{beam, eye};
 
 use crate::domain::query::asked;
-use crate::domain::view::observation;
-use crate::domain::view::param;
+
+/// The camera grid's cell at `tau`, as an angle.
+pub fn cell(tau: Tau) -> f64 {
+    tau.scale() / SPLIT
+}
 
 /// The camera grid's cell `distance` from the eye, in units: what spans it is
 /// observed there, and a motion that carries something this far is seen.
@@ -26,8 +30,8 @@ pub fn cell_there(dist: f64) -> f64 {
 /// (`cell_there`), in seconds: the quantum a clock animating it is stepped
 /// by, its words standing between steps. Infinite where nothing is drawn
 /// (`distance` infinite) or nothing moves.
-pub fn seen_step_s(dist: f64, speed: f64) -> f64 {
-    param::SEEN_STEP_CELLS * cell_there(dist) / speed
+pub fn seen_step_s(distance: f64, speed: f64) -> f64 {
+    crate::domain::view::param::SEEN_STEP_CELLS * cell_there(distance) / speed
 }
 
 /// A clock as it is seen, stepped a quantum at a time: what it shows stands
@@ -36,6 +40,31 @@ pub fn seen_step_s(dist: f64, speed: f64) -> f64 {
 /// source went back or it never stepped. Its source is its reader's.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Stepped(Option<f64>);
+
+impl Stepped {
+    /// Its source at `t`, the next step from a reading `at` of it
+    /// `next(at)`: what it shows, the reading it next steps at, and whether
+    /// it stepped.
+    pub fn at(&mut self, t: f64, next: impl Fn(f64) -> f64) -> (f64, f64, bool) {
+        if let Some(at) = self.0 {
+            let due = next(at);
+            if !(t >= due || t < at) {
+                return (at, due, false);
+            }
+        }
+        self.0 = Some(t);
+        (t, next(t), true)
+    }
+}
+
+/// The screen as the eye sees it: its axes and the tangents of its half-angles.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Lens {
+    forward: V3,
+    right: V3,
+    up: V3,
+    tan: [f64; 2],
+}
 
 impl Stepped {
     /// Its source at `t`, the next step from a reading `at` of it
@@ -84,6 +113,11 @@ pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> 
         &beam::Grid::of(lens.tan.map(|t| t as f32)).words(),
     );
     Some(())
+}
+
+fn unit(v: V3) -> Option<V3> {
+    let l = v3::len(&v);
+    (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }
 
 #[cfg(test)]

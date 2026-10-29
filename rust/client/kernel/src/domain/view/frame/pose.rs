@@ -5,7 +5,6 @@
 //! the pose; nothing here knows which.
 
 use pxl_spec::space::camera::eye::Frustum;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -30,10 +29,8 @@ pub struct View {
     /// The camera as composed this turn; None before it stands anywhere.
     pub pose: Option<ObserverPose>,
 
-    /// Its size in CSS pixels, read past the frame only through the screen
-    /// (`domain/view/frame/screen.rs`).
-    pub(super) width: f64,
-    pub(super) height: f64,
+    pub width: f64,
+    pub height: f64,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -49,9 +46,6 @@ impl View {
             pose: None,
             width: 1.0,
             height: 1.0,
-            // A pixel a CSS pixel until a surface says.
-            ratio: 1.0,
-            tau: crate::domain::view::lens::tau_of(1.0, 1.0),
             view_matrix: mat4::new(),
             inv_view_matrix: mat4::new(),
             proj: mat4::new(),
@@ -120,16 +114,15 @@ pub fn km_per_u() -> f64 {
 
 /// The view `width` × `height` CSS pixels: what its matrices are made of,
 /// made again only where one moved. The pixels it is drawn with are the
-/// drawing's alone: the camera grid is an angle (pxl-spec
-/// space/camera/grid.rs `CELL`).
+/// drawing's alone (`lens::tau`).
 pub fn view_resize(width: f64, height: f64) {
     let v = view();
     let (width, height) = (width.max(1.0), height.max(1.0));
-    if width == v.width && height == v.height && ratio == v.ratio {
+    if width == v.width && height == v.height {
         return;
     }
     (v.width, v.height) = (width, height);
-    observation::forget();
+    crate::domain::view::observation::forget();
     compose();
 }
 

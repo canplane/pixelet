@@ -429,3 +429,7 @@ impl Placed {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "world.test.rs"]
+mod test;

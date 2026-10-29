@@ -21,13 +21,9 @@ use crate::domain::scene::indicator::param::{
 };
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
-use crate::domain::view::frame::coord;
-use crate::domain::view::lens;
 use crate::domain::view::lens::{seen_step_s, Stepped};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, wake_at};
-use pxl_render::frame::shader::word;
-use pxl_render::param::puck::beacon;
 use xpute_guest::clock::now;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
@@ -39,12 +35,19 @@ const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.cell());
 
 /// Which of its sides (top, bottom, right, left) lie on the zone's border.
 struct ZoneSample {
+    /// In the ground's cells from the center.
+    at: [i32; 2],
     off: V3,
     borders: [f64; 4],
 }
 
+/// How far the zone reaches from its center along an axis, in cells.
+fn zone_reach() -> i32 {
+    ZONE_RADIUS_CELL.ceil() as i32
+}
+
 fn zone_samples() -> impl Iterator<Item = ZoneSample> {
-    let range = ZONE_RADIUS_CELL.ceil() as i32;
+    let range = zone_reach();
     let flag = |b: bool| if b { 1.0 } else { 0.0 };
     (-range..=range)
         .flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64)))
@@ -58,6 +61,7 @@ fn zone_samples() -> impl Iterator<Item = ZoneSample> {
             let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
             let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
             Some(ZoneSample {
+                at: [dx as i32, dy as i32],
                 off: [
                     dx * units(GROUND.cell()),
                     dy * units(GROUND.cell()),
@@ -104,13 +108,13 @@ fn lay_zone(
     const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     let ring = zone_reach() + 1;
     let across = (2 * ring + 1) as usize;
-    let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
+    let index = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
     rise.clear();
     rise.resize(across * across, None);
     for s in zone_samples() {
         for d in [[0, 0]].iter().chain(&BESIDE) {
             let at = [s.at[0] + d[0], s.at[1] + d[1]];
-            if rise[idx(at)].is_none() {
+            if rise[index(at)].is_none() {
                 let off = [
                     s.off[0] + f64::from(d[0]) * cell,
                     s.off[1] + f64::from(d[1]) * cell,
@@ -119,13 +123,13 @@ fn lay_zone(
                 // An unloaded neighbor tile falls back to the center's height; 0 would
                 // sink or launch that instance.
                 let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
-                rise[idx(at)] = Some(ground - center_pos[2]);
+                rise[index(at)] = Some(ground - center_pos[2]);
             }
         }
     }
     // The box on the ground's cell `d` from the sample, relative to the center.
     let box_at = |s: &ZoneSample, d: [i32; 2]| {
-        let delta_ele = rise[idx([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
+        let delta_ele = rise[index([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
         let off = [
             s.off[0] + f64::from(d[0]) * cell,
             s.off[1] + f64::from(d[1]) * cell,
@@ -159,7 +163,7 @@ fn lay_zone(
 fn beacon_speed() -> f64 {
     libm::hypot(
         BEACON_BOB * BEACON_BOB_RATE,
-        BEACON_SPIN_RATE * f64::from(beacon::RADIUS),
+        BEACON_SPIN_RATE * f64::from(pxl_render::param::puck::beacon::RADIUS),
     )
 }
 
@@ -177,7 +181,13 @@ struct Zone {
     target: [f64; 2],
     shown: Option<[f64; 2]>,
     night: bool,
+    /// The bob's and the spin's clock as drawn, in seconds: stepped a seen
+    /// step at a time (`lens::Stepped`) off `run`, which runs by the turn's
+    /// step, held past a stall (`frame.delta_s`), while the bob spans a
+    /// camera cell.
     time: f64,
+    run: f64,
+    clock: Stepped,
     visible: bool,
 }
 
@@ -194,6 +204,9 @@ pub struct LocationPuck {
     grounded: Asked<Seen, Option<V3>>,
     /// The zone grounded this step, kept so a step allocates nothing.
     lane: Vec<f32>,
+    /// Each cell's ground over the zone's center, of the zone and the ring
+    /// about it, kept as `lane` is.
+    rise: Vec<Option<f64>>,
     /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
     /// which `held` holds, so grounding it again to the same heights draws
     /// nothing anew.
@@ -252,7 +265,7 @@ impl LocationPuck {
         );
         lay_zone(
             center_pos,
-            |at| world.surface_support(at).val().flatten(),
+            |at| world.surface_support(at).value().flatten(),
             &mut rise,
             &mut lane,
         );
@@ -274,6 +287,8 @@ impl LocationPuck {
                         shown: None,
                         night: false,
                         time: 0.0,
+                        run: 0.0,
+                        clock: Stepped::default(),
                         visible: false,
                     });
                 }
@@ -281,7 +296,7 @@ impl LocationPuck {
             core::mem::swap(&mut self.drawn, &mut lane);
             request_world_tick();
         }
-        self.lane = lane;
+        (self.lane, self.rise) = (lane, rise);
         Some(center_pos)
     }
 
@@ -294,12 +309,12 @@ impl LocationPuck {
         request_world_tick();
     }
 
-    /// Whether anything is animating and wants frames. The puck is drawn
-    /// where an actor would be (domain/scene/actor.rs `tick`): in the frustum and
-    /// spanning a camera cell at its distance; and it moves, its beacon
-    /// sliding to its target or bobbing, only where the move spans one, so a
-    /// frame is asked only for what can be seen to change. Else the beacon
-    /// stands at its target and its time holds.
+    /// Whether the beacon slides and wants frames. The puck is drawn where
+    /// an actor would be (domain/scene/actor.rs `tick`): in the frustum and
+    /// spanning a camera cell at its distance; and its beacon slides to its
+    /// target, a frame a step, only where the slide spans one. Its bob and
+    /// spin are stepped a seen step at a time where the bob spans one, the
+    /// turn woken for the next (`lens::Stepped`); else they hold.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.zone.as_mut() else {
             return false;
@@ -318,12 +333,19 @@ impl LocationPuck {
         } else {
             *shown = p.target;
         }
-        let bobs = p.visible && 2.0 * BEACON_BOB >= cell_there;
-        if bobs {
-            p.time += dt;
+        // Measured to the beacon, over the zone's center by its bias.
+        let beacon = v3::add(&to, &[shown[0], shown[1], BEACON_Z_BIAS]);
+        let mut stepped = false;
+        if p.visible && 2.0 * BEACON_BOB >= cell_there {
+            p.run += dt;
+            let step = seen_step_s(v3::len(&beacon), beacon_speed());
+            let (time, next, s) = p.clock.at(p.run, |at| at + step);
+            p.time = time;
+            stepped = s;
+            wake_at(now() + (next - p.run) * 1000.0);
         }
         if slides || stepped {
-            region::animated();
+            crate::domain::scene::region::animated();
         }
         slides
     }
@@ -336,7 +358,7 @@ impl LocationPuck {
         let shown = p.shown.unwrap_or(p.target);
         // The zone about its center and the beacon over it, as drawn
         // (`region`).
-        let state = region::digest(&[
+        let state = crate::domain::scene::region::digest(&[
             p.center[0],
             p.center[1],
             p.center[2],
@@ -346,7 +368,7 @@ impl LocationPuck {
             f64::from(u8::from(p.night)),
             f64::from(self.held.handle),
         ]);
-        region::drawn(
+        crate::domain::scene::region::drawn(
             u32::MAX,
             p.center,
             libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB) + libm::hypot(shown[0], shown[1]),
@@ -364,7 +386,6 @@ impl LocationPuck {
             0.0,
             1.0,
         );
-        let shown = p.shown.unwrap_or(p.target);
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,
@@ -381,3 +402,7 @@ impl LocationPuck {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "location_puck.test.rs"]
+mod test;

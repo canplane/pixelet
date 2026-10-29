@@ -19,7 +19,7 @@ decision record, not a rule each change is held to.
   answered; it never decides what a block is.
 - **The eye's drawing is ray → raster → ray.** Beams and samples find the blocks
   through the query, sharing what pixels share (pxl-shader beam.rs); each block
-  a sample stopped at becomes a box (raster.rs `sample_box_cs`); the rasterizer keeps
+  a sample stopped at becomes a box (raster.rs `boxes_cs`); the rasterizer keeps
   each pixel's nearest box its own ray enters (pxl-render raster.wgsl); the
   pixel takes that block and walks only where it holds none (cast.rs `cast_cs`,
   `miss_list_cs`).
@@ -64,7 +64,7 @@ decision record, not a rule each change is held to.
 
 Nothing now. What was open here, settled the same day:
 
-- **The shadow map took the eye's division** (e04a3a855): beams, samples a few
+- **The sun's map took the eye's division** (e04a3a855): beams, samples a few
   texels apart, their blocks drawn from the sun and each texel taking the
   nearest it enters, walks only where none is entered. The policy that kept its
   clipmap between frames went with it, and a frame where nothing it reads moved

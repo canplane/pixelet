@@ -11,7 +11,7 @@
 //! top (`asset`). The CPU's and a GPU's alike, each over its own reading of
 //! the world (`cast::Query`).
 
-use crate::cast::{self, Detail, End, Keep, Met, Node, Query, Ray, Until, DEPTH};
+use crate::cast::{self, Detail, Ends, Keep, Met, Node, Query, Ray, Until, DEPTH};
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
 /// A descent's line: the node it ended at, by its index at its zoom, what
@@ -42,11 +42,17 @@ impl<A: Copy> Line<A> {
     /// node over it, by zoom.
     pub fn kept(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
         Line {
-            at: node.idx(origin),
+            at: node.index(origin),
             zoom: node.zoom,
             live,
             stack: *stack,
-        };
+        }
+    }
+}
+
+impl<A: Copy> Keep<A> for Footing<A> {
+    fn keep(&mut self, met: &Met<A>, stack: &[A; DEPTH]) {
+        self.line = Line::kept(self.origin, &met.stop.node, met.stop.at, stack);
     }
 }
 
@@ -275,7 +281,7 @@ mod tests {
     /// ray's line and climbed over where it resumed; the assets about the
     /// stop asked off it are the world's.
     #[test]
-    fn walk_keeps_line() {
+    fn a_walk_keeps_the_line_down_to_where_it_stops() {
         let s = FINEST_ZOOM - UNIT_ZOOM;
         let o = [(6 << s) + 17, (3 << s) + 90, 9 << s];
         let detail = Detail {
@@ -286,7 +292,7 @@ mod tests {
         let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
         let mut first = Kept(None, o);
         let met = cast::rooted(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
-        assert_eq!(met.ends, End::Stop);
+        assert_eq!(met.ends, Ends::Stop);
         let first = first.0.unwrap();
         same(&first, &line(&mut Step, first.zoom, first.at));
         for d in [
@@ -307,7 +313,7 @@ mod tests {
                 let from = if held {
                     (h, cast::Over::over(&Along(&first), h.zoom), t)
                 } else {
-                    (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)
+                    (Node::ROOT, Step.root(Node::ROOT.index(o)), t)
                 };
                 let mut kept = Kept(None, o);
                 let resumed = cast::walk(
@@ -320,7 +326,7 @@ mod tests {
                     &Along(&first),
                     &mut kept,
                 );
-                assert_eq!(resumed.ends, End::Stop, "{d:?} {share}");
+                assert_eq!(resumed.ends, Ends::Stop, "{d:?} {share}");
                 let kept = kept.0.unwrap();
                 let walked = line(&mut Step, kept.zoom, kept.at);
                 same(&kept, &walked);

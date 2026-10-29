@@ -55,3 +55,12 @@ pub const CASE_LONG_SIDE_MAX: f64 = 256.0;
 // ---- the projection ----
 
 pub const NEAR: f64 = 0.1;
+
+// ---- what is seen to move ----
+
+/// The share of a camera grid cell a motion stepped a quantum at a time
+/// carries what it moves a step, at the nearest drawn (`lens::seen_step_s`),
+/// set by eye on the clouds: a twelfth of a cell, 1/1152 rad, is not seen
+/// to move by itself, and a whole cell's step at once was seen as the
+/// clouds stopping and jumping.
+pub const SEEN_STEP_CELLS: f64 = 1.0 / 12.0;

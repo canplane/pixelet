@@ -621,18 +621,18 @@ fn box_placed_matches_store() {
     assert_eq!(asked, held);
 }
 
-/// A brick that lands after the windows were folded without it is read
+/// A square that lands after the windows were folded without it is read
 /// with what it holds once the landings are folded, as the stage folds them
 /// (domain/layer/terrain/window.rs `refold`): a spike
 /// a cell wide in it, over ground at five and taller than a node over the
-/// brick, is met where a walker's ray down it met it while the brick was
-/// held from the start, and no cell of the brick stands outside the bound
-/// read over it at any zoom over a brick.
+/// square, is met where a walker's ray down it met it while the square was
+/// held from the start, and no cell of the square stands outside the bound
+/// read over it at any zoom over a square.
 #[test]
-fn late_brick_spike() {
-    use crate::domain::layer::terrain::window::{on_landed, refold, test::unland, Windowed};
+fn a_square_landing_after_the_fold_is_read_with_its_spike() {
+    use crate::domain::layer::terrain::window::{landed, refold, test::unland, Windowed};
     use pxl_render::gpu::renderer::Landing;
-    use pxl_spec_core::window::{self as cells, Bricks, Found, BRICK, LEVELS, WINDOW};
+    use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE, WINDOW};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let leaf = top().children()[0];
@@ -646,7 +646,7 @@ fn late_brick_spike() {
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
-    let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
+    let residency = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
     // The spike's column in the eye's leaves' window.
     let (first, _) = Windowed.origin(LEAF_CELL);
@@ -655,8 +655,8 @@ fn late_brick_spike() {
         .map(|k| {
             let w = WINDOW as i32;
             [
-                first[0] * BRICK as i32 + k % w,
-                first[1] * BRICK as i32 + k / w,
+                first[0] * SQUARE as i32 + k % w,
+                first[1] * SQUARE as i32 + k / w,
             ]
         })
         .find(|&g| top(g) == 400)
@@ -669,23 +669,23 @@ fn late_brick_spike() {
     let met = |access: &World| {
         access
             .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-            .val()
+            .value()
             .flatten()
             .unwrap()
             .point[2]
     };
-    let held = met(&World::new(&tile_cache, &store));
+    let held = met(&World::new(&residency, &store));
     let (b, ticket) = unland(LEAF_CELL, spike);
     // As the stage lands a read-back: each landing, then one fold.
-    on_landed(b, ticket, Landing::Built(&[0]));
+    landed(b, ticket, Landing::Built(&[0]));
     refold();
-    assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
-    let q = cells::brick_of(spike).0;
+    assert_eq!(met(&World::new(&residency, &store)), held, "the spike met");
+    let q = cells::square_of(spike).0;
     let mut outside = 0;
-    for k in 0..BRICK * BRICK {
+    for k in 0..SQUARE * SQUARE {
         let g = [
-            q[0] * BRICK as i32 + (k % BRICK) as i32,
-            q[1] * BRICK as i32 + (k / BRICK) as i32,
+            q[0] * SQUARE as i32 + (k % SQUARE) as i32,
+            q[1] * SQUARE as i32 + (k / SQUARE) as i32,
         ];
         let h = top(g);
         for zoom in TOP_ZOOM..LEAF_CELL - LEVELS {
@@ -702,15 +702,15 @@ fn late_brick_spike() {
     assert_eq!(outside, 0, "cells outside the bound over them");
 }
 
-/// The device that went took every brick it held: the turn that sees it
-/// gives up their cells (domain/layer/terrain/window.rs `assign_slots`, as `step`
-/// runs it) and folds the windows over none, so no node over a brick of
+/// The device that went took every square it held: the turn that sees it
+/// gives up their cells (domain/layer/terrain/window.rs `berth`, as `step`
+/// runs it) and folds the windows over none, so no node over a square of
 /// the eye's leaves keeps a bound of cells gone.
 #[test]
-fn device_loss_drops_bounds() {
+fn a_device_gone_leaves_no_bound_over_the_squares_it_held() {
     use crate::domain::layer::terrain::window::{test::lose, Windowed};
     use pxl_spec_core::ground::UNBOUNDED;
-    use pxl_spec_core::window::{self as cells, Bricks, Found, BRICK, LEVELS};
+    use pxl_spec_core::window::{self as cells, Found, Squares, LEVELS, SQUARE};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();
@@ -718,94 +718,11 @@ fn device_loss_drops_bounds() {
     let zoom = LEAF_CELL - LEVELS - 1;
     let over = || {
         let s = LEAF_CELL - zoom;
-        let g = [first[0] * BRICK as i32 >> s, first[1] * BRICK as i32 >> s];
+        let g = [first[0] * SQUARE as i32 >> s, first[1] * SQUARE as i32 >> s];
         let mut place = Found::NONE;
         cells::bound_over(&Windowed, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
     };
     assert_ne!(over(), [UNBOUNDED; 2], "held");
     lose();
     assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
-}
-
-/// What the ground grows stands where it grew whatever is put over it or in
-/// place of the cell under it, air or a cube: it grows on the world
-/// unplaced (pxl-spec-core `scatter::grown`).
-#[test]
-fn a_grown_decor_stands_where_it_grew_whatever_is_put_over_or_under_it() {
-    use crate::domain::layer::object::store::AIR;
-    let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
-    let near = |store: &Store| {
-        let world = World::new(&residency, store);
-        let space = pxl_spec::space::coord::aabb::Aabb {
-            min: [x - 8.0, y - 8.0, world::REACH.min[2]],
-            max: [x + 8.0, y + 8.0, world::REACH.max[2]],
-        };
-        world.grown_over(&space)
-    };
-    let bare = near(&Store::default());
-    let tree = *bare.first().expect("a decor grows about the eye");
-    let [cx, cy, cz] = tree.grown_in().unwrap();
-    let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
-
-    let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
-    write(&mut store, column(6), OBJECT_COARSEST, red);
-    assert_eq!(near(&store), bare, "a cube over it moves nothing");
-
-    for (under, what) in [(AIR, "a carve"), (red, "a cube")] {
-        let mut store = Store::default();
-        write(&mut store, column(-1), OBJECT_COARSEST, under);
-        assert_eq!(near(&store), bare, "{what} under it moves nothing");
-    }
-}
-
-/// Only an edit in its own box takes what the ground grows away, air or a
-/// cube; one under it or over it leaves it growing (pxl-spec-core
-/// `scatter::Grounds::edited`).
-#[test]
-fn a_grown_decor_goes_only_where_an_edit_holds_its_box() {
-    use crate::domain::layer::object::store::AIR;
-    let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
-    let empty = Store::default();
-    let world = World::new(&residency, &empty);
-    let space = pxl_spec::space::coord::aabb::Aabb {
-        min: [x - 8.0, y - 8.0, world::REACH.min[2]],
-        max: [x + 8.0, y + 8.0, world::REACH.max[2]],
-    };
-    let tree = *world
-        .grown_over(&space)
-        .first()
-        .expect("a decor grows about the eye");
-    let [cx, cy, cz] = tree.grown_in().unwrap();
-    let decor = pxl_spec::asset::decor::Decor::of(pxl_spec::asset::DecorId::of(tree.id).unwrap());
-    let grows = |store: &Store| {
-        let world = World::new(&residency, store);
-        super::scatter::grown_at(
-            &mut super::scatter::Asked::new(&world),
-            decor,
-            [cx, cy],
-            true,
-        )
-        .map(|(_, grows)| grows)
-    };
-    assert_eq!(
-        grows(&Store::default()),
-        Some(true),
-        "it grows on bare ground"
-    );
-    let red = cube_id(Cube::Object(cube::Object::red));
-    for (dz, value, what, kept) in [
-        (0, AIR, "air in its box", false),
-        (0, red, "a cube in its box", false),
-        (-1, AIR, "air under it", true),
-        (-1, red, "a cube under it", true),
-        (6, red, "a cube over it", true),
-    ] {
-        let mut store = Store::default();
-        let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
-        write(&mut store, at, OBJECT_COARSEST, value);
-        assert_eq!(grows(&store), Some(kept), "{what}");
-    }
 }

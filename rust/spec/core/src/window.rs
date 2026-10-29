@@ -239,26 +239,38 @@ pub const LINES_ENTRIES_AT: u32 = way::HEADER_WORDS + WAYS_BINS;
 pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_BRICK_SEGMENTS.div_ceil(2);
 pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGMENT_WORDS as u32;
 
-/// A handed brick's scratch, the GPU's own for the frame it is filled
-/// (`HANDED` of them, each `way::tree::scratch_words` of the cells its
-/// tree holds, `way::tree::SCRATCH_WORDS` at the renderer's cap): its
-/// columns' spans, the brick's and the ring of columns about it, which a
-/// column's cells read beside its own (`SPANS_AT`, pxl-spec-core fill.rs
-/// `spans`); then its tree's (`way::tree::FREED_AT`). Its levels' ways'
-/// bound and its ways' tree are made off the spans (fill.rs `level`,
-/// `way::tree::leaf`), and they go with the frame.
-pub const SPANS_AT: u32 = 0;
-/// The columns whose spans a brick's cells read: the brick's and a ring
+/// The most runs a square's columns read as (`ways::runs`), a bore's
+/// lining among them: the most of the format-12 set (2026-10-18), measured
+/// with every tile at every zoom (z15's 15320, tile [11707, 3502] square (7, 6); z14's most
+/// 7867); a tile past it fails its bake (pxl-spec bake/tile/terrain.rs
+/// `runs_fit`).
+pub const RUNS_SQUARE: u32 = 15320;
+
+/// A handed square's scratch, the GPU's own for the frame it is filled
+/// (`HANDED` of them, each `ways::tree::scratch_words` of the blocks its
+/// tree holds, `ways::tree::SCRATCH_WORDS` at the renderer's cap): its columns'
+/// runs, what its ways write along z (`ways::run_word`), lowest first, each
+/// to the next's first block and a column's last `NOTHING` on, a column no
+/// way writes in none (`RUNS_AT`), each column's first among them, row by
+/// row, and the square's count past the last (`FIRSTS_AT`); then its tree's
+/// (`ways::tree::FREED_AT`). Its levels' ways' bound and its ways' tree
+/// are made off the runs (pxl-spec-core fill.rs `level`, `ways::tree::leaf`),
+/// and they go with the frame. Before the tree's, each column's spans, the
+/// square's and the ring of columns about it, which a column's runs read
+/// beside its own (`SPANS_AT`, fill.rs `spans`).
+pub const FIRSTS_AT: u32 = 0;
+pub const RUNS_AT: u32 = FIRSTS_AT + SQUARE_CELLS + 1;
+/// The columns whose spans a square's runs read: the square's and a ring
 /// of one about it, `SPANS_ACROSS` a side, row by row from the ring's
 /// first.
-pub const SPANS_ACROSS: u32 = BRICK + 2;
+pub const SPANS_ACROSS: u32 = SQUARE + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
-/// A column's spans in words (`way::Spans`): a head word, its count, the
-/// count's high bit set where they did not fit `way::SPANS`, and its face
-/// cell over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
-/// then each span's lowest and past its highest, an `i16` each as the
-/// world's z is, held to it (`answer::bound_word`), and its value.
-pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
+/// A column's spans in words: its count, the high bit set where they did
+/// not fit `ways::SPANS`; then each span's lowest and past its highest, an
+/// `i16` each as the world's z is, held to it (`answer::bound_word`), and its value
+/// (`ways::Spans`).
+pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * crate::ways::SPANS as u32;
+pub const SPANS_AT: u32 = RUNS_AT + RUNS_SQUARE;
 pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A square's columns, a word a cell, row by row: a cell's ground's top in
@@ -338,9 +350,9 @@ pub trait Bricks {
     /// columns' joined (`join`), level 0 one.
     fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
     /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
-    fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
-    /// Entry `e` of the eye's window at `cell`'s levels over its bricks
-    /// (`JOINED_WORDS`, `fold`), as this side folded them over the bricks
+    fn laid(&self, cell: Zoom, berth: u32, i: u32) -> u32;
+    /// Entry `e` of the eye's window at `cell`'s levels over its squares
+    /// (`JOINED_WORDS`, `fold`), as this side folded them over the squares
     /// it holds; the zero entry, none, where it holds no fold.
     fn joined(&self, cell: Zoom, e: u32) -> [u32; JOINED_WORDS as usize];
     /// The eye's window at `cell`'s first brick, which its blocks of
@@ -368,6 +380,13 @@ pub trait Brick {
     /// they wall it by.
     fn laid(&self, i: u32) -> u32;
     fn height(&self, c: [i32; 2]) -> i32;
+    /// Column `c`'s spans and whether they fit, where the square keeps them
+    /// worked out already (`SPANS_AT`, pxl-spec-core fill.rs `spans`):
+    /// whether it does, and they. None by default, each worked out off its
+    /// lines (`ways::column`).
+    fn kept_spans(&self, _c: [i32; 2]) -> (bool, crate::ways::Spans, bool) {
+        (false, crate::ways::Spans::NONE, true)
+    }
 }
 
 /// Whether column `c` is the brick's or its ring's.
@@ -475,6 +494,14 @@ impl<Q: Brick> Columns for Q {
         }
         let cell = Square::cell(self);
         crate::ground::face_height(cell, crate::ground::cells(cell, self.height(c) as f32))
+    }
+    fn spans(&self, c: [i32; 2]) -> (crate::ways::Spans, bool) {
+        let (kept, spans, fits) = self.kept_spans(c);
+        if kept {
+            (spans, fits)
+        } else {
+            crate::ways::column(self, c)
+        }
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.
@@ -737,8 +764,8 @@ pub const ORIGIN_AT: u32 = SLOTS;
 /// The row of the windows' buffer the eye's windows' entries begin at:
 /// past their entries and their first bricks.
 pub const JOINED_AT: u32 = ORIGIN_AT + WINDOWS;
-/// The eye's windows' entries, as the GPU lays them and the CPU reads them
-/// back: window `cell − FIRST_CELL` a run of `JOINED_ENTRIES`.
+/// The eye's windows' entries, as the GPU lays them: window `cell −
+/// FIRST_CELL` a run of `JOINED_ENTRIES`.
 pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_WINDOWS;
 
 /// Entry of level `l` (from 1) over a brick, its block `at` in blocks of
@@ -760,19 +787,19 @@ const fn key_word(v: i32) -> u32 {
 
 /// Entry `b` of level `l` over a brick, its Morton index there
 /// (`joined_index`), of the eye's window at `cell`, folded off the level
-/// under it: what a ray reads at `cell` in the block of `2^l` entries a side
-/// at `b`, aligned as the entries are (`ACROSS` a multiple of the block's
+/// under it: what a ray reads at `cell` in the block of `2^l` slots a side
+/// at `b`, aligned as the slots are (`ACROSS` a multiple of the block's
 /// side), the join of its four halves' joins, each read once where the
-/// level under it laid it (`Bricks::joined`; at level 1 a brick's own,
-/// `held_brick`); keyed by the window's first brick (`Bricks::origin`),
+/// level under it laid it (`Squares::joined`; at level 1 a square's own,
+/// `held_square`); keyed by the window's first square (`Squares::origin`),
 /// so an entry of a window since moved names another. A block in the
-/// window's range is a node's bricks; one across its seam, where the
-/// entries wrap, holds what the window holds of the two nodes either side,
+/// window's range is a node's squares; one across its seam, where the
+/// slots wrap, holds what the window holds of the two nodes either side,
 /// which bounds either from over. The zero entry where the window is not
-/// laid out or no window holds a brick of the block, a lack. A level is
+/// laid out or no window holds a square of the block, a lack. A level is
 /// folded once the one under it is.
-pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS as usize] {
-    let [x, y] = of_idx(b);
+pub fn fold(w: &impl Squares, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS as usize] {
+    let [x, y] = of_index(b);
     let (first, laid) = w.origin(cell);
     let key = [key_word(first[0]), key_word(first[1])];
     let half = 1 << (l - 1);
@@ -781,17 +808,14 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
     while laid && k < 4 {
         let (dx, dy) = ((k & 1) * half, (k >> 1) * half);
         let got = if l == 1 {
-            let (q, _) = w.brick(
-                cell,
-                entry([((x << l) + dx) as i32, ((y << l) + dy) as i32]),
-            );
-            held_brick(w, cell, q)
+            let (q, _) = w.square(cell, slot([((x << l) + dx) as i32, ((y << l) + dy) as i32]));
+            held_square(w, cell, q)
         } else {
             unfold(w.joined(cell, joined_idx(l - 1, [0, 0]) + 4 * b + k), first)
         };
         // Component-wise: a GPU has no array equality. A half no window
         // holds is none of either source.
-        if got[0][0] == ground::UNBOUNDED[0] && got[0][1] == ground::UNBOUNDED[1] {
+        if got[0][0] == crate::ground::UNBOUNDED[0] && got[0][1] == crate::ground::UNBOUNDED[1] {
             return [0; JOINED_WORDS as usize];
         }
         joined = ground::joined(joined, got);
@@ -804,28 +828,28 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
     [key[0], key[1], g as u32, ways as u32]
 }
 
-/// What a ray reads of brick `q` at `cell`: its cells off the finest
+/// What a ray reads of square `q` at `cell`: its cells off the finest
 /// window holding them present, this one or a coarser one, as a node a
-/// brick wide reads them (`bounded`), so a brick this window has yet to
+/// square wide reads them (`bounded`), so a square this window has yet to
 /// hold is bounded by the cells read in its place; none
 /// (`ground::UNBOUNDED`) where no window holds it, a lack. Only the
-/// bricks' own levels are read, never another window's entries, so the
+/// squares' own levels are read, never another window's entries, so the
 /// windows fold in any order.
-fn held_brick(w: &impl Bricks, cell: Zoom, q: [i32; 2]) -> Bounds {
+fn held_square(w: &impl Squares, cell: Zoom, q: [i32; 2]) -> crate::ground::Bounds {
     let mut place = Found::NONE;
     let (b, _, here, _) = bounded(w, &mut place, cell, (cell - LEVELS, q));
     if here {
         b
     } else {
-        [ground::UNBOUNDED; 2]
+        [crate::ground::UNBOUNDED; 2]
     }
 }
 const _: () = assert!(
     FIRST_CELL >= LEVELS,
-    "a brick is a node at its cells' zoom less `LEVELS`"
+    "a square is a node at its cells' zoom less `LEVELS`"
 );
 
-/// The joins an entry `e` holds of a window whose first brick is `q`
+/// The joins an entry `e` holds of a window whose first square is `q`
 /// (`fold`): its bounds where its key is `q`, else none
 /// (`ground::UNBOUNDED`), the zero entry and a moved window's alike.
 fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> Bounds {
@@ -842,11 +866,11 @@ fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> Bounds {
 /// lies in the window's range and a superset where it crosses the seam; a
 /// node wider than the window the window whole, the top block. And whether
 /// no other window need be read: the node lies in the window, or the entry
-/// is none (`ground::UNBOUNDED`), a brick of its block held by no window,
+/// is none (`ground::UNBOUNDED`), a square of its block held by no window,
 /// so nothing bounds the node, which only splits more. What the window
 /// does not reach of the node a coarser window holds, as a cell's
 /// (`step`). The one reader of every entry.
-fn held_of(w: &impl Bricks, cell: Zoom, g: [i32; 2], l: u32) -> (Bounds, bool) {
+fn held_of(w: &impl Squares, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground::Bounds, bool) {
     let (first, laid) = w.origin(cell);
     if !laid {
         return ([ground::EMPTY; 2], false);
@@ -871,9 +895,9 @@ fn held_of(w: &impl Bricks, cell: Zoom, g: [i32; 2], l: u32) -> (Bounds, bool) {
         (ACROSS - 1) as i32,
     );
     let at = [((q[0] & m) as u32) >> level, ((q[1] & m) as u32) >> level];
-    let b = unfold(w.joined(cell, joined_idx(level, at)), first);
-    // A brick no window holds: no coarser window bounds it either.
-    if b[0][0] == ground::UNBOUNDED[0] && b[0][1] == ground::UNBOUNDED[1] {
+    let b = unfold(w.joined(cell, joined_index(level, at)), first);
+    // A square no window holds: no coarser window bounds it either.
+    if b[0][0] == crate::ground::UNBOUNDED[0] && b[0][1] == crate::ground::UNBOUNDED[1] {
         return (b, true);
     }
     (b, all)

@@ -14,12 +14,12 @@ Nothing now.
 
 ## P1
 
-- **The proxy, measured as one cast with each pixel's own walk.** Boxes
-  rasterized from the bounds the GPU already holds start each pixel's ray, and
-  every pixel walks its own from there, with no samples' answer; taken if that
-  cast is under the one as built (p95 62.5 ms, about four times the 16.7 ms
-  gate), and with it the shimmer's first cause and the sun's map are answered —
-  [20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md).
+- **What made it smooth, measured, and the whole cost against 9/26.** Once
+  the structure's work is done and the code tidied: which commits and which
+  reuse made moving smooth, each by its "off", and the frame against
+  e78eeec55, so the gain of rays with the raster only handing out is known
+  and a regression of it is seen —
+  [20261026-what-made-it-smooth.md](./experiment/20261026-what-made-it-smooth.md).
 
 ## P2
 

@@ -24,7 +24,7 @@ pub const WORLD_COLOR: Format = Format::rgba16float;
 
 /// A part of the world's drawn pixels, from `at`, `size` across and down:
 /// what a frame draws again where nothing moved but what the kernel's region
-/// holds (gpu/renderer.rs `FrameInput::region`).
+/// holds (gpu/renderer.rs `FrameInput::moved`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Region {
     pub at: [u32; 2],
@@ -34,20 +34,22 @@ pub struct Region {
 /// The drawn pixels a region is grown by each way: the resolve's pixels
 /// beside it and a face's growth (pxl-spec-core param.rs `raster::GROWN`),
 /// with room.
-const REGION_MARGIN: u32 = 4;
+pub const REGION_MARGIN: u32 = 4;
 
-/// The share of the world's pixels past which a region is drawn whole.
-const REGION_MOST: f64 = 0.5;
+/// The share of the world's pixels past which a region is drawn whole: a
+/// region costs a clear and a scissor beside what it draws, so only one
+/// that holds nearly all of them gains nothing.
+const REGION_MOST: f64 = 0.9;
 
 impl Region {
     /// The drawn pixels under clip `[x0, y0, x1, y1]`, Y up, of a world
-    /// `width` by `height`, grown by `REGION_MARGIN`; none where they hold
+    /// `width` by `height`, grown by `margin` of them; none where they hold
     /// more than `REGION_MOST` of it, or nothing.
-    pub fn of([x0, y0, x1, y1]: [f32; 4], width: u32, height: u32) -> Option<Region> {
+    pub fn of([x0, y0, x1, y1]: [f32; 4], width: u32, height: u32, margin: u32) -> Option<Region> {
         let (w, h) = (width as f32, height as f32);
         let px = |x: f32| (x * 0.5 + 0.5) * w;
         let py = |y: f32| (0.5 - y * 0.5) * h;
-        let m = REGION_MARGIN as f32;
+        let m = margin as f32;
         let lo = [(px(x0) - m).max(0.0), (py(y1) - m).max(0.0)];
         let hi = [(px(x1) + m).min(w), (py(y0) + m).min(h)];
         if !(hi[0] > lo[0] && hi[1] > lo[1]) {

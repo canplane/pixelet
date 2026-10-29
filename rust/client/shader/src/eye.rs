@@ -1,14 +1,18 @@
 // pxl-shader/eye.rs
 
 //! The eye a cast is from, as the kernel writes its words (pxl-spec-core
-//! `eye`), and what every entry reads off it.
+//! `eye`), what every entry reads off it, and the eye as an observer
+//! (observer.rs `Observer`): its camera grid's corners, cells and samples
+//! (pxl-spec-core `beam::Grid`), a ray at the screen's tangents.
 
 use pxl_spec_core::cast::{self, Detail};
-use pxl_spec_core::{beam, eye};
+use pxl_spec_core::{beam, eye, observed, tally};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
+use crate::observed::{seen_at, Seen, Writing};
 use crate::observer::{Aim, Level, Observer};
+use crate::world::{Looks, World};
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
 /// where pxl-spec-core `eye` lays them (asserted below).
@@ -40,6 +44,10 @@ pub struct Eye {
     /// The sun's cast, a frame's constants (pxl-spec-core `sun::Sun`), all
     /// zero where no shadow is cast.
     pub sun: [Vec4; 5],
+    /// Each pixel's ray's offset from its middle, in drawn pixels, and the
+    /// first pixel of the region the frame casts (pxl-spec-core
+    /// `eye::JITTER`).
+    pub jitter: Vec4,
 }
 
 /// Word `words`'s byte.
@@ -76,12 +84,29 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
         Detail {
             range: [eye.range.x, eye.range.y],
             eye: [0.0; 3],
-            spacing: cast::Spacing {
-                angle: pxl_spec_core::grid::CELL,
-                across: 0.0,
-            },
+            beam: 0.0,
         },
     )
+}
+
+/// The nodes holding the eye, from its root down, asked once a frame ahead
+/// of its beam rays, which every one of them enters first (pxl-spec-core
+/// `cast::origin_line`): written under a pass of their own
+/// (`observed::ORIGIN_PASS`), so each ray reads them kept rather than
+/// asking the world again. The sun's rays start apart, so it has none.
+pub(crate) fn origin<L: Looks>(eye: &Eye, world: World<'_, L>, seen: &mut Seen) {
+    let (o, detail) = eye_origin(eye);
+    let tag = observed::tag(seen_at(seen, observed::FRAME), observed::ORIGIN_PASS);
+    cast::origin_line(
+        &mut Writing {
+            world,
+            seen,
+            tag,
+            assets: eye.assets(),
+        },
+        o,
+        detail,
+    );
 }
 
 /// The eye's ray at the tangents `[tx, ty]`, reaching as far as the eye.
@@ -108,14 +133,26 @@ const _: () = assert!(eye::GRID_WORDS == 16, "`grid` reads the grid's four vec4s
 
 impl Observer for Eye {
     type At = [f32; 2];
-    const TALLY: u32 = tally::EYE;
-    const ASSETS: bool = true;
-    const PASSES: [u32; 3] = [
-        observed::BEAM_PASS,
-        observed::SAMPLES_PASS,
-        observed::MISSED_PASS,
-    ];
-    const APART: bool = false;
+
+    fn tally(&self) -> u32 {
+        tally::EYE
+    }
+
+    fn assets(&self) -> bool {
+        true
+    }
+
+    fn passes(&self) -> [u32; 3] {
+        [
+            observed::BEAM_PASS,
+            observed::SAMPLES_PASS,
+            observed::MISSED_PASS,
+        ]
+    }
+
+    fn apart(&self) -> bool {
+        false
+    }
 
     fn corners(&self) -> [u32; 2] {
         grid(self).corners
@@ -129,8 +166,8 @@ impl Observer for Eye {
         grid(self).handed(t)
     }
 
-    fn line(&self, idx: u32) -> u32 {
-        beam::Grid::line(idx)
+    fn line(&self, index: u32) -> u32 {
+        beam::Grid::line(index)
     }
 
     /// Every ray of the eye's starts at the eye.
@@ -173,7 +210,7 @@ impl Observer for Eye {
         grid(self).sample_at(s)
     }
 
-    /// Always about it: the lattice runs `param::beam::NEAR` samples past the
+    /// Always about it: the lattice runs `beam::NEAR` samples past the
     /// screen.
     fn sample_before(&self, at: [f32; 2]) -> ([u32; 2], bool) {
         (grid(self).sample_before(at), true)
@@ -195,10 +232,5 @@ impl Observer for Eye {
     /// From the eye, its boxes about it marked at the screen's tangents.
     fn laid(&self) -> ([i32; 3], (bool, [f32; 2])) {
         (eye_origin(self).0, (true, [self.tan.x, self.tan.y]))
-    }
-
-    /// Every one: what the eye casts is what it shows.
-    fn needs<W: Words + ?Sized>(&self, _: &W, _: Level, _: [u32; 2]) -> bool {
-        true
     }
 }

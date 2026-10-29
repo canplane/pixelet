@@ -45,7 +45,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
     Detail {
         range: [z, z],
         eye: [0.0; 3],
-        spacing: Spacing::NONE,
+        beam: 0.0,
     }
 }
 
@@ -58,7 +58,7 @@ pub fn held() -> Detail {
     Detail {
         range: [finest, finest],
         eye: [0.0; 3],
-        spacing: Spacing::NONE,
+        beam: 0.0,
     }
 }
 
@@ -70,7 +70,7 @@ pub fn by_dist() -> Detail {
     Detail {
         range: asked(),
         eye: [0.0; 3],
-        spacing: Spacing::NONE,
+        beam: 0.0,
     }
 }
 

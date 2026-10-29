@@ -3,10 +3,13 @@
 //! The eye's rays, each drawn at its own pixel where it met a face, painted
 //! by paint.wgsl's `paint` (pxl-spec-core ray.rs), from the world surface's
 //! `rays` the GPU's cast leaves (gpu/renderer.rs `Cast`): the ground it
-//! casts over (ray/ground.rs) and the cast (ray/cast.rs).
+//! casts over (ray/ground.rs) and the cast (ray/cast.rs), its samples'
+//! stops handed to the rasterizer (ray/raster.rs).
 
 mod cast;
 mod ground;
+mod raster;
+mod tally;
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
 use crate::gpu::api::{
@@ -19,14 +22,7 @@ use crate::gpu::surface::WORLD_COLOR;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
-pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
-
-/// Whether a frame of `kind` casts the pixels' rays, whole or off the
-/// samples that stand: the rays, their depth and where they met the world
-/// are laid again.
-fn casts_px(kind: FrameKind) -> bool {
-    kind == FrameKind::cast || kind == FrameKind::px
-}
+pub use tally::SUN_SUMS;
 
 pub struct RaysPass {
     built: Built,

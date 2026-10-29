@@ -9,7 +9,6 @@
 //! digest of the sources it names.
 
 use std::path::Path;
-use std::process::Command;
 
 use sha2::{Digest, Sha256};
 
@@ -17,24 +16,19 @@ use sha2::{Digest, Sha256};
 pub const DIR: &str = "rust/client/render/src/frame/shader";
 
 /// Each entry and the file it is checked in as, in `DIR`.
-pub const ENTRIES: [(&str, &str); 27] = [
+pub const ENTRIES: [(&str, &str); 28] = [
+    ("origin_cs", "origin.gen.wgsl"),
     ("beam_cs", "beam.gen.wgsl"),
     ("cell_cs", "cell.gen.wgsl"),
     ("sample_cs", "sample.gen.wgsl"),
     ("cast_cs", "cast.gen.wgsl"),
     ("sun_cs", "sun.gen.wgsl"),
-    ("sun_beam_cs", "sun_beam.gen.wgsl"),
-    ("sun_cell_cs", "sun_cell.gen.wgsl"),
-    ("sun_sample_cs", "sun_sample.gen.wgsl"),
-    ("sun_sample_box_cs", "sun_sample_box.gen.wgsl"),
     ("sun_miss_cs", "sun_miss.gen.wgsl"),
     ("sun_mark_cs", "sun_mark.gen.wgsl"),
-    ("sun_mark_drawn_cs", "sun_mark_drawn.gen.wgsl"),
-    ("sun_reach_cs", "sun_reach.gen.wgsl"),
     ("miss_cs", "miss.gen.wgsl"),
     ("miss_list_cs", "miss_list.gen.wgsl"),
-    ("sample_box_cs", "sample_box.gen.wgsl"),
-    ("face_cs", "face.gen.wgsl"),
+    ("boxes_cs", "boxes.gen.wgsl"),
+    ("faces_cs", "faces.gen.wgsl"),
     ("forget_cs", "forget.gen.wgsl"),
     ("joined_cs", "joined.gen.wgsl"),
     ("height_cs", "height.gen.wgsl"),
@@ -55,23 +49,38 @@ pub const ENTRIES: [(&str, &str); 27] = [
 /// rust/client/shader/rust-toolchain.toml holds it.
 pub const NIGHTLY: &str = "nightly-2026-04-11";
 
-/// Where a generated file names the digest of the sources that made it.
-pub const INPUTS: &str = "// Inputs: ";
+/// The one record of what the entries in `DIR` were made from: the digest
+/// of their sources (`inputs_digest`), beside them. One file for all, since
+/// what an entry reads is only known once it is compiled, so an entry whose
+/// bytes did not change has nothing to change.
+pub const STAMP: &str = "gen.digest";
 
 /// What makes the entries: pxl-spec-core, the shader crate, the builder that
 /// reads its SPIR-V into WGSL, xpute-kit beneath them, their lock and the
-/// toolchain's pin — every Rust, TOML and lock file under them the tree holds
-/// (`git ls-files -co --exclude-standard`, as check_rules lists it), so a new
-/// one counts before it is added and nothing ignored does. Wider than what
-/// reaches a shader: a change elsewhere in them asks for a regenerate that
-/// differs only here.
-const INPUT_ROOTS: [&str; 6] = [
+/// toolchain's pin, the workspaces the two crates over it inherit from, the
+/// cargo config the container's cargo reads from above the shader crate and
+/// the compiler wrapper it names, and this generator, which writes each
+/// file's head — every file on disk under them but a test (`inputs`), so a
+/// new one counts before it is added. The build is of a copy of these alone
+/// (pxl-tool bin/shader_wgsl.rs `snapshot`), so one it reads and the digest
+/// does not name fails there rather than going unseen. The digest is all that holds
+/// a file current, for a write that skips the container and for check_rules
+/// alike, so it names everything a file is made by. Wider than what reaches a
+/// shader: a change elsewhere in them asks for a regenerate that differs only
+/// here.
+const INPUT_ROOTS: [&str; 12] = [
     "rust/spec/core/",
     "rust/client/shader/",
     "rust/client/shader/build/",
     "xpute/rust/kit/",
     "rust/client/shader/Cargo.lock",
     "rust/client/shader/rust-toolchain.toml",
+    "rust/Cargo.toml",
+    "xpute/rust/Cargo.toml",
+    "rust/.cargo/config.toml",
+    "rust/.cargo/rustc.sh",
+    "rust/tool/src/shader.rs",
+    "rust/tool/src/bin/shader_wgsl.rs",
 ];
 
 /// Each checked-in entry's path from the checkout's root.
@@ -79,35 +88,21 @@ pub fn generated() -> impl Iterator<Item = String> {
     ENTRIES.iter().map(|(_, file)| format!("{DIR}/{file}"))
 }
 
-/// SHA-256 over each input's path and bytes, in path order: the path, a NUL,
-/// its length in decimal, a NUL, then its bytes.
+/// SHA-256 over what each input means to the build, in path order: the path,
+/// a NUL, its meaning's length in decimal, a NUL, then the meaning. A Rust
+/// file means its tokens, without its comments and doc attributes, which reach
+/// no SPIR-V; a TOML file its parsed value, without its comments or layout;
+/// any other, a lock or the compiler wrapper, its bytes. A test file (`*.test.rs`) is not compiled for a shader and
+/// is not an input. So an edit to a comment or a test leaves the digest, and
+/// rust-gpu is not run again for it.
 pub fn inputs_digest(root: &Path) -> Result<String, String> {
-    let out = Command::new("git")
-        .args(["ls-files", "-co", "--exclude-standard"])
-        .args(INPUT_ROOTS)
-        .current_dir(root)
-        .output()
-        .map_err(|e| format!("git ls-files: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "git ls-files: {}",
-            String::from_utf8_lossy(&out.stderr)
-        ));
-    }
-    let listed = String::from_utf8(out.stdout).map_err(|e| format!("git ls-files: {e}"))?;
-    let mut inputs: Vec<&str> = listed
-        .lines()
-        .filter(|f| {
-            [".rs", ".toml", ".lock"].iter().any(|e| f.ends_with(e)) && root.join(f).is_file()
-        })
-        .collect();
-    inputs.sort_unstable();
-    inputs.dedup();
     let mut hash = Sha256::new();
-    for f in inputs {
-        let bytes = std::fs::read(root.join(f)).map_err(|e| format!("{f}: {e}"))?;
-        hash.update(format!("{f}\0{}\0", bytes.len()).as_bytes());
-        hash.update(&bytes);
+    for f in inputs(root)? {
+        let f = f.as_str();
+        let text = std::fs::read_to_string(root.join(f)).map_err(|e| format!("{f}: {e}"))?;
+        let meant = meaning(f, &text)?;
+        hash.update(format!("{f}\0{}\0", meant.len()).as_bytes());
+        hash.update(&meant);
     }
     Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
@@ -127,9 +122,7 @@ pub fn inputs(root: &Path) -> Result<Vec<String>, String> {
         let entries = std::fs::read_dir(&path).map_err(|e| format!("{at}: {e}"))?;
         for entry in entries {
             let name = entry.map_err(|e| format!("{at}: {e}"))?.file_name();
-            let name = name
-                .to_str()
-                .ok_or_else(|| format!("{at}: a name not UTF-8"))?;
+            let name = name.to_str().ok_or_else(|| format!("{at}: a name not UTF-8"))?;
             // A build's own output and a tool's hidden state are no source.
             if name == "target" || name.starts_with('.') {
                 continue;
@@ -151,14 +144,15 @@ pub fn inputs(root: &Path) -> Result<Vec<String>, String> {
 fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     if f.ends_with(".rs") {
-        let stream: proc_macro2::TokenStream = text.parse().map_err(|e| format!("{f}: {e:?}"))?;
+        let stream: proc_macro2::TokenStream =
+            text.parse().map_err(|e| format!("{f}: {e:?}"))?;
         tokens(stream, &mut out);
     } else if f.ends_with(".toml") {
-        let mut val: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
+        let mut value: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
         if INHERITED.contains(&f) {
-            val = inherited(&val);
+            value = inherited(&value);
         }
-        out.extend(val.to_string().into_bytes());
+        out.extend(value.to_string().into_bytes());
     } else {
         out.extend(text.as_bytes());
     }
@@ -194,8 +188,7 @@ fn tokens(stream: proc_macro2::TokenStream, out: &mut Vec<u8>) {
     while k < trees.len() {
         if let TokenTree::Punct(p) = &trees[k] {
             if p.as_char() == '#' {
-                let bang =
-                    matches!(trees.get(k + 1), Some(TokenTree::Punct(q)) if q.as_char() == '!');
+                let bang = matches!(trees.get(k + 1), Some(TokenTree::Punct(q)) if q.as_char() == '!');
                 let at = k + 1 + usize::from(bang);
                 if let Some(TokenTree::Group(g)) = trees.get(at) {
                     let doc = g.delimiter() == Delimiter::Bracket
@@ -211,11 +204,7 @@ fn tokens(stream: proc_macro2::TokenStream, out: &mut Vec<u8>) {
             TokenTree::Ident(i) => out.extend(format!("i{i} ").into_bytes()),
             TokenTree::Literal(l) => out.extend(format!("l{l} ").into_bytes()),
             TokenTree::Punct(p) => {
-                let joint = if p.spacing() == Spacing::Joint {
-                    'j'
-                } else {
-                    'a'
-                };
+                let joint = if p.spacing() == Spacing::Joint { 'j' } else { 'a' };
                 out.extend(format!("p{}{joint} ", p.as_char()).into_bytes());
             }
             TokenTree::Group(g) => {
@@ -244,9 +233,9 @@ pub fn made_from(root: &Path) -> Option<String> {
 /// Each checked-in entry not made from `digest`: all of them when the stamp
 /// names another, else those missing.
 pub fn stale(root: &Path, digest: &str) -> Vec<String> {
-    let cur = made_from(root).as_deref() == Some(digest);
+    let current = made_from(root).as_deref() == Some(digest);
     generated()
-        .filter(|f| !cur || !root.join(f).is_file())
+        .filter(|f| !current || !root.join(f).is_file())
         .collect()
 }
 
@@ -254,12 +243,16 @@ pub fn stale(root: &Path, digest: &str) -> Vec<String> {
 pub fn header() -> String {
     [
         "// GENERATED by pxl-tool bin/shader_wgsl.rs; do not edit. Regenerate with",
-        "// `cargo shader-wgsl` in rust/; `--check` fails when it is stale.",
+        "// `cargo shader-wgsl` in rust/; `--check` fails when it is stale. What it",
+        "// was made from is gen.digest's, beside it.",
         "// Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,",
         "// through rust/client/shader, by",
         &format!("// rust-gpu 0.10.0-alpha.1 ({NIGHTLY}) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build."),
-        &format!("{INPUTS}{digest}"),
         "",
     ]
     .join("\n")
 }
+
+#[cfg(test)]
+#[path = "shader.test.rs"]
+mod test;

@@ -1,6 +1,7 @@
 # Generated files, kept out of the language stats: rust-gpu's WGSL
 # (pxl-tool bin/shader_wgsl.rs) and what pxl-tool writes from spec/.
 *.gen.wgsl linguist-generated=true
+gen.digest linguist-generated=true
 *.spec.rs linguist-generated=true
 *.spec.ts linguist-generated=true
 

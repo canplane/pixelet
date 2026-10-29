@@ -13,11 +13,14 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 // What is drawn and how finely follows from these, with the field of view
 // (pxl-spec space/camera/grid.rs `HALF_TAN`) and the display's pixels.
 
-/// The camera grid, the one knob of resolution: the view's cells a radian,
-/// a cell 1/`CELLS_A_RADIAN` radians about the eye whatever the screen. An
-/// angle, so what is observed is the display's pixels' to draw, never
-/// theirs to decide.
-pub const CELLS_A_RAD: f32 = 96.0;
+/// The camera grid, the one knob of resolution: a cell is an angle of
+/// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs), stated
+/// at `RATIO_MAX`: 96 a radian a CSS pixel asks, in drawn pixels. Every
+/// view is cast at τ `RATIO_MAX` whatever its ratio (pxl-spec
+/// space/camera/grid.rs `Tau::VIEW`), its cells as wide as a ratio of one
+/// asks, so what is observed is the display's pixels' to draw, never theirs
+/// to decide; whatever is sized by `SPLIT` holds at every τ.
+pub const SPLIT: f32 = 96.0 * RATIO_MAX;
 
 /// How many times finer than the view's a grid the bands and windows are
 /// sized for (`SPLIT`, `window::RADIUS`): a window holds its zoom's cells

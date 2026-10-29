@@ -479,6 +479,10 @@ pub trait Columns {
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
     fn joins(&self, c: [i32; 2], k: u32) -> bool;
+    /// Column `c`'s spans and whether they fit `SPANS` (`column`): worked
+    /// out off its segments, or read where they were worked out once for
+    /// every column beside it to read (pxl-spec-core fill.rs `spans`).
+    fn spans(&self, c: [i32; 2]) -> (Spans, bool);
 }
 
 /// The `k`-th segment's crossing of column `c`.
@@ -815,13 +819,86 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
     ([c[0] + d[0], c[1] + d[1]], z + d[2])
 }
 
-/// What the ways write in cell `z` of column `c` at zoom `cell`, its spans and
-/// those beside it kept in `k` (`at` of its own): a deck's slab or its
-/// pier, else a bore's air (`AIR`); else, under its face cell, where a
-/// cave may take it (`ground::face_cell`), the way's look where a bore's
-/// air is beside it — under or over it, or across one of its four faces,
-/// the first in `near`'s order — so a cave never opens into a way, whatever
-/// carves the ground
+/// A run's first block and its value; a value of no way is `NOTHING`.
+pub fn run_of(w: u32) -> (i32, u32) {
+    let value = w >> 16;
+    (
+        (w << 16) as i32 >> 16,
+        if value == 0xffff { NOTHING } else { value },
+    )
+}
+
+/// The first block past `z` where one of a column's spans' blocks
+/// (`filled`) begins or ends, `i32::MAX` where none does.
+fn edge_after(spans: &Spans, cell: Zoom, z: i32) -> i32 {
+    let mut edge = i32::MAX;
+    let mut k = 0;
+    while k < spans.n as usize {
+        let [first, last] = filled(cell, spans.run[k]);
+        if first > z {
+            edge = edge.min(first);
+        }
+        if last >= z {
+            edge = edge.min(last + 1);
+        }
+        k += 1;
+    }
+    edge
+}
+
+/// A column's spans, the four columns' beside it in `near`'s order (the
+/// row under it, the cell before it, the cell after it, the row over it)
+/// and its ground's face block (`ground::face_block`), none where the
+/// area's edge walls it: what its blocks are read off (`lined`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Around {
+    pub spans: [Spans; 5],
+    pub face: i32,
+}
+
+/// Column `c` and the columns beside it (`Around`), the ring's off their
+/// edge bins, and whether all their spans fit `SPANS`.
+pub fn around<C: Columns>(cols: &C, c: [i32; 2]) -> (Around, bool) {
+    let mut a = Around {
+        spans: [Spans::NONE; 5],
+        face: i32::MIN,
+    };
+    if cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
+        return (a, true);
+    }
+    a.face = crate::ground::face_block(cols.cell(), cols.face(c));
+    let mut fits = true;
+    let mut k = 0;
+    while k < 7 {
+        let d = near(k);
+        if k != 3 && k != 4 {
+            let (s, fit) = cols.spans([c[0] + d[0], c[1] + d[1]]);
+            a.spans[beside(k)] = s;
+            fits &= fit;
+        }
+        k += 1;
+    }
+    (a, fits)
+}
+
+/// Which of `Around`'s spans the `k`-th of `near` reads: its own column's
+/// for itself and the blocks under and over it.
+fn beside(k: u32) -> usize {
+    if k < 3 {
+        k as usize
+    } else if k < 5 {
+        0
+    } else {
+        k as usize - 2
+    }
+}
+
+/// What the ways write in block `z` of a column at `cell` (`at` of its
+/// own spans): a deck's slab or its pier, else a bore's air (`AIR`); else,
+/// under the ground's face block, where a cave may take it
+/// (`ground::face_block`), the way's look where a bore's air is beside it —
+/// under or over it, or across one of its four faces, the first in `near`'s
+/// order — so a cave never opens into a way, whatever carves the ground
 /// (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md,
 /// "Separation"); else `NOTHING`. Read off the spans in place, the
 /// column's own first: a cell it writes reads none beside it.

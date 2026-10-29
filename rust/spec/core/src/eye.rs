@@ -48,8 +48,17 @@ pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// leaves them zero.
 pub const SUN: usize = GRID + GRID_WORDS;
 pub const SUN_WORDS: usize = 20;
-/// Every word, the sun's light box last.
-pub const WORDS: usize = SUN + SUN_WORDS;
+/// Where each pixel's ray goes through it this frame, its offset from the
+/// pixel's middle in drawn pixels, X right and Y down, f32 bits; then the
+/// first pixel the frame casts across and down, f32 bits, where it casts
+/// only a region of them (pxl-render gpu/surface.rs `Region`). The
+/// renderer's to write; the kernel leaves it zero.
+/// What the beams, cells and samples cast is the camera grid's and reads none
+/// of it.
+pub const JITTER: usize = SUN + SUN_WORDS;
+pub const JITTER_WORDS: usize = 4;
+/// Every word, the jitter last.
+pub const WORDS: usize = JITTER + JITTER_WORDS;
 const _: () = assert!(
     STEPS == ORIGIN + 3
         && REACH == FORWARD + 3

@@ -36,6 +36,12 @@ struct Clip {
     /// The farthest any point of the mesh moves over it, unscaled; set when
     /// the model is sealed (`Model::moved`).
     motion: f32,
+    /// The fastest, unscaled, in units a second, along its keys' chords; set
+    /// with it.
+    speed: f32,
+    /// How far any vertex lies from the origin as its first key skins it,
+    /// unscaled; set with it.
+    reach: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -66,6 +72,9 @@ pub struct Model {
     scale: f32,
     /// Unscaled bounding sphere for a hit test to reject by.
     radius: f32,
+    /// How far any vertex lies from its origin as its rest pose skins it,
+    /// unscaled: what it covers drawn (`reach`).
+    rest_reach: f32,
 }
 
 #[derive(Default)]
@@ -244,6 +253,7 @@ impl Models {
             order: Vec::new(),
             scale: 1.0,
             radius: 0.0,
+            rest_reach: 0.0,
         };
         self.models.push(model);
         Some(((self.models.len() - 1) as u32, at))
@@ -280,6 +290,8 @@ impl Models {
             duration,
             channels: Vec::new(),
             motion: 0.0,
+            speed: 0.0,
+            reach: 0.0,
         });
         (m.clips.len() - 1) as u32
     }
@@ -336,9 +348,15 @@ impl Models {
             }
         }
         for c in 0..m.clips.len() {
-            let motion = m.moved(c);
-            m.clips[c].motion = motion;
+            (m.clips[c].motion, m.clips[c].speed) = m.moved(c);
+            let first = m.clips[c]
+                .channels
+                .iter()
+                .flat_map(|ch| ch.times.first().copied())
+                .fold(0.0f32, f32::min);
+            m.clips[c].reach = m.reach_at(Some((c as u32, first)));
         }
+        m.rest_reach = m.reach_at(None);
     }
 
     pub fn mesh(&self, model: u32) -> Option<MeshRef> {
@@ -386,12 +404,74 @@ impl Model {
         self.clips.get(clip as usize).map_or(0.0, |c| c.motion)
     }
 
-    /// A clip's motion, off its own pose and palette at each of its keys: a
-    /// vertex is its joints' palettes blended, so it moves no farther than
-    /// the farthest joint's palette moves a point within the radius — its
-    /// translation's change and its linear part's (Frobenius) times the
-    /// radius. Twice the farthest from the first key bounds any two.
-    fn moved(&self, clip: usize) -> f32 {
+    /// How far any vertex lies from the origin as drawn, unscaled, at a
+    /// clip's first key and as far as it moves from there, or at rest where
+    /// none plays: a sphere about where it stands that holds it.
+    pub fn reach(&self, clip: Option<u32>) -> f32 {
+        clip.and_then(|c| self.clips.get(c as usize))
+            .map_or(self.rest_reach, |c| c.reach + c.motion)
+    }
+
+    /// How far any vertex lies from the origin as the pose `at` skins it,
+    /// unscaled: each vertex its joints' palettes blended by its weights,
+    /// its lanes laid one after another a vertex count apart
+    /// (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2, joints 4,
+    /// weights 4; query/model/asset.rs).
+    fn reach_at(&self, at: Option<(u32, f32)>) -> f32 {
+        let n = self.joints();
+        if n == 0 {
+            return self.radius;
+        }
+        let (mut local, mut global) = (vec![[0.0; 10]; n], vec![[0.0; 16]; n]);
+        let mut palette = vec![0.0; n * 16];
+        self.pose(at, &mut local);
+        self.palette(&local, &mut global, &mut palette);
+        let count = self.vertex_cnt as usize;
+        let lane = |k: usize| k * count;
+        // SAFETY: the model's block, sealed: its vertex lanes first.
+        let w = unsafe {
+            core::slice::from_raw_parts(
+                mem::at::<u32>(self.at),
+                count * MODEL_VERTEX_WORDS as usize,
+            )
+        };
+        let mut far = 0.0f32;
+        for v in 0..count {
+            let p = [0, 1, 2].map(|k| f32::from_bits(w[lane(0) + v * 3 + k]));
+            let mut q = [0.0f32; 3];
+            for k in 0..4 {
+                let joint = w[lane(8) + v * 4 + k] as usize;
+                let weight = f32::from_bits(w[lane(12) + v * 4 + k]);
+                let Some(m) = palette
+                    .get(joint * 16..joint * 16 + 16)
+                    .filter(|_| weight != 0.0)
+                else {
+                    continue;
+                };
+                for r in 0..3 {
+                    q[r] += weight * (m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
+                }
+            }
+            far = far.max((q[0] * q[0] + q[1] * q[1] + q[2] * q[2]).sqrt());
+        }
+        far
+    }
+
+    /// The fastest any point of its mesh moves over a clip from one key to
+    /// the next, unscaled, in units a second: along the keys' chords, so a
+    /// point turning between them moves somewhat faster.
+    pub fn speed(&self, clip: u32) -> f32 {
+        self.clips.get(clip as usize).map_or(0.0, |c| c.speed)
+    }
+
+    /// A clip's motion and speed, off its own pose and palette at each of
+    /// its keys: a vertex is its joints' palettes blended, so it moves no
+    /// farther than the farthest joint's palette moves a point within the
+    /// radius — its translation's change and its linear part's (Frobenius)
+    /// times the radius. Twice the farthest from the first key bounds any
+    /// two; the farthest from one key to the next over the time between
+    /// them is its speed, along their chords.
+    fn moved(&self, clip: usize) -> (f32, f32) {
         let c = &self.clips[clip];
         let mut times: Vec<f32> = c
             .channels
@@ -406,27 +486,37 @@ impl Model {
         let (mut first, mut palette) = (vec![0.0; n * 16], vec![0.0; n * 16]);
         self.pose(Some((clip as u32, times[0])), &mut local);
         self.palette(&local, &mut global, &mut first);
-        let mut far = 0.0f32;
-        for &t in &times[1..] {
-            self.pose(Some((clip as u32, t)), &mut local);
-            self.palette(&local, &mut global, &mut palette);
-            for (a, b) in palette
-                .as_chunks::<16>()
+        let mut last = first.clone();
+        // How far a point within the radius moves between two palettes.
+        let apart = |a: &[f32], b: &[f32]| {
+            a.as_chunks::<16>()
                 .0
                 .iter()
-                .zip(first.as_chunks::<16>().0)
-            {
-                let d: [f32; 16] = core::array::from_fn(|i| a[i] - b[i]);
-                let linear = [0, 1, 2, 4, 5, 6, 8, 9, 10]
-                    .iter()
-                    .map(|&i| d[i] * d[i])
-                    .sum::<f32>()
-                    .sqrt();
-                let moved = (d[12] * d[12] + d[13] * d[13] + d[14] * d[14]).sqrt();
-                far = far.max(moved + linear * self.radius);
+                .zip(b.as_chunks::<16>().0)
+                .map(|(a, b)| {
+                    let d: [f32; 16] = core::array::from_fn(|i| a[i] - b[i]);
+                    let linear = [0, 1, 2, 4, 5, 6, 8, 9, 10]
+                        .iter()
+                        .map(|&i| d[i] * d[i])
+                        .sum::<f32>()
+                        .sqrt();
+                    let moved = (d[12] * d[12] + d[13] * d[13] + d[14] * d[14]).sqrt();
+                    moved + linear * self.radius
+                })
+                .fold(0.0f32, f32::max)
+        };
+        let (mut far, mut fast) = (0.0f32, 0.0f32);
+        for k in 1..times.len() {
+            self.pose(Some((clip as u32, times[k])), &mut local);
+            self.palette(&local, &mut global, &mut palette);
+            far = far.max(apart(&palette, &first));
+            let dt = times[k] - times[k - 1];
+            if dt > 0.0 {
+                fast = fast.max(apart(&palette, &last) / dt);
             }
+            core::mem::swap(&mut last, &mut palette);
         }
-        2.0 * far
+        (2.0 * far, fast)
     }
 
     /// The joints' local transforms at a clip's time, or at rest.

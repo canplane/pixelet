@@ -47,13 +47,44 @@ pub const fn split_distance(cell_zoom: Zoom) -> f64 {
     CELLS_A_RADIAN * units(cell_zoom) / pxl_spec_core::grid::SPANS as f64
 }
 
-/// The camera grid's cell zoom at `r2`, a distance from the eye squared: the
-/// widest cell whose split distance is within the distance, which is the
-/// finest whose side spans one of the view's cells there, `r / CELLS_A_RADIAN`.
-/// A node drawn whole, all its faces, is at least its side wide from any
-/// direction, so the face a ray meets does not enter. Finer than the
-/// ground's near the eye, held to what a zoom can name: pxl-spec-core's, the
-/// one rule the CPU and a GPU's cast size by, of the one input, a square.
-pub fn cell_at(r2: f64) -> Zoom {
-    grid::cell_at(r2 as f32)
+/// The criterion's one scale factor, at least 1: every zoom's split
+/// distance is `split_distance` / τ. The reach is sized at 1, and a
+/// coarser τ only brings bands nearer, so none breaks it.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct Tau(f64);
+
+impl Tau {
+    pub const FINEST: Tau = Tau(1.0);
+
+    /// Every view's, whatever its screen: the cell a ratio of one asks of
+    /// `SPLIT`, which is stated at `RATIO_MAX`, so about twelve CSS pixels at
+    /// the reference view. How many pixels a display draws it with is the
+    /// drawing's, never what is observed.
+    pub const VIEW: Tau = Tau(RATIO_MAX);
+
+    /// At least 1: a finer quality than the criterion breaks the reach.
+    pub fn of(scale: f64) -> Tau {
+        xpute_kit::ensure!(scale >= 1.0, EINVAL);
+        Tau(scale)
+    }
+
+    pub const fn scale(self) -> f64 {
+        self.0
+    }
+
+    pub const fn split_distance(self, cell_zoom: Zoom) -> f64 {
+        split_distance(cell_zoom) / self.0
+    }
+
+    /// The camera grid's cell zoom at `r2`, a distance from the eye squared:
+    /// the widest cell whose split distance is within the distance, which is
+    /// the finest whose side spans one of the grid's cells there, `r / SPLIT`.
+    /// A block drawn whole, all its faces, is at least its side wide from any
+    /// direction, so the face a ray meets does not enter. Finer than the
+    /// ground's near the eye, held to what a zoom can name: pxl-spec-core's, the
+    /// one rule the CPU and a GPU's cast size by, of the one input, a square;
+    /// the distance as τ scales it.
+    pub fn cell_at(self, r2: f64) -> Zoom {
+        pxl_spec_core::grid::cell_at((r2 * (self.0 * self.0)) as f32)
+    }
 }

@@ -265,24 +265,12 @@ impl Grown {
         // cut that moved as it was and as it is, held with any a frame not
         // drawn handed.
         for &b in f.edits {
-            self.hold(b);
-        }
-        for k in [0, eye::CUT_WORDS] {
-            let (was, is) = (self.cuts, grows.cuts);
-            let (was, is) = (&was[k..k + eye::CUT_WORDS], &is[k..k + eye::CUT_WORDS]);
-            if was != is {
-                for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
-                    self.hold(scatter::cut_box(
-                        c[3],
-                        [c[0] as i32, c[1] as i32, c[2] as i32],
-                    ));
-                }
-            }
-        }
-        cut_boxes(&self.cuts, growth.cuts, |b| {
             hold(&mut self.held, &mut self.holding, b);
+        }
+        cut_boxes(&self.cuts, grows.cuts, |b| {
+            hold(&mut self.held, &mut self.holding, b)
         });
-        self.cuts = *growth.cuts;
+        self.cuts = *grows.cuts;
         let w = &mut self.window;
         w.begin();
         w.read(growth.window);
@@ -472,23 +460,6 @@ impl Grown {
         self.counted.forget();
     }
 
-    /// Box `b` held for the slots it meets to grow again (`held`), past the
-    /// room joined into the last.
-    fn hold(&mut self, b: [i32; 4]) {
-        if self.holding < self.held.len() {
-            self.held[self.holding] = b;
-            self.holding += 1;
-        } else {
-            let last = &mut self.held[self.holding - 1];
-            *last = [
-                last[0].min(b[0]),
-                last[1].min(b[1]),
-                last[2].max(b[2]),
-                last[3].max(b[3]),
-            ];
-        }
-    }
-
     /// The frame was drawn: the boxes it marked by and its every-slot
     /// growth are done with.
     pub fn drawn_frame(&mut self) {
@@ -520,7 +491,7 @@ impl Grown {
     /// A frame's decor handed and never drawn: its edits held for the next.
     pub fn carry_edits(&mut self, edits: &[[i32; 4]]) {
         for &b in edits {
-            self.hold(b);
+            hold(&mut self.held, &mut self.holding, b);
         }
     }
 
@@ -645,7 +616,7 @@ pub(crate) fn hold(held: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
 }
 
 /// The boxes a preview's cuts changed, `was` against `is`: each cut that
-/// moved as it was and as it is (pxl-spec-core `overwrite::cut_box`).
+/// moved as it was and as it is (pxl-spec-core `scatter::cut_box`).
 pub(crate) fn cut_boxes(
     was: &[u32; eye::CUTS],
     is: &[u32; eye::CUTS],
@@ -655,7 +626,7 @@ pub(crate) fn cut_boxes(
         let (was, is) = (&was[k..k + eye::CUT_WORDS], &is[k..k + eye::CUT_WORDS]);
         if was != is {
             for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
-                each(overwrite::cut_box(
+                each(scatter::cut_box(
                     c[3],
                     [c[0] as i32, c[1] as i32, c[2] as i32],
                 ));

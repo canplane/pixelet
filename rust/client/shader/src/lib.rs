@@ -6,7 +6,7 @@
 //! casts for (observer.rs), a pass both observers take one entry
 //! (either.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
 //! observed pyramid (observed.rs), the world's depth from the sun (sun.rs),
-//! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
+//! each handed square's ground (ground.rs) and ways (way.rs), and the decor
 //! the ground grows (decor.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
 //! name pxl-tool shader.rs `ENTRIES` reads.
@@ -19,32 +19,24 @@
 mod beam;
 mod cast;
 mod decor;
+mod either;
 mod eye;
 mod ground;
 mod observed;
+mod observer;
+mod raster;
 mod sun;
 mod way;
 mod world;
 
-pub use beam::{beam_cs, cell_cs, sample_cs};
+pub use beam::{beam_cs, cell_cs, origin_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs};
 pub use decor::{decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs};
 pub use eye::Eye;
 pub use ground::{bound_cs, heights_cs, joined_cs};
 pub use observed::forget_cs;
-pub use raster::{boxes_cs, faces_cs};
-pub use sun::{
-    sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs,
-    sun_reach_cs, sun_sample_cs,
-};
-pub use eye::Eye;
-pub use ground::{bound_cs, height_cs, joined_cs};
-pub use observed::forget_cs;
-pub use raster::{sample_box_cs, face_cs};
-pub use sun::{
-    sun_beam_cs, sun_sample_box_cs, sun_cell_cs, sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs,
-    sun_reach_cs, sun_sample_cs,
-};
+pub use raster::{face_cs, sample_box_cs};
+pub use sun::{sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs, sun_reach_cs, Moved};
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{Looks, Unlooked, World};
 
@@ -66,5 +58,19 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
         }
     } else {
         0
+    }
+}
+
+/// Word `i` of `s` raised to `v` where it is less, none past `s`.
+fn most(s: &mut [u32], i: u32, v: u32) {
+    if (i as usize) < s.len() {
+        // SAFETY: just bounded by the slice's own length.
+        unsafe {
+            spirv_std::arch::atomic_u_max::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+            >(s.get_unchecked_mut(i as usize), v)
+        };
     }
 }

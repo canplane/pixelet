@@ -90,13 +90,13 @@ pub const SHADER_FORGET: u32 = 43;
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 44;
 /// The world's depth from the sun into its clipmap, generated with the cast
-/// from pxl-spec-core's `sun`: every slot taking the visible sample, a
+/// from pxl-spec-core's `sun`: every slot taking the raster's pick, a
 /// workgroup a tile, a compute entry; that depth laid into the map
 /// (sun_map.wgsl, gpu/shadow.rs); and the slots that took none walked
 /// apart (pxl-spec-core `sun::misses_at`), a compute entry of its own.
 pub const SHADER_SUN: u32 = 45;
 pub const SHADER_SUN_MAP: u32 = 46;
-pub const SHADER_SUN_MARK: u32 = 47;
+pub const SHADER_SUN_MISS: u32 = 47;
 pub const SHADER_SCREEN_DEPTH: u32 = 48;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 49;
@@ -104,7 +104,7 @@ pub const SHADER_CAMERA_GRID: u32 = 49;
 /// their boxes written, a compute entry; and the boxes drawn, the nearest
 /// face a pixel's ray enters kept with its sample (raster.wgsl), which the
 /// cast's pixels read (`SHADER_CAST`).
-pub const SHADER_SAMPLE_BOX: u32 = 50;
+pub const SHADER_BOXES: u32 = 50;
 pub const SHADER_RASTER: u32 = 51;
 /// The pixels the cast's reading walk missed, walked again from their list
 /// (pxl-spec-core `observed::MARKS_AT`), a thread each: a compute entry.
@@ -112,14 +112,6 @@ pub const SHADER_MISS_LIST: u32 = 52;
 /// What lies about each box's face, asked once a box (pxl-spec-core
 /// `raster::ARGS_FACES`): a compute entry.
 pub const SHADER_FACE: u32 = 53;
-/// The sun's beam rays and its cells' starts off them (pxl-spec-core
-/// `sun::BEAM`): compute entries.
-pub const SHADER_SUN_BEAM: u32 = 54;
-pub const SHADER_SUN_CELL: u32 = 55;
-/// The sun's samples and their boxes (pxl-spec-core `sun::SAMPLE`):
-/// compute entries.
-pub const SHADER_SUN_SAMPLE: u32 = 56;
-pub const SHADER_SUN_BOXES: u32 = 57;
 /// The tiles of the sun's box its receivers stand on in a cast
 /// (pxl-spec-core `sun::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
@@ -130,7 +122,14 @@ pub const SHADER_SUN_REACH: u32 = 56;
 /// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
 /// time, for `SHADER_GROWN` to grow: its one compute entry.
 pub const SHADER_GROWN_STAND: u32 = 57;
-pub const SHADERS: u32 = 58;
+/// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
+pub const SHADER_SCREEN_FINISH: u32 = 58;
+/// The world's color gathered over frames (screen_resolve.wgsl).
+pub const SHADER_SCREEN_RESOLVE: u32 = 59;
+/// The region a frame draws again set back to nothing at the far plane
+/// (screen_clear.wgsl).
+pub const SHADER_SCREEN_CLEAR: u32 = 60;
+pub const SHADERS: u32 = 61;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -273,7 +272,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "eye",
         "paint",
         "debug_look",
-        "px",
         "screen_ray",
         "screen_lit"
     ],
@@ -331,8 +329,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["sun.gen"],
     // SHADER_SUN_MAP
     &["sun_word", "sun_map"],
-    // SHADER_SUN_MARK
-    &["sun_mark.gen"],
+    // SHADER_SUN_MISS
+    &["sun_miss.gen"],
     // SHADER_SCREEN_DEPTH
     lit![
         "lattice",
@@ -345,22 +343,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "camera_grid"],
-    // SHADER_SAMPLE_BOX
-    &["sample_box.gen"],
+    // SHADER_BOXES
+    &["boxes.gen"],
     // SHADER_RASTER
-    &["raster_box", "px", "raster"],
+    &["raster_box", "raster"],
     // SHADER_MISS_LIST
     &["miss_list.gen"],
     // SHADER_FACE
     &["face.gen"],
-    // SHADER_SUN_BEAM
-    &["sun_beam.gen"],
-    // SHADER_SUN_CELL
-    &["sun_cell.gen"],
-    // SHADER_SUN_SAMPLE
-    &["sun_sample.gen"],
-    // SHADER_SUN_SAMPLE_BOX
-    &["sun_sample_box.gen"],
     // SHADER_SUN_MARK
     &["sun_mark.gen"],
     // SHADER_SUN_MARK_DRAWN
@@ -369,4 +359,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["sun_reach.gen"],
     // SHADER_GROWN_STAND
     &["decor_stand.gen"],
+    // SHADER_SCREEN_FINISH
+    &["frame", "encode", "finish", "screen_finish"],
+    // SHADER_SCREEN_RESOLVE
+    &["frame", "screen_resolve"],
+    // SHADER_SCREEN_CLEAR
+    &["screen_clear"],
 ];

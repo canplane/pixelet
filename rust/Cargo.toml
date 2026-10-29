@@ -112,6 +112,20 @@ edition = "2021"
 version = "0.0.0"
 publish = false
 
+# What a check, a test and a debug build are made with. A line of each
+# function is enough for a panic's backtrace; a dependency's full debug
+# information is what most of the link and the target's size are spent on,
+# and nothing here steps through one. The tests walk the world's catalogs,
+# patches and casts, which code left unoptimized runs many times slower;
+# opt-level 1 keeps the overflow checks and debug assertions they hold the
+# code to, and a check, which makes no code, is not slowed by it.
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 # The module's profile, and only the module's — `server` below builds on it
 # but does not take this line.
 #
@@ -164,6 +178,29 @@ panic = "unwind"
 [profile.native]
 inherits = "release"
 opt-level = 3
+
+# The module as the dev server rebuilds it on every change
+# (ts/app/web/script/build-wasm.py). It keeps the release profile's `z`,
+# which costs this module no speed (above), and drops what makes every build
+# of it start over: one codegen unit and the whole-graph LTO, which are for
+# the bytes a visitor downloads. A change then recompiles only the crates it
+# reaches.
+[profile.watch]
+inherits = "release"
+lto = false
+codegen-units = 256
+incremental = true
+
+# The device's library as a dev build of the app rebuilds it
+# (ts/app/native/script/build-native.py), as `watch` is the module's: the
+# native profile's code, without the one codegen unit and the whole-graph
+# LTO that make every build of it start over, so a change recompiles the
+# crates it reaches. A Release build of the app takes `native`.
+[profile.native-watch]
+inherits = "native"
+lto = false
+codegen-units = 256
+incremental = true
 
 # naga's Metal backend writes a `let` of a loop's body that `break if` reads
 # in `continuing` as its expression again after the counter moved, so the

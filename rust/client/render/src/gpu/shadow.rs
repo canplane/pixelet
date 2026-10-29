@@ -4,7 +4,7 @@
 //! orthographic about the eye and as wide as the casters reach (the
 //! kernel's `STAGE_AT::SHADOWS`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
-//! rays are, off samples and the visible sample (pxl-shader `sun_cs`), into
+//! rays are, off samples and the raster's pick (pxl-shader `sun_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-spec-core `sun`); laid into the map
 //! each frame in the box's own order
@@ -15,7 +15,7 @@
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec_core::eye;
-use pxl_spec_core::sun::{self, Sun};
+use pxl_spec_core::sun::{self, Starts, Sun, ANCHOR};
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_SUN_MAP};
@@ -36,6 +36,10 @@ const _: () = assert!(
     SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
+
+/// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
+/// start in Q3 and what rounding to it left.
+type Anchor = ([i32; 2], [i32; 3], [f32; 3]);
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
 /// start in Q3 and what rounding to it left.
@@ -75,12 +79,19 @@ pub struct Shadow {
     pub texel: f64,
     /// The sun the map is cast from, moved only when the real one has gone a
     /// step from it.
-    cast_from: Option<V3>,
+    pub cast_from: Option<V3>,
     /// The light's frame the clipmap's texels are cast in, numbered: moved
     /// where the sun the map is cast from, the reach or the depth step
-    /// (`DEPTH_STEP`) moved, so the world is cast again whole.
+    /// (`DEPTH_STEP`) moved, the rays' starts with it (`starts`).
     pub frame: u32,
     held: Option<(V3, f64, i64)>,
+    /// What the rays' starts are worked out off (`starts`): the box's
+    /// corner, the light's inverse and the eye's world position, as last
+    /// aimed; and the anchors worked out in the light frame numbered first.
+    box_corner: [i32; 2],
+    inverse: Mat4,
+    eye_world: V3,
+    anchors: (u32, Vec<Anchor>),
 }
 
 impl Shadow {
@@ -163,6 +174,10 @@ impl Shadow {
             cast_from: None,
             frame: 0,
             held: None,
+            box_corner: [0; 2],
+            inverse: mat4::new(),
+            eye_world: [0.0; 3],
+            anchors: (u32::MAX, Vec::new()),
         }
     }
 
@@ -334,14 +349,14 @@ impl Shadow {
     /// first (`PIPELINE_SUN_MAP` writes every texel it covers), which a
     /// frame that casts alone may. The casters are drawn into it next, then
     /// it ends.
-    pub fn begin<'a>(
+    pub fn begin(
         &self,
-        ctx: &mut RenderContext<'a>,
+        g: &Gpu,
+        encoder: u32,
         cast: bool,
         rect: Option<[u32; 4]>,
-    ) -> TrackedRenderPass<'a> {
-        let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::shadow);
+        stamp: &mut Stamp,
+    ) -> u32 {
         let load = if rect.is_some() {
             Load::Load
         } else {
@@ -349,18 +364,10 @@ impl Shadow {
         };
         let pass = g.pass(
             encoder,
-            &pass_desc(
-                0,
-                Load::Clear,
-                self.map_view,
-                Load::Clear,
-                1.0,
-                stamp.pass(),
-            ),
+            &pass_desc(0, Load::Clear, self.map_view, load, 1.0, stamp.pass()),
         );
-        let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(r) = rect {
-            pass.set_scissor(r);
+            g.set_scissor(pass, r);
         }
         if cast {
             pass.set_pipeline(self.lay.pipeline);

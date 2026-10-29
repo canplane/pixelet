@@ -535,13 +535,24 @@ impl RaysPass {
         // once, the brick's and its ring's (pxl-spec-core fill.rs `spans`),
         // which the levels and the trees read.
         g.set_pipeline(pass, c.ways_built.pipeline);
-        g.set_bind_group(pass, 0, c.ways_group, &[]);
+        // Each column's spans once, the square's and its ring's
+        // (pxl-spec-core fill.rs `spans`), which the count and the write read.
+        g.set_bind_group(pass, 0, c.ways_group, &[3 * SLOT_STRIDE]);
         g.dispatch(
             pass,
-            window::SPANS_COLUMNS.div_ceil(compute::WAY_WORKGROUP[0]),
+            window::SPANS_COLUMNS.div_ceil(compute::WAYS_WORKGROUP[0]),
             1,
             c.fresh_len,
         );
+        for k in 0..3 {
+            g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
+            let across = if k == 1 {
+                1
+            } else {
+                SQUARE_CELLS / compute::WAYS_WORKGROUP[0]
+            };
+            g.dispatch(pass, across, 1, c.fresh_len);
+        }
         g.set_pipeline(pass, c.bound_built.pipeline);
         for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
@@ -583,9 +594,9 @@ impl RaysPass {
     /// surface's present takes (wgpu-core's `Device::poll` reads its
     /// `snatchable_lock` across the fence wait, `Surface::present` writes
     /// it), so none waits.
-    pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundBricks) {
+    pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundSquares) {
         let landed = &mut *ground.landed;
-        let most = [way::tree::POOL_FAMILIES, way::tree::BRICK_FAMILIES];
+        let most = [way::tree::POOL_FAMILIES, way::tree::SQUARE_FAMILIES];
         let Some(c) = self.ground.as_mut() else {
             return;
         };

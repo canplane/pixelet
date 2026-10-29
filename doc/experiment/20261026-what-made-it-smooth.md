@@ -26,14 +26,14 @@ caching or sharing of discovery, no raster in any of them.
 - **1c5455121, the sun's walks on the observed pyramid** and the eye's line
   machinery. The sun walked the world from scratch every frame its map was
   cast; it now reads what the eye's rays or an earlier frame asked. On the
-  start view its spans are each under 1.5 ms p95 with 96.9% of slots taking a
-  sample, where before the day's sun rework `shadow` was 60.2 ms p95 and the
-  interval 216 ms against 77 with shadows off
-  ([the shadow map](./20261026-the-shadow-map.md)).
+  start view its spans are each under 1.5 ms p95 with 96.9% of slots picked,
+  where before the day's sun rework `shadow` was 60.2 ms p95 and the interval
+  216 ms against 77 with shadows off
+  ([the sun's map](./20261026-the-suns-map.md)).
 
-Also before the felt change and possibly part of it: e04a3a855 (the shadow map
+Also before the felt change and possibly part of it: e04a3a855 (the sun's map
 cast as the eye's rays are, its keep policy gone), 806af7525 (faces asked once
-a box), de2f73c26 (missed pixels from a list), 21f72517b (the raster keeps),
+a box), de2f73c26 (missed pixels from a list), 21f72517b (the raster picks),
 7778b87f0 (four occlusion samples). After it, not part of the feel but of the
 same kind: 403ddd70d (an edit forgets only the nodes it changed), f94ee59b2
 (the sky taken off the samples, and beams passing a slab they clear: at the
@@ -50,8 +50,8 @@ effect of none is measured alone.
   families written). Off: forget all every frame.
 - **The beams' passes, within a frame.** A node asked once a frame by the
   coarsest pass reaching it. Off: one pass.
-- **Beams to cells to samples to pixels.** A pixel takes a sample's block as
-  the visible sample (`taken`), or the samples' sky; only the rest walk,
+- **Beams to cells to samples to pixels.** A pixel takes a sample's block by
+  the raster's pick (`picked`), or the samples' sky; only the rest walk,
   listed (`miss_list_cs`). Off: every pixel walks from its cell's start, 4.5
   times the cast ([a proxy only starts the ray](../minutes/20261024-a-proxy-only-starts-the-ray.md)).
 - **Faces asked once a box**, for every pixel that shows it.

@@ -348,7 +348,7 @@ export const SETTING_SHIPPED = {
   },
   /** The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
    * cast once more from the sun as the eye's rays are, beams and samples on
-   * the observed pyramid, the boxes they stop at drawn and a texel's sample
+   * the observed pyramid, the boxes they stop at drawn and a texel's pick
    * taken, the rest walked (pxl-shader sun.rs), recast only where what it
    * reads moves; decor and the actors drawn into it depth only, and a 3x3
    * compare per fragment; 16 MB of map. */
@@ -412,7 +412,7 @@ export const SETTING_SHIPPED = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl). */
+  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's block or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",
@@ -434,6 +434,14 @@ export const SETTING_SHIPPED = {
     },
     section: "debug",
     kept: false,
+  },
+  /** How the sun's shadow map is cast — the slots that took the raster's pick and the boxes it drew — counted on the GPU and summed since boot into the profiler's sun lanes (rust/client/render/src/gpu/ray/tally.rs, rust/client/shader/src/sun.rs). The counting's atomics run in the sun's spans, so time them with it off. */
+  sun_counts: {
+    key: 20 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+    dev: true,
   },
 } as const;
 

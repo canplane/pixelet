@@ -9,14 +9,15 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::frame::shader::word::DECOR_GROUPS;
-use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
+use pxl_render::gpu::renderer::{
+    render_frame, Cast, EarthTiles, FrameInput, GroundSquares, Landing,
+};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{DeviceSample, GpuSample};
+use crate::profiler::frame::{DeviceSample, GpuSample, SunSample};
 use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
@@ -31,7 +32,7 @@ use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_rays, GpuRead};
+use crate::profiler::report::{set_host_frame, set_sun};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -177,20 +178,19 @@ pub fn stage_render(pace: Pace) {
     let on = api::device_generation();
     let (window, layers) = earth_window(Earth::demand().floor(), on);
     let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
-    let o = observation::observation();
-    let eye = o.as_ref().and_then(cast::eye);
-    let mut terrain_upload = cast::upload;
+    let o = crate::domain::view::observation::observation();
+    let eye = o.as_ref().and_then(crate::domain::scene::cast::eye);
+    let mut terrain_upload = crate::domain::scene::cast::upload;
     let landed = core::cell::Cell::new(false);
     let mut terrain_landed = |b: u32, ticket: u32, landing: Landing<'_>| {
         landed.set(true);
-        window::on_landed(b, ticket, landing);
+        crate::domain::layer::terrain::window::landed(b, ticket, landing);
     };
-    // What the scene animates changed, where on the screen.
-    let (region, animated) = {
+    // What the scene animates changed, about the eye.
+    let (moved, animated) = {
         let s = stage_lane();
-        let view_proj: [f64; 16] = core::array::from_fn(|k| s[STAGE_AT::EYE_VIEW_PROJ + k]);
         let eye = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
-        region::take(&view_proj, eye, scene().environment.sun())
+        region::take(eye)
     };
     let out = render_frame(FrameInput {
         lists,
@@ -209,29 +209,34 @@ pub fn stage_render(pace: Pace) {
         ground: GroundBricks {
             upload: &mut terrain_upload,
             landed: &mut terrain_landed,
-            pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::FAMILY_WORDS),
-            scratch: tree::scratch_families(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
-            records: param::WAYS_RECORDS_FIRST_BYTES,
+            pool: crate::domain::scene::param::WAYS_POOL_FIRST_BYTES
+                / (4 * pxl_spec_core::way::tree::FAMILY_WORDS),
+            scratch: pxl_spec_core::way::tree::scratch_families(
+                crate::domain::scene::param::WAYS_SCRATCH_FIRST_BYTES
+                    / (4 * pxl_spec_core::window::HANDED),
+            ),
+            records: crate::domain::scene::param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            window: window::table(),
-            shards: cast::shards(),
-            overwrites: cast::overwrites(),
-            decor: drawn::frame(),
-            actors,
-            ray_counts: settings_store().ray_counts,
+            window: crate::domain::layer::terrain::window::table(),
+            shards: crate::domain::scene::cast::shards(),
+            overwrites: crate::domain::scene::cast::overwrites(),
+            decor: crate::domain::scene::decor::drawn::frame(),
+            sun_counts: settings_store().sun_counts,
         }),
         text: text_raster,
         sheet: sheet(),
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
+        moved,
+        animated,
     });
     // What landed, folded once after all of it, before anything reads a
     // bound again (domain/layer/terrain/window.rs `refold`).
     if landed.get() {
-        window::refold();
+        crate::domain::layer::terrain::window::refold();
     }
     if out.redraw {
         request_world_tick();
@@ -264,8 +269,8 @@ pub fn stage_render(pace: Pace) {
         );
         return;
     };
-    DRAWN.set(Some(api::device_generation()));
-    set_rays(RaySample::of(stat.rays));
+    DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
+    set_sun(SunSample::of(stat.sun));
     set_host_frame(
         out.kind,
         GpuSample {

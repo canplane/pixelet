@@ -24,14 +24,17 @@ own rule for when it was right. None of them may return, under any name.
 
 ## The conditions
 
-1. **The proxy holds no fact of its own.** Its shape comes from what already
-   bounds the world: the ground's per-square height bounds the eye's windows
-   already hold (`bound_cs`, the levels of rust/spec/core/src/window.rs), and
-   the objects' tree's nodes that hold something. Nothing is baked, meshed or
-   cached for the proxy.
-2. **It is made on the GPU each frame, from those bounds as they stand.** There
-   is no CPU partition, no queue and no slot, so there is nothing to invalidate:
-   a bound that changes draws differently on the next frame.
+_Conditions 1 and 2 restated 2026-10-26 by the user, who withdrew "nothing
+persists, nothing to invalidate"._
+
+1. **The raster does not reimplement the World Query's meaning.** What a block
+   is, and whether a ray stops on it, is the World Query's answer (`Query`,
+   rust/spec/core/src/cast.rs) whichever side asks; the raster only orders
+   what that query answered.
+2. **No independent consistency state is added.** No second representation of
+   the world with its own invalidation stands beside it: no partition, queue,
+   slot or table that must be told it is stale. Intermediate data derived from
+   the query's answers may be reused where it pays.
 3. **It is conservative, and it only starts the ray.** A box over the highest
    ground in its square is never farther than the first block a ray through it
    meets, so a ray started at the box's front face misses nothing. The ray then
@@ -212,9 +215,9 @@ not the descent or the writing a cell's pixels share, so a split between
 raster and ray has to give the raster that shared work, not only the start.
 
 The split taken is the other way round, a decision on today's measurements
-rather than a rule for every pass: the samples still walk, and the raster keeps
+rather than a rule for every pass: the samples still walk, and the raster picks
 each pixel's block off the blocks they stopped at
-([the raster keeps](../experiment/20261026-the-raster-keeps.md), "Taken").
+([the raster picks](../experiment/20261026-the-raster-picks.md), "Taken").
 The shared discovery stays where cells share it; the per-pixel 4 × 4 lookup,
 the costly part, is the raster's depth test; and the boxes are derived from the
 samples, with no chunk, mesh or frontier beside them.

@@ -128,7 +128,7 @@
       "constants), so a terrain grown past a phone fails to build; and at boot",
       "against where it actually started and what the device actually gave.",
       "",
-      "256 MiB. The fixed ranges take 79.04 MiB, the terrain's 65.66 MiB of",
+      "256 MiB. The fixed ranges take 79.04 MiB, the terrain's 65.65 MiB of",
       "them, and the module's data ends at about 10.5 MiB (`__data_end` in a",
       "build), which leaves the phone 422.4 in practice, so there are 166 MiB of",
       "headroom over the guarantee (2026-10-24).",
@@ -139,7 +139,7 @@
       "the buddy's block for a division's, the ways' pool's mirror at its cap",
       "and every read's room for a brick's records at its most, and the",
       "profiler's lanes while its setting is on, each in the buddy's blocks,",
-      "a power of two, 204.58 MiB.",
+      "a power of two, 204.61 MiB.",
       "",
       "Each figure here in MiB to two places is held to the code by a test",
       "(door/layout.test.rs); the data's end is a build's, and read off one."

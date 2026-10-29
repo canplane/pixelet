@@ -71,13 +71,15 @@ impl Spacing {
 /// The distance is the eye's, `eye` units from the walk's origin: none for
 /// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
-/// at the zooms the eye's rays ask it (`reach`). `spacing` is how far a
-/// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).
+/// at the zooms the eye's rays ask it (`reach`). `beam` is how far apart a
+/// beam of parallel rays lies, in units, the sun's map's (pxl-spec-core
+/// `sun::BEAM`), which a beam ray's narrow split is judged by (`Until::Beam`);
+/// 0 for the eye's, whose rays part by an angle (`beam::narrow`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
     pub range: [Zoom; 2],
     pub eye: [f32; 3],
-    pub spacing: Spacing,
+    pub beam: f32,
 }
 
 impl Detail {
@@ -248,7 +250,7 @@ impl Node {
                 self.roots[a] - (og.wrapping_add(d.unsigned_abs()) < og) as i32
             }
         };
-        // [naga] each axis by itself, not a loop (cave.rs `node_seed`).
+        // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
         Node {
             corner: self.corner,
             zoom: self.zoom,
@@ -453,20 +455,20 @@ pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
     (n.idx(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
 }
 
-/// The asset `asset` at the node `n` as drawn from the origin `o`, in units
+/// The block `block` at the node `n` as drawn from the origin `o`, in units
 /// from it (`bounds`, `kept_bounds`): the box `entry` asks a ray into, as
 /// the samples' boxes are drawn (`raster`).
-pub fn drawn(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
-    kept_bounds(bounds(n, grid_of(o)), asset)
+pub fn drawn(o: [i32; 3], n: &Node, block: u32) -> ([f32; 3], [f32; 3]) {
+    kept_bounds(bounds(n, grid_of(o)), block)
 }
 
-/// Where `ray` from the origin `o` enters the cell `asset` is in (an asset's word,
+/// Where `ray` from the origin `o` enters the block `block` (a block's word,
 /// `answer`) at the node `n`, and whether it does within its reach: its span
-/// in the cell as drawn from the origin (`drawn`, `spans`), and
+/// in the block as drawn from the origin (`drawn`, `spans`), and
 /// where that span begins (`entered`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
-pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, asset: u32) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, drawn(o, n, asset), 0.0);
+pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, block: u32) -> (f32, u32, bool) {
+    let (x, y, z) = spans(ray, drawn(o, n, block), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
         lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
@@ -644,9 +646,20 @@ pub fn rooted<Q: Query>(
     )
 }
 
+/// The nodes holding the origin `o`, from its root down: the line every ray
+/// from `o` enters first, asked as each such ray's walk asks it, by that
+/// walk, of a ray that goes nowhere, so it enters every node holding the
+/// origin and no other. Asked once ahead of the rays, so a reader that
+/// keeps the answers hands them to every ray (pxl-shader eye.rs
+/// `origin`). The nodes asked.
+pub fn origin_line<Q: Query>(q: &mut Q, o: [i32; 3], detail: Detail) -> u32 {
+    let nowhere = Ray::new([0.0, 0.0, -1.0], f32::MIN_POSITIVE);
+    rooted(q, o, &nowhere, detail, Until::Beam, &mut ()).visits
+}
+
 /// What was handed each node over where a walk starts, by its zoom: the
-/// line it resumes from, as a beam ray left it (`Keep`), read only where
-/// the walk climbs over its start.
+/// line it resumes from, as a beam ray left it (`Keep`), read where the
+/// walk climbs over its start, and where it ends for what keeps its line.
 pub trait Over<A: Copy> {
     fn over(&self, zoom: Zoom) -> A;
 }
@@ -662,16 +675,24 @@ impl<A: Copy> Over<A> for Rooted<A> {
     }
 }
 
-/// What a walk leaves of its line where it ends (`walk`), for the walks
-/// that resume from it: the node it ended at, what was handed it (`live`),
-/// and what was handed every node over it, its stack by zoom. A walk none
-/// resumes from leaves nothing (`()`), and holds no copy of its stack.
+/// What a walk leaves where it ends (`walk`), for what reads on from it:
+/// its met, whose stop is the node it ended at and what was handed it
+/// (`Stop::node`, `Stop::at`), and what was handed every node over that,
+/// its stack by zoom, `over`'s where the walk started under it (`LINE`). A
+/// walk nothing reads on from leaves nothing (`()`), and reads nothing of
+/// `over` for it.
 pub trait Keep<A: Copy> {
-    fn keep(&mut self, node: &Node, live: A, stack: &[A; DEPTH]);
+    /// Whether it reads the line, so the walk's stack is whole where it
+    /// ends.
+    const LINE: bool = true;
+
+    fn keep(&mut self, met: &Met<A>, stack: &[A; DEPTH]);
 }
 
 impl<A: Copy> Keep<A> for () {
-    fn keep(&mut self, _: &Node, _: A, _: &[A; DEPTH]) {}
+    const LINE: bool = false;
+
+    fn keep(&mut self, _: &Met<A>, _: &[A; DEPTH]) {}
 }
 
 /// The first cell `ray` meets within its reach that `until` stops at, at
@@ -751,47 +772,28 @@ pub fn walk<Q: Query>(
             // The planes the ray enters where it stops: the node's, or the
             // box a cell keeping less than its cube is.
             let mut near = [x.0, y.0, z.0];
-            // ESVO's contour (Laine & Karras 2010) on every axis alike:
-            // whether the ray's span in a split node meets the box in its
-            // steps its content lies in (`answer::box_of`), grown by `w`
-            // on every side. Nothing a ray meets is passed for being thin.
-            let meets_box = |w: f32| {
-                let (first, past) = box_of(i.asset);
-                // Step `e` of the box on axis `a`, on the grid's own planes
-                // (`units`), as a node's own are: the far one the node's.
-                let step = |a: usize, e: u32, out: u32| {
-                    if e >= BOX_STEPS {
-                        return hi[a];
-                    }
-                    // A step's width a whole count of the finest grid's
-                    // over a node `BOX_STEPS` or more of them wide; finer,
-                    // rounded out (`out` the step less one to round up), as
-                    // `e · side` fits a u32 there.
-                    let at = if u >= BOX_STEPS - 1 {
-                        e * ((u >> BOX_BITS) + 1)
-                    } else {
-                        (e * (u + 1) + out) >> BOX_BITS
-                    };
-                    units(n.corner[a].wrapping_add(at), og[a], n.roots[a])
+            // ESVO's contour (Laine & Karras 2010): whether the ray's span in
+            // a split node meets the slab along z its content lies in,
+            // widened by `w` above and below, its planes a face's own
+            // (`level`).
+            let meets_slab = |w: f32| {
+                let [lo, hi] = slab_of(i.block[0]);
+                let level = |v: i32| {
+                    let root = v >> UNIT_ZOOM;
+                    units(
+                        ((v - (root << UNIT_ZOOM)) as u32) << FRAC_W,
+                        og[2],
+                        root - r0[2],
+                    )
                 };
-                let (bx, by, bz) = spans(
-                    ray,
-                    (
-                        [
-                            step(0, first[0], 0) - w,
-                            step(1, first[1], 0) - w,
-                            step(2, first[2], 0) - w,
-                        ],
-                        [
-                            step(0, past[0], BOX_STEPS - 1) + w,
-                            step(1, past[1], BOX_STEPS - 1) + w,
-                            step(2, past[2], BOX_STEPS - 1) + w,
-                        ],
-                    ),
-                    t0,
+                let (bottom, top) = planes(
+                    ray.direction[2],
+                    ray.inverse[2],
+                    level(lo) - w,
+                    level(hi) + w,
+                    (t0, t1),
                 );
-                greater(greater(greater(t0, bx.0), by.0), bz.0)
-                    < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
+                greater(t0, bottom) < lesser(t1, top)
             };
             let ends = match i.kind {
                 Kind::Lacks => Ends::Lacks,
@@ -826,18 +828,27 @@ pub fn walk<Q: Query>(
                 {
                     Ends::Stop
                 }
-                Kind::Cell => Ends::On,
-                // A beam ray passes whole a split whose box it clears by
+                Kind::Block => Ends::On,
+                // A beam ray passes whole a split whose slab it clears by
                 // `2√2` of the grid's width there, as the grid's rays about
                 // it clear it too; else it stops at one it may not share with
                 // them, and enters every other.
                 Kind::Split if until == Until::Beam => {
-                    // The grid's rays' spacing at the node's far corner: a
-                    // split narrower than `2√2` of that may lie between them
-                    // (`narrow`).
-                    let width = detail.spacing.width(libm::sqrtf(reach[0]));
-                    let narrow = narrow(side * side, width * width);
-                    let meets = meets_box(NARROW * width);
+                    // Parallel rays `detail.beam` apart, or the grid's
+                    // `s · d` at the node's far corner: a split narrower than
+                    // `2√2` of that may lie between them (pxl-spec-core
+                    // `sun::BEAM`, `beam::narrow`).
+                    let width = if detail.beam > 0.0 {
+                        detail.beam
+                    } else {
+                        s * libm::sqrtf(reach[0])
+                    };
+                    let narrow = if detail.beam > 0.0 {
+                        side * side < 8.0 * width * width
+                    } else {
+                        crate::beam::narrow(side * side, reach[0], s)
+                    };
+                    let meets = meets_slab(2.0 * core::f32::consts::SQRT_2 * width);
                     into = meets && !narrow;
                     if meets && narrow {
                         Ends::Stop
@@ -845,12 +856,12 @@ pub fn walk<Q: Query>(
                         Ends::On
                     }
                 }
-                // A span wholly out of the box, or touching it alone, meets
-                // nothing a ray cannot see through, and a walk to that passes
-                // the node whole. A walk to what is transparent goes in: its
-                // stop is where that span begins.
+                // A span wholly out of the slab, or touching it alone, meets
+                // nothing that fills, and a walk to what fills passes the
+                // node whole. A walk to air goes in: its stop is where that
+                // span begins.
                 Kind::Split => {
-                    into = until == Until::Transparent || meets_box(0.0);
+                    into = until == Until::Air || meets_slab(0.0);
                     Ends::On
                 }
             };
@@ -866,8 +877,9 @@ pub fn walk<Q: Query>(
                     at,
                     asset: i.asset,
                 };
-                keep.keep(&n, at, &stack);
-                return Met { ends, stop, visits };
+                let met = Met { ends, stop, visits };
+                leave(keep, &met, &mut stack, low, over);
+                return met;
             }
         }
         // Every way on makes the next node: what is handed it is decided here,
@@ -911,10 +923,12 @@ pub fn walk<Q: Query>(
                     asset: AIR,
                 };
                 let met = Met {
-                    ends: End::On,
+                    ends: Ends::On,
                     stop,
                     visits,
                 };
+                leave(keep, &met, &mut stack, low, over);
+                return met;
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
@@ -975,9 +989,63 @@ pub fn walk<Q: Query>(
     }
 }
 
+/// The walk's line left to `keep` where it ends at `met`: its stack, under
+/// `over`'s where it started under it, at `low`, made whole first where
+/// `keep` reads it (`Keep::LINE`).
+fn leave<A: Copy, K: Keep<A>>(
+    keep: &mut K,
+    met: &Met<A>,
+    stack: &mut [A; DEPTH],
+    low: Zoom,
+    over: &impl Over<A>,
+) {
+    if K::LINE {
+        let mut z = 0;
+        while z < low {
+            stack[z as usize] = over.over(z);
+            z += 1;
+        }
+    }
+    keep.keep(met, stack);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A node held from one origin is the same world node held from
+    /// another a little off, across a root's edge and X's seam alike.
+    #[test]
+    fn a_node_moves_to_another_origin() {
+        let edges = [0i32, -1, 5, i32::MAX - 3, i32::MIN + 2, 1 << 20];
+        for &a in &edges {
+            for d in [-700i32, -1, 0, 1, 700] {
+                // Y and Z do not go round: about their roots' edge at 0.
+                let near = |v: i32| (v % 1000).wrapping_sub(500);
+                let from = [a, near(a.wrapping_add(13)), near(a.wrapping_sub(29))];
+                let to = from.map(|v| v.wrapping_add(d));
+                for zoom in [1, 9, 20, 30] {
+                    let ray = Ray::new([0.6, -0.48, 0.64], 1000.0);
+                    let p = point_at(from, &ray, 2.5);
+                    let (n, _) = Node {
+                        corner: [0; 3],
+                        zoom,
+                        roots: [0; 3],
+                    }
+                    .over(p);
+                    let n = Node {
+                        zoom: n.zoom.min(zoom),
+                        ..n
+                    };
+                    let m = n.moved(from, to);
+                    assert_eq!(m.index(to), n.index(from), "{a} {d} {zoom}");
+                }
+            }
+        }
+    }
+    use crate::answer::{kept_word, slab_word, ANY, EIGHTHS};
+    use crate::cube::ground::stone;
+    use crate::overwrite::{AIR, FULL};
 
     /// A node held from one origin is the same world node held from
     /// another a little off, across a root's edge and X's seam alike.
@@ -1064,7 +1132,7 @@ mod tests {
         let detail = Detail {
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
-            spacing: Spacing::NONE,
+            beam: 0.0,
         };
         first(&mut One { kept }, o, &ray, detail, Until::Opaque)
     }
@@ -1208,5 +1276,105 @@ mod tests {
         assert_eq!(met.ends, End::On);
         // The whole cube stops it there.
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Stop);
+    }
+
+    /// What a walk asks, in order: each node, and the zooms it is asked at.
+    struct Asked<Q> {
+        q: Q,
+        log: [(Zoom, [i32; 3], [Zoom; 2]); 512],
+        len: usize,
+    }
+
+    impl<Q: Query<At = ()>> Query for Asked<Q> {
+        type At = ();
+        fn root(&mut self, node: [i32; 3]) {
+            self.q.root(node)
+        }
+        fn child(&mut self, at: &(), zoom: Zoom, node: [i32; 3]) {
+            self.q.child(at, zoom, node)
+        }
+        fn node(
+            &mut self,
+            at: &mut (),
+            zoom: Zoom,
+            node: [i32; 3],
+            asked: [Zoom; 2],
+            t0: f32,
+        ) -> In<[u32; 2]> {
+            if self.len < self.log.len() {
+                self.log[self.len] = (zoom, node, asked);
+                self.len += 1;
+            }
+            self.q.node(at, zoom, node, asked, t0)
+        }
+    }
+
+    fn asked_by<Q: Query<At = ()>>(q: Q) -> Asked<Q> {
+        Asked {
+            q,
+            log: [(0, [0; 3], [0; 2]); 512],
+            len: 0,
+        }
+    }
+
+    /// The nodes holding the origin, asked once, are the nodes every ray from
+    /// it enters first, each asked at the same zooms: what a ray reads of
+    /// them kept is what it would have asked.
+    #[test]
+    fn every_ray_enters_the_origin_s_line_first_as_it_is_asked() {
+        use crate::answer::box_word;
+        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
+        let detail = Detail {
+            range: [12, UNIT_ZOOM],
+            eye: [0.0; 3],
+            spacing: Spacing {
+                angle: crate::grid::CELL,
+                across: 0.0,
+            },
+        };
+        for o in [
+            [steps(5.3), steps(0.4), steps(1.6)],
+            [steps(-2.7), steps(30.1), steps(-0.2)],
+            [steps(1.0e5), steps(-7.5e3), steps(300.0)],
+        ] {
+            let world = || Boxed(box_word([0; 3], [1024; 3]));
+            let mut line = asked_by(world());
+            let visits = origin_line(&mut line, o, detail);
+            assert_eq!(visits as usize, line.len);
+            assert!(line.len > 1);
+            for d in [
+                [1.0, 0.2, -0.3],
+                [-0.5, 0.9, 0.1],
+                [0.1, -0.2, -1.0],
+                [-0.7, -0.7, 0.05],
+            ] {
+                let l = libm::sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                let ray = Ray::new([d[0] / l, d[1] / l, d[2] / l], 50.0);
+                let mut walk = asked_by(world());
+                first(&mut walk, o, &ray, detail, Until::Opaque);
+                // Each node the walk asks that holds the origin is the
+                // line's at its zoom, asked alike.
+                let (og, mut k) = (grid_of(o), 0);
+                while k < walk.len {
+                    let (zoom, node, asked) = walk.log[k];
+                    let keep = !under(zoom);
+                    let holding = Node {
+                        corner: [og[0] & keep, og[1] & keep, og[2] & keep],
+                        zoom,
+                        roots: [0; 3],
+                    };
+                    if holding.index(o) == node && (zoom as usize) < line.len {
+                        assert_eq!(line.log[zoom as usize], (zoom, node, asked));
+                    }
+                    k += 1;
+                }
+                // And it enters them first, root down.
+                let mut z = 0;
+                while z < line.len.min(walk.len) && walk.log[z] == line.log[z] {
+                    z += 1;
+                }
+                assert!(z > 1, "{o:?} {d:?}: {z}");
+            }
+        }
     }
 }

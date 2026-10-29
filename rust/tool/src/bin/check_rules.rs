@@ -549,6 +549,15 @@ fn run() -> Result<Vec<String>, String> {
             }
         }
     }
+
+    // The generated shaders' stamp names the digest of the sources they were
+    // made from (pxl-tool shader.rs `STAMP`); a set the tree has moved past is
+    // stale.
+    for f in stale(&root, &inputs_digest(&root)?) {
+        problems.push(format!(
+            "{f}: stale against pxl-spec-core's sources; run `cargo shader-wgsl` in rust/"
+        ));
+    }
     Ok(problems)
 }
 
