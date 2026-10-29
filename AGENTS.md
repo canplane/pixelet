@@ -11,6 +11,12 @@
 - The agents are in `.agents/agents/`: `review` reviews a change. It is
   read-only and is handed the code, not its author's
   conclusions.
+- The plugins are in `.agents/plugins/`, a marketplace: `deno-lsp` reads
+  TypeScript through `deno lsp`, both workspaces' import maps resolved, where
+  `typescript-language-server` resolves neither. Claude Code takes it from a
+  checkout's own `.claude/settings.json`, which registers the marketplace
+  (`./.agents/plugins`) and enables `deno-lsp@pixelet` with
+  `typescript-lsp@claude-plugins-official` off.
 - `ARCHITECTURE.md` (and `xpute/ARCHITECTURE.md` for xpute) defines the parts
   and their boundaries. At the host/guest boundary:
   - xpute speaks only of host, guest and their contract, and names no program.

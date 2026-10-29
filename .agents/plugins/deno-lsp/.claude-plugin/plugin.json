@@ -1,0 +1,6 @@
+{
+  "name": "deno-lsp",
+  "version": "1.0.0",
+  "description": "TypeScript read through `deno lsp`, with both Deno workspaces' import maps (ts/, xpute/ts/), in place of typescript-language-server, which resolves neither.",
+  "author": { "name": "canplane" }
+}
