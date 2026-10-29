@@ -60,8 +60,7 @@ a block in front of it, as a frame drawn whole showed.
 - The actor's region sphere is what its mesh reaches as skinned at its clip's
   first key, and as far as the clip moves it; no test holds it to a shipped
   model.
-EOF
-cd /Users/sanghoon/git/canplane/pixelet && awk 'length > 80 && !/^\|/' doc/experiment/20261029-what-moved-alone.md | head
+
 ## Tried and taken out: the sun's cast left to the jitter's frames
 
 A `px` region frame casts the sun again because its receivers read the
