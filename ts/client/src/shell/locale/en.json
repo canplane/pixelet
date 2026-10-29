@@ -321,6 +321,7 @@
       "placeholder": "Search places",
       "clear_aria_label": "Clear search",
       "loading": "Searching…",
+      "locating": "Locating…",
       "no_results": "No results found",
       "section_elsewhere": "Elsewhere",
       "pivot": "Current location"

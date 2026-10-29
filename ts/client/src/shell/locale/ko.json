@@ -207,6 +207,7 @@
       "placeholder": "장소 검색",
       "clear_aria_label": "검색어 지우기",
       "loading": "검색 중…",
+      "locating": "위치 찾는 중…",
       "no_results": "검색 결과가 없습니다.",
       "section_elsewhere": "기타",
       "pivot": "현재 위치"

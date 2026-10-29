@@ -47,8 +47,8 @@ import {
   primaryLanguage,
 } from "@/shell/division/label.ts";
 import {
-  useCenterCoordinates,
   useDivisionLabel,
+  usePivotCoordinates,
 } from "@/shell/division/pivot.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
@@ -214,7 +214,7 @@ function LocateCard() {
 function MapCenter() {
   const { t } = useTranslation();
   const place = useDivisionLabel();
-  const coordinates = useCenterCoordinates();
+  const coordinates = usePivotCoordinates();
   if (coordinates === null) return null;
   return (
     <View>

@@ -25,7 +25,7 @@ export function useDivisionLabel(): string | null {
   });
 }
 
-export function useCenterCoordinates(): string | null {
+export function usePivotCoordinates(): string | null {
   return useKernel((s) => s.pivot.lon_lat && coordinateLabel(s.pivot.lon_lat));
 }
 
