@@ -159,7 +159,7 @@ impl Raster {
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
             self.size = size;
         }
-        // The cast's view (pxl-shader cast.rs `pixel_tan`): its axes, the
+        // The cast's view (pxl-shader cast.rs `px_tan`): its axes, the
         // screen's half-angles, the near plane, the angle a face grows by,
         // the drawn pixels and the rays' reach, each pixel's ray as the cast
         // forms it.

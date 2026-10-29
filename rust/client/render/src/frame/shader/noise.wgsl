@@ -2,7 +2,7 @@
 // writes from pxl-spec-core cloud.rs, where the cumulus draws its cells from
 // it on the CPU.
 
-// Wraps at `mask + 1`, the lattice's count across the world, so the noise wraps with the map.
+// Wraps at `mask + 1`, the lattice's cnt across the world, so the noise wraps with the map.
 fn lattice_noise(base: vec2u, p: vec2f, mask: u32, salt: u32) -> f32 {
   let whole = floor(p);
   let f = p - whole;
@@ -16,12 +16,12 @@ fn lattice_noise(base: vec2u, p: vec2f, mask: u32, salt: u32) -> f32 {
 }
 
 // Octaves finer than half a pixel stand at their mean instead of aliasing, each
-// offset from the last (`NOISE_OCTAVE_OFFSET`).
-fn lattice_fbm(base: vec2u, p: vec2f, count: u32, first: u32, salt: u32, footprint: f32) -> f32 {
+// offset from the last (`NOISE_OCTAVE_OFF`).
+fn lattice_fbm(base: vec2u, p: vec2f, cnt: u32, first: u32, salt: u32, footprint: f32) -> f32 {
   let scale = 1u << first;
   var b = base * scale;
   var q = p * f32(scale);
-  var n = count * scale;
+  var n = cnt * scale;
   var sum = 0.0;
   var amp = 0.5;
   var reach = footprint * f32(scale);
@@ -29,7 +29,7 @@ fn lattice_fbm(base: vec2u, p: vec2f, count: u32, first: u32, salt: u32, footpri
     if (reach > 0.5) {
       sum += amp * 0.5;
     } else {
-      sum += amp * lattice_noise(b, q + f32(k) * NOISE_OCTAVE_OFFSET, n - 1u, salt + first + k);
+      sum += amp * lattice_noise(b, q + f32(k) * NOISE_OCTAVE_OFF, n - 1u, salt + first + k);
     }
     reach *= 2.0;
     b *= 2u;

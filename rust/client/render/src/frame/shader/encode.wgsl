@@ -9,6 +9,6 @@ fn to_srgb(c: vec3f) -> vec3f {
 
 fn vignette_of(frag: vec2f, viewport: vec2f, amount: f32) -> f32 {
   let d = distance(frag / viewport, vec2f(0.5));
-  let dark = smoothstep(0.8, LENS_VIGNETTE_OFFSET * 0.799, d * (LENS_VIGNETTE_DARKNESS + LENS_VIGNETTE_OFFSET));
+  let dark = smoothstep(0.8, LENS_VIGNETTE_OFF * 0.799, d * (LENS_VIGNETTE_DARKNESS + LENS_VIGNETTE_OFF));
   return mix(1.0, dark, amount);
 }

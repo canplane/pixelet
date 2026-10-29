@@ -4,7 +4,7 @@
 //! bind group made for one pipeline serves every one declaring the same group.
 
 use crate::frame::shader::record::{
-    compute_entry, pipeline as record_of, source, HEAD, PIPELINES, SHADERS,
+    compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
 };
 use crate::gpu::api::{Format, Gpu};
 
@@ -56,7 +56,7 @@ impl Pipelines {
     fn module(&mut self, g: &Gpu, kind: u32) -> u32 {
         let m = &mut self.modules[kind as usize];
         if *m == 0 {
-            *m = g.shader(source(kind));
+            *m = g.shader(src(kind));
         }
         *m
     }

@@ -16,7 +16,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Regio
   var o: RegionOut;
   o.number = marker_number(ii);
   o.clip = vec4f(p.clip.xy, p.upright_z * p.clip.w, p.clip.w);
-  let at = anchor_pixel(p, textureDimensions(world_depth));
+  let at = anchor_px(p, textureDimensions(world_depth));
   if (at.x >= 0) {
     // Reversed depth: nearer is greater.
     let probe = marker_proj() * vec4f(p.anchor_view + vec3f(0.0, 0.0, p.push), 1.0);

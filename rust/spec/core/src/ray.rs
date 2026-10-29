@@ -24,14 +24,14 @@ pub const FACES: u32 = 3;
 /// six bits; the eighths of its cube the cell keeps, 0 for all eight
 /// (`answer::kept`), so the screen pass draws the box it is
 /// (`answer::side`).
-pub use crate::answer::VALUE_BITS;
+pub use crate::answer::VAL_BITS;
 pub const FACE_BITS: u32 = 3;
 use crate::answer;
 pub use crate::answer::KEPT_BITS;
 use crate::tally;
 pub use crate::ZOOM_BITS;
 
-pub const FACE_SHIFT: u32 = VALUE_BITS;
+pub const FACE_SHIFT: u32 = VAL_BITS;
 pub const ZOOM_SHIFT: u32 = FACE_SHIFT + FACE_BITS;
 pub const KEPT_SHIFT: u32 = ZOOM_SHIFT + ZOOM_BITS;
 const _: () = assert!(KEPT_SHIFT + KEPT_BITS < 32);

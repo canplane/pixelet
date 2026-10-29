@@ -25,7 +25,7 @@ fn cloud_opacity_finer(p: vec2f, footprint: f32, finer: u32) -> f32 {
 fn weather(p: vec2f, salt: u32) -> f32 {
   let base = clouds_base();
   let at = (vec2f(base % vec2u(CLOUD_WEATHER_CELL)) + p) / f32(CLOUD_WEATHER_CELL);
-  let v = lattice_noise(base / CLOUD_WEATHER_CELL, at, clouds_count() / CLOUD_WEATHER_CELL - 1u, salt);
+  let v = lattice_noise(base / CLOUD_WEATHER_CELL, at, clouds_cnt() / CLOUD_WEATHER_CELL - 1u, salt);
   let even = 1.0 / (1.0 + exp(-LOGISTIC_SCALE * (v - 0.5) / CLOUD_WEATHER_SIGMA));
   return smoothstep(CLOUD_WEATHER_CLEAR, CLOUD_WEATHER_CROWDED, even);
 }

@@ -8,7 +8,7 @@
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::word::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
+use crate::frame::shader::word::clouds::{BASE, CNT, DRIFT, FRAC, REACH, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
@@ -146,7 +146,7 @@ fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
         words[FRAC + k] = (u - u.floor()) as f32;
         words[DRIFT + k] = drift[k] as f32;
     }
-    words[COUNT] = f32::from_bits(LATTICE_CNT);
+    words[CNT] = f32::from_bits(LATTICE_CNT);
 }
 
 fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {

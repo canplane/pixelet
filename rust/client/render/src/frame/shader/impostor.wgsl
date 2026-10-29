@@ -25,7 +25,7 @@ struct VertexOut {
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let i = instances[draw_index() + v.i];
+  let i = instances[draw_idx() + v.i];
   var o: VertexOut;
   let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
   let scale = lane(4u, i);

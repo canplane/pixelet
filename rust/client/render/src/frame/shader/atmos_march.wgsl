@@ -17,7 +17,7 @@ fn multiscatter(r: f32, mu_s: f32) -> vec3f {
 }
 
 // What a point at radius `r` sends along the ray, per km, from a light toward `toward`.
-fn air_source(m: Medium, r: f32, up: vec3f, toward: vec3f, phase: vec2f) -> vec3f {
+fn air_src(m: Medium, r: f32, up: vec3f, toward: vec3f, phase: vec2f) -> vec3f {
   let mu = dot(up, toward);
   return sun_transmittance(r, mu) * (m.rayleigh * phase.x + m.mie * phase.y) + multiscatter(r, mu) * m.scattering;
 }
@@ -75,11 +75,11 @@ fn per_depth(r: f32, up: vec3f, dir: vec3f, t: f32, sun: vec3f, sun_phase: vec2f
   let p = up * r + dir * t;
   let pr = radius_along(r, mu, t);
   let m = medium_at(height_along(r, mu, t, pr));
-  var source = air_source(m, pr, p / pr, sun, sun_phase);
+  var src = air_src(m, pr, p / pr, sun, sun_phase);
   if (moon_light > 0.0) {
-    source += air_source(m, pr, p / pr, moon, moon_phase) * moon_light;
+    src += air_src(m, pr, p / pr, moon, moon_phase) * moon_light;
   }
-  return select(vec3f(0.0), source / m.extinction, m.extinction > vec3f(0.0));
+  return select(vec3f(0.0), src / m.extinction, m.extinction > vec3f(0.0));
 }
 
 // Up +z, to the ground or the top, gathered from the eye to where the ray ends.

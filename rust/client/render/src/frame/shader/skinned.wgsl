@@ -3,7 +3,7 @@
 
 struct Draw {
   translation: vec3f,
-  rotation: f32,
+  rot: f32,
   opacity: f32,
   scale: f32,
   _p0: f32,
@@ -15,7 +15,7 @@ struct Draw {
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
-fn draw_rotation() -> f32 { return draw_words[0].w; }
+fn draw_rot() -> f32 { return draw_words[0].w; }
 fn draw_opacity() -> f32 { return draw_words[1].x; }
 fn draw_scale() -> f32 { return draw_words[1].y; }
 
@@ -30,7 +30,7 @@ fn joint(j: u32) -> mat4x4f {
 }
 
 struct VertexIn {
-  @location(0) position: vec3f,
+  @location(0) pos: vec3f,
   @location(1) normal: vec3f,
   @location(2) uv: vec2f,
   @location(3) joints: vec4<u32>,
@@ -55,8 +55,8 @@ fn skin_of(v: VertexIn) -> mat4x4f {
 
 // One function, so the depth pass places a vertex where the lit pass does.
 fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
-  let p = (m * vec4f(v.position, 1.0)).xyz * draw_scale();
-  return place_up(p, draw_rotation()) + draw_translation();
+  let p = (m * vec4f(v.pos, 1.0)).xyz * draw_scale();
+  return place_up(p, draw_rot()) + draw_translation();
 }
 
 @vertex
@@ -67,7 +67,7 @@ fn vs(v: VertexIn) -> VertexOut {
   var o: VertexOut;
   o.clip = jittered(frame_view_proj() * vec4f(world, 1.0));
   o.uv = v.uv;
-  o.normal = place_up(n, draw_rotation());
+  o.normal = place_up(n, draw_rot());
   o.world_pos = world;
   let seen = seen_from_eye(world);
   o.through = seen.through;

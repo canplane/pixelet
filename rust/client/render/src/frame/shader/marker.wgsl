@@ -82,7 +82,7 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placed {
 }
 
 // The pixel of a target `dims` large the anchor falls in; x < 0 off the screen.
-fn anchor_pixel(p: Placed, dims: vec2u) -> vec2i {
+fn anchor_px(p: Placed, dims: vec2u) -> vec2i {
   let at = marker_proj() * vec4f(p.anchor_view, 1.0);
   if (at.w <= 0.0) {
     return vec2i(-1);

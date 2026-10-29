@@ -64,8 +64,8 @@ struct CloudOut {
 // reach of the eye. The farther first, so the nearer is blended over it.
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> CloudOut {
-  let alto = ALTOCUMULUS.km - atmos_camera_altitude();
-  let cirrus = CIRRUS.km - atmos_camera_altitude();
+  let alto = ALTOCUMULUS.km - atmos_camera_alt();
+  let cirrus = CIRRUS.km - atmos_camera_alt();
   let k = select(1u - i, i, abs(alto) > abs(cirrus));
   let h = select(cirrus, alto, k == 0u);
   let reach = clouds_reach();

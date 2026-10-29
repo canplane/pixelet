@@ -6,7 +6,7 @@
 //! where what it reads changed (`decor_mark_cs`, `Grows`), its record
 //! standing otherwise; then each frame each
 //! record taken where the rays ask the leaf cell's zoom or finer and sized
-//! for the screen, counted a draw region (`decor_count_cs`), the regions laid
+//! for the screen, counted a draw region (`decor_cnt_cs`), the regions laid
 //! out with their indirect args (`decor_args_cs`), and each record drawn
 //! into the decor's instances in the layout the decor and impostor shaders read
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
@@ -19,7 +19,7 @@ use pxl_spec_core::{eye, overwrite, window};
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{
-    SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE,
+    SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_CNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE,
     SHADER_GROWN_STAND,
 };
 use crate::frame::shader::word::DRAW_FLOATS;
@@ -162,7 +162,7 @@ impl Grown {
             mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &compute::DECOR_MARK_GROUP),
             stand: pipelines.build_compute(g, SHADER_GROWN_STAND, &compute::DECOR_STAND_GROUP),
             grow: pipelines.build_compute(g, SHADER_GROWN, &compute::DECOR_GROUP),
-            cnt: pipelines.build_compute(g, SHADER_GROWN_COUNT, &compute::DECOR_COUNT_GROUP),
+            cnt: pipelines.build_compute(g, SHADER_GROWN_CNT, &compute::DECOR_CNT_GROUP),
             args_built: pipelines.build_compute(g, SHADER_GROWN_ARGS, &compute::DECOR_ARGS_GROUP),
             place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &compute::DECOR_PLACE_GROUP),
             groups: [0; 6],

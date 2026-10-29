@@ -6,7 +6,7 @@
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
-  @location(0) position: vec3f,
+  @location(0) pos: vec3f,
   @location(1) normal: vec3f,
   @location(2) uv: vec2f,
 };
@@ -30,12 +30,12 @@ struct Placed {
 };
 
 fn placed(v: VertexIn) -> Placed {
-  let i = instances[draw_index() + v.i];
+  let i = instances[draw_idx() + v.i];
   let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
   var p: Placed;
   p.spin = lane(3u, i);
   let scale = lane(4u, i);
-  p.world = place_up(v.position * scale, p.spin) + at + draw_translation();
+  p.world = place_up(v.pos * scale, p.spin) + at + draw_translation();
   return p;
 }
 

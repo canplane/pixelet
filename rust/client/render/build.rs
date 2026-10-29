@@ -82,7 +82,7 @@ fn main() {
         3 * b
     );
     let ray = [
-        field("value", 0, VALUE_BITS),
+        field("val", 0, VAL_BITS),
         field("face", FACE_SHIFT, FACE_BITS),
         field("zoom", ZOOM_SHIFT, ZOOM_BITS),
         field("kept", KEPT_SHIFT, KEPT_BITS),
@@ -311,10 +311,10 @@ fn compute(dir: &Path) -> String {
 fn params() -> String {
     use param::Value;
     let mut out = String::new();
-    for &(path, name, value) in param::ALL.iter().flat_map(|m| m.iter()) {
+    for &(path, name, val) in param::ALL.iter().flat_map(|m| m.iter()) {
         let topic = path.rsplit_once("param::").map_or("", |(_, t)| t);
         let named = format!("{}_{name}", topic.replace("::", "_").to_uppercase());
-        out += &match value {
+        out += &match val {
             Value::F32(v) => format!("const {named}: f32 = {v:?};\n"),
             Value::I32(v) => format!("const {named}: i32 = {v};\n"),
             Value::U32(v) => format!("const {named}: u32 = {v}u;\n"),
@@ -523,7 +523,7 @@ fn assemble(out: &Path) {
     let root = out.parent().expect("OUT_DIR");
     std::fs::write(
         root.join("sources.rs"),
-        format!("/// Shader `kind` as build.rs assembled and validated it (part.rs).\npub fn source(kind: u32) -> &'static str {{\n    match kind {{\n{sources}        _ => \"\",\n    }}\n}}\n"),
+        format!("/// Shader `kind` as build.rs assembled and validated it (part.rs).\npub fn src(kind: u32) -> &'static str {{\n    match kind {{\n{sources}        _ => \"\",\n    }}\n}}\n"),
     )
     .expect("the shaders' sources");
     std::fs::write(

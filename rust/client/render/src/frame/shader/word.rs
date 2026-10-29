@@ -141,7 +141,7 @@ uniform! {
         RAYLEIGH_SCALE_HEIGHT: F32 = 11,
         SUN_DIR: Vec3 = 12,
         MIE_SCATTERING: F32 = 15,
-        CAMERA_ALTITUDE: F32 = 16,
+        CAMERA_ALT: F32 = 16,
         KM_PER_U: F32 = 17,
         MIE_EXTINCTION: F32 = 18,
         MIE_SCALE_HEIGHT: F32 = 19,
@@ -163,7 +163,7 @@ uniform! {
         /// Lights the ground, never drawn: drawn, the sky went pale blue.
         NIGHT_SKY: Vec3 = 36,
         /// The Earth's face under the eye: at sea level the terrain floated on it.
-        LAND_ALTITUDE_KM: F32 = 39,
+        LAND_ALT_KM: F32 = 39,
         /// A lit city's radiance where the picture holds all of it.
         CITY_LIGHT: Vec3 = 40,
         /// In units.
@@ -188,7 +188,7 @@ uniform! {
         /// The lattice's units around; the cells the wind has moved it
         /// under the map; the field's lattice unit the eye is over and its
         /// share of one (gpu/cloud.rs `field`).
-        COUNT: U32 = 2,
+        CNT: U32 = 2,
         DRIFT: Vec2 = 4,
         BASE: Vec2u = 6,
         FRAC: Vec2 = 8,

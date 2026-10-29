@@ -67,12 +67,12 @@ fn air_far() -> f32 {
 }
 
 // The nearest anything drawn may lie, in units: how far the eye stands over
-// the world's top, where a position's Z ends (`HEIGHT_BITS` about sea level),
+// the world's top, where a pos's Z ends (`HEIGHT_BITS` about sea level),
 // none while it stands within the world. The air's volume starts there, so an
 // eye high over the world spends no slice on the empty air under it.
 fn air_near() -> f32 {
   let top = f32(1u << (HEIGHT_BITS - 1u));
-  return max(atmos_camera_altitude() / atmos_km_per_u() - top, 0.0);
+  return max(atmos_camera_alt() / atmos_km_per_u() - top, 0.0);
 }
 
 // The volume's depth, one law for every column: slice z, 0 to 1, lies

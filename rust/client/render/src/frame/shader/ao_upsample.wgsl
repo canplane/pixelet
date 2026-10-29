@@ -33,7 +33,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
       let tap_normal = tap.gba * 2.0 - 1.0;
       let tap_pos = view_pos(tap_depth, p_uv);
       let plane_dist = abs(dot(tap_pos - pos, normal));
-      let weight = exp(-plane_dist / AO_DISTANCE_FALLOFF) * max(dot(normal, tap_normal), 0.0);
+      let weight = exp(-plane_dist / AO_DIST_FALLOFF) * max(dot(normal, tap_normal), 0.0);
       total += weight;
       acc += tap * weight;
     }

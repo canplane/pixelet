@@ -4,7 +4,7 @@
 //! `scatter`): the entries that grow again listed (`decor_mark_cs`), which
 //! candidates stand, a patch at a time (`decor_stand_cs`), each that does
 //! grown (`decor_cs`), and the records counted, laid out and
-//! placed for their draws (`decor_count_cs`, `decor_args_cs`,
+//! placed for their draws (`decor_cnt_cs`, `decor_args_cs`,
 //! `decor_place_cs`).
 
 use pxl_spec_core::answer::{self, In};
@@ -358,7 +358,7 @@ fn entry_word(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
     scatter::record_at(scatter::entry_record(rows, s, k, p, i))
 }
 
-/// Lanes a decor pass's workgroup has (`decor_count_cs`, `decor_place_cs`).
+/// Lanes a decor pass's workgroup has (`decor_cnt_cs`, `decor_place_cs`).
 const RECORD_LANES: u32 = 64;
 
 /// Whether workgroup `g` of a decor pass reads records: past the entries,
@@ -406,8 +406,8 @@ fn records(grown: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
 /// is the decor left out; else sized for the screen (pxl-spec-core
 /// `scatter::drawn`), a model where its group's extent spans `MODEL_ANGLE`
 /// at its distance, a sprite down to `SPRITE_ANGLE`, else nothing.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_count_cs"))]
-pub fn decor_count_cs(
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cnt_cs"))]
+pub fn decor_cnt_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
@@ -439,7 +439,7 @@ pub fn decor_count_cs(
     }
 }
 
-/// `decor_count_cs` for the record at word `i`.
+/// `decor_cnt_cs` for the record at word `i`.
 fn cnt_one(
     eye: &Eye,
     drawing: &[u32],
@@ -496,7 +496,7 @@ fn cnt_one(
     }
 }
 
-/// Each region laid after the one before (`decor_count_cs`'s counts), its
+/// Each region laid after the one before (`decor_cnt_cs`'s counts), its
 /// first slot kept for `decor_place_cs` and added to its draw uniform's
 /// index, and its indirect args: a model region's indexed by its group's
 /// mesh (`meshes`, its index count, none while it loads), a sprite region's
@@ -532,7 +532,7 @@ pub fn decor_args_cs(
     }
 }
 
-/// Each record its region drew a slot of, read as `decor_count_cs` reads
+/// Each record its region drew a slot of, read as `decor_cnt_cs` reads
 /// them (`records`): its box's base middle about the
 /// anchor, its heading and scale, in the lanes the decor and impostor
 /// shaders read, and the slot its own in the index list.

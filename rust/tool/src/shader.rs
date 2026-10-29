@@ -37,7 +37,7 @@ pub const ENTRIES: [(&str, &str); 27] = [
     ("decor_mark_cs", "decor_mark.gen.wgsl"),
     ("decor_stand_cs", "decor_stand.gen.wgsl"),
     ("decor_cs", "decor.gen.wgsl"),
-    ("decor_count_cs", "decor_count.gen.wgsl"),
+    ("decor_cnt_cs", "decor_cnt.gen.wgsl"),
     ("decor_args_cs", "decor_args.gen.wgsl"),
     ("decor_place_cs", "decor_place.gen.wgsl"),
     ("way_cs", "way.gen.wgsl"),

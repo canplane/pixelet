@@ -16,7 +16,7 @@ fn depth_at(p: vec2i) -> f32 {
   return textureLoad(half_depth, clamp(p, vec2i(0), vec2i(ao_half()) - 1), 0).r;
 }
 
-fn rotation_z(theta: f32) -> mat3x3f {
+fn rot_z(theta: f32) -> mat3x3f {
   let c = cos(theta);
   let s = sin(theta);
   return mat3x3f(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0);
@@ -40,17 +40,17 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   }
   let tangent = normalize(cross(helper, normal));
   let bitangent = cross(normal, tangent);
-  let tbn = mat3x3f(tangent, bitangent, normal) * rotation_z(noise.r * TAU);
-  let falloff = AO_RADIUS * AO_DISTANCE_FALLOFF * AO_FALLOFF_SHARE;
+  let tbn = mat3x3f(tangent, bitangent, normal) * rot_z(noise.r * TAU);
+  let falloff = AO_RADIUS * AO_DIST_FALLOFF * AO_FALLOFF_SHARE;
   var occluded = 0.0;
   var total = 0.0;
-  var offset_move = noise.g;
-  let offset_step = 1.0 / f32(AO_SAMPLES);
+  var off_move = noise.g;
+  let off_step = 1.0 / f32(AO_SAMPLES);
   var hemisphere = HEMISPHERE;
   for (var k = 0; k < AO_SAMPLES; k++) {
     let dir = tbn * hemisphere[k];
-    let move_amount = fract(offset_move);
-    offset_move += offset_step;
+    let move_amount = fract(off_move);
+    off_move += off_step;
     let sample_pos = pos + AO_RADIUS * move_amount * dir;
     let o = ao_proj() * vec4f(sample_pos, 1.0);
     let ndc = o.xyz / o.w;

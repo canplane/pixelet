@@ -51,7 +51,7 @@ pub const SHADER_GROWN: u32 = 29;
 /// What `SHADER_GROWN` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
 /// args; each drawn into the decor's instances: pxl-spec-core `scatter::drawn`.
-pub const SHADER_GROWN_COUNT: u32 = 30;
+pub const SHADER_GROWN_CNT: u32 = 30;
 pub const SHADER_GROWN_ARGS: u32 = 31;
 pub const SHADER_GROWN_PLACE: u32 = 32;
 /// Each newly held terrain frame's ways, its columns' spans off its lines,
@@ -283,8 +283,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["height.gen"],
     // SHADER_GROWN
     &["decor.gen"],
-    // SHADER_GROWN_COUNT
-    &["decor_count.gen"],
+    // SHADER_GROWN_CNT
+    &["decor_cnt.gen"],
     // SHADER_GROWN_ARGS
     &["decor_args.gen"],
     // SHADER_GROWN_PLACE

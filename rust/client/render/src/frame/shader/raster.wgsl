@@ -129,7 +129,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
     );
     return o;
   }
-  // The cast's projection (pxl-shader cast.rs `pixel_tan`), reversed and
+  // The cast's projection (pxl-shader cast.rs `px_tan`), reversed and
   // infinite: depth RASTER_NEAR over the view depth, which along a pixel's
   // ray falls as the ray's distance grows; moved against the rays' offset,
   // so a pixel's middle draws what its own ray goes through.
@@ -169,9 +169,9 @@ fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
 }
 
 // The drawn pixel's tangents across and up at `at`, where its ray goes
-// through it (pixel.wgsl `pixel_tan`), off the raster's own view.
+// through it (pixel.wgsl `px_tan`), off the raster's own view.
 fn raster_tan(at: vec2f) -> vec2f {
-  return pixel_tan(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
+  return px_tan(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
 }
 
 // Whether the ray from `o` along the unit `u` enters the box `lo`..`hi`

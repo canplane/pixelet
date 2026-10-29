@@ -160,7 +160,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     // Out to the reach from anywhere in the anchor's unit: every unit of the
     // eye's cell at the reach's zoom reaches no farther than the cell and
     // one beside it, whose side the reach is short of. What is past an
-    // eye's own reach `decor_count_cs` leaves out by its size, as it does
+    // eye's own reach `decor_cnt_cs` leaves out by its size, as it does
     // what is past the box.
     // No farther than the rays ask the leaves' cells, past which none is drawn.
     let reach = (DECORS

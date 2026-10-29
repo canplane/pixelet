@@ -18,7 +18,7 @@ pub enum Value {
     Vec3([f32; 3]),
 }
 
-macro_rules! value {
+macro_rules! val {
     (f32, $v:expr) => {
         $crate::param::Value::F32($v)
     };
@@ -45,7 +45,7 @@ macro_rules! params {
     ($($(#[$m:meta])* $name:ident: $ty:tt = $v:expr;)*) => {
         $($(#[$m])* pub const $name: $ty = $v;)*
         pub const ALL: &[(&str, &str, $crate::param::Value)] =
-            &[$((module_path!(), stringify!($name), value!($ty, $name)),)*];
+            &[$((module_path!(), stringify!($name), val!($ty, $name)),)*];
     };
 }
 
@@ -75,7 +75,7 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
 pub mod ao {
     params! {
         RADIUS: f32 = 1.5;
-        DISTANCE_FALLOFF: f32 = 1.0;
+        DIST_FALLOFF: f32 = 1.0;
         INTENSITY: f32 = 1.2;
         SAMPLES: i32 = 4;
         DENOISE_SAMPLES: i32 = 4;
@@ -190,7 +190,7 @@ pub mod lens {
         GLARE_VEIL: f32 = 0.03;
         /// postprocessing's VignetteEffect defaults.
         VIGNETTE_DARKNESS: f32 = 0.45;
-        VIGNETTE_OFFSET: f32 = 0.3;
+        VIGNETTE_OFF: f32 = 0.3;
     }
 }
 
@@ -228,7 +228,7 @@ pub mod noise {
         OCTAVES: u32 = 4;
         /// An offset per octave keeps lattice lines from coinciding into a
         /// visible grid.
-        OCTAVE_OFFSET: [f32; 2] = [0.37, 0.61];
+        OCTAVE_OFF: [f32; 2] = [0.37, 0.61];
     }
 }
 

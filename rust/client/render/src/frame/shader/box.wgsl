@@ -88,8 +88,8 @@ fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
   c.face = k / 6u;
   c.local = FACE_CORNER[c.face * 4u + FACE_TRIANGLES[k % 6u]];
   c.size = vec3f(b.size_xy, b.z.y);
-  let position = vec3f(b.min_xy, b.z.x) + c.size * 0.5 + c.local * c.size;
-  c.world = position + place;
+  let pos = vec3f(b.min_xy, b.z.x) + c.size * 0.5 + c.local * c.size;
+  c.world = pos + place;
   return c;
 }
 
@@ -126,15 +126,15 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
 
 // How much the box's own edges darken a point of its face: a lone box's
 // every edge is its silhouette, the nearer of the two edges of the face
-// that run through the point's axes. `pixel` is the units one of the
+// that run through the point's axes. `px` is the units one of the
 // surface's pixels spans along each axis: an edge is the cells' line, of
 // one width in units whatever the box's size (`line_at`).
-fn outline(local_pos: vec3f, box_scale: vec3f, pixel: vec3f, normal: vec3f) -> f32 {
+fn outline(local_pos: vec3f, box_scale: vec3f, px: vec3f, normal: vec3f) -> f32 {
   if (frame_edge_strength() <= 0.0) {
     return 0.0;
   }
   let to_edge = (0.5 - abs(local_pos)) * box_scale;
-  let p = max(pixel, vec3f(1e-9));
+  let p = max(px, vec3f(1e-9));
   var a = vec2u(0u, 2u);
   if (abs(normal.z) > 0.5) {
     a = vec2u(0u, 1u);
@@ -147,12 +147,12 @@ fn outline(local_pos: vec3f, box_scale: vec3f, pixel: vec3f, normal: vec3f) -> f
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let at = i.local_pos * i.box_scale;
-  let pixel = sqrt(dpdx(at) * dpdx(at) + dpdy(at) * dpdy(at));
+  let px = sqrt(dpdx(at) * dpdx(at) + dpdy(at) * dpdy(at));
   let s = Surface(
     i.rgb,
     vec4f(i.layer),
     i.normal,
-    outline(i.local_pos, i.box_scale, pixel, i.normal),
+    outline(i.local_pos, i.box_scale, px, i.normal),
     i.world_pos,
     i.box_uv,
     dpdx(i.box_uv),

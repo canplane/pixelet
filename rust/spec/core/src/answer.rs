@@ -40,12 +40,12 @@ pub struct In<B> {
 pub const AIR: [u32; 2] = [sentinel::void as u32, 0];
 
 /// The bits an asset's value takes at the foot of its word.
-pub const VALUE_BITS: u32 = 16;
+pub const VAL_BITS: u32 = 16;
 
 /// An asset's word where what is placed answered it, over its value: the
 /// source control tells an edit by (`is_placed`), which nothing drawn reads.
 /// Over it, the share of its cube the cell keeps (`KEPT_SHIFT`).
-pub const PLACED_ASSET: u32 = 1 << VALUE_BITS;
+pub const PLACED_ASSET: u32 = 1 << VAL_BITS;
 
 /// An asset's value, without whether what is placed holds it
 /// (`PLACED_ASSET`) or what of its cube it keeps: a look reads the same
@@ -174,7 +174,7 @@ pub fn fills(val: u32) -> bool {
 /// A cell's kept share over its asset's value and `PLACED_ASSET`: the eighths of
 /// its cube it keeps of what fills it (`kept`), 0 for all eight, so a leaf's
 /// word, and every cell's whole, sets no bit of it.
-pub const KEPT_SHIFT: u32 = VALUE_BITS + 1;
+pub const KEPT_SHIFT: u32 = VAL_BITS + 1;
 pub const KEPT_BITS: u32 = EIGHTHS.trailing_zeros();
 /// A cube's eighths: its children, what a share is kept in.
 pub const EIGHTHS: u32 = 8;

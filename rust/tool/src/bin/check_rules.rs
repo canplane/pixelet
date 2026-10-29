@@ -218,7 +218,7 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
     ),
     (
         "decor.rs",
-        "decor_count_cs",
+        "decor_cnt_cs",
         "client/shader/src/decor.rs",
         "RECORD_LANES",
         1,

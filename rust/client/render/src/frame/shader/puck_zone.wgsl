@@ -6,7 +6,7 @@ struct VertexIn {
   @builtin(instance_index) i: u32,
   // Four a face, in the box's order (gpu/pass/puck.rs `box_lanes`).
   @builtin(vertex_index) corner: u32,
-  @location(0) position: vec3f,
+  @location(0) pos: vec3f,
   @location(1) uv: vec2f,
 };
 struct VertexOut {
@@ -24,15 +24,15 @@ fn vs(v: VertexIn) -> VertexOut {
   // corners meet at one point outside the view, which draws nothing.
   let open = ((u32(zone[k + 7u]) >> (v.corner / 4u)) & 1u) != 0u;
   var o: VertexOut;
-  o.clip = select(vec4f(2.0, 2.0, 2.0, 1.0), jittered(frame_view_proj() * vec4f(v.position + center + draw_translation(), 1.0)), open);
+  o.clip = select(vec4f(2.0, 2.0, 2.0, 1.0), jittered(frame_view_proj() * vec4f(v.pos + center + draw_translation(), 1.0)), open);
   o.uv = v.uv;
   o.borders = vec4f(zone[k + 3u], zone[k + 4u], zone[k + 5u], zone[k + 6u]);
   return o;
 }
 
-fn aastep(thres: f32, value: f32) -> f32 {
-  let w = fwidth(value) * 0.5;
-  return smoothstep(thres - w, thres + w, value);
+fn aastep(thres: f32, val: f32) -> f32 {
+  let w = fwidth(val) * 0.5;
+  return smoothstep(thres - w, thres + w, val);
 }
 
 @fragment

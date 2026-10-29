@@ -1,9 +1,9 @@
 // The screen pass's lit pixel: the face its ray met, painted and lit, at
-// the depth `behind` it (screen_ray.wgsl `pixel_ray`).
+// the depth `behind` it (screen_ray.wgsl `px_ray`).
 
 @fragment
 fn fs(v: VertexOut) -> FragOut {
-  let p = pixel_ray(v.clip.xy);
+  let p = px_ray(v.clip.xy);
   let a = p.a;
   let size = p.size;
   let d = p.d;
@@ -21,7 +21,7 @@ fn fs(v: VertexOut) -> FragOut {
     // the lit pixel is drawn at (`behind`), so what is laid on the face shows
     // as it does there.
     let far = d * bitcast<f32>(eye_word(EYE_REACH));
-    let at = select(far, h.at * (1.0 + behind(h, pixel_steps(a, size, h))), met);
+    let at = select(far, h.at * (1.0 + behind(h, px_steps(a, size, h))), met);
     let clip = frame_view_proj() * vec4f(at, 1.0);
     var o: FragOut;
     // The nodes asked, the third word in this view, on the steps' ramp; none
@@ -36,7 +36,7 @@ fn fs(v: VertexOut) -> FragOut {
   let painted = drawn(c);
   // The face's step across a pixel, once: the lines' width and the depth's
   // step back both read it.
-  let steps = pixel_steps(a, size, h);
+  let steps = px_steps(a, size, h);
   let crease = creases(h, faces, steps);
   let s = Surface(
     painted.rgb,
