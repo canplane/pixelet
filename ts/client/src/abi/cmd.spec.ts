@@ -68,7 +68,7 @@ export const enum InputMinor {
   TRACKING = 0x04,
   VIEW = 0x05,
   COMPASS_RESET = 0x07,
-  GO_TO = 0x08,
+  GOTO = 0x08,
   POSE = 0x09,
   POSE_END = 0x0a,
   HOLD = 0x0b,
