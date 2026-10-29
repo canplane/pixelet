@@ -123,7 +123,7 @@ pub fn ghost() -> Ghost {
             let c = q3::unpack(&h);
             let box_ghost = GhostBox {
                 at: [x, y, z],
-                sz: cur_scale,
+                size: cur_scale,
                 cube,
                 erase,
             };

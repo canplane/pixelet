@@ -133,12 +133,12 @@ impl Tally {
                 (from.boxes[k], raster::ARGS_INSTANCES, tally::BOXES, 1),
             ] {
                 let to = word_bytes(tally::at(o, lane) as usize);
-                let sz = word_bytes(words as usize);
+                let size = word_bytes(words as usize);
                 g.copy_buf(
                     encoder,
                     (buf, word_bytes(word as usize)),
                     (self.counts, to),
-                    sz,
+                    size,
                 );
             }
         }

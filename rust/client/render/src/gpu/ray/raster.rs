@@ -47,7 +47,7 @@ pub(super) struct Raster {
     pub(super) visibility_array: u32,
     depth: u32,
     depth_view: u32,
-    sz: [u32; 2],
+    size: [u32; 2],
     groups: [u32; 3],
     bound: [u32; 9],
     /// The sun's, made where its shadows are first cast (`sun_made`); and a
@@ -101,7 +101,7 @@ impl Raster {
             visibility_array: 0,
             depth: 0,
             depth_view: 0,
-            sz: [0; 2],
+            size: [0; 2],
             groups: [0; 3],
             bound: [0; 9],
             sun: SunRaster::default(),
@@ -123,7 +123,7 @@ impl Raster {
         &mut self,
         g: &Gpu,
         e: &[u32],
-        sz: [u32; 2],
+        size: [u32; 2],
         grid: &beam::Grid,
         samples_cast: bool,
         [eye, beams, head]: [u32; 3],
@@ -138,7 +138,7 @@ impl Raster {
             );
             self.room = samples;
         }
-        if sz != self.sz {
+        if size != self.size {
             for v in [
                 self.visibility_view,
                 self.visibility_array,
@@ -148,14 +148,14 @@ impl Raster {
             ] {
                 release(v);
             }
-            let [w, h] = sz;
+            let [w, h] = size;
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
             self.visibility = g.texture(w, h, 1, Format::r32uint, 1, usage);
             self.visibility_view = g.view(self.visibility, false, 0, 1, 0, 1);
             self.visibility_array = g.view(self.visibility, true, 0, 1, 0, 1);
             self.depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
-            self.sz = sz;
+            self.size = size;
         }
         // The cast's view (pxl-shader cast.rs `pixel_tan`): its axes, the
         // screen's half-angles, the near plane, the angle a face grows by,
@@ -164,7 +164,7 @@ impl Raster {
         let v = |at: usize| [e[at], e[at + 1], e[at + 2]].map(f32::from_bits);
         let (r, u, f) = (v(eye::RIGHT), v(eye::UP), v(eye::FORWARD));
         let tan = [e[eye::TAN], e[eye::TAN + 1]].map(f32::from_bits);
-        let [w, h] = sz.map(|s| s.max(1) as f32);
+        let [w, h] = size.map(|s| s.max(1) as f32);
         let reach = f32::from_bits(e[eye::REACH]);
         let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
         let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));
@@ -303,11 +303,11 @@ impl Raster {
 impl Raster {
     /// The sun's buffers and its targets at the map's `size`, made once;
     /// whether they are.
-    pub(super) fn sun_made(&mut self, g: &Gpu, sz: u32) -> bool {
+    pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.sun;
         if s.group == 0 {
             let samples =
-                (sz / pxl_spec_core::param::sun::SAMPLE) * (sz / pxl_spec_core::param::sun::SAMPLE);
+                (size / pxl_spec_core::param::sun::SAMPLE) * (size / pxl_spec_core::param::sun::SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             s.boxes = g.buf(word_bytes(raster::words(samples) as usize), storage);
             s.args = g.buf(
@@ -319,10 +319,10 @@ impl Raster {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            s.visibility = g.texture(sz, sz, 1, Format::r32uint, 1, usage);
+            s.visibility = g.texture(size, size, 1, Format::r32uint, 1, usage);
             s.visibility_view = g.view(s.visibility, false, 0, 1, 0, 1);
             s.visibility_array = g.view(s.visibility, true, 0, 1, 0, 1);
-            s.depth = g.texture(sz, sz, 1, Format::depth32float, 1, usage);
+            s.depth = g.texture(size, size, 1, Format::depth32float, 1, usage);
             s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
             s.group = g.bind_group(
                 self.draw_built.layouts[0],
@@ -344,7 +344,7 @@ impl Raster {
 
     /// The sun's view off the eye's words `e` (pxl-spec-core `sun::Sun`) for
     /// the map `size` a side, as `prepare` lays the eye's; the args cleared.
-    pub(super) fn sun_prepare(&self, g: &Gpu, e: &[u32], sz: u32) {
+    pub(super) fn sun_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
         let s = &self.sun;
         if s.group == 0 {
             return;
@@ -361,7 +361,7 @@ impl Raster {
         let (r, d) = (unit(v.across), unit(v.down));
         let up = [-d[0], -d[1], -d[2]];
         let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, up, v.dir));
-        let n = sz as f32;
+        let n = size as f32;
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],
             r[1],

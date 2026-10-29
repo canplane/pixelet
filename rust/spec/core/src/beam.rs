@@ -241,7 +241,7 @@ impl Grid {
 
     /// The beam rays' words: the lines, the cells' starts and the samples'
     /// stops, as many as the grid lays, whatever the pixels drawn.
-    pub fn sz(&self) -> u32 {
+    pub fn size(&self) -> u32 {
         self.samples_at + self.samples[0] * self.samples[1] * SAMPLE_WORDS
     }
 }
@@ -314,7 +314,7 @@ mod tests {
         // 33,554,432 words a storage binding holds on every device
         // (pxl-render floor.rs).
         let up = 0.5;
-        let words = Grid::of([up * 4112.0 / 2338.0, up]).sz();
+        let words = Grid::of([up * 4112.0 / 2338.0, up]).size();
         assert!(words <= 33_554_432, "{words} words");
     }
 }

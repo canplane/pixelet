@@ -385,7 +385,7 @@ impl RaysPass {
         let families = ground.pool.min(way::tree::POOL_FAMILIES);
         let scratch_families = ground.scratch.clamp(1, way::tree::BRICK_FAMILIES);
         let gb = self.ground.get_or_insert_with(|| {
-            let buf = |sz: u32, usage: u32| g.buf(sz, usage);
+            let buf = |size: u32, usage: u32| g.buf(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let frames_buf = buf(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
             let fresh = buf(word_bytes((HANDED_WORDS * HANDED) as usize), storage);

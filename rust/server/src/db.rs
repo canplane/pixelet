@@ -12,7 +12,7 @@ pub struct Probe<'a> {
     pub name: &'a str,
 }
 
-pub async fn connect(url: &str, pool_sz: usize, probe: &Probe<'_>) -> Result<Pool, DbError> {
+pub async fn connect(url: &str, pool_size: usize, probe: &Probe<'_>) -> Result<Pool, DbError> {
     let pg_cfg: tokio_postgres::Config = url.parse()?;
     let mgr = Manager::from_config(
         pg_cfg,
@@ -21,7 +21,7 @@ pub async fn connect(url: &str, pool_sz: usize, probe: &Probe<'_>) -> Result<Poo
             recycling_method: RecyclingMethod::Fast,
         },
     );
-    let pool = Pool::builder(mgr).max_size(pool_sz).build()?;
+    let pool = Pool::builder(mgr).max_size(pool_size).build()?;
 
     pool.get().await?.query_one(probe.sql, &[]).await?;
     println!("[db] {}: ok", probe.name);

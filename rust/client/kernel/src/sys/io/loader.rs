@@ -223,10 +223,10 @@ pub fn on_opened(fd: u32, key: u64, opened: Opened) {
 }
 
 /// An image's bytes, read: kept, where a header gives its size
-/// (pxl-spec `asset::image_sz`); a file no header sizes is the asset's
+/// (pxl-spec `asset::image_size`); a file no header sizes is the asset's
 /// own failure, so it is final.
 fn on_image_arrived(load: Load, file: Vec<u8>) {
-    *loader().at(LoadKind::Image, load) = Some(if pxl_spec::asset::image_sz(&file).is_some() {
+    *loader().at(LoadKind::Image, load) = Some(if pxl_spec::asset::image_size(&file).is_some() {
         Entry::Image(file)
     } else {
         Entry::Failed

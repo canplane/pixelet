@@ -28,15 +28,15 @@ pub fn on_whole_units(min: V3) -> (V3, V3) {
 
 /// The hover ghost's box at `offset` in its mesh (`on_whole_units`), lit and
 /// tiled as a placed cube is; the mesh's z step, which its draw scales by.
-pub fn write_lone_box(m: &mut [u32], off: V3, sz: f64, rgb: [u8; 3], layer: u8) -> f64 {
+pub fn write_lone_box(m: &mut [u32], off: V3, size: f64, rgb: [u8; 3], layer: u8) -> f64 {
     xpute_kit::ensure!(m.len() == BOX_WORDS as usize, ENOTRECOVERABLE);
-    let z_step = (off[2] + sz) / Z_STEPS;
+    let z_step = (off[2] + size) / Z_STEPS;
     // Both ends rounded, not the size: boxes stacked meet at one step, never
     // a step over or apart.
-    let (z0, z1) = (steps(off[2], z_step), steps(off[2] + sz, z_step));
-    let xy = sz / XY_STEPS;
+    let (z0, z1) = (steps(off[2], z_step), steps(off[2] + size, z_step));
+    let xy = size / XY_STEPS;
     m[0] = steps(off[0], xy) | (steps(off[1], xy) << 16);
-    m[1] = steps(sz, xy) | (steps(sz, xy) << 16);
+    m[1] = steps(size, xy) | (steps(size, xy) << 16);
     m[2] = z0 | ((z1 - z0) << 16);
     m[3] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
     m[4] = u32::from(layer);

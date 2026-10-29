@@ -39,8 +39,8 @@ pub const SEPARATION_LANES: [(usize, usize); 7] = [
 
 /// Separation lane `k`'s bytes in a record.
 const fn separation_lane_bytes(k: usize) -> u32 {
-    let (cnt, sz) = SEPARATION_LANES[k];
-    lane_bytes(cnt, sz)
+    let (cnt, size) = SEPARATION_LANES[k];
+    lane_bytes(cnt, size)
 }
 
 /// Where separation lane `k`'s plane starts; past the last, where the planes end.

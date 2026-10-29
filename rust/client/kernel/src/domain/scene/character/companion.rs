@@ -80,7 +80,7 @@ struct Figure {
     /// Its falling edge, a gesture's end, fixes the destination.
     was_dragging: bool,
     settle: SettleTracker,
-    initial_facing_done: bool,
+    init_facing_done: bool,
     follow_walk_until: f64,
     stands_z: Option<f64>,
     /// The floor it is drawn on (`drawn_floor`), of where it stands, its
@@ -101,7 +101,7 @@ impl Figure {
             walk_plan: None,
             was_dragging: false,
             settle: SettleTracker::new(target, 0.0),
-            initial_facing_done: false,
+            init_facing_done: false,
             follow_walk_until: 0.0,
             stands_z: None,
             drawn: Asked::NONE,
@@ -228,9 +228,9 @@ impl Figure {
             // The actor's Y-up to Z-up turn maps the model's forward to +Y, hence +PI/2.
             if let Some(heading) = heading {
                 self.heading = heading + core::f64::consts::PI / 2.0;
-            } else if !self.initial_facing_done {
+            } else if !self.init_facing_done {
                 self.heading = back_to_camera(p.azimuth);
-                self.initial_facing_done = true;
+                self.init_facing_done = true;
             }
         }
 

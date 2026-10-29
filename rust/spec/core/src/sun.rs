@@ -93,8 +93,8 @@ impl Sun {
     /// change in depth a texel across the map (`slope`), times it.
     /// `corner` is the world texel index of the box's first texel; `rim`
     /// the share of its half-width a receiver reads within.
-    pub fn of([x, y, z, w]: [[f32; 3]; 4], sz: u32, corner: [i32; 2], rim: f32) -> Sun {
-        let texel = 2.0 / sz as f32;
+    pub fn of([x, y, z, w]: [[f32; 3]; 4], size: u32, corner: [i32; 2], rim: f32) -> Sun {
+        let texel = 2.0 / size as f32;
         let (ax, ay) = (1.0 - texel / 2.0, texel / 2.0 - 1.0);
         let reach = length(z);
         let dir = [z[0] / reach, z[1] / reach, z[2] / reach];
@@ -196,8 +196,8 @@ impl Sun {
     /// may read it, grown by `pad` texels: within `rim` of the box's
     /// half-width about its middle, where the eye stands, as past it a
     /// shadow has faded to nothing (pxl-render shadow.wgsl `sun_lit`).
-    pub fn read(&self, sz: u32, p: [i32; 2], pad: f32) -> bool {
-        let half = sz as f32 / 2.0;
+    pub fn read(&self, size: u32, p: [i32; 2], pad: f32) -> bool {
+        let half = size as f32 / 2.0;
         let (x, y) = (p[0] as f32 + 0.5 - half, p[1] as f32 + 0.5 - half);
         let r = self.rim * half + pad;
         x * x + y * y <= r * r
@@ -219,8 +219,8 @@ impl Sun {
     /// (`SAMPLE`) is drawn in the box's order, as the map is laid, and a
     /// slot reads its visible sample at this texel: drawn in the slots' order,
     /// a box would split at the seam where the slots wrap.
-    pub fn texel(&self, sz: u32, slot: [u32; 2]) -> [u32; 2] {
-        let at = |k: usize| (slot[k] as i32).wrapping_sub(self.corner[k]) as u32 & (sz - 1);
+    pub fn texel(&self, size: u32, slot: [u32; 2]) -> [u32; 2] {
+        let at = |k: usize| (slot[k] as i32).wrapping_sub(self.corner[k]) as u32 & (size - 1);
         [at(0), at(1)]
     }
 
@@ -308,7 +308,7 @@ pub const MOVED_EPOCH: usize = 2;
 /// rays and the shadow map share is handed the eye's own head, all zero, in
 /// its place (pxl-shader either.rs `Either`): a head naming no map is the
 /// eye's.
-pub const MOVED_SZ: usize = 3;
+pub const MOVED_SIZE: usize = 3;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -481,35 +481,35 @@ pub const CELL_RAY: u32 = 1;
 pub const CELL_WORDS: u32 = 2;
 
 /// The beam rays across the map `size` texels a side, and down.
-pub const fn beam_across(sz: u32) -> u32 {
-    sz / BEAM + 1 + 2 * BEAM_WINDOW
+pub const fn beam_across(size: u32) -> u32 {
+    size / BEAM + 1 + 2 * BEAM_WINDOW
 }
 
 /// The cells across the map, and down.
-pub const fn cells_across(sz: u32) -> u32 {
-    sz / BEAM
+pub const fn cells_across(size: u32) -> u32 {
+    size / BEAM
 }
 
 /// Where the beam's words lie in the list's buffer, its first: the lines,
 /// a beam ray each, then the cells' starts; and all its words.
-pub const fn lines_at(_sz: u32) -> u32 {
+pub const fn lines_at(_size: u32) -> u32 {
     0
 }
 
-pub const fn line(sz: u32, ray: u32) -> u32 {
-    lines_at(sz) + ray * LINE_WORDS
+pub const fn line(size: u32, ray: u32) -> u32 {
+    lines_at(size) + ray * LINE_WORDS
 }
 
-pub const fn cells_at(sz: u32) -> u32 {
-    lines_at(sz) + beam_across(sz) * beam_across(sz) * LINE_WORDS
+pub const fn cells_at(size: u32) -> u32 {
+    lines_at(size) + beam_across(size) * beam_across(size) * LINE_WORDS
 }
 
-pub const fn cell(sz: u32, [i, j]: [u32; 2]) -> u32 {
-    cells_at(sz) + (j * cells_across(sz) + i) * CELL_WORDS
+pub const fn cell(size: u32, [i, j]: [u32; 2]) -> u32 {
+    cells_at(size) + (j * cells_across(size) + i) * CELL_WORDS
 }
 
-pub const fn beam_words(sz: u32) -> u32 {
-    cells_at(sz) + cells_across(sz) * cells_across(sz) * CELL_WORDS
+pub const fn beam_words(size: u32) -> u32 {
+    cells_at(size) + cells_across(size) * cells_across(size) * CELL_WORDS
 }
 
 /// How far short of where a beam ray stopped a cell's texels start: the
@@ -537,16 +537,16 @@ pub fn margin(width: f32) -> f32 {
 /// the beam's in the list's buffer, a sample `size / SAMPLE` across and
 /// down, by its index `j · across + i`, which its box is drawn with
 /// (`raster::id_of`).
-pub const fn samples_at(sz: u32) -> u32 {
-    beam_words(sz)
+pub const fn samples_at(size: u32) -> u32 {
+    beam_words(size)
 }
 
-pub const fn sample(sz: u32, idx: u32) -> u32 {
-    samples_at(sz) + idx * crate::beam::SAMPLE_WORDS
+pub const fn sample(size: u32, idx: u32) -> u32 {
+    samples_at(size) + idx * crate::beam::SAMPLE_WORDS
 }
 
-pub const fn sample_words(sz: u32) -> u32 {
-    sample(sz, (sz / SAMPLE) * (sz / SAMPLE))
+pub const fn sample_words(size: u32) -> u32 {
+    sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
 
 /// The slots whose ray took no visible sample, listed for their walk
@@ -557,12 +557,12 @@ pub const fn sample_words(sz: u32) -> u32 {
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
 /// (`observed::MARKS_COUNT`), then a slot each, its X and its Y over 16 bits.
-pub const fn misses_cnt(sz: u32) -> u32 {
-    sample_words(sz)
+pub const fn misses_cnt(size: u32) -> u32 {
+    sample_words(size)
 }
 
-pub const fn misses_at(sz: u32) -> u32 {
-    misses_cnt(sz) + 1
+pub const fn misses_at(size: u32) -> u32 {
+    misses_cnt(size) + 1
 }
 
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
@@ -570,8 +570,8 @@ pub const fn misses_at(sz: u32) -> u32 {
 /// last cast a receiver stood on it in (`MOVED_CAST`; pxl-shader sun.rs
 /// `sun_mark_cs`, `sun_mark_drawn_cs`): where the eye's pixels meet the
 /// world, and where the decor and the actors drawn stand.
-pub const fn stands_at(sz: u32) -> u32 {
-    misses_at(sz) + sz * sz
+pub const fn stands_at(size: u32) -> u32 {
+    misses_at(size) + size * size
 }
 
 /// The tiles a receiver reads, past the stands, as many: the number of the
@@ -580,12 +580,12 @@ pub const fn stands_at(sz: u32) -> u32 {
 /// pxl-shader sun.rs `sun_reach_cs`). A tile this cast's number names is
 /// the cast's to cast; one an earlier cast of its epoch names holds what
 /// that cast left; no receiver reads any other.
-pub const fn reads_at(sz: u32) -> u32 {
-    stands_at(sz) + tiles(sz) * tiles(sz)
+pub const fn reads_at(size: u32) -> u32 {
+    stands_at(size) + tiles(size) * tiles(size)
 }
 
-pub const fn tiles(sz: u32) -> u32 {
-    sz / TILE
+pub const fn tiles(size: u32) -> u32 {
+    size / TILE
 }
 
 /// The drawn pixels a thread of the mark reads, a side (pxl-shader sun.rs
@@ -599,24 +599,24 @@ pub const MARK: u32 = 4;
 /// (pxl-shader sun.rs `Map::needs`).
 pub const COARSE: u32 = 8;
 
-pub const fn coarse(sz: u32) -> u32 {
-    tiles(sz) / COARSE
+pub const fn coarse(size: u32) -> u32 {
+    tiles(size) / COARSE
 }
 
-pub const fn coarse_at(sz: u32) -> u32 {
-    reads_at(sz) + tiles(sz) * tiles(sz)
+pub const fn coarse_at(size: u32) -> u32 {
+    reads_at(size) + tiles(size) * tiles(size)
 }
 
 /// The word of the square tile `[i, j]` lies in, among the squares'
 /// (`coarse_at`); the map's tiles a whole number of squares a side.
-pub const fn coarse_square(sz: u32, [i, j]: [u32; 2]) -> u32 {
-    coarse_at(sz) + (j / COARSE) * coarse(sz) + i / COARSE
+pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
+    coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
 /// stands, the reads, their squares.
-pub const fn list_words(sz: u32) -> u32 {
-    coarse_at(sz) + coarse(sz) * coarse(sz)
+pub const fn list_words(size: u32) -> u32 {
+    coarse_at(size) + coarse(size) * coarse(size)
 }
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on

@@ -41,12 +41,12 @@ export function Motion(
     MotionProps,
 ) {
   const target = resolve(to);
-  const initial = resolve(from ?? to);
+  const init = resolve(from ?? to);
 
   const values = useRef<Record<Channel, Animated.Value> | null>(null);
   if (values.current === null) {
     values.current = Object.fromEntries(
-      CHANNELS.map((c) => [c, new Animated.Value(initial[c])]),
+      CHANNELS.map((c) => [c, new Animated.Value(init[c])]),
     ) as Record<Channel, Animated.Value>;
   }
   const v = values.current;
@@ -62,7 +62,7 @@ export function Motion(
     const replaying = replay !== null && replay !== replayed.current;
     replayed.current = replay;
 
-    let start: Required<Pose> = stood.current ?? initial;
+    let start: Required<Pose> = stood.current ?? init;
     if ((replaying || stood.current === null) && from) {
       start = resolve(from);
       for (const c of CHANNELS) v[c].setValue(start[c]);

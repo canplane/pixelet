@@ -11,7 +11,7 @@ import {
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
 
-const INITIAL: Snapshot = {
+const INIT: Snapshot = {
   pivot: {
     status: GroundStatus.Idle,
     is_off_center: false,
@@ -42,7 +42,7 @@ const INITIAL: Snapshot = {
   stall: null,
 };
 
-let snapshot: Snapshot = INITIAL;
+let snapshot: Snapshot = INIT;
 const listeners = new Listeners();
 
 /** Read whole now: the kernel writes the next one in the same place. */

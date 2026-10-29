@@ -188,13 +188,13 @@ pub const fn buf_entry(binding: u32, buf: Id) -> Entry {
 }
 
 /// `size` bytes of a buffer from `offset`.
-pub const fn buf_range_entry(binding: u32, buf: Id, off: u32, sz: u32) -> Entry {
+pub const fn buf_range_entry(binding: u32, buf: Id, off: u32, size: u32) -> Entry {
     Entry {
         binding,
         resource: encode::Resource::Buffer {
             buffer: buf,
             offset: off,
-            size: Some(sz),
+            size: Some(size),
         },
     }
 }
@@ -612,17 +612,17 @@ impl Gpu {
     /// A buffer of `size` bytes, one every device makes and, as storage,
     /// binds (frame/shader/floor.rs `fits`): a size past that is a bug the
     /// structure let through, not a device to fall short on.
-    pub fn buf(&self, sz: u32, usage: u32) -> Id {
+    pub fn buf(&self, size: u32, usage: u32) -> Id {
         xpute_kit::ensure!(
-            crate::frame::shader::floor::fits(u64::from(sz), usage & buffer_usage::STORAGE != 0),
+            crate::frame::shader::floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0),
             ENOSPC,
-            sz
+            size
         );
         let s = self.s();
         made(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
-                size: sz,
+                size,
                 usage,
                 mapped_at_creation: false,
             },
@@ -654,12 +654,12 @@ impl Gpu {
     }
 
     /// A volume `size` texels on a side each way: no mips, no layers.
-    pub fn volume(&self, sz: [u32; 3], format: Format, usage: u32) -> Id {
+    pub fn volume(&self, size: [u32; 3], format: Format, usage: u32) -> Id {
         let s = self.s();
         made(s.encoder.texture(
             &mut s.stream,
             &encode::TextureDescriptor {
-                size: sz,
+                size,
                 mip_levels: 1,
                 samples: 1,
                 dimension: TextureDimension::_3d,
@@ -953,7 +953,7 @@ impl Gpu {
     /// is copied into, taken once it has landed: each image is copied in
     /// once, on this device, for the one that takes it. None while it
     /// lands, the first ask handing it to the device; none for good for a
-    /// file whose size no header gives (pxl-spec `asset::image_sz`),
+    /// file whose size no header gives (pxl-spec `asset::image_size`),
     /// which the kernel does not hand, and for the empty file of one
     /// already taken on this device.
     /// The file's bytes are its asker's until it is taken (`take_landed`);
@@ -967,7 +967,7 @@ impl Gpu {
             s.landed.push(image);
             return Some(s.images.swap_remove(k).texture);
         }
-        let (width, height) = pxl_spec::asset::image_sz(file)?;
+        let (width, height) = pxl_spec::asset::image_size(file)?;
         let usage = TEXTURE_USAGE::TEXTURE_BINDING
             | TEXTURE_USAGE::COPY_SRC
             | TEXTURE_USAGE::COPY_DST
@@ -1084,26 +1084,26 @@ impl Gpu {
     }
 
     /// A size of 0 is the rest of the buffer.
-    pub fn set_vertex_buf(&self, pass: Id, slot: u32, buf: Id, off: u32, sz: u32) {
+    pub fn set_vertex_buf(&self, pass: Id, slot: u32, buf: Id, off: u32, size: u32) {
         call::set_vertex_buffer(
             &mut self.s().stream,
             pass,
             slot,
             buf,
             off,
-            (sz != 0).then_some(sz),
+            (size != 0).then_some(size),
         );
     }
 
     /// Indices are u32.
-    pub fn set_idx_buf(&self, pass: Id, buf: Id, off: u32, sz: u32) {
+    pub fn set_idx_buf(&self, pass: Id, buf: Id, off: u32, size: u32) {
         call::set_index_buffer(
             &mut self.s().stream,
             pass,
             buf,
             IndexFormat::uint32,
             off,
-            (sz != 0).then_some(sz),
+            (size != 0).then_some(size),
         );
     }
 
@@ -1265,8 +1265,8 @@ impl Gpu {
     }
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
-    pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), sz: u32) {
-        call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), sz);
+    pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
+        call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), size);
     }
 
     /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied

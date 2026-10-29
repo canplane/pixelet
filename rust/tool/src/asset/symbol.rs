@@ -25,7 +25,7 @@ pub struct Symbol {
     pub mask: Vec<u8>,
     /// Its own box, and each shape in it as SVG path data and whether it
     /// fills even-odd.
-    pub sz: [f32; 2],
+    pub size: [f32; 2],
     pub shapes: Vec<(String, bool)>,
 }
 
@@ -45,7 +45,7 @@ pub fn symbols(dir: &Path) -> Result<Vec<Symbol>, String> {
             Ok(Symbol {
                 path: format!("symbols/{rel}"),
                 mask: mask(&tree).map_err(|e| format!("{rel}: {e}"))?,
-                sz: [tree.size().width(), tree.size().height()],
+                size: [tree.size().width(), tree.size().height()],
                 shapes,
             })
         })
@@ -113,13 +113,13 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), String> {
 
 /// The symbol's coverage, scaled from its own box to fill the square.
 fn mask(tree: &resvg::usvg::Tree) -> Result<Vec<u8>, String> {
-    let sz = tree.size();
+    let size = tree.size();
     let mut pixmap =
         resvg::tiny_skia::Pixmap::new(SYMBOL_PX, SYMBOL_PX).ok_or("an empty square")?;
-    let scale = SYMBOL_PX as f32 / sz.width().max(sz.height());
+    let scale = SYMBOL_PX as f32 / size.width().max(size.height());
     let transform = resvg::tiny_skia::Transform::from_scale(scale, scale).post_translate(
-        (SYMBOL_PX as f32 - sz.width() * scale) / 2.0,
-        (SYMBOL_PX as f32 - sz.height() * scale) / 2.0,
+        (SYMBOL_PX as f32 - size.width() * scale) / 2.0,
+        (SYMBOL_PX as f32 - size.height() * scale) / 2.0,
     );
     resvg::render(tree, transform, &mut pixmap.as_mut());
     Ok(pixmap.pixels().iter().map(|p| p.alpha()).collect())
@@ -155,8 +155,8 @@ pub fn render_ts(symbols: &[Symbol]) -> String {
         ts.push_str(&format!(
             "  {:?}: {{ box: [{}, {}], shapes: [{}] }},\n",
             s.path,
-            s.sz[0],
-            s.sz[1],
+            s.size[0],
+            s.size[1],
             shapes.join(", ")
         ));
     }

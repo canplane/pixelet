@@ -341,7 +341,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
             _ => (design, None),
         };
         // Its words are laid out by a later turn.
-        let Some([width, height, anchor]) = design::sz(&design) else {
+        let Some([width, height, anchor]) = design::size(&design) else {
             unlaid = true;
             continue;
         };
@@ -381,7 +381,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else {
             continue;
         };
-        if design::sz(&p.pending[k].1).is_none() {
+        if design::size(&p.pending[k].1).is_none() {
             continue;
         }
         if design::slot(&p.pending[k].1) == NO_SLOT {
@@ -431,7 +431,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
             p.candidates.local_z[i] - about[2],
         ];
         let design = &sized[i].design;
-        let [w, h, anchor] = design::sz(design).or_bug(Errno::ENOTRECOVERABLE);
+        let [w, h, anchor] = design::size(design).or_bug(Errno::ENOTRECOVERABLE);
         instances.extend_from_slice(&set::instance(
             at,
             [w, h],

@@ -20,20 +20,20 @@ pub const INSTANCE_FLOATS: usize = pxl_render::frame::shader::word::MARKER_INSTA
 /// region it keeps, as tall as it and centered on it: a marker is one
 /// thing, hidden whole where a nearer one's region is in front of its anchor
 /// (marker.wgsl).
-pub fn instance(at: V3, sz: [f64; 2], slot: u32, down: f64, region: f64) -> [f32; INSTANCE_FLOATS] {
+pub fn instance(at: V3, size: [f64; 2], slot: u32, down: f64, region: f64) -> [f32; INSTANCE_FLOATS] {
     let sheet = sheet();
     [
         at[0],
         at[1],
         at[2],
-        sz[0],
-        sz[1],
+        size[0],
+        size[1],
         sheet.u0(slot),
         sheet.v0(slot),
         sheet.u1(slot),
         sheet.v1(slot),
         down,
-        region.max(sz[0]),
+        region.max(size[0]),
     ]
     .map(|v| v as f32)
 }

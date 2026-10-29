@@ -90,7 +90,7 @@ fn formats_round_trip() {
 
 /// A tile at every lane's longest is as long as `MAX_PACKET_BYTES` says.
 #[test]
-fn full_tile_packet_sz() {
+fn full_tile_pkt_size() {
     use separation::{MAX_LINES, MAX_POINTS};
     let starts: Vec<u32> = (0..=MAX_LINES)
         .map(|d| (d * MAX_POINTS / MAX_LINES) as u32)

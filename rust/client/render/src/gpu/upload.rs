@@ -91,7 +91,7 @@ pub struct Uploads {
     layout: u32,
 }
 
-pub(crate) fn buf_sz(len: u32) -> u32 {
+pub(crate) fn buf_size(len: u32) -> u32 {
     ((len + 3) & !3).max(4)
 }
 
@@ -165,7 +165,7 @@ impl Uploads {
             return false;
         }
         let buf = g.buf(
-            buf_sz(self.len[i]),
+            buf_size(self.len[i]),
             buffer_usage::VERTEX
                 | buffer_usage::INDEX
                 | buffer_usage::STORAGE
@@ -223,7 +223,7 @@ impl Uploads {
         self.buf[i] = 0;
         self.group[i] = 0;
         self.cnt += 1;
-        self.bytes += buf_sz(len) as u64;
+        self.bytes += buf_size(len) as u64;
         self.missing += 1;
         if let Some(g) = g {
             self.put(g, i);
@@ -259,7 +259,7 @@ impl Uploads {
         }
         release(self.buf[i]);
         self.cnt -= 1;
-        self.bytes -= buf_sz(self.len[i]) as u64;
+        self.bytes -= buf_size(self.len[i]) as u64;
         // Backward shift: an entry past the hole moves into it unless its home lies
         // between the hole and it, so no probe ever stops early.
         loop {

@@ -56,7 +56,7 @@ impl PlacementTool {
     }
 
     /// The side of the cube it places in, in units.
-    pub fn sz(self) -> f64 {
+    pub fn size(self) -> f64 {
         units(self.zoom())
     }
 }
@@ -126,7 +126,7 @@ pub fn anchor_center(anchor: &Q3) -> Q3 {
 /// In the world's doubles, the space the pick works in.
 pub fn object_aabb(obj: &Entry) -> Aabb {
     let min = crate::domain::view::frame::coord::to_world(&obj.corner());
-    let max = min.map(|v| v + obj.sz());
+    let max = min.map(|v| v + obj.size());
     Aabb { min, max }
 }
 

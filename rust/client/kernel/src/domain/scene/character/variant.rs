@@ -33,13 +33,13 @@ pub fn character_variant(group: Group, number: u8) -> Option<CharacterVariant> {
             (
                 person::models[row],
                 person::skin,
-                person::sz,
+                person::size,
                 person::move_clip,
             )
         }
         Group::pet => {
             let row = pet::Key::ALL.iter().position(|k| *k as u8 == number)?;
-            (pet::models[row], pet::skin, pet::sz, pet::move_clip)
+            (pet::models[row], pet::skin, pet::size, pet::move_clip)
         }
     };
     Some(CharacterVariant {

@@ -17,7 +17,7 @@
         "The people a player can be: the key the settings store persists, row for",
         "row with the model under asset/. One pack, so one colormap."
       ],
-      "sz": {
+      "size": {
         "$val": 1.0,
         "$doc": [
           "World units tall — one cell."
@@ -74,7 +74,7 @@
       "$doc": [
         "The pets, the same way. A pet's key is its model's name."
       ],
-      "sz": {
+      "size": {
         "$val": 0.25,
         "$doc": [
           "World units tall — a quarter cell, the step the object tiers also take."

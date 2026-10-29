@@ -861,20 +861,20 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             .and_then(Node::arr)
             .ok_or(at("variants"))?
         {
-            let sz = v
-                .get("sz")
+            let size = v
+                .get("size")
                 .and_then(Node::arr)
                 .filter(|s| s.len() == 3)
                 .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
-            match (v.str_at("model"), v.str_at("skin"), sz.flatten()) {
-                (Some(_), Some(_), Some(sz))
-                    if sz
+            match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
+                (Some(_), Some(_), Some(size))
+                    if size
                         .iter()
                         .all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) =>
                 {
                     sizes.push(format!(
                         "[{}]",
-                        sz.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")
+                        size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")
                     ));
                     models.push(format!(
                         "Variant {{ model: {SLOT}({slot}), skin: {SLOT}({}) }}",

@@ -29,7 +29,7 @@ struct Answer<T> {
 
 struct RasterAt {
     px: Box<[u8]>,
-    sz: [u32; 2],
+    size: [u32; 2],
     origin: [f32; 2],
     advance: f32,
 }
@@ -146,30 +146,30 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         let px = unsafe { core::slice::from_raw_parts(a.px.as_ptr(), a.px.len()) };
         return Some(Raster {
             px,
-            width: a.sz[0],
-            height: a.sz[1],
+            width: a.size[0],
+            height: a.size[1],
             origin: a.origin,
             advance: a.advance,
         });
     }
     let advance = text_width(font, text_in)? as f32;
-    let (sz, origin) = raster_box(font, advance);
+    let (size, origin) = raster_box(font, advance);
     let scale = SHEET_SCALE as f32;
-    let mut px = vec![0u8; (sz[0] * sz[1] * 4) as usize].into_boxed_slice();
+    let mut px = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
     let mut args = [0u32; RASTER::WORDS as usize];
     args[RASTER::weight as usize] = font.weight;
     args[RASTER::px as usize] = (font.px * scale).to_bits();
     args[RASTER::color as usize] = color;
     args[RASTER::at as usize] = off_of_slice(&raw mut *px) as u32;
-    args[RASTER::width as usize] = sz[0];
-    args[RASTER::height as usize] = sz[1];
+    args[RASTER::width as usize] = size[0];
+    args[RASTER::height as usize] = size[1];
     args[RASTER::x as usize] = origin[0].to_bits();
     if offer(op::TEXT_RASTER, &args, text_in.as_bytes()) != Some(true) {
         return None;
     }
     let at = RasterAt {
         px,
-        sz,
+        size,
         origin,
         advance: advance * scale,
     };

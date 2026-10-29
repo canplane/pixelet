@@ -53,7 +53,7 @@ const _: () = assert!(
     pxl_spec_core::sun::MOVED_CAST == 0
         && pxl_spec_core::sun::MOVED_COUNTED == 1
         && pxl_spec_core::sun::MOVED_EPOCH == 2
-        && pxl_spec_core::sun::MOVED_SZ == 3,
+        && pxl_spec_core::sun::MOVED_SIZE == 3,
     "the head's first vec4 is read by its words"
 );
 
@@ -80,8 +80,8 @@ fn epoch(m: &Moved) -> u32 {
     m.v[0].z as u32
 }
 
-/// The map's side (`sun::MOVED_SZ`), none in the eye's head.
-pub(crate) fn sz(m: &Moved) -> u32 {
+/// The map's side (`sun::MOVED_SIZE`), none in the eye's head.
+pub(crate) fn size(m: &Moved) -> u32 {
     m.v[0].w as u32
 }
 
@@ -89,8 +89,8 @@ pub(crate) fn sz(m: &Moved) -> u32 {
 /// cast numbered `cast` casts (`sun::reads_at`), none past the box: tile by
 /// tile where they are few, else by the squares they lie in
 /// (`sun::coarse_at`), which may name a square for a tile of it alone.
-fn casts_in<W: Words + ?Sized>(w: &W, sz: u32, cast: u32, lo: [i32; 2], hi: [i32; 2]) -> bool {
-    let n = pxl_spec_core::sun::tiles(sz) as i32;
+fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i32; 2]) -> bool {
+    let n = pxl_spec_core::sun::tiles(size) as i32;
     let (lo, hi) = (
         [lo[0].max(0), lo[1].max(0)],
         [hi[0].min(n - 1), hi[1].min(n - 1)],
@@ -100,12 +100,12 @@ fn casts_in<W: Words + ?Sized>(w: &W, sz: u32, cast: u32, lo: [i32; 2], hi: [i32
     }
     let few = (hi[0] - lo[0] + 1) * (hi[1] - lo[1] + 1) <= 16;
     let (k, first, row) = if few {
-        (1, pxl_spec_core::sun::reads_at(sz), n)
+        (1, pxl_spec_core::sun::reads_at(size), n)
     } else {
         (
             pxl_spec_core::sun::COARSE as i32,
-            pxl_spec_core::sun::coarse_at(sz),
-            pxl_spec_core::sun::coarse(sz) as i32,
+            pxl_spec_core::sun::coarse_at(size),
+            pxl_spec_core::sun::coarse(size) as i32,
         )
     };
     let mut j = lo[1] / k;
@@ -171,7 +171,7 @@ fn sun_of(eye: &Eye) -> Sun {
 pub(crate) struct Map {
     sun: Sun,
     starts: Starts,
-    sz: u32,
+    size: u32,
     eye: [i32; 3],
     detail: Detail,
     /// The cast's number (`sun::MOVED_CAST`), which names the tiles it
@@ -186,22 +186,22 @@ impl Map {
         Map {
             sun,
             starts: starts(moved),
-            sz: sz(moved),
+            size: size(moved),
             eye: origin,
             detail: sun.detail(detail),
             cast: cast_number(moved),
         }
     }
 
-    /// Its side (`sun::MOVED_SZ`), which its slots and its list are laid
+    /// Its side (`sun::MOVED_SIZE`), which its slots and its list are laid
     /// by.
     pub(crate) fn side(&self) -> u32 {
-        self.sz
+        self.size
     }
 
     /// Its samples across and down, a side.
     fn across(&self) -> u32 {
-        self.sz / pxl_spec_core::param::sun::SAMPLE
+        self.size / pxl_spec_core::param::sun::SAMPLE
     }
 
     /// The word a slot leaves for the walk `met` of its ray aimed `aim`.
@@ -238,7 +238,7 @@ impl Observer for Map {
     }
 
     fn corners(&self) -> [u32; 2] {
-        let a = pxl_spec_core::sun::beam_across(self.sz);
+        let a = pxl_spec_core::sun::beam_across(self.size);
         [a, a]
     }
 
@@ -280,7 +280,7 @@ impl Observer for Map {
     }
 
     fn line(&self, idx: u32) -> u32 {
-        pxl_spec_core::sun::line(self.sz, idx)
+        pxl_spec_core::sun::line(self.size, idx)
     }
 
     /// Every ray of the sun's starts apart, its line's start kept after it
@@ -298,7 +298,7 @@ impl Observer for Map {
     }
 
     fn cells(&self) -> [u32; 2] {
-        let a = pxl_spec_core::sun::cells_across(self.sz);
+        let a = pxl_spec_core::sun::cells_across(self.size);
         [a, a]
     }
 
@@ -309,7 +309,7 @@ impl Observer for Map {
     }
 
     fn cell_at(&self, c: [u32; 2]) -> u32 {
-        pxl_spec_core::sun::cell(self.sz, c)
+        pxl_spec_core::sun::cell(self.size, c)
     }
 
     fn samples(&self) -> [u32; 2] {
@@ -329,22 +329,22 @@ impl Observer for Map {
     /// where the samples about a slot lie about it (`sample_before`).
     fn sample_at(&self, s: [u32; 2]) -> u32 {
         let n = self.across();
-        pxl_spec_core::sun::sample(self.sz, (s[1] % n) * n + s[0] % n)
+        pxl_spec_core::sun::sample(self.size, (s[1] % n) * n + s[0] % n)
     }
 
     /// Not about it within a sample of the box's edge, where the slots wrap:
     /// a sample past it lies at the box's other side.
     fn sample_before(&self, slot: [u32; 2]) -> ([u32; 2], bool) {
         let d = pxl_spec_core::param::sun::SAMPLE;
-        let p = self.sun.texel(self.sz, slot);
-        let (r, n) = ([slot[0] % d, slot[1] % d], self.sz);
+        let p = self.sun.texel(self.size, slot);
+        let (r, n) = ([slot[0] % d, slot[1] % d], self.size);
         let inside = p[0] >= r[0] && p[0] - r[0] + d < n && p[1] >= r[1] && p[1] - r[1] + d < n;
         ([slot[0] / d, slot[1] / d], inside)
     }
 
     /// From where its texel of the box lies on the near plane (`sun::ray`).
     fn aim(&self, slot: [u32; 2]) -> Aim {
-        let p = self.sun.texel(self.sz, slot);
+        let p = self.sun.texel(self.size, slot);
         let (origin, ray, from) = pxl_spec_core::sun::ray(self.eye, &self.sun, &self.starts, p);
         let mut detail = self.detail;
         detail.eye = from;
@@ -357,7 +357,7 @@ impl Observer for Map {
 
     /// The cell of the box its texel lies in.
     fn cell_of(&self, slot: [u32; 2]) -> [u32; 2] {
-        let p = self.sun.texel(self.sz, slot);
+        let p = self.sun.texel(self.size, slot);
         let b = pxl_spec_core::sun::BEAM;
         [p[0] / b, p[1] / b]
     }
@@ -384,7 +384,7 @@ impl Observer for Map {
         let t = pxl_spec_core::sun::TILE as i32;
         let (lo, hi) = match level {
             Level::Ray => {
-                let p = self.sun.texel(self.sz, at);
+                let p = self.sun.texel(self.size, at);
                 let tile = [p[0] as i32 / t, p[1] as i32 / t];
                 (tile, tile)
             }
@@ -398,12 +398,12 @@ impl Observer for Map {
                 ([c[0] - side, c[1] - side], [c[0] + 1, c[1] + 1])
             }
             Level::Sample => {
-                let p = self.sun.texel(self.sz, self.point(at));
+                let p = self.sun.texel(self.size, self.point(at));
                 let tile = [p[0] as i32 / t, p[1] as i32 / t];
                 ([tile[0] - 1, tile[1] - 1], [tile[0] + 1, tile[1] + 1])
             }
         };
-        casts_in(w, self.sz, self.cast, lo, hi)
+        casts_in(w, self.size, self.cast, lo, hi)
     }
 }
 
@@ -543,7 +543,7 @@ pub fn sun_mark_cs(
     if id.x * m >= drawn.x || id.y * m >= drawn.y {
         return;
     }
-    let (s, n) = (sun_of(eye), sz(moved));
+    let (s, n) = (sun_of(eye), size(moved));
     let cast = cast_number(moved);
     // The tile last marked, so a run of pixels on one marks it once.
     let mut last = [i32::MIN; 2];
@@ -578,8 +578,8 @@ pub fn sun_mark_cs(
 
 /// Tile `[i, j]`'s word among the box's tiles' words at `first` (the
 /// stands, the reads), `NO_TILE` past the box.
-fn tile_word(sz: u32, first: u32, [i, j]: [i32; 2]) -> u32 {
-    let n = pxl_spec_core::sun::tiles(sz) as i32;
+fn tile_word(size: u32, first: u32, [i, j]: [i32; 2]) -> u32 {
+    let n = pxl_spec_core::sun::tiles(size) as i32;
     if i >= 0 && j >= 0 && i < n && j < n {
         first + (j * n + i) as u32
     } else {
@@ -592,8 +592,8 @@ const NO_TILE: u32 = u32::MAX;
 
 /// Tile `tile` of the box marked stood on in the cast numbered `cast`
 /// (`sun::stands_at`), none past the box.
-fn stand(list: &mut [u32], sz: u32, cast: u32, tile: [i32; 2]) {
-    let w = tile_word(sz, pxl_spec_core::sun::stands_at(sz), tile);
+fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
+    let w = tile_word(size, pxl_spec_core::sun::stands_at(size), tile);
     if w != NO_TILE {
         put(list, w, cast);
     }
@@ -657,7 +657,7 @@ pub fn sun_mark_drawn_cs(
     ) {
         return;
     }
-    let (s, n) = (sun_of(eye), sz(moved));
+    let (s, n) = (sun_of(eye), size(moved));
     let ([i, j], cast, r) = (s.tile_of(v), cast_number(moved), s.ring());
     let mut b = -r;
     while b <= r {
@@ -686,7 +686,7 @@ pub fn sun_reach_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
-    let side = sz(moved);
+    let side = size(moved);
     let n = pxl_spec_core::sun::tiles(side);
     if id.x >= n || id.y >= n {
         return;
@@ -735,7 +735,7 @@ pub fn sun_reach_cs(
 
 /// Whether a receiver stood on tile `tile` in the cast numbered `cast`,
 /// none past the box.
-fn stood(list: &[u32], sz: u32, cast: u32, tile: [i32; 2]) -> bool {
-    let w = tile_word(sz, pxl_spec_core::sun::stands_at(sz), tile);
+fn stood(list: &[u32], size: u32, cast: u32, tile: [i32; 2]) -> bool {
+    let w = tile_word(size, pxl_spec_core::sun::stands_at(size), tile);
     w != NO_TILE && at(list, w) == cast
 }

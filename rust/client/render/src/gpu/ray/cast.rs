@@ -154,7 +154,7 @@ pub(super) struct CastBuffers {
     /// Shards the buffer holds.
     shard_room: usize,
     /// The drawn pixels it casts, a ray each: the world surface's.
-    sz: [u32; 2],
+    size: [u32; 2],
     /// The overwrites' heap lane then their data lane, each `overwrite_room`
     /// words, the lanes' own room; the revision it holds, none at first.
     overwrites: u32,
@@ -278,7 +278,7 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_SUN_REACH, &compute::SUN_REACH_GROUP);
         let raster = Raster::new(g, pipelines);
         let tally = Tally::new(g);
-        let buf = |sz: u32, usage: u32| g.buf(sz, usage);
+        let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
             built,
@@ -351,7 +351,7 @@ impl RaysPass {
             ),
             shards: 0,
             shard_room: 0,
-            sz: [0; 2],
+            size: [0; 2],
             overwrites: 0,
             overwrite_room: 0,
             overwrite_revision: None,
@@ -452,7 +452,7 @@ impl RaysPass {
             g.write_buf(c.window, 0, bytes(cast.window));
             c.refold = true;
         }
-        c.sz = rays.1;
+        c.size = rays.1;
         // The grid as the eye's words lay it (pxl-spec-core `eye::GRID`), the
         // dispatches' sizes, and room for its corners' lines, its cells'
         // starts and its samples' stops, made again only where they outgrow
@@ -467,19 +467,19 @@ impl RaysPass {
                 .try_into()
                 .or_bug(Errno::ENOTRECOVERABLE),
         );
-        let need = c.grid.sz();
+        let need = c.grid.size();
         if need > c.beam_room {
             if c.beams != 0 {
                 release(c.beams);
             }
-            let sz = word_bytes(need as usize);
+            let size = word_bytes(need as usize);
             xpute_kit::ensure!(
-                crate::frame::shader::floor::fits(sz as u64, true),
+                crate::frame::shader::floor::fits(size as u64, true),
                 ENOTRECOVERABLE,
                 need
             );
             (c.beams, c.beam_room) = (
-                g.buf(sz, buffer_usage::STORAGE | buffer_usage::COPY_DST),
+                g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
                 need,
             );
         }
@@ -682,7 +682,7 @@ impl RaysPass {
             head[sun::MOVED_CAST] = c.sun_number;
             head[sun::MOVED_EPOCH] = c.sun_epoch;
             head[sun::MOVED_COUNTED] = u32::from(ray_counts);
-            head[sun::MOVED_SZ] = shadow::SZ;
+            head[sun::MOVED_SIZE] = shadow::SIZE;
             let at = 4 * sun::STARTS_AT;
             head[at..at + 4 * sun::STARTS_VEC4S].copy_from_slice(&sun_map.2.words());
             // The actors drawn, receivers as decor is (`sun_mark_drawn_cs`).
@@ -695,7 +695,7 @@ impl RaysPass {
             }
             g.write_buf(c.sun_moved, 0, bytes(&head));
             g.write_buf(c.sun_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
-            c.raster.sun_prepare(g, &cast.eye, shadow::SZ);
+            c.raster.sun_prepare(g, &cast.eye, shadow::SIZE);
         }
         if eye_moved || jittered || c.sun_cast {
             g.write_buf(c.eye, 0, bytes(&cast.eye));
@@ -757,7 +757,7 @@ impl RaysPass {
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.sun_cast],
-            rays: [c.sz[0] * c.sz[1], shadow::SZ * shadow::SZ],
+            rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
         };
         c.tally.begin(g, ray_counts, c.seen, frame);
         let bound = [
@@ -782,7 +782,7 @@ impl RaysPass {
             c.raster.prepare(
                 g,
                 &cast.eye,
-                c.sz,
+                c.size,
                 &c.grid,
                 self.kind == FrameKind::cast,
                 [c.eye, c.beams, c.eye_head],
@@ -943,7 +943,7 @@ impl RaysPass {
                 (
                     GpuSpanName::px,
                     &c.built,
-                    c.region.map_or(c.sz, |r| r.sz),
+                    c.region.map_or(c.size, |r| r.size),
                     compute::CAST_WORKGROUP,
                 ),
             ] {
@@ -1009,7 +1009,7 @@ impl RaysPass {
                 g.set_bind_group(pass, 0, c.sun_groups[4], &[]);
                 g.set_pipeline(pass, c.sun_mark_built.pipeline);
                 let w = compute::SUN_MARK_WORKGROUP;
-                let [x, y] = c.sz.map(|v| v.div_ceil(sun::MARK));
+                let [x, y] = c.size.map(|v| v.div_ceil(sun::MARK));
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             }
             g.set_bind_group(pass, 0, c.sun_groups[5], &[]);
@@ -1020,21 +1020,21 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.sun_groups[6], &[]);
             g.set_pipeline(pass, c.sun_reach_built.pipeline);
             let w = compute::SUN_REACH_WORKGROUP;
-            let n = sun::tiles(shadow::SZ);
+            let n = sun::tiles(shadow::SIZE);
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             // The beam and the cells' starts by the eye's passes over the
             // sun's world's group, which hands them the sun's head.
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
             g.set_pipeline(pass, c.beam_built.pipeline);
-            let n = sun::beam_across(shadow::SZ);
+            let n = sun::beam_across(shadow::SIZE);
             let w = compute::BEAM_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.set_pipeline(pass, c.cells_built.pipeline);
-            let n = sun::cells_across(shadow::SZ);
+            let n = sun::cells_across(shadow::SIZE);
             let w = compute::CELL_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
-            let n = shadow::SZ / pxl_spec_core::param::sun::SAMPLE;
+            let n = shadow::SIZE / pxl_spec_core::param::sun::SAMPLE;
             let stamp = stamps[GpuSpanName::sun_sample as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
@@ -1053,14 +1053,14 @@ impl RaysPass {
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_slot as usize].pass());
             g.set_bind_group(pass, 0, c.sun_groups[0], &[]);
             g.set_pipeline(pass, c.sun_built.pipeline);
-            let tiles = shadow::SZ / sun::TILE;
+            let tiles = shadow::SIZE / sun::TILE;
             g.dispatch(pass, tiles, tiles, 1);
             g.end(pass);
             // Their count where their walk reads it, then that walk.
             g.copy_buf(
                 encoder,
                 (c.sun_misses, word_bytes(ray::MISS_ARGS_CNT as usize)),
-                (c.sun_list, word_bytes(sun::misses_cnt(shadow::SZ) as usize)),
+                (c.sun_list, word_bytes(sun::misses_cnt(shadow::SIZE) as usize)),
                 4,
             );
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_walk as usize].pass());
@@ -1093,7 +1093,7 @@ impl RaysPass {
             c.sun_list = sun_list(g, true);
             c.sun_list_whole = true;
         }
-        c.sun_ready = c.raster.sun_made(g, shadow::SZ);
+        c.sun_ready = c.raster.sun_made(g, shadow::SIZE);
     }
 
     /// The counts copied last frame mapped back (`Tally::back`).
@@ -1207,7 +1207,7 @@ fn px_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
 }
 
 const _: () = assert!(
-    sun::tiles(shadow::SZ).is_multiple_of(sun::COARSE),
+    sun::tiles(shadow::SIZE).is_multiple_of(sun::COARSE),
     "the map's tiles are a whole number of squares a side (`sun::coarse_square`)"
 );
 
@@ -1216,7 +1216,7 @@ const _: () = assert!(
 /// them (`sun::list_words`).
 fn sun_list(g: &Gpu, whole: bool) -> u32 {
     let words = if whole {
-        sun::list_words(shadow::SZ) as usize
+        sun::list_words(shadow::SIZE) as usize
     } else {
         4
     };

@@ -331,9 +331,9 @@ pub fn bind_mesh(
     if *bound != mesh {
         let mut at = 0;
         for lane in 0..lit.lanes {
-            let sz = vertex_cnt * lit.strides[lane];
-            g.set_vertex_buf(pass, lane as u32, mesh, at, sz);
-            at += sz;
+            let size = vertex_cnt * lit.strides[lane];
+            g.set_vertex_buf(pass, lane as u32, mesh, at, size);
+            at += size;
         }
         g.set_idx_buf(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, idx_cnt * 4);
         *bound = mesh;

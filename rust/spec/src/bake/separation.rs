@@ -116,11 +116,11 @@ impl Separation {
     /// Refused, with its lines and points, where a record's room does not
     /// hold it (`holds`).
     pub fn fits(&self) -> Result<(), [usize; 2]> {
-        let sz = [self.len(), self.points.len()];
-        if holds(sz[0], sz[1]) {
+        let size = [self.len(), self.points.len()];
+        if holds(size[0], size[1]) {
             Ok(())
         } else {
-            Err(sz)
+            Err(size)
         }
     }
 
@@ -159,7 +159,7 @@ impl Separation {
         &self,
         origin: [f64; 2],
         step: f64,
-        sz: [i64; 2],
+        size: [i64; 2],
         mut each: impl FnMut(i64, i64, usize),
     ) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - f64::from(CELL_CENTER);
@@ -173,7 +173,7 @@ impl Separation {
                         cell(a[k].min(b[k]) - half, k).ceil() as i64,
                         cell(a[k].max(b[k]) + half, k).floor() as i64,
                     );
-                    lo.max(0)..=hi.min(sz[k] - 1)
+                    lo.max(0)..=hi.min(size[k] - 1)
                 };
                 for j in range(1) {
                     for i in range(0) {
@@ -214,11 +214,11 @@ impl Separation {
         frame: Frame,
         origin: [f64; 2],
         step: f64,
-        sz: [i64; 2],
+        size: [i64; 2],
         mut each: impl FnMut(i64, i64, usize, Crossing),
     ) {
         let stations = frame.stations();
-        self.segments_over(origin, step, sz, |i, j, p| {
+        self.segments_over(origin, step, size, |i, j, p| {
             let at = [i, j].map(|v| v as f64 + f64::from(CELL_CENTER));
             let at = [origin[0] + at[0] * step, origin[1] + at[1] * step];
             if let Some(over) = crossing_at(&self.segment(p), at, step, &stations) {

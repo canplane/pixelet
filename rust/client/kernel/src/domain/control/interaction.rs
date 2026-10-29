@@ -205,7 +205,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         hover.approach = None;
         hover.coord = Some(world_adjacent_corner(
             &hit,
-            tool.sz(),
+            tool.size(),
             flush_against(&hit).as_ref(),
         ));
         return;

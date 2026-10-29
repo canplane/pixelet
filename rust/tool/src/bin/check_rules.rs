@@ -524,14 +524,14 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
     for (file, entry, at, name, sides) in WORKGROUPS {
-        let sz = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
+        let size = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
         let val = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
-        let held = sz
+        let held = size
             .zip(val)
             .is_some_and(|(s, v)| s[..sides].iter().all(|&d| d == v));
         if !held {
             problems.push(format!(
-                "{SHADER}{file}: `{entry}`'s workgroup {sz:?} is not `{name}` ({at}: {val:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
+                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {val:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
             ));
         }
     }

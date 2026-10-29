@@ -57,7 +57,7 @@ impl Entry {
         EntryAt::new(self.zoom, self.at)
     }
 
-    pub fn sz(&self) -> f64 {
+    pub fn size(&self) -> f64 {
         units(self.zoom)
     }
 

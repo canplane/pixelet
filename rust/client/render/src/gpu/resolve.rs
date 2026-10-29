@@ -191,8 +191,8 @@ impl Resolve {
             r.at[0],
             r.at[1],
             0,
-            r.sz[0],
-            r.sz[1],
+            r.size[0],
+            r.size[1],
         );
         s.history_view[was]
     }

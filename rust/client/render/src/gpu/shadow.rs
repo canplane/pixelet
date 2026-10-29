@@ -30,9 +30,9 @@ use crate::gpu::put::put_mat;
 use crate::param::shadow::DEPTH_STEP;
 
 /// The map's side in texels.
-pub const SZ: u32 = 2048;
+pub const SIZE: u32 = 2048;
 const _: () = assert!(
-    SZ as i32 <= ANCHOR,
+    SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
 
@@ -92,8 +92,8 @@ pub struct Shadow {
 impl Shadow {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Shadow {
         let map = g.texture(
-            SZ,
-            SZ,
+            SIZE,
+            SIZE,
             1,
             Format::depth32float,
             1,
@@ -126,8 +126,8 @@ impl Shadow {
             1,
         );
         let world = g.texture(
-            SZ,
-            SZ,
+            SIZE,
+            SIZE,
             1,
             Format::r32uint,
             1,
@@ -196,7 +196,7 @@ impl Shadow {
     /// it a receiver reads within; `fixed` is a point that stays put in the
     /// world as the eye moves, in the eye's frame.
     pub fn aim(&mut self, sun_dir: &[f32], target: V3, reach: f64, rim: f32, fixed: V3) {
-        self.texel = reach * 2.0 / f64::from(SZ);
+        self.texel = reach * 2.0 / f64::from(SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the sun goes, on purpose: the sun read as moving. Turned on every
         // frame instead, the grid below snapped another way each time and a
@@ -251,7 +251,7 @@ impl Shadow {
         };
         self.sun = Sun::of(
             [column(0), column(1), column(2), column(3)],
-            SZ,
+            SIZE,
             corner,
             rim,
         )
@@ -276,7 +276,7 @@ impl Shadow {
             corner[1].div_euclid(ANCHOR) * ANCHOR,
         ];
         let q3 = f64::from(1u32 << pxl_spec_core::FRAC_W);
-        let texel = 2.0 / f64::from(SZ);
+        let texel = 2.0 / f64::from(SIZE);
         let (inverse, eye) = (self.inverse, self.eye_world);
         let mut anchor = |k: usize| {
             let w = [

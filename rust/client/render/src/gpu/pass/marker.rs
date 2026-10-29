@@ -150,7 +150,7 @@ pub struct MarkerPass {
     numbers_view: u32,
     regions: u32,
     regions_view: u32,
-    regions_sz: (u32, u32),
+    regions_size: (u32, u32),
     painter: SheetPainter,
     sampler: u32,
     sheet: u32,
@@ -171,7 +171,7 @@ pub struct MarkerPass {
 impl MarkerPass {
     /// Its regions' depth's bytes, one f32 a pixel.
     pub fn depth_bytes(&self) -> f64 {
-        self.regions_sz.0 as f64 * self.regions_sz.1 as f64 * 4.0
+        self.regions_size.0 as f64 * self.regions_size.1 as f64 * 4.0
     }
 
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> MarkerPass {
@@ -192,7 +192,7 @@ impl MarkerPass {
             numbers_view: 0,
             regions: 0,
             regions_view: 0,
-            regions_sz: (0, 0),
+            regions_size: (0, 0),
             frame_group,
             painter: SheetPainter::new(g, pipelines),
             sampler,
@@ -216,16 +216,16 @@ impl MarkerPass {
         let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         if flush.whole {
-            if flush.sz == 0 {
+            if flush.size == 0 {
                 return false;
             }
             for id in [self.sheet_group, self.sheet_view, self.sheet] {
                 release(id);
             }
-            self.levels = mip_levels(flush.sz, flush.sz);
+            self.levels = mip_levels(flush.size, flush.size);
             self.sheet = g.texture(
-                flush.sz,
-                flush.sz,
+                flush.size,
+                flush.size,
                 1,
                 Format::rgba8unorm_srgb,
                 self.levels,
@@ -321,7 +321,7 @@ impl MarkerPass {
         &mut self,
         g: &Gpu,
         depth: u32,
-        sz: (u32, u32),
+        size: (u32, u32),
         draws: &Draws,
         uniforms: &[f32],
         uploads: &Uploads,
@@ -329,7 +329,7 @@ impl MarkerPass {
         if self.sheet_group == 0 {
             return;
         }
-        if self.regions_sz != sz {
+        if self.regions_size != size {
             for id in [
                 self.numbers_view,
                 self.numbers,
@@ -339,8 +339,8 @@ impl MarkerPass {
                 release(id);
             }
             self.numbers = g.texture(
-                sz.0,
-                sz.1,
+                size.0,
+                size.1,
                 1,
                 Format::rgba8unorm,
                 1,
@@ -348,15 +348,15 @@ impl MarkerPass {
             );
             self.numbers_view = g.view(self.numbers, false, 0, 1, 0, 1);
             self.regions = g.texture(
-                sz.0,
-                sz.1,
+                size.0,
+                size.1,
                 1,
                 Format::depth32float,
                 1,
                 texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
             );
             self.regions_view = g.view(self.regions, false, 0, 1, 0, 1);
-            self.regions_sz = sz;
+            self.regions_size = size;
         }
         let placed = draws
             .of(PIPELINE_MARKER)

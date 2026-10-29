@@ -401,7 +401,7 @@ impl RasterTile {
 #[derive(Clone, Copy)]
 struct Axis {
     off: i64,
-    sz: i64,
+    size: i64,
     scale: f64,
     radius: i64,
 }
@@ -419,7 +419,7 @@ impl Axis {
         let lo_clamped = lo.max(0.0) as i64;
         let hi_clamped = hi.ceil().min(raster as f64) as i64;
         let raw = ((raster - lo_clamped) as f64).min(hi - lo).max(0.0);
-        let (off, sz) = if (hi_clamped - lo_clamped) as f64 > 0.9 * raster as f64 {
+        let (off, size) = if (hi_clamped - lo_clamped) as f64 > 0.9 * raster as f64 {
             (0, raster)
         } else {
             let off = (lo_clamped - window_radius).min(raster).max(0);
@@ -429,7 +429,7 @@ impl Axis {
             )
         };
         let mut scale = out / raw;
-        if sz as f64 >= out && sz as f64 <= out + (sz as f64 - raw) {
+        if size as f64 >= out && size as f64 <= out + (size as f64 - raw) {
             scale = 1.0;
         }
         if scale < 1.0 {
@@ -446,7 +446,7 @@ impl Axis {
         };
         Axis {
             off,
-            sz,
+            size,
             scale,
             radius,
         }
@@ -471,13 +471,13 @@ impl Source<'_> {
         let (x, y) = (self.x, self.y);
         if px < x.off as f64
             || py < y.off as f64
-            || px + 1e-10 > (x.sz + x.off) as f64
-            || py + 1e-10 > (y.sz + y.off) as f64
+            || px + 1e-10 > (x.size + x.off) as f64
+            || py + 1e-10 > (y.size + y.off) as f64
         {
             return None;
         }
-        let cx = ((px + 1e-10) as i64 - x.off).min(x.sz - 1);
-        let cy = ((py + 1e-10) as i64 - y.off).min(y.sz - 1);
+        let cx = ((px + 1e-10) as i64 - x.off).min(x.size - 1);
+        let cy = ((py + 1e-10) as i64 - y.off).min(y.size - 1);
         self.px(cx + x.off, cy + y.off)?;
 
         let (sx, sy) = (px - x.off as f64, py - y.off as f64);
@@ -496,8 +496,8 @@ impl Source<'_> {
                 0.0
             }
         };
-        let (j0, j1) = ((-y.radius).max(-iy), y.radius.min(y.sz - iy - 1));
-        let (i0, i1) = ((-x.radius).max(-ix), x.radius.min(x.sz - ix - 1));
+        let (j0, j1) = ((-y.radius).max(-iy), y.radius.min(y.size - iy - 1));
+        let (i0, i1) = ((-x.radius).max(-ix), x.radius.min(x.size - ix - 1));
         // Weights are renormalized over pixels with data, except when they already
         // sum to one within the warper's tolerance.
         let (mut val, mut total) = (0.0, 0.0);

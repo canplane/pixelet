@@ -10,7 +10,7 @@ use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::view::frame::pose::view;
-use crate::domain::view::frame::screen::{ndc_to_px, sz};
+use crate::domain::view::frame::screen::{ndc_to_px, size};
 
 /// A fraction of the distance, since the marker holds a constant screen size.
 /// Generous: one marker too many costs a sprite.
@@ -20,7 +20,7 @@ const ANCHOR_REACH: f64 = 0.08;
 pub fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.at().eye;
-    let [width, height] = sz();
+    let [width, height] = size();
 
     let mut n = 0usize;
     for i in 0..candidates.cnt as usize {

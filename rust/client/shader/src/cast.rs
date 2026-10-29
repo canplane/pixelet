@@ -58,9 +58,9 @@ const _: () = assert!(
 /// its middle off by the eye's jitter (pxl-spec-core `eye::JITTER`), of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
-pub(crate) fn px_tan(eye: &Eye, p: UVec3, sz: UVec3) -> [f32; 2] {
-    let ndc_x = (p.x as f32 + 0.5 + eye.jitter.x) / sz.x as f32 * 2.0 - 1.0;
-    let ndc_y = 1.0 - (p.y as f32 + 0.5 + eye.jitter.y) / sz.y as f32 * 2.0;
+pub(crate) fn px_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
+    let ndc_x = (p.x as f32 + 0.5 + eye.jitter.x) / size.x as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p.y as f32 + 0.5 + eye.jitter.y) / size.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
 }
 
@@ -103,7 +103,7 @@ pub fn cast_cs(
     #[spirv(descriptor_set = 0, binding = 13)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
 ) {
-    let sz: UVec3 = rays.query_size();
+    let size: UVec3 = rays.query_size();
     // The frame's region, dispatched from its first pixel (pxl-spec-core
     // `eye::JITTER`).
     let id = UVec3::new(
@@ -111,11 +111,11 @@ pub fn cast_cs(
         id.y + eye.jitter.w as u32,
         id.z,
     );
-    if id.x >= sz.x || id.y >= sz.y {
+    if id.x >= size.x || id.y >= size.y {
         return;
     }
     let g = grid(eye);
-    let px = px_tan(eye, id, sz);
+    let px = px_tan(eye, id, size);
     let aim = eye.aim(px);
     let ray = aim.ray;
     // [naga] Fetched at u32s, as the raster wrote them.
@@ -183,7 +183,7 @@ pub fn cast_cs(
     add_cnt(marks, on, tally::WALKED, 1);
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
-    let whole = [sz.x.div_ceil(CAST_SIDE), sz.y.div_ceil(CAST_SIDE)];
+    let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
     let at = enlist(marks, observed::MARKS, whole);
     if at < observed::MARKS {
         seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
@@ -237,7 +237,7 @@ fn missed(
     beams: &Beams,
     seen: &mut Seen,
     id: UVec3,
-    sz: UVec3,
+    size: UVec3,
 ) -> [u32; ray::WORDS as usize] {
     let mut world = World {
         window,
@@ -250,7 +250,7 @@ fn missed(
     };
     let mut lined = Lined::before();
     let (aim, met, before) =
-        observer::walked(eye, world, seen, beams, px_tan(eye, id, sz), &mut lined);
+        observer::walked(eye, world, seen, beams, px_tan(eye, id, size), &mut lined);
     let faces = world.faced(aim.origin, &aim.ray, &met, |_, _, _| {
         support::Line::kept(aim.origin, &met.stop.node, lined.live, &lined.stack)
     });
@@ -283,8 +283,8 @@ pub fn miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let (window, beams): (&[IVec4], &Beams) = (window, beams);
-    let sz: UVec3 = rays.query_size();
-    if id.x >= sz.x || id.y >= sz.y {
+    let size: UVec3 = rays.query_size();
+    if id.x >= size.x || id.y >= size.y {
         return;
     }
     let first: u32 = rays.read(UVec3::new(id.x, id.y, 0));
@@ -292,7 +292,7 @@ pub fn miss_cs(
         return;
     }
     let w = missed(
-        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, sz,
+        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
     );
     write_ray(rays, id, w);
 }
@@ -327,12 +327,12 @@ pub fn miss_list_cs(
     }
     let listed = seen_at(seen, observed::MARKS_AT + k);
     let id = UVec3::new(listed & 0xffff, listed >> 16, 0);
-    let sz: UVec3 = rays.query_size();
-    if id.x >= sz.x || id.y >= sz.y {
+    let size: UVec3 = rays.query_size();
+    if id.x >= size.x || id.y >= size.y {
         return;
     }
     let w = missed(
-        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, sz,
+        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
     );
     write_ray(rays, id, w);
 }

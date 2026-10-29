@@ -331,7 +331,7 @@ impl SheetPainter {
         }
         // What goes into the stream whole, asked of it at once: the text's and
         // the icons' pixels, the size and the shapes, as their writers measure them.
-        let sz_bytes = [w as f32, h as f32, 0.0, 0.0];
+        let size_bytes = [w as f32, h as f32, 0.0, 0.0];
         let instance_bytes = bytes(shapes.as_flattened());
         let px = rasters
             .iter()
@@ -339,7 +339,7 @@ impl SheetPainter {
             .chain(icons.iter().map(Vec::as_slice));
         if !room(
             px.map(write_texture_bytes).sum::<usize>()
-                + write_buffer_bytes(bytes(&sz_bytes))
+                + write_buffer_bytes(bytes(&size_bytes))
                 + write_buffer_bytes(instance_bytes),
         ) {
             return false;
@@ -360,8 +360,8 @@ impl SheetPainter {
         }
         let lines_view = g.view(lines, true, 0, 1, 0, layers);
 
-        let sz = g.buf(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        g.write_buf(sz, 0, bytes(&sz_bytes));
+        let size = g.buf(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.write_buf(size, 0, bytes(&size_bytes));
         let instances = g.buf(
             instance_bytes.len().max(16) as u32,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
@@ -370,7 +370,7 @@ impl SheetPainter {
 
         let entry_group = g.bind_group(
             self.built.layouts[0],
-            &[buf_entry(0, sz), buf_entry(1, instances)],
+            &[buf_entry(0, size), buf_entry(1, instances)],
         );
         let lines_group = g.bind_group(
             self.built.layouts[1],
@@ -403,7 +403,7 @@ impl SheetPainter {
             lines_group,
             entry_group,
             instances,
-            sz,
+            size,
             lines_view,
             lines,
         ]);

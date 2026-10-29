@@ -105,7 +105,7 @@ pub const MAX_SCENE_VERTICES: u32 = 1 << 20;
 pub const MAX_SCENE_IDXS: u32 = 1 << 22;
 pub const MAX_SCENE_PRIMITIVES: u32 = 1 << 12;
 
-fn comp_sz(t: usize) -> Option<usize> {
+fn comp_size(t: usize) -> Option<usize> {
     match t {
         5120 | 5121 => Some(1),
         5122 | 5123 => Some(2),
@@ -114,7 +114,7 @@ fn comp_sz(t: usize) -> Option<usize> {
     }
 }
 
-fn type_sz(t: &str) -> Option<usize> {
+fn type_size(t: &str) -> Option<usize> {
     match t {
         "SCALAR" => Some(1),
         "VEC2" => Some(2),
@@ -228,7 +228,7 @@ fn idx_in(v: Option<JsonValue>, len: usize) -> Result<usize, MarshalError> {
 }
 
 /// A count or a byte offset, `default` when absent.
-fn sz(v: Option<JsonValue>, default: usize) -> Result<usize, MarshalError> {
+fn size(v: Option<JsonValue>, default: usize) -> Result<usize, MarshalError> {
     Ok(idx_of(v, usize::MAX)?.unwrap_or(default))
 }
 
@@ -332,7 +332,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         if a.kind != Some(kind) {
             return Err(malformed());
         }
-        let width = type_sz(kind).ok_or_else(malformed)?;
+        let width = type_size(kind).ok_or_else(malformed)?;
         let cnt = idx_in(a.cnt, usize::MAX)?;
         let len = cnt.checked_mul(width).ok_or_else(malformed)?;
         self.spend(len)?;
@@ -343,20 +343,20 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         };
         let bv = self.views[bv_idx];
         let buf = self.bufs[idx_in(bv.buf, self.bufs.len())?];
-        let view_off = sz(bv.off, 0)?;
+        let view_off = size(bv.off, 0)?;
         let view_length = idx_in(bv.length, usize::MAX)?;
         let view = view_off
             .checked_add(view_length)
             .and_then(|end| buf.get(view_off..end))
             .ok_or_else(malformed)?;
         let comp_type = idx_in(a.comp_type, usize::MAX)?;
-        let comp = comp_sz(comp_type).ok_or_else(malformed)?;
+        let comp = comp_size(comp_type).ok_or_else(malformed)?;
         let element = comp * width;
-        let stride = sz(bv.stride, element)?;
+        let stride = size(bv.stride, element)?;
         if stride < element {
             return Err(malformed());
         }
-        let base = sz(a.off, 0)?;
+        let base = size(a.off, 0)?;
         // The last element ends within the view, so no read below leaves it.
         if let Some(last) = cnt.checked_sub(1) {
             let end = last
@@ -433,7 +433,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
             return Ok(None);
         };
         let vals = self.read(idx, kind, convert).await?;
-        if Some(vals.len()) != type_sz(kind).map(|w| w * cnt) {
+        if Some(vals.len()) != type_size(kind).map(|w| w * cnt) {
             return Err(malformed());
         }
         Ok(Some(vals))

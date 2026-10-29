@@ -29,7 +29,7 @@ pub const WORLD_COLOR: Format = Format::rgba16float;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Region {
     pub at: [u32; 2],
-    pub sz: [u32; 2],
+    pub size: [u32; 2],
 }
 
 /// The drawn pixels a region is grown by each way: the resolve's pixels
@@ -57,18 +57,18 @@ impl Region {
         // Whole workgroups of the pixels' cast (pxl-shader cast.rs
         // `cast_cs`, 8 by 8), so its last ones cast no pixel past it.
         let whole = |lo: f32, hi: f32, n: u32| {
-            let sz = (hi.ceil() as u32 - lo as u32).next_multiple_of(8).min(n);
-            [(lo as u32).min(n - sz), sz]
+            let size = (hi.ceil() as u32 - lo as u32).next_multiple_of(8).min(n);
+            [(lo as u32).min(n - size), size]
         };
         let ([ax, sx], [ay, sy]) = (whole(lo[0], hi[0], width), whole(lo[1], hi[1], height));
-        let (at, sz) = ([ax, ay], [sx, sy]);
-        let share = f64::from(sz[0]) * f64::from(sz[1]) / (f64::from(w) * f64::from(h));
-        (share <= REGION_MOST).then_some(Region { at, sz })
+        let (at, size) = ([ax, ay], [sx, sy]);
+        let share = f64::from(size[0]) * f64::from(size[1]) / (f64::from(w) * f64::from(h));
+        (share <= REGION_MOST).then_some(Region { at, size })
     }
 
     /// As a pass's scissor takes it.
     pub fn rect(&self) -> [u32; 4] {
-        [self.at[0], self.at[1], self.sz[0], self.sz[1]]
+        [self.at[0], self.at[1], self.size[0], self.size[1]]
     }
 }
 

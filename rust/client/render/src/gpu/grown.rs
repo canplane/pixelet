@@ -140,7 +140,7 @@ pub type World = [u32; 6];
 
 impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
-        let buf = |sz: u32, usage: u32| g.buf(sz, usage);
+        let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buf(core::mem::size_of_val(&DECORS) as u32, storage);
         let table = DECORS;

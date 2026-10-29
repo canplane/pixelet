@@ -72,7 +72,7 @@ use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
 use crate::look::environment::{ENV_AIR, ENV_POLE, ENV_SUN};
 
-const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
+const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(
     GPU_SPAN_NAMES <= 32,
@@ -500,7 +500,7 @@ impl Renderer {
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
         let draws_buf = g.buf(
-            DRAWS_INITIAL * 4,
+            DRAWS_INIT * 4,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         let shadow = Shadow::new(g, &mut pipelines);
@@ -542,7 +542,7 @@ impl Renderer {
             sky_built,
             sky_group,
             draws_buf,
-            draws_bytes: DRAWS_INITIAL * 4,
+            draws_bytes: DRAWS_INIT * 4,
             bind_group: 0,
             models,
             shadow,

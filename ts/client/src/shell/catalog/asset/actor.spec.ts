@@ -15,7 +15,7 @@ export const groups = {
    * row with the model under asset/. One pack, so one colormap. */
   person: {
     /** World units tall — one cell. */
-    sz: 1 as number,
+    size: 1 as number,
     keys: {
       "female-1": 0 as number,
       "female-2": 1 as number,
@@ -53,7 +53,7 @@ export const groups = {
   /** The pets, the same way. A pet's key is its model's name. */
   pet: {
     /** World units tall — a quarter cell, the step the object tiers also take. */
-    sz: 0.25 as number,
+    size: 0.25 as number,
     keys: {
       beaver: 0 as number,
       bee: 1 as number,

@@ -26,7 +26,7 @@ impl<'a> Either<'a> {
         Either {
             eye,
             map: Map::of(eye, moved),
-            sun: sun::sz(moved) != 0,
+            sun: sun::size(moved) != 0,
         }
     }
 

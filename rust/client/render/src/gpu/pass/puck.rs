@@ -9,7 +9,7 @@ use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::WORLD_COLOR;
-use crate::gpu::upload::{buf_sz, Draws, Uploads};
+use crate::gpu::upload::{buf_size, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 use crate::param::puck::beacon;
@@ -56,15 +56,15 @@ fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
     let mut k = 0;
     for sx in [1.0f32, -1.0] {
         for sy in [1.0f32, -1.0] {
-            for sz in [1.0f32, -1.0] {
-                let mut tri = [[sx * r, 0.0, 0.0], [0.0, sy * r, 0.0], [0.0, 0.0, sz * r]];
+            for size in [1.0f32, -1.0] {
+                let mut tri = [[sx * r, 0.0, 0.0], [0.0, sy * r, 0.0], [0.0, 0.0, size * r]];
                 // Outward winding: flipped when an odd number of axes are negative.
-                if sx * sy * sz < 0.0 {
+                if sx * sy * size < 0.0 {
                     tri.reverse();
                 }
                 for p in tri {
                     pos[k * 3..k * 3 + 3].copy_from_slice(&p);
-                    normal[k * 3..k * 3 + 3].copy_from_slice(&[sx / len, sy / len, sz / len]);
+                    normal[k * 3..k * 3 + 3].copy_from_slice(&[sx / len, sy / len, size / len]);
                     k += 1;
                 }
             }
@@ -91,7 +91,7 @@ pub struct PuckPass {
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
-    let id = g.buf(buf_sz(data.len() as u32), usage | buffer_usage::COPY_DST);
+    let id = g.buf(buf_size(data.len() as u32), usage | buffer_usage::COPY_DST);
     g.write_buf(id, 0, data);
     id
 }

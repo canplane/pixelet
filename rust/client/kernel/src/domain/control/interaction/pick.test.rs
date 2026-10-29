@@ -51,11 +51,11 @@ fn struck_corner_lands_on_cell() {
 fn struck_corner_names_cell() {
     for (name, hit) in cases() {
         let cell = lattice(&world_struck_corner(&hit, units(GROUND.cell())));
-        for sz in (OBJECT_COARSEST..=OBJECT_FINEST).map(units) {
+        for size in (OBJECT_COARSEST..=OBJECT_FINEST).map(units) {
             assert_eq!(
-                lattice(&world_struck_corner(&hit, sz)),
+                lattice(&world_struck_corner(&hit, size)),
                 cell,
-                "{name} at tier {sz}"
+                "{name} at tier {size}"
             );
         }
     }

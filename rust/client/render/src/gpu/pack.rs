@@ -16,7 +16,7 @@ use crate::gpu::api::{buffer_usage, bytes, release, texture_usage, Format, Gpu, 
 use crate::gpu::mip::{mip_levels, Mips};
 use crate::mesh::paint::palette::{palette, LAYERS, SENTINELS};
 
-pub const LAYER_TEX_SZ: u32 = PACK.cell;
+pub const LAYER_TEX_SIZE: u32 = PACK.cell;
 
 const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
     top << (IMAGE_TOP * SLOT_BITS)
@@ -82,13 +82,13 @@ impl Pack {
     pub fn new(g: &Gpu) -> Pack {
         let (tiles, _) = plan();
         let slots = tiles.len() as u32;
-        let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
+        let levels = mip_levels(LAYER_TEX_SIZE, LAYER_TEX_SIZE);
         let usage = texture_usage::TEXTURE_BINDING
             | texture_usage::COPY_DST
             | texture_usage::RENDER_ATTACHMENT;
         let tex = g.texture(
-            LAYER_TEX_SZ,
-            LAYER_TEX_SZ,
+            LAYER_TEX_SIZE,
+            LAYER_TEX_SIZE,
             slots,
             Format::rgba8unorm_srgb,
             levels,
@@ -113,7 +113,7 @@ impl Pack {
         g.write_buf(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.
         let bytes = (0..levels)
-            .map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots)
+            .map(|level| (LAYER_TEX_SIZE >> level).pow(2) * 4 * slots)
             .sum();
         Pack {
             tex,
@@ -147,8 +147,8 @@ impl Pack {
                 0,
                 0,
                 slot as u32,
-                LAYER_TEX_SZ,
-                LAYER_TEX_SZ,
+                LAYER_TEX_SIZE,
+                LAYER_TEX_SIZE,
             );
         }
         g.submit(encoder);

@@ -51,15 +51,15 @@
       "orient": "random",
       "on": ["park", "forest", "land"],
       "variants": [
-        { "model": "decor/kenney_fantasy_town/tree.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "sz": [1, 1, 3] },
-        { "model": "decor/kenney_fantasy_town/tree-high.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "sz": [1, 1, 3] },
-        { "model": "decor/kenney_fantasy_town/tree-crooked.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "sz": [1, 1, 3] },
-        { "model": "decor/kenney_fantasy_town/tree-high-round.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "sz": [1, 1, 3] },
-        { "model": "decor/kenney_fantasy_town/tree-high-crooked.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "sz": [1, 1, 3] },
-        { "model": "decor/kenney_graveyard_kit/pine.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "sz": [1, 1, 2] },
-        { "model": "decor/kenney_graveyard_kit/pine-crooked.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "sz": [1, 1, 2] },
-        { "model": "decor/kenney_graveyard_kit/pine-fall.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "sz": [1, 1, 2] },
-        { "model": "decor/kenney_graveyard_kit/pine-fall-crooked.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "sz": [1, 1, 2] }
+        { "model": "decor/kenney_fantasy_town/tree.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "size": [1, 1, 3] },
+        { "model": "decor/kenney_fantasy_town/tree-high.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "size": [1, 1, 3] },
+        { "model": "decor/kenney_fantasy_town/tree-crooked.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "size": [1, 1, 3] },
+        { "model": "decor/kenney_fantasy_town/tree-high-round.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "size": [1, 1, 3] },
+        { "model": "decor/kenney_fantasy_town/tree-high-crooked.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "size": [1, 1, 3] },
+        { "model": "decor/kenney_graveyard_kit/pine.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "size": [1, 1, 2] },
+        { "model": "decor/kenney_graveyard_kit/pine-crooked.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "size": [1, 1, 2] },
+        { "model": "decor/kenney_graveyard_kit/pine-fall.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "size": [1, 1, 2] },
+        { "model": "decor/kenney_graveyard_kit/pine-fall-crooked.glb", "skin": "decor/kenney_graveyard_kit/colormap.png", "size": [1, 1, 2] }
       ]
     },
     "boat": {
@@ -74,10 +74,10 @@
       "orient": "random",
       "on": ["water"],
       "variants": [
-        { "model": "decor/kenney_watercraft_pack/boat-row-small.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "sz": [3, 2, 1] },
-        { "model": "decor/kenney_watercraft_pack/boat-fishing-small.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "sz": [2, 4, 3] },
-        { "model": "decor/kenney_watercraft_pack/boat-sail-a.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "sz": [2, 4, 5] },
-        { "model": "decor/kenney_watercraft_pack/boat-speed-a.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "sz": [2, 3, 2] }
+        { "model": "decor/kenney_watercraft_pack/boat-row-small.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "size": [3, 2, 1] },
+        { "model": "decor/kenney_watercraft_pack/boat-fishing-small.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "size": [2, 4, 3] },
+        { "model": "decor/kenney_watercraft_pack/boat-sail-a.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "size": [2, 4, 5] },
+        { "model": "decor/kenney_watercraft_pack/boat-speed-a.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "size": [2, 3, 2] }
       ]
     },
     "car": {
@@ -93,11 +93,11 @@
       "orient": "along_transport",
       "on": ["motorway", "trunk", "primary", "secondary", "residential_road"],
       "variants": [
-        { "model": "decor/kenney_car_kit/sedan.glb", "skin": "decor/kenney_car_kit/colormap.png", "sz": [1, 3, 1] },
-        { "model": "decor/kenney_car_kit/suv.glb", "skin": "decor/kenney_car_kit/colormap.png", "sz": [1, 3, 1] },
-        { "model": "decor/kenney_car_kit/van.glb", "skin": "decor/kenney_car_kit/colormap.png", "sz": [1, 3, 1] },
-        { "model": "decor/kenney_car_kit/hatchback-sports.glb", "skin": "decor/kenney_car_kit/colormap.png", "sz": [1, 3, 1] },
-        { "model": "decor/kenney_car_kit/taxi.glb", "skin": "decor/kenney_car_kit/colormap.png", "sz": [1, 3, 1] }
+        { "model": "decor/kenney_car_kit/sedan.glb", "skin": "decor/kenney_car_kit/colormap.png", "size": [1, 3, 1] },
+        { "model": "decor/kenney_car_kit/suv.glb", "skin": "decor/kenney_car_kit/colormap.png", "size": [1, 3, 1] },
+        { "model": "decor/kenney_car_kit/van.glb", "skin": "decor/kenney_car_kit/colormap.png", "size": [1, 3, 1] },
+        { "model": "decor/kenney_car_kit/hatchback-sports.glb", "skin": "decor/kenney_car_kit/colormap.png", "size": [1, 3, 1] },
+        { "model": "decor/kenney_car_kit/taxi.glb", "skin": "decor/kenney_car_kit/colormap.png", "size": [1, 3, 1] }
       ]
     },
     "train": {
@@ -112,10 +112,10 @@
       "orient": "along_transport",
       "on": ["tram", "light_rail", "subway", "monorail", "rail"],
       "variants": [
-        { "model": "decor/kenney_train_kit/train-locomotive-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "sz": [1, 3, 2] },
-        { "model": "decor/kenney_train_kit/train-locomotive-b.glb", "skin": "decor/kenney_train_kit/colormap.png", "sz": [1, 3, 2] },
-        { "model": "decor/kenney_train_kit/train-diesel-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "sz": [1, 3, 2] },
-        { "model": "decor/kenney_train_kit/train-electric-city-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "sz": [1, 3, 2] }
+        { "model": "decor/kenney_train_kit/train-locomotive-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "size": [1, 3, 2] },
+        { "model": "decor/kenney_train_kit/train-locomotive-b.glb", "skin": "decor/kenney_train_kit/colormap.png", "size": [1, 3, 2] },
+        { "model": "decor/kenney_train_kit/train-diesel-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "size": [1, 3, 2] },
+        { "model": "decor/kenney_train_kit/train-electric-city-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "size": [1, 3, 2] }
       ]
     }
   }

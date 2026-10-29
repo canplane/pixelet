@@ -16,7 +16,7 @@ use crate::sys::io::text::{text_lines, text_width};
 use pxl_render::gpu::sheet::shelf::{Paint, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_render::look::marker::{
-    bubble_sz, pill_sz, point_sz, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
+    bubble_size, pill_size, point_size, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
 };
 use xpute_guest::global::Global;
 
@@ -64,7 +64,7 @@ impl Design {
 /// A sticker: a design as the sheet holds it, its size, laid out once, and
 /// its slot, none until it is asked for (`slot`).
 struct Sticker {
-    sz: [f64; 3],
+    size: [f64; 3],
     /// Its words as they were laid out when sized: the host's layouts are a
     /// cache it may let go.
     lines: Vec<String>,
@@ -110,9 +110,9 @@ pub fn coming(design: &Design) -> bool {
 
 /// Its width, height and where it stands down from its top; none until its
 /// words are laid out, which a later turn has.
-pub fn sz(design: &Design) -> Option<[f64; 3]> {
+pub fn size(design: &Design) -> Option<[f64; 3]> {
     if let Some(b) = stickers().get(design) {
-        return Some(b.sz);
+        return Some(b.size);
     }
     let laid = |font, wrap, text: &str| -> Option<(f64, Vec<String>)> {
         let laid = text_lines(font, wrap, text)?;
@@ -121,11 +121,11 @@ pub fn sz(design: &Design) -> Option<[f64; 3]> {
             laid.iter().map(|&(l, _)| l.trim().to_owned()).collect(),
         ))
     };
-    let (sz, lines) = match design {
-        Design::Pill { words, .. } => (pill_sz(text_width(PILL_FONT, words)?.ceil()), Vec::new()),
+    let (size, lines) = match design {
+        Design::Pill { words, .. } => (pill_size(text_width(PILL_FONT, words)?.ceil()), Vec::new()),
         Design::Point {
             name: None, icon, ..
-        } => (point_sz(*icon, None), Vec::new()),
+        } => (point_size(*icon, None), Vec::new()),
         Design::Point {
             name: Some(name),
             wrap,
@@ -133,28 +133,28 @@ pub fn sz(design: &Design) -> Option<[f64; 3]> {
             ..
         } => {
             let (w, lines) = laid(POINT_FONT, f64::from(*wrap), name)?;
-            (point_sz(*icon, Some((w, lines.len()))), lines)
+            (point_size(*icon, Some((w, lines.len()))), lines)
         }
         Design::Bubble { words } => {
             let (w, lines) = laid(BUBBLE_FONT, BUBBLE_TEXT_W, words)?;
-            (bubble_sz(w, lines.len()), lines)
+            (bubble_size(w, lines.len()), lines)
         }
     };
     stickers().insert(
         design.clone(),
         Sticker {
-            sz,
+            size,
             lines,
             slot: NO_SLOT,
         },
     );
-    Some(sz)
+    Some(size)
 }
 
 /// Whether the design is laid out and painted, so drawing it shows its
 /// words. It asks the sheet for no slot, which `slot` does.
 pub fn ready(design: &Design) -> bool {
-    sz(design).is_some()
+    size(design).is_some()
         && stickers()
             .get(design)
             .is_some_and(|b| b.slot != NO_SLOT && sheet().is_painted(b.slot as u32))
@@ -164,7 +164,7 @@ pub fn ready(design: &Design) -> bool {
 pub fn slot(design: &Design) -> i32 {
     let b = stickers().get_mut(design).or_bug(Errno::ENOTRECOVERABLE);
     if b.slot == NO_SLOT {
-        let [w, h, _] = b.sz;
+        let [w, h, _] = b.size;
         b.slot = sheet().add(
             w * SHEET_SCALE,
             h * SHEET_SCALE,

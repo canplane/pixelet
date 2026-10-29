@@ -72,7 +72,7 @@ pub enum Ghost {
 #[derive(Clone, Copy)]
 pub struct GhostBox {
     pub at: V3,
-    pub sz: f64,
+    pub size: f64,
     pub cube: Option<Cube>,
     pub erase: bool,
 }

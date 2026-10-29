@@ -46,7 +46,7 @@ pub const CNT_INK: u32 = 0x14141aff;
 
 /// A pill's sprite for words as wide as `text_w`: its width, height down to
 /// the dot's foot, and where what it marks is, at the dot's.
-pub fn pill_sz(text_w: f64) -> [f64; 3] {
+pub fn pill_size(text_w: f64) -> [f64; 3] {
     [
         (text_w + 2.0 * f64::from(PAD_X)).max(f64::from(PILL_H)),
         f64::from(PILL_H + DOT_GAP + DOT_DIAM),
@@ -106,7 +106,7 @@ pub fn point_mark(icon: bool) -> f32 {
 /// A point's sprite, its mark an icon's or a dot's, for a name laid out in
 /// `lines` as wide as `text_w`, or none: its width, height and where the
 /// place is, down from its top.
-pub fn point_sz(icon: bool, text: Option<(f64, usize)>) -> [f64; 3] {
+pub fn point_size(icon: bool, text: Option<(f64, usize)>) -> [f64; 3] {
     let mark = f64::from(point_mark(icon));
     match text {
         None => [mark, mark, mark / 2.0],
@@ -153,7 +153,7 @@ pub fn bubble_box_h(lines: usize) -> f32 {
 
 /// A bubble's sprite for `lines` lines as wide as `text_w`: its width,
 /// height with the tail, and where its speaker is, at the tail's tip.
-pub fn bubble_sz(text_w: f64, lines: usize) -> [f64; 3] {
+pub fn bubble_size(text_w: f64, lines: usize) -> [f64; 3] {
     let h = f64::from(bubble_box_h(lines) + TAIL_H);
     [text_w.ceil() + f64::from(PADDING_X) * 2.0, h, h]
 }
