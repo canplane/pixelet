@@ -42,7 +42,7 @@ impl<A: Copy> Line<A> {
     /// node over it, by zoom.
     pub fn kept(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
         Line {
-            at: node.index(origin),
+            at: node.idx(origin),
             zoom: node.zoom,
             live,
             stack: *stack,
@@ -62,7 +62,7 @@ impl<A: Copy> Keep<A> for Footing<A> {
 /// it; its line kept for the assets asked about it (`asset`).
 pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
     let (o, ray, detail) = down(cell, g);
-    let at = Node::ROOT.index(o);
+    let at = Node::ROOT.idx(o);
     let root = q.root(at);
     let mut f = Footing {
         top: (0, 0.0),
@@ -313,7 +313,7 @@ mod tests {
                 let from = if held {
                     (h, cast::Over::over(&Along(&first), h.zoom), t)
                 } else {
-                    (Node::ROOT, Step.root(Node::ROOT.index(o)), t)
+                    (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)
                 };
                 let mut kept = Kept(None, o);
                 let resumed = cast::walk(

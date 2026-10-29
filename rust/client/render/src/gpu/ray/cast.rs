@@ -467,7 +467,7 @@ impl RaysPass {
                 .try_into()
                 .or_bug(Errno::ENOTRECOVERABLE),
         );
-        let need = c.grid.size();
+        let need = c.grid.sz();
         if need > c.beam_room {
             if c.beams != 0 {
                 release(c.beams);
@@ -682,7 +682,7 @@ impl RaysPass {
             head[sun::MOVED_CAST] = c.sun_number;
             head[sun::MOVED_EPOCH] = c.sun_epoch;
             head[sun::MOVED_COUNTED] = u32::from(ray_counts);
-            head[sun::MOVED_SIZE] = shadow::SZ;
+            head[sun::MOVED_SZ] = shadow::SZ;
             let at = 4 * sun::STARTS_AT;
             head[at..at + 4 * sun::STARTS_VEC4S].copy_from_slice(&sun_map.2.words());
             // The actors drawn, receivers as decor is (`sun_mark_drawn_cs`).
@@ -972,8 +972,8 @@ impl RaysPass {
             // walk over their list, and over every pixel where it was full.
             g.copy_buf(
                 encoder,
-                (c.marks, word_bytes(ray::MISS_ARGS_COUNT as usize)),
-                (c.seen, word_bytes(observed::MARKS_COUNT as usize)),
+                (c.marks, word_bytes(ray::MISS_ARGS_CNT as usize)),
+                (c.seen, word_bytes(observed::MARKS_CNT as usize)),
                 4,
             );
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::miss as usize].pass());
@@ -1059,11 +1059,8 @@ impl RaysPass {
             // Their count where their walk reads it, then that walk.
             g.copy_buf(
                 encoder,
-                (c.sun_misses, word_bytes(ray::MISS_ARGS_COUNT as usize)),
-                (
-                    c.sun_list,
-                    word_bytes(sun::misses_count(shadow::SZ) as usize),
-                ),
+                (c.sun_misses, word_bytes(ray::MISS_ARGS_CNT as usize)),
+                (c.sun_list, word_bytes(sun::misses_cnt(shadow::SZ) as usize)),
                 4,
             );
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_walk as usize].pass());

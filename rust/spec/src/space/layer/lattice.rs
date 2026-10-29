@@ -90,7 +90,7 @@ impl Cells for Lattice {
         let n = self.tile_cells() as i32;
         let (tile, [tx, ty]) = (child_of([0, 0], q), self.in_tile(idx).map(|v| v as i32));
         let [x, y] = parent_of([tile[0] * n + tx, tile[1] * n + ty]);
-        self.cell_index(x as u32, y as u32)
+        self.cell_idx(x as u32, y as u32)
     }
 
     /// The child slot and the 2×2 cells, in `slot_of`'s order, a parent cell
@@ -100,7 +100,7 @@ impl Cells for Lattice {
         let [x, y] = child_of(self.in_tile(idx).map(|v| v as i32), 0);
         let [x0, y0] = [(x % n) as u32, (y % n) as u32];
         let cells =
-            std::array::from_fn(|q| self.cell_index(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
+            std::array::from_fn(|q| self.cell_idx(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
         (slot_of([x / n, y / n]), cells)
     }
 }

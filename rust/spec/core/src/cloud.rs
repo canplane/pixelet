@@ -12,7 +12,7 @@ use crate::param::cloud::WIND;
 use crate::UNIT_ZOOM;
 
 /// The lattice's units around the world, X's 2^24 units over a lattice unit's.
-pub const LATTICE_COUNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);
+pub const LATTICE_CNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);
 
 /// How far the field has moved under the map `time` seconds in, in cells.
 pub fn drift(time: f64) -> [f64; 2] {

@@ -41,7 +41,7 @@ use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
 use crate::window::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
 use crate::world::HANDED_WORDS;
-use crate::{wrap_index, Zoom, LEAF_CELL, ZOOM_BITS};
+use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
@@ -110,8 +110,8 @@ pub const ENTRIES_AT: u32 = HEAD_WORDS;
 /// pixel (`ray::MISS_ARGS_WHOLE`). Room for the bursts a load or a long
 /// zoom marks, about a hundred thousand at 9 Mpx.
 pub const MARKS: u32 = 1 << 20;
-pub const MARKS_COUNT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
-pub const MARKS_AT: u32 = MARKS_COUNT + 1;
+pub const MARKS_CNT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
+pub const MARKS_AT: u32 = MARKS_CNT + 1;
 /// The buffer's words, whatever is drawn: the list's room fixed, so none
 /// of them a pixel's.
 pub const WORDS: u32 = MARKS_AT + MARKS;
@@ -255,7 +255,7 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
     let world = 1i32 << LEAF_CELL;
     let (nw, bw) = (n[2] - n[0], b[2] - b[0]);
     // The box's first column from the node's, the short way round.
-    let from = wrap_index(LEAF_CELL, b[0].wrapping_sub(n[0]));
+    let from = wrap_idx(LEAF_CELL, b[0].wrapping_sub(n[0]));
     let across = nw >= world
         || bw >= world
         || (from < nw && from + bw > 0)

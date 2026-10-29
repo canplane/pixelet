@@ -39,7 +39,7 @@ pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
 /// Entry `at` of level `j` off the brick at `base`, its two bound words
 /// (`window::LEVEL_ENTRY_WORDS`).
 pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
-    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_index(j, [x, y]);
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_idx(j, [x, y]);
     [at(ground, e) as i32, at(ground, e + 1) as i32]
 }
 
@@ -152,7 +152,7 @@ impl way::Kept for Scratch<'_> {
             } else {
                 face
             },
-            w & SPANS_COUNT,
+            w & SPANS_CNT,
         )
     }
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
@@ -166,7 +166,7 @@ impl way::Kept for Scratch<'_> {
 
 /// A column's spans' head word's count (`window::SPANS_COLUMN_WORDS`); the
 /// bit over it, where they did not fit.
-const SPANS_COUNT: u32 = SPANS_PAST - 1;
+const SPANS_CNT: u32 = SPANS_PAST - 1;
 const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
@@ -224,7 +224,7 @@ impl window::Brick for Filling<'_> {
             return column_top(column_of(
                 self.ground,
                 self.base,
-                window::index_of([c[0] as u32, c[1] as u32]),
+                window::idx_of([c[0] as u32, c[1] as u32]),
             ));
         }
         let first = [
@@ -256,7 +256,7 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
         ],
         Shard::of_word(at(fresh, rec + FRESH_SHARD)),
     );
-    let i = window::index_of([x, y]);
+    let i = window::idx_of([x, y]);
     let own = ground::own(at(fresh, rec + LOOKS_AT + i), cell);
     let top = if own == ground::UNKNOWN {
         crate::SEA_LEVEL
@@ -274,7 +274,7 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     // in one leaf cell, whose ring is both's.
     let gone = |k: u32| {
         let b = [
-            crate::wrap_index(cell, first[0] + (x + k) as i32),
+            crate::wrap_idx(cell, first[0] + (x + k) as i32),
             first[1] + y as i32,
         ];
         let s = cell - crate::LEAF_CELL;
@@ -300,7 +300,7 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
 /// drawn by (`ground::Cell::four`), the one read of them past the fill.
 pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     let rec = window::handed_at(k);
-    let i = window::index_of([x, y]);
+    let i = window::idx_of([x, y]);
     put(
         looks,
         at(fresh, rec + FRESH_BRICK) * BRICK_CELLS + i,
@@ -350,7 +350,7 @@ pub fn keep(sq: &impl window::Brick, scratch: &mut [u32], mine: u32, i: u32) -> 
         let held = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32);
         let run = [held(s.run[j][0]), held(s.run[j][1])];
         put(scratch, w, crate::answer::bound_word(run) as u32);
-        put(scratch, w + 1, s.value[j]);
+        put(scratch, w + 1, s.val[j]);
         j += 1;
     }
     if fits {
@@ -379,7 +379,7 @@ pub fn level(
     at: [u32; 2],
 ) {
     let w = if j == 0 {
-        let top = column_top(column_of(ground, base, window::index_of(at)));
+        let top = column_top(column_of(ground, base, window::idx_of(at)));
         let lines = way::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
@@ -395,7 +395,7 @@ pub fn level(
             at,
         )
     };
-    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_index(j, at);
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_idx(j, at);
     put(ground, e, w[0] as u32);
     put(ground, e + 1, w[1] as u32);
 }
@@ -556,7 +556,7 @@ mod tests {
                 .map(|_| base_top + next(9) as i32 - 4)
                 .collect();
             for i in 0..BRICK_CELLS {
-                let [x, y] = window::of_index(i);
+                let [x, y] = window::of_idx(i);
                 let ring = ((y + 1) * SPANS_ACROSS + x + 1) as usize;
                 put(&mut lane, COLUMNS_AT + i, tops[ring] as u32 & 0xffff);
             }
@@ -577,7 +577,7 @@ mod tests {
                     for j in 0..s.n as usize {
                         let lo = top + next(40) as i32 - 30;
                         s.run[j] = [lo, lo + 1 + next(12) as i32];
-                        s.value[j] = match next(3) {
+                        s.val[j] = match next(3) {
                             0 => way::AIR_OF | 3,
                             1 => 7,
                             _ => way::PIER,
@@ -593,7 +593,7 @@ mod tests {
                         w,
                         crate::answer::bound_word(s.run[j as usize]) as u32,
                     );
-                    put(&mut scratch, w + 1, s.value[j as usize]);
+                    put(&mut scratch, w + 1, s.val[j as usize]);
                 }
             }
             let kept = Scratch {
@@ -612,11 +612,11 @@ mod tests {
             let p = Read(&pool);
             let s = 1i32 << (crate::LEAF_CELL - cell);
             for i in 0..BRICK_CELLS {
-                let [x, y] = window::of_index(i);
+                let [x, y] = window::of_idx(i);
                 for z in (base_top - 60) / s..(base_top + 60) / s {
                     let at = [x as i32, y as i32, z];
                     let held = tree::cursor(&p, root, cell, cell, at);
-                    let got = tree::read(overwrite::value(&p, held, Cut::NONE, cell, at));
+                    let got = tree::read(overwrite::val(&p, held, Cut::NONE, cell, at));
                     let want = match way::lined(&kept, [at[0], at[1]], cell, z) {
                         way::NOTHING => ground::VOID,
                         v => v,

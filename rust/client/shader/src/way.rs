@@ -157,10 +157,10 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     let len = stack.len() as u32;
     // SAFETY: word `TAKEN`, the stack's first; the buffer is never empty
     // (pxl-render gpu/ray/ground.rs makes it a word a family of the pool's).
-    let count = unsafe { stack.get_unchecked_mut(TAKEN as usize) };
+    let cnt = unsafe { stack.get_unchecked_mut(TAKEN as usize) };
     let mut gone = unsafe {
         spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(
-            count,
+            cnt,
         )
     };
     let (mut done, mut ok) = (false, false);
@@ -175,7 +175,7 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
                     { Scope::QueueFamily as u32 },
                     { Semantics::NONE.bits() },
                     { Semantics::NONE.bits() },
-                >(count, gone + n, gone)
+                >(cnt, gone + n, gone)
             };
             (done, ok) = (was == gone, was == gone);
             if !done {

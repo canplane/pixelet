@@ -6,7 +6,7 @@
 //! alike. What places it in the world, a position's cell or a tile's
 //! neighbors, is pxl-spec's (space/layer/lattice.rs `Cells`).
 
-use crate::{count, Zoom, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
+use crate::{cnt, Zoom, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
 
 /// Where a cell's center lies in it, as a share of its side from its low
 /// corner: what a cell is painted, sampled and crossed at.
@@ -92,20 +92,20 @@ impl Lattice {
 
     /// How many of its finest cells stand across one at `z`.
     pub const fn finest_in(self, zoom: Zoom) -> u32 {
-        count(self.cell, self.cell_zoom(zoom))
+        cnt(self.cell, self.cell_zoom(zoom))
     }
 
     pub const fn tile_cells(self) -> u32 {
-        count(self.cell, LEAF_ZOOM)
+        cnt(self.cell, LEAF_ZOOM)
     }
 
-    pub const fn cell_index(self, tx: u32, ty: u32) -> u32 {
+    pub const fn cell_idx(self, tx: u32, ty: u32) -> u32 {
         ty * self.tile_cells() + tx
     }
 
-    pub const fn in_tile(self, index: u32) -> [u32; 2] {
+    pub const fn in_tile(self, idx: u32) -> [u32; 2] {
         let n = self.tile_cells();
-        [index % n, index / n]
+        [idx % n, idx / n]
     }
 }
 

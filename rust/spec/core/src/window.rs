@@ -14,7 +14,7 @@
 
 use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
 use crate::lattice::{GROUND, TILE_CELLS};
-use crate::{wrap_index, Zoom, LEAF_CELL, TOP_ZOOM};
+use crate::{wrap_idx, Zoom, LEAF_CELL, TOP_ZOOM};
 
 /// A brick's side in cells, as a shift.
 pub const BRICK_SHIFT: u32 = 6;
@@ -126,7 +126,7 @@ pub const RADIUS: u32 = crate::grid::SPLIT as u32;
 /// hold the cells [c − RADIUS, c + RADIUS] wherever in a brick `c` lies.
 pub fn origin(cell: Zoom, c: [i32; 2]) -> [i32; 2] {
     let first = |v: i32| (v - RADIUS as i32) >> BRICK_SHIFT;
-    [wrap_index(bricks_zoom(cell), first(c[0])), first(c[1])]
+    [wrap_idx(bricks_zoom(cell), first(c[0])), first(c[1])]
 }
 
 /// The zoom a window's bricks are counted at: its cells' over `BRICK_SHIFT`.
@@ -161,8 +161,8 @@ pub const fn level_at(j: u32) -> u32 {
 
 /// Entry `[x, y]` of level `j` among a brick's levels, each level laid as
 /// its cells are (`index_of`).
-pub const fn level_index(j: u32, at: [u32; 2]) -> u32 {
-    level_at(j) + index_of(at)
+pub const fn level_idx(j: u32, at: [u32; 2]) -> u32 {
+    level_at(j) + idx_of(at)
 }
 
 /// Cell `[x, y]`'s index among a brick's cells (or a level's entries), the
@@ -171,12 +171,12 @@ pub const fn level_index(j: u32, at: [u32; 2]) -> u32 {
 /// four in a row and the cells about one lie near it, as a texture's tiling
 /// lays them for its 2D cache (decision 20261014, the grid's storage by the
 /// 2D cache). A cell and the one after it in x, x even, are two in a row.
-pub const fn index_of([x, y]: [u32; 2]) -> u32 {
+pub const fn idx_of([x, y]: [u32; 2]) -> u32 {
     spread(x) | spread(y) << 1
 }
 
 /// The cell at index `i` (`index_of`'s inverse).
-pub const fn of_index(i: u32) -> [u32; 2] {
+pub const fn of_idx(i: u32) -> [u32; 2] {
     [gather(i), gather(i >> 1)]
 }
 
@@ -365,11 +365,11 @@ fn is_held(c: [i32; 2]) -> bool {
 }
 
 /// Column `c`'s cell index in the brick, none outside it.
-fn cell_index(c: [i32; 2]) -> u32 {
+fn cell_idx(c: [i32; 2]) -> u32 {
     if c[0] < 0 || c[1] < 0 || c[0] >= BRICK as i32 || c[1] >= BRICK as i32 {
         return BRICK_CELLS;
     }
-    index_of([c[0] as u32, c[1] as u32])
+    idx_of([c[0] as u32, c[1] as u32])
 }
 
 /// Column `c`'s bin word, a ring column's the edge bin it borders: its
@@ -421,7 +421,7 @@ impl<Q: Brick> crate::way::Columns for Q {
     fn per_m(&self) -> f32 {
         header_of(self).0
     }
-    fn count(&self, c: [i32; 2]) -> u32 {
+    fn cnt(&self, c: [i32; 2]) -> u32 {
         bin_of(self, c).1
     }
     fn segment(&self, c: [i32; 2], k: u32) -> crate::way::Segment {
@@ -441,7 +441,7 @@ impl<Q: Brick> crate::way::Columns for Q {
     /// column in its leaf cell as its world index does. A ring column is
     /// none of the brick's, never walled.
     fn is_walled(&self, c: [i32; 2]) -> bool {
-        let i = cell_index(c);
+        let i = cell_idx(c);
         i != BRICK_CELLS && crate::area::laid(self.laid(i), Brick::cell(self), c) == UNKNOWN
     }
     fn stations(&self) -> crate::way::Stations {
@@ -451,7 +451,7 @@ impl<Q: Brick> crate::way::Columns for Q {
     /// laid it (`LAID_WORDS`): the wall is the descent's to lay (`ground`'s
     /// reader).
     fn look(&self, c: [i32; 2]) -> u32 {
-        let i = cell_index(c);
+        let i = cell_idx(c);
         if i == BRICK_CELLS {
             VOID
         } else {
@@ -538,7 +538,7 @@ impl Found {
 /// The cell at `from` that column `c` of the cells at `zoom` lies in.
 fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
     let s = zoom - from;
-    [wrap_index(from, c[0] >> s), c[1] >> s]
+    [wrap_idx(from, c[0] >> s), c[1] >> s]
 }
 
 /// The window holding a node's cells at `cell` from its first, `g`, stepped
@@ -602,7 +602,7 @@ pub fn cell(w: &impl Bricks, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32
     if !f.here() {
         return (VOID, 0, laid_half(VOID, 0), f);
     }
-    let (from, slot, i) = (f.from(), f.slot(), index_of(at));
+    let (from, slot, i) = (f.from(), f.slot(), idx_of(at));
     (
         w.look(from, slot, i),
         w.column(from, slot, i),
@@ -661,7 +661,7 @@ pub const WINDOW_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 pub const JOINED_LEVELS: u32 = WINDOW_LEVELS - LEVELS;
 /// A window's entries: level `l` over a brick has `(ACROSS >> l)²`, an
 /// aligned block of `2^l` bricks a side each.
-pub const JOINED_ENTRIES: u32 = joined_index(JOINED_LEVELS + 1, [0, 0]);
+pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_LEVELS + 1, [0, 0]);
 /// An entry's words: its key, the block's first brick at its cells' zoom,
 /// X then Y, each with its sign flipped (`key_word`), so the zero entry,
 /// as fresh memory holds it, names no brick; then the join's bounds, the
@@ -740,9 +740,9 @@ pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_WINDOWS;
 /// entries `4b..4b + 4` of the level under it. The levels under `l` hold
 /// `(ACROSS >> m)²` each, `m` from 1: a geometric sum, `(ACROSS² −
 /// (ACROSS >> (l − 1))²) / 3`, whole as a difference of two powers of four.
-pub const fn joined_index(l: u32, at: [u32; 2]) -> u32 {
+pub const fn joined_idx(l: u32, at: [u32; 2]) -> u32 {
     let under = ACROSS >> (l - 1);
-    (ACROSS * ACROSS - under * under) / 3 + index_of(at)
+    (ACROSS * ACROSS - under * under) / 3 + idx_of(at)
 }
 const _: () = assert!(ACROSS.is_power_of_two() && JOINED_LEVELS < ACROSS.trailing_zeros() + 1);
 
@@ -765,7 +765,7 @@ const fn key_word(v: i32) -> u32 {
 /// laid out or no window holds a brick of the block, a lack. A level is
 /// folded once the one under it is.
 pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS as usize] {
-    let [x, y] = of_index(b);
+    let [x, y] = of_idx(b);
     let (first, laid) = w.origin(cell);
     let key = [key_word(first[0]), key_word(first[1])];
     let half = 1 << (l - 1);
@@ -780,10 +780,7 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
             );
             held_brick(w, cell, q)
         } else {
-            unfold(
-                w.joined(cell, joined_index(l - 1, [0, 0]) + 4 * b + k),
-                first,
-            )
+            unfold(w.joined(cell, joined_idx(l - 1, [0, 0]) + 4 * b + k), first)
         };
         // Component-wise: a GPU has no array equality. A half no window
         // holds is none of either source.
@@ -847,10 +844,10 @@ fn held_of(w: &impl Bricks, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground::
     if !laid {
         return ([crate::ground::EMPTY; 2], false);
     }
-    let (q, _) = brick_of([wrap_index(cell, g[0]), g[1]]);
+    let (q, _) = brick_of([wrap_idx(cell, g[0]), g[1]]);
     // The node's first brick from the window's, X the short way round.
     let d = [
-        wrap_index(bricks_zoom(cell), q[0] - first[0]),
+        wrap_idx(bricks_zoom(cell), q[0] - first[0]),
         q[1] - first[1],
     ];
     let (side, across) = (1i32 << l, ACROSS as i32);
@@ -867,7 +864,7 @@ fn held_of(w: &impl Bricks, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground::
         (ACROSS - 1) as i32,
     );
     let at = [((q[0] & m) as u32) >> level, ((q[1] & m) as u32) >> level];
-    let b = unfold(w.joined(cell, joined_index(level, at)), first);
+    let b = unfold(w.joined(cell, joined_idx(level, at)), first);
     // A brick no window holds: no coarser window bounds it either.
     if b[0][0] == crate::ground::UNBOUNDED[0] && b[0][1] == crate::ground::UNBOUNDED[1] {
         return (b, true);
@@ -939,8 +936,8 @@ fn bounded(
 ) -> (crate::ground::Bounds, Zoom, bool, bool) {
     // The node's first cell at `cell`, or the cell holding it.
     let g = [
-        crate::index_at(zoom, c[0], cell),
-        crate::index_at(zoom, c[1], cell),
+        crate::idx_at(zoom, c[0], cell),
+        crate::idx_at(zoom, c[1], cell),
     ];
     if cell > zoom + LEVELS {
         let (b, all) = held_of(w, cell, g, cell - zoom - LEVELS);

@@ -7,7 +7,7 @@ fn zoom_power_of_two() {
     for zoom in [27, UNIT_ZOOM, 18, 15] {
         assert_eq!(of_side(units(zoom)), zoom);
     }
-    assert_eq!(count(UNIT_ZOOM, 15) as f64, units(15));
+    assert_eq!(cnt(UNIT_ZOOM, 15) as f64, units(15));
 }
 
 /// A point's cell at a zoom holds it, either side of the origin and below a unit.

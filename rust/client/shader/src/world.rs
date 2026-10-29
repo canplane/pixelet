@@ -240,7 +240,7 @@ impl<L: Looks> World<'_, L> {
         if answer::kept(met.stop.asset[0]) < answer::EIGHTHS {
             return face::BOX;
         }
-        let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
+        let (zoom, c) = (met.stop.node.zoom, met.stop.node.idx(origin));
         let line = line(self, zoom, c);
         face::word(face_of(ray, met.stop.axis), |d| {
             answer::whole(support::asset(self, &line, zoom, face::beside(zoom, c, d)))
@@ -252,5 +252,5 @@ impl<L: Looks> World<'_, L> {
 /// `ray`): 2·axis, plus one where its outward normal points down the axis,
 /// against the ray.
 pub(crate) fn face_of(ray: &cast::Ray, axis: u32) -> u32 {
-    2 * axis + (pxl_spec_core::axis(ray.direction, axis) > 0.0) as u32
+    2 * axis + (pxl_spec_core::axis(ray.dir, axis) > 0.0) as u32
 }

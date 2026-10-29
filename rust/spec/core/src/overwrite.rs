@@ -58,8 +58,8 @@ pub const AIR: u32 = object::air as u32;
 /// branch's fold the kind most of its fill is low and its share of its cube
 /// filled high (`fold_word`). Low, the value or the kind either way
 /// (`low`); high, the handle or the share (`high`).
-pub const fn leaf_word(value: u32, ext: u32) -> u32 {
-    value & 0xffff | ext << 16
+pub const fn leaf_word(val: u32, ext: u32) -> u32 {
+    val & 0xffff | ext << 16
 }
 
 /// A fold's word: its kind and its share (`leaf_word`).
@@ -285,8 +285,8 @@ pub fn child(lanes: &impl Lanes, parent: Held, zoom: Zoom, at: [i32; 3]) -> Held
 
 /// Whether a value is drawn as a voxel, a placeable cube or air, rather than
 /// an instance or nothing.
-pub const fn voxel(value: u32) -> bool {
-    value == AIR || Ground::grounds(value) || Object::objects(value)
+pub const fn voxel(val: u32) -> bool {
+    val == AIR || Ground::grounds(val) || Object::objects(val)
 }
 
 /// Whether `cut` is at `zoom` or coarser and its cube holds the node `at`.
@@ -308,7 +308,7 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 /// that is a voxel is. How much of the cell is kept is the cell's, of
 /// every layer together (`answer::cover`, `answer::eighths`). `hide`, a
 /// preview's left-out leaf, is left out where it is the leaf itself.
-pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
+pub fn val(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
     let word = if held.holds() {
         lanes.data(held.slot())
     } else {
@@ -372,7 +372,7 @@ pub fn looks(
             2 * at[1] + (k >> 1 & 1) as i32,
             2 * at[2] + (k >> 2) as i32,
         ];
-        let c = value(lanes, of(lanes, base + k, zoom + 1), hide, zoom + 1, child);
+        let c = val(lanes, of(lanes, base + k, zoom + 1), hide, zoom + 1, child);
         (c, c != VOID && c != AIR)
     };
     let mut four = [v; 4];
@@ -444,7 +444,7 @@ pub fn over(
     let v = if carved {
         AIR
     } else {
-        value(lanes, held, hide, zoom, at)
+        val(lanes, held, hide, zoom, at)
     };
     let says = if v == VOID { UNDER } else { CELL };
     Over {

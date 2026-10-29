@@ -126,7 +126,7 @@ const _: () = assert!(FINEST_ZOOM < 1 << ZOOM_BITS);
 
 /// Index `v` along an axis at `zoom` as an index at `to`: the first of the
 /// finer that lie in it, or the coarser it lies in, the floor.
-pub const fn index_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
+pub const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
     if to >= zoom {
         v << (to - zoom)
     } else {
@@ -136,7 +136,7 @@ pub const fn index_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
 
 /// X named as the world names it at `zoom`, X going round: from minus half
 /// its count to under half (pxl-spec space/coord/world.rs `wrap_index`).
-pub fn wrap_index(zoom: Zoom, x: i32) -> i32 {
+pub fn wrap_idx(zoom: Zoom, x: i32) -> i32 {
     match zoom {
         0 => 0,
         z => x.wrapping_shl(32 - z) >> (32 - z),
@@ -144,7 +144,7 @@ pub fn wrap_index(zoom: Zoom, x: i32) -> i32 {
 }
 
 /// How many `inner` cells stand across one `outer`, which is no finer.
-pub const fn count(inner: Zoom, outer: Zoom) -> u32 {
+pub const fn cnt(inner: Zoom, outer: Zoom) -> u32 {
     if inner < outer {
         panic!("an outer zoom finer than the inner")
     }

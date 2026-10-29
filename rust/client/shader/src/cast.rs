@@ -41,9 +41,9 @@ fn word<A: Copy>(
         return [0, 0, met.visits, 0];
     }
     let s = met.stop;
-    let [value, four] = s.asset;
+    let [val, four] = s.asset;
     [
-        ray::first_word(value, face_of(ray, s.axis), s.node.zoom),
+        ray::first_word(val, face_of(ray, s.axis), s.node.zoom),
         s.t.to_bits(),
         if steps { met.visits } else { four },
         faces,
@@ -58,9 +58,9 @@ const _: () = assert!(
 /// its middle off by the eye's jitter (pxl-spec-core `eye::JITTER`), of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
-pub(crate) fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
-    let ndc_x = (p.x as f32 + 0.5 + eye.jitter.x) / size.x as f32 * 2.0 - 1.0;
-    let ndc_y = 1.0 - (p.y as f32 + 0.5 + eye.jitter.y) / size.y as f32 * 2.0;
+pub(crate) fn px_tan(eye: &Eye, p: UVec3, sz: UVec3) -> [f32; 2] {
+    let ndc_x = (p.x as f32 + 0.5 + eye.jitter.x) / sz.x as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p.y as f32 + 0.5 + eye.jitter.y) / sz.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
 }
 
@@ -89,7 +89,7 @@ const CAST_SIDE: u32 = 8;
 /// `ray::MISS`; `miss_list_cs`, `miss_cs`), so no lane carries a walk's
 /// footprint for the few that walk. A marked pixel is listed for that walk
 /// (pxl-spec-core `observed::MARKS_AT`) by a plain write, its place taken
-/// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_COUNT`),
+/// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_CNT`),
 /// so no word of the pyramid is typed atomic here; one past the list's room
 /// has the walk over every pixel dispatched instead.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cast_cs"))]
@@ -103,7 +103,7 @@ pub fn cast_cs(
     #[spirv(descriptor_set = 0, binding = 13)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
 ) {
-    let size: UVec3 = rays.query_size();
+    let sz: UVec3 = rays.query_size();
     // The frame's region, dispatched from its first pixel (pxl-spec-core
     // `eye::JITTER`).
     let id = UVec3::new(
@@ -111,11 +111,11 @@ pub fn cast_cs(
         id.y + eye.jitter.w as u32,
         id.z,
     );
-    if id.x >= size.x || id.y >= size.y {
+    if id.x >= sz.x || id.y >= sz.y {
         return;
     }
     let g = grid(eye);
-    let px = pixel_tan(eye, id, size);
+    let px = px_tan(eye, id, sz);
     let aim = eye.aim(px);
     let ray = aim.ray;
     // [naga] Fetched at u32s, as the raster wrote them.
@@ -160,7 +160,7 @@ pub fn cast_cs(
             seen_at(beams, k + beam::SAMPLE_FACES),
             seen_at(beams, k + beam::SAMPLE_VISITS),
         );
-        add_count(marks, on, tally::TOOK, 1);
+        add_cnt(marks, on, tally::TOOK, 1);
         write_ray(
             rays,
             id,
@@ -180,10 +180,10 @@ pub fn cast_cs(
     // Neither: marked and listed for its walk (`miss_list_cs`), which reads
     // and writes the pyramid. No walk is this pass's own, so a lane that
     // takes its visible sample pays none of a walk's footprint.
-    add_count(marks, on, tally::WALKED, 1);
+    add_cnt(marks, on, tally::WALKED, 1);
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
-    let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
+    let whole = [sz.x.div_ceil(CAST_SIDE), sz.y.div_ceil(CAST_SIDE)];
     let at = enlist(marks, observed::MARKS, whole);
     if at < observed::MARKS {
         seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
@@ -193,7 +193,7 @@ pub fn cast_cs(
 /// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
 /// `tally::TOOK` on) in its walk again's args `args`, where `on`
 /// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
-pub(crate) fn add_count(args: &mut [u32], on: bool, lane: u32, v: u32) {
+pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
     if on {
         add(args, ray::MISS_ARGS_TALLY + lane - tally::TOOK, v);
     }
@@ -201,13 +201,13 @@ pub(crate) fn add_count(args: &mut [u32], on: bool, lane: u32, v: u32) {
 
 /// One more missed ray listed for its walk again, the eye's pixels and the
 /// sun's slots alike (pxl-shader sun.rs `sun_cs`): its place off the count
-/// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_COUNT`),
+/// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_CNT`),
 /// the rows the list fills raised to hold it (`ray::MISS_ARGS_LIST`); one
 /// past the list's `room` has the walk over `whole` workgroups dispatched
 /// instead (`ray::MISS_ARGS_WHOLE`). Its place, which the caller writes
 /// where it is under `room`.
 pub(crate) fn enlist(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
-    let at = add(args, ray::MISS_ARGS_COUNT, 1);
+    let at = add(args, ray::MISS_ARGS_CNT, 1);
     if at < room {
         most(
             args,
@@ -237,7 +237,7 @@ fn missed(
     beams: &Beams,
     seen: &mut Seen,
     id: UVec3,
-    size: UVec3,
+    sz: UVec3,
 ) -> [u32; ray::WORDS as usize] {
     let mut world = World {
         window,
@@ -250,7 +250,7 @@ fn missed(
     };
     let mut lined = Lined::before();
     let (aim, met, before) =
-        observer::walked(eye, world, seen, beams, pixel_tan(eye, id, size), &mut lined);
+        observer::walked(eye, world, seen, beams, px_tan(eye, id, sz), &mut lined);
     let faces = world.faced(aim.origin, &aim.ray, &met, |_, _, _| {
         support::Line::kept(aim.origin, &met.stop.node, lined.live, &lined.stack)
     });
@@ -283,8 +283,8 @@ pub fn miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let (window, beams): (&[IVec4], &Beams) = (window, beams);
-    let size: UVec3 = rays.query_size();
-    if id.x >= size.x || id.y >= size.y {
+    let sz: UVec3 = rays.query_size();
+    if id.x >= sz.x || id.y >= sz.y {
         return;
     }
     let first: u32 = rays.read(UVec3::new(id.x, id.y, 0));
@@ -292,7 +292,7 @@ pub fn miss_cs(
         return;
     }
     let w = missed(
-        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
+        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, sz,
     );
     write_ray(rays, id, w);
 }
@@ -302,7 +302,7 @@ pub fn miss_cs(
 /// workgroup and `ray::MISS_ACROSS` workgroups a row, dispatched over the
 /// rows the list filled (`ray::MISS_ARGS_LIST`), each past the count
 /// returning at once. The count is copied into the pyramid's buffer once
-/// `cast_cs` is done (`observed::MARKS_COUNT`).
+/// `cast_cs` is done (`observed::MARKS_CNT`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "miss_list_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn miss_list_cs(
@@ -321,18 +321,18 @@ pub fn miss_list_cs(
 ) {
     let (window, beams): (&[IVec4], &Beams) = (window, beams);
     let k = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES + lane.x;
-    let count = seen_at(seen, observed::MARKS_COUNT);
-    if k >= count || k >= observed::MARKS {
+    let cnt = seen_at(seen, observed::MARKS_CNT);
+    if k >= cnt || k >= observed::MARKS {
         return;
     }
     let listed = seen_at(seen, observed::MARKS_AT + k);
     let id = UVec3::new(listed & 0xffff, listed >> 16, 0);
-    let size: UVec3 = rays.query_size();
-    if id.x >= size.x || id.y >= size.y {
+    let sz: UVec3 = rays.query_size();
+    if id.x >= sz.x || id.y >= sz.y {
         return;
     }
     let w = missed(
-        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
+        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, sz,
     );
     write_ray(rays, id, w);
 }

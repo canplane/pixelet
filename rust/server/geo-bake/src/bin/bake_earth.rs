@@ -183,7 +183,7 @@ fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
     let mut rgba = vec![0u8; earth::EARTH_BYTES];
     for ty in 0..TILE_CELLS {
         for tx in 0..TILE_CELLS {
-            let idx = GROUND.cell_index(tx, ty);
+            let idx = GROUND.cell_idx(tx, ty);
             let cell = GROUND.cell_at(tile, idx);
             let (base, side) = (cell.base(), cell.side());
             let (x, y) = (

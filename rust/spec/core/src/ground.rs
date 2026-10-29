@@ -53,7 +53,7 @@ pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = TILE_ELE_SPAN + 2 * ELE_PAD;
 
 /// Sample (x, y) of a padded elevation grid, rows from the south.
-pub const fn ele_index(x: u32, y: u32) -> usize {
+pub const fn ele_idx(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
 }
 
@@ -170,7 +170,7 @@ pub fn bicubic(ele: impl Fn(usize) -> i32, tx: f32, ty: f32) -> i32 {
         let mut row = 0.0f32;
         let mut i = 0;
         while i < 4 {
-            let v = ele(ele_index(held(x0 + i), py));
+            let v = ele(ele_idx(held(x0 + i), py));
             lo = lo.min(v);
             hi = hi.max(v);
             row += v as f32 * wx[i as usize];
@@ -187,7 +187,7 @@ pub fn bicubic(ele: impl Fn(usize) -> i32, tx: f32, ty: f32) -> i32 {
 /// parent cell's zoom, since a fixed corner drifts the map half a coarse cell a step.
 pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
     let tie = v[if parent & 1 == 1 { 0 } else { N - 1 }];
-    let count = |x: T| {
+    let cnt = |x: T| {
         let (mut n, mut k) = (0, 0);
         while k < N {
             n += usize::from(v[k] == x);
@@ -199,7 +199,7 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
     let mut k = 0;
     while k < N {
         let x = v[k];
-        let n = count(x);
+        let n = cnt(x);
         if 2 * n > N {
             return x;
         }

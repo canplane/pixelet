@@ -91,8 +91,8 @@ pub fn reach(width: f32) -> f32 {
     (width * 0.5).max(core::f32::consts::FRAC_1_SQRT_2)
 }
 
-pub fn covers(width: f32, distance: f32) -> bool {
-    distance <= reach(width)
+pub fn covers(width: f32, dist: f32) -> bool {
+    dist <= reach(width)
 }
 
 /// How far from its line a way reaches anything drawn, in its tile's cells:
@@ -464,7 +464,7 @@ pub trait Columns {
     fn cell(&self) -> Zoom;
     fn per_m(&self) -> f32;
     /// How many segments may be over column `c`, and the `k`-th of them.
-    fn count(&self, c: [i32; 2]) -> u32;
+    fn cnt(&self, c: [i32; 2]) -> u32;
     fn segment(&self, c: [i32; 2], k: u32) -> Segment;
     /// The column's center in its tile's cells, a cell a side.
     fn center(&self, c: [i32; 2]) -> [f32; 2];
@@ -496,7 +496,7 @@ fn visit<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Crossing, u32) {
         return (x, k + 1);
     }
     let mut j = k + 1;
-    while j < cols.count(c) && cols.joins(c, j) {
+    while j < cols.cnt(c) && cols.joins(c, j) {
         let y = crossing_at(cols, c, j);
         if !y.is() {
             break;
@@ -584,7 +584,7 @@ fn pier_stands<C: Columns>(
     }
     let gap = cells_of_m(LOWER_DECK_GAP_M, per_m);
     let mut k = 0;
-    while k < cols.count(c) {
+    while k < cols.cnt(c) {
         let (x, next) = visit(cols, c, k);
         k = next;
         if x.is() {
@@ -607,14 +607,14 @@ pub(crate) const AIR_OF: u32 = 0x80;
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Write {
     run: [i32; 2],
-    value: u32,
+    val: u32,
     pier: [i32; 2],
 }
 
 impl Write {
     const NONE: Write = Write {
         run: [0, 0],
-        value: NOTHING,
+        val: NOTHING,
         pier: [0, 0],
     };
 }
@@ -632,12 +632,12 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) 
     let w = match o.what {
         Occupy::Under => Write {
             run: o.span,
-            value: AIR_OF | x.kind,
+            val: AIR_OF | x.kind,
             pier: [0, 0],
         },
         Occupy::Over => Write {
             run: o.span,
-            value: x.kind,
+            val: x.kind,
             pier: if empty(o.pier) {
                 o.pier
             } else {
@@ -667,7 +667,7 @@ pub const SPANS: usize = 10;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spans {
     pub run: [[i32; 2]; SPANS],
-    pub value: [u32; SPANS],
+    pub val: [u32; SPANS],
     pub n: u32,
     pub face: i32,
 }
@@ -675,7 +675,7 @@ pub struct Spans {
 impl Spans {
     pub const NONE: Spans = Spans {
         run: [[0, 0]; SPANS],
-        value: [0; SPANS],
+        val: [0; SPANS],
         n: 0,
         face: i32::MIN,
     };
@@ -686,7 +686,7 @@ impl Spans {
             return false;
         }
         self.run[self.n as usize] = run;
-        self.value[self.n as usize] = v;
+        self.val[self.n as usize] = v;
         self.n += 1;
         true
     }
@@ -707,13 +707,13 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let ground = (cols.face(c), cols.per_m());
     spans.face = crate::ground::face_cell(cell, ground.0);
     let mut k = 0;
-    while k < cols.count(c) {
+    while k < cols.cnt(c) {
         let (w, next) = writes(cols, c, k, ground);
         k = next;
-        if w.value != NOTHING && fills_any(cell, w.run) {
-            fits &= spans.push(w.run, w.value);
+        if w.val != NOTHING && fills_any(cell, w.run) {
+            fits &= spans.push(w.run, w.val);
         }
-        if w.value != NOTHING && fills_any(cell, w.pier) {
+        if w.val != NOTHING && fills_any(cell, w.pier) {
             fits &= spans.push(w.pier, PIER);
         }
     }

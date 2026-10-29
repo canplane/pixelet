@@ -20,7 +20,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::WORLD_COLOR;
 use crate::look::environment::ENV_SKY;
 use pxl_spec::space::coord::world::EXTENT;
-use pxl_spec_core::cloud::{drift, LATTICE_COUNT};
+use pxl_spec_core::cloud::{drift, LATTICE_CNT};
 use pxl_spec_core::param::cloud::LATTICE_SHAMT;
 use pxl_spec_core::UNIT_ZOOM;
 
@@ -29,7 +29,7 @@ const _: () = assert!(
     "one lattice count for both axes"
 );
 const _: () = assert!(
-    LATTICE_COUNT.is_multiple_of(CLOUD_TILE_UNITS),
+    LATTICE_CNT.is_multiple_of(CLOUD_TILE_UNITS),
     "the world is whole tiles"
 );
 
@@ -142,11 +142,11 @@ fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
     for k in 0..2 {
         let u = eye[k] / side;
         words[BASE + k] =
-            f32::from_bits((u.floor() as i64).rem_euclid(i64::from(LATTICE_COUNT)) as u32);
+            f32::from_bits((u.floor() as i64).rem_euclid(i64::from(LATTICE_CNT)) as u32);
         words[FRAC + k] = (u - u.floor()) as f32;
         words[DRIFT + k] = drift[k] as f32;
     }
-    words[COUNT] = f32::from_bits(LATTICE_COUNT);
+    words[COUNT] = f32::from_bits(LATTICE_CNT);
 }
 
 fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {

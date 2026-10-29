@@ -58,7 +58,7 @@ pub fn joined_cs(
     };
     let k = (window::JOINED_AT
         + (cell - FIRST_CELL) * window::JOINED_ENTRIES
-        + window::joined_index(l, [0, 0])
+        + window::joined_idx(l, [0, 0])
         + b) as usize;
     if k < window.len() {
         window[k] = IVec4::new(x as i32, y as i32, bound as i32, pad as i32);

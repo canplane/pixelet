@@ -9,7 +9,7 @@
 //! straddles.
 
 use crate::cube::Ground;
-use crate::{index_at, wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
+use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
 
 use crate::ground::{UNKNOWN, VOID};
 
@@ -200,7 +200,7 @@ pub fn is_walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool 
     if shard.inside() {
         return false;
     }
-    let leaf = |v: i32| index_at(zoom, v, LEAF_CELL);
+    let leaf = |v: i32| idx_at(zoom, v, LEAF_CELL);
     let lo = [leaf(c[0]) - 1, leaf(c[1]) - 1];
     let hi = [leaf(c[0] + 1) + 1, leaf(c[1] + 1) + 1];
     let past = |l: [i32; 2]| shard.past_leaf((zoom, c), tile_at(LEAF_CELL, l));

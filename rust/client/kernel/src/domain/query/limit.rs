@@ -14,7 +14,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{Cells, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec_core::area::Shard;
-use pxl_spec_core::wrap_index;
+use pxl_spec_core::wrap_idx;
 
 use super::World;
 use crate::domain::layer::Query;
@@ -50,7 +50,7 @@ impl World<'_> {
         // The leaf tiles under it, the area a fact of each.
         let t = GROUND.tile_cell_shamt();
         let tiles = |k: usize| first(k) >> t..=(first(k) + cnt(k) - 1) >> t;
-        if !tiles(1).all(|y| tiles(0).all(|x| within_tile([wrap_index(LEAF_ZOOM, x), y]))) {
+        if !tiles(1).all(|y| tiles(0).all(|x| within_tile([wrap_idx(LEAF_ZOOM, x), y]))) {
             return false;
         }
         let s = (cnt(0).max(cnt(1)) as u64)
@@ -60,7 +60,7 @@ impl World<'_> {
         let nodes = |k: usize| first(k) >> s..=(first(k) + cnt(k) - 1) >> s;
         nodes(1).all(|y| {
             nodes(0).all(|x| {
-                let node = (zoom, [wrap_index(zoom, x), y]);
+                let node = (zoom, [wrap_idx(zoom, x), y]);
                 let (line, mut place) = (self.terrain.cursor(node, cell), Found::NONE);
                 // The ground's faces, in leaf cells.
                 self.terrain
@@ -84,7 +84,7 @@ fn within_tile(leaf: [i32; 2]) -> bool {
         shard.past_leaf(
             node,
             [
-                wrap_index(LEAF_ZOOM, leaf[0] + dx as i32),
+                wrap_idx(LEAF_ZOOM, leaf[0] + dx as i32),
                 leaf[1] + dy as i32,
             ],
         )

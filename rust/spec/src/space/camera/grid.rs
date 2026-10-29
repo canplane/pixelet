@@ -23,7 +23,7 @@ pub fn fov() -> f64 {
 }
 
 /// The view's cells a radian (pxl-spec-core `grid::CELLS_A_RADIAN`).
-pub const CELLS_A_RAD: f64 = pxl_spec_core::grid::CELLS_A_RADIAN as f64;
+pub const CELLS_A_RAD: f64 = pxl_spec_core::grid::CELLS_A_RAD as f64;
 
 /// How many times as far a window holds its zoom's cells as the view draws
 /// them (pxl-spec-core `grid::WINDOW_MARGIN`).

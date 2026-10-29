@@ -54,7 +54,7 @@ fn parent_child_cells() {
         let n = lattice.tile_cells();
         for q in 0..4 {
             for (tx, ty) in [(0, 0), (1, 0), (n - 1, n - 1), (n / 2, 3), (7, n - 2)] {
-                let child = lattice.cell_index(tx, ty);
+                let child = lattice.cell_idx(tx, ty);
                 let parent = lattice.parent_cell(q, child);
                 let (slot, cells) = lattice.child_cells(parent);
                 assert_eq!(slot, q, "the cells lie in the child tile the cell does");

@@ -10,10 +10,10 @@ use crate::fill::{column_of, laid_of, level_of, put, root_of, Fresh};
 use crate::ground::Bounds;
 use crate::support::{asset, footing};
 use crate::window::{
-    self, bound_over, column_top, entry, fold, join, joined_index, laid_half, level_index,
-    of_index, Entry, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, COLUMNS_AT, ENTRIES,
-    EYE_WINDOWS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LEVELS,
-    LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT, WINDOW, WINDOWS,
+    self, bound_over, column_top, entry, fold, join, joined_idx, laid_half, level_idx, of_idx,
+    Entry, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, COLUMNS_AT, ENTRIES, EYE_WINDOWS,
+    FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LEVELS, LEVELS_AT,
+    LEVEL_ENTRY_WORDS, ORIGIN_AT, WINDOW, WINDOWS,
 };
 use std::{vec, vec::Vec};
 
@@ -185,7 +185,7 @@ fn windows() -> (Vec<Entry>, Vec<u32>) {
             let base = slot * BRICK_WORDS;
             ground.resize(ground.len() + BRICK_WORDS as usize, 0);
             for i in 0..BRICK_CELLS {
-                let [x, y] = of_index(i);
+                let [x, y] = of_idx(i);
                 let mid = |v: i32| (v << s) + ((1 << s) >> 1);
                 let leaf = [
                     mid((q[0] << BRICK_SHIFT) + x as i32),
@@ -195,7 +195,7 @@ fn windows() -> (Vec<Entry>, Vec<u32>) {
                 put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
                 let w = &mut ground[(base + LAID_AT + i / 2) as usize];
                 *w |= laid_half(stone as u32, 0) << (16 * (i % 2));
-                let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_index(0, [x, y]);
+                let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(0, [x, y]);
                 let b = ground::bounds_word([[top, top], ground::EMPTY]);
                 put(&mut ground, e, b[0] as u32);
                 put(&mut ground, e + 1, b[1] as u32);
@@ -214,7 +214,7 @@ fn windows() -> (Vec<Entry>, Vec<u32>) {
                         j,
                         at,
                     );
-                    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_index(j, at);
+                    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(j, at);
                     put(&mut ground, e, b[0] as u32);
                     put(&mut ground, e + 1, b[1] as u32);
                 }
@@ -239,7 +239,7 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
             };
             let entries: Vec<_> = (0..blocks)
                 .map(|b| {
-                    let [x, y] = of_index(b);
+                    let [x, y] = of_idx(b);
                     let unheld = (0..4).any(|k| {
                         let s = entry([(2 * x + k % 2) as i32, (2 * y + k / 2) as i32]);
                         !w.brick(cell, s).1
@@ -252,8 +252,9 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
                 })
                 .collect();
             for (b, e) in entries.into_iter().enumerate() {
-                joined[((cell - FIRST_CELL) * JOINED_ENTRIES + joined_index(l, [0, 0])) as usize
-                    + b] = e;
+                joined
+                    [((cell - FIRST_CELL) * JOINED_ENTRIES + joined_idx(l, [0, 0])) as usize + b] =
+                    e;
             }
         }
     }

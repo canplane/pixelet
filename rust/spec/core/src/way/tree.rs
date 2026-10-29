@@ -331,13 +331,13 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 /// it, as the ways write it (`way::AIR`).
 pub fn leaf(pool: &mut impl Pool, kept: &impl super::Kept, cell: Zoom, slot: u32) {
     let at = unpack(pool.data(slot));
-    let value = super::lined(kept, [at[0], at[1]], cell, at[2]);
-    let word = if value == super::NOTHING {
+    let val = super::lined(kept, [at[0], at[1]], cell, at[2]);
+    let word = if val == super::NOTHING {
         ground::VOID
-    } else if value == super::AIR {
+    } else if val == super::AIR {
         overwrite::leaf_word(PLACED_AIR, 0)
     } else {
-        overwrite::leaf_word(value, 0)
+        overwrite::leaf_word(val, 0)
     };
     pool.set_heap(slot, 0);
     pool.set_data(slot, word);
@@ -438,11 +438,11 @@ pub fn lay(pool: &mut impl Pool, records: &[u32]) {
 /// How a reader reads a leaf's value: the ground's void for a bore's air,
 /// as the ways write it (`way::AIR`), else itself; `ground::VOID` where
 /// the tree holds nothing.
-pub fn read(value: u32) -> u32 {
-    if value == PLACED_AIR {
+pub fn read(val: u32) -> u32 {
+    if val == PLACED_AIR {
         super::AIR
     } else {
-        value
+        val
     }
 }
 

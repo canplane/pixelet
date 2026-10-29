@@ -14,7 +14,7 @@ use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::{neighbor_idx, CHILDREN};
 use xpute_kit::math::scalar::round;
 
-use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use super::constant::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use super::separation::fold_separation;
 use super::tile::terrain::{Ground, TerrainTile, ELE_LANE};
 use super::tile::Occupancy;
@@ -52,7 +52,7 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     let read = |qx: i64, qy: i64, mx: i64, my: i64| -> Option<i64> {
         let grid = around[neighbor_idx(qx as i32, qy as i32)]?;
         Some(
-            grid[ele_index(
+            grid[ele_idx(
                 (mx - qx * inner + pad) as u32,
                 (my - qy * inner + pad) as u32,
             )] as i64,
@@ -78,7 +78,7 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
             let (mx, my) = (2 * ix, 2 * iy);
             let sum =
                 sample(mx, my) + sample(mx + 1, my) + sample(mx, my + 1) + sample(mx + 1, my + 1);
-            out[ele_index(sx as u32, sy as u32)] = round(sum as f64 / 4.0) as i16;
+            out[ele_idx(sx as u32, sy as u32)] = round(sum as f64 / 4.0) as i16;
         }
     }
 }

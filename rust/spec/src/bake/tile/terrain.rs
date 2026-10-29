@@ -198,8 +198,8 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_spec_core::window::Brick for
 
 /// Cell `i` of the brick at `place` (in bricks), in its tile's cells.
 fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
-    use pxl_spec_core::window::{of_index, BRICK};
-    let [x, y] = of_index(i);
+    use pxl_spec_core::window::{of_idx, BRICK};
+    let [x, y] = of_idx(i);
     [place[0] * BRICK + x, place[1] * BRICK + y]
 }
 
@@ -283,7 +283,7 @@ pub fn brick_spans(
     record(tile, held, place, scratch, handed);
     let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
-    let first = [pxl_spec_core::wrap_index(cell, first[0]), first[1]];
+    let first = [pxl_spec_core::wrap_idx(cell, first[0]), first[1]];
     pxl_spec_core::fill::brick(handed, lane, kept, place, cell, first)
 }
 

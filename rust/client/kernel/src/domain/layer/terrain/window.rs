@@ -24,7 +24,7 @@ use pxl_spec_core::window::{
     self, Bricks, Entry, BRICK, BRICK_CELLS, BRICK_SHIFT, ENTRIES, EYE_WINDOWS, FIRST_CELL, HANDED,
     LEVELS, SLOTS, WINDOWS,
 };
-use pxl_spec_core::wrap_index;
+use pxl_spec_core::wrap_idx;
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 use xpute_guest::mem::off_of_slice;
@@ -203,7 +203,7 @@ fn fresh() -> Windows {
 fn cell_at(cell: Zoom, p: [f64; 2]) -> [i32; 2] {
     let side = units(cell);
     [
-        wrap_index(cell, (p[0] / side).floor() as i32),
+        wrap_idx(cell, (p[0] / side).floor() as i32),
         (p[1] / side).floor() as i32,
     ]
 }
@@ -216,7 +216,7 @@ fn wanted(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
         at(first[0], (s % window::ACROSS) as i32),
         at(first[1], (s / window::ACROSS) as i32),
     ];
-    [wrap_index(cell - BRICK_SHIFT, q[0]), q[1]]
+    [wrap_idx(cell - BRICK_SHIFT, q[0]), q[1]]
 }
 
 /// The tile brick `q` at `cell` lies in, and where in it, in bricks.
@@ -268,7 +268,7 @@ fn fold(w: &mut Windows) {
         for win in 0..EYE_WINDOWS {
             for b in 0..blocks {
                 let e = window::fold(&Holding(w), FIRST_CELL + win, l, b);
-                let at = win * window::JOINED_ENTRIES + window::joined_index(l, [0, 0]) + b;
+                let at = win * window::JOINED_ENTRIES + window::joined_idx(l, [0, 0]) + b;
                 w.joined[at as usize] = e;
             }
         }
@@ -767,7 +767,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
         let side = GROUND.tile_cells() as usize;
         let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
         for i in 0..BRICK_CELLS {
-            let [x, y] = window::of_index(i);
+            let [x, y] = window::of_idx(i);
             let from = 4 * ((y0 + y as usize) * side + x0 + x as usize);
             cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&lane[from..from + 4]);
         }

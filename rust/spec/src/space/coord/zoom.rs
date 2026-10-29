@@ -45,7 +45,7 @@ pub const fn units(zoom: Zoom) -> f64 {
 }
 
 /// How many `inner` cells stand across one `outer`, which is no finer.
-pub use pxl_spec_core::count;
+pub use pxl_spec_core::cnt;
 
 /// The zoom whose side is `units`, a power of two.
 pub fn of_side(units: f64) -> Zoom {

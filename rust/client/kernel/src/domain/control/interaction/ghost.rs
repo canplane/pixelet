@@ -61,7 +61,7 @@ pub fn ghost() -> Ghost {
             cube_of(
                 w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
                     .val()
-                    .map_or(0, pxl_spec_core::answer::value),
+                    .map_or(0, pxl_spec_core::answer::val),
             )
         }),
         _ => None,

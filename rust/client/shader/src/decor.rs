@@ -422,10 +422,10 @@ pub fn decor_count_cs(
     }
     let mut k = lane.x;
     while k < scatter::RUNS {
-        let (first, count) = records(grown, rows, group.x, k);
+        let (first, cnt) = records(grown, rows, group.x, k);
         let mut n = 0;
-        while n < count {
-            count_one(
+        while n < cnt {
+            cnt_one(
                 eye,
                 drawing,
                 rows,
@@ -440,7 +440,7 @@ pub fn decor_count_cs(
 }
 
 /// `decor_count_cs` for the record at word `i`.
-fn count_one(
+fn cnt_one(
     eye: &Eye,
     drawing: &[u32],
     rows: &[Decor],
@@ -512,7 +512,7 @@ pub fn decor_args_cs(
     while r < drawn::REGIONS {
         let n = regions[r as usize];
         regions[(drawn::REGIONS + r) as usize] = first;
-        uniforms[(r * drawn::UNIFORM_WORDS + drawn::UNIFORM_INDEX) as usize] += first;
+        uniforms[(r * drawn::UNIFORM_WORDS + drawn::UNIFORM_IDX) as usize] += first;
         let a = (drawn::ARGS_WORDS * r) as usize;
         if r % 2 == 0 {
             args[a] = at(meshes, r / 2);
@@ -552,9 +552,9 @@ pub fn decor_place_cs(
     }
     let mut k = lane.x;
     while k < scatter::RUNS {
-        let (first, count) = records(grown, rows, group.x, k);
+        let (first, cnt) = records(grown, rows, group.x, k);
         let mut n = 0;
-        while n < count {
+        while n < cnt {
             place_one(
                 drawing,
                 rows,
@@ -661,7 +661,7 @@ impl Instances<'_> {
     /// How many are placed: the last region's end once placed, the regions
     /// laid in order from the first slot (`decor_args_cs`), no more than the
     /// slots.
-    pub(crate) fn count(&self) -> u32 {
+    pub(crate) fn cnt(&self) -> u32 {
         at(self.regions, 2 * drawn::REGIONS - 1).min(self.room())
     }
 

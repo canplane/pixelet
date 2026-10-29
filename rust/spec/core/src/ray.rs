@@ -58,7 +58,7 @@ pub const MISS_LANES: u32 = 64;
 pub const MISS_ACROSS: u32 = 64;
 pub const MISS_ARGS_LIST: u32 = 0;
 pub const MISS_ARGS_WHOLE: u32 = 3;
-pub const MISS_ARGS_COUNT: u32 = 6;
+pub const MISS_ARGS_CNT: u32 = 6;
 pub const MISS_ARGS_TALLY: u32 = 7;
 pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + crate::tally::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0];
@@ -67,5 +67,5 @@ pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1,
 /// value and the share it keeps, the face and the zoom.
 pub const fn first_word(asset: u32, face: u32, zoom: Zoom) -> u32 {
     let kept = asset >> crate::answer::KEPT_SHIFT & ((1 << KEPT_BITS) - 1);
-    crate::answer::value(asset) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
+    crate::answer::val(asset) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
 }

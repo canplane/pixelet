@@ -26,7 +26,7 @@ impl<'a> Either<'a> {
         Either {
             eye,
             map: Map::of(eye, moved),
-            sun: sun::size(moved) != 0,
+            sun: sun::sz(moved) != 0,
         }
     }
 
@@ -103,11 +103,11 @@ impl Observer for Either<'_> {
         }
     }
 
-    fn line(&self, index: u32) -> u32 {
+    fn line(&self, idx: u32) -> u32 {
         if self.sun {
-            self.map.line(index)
+            self.map.line(idx)
         } else {
-            self.eye.line(index)
+            self.eye.line(idx)
         }
     }
 

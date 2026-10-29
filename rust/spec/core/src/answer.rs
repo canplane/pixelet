@@ -50,7 +50,7 @@ pub const PLACED_ASSET: u32 = 1 << VALUE_BITS;
 /// An asset's value, without whether what is placed holds it
 /// (`PLACED_ASSET`) or what of its cube it keeps: a look reads the same
 /// whichever layer holds it.
-pub const fn value(asset: u32) -> u32 {
+pub const fn val(asset: u32) -> u32 {
     asset & (PLACED_ASSET - 1)
 }
 
@@ -156,8 +156,8 @@ pub const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
 /// the values between them today only because no matter lets light
 /// through yet, so neither is the other's negation; matter a ray sees
 /// through would answer yes to both.
-pub fn transparent(value: u32) -> bool {
-    let v = self::value(value);
+pub fn transparent(val: u32) -> bool {
+    let v = self::val(val);
     v == sentinel::void as u32 || v == object::air as u32
 }
 
@@ -166,8 +166,8 @@ pub fn transparent(value: u32) -> bool {
 /// what nothing is painted on and what is placed as nothing. A question of
 /// matter, not of light (`transparent`): matter a ray sees through would
 /// still fill, so this is not `!transparent`.
-pub fn fills(value: u32) -> bool {
-    let v = self::value(value);
+pub fn fills(val: u32) -> bool {
+    let v = self::val(val);
     v != sentinel::void as u32 && v != object::air as u32
 }
 
@@ -251,8 +251,8 @@ pub fn whole(asset: u32) -> bool {
 }
 
 /// Whether what is placed holds an asset's value (`PLACED_ASSET`).
-pub fn is_placed(value: u32) -> bool {
-    value & PLACED_ASSET != 0
+pub fn is_placed(val: u32) -> bool {
+    val & PLACED_ASSET != 0
 }
 
 #[cfg(test)]

@@ -210,7 +210,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     }
     // The ways where the cell's column was read: their leaf or fold over it.
     let way = if is_cell && i.kind == Kind::Cell && place.here() {
-        overwrite::value(pool, *trail, Cut::NONE, zoom, c)
+        overwrite::val(pool, *trail, Cut::NONE, zoom, c)
     } else {
         VOID
     };
@@ -229,14 +229,14 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         // placed, its share kept with the ground's (`answer::cover`): the
         // cell keeps the eighths of its cube all of them fill
         // (`answer::eighths`), its look the kind most of that is.
-        let mut value = if i.kind == Kind::Cell {
+        let mut val = if i.kind == Kind::Cell {
             i.asset[0]
         } else {
             VOID
         };
-        let mut fill = if fills(value) { cell.cover(c[2]) } else { 0 };
-        let mut four = if fills(value) {
-            ground::word(cell.four(zoom, value))
+        let mut fill = if fills(val) { cell.cover(c[2]) } else { 0 };
+        let mut four = if fills(val) {
+            ground::word(cell.four(zoom, val))
         } else {
             0
         };
@@ -244,15 +244,15 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
             // A way's look four times where one wrote it, whatever its value.
             let w = crate::way::tree::read(way);
             let (f, theirs) = cover(fill, w, overwrite::filled(pool, *trail));
-            if theirs || !fills(value) {
-                (value, four) = (w, ground::word([w; 4]));
+            if theirs || !fills(val) {
+                (val, four) = (w, ground::word([w; 4]));
             }
             fill = f;
         }
         if over.says == CELL {
             let (f, theirs) = cover(fill, over.asset, over.fill);
-            if theirs || !fills(value) {
-                [value, four] = laid();
+            if theirs || !fills(val) {
+                [val, four] = laid();
             }
             fill = f;
         }
@@ -271,7 +271,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
                 0,
             ]
         } else {
-            [kept_word(value, kept), four]
+            [kept_word(val, kept), four]
         };
         return In {
             kind: Kind::Cell,
@@ -337,7 +337,7 @@ pub struct Placed {
     /// The nodes gone into, a level each, the child each is at, and the
     /// level at; none gone into at 0.
     held: [overwrite::Held; PLACED_LEVELS + 1],
-    index: [[i32; 3]; PLACED_LEVELS + 1],
+    idx: [[i32; 3]; PLACED_LEVELS + 1],
     next: [u32; PLACED_LEVELS + 1],
     depth: usize,
 }
@@ -350,7 +350,7 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> Placed {
         hi,
         first: [lo[0] >> s, lo[1] >> s, lo[2] >> s],
         held: [overwrite::Held::NOTHING; PLACED_LEVELS + 1],
-        index: [[0; 3]; PLACED_LEVELS + 1],
+        idx: [[0; 3]; PLACED_LEVELS + 1],
         next: [0; PLACED_LEVELS + 1],
         depth: 0,
     }
@@ -379,7 +379,7 @@ impl Placed {
                 }
                 let node = overwrite::cursor(lanes, PLACED, PLACED_FIRST, n);
                 if node.holds() {
-                    (self.held[0], self.index[0], self.next[1]) = (node, n, 0);
+                    (self.held[0], self.idx[0], self.next[1]) = (node, n, 0);
                     self.depth = 1;
                 }
                 continue;
@@ -390,7 +390,7 @@ impl Placed {
                 self.next[self.depth] += 1;
                 continue;
             }
-            let (o, p) = (self.next[d], self.index[d - 1]);
+            let (o, p) = (self.next[d], self.idx[d - 1]);
             let c = [
                 2 * p[0] + (o & 1) as i32,
                 2 * p[1] + (o >> 1 & 1) as i32,
@@ -410,7 +410,7 @@ impl Placed {
                 overwrite::Held::NOTHING
             };
             if h.holds() && h.is_folded() && d < PLACED_LEVELS {
-                (self.held[d], self.index[d], self.next[d + 1]) = (h, c, 0);
+                (self.held[d], self.idx[d], self.next[d + 1]) = (h, c, 0);
                 self.depth += 1;
                 continue;
             }

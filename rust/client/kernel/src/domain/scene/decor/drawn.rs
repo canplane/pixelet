@@ -130,7 +130,7 @@ fn handed() -> &'static mut Handed {
 /// A leaf cell's X as the world names it (pxl-spec-core `wrap_index`), the
 /// GPU's grown records' among them, as a word.
 fn wrapped(x: i32) -> u32 {
-    pxl_spec_core::wrap_index(LEAF_CELL, x) as u32
+    pxl_spec_core::wrap_idx(LEAF_CELL, x) as u32
 }
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the

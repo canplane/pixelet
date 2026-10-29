@@ -148,8 +148,8 @@ impl Observer for Eye {
         grid(self).handed(t)
     }
 
-    fn line(&self, index: u32) -> u32 {
-        beam::Grid::line(index)
+    fn line(&self, idx: u32) -> u32 {
+        beam::Grid::line(idx)
     }
 
     /// Every ray of the eye's starts at the eye.

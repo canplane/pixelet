@@ -24,7 +24,7 @@
 
 use crate::answer::{box_of, kept, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
 use crate::grid::cell_at;
-use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
+use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
 /// axis: a drawn pixel's middle, its tangents the screen's half-angles'
@@ -128,7 +128,7 @@ pub enum Until {
 /// per-ray coefficients).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ray {
-    pub direction: [f32; 3],
+    pub dir: [f32; 3],
     pub reach: f32,
     inverse: [f32; 3],
 }
@@ -150,16 +150,16 @@ impl Ray {
                 d
             }
         };
-        let direction = [
+        let dir = [
             moves(direction[0]),
             moves(direction[1]),
             moves(direction[2]),
         ];
         let inv = |d: f32| if d == 0.0 { 0.0 } else { 1.0 / d };
         Ray {
-            direction,
+            dir,
             reach,
-            inverse: [inv(direction[0]), inv(direction[1]), inv(direction[2])],
+            inverse: [inv(dir[0]), inv(dir[1]), inv(dir[2])],
         }
     }
 }
@@ -256,15 +256,15 @@ impl Node {
 
     /// The world's node it is from the origin `o`, X named as the world
     /// names it (pxl-spec space/coord/world.rs `wrap_index`).
-    pub fn index(&self, o: [i32; 3]) -> [i32; 3] {
+    pub fn idx(&self, o: [i32; 3]) -> [i32; 3] {
         let r0 = roots_of(o);
         [
-            wrap_index(
+            wrap_idx(
                 self.zoom,
-                index_on(r0[0] + self.roots[0], self.corner[0], self.zoom),
+                idx_on(r0[0] + self.roots[0], self.corner[0], self.zoom),
             ),
-            index_on(r0[1] + self.roots[1], self.corner[1], self.zoom),
-            index_on(r0[2] + self.roots[2], self.corner[2], self.zoom),
+            idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom),
+            idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom),
         ]
     }
 }
@@ -287,8 +287,7 @@ fn roots_of(o: [i32; 3]) -> [i32; 3] {
 pub fn point_at(o: [i32; 3], ray: &Ray, t: f32) -> ([u32; 3], [i32; 3]) {
     let og = grid_of(o);
     let on = |a: usize| {
-        let d =
-            libm::floorf(crate::axis(ray.direction, a as u32) * t * (1 << FRAC_W) as f32) as i32;
+        let d = libm::floorf(crate::axis(ray.dir, a as u32) * t * (1 << FRAC_W) as f32) as i32;
         let p = og[a].wrapping_add(d as u32);
         (
             p,
@@ -327,7 +326,7 @@ fn under(z: Zoom) -> u32 {
 /// The world's node on axis `a` of the node at zoom `z` whose corner is `c`
 /// in the root `root`: `root · 2^z` and the corner's high bits, no shift
 /// reaching the word's width.
-fn index_on(root: i32, c: u32, z: Zoom) -> i32 {
+fn idx_on(root: i32, c: u32, z: Zoom) -> i32 {
     let high = if z >= FINEST_ZOOM {
         0
     } else {
@@ -383,27 +382,9 @@ fn spans(
     t: f32,
 ) -> ((f32, f32), (f32, f32), (f32, f32)) {
     (
-        planes(
-            ray.direction[0],
-            ray.inverse[0],
-            lo[0],
-            hi[0],
-            (t, ray.reach),
-        ),
-        planes(
-            ray.direction[1],
-            ray.inverse[1],
-            lo[1],
-            hi[1],
-            (t, ray.reach),
-        ),
-        planes(
-            ray.direction[2],
-            ray.inverse[2],
-            lo[2],
-            hi[2],
-            (t, ray.reach),
-        ),
+        planes(ray.dir[0], ray.inverse[0], lo[0], hi[0], (t, ray.reach)),
+        planes(ray.dir[1], ray.inverse[1], lo[1], hi[1], (t, ray.reach)),
+        planes(ray.dir[2], ray.inverse[2], lo[2], hi[2], (t, ray.reach)),
     )
 }
 
@@ -436,7 +417,7 @@ pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
 /// (`crossing`), and that plane's t, no nearer than the origin — the node's
 /// and the ray's alone, whatever walk came to it.
 fn entered(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
-    let e = crossing(ray.direction, near, true);
+    let e = crossing(ray.dir, near, true);
     (greater(axis(near, e), 0.0), e)
 }
 
@@ -467,7 +448,7 @@ pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f3
 /// word `asset` keeps it whole, else its kept box's. What a walker and decor
 /// stand on (pxl-kernel domain/query/ray.rs `hit`, `support::footing`).
 pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
-    (n.index(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
+    (n.idx(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
 }
 
 /// The asset `asset` at the node `n` as drawn from the origin `o`, in units
@@ -647,7 +628,7 @@ pub fn rooted<Q: Query>(
     until: Until,
     keep: &mut impl Keep<Q::At>,
 ) -> Met<Q::At> {
-    let at = q.root(Node::ROOT.index(o));
+    let at = q.root(Node::ROOT.idx(o));
     walk(
         q,
         o,
@@ -759,7 +740,7 @@ pub fn walk<Q: Query>(
                 [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
                 [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
             );
-            let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, reach), t0);
+            let i = q.node(&mut at, n.zoom, n.idx(o), asked(detail, reach), t0);
             visits += 1;
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
@@ -904,9 +885,9 @@ pub fn walk<Q: Query>(
                 units(n.corner[2].wrapping_add(half), og[2], n.roots[2]),
             ];
             let crossed = [
-                past(ray.direction[0], ray.inverse[0], mid[0], t0),
-                past(ray.direction[1], ray.inverse[1], mid[1], t0),
-                past(ray.direction[2], ray.inverse[2], mid[2], t0),
+                past(ray.dir[0], ray.inverse[0], mid[0], t0),
+                past(ray.dir[1], ray.inverse[1], mid[1], t0),
+                past(ray.dir[2], ray.inverse[2], mid[2], t0),
             ];
             stack[n.zoom as usize] = at;
             let side = |k: bool, c: u32| if k { c | half } else { c };
@@ -941,8 +922,8 @@ pub fn walk<Q: Query>(
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
-            let e = crossing(ray.direction, [x.1, y.1, z.1], false);
-            let up = axis(ray.direction, e) > 0.0;
+            let e = crossing(ray.dir, [x.1, y.1, z.1], false);
+            let up = axis(ray.dir, e) > 0.0;
             let old = axis(n.corner, e);
             let new = if up {
                 old.wrapping_add(u).wrapping_add(1)
@@ -989,7 +970,7 @@ pub fn walk<Q: Query>(
                 (parent, false)
             }
         };
-        let node = n.index(o);
+        let node = n.idx(o);
         at = if fresh {
             q.root(node)
         } else {
@@ -1047,7 +1028,7 @@ mod tests {
                         ..n
                     };
                     let m = n.moved(from, to);
-                    assert_eq!(m.index(to), n.index(from), "{a} {d} {zoom}");
+                    assert_eq!(m.idx(to), n.idx(from), "{a} {d} {zoom}");
                 }
             }
         }

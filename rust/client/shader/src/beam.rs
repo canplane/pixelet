@@ -189,7 +189,7 @@ where
             t,
         )
     } else {
-        (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t)
+        (cast::Node::ROOT, q.root(cast::Node::ROOT.idx(origin)), t)
     };
     cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep)
 }

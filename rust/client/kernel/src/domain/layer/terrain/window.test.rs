@@ -158,7 +158,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         };
         let side = GROUND.tile_cells();
         let at = |k: u32| {
-            let [x, y] = window::of_index(k);
+            let [x, y] = window::of_idx(k);
             ((place[1] * BRICK + y) * side + place[0] * BRICK + x) as usize
         };
         let (mut segments, mut lines) = (
@@ -179,7 +179,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
             height: |c: [i32; 2]| {
                 i32::from(
-                    heights[at(window::index_of([
+                    heights[at(window::idx_of([
                         c[0].clamp(0, BRICK as i32 - 1) as u32,
                         c[1].clamp(0, BRICK as i32 - 1) as u32,
                     ]))],

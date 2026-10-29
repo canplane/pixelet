@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 
 use postgres::{Client, NoTls};
 use pxl_geo_spec::table::CATALOG;
-use pxl_spec::space::coord::zoom::{count, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cnt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
 use pxl_spec::space::layer::lattice::GROUND;
@@ -151,7 +151,7 @@ impl Coverage {
             .iter()
             .filter(|&&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile)
             .count();
-        under == (count(SHARD_ZOOM, zoom) as usize).pow(2)
+        under == (cnt(SHARD_ZOOM, zoom) as usize).pow(2)
     }
 
     /// Every leaf held.

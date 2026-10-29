@@ -16,7 +16,7 @@
 //! there, corner `k` across edge `k & 1` and edge `2 + (k >> 1)`: `+u+v`,
 //! `−u+v`, `+u−v`, `−u−v`.
 
-use crate::{wrap_index, Zoom};
+use crate::{wrap_idx, Zoom};
 
 /// A face's edges, and its corners.
 pub const EDGES: u32 = 4;
@@ -77,7 +77,7 @@ pub fn word(face: u32, mut hides: impl FnMut([i32; 3]) -> bool) -> u32 {
 /// going round (`wrap_index`).
 pub fn beside(zoom: Zoom, c: [i32; 3], d: [i32; 3]) -> [i32; 3] {
     [
-        wrap_index(zoom, c[0].wrapping_add(d[0])),
+        wrap_idx(zoom, c[0].wrapping_add(d[0])),
         c[1] + d[1],
         c[2] + d[2],
     ]

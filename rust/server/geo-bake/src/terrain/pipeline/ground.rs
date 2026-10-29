@@ -17,7 +17,7 @@ const TILE_AREA: usize = (TILE_CELLS * TILE_CELLS) as usize;
 const SPAN: i64 = TILE_CELLS as i64;
 
 fn cell_idx(x: i64, y: i64) -> usize {
-    GROUND.cell_index(x as u32, y as u32) as usize
+    GROUND.cell_idx(x as u32, y as u32) as usize
 }
 
 /// Landcover and water do not paint the sea: the cells the coast left water,

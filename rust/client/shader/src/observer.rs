@@ -73,7 +73,7 @@ pub(crate) trait Observer {
     fn handed(&self, aim: &Aim, t: f32) -> f32;
     /// The first word of the line of the corner numbered `index`, `across` a
     /// row (`index`).
-    fn line(&self, index: u32) -> u32;
+    fn line(&self, idx: u32) -> u32;
     /// Where the ray of the line at `base` of `w` started, which its nodes
     /// are held from (`cast::Node::moved`); and that kept there.
     fn origin_of<W: Words + ?Sized>(&self, w: &W, base: u32) -> [i32; 3];
@@ -110,7 +110,7 @@ pub(crate) trait Observer {
 }
 
 /// The number of `c` on a lattice `across` a row, a corner's or a sample's.
-fn index(across: u32, c: [u32; 2]) -> u32 {
+fn idx(across: u32, c: [u32; 2]) -> u32 {
     c[1] * across + c[0]
 }
 
@@ -130,7 +130,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
         return;
     }
     let aim = o.corner(c);
-    let base = o.line(index(o.corners()[0], c));
+    let base = o.line(idx(o.corners()[0], c));
     o.keep_origin(w, base, aim.origin);
     let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[0]);
     let met = cast::rooted(
@@ -165,13 +165,13 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
     }
     let across = o.corners()[0];
     let ([x, y], side) = o.window(c);
-    let mut from = index(across, [x, y]);
+    let mut from = idx(across, [x, y]);
     let mut least = t_of(o, &*w, from);
     let mut j = 0;
     while j < side {
         let mut i = 0;
         while i < side {
-            let k = index(across, [x + i, y + j]);
+            let k = idx(across, [x + i, y + j]);
             let t = t_of(o, &*w, k);
             if t < least {
                 (least, from) = (t, k);
@@ -284,7 +284,7 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
         o.sample_at(s),
         before,
         origin,
-        index(o.samples()[0], s),
+        idx(o.samples()[0], s),
         eyed,
         boxes,
         args,

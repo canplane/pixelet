@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::coverage::Coverage;
 use postgres::Client;
-use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use pxl_spec::bake::constant::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::get_tile_bbox;
 use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
@@ -311,7 +311,7 @@ impl Raster {
                 // PostgreSQL rounds half to even. No data is 0, the source's
                 // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = src.sample(px, py) {
-                    grid[ele_index(c as u32, (span - 1 - r) as u32)] =
+                    grid[ele_idx(c as u32, (span - 1 - r) as u32)] =
                         pxl_spec_core::cells_of_m(v, per_m) as i16;
                 }
             }

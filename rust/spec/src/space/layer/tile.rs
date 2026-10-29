@@ -14,7 +14,7 @@ use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{
     ancestor_of, child_of, first_descendant_of, off_in, parent_of, region, slot_of, Node,
 };
-use pxl_spec_core::wrap_index;
+use pxl_spec_core::wrap_idx;
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
@@ -53,7 +53,7 @@ impl Tile {
     /// (`morton::write_name`).
     pub fn key(self) -> u128 {
         let [x, y] = self.at;
-        key_of::<2>(self.zoom, [wrap_index(self.zoom, x), y])
+        key_of::<2>(self.zoom, [wrap_idx(self.zoom, x), y])
     }
 
     /// `key`'s inverse; `None` for a zoom the pyramid does not hold.
@@ -150,7 +150,7 @@ pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i32> {
 
 /// The tile at `z` at (x, y), X wrapped around the world.
 pub fn tile_at(zoom: Zoom, [x, y]: [i32; 2]) -> Tile {
-    Tile::new(zoom, [wrap_index(zoom, x), y])
+    Tile::new(zoom, [wrap_idx(zoom, x), y])
 }
 
 /// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.
@@ -182,7 +182,7 @@ impl Cell {
     /// Its place in its tile, as every lane of the tile numbers it.
     pub fn idx(self) -> u32 {
         let [tx, ty] = self.in_tile();
-        self.lattice.cell_index(tx, ty)
+        self.lattice.cell_idx(tx, ty)
     }
 
     pub fn tile_zoom(self) -> Zoom {

@@ -33,7 +33,7 @@ fn write_undo_round_trip() {
                 let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
                 held.holds()
                     && !held.is_folded()
-                    && overwrite::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
+                    && overwrite::val(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -115,7 +115,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Held, [i32; 2]) {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
-                let v = overwrite::value(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
+                let v = overwrite::val(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
                 let kept = pxl_spec_core::answer::eighths(overwrite::filled(&store.lanes(), held));
                 if v != VOID && kept > 0 {
                     out.insert([x, y, z], (v, kept));

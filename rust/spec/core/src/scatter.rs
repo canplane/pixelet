@@ -14,7 +14,7 @@
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
-use crate::answer::value;
+use crate::answer::val;
 use crate::cast::Detail;
 use crate::cave::node_seed;
 use crate::cube::{sentinel, Ground};
@@ -23,7 +23,7 @@ use crate::lattice::GROUND;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::window::{BRICK_SHIFT, ENTRIES, EYE_WINDOWS};
 use crate::world::{placed_in, Placed};
-use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
+use crate::{wrap_idx, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
 const PATCH_SHIFT: u32 = PATCH.trailing_zeros();
 const _: () = assert!(
@@ -142,8 +142,8 @@ pub fn patch_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2
             ((max[0] - 1) >> shift) - first[0] + 1,
             ((max[1] - 1) >> shift) - first[1] + 1,
         ];
-        let count = (across[0] * across[1]) as u32;
-        if n < count {
+        let cnt = (across[0] * across[1]) as u32;
+        if n < cnt {
             return (
                 born,
                 [
@@ -153,7 +153,7 @@ pub fn patch_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2
                 true,
             );
         }
-        n -= count;
+        n -= cnt;
     }
     (top, [0, 0], false)
 }
@@ -336,7 +336,7 @@ pub const fn brick_reads(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
 pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     let wide = reads[2] - reads[0];
     // The box's first column from the region's, the short way round.
-    let (from, width) = (wrap_index(LEAF_CELL, b[0] - reads[0]), b[2] - b[0]);
+    let (from, width) = (wrap_idx(LEAF_CELL, b[0] - reads[0]), b[2] - b[0]);
     // Met where it starts in the region or over it, or runs on round the
     // world into it.
     let across = width >= 1 << LEAF_CELL
@@ -419,11 +419,11 @@ pub mod drawn {
     /// device's dynamic offset alignment), its index list's first slot at
     /// `UNIFORM_INDEX` within it: the lanes' base, to which the args pass adds
     /// the region's first slot once the regions are laid out.
-    pub const UNIFORM_WORDS: u32 = OFFSET_BYTES / 4;
+    pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
     /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
-    const OFFSET_BYTES: u32 = 256;
-    pub const UNIFORM_INDEX: u32 = 7;
+    const OFF_BYTES: u32 = 256;
+    pub const UNIFORM_IDX: u32 = 7;
     /// The drawing words, what a frame's decor is drawn by: the model's and
     /// the sprite's floors, each an angle about the eye in radians, the
     /// anchor the lanes' positions are about (unit cells, X wrapping), the
@@ -745,14 +745,14 @@ fn asks<Q: Grounds>(
         let v = q.asset(f, cell, b);
         if voted {
             let holds = if b[2] == lo[2] {
-                decor.allows(value(v))
+                decor.allows(val(v))
             } else {
                 v == sentinel::void as u32 && !q.is_edited(cell, b)
             };
             if !holds {
                 return (g, false);
             }
-        } else if Ground::transports(value(v)) {
+        } else if Ground::transports(val(v)) {
             if ask % 4 < 2 {
                 horizontal += 1;
             } else {
@@ -928,8 +928,8 @@ impl Decor {
     }
 
     /// Whether the ground grows it on a cell of `value`: a look it stands on.
-    pub const fn allows(&self, value: u32) -> bool {
-        value < 256 && self.on[(value >> 5) as usize] >> (value & 31) & 1 == 1
+    pub const fn allows(&self, val: u32) -> bool {
+        val < 256 && self.on[(val >> 5) as usize] >> (val & 31) & 1 == 1
     }
 
     /// Its cell's zoom: a unit's, `scale_steps` coarser.

@@ -5,7 +5,7 @@
 
 use xpute_kit::math::rng::derive_seed_u32;
 
-use crate::{wrap_index, Zoom, LEAF_CELL};
+use crate::{wrap_idx, Zoom, LEAF_CELL};
 
 /// The seed every procedural draw starts from (`node_seed`). Changing it
 /// reshuffles everything scattered.
@@ -23,7 +23,7 @@ pub fn node_seed<const D: usize>(tag: u32, (zoom, at): (Zoom, [i32; D])) -> u32 
     // `loop { … continuing { break if … } }` an iteration early, re-reading
     // its condition after the counter moved.
     if D > 0 {
-        h = derive_seed_u32(h, wrap_index(zoom, at[0]) as u32);
+        h = derive_seed_u32(h, wrap_idx(zoom, at[0]) as u32);
     }
     if D > 1 {
         h = derive_seed_u32(h, at[1] as u32);

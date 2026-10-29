@@ -165,7 +165,7 @@ fn parse<'a>(
     for &[x, y] in &covered {
         for k in 0..9 {
             let n = [
-                pxl_spec_core::wrap_index(SHARD_ZOOM, x + k % 3 - 1),
+                pxl_spec_core::wrap_idx(SHARD_ZOOM, x + k % 3 - 1),
                 y + k / 3 - 1,
             ];
             let key = area::shard_key(n);

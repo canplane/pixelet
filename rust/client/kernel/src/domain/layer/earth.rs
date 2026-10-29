@@ -7,7 +7,7 @@
 
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
-use pxl_spec_core::wrap_index;
+use pxl_spec_core::wrap_idx;
 
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -107,7 +107,7 @@ pub fn earth_window(
     };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
     let around = 1 << EARTH_ZOOM;
-    let east = |x: i32| wrap_index(EARTH_ZOOM, x - first);
+    let east = |x: i32| wrap_idx(EARTH_ZOOM, x - first);
     let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
