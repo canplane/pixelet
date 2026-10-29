@@ -268,12 +268,13 @@ guest installs an executor (`sched/task`), marks the edges with `rise` and
 `fall`, and polls it between them.
 
 On the host side, the **strobe** (`@xpute/host/sched/strobe.ts` `Strobe`)
-decides when a turn is rung. It rings on an animation frame, only when the host
-or the guest's last falling edge asked for a turn, and only on the refreshes the
-quantum paces at; a display frame sooner than that is skipped, and the next
-asked for. A positive `wake_ms` sets a timer that asks for a display frame when
-it fires. A guest that asks for nothing is rung for nothing, and no turn runs on
-a timer of the host's own.
+decides when a turn is rung. It is named for a circuit's strobe, the pulse that
+tells a receiver when to act, and it is the timing the cooperative turns keep.
+It rings on an animation frame, only when the host or the guest's last falling
+edge asked for a turn, and only on the refreshes the quantum paces at; a display
+frame sooner than that is skipped, and the next asked for. A positive `wake_ms`
+sets a timer that asks for a display frame when it fires. A guest that asks for
+nothing is rung for nothing, and no turn runs on a timer of the host's own.
 
 The strobe is not all that rings the guest. The doorbell rings with no quota to
 make room in a full submission ring, to wait for a call's reply and to send a
@@ -613,12 +614,14 @@ where the tree records the source.
 | The exokernel and its library operating system              | the arrangement                  | The host grants real resources; the guest keeps its own abstractions over them |
 | Aegis                                                       | `sched/quantum`                  | The quota as a cooperative counterpart of its CPU slice                        |
 | Android Swappy's frame pacing                               | `sched/quantum`, `sched/strobe`  | Turns a whole number of refreshes apart                                        |
+| A circuit's strobe, the pulse that says when to act         | `sched/strobe`                   | Its name                                                                       |
 | "core" for main memory, as in a core dump                   | the core memory                  | Its name                                                                       |
 | A linker script's output sections                           | `mem/section`                    | Ranges placed end to end without knowing what they hold                        |
 | [evanw/buddy-malloc](https://github.com/evanw/buddy-malloc) | `alloc/buddy_tree`               | The page allocator, ported line for line                                       |
 | SLUB                                                        | `alloc/slab`                     | A slab keeps its free list inside its free slots                               |
 | virtio's descriptor table, AF_XDP's UMEM                    | the rings (`spec/ipc/ring.json`) | Descriptors kept apart from the payload's slots                                |
-| io_uring                                                    | the rings                        | A submission ring and a completion ring, rung by a doorbell                    |
+| io_uring                                                    | the rings                        | A submission ring and a completion ring                                        |
+| NVMe's queues and their doorbell registers                  | the doorbell                     | Its name, and that ringing it carries no message                               |
 | Plan 9's file access, in POSIX's words                      | `ipc/sys`, `ipc/ns`              | Descriptors the guest issues; a root and a path; the host binds the roots      |
 | The ELF auxiliary vector                                    | `ipc/directory`                  | Entries a reader skips when it does not know them                              |
 | POSIX and Linux errno                                       | `spec/status/errno.json`         | Negative errno numbers                                                         |
