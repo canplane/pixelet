@@ -93,11 +93,12 @@ uniform! {
         EDGE_WIDTH: F32 = 29,
         RIM_INTENSITY: F32 = 30,
         CORNER_AO: F32 = 31,
-        /// The sun's light box from the eye's frame (gpu/shadow.rs `aim`),
-        /// how much of the sun a shadow takes, none where no map is drawn,
-        /// the normal offset a fragment takes, a texel at the map's reach,
-        /// and the share of the map's half-width the casters reach, where
-        /// the shadows end.
+        /// The light box from the eye's frame (gpu/shadow.rs `aim`), how
+        /// much of its light a shadow takes, none where no map is drawn, the
+        /// normal offset a fragment takes, a texel at the map's reach, and
+        /// the share of the map's half-width the casters reach, where the
+        /// shadows end. Its light is the sun's, or the Moon's where
+        /// `SHADOW_MOON` is 1 (shadow.wgsl `shadow_light`).
         LIGHT_VIEW_PROJ: Mat4 = 32,
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
@@ -108,12 +109,16 @@ uniform! {
         /// The canvas's device pixels, where `VIEWPORT` is the world's: what
         /// is drawn over the world, after the finish, is laid out in them.
         SCREEN: Vec2 = 52,
+        /// 1 where the shadow map is cast from the Moon (`LIGHT_VIEW_PROJ`).
+        SHADOW_MOON: F32 = 54,
         /// Where this frame's pixels sample the world, off their middles, in
         /// clip units, X right and Y up: pxl-spec-core `eye::JITTER`'s offset
         /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
         /// height) of `VIEWPORT`. What is drawn into the world's color is
         /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
-        JITTER: Vec2 = 54,
+        /// Last: the words before it are what a frame reads as moved
+        /// (gpu/renderer.rs `frame`).
+        JITTER: Vec2 = 56,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);

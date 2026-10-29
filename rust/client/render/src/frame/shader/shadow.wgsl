@@ -1,4 +1,5 @@
-// The sun's shadow map (gpu/shadow.rs): 3x3 PCF with a texel of normal
+// The sun's shadow map (gpu/shadow.rs), cast from the Moon where the sun is
+// down (`shadow_light`): 3x3 PCF with a texel of normal
 // offset, each tap compared at the depth the receiver's own plane has
 // where it lies; 1 where the map does not reach, and fading out toward the
 // casters' reach, so the shadows end where they do with no edge. A pass
@@ -27,9 +28,14 @@ fn sun_slope(n: vec3f, texel: f32) -> vec2f {
   return -vec2f(dot(n, across / dot(across, across)), -dot(n, up / dot(up, up))) * texel / d;
 }
 
+// Where the map is cast from: the sun, or the Moon (renderer.rs `lay_out`).
+fn shadow_light() -> vec3f {
+  return select(atmos_sun_dir(), atmos_moon_dir(), frame_shadow_moon() > 0.0);
+}
+
 fn sun_lit(world_pos: vec3f, n: vec3f) -> f32 {
-  // shade.wgsl weighs the sun by the same facing, so the taps would be multiplied by zero.
-  if (dot(n, atmos_sun_dir()) <= 0.0) {
+  // shade.wgsl weighs the light by the same facing, so the taps would be multiplied by zero.
+  if (dot(n, shadow_light()) <= 0.0) {
     return 0.0;
   }
   if (frame_shadow_strength() <= 0.0) {

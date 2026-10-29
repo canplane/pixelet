@@ -30,8 +30,8 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{PIPELINE_SCREEN_CLEAR, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
-    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL,
-    VIEWPORT, VIEW_PROJ, VIGNETTE,
+    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_MOON, SHADOW_RIM, SHADOW_STRENGTH,
+    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -74,7 +74,7 @@ use crate::gpu::surface::{
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
-use crate::look::environment::{ENV_AIR, ENV_POLE, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
 
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
@@ -455,7 +455,8 @@ pub struct Renderer {
     bind_group: u32,
     models: FrameGroups,
     shadow: Shadow,
-    /// Whether the shadow map is cast and drawn this frame (`STAGE_AT::SHADOWS`).
+    /// Whether the shadow map is cast and drawn this frame: the setting on
+    /// (`STAGE_AT::SHADOWS`) and the sun or the Moon up (`lay_out`).
     shadows: bool,
     ao: ScreenAo,
     screen_ao: bool,
@@ -702,23 +703,30 @@ impl Renderer {
             (eye_world[1] / MERCATOR_RADIUS_U) as f32,
             MERCATOR_RADIUS_U as f32,
         ]);
-        // The shadow map, as wide as the casters reach; none where the
-        // shadows are off.
+        // The shadow map, as wide as the casters reach, cast from the sun
+        // where it is up, else from the Moon where it is up and lit; none
+        // where the shadows are off, or where neither is up, as only their
+        // direct light reads the map (atmos_light.wgsl `surface_light_in`)
+        // and a shadow would show nowhere.
         let far = s[STAGE_AT::SHADOWS];
-        self.shadows = far > 0.0;
+        let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 3]);
+        let light = if sun[2] > 0.0 {
+            Some((sun, false))
+        } else if moon[2] > 0.0 && env[ENV_MOON + 3] > 0.0 {
+            Some((moon, true))
+        } else {
+            None
+        };
+        let light = light.filter(|_| far > 0.0);
+        self.shadows = light.is_some();
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
-        if self.shadows {
+        u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
+        if let Some((dir, _)) = light {
             // Up to a power of two, so the snap grid and the texel move only in steps;
             // the shadows fade by the casters' own reach.
             let half = libm::exp2(libm::ceil(libm::log2(far)));
             let rim = (far / half) as f32;
-            self.shadow.aim(
-                &env[ENV_SUN..ENV_SUN + 3],
-                eye,
-                half,
-                rim,
-                eye_world.map(|v| -v),
-            );
+            self.shadow.aim(dir, eye, half, rim, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
             u[SHADOW_RIM] = rim;
