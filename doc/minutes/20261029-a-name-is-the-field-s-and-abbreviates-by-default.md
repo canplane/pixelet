@@ -109,8 +109,7 @@ coroutine members are looked up by their spelling: when the sweep renamed
 `initial_suspend` and `return_value`, the first coroutine stopped compiling.
 The same holds for a JavaScript collection's `size`, a TypedArray's `buffer`,
 the wasm import `env.memory`, xpute's `gpu/` (WebGPU's vocabulary), OSM Carto's
-`feature`, and the render names that flow into WGSL. A helper named after the
-type it builds keeps the type's word (`marshal_error`).
+`feature`, and the render names that flow into WGSL.
 
 A wire name is ours when both of its ends ship in one deploy; the search's
 `distance_m` became `dist_m` on the wire too. A name kept in storage outlives a
