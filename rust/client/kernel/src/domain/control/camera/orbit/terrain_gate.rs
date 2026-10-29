@@ -87,8 +87,9 @@ fn eye(at: &ViewPose) -> (V3, Q3) {
     (world, world_to_canonical(&world))
 }
 
-/// A step may not end deeper in the ground than it started. A blanket
-/// exemption for an already-blocked start once opened the gate for good.
+/// A step may not end deeper in the ground than it started, but for the
+/// first cell of a wall or a roof (`embedded`). A blanket exemption for an
+/// already-blocked start once opened the gate for good.
 fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the floor's walk.
     match settings_store().orbit_obstacle {
@@ -112,14 +113,22 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
         OrbitObstacleMode::stop => {}
     }
 
-    let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
+    let access = World::now();
+    // An embedded start is where the eye may stand, not a start to climb
+    // out of: from it, the ground is as deep as from the air.
+    let limit = match embedded(&eye(from).1, &access) {
+        true => 0.0,
+        false => penetration(from).map_or(0.0, |start| start.max(0.0)),
+    };
 
     let mut last = *from;
     for i in 1..=GATE_STEP_SAMPLES {
         let at = between(from, to, i as f64 / GATE_STEP_SAMPLES as f64);
+        let deep =
+            penetration(&at).is_some_and(|deep| deep > limit) && !embedded(&eye(&at).1, &access);
         // The last clear sample, not the crossing: on the boundary, the next frame's
         // rounding would decide which side the eye is on.
-        if penetration(&at).is_some_and(|deep| deep > limit) {
+        if deep || crossed(&last, &at, &access) {
             return last;
         }
         last = at;
@@ -143,20 +152,62 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
     }
 }
 
-fn in_solid(at: &ViewPose) -> bool {
+fn in_solid(at: &ViewPose, access: &World) -> bool {
     let (world, eye) = eye(at);
-    World::now()
+    access
         .floor_under(&eye, LEAF_ZOOM)
         .value()
         .flatten()
         .is_some_and(|top| top > world[2])
 }
 
+/// Whether the eye at `eye` stands in a solid cell with air beside it or
+/// under it: the first cell of a wall, a roof or a slope's step, where it
+/// may stand embedded, as the eye's rays do not meet the cell they start in
+/// (pxl-spec-core `cast::walk`). Not a cell with air only over it, so over
+/// open ground the eye keeps its height (`EYE_CLEARANCE_U`). A point is in
+/// something solid as `in_solid` asks it, a cell's side away; where that is
+/// not known, not embedded.
+fn embedded(eye: &Q3, access: &World) -> bool {
+    let side = q3::from_real(units(GROUND.cell()));
+    let solid = |d: [i64; 3]| {
+        let at = world::at(
+            i64::from(eye[0]) + d[0] * side,
+            i64::from(eye[1]) + d[1] * side,
+            i64::from(eye[2]) + d[2] * side,
+        );
+        let z = q3::to_real(i64::from(at[2]));
+        access
+            .floor_under(&at, LEAF_ZOOM)
+            .exact()
+            .map(|top| top.is_some_and(|top| top > z))
+    };
+    let open = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, -1]];
+    solid([0, 0, 0]) == Some(true) && open.into_iter().any(|d| solid(d) == Some(false))
+}
+
+/// Whether the eye comes out of something solid at `at`, from `last`,
+/// where it does not see the focus: through a wall it stood in the first cell
+/// of (`embedded`) to the wall's far side, which a wall one or two cells
+/// thick would otherwise let it reach.
+fn crossed(last: &ViewPose, at: &ViewPose, access: &World) -> bool {
+    in_solid(last, access) && !in_solid(at, access) && toward_eye(at, at.dist, access).is_some()
+}
+
 /// What lies between the eye and the focus is not asked: that hides the
-/// center but is not the eye running into anything.
+/// center but is not the eye running into anything, save where the eye
+/// comes out of a wall to its far side (`crossed`). The first cell of a wall
+/// or a roof is no obstacle (`embedded`).
 fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
-    (1..=GATE_STEP_SAMPLES)
-        .all(|i| !in_solid(&between(from, to, i as f64 / GATE_STEP_SAMPLES as f64)))
+    let access = World::now();
+    let mut last = *from;
+    (1..=GATE_STEP_SAMPLES).all(|i| {
+        let at = between(from, to, i as f64 / GATE_STEP_SAMPLES as f64);
+        let clear = (!in_solid(&at, &access) || embedded(&eye(&at).1, &access))
+            && !crossed(&last, &at, &access);
+        last = at;
+        clear
+    })
 }
 
 /// A zoom in the climb holds straight down, blocked by a roof over the focus
@@ -172,7 +223,7 @@ fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> O
     if to.dist >= from.dist || climbed.polar > 0.0 {
         return None;
     }
-    let roof = roof_over(climbed, from.dist, access)?;
+    let roof = toward_eye(climbed, from.dist, access)?;
     // Under it, the near plane's own distance, so the near plane never cuts it.
     let dist = to.dist.min(roof.t - NEAR).max(MIN_DIST);
     under(&roof, climbed, dist).then_some(ViewPose { dist, ..*climbed })
@@ -186,7 +237,7 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
     if to.dist <= from.dist || from.polar > 0.0 {
         return None;
     }
-    let roof = roof_over(from, to.dist, access)?;
+    let roof = toward_eye(from, to.dist, access)?;
     under(&roof, from, from.dist).then(|| ViewPose {
         dist: to.dist.min(from.dist.max(roof.t - NEAR)),
         ..*to
@@ -194,8 +245,9 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
 }
 
 /// What `at`'s focus meets toward its eye within `reach`: a roof, where the
-/// eye is straight over it.
-fn roof_over(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
+/// eye is straight over it; within the eye's own distance, what hides the
+/// focus from it.
+fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
     let ray = Ray {
         origin: at.target,
         direction: orbit_eye_offset(1.0, at.polar, at.azimuth),

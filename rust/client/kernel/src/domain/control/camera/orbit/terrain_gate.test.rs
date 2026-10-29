@@ -98,10 +98,61 @@ fn under_half_open() {
     let (tile_cache, store, target) = roofed(Some(2.0));
     let access = World::new(&tile_cache, &store);
     let at = pose(target, MIN_DIST, 0.0);
-    let roof = roof_over(&at, 16.0, &access).unwrap();
+    let roof = toward_eye(&at, 16.0, &access).unwrap();
     // The underside at 7 and the cell's top at 8, the focus at 5.5.
     let to = |z: f64| z - target[2];
     assert!(under(&roof, &at, to(7.0)));
     assert!(under(&roof, &at, to(7.9)));
     assert!(!under(&roof, &at, to(8.0)));
+}
+
+/// The eye may stand in the first cell of a roof or a wall, air under it or
+/// beside it, not in the ground's top with air only over it, nor deeper.
+#[test]
+fn embedded_first_cell() {
+    let _g = serial();
+    let (tile_cache, mut store, [x, y, _]) = roofed(Some(2.0));
+    // A wall on the ground beside the focus's cell, from 5 to 6.
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(&mut store, [x + 0.5, y - 0.5, 5.0], OBJECT_COARSEST, red);
+    let access = World::new(&tile_cache, &store);
+    // Over the focus, or a cell beside it, in the frame the gate puts the eye in.
+    let at = |dx: f64, z: f64| world_to_canonical(&[x + dx, y, z]);
+    // The roof's lowest cell, air under it.
+    assert!(embedded(&at(0.0, 7.5), &access));
+    // The wall's cell, air beside it.
+    assert!(embedded(&at(1.0, 5.5), &access));
+    // The ground's top, air only over it.
+    assert!(!embedded(&at(0.0, 4.5), &access));
+    // Deeper in the ground.
+    assert!(!embedded(&at(0.0, 3.5), &access));
+    // Air.
+    assert!(!embedded(&at(0.0, 6.0), &access));
+}
+
+/// Out of a wall's first cell the eye comes back to the focus's side, not
+/// through to the far side, where the wall hides the focus.
+#[test]
+fn wall_not_crossed() {
+    let _g = serial();
+    let (tile_cache, mut store, target) = roofed(None);
+    // A wall a cell thick east of the focus's cell, from 5 to 6.
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(
+        &mut store,
+        [target[0] + 0.5, target[1] - 0.5, 5.0],
+        OBJECT_COARSEST,
+        red,
+    );
+    let access = World::new(&tile_cache, &store);
+    // Level with the focus, `dist` east of it.
+    let east = |dist: f64| ViewPose {
+        target,
+        dist,
+        polar: core::f64::consts::FRAC_PI_2,
+        azimuth: -core::f64::consts::FRAC_PI_2,
+    };
+    assert!(in_solid(&east(1.0), &access));
+    assert!(crossed(&east(1.0), &east(2.0), &access));
+    assert!(!crossed(&east(1.0), &east(0.4), &access));
 }
