@@ -392,9 +392,9 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   );
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
-    const phase_count = w[o + TASK.phase_cnt];
+    const phase_cnt = w[o + TASK.phase_cnt];
     const phases: [string, f64][] = [];
-    for (let k = 0; k < phase_count; k++) {
+    for (let k = 0; k < phase_cnt; k++) {
       phases.push([
         TASK_PHASE_NAMES[w[o + TASK.phase_ids + k]] ?? "?",
         w[o + TASK.phase_vals + k],

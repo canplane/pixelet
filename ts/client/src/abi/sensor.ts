@@ -22,7 +22,7 @@ function given(n: number | null): number | null {
   return n !== null && Number.isFinite(n) ? n : null;
 }
 
-function kernel_position(
+function kernel_pos(
   lon: f64,
   lat: f64,
   altitude: f64 | null,
@@ -42,14 +42,14 @@ function kernel_position(
   );
 }
 
-function kernel_position_error(code: GeolocationErrorCode): void {
+function kernel_pos_err(code: GeolocationErrorCode): void {
   HOST.send(
     Command.SENSOR_FAILED,
     encode_sensor_failed(HOST.doorbell, Sensor.Geolocation, code),
   );
 }
 
-function kernel_orientation(
+function kernel_orient(
   webkit_compass_heading: f64 | null,
   alpha: f64 | null,
   beta: f64 | null,
@@ -68,7 +68,7 @@ function kernel_orientation(
 }
 
 /** The compass gives no code for its failure. */
-function kernel_orientation_lost(): void {
+function kernel_orient_lost(): void {
   HOST.now(
     Command.SENSOR_FAILED,
     encode_sensor_failed(HOST.doorbell, Sensor.Orientation, null),
@@ -82,7 +82,7 @@ function kernel_permission(sensor: Sensor, answer: PermissionAnswer): void {
   );
 }
 
-const ERROR = {
+const ERR = {
   denied: GeolocationErrorCode.PermissionDenied,
   unavailable: GeolocationErrorCode.PositionUnavailable,
   timeout: GeolocationErrorCode.Timeout,
@@ -103,10 +103,10 @@ const ANSWER = {
 
 /** What the place's sensors heard, handed to it once at boot. */
 export const SENSOR_HEARD: SensorHeard = {
-  position: kernel_position,
-  positionError: (error) => kernel_position_error(ERROR[error]),
-  orientation: kernel_orientation,
-  orientationLost: kernel_orientation_lost,
+  position: kernel_pos,
+  positionError: (error) => kernel_pos_err(ERR[error]),
+  orientation: kernel_orient,
+  orientationLost: kernel_orient_lost,
   permission: (sensor, answer) =>
     kernel_permission(SENSOR[sensor], ANSWER[answer]),
 };
