@@ -21,8 +21,8 @@ const server = new Deno.Command(Deno.execPath(), {
 
 const HEADER_END = new TextEncoder().encode("\r\n\r\n");
 
-/** Each message's bytes, header and body, as they arrive on `from`. */
-async function* messages(from: ReadableStream<Uint8Array>) {
+/** Each message's content part, as the messages arrive on `from`. */
+async function* contents(from: ReadableStream<Uint8Array>) {
   let buf = new Uint8Array(0);
   for await (const chunk of from) {
     const next = new Uint8Array(buf.length + chunk.length);
@@ -52,23 +52,24 @@ function find(hay: Uint8Array, needle: Uint8Array): number {
   return -1;
 }
 
-function frame(body: Uint8Array): Uint8Array {
+/** A message: the header part, then `content`. */
+function message(content: Uint8Array): Uint8Array {
   const header = new TextEncoder().encode(
-    `Content-Length: ${body.length}\r\n\r\n`,
+    `Content-Length: ${content.length}\r\n\r\n`,
   );
-  const out = new Uint8Array(header.length + body.length);
+  const out = new Uint8Array(header.length + content.length);
   out.set(header);
-  out.set(body, header.length);
+  out.set(content, header.length);
   return out;
 }
 
-/** The initialize request with the workspaces in place of its folders. */
-function rooted(body: Uint8Array): Uint8Array {
-  const msg = JSON.parse(new TextDecoder().decode(body));
-  if (msg.method !== "initialize") return body;
+/** The initialize request with the workspaces as its `workspaceFolders`. */
+function with_workspace_folders(content: Uint8Array): Uint8Array {
+  const msg = JSON.parse(new TextDecoder().decode(content));
+  if (msg.method !== "initialize") return content;
   const root: string = msg.params.rootUri ??
     msg.params.workspaceFolders?.[0]?.uri;
-  if (root === undefined) return body;
+  if (root === undefined) return content;
   msg.params.workspaceFolders = folders.map((f) => ({
     uri: `${root.replace(/\/$/, "")}/${f}`,
     name: f,
@@ -81,16 +82,18 @@ const toClient = Deno.stdout.writable.getWriter();
 
 const up = (async () => {
   let first = true;
-  for await (const body of messages(Deno.stdin.readable)) {
-    await toServer.write(frame(first ? rooted(body) : body));
+  for await (const content of contents(Deno.stdin.readable)) {
+    await toServer.write(
+      message(first ? with_workspace_folders(content) : content),
+    );
     first = false;
   }
   await toServer.close();
 })();
 
 const down = (async () => {
-  for await (const body of messages(server.stdout)) {
-    await toClient.write(frame(body));
+  for await (const content of contents(server.stdout)) {
+    await toClient.write(message(content));
   }
 })();
 
