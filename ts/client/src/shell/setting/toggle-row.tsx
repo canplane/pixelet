@@ -32,9 +32,12 @@ const INSET = 2;
 const THUMB = { width: 37, height: TRACK.height - 2 * INSET };
 const TRAVEL = TRACK.width - THUMB.width - 2 * INSET;
 
-export function ToggleRow(
-  { value, onValueChange, style, children }: ToggleRowProps,
-) {
+export function ToggleRow({
+  value,
+  onValueChange,
+  style,
+  children,
+}: ToggleRowProps) {
   return (
     <Pressable
       onPress={() => onValueChange(!value)}

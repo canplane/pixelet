@@ -77,10 +77,7 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
 const error = (key: string): Said => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Said => ({ key, tone: ToastTone.Loading });
 
-function location(
-  status: DevicePoseStatus,
-  failure: Message | null,
-): Said | null {
+function location(status: SensorStatus, failure: Message | null): Said | null {
   if (failure !== null) return error(messageKey(failure));
   return status === DevicePoseStatus.Loading
     ? loading("toast.location_checking")
@@ -132,10 +129,10 @@ export function ToastController() {
   useSaid(Report.Network, useOnline() ? null : error("toast.network_unstable"));
   useSaid(Report.Server, serverError(useSource(), stall), SERVER_HOLD_MS);
 
-  const outside = useKernel((s) => s.focus.outside);
-  const shown = useKernel((s) => s.focus.status === GroundStatus.Success);
-  const companionLoading = useKernel((s) =>
-    !s.companion.person_ready || !s.companion.pet_ready
+  const outside = useKernel((s) => s.pivot.outside);
+  const shown = useKernel((s) => s.pivot.status === GroundStatus.Success);
+  const companionLoading = useKernel(
+    (s) => !s.companion.person_ready || !s.companion.pet_ready,
   );
   const [greeting, setGreeting] = useState(Greeting.Waiting);
   const ready = !outside && shown && !companionLoading;

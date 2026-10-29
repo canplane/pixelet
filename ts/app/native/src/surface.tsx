@@ -34,9 +34,8 @@ interface SurfaceProps extends ViewProps {
   onDetach: () => void;
 }
 
-const SurfaceView: ComponentType<SurfaceProps> = requireNativeView(
-  "PxlPlatform",
-);
+const SurfaceView: ComponentType<SurfaceProps> =
+  requireNativeView("PxlPlatform");
 
 function useSurface(
   driver: SurfaceDriver,
@@ -59,9 +58,8 @@ function useSurface(
   useEffect(() => {
     const surface = driver.open();
     setHandle(surface);
-    const close = surface !== 0 && open.current
-      ? open.current(surface)
-      : () => {};
+    const close =
+      surface !== 0 && open.current ? open.current(surface) : () => {};
     return () => {
       close();
       setHandle(0);
@@ -95,9 +93,8 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
 
   useEffect(() => {
     const close = input.open(() => size.current);
-    const visibility = AppState.addEventListener(
-      "change",
-      (state) => input.visible(state === "active"),
+    const visibility = AppState.addEventListener("change", (state) =>
+      input.visible(state === "active"),
     );
     return () => {
       visibility.remove();
@@ -111,18 +108,22 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
     input.requestFrame();
   };
 
-  const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
-    for (const t of e.nativeEvent.changedTouches) {
-      input.pointer(
-        phase,
-        "touch",
-        Number(t.identifier),
-        0,
-        t.locationX,
-        t.locationY,
-      );
-    }
-  };
+  const touches =
+    (...phases: PointerPhase[]) =>
+    (e: GestureResponderEvent) => {
+      for (const t of e.nativeEvent.changedTouches) {
+        for (const phase of phases) {
+          input.pointer(
+            phase,
+            "touch",
+            Number(t.identifier),
+            0,
+            t.locationX,
+            t.locationY,
+          );
+        }
+      }
+    };
 
   return (
     <SurfaceView

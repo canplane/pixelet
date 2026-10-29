@@ -20,11 +20,12 @@ let canvas: OffscreenCanvasRenderingContext2D | null | undefined;
 
 function context(): OffscreenCanvasRenderingContext2D | null {
   if (canvas === undefined) {
-    canvas = typeof OffscreenCanvas === "undefined"
-      ? null
-      : new OffscreenCanvas(1, 1).getContext("2d", {
-        willReadFrequently: true,
-      });
+    canvas =
+      typeof OffscreenCanvas === "undefined"
+        ? null
+        : new OffscreenCanvas(1, 1).getContext("2d", {
+            willReadFrequently: true,
+          });
   }
   return canvas;
 }

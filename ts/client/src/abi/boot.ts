@@ -54,9 +54,10 @@ export function stop_code(): string | null {
 
 const abort: SysHost["abort"] = ({ errnum, file, line, column, a, b }) => {
   console.error(
-    `[kernel] stopped: ${strerror(errnum)} at ${
-      file.replace(/^\.+/, "")
-    }:${line}:${column} (${a}, ${b})`,
+    `[kernel] stopped: ${strerror(errnum)} at ${file.replace(
+      /^\.+/,
+      "",
+    )}:${line}:${column} (${a}, ${b})`,
   );
   const where = `${file.split("/").pop()}:${line}`;
   code = `${strerror(errnum).split(":")[0]} · ${
@@ -71,15 +72,13 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(new Uint8Array(HOST.guest.memory, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
-      follow_refused(
-        kernel_snapshot().kept_refused,
-        (slot) =>
-          queueMicrotask(() =>
-            HOST.send(
-              Command.WORLD_KEPT_EMPTIED,
-              encode_world_kept_emptied(HOST.doorbell, slot),
-            )
+      follow_refused(kernel_snapshot().kept_refused, (slot) =>
+        queueMicrotask(() =>
+          HOST.send(
+            Command.WORLD_KEPT_EMPTIED,
+            encode_world_kept_emptied(HOST.doorbell, slot),
           ),
+        ),
       );
       return;
     }

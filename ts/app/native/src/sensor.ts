@@ -46,9 +46,10 @@ let granted: boolean | null = null;
  * and the resume restarted the sensors, which asked again in a loop. */
 async function permitted(): Promise<boolean> {
   const now = await Location.getForegroundPermissionsAsync();
-  const { status } = now.status === Location.PermissionStatus.UNDETERMINED
-    ? await Location.requestForegroundPermissionsAsync()
-    : now;
+  const { status } =
+    now.status === Location.PermissionStatus.UNDETERMINED
+      ? await Location.requestForegroundPermissionsAsync()
+      : now;
   granted = status === Location.PermissionStatus.GRANTED;
   return granted;
 }

@@ -114,12 +114,7 @@ export const enum SpecialType {
 }
 
 export type NodeValue<T = never> =
-  | T
-  | null
-  | primitive
-  | TypedArray
-  | BigTypedArray
-  | NodeValue<T>[];
+  T | null | primitive | TypedArray | BigTypedArray | NodeValue<T>[];
 
 export type Node = LeafNode | SpecialNode;
 
@@ -213,8 +208,9 @@ export const TYPE_IS_KNOWN = (type: u8): boolean => {
   if (type === SpecialType.NIL || type === SpecialType.BRANCH) return true;
   if (
     !TYPE_IS_LEAF(type) ||
-    (type & ~(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK))
-  ) return false;
+    type & ~(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK)
+  )
+    return false;
   const arg = TYPE_ARG_OF(type);
   switch (type & CLASS_MASK) {
     case CLASS_F:
@@ -245,7 +241,8 @@ export const GET_DESC = (
   if (
     desc !== FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type) ||
     !TYPE_IS_KNOWN(type)
-  ) throw new MarshalError(Errno.EBADMSG);
+  )
+    throw new MarshalError(Errno.EBADMSG);
   out[0] = buf_view.getUint32(off, LE);
   out[1] = type;
   return out;
@@ -254,7 +251,7 @@ export const GET_DESC = (
 export type AlignUnit = 1 | 2 | 4 | 8;
 
 export const ALIGN = (nbyte: u32, unit: AlignUnit): u32 => {
-  if ((unit & (unit - 1)) || unit > WORD_SZ) {
+  if (unit & (unit - 1) || unit > WORD_SZ) {
     throw new MarshalError(Errno.EINVAL);
   }
 

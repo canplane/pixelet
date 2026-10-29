@@ -36,20 +36,18 @@ function effectAt(level: f64, place: BackingPlace): Effect {
   return "regular";
 }
 
-export function Backing(
-  {
-    fill,
-    material,
-    tint,
-    interactive,
-    place,
-    fade = 1,
-    fadeFrom,
-    transition = SNAP,
-    style,
-    children,
-  }: BackingProps,
-) {
+export function Backing({
+  fill,
+  material,
+  tint,
+  interactive,
+  place,
+  fade = 1,
+  fadeFrom,
+  transition = SNAP,
+  style,
+  children,
+}: BackingProps) {
   const veil = useVeil(fade, transition, fadeFrom);
 
   const target = effectAt(veil.level, place);
@@ -77,9 +75,13 @@ export function Backing(
       <Motion {...veil.motion} style={style}>
         <Blur style={[StyleSheet.absoluteFill, round]} />
         <View
-          style={[StyleSheet.absoluteFill, round, {
-            backgroundColor: alpha(fill as string, material.system),
-          }]}
+          style={[
+            StyleSheet.absoluteFill,
+            round,
+            {
+              backgroundColor: alpha(fill as string, material.system),
+            },
+          ]}
         />
         {children}
       </Motion>
@@ -127,14 +129,17 @@ export function Backing(
     >
       <Motion
         {...veil.motion}
-        style={[styles.layout, {
-          flexDirection,
-          alignItems,
-          justifyContent,
-          gap,
-          rowGap,
-          columnGap,
-        }]}
+        style={[
+          styles.layout,
+          {
+            flexDirection,
+            alignItems,
+            justifyContent,
+            gap,
+            rowGap,
+            columnGap,
+          },
+        ]}
       >
         {children}
       </Motion>

@@ -190,19 +190,18 @@ the policy belongs to the program.
 
 ## Running it
 
-Deno 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target, a C++20
-compiler as `c++` or `$CXX`, GNU Make, and the
-[WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
-`$WASI_SDK_PATH`, for the C++ guest built as a WebAssembly module.
+Node 24 with pnpm (`pnpm --dir ts install` first), rustup (it installs what
+`rust/rust-toolchain.toml` names), a C++20
+compiler as `c++` or `$CXX`, GNU Make, and the [WASI
+SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
+`$WASI_SDK_PATH`, for the C++ guest built as a module.
 
 ```sh
-make -j8 check     # deno fmt --check, deno lint, deno check, cargo fmt --check, clippy, the C++ compiled
-make -j8 test      # deno test, cargo test and the C++ tests, the golden records included,
-                   # and the traces against every guest, native and WebAssembly, once build has made them
-make -j8 build     # the guest the traces drive, in Rust and C++, native and WebAssembly; test builds it first
-make -j8 test-gpu  # the GPU hosts against golden/gpu: the native one on wgpu, the web one in Chrome (installed, or $CHROME)
-make fmt           # deno fmt, cargo fmt
-make lint          # deno lint
+make -j8 check     # formats, lints and types checked, the C++ compiled
+make -j8 test      # every tree's tests, then the traces against every guest
+make -j8 build     # the guests the traces drive; test builds them first
+make -j8 test-gpu  # the GPU hosts, on wgpu and in Chrome ($CHROME)
+make fmt           # prettier, cargo fmt
 ```
 
 Each runs every tree's own target, in parallel with `-j`; `check-ts`,

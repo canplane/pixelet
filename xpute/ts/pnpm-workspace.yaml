@@ -1,0 +1,4 @@
+# esbuild bundles the web host's test for Chrome; koffi opens a native guest.
+onlyBuiltDependencies:
+  - esbuild
+  - koffi

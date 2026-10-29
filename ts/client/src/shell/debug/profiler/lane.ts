@@ -35,7 +35,9 @@ const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));
 const OBJECT_NAMES = Array.from(
   { length: op.DESTROY - 1 },
   (_, k) =>
-    Object.entries(op).find(([, v]) => v === k + 1)?.[0].toLowerCase() ?? "-",
+    Object.entries(op)
+      .find(([, v]) => v === k + 1)?.[0]
+      .toLowerCase() ?? "-",
 );
 /** Each list lane's names, slot by slot. */
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
@@ -48,9 +50,9 @@ export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   out: STREAM_NAMES,
 };
 
-export type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
-export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) =>
-  !g.startsWith("$")
+export type FrameGroup = Exclude<keyof typeof FRAME_GROUP, "$doc">;
+export const GROUPS = Object.keys(FRAME_GROUP).filter(
+  (g) => !g.startsWith("$"),
 ) as FrameGroup[];
 
 export const n1 = (n: number) => fixed(n ?? 0, 1);
@@ -61,14 +63,11 @@ const UNIT = /_(ms|bytes|px)$/;
 export const phaseText = ([k, v]: [string, f64]) =>
   `${k.replace(UNIT, "")} ${k === "bytes" ? round(v) : n1(v)}`;
 
-export const pct = (
-  part: number,
-  whole: number,
-) => (whole > 0 ? round((part / whole) * 100) : 0);
+export const pct = (part: number, whole: number) =>
+  whole > 0 ? round((part / whole) * 100) : 0;
 
-export const tris = (
-  t: number,
-) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
+export const tris = (t: number) =>
+  t >= 1000 ? `${round(t / 1000)}k` : String(round(t));
 
 /** A frame's GPU time: its spans' sum (pxl-render renderer.rs `gpu_ms`). */
 export const gpuMs = (f: Frame): f64 =>

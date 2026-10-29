@@ -5,6 +5,9 @@ import { bracket } from "@/bracket.tsx";
 
 /** Where the map's top row of controls stands. */
 export function useChromeTop(): number {
-  return chrome.inset + bracket.view.useSafeArea().top +
-    bracket.view.useViewportTop();
+  return (
+    chrome.inset +
+    bracket.view.useSafeArea().top +
+    bracket.view.useViewportTop()
+  );
 }

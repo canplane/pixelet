@@ -14,6 +14,10 @@ export function ViewPanel() {
   const v = useProfilerView(show && open);
 
   if (!show) return null;
+  const note =
+    v === null || Number.isNaN(v.pivot_lat)
+      ? undefined
+      : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}°`;
   return (
     <Fold name="view" title="View">{v !== null && <ProfilerView v={v} />}</Fold>
   );

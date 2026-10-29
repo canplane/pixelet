@@ -33,4 +33,4 @@ target/
 
 # A library's locks are its consumer's to keep.
 rust/Cargo.lock
-deno.lock
+pnpm-lock.yaml

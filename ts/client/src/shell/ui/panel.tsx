@@ -54,12 +54,14 @@ export const PanelPresence = createContext<{ open: boolean; gone: () => void }>(
 
 /** The top row: the sheet's own control where a title would stand — its tabs or
  * its search field — and close. The panel's `label` names the sheet. */
-export function PanelBar(
-  { onClose, children, ...rest }: ViewProps & {
-    onClose: () => void;
-    children: ReactNode;
-  },
-) {
+export function PanelBar({
+  onClose,
+  children,
+  ...rest
+}: ViewProps & {
+  onClose: () => void;
+  children: ReactNode;
+}) {
   return (
     <View {...rest} style={styles.bar}>
       <View style={styles.barMain}>{children}</View>
@@ -68,9 +70,13 @@ export function PanelBar(
   );
 }
 
-export function PanelBody(
-  { bar, children }: { bar: ReactNode; children: ReactNode },
-) {
+export function PanelBody({
+  bar,
+  children,
+}: {
+  bar: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <View style={styles.body}>
       <View style={styles.scroll}>{children}</View>
@@ -105,9 +111,12 @@ export function PanelScroll({ children }: { children: ReactNode }) {
   return (
     <ScrollView
       style={styles.tabScroll}
-      contentContainerStyle={[styles.tabContent, {
-        paddingBottom: bottom + PANEL_EDGE,
-      }]}
+      contentContainerStyle={[
+        styles.tabContent,
+        {
+          paddingBottom: bottom + PANEL_EDGE,
+        },
+      ]}
     >
       {children}
     </ScrollView>
@@ -203,23 +212,23 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         const { top, center, shown, full, half, stops } = live.current;
         const tap = Math.abs(g.dx) < TAP_SLOP && Math.abs(g.dy) < TAP_SLOP;
         if (tap) {
-          const onHandle = g.y0 - top < chrome.target &&
+          const onHandle =
+            g.y0 - top < chrome.target &&
             Math.abs(g.x0 - center) < chrome.target / 2;
           if (half && onHandle) detent(!full);
           return;
         }
         const height = shown - g.dy;
-        const stop = g.vy < -FLING
-          ? stops.find((s) => s.height > shown)
-          : g.vy > FLING
-          ? stops.findLast((s) => s.height < shown)
-          : stops.reduce((
-            a,
-            b,
-          ) => (Math.abs(b.height - height) < Math.abs(a.height - height)
-            ? b
-            : a)
-          );
+        const stop =
+          g.vy < -FLING
+            ? stops.find((s) => s.height > shown)
+            : g.vy > FLING
+              ? stops.findLast((s) => s.height < shown)
+              : stops.reduce((a, b) =>
+                  Math.abs(b.height - height) < Math.abs(a.height - height)
+                    ? b
+                    : a,
+                );
         stop?.settle();
       },
       onPanResponderTerminate: () => setDrag(null),
@@ -249,19 +258,25 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         to={open ? { translateY: offset } : away}
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
         onSettled={open ? () => drag === null && setBodyFull(full) : gone}
-        style={[sheetStyles.sheet, {
-          width,
-          height: fullHeight,
-          left: (window.width - width) / 2,
-        }]}
+        style={[
+          sheetStyles.sheet,
+          {
+            width,
+            height: fullHeight,
+            left: (window.width - width) / 2,
+          },
+        ]}
       >
         <View
           {...responder.panHandlers}
           accessibilityViewIsModal
           accessibilityLabel={label}
-          style={[sheetStyles.body, {
-            height: bodyFull ? fullHeight : halfHeight,
-          }]}
+          style={[
+            sheetStyles.body,
+            {
+              height: bodyFull ? fullHeight : halfHeight,
+            },
+          ]}
         >
           {children}
           <View style={sheetStyles.handle} />

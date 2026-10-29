@@ -39,10 +39,17 @@ interface CardProps {
   children: ReactNode;
 }
 
-export function Card(
-  { pane, mode, fill, tint, x, width, span, onContentWidth, children }:
-    CardProps,
-) {
+export function Card({
+  pane,
+  mode,
+  fill,
+  tint,
+  x,
+  width,
+  span,
+  onContentWidth,
+  children,
+}: CardProps) {
   const depth = pane === mode ? 0 : 1;
   const pose = cardPose(depth, PEEK_PX);
   // However it was chosen, the chosen card comes forward from behind.
@@ -50,9 +57,13 @@ export function Card(
     <Motion
       to={pose.rest}
       transition={SETTLE}
-      style={[styles.card, depth === 0 ? touches.pass : touches.block, {
-        zIndex: pose.zIndex,
-      }]}
+      style={[
+        styles.card,
+        depth === 0 ? touches.pass : touches.block,
+        {
+          zIndex: pose.zIndex,
+        },
+      ]}
     >
       <Pill
         x={x}

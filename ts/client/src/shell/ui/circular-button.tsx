@@ -20,15 +20,13 @@ interface CircularButtonProps {
   label: string;
 }
 
-export function CircularButton(
-  {
-    glyph,
-    size = chrome.control,
-    place = BackingPlace.OverMap,
-    onPress,
-    label,
-  }: CircularButtonProps,
-) {
+export function CircularButton({
+  glyph,
+  size = chrome.control,
+  place = BackingPlace.OverMap,
+  onPress,
+  label,
+}: CircularButtonProps) {
   const round = { width: size, height: size, borderRadius: size / 2 };
   return (
     <Pressable

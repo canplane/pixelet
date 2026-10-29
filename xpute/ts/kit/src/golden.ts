@@ -16,16 +16,19 @@ export class Golden {
 
   private constructor(src: string) {
     this.map = new Map(
-      src.split("\n").filter((l) => l.includes("\t")).map((l) => {
-        const at = l.indexOf("\t");
-        return [l.slice(0, at), l.slice(at + 1)] as const;
-      }),
+      src
+        .split("\n")
+        .filter((l) => l.includes("\t"))
+        .map((l) => {
+          const at = l.indexOf("\t");
+          return [l.slice(0, at), l.slice(at + 1)] as const;
+        }),
     );
   }
 
   /**
    * The record at `path` under spec/: `golden/wire/tlv.tsv`, fetched beside
-   * this file, so a page served from the tree reads it as Deno does.
+   * this file, so a page served from the tree reads it as the tests do.
    */
   static async load(path: string): Promise<Golden> {
     return new Golden(await (await fetch(new URL(path, SPEC))).text());
@@ -76,7 +79,7 @@ export class Golden {
   /** Calls `f` with `base.0`, `base.1`, … while an entry has that prefix. */
   each(base: string, f: (key: string) => void): void {
     let k = 0;
-    for (;; k++) {
+    for (; ; k++) {
       const prefix = base === "" ? `${k}` : `${base}.${k}`;
       const dotted = `${prefix}.`;
       let found = false;

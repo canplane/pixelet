@@ -8,12 +8,13 @@ import {
   type ProxyOptions,
   type ViteDevServer,
 } from "vite";
-import deno from "@deno/vite-plugin";
-import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { execFile, execSync } from "node:child_process";
+import { appendFileSync, readFileSync, watch } from "node:fs";
+import { createRequire } from "node:module";
 import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import react from "@vitejs/plugin-react";
 
@@ -31,10 +32,20 @@ import {
   readEnums,
   stale,
 } from "@pxl/build/const-enum.ts";
-import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
+import { REPO, WORKSPACE } from "@pxl/build/paths.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/** Where `name` is installed for the package at `dir`: pnpm gives each
+ * package its own dependencies. */
+function installed(name: string, dir: string): string {
+  return path.dirname(
+    createRequire(path.join(dir, "package.json")).resolve(
+      `${name}/package.json`,
+    ),
+  );
+}
 
 const geoBaseDefault = "http://127.0.0.1:3000";
 const tileBaseDefault = "http://127.0.0.1:3001";
@@ -55,7 +66,9 @@ function buildId(): string {
       execSync(`git ${args}`, {
         cwd: __dirname,
         stdio: ["ignore", "pipe", "ignore"],
-      }).toString().trim();
+      })
+        .toString()
+        .trim();
     const dirty = git("status --porcelain") !== "" ? "-dirty" : "";
     return `${git("rev-parse --short HEAD")}${dirty}`;
   } catch {
@@ -130,10 +143,9 @@ function remoteConsole(): Plugin {
           // cannot see it. Appended rather than held, so `tail -f` works and
           // nothing here has to be flushed or closed.
           if (lines.length > 0) {
-            Deno.writeTextFileSync(
+            appendFileSync(
               CONSOLE_LOG,
               lines.map((l) => `${new Date().toISOString()} ${l}\n`).join(""),
-              { append: true, create: true },
             );
           }
           res.statusCode = 204;
@@ -155,11 +167,11 @@ function buildStamp(): Plugin {
     load(source) {
       if (source !== resolved) return undefined;
       const id = buildId();
-      return `export const time = ${
-        JSON.stringify(new Date().toISOString())
-      };\n` +
+      return (
+        `export const time = ${JSON.stringify(new Date().toISOString())};\n` +
         `export const id = ${JSON.stringify(id)};\n` +
-        `export const number = ${JSON.stringify(buildNumber(id))};\n`;
+        `export const number = ${JSON.stringify(buildNumber(id))};\n`
+      );
     },
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
@@ -177,11 +189,12 @@ function buildStamp(): Plugin {
       this.emitFile({
         type: "asset",
         fileName: "build.json",
-        source: JSON.stringify({
-          number: official ? Number(official) : null,
-          id: buildId(),
-          time: new Date().toISOString(),
-        }) + "\n",
+        source:
+          JSON.stringify({
+            number: official ? Number(official) : null,
+            id: buildId(),
+            time: new Date().toISOString(),
+          }) + "\n",
       });
     },
   };
@@ -204,35 +217,17 @@ function buildStamp(): Plugin {
  * is a build error, never a bundle that reaches a browser and throws. The
  * table is read once, as the server starts, so an enum declared since, or a
  * member added to one, is the same error, saying the server has to be
- * restarted.
- *
- * A file of the tree outside this root (xpute/ts) is one the Deno resolver
- * hands back as a virtual module its loader has already emitted, every enum
- * an object by then; such a file is read from its own path instead, as one
- * inside the root is. A file that declares enums and reaches the transform
- * without its declarations is a build error.
+ * restarted. A file that declares enums and reaches the transform without
+ * its declarations is a build error.
  */
 function constEnum(roots: string[]): Plugin {
   const table = readEnums(roots);
   const restart = "restart the dev server";
 
-  // An id can carry a query or a hash — `?url`, and the `#deno` the Deno
-  // resolver appends to the virtual id it hands back — and either one hides
-  // the extension from a `$`-anchored test. Missing a module that way is
-  // silent and asymmetric: the file holding the declaration is reached under
-  // its plain path and loses it, while the importer keeps the name it can no
-  // longer bind.
-  //
-  // The Deno resolver's virtual id names the file last, after `::`
-  // (`\0deno::TypeScript::file:///…::/…/x.ts`), and an import is resolved
-  // against the file itself, so that is what is kept.
-  const sourceOf = (id: string) => {
-    const plain = id.split("?")[0].split("#")[0];
-    const at = plain.lastIndexOf("::");
-    return path.resolve(
-      at < 0 ? plain : plain.slice(at + 2).replace(/^file:\/\//, ""),
-    );
-  };
+  // An id can carry a query or a hash (`?url`), which hides the extension
+  // from a `$`-anchored test: the file holding the declaration would lose it
+  // while the importer keeps the name it can no longer bind.
+  const sourceOf = (id: string) => path.resolve(id.split("?")[0].split("#")[0]);
   const declares = (file: string) =>
     table.exported.has(file) || table.local.has(file);
   const IMPORT =
@@ -251,18 +246,6 @@ function constEnum(roots: string[]): Plugin {
     name: "const-enum",
     // Before the transpiler reaches the types: the declarations are still here.
     enforce: "pre",
-    async resolveId(id, importer, options) {
-      const resolved = await this.resolve(id, importer, {
-        ...options,
-        skipSelf: true,
-      });
-      if (resolved === null || !resolved.id.startsWith("\0deno::")) return null;
-      const file = sourceOf(resolved.id);
-      return /\.tsx?$/.test(file) &&
-          roots.some((r) => file.startsWith(r + path.sep))
-        ? file
-        : null;
-    },
     transform(code, id) {
       const at = sourceOf(id);
       if (!/\.tsx?$/.test(at) || id.includes("node_modules")) return null;
@@ -302,10 +285,8 @@ function constEnum(roots: string[]): Plugin {
         // for the parser instead of a name the stale check below can say.
         out = out.replace(
           new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"),
-          (
-            whole,
-            key: string,
-          ) => (members.has(key) ? literal(members.get(key)!) : whole),
+          (whole, key: string) =>
+            members.has(key) ? literal(members.get(key)!) : whole,
         );
         struck.push(name);
       }
@@ -316,9 +297,9 @@ function constEnum(roots: string[]): Plugin {
       // export nobody declares.
       out = out.replace(IMPORT, (whole, clause: string, from: string) => {
         const all = items(clause);
-        const kept = all.filter((i) => !imported.has(i.local)).map((i) =>
-          i.item
-        );
+        const kept = all
+          .filter((i) => !imported.has(i.local))
+          .map((i) => i.item);
         if (kept.length === all.length) return whole;
         return kept.length ? `import { ${kept.join(", ")} } from ${from};` : "";
       });
@@ -326,14 +307,12 @@ function constEnum(roots: string[]): Plugin {
         const left = new RegExp(`\\b${name}\\.\\w`).exec(out);
         if (left) {
           throw new Error(
-            `${
-              stale(
-                `${name}.${
-                  /\w+/.exec(out.slice(left.index + name.length + 1))![0]
-                }`,
-                restart,
-              )
-            } (${id})`,
+            `${stale(
+              `${name}.${
+                /\w+/.exec(out.slice(left.index + name.length + 1))![0]
+              }`,
+              restart,
+            )} (${id})`,
           );
         }
       }
@@ -353,17 +332,17 @@ function constEnum(roots: string[]): Plugin {
  * the tile server, the rest to the search server. `published` ones go to the
  * published deployment under `dev`.
  */
-export const DEV_PROXY_ROUTES = [
-  { path: TILE_PREFIX, tiles: true, published: true },
-  { path: ASSET_PREFIX, tiles: true, published: true },
-  { path: GEO_PREFIX, published: true },
-  { path: API_PREFIX, app: true, published: true },
-] as const satisfies readonly {
+export const DEV_PROXY_ROUTES: readonly {
   path: string;
   tiles?: boolean;
   app?: boolean;
   published?: boolean;
-}[];
+}[] = [
+  { path: TILE_PREFIX, tiles: true, published: true },
+  { path: ASSET_PREFIX, tiles: true, published: true },
+  { path: GEO_PREFIX, published: true },
+  { path: API_PREFIX, app: true, published: true },
+];
 
 const remoteOriginDefault = "https://plei.me";
 
@@ -385,7 +364,7 @@ const corePathIncludes = [
 // core change waits for it, so the page never runs the shell generated from a
 // new spec beside a module built from the old. The wait before a reload lets a
 // build the same write starts claim it: the generator writes the .ts beside
-// the .rs, and Deno's watcher reports the one after Vite's reports the other.
+// the .rs, and the Rust watcher reports the one after Vite's reports the other.
 const RELOAD_SETTLE_MS = 200;
 const kernelBuild = { running: false, held: false };
 let reloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -404,7 +383,7 @@ function sendHeldReload(server: ViteDevServer) {
   server.ws.send({ type: "full-reload" });
 }
 
-function fullReloadOnCoreChange() {
+function fullReloadOnCoreChange(): Plugin {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
     // monorepo packages are treated as "core": always full reload on change
@@ -416,7 +395,7 @@ function fullReloadOnCoreChange() {
 
   return {
     name: "full-reload-core",
-    enforce: "pre" as const,
+    enforce: "pre",
 
     // Vite's watcher covers `root`, which here is ts/app/web: without this,
     // nothing under xpute/ts/ or ts/client/ is watched, handleHotUpdate
@@ -434,19 +413,6 @@ function fullReloadOnCoreChange() {
       const file = ctx.file;
 
       if (isCoreFile(file)) {
-        // Invalidate by hand, because Vite cannot make the connection
-        // itself. The deno plugin resolves a core import to a virtual id —
-        // `\0deno::TypeScript::@xpute/kit/...::/abs/path.ts` — and the
-        // module graph is keyed by resolved id while onFileChange looks up
-        // by file path, so a changed core file would leave its transform
-        // cached under a name nothing matches, and the full-reload below
-        // would fetch the same stale module again. The absolute path is
-        // inside the virtual id, so matching on it is enough to find them.
-        for (const mod of ctx.server.moduleGraph.idToModuleMap.values()) {
-          if (mod.id?.includes(file)) {
-            ctx.server.moduleGraph.invalidateModule(mod);
-          }
-        }
         reloadOnce(ctx.server);
         // Vite prints "page reload" for the ones it decides itself and says
         // nothing about this one, so without a line here a core edit looks
@@ -466,7 +432,7 @@ function fullReloadOnCoreChange() {
 }
 
 // The kernel's module, built again when what it is built from changes. It is
-// built once as the server starts (deno.jsonc `dev`'s dependency), and the
+// built once as the server starts (package.json `dev`), and the
 // page reloads when src/guest.wasm is replaced
 // (fullReloadOnCoreChange), so a Rust edit otherwise waited for a hand-run
 // build or a restart of everything. Every change under rust/ asks, outside
@@ -490,37 +456,40 @@ function rebuildKernelOnRustChange(): Plugin {
         kernelBuild.running = true;
         do {
           again = false;
-          const done = await new Deno.Command("./script/build-wasm.py", {
+          const done = await promisify(execFile)("./script/build-wasm.py", {
             cwd: __dirname,
-          }).output();
-          const said = new TextDecoder().decode(
-            done.success ? done.stdout : done.stderr,
-          ).trim();
+          }).then(
+            ({ stdout }) => ({ success: true, said: stdout }),
+            (e: { stderr?: string; message: string }) => ({
+              success: false,
+              said: e.stderr || e.message,
+            }),
+          );
+          const said = done.said.trim();
           if (done.success) {
             server.config.logger.info(said.split("\n").at(-1) ?? "", {
               timestamp: true,
             });
-          } else {server.config.logger.error(`kernel build failed\n${said}`, {
+          } else {
+            server.config.logger.error(`kernel build failed\n${said}`, {
               timestamp: true,
-            });}
+            });
+          }
         } while (again);
         kernelBuild.running = false;
         sendHeldReload(server);
       };
-      const watcher = Deno.watchFs(crates);
+      const watcher = watch(crates, { recursive: true }, (_, file) => {
+        if (file && !path.join(crates, file).startsWith(target)) build();
+      });
       server.httpServer?.once("close", () => watcher.close());
-      (async () => {
-        for await (const event of watcher) {
-          if (event.paths.some((p) => !p.startsWith(target))) build();
-        }
-      })();
     },
   };
 }
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, Deno.cwd(), "VITE_");
+  const env = loadEnv(mode, process.cwd(), "VITE_");
 
   // A production build is never a development build, whatever .env says.
   // VITE_APP_ENV lives in .env, which Vite loads for *every* mode, so a
@@ -537,9 +506,10 @@ export default defineConfig(({ mode }) => {
   // on isDev alone would leave __APP_ENV__ reading "development" while the
   // debug section it implies is absent. One value, one rule.
   const rawAppEnv = env.VITE_APP_ENV || mode;
-  const appEnv = mode === "production" && rawAppEnv === "development"
-    ? "production"
-    : rawAppEnv;
+  const appEnv =
+    mode === "production" && rawAppEnv === "development"
+      ? "production"
+      : rawAppEnv;
   const isDev = appEnv === "development";
 
   // Three local servers, one per root plus the tiles a deployment reads out of
@@ -560,7 +530,7 @@ export default defineConfig(({ mode }) => {
   const delivery = devSource === "delivery";
 
   const remoteOrigin = delivery
-    ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault)
+    ? env.VITE_REMOTE_ORIGIN || remoteOriginDefault
     : "";
   // What the proxy hands the page is never stored. The objects behind it are
   // `immutable` for a year, which a deployment means; here a restart of this
@@ -571,20 +541,23 @@ export default defineConfig(({ mode }) => {
       res.headers["cache-control"] = "no-store";
     });
   };
-  const proxy = Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
-    route.path,
-    {
-      target: remoteOrigin && route.published
-        ? remoteOrigin
-        : route.tiles
-        ? tileBase
-        : route.app
-        ? apiBase
-        : geoBase,
-      changeOrigin: true,
-      configure: noStore,
-    },
-  ]));
+  const proxy = Object.fromEntries(
+    DEV_PROXY_ROUTES.map((route) => [
+      route.path,
+      {
+        target:
+          remoteOrigin && route.published
+            ? remoteOrigin
+            : route.tiles
+              ? tileBase
+              : route.app
+                ? apiBase
+                : geoBase,
+        changeOrigin: true,
+        configure: noStore,
+      },
+    ]),
+  );
 
   return {
     // Root `make dev-oven` runs the three servers and this in one
@@ -600,7 +573,6 @@ export default defineConfig(({ mode }) => {
         path.join(WORKSPACE, "client", "src"),
         path.join(REPO, "xpute", "ts"),
       ]),
-      deno(),
       react(),
 
       rebuildKernelOnRustChange(),
@@ -610,21 +582,26 @@ export default defineConfig(({ mode }) => {
     ],
 
     resolve: {
+      // The aliases are ../../tsconfig.json's.
+      tsconfigPaths: true,
       alias: [
-        // The shell imports React Native's API, which deno.jsonc resolves to
-        // React Native itself for the type-check; a web bundle takes the
+        // The shell imports React Native's API, which the type-check resolves
+        // to React Native itself; a web bundle takes the
         // same names from react-native-web. Exact, so a package under
         // `react-native/…` is not rewritten into one that does not exist.
-        { find: /^react-native$/, replacement: "react-native-web" },
-        // react-native-svg picks its platform by file suffix, which a web
-        // bundle reached through Deno's resolver never sees: the package
+        {
+          find: /^react-native$/,
+          replacement: installed("react-native-web", __dirname),
+        },
+        // react-native-svg picks its platform by file suffix, which its
+        // package entry does not: the package
         // resolves to its CommonJS entry, whose native half reaches into
         // React Native's Flow sources. The web half is named instead.
         {
           find: /^react-native-svg$/,
           replacement: path.join(
-            WORKSPACE,
-            "node_modules/react-native-svg/lib/module/ReactNativeSVG.web.js",
+            installed("react-native-svg", path.join(WORKSPACE, "client")),
+            "lib/module/ReactNativeSVG.web.js",
           ),
         },
         // Where a bundled image's address is kept: React Native's own
@@ -633,8 +610,8 @@ export default defineConfig(({ mode }) => {
         {
           find: /^@react-native\/assets-registry\/registry$/,
           replacement: path.join(
-            WORKSPACE,
-            "node_modules/react-native-web/dist/modules/AssetRegistry/index.js",
+            installed("react-native-web", __dirname),
+            "dist/modules/AssetRegistry/index.js",
           ),
         },
       ],
@@ -702,14 +679,9 @@ export default defineConfig(({ mode }) => {
       // everything — Vite checks the Host header against this list, and the
       // check is what stands between a dev server and DNS rebinding.
       allowedHosts: [".trycloudflare.com"],
-      // Vite's default fs.allow walks up from this config's own directory
-      // looking for an npm/pnpm/yarn workspace root; this is a Deno
-      // workspace, which that heuristic does not recognize, so it falls
-      // back to ts/app/web itself and 403s any `/@fs/` request for a file
-      // outside it — invisible for plain .ts imports, which the deno plugin
-      // resolves, but fatal for an asset import (`import x from "*.png"`)
-      // that points into xpute/ts/. The repo root allowed once covers every
-      // such path.
+      // Vite's default fs.allow is the pnpm workspace, ts/, so an asset
+      // import (`import x from "*.png"`) into xpute/ts/ is refused. The repo
+      // root allowed once covers every such path.
       fs: { allow: [REPO] },
       // Each prefix forwarded whole and unrewritten.
       proxy,

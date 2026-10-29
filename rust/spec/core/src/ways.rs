@@ -941,10 +941,105 @@ pub fn runs(a: &Around, cell: Zoom, mut put: impl FnMut(u32, u32)) -> u32 {
         if z == i32::MAX {
             return n;
         }
-        let v = lined(a, cell, z);
-        if v != held {
-            put(n, run_word(z, v));
-            (held, n) = (v, n + 1);
+    }
+    z
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A column: its face cell, its spans and how many it holds.
+    type Column = (i32, [([i32; 2], u32); 4], u32);
+
+    /// A column and the four beside it, each a face cell and its spans.
+    struct Five([Column; 5]);
+
+    impl Five {
+        fn of(&self, c: [i32; 2]) -> &Column {
+            let k = match c {
+                [0, 0] => 0,
+                [0, -1] => 1,
+                [-1, 0] => 2,
+                [1, 0] => 3,
+                _ => 4,
+            };
+            &self.0[k]
+        }
+    }
+
+    impl Kept for Five {
+        fn head(&self, c: [i32; 2]) -> (i32, u32) {
+            let (face, _, n) = self.of(c);
+            (*face, *n)
+        }
+        fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
+            self.of(c).1[j as usize]
+        }
+    }
+
+    /// `bound` is the hull of the cells `lined` writes, a cell at a
+    /// time, a bore's air held to the top: every way a slab, a pier or air
+    /// over another, beside it or over and under it can lie, at zooms from
+    /// the leaves to three coarser.
+    #[test]
+    fn bound_is_hull() {
+        let mut seed = 0x2545_f491_u32;
+        let mut next = |m: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed % m
+        };
+        for _ in 0..20_000 {
+            let cell = LEAF_CELL - next(4);
+            let s = 1i32 << (LEAF_CELL - cell);
+            let top = next(120) as i32 - 60;
+            let face = crate::ground::face_cell(
+                cell,
+                crate::ground::face_height(cell, crate::ground::cells(cell, top as f32)),
+            );
+            let mut five = [(0, [([0, 0], 0); 4], 0); 5];
+            for (k, col) in five.iter_mut().enumerate() {
+                let n = next(5);
+                for j in 0..n as usize {
+                    let lo = next(140) as i32 - 70;
+                    let v = match next(3) {
+                        0 => AIR_OF | 3,
+                        1 => 7,
+                        _ => PIER,
+                    };
+                    col.1[j] = ([lo, lo + 1 + next(30) as i32], v);
+                }
+                col.2 = n;
+                col.0 = if k == 0 && next(8) == 0 {
+                    i32::MIN
+                } else {
+                    face
+                };
+            }
+            let k = Five(five);
+            let mut hull = crate::ground::EMPTY;
+            for z in -200 / s..200 / s {
+                let v = lined(&k, [0, 0], cell, z);
+                if v == NOTHING {
+                    continue;
+                }
+                let end = if v == AIR {
+                    ((z + 1) * s).min(top)
+                } else {
+                    (z + 1) * s
+                };
+                if z * s < end {
+                    hull = [hull[0].min(z * s), hull[1].max(end)];
+                }
+            }
+            assert_eq!(
+                bound(&k, [0, 0], cell, top),
+                hull,
+                "{:?} at {cell}, top {top}",
+                k.0
+            );
         }
     }
 }

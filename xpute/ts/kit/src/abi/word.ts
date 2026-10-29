@@ -3,10 +3,13 @@
 export type numeric = number | bigint;
 export type primitive = numeric | string | boolean;
 
-export type Vec<N extends number, T = number, R extends unknown[] = []> =
-  R["length"] extends N ? R : Vec<N, T, [T, ...R]>;
+export type Vec<
+  N extends number,
+  T = number,
+  R extends unknown[] = [],
+> = R["length"] extends N ? R : Vec<N, T, [T, ...R]>;
 
-export const BOOL = (x: unknown): 1 | 0 => x ? 1 : 0;
+export const BOOL = (x: unknown): 1 | 0 => (x ? 1 : 0);
 
 export type bits = 8 | 16 | 32 | 64 | 96 | 128;
 

@@ -57,8 +57,8 @@ concurrency:
 
 env:
   # No language's version is here: each tree says its own. rust/rust-toolchain.toml
-  # says the Rust and rustup reads it on its own; ts/.tool-versions says the Deno
-  # and setup-deno is pointed at it. The Python scripts take the standard
+  # says the Rust and rustup reads it on its own; ts/.tool-versions says the Node
+  # and setup-node is pointed at it, and ts/package.json the pnpm. The Python scripts take the standard
   # library alone and run on the runner's python3, as the shell scripts on its
   # sh. A job installs from a file rather than being told, so the number is in
   # one place.
@@ -190,9 +190,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      - uses: denoland/setup-deno@v2
+      - uses: actions/setup-node@v4
         with:
-          deno-version-file: ts/.tool-versions
+          node-version-file: ts/.tool-versions
+      - run: corepack enable
 
 
       # Its own cargo cache: the module and what builds it.

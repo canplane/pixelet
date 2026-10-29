@@ -38,15 +38,17 @@ function CameraGizmo() {
 /** Whether any panel is up, so the corner is the window's. */
 export function useDebugWindow(): boolean {
   return useKernel((s) =>
-    settingsIn("debug").some((name) =>
-      isPanel(name) && s.settings[SETTINGS[name].key] === 1
-    )
+    settingsIn("debug").some(
+      (name) => isPanel(name) && s.settings[SETTING[name].key] === 1,
+    ),
   );
 }
 
-export function DebugPanels() {
-  return settingsIn("debug").filter(isPanel).map((name) => {
-    const Panel = PANEL[name];
-    return <Panel key={name} />;
-  });
+export function DebugWindow() {
+  return settingsIn("debug")
+    .filter(isPanel)
+    .map((name) => {
+      const Panel = PANEL[name];
+      return <Panel key={name} />;
+    });
 }

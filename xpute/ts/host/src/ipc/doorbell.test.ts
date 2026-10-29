@@ -1,5 +1,6 @@
 // @xpute/host/ipc/doorbell.test.ts
 
+import { test } from "vitest";
 import { assertEquals, assertThrows } from "@std/assert";
 
 import { InvariantError } from "@xpute/kit/status/error.ts";
@@ -9,7 +10,7 @@ import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 const CAP = 8;
 const SLOT = 64;
 
-Deno.test("doorbell - a call from inside a listener is refused and leaves nothing submitted", () => {
+test("doorbell - a call from inside a listener is refused and leaves nothing submitted", () => {
   const sq_at = 8;
   const cq_at = sq_at + ring_bytes(CAP);
   const slots_at = cq_at + ring_bytes(CAP);

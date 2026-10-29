@@ -74,10 +74,8 @@ export function mount(guest: Guest, plan: Plan): Host {
     doorbell.send(0, cmd, pkt);
     strobe.request();
   };
-  const sys = new Sys(
-    plan.sys,
-    (fd, res, detail) =>
-      send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
+  const sys = new Sys(cfg.sys, (fd, res, detail) =>
+    send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
   );
   return {
     guest,

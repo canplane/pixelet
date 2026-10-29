@@ -89,17 +89,19 @@ function openSurface(
 /** A field's own keys, which the shell routes apart. */
 function inField(e: KeyboardEvent): boolean {
   const target = e.target;
-  return target instanceof HTMLElement &&
+  return (
+    target instanceof HTMLElement &&
     (target.isContentEditable ||
-      target.closest("input, textarea, select") !== null);
+      target.closest("input, textarea, select") !== null)
+  );
 }
 
 function pointerKind(e: PointerEvent): PointerKind {
   return e.pointerType === "touch"
     ? "touch"
     : e.pointerType === "pen"
-    ? "pen"
-    : "mouse";
+      ? "pen"
+      : "mouse";
 }
 
 function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
@@ -128,11 +130,12 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
   const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) e.preventDefault();
-    const per = e.deltaMode === WheelEvent.DOM_DELTA_LINE
-      ? LINE_PX
-      : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
-      ? globalThis.innerHeight
-      : 1;
+    const per =
+      e.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? LINE_PX
+        : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? globalThis.innerHeight
+          : 1;
     input.wheel(e.deltaY * per);
   };
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
@@ -143,9 +146,13 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   // A composed or shortcut key is the IME's or the browser's; Tab switches the dock mid-word too.
   const onKeyDown = (e: KeyboardEvent) => {
     if (
-      e.repeat || (e.isComposing && e.code !== "Tab") || e.metaKey ||
-      e.ctrlKey || e.altKey
-    ) return;
+      e.repeat ||
+      (e.isComposing && e.code !== "Tab") ||
+      e.metaKey ||
+      e.ctrlKey ||
+      e.altKey
+    )
+      return;
     if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
@@ -207,9 +214,11 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
 }
 
-export function World(
-  { surface: driver, input, overMarker }: WorldSurfaceProps,
-) {
+export function World({
+  surface: driver,
+  input,
+  overMarker,
+}: WorldSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -245,9 +254,8 @@ export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
     const canvas = ref.current;
     if (!canvas) return;
     const surface = openSurface(canvas, driver);
-    const close = surface.handle !== 0
-      ? open.current(surface.handle)
-      : () => {};
+    const close =
+      surface.handle !== 0 ? open.current(surface.handle) : () => {};
     return () => {
       close();
       surface.close();

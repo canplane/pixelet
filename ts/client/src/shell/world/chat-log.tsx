@@ -20,9 +20,12 @@ export function ChatLog() {
       {chatLines.map((line, i) => (
         <View
           key={line.id}
-          style={[styles.line, {
-            opacity: 0.4 + 0.6 * ((i + 1) / chatLines.length),
-          }]}
+          style={[
+            styles.line,
+            {
+              opacity: 0.4 + 0.6 * ((i + 1) / chatLines.length),
+            },
+          ]}
         >
           <Text style={[styles.text, styles.self]}>
             {t("world.chat.self_label")}

@@ -125,14 +125,14 @@ copying
 
 ## Getting Started
 
-> Requires GNU Make, Python 3.11 or newer, [Deno](https://deno.land/) at the
-> version `ts/.tool-versions` pins, Rust through [rustup](https://rustup.rs/),
-> which takes the toolchain and its targets from `rust/rust-toolchain.toml`,
-> Binaryen's `wasm-opt`, and Docker for the local databases. The dev and build
-> tasks build the kernel module from `rust/` first. `make check` and `make test`
-> take what [xpute/README.md](./xpute/README.md#running-it) lists besides;
-> publishing the bucket takes the AWS CLI, and a deploy by hand and the usage
-> report take wrangler.
+> Requires GNU Make, Python 3.11 or newer, [Node](https://nodejs.org/) at the
+> version `ts/.tool-versions` pins with pnpm (`corepack enable`, or
+> `npm i -g pnpm@10`), Rust through [rustup](https://rustup.rs/)
+> (the toolchain is `rust/rust-toolchain.toml`'s), Binaryen's `wasm-opt`, and
+> Docker for the local databases and the shaders' build. `make check` and
+> `make test` take what [xpute/README.md](./xpute/README.md#running-it) lists
+> besides; publishing the bucket takes the AWS CLI, and a deploy by hand
+> wrangler.
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -143,6 +143,7 @@ cp ts/app/web/.env.example ts/app/web/.env
 cp infra/local/.env.example infra/local/.env
 cp rust/server/.env.example rust/server/.env
 
+pnpm --dir ts install
 make dev
 ```
 
@@ -255,9 +256,8 @@ they stand on the chain from the eye to the reads.
 
 ```
 .
-├── ts/                       # The TypeScript workspace (ts/deno.jsonc)
-│   ├── client/               #   the client, which both apps bundle
-│   │   ├── brand/            #     the icons and symbol both apps and the shell draw
+├── ts/                  # The TypeScript workspace (pnpm)
+│   ├── client/          #   the client both apps bundle
 │   │   └── src/
 │   │       ├── bracket.tsx   #     what the client asks of the place it runs in
 │   │       ├── deploy.ts     #     the build's values that ship as data

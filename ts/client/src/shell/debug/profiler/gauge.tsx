@@ -32,9 +32,13 @@ const Note = ({ children }: { children: string }) => (
   <Text style={[gauge.text, gauge.key]}>{children}</Text>
 );
 
-export const Head = (
-  { children, end }: { children: string; end?: ReactNode },
-) => (
+export const Head = ({
+  children,
+  end,
+}: {
+  children: string;
+  end?: ReactNode;
+}) => (
   <View style={gauge.head}>
     <Text style={[gauge.text, gauge.headText]}>{children}</Text>
     <View style={gauge.headLine} />
@@ -44,22 +48,17 @@ export const Head = (
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
-const geo = (
-  lat: number,
-  lon: number,
-) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
-const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
+const geo = (lat: number, lon: number) =>
+  Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`;
+const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
 /** What the pick met, by the kernel's code (profiler.json `SUMMARY.view`). */
 const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
 
-const units3 = (
-  x: number,
-  y: number,
-  z: number,
-) => (Number.isNaN(x)
-  ? "-"
-  : `${Math.floor(x)}, ${Math.floor(y)}, ${Math.floor(z)}`);
+/** A unit to an eighth, the finest cell (z27), with no trailing zeros. */
+const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
+const coord = (x: number, y: number, z: number) =>
+  Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`;
 
 /**
  * Live: where the camera and the pointer are now, not over the window. The
@@ -88,28 +87,30 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
       <Head>What the tool strikes</Head>
       <Row
         k="struck"
-        v={picked
-          ? (STRUCK[v.struck] ?? "-")
-          : Number.isNaN(v.hover_x)
-          ? "-"
-          : "nothing in reach"}
+        v={
+          picked
+            ? (STRUCK[v.struck] ?? "-")
+            : Number.isNaN(v.hover_x)
+              ? "-"
+              : "nothing in reach"
+        }
       />
       <Row
-        k="held/drawn at"
-        v={picked
-          ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
-          : "-"}
+        k="struck/drawn at"
+        v={
+          picked
+            ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
+            : "-"
+        }
         warn={folded}
       />
       <Row
-        k="places at x/y/z (units)"
-        v={units3(v.place_x, v.place_y, v.place_z)}
-      />
-      <Row
-        k="places a cube of"
-        v={Number.isNaN(v.place_zoom)
-          ? "-"
-          : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`}
+        k="places at zoom"
+        v={
+          Number.isNaN(v.place_zoom)
+            ? "-"
+            : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`
+        }
         warn={v.blocked === 1}
       />
     </>
@@ -143,10 +144,11 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
   const f = g.frames;
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) =>
-    [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) =>
-      by(r) > 0
-    );
-  const failing = g.tasks.filter((t) => t.error > 0);
+    [...rows]
+      .sort((a, b) => by(b) - by(a))
+      .slice(0, n)
+      .filter((r) => by(r) > 0);
+  const failing = g.tasks.filter((t) => t.err > 0);
 
   // A glance: how smooth, where the frame's time goes, what it is drawn at,
   // and whether anything leaks or fails. The report holds the rest.
@@ -225,9 +227,9 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     heap: f !== null && (
       <Row
         k="heap used change"
-        v={`${f.heap_used_delta_bytes >= 0 ? "+" : ""}${
-          bytes(f.heap_used_delta_bytes)
-        }`}
+        v={`${f.heap_used_delta_bytes >= 0 ? "+" : ""}${bytes(
+          f.heap_used_delta_bytes,
+        )}`}
       />
     ),
     ring: null,

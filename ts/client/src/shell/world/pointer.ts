@@ -21,8 +21,10 @@ const pressed = new Map<i32, PointerType>();
 
 useDockStore.subscribe((state, before) => {
   if (
-    state.dockMode === DockMode.Message && before.dockMode !== DockMode.Message
-  ) kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
+    state.dockMode === DockMode.Message &&
+    before.dockMode !== DockMode.Message
+  )
+    kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
 });
 
 export function worldPointer(

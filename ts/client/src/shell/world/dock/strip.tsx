@@ -38,9 +38,8 @@ import {
 import { useKernel } from "@/shell/store/watch.ts";
 
 /** A page's browser pans the strip, and holds and drags up reach the view's own gesture; on a device the responder system shares the finger. */
-const PAN_X: ViewStyle = Platform.OS === "web"
-  ? ({ touchAction: "pan-x" } as ViewStyle)
-  : {};
+const PAN_X: ViewStyle =
+  Platform.OS === "web" ? ({ touchAction: "pan-x" } as ViewStyle) : {};
 
 const ITEM = 24;
 
@@ -97,7 +96,8 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
         if (
           state === Gesture.Drag ||
           (Math.abs(s.dx) < DRAG_PX && Math.abs(s.dy) < DRAG_PX)
-        ) return;
+        )
+          return;
         state = Gesture.Drag;
         stopHold();
         handlers.current.close();
@@ -120,9 +120,13 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   return responder.current.panHandlers;
 }
 
-function SwatchButton(
-  { cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "tap"> },
-) {
+function SwatchButton({
+  cube,
+  gesture,
+}: {
+  cube: Cube;
+  gesture: Omit<SizeGesture, "press">;
+}) {
   const { t } = useTranslation();
   const selectCube = useDockStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
@@ -223,14 +227,17 @@ function MarkerButton() {
   );
 }
 
-function ToolButton(
-  { label, glyph, active, onPress }: {
-    label: string;
-    glyph: GlyphName;
-    active?: boolean;
-    onPress: () => void;
-  },
-) {
+function ToolButton({
+  label,
+  glyph,
+  active,
+  onPress,
+}: {
+  label: string;
+  glyph: GlyphName;
+  active?: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
@@ -238,10 +245,8 @@ function ToolButton(
       accessibilityLabel={label}
       style={styles.slot}
     >
-      {
-        /* Always mounted: Android, creating it once lit, drew its ground without
-                its corners. */
-      }
+      {/* Always mounted: Android, creating it once lit, drew its ground without
+                its corners. */}
       <View
         collapsable={false}
         style={[styles.held, active && styles.toolActive]}
@@ -257,13 +262,15 @@ function ToolButton(
 }
 
 /** `span` is the bar's width, past which it never reaches; the picks scroll unless the sizes are open. */
-export function Strip(
-  { span, scrolls, sizes }: {
-    span: f64;
-    scrolls: boolean;
-    sizes: Omit<SizeGesture, "tap">;
-  },
-) {
+export function Strip({
+  span,
+  scrolls,
+  gesture,
+}: {
+  span: f64;
+  scrolls: boolean;
+  gesture: Omit<SizeGesture, "press">;
+}) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.holding.tool);
   const recentPicks = useDockStore((s) => s.recentPicks);
@@ -295,17 +302,17 @@ export function Strip(
         contentContainerStyle={styles.picksContent}
       >
         {recentPicks.map((pick) =>
-          pick.tool === ActiveTool.Object
-            ? (
-              <SwatchButton
-                key={cubeId(pick.cube)}
-                cube={pick.cube}
-                sizes={sizes}
-              />
-            )
-            : pick.tool === ActiveTool.Decor
-            ? <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
-            : <MarkerButton key="marker" />
+          pick.tool === ActiveTool.Object ? (
+            <SwatchButton
+              key={cubeId(pick.cube)}
+              cube={pick.cube}
+              gesture={gesture}
+            />
+          ) : pick.tool === ActiveTool.Decor ? (
+            <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
+          ) : (
+            <MarkerButton key="marker" />
+          ),
         )}
       </ScrollView>
 

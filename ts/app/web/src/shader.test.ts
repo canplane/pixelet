@@ -10,15 +10,18 @@
  * modules Tint refuses (a literal past f32's range, at e84ddd56e).
  */
 
+import { test } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { REPO } from "@pxl/build/import-map.ts";
+import { REPO } from "@pxl/build/paths.ts";
 import { create, globals } from "webgpu";
 
 const SHADERS = path.join(REPO, "rust/client/render/src/frame/shader");
 
-Deno.test("Tint takes every generated shader", async () => {
-  const modules = fs.readdirSync(SHADERS).filter((f) => f.endsWith(".gen.wgsl"))
+test("Tint takes every generated shader", async () => {
+  const modules = fs
+    .readdirSync(SHADERS)
+    .filter((f) => f.endsWith(".gen.wgsl"))
     .sort();
   if (modules.length === 0) {
     throw new Error(`no generated shader under ${SHADERS}`);
@@ -41,8 +44,8 @@ Deno.test("Tint takes every generated shader", async () => {
     }
     device.pushErrorScope("validation");
     const module = device.createShaderModule({ code });
-    const errors = (await module.getCompilationInfo()).messages.filter((m) =>
-      m.type === "error"
+    const errors = (await module.getCompilationInfo()).messages.filter(
+      (m) => m.type === "error",
     );
     refused.push(
       ...errors.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`),

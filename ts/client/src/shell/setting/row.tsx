@@ -51,14 +51,17 @@ function Badges({ cost, dev }: { cost?: SettingCost; dev?: boolean }) {
   );
 }
 
-function Described(
-  { label, description, cost, dev }: {
-    label: string;
-    description?: string;
-    cost?: SettingCost;
-    dev?: boolean;
-  },
-) {
+function Described({
+  label,
+  description,
+  cost,
+  dev,
+}: {
+  label: string;
+  description?: string;
+  cost?: SettingCost;
+  dev?: boolean;
+}) {
   return (
     <View style={styles.described}>
       <View style={styles.nameLine}>
@@ -207,9 +210,13 @@ export function Prose({ children }: { children: ReactNode }) {
   return <View style={styles.prose}>{children}</View>;
 }
 
-export function Link(
-  { href, children }: { href: string; children?: ReactNode },
-) {
+export function Link({
+  href,
+  children,
+}: {
+  href: string;
+  children?: ReactNode;
+}) {
   return (
     <Text style={styles.link} onPress={() => Linking.openURL(href)}>
       {children}

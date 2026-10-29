@@ -23,8 +23,12 @@ pxl-spec-core.workspace = true
 xpute-gpu.workspace = true
 
 [build-dependencies]
-# The zooms the screen's rays are painted by (build.rs `lattice.wgsl`), and
-# the cloud field's hash (`cloud_hash.wgsl`).
+# The light a colour decodes to, the same bits on every machine (build.rs
+# `debug_looks`), as the crate's own is (clippy.toml).
+libm.workspace = true
+# The zooms the screen's rays are painted by (build.rs `lattice.wgsl`), the
+# cloud field's hash (`cloud_hash.wgsl`), and the values every shader may
+# name (`words`).
 pxl-spec-core.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
 naga = { version = "30", features = ["wgsl-in"] }

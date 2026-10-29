@@ -5,13 +5,29 @@
 
 use crate::space::coord::zoom::{units, Zoom};
 
-/// The camera grid, the one knob of resolution: a cell is an angle of
-/// 1/`SPLIT` radians about the eye, and the block it is drawn with, whole,
-/// spans at least one cell from any direction, so a zoom's block is drawn
-/// from half `SPLIT` of its sides away out to `SPLIT` of them. Pixels are a screen's, derived from it
-/// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
-/// inside it is its layer's to fold (pxl-spec-core, which a GPU's cast sizes
-/// its cells by too).
+// ---- the view's knobs, beside pxl-spec-core grid.rs's ----
+
+/// The tangent of half the vertical field of view, the view's (pxl-kernel
+/// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
+/// distance, a field of 53.13° (`fov`).
+pub const HALF_TAN: f64 = 0.5;
+
+// ---- derived from the knobs ----
+
+/// The vertical field of view, in radians (`HALF_TAN`).
+pub fn fov() -> f64 {
+    2.0 * libm::atan(HALF_TAN)
+}
+
+/// The view's cells a radian (pxl-spec-core `grid::CELLS_A_RADIAN`).
+pub const CELLS_A_RADIAN: f64 = pxl_spec_core::grid::CELLS_A_RADIAN as f64;
+
+/// How many times as far a window holds its zoom's cells as the view draws
+/// them (pxl-spec-core `grid::WINDOW_MARGIN`).
+pub const WINDOW_MARGIN: f64 = pxl_spec_core::grid::WINDOW_MARGIN as f64;
+
+/// The grid the bands and windows are sized for, the view's
+/// `WINDOW_MARGIN` times finer (pxl-spec-core `grid::SPLIT`).
 pub const SPLIT: f64 = pxl_spec_core::grid::SPLIT as f64;
 
 /// The view `SPLIT` is stated at: 1080 CSS px high, drawn at

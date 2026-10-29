@@ -74,11 +74,7 @@ export function Dock() {
             span={barWidth}
             onContentWidth={setStripWidth}
           >
-            <Strip
-              span={barWidth}
-              scrolls={flyout?.sizes !== Sizes.Open}
-              sizes={sizes}
-            />
+            <Strip span={barWidth} scrolls={!popover?.open} gesture={gesture} />
           </Card>
 
           {shownFlyout && <SizeFlyout flyout={shownFlyout} />}

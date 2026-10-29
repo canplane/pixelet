@@ -45,13 +45,16 @@ export class IndexedMap<K extends numeric> {
   private mask: u32;
   private _size: u32 = 0;
 
-  constructor(private readonly traits: KeyTraits<K>, cap: u32 = 16) {
-    let size = 2;
-    while (size < cap * 2) size <<= 1;
-    this.table = new Uint32Array(size);
-    this.keys = this.take_keys(size >>> 1);
-    this.mask = size - 1;
-    this.shift = 32 - Math.log2(size);
+  constructor(
+    private readonly traits: KeyTraits<K>,
+    cap: u32 = 16,
+  ) {
+    let sz = 2;
+    while (sz < cap * 2) sz <<= 1;
+    this.table = new Uint32Array(sz);
+    this.keys = this.take_keys(sz >>> 1);
+    this.mask = sz - 1;
+    this.shift = 32 - Math.log2(sz);
   }
 
   get size(): u32 {

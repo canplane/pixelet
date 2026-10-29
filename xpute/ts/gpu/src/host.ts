@@ -135,7 +135,9 @@ class Words {
 
 /** Whether `a`'s generation is behind `b`'s, generations wrapping in 16 bits. */
 function older(a: u32, b: u32): boolean {
-  return (((a >>> 16) - (b >>> 16)) & 0xffff) >= 0x8000;
+  const behind =
+    ((a >>> SLOT_BITS) - (b >>> SLOT_BITS)) & ((1 << GENERATION_BITS) - 1);
+  return behind >= 1 << (GENERATION_BITS - 1);
 }
 
 export class GpuHost {
@@ -221,11 +223,9 @@ export class GpuHost {
   private lost(): void {
     this.objects.length = 0;
     if (this.block) {
-      new Uint32Array(
-        this.memory(),
-        this.block.address,
-        this.block.words,
-      )[this.block.words - 1] = STATUS.LOST;
+      new Uint32Array(this.memory(), this.block.address, this.block.words)[
+        this.block.words - 1
+      ] = STATUS.LOST;
     }
   }
 
@@ -369,9 +369,8 @@ export class GpuHost {
         this.put(id, {
           view: texture.createView({
             format,
-            dimension: dim === undefined
-              ? undefined
-              : TEXTURE_VIEW_DIMENSION[dim],
+            dimension:
+              dim === undefined ? undefined : TEXTURE_VIEW_DIMENSION[dim],
             aspect,
             baseMipLevel,
             mipLevelCount,
@@ -406,9 +405,8 @@ export class GpuHost {
             mipmapFilter: MIPMAP_FILTER_MODE[mip],
             lodMinClamp,
             lodMaxClamp,
-            compare: compare === undefined
-              ? undefined
-              : COMPARE_FUNCTION[compare],
+            compare:
+              compare === undefined ? undefined : COMPARE_FUNCTION[compare],
             maxAnisotropy: r.u(),
           }),
         );
@@ -480,9 +478,8 @@ export class GpuHost {
         this.put(
           id,
           d.createPipelineLayout({
-            bindGroupLayouts: Array.from(
-              { length: r.u() },
-              () => this.get<GPUBindGroupLayout>(r.u()),
+            bindGroupLayouts: Array.from({ length: r.u() }, () =>
+              this.get<GPUBindGroupLayout>(r.u()),
             ),
           }),
         );
@@ -511,9 +508,10 @@ export class GpuHost {
           }
           return {
             binding,
-            resource: kind === 1
-              ? this.get<GPUSampler>(object)
-              : this.get<View>(object).view,
+            resource:
+              kind === 1
+                ? this.get<GPUSampler>(object)
+                : this.get<View>(object).view,
           };
         });
         this.put(id, d.createBindGroup({ layout, entries }));
@@ -583,36 +581,43 @@ export class GpuHost {
             ];
             // As the formats, WebGPU's newer factors are past what a DOM lib's type lists.
             const factor = (k: u32) => BLEND_FACTOR[k] as GPUBlendFactor;
-            const blend = cop === NONE ? undefined : {
-              color: {
-                operation: BLEND_OPERATION[cop],
-                srcFactor: factor(csrc),
-                dstFactor: factor(cdst),
-              },
-              alpha: {
-                operation: BLEND_OPERATION[aop],
-                srcFactor: factor(asrc),
-                dstFactor: factor(adst),
-              },
-            };
+            const blend =
+              cop === NONE
+                ? undefined
+                : {
+                    color: {
+                      operation: BLEND_OPERATION[cop],
+                      srcFactor: factor(csrc),
+                      dstFactor: factor(cdst),
+                    },
+                    alpha: {
+                      operation: BLEND_OPERATION[aop],
+                      srcFactor: factor(asrc),
+                      dstFactor: factor(adst),
+                    },
+                  };
             return { format, blend, writeMask: r.u() };
           },
         );
         this.put(
           id,
           d.createRenderPipeline({
-            layout: layout === undefined
-              ? "auto"
-              : this.get<GPUPipelineLayout>(layout),
+            layout:
+              layout === undefined
+                ? "auto"
+                : this.get<GPUPipelineLayout>(layout),
             vertex,
             primitive,
             depthStencil: depthFormat === undefined ? undefined : depth,
             multisample,
-            fragment: module === undefined ? undefined : {
-              module: this.get<GPUShaderModule>(module),
-              entryPoint,
-              targets,
-            },
+            fragment:
+              module === undefined
+                ? undefined
+                : {
+                    module: this.get<GPUShaderModule>(module),
+                    entryPoint,
+                    targets,
+                  },
           }),
         );
         return;
@@ -624,9 +629,10 @@ export class GpuHost {
         this.put(
           id,
           d.createComputePipeline({
-            layout: layout === undefined
-              ? "auto"
-              : this.get<GPUPipelineLayout>(layout),
+            layout:
+              layout === undefined
+                ? "auto"
+                : this.get<GPUPipelineLayout>(layout),
             compute: { module, entryPoint: r.text() },
           }),
         );
@@ -644,9 +650,11 @@ export class GpuHost {
         const id = r.u();
         const o = this.get<GpuObject>(id);
         if (
-          o instanceof GPUBuffer || o instanceof GPUTexture ||
+          o instanceof GPUBuffer ||
+          o instanceof GPUTexture ||
           o instanceof GPUQuerySet
-        ) o.destroy();
+        )
+          o.destroy();
         this.forget(id);
         return;
       }
@@ -709,17 +717,20 @@ export class GpuHost {
         createImageBitmap(image, {
           imageOrientation: flipY ? "flipY" : "from-image",
           premultiplyAlpha: premultipliedAlpha ? "premultiply" : "none",
-        }).then((source) => {
-          if (this.objects.includes(to.texture)) {
-            (d.queue as ExternalImageQueue).copyExternalImageToTexture(
-              { source },
-              to,
-              [source.width, source.height],
-            );
-            this.done(word, ticket);
-          }
-          source.close();
-        }, () => {});
+        }).then(
+          (source) => {
+            if (this.objects.includes(to.texture)) {
+              (d.queue as ExternalImageQueue).copyExternalImageToTexture(
+                { source },
+                to,
+                [source.width, source.height],
+              );
+              this.done(word, ticket);
+            }
+            source.close();
+          },
+          () => {},
+        );
         return;
       }
       case op.ENCODER:
@@ -792,17 +803,16 @@ export class GpuHost {
           .colorAttachments as GPURenderPassColorAttachment[];
         colors.length = 0;
         for (let k = 0; k < n; k++) {
-          const c = this.colors[k] ??= {
+          const c = (this.colors[k] ??= {
             view: undefined as unknown as GPUTextureView,
             loadOp: "load",
             storeOp: "store",
             clearValue: [0, 0, 0, 0],
-          };
+          });
           c.view = this.get<View>(r.u()).view;
           const resolve = r.opt();
-          c.resolveTarget = resolve === undefined
-            ? undefined
-            : this.get<View>(resolve).view;
+          c.resolveTarget =
+            resolve === undefined ? undefined : this.get<View>(resolve).view;
           c.loadOp = LOAD_OP[r.u()];
           c.storeOp = STORE_OP[r.u()];
           const clear = c.clearValue as number[];
@@ -838,9 +848,10 @@ export class GpuHost {
         }
         this.pass.timestampWrites = this.timestamps(r);
         const occlusion = r.opt();
-        this.pass.occlusionQuerySet = occlusion === undefined
-          ? undefined
-          : this.get<GPUQuerySet>(occlusion);
+        this.pass.occlusionQuerySet =
+          occlusion === undefined
+            ? undefined
+            : this.get<GPUQuerySet>(occlusion);
         this.put(id, e.beginRenderPass(this.pass));
         return;
       }
@@ -984,15 +995,18 @@ export class GpuHost {
         const ticket = r.u();
         // Where the device went since (`lost`) it lands nowhere, as the native
         // host's pending reads are dropped.
-        buffer.mapAsync(GPUMapMode.READ, offset, size).then(() => {
-          if (this.get<GPUBuffer>(id) !== buffer) return;
-          this.bytesAt(address, size).set(
-            new Uint8Array(buffer.getMappedRange(offset, size)),
-          );
-          buffer.unmap();
-          new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;
-          this.wake();
-        }, () => {});
+        buffer.mapAsync(GPUMapMode.READ, offset, size).then(
+          () => {
+            if (this.get<GPUBuffer>(id) !== buffer) return;
+            this.bytesAt(address, size).set(
+              new Uint8Array(buffer.getMappedRange(offset, size)),
+            );
+            buffer.unmap();
+            new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;
+            this.wake();
+          },
+          () => {},
+        );
         return;
       }
       case op.QUEUE_DONE: {
@@ -1006,9 +1020,10 @@ export class GpuHost {
         const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODE[r.u()]];
         context?.configure({
           device: d,
-          format: format === SURFACE_PREFERRED
-            ? navigator.gpu.getPreferredCanvasFormat()
-            : TEXTURE_FORMAT[format],
+          format:
+            format === SURFACE_PREFERRED
+              ? navigator.gpu.getPreferredCanvasFormat()
+              : TEXTURE_FORMAT[format],
           usage,
           alphaMode,
         });
@@ -1034,10 +1049,9 @@ export class GpuHost {
         this.block = { address, words };
         const out = new Uint32Array(this.memory(), address, words);
         const limits = d.limits as unknown as Record<string, number>;
-        LIMIT_NAME.forEach((
-          name,
-          k,
-        ) => (out[k] = Math.min(limits[name] ?? 0, 0xffffffff)));
+        LIMIT_NAME.forEach(
+          (name, k) => (out[k] = Math.min(limits[name] ?? 0, 0xffffffff)),
+        );
         FEATURE_NAME.forEach((name, k) => {
           if (d.features.has(name as GPUFeatureName)) {
             out[LIMIT_NAME.length + (k >> 5)] |= 1 << (k & 31);

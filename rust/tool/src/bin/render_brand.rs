@@ -8,7 +8,7 @@
 //! is opaque because both platforms paint alpha black; `og-image.png` stays
 //! PNG because the source was a 10-bit AVIF not every decoder reads.
 //!
-//!   deno task --cwd ts/app/web build:brand   the icons, the outline checked
+//!   pnpm --dir ts/app/web build:brand   the icons, the outline checked
 //!   make render-brand                        the outline rewritten as well
 
 use std::io::Cursor;

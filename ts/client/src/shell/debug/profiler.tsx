@@ -72,16 +72,21 @@ const TINT: Record<Tint, TintLook> = {
 };
 
 /** The hint shows under the buttons on hover or hold, since a device has no tooltip. */
-function PanelButton(
-  { label, hint, tint = Tint.Plain, onPress, onHint, disabled }: {
-    label: string;
-    hint: string;
-    tint?: Tint;
-    onPress: () => void;
-    onHint: (hint: string | null) => void;
-    disabled?: boolean;
-  },
-) {
+function PanelButton({
+  label,
+  hint,
+  tint = Tint.Plain,
+  onPress,
+  onHint,
+  disabled,
+}: {
+  label: string;
+  hint: string;
+  tint?: Tint;
+  onPress: () => void;
+  onHint: (hint: string | null) => void;
+  disabled?: boolean;
+}) {
   const [hovered, setHovered] = useState(false);
   const t = TINT[tint];
   return (
@@ -102,12 +107,13 @@ function PanelButton(
       disabled={disabled}
       accessibilityRole="button"
       accessibilityHint={hint}
-      style={(
-        { pressed },
-      ) => [styles.button, {
-        borderColor: t.border,
-        backgroundColor: hovered || pressed ? t.lit : t.ground,
-      }]}
+      style={({ pressed }) => [
+        styles.button,
+        {
+          borderColor: t.border,
+          backgroundColor: hovered || pressed ? t.lit : t.ground,
+        },
+      ]}
     >
       {({ pressed }) => (
         <Text
@@ -125,6 +131,53 @@ function PanelButton(
 }
 
 const SAID_MS = 2500;
+
+/** A setting the panel holds (section `profiler`). */
+type Own = {
+  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler"
+    ? K
+    : never;
+}[SettingName];
+
+/** Each a checkbox under the buttons, set while the window is stopped: one
+ * that changed mid-window would leave the window's frames counted apart. A
+ * dev one is absent from a production build (`settingsIn`), and its box
+ * with it. */
+const OWN: Record<Own, { label: string; note: string }> = {
+  ray_counts: { label: "Ray counts", note: "into the report; slows the casts" },
+};
+
+function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
+  const { key } = SETTING[name];
+  const on = useKernel((s) => s.settings[key] === 1);
+  const own = OWN[name];
+  const Box = on ? CheckSquareIcon : SquareIcon;
+  return (
+    <Pressable
+      onPress={() => kernel_setting(key, on ? 0 : 1)}
+      disabled={disabled}
+      accessibilityRole="checkbox"
+      aria-checked={on}
+      style={[
+        gauge.row,
+        styles.check,
+        disabled && { opacity: disabledContent },
+      ]}
+    >
+      <View style={styles.checkLabel}>
+        <Box
+          size={18}
+          color={gauge.text.color}
+          weight={on ? "fill" : "regular"}
+        />
+        <Text style={gauge.text}>{own.label}</Text>
+      </View>
+      <Text style={[gauge.text, gauge.key, styles.note]} numberOfLines={1}>
+        {disabled ? "stop the window to change" : own.note}
+      </Text>
+    </Pressable>
+  );
+}
 
 function restartWindow(): void {
   kernel_command(Command.PROFILER_START);
@@ -154,9 +207,12 @@ export function ProfilerPanel() {
 
   if (!show) return null;
   const recording = g?.rec.recording === true;
-  const f = g?.frames ?? null;
-  const rate = f === null ? null : fps(f);
-  const title = rate === null ? "Profiler" : `Profiler · ${n1(rate)} fps`;
+  // The rate frames are drawn at over the last second, idle where recording
+  // saw none move in it.
+  const r = g?.recent ?? null;
+  const rate = r === null ? null : movingFps(r);
+  const note =
+    rate !== null ? `${n1(rate)} fps` : recording ? "idle" : undefined;
 
   return (
     <Fold
@@ -190,8 +246,10 @@ export function ProfilerPanel() {
           label="Report"
           hint="copy the window's summary as text"
           onPress={() =>
-            void profilerReportCopy(profilerReportText(profilerReportRead()))
-              .then(setSaid)}
+            void profilerReportCopy(
+              profilerReportText(profilerReportRead()),
+            ).then(setSaid)
+          }
         />
         <PanelButton
           onHint={setHint}

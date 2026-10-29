@@ -26,10 +26,12 @@ export default (config) => {
     config.modResults.UIApplicationSceneManifest = {
       UIApplicationSupportsMultipleScenes: false,
       UISceneConfigurations: {
-        UIWindowSceneSessionRoleApplication: [{
-          UISceneConfigurationName: "Default Configuration",
-          UISceneDelegateClassName: SCENE_DELEGATE,
-        }],
+        UIWindowSceneSessionRoleApplication: [
+          {
+            UISceneConfigurationName: "Default Configuration",
+            UISceneDelegateClassName: SCENE_DELEGATE,
+          },
+        ],
       },
     };
     return config;
@@ -43,10 +45,12 @@ export default (config) => {
         "ios-scene: AppDelegate.swift is not the template this plugin rewrites",
       );
     }
-    config.modResults.contents = source.replace(
-      DECLARED,
-      "class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider {",
-    ).replace(STARTED, "");
+    config.modResults.contents = source
+      .replace(
+        DECLARED,
+        "class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider {",
+      )
+      .replace(STARTED, "");
     return config;
   });
 };

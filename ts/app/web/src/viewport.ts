@@ -53,9 +53,9 @@ interface VirtualKeyboard extends EventTarget {
   readonly boundingRect: DOMRect;
 }
 
-const keyboard =
-  (navigator as Navigator & { virtualKeyboard?: VirtualKeyboard })
-    .virtualKeyboard;
+const keyboard = (
+  navigator as Navigator & { virtualKeyboard?: VirtualKeyboard }
+).virtualKeyboard;
 
 /**
  * Pins the overlays to the visual viewport: the top as `useViewportTop`, the
@@ -72,7 +72,7 @@ export function useVisualViewport(): void {
 
     const root = document.documentElement;
     let frame = 0;
-    let settleTimer = 0;
+    let settleTimer: ReturnType<typeof setTimeout> | 0 = 0;
 
     function apply() {
       frame = 0;

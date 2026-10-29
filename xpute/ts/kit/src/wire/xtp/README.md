@@ -114,12 +114,7 @@ This library stores data as a **binary tree**.
 Example input:
 
 ```ts
-[
-  42,
-  "hello",
-  true,
-  new Float64Array([1.1, 2.2, 3.3]),
-];
+[42, "hello", true, new Float64Array([1.1, 2.2, 3.3])];
 ```
 
 Conceptually becomes:
@@ -212,12 +207,7 @@ Example:
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
 const tree = new TreeView();
-tree.branch((b) =>
-  b
-    .u32(1)
-    .str(null)
-    .branch(null)
-);
+tree.branch((b) => b.u32(1).str(null).branch(null));
 
 const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const root = new TreeReader(packet).read_branch();
@@ -276,12 +266,7 @@ import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
 const tree = new TreeView();
 
-tree.branch((b) =>
-  b
-    .u8(255)
-    .str("Player_1")
-    .f32(99.9)
-);
+tree.branch((b) => b.u8(255).str("Player_1").f32(99.9));
 
 const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const b = new TreeReader(packet).read_branch();
@@ -316,12 +301,7 @@ tree.u64(123n);
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
 const tree = new TreeView();
-tree.branch((b) =>
-  b
-    .u32(7)
-    .str(null)
-    .u8_array(null)
-);
+tree.branch((b) => b.u32(7).str(null).u8_array(null));
 
 const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 const b = new TreeReader(packet).read_branch();
@@ -423,9 +403,7 @@ const users = [
   { id: 2, name: "grace" },
 ];
 
-const blobs = [
-  { id: 10, body: new Uint8Array([1, 2, 3]) },
-];
+const blobs = [{ id: 10, body: new Uint8Array([1, 2, 3]) }];
 
 const samples = new Int16Array([10, 20, 30, 40]);
 
@@ -443,10 +421,7 @@ const blobs_view = new TreeView().branch((b) => {
 
 const packet = encoder.encode(
   new TreeView().branch((b) =>
-    b
-      .i16_array(samples)
-      .subtree(users_view)
-      .subtree(blobs_view)
+    b.i16_array(samples).subtree(users_view).subtree(blobs_view),
   ),
 );
 ```
@@ -665,9 +640,9 @@ tree.set(to_tuple(obj, keys));
 
 const packet = new TreeEncoder().encode(tree, { init_cap: 1024 });
 
-const out_tuple = new TreeReader(packet).read_branch().get_deep<
-  [number, number, string]
->();
+const out_tuple = new TreeReader(packet)
+  .read_branch()
+  .get_deep<[number, number, string]>();
 const out = from_tuple<typeof obj>(out_tuple, keys);
 
 console.log(out);

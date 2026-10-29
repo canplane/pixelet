@@ -41,13 +41,15 @@ const CHIP_REACH = {
   paddingVertical: touchReach(CHIP_HEIGHT),
 };
 
-function Chip(
-  { label, active, onPress }: {
-    label: string;
-    active: boolean;
-    onPress: () => void;
-  },
-) {
+function Chip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
@@ -56,9 +58,7 @@ function Chip(
       style={CHIP_REACH}
     >
       <View style={[styles.chip, active && styles.chipOn]}>
-        {
-          /* Sized to the label's heavier weight, so a pick never rewraps the row. */
-        }
+        {/* Sized to the label's heavier weight, so a pick never rewraps the row. */}
         <Text
           aria-hidden
           maxFontSizeMultiplier={textScale.chrome}
@@ -84,13 +84,15 @@ function Chip(
 }
 
 /** A preview of the one picked beside the chips that pick it. */
-function PickerCard(
-  { label, selected, children }: {
-    label: string;
-    selected: CharacterVariant;
-    children: ReactNode;
-  },
-) {
+function PickerCard({
+  label,
+  selected,
+  children,
+}: {
+  label: string;
+  selected: CharacterVariant;
+  children: ReactNode;
+}) {
   return (
     <View style={styles.picker}>
       <SectionTitle>{label}</SectionTitle>

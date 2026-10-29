@@ -74,7 +74,8 @@ status = subprocess.run(["git", "status", "--porcelain"], cwd=EDGE, capture_outp
 if status.returncode == 0 and status.stdout.strip():
     print(f"[deploy] the tree is not clean, so the build id will say -dirty:\n{status.stdout.strip()}", flush=True)
 
-step("build", ["deno", "task", "--cwd", str(WEB), "build"])
+step("install", ["pnpm", "--dir", str(WEB), "install", "--frozen-lockfile"])
+step("build", ["pnpm", "--dir", str(WEB), "build"])
 # A fresh copy every time, so what is checked or deployed is never a bundle
 # left from before.
 shutil.rmtree(EDGE / "dist", ignore_errors=True)

@@ -39,10 +39,13 @@ function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
   return (
     <View
       pointerEvents="none"
-      style={[styles.tipAnchor, {
-        left: named.x - TIP_SPAN / 2,
-        bottom: sheetHeight - named.y,
-      }]}
+      style={[
+        styles.tipAnchor,
+        {
+          left: named.x - TIP_SPAN / 2,
+          bottom: sheetHeight - named.y,
+        },
+      ]}
     >
       <View style={styles.tipShape}>
         <View
@@ -52,7 +55,9 @@ function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
           <View style={styles.tipPill} />
           <View style={styles.tipPoint} />
         </View>
-        <Text numberOfLines={1} style={styles.tip}>{named.label}</Text>
+        <Text numberOfLines={1} style={styles.tip}>
+          {named.label}
+        </Text>
       </View>
     </View>
   );
@@ -66,29 +71,33 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
   // In the window, not against the sheet: a device's measureLayout leaves the scroll out.
   // A press counts, so a measure that answers after its release shows nothing.
   const press = useRef(0);
-  const naming = useMemo<Naming>(() => ({
-    show: (label, item) => {
-      const at = ++press.current;
-      sheet.current?.measureInWindow((sx, sy) =>
-        item.measureInWindow((x, y, w) => {
-          if (press.current === at) {
-            setNamed({ label, x: x - sx + w / 2, y: y - sy });
-          }
-        })
-      );
-    },
-    hide: () => {
-      press.current++;
-      setNamed(null);
-    },
-  }), []);
+  const naming = useMemo<Naming>(
+    () => ({
+      show: (label, item) => {
+        const at = ++press.current;
+        sheet.current?.measureInWindow((sx, sy) =>
+          item.measureInWindow((x, y, w) => {
+            if (press.current === at) {
+              setNamed({ label, x: x - sx + w / 2, y: y - sy });
+            }
+          }),
+        );
+      },
+      hide: () => {
+        press.current++;
+        setNamed(null);
+      },
+    }),
+    [],
+  );
 
   return (
     <View
       ref={sheet}
       style={styles.sheet}
       onLayout={(e: LayoutChangeEvent) =>
-        setSheetHeight(e.nativeEvent.layout.height)}
+        setSheetHeight(e.nativeEvent.layout.height)
+      }
     >
       <NamingContext.Provider value={naming}>{children}</NamingContext.Provider>
       {named && <NameTip named={named} sheetHeight={sheetHeight} />}

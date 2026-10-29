@@ -5,7 +5,7 @@
  * the one that was open, so the corner holds one at a time.
  */
 
-import { CaretDown, CaretUp } from "phosphor-react-native";
+import { CaretDownIcon, CaretUpIcon } from "phosphor-react-native";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
@@ -25,16 +25,24 @@ const toggle = (name: PanelName) =>
 
 export const HINT_INK = alpha(color.white, 0.55);
 
-/** A panel whose title opens and closes it; `end` sits by the caret. */
-export function Fold(
-  { name, title, end, children }: {
-    name: PanelName;
-    title: string;
-    end?: ReactNode;
-    children?: ReactNode;
-  },
-) {
-  const open = useOpenFold((s) => s.open === name);
+/**
+ * A panel whose title opens and closes it; `note` follows the title, a reading
+ * rather than a name, so it is not bold; `end` sits by the caret.
+ */
+export function Accordion({
+  name,
+  title,
+  note,
+  end,
+  children,
+}: {
+  name: PanelName;
+  title: string;
+  note?: string;
+  end?: ReactNode;
+  children?: ReactNode;
+}) {
+  const open = useOpenAccordion((s) => s.open === name);
   return (
     <View style={styles.panel}>
       <Pressable
@@ -46,9 +54,11 @@ export function Fold(
           <Text style={[gauge.text, styles.titleText]}>{title}</Text>
           <View style={styles.end}>
             {open && end}
-            {open
-              ? <CaretUp size={12} color={HINT_INK} />
-              : <CaretDown size={12} color={HINT_INK} />}
+            {open ? (
+              <CaretUpIcon size={12} color={HINT_INK} />
+            ) : (
+              <CaretDownIcon size={12} color={HINT_INK} />
+            )}
           </View>
         </View>
       </Pressable>

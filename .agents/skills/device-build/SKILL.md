@@ -36,7 +36,7 @@ make sync-build-number
 ### Generate
 
 ```bash
-(cd ts/app/native && deno install && deno run -A npm:expo@57.0.25 prebuild --platform ios --no-install)
+(cd ts && pnpm install) && (cd ts/app/native && pnpm exec expo prebuild --platform ios --no-install)
 (cd ts/app/native/ios && pod install)
 ```
 
@@ -111,7 +111,7 @@ xcrun simctl launch <id> me.plei.pixelet
 ### Generate
 
 ```bash
-(cd ts/app/native && deno install && deno run -A npm:expo@57.0.25 prebuild --platform android --no-install)
+(cd ts && pnpm install) && (cd ts/app/native && pnpm exec expo prebuild --platform android --no-install)
 ```
 
 The app has two flavors, `mobile` for a phone and `quest` for a Meta Quest, so

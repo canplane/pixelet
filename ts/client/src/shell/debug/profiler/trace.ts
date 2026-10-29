@@ -82,11 +82,9 @@ function frameArgs(f: Frame): Args {
         args[`census_${names[i]}_draws`] = d;
         args[`census_${names[i]}_tris`] = t;
       });
-    } else {f[name].forEach((
-        v,
-        i,
-      ) => (args[`${name}_${names[i]}`] = fixedN(v, 2))
-      );}
+    } else {
+      f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
+    }
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
   return args;
@@ -110,9 +108,8 @@ function profilerTraceJson(): string {
     // The outcome is the event's category, and the detail is in `fail`'s text.
     const args: Args = {
       priority: r.priority,
-      queuedMs: r.start_ms === null
-        ? null
-        : fixedN(r.start_ms - r.enqueue_ms, 1),
+      queuedMs:
+        r.start_ms === null ? null : fixedN(r.start_ms - r.enqueue_ms, 1),
       ranMs: r.start_ms === null ? null : fixedN(r.end_ms - r.start_ms, 1),
     };
     if (r.fail !== 0) {
@@ -192,9 +189,9 @@ function profilerTraceJson(): string {
 export async function profilerTraceSave(): Promise<string> {
   const json = profilerTraceJson();
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
-  const name = `pxl-profiler-${
-    new Date().toISOString().replace(/[:.]/g, "-")
-  }.json`;
+  const name = `pxl-profiler-${new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")}.json`;
   try {
     await bracket.share.save(name, json, "application/json");
     console.log(

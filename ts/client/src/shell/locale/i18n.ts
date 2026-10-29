@@ -18,9 +18,10 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
   const out: Catalog = { ...base };
   for (const [key, value] of Object.entries(extra)) {
     const current = out[key];
-    out[key] = typeof value === "object" && typeof current === "object"
-      ? deepMerge(current, value)
-      : value;
+    out[key] =
+      typeof value === "object" && typeof current === "object"
+        ? deepMerge(current, value)
+        : value;
   }
   return out;
 }
@@ -29,9 +30,9 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
  * Rolldown did not drop a helper's argument and shipped 47 dev strings. */
 const catalog = __IS_DEV__
   ? {
-    en: deepMerge(en, enDev) as typeof en,
-    ko: deepMerge(ko, koDev) as typeof ko,
-  }
+      en: deepMerge(en, enDev) as typeof en,
+      ko: deepMerge(ko, koDev) as typeof ko,
+    }
   : { en, ko };
 
 export type Language = keyof typeof catalog;
@@ -53,7 +54,7 @@ const languageDetector: LanguageDetectorModule = {
   // region, so ["en-US", "ko"] read as Korean.
   detect: () =>
     bracket.storage.get(LANG_KEY) ??
-      bracket.locale.list().map((code) => new Intl.Locale(code).language),
+    bracket.locale.list().map((code) => new Intl.Locale(code).language),
   cacheUserLanguage: (lng) => bracket.storage.set(LANG_KEY, lng),
 };
 

@@ -94,8 +94,7 @@ const SOURCE_KEY = "source";
 
 const KINDS = BASE_LAYERS.join("|");
 const KEY_RE = new RegExp(
-  String
-    .raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
+  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
@@ -181,8 +180,8 @@ export default {
     const bucket = url.pathname.startsWith(TILE_PREFIX)
       ? url.pathname.slice(TILE_PREFIX.length)
       : url.pathname.startsWith(ASSET_PREFIX)
-      ? url.pathname.slice(1)
-      : null;
+        ? url.pathname.slice(1)
+        : null;
 
     // Everything else under a claimed root is reverse-proxied to that root's
     // origin, same path, host header rewritten for Caddy. Neither branch reads
@@ -191,8 +190,8 @@ export default {
       const origin = url.pathname.startsWith(GEO_PREFIX)
         ? env.GEO_ORIGIN
         : url.pathname.startsWith(API_PREFIX)
-        ? env.API_ORIGIN
-        : null;
+          ? env.API_ORIGIN
+          : null;
       if (origin) {
         const target = new URL(url.pathname + url.search, origin);
         const headers = new Headers(request.headers);
@@ -228,8 +227,8 @@ export default {
       page
         ? left()
         : new Response(request.method === "HEAD" ? null : "not found", {
-          status: 404,
-        });
+            status: 404,
+          });
     const cache = caches.default;
     if (request.method === "GET") {
       const cached = await cache.match(request);

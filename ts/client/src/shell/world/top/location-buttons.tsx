@@ -40,8 +40,8 @@ export function LocationButtons() {
   const press = following
     ? Tracking.Unfollow
     : offCenter
-    ? Tracking.Recenter
-    : Tracking.Follow;
+      ? Tracking.Recenter
+      : Tracking.Follow;
   const { glyph, label } = PRESS[press];
 
   return (
@@ -52,10 +52,11 @@ export function LocationButtons() {
           label: t(label),
           onPress: () => void kernel_tracking(press),
           isActive: following,
-          disabled: status !== DevicePoseStatus.Ready || !hasLocation,
-          face: status === DevicePoseStatus.Loading
-            ? <Spinner size={chrome.glyph} color={LABEL.primary} />
-            : (
+          disabled: status !== SensorStatus.Ready || !hasLocation,
+          face:
+            status === SensorStatus.Loading ? (
+              <Spinner size={chrome.glyph} color={LABEL.primary} />
+            ) : (
               // One turn as following starts.
               <Motion
                 to={{ rotate: 0 }}

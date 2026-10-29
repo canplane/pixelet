@@ -120,9 +120,9 @@ export class Doorbell implements PacketRoom {
     take: (result: i32, reply: BranchCursor | null) => T,
   ): T {
     if (this.trapped) throw new InvariantError(Errno.ENOTRECOVERABLE);
-    const tag = this.next_call = (this.next_call + 1) >>> 0;
-    let out: { value: T } | null = null;
-    this.waiting.set(tag, (result, f) => out = { value: take(result, f) });
+    const tag = (this.next_call = (this.next_call + 1) >>> 0);
+    let out: { val: T } | null = null;
+    this.waiting.set(tag, (result, f) => (out = { val: take(result, f) }));
     try {
       this.submit(tag, cmd, pkt, frame.ACKREQ);
       while (out === null) {
@@ -155,18 +155,18 @@ export class Doorbell implements PacketRoom {
             waiting(cq.result(at), f);
           } else if (cq.result(at) < 0) {
             console.warn(
-              `[xpute/doorbell] command 0x${cmd.toString(16)} failed: ${
-                strerror(cq.result(at))
-              }`,
+              `[xpute/doorbell] command 0x${cmd.toString(16)} failed: ${strerror(
+                cq.result(at),
+              )}`,
             );
           }
         } else if (this.signal !== null) {
           this.signal(tag, cmd, f);
         } else {
           console.warn(
-            `[xpute/doorbell] signal 0x${
-              cmd.toString(16)
-            } raised with no one to hear it`,
+            `[xpute/doorbell] signal 0x${cmd.toString(
+              16,
+            )} raised with no one to hear it`,
           );
         }
         cq.advance();
@@ -190,9 +190,9 @@ export class Doorbell implements PacketRoom {
       if (errnum === Errno.OK) return;
       if (errnum !== Errno.EAGAIN) {
         throw new Error(
-          `[xpute/doorbell] command 0x${
-            cmd.toString(16)
-          } refused by the ring: ${errnum}`,
+          `[xpute/doorbell] command 0x${cmd.toString(
+            16,
+          )} refused by the ring: ${errnum}`,
         );
       }
       this.ring(0);

@@ -72,9 +72,14 @@ interface ToastProps extends ToastSpec {
   touchBelow?: f64;
 }
 
-export function Toast(
-  { message, tone, fade, fadeTransition, touch, touchBelow }: ToastProps,
-) {
+export function Toast({
+  message,
+  tone,
+  fade,
+  fadeTransition,
+  touch,
+  touchBelow,
+}: ToastProps) {
   const error = tone === ToastTone.Error;
   const span = bracket.view.useWindowSize().width;
   const [open, setOpen] = useState(false);
@@ -111,9 +116,11 @@ export function Toast(
       <View style={styles.slot}>
         <Swap
           id={tone}
-          from={tone === ToastTone.Ready
-            ? { opacity: 0, scale: 0.3, rotate: -20 }
-            : { opacity: 0, scale: 0.8 }}
+          from={
+            tone === ToastTone.Ready
+              ? { opacity: 0, scale: 0.3, rotate: -20 }
+              : { opacity: 0, scale: 0.8 }
+          }
           exit={{ opacity: 0, scale: 0.5 }}
           transition={tone === ToastTone.Ready ? POP : FADE}
           exitTransition={FADE}
@@ -129,9 +136,12 @@ export function Toast(
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={textScale.chrome}
-          style={[styles.message, {
-            maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
-          }]}
+          style={[
+            styles.message,
+            {
+              maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
+            },
+          ]}
         >
           {message}
         </Text>

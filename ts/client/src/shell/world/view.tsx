@@ -70,8 +70,10 @@ function World() {
 /** The room a panel may fill between the settings button and the dock. */
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + chrome.control + PANEL_GAP_PX;
-  const bottom = bottomRest(bracket.view.useSafeArea(), chrome.inset) +
-    DOCK_HEIGHT + PANEL_GAP_PX;
+  const bottom =
+    bottomRest(bracket.view.useSafeArea(), chrome.inset) +
+    DOCK_HEIGHT +
+    PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 
@@ -103,9 +105,7 @@ export function WorldView() {
         <World />
       </View>
 
-      {
-        /* Under the chrome: the size flyout is meant to cover the toasts. */
-      }
+      {/* Under the chrome: the size popover is meant to cover the toasts. */}
       <AboveKeyboard inset={chrome.inset} lift={DOCK_HEIGHT + TOAST_LIFT_PX}>
         <Toaster />
       </AboveKeyboard>

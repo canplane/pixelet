@@ -38,18 +38,20 @@ function columnsOf(width: f64): f64 {
  * edges meet the row's, as the other tabs' content does: the cells overhang by
  * the margin an item keeps inside its cell.
  */
-export function Grid(
-  { head, children }: {
-    head: React.ReactNode;
-    children: (cell: f64) => React.ReactNode;
-  },
-) {
+export function Grid({
+  head,
+  children,
+}: {
+  head: React.ReactNode;
+  children: (cell: f64) => React.ReactNode;
+}) {
   const [width, setWidth] = useState(0);
   const columns = columnsOf(width);
-  const cell = width > 0
-    ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) /
-      (columns - 1 + ITEM_SLOPE)
-    : chrome.target;
+  const cell =
+    width > 0
+      ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) /
+        (columns - 1 + ITEM_SLOPE)
+      : chrome.target;
   return (
     <View
       style={styles.section}
@@ -66,15 +68,19 @@ export function Grid(
 }
 
 /** Pictures only: names under every item read as a list. A press names it above the finger. */
-export function Item(
-  { label, active, cell, onPress, children }: {
-    label: string;
-    active: boolean;
-    cell: f64;
-    onPress: () => void;
-    children: React.ReactNode;
-  },
-) {
+export function Item({
+  label,
+  active,
+  cell,
+  onPress,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  cell: f64;
+  onPress: () => void;
+  children: React.ReactNode;
+}) {
   const naming = useContext(NamingContext);
   const ref = useRef<View>(null);
   return (

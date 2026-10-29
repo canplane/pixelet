@@ -13,7 +13,8 @@ type Base64 = string;
 export function is_b64url(s: string): boolean {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    const ok = (c >= 0x30 && c <= 0x39) || // 0-9
+    const ok =
+      (c >= 0x30 && c <= 0x39) || // 0-9
       (c >= 0x41 && c <= 0x5a) || // A-Z
       (c >= 0x61 && c <= 0x7a) || // a-z
       c === 0x2d || // -

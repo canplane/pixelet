@@ -29,7 +29,7 @@ export function cubeSection(cube: Cube): CubeSection {
 
 const NAME = Object.fromEntries(
   Object.entries(cube).flatMap(([, values]) =>
-    Object.entries(values).map(([name, n]) => [n, name])
+    Object.entries(values).map(([name, n]) => [n, name]),
   ),
 ) as Record<number, string>;
 
@@ -59,8 +59,8 @@ const DECOR_NAME = Object.fromEntries(
   Object.entries(decor).map(([name, n]) => [n, name]),
 ) as Record<number, DecorId>;
 
-export const decorIds: readonly u16[] = Object.values(decor).sort((a, b) =>
-  a - b
+export const decorIds: readonly u16[] = Object.values(decor).sort(
+  (a, b) => a - b,
 );
 
 export function decorName(kind: u16): DecorId {

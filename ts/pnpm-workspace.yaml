@@ -1,0 +1,12 @@
+# pixelet's TypeScript: the client (the shell and the host, the same files on a
+# page and on a device), the scripts the bundlers read it through, and each
+# app.
+packages:
+  - client
+  - build
+  - app/web
+  - app/native
+
+# Dawn, which the web app's shader test compiles on, installs its binary.
+onlyBuiltDependencies:
+  - webgpu

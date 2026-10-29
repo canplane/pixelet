@@ -1,5 +1,6 @@
 // @xpute/host/ipc/ring.test.ts
 
+import { test } from "vitest";
 import { assert, assertEquals, assertThrows } from "@std/assert";
 
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
@@ -19,7 +20,7 @@ function ring(cap: number, slot: number): Ring {
   );
 }
 
-Deno.test("ring - frames come out in order across the wrap, and a full ring refuses", () => {
+test("ring - frames come out in order across the wrap, and a full ring refuses", () => {
   const r = ring(4, 64);
   for (let round = 0; round < 3; round++) {
     for (let k = 0; k < 4; k++) {
@@ -32,13 +33,10 @@ Deno.test("ring - frames come out in order across the wrap, and a full ring refu
     for (let k = 0; k < 4; k++) {
       const at = r.peek();
       assert(at >= 0);
-      assertEquals([
-        r.tag(at),
-        r.cmd(at),
-        r.flags(at),
-        r.result(at),
-        r.packet(at),
-      ], [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k), null]);
+      assertEquals(
+        [r.tag(at), r.cmd(at), r.flags(at), r.result(at), r.pkt(at)],
+        [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k), null],
+      );
       r.advance();
     }
     assertEquals(r.peek(), -1);
@@ -46,7 +44,7 @@ Deno.test("ring - frames come out in order across the wrap, and a full ring refu
   assertEquals([r.head, r.tail], [12, 12], "positions only grow");
 });
 
-Deno.test("ring - one payload a slot, so the payloads run out with the slots and never before them", () => {
+test("ring - one payload a slot, so the payloads run out with the slots and never before them", () => {
   const r = ring(8, 64);
   const w = new PacketWriter();
   const push = (n: number) =>
@@ -66,26 +64,22 @@ Deno.test("ring - one payload a slot, so the payloads run out with the slots and
 
   for (let n = 1; n <= 8; n++) {
     const at = r.peek();
-    assertEquals(r.packet(at)!.byteLength, 56);
-    const root = new TreeReader(r.packet(at)!).read_branch();
-    assertEquals([
-      r.tag(at),
-      root.at(0).get<number>(),
-      root.at(1).get<number>(),
-    ], [n, n, n * 2 ** 40]);
+    assertEquals(r.pkt(at)!.byteLength, 56);
+    const root = new TreeReader(r.pkt(at)!).read_branch();
+    assertEquals(
+      [r.tag(at), root.at(0).get<number>(), root.at(1).get<number>()],
+      [n, n, n * 2 ** 40],
+    );
     r.advance();
   }
   assertEquals(push(9), Errno.OK, "a slot freed is a payload freed");
 
   assert(r.write(w, 1));
   assertEquals(r.push(10, 0x0101, 0, w.str("x".repeat(40))), Errno.EMSGSIZE);
-  assertThrows(
-    () => {
-      const at = r.entry_at(r.tail);
-      r.push(11, 0);
-      r.words[at + 3] = 4;
-      r.packet(at);
-    },
-    MarshalError,
-  );
+  assertThrows(() => {
+    const at = r.entry_at(r.tail);
+    r.push(11, 0);
+    r.words[at + 3] = 4;
+    r.pkt(at);
+  }, MarshalError);
 });

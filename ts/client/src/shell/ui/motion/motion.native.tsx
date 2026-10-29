@@ -26,9 +26,11 @@ const CHANNELS: readonly Channel[] = [
   "rotate",
 ];
 
-function timing(
-  t: Transition,
-): { duration: number; easing: EasingFunction; delay: number } {
+function timing(t: Transition): {
+  duration: number;
+  easing: EasingFunction;
+  delay: number;
+} {
   return {
     duration: t.durationMs,
     easing: (p) => curveAt(t, p),
@@ -36,10 +38,16 @@ function timing(
   };
 }
 
-export function Motion(
-  { to, from, replay = null, transition, onSettled, style, onLayout, children }:
-    MotionProps,
-) {
+export function Motion({
+  to,
+  from,
+  replay = null,
+  transition,
+  onSettled,
+  style,
+  onLayout,
+  children,
+}: MotionProps) {
   const target = resolve(to);
   const initial = resolve(from ?? to);
 
@@ -78,7 +86,7 @@ export function Motion(
         easing,
         delay,
         useNativeDriver: true,
-      })
+      }),
     );
     if (moves.length === 0) {
       settled.current?.();
@@ -103,10 +111,13 @@ export function Motion(
   ]);
 
   // Under StrictMode a view put back arrives again from `from`.
-  useEffect(() => () => {
-    for (const c of CHANNELS) v[c].stopAnimation();
-    stood.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      for (const c of CHANNELS) v[c].stopAnimation();
+      stood.current = null;
+    },
+    [],
+  );
 
   // One layer while not opaque: Android otherwise fades each child apart, and
   // overlapping ones show through.
@@ -155,12 +166,14 @@ export function Spin({ periodMs, children }: SpinProps) {
   return (
     <Animated.View
       style={{
-        transform: [{
-          rotate: turn.interpolate({
-            inputRange: [0, 1],
-            outputRange: ["0deg", "360deg"],
-          }),
-        }],
+        transform: [
+          {
+            rotate: turn.interpolate({
+              inputRange: [0, 1],
+              outputRange: ["0deg", "360deg"],
+            }),
+          },
+        ],
       }}
     >
       {children}

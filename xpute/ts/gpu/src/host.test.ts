@@ -40,7 +40,11 @@ async function replay(): Promise<void> {
     const bytes = new Uint8Array(memory);
     const words = new Uint32Array(memory);
     if (g.has(`${p}.input`)) bytes.set(g.bytes(`${p}.input`), inputAt);
-    const host = new GpuHost(device, () => memory, () => {});
+    const host = new GpuHost(
+      device,
+      () => memory,
+      () => {},
+    );
     const turns: string[] = [];
     g.each(`${p}.turn`, (k) => turns.push(k));
     for (const [k, turn] of turns.entries()) {
@@ -69,7 +73,11 @@ function guard(): void {
   const context = (name: string) =>
     ({ unconfigure: () => released.push(name) }) as unknown as GPUCanvasContext;
   const device = { lost: new Promise<never>(() => {}) } as unknown as GPUDevice;
-  const host = new GpuHost(device, () => new ArrayBuffer(0), () => {});
+  const host = new GpuHost(
+    device,
+    () => new ArrayBuffer(0),
+    () => {},
+  );
   // Slot 3, generations 1 and 2 (`slot | generation << 16`).
   const [old, newer] = [3 | (1 << 16), 3 | (2 << 16)];
   host.bind(old, context("old"));
@@ -95,8 +103,11 @@ function guard(): void {
   );
 }
 
-const outcome = await replay().then(guard).then(
-  () => "ok",
-  (e: unknown) => (e instanceof Error ? `${e.message}\n${e.stack}` : String(e)),
-);
+const outcome = await replay()
+  .then(guard)
+  .then(
+    () => "ok",
+    (e: unknown) =>
+      e instanceof Error ? `${e.message}\n${e.stack}` : String(e),
+  );
 await fetch("/outcome", { method: "POST", body: outcome });

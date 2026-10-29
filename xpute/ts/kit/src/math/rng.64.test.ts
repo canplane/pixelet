@@ -7,6 +7,7 @@
  * SplitMix64 reference vector.
  */
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
@@ -17,7 +18,7 @@ import {
   u32_to_unit,
 } from "@xpute/kit/math/rng.ts";
 
-Deno.test("rng computes what the record holds", async () => {
+test("rng computes what the record holds", async () => {
   const v = await Golden.load("golden/math/rng.64.tsv");
   v.each("", (k) => {
     const seed = v.u64(`${k}.seed`);

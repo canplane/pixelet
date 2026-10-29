@@ -3,7 +3,7 @@
 # cannot drift apart in it.
 
 name: toolchain
-description: The Rust toolchain, Binaryen and the cargo and deno caches.
+description: The Rust toolchain, Binaryen and the cargo and pnpm caches.
 
 inputs:
   cache:
@@ -51,8 +51,6 @@ runs:
     - uses: actions/cache@v5
       with:
         path: |
-          ~/.cache/deno
-          ts/node_modules
-          ts/app/native/node_modules
-        key: deno-${{ runner.os }}-${{ hashFiles('ts/deno.lock') }}
-        restore-keys: deno-${{ runner.os }}-
+          ~/.local/share/pnpm/store
+        key: pnpm-${{ runner.os }}-${{ hashFiles('ts/pnpm-lock.yaml') }}
+        restore-keys: pnpm-${{ runner.os }}-

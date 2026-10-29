@@ -1,0 +1,29 @@
+{
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": "^22.18.0 || >=23.6.0"
+  },
+  "scripts": {
+    "preinstall": "node build/require-pnpm.ts",
+    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
+    "typecheck": "tsc -p . && tsc -p app/native && tsc -p server/edge",
+    "test": "vitest run",
+    "fmt": "prettier --write .",
+    "fmt:check": "prettier --check .",
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "@std/assert": "jsr:^1.0.19",
+    "@types/node": "^24",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@webgpu/types": "~0.1.74",
+    "oxlint": "^1.90.0",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.5"
+  }
+}

@@ -30,9 +30,11 @@ function orient_has(): boolean {
 }
 
 function orient_gated(): boolean {
-  return orient_has() &&
+  return (
+    orient_has() &&
     typeof (DeviceOrientationEvent as IosOrientationEventCtor)
-        .requestPermission === "function";
+      .requestPermission === "function"
+  );
 }
 
 /** No event says the listener stopped hearing, so silence is how a loss shows. */
@@ -77,10 +79,10 @@ function geo_start(): void {
         err.code === err.PERMISSION_DENIED
           ? "denied"
           : err.code === err.POSITION_UNAVAILABLE
-          ? "unavailable"
-          : err.code === err.TIMEOUT
-          ? "timeout"
-          : "other",
+            ? "unavailable"
+            : err.code === err.TIMEOUT
+              ? "timeout"
+              : "other",
       );
     },
     // No timeout: one would raise TIMEOUT on a clock while no fix comes
@@ -119,11 +121,14 @@ export function follow(): () => void {
       "geolocation",
       status?.state === "granted" ? "granted" : "denied",
     );
-  navigator.permissions?.query({ name: "geolocation" }).then((s) => {
-    if (stopped) return;
-    status = s;
-    s.addEventListener("change", on_change);
-  }).catch(() => {});
+  navigator.permissions
+    ?.query({ name: "geolocation" })
+    .then((s) => {
+      if (stopped) return;
+      status = s;
+      s.addEventListener("change", on_change);
+    })
+    .catch(() => {});
   return () => {
     stopped = true;
     status?.removeEventListener("change", on_change);

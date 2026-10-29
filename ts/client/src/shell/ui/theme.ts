@@ -19,10 +19,12 @@ function tint(hex: string, a: number, over = "#ffffff"): string {
   const n = parseInt(hex.slice(1), 16);
   const g = parseInt(over.slice(1), 16);
   const mix = (c: number, b: number) =>
-    round(b + (c - b) * a).toString(16).padStart(2, "0");
-  return `#${
-    [16, 8, 0].map((s) => mix((n >> s) & 255, (g >> s) & 255)).join("")
-  }`;
+    round(b + (c - b) * a)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${[16, 8, 0]
+    .map((s) => mix((n >> s) & 255, (g >> s) & 255))
+    .join("")}`;
 }
 
 /** iOS's secondary label: the label's color at this opacity, in either mode. */

@@ -1,84 +1,87 @@
-#!/usr/bin/env -S deno run -A
 // Runs ts/gpu/src/host.test.ts where the web host runs: in Chrome, on its
 // WebGPU. The test is bundled for the browser and served at its own path
 // beside the tree's spec/, Chrome is started headless on the page, and the
 // page posts its outcome back. No Chrome, or no WebGPU in it, fails: a
 // device without WebGPU is not one xpute runs on.
 //
-//   deno task --cwd ts test:gpu:web          ($CHROME names the browser's binary)
+//   pnpm --dir ts test:gpu:web          ($CHROME names the browser's binary)
 
-import { dirname, fromFileUrl, join } from "@std/path";
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 
 /** xpute's root, three up: the spec it serves, and ts/target/, which it bundles into. */
-const ROOT = join(dirname(fromFileUrl(import.meta.url)), "../../..");
+const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const TEST = "ts/gpu/src/host.test.ts";
 const BUNDLE = join(ROOT, "ts/target/browser/host.test.js");
-const CHROME = Deno.env.get("CHROME") ??
-  (Deno.build.os === "darwin"
+const CHROME =
+  process.env.CHROME ??
+  (process.platform === "darwin"
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : "google-chrome");
 const SECONDS = 60;
 
-async function bundle(): Promise<void> {
-  const out = await new Deno.Command(Deno.execPath(), {
-    args: ["bundle", "--platform", "browser", "-o", BUNDLE, join(ROOT, TEST)],
-    cwd: join(ROOT, "ts"),
-    stdout: "inherit",
-    stderr: "inherit",
-  })
-    .output();
-  if (!out.success) throw new Error(`bundling ${TEST} failed`);
-}
-
 async function main(): Promise<number> {
-  await bundle();
+  await build({
+    entryPoints: [join(ROOT, TEST)],
+    bundle: true,
+    platform: "browser",
+    format: "esm",
+    outfile: BUNDLE,
+    absWorkingDir: join(ROOT, "ts"),
+  });
   const { promise: outcome, resolve } = Promise.withResolvers<string>();
   const page = `/${TEST.replace(/\.ts$/, ".js")}`;
-  const server = Deno.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    onListen: () => {},
-  }, async (req) => {
-    const path = new URL(req.url).pathname;
+  const server = createServer(async (req, res) => {
+    const path = new URL(req.url ?? "/", "http://localhost").pathname;
     if (req.method === "POST" && path === "/outcome") {
-      resolve(await req.text());
-      return new Response(null, { status: 204 });
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      resolve(body);
+      return res.writeHead(204).end();
     }
     if (path === "/") {
-      return new Response(
-        `<!doctype html><script type="module" src="${page}"></script>`,
-        { headers: { "content-type": "text/html" } },
-      );
+      return res
+        .writeHead(200, { "content-type": "text/html" })
+        .end(`<!doctype html><script type="module" src="${page}"></script>`);
     }
     if (path === page) {
-      return new Response(await Deno.readFile(BUNDLE), {
-        headers: { "content-type": "text/javascript" },
-      });
+      return res
+        .writeHead(200, { "content-type": "text/javascript" })
+        .end(await readFile(BUNDLE));
     }
     if (path.startsWith("/spec/") && !path.includes("..")) {
-      return new Response(await Deno.readFile(join(ROOT, path)));
+      return res.writeHead(200).end(await readFile(join(ROOT, path)));
     }
-    return new Response(null, { status: 404 });
+    res.writeHead(404).end();
   });
-  const profile = await Deno.makeTempDir({ prefix: "xpute-browser-" });
-  const chrome = new Deno.Command(CHROME, {
-    args: [
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  const { port } = server.address() as AddressInfo;
+  const profile = await mkdtemp(join(tmpdir(), "xpute-browser-"));
+  const chrome = spawn(
+    CHROME,
+    [
       "--headless=new",
       "--no-first-run",
       "--no-default-browser-check",
       "--enable-unsafe-webgpu",
       `--user-data-dir=${profile}`,
-      `http://127.0.0.1:${server.addr.port}/`,
+      `http://127.0.0.1:${port}/`,
     ],
-    stdout: "null",
-    stderr: "null",
-  }).spawn();
+    { stdio: "ignore" },
+  );
+  const exited = new Promise((done) => chrome.once("exit", done));
   try {
     const late = new Promise<string>((_, reject) =>
       setTimeout(
         () => reject(new Error(`no outcome from Chrome in ${SECONDS} s`)),
         SECONDS * 1000,
-      )
+      ).unref(),
     );
     const said = await Promise.race([outcome, late]);
     console.log(
@@ -89,10 +92,10 @@ async function main(): Promise<number> {
     return said === "ok" ? 0 : 1;
   } finally {
     chrome.kill();
-    await chrome.status;
-    await server.shutdown();
-    await Deno.remove(profile, { recursive: true });
+    await exited;
+    server.close();
+    await rm(profile, { recursive: true });
   }
 }
 
-Deno.exit(await main());
+process.exit(await main());

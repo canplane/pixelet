@@ -20,15 +20,18 @@ import type { Transition } from "@/shell/ui/motion/transition.ts";
 function keyframe(p: Required<Pose>): Keyframe {
   return {
     opacity: String(p.opacity),
-    transform:
-      `translateX(${p.translateX}px) translateY(${p.translateY}px) scale(${p.scale}) rotate(${p.rotate}deg)`,
+    transform: `translateX(${p.translateX}px) translateY(${p.translateY}px) scale(${p.scale}) rotate(${p.rotate}deg)`,
   };
 }
 
 function same(a: Required<Pose>, b: Required<Pose>): boolean {
-  return a.opacity === b.opacity && a.translateX === b.translateX &&
-    a.translateY === b.translateY && a.scale === b.scale &&
-    a.rotate === b.rotate;
+  return (
+    a.opacity === b.opacity &&
+    a.translateX === b.translateX &&
+    a.translateY === b.translateY &&
+    a.scale === b.scale &&
+    a.rotate === b.rotate
+  );
 }
 
 function timing(t: Transition): KeyframeAnimationOptions {
@@ -40,10 +43,16 @@ function timing(t: Transition): KeyframeAnimationOptions {
   };
 }
 
-export function Motion(
-  { to, from, replay = null, transition, onSettled, style, onLayout, children }:
-    MotionProps,
-) {
+export function Motion({
+  to,
+  from,
+  replay = null,
+  transition,
+  onSettled,
+  style,
+  onLayout,
+  children,
+}: MotionProps) {
   const node = useRef<View | null>(null);
   const running = useRef<Animation | null>(null);
   const stood = useRef<Required<Pose> | null>(null);
@@ -100,11 +109,14 @@ export function Motion(
 
   // Under StrictMode a view put back must arrive again from `from`; kept as
   // it was, it would read its canceled start as the end and play nothing.
-  useLayoutEffect(() => () => {
-    running.current?.cancel();
-    running.current = null;
-    stood.current = null;
-  }, []);
+  useLayoutEffect(
+    () => () => {
+      running.current?.cancel();
+      running.current = null;
+      stood.current = null;
+    },
+    [],
+  );
 
   return (
     <View
@@ -132,9 +144,15 @@ export function Spin({ periodMs, children }: SpinProps) {
   const node = useRef<View | null>(null);
   useLayoutEffect(() => {
     const el = node.current as unknown as HTMLElement | null;
-    const turn = el?.animate([{ transform: "rotate(0deg)" }, {
-      transform: "rotate(360deg)",
-    }], { duration: periodMs, iterations: Infinity, easing: "linear" });
+    const turn = el?.animate(
+      [
+        { transform: "rotate(0deg)" },
+        {
+          transform: "rotate(360deg)",
+        },
+      ],
+      { duration: periodMs, iterations: Infinity, easing: "linear" },
+    );
     return () => turn?.cancel();
   }, [periodMs]);
   return <View ref={node}>{children}</View>;

@@ -36,16 +36,17 @@ const PROPERTIES = {
 };
 
 const FLAVORS = ["mobile", "quest"];
-const DEBUGGABLE = FLAVORS.flatMap((
-  flavor,
-) => [`${flavor}Debug`, `${flavor}DebugOptimized`]);
+const DEBUGGABLE = FLAVORS.flatMap((flavor) => [
+  `${flavor}Debug`,
+  `${flavor}DebugOptimized`,
+]);
 const MARK = "// pxl: the flavors' debug builds (plugin/android-build.ts)";
 const DAEMON_JAVA = "17";
 
 export default (config) => {
   config = withGradleProperties(config, (config) => {
-    const items = config.modResults.filter((item) =>
-      !(item.type === "property" && item.key in PROPERTIES)
+    const items = config.modResults.filter(
+      (item) => !(item.type === "property" && item.key in PROPERTIES),
     );
     for (const [key, value] of Object.entries(PROPERTIES)) {
       items.push({ type: "property", key, value });
@@ -53,18 +54,21 @@ export default (config) => {
     config.modResults = items;
     return config;
   });
-  config = withDangerousMod(config, ["android", (config) => {
-    const file = path.join(
-      config.modRequest.platformProjectRoot,
-      "gradle",
-      "gradle-daemon-jvm.properties",
-    );
-    fs.writeFileSync(
-      file,
-      `# plugin/android-build.ts\ntoolchainVersion=${DAEMON_JAVA}\n`,
-    );
-    return config;
-  }]);
+  config = withDangerousMod(config, [
+    "android",
+    (config) => {
+      const file = path.join(
+        config.modRequest.platformProjectRoot,
+        "gradle",
+        "gradle-daemon-jvm.properties",
+      );
+      fs.writeFileSync(
+        file,
+        `# plugin/android-build.ts\ntoolchainVersion=${DAEMON_JAVA}\n`,
+      );
+      return config;
+    },
+  ]);
   return withAppBuildGradle(config, (config) => {
     const gradle = config.modResults.contents;
     if (gradle.includes(MARK)) return config;
@@ -75,11 +79,11 @@ export default (config) => {
       );
     }
     const end = gradle.indexOf("\n", at) + 1;
-    const line = `    ${MARK}\n    debuggableVariants = ${
-      JSON.stringify(DEBUGGABLE)
-    }\n`;
-    config.modResults.contents = gradle.slice(0, end) + line +
-      gradle.slice(end);
+    const line = `    ${MARK}\n    debuggableVariants = ${JSON.stringify(
+      DEBUGGABLE,
+    )}\n`;
+    config.modResults.contents =
+      gradle.slice(0, end) + line + gradle.slice(end);
     return config;
   });
 };

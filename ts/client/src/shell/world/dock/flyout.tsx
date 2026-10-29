@@ -59,11 +59,13 @@ export interface Flyout {
 }
 
 /** `x` and `y` on the page. */
-function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
-  if (Math.abs(x - at.bar[0] - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.bar[1] - FLYOUT_LIFT_PX -
-    (2 * FLYOUT_PAD_Y + OBJECT_TIERS * FLYOUT_PITCH - FLYOUT_GAP_PX);
-  const along = y - top - FLYOUT_PAD_Y;
+function tierAt(at: Popover, x: f64, y: f64): u32 | null {
+  if (Math.abs(x - at.bar[0] - at.centerX) > POPOVER_WIDTH / 2) return null;
+  const top =
+    at.bar[1] -
+    POPOVER_LIFT_PX -
+    (2 * POPOVER_PAD_Y + OBJECT_TIERS * POPOVER_PITCH - POPOVER_GAP_PX);
+  const along = y - top - POPOVER_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / FLYOUT_PITCH);
   if (row >= OBJECT_TIERS || along - row * FLYOUT_PITCH > chrome.target) {
@@ -72,11 +74,12 @@ function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
   return TIERS[row];
 }
 
-/** Where the flyout stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
-export function useFlyout(
-  bar: React.RefObject<View | null>,
-): { flyout: Flyout | null; sizes: Omit<SizeGesture, "tap"> } {
-  const [flyout, setFlyout] = useState<Flyout | null>(null);
+/** Where the popover stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
+export function usePopover(bar: React.RefObject<View | null>): {
+  popover: Popover | null;
+  gesture: Omit<SizeGesture, "press">;
+} {
+  const [popover, setPopover] = useState<Popover | null>(null);
   // A release can come before the swatch's place is measured.
   const pressing = useRef(false);
   const cueTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -103,9 +106,9 @@ export function useFlyout(
           setFlyout({
             centerX: sx + sw / 2 - bx,
             bar: [bx, by],
-            hover: null,
-            sizes: open ? Sizes.Open : Sizes.Seed,
-          })
+            highlighted: null,
+            open,
+          }),
         );
       });
       cueTimer.current = setTimeout(() => setFlyout(null), CUE_MS);
@@ -139,16 +142,16 @@ export function SizeFlyout({ flyout }: { flyout: Flyout }) {
         { left: flyout.centerX - FLYOUT_WIDTH / 2 },
       ]}
     >
-      {flyout.sizes === Sizes.Open
-        ? <SizeMarks hover={flyout.hover} />
-        : (
-          <Backing
-            fill={STRIP.ground}
-            material={material.flyout}
-            place={BackingPlace.OverMap}
-            style={styles.seed}
-          />
-        )}
+      {popover.open ? (
+        <SizeMarks highlighted={popover.highlighted} />
+      ) : (
+        <Backing
+          fill={STRIP.ground}
+          material={material.popover}
+          place={BackingPlace.OverMap}
+          style={styles.seed}
+        />
+      )}
     </View>
   );
 }
@@ -182,8 +185,8 @@ function SizeMarks({ hover }: { hover: u32 | null }) {
                   hover === tier
                     ? styles.markHover
                     : objectTier === tier
-                    ? styles.markHeld
-                    : styles.markIdle,
+                      ? styles.markHeld
+                      : styles.markIdle,
                 ]}
               />
             </Motion>

@@ -44,15 +44,17 @@ export async function fetchSearch(
     await res.body?.cancel();
     throw new Error(`[search] http ${res.status}`);
   }
-  const results = await res
-    .json() as (Omit<SearchResult, "context"> & { context: WirePart[] })[];
+  const results = (await res.json()) as (Omit<SearchResult, "context"> & {
+    context: WirePart[];
+  })[];
   return results.map((r) => ({ ...r, context: r.context.flatMap(namePart) }));
 }
 
 /** None for a subtype newer than this client. */
 function namePart({ subtype, approx, ...named }: WirePart): NamePart[] {
-  const number =
-    (DIVISION_SUBTYPE as Record<string, number>)[subtype.toUpperCase()];
+  const number = (DIVISION_SUBTYPE as Record<string, number>)[
+    subtype.toUpperCase()
+  ];
   return number === undefined
     ? []
     : [{ ...named, subtype: number, area: !approx }];

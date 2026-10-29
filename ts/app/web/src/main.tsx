@@ -14,11 +14,11 @@ import { boot } from "@pxl/client/shell/boot.ts";
 import { AppLayout } from "@pxl/client/shell/layout.tsx";
 import WorldPage from "@pxl/client/shell/world/page.tsx";
 import { Halt } from "@pxl/client/shell/halt.tsx";
-import { page } from "@/bracket.ts";
-import * as webgpu from "@/webgpu.ts";
+import { page } from "./bracket.ts";
+import * as webgpu from "./webgpu.ts";
 import "./document.css";
 
-if (import.meta.env.DEV) (await import("@/remote-console.ts")).install();
+if (import.meta.env.DEV) (await import("./remote-console.ts")).install();
 
 bracket.set(page);
 
@@ -31,7 +31,9 @@ try {
   if (!root) throw new Error("web: missing root container: #root");
   createRoot(root).render(
     <StrictMode>
-      {missing ? <Halt of={`halt.${missing}`} /> : (
+      {missing ? (
+        <Halt of={`halt.${missing}`} />
+      ) : (
         <AppLayout>
           <WorldPage />
         </AppLayout>

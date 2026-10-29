@@ -27,9 +27,13 @@ export function keepKeyboard(): false {
 }
 
 /** A touch starting anywhere but a kept view puts the keyboard away, and `onAway` is told. */
-export function KeyboardAway(
-  { children, onAway }: { children: ReactNode; onAway?: () => void },
-) {
+export function KeyboardAway({
+  children,
+  onAway,
+}: {
+  children: ReactNode;
+  onAway?: () => void;
+}) {
   const onTouch = () => {
     kept = false;
     queueMicrotask(() => {

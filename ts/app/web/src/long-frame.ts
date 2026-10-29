@@ -34,11 +34,12 @@ export function watch(heard: (frame: LongFrame) => void): void {
     new PerformanceObserver((list) => {
       for (const raw of list.getEntries()) {
         const e = raw as LoafEntry;
-        const scriptMs = e.scripts?.reduce((sum, s) => sum + s.duration, 0) ??
-          0;
-        const renderMs = e.renderStart > 0
-          ? Math.max(0, e.startTime + e.duration - e.renderStart)
-          : 0;
+        const scriptMs =
+          e.scripts?.reduce((sum, s) => sum + s.duration, 0) ?? 0;
+        const renderMs =
+          e.renderStart > 0
+            ? Math.max(0, e.startTime + e.duration - e.renderStart)
+            : 0;
         heard({
           source: "loaf",
           t: e.startTime,

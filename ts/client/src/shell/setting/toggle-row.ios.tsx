@@ -14,9 +14,12 @@ import type { ToggleRowProps } from "./toggle-row.tsx";
 // Everything the default has, but what this file draws itself.
 export * from "./toggle-row.tsx";
 
-export function ToggleRow(
-  { value, onValueChange, style, children }: ToggleRowProps,
-) {
+export function ToggleRow({
+  value,
+  onValueChange,
+  style,
+  children,
+}: ToggleRowProps) {
   return (
     <View style={style}>
       {children}

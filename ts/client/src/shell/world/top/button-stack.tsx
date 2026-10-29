@@ -23,9 +23,13 @@ interface StackItem {
 }
 
 /** iPhone Maps' grouped controls. */
-export function ButtonStack(
-  { items, isActive }: { items: StackItem[]; isActive?: boolean },
-) {
+export function ButtonStack({
+  items,
+  isActive,
+}: {
+  items: StackItem[];
+  isActive?: boolean;
+}) {
   return (
     <Backing
       fill={isActive ? surface.chosen.fill : color.ground}
@@ -50,8 +54,8 @@ export function ButtonStack(
                 opacity: item.disabled
                   ? disabledContent
                   : pressed && !SYSTEM_BACKING
-                  ? 0.5
-                  : 1,
+                    ? 0.5
+                    : 1,
               }}
               transition={SNAP}
             >
