@@ -123,7 +123,7 @@ Three consequences, and they are the prerequisites:
    either at home or away.
 3. **And something has to know which are away.** That is a central scheduler,
    and it is half built. Synchronous CPU work already runs in the tick. Worker
-   jobs are asynchronous, quota-limited and cancellable — the same shape as a
+   jobs are asynchronous, quota-limited and cancelable — the same shape as a
    fetch — so they belong in something shaped like fetch_scheduler.ts (quota,
    wishlist replacement, abort) plus a ledger of ownership: which buffers are
    out, for which job, and what happens to them when that job's chunk is
@@ -360,7 +360,7 @@ against the model above:
   the memory (BACKLOG.md), and is harmless until then.
 - **The central scheduler, main-thread half**: built. The tick with its frame
   budget (sched/tick.ts) runs the synchronous work; the fetch scheduler
-  (sched/fetch_scheduler.ts) runs the asynchronous, quota-limited, cancellable
+  (sched/fetch_scheduler.ts) runs the asynchronous, quota-limited, cancelable
   work, and its queue is lanes; the ledger reports both.
 - **Little**: the skeleton is in — sched/slabs.ts, the capped, lazily made,
   idle-released slab pool with the ownership record of which slab is away for

@@ -156,8 +156,8 @@ fn decode(bytes: &[u8], flip_y: bool, premultiplied: bool) -> Option<Image> {
     Some(image)
 }
 
-/// Pixels of `channels` bytes each, as RGBA8: grey spread to the three
-/// colours, a missing alpha opaque.
+/// Pixels of `channels` bytes each, as RGBA8: gray spread to the three
+/// colors, a missing alpha opaque.
 fn rgba(width: u32, height: u32, channels: usize, from: &[u8]) -> Image {
     let rgba = match channels {
         4 => from.to_vec(),

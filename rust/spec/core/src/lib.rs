@@ -63,9 +63,9 @@ pub const LEAF_CELL: Zoom = LEAF_ZOOM + 9;
 /// water stands and under which the Earth past the service area is rock.
 pub const SEA_LEVEL: i32 = 0;
 
-/// `m` ground metres in leaf cells, `per_m` leaf cells a ground metre where
+/// `m` ground meters in leaf cells, `per_m` leaf cells a ground meter where
 /// they lie (pxl-spec procedural.rs `Frame::per_m`), rounded half to even:
-/// what every length given in metres is, to the bake and the client alike.
+/// what every length given in meters is, to the bake and the client alike.
 pub fn cells_of_m(m: f32, per_m: f32) -> i32 {
     libm::rintf(m * per_m) as i32
 }

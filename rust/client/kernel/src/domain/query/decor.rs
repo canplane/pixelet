@@ -87,8 +87,8 @@ fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
 /// What is placed in the 27 nodes about the node a striking walk is at, at
 /// each zoom it went through: the objects' tree's cursors there
 /// (pxl-spec-core `overwrite::Held`), each zoom's the children of the zoom
-/// over's, as a node's neighbours are its parent's neighbours' children
-/// (Samet 1989, neighbour finding). A walk enters a node through its
+/// over's, as a node's neighbors are its parent's neighbors' children
+/// (Samet 1989, neighbor finding). A walk enters a node through its
 /// parent, so each zoom's is stepped from the one over in 27 `child` reads,
 /// never walked from the roots.
 pub(super) struct Around {

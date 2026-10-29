@@ -41,7 +41,7 @@ inline constexpr std::uint32_t READ = 2u;
 inline constexpr std::uint32_t WRITE = 3u;
 
 // fd: the descriptor ended. A file opened for writing is replaced by what was written; an
-// open not yet answered is cancelled, and never answered.
+// open not yet answered is canceled, and never answered.
 inline constexpr std::uint32_t CLOSE = 4u;
 
 // errno, line, column, a (low, high word), b (low, high word), then the file's bytes:

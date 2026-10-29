@@ -345,13 +345,13 @@ in its own **tile cache** (`domain/layer/tile_cache.rs`):
 
 The GPU holds the ground's cells in **windows**. A ray observes a zoom's cells
 only within a fixed reach of the eye (`pxl-spec-core window.rs` `RADIUS`), so a
-window about a centre holds every cell it can observe at its zoom. The eye has
+window about a center holds every cell it can observe at its zoom. The eye has
 one at every zoom drawn; the pivot two, at the leaves and the zoom over them;
-and a place the camera is travelling to one, at the leaves
+and a place the camera is traveling to one, at the leaves
 (`domain/layer/terrain/window.rs`):
 
 - A window is a few **bricks** of cells a side, each held in the entry of the
-  window its place names, so the window follows its centre a brick at a time
+  window its place names, so the window follows its center a brick at a time
   and no held cell moves. A brick at a zoom is held once however many windows
   want it, and kept while any does.
 - A brick is filled on the GPU as its tile lands (`pxl-render
@@ -439,7 +439,7 @@ them. What a ray stops on is the query's answer; the rasterizer only orders
 what the rays found
 ([the ray finds, the raster hands out](./doc/minutes/20261026-the-ray-finds-the-raster-hands-out.md)).
 
-Neighbouring rays share most of their descent, so the cast walks that part
+Neighboring rays share most of their descent, so the cast walks that part
 once an angular cell and hands the rest to the rasterizer
 ([a cell casts a beam](./doc/minutes/20261022-a-cell-casts-a-beam.md)):
 
@@ -880,7 +880,7 @@ Bridges and tunnels are solved from the tile and as much of its 1-ring as its
 structures reach, and never further, starting from Arnis's rules
 (`separation/solve.rs`;
 [as Arnis solves them](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)).
-A height leans on nothing further than a tile, so two neighbours solve the same
+A height leans on nothing further than a tile, so two neighbors solve the same
 height where they meet. A deck is a line in the terrain tile
 ([ways off the ground](./doc/minutes/archive/20261001-ways-off-the-ground.md)).
 
@@ -1026,7 +1026,7 @@ them.
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                                                       | `pxl-spec-core cast.rs` `walk`                                                                                                      | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |
 | Laine and Karras's beams; Reshetov et al. ([doc/minutes/20261022-a-cell-casts-a-beam.md](./doc/minutes/20261022-a-cell-casts-a-beam.md))                            | `pxl-shader beam.rs`, `pxl-spec-core cast.rs` `Until::Beam`                                                                         | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
 | Tevs, Ihrke and Seidel's maximum mipmaps ([doc/minutes/20261028-a-tile-is-asked-where-it-lies.md](./doc/minutes/20261028-a-tile-is-asked-where-it-lies.md))         | `pxl-spec-core window.rs` `bounded`                                                                                                 | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
-| The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `sun.rs` `Sun`                                                                                           | A zoom's square about a centre, each part held at its place modulo the side, so it follows the centre and nothing held moves             |
+| The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `sun.rs` `Sun`                                                                                           | A zoom's square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves             |
 | Burns and Hunt's visibility buffer (JCGT 2013)                                                                                                                      | `pxl-render gpu/ray/raster.rs` `Raster`, `frame/shader/raster.wgsl`                                                                 | Each pixel keeps the number of the nearest thing drawn over it, here a sample's box, and reads the rest off that                         |
 | OpenStreetMap Carto                                                                                                                                                 | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/asset/`                                                              | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
 | Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/marker.rs`                                                                                                         | A marker's line pitch                                                                                                                    |

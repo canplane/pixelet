@@ -32,7 +32,7 @@ raised days before (2026-10-21).
 
 A ray a cell, turned back into geometry, drew the ground in stripes
 ([the eye decides](./20261014-the-eye-decides.md)): blocks between two
-neighbouring rays are never found, and nothing covers their pixels.
+neighboring rays are never found, and nothing covers their pixels.
 
 ## The references, and what each one says here
 
@@ -88,7 +88,7 @@ is either a node over `X`, or a cube inside `X` where `X` is wider than that,
 as a block near the eye is.
 
 - **`Y` holds a beam ray.** The ball inside `Y` has a radius of half its side,
-  so it covers an angle of at least `side / (2d)` about its centre, and a screen
+  so it covers an angle of at least `side / (2d)` about its center, and a screen
   only stretches angles. That disk, at least `s / √2` in radius, holds a corner
   of the grid, and that corner's beam ray passes through `Y`.
 - **That beam ray stops where it enters `Y`, or sooner.** Where `Y` is over `X`,
@@ -105,7 +105,7 @@ as a block near the eye is.
   then no farther than where the other ray enters `Y`, and that is no farther
   than `e`.
 - **The window.** The corner whose ray passes through `Y` lies within `Y`'s
-  image, at most `√6 · s · (1 + γ)` from its centre as an angle, stretched by
+  image, at most `√6 · s · (1 + γ)` from its center as an angle, stretched by
   the screen's slope at that cell's corner farthest from the axis. A cell
   starts from the least of the beam rays within that many cells of its own, a
   square window over the corners each cell takes for itself

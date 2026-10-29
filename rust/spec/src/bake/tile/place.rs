@@ -39,7 +39,7 @@ pub const PLACE_LATTICE: Lattice =
     Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
 /// The cell a place keeps to itself, as a zoom under the tile. Seen at an
-/// icon's own cell, places a few metres apart stood side by side as near as
+/// icon's own cell, places a few meters apart stood side by side as near as
 /// the view came.
 const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
 

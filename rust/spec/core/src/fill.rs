@@ -311,7 +311,7 @@ pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
 /// The spans of column `i` of the brick handed `k`-th and its ring
 /// (`window::SPANS_COLUMNS`) into its scratch (`keep`): each column's
 /// worked out once, before its levels and its ways' tree read them and its
-/// neighbours': the most it makes (`keep`).
+/// neighbors': the most it makes (`keep`).
 pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32) -> u32 {
     let (rec, base, place, cell) = handed(fresh, k);
     let filling = Filling {

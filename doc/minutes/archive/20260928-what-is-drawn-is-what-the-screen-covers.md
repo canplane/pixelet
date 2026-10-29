@@ -235,7 +235,7 @@ That splits what the kernel holds into four, each with its own bound:
 | the samples     | what the screen shows                                                                          | the screen                                   |
 
 What decides residency is observability, not distance: a thing just behind a
-wall has no need of its full record, and a mountain thirty kilometres off on the
+wall has no need of its full record, and a mountain thirty kilometers off on the
 horizon needs its coarse one. The working set is filled the way a virtual
 address space is: an observation misses, and the miss is fetched.
 
@@ -329,7 +329,7 @@ speed times the latency.
   is asked for, with no object and no request of its own, and an ocean child is
   never asked for — today that is a 404 a page, each a Worker request.
 - **It is a grid, not a word.** One maximum a page lets a grazing ray descend
-  everywhere and, drawn, stands a page as one box — 512 τ, the kilometre walls
+  everywhere and, drawn, stands a page as one box — 512 τ, the kilometer walls
   recorded on 09-26. A k × k grid of minimum and maximum, the top of a max
   mipmap (Tevs, Ihrke and Seidel), is 4 KiB a page at k = 32 against a record of
   about 1.2 MiB.
@@ -513,7 +513,7 @@ all.
 - The geometry's zoom is the distance's alone, `z(r)`: a height's error shows on
   screen as `P · ε / r` whatever the angle, and with the angle in, the skyline —
   where `1 / cos α` is largest — was drawn coarsest, everything past about 6 km
-  from street level at z6. The angle belongs to sampling colour, clamped as
+  from street level at z6. The angle belongs to sampling color, clamped as
   anisotropic filtering clamps it.
 - Two hits, not one. A hit on the conservative maximum decides misses: it is no
   later than the true one, so the zoom errs finer. A hit on the drawn surface,
@@ -966,7 +966,7 @@ with what it meant. A cell of the observation — τ pixels, the least the obser
 promises to tell apart — is don't-care inside: drawn finer, exact, averaged,
 procedural, some other shape altogether, its own value included. Optimization
 comes before precision there. What is not allowed is for an approximation to
-leak: to change what a neighbouring cell observes. So τ is not a tolerance but
+leak: to change what a neighboring cell observes. So τ is not a tolerance but
 the observation's quantum, and the one rule is
 
 ```text
@@ -1285,7 +1285,7 @@ groups that wait on their longest, so where on the screen the long rays lie
 decides it. Drawn as heatmaps (`crates/target/ray_steps/`):
 
 - The steps are near constant in blocks that are the index cells projected onto
-  the screen, and neighbours within a block differ by a few steps: a group pays
+  the screen, and neighbors within a block differ by a few steps: a group pays
   about what each of its rays pays, except along a block's edge.
 - From above, a disc about the nadir costs more: the finer band of distance, a
   zoom more under it.
@@ -1301,11 +1301,11 @@ decides it. Drawn as heatmaps (`crates/target/ray_steps/`):
 Two things this review corrected:
 
 - **A cell is an angular footprint, not a sample point.** One ray through a
-  cell's centre, its answer spread over the cell, is not the rule: a pole
-  thinner than the cell that the centre ray misses still covers part of it. What
+  cell's center, its answer spread over the cell, is not the rule: a pole
+  thinner than the cell that the center ray misses still covers part of it. What
   the rule asks is a bounded amount of observation a cell — O(1) work that
   stands conservatively for the cell's footprint — and how that is done (a
-  centre ray with the hierarchy's bounds, corner rays, adaptive subdivision, a
+  center ray with the hierarchy's bounds, corner rays, adaptive subdivision, a
   cone through the pyramid, reuse over time) is the experiment's to choose.
   Fixing the primitive at one ray a cell too early would fix the representation
   before the measurement.

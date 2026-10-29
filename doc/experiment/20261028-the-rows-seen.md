@@ -14,7 +14,7 @@ what turning the prune off costs.
 Since at least 10-27 14:00, rows of coarse cells went empty at grazing
 angles. Looking straight down, none did. The user saw them early and let them
 pass for speed. When they were raised (the screenshot of 10-27 22:30), the
-sessions first read them as centred kept boxes and built a touch rule that
+sessions first read them as centered kept boxes and built a touch rule that
 only the ground set. It broke the symmetry between the ground and what is
 placed, and was reverted whole (`8ee81810d`).
 

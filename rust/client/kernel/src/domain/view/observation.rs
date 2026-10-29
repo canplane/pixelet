@@ -121,7 +121,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     let mut stack = core::mem::take(STACK.get(Vec::new));
     stack.clear();
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
-    // Depth first, so each brick's lines step from its neighbour's.
+    // Depth first, so each brick's lines step from its neighbor's.
     let (world, mut walked) = (World::now(), Walked::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell, d) = (zoom + BRICK_SHIFT, near(zoom, xy));

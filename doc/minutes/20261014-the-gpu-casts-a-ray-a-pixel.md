@@ -115,7 +115,7 @@ Where full's frame goes, each part added to the one before:
 | the descent alone (V1)                  | 14   |
 | the node queries                        | ~89  |
 | the ground's heights, bicubic per query | ~148 |
-| the wall's neighbour reads              | ~18  |
+| the wall's neighbor reads              | ~18  |
 | past the area                           | ~6   |
 
 The walk is cheap. Its steps are the order of the references' below. The cost is
@@ -177,7 +177,7 @@ holds", "A ray a pixel").
 2. **The bound from the grid.** A maximum and minimum pyramid over a tile's
    cells, from the grid's own reads, takes the place of what `relief` derives.
 3. **The wall in the grid.** The area's edge laid on a cell is a fact of the
-   tile. It is read once, not as nine neighbours a query.
+   tile. It is read once, not as nine neighbors a query.
 4. **The step's size.** The generated WGSL is 465 KB. A cave child builds all
    eight of its siblings to take one (`array<Cave,8>`, 22 times).
 5. **Textures or storage buffers** for the grid, by the 2D cache.

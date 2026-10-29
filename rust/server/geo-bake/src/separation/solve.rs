@@ -18,7 +18,7 @@
 //! scope, the stretches of them it sees (`Stretch`), and the lines it keeps; the
 //! bridges are `bridge`'s, the tunnels `tunnel`'s. It began as louis-e/arnis `c96872e`
 //! ported, read for Overture's fields where Arnis reads OSM's tags, its widths
-//! the ground's, and its numbers, metres (a block a metre upright on the
+//! the ground's, and its numbers, meters (a block a meter upright on the
 //! Earth, as its celestial bodies say), taken into the tile's cells, half to
 //! even. What is read is the tile and as much of its 1-ring as the structures
 //! touching it reach, and no further.
@@ -31,7 +31,7 @@
 //!
 //! - Where the ring cuts a piece is no end of it. A cut lies a tile from every
 //!   cell its tile draws, so a height that leans on nothing further than a
-//!   tile comes out the same in two neighbours, who both see the cells where
+//!   tile comes out the same in two neighbors, who both see the cells where
 //!   they meet; a height drawn from the cut, or from anything only the whole
 //!   piece shows (its lowest point, the straight run between its portals),
 //!   comes out different, and their tiles step at the seam.
@@ -66,7 +66,7 @@ use crate::separation::{Drawn, Line, Reader, Solved};
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
-/// The tile's scale: Arnis's metres in leaf cells (pxl-spec-core
+/// The tile's scale: Arnis's meters in leaf cells (pxl-spec-core
 /// `cells_of_m`), at the tile's `Frame::per_m`.
 #[derive(Clone, Copy)]
 struct Scale {

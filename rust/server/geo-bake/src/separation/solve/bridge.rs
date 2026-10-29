@@ -39,7 +39,7 @@ use crate::terrain::pipeline::overture::policy::waterway_width;
 
 use super::*;
 
-// ---- Arnis's numbers for a deck, in metres or as ratios, under its names ----
+// ---- Arnis's numbers for a deck, in meters or as ratios, under its names ----
 const LAYER_HEIGHT_STEP_M: f64 = 6.0;
 const FLAT_TERRAIN_DIP_THRESHOLD_M: f64 = 4.0;
 const SHORT_BRIDGE_LENGTH_M: f64 = 30.0;

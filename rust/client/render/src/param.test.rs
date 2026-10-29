@@ -16,7 +16,7 @@ fn settings_modules_written() {
 }
 
 #[test]
-fn linear_colour_is_hex() {
+fn linear_color_is_hex() {
     // Written to six places, as the shaders read them.
     for (hex, linear) in [
         (0xff1493, puck::beacon::DAY),

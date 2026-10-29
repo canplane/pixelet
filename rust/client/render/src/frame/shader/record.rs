@@ -353,7 +353,7 @@ const BOX_LANES: [Lane; 2] = [
 ];
 const PUCK_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
 const PUCK_BEACON_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
-/// A debug line's vertex, its place and its colour, a segment's two read as
+/// A debug line's vertex, its place and its color, a segment's two read as
 /// one instance; a debug face's vertex, its place.
 pub const DEBUG_VERTEX_BYTES: u32 = 28;
 pub const DEBUG_FACE_VERTEX_BYTES: u32 = 12;

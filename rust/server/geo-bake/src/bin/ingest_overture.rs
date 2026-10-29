@@ -321,7 +321,7 @@ fn is_keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, Str
 }
 
 /// The shards as rectangles of the shard grid, so a download asks for little
-/// past them: each row's shards in runs of neighbours, and a run joined to
+/// past them: each row's shards in runs of neighbors, and a run joined to
 /// the one under it when the two span the same columns. A full coverage is
 /// one rectangle.
 fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {

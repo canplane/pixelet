@@ -49,7 +49,7 @@ export const cube = {
     grass: 7,
     /** park: Carto @park */
     park: 8,
-    /** playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%) */
+    /** playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%) */
     leisure: 9,
     /** pitch and track: Carto @pitch */
     pitch: 10,

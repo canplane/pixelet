@@ -6,19 +6,19 @@
 
 /* where a point stands */
 
-// The air's centre, straight under the eye at the air's radius from it.
+// The air's center, straight under the eye at the air's radius from it.
 fn planet_center() -> vec3f {
   return vec3f(0.0, 0.0, -camera_r() / atmos_km_per_u());
 }
 
-// Straight up at a point, away from the air's centre.
+// Straight up at a point, away from the air's center.
 fn up_at(world_pos: vec3f) -> vec3f {
   return normalize(world_pos - planet_center());
 }
 
 // A point's radius in the air, by its height on the flat map: the eye's
 // radius and the point's height over it, its z. Measured from the air's
-// centre instead, flat ground d out stood d²/2R up — 7 km at 300 km — and
+// center instead, flat ground d out stood d²/2R up — 7 km at 300 km — and
 // its light swept the tables' radius rows, a band at each.
 fn radius_of(world_pos: vec3f) -> f32 {
   return max(camera_r() + (world_pos.z - frame_camera_pos().z) * atmos_km_per_u(), atmos_bottom_radius());

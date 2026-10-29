@@ -1,12 +1,12 @@
 // pxl-spec-core/window.rs
 
 //! gpu-portable: the ground's cells as they are held, a window a zoom about
-//! a centre. A ray observes a zoom's cells only within `RADIUS` of them
+//! a center. A ray observes a zoom's cells only within `RADIUS` of them
 //! from the eye (pxl-spec space/layer/demand.rs `band`, the top's by its
 //! reach), so a window `WINDOW` cells a side about it holds every cell it
 //! can observe there. A window is `ACROSS` bricks a side, each brick
 //! held in the entry its place names modulo `ACROSS`, so the window follows
-//! its centre a brick at a time and no held cell moves. Windows at one
+//! its center a brick at a time and no held cell moves. Windows at one
 //! zoom hold a brick in the same entry, so a brick at a zoom is held once,
 //! in a slot of that entry, however many windows want it (`Entry`). A brick
 //! is present once its cells are drawn; a reader of one absent reads the
@@ -21,7 +21,7 @@ pub const BRICK_SHIFT: u32 = 6;
 pub const BRICK: u32 = 1 << BRICK_SHIFT;
 pub const BRICK_CELLS: u32 = BRICK * BRICK;
 /// Bricks a window holds a side, and in all: as many as hold `RADIUS`
-/// about a centre anywhere in a brick, to a power of two, as `entry` masks
+/// about a center anywhere in a brick, to a power of two, as `entry` masks
 /// by it.
 pub const ACROSS: u32 = ((2 * RADIUS + BRICK).div_ceil(BRICK)).next_power_of_two();
 pub const ENTRIES: u32 = ACROSS * ACROSS;
@@ -116,7 +116,7 @@ pub const fn fresh_brick(first: [u32; 2]) -> [i32; 2] {
     ]
 }
 
-/// How far from its centre a window holds every cell, in its own cells: a
+/// How far from its center a window holds every cell, in its own cells: a
 /// zoom's band ends `CELLS_A_RADIAN` of its cells from the eye, and the
 /// window holds `WINDOW_MARGIN` times that (`grid::SPLIT`).
 pub const RADIUS: u32 = crate::grid::SPLIT as u32;
@@ -308,7 +308,7 @@ pub const fn handed_at(k: u32) -> u32 {
 }
 
 /// The windows as one side holds them: per window, a zoom's cells about
-/// its centre, which brick each entry holds once present, and the slots
+/// its center, which brick each entry holds once present, and the slots
 /// their cells are held in.
 pub trait Bricks {
     /// The slot brick `q` at `cell` is held present in, which the reads

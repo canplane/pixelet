@@ -42,7 +42,7 @@ pub mod ground {
     pub const grass: u8 = 7;
     /// park: Carto @park
     pub const park: u8 = 8;
-    /// playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%)
+    /// playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%)
     pub const leisure: u8 = 9;
     /// pitch and track: Carto @pitch
     pub const pitch: u8 = 10;

@@ -35,7 +35,7 @@ export const steps = {
   most: 1024 as number,
   none: 0x808080,
   /** Google's Turbo, dark blue at none through green and yellow to dark red at
-   * `most`, at even stops a pixel's colour runs straight between. */
+   * `most`, at even stops a pixel's color runs straight between. */
   ramp: [
     0x23171b,
     0x493eaf,

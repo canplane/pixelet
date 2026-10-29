@@ -116,19 +116,19 @@ pub mod way {
     /// The farthest past half its width a line is drawn, in its tile's cells.
     pub const LINE_PAST: f32 = 1.0;
 
-    /// A deck's slab under its surface, in ground metres: Arnis's
+    /// A deck's slab under its surface, in ground meters: Arnis's
     /// `DECK_STRUCTURE_DEPTH`.
     pub const DECK_THICKNESS_M: f32 = 2.0;
 
-    /// Clear height a deck keeps over a deck under it, in ground metres: Arnis's
+    /// Clear height a deck keeps over a deck under it, in ground meters: Arnis's
     /// `STACKED_DECK_HEADROOM`.
     pub const STACKED_DECK_HEADROOM_M: f32 = 6.0;
 
-    /// A beam bridge's bents apart, in ground metres: Arnis's `pier_interval`.
+    /// A beam bridge's bents apart, in ground meters: Arnis's `pier_interval`.
     pub const BEAM_PILLAR_INTERVAL_M: f32 = 8.0;
 
     /// A beam bridge's bents apart once its half width passes two cells, in
-    /// ground metres: Arnis's `pier_interval`.
+    /// ground meters: Arnis's `pier_interval`.
     pub const WIDE_BEAM_PIER_INTERVAL_M: f32 = 12.0;
 
     /// Arnis's `place_pillar`: a deck this near the ground rests on it.

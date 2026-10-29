@@ -16,7 +16,7 @@
 // steps view, the nodes its descent asked, and its face's edges and corners
 // (`RAY_FACES`). A cell is painted from these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
-// Each value's swatch and layer, then the colour it reads as from afar, in
+// Each value's swatch and layer, then the color it reads as from afar, in
 // linear light (`mesh/paint/ground.rs` `look_words`), by value whichever
 // source holds it.
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
@@ -116,7 +116,7 @@ struct Drawn {
 
 // What the cell a pixel's ray met is drawn as, by its value, whichever
 // source holds it: at the ground's cell or finer, its swatch and its layer
-// in all four taps; coarser, one colour as it reads from afar, the ground's
+// in all four taps; coarser, one color as it reads from afar, the ground's
 // the mean of the four looks its cell folds where its face's own is among
 // them.
 fn drawn(c: vec3u) -> Drawn {
@@ -177,7 +177,7 @@ fn hit_of(c: vec2u, d: vec3f) -> Hit {
 
 // How far this pixel's ray's hit moves along its face's plane as the pixel
 // moves one drawn pixel across (the first) and down (the second): what a
-// rasterised face's dpdx and dpdy of its position read. Derived rather than
+// rasterized face's dpdx and dpdy of its position read. Derived rather than
 // differenced, since the quad about an edge straddles other faces there.
 fn pixel_steps(a: vec3f, size: vec2f, h: Hit) -> mat2x3f {
   let tan = eye_tan();

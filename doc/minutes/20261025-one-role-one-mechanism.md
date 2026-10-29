@@ -73,7 +73,7 @@ pack's load number, `variant.json`) are left out.
 11. **Smaller.**
     - A redraw flag beside `ctx.invalidate()` that only repeats it
       (`scene/stage.rs`, `turn.rs`).
-    - `io/source.rs` `past_at` calls itself the one judgement for what is drawn,
+    - `io/source.rs` `past_at` calls itself the one judgment for what is drawn,
       walked, edited and said, and has one reader.
     - The division layer's pivot line enters as a destination (`turn.rs`,
       `io/demand.rs` `Why::Destination`).

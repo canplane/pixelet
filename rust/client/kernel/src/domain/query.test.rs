@@ -45,7 +45,7 @@ struct Leaf {
 /// (`domain/layer/tile_cache/floor.rs`): a tile's coarser pictures here are the
 /// same ground, each marking its children held; their cells held in the
 /// windows about `centre`, in units.
-fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
+fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
     let mut admitted: Vec<Tile> = Vec::new();
@@ -86,7 +86,7 @@ fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
         .collect();
     tile_cache.ask(&asks);
     // Their cells as a GPU would hand them back, at once.
-    crate::domain::layer::terrain::window::test::hold(centre, &cells);
+    crate::domain::layer::terrain::window::test::hold(center, &cells);
     tile_cache
 }
 

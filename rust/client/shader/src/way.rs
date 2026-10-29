@@ -21,7 +21,7 @@ use crate::world::brick_at;
 /// The ways of the bricks `fresh` names, one a `z`, a thread a column of
 /// the brick and its ring (`x`, row by row): each its spans once off the
 /// brick's lines into the brick's scratch (`fill::spans`), which its
-/// levels and its ways' tree read its cells and its neighbours' off. Over
+/// levels and its ways' tree read its cells and its neighbors' off. Over
 /// `height_cs`'s tops: a way is told from their faces. Each brick's
 /// entry as handed whole: where it lies and its shard lay the area's edge
 /// (pxl-spec-core `way::Columns::is_walled`).

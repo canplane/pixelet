@@ -461,7 +461,7 @@ pub const LINE_ORIGIN: u32 = crate::beam::LINE_WORDS;
 
 /// How far past the disk a receiver reads the map reaches, in texels, at
 /// worst (pxl-render shadow.wgsl `sun_lit`): its corner tap `SPREAD` each
-/// way, and past it the neighbour its linear compare filters in, a texel
+/// way, and past it the neighbor its linear compare filters in, a texel
 /// each way, so both along a diagonal. The rim is measured at the
 /// receiver's offset point, so its normal offset adds none; and the fade
 /// and `Sun::read` both measure from the snapped box's middle, its one

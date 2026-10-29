@@ -9,7 +9,7 @@ this order, each layer written over the one before:
 
 1. **The ground.** A tile's 512 × 512 cells, each a block shifted up to its
    cell's height at once: one pass over a fixed-stride grid. A cell shows its
-   top face, and a side face as tall as the step down to each neighbour lower
+   top face, and a side face as tall as the step down to each neighbor lower
    than it. A way at grade only recolors its cell.
 2. **Caves.** A procedural field (`pxl-spec-core cave.rs` `Cave::hollow`),
    asked only under the ground's face.
@@ -70,7 +70,7 @@ Every cell composed into a list of z intervals — a "column" of "runs" — and
 every reader scanning those lists: `pxl-spec block/stand.rs` `Stand`,
 `stands_of`, `compose`; `block/sample.rs` `ground_runs` and the per-cell `Over`
 and `Under`; `pxl-render mesh/run.rs`, `mesh/paint/column.rs`, and the run
-masks, neighbour scans and coarse buckets of `mesh/chunk.rs`;
+masks, neighbor scans and coarse buckets of `mesh/chunk.rs`;
 `pxl-kernel chunk/build/run.rs`; `query/block.rs` `Cell`, `Run` and `Column`,
 and the interval walks of `query/support.rs`. The word goes with it.
 
@@ -86,7 +86,7 @@ stone, soil, grass, bedrock) and K the cells overwritten:
 
 |                          | Every cell a list of intervals                                                        | A grid, then overwrites            |
 | ------------------------ | ------------------------------------------------------------------------------------- | ---------------------------------- |
-| Time                     | O(C·R²): each interval scans its own and eight neighbours' lists, some fourteen scans | O(C + K): a few comparisons a cell |
+| Time                     | O(C·R²): each interval scans its own and eight neighbors' lists, some fourteen scans | O(C + K): a few comparisons a cell |
 | Space                    | O(C·R): some 80–100 bytes a cell                                                      | O(C + K): some 3 bytes a cell      |
 | Blocks stacked in a cell | R grows, the cost as R²                                                               | linear in K                        |
 

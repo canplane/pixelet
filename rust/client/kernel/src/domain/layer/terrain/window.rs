@@ -1,7 +1,7 @@
 // pxl-kernel/domain/layer/terrain/window.rs
 
 //! The ground's cells as the kernel holds them: a window a zoom about each
-//! centre a reader declares — the eye, the pivot where walking and editing
+//! center a reader declares — the eye, the pivot where walking and editing
 //! happen, a destination being gone to — each as deep as its reader reads
 //! (pxl-spec-core `window`). A brick at a zoom is held once, in a slot,
 //! however many windows want it (`Slot`). It is filled from its tile as it
@@ -44,7 +44,7 @@ use pxl_render::gpu::renderer::{CellsBack, FreshBrick, Landing};
 
 /// Who a window is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Centre {
+pub enum Center {
     Eye,
     Pivot,
     Destination,
@@ -60,11 +60,11 @@ const _: () = assert!(
 
 /// Who window `w` is about, and its cells' zoom as laid out; a
 /// destination's is its line's.
-const fn layout(w: u32) -> (Centre, Zoom) {
+const fn layout(w: u32) -> (Center, Zoom) {
     match w {
-        w if w < EYE_WINDOWS => (Centre::Eye, window::eye_cell(w)),
-        w if w < EYE_WINDOWS + 2 => (Centre::Pivot, LEAF_CELL - 1 + (w - EYE_WINDOWS)),
-        _ => (Centre::Destination, LEAF_CELL),
+        w if w < EYE_WINDOWS => (Center::Eye, window::eye_cell(w)),
+        w if w < EYE_WINDOWS + 2 => (Center::Pivot, LEAF_CELL - 1 + (w - EYE_WINDOWS)),
+        _ => (Center::Destination, LEAF_CELL),
     }
 }
 
@@ -134,7 +134,7 @@ struct Windows {
     windows: [Window; WINDOWS as usize],
     /// Every window's entries, each its brick and its slot's state, then
     /// each window's first brick, a row shaped as an entry's, its brick the
-    /// first and present while it is laid out, none while its centre is not
+    /// first and present while it is laid out, none while its center is not
     /// (pxl-spec-core `window::ORIGIN_AT`): the GPU's table as it is
     /// (`table`).
     entries: [Entry; (SLOTS + WINDOWS) as usize],
@@ -172,13 +172,13 @@ fn windows() -> &'static mut Windows {
     WINDOWS_STATE.get(fresh)
 }
 
-/// Window `win`'s first brick, none while its centre is not.
+/// Window `win`'s first brick, none while its center is not.
 fn first_of(w: &Windows, win: u32) -> Option<[i32; 2]> {
     let (first, laid) = w.entries[(SLOTS + win) as usize].held();
     laid.then_some(first)
 }
 
-/// The windows before any centre stands: every entry absent.
+/// The windows before any center stands: every entry absent.
 fn fresh() -> Windows {
     Windows {
         windows: core::array::from_fn(|w| Window {
@@ -294,7 +294,7 @@ const _: () = assert!(
     "a brick comes back whole"
 );
 
-/// The turn's windows: each centre where it now stands (`at`, in units, X
+/// The turn's windows: each center where it now stands (`at`, in units, X
 /// then Y, by `Centre`; none where it is not), a brick no window holds any
 /// more given up (`assign_slots`); the tiles a window now wants but holds no
 /// packet for are asked again, and the bricks due found (`due`). The
@@ -321,11 +321,11 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         || terrain.revision() != w.read
         || kept != w.kept;
     for win in 0..WINDOWS {
-        let (centre, laid) = layout(win);
-        let p = at[centre as usize];
-        let cell = match (centre, p) {
+        let (center, laid) = layout(win);
+        let p = at[center as usize];
+        let cell = match (center, p) {
             // Where its line says the ground: open sea's leaf is the tile over it.
-            (Centre::Destination, Some(p)) => {
+            (Center::Destination, Some(p)) => {
                 let leaf = tile_at(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
                 terrain.src(leaf).map_or(laid, |t| GROUND.cell_zoom(t.zoom))
             }
@@ -570,7 +570,7 @@ pub fn refold() {
 /// takes: the eye's windows coarsest first, since a reader of a brick
 /// absent reads the coarser window's (pxl-spec-core `window::step`), then the
 /// pivot's and a destination's; in a window by how far its brick lies from
-/// the centre. A brick another window listed first is not listed again.
+/// the center. A brick another window listed first is not listed again.
 /// Only a brick whose tile can hand it now: one waiting on its tile does
 /// not hold a place another could take.
 fn due(w: &mut Windows) {
@@ -623,17 +623,17 @@ pub fn voids() -> List<Tile, { HANDED as usize }> {
     voids
 }
 
-/// How far brick `q` at `cell` lies from the centre of the window whose
+/// How far brick `q` at `cell` lies from the center of the window whose
 /// first brick is `first`, squared, in cells, X the short way round: the
-/// centre as the window places it, the middle of the brick's worth of
+/// center as the window places it, the middle of the brick's worth of
 /// cells its first holds it over (`window::origin`).
 fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
     let mid = |v: i32| i64::from(v) * i64::from(BRICK) + i64::from(BRICK / 2);
-    let centre = |v: i32| mid(v) + i64::from(window::RADIUS);
+    let center = |v: i32| mid(v) + i64::from(window::RADIUS);
     let round = 1i64 << cell;
-    let dx = (mid(q[0]) - centre(first[0])).rem_euclid(round);
+    let dx = (mid(q[0]) - center(first[0])).rem_euclid(round);
     let dx = dx.min(round - dx);
-    let dy = mid(q[1]) - centre(first[1]);
+    let dy = mid(q[1]) - center(first[1]);
     dx * dx + dy * dy
 }
 
@@ -645,7 +645,7 @@ pub fn pinned() -> &'static [Tile] {
 }
 
 /// The eye's window at `cell`'s entries as it holds them, each brick
-/// present or still wanted (`Entry`); none while its centre is not. A debug
+/// present or still wanted (`Entry`); none while its center is not. A debug
 /// reader's (domain/scene/indicator/coverage_gizmo.rs): a copy, moving nothing.
 pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
     let (w, win) = (

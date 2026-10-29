@@ -98,7 +98,7 @@ fn companion_tick(ctx: &mut TickContext) {
 
 /// Each pyramid layer's tiles, from the live eye.
 fn demand_tick(ctx: &mut TickContext) {
-    // The ground's windows where their centres now stand, before what arrives fills them.
+    // The ground's windows where their centers now stand, before what arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = crate::domain::layer::terrain::window::step(
         [

@@ -48,7 +48,7 @@ const geo = (
   lat: number,
   lon: number,
 ) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
-const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
+const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
 /** What the pick met, by the kernel's code (profiler.json `SUMMARY.view`). */
 const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
@@ -88,7 +88,7 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
         v={units3(v.pivot_x, v.pivot_y, v.pivot_z)}
       />
       <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
-      <Row k="altitude" v={metres(v.pivot_alt)} />
+      <Row k="altitude" v={meters(v.pivot_alt)} />
       <Head>Pointer</Head>
       <Row k="x/y/z (units)" v={units3(v.hover_x, v.hover_y, v.hover_z)} />
       <Row k="drawn at" v={zoomName(v.cell)} />

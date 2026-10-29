@@ -47,7 +47,7 @@ macro_rules! home {
 /// API biases suggestions to the request's `regionCode`, so another country's
 /// fill only what room is left. Similarity is rounded to two decimals so
 /// distance decides among near-equal names; on the raw score, one trigram
-/// outranked a thousand kilometres.
+/// outranked a thousand kilometers.
 const SEARCH_NEAR_SQL: &str = concat!(
     "WITH home AS (SELECT geom FROM overture_division_areas WHERE properties->>'division_id' = ",
     home!(),

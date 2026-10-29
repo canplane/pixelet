@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene/actor.rs
 
-//! The actor kind's behaviour: an instance of a registered model that plays
+//! The actor kind's behavior: an instance of a registered model that plays
 //! its clips. What is its own alone is its clips' times and its joint
 //! palette, in a block of its own; where it stands is its holder's, a
 //! figure or a case, which hands its stance in (`Stance`). Each tick

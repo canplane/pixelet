@@ -36,7 +36,7 @@ pub struct Grid {
     /// within which two rays enter a cube under `2√2 · s · d` wide apart
     /// (`handed`).
     keep: f32,
-    /// As far as a cube a beam ray must cross reaches from its centre, `√6
+    /// As far as a cube a beam ray must cross reaches from its center, `√6
     /// · s` as an angle with the margin, and its tangent (`window`).
     reach: f32,
     reach_tan: f32,
@@ -147,7 +147,7 @@ impl Grid {
 
     /// The cells about a pixel at the screen's tangents `at`, a side, whose
     /// corners its start is the least of: the reach stretched by the
-    /// screen's slope there out to it, plus the distance from that centre
+    /// screen's slope there out to it, plus the distance from that center
     /// to the corner nearest it.
     fn window(&self, at: [f32; 2]) -> u32 {
         let edge = libm::sqrtf(at[0] * at[0] + at[1] * at[1]);

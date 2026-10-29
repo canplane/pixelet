@@ -159,7 +159,7 @@ fn do_pan(dx: f64, dy: f64) {
     by_hand(|| crate::domain::control::camera::controller::pan(dx, dy));
 }
 
-/// Azimuth follows the cursor's angle about screen center (arcball), tilt a
+/// Azimuth follows the pointer's angle about screen center (arcball), tilt a
 /// fixed rate from the drag's start. The drag locks to whichever axis
 /// dominates past AXIS_LOCK_THRESHOLD_PX: an off-center vertical drag still
 /// sweeps an angle, which read as a spin once tilt saturated.

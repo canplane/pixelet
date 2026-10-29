@@ -103,7 +103,7 @@ pub fn footprint(width: f32) -> f32 {
     reach(width) + LINE_PAST
 }
 
-/// A deck's slab in leaf cells, at least one, `per_m` leaf cells a metre.
+/// A deck's slab in leaf cells, at least one, `per_m` leaf cells a meter.
 pub fn slab_depth(per_m: f32) -> i32 {
     cells_of_m(DECK_THICKNESS_M, per_m).max(1)
 }
@@ -199,11 +199,11 @@ pub struct Stations {
     pub leaf: f32,
 }
 
-/// A bent's spacing for the narrow beam (`w` 0) and the wide (1), metres.
+/// A bent's spacing for the narrow beam (`w` 0) and the wide (1), meters.
 pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVAL_M];
 
 /// What a brick's lines open with (pxl-spec-core window.rs `LINES_*`): its
-/// tile's leaf cells a ground metre (pxl-spec `Frame::per_m`), then its
+/// tile's leaf cells a ground meter (pxl-spec `Frame::per_m`), then its
 /// stations, step, phase and leaf, each a float's bits.
 pub const HEADER_WORDS: u32 = 8;
 
@@ -412,7 +412,7 @@ pub struct Occupies {
 }
 
 /// What `c` occupies over ground `ground` leaf cells high, `per_m` leaf
-/// cells a ground metre: all the surface sweeps across the column, so a slab
+/// cells a ground meter: all the surface sweeps across the column, so a slab
 /// or a bore steps down to the next column's without a gap however steep.
 pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
     let (low, top) = (libm::rintf(c.low) as i32, libm::rintf(c.top) as i32);
@@ -460,7 +460,7 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
 /// tile's stations, and its ground — its look as read, and its face's height
 /// in leaf cells. A column the brick does not hold has no segment.
 pub trait Columns {
-    /// The cells' zoom, and leaf cells a ground metre over the ground.
+    /// The cells' zoom, and leaf cells a ground meter over the ground.
     fn cell(&self) -> Zoom;
     fn per_m(&self) -> f32;
     /// How many segments may be over column `c`, and the `k`-th of them.
@@ -621,7 +621,7 @@ impl Writes {
 
 /// What the visit from the `k`-th segment over column `c` writes, and where
 /// the next visit starts: a visit of a look that grounds, as what it
-/// occupies over the column's face `face`, `per_m` leaf cells a metre, its
+/// occupies over the column's face `face`, `per_m` leaf cells a meter, its
 /// pier where one stands.
 fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Writes, u32) {
     let (x, next) = visit(cols, c, k);

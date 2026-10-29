@@ -105,7 +105,7 @@ const SHARD_SERVED_SHIFT: u32 = 1;
 /// The bits of which of the nine are served (`Shard::served`).
 const SHARD_SERVED_BITS: u32 = 9;
 const SHARD_ALL: u32 = (1 << SHARD_SERVED_BITS) - 1;
-/// Its own among the nine, the centre.
+/// Its own among the nine, the center.
 const OWN: u32 = 1 << 4;
 const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 
@@ -216,13 +216,13 @@ pub const fn beside(k: u32) -> [i32; 2] {
 }
 
 /// The leaf cells about the leaf cell holding the column `b` at `cell`, a
-/// leaf's or finer, that its eight neighbours lie in (`beside`'s bits). A
+/// leaf's or finer, that its eight neighbors lie in (`beside`'s bits). A
 /// column within its leaf cell touches none; one on a leaf's edge or corner,
 /// the cells across them; at the leaves, all eight. Whether the column has
 /// ground beside one gone (`laid`) is whether any of these is.
 pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
     let m = (1 << (cell - LEAF_CELL)) - 1;
-    // Per axis, the leaf offsets its neighbours reach: 0 always, -1 at the
+    // Per axis, the leaf offsets its neighbors reach: 0 always, -1 at the
     // leaf cell's low edge, +1 at its high one.
     let reach = |v: i32| 0b010 | ((v & m == 0) as u32) | ((v & m == m) as u32) << 2;
     let (x, y) = (reach(b[0]), reach(b[1]));

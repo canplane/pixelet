@@ -29,7 +29,7 @@ pub const EPS: f64 = units(GROUND.cell());
 /// leaves. A terrain leaf's reads stay within its 2-ring; a
 /// divisions leaf looks this far for the point of a division with no area,
 /// past the gap between such points nearly everywhere (99% of Korea's
-/// neighbourhoods, most of its villages, measured 2026-10-08).
+/// neighborhoods, most of its villages, measured 2026-10-08).
 pub const BAKE_REACH: f64 = units(LEAF_ZOOM - 2);
 
 const _: () = assert!(

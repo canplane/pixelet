@@ -28,7 +28,7 @@ was drafted and aborted the day before
 
   > Since 2026-10-25, Arnis being the reference and the 1-ring the bound: a
   > structure is no longer solved as one line over all of it, which a ring that
-  > sees part of it cannot do, and neighbouring tiles stepped where their rings
+  > sees part of it cannot do, and neighboring tiles stepped where their rings
   > saw different parts. Whether decks stand side by side, a deck's axis and its
   > course are judged on the ways whole. A deck is solved in blocks of 16 cells
   > along its way, each from what lies about the block
@@ -65,7 +65,7 @@ as Carto draws them (`overture/width.rs`), where Arnis sizes each by its own
 widths or clears a waterway's centerline. Its distances along and between ways
 stay its own.
 
-Arnis's numbers are metres — a block is a metre upright on the Earth (its
+Arnis's numbers are meters — a block is a meter upright on the Earth (its
 `celestial.rs`) — and each is taken into the page's cells by the page's scale,
 `u_per_m` at the page's south-west corner (`pxl-spec procedural.rs`
 `Frame::per_m`), rounded half to even (`pxl-spec-core` `cells_of_m`;
@@ -112,7 +112,7 @@ them: the world draws nothing that is not in use.
   nine pages at Namsan.
 
   > Since fixed (2026-10-25). The pages did not differ for want of seeing: two
-  > neighbours both see the cells where they meet. They differed because the
+  > neighbors both see the cells where they meet. They differed because the
   > bore's floor was drawn from where each ring cut it: the straight run between
   > its two ends, a cut one among them, and its one valley, the lowest point of
   > the stretch it saw. A cut lies a tile from every cell its page draws, so a

@@ -39,7 +39,7 @@ fn diagonal_line_one_band() {
     }
 }
 
-/// A parent's neighbourhood with `d` its first child's lines and no other.
+/// A parent's neighborhood with `d` its first child's lines and no other.
 fn first_child(d: &Separation) -> [Option<&Separation>; 16] {
     let mut around = [None; 16];
     around[crate::space::layer::tile::neighbor_idx(0, 0)] = Some(d);
@@ -76,7 +76,7 @@ fn form_from_surface() {
         span,
         pier: [0, 0],
     };
-    // Two cells a metre: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
+    // Two cells a meter: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
     let cpm = 2.0;
     assert_eq!(
         on(over(Form::Bridge, 30.0), 10, cpm),

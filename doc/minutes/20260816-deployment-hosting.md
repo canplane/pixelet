@@ -445,7 +445,7 @@ own list of input types (which contains `password`), and the deliberate
 attribution link in the license section.
 
 **Location is the sensitive surface here.** The only personal data leaving the
-client is the view's centre, which forward search sends as `near` to the
+client is the view's center, which forward search sends as `near` to the
 project's own `/geo/search` (`fetchSearch` in
 `ts/client/src/shell/search/fetch.ts`), debounced (`DEBOUNCE_MS` in
 `ts/client/src/shell/search/modal.tsx`). That is disclosed in the settings'

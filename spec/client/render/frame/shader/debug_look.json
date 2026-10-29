@@ -56,7 +56,7 @@
     "none": {
       "$type": "rgb",
       "$value": "#808080",
-      "$doc": "A pixel that walked nothing, apart from the ramp's every colour."
+      "$doc": "A pixel that walked nothing, apart from the ramp's every color."
     },
     "ramp": {
       "$type": "rgb",
@@ -81,7 +81,7 @@
       ],
       "$doc": [
         "Google's Turbo, dark blue at none through green and yellow to dark red at",
-        "`most`, at even stops a pixel's colour runs straight between."
+        "`most`, at even stops a pixel's color runs straight between."
       ]
     }
   }

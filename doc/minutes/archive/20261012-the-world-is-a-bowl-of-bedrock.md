@@ -93,7 +93,7 @@ plane is the top of the ground under it, which that ground's own cube draws,
 since the cell over it is not full. A shrunk cell drawing that plane instead,
 and the cube under leaving its top to it, opened a hole wherever the cube over
 was drawn at another zoom. Chunks are drawn under the lowest face about a node,
-its own columns' and those beside, so a step down to a neighbour is walled by a
+its own columns' and those beside, so a step down to a neighbor is walled by a
 cube's own ground, and wherever the eye's rays land, whatever the bound holds
 (`pxl-kernel chunk/domain/walk.rs`): the rays are cast against the world the
 hash carves, so a cave seen through a dig is met and drawn as deep as they go,

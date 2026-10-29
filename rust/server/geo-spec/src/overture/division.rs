@@ -38,7 +38,7 @@ pub fn reach_at(y: f64) -> f64 {
 }
 
 /// The division each of a batch of points is in: `$1`/`$2` are EPSG:3857
-/// metres and `$3` [`reach_at`] them, `idx` counts the points from 1. It is
+/// meters and `$3` [`reach_at`] them, `idx` counts the points from 1. It is
 /// the deepest division an area of contains the point, or, nearer, a child
 /// of it with no area, the nearest within reach; where no area contains the
 /// point, the nearest division within reach. Many localities have a point

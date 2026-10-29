@@ -82,7 +82,7 @@ they did by the same commands as on the page
   calls.
 - **Identity is not one kind, and should not be made one.** A handle the guest
   issues, the guest's own domain key, a number the host issues, an enum, a
-  string. A fetch's key is what a read is deduplicated and cancelled by; a
+  string. A fetch's key is what a read is deduplicated and canceled by; a
   descriptor in its place adds a table from key to descriptor and loses what the
   key meant.
 - **The verbs are a subject added, changed and removed.** Asked for or reported,

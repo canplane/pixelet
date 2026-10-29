@@ -36,7 +36,7 @@ impl Frame {
         }
     }
 
-    /// Leaf cells a ground metre over the tile, of height as of breadth: the
+    /// Leaf cells a ground meter over the tile, of height as of breadth: the
     /// scale where its south-west corner lies, one value a tile
     /// (pxl-spec-core `cells_of_m`).
     pub fn per_m(self) -> f32 {
@@ -45,7 +45,7 @@ impl Frame {
 
     /// Where its piers may stand, in its cells (pxl-spec-core way.rs
     /// `Stations`): each beam's lattice of stations, at its spacing in
-    /// ground metres where the tile lies, and where its corner falls in it;
+    /// ground meters where the tile lies, and where its corner falls in it;
     /// and the leaf cells its cell spans.
     pub fn stations(self) -> Stations {
         let corner = self.corner.map(|v| v / self.cell);

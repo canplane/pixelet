@@ -79,7 +79,7 @@ device's location (terraces by water).
 **Reviewed before the build** (pixelet-d3, pixelet-1d [faaf39]):
 
 - A LINE bit is a sound openness test at the stop's zoom, if a lenient one.
-  A side face can still show past an undrawn finer or partial neighbour, as
+  A side face can still show past an undrawn finer or partial neighbor, as
   a wrong surface rather than a hole.
 - A side face taken needs its own word, or it is painted with the sample
   face's edges. The other way, `face::BOX` on open sides, keeps today's asks
@@ -93,7 +93,7 @@ The walks again are not worth removing this way.
 - Half of them are holes, rows thinner than the samples' spacing, which no
   face drawn can answer. The walk is the answer there.
 - Of the off-axis half, the open sides removed about 40%. The rest are
-  sides against a whole neighbour, where walking is right.
+  sides against a whole neighbor, where walking is right.
 - So walks fell by about a fifth: a share of the millisecond the removal
   cost. It was bought with half again as many face asks, and with more
   fragments in every view, including looking down, where nothing walks.

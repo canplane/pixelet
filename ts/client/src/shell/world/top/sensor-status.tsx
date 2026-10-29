@@ -24,7 +24,7 @@ export function SensorStatus() {
   const location = useKernel((s) => s.location.status);
   const orientation = useKernel((s) => s.orientation.status);
 
-  // Faded as one layer with its halo: faded apart, the halo greyed the glyph.
+  // Faded as one layer with its halo: faded apart, the halo grayed the glyph.
   const icon = (glyph: GlyphName, status: DevicePoseStatus) => (
     <View
       needsOffscreenAlphaCompositing

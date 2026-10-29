@@ -20,7 +20,7 @@ rule rather than a tendency:
 - **Interrupts**: pointer, wheel, pinch, keyboard; geolocation and the device
   pose; resize and tab visibility; a setting toggled; a network response
   arriving.
-- **I/O**: `fetch`, `localStorage`, rasterising text on a canvas (the badge
+- **I/O**: `fetch`, `localStorage`, rasterizing text on a canvas (the badge
   sheet), the WebGPU calls themselves, the `requestAnimationFrame` loop that
   drives the tick.
 - **UI**: the React tree and the DOM overlays.
@@ -66,7 +66,7 @@ the boundary:
      primitive that hands over the turn — the tick, the drain — never a typed
      call per operation.
   4. What goes over the network, and in what format, stays the shell's to lead
-     for now. It is a grey zone, not decided.
+     for now. It is a gray zone, not decided.
 
   **The message, as built (2026-09-14).** What a frame
   (`@xpute/core/ipc/frame.ts`) needs once the transport is shared memory: four
@@ -270,7 +270,7 @@ the boundary Rust — and the order is by what each unlocks:
    record.
 3. **The POI index and placement.** With 2, the module reads a POI page itself
    and placement is a phase of the tick; the glue keeps the sheet the badges'
-   text is rasterised on.
+   text is rasterized on.
 4. **The object store's persistence.** The record is the module's (`Placement`);
    writing it to `localStorage` is I/O and stays.
 

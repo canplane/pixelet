@@ -1,6 +1,6 @@
 // pxl-kernel/domain/layer/terrain/window.test.rs
 //
-// The windows as a test holds them: about a centre, each brick of the
+// The windows as a test holds them: about a center, each brick of the
 // tiles given present at once, its cells as a GPU would hand them back.
 
 use super::*;
@@ -26,7 +26,7 @@ struct Built {
     slots: Vec<Slot>,
 }
 
-/// What windows are built over: a centre and the tiles held.
+/// What windows are built over: a center and the tiles held.
 type Over = ([f64; 2], Vec<HeldTile>);
 
 /// The windows built this run, by what they were built over: the same are
@@ -58,17 +58,17 @@ fn mirrored(records: &[u32]) {
 /// and its height, row by row from its first, and its lines; each brick's
 /// columns, its tops and its ways' spans as its fill keeps them
 /// (`fill_columns`), and its levels as a GPU folds them (pxl-spec-core
-/// `fill::level`), read back. Built once a run for a centre and its tiles
+/// `fill::level`), read back. Built once a run for a center and its tiles
 /// (`BUILT`); each hold is its own copy, whatever a test does to it.
-pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
+pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     let mut built = BUILT.lock().unwrap_or_else(|e| e.into_inner());
     let k = match built
         .iter()
-        .position(|((c, h), _)| *c == centre && h.as_slice() == held)
+        .position(|((c, h), _)| *c == center && h.as_slice() == held)
     {
         Some(k) => k,
         None => {
-            let records = build(centre, held);
+            let records = build(center, held);
             let upto = |words: &[u32]| {
                 words[..words.iter().rposition(|&w| w != 0).map_or(0, |i| i + 1)].to_vec()
             };
@@ -78,7 +78,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 entries: windows().entries.to_vec(),
                 slots: windows().slots.to_vec(),
             };
-            built.push(((centre, held.to_vec()), b));
+            built.push(((center, held.to_vec()), b));
             built.len() - 1
         }
     };
@@ -119,7 +119,7 @@ pub(crate) fn lose() {
 }
 
 /// `hold`'s windows, built: the families their trees took, as records.
-fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
+fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
@@ -131,11 +131,11 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     WINDOWS_STATE.set(fresh());
     let w = windows();
     for win in 0..WINDOWS {
-        let (centre_of, cell) = layout(win);
-        if centre_of == Centre::Destination {
+        let (center_of, cell) = layout(win);
+        if center_of == Center::Destination {
             continue;
         }
-        let first = window::origin(cell, cell_at(cell, centre));
+        let first = window::origin(cell, cell_at(cell, center));
         w.entries[(SLOTS + win) as usize] = Entry {
             brick: first,
             present: 1,
@@ -264,11 +264,11 @@ fn fill_columns(
 /// their bricks slotted (`assign_slots`), what was held before kept.
 fn lay(w: &mut Windows, eye: [f64; 2], pivot: [f64; 2]) {
     for win in 0..WINDOWS {
-        let (centre_of, cell) = layout(win);
-        let p = match centre_of {
-            Centre::Eye => eye,
-            Centre::Pivot => pivot,
-            Centre::Destination => continue,
+        let (center_of, cell) = layout(win);
+        let p = match center_of {
+            Center::Eye => eye,
+            Center::Pivot => pivot,
+            Center::Destination => continue,
         };
         let first = window::origin(cell, cell_at(cell, p));
         w.entries[(SLOTS + win) as usize] = Entry {
@@ -313,14 +313,14 @@ fn want(w: &Windows, win: u32, s: u32) -> [i32; 2] {
     w.entries[(win * ENTRIES + s) as usize].brick
 }
 
-const CENTRE: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
+const CENTER: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
 
 #[test]
 fn shared_brick_held_once() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
-    lay(w, leaf(CENTRE), leaf(CENTRE));
+    lay(w, leaf(CENTER), leaf(CENTER));
     assert_eq!(
         w.slots.iter().filter(|b| !b.is_free()).count(),
         (EYE_WINDOWS * ENTRIES) as usize,
@@ -356,12 +356,12 @@ fn left_brick_kept() {
     WINDOWS_STATE.set(fresh());
     let w = windows();
     let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
-    lay(w, leaf(CENTRE), leaf(CENTRE));
+    lay(w, leaf(CENTER), leaf(CENTER));
     land_all(w);
     // The eye a brick on at the leaves: its window there leaves a column
     // the pivot's still wants, and wants a column the pivot's does not.
-    let on = leaf([CENTRE[0] + f64::from(BRICK), CENTRE[1]]);
-    lay(w, on, leaf(CENTRE));
+    let on = leaf([CENTER[0] + f64::from(BRICK), CENTER[1]]);
+    lay(w, on, leaf(CENTER));
     assert_eq!(held_at(w, LEAF_CELL), (ENTRIES + window::ACROSS) as usize);
     for s in 0..ENTRIES {
         let q = want(w, pivot, s);
@@ -388,7 +388,7 @@ fn left_brick_kept() {
     }
     // Back where it was, the eye finds the column it left present.
     land_all(w);
-    lay(w, leaf(CENTRE), leaf(CENTRE));
+    lay(w, leaf(CENTER), leaf(CENTER));
     for s in 0..ENTRIES {
         assert!(
             w.entries[(eye * ENTRIES + s) as usize].holds(want(w, eye, s)),
@@ -409,8 +409,8 @@ fn apart_windows_own_slots() {
     let w = windows();
     lay(
         w,
-        leaf(CENTRE),
-        leaf([CENTRE[0] + 100.0 * f64::from(BRICK), CENTRE[1]]),
+        leaf(CENTER),
+        leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]),
     );
     for win in 0..EYE_WINDOWS + 2 {
         for s in 0..ENTRIES {
@@ -432,7 +432,7 @@ fn landing_shows_everywhere() {
     WINDOWS_STATE.set(fresh());
     let w = windows();
     let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
-    lay(w, leaf(CENTRE), leaf(CENTRE));
+    lay(w, leaf(CENTER), leaf(CENTER));
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL, q).unwrap();
     w.slots[b as usize].ticket = 7;
@@ -456,8 +456,8 @@ fn landing_shows_everywhere() {
         ticket: REFUSED,
         ..w.slots[b as usize]
     };
-    let far = leaf([CENTRE[0] + 100.0 * f64::from(BRICK), CENTRE[1]]);
-    lay(w, leaf(CENTRE), far);
+    let far = leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]);
+    lay(w, leaf(CENTER), far);
     assert_eq!(
         w.slots[b as usize].ticket, REFUSED,
         "the eye still wants it"
@@ -483,14 +483,14 @@ fn heap_wait_rehanded() {
     });
     WINDOWS_STATE.set(fresh());
     let w = windows();
-    lay(w, leaf(CENTRE), leaf(CENTRE));
+    lay(w, leaf(CENTER), leaf(CENTER));
     let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL, q).unwrap();
     // As `on_landed` leaves it where the heap refused the mirror its chunk.
     (w.slots[b as usize].ticket, w.heap) = (WAITING, Some(Refused::now()));
     assert!(!wake(w), "no page given back: it waits");
-    lay(w, leaf(CENTRE), leaf(CENTRE));
+    lay(w, leaf(CENTER), leaf(CENTER));
     assert_eq!(
         w.slots[b as usize].ticket, WAITING,
         "unhanded while it waits"

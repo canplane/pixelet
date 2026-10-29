@@ -38,7 +38,7 @@ pub async fn ancestors(pool: &Pool, id: &str) -> Result<Vec<DivisionPart>, DbErr
     Ok(parts)
 }
 
-/// Each point's name; `xs`/`ys` are EPSG:3857 metres.
+/// Each point's name; `xs`/`ys` are EPSG:3857 meters.
 pub async fn name_points(
     pool: &Pool,
     xs: &[f64],

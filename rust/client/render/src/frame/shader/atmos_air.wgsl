@@ -11,7 +11,7 @@
 /* the air before a point */
 
 // The cubic B-spline about texel coordinate `x` along one axis as two
-// linear reads (Sigg and Hadwiger 2005): their places, texels with centres
+// linear reads (Sigg and Hadwiger 2005): their places, texels with centers
 // at whole numbers, then their weights.
 fn bspline_taps(x: f32) -> vec4f {
   let i = floor(x);

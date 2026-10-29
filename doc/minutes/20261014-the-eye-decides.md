@@ -56,7 +56,7 @@ drew them all.
 camera grid, down the pyramid. A chunk drew only the blocks rays stopped on. The
 frontier, the runs and the column composition went. The ground came in stripes,
 rows of rays with sky between them, and `480e6b8f9` proved why. Rays sample
-points. Between two neighbouring rays on ground seen at a grazing angle lie
+points. Between two neighboring rays on ground seen at a grazing angle lie
 blocks that no ray stopped on, so they are never built, and their place shows
 sky. Two conditions cannot both hold:
 
@@ -85,7 +85,7 @@ built over several turns, never a hole, no state beyond the present view's
 chunks — cannot all hold, and keeping the old piece until the new one is ready
 is the frontier again. That is a second layer hiding latency, beside the one the
 tiles already have, where a coarser tile stands in until its own arrives.
-Neighbouring chunks at different zooms meet in seams. And everything inside a
+Neighboring chunks at different zooms meet in seams. And everything inside a
 reached chunk is built, caves included.
 
 **Draw only a chunk's cross-sections.** Mesh, for each of the six axis

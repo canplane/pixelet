@@ -4,7 +4,7 @@
 //! extent with its apron, the stride the bake samples elevation at and the
 //! raster's block, so every shard lands on one grid of blocks:
 //! `name minx miny maxx maxy stride block block_m`. The apron is the shard's
-//! (`SHARD_APRON`) taken out to whole blocks, so a block a neighbour warps
+//! (`SHARD_APRON`) taken out to whole blocks, so a block a neighbor warps
 //! too is the same block, stored once.
 //!
 //! With `--blocks <shard>`, the shard's blocks instead, one a line, `bx by

@@ -37,7 +37,7 @@ pixel.
   pixel's sample point, and the depth test keeps the nearest that does. What
   is thinner than a pixel and misses the point is lost: far wires and fences
   break up and crawl.
-- **No rows of holes.** Every triangle is projected, and neighbouring
+- **No rows of holes.** Every triangle is projected, and neighboring
   triangles share their edges (a watertight fill rule), so a pixel's point
   always lands on some surface. What a raster loses is under a pixel, never a
   whole row.

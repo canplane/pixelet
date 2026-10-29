@@ -221,7 +221,7 @@ impl<L: Observed> Demand<L> {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
         // One walk down the pyramid in key order, so each tile's line, its
-        // own and the ground's it is ordered by, steps from its neighbour's.
+        // own and the ground's it is ordered by, steps from its neighbor's.
         let (mut lines, mut ground) = (Lines::default(), Walked::default());
         let mut order = |o: &Observation, p: Tile| {
             crate::domain::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground)
@@ -318,7 +318,7 @@ impl<L: Observed> Demand<L> {
 
         L::tile_cache().ask(&asks);
         // The asks in key order, in the demand's room (nothing reads it
-        // between observations): each line read steps from its neighbour's
+        // between observations): each line read steps from its neighbor's
         // (`seek`), not from the top.
         demand.clear();
         demand.extend(asks.keys().copied());

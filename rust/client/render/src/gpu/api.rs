@@ -773,7 +773,7 @@ impl Gpu {
     /// A render pipeline from its record (frame/shader/record.rs) over the
     /// group layouts, drawing into `format`, depth32 its depth: into the
     /// depth alone where `format` is depth32's, its fragment writing no
-    /// colour (the shadow map, gpu/shadow.rs).
+    /// color (the shadow map, gpu/shadow.rs).
     pub fn pipeline(&self, words: &[u32], layouts: &[Id], module: Id, format: Format) -> Id {
         let mut at = record::HEAD as usize;
         let mut next = || {

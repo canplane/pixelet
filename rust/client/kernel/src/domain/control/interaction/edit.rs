@@ -216,7 +216,7 @@ pub fn remove(at: EntryAt) {
     }
 }
 
-/// The edit the pointer would make, decided once a turn: the cursor's ghost
+/// The edit the pointer would make, decided once a turn: its ghost
 /// shows it, and what it removes is handed to what is drawn to leave out.
 #[derive(Clone, Copy, Default)]
 pub struct Pending {

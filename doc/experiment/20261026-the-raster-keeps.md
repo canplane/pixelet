@@ -11,7 +11,7 @@ stopped at are drawn as boxes, the depth test keeping each pixel's nearest.
 
 Dev setting 20 `ray_sample_raster`, span `sraster` (branch
 `experiment/20261026-cast-split`). A compute pass lays a box a stopped sample,
-one where its left or upper neighbour stopped on the same box; a render pass
+one where its left or upper neighbor stopped on the same box; a render pass
 draws, per box, the face on each axis turned to the eye, only on the axis the
 sample entered by, and the fragment keeps a pixel only where that pixel's own
 ray enters the box across that face (the cast's own entry test), so the depth
@@ -42,7 +42,7 @@ Against the eye's own walk, in the same frames, with steps on:
 Every difference from the eye is the eye stopping nearer: a block no sample
 stopped at stands in front of the one taken. Of the raster's in the warm
 load, 1.18M are the 4 × 4 rule's own, 489k are pixels the 4 × 4 rule walked
-(no neighbour's block entered) where the raster took a block from a sample
+(no neighbor's block entered) where the raster took a block from a sample
 further off, and 61k another block.
 
 ## What it showed
@@ -62,7 +62,7 @@ Taken next, over keeping the wider choice: a fragment is kept only where its
 box is one of the blocks the pixel's own 4 × 4 samples stopped at, so the
 raster makes the 4 × 4 rule's choice exactly and only its cost changes. The
 question is what that test costs a fragment, given that a box stands for a run
-of neighbouring samples that stopped on it.
+of neighboring samples that stopped on it.
 
 ## Held to the 4 × 4, by reading the samples
 

@@ -48,7 +48,7 @@ Two pages side by side in Chrome ("Chrome Tahoe"), each fresh, one tab in the
 foreground at a time:
 
 - **:5173**, the shared tree before the resolve (`9ae190913`).
-- **:5184**, a worktree of it with the resolve and its 5-tap neighbourhood,
+- **:5184**, a worktree of it with the resolve and its 5-tap neighborhood,
   before the review's fixes (the frames asked for, the sequence's last
   place); for pair 2, with the boxes and faces kept too.
 
@@ -95,7 +95,7 @@ None of these was explained further.
   resolve before the trim: GPU p50 11.9 ms on :5173 (every frame `standing`,
   the actor's clip playing), 16.2 on :5184 (every frame `pixels`). The
   resolve's p95 was 4.8–5.0 ms.
-- The resolve's neighbourhood cut to the pixel and the four beside it: p95
+- The resolve's neighborhood cut to the pixel and the four beside it: p95
   2.7 ms at 0.84 of 3840×1986 (5.4 M px), 4.8 at 1.00 (7.6 M px), about 0.6 ns
   a pixel.
 - A `pixels` frame with the boxes and faces kept: sraster 1.2 ms p95 (1.7–2.3
@@ -115,7 +115,7 @@ What else a `pixels` frame redoes, by reading (the review), not measured:
 the sun's receivers are marked again (they read the jitter, `cast.rs`), and
 the occlusion's prepass runs again (its read takes the frame's words, jitter
 and all, as its depth moves with it). The finish carries this frame's
-jittered depth up beside the gathered colour, so the markers tested against
+jittered depth up beside the gathered color, so the markers tested against
 it may move by up to half a pixel while the sequence runs.
 
 ## What was not done
@@ -149,7 +149,7 @@ have theirs (gpu/pack.rs: a mip chain, sampled anisotropic).
   through many partly covered nodes. Estimated: several hundred ms a frame,
   over ten frames' budget.
 - Each node would also carry its coverage, and the tiles' bake would change.
-  The values' colours from afar (`looks`) are a part of it, not per node.
+  The values' colors from afar (`looks`) are a part of it, not per node.
 
 **The prune.** It is a mip's choice of level without its mean: a node under
 the footprint is dropped whole. As the camera moves the footprint crosses the

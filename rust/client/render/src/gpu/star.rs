@@ -112,7 +112,7 @@ impl StarPass {
 }
 
 /// A record's star (pxl-spec asset/star.rs `star`, the bake's one layout)
-/// as the sky draws it: its direction, its flux, its colour.
+/// as the sky draws it: its direction, its flux, its color.
 fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_RECORD_FLOATS] {
     let s = star::star(packed);
     let (ra, dec) = (s.ra.to_radians(), s.dec.to_radians());

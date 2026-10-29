@@ -9,7 +9,7 @@ which the flat map is now laid back on about its center. Before this, each was a
 picture of its own. The sky was the three.js dome shader's three-color gradient,
 keyed to an hourly theme; the haze was one flat fog color mixed in by depth; the
 sunlight was the theme's directional color; the stars were grid cells lit whole,
-which drew as grey rectangles; the clouds were value noise painted on the dome;
+which drew as gray rectangles; the clouds were value noise painted on the dome;
 and the world was flat to the edge of the fog. None of them knew about the
 others, so a sunset reddened the sky and not the light, and a view from high up
 saw the flat ground overshoot a horizon it had no horizon of its own to meet.
@@ -102,7 +102,7 @@ screen says one white star outshines another.
 
 ## The globe
 
-The fog was 1,536 u, and at that the ground a street view saw ended in a grey
+The fog was 1,536 u, and at that the ground a street view saw ended in a gray
 band. The window can reach further: with its finest at the leaves for decoration
 and five zooms, its coarsest is z12, which draws step 2⁵, wanted out to 192 · 2⁵
 = 6,144 u. That is `FOG_FAR` now. It costs no memory — the window's 125 records
@@ -182,7 +182,7 @@ of its own:
 Built, on main and not yet pushed: 2964b127 (the air), 85fd5349 (the exposure),
 31f778a1 (the fog to the window), df12c155 (the first curvature), 562639ac (the
 stars), 043dd7cb (the moonlit night), fe3e7786 (the clouds), dc89db17 (the
-globe), and the ground past the terrain in the land's color rather than a grey.
+globe), and the ground past the terrain in the land's color rather than a gray.
 
 Not yet seen on a screen: the clouds at sunset, and the moonlit sky toward the
 moon itself — the page reloaded or the camera would not turn each time.

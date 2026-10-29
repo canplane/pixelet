@@ -90,7 +90,7 @@ impl OrbitObstacleMode {
 ///
 ///   off    — none.
 ///   corner — the screen pass's own: the floor along a cube and the inside
-///            of a corner, where a neighbouring pixel's face rises in front
+///            of a corner, where a neighboring pixel's face rises in front
 ///            of the pixel's own plane within a cell or two of it
 ///            (rust/client/render/src/frame/shader/screen_ray.wgsl).
 ///            A few taps of the rays a pixel, behind a uniform.
@@ -265,7 +265,7 @@ pub enum SettingKey {
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
+    /// Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
     ray_steps = 19,
     /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
     ray_counts = 20,

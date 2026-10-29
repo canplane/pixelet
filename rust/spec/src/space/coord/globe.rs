@@ -1,6 +1,6 @@
 // pxl-spec/space/coord/globe.rs
 
-//! The planet the air is drawn about: its radius, in kilometres and in the
+//! The planet the air is drawn about: its radius, in kilometers and in the
 //! map's units, a round of which is its circumference. What is drawn is
 //! flat, where the eye's rays find it: nothing is placed on the sphere.
 

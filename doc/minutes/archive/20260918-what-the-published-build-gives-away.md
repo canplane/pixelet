@@ -92,7 +92,7 @@ one pass and the pass is Binaryen's.
 
 ## Two claims about the standard tools that were wrong
 
-**`trim-paths` is not stable.** It is Cargo's own setting for sanitising the
+**`trim-paths` is not stable.** It is Cargo's own setting for sanitizing the
 absolute paths a panic carries — RFC 3127, and exactly the right tool — and
 `cargo` refuses it: _"not stabilized in this version of Cargo (1.94.1)"_. It is
 listed in the Cargo book under Unstable Features, which is easy to skim past
@@ -155,7 +155,7 @@ that message to the console. The trap carries nothing, so without it a
 production panic is one line of `unreachable`. The paths are the price of
 knowing where.
 
-None of this is news. RFC 3127 exists to sanitise exactly these paths, the rustc
+None of this is news. RFC 3127 exists to sanitize exactly these paths, the rustc
 book documents `--remap-path-prefix` for it, the Linux kernel's Rust support
 patched the same leak in its own build, and removing build paths is a standing
 concern of reproducible-builds.org. C has `-ffile-prefix-map` and Go has

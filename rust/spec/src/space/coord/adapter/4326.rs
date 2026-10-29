@@ -12,7 +12,7 @@ use crate::space::coord::zoom::Zoom;
 
 use super::epsg3857::{self, G3857};
 
-/// lng, lat, alt (metres above sea level).
+/// lng, lat, alt (meters above sea level).
 pub type G4326 = [f64; 3];
 
 pub use crate::space::coord::earth::EARTH_RADIUS_M;
@@ -88,7 +88,7 @@ pub fn unproject(q: &Q3) -> G4326 {
     from_mercator(&epsg3857::unproject(q))
 }
 
-/// Great-circle ground distance in metres (haversine), ignoring altitude.
+/// Great-circle ground distance in meters (haversine), ignoring altitude.
 pub fn dist(a: &G4326, b: &G4326) -> f64 {
     let d_lng = (b[0] - a[0]) * DEG_TO_RAD;
     let d_lat = (b[1] - a[1]) * DEG_TO_RAD;

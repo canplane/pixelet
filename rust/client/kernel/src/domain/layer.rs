@@ -1,7 +1,7 @@
 // pxl-kernel/domain/layer.rs
 
 //! What is in the world, in layers. A layer owns its store and knows
-//! nothing of its neighbours.
+//! nothing of its neighbors.
 
 mod answer;
 use pxl_spec::bake::tile::Occupancy;

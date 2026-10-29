@@ -36,7 +36,7 @@ use crate::separation::{Drawn, Line};
 use super::bridge::Decks;
 use super::*;
 
-// ---- Arnis's numbers for a bore, in metres, under its names ----
+// ---- Arnis's numbers for a bore, in meters, under its names ----
 const TUNNEL_CEIL_OFF_M: f64 = 5.0;
 const TUNNEL_COVER_DROP_M: f64 = 7.0;
 const TUNNEL_ROOF_COVER_M: f64 = TUNNEL_CEIL_OFF_M + 1.0;
@@ -445,7 +445,7 @@ fn road_bores(
         //
         // A longer one is not: a tile that draws it may see neither portal, and the straight run
         // between them is not a ring's to know. Its ring cuts it, and where the ring cuts is no end of
-        // it, nor a height to draw a line from: two neighbours cut it in different places, and a
+        // it, nor a height to draw a line from: two neighbors cut it in different places, and a
         // floor that leaned on the cut would differ where they meet, though both see the cells there.
         // So the floor of a long bore leans on nothing further than a tile (`TILE_CELLS`) from each
         // cell, which every ring holds about what its tile draws: the highest floor under the cover by

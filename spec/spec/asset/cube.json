@@ -71,7 +71,7 @@
         "name": "leisure",
         "value": 9,
         "$doc": [
-          "playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%)"
+          "playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%)"
         ]
       },
       { "name": "pitch", "value": 10, "$doc": ["pitch and track: Carto @pitch"] },

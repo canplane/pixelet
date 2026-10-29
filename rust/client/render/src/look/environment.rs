@@ -10,7 +10,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
 
 /// The sun's direction and a pad (4); the Moon's direction and its light
-/// (4); the Moon's colour and a pad (4), the sun's being white; the stars'
+/// (4); the Moon's color and a pad (4), the sun's being white; the stars'
 /// fade, clock and the anchor's longitude (4); air (4); the stars' frame
 /// (12).
 pub const ENV_FLOATS: usize = ENV_STARS + ENV_STAR_FRAME_FLOATS;
@@ -46,7 +46,7 @@ pub fn write_env(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // Both lights, summed so the light does not snap where they cross at
     // dusk, each as it reaches the air, against a sun overhead at sea
     // level, which the shaders take as white (atmos_lut.wgsl
-    // `table_white`): the sun's is that white, the Moon's its colour.
+    // `table_white`): the sun's is that white, the Moon's its color.
     let sun_dir = v3::norm(&light.sun);
     let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
