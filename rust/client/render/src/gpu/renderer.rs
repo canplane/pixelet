@@ -130,10 +130,6 @@ pub struct FrameInput<'a> {
 /// to fall: in its radii over the sine of the sun's height.
 const SHADOW_RADII: f64 = 2.0;
 
-/// The sun's least height, its sine, an actor's shadow's reach is bounded
-/// at: under it the frame is drawn whole.
-const SHADOW_LEAST_SUN: f64 = 0.25;
-
 /// The texels beside a caster's that it changes, in the sun's map and,
 /// through a receiver's taps, on the screen: the map's filter, a slope's
 /// push and the normal's offset, with room (shadow.wgsl `sun_lit`).
@@ -757,8 +753,14 @@ impl Renderer {
     /// shadows grown by as far as a receiver's taps spread (`Region`); and
     /// in the sun's map, the texels the ones that cast cover, `[x, y,
     /// width, height]`, none where none casts. None at all where nothing
-    /// moved, or where they cannot be bounded: a shadow falling too far, or
-    /// a sphere about or behind the eye.
+    /// moved, or where they cannot be bounded: a shadow cast from a sun on or
+    /// under the horizon, or a sphere about or behind the eye. A shadow is
+    /// taken to fall on ground about level with the caster (`SHADOW_RADII`),
+    /// at any height of the sun. Ground falling away from the sun more
+    /// steeply, or a drop, takes the shadow's end past the region, where it
+    /// stays until a frame is drawn whole; how steeply it may fall shrinks
+    /// with the sun, about 10° at a sun 14.5° up and 7° at 10°. A region past
+    /// most of the screen is drawn whole (`Region::of`).
     fn regions(
         &self,
         moved: &[[f32; 5]],
@@ -772,7 +774,7 @@ impl Renderer {
         // A receiver's taps, the filter's and the normal's offset, in units.
         let spread = (f64::from(sun::SPREAD) + SHADOW_MARGIN) * self.shadow.texel;
         let casts = |s: &[f32; 5]| s[4] != 0.0 && sun.is_some();
-        if moved.iter().any(casts) && sun.is_some_and(|s| s[2] < SHADOW_LEAST_SUN) {
+        if moved.iter().any(casts) && sun.is_some_and(|s| s[2] <= 0.0) {
             return None;
         }
         let sphere = |s: &[f32; 5]| ([s[0], s[1], s[2]].map(f64::from), f64::from(s[3]));
