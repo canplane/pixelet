@@ -59,11 +59,21 @@ fn dives_under_roof() {
     assert_eq!(dive_to(Some(3.0), 2.2, 0.0), Some(2.2));
 }
 
+/// Short of straight down, wherever the climb stopped, it dives as well,
+/// on its own line.
+#[test]
+fn dives_slanted() {
+    let polar: f64 = 0.1;
+    let under = (8.0 - over(5.0)) / polar.cos() - NEAR;
+    let dist = dive_to(Some(3.0), 10.0, polar).unwrap();
+    assert!((dist - under).abs() < 1e-6);
+}
+
 #[test]
 fn dive_held_back() {
     // A zoom out.
     assert_eq!(dive_to(Some(3.0), 20.0, 0.0), None);
-    // Not straight down.
+    // A line that passes the roof by.
     assert_eq!(dive_to(Some(3.0), 10.0, 0.3), None);
     // Nothing over the pivot.
     assert_eq!(dive_to(None, 10.0, 0.0), None);
