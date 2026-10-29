@@ -93,8 +93,8 @@ pub fn words_at(at: EntryAt) -> Option<&'static str> {
     if let Some(d) = draft().filter(|d| d.at == at) {
         return Some(&d.words);
     }
-    let objects = crate::domain::layer::object::store::objects();
-    objects.words(&objects.read((at.zoom(), at.at())).placed()?)
+    let object = crate::domain::layer::object::store::object();
+    object.words(&object.read((at.zoom(), at.at())).placed()?)
 }
 
 /// The one waiting, which the markers draw.

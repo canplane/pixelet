@@ -15,7 +15,7 @@
 //! each frame the map is, as the eye's rays are (`SAMPLE`): nothing a cast
 //! established is kept for the next, so no policy says what still stands.
 
-use crate::cast::{Detail, Ends, Met, Ray};
+use crate::cast::{Detail, End, Met, Ray};
 use crate::param::sun::{SAMPLE, SPREAD};
 use crate::{axis, FRAC_W};
 use core::f32::consts::SQRT_2;
@@ -637,7 +637,7 @@ pub fn ray(eye: [i32; 3], s: &Sun, starts: &Starts, p: [u32; 2]) -> ([i32; 3], R
 /// along its ray, as a share of the box's depth, pushed back as its face's
 /// axis is (`Sun::bias`); the far plane, 1, where it stopped at nothing.
 pub fn depth<A>(s: &Sun, met: &Met<A>) -> f32 {
-    if met.ends != Ends::Stop {
+    if met.ends != End::Stop {
         return 1.0;
     }
     let d = met.stop.t / s.reach + axis(s.bias, met.stop.axis);
@@ -710,7 +710,7 @@ mod tests {
     }
 
     /// A walk that stopped `t` along its ray on a face across `axis`, or went on.
-    fn met(ends: Ends, t: f32, axis: u32) -> Met<()> {
+    fn met(ends: End, t: f32, axis: u32) -> Met<()> {
         let node = crate::cast::Node::ROOT;
         Met {
             ends,
@@ -744,9 +744,9 @@ mod tests {
     #[test]
     fn square_face_no_slope() {
         let s = down();
-        assert_eq!(depth(&s, &met(Ends::Stop, 2.0, 2)), 0.25);
-        assert_eq!(depth(&s, &met(Ends::On, 8.0, 0)), 1.0);
-        assert_eq!(depth(&s, &met(Ends::Lacks, 2.0, 2)), 1.0);
+        assert_eq!(depth(&s, &met(End::Stop, 2.0, 2)), 0.25);
+        assert_eq!(depth(&s, &met(End::On, 8.0, 0)), 1.0);
+        assert_eq!(depth(&s, &met(End::Lacks, 2.0, 2)), 1.0);
     }
 
     #[test]
@@ -766,7 +766,7 @@ mod tests {
             1.0,
         );
         let texel = 4.0 / 2048.0;
-        let d = depth(&s, &met(Ends::Stop, 2.0, 2));
+        let d = depth(&s, &met(End::Stop, 2.0, 2));
         assert!(
             (d - (0.25 + crate::param::sun::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
             "{d}"

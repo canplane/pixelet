@@ -33,7 +33,7 @@ pub fn width_byte(width: f64) -> u8 {
 }
 
 /// What a line over a column is and occupies there (pxl-spec-core way.rs).
-pub use pxl_spec_core::way::{Crossing, Occupies, Occupy};
+pub use pxl_spec_core::way::{Crossing, Occupancy, Occupy};
 
 /// What a line is, from the source's flags alone; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

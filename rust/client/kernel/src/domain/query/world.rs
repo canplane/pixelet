@@ -22,7 +22,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 #[derive(Clone, Copy)]
 pub struct World<'a> {
     pub(super) terrain: &'a TileCache<TerrainTile>,
-    pub(super) objects: &'a Store,
+    pub(super) object: &'a Store,
     /// Whether decor is struck, as the boxes it claims; else a ray passes
     /// through decor.
     pub(super) decor: bool,
@@ -40,8 +40,8 @@ impl World<'static> {
     /// The world as stored: what every mechanic asks, the pick, a walk, the
     /// camera's clearance, an edit's reads and decor's footing.
     pub fn now() -> World<'static> {
-        let objects: &'static Store = crate::domain::layer::object::store::objects();
-        World::new(TerrainTile::tile_cache(), objects)
+        let object: &'static Store = crate::domain::layer::object::store::object();
+        World::new(TerrainTile::tile_cache(), object)
     }
 
     /// As `now`, and decor is struck too, where the frame holds it: the
@@ -55,10 +55,10 @@ impl World<'static> {
 }
 
 impl<'a> World<'a> {
-    pub fn new(terrain: &'a TileCache<TerrainTile>, objects: &'a Store) -> World<'a> {
+    pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
         World {
             terrain,
-            objects,
+            object,
             decor: false,
             unplaced: false,
             hide: None,
@@ -120,16 +120,16 @@ impl<'a> World<'a> {
 #[derive(Default)]
 pub struct Walked {
     ground: Lines,
-    objects: Walk,
+    object: Walk,
 }
 
 impl World<'_> {
     /// Where the ground and what is placed stand in the node, as its cells
     /// at `cell` are read; each stepped from where `walked` last went.
     pub fn bounds(&self, walked: &mut Walked, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
-        let objects = self.objects.column(&mut walked.objects, node);
+        let object = self.object.column(&mut walked.object, node);
         self.terrain
             .bound_walked(&mut walked.ground, node, cell)
-            .map(|ground| ground.into_iter().chain(objects).reduce(Aabb::join))
+            .map(|ground| ground.into_iter().chain(object).reduce(Aabb::join))
     }
 }

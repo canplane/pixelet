@@ -87,14 +87,14 @@ impl Entry {
 }
 
 /// The placed objects, one store, the layer's own.
-static OBJECTS: Global<Store> = Global::new();
+static OBJECT: Global<Store> = Global::new();
 
-pub fn objects() -> &'static mut Store {
-    OBJECTS.get(Store::default)
+pub fn object() -> &'static mut Store {
+    OBJECT.get(Store::default)
 }
 
 pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
-    let regions = objects().write(writes);
+    let regions = object().write(writes);
     if !regions.is_empty() {
         note_written(&regions);
     }

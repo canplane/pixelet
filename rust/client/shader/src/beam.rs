@@ -7,7 +7,7 @@
 //! handed names (either.rs `Either`); and the words a line, a node and a
 //! sample are held in, every observer's.
 
-use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
+use pxl_spec_core::cast::{self, Detail, End, Met, Query, Until};
 use pxl_spec_core::world::Handed;
 use pxl_spec_core::{beam, observed, way};
 use spirv_std::glam::{IVec4, UVec3};
@@ -150,13 +150,13 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
 pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A>) {
     let stop = &met.stop;
     node_put(w, base + beam::SAMPLE_NODE, &stop.node);
-    if met.ends == Ends::On {
+    if met.ends == End::On {
         w.set(
             base + beam::SAMPLE_NODE + beam::NODE_ZOOM,
             beam::SAMPLE_NONE,
         );
     }
-    w.set(base + beam::SAMPLE_LACKS, (met.ends == Ends::Lacks) as u32);
+    w.set(base + beam::SAMPLE_LACKS, (met.ends == End::Lacks) as u32);
     w.set(base + beam::SAMPLE_ASSET, stop.asset[0]);
     w.set(base + beam::SAMPLE_ASSET + 1, stop.asset[1]);
     w.set(base + beam::SAMPLE_AXIS, stop.axis);

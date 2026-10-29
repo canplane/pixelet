@@ -21,7 +21,7 @@ use crate::cast::{add_count, enlist, pixel_tan, Rays};
 use crate::decor::Instances;
 use crate::eye::{eye_origin, eye_ray, Eye};
 use crate::observed::Seen;
-use crate::observer::{self, Aim, Level, Observer, Takes};
+use crate::observer::{self, Aim, Level, Observer, Take};
 use crate::world::World;
 
 /// The world's depth from the sun, a slot of the sun's clipmap each
@@ -458,9 +458,9 @@ pub fn sun_cs(
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = visibility.fetch(UVec3::new(p[0], p[1], 0));
     let (took, stop, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
-    if took == Takes::Sample {
+    if took == Take::Sample {
         let met = cast::Met {
-            ends: cast::Ends::Stop,
+            ends: cast::End::Stop,
             stop,
             visits: 0,
         };
@@ -469,7 +469,7 @@ pub fn sun_cs(
         unsafe { sun.write(slot, m.word(&aim, &met)) };
         return;
     }
-    if took == Takes::Sky {
+    if took == Take::Sky {
         // SAFETY: within the map, bounded by its size above.
         unsafe { sun.write(slot, m.sun.word(aim.detail, 1.0)) };
         return;

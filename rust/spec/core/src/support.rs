@@ -11,7 +11,7 @@
 //! top (`asset`). The CPU's and a GPU's alike, each over its own reading of
 //! the world (`cast::Query`).
 
-use crate::cast::{self, Detail, Ends, Keep, Met, Node, Query, Ray, Until, DEPTH};
+use crate::cast::{self, Detail, End, Keep, Met, Node, Query, Ray, Until, DEPTH};
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
 /// A descent's line: the node it ended at, by its index at its zoom, what
@@ -25,13 +25,13 @@ pub struct Line<A> {
 }
 
 /// A column's footing: its top as drawn at its cell zoom (`cast::top`),
-/// how the ray down ended — met (`Ends::Stop`), nothing it cannot see
+/// how the ray down ended — met (`End::Stop`), nothing it cannot see
 /// through (`On`) or a node not held (`Lacks`) — and the line it
 /// descended.
 #[derive(Clone, Copy)]
 pub struct Footing<A> {
     pub top: (i32, f32),
-    pub ends: Ends,
+    pub ends: End,
     pub line: Line<A>,
     origin: [i32; 3],
 }
@@ -66,7 +66,7 @@ pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
     let root = q.root(at);
     let mut f = Footing {
         top: (0, 0.0),
-        ends: Ends::On,
+        ends: End::On,
         line: Line {
             at,
             zoom: 0,
@@ -230,7 +230,7 @@ mod tests {
     #[test]
     fn footing_asset_is_worlds() {
         let f = footing(&mut Step, UNIT_ZOOM, [6, 3]);
-        assert_eq!(f.ends, Ends::Stop);
+        assert_eq!(f.ends, End::Stop);
         assert_eq!(f.top.0, -1, "the top of the cell under z = 0");
         for x in 2..10 {
             for y in 0..7 {
@@ -292,7 +292,7 @@ mod tests {
         let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
         let mut first = Kept(None, o);
         let met = cast::rooted(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
-        assert_eq!(met.ends, Ends::Stop);
+        assert_eq!(met.ends, End::Stop);
         let first = first.0.unwrap();
         same(&first, &line(&mut Step, first.zoom, first.at));
         for d in [
@@ -326,7 +326,7 @@ mod tests {
                     &Along(&first),
                     &mut kept,
                 );
-                assert_eq!(resumed.ends, Ends::Stop, "{d:?} {share}");
+                assert_eq!(resumed.ends, End::Stop, "{d:?} {share}");
                 let kept = kept.0.unwrap();
                 let walked = line(&mut Step, kept.zoom, kept.at);
                 same(&kept, &walked);

@@ -17,7 +17,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::layer::{Asks, Base};
+use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
 
@@ -35,7 +35,7 @@ pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * RECORD_BYTES;
 impl Base for DivisionTile {
     const STREAM: Stream = Stream::division;
     const LATTICE: Lattice = GROUND;
-    const ASKS: Asks = Asks::Line;
+    const ASK_SCOPE: AskScope = AskScope::Line;
     const LEAF: Zoom = DIVISION_LEAF;
 
     fn occupancy(&self) -> Occupancy {

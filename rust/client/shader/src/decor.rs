@@ -8,7 +8,7 @@
 //! `decor_place_cs`).
 
 use pxl_spec_core::answer::{self, In};
-use pxl_spec_core::cast::{Ends, Query};
+use pxl_spec_core::cast::{End, Query};
 use pxl_spec_core::decor::{Decor, COUNTS};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::lattice::GROUND;
@@ -83,7 +83,7 @@ impl Grounds for Growing<'_> {
 
     fn footing(&mut self, cell: u32, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool) {
         let f = support::footing(&mut Unplaced(&mut self.world), cell, g);
-        let (top, met) = (f.top, f.ends == Ends::Stop);
+        let (top, met) = (f.top, f.ends == End::Stop);
         (f, top, met)
     }
 

@@ -367,8 +367,8 @@ impl<'a> World<'a> {
             }
         };
         match from {
-            Some((from, n)) => self.objects.entries_under(&from[..n], &space, &mut visit),
-            None => self.objects.entries_in(&space, &mut visit),
+            Some((from, n)) => self.object.entries_under(&from[..n], &space, &mut visit),
+            None => self.object.entries_in(&space, &mut visit),
         }
     }
 

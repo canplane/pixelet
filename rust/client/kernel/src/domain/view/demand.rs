@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::earth::Earth;
-use crate::domain::layer::{Asks, Base};
+use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch::{answered, body, on_answer_settled, release, take_answered, Answered};
 use crate::sys::io::request::attempt_of;
@@ -227,7 +227,7 @@ impl<L: Observed> Demand<L> {
             crate::domain::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground)
         };
         if let Some(o) = o {
-            if matches!(L::ASKS, Asks::View) {
+            if matches!(L::ASK_SCOPE, AskScope::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
             }
             demand.sort_unstable_by_key(|p| key_of::<2>(p.zoom, p.at));
@@ -270,7 +270,7 @@ impl<L: Observed> Demand<L> {
                 ENOTRECOVERABLE,
                 *read.iter().max().unwrap_or(&0)
             );
-            if !matches!(L::ASKS, Asks::Line) {
+            if !matches!(L::ASK_SCOPE, AskScope::Line) {
                 self.floor.clear();
                 floor::floor(o, top, |p| {
                     self.floor.push(p);
@@ -307,7 +307,7 @@ impl<L: Observed> Demand<L> {
         }
         xpute_kit::ensure!(
             named
-                <= if matches!(L::ASKS, Asks::Floor) {
+                <= if matches!(L::ASK_SCOPE, AskScope::Floor) {
                     0
                 } else {
                     TileCache::<L>::DST_TILES + L::PINNED

@@ -24,7 +24,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::answer::{self, In, Kind};
 pub(super) use pxl_spec_core::cast::Until;
-use pxl_spec_core::cast::{self, Detail, Ends, Query, Spacing};
+use pxl_spec_core::cast::{self, Detail, End, Query, Spacing};
 use pxl_spec_core::support::{Footing, Line};
 
 /// The zooms a cell is asked at: no coarser than a tile draws and no finer
@@ -162,7 +162,7 @@ impl<'a> Query for Walker<'_, 'a> {
         // What is placed and where the ground stands about it, off what was
         // about its parent, while decor is struck there.
         if let Some((_, s)) = self.strike.as_mut() {
-            s.about.visit(&self.world.objects.lanes(), at.node);
+            s.about.visit(&self.world.object.lanes(), at.node);
             if t0 < s.held && s.about_zoom(zoom) == zoom {
                 s.about.read_columns(self.world, (zoom, [c[0], c[1]]));
             }
@@ -269,7 +269,7 @@ impl<'a> World<'a> {
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.reach as f32);
         let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
-        let met = (met.ends == Ends::Stop).then(|| self.hit(ray, q, met.stop));
+        let met = (met.ends == End::Stop).then(|| self.hit(ray, q, met.stop));
         let answer = match (met, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),
             (Some(h), Some(l), _) => Answer::Coarser(Some(h), l),
@@ -294,7 +294,7 @@ impl<'a> World<'a> {
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
         let f = pxl_spec_core::support::footing(&mut walker, cell, g);
-        let met = (f.ends == Ends::Stop).then_some(f.top);
+        let met = (f.ends == End::Stop).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
             (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),
@@ -348,7 +348,7 @@ impl<'a> World<'a> {
         normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
         let struck = match answer::is_placed(s.asset[0]) {
             true => self
-                .objects
+                .object
                 .placed(zoom, wrap_cell(zoom, c), s.at.handed.placed)
                 .map_or(Struck::Objects, |e| Struck::Object(e.id())),
             false => Struck::Ground,

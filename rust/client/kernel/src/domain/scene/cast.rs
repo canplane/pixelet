@@ -14,7 +14,7 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::kept::Offered;
 use crate::domain::layer::object::preview;
-use crate::domain::layer::object::store::objects;
+use crate::domain::layer::object::store::object;
 use crate::domain::layer::terrain::tile::kept;
 use crate::domain::layer::terrain::window::{self, Handed};
 use crate::domain::layer::Base as _;
@@ -73,7 +73,7 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
 /// revision the lanes were last handed at, so the GPU takes only those
 /// again where it holds that one (domain/layer/object/store.rs `gpu_lanes`).
 pub fn overwrites() -> Overwrites<'static> {
-    let l = objects().gpu_lanes();
+    let l = object().gpu_lanes();
     Overwrites {
         heap: l.heap,
         data: l.data,

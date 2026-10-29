@@ -71,7 +71,7 @@ fn form_from_surface() {
     };
     let no = [0, 0];
     let on = |c: Crossing, ground: i32, cpm: f32| way::occupies(&c, ground, cpm);
-    let at = |what: Occupy, span: [i32; 2]| Occupies {
+    let at = |what: Occupy, span: [i32; 2]| Occupancy {
         what,
         span,
         pier: [0, 0],

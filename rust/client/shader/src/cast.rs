@@ -4,7 +4,7 @@
 //! or the sky, and the rest walked (`miss_list_cs` over their list,
 //! `miss_cs` over every pixel where the list was full).
 
-use pxl_spec_core::cast::{self, Ends, Met};
+use pxl_spec_core::cast::{self, End, Met};
 use pxl_spec_core::{beam, observed, ray, support, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
@@ -13,7 +13,7 @@ use spirv_std::{spirv, Image};
 use crate::beam::Beams;
 use crate::eye::{grid, Eye};
 use crate::observed::{seen_at, seen_put, Lined, Seen};
-use crate::observer::{self, Observer, Takes};
+use crate::observer::{self, Observer, Take};
 use crate::world::{face_of, World};
 use crate::{add, most};
 
@@ -37,7 +37,7 @@ fn word<A: Copy>(
     steps: bool,
     faces: u32,
 ) -> [u32; ray::WORDS as usize] {
-    if met.ends != Ends::Stop {
+    if met.ends != End::Stop {
         return [0, 0, met.visits, 0];
     }
     let s = met.stop;
@@ -129,14 +129,14 @@ pub fn cast_cs(
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
-    if took == Takes::Sky {
+    if took == Take::Sky {
         write_ray(
             rays,
             id,
             word(
                 &ray,
                 Met {
-                    ends: Ends::On,
+                    ends: End::On,
                     stop: hit,
                     visits: if steps {
                         seen_at(
@@ -153,7 +153,7 @@ pub fn cast_cs(
         );
         return;
     }
-    if took == Takes::Sample {
+    if took == Take::Sample {
         // What lies about its face, the sample's, and the nodes the
         // sample's walk visited, which the steps view shows as this pixel's.
         let (faces, visits) = (
@@ -167,7 +167,7 @@ pub fn cast_cs(
             word(
                 &ray,
                 Met {
-                    ends: Ends::Stop,
+                    ends: End::Stop,
                     stop: hit,
                     visits,
                 },

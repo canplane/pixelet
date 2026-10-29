@@ -5,7 +5,7 @@
 
 use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::area::Area;
-use pxl_spec_core::cast::{self, Ends, Met, Query};
+use pxl_spec_core::cast::{self, End, Met, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
 use pxl_spec_core::window::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL};
@@ -234,7 +234,7 @@ impl<L: Looks> World<'_, L> {
         met: &Met<A>,
         line: impl FnOnce(&mut Self, u32, [i32; 3]) -> support::Line<Handed>,
     ) -> u32 {
-        if met.ends != Ends::Stop {
+        if met.ends != End::Stop {
             return 0;
         }
         if answer::kept(met.stop.asset[0]) < answer::EIGHTHS {

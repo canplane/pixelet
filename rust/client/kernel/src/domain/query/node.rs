@@ -79,7 +79,7 @@ impl World<'_> {
     /// What is placed as of now: the objects' store's revision, which every
     /// write moves (domain/layer/object/store.rs).
     pub fn revision(&self) -> u32 {
-        self.objects.revision()
+        self.object.revision()
     }
 
     /// What is in the cell `node`, X on the asker's lap, at its own
@@ -97,7 +97,7 @@ impl World<'_> {
             handed: if self.unplaced {
                 world::Handed::unplaced(node)
             } else {
-                world::Handed::of(&self.objects.lanes(), node)
+                world::Handed::of(&self.object.lanes(), node)
             },
         }
     }
@@ -132,7 +132,7 @@ impl World<'_> {
         let node = (zoom + 1, child_of(c, k));
         At {
             node,
-            handed: at.handed.child(&self.objects.lanes(), pool(), node),
+            handed: at.handed.child(&self.object.lanes(), pool(), node),
         }
     }
 
@@ -153,7 +153,7 @@ impl World<'_> {
         lines: &mut Lines,
     ) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (
-            self.objects.lanes(),
+            self.object.lanes(),
             [self.cut(self.carve), self.cut(self.hide)],
         );
         let mut reading = Reading::new(self, lines);

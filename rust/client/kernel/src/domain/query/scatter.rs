@@ -37,7 +37,7 @@ impl<'a, 'w> Asked<'a, 'w> {
         Asked {
             world,
             unplaced: world.unplaced(),
-            lanes: world.objects.lanes(),
+            lanes: world.object.lanes(),
         }
     }
 }

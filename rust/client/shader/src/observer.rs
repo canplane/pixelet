@@ -295,7 +295,7 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
 /// visible sample, the sky, or a walk of its own.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
-pub(crate) enum Takes {
+pub(crate) enum Take {
     Sample,
     Sky,
     Walk,
@@ -312,11 +312,11 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
     at: O::At,
     aim: &Aim,
     visible: u32,
-) -> (Takes, cast::Stop<u32>, u32) {
+) -> (Take, cast::Stop<u32>, u32) {
     if visible != 0 && visible & raster::LACK == 0 {
         let (stop, k, enters) = took(o, w, aim, visible);
         if enters {
-            return (Takes::Sample, stop, k);
+            return (Take::Sample, stop, k);
         }
     }
     let none = cast::Stop {
@@ -327,9 +327,9 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
         asset: [0; 2],
     };
     if visible == 0 && sky(o, w, at) {
-        (Takes::Sky, none, 0)
+        (Take::Sky, none, 0)
     } else {
-        (Takes::Walk, none, 0)
+        (Take::Walk, none, 0)
     }
 }
 

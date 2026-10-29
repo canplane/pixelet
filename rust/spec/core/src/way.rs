@@ -405,7 +405,7 @@ pub enum Occupy {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Occupies {
+pub struct Occupancy {
     pub what: Occupy,
     pub span: [i32; 2],
     pub pier: [i32; 2],
@@ -414,7 +414,7 @@ pub struct Occupies {
 /// What `c` occupies over ground `ground` leaf cells high, `per_m` leaf
 /// cells a ground meter: all the surface sweeps across the column, so a slab
 /// or a bore steps down to the next column's without a gap however steep.
-pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
+pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
     let (low, top) = (libm::rintf(c.low) as i32, libm::rintf(c.top) as i32);
     let none = [0, 0];
     match c.form {
@@ -425,29 +425,29 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
             } else {
                 none
             };
-            Occupies {
+            Occupancy {
                 what: Occupy::Over,
                 span: [lo, top],
                 pier,
             }
         }
-        TUNNEL => Occupies {
+        TUNNEL => Occupancy {
             what: Occupy::Under,
             span: [low, top + c.clear as i32],
             pier: none,
         },
         // a way on the ground moves the ground with it: filled up to it, cut down to it
-        _ if top > ground => Occupies {
+        _ if top > ground => Occupancy {
             what: Occupy::Over,
             span: [ground, top],
             pier: none,
         },
-        _ if top < ground => Occupies {
+        _ if top < ground => Occupancy {
             what: Occupy::Under,
             span: [low, ground],
             pier: none,
         },
-        _ => Occupies {
+        _ => Occupancy {
             what: Occupy::Grade,
             span: none,
             pier: none,
@@ -605,14 +605,14 @@ pub(crate) const AIR_OF: u32 = 0x80;
 /// over its way's look), over `run`; and a pier (`PIER`) over `pier`,
 /// empty where none stands. `NOTHING` where it writes none.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Writes {
+struct Write {
     run: [i32; 2],
     value: u32,
     pier: [i32; 2],
 }
 
-impl Writes {
-    const NONE: Writes = Writes {
+impl Write {
+    const NONE: Write = Write {
         run: [0, 0],
         value: NOTHING,
         pier: [0, 0],
@@ -623,19 +623,19 @@ impl Writes {
 /// the next visit starts: a visit of a look that grounds, as what it
 /// occupies over the column's face `face`, `per_m` leaf cells a meter, its
 /// pier where one stands.
-fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Writes, u32) {
+fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
     let (x, next) = visit(cols, c, k);
     if !x.is() || !Ground::grounds(x.kind) {
-        return (Writes::NONE, next);
+        return (Write::NONE, next);
     }
     let o = occupies(&x, face, per_m);
     let w = match o.what {
-        Occupy::Under => Writes {
+        Occupy::Under => Write {
             run: o.span,
             value: AIR_OF | x.kind,
             pier: [0, 0],
         },
-        Occupy::Over => Writes {
+        Occupy::Over => Write {
             run: o.span,
             value: x.kind,
             pier: if empty(o.pier) {
@@ -645,7 +645,7 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) 
             },
         },
         // An approach's look, laid into the cells by the bake (pxl-spec bake/way.rs `lay`).
-        Occupy::Grade => Writes::NONE,
+        Occupy::Grade => Write::NONE,
     };
     (w, next)
 }

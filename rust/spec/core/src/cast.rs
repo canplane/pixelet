@@ -569,7 +569,7 @@ pub struct Stop<A> {
 /// not held, past which it tells nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum Ends {
+pub enum End {
     Stop,
     On,
     Lacks,
@@ -580,7 +580,7 @@ pub enum Ends {
 /// ray's steps the CPU and a GPU both report.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Met<A> {
-    pub ends: Ends,
+    pub ends: End,
     pub stop: Stop<A>,
     pub visits: u32,
 }
@@ -814,7 +814,7 @@ pub fn walk<Q: Query>(
                     < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
             };
             let ends = match i.kind {
-                Kind::Lacks => Ends::Lacks,
+                Kind::Lacks => End::Lacks,
                 // A cell keeping less than its cube is the box its share
                 // fills (`kept_bounds`): an eye's ray stops where it enters
                 // the box and passes it as air where it misses; a beam ray
@@ -832,9 +832,9 @@ pub fn walk<Q: Query>(
                     );
                     near = [bx.0, by.0, bz.0];
                     if b1 > b0 {
-                        Ends::Stop
+                        End::Stop
                     } else {
-                        Ends::On
+                        End::On
                     }
                 }
                 Kind::Cell
@@ -844,9 +844,9 @@ pub fn walk<Q: Query>(
                         Until::Beam => !transparent(i.asset[0]),
                     } =>
                 {
-                    Ends::Stop
+                    End::Stop
                 }
-                Kind::Cell => Ends::On,
+                Kind::Cell => End::On,
                 // A beam ray passes whole a split whose box it clears by
                 // `2√2` of the grid's width there, as the grid's rays about
                 // it clear it too; else it stops at one it may not share with
@@ -860,9 +860,9 @@ pub fn walk<Q: Query>(
                     let meets = meets_box(NARROW * width);
                     into = meets && !narrow;
                     if meets && narrow {
-                        Ends::Stop
+                        End::Stop
                     } else {
-                        Ends::On
+                        End::On
                     }
                 }
                 // A span wholly out of the box, or touching it alone, meets
@@ -871,10 +871,10 @@ pub fn walk<Q: Query>(
                 // stop is where that span begins.
                 Kind::Split => {
                     into = until == Until::Transparent || meets_box(0.0);
-                    Ends::On
+                    End::On
                 }
             };
-            if ends != Ends::On {
+            if ends != End::On {
                 // Where the walk ends, its stop, made there and nowhere else:
                 // where the ray enters the node, or its asset's box
                 // (`entered`).
@@ -932,7 +932,7 @@ pub fn walk<Q: Query>(
                     asset: AIR,
                 };
                 let met = Met {
-                    ends: Ends::On,
+                    ends: End::On,
                     stop,
                     visits,
                 };
@@ -1131,7 +1131,7 @@ mod tests {
     fn ray_stops_at_entry() {
         // An eighth kept is a box half the side, a quarter in from each face.
         let met = along(1, 0.5, 0.5);
-        assert_eq!(met.ends, Ends::Stop);
+        assert_eq!(met.ends, End::Stop);
         assert!((met.stop.t - 5.25).abs() < 1e-5, "{}", met.stop.t);
         assert_eq!(met.stop.axis, 0);
         // Whole, the cube's face.
@@ -1193,12 +1193,7 @@ mod tests {
             box_word([0, 0, 512], [1024; 3]),
         ] {
             let met = walk(missed);
-            assert_eq!(
-                (met.ends, met.visits),
-                (Ends::On, 1),
-                "{:?}",
-                box_of(missed)
-            );
+            assert_eq!((met.ends, met.visits), (End::On, 1), "{:?}", box_of(missed));
         }
         assert!(walk(box_word([0; 3], [512; 3])).visits > 1);
         // An edge that is not a half: the origin lies in the root's first
@@ -1250,10 +1245,10 @@ mod tests {
     #[test]
     fn ray_beside_box_passes() {
         let met = along(1, 0.1, 0.5);
-        assert_eq!(met.ends, Ends::On);
+        assert_eq!(met.ends, End::On);
         let met = along(4, 0.5, 0.05);
-        assert_eq!(met.ends, Ends::On);
+        assert_eq!(met.ends, End::On);
         // The whole cube stops it there.
-        assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, Ends::Stop);
+        assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Stop);
     }
 }

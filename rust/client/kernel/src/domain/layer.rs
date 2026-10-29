@@ -29,7 +29,7 @@ pub use query::Query;
 
 /// What a layer asks for of the view.
 #[derive(Clone, Copy)]
-pub enum Asks {
+pub enum AskScope {
     /// The floor alone.
     Floor,
     /// A line alone, the division layer's pivot's (`division::line`).
@@ -55,7 +55,7 @@ pub trait Base: Clone + 'static {
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
     /// What it asks of the view; its tile cache is sized so.
-    const ASKS: Asks = Asks::View;
+    const ASK_SCOPE: AskScope = AskScope::View;
 
     /// The coarsest zoom the layer's own source supplies whole, where one
     /// differs from the ground's declared top (sys/io/source.rs `top`). Its floor is

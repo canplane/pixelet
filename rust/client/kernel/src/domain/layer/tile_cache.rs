@@ -21,7 +21,7 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::demand::reach_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::domain::layer::{Asks, Base};
+use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Ask;
 
 /// Only the eye. Another point observer would add its own misses.
@@ -84,7 +84,7 @@ pub struct TileCache<L: Base> {
 }
 
 /// What a layer's tile cache holds at once, from what it asks for. A layer
-/// holds only what it asks for (`Base::ASKS`).
+/// holds only what it asks for (`Base::ASK_SCOPE`).
 impl<L: Base> TileCache<L> {
     /// The zooms the layer's pyramid holds, its leaves to the coarsest it is read at.
     pub const ZOOMS: u32 = (L::LEAF - L::COARSEST + 1);
@@ -95,14 +95,14 @@ impl<L: Base> TileCache<L> {
     /// The most of its tiles a zoom's demand names, by its lattice.
     pub const ZOOM_DEMAND_TILES: u32 = reach_tiles(L::LATTICE);
 
-    const DEMAND_TILES: u32 = if matches!(L::ASKS, Asks::View) {
+    const DEMAND_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
         OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS
     } else {
         0
     };
 
     /// The lines over the misses, every zoom's but the finest.
-    const ANCESTOR_TILES: u32 = if matches!(L::ASKS, Asks::View) {
+    const ANCESTOR_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
         OBSERVERS * Self::ZOOM_DEMAND_TILES * (Self::ZOOMS - 1)
     } else {
         0
@@ -110,10 +110,10 @@ impl<L: Base> TileCache<L> {
 
     /// Held hard apart from the view: the floor, a destination's line, and
     /// what a reader that cannot take a coarser answer declares (`Base::PINNED`).
-    const PINNED_TILES: u32 = match L::ASKS {
-        Asks::Floor => floor::tiles(L::LATTICE),
-        Asks::Line => Self::DST_TILES + L::PINNED,
-        Asks::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PINNED,
+    const PINNED_TILES: u32 = match L::ASK_SCOPE {
+        AskScope::Floor => floor::tiles(L::LATTICE),
+        AskScope::Line => Self::DST_TILES + L::PINNED,
+        AskScope::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PINNED,
     };
 
     /// What is held hard at most.
@@ -122,7 +122,7 @@ impl<L: Base> TileCache<L> {
     /// A slot for a tile nothing holds hard to land in. The floor alone holds
     /// every tile it asks for hard, and asks for at most `floor::tiles`, so a
     /// tile it asks for finds a slot free or held only as cache.
-    const WORKSPACE: u32 = matches!(L::ASKS, Asks::View) as u32;
+    const WORKSPACE: u32 = matches!(L::ASK_SCOPE, AskScope::View) as u32;
 
     /// Convergence: the misses and their lines share each zoom's ring, so a tile
     /// the view reads never gives up another the view reads.

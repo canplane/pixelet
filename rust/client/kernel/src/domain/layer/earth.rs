@@ -17,7 +17,7 @@ use xpute_guest::mem::heap::Block;
 
 use crate::domain::layer::kept::{Kept, Offered};
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::layer::{Asks, Base};
+use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -31,7 +31,7 @@ static EARTH: Global<TileCache<Earth>> = Global::new();
 impl Base for Earth {
     const STREAM: Stream = Stream::earth;
     const LATTICE: Lattice = GROUND;
-    const ASKS: Asks = Asks::Floor;
+    const ASK_SCOPE: AskScope = AskScope::Floor;
     const TOP: Option<Zoom> = Some(EARTH_ZOOM);
 
     /// Only the top zoom is baked: no child is a tile.

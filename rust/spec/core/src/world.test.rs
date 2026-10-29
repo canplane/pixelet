@@ -4,7 +4,7 @@ extern crate std;
 
 use super::*;
 use crate::area::Area;
-use crate::cast::{Ends, Query};
+use crate::cast::{End, Query};
 use crate::cube::ground::stone;
 use crate::fill::{column_of, laid_of, level_of, put, root_of, Fresh};
 use crate::ground::Bounds;
@@ -337,7 +337,7 @@ fn footing_without_bound() {
         ];
         let (a, b) = (footing(&mut was, CELL, g), footing(&mut is, CELL, g));
         assert_eq!((a.top, a.ends), (b.top, b.ends), "{g:?}");
-        stops += (a.ends == Ends::Stop) as u32;
+        stops += (a.ends == End::Stop) as u32;
         for d in 0..27 {
             let c = [g[0] + d % 3 - 1, g[1] + d / 3 % 3 - 1, a.top.0 + d / 9 - 1];
             assert_eq!(

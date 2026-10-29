@@ -17,7 +17,7 @@ use pxl_spec::bake::constant::EntryAt;
 impl<'a> World<'a> {
     /// What is placed at exactly `at`, air left out.
     pub fn placed(&self, at: EntryAt) -> Option<Entry> {
-        self.objects
+        self.object
             .read((at.zoom(), at.at()))
             .placed()
             .filter(|e| !is_air(e.state))
@@ -26,7 +26,7 @@ impl<'a> World<'a> {
     /// Everything placed whose cube meets `space`, air left out, X in
     /// `space`'s frame.
     pub fn placed_in(&self, space: &Aabb, visit: &mut dyn FnMut(&Entry)) {
-        self.objects.entries_in(space, &mut |e| {
+        self.object.entries_in(space, &mut |e| {
             if !is_air(e.state) {
                 visit(e);
             }
@@ -37,14 +37,14 @@ impl<'a> World<'a> {
     /// a dig cut finer is held as finely as a cube.
     pub(super) fn finest_in(&self, space: &Aabb) -> Option<Zoom> {
         let mut finest = None;
-        self.objects
+        self.object
             .entries_in(space, &mut |e| finest = finest.max(Some(e.zoom)));
         finest
     }
 
     /// A marker's words, as put up; none for anything else.
     pub fn words(&self, e: &Entry) -> Option<&'a str> {
-        self.objects.words(e)
+        self.object.words(e)
     }
 
     /// What is placed whose own room shares `space`, air left out, that
@@ -56,7 +56,7 @@ impl<'a> World<'a> {
             max: space.max,
         };
         let mut met = None;
-        self.objects.entries_in(&around, &mut |e| {
+        self.object.entries_in(&around, &mut |e| {
             if met.is_none()
                 && !is_air(e.state)
                 && which(e)

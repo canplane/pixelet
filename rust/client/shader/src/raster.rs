@@ -6,7 +6,7 @@
 //! reads each pixel's visible sample off; and what lies about each box's face
 //! asked once a box (`face_cs`).
 
-use pxl_spec_core::cast::{Ends, Met, Stop};
+use pxl_spec_core::cast::{End, Met, Stop};
 use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
@@ -183,7 +183,7 @@ pub fn face_cs(
         let (origin, _) = eye_origin(eye);
         let ray = eye_ray(eye, g.sample(sample));
         let met = Met {
-            ends: Ends::Stop,
+            ends: End::Stop,
             stop: Stop {
                 t: 0.0,
                 axis: seen_at(beams, k + beam::SAMPLE_AXIS),
