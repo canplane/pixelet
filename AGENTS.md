@@ -3,10 +3,11 @@
 - Each skill has one role, stated in its description. A new rule goes into the
   skill whose role it is, or into a new skill, never into one it is merely
   related to.
-- The skills are in `.agents/skills/`: `cargo` (running cargo),
-  `write-documents` (documents people read), `deploy` (checking once and
-  sending), and `bake-tiles`, `publish-bucket` and `device-build` (tiles, the
-  bucket, devices). Read the skill for a step before taking it.
+- The skills are in `.agents/skills/`: `cargo` (running cargo), `naming`
+  (choosing and spelling a name), `write-documents` (documents people read),
+  `deploy` (checking once and sending), and `bake-tiles`, `publish-bucket` and
+  `device-build` (tiles, the bucket, devices). Read the skill for a step before
+  taking it.
 - The agents are in `.agents/agents/`: `review` reviews a change. It is
   read-only and is handed the code, not its author's
   conclusions.
