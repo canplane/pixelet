@@ -22,7 +22,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   if (at.x >= 0 && pack4x8unorm(textureLoad(nearest, at, 0)) != marker_number(ii)) {
     o.clip = NOWHERE;
   }
-  let k = ii * 11u;
+  let k = ii * MARKER_INSTANCE_FLOATS;
   let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
   o.uv = vec2f(mix(rect.x, rect.z, p.across), mix(rect.w, rect.y, p.q.y + 0.5));
   o.upright_z = p.upright_z;

@@ -8,10 +8,13 @@ fn rim(n: vec3f, world_pos: vec3f) -> f32 {
   return pow(1.0 - max(dot(n, view_dir), 0.0), LIGHT_RIM_POWER) * frame_rim_intensity();
 }
 
-// `open` scales all of the light, the sun's too: over the sky's light alone
-// a corner went unmarked in the sun.
+// The shadow and the occlusion are both visibility, each of its own light
+// (atmos_light.wgsl `surface_light_in`): one rule for one kind of thing. Gray
+// occlusion over all the light dimmed the direct sun too, which a warm tint
+// once made up for; a fixed tint is wrong under a sunset, the Moon or the
+// night, and with the sun left alone the warmth in a corner is the light's.
 // Opaque to the drawn edge: where ground is drawn, the Earth's picture never shows through it.
-fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen: Seen) -> vec3f {
-  let color = albedo * surface_light_in(n, up_at(world_pos), lit, seen.light, lights_now()) * open * (1.0 + rim(n, world_pos));
+fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: f32, seen: Seen) -> vec3f {
+  let color = albedo * surface_light_in(n, up_at(world_pos), lit, open, seen.light, lights_now()) * (1.0 + rim(n, world_pos));
   return color * seen.through + seen.scattered;
 }

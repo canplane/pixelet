@@ -1,23 +1,12 @@
 // Shared by the AO passes: N8AO 1.10.1 (CC0) ported to WGSL and reversed depth,
 // at its "performance" settings. Everything is in view space.
 
-struct Ao {
-  proj: mat4x4f,
-  inv_proj: mat4x4f,
-  half: vec2f,
-  _p0: vec2f,
-};
-
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process. The screen's size and the fog are the frame's.
 @group(0) @binding(6) var<uniform> ao_words: array<vec4f, AO_VEC4S>;
 
-fn ao_proj() -> mat4x4f { return mat4x4f(ao_words[0], ao_words[1], ao_words[2], ao_words[3]); }
-fn ao_inv_proj() -> mat4x4f { return mat4x4f(ao_words[4], ao_words[5], ao_words[6], ao_words[7]); }
-fn ao_half() -> vec2f { return ao_words[8].xy; }
-
-// The blue-noise texture's side; a pixel reads it tiled.
-const AO_NOISE_MASK: i32 = 127;
+// The blue-noise texture's side less one; a pixel reads it tiled.
+const AO_NOISE_MASK: i32 = i32(AO_NOISE_SIDE) - 1;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

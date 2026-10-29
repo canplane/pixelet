@@ -12,7 +12,7 @@ use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_guest::mem::off_of_slice;
 
 use crate::sys::io::host::{offer, turn};
-use crate::sys::io::host_spec::op;
+use crate::sys::io::host_spec::{op, LAYOUT, LAYOUT_ANSWER, LINE, RASTER};
 use xpute_guest::global::Global;
 
 /// (weight, px bits, max width bits; 0 for one line, text).
@@ -78,14 +78,14 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     let Some(answer) = t.layouts.get_mut(&key) else {
         // No more lines than characters, and one for an empty text.
         let lines = text_in.chars().count().max(1) as u32;
-        let mut at = vec![0u32; 1 + 2 * lines as usize].into_boxed_slice();
-        let args = [
-            font.weight,
-            font.px.to_bits(),
-            (max_width as f32).to_bits(),
-            off_of_slice(&raw mut *at) as u32,
-            lines,
-        ];
+        let mut at =
+            vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize].into_boxed_slice();
+        let mut args = [0u32; LAYOUT::WORDS as usize];
+        args[LAYOUT::weight as usize] = font.weight;
+        args[LAYOUT::px as usize] = font.px.to_bits();
+        args[LAYOUT::max_width as usize] = (max_width as f32).to_bits();
+        args[LAYOUT::at as usize] = off_of_slice(&raw mut *at) as u32;
+        args[LAYOUT::lines as usize] = lines;
         match offer(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
             None => return Some(unlaid(text_in)),
             Some(false) => return None,
@@ -110,15 +110,18 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
         .as_chunks::<{ LINE::WORDS as usize }>()
         .0;
-    let cnt = answer.at[LAYOUT_ANSWER::cnt as usize] as usize;
-    let mut lines = Vec::with_capacity(cnt.min(pairs.len()));
+    let count = answer.at[LAYOUT_ANSWER::count as usize] as usize;
+    let mut lines = Vec::with_capacity(count.min(pairs.len()));
     let mut start = 0;
-    for pair in pairs.iter().take(cnt) {
+    for pair in pairs.iter().take(count) {
         let (end, width) = (
             pair[LINE::end as usize] as usize,
             f32::from_bits(pair[LINE::width as usize]) as f64,
         );
-        if cnt > pairs.len() || end < start || !text_in.is_char_boundary(end) || !width.is_finite()
+        if count > pairs.len()
+            || end < start
+            || !text_in.is_char_boundary(end)
+            || !width.is_finite()
         {
             return Some(unlaid(text_in));
         }
@@ -155,12 +158,12 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     let advance = text_width(font, text_in)? as f32;
     let (size, origin) = raster_box(font, advance);
     let scale = SHEET_SCALE as f32;
-    let mut px = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
+    let mut pixels = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
     let mut args = [0u32; RASTER::WORDS as usize];
     args[RASTER::weight as usize] = font.weight;
     args[RASTER::px as usize] = (font.px * scale).to_bits();
     args[RASTER::color as usize] = color;
-    args[RASTER::at as usize] = off_of_slice(&raw mut *px) as u32;
+    args[RASTER::at as usize] = off_of_slice(&raw mut *pixels) as u32;
     args[RASTER::width as usize] = size[0];
     args[RASTER::height as usize] = size[1];
     args[RASTER::x as usize] = origin[0].to_bits();

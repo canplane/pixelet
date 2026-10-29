@@ -8,8 +8,6 @@
 /// A draw's uniform (frame/draw.rs): its translation and what its pipeline
 /// reads past it.
 pub const DRAW_FLOATS: usize = 8;
-/// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs).
-pub const AO_FLOATS: usize = 36;
 
 /// What a uniform's field is to the shader that reads it off the vec4s.
 #[derive(Clone, Copy)]
@@ -127,8 +125,8 @@ uniform! {
 pub const SKY_FLOATS: usize = floats(sky::FIELDS);
 
 uniform! {
-    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 8 to 10 and
-    /// 35 are free.
+    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 8 to 10 are
+    /// free.
     atmos {
         RAYLEIGH_SCATTERING: Vec3 = 0,
         BOTTOM_RADIUS: F32 = 3,
@@ -153,6 +151,9 @@ uniform! {
         MOON_LIGHT: F32 = 31,
         /// As it reaches the air, against the sun's white.
         MOON_COLOR: Vec3 = 32,
+        /// Where the eye's rays end, in units (pxl-spec-core `eye::REACH`):
+        /// past it the land is the Earth's picture whole.
+        DRAWN: F32 = 35,
         /// Lights the ground, never drawn: drawn, the sky went pale blue.
         NIGHT_SKY: Vec3 = 36,
         /// The Earth's face under the eye: at sea level the terrain floated on it.
@@ -176,7 +177,7 @@ uniform! {
         /// How much of the clouds the kernel shows (pxl-kernel
         /// domain/scene/environment/cloud.rs `clouds_shown`).
         SHOWN: F32 = 0,
-        /// How far the eye observes, in km: past it no sheet is drawn.
+        /// How far the eye draws, in km: past it no sheet is drawn.
         REACH: F32 = 1,
         /// The lattice's units around; the cells the wind has moved it
         /// under the map; the field's lattice unit the eye is over and its
@@ -220,7 +221,7 @@ uniform! {
         VIEW: Mat4 = 0,
         PROJ: Mat4 = 16,
         TRANSLATION: Vec3 = 32,
-        PX_PER_UNIT: F32 = 35,
+        PX_K: F32 = 35,
         BEFORE: F32 = 36,
     }
 }
@@ -233,7 +234,7 @@ pub const MARKER_INSTANCE_FLOATS: u32 = 11;
 pub const PUCK_ZONE_INSTANCE_FLOATS: u32 = 8;
 
 /// A star's record as the sky reads it (gpu/star.rs, star.wgsl): its
-/// direction and flux, then its color and a pad.
+/// direction and flux, then its colour and a pad.
 pub const STAR_RECORD_FLOATS: usize = 8;
 
 /// The raster's view's words (gpu/ray/raster.rs, raster.wgsl `Raster`),
@@ -274,12 +275,14 @@ pub const BOX_XY_STEPS: u32 = 256;
 pub const BOX_VERTICES: u32 = 36;
 
 /// The uniforms whose fields are stated here.
-pub const UNIFORMS: [(&str, &[Field]); 5] = [
+pub const UNIFORMS: [(&str, &[Field]); 7] = [
     (frame::NAME, frame::FIELDS),
     (sky::NAME, sky::FIELDS),
     (atmos::NAME, atmos::FIELDS),
     (clouds::NAME, clouds::FIELDS),
     (stars::NAME, stars::FIELDS),
+    (ao::NAME, ao::FIELDS),
+    (marker::NAME, marker::FIELDS),
 ];
 
 /// The cloud sheets' tile (gpu/cloud.rs), one fetch a pixel and a mip chain
@@ -325,3 +328,7 @@ pub const NO_SLOT: u32 = (1 << SLOT_BITS) - 1;
 pub const IMAGE_TOP: u32 = 0;
 pub const IMAGE_SIDE: u32 = 1;
 pub const IMAGE_BOTTOM: u32 = 2;
+
+#[cfg(test)]
+#[path = "word.test.rs"]
+mod test;

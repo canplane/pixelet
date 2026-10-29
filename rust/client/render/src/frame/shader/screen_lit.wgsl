@@ -21,7 +21,7 @@ fn fs(v: VertexOut) -> FragOut {
     // the lit pixel is drawn at (`behind`), so what is laid on the face shows
     // as it does there.
     let far = d * bitcast<f32>(eye_word(EYE_REACH));
-    let at = select(far, h.at * (1.0 + behind(h, px_steps(a, size, h))), met);
+    let at = select(far, h.at * (1.0 + behind(h, pixel_steps(a, size, h))), met);
     let clip = frame_view_proj() * vec4f(at, 1.0);
     var o: FragOut;
     // The nodes asked, the third word in this view; none where the pixel
@@ -66,8 +66,8 @@ fn fs(v: VertexOut) -> FragOut {
 // finer than its threshold.
 //
 // A world's cell spans (1, 2] of the view's cells at its distance
-// (pxl-spec-core grid.rs `cell_at`, `CELLS_A_RADIAN` sides its split
-// distance), so its share of a cell squared is within (1, 4]: green there,
+// (pxl-spec-core grid.rs `cell_at`, `CELLS_A_RADIAN` / 2 sides its
+// split distance), so its share of a cell squared is within (1, 4]: green there,
 // finer blue, coarser red (debug_look.json `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   if (frame_gizmo() < 0.5) {

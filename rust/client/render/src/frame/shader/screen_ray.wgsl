@@ -221,8 +221,8 @@ fn footprint(p: mat2x3f) -> vec3f {
 // cosine of the ray off the forward axis, and a cell observed there spans
 // at least that cell (the eye decides): the step is at most `SNAP / cos` of
 // a cell, under one for any field of view short of 150°, however edge on
-// the face is seen. `BEHIND` adds 2^-14 of the distance, where a cell is a
-// thousandth of it.
+// the face is seen. `BEHIND` adds 2^-14 of the distance, where a cell is at
+// least 1/96 of it (pxl-spec-core `grid::CELL`).
 fn behind(h: Hit, p: mat2x3f) -> f32 {
   let f = eye_vec3(EYE_FORWARD);
   return BEHIND + SNAP * max(abs(dot(p[0], f)), abs(dot(p[1], f))) / dot(h.at, f);
@@ -240,7 +240,7 @@ fn occlusion_of(d: f32) -> f32 {
 // corners leave it to the light.
 struct Creases {
   edge: f32,
-  open: vec3f,
+  open: f32,
 };
 
 // Off the face's own bits (pxl-spec-core `face`), edge `k` +u, -u, +v, -v
@@ -250,19 +250,19 @@ struct Creases {
 // every size side by side show one line and perspective alone thins it far
 // off (`line_at`). The closing in: each edge a cell rises across, and each
 // corner one rises across alone, takes its share of what the last left,
-// over a cell, tinted warm.
+// over a cell.
 fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
   if (frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) {
-    return Creases(0.0, vec3f(1.0));
+    return Creases(0.0, 1.0);
   }
   let u = (h.axis + 1u) % 3u;
   let v = (h.axis + 2u) % 3u;
   let l = (h.at - h.corner) / h.side;
-  // Each edge: how far it is, in cells, and the units a drawn px spans
+  // Each edge: how far it is, in cells, and the units a drawn pixel spans
   // toward it.
   let to = vec4f(1.0 - l[u], l[u], 1.0 - l[v], l[v]);
-  let px = max(footprint(p), vec3f(1e-9));
-  let across = vec4f(px[u], px[u], px[v], px[v]);
+  let pixel = max(footprint(p), vec3f(1e-9));
+  let across = vec4f(pixel[u], pixel[u], pixel[v], pixel[v]);
   var edge = 0.0;
   var open = 1.0;
   for (var k = 0u; k < 4u; k++) {
@@ -279,7 +279,7 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
     }
   }
   let k = frame_corner_ao() * (1.0 - open);
-  return Creases(edge, (1.0 - k) * mix(vec3f(1.0), AO_TINT, k));
+  return Creases(edge, 1.0 - k);
 }
 
 // The face's texture coordinate: the world's pos, one repeat a unit.

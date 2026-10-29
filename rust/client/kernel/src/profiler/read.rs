@@ -13,7 +13,7 @@ use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::profiler::frame::FrameSample;
-use crate::profiler::frame::{is_missed, long, overran, unmeasured};
+use crate::profiler::frame::{long, missed, overran, unmeasured};
 use crate::profiler::record::{
     profiler_frames_since, profiler_recording_state, profiler_scratch, profiler_tasks_since,
 };
@@ -114,7 +114,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
 
     let cnt = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     // A span the frame did not run reads 0 and is left out.
-    // The GPU's figures over the frames a read landed with, each read once.
+    // The GPU's figures over the frames a read timed, each read once.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
     FramesSection {
         present: 1.0,
@@ -122,9 +122,9 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         seconds,
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
-        missed: moving().filter(|f| is_missed(f)).count() as f64,
-        overran: cnt(&overran),
-        long: cnt(&long),
+        missed: moving().filter(|f| missed(f)).count() as f64,
+        overran: count(&overran),
+        long: count(&long),
         turns: sum(&|f| f.turns),
         interval: spread(scratch, moving().map(|f| f.interval_ms)),
         busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
@@ -137,8 +137,11 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         effects_p95: core::array::from_fn(|k| {
             spread(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
-        gpu_read: cnt(&|f| f.gpu.read != 0.0),
-        gpu: spread(scratch, read().map(|f| renderer::gpu_ms(&f.gpu.spans))),
+        gpu_read: count(&|f| f.gpu.read != 0.0),
+        gpu: spread(
+            scratch,
+            read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans)),
+        ),
         phases_p95: core::array::from_fn(|k| {
             spread(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
@@ -152,6 +155,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         kinds: core::array::from_fn(|k| cnt(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| cnt(&|f| f.wake == k as f64)),
         heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
+        first: *first,
         last: *last,
     }
 }
@@ -220,7 +224,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
                 if i < shown {
                     [counted[i].0, counted[i].1, counted[i].2]
                 } else {
-                    [0.0; LIMIT::REASON_WORDS as usize]
+                    [0.0; LIMITS::REASON_WORDS as usize]
                 }
             }),
             phase_n: phase_n as f64,
@@ -247,8 +251,8 @@ fn view() -> ViewSection {
         pose::ray_of(pose.at(), x, y, &mut origin, &mut dir);
         let ray = Ray {
             origin,
-            dir,
-            reach: observation::eye_draw_reach().unwrap_or(0.0),
+            direction,
+            reach: crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0),
         };
         let detail = query::by_dist();
         let hit = query::World::now()

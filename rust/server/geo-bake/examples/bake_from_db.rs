@@ -20,10 +20,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (dir, tiles) = args.split_first().expect("usage: <dir> <leaf name>...");
 
-    let coverage = Coverage::of_src().expect("coverage");
+    let coverage = Coverage::of_source().expect("coverage");
     let (_, mut client) = Overture::reading(
         &leaf::READS,
-        &Coverage::of_src().expect("coverage").shards().collect(),
+        &Coverage::of_source().expect("coverage").shards().collect(),
     )
     .expect("geo DB");
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));

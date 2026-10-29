@@ -11,10 +11,10 @@
 
 use pxl_spec_core::{beam, eye, raster, sun};
 
-use crate::frame::shader::record::{
-    compute, source, PIPELINE_RASTER, SHADER_SAMPLE_BOX, SHADER_FACE, SHADER_SUN_SAMPLE_BOX,
-    SHADER_SUN_SAMPLE,
-};
+use super::cast::HEAD_BINDING;
+
+use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER_SAMPLE_BOX};
+use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
     Load, RenderContext,
@@ -92,7 +92,7 @@ impl Raster {
             ),
             boxes: 0,
             room: 0,
-            uniform: g.buf(
+            uniform: g.buffer(
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
@@ -163,8 +163,8 @@ impl Raster {
         let tan = [e[eye::TAN], e[eye::TAN + 1]].map(f32::from_bits);
         let [w, h] = size.map(|s| s.max(1) as f32);
         let reach = f32::from_bits(e[eye::REACH]);
-        let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
-        let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));
+        let pixel = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
+        let turn = BOX_VERTICES * u32::from(raster::flipped(r, u, f));
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],
             r[1],
@@ -303,7 +303,7 @@ impl Raster {
                 word_bytes(raster::ARGS_WORDS as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
-            s.uniform = g.buf(
+            s.uniform = g.buffer(
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
@@ -349,7 +349,7 @@ impl Raster {
         };
         let (r, d) = (unit(v.across), unit(v.down));
         let up = [-d[0], -d[1], -d[2]];
-        let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, up, v.dir));
+        let turn = BOX_VERTICES * u32::from(raster::flipped(r, up, v.dir));
         let n = size as f32;
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],

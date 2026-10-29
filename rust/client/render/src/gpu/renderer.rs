@@ -10,8 +10,9 @@ use pxl_spec::space::coord::world;
 use pxl_spec_core::eye;
 use pxl_spec_core::ray;
 use pxl_spec_core::scatter::GROUPS;
-use pxl_spec_core::way;
-use pxl_spec_core::window::{FRESH_WORDS, HANDED};
+use pxl_spec_core::sun;
+use pxl_spec_core::ways;
+use pxl_spec_core::window::{self, FreshSquare};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -19,7 +20,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{
-    census_slot, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
+    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
     PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
     PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS,
     UPLOAD_WORDS,
@@ -30,10 +31,11 @@ use crate::frame::shader::word::frame::{
     RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT,
     VIEW_PROJ, VIGNETTE,
 };
-use crate::frame::shader::word::{sky, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
+use crate::frame::shader::word::{
+    sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
+};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
-use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
@@ -51,7 +53,7 @@ use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::marker::MarkerPass;
-use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -67,9 +69,9 @@ use crate::gpu::surface::{
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
-use crate::look::environment::{ENV_AIR, ENV_STARS, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_POLE, ENV_SUN};
 
-const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
+const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(
     GPU_SPAN_NAMES <= 32,
@@ -262,11 +264,15 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     /// Whether a GPU read landed with this frame: its spans are then that
-    /// read's and `gpu_px` the world's pixels the frame it timed drew, what
-    /// the spans were measured over; else both are 0, as nothing was
-    /// measured with this frame.
+    /// read's, `gpu_px` the world's pixels the frame it timed drew, what the
+    /// spans were measured over, and `gpu_frame` that frame's number (`frame`
+    /// as it was); else they are 0, as nothing was measured with this frame.
     pub gpu_read: bool,
     pub gpu_px: f64,
+    pub gpu_frame: f64,
+    /// This frame's number, from 1, a frame the renderer encoded each; 0
+    /// where it stood and drew nothing.
+    pub frame: f64,
     /// The upload table's uploads and their bytes, the depth targets' bytes
     /// and the texture pack's: each as counted, in bytes.
     pub uploads: f64,
@@ -350,7 +356,7 @@ static REDRAW: Global<bool> = Global::new();
 /// renderer numbers on.
 static DRAWN_FRAMES: Global<f64> = Global::new();
 
-pub fn on_gpu_lost() {
+pub fn gpu_lost() {
     RENDERER.set(None);
     on_skins_lost();
     on_device_lost();
@@ -375,9 +381,10 @@ pub struct Renderer {
     /// The spans' queries (`Gpu::spans`); 0 where the device keeps no
     /// timestamps, and no frame is timed.
     query_set: u32,
-    /// The world's pixels of the frame whose spans' read is on its way: one
-    /// read at most is (`Gpu::submit_frame`).
+    /// The world's pixels and the number of the frame whose spans' read is
+    /// on its way: one read at most is (`Gpu::submit_frame`).
     read_px: f64,
+    read_frame: f64,
     pipelines: Pipelines,
     frame_buf: u32,
     frame: Frame,
@@ -461,7 +468,7 @@ impl Renderer {
             frame_layout(g, &mut pipelines),
             frame_buf,
             shadow.entries(1),
-            [ao.blank_entry(7); 2],
+            [ao.blank_entry(MAP_BINDING); 2],
             air,
         );
         let query_set = if device.timestamps { g.spans() } else { 0 };
@@ -470,7 +477,7 @@ impl Renderer {
             query_set,
             read_px: 0.0,
             read_frame: 0.0,
-            ghost: pipelines.build(g, PIPELINE_GHOST_BOX, WORLD_COLOR),
+            ghost: pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()),
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
@@ -522,7 +529,7 @@ impl Renderer {
             view_entry(4, self.pack.view),
             buf_entry(5, self.pack.table),
             sampler_entry(6, self.pack.sampler),
-            self.ao.entry(7),
+            self.ao.entry(MAP_BINDING),
         ];
         e.extend(self.atmosphere.entries());
         e
@@ -543,21 +550,13 @@ impl Renderer {
         self.box_groups(g);
         self.models.rebind(
             g,
-            self.frame_buf,
+            self.frame_buffer,
             [self.ao.entry(MAP_BINDING), self.ao.blank_entry(MAP_BINDING)],
         );
     }
 
     /// `reach` how far the eye draws, in units; none without an eye.
-    fn lay_out(
-        &mut self,
-        g: &Gpu,
-        width: u32,
-        height: u32,
-        screen: (u32, u32),
-        env: &[f32],
-        reach: f32,
-    ) {
+    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: f32) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
         proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
@@ -588,7 +587,7 @@ impl Renderer {
             reach * env[ENV_AIR + 1],
         );
         self.stars.lay_out(&m, env, width);
-        self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
+        self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
         self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
@@ -633,10 +632,10 @@ impl Renderer {
             u[SHADOW_RIM] = (far / half) as f32;
         }
 
-        self.atmosphere.lay_out(g, env);
+        self.atmosphere.lay_out(g, env, reach);
     }
 
-    /// A box is one instance shared by 36 vertices; a draw's first box is its first
+    /// A box is one instance shared by `BOX_VERTICES`; a draw's first box is its first
     /// instance. Both vertex slots bind the same buffer; the record index rides
     /// on the first vertex.
     fn draw_boxes(&self, pass: &mut TrackedRenderPass, draws: &Draws) {
@@ -716,7 +715,7 @@ impl Renderer {
         read.read(input.cases);
 
         targets(g, world);
-        // How far the eye observes, as far as the clouds are drawn.
+        // How far the eye draws, as far as the clouds are drawn.
         let reach = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
@@ -807,12 +806,22 @@ impl Renderer {
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] =
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
+        // Where each actor drawn stands, units from the eye, a receiver of
+        // the sun's map as decor is (pxl-spec-core `sun::ACTORS_AT`).
+        let mut actors = [[0.0f32; 3]; sun::ACTORS];
+        let mut n = 0;
+        for d in draws.of(PIPELINE_SKINNED).take(sun::ACTORS) {
+            let u = uniform_of(uniforms, d);
+            actors[n] = [u[0], u[1], u[2]];
+            n += 1;
+        }
         self.screen.prepare(
             g,
             cast,
             &meshes,
             (world.rays_view, [world.width, world.height]),
             (self.shadow.world, self.shadow.frame, self.shadow.starts()),
+            &actors[..n],
         );
         // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
@@ -864,7 +873,9 @@ impl Renderer {
         // show.
         if quiet && !self.screen.casts_px() && !self.screen.sun_casts() {
             self.frame_read = read;
-            let stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
+            let mut stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
+            // Nothing drawn, so no number a read could name.
+            stat.frame = 0.0;
             self.order = order;
             return (FrameKind::stood, stat);
         }
@@ -1008,7 +1019,7 @@ impl Renderer {
         release(canvas_view);
         // The read that landed is the one that was on its way; this frame's
         // takes its place where one was asked.
-        let gpu_read = q != 0 && g.has_gpu_landed();
+        let gpu_read = q != 0 && g.gpu_landed();
         let (gpu_spans, gpu_px, gpu_frame) = if gpu_read {
             (
                 core::array::from_fn(|k| g.gpu_ms(k as u32)),
@@ -1016,10 +1027,13 @@ impl Renderer {
                 self.read_frame,
             )
         } else {
-            ([0.0; GPU_SPAN_NAMES], 0.0)
+            ([0.0; GPU_SPAN_NAMES], 0.0, 0.0)
         };
+        let frame = DRAWN_FRAMES.get(|| 0.0);
+        *frame += 1.0;
         if asked {
             self.read_px = f64::from(world.width) * f64::from(world.height);
+            self.read_frame = *frame;
         }
         let skipped = !frame_commit();
         if skipped {
@@ -1043,6 +1057,7 @@ impl Renderer {
         let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
         stat.gpu_px = gpu_px;
+        stat.gpu_frame = gpu_frame;
         self.order = order;
         (kind, stat)
     }
@@ -1124,10 +1139,10 @@ impl Renderer {
         let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
         for d in draws.iter().filter(|_| counted) {
             let tris = match d[4] {
-                PIPELINE_GHOST_BOX => d[1] * 12,
+                PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_IMPOSTOR => 2 * d[2],
-                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3),
+                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
                 PIPELINE_PUCK_ZONE => BOX_VERTICES / 3 * d[1],
                 PIPELINE_PUCK_BEACON => BEACON_VERTICES / 3,
                 PIPELINE_MARKER => 2 * d[1],
@@ -1146,7 +1161,7 @@ impl Renderer {
             gpu_px: 0.0,
             gpu_frame: 0.0,
             frame: *DRAWN_FRAMES.get(|| 0.0),
-            uploads: b.cnt as f64,
+            uploads: b.count as f64,
             upload_bytes: b.bytes as f64,
             // The depth targets: the world's own and the canvas's, one f32 a
             // pixel, AO's and the markers' regions'.

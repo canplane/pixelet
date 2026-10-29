@@ -48,8 +48,8 @@ export function kept_key(slot: u32): string | undefined {
  * by name as JSON, then for a day as their slot holds them; the objects as
  * their packet's base64 alone, the format theirs by the key. */
 const SETTINGS_BEFORE = "pxl:settings";
-const OBJECTS_BEFORE = "pxl:object:v15";
 const OBJECTS_BEFORE_FORMAT = 15;
+const OBJECTS_BEFORE = `pxl:object:v${OBJECTS_BEFORE_FORMAT}`;
 
 /** Before the kernel reads a slot: an empty slot is filled from what was kept
  * before it, once, and that is left where it was. The settings carry over as

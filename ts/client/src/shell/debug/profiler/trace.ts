@@ -96,14 +96,23 @@ function profilerTraceJson(): string {
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
-  // ---- task spans, one thread per stream ----
-  const catTid = new Map<string, u32>();
-  for (const r of tasks) {
-    let tid = catTid.get(r.stream);
+  // ---- task spans: a stream's rows, each task on the first that is free
+  // by its enqueue, so tasks that overlap never nest falsely ----
+  const rows = new Map<string, f64[]>();
+  const rowTid = new Map<string, u32>();
+  const byEnqueue = [...tasks].sort((a, b) => a.enqueue_ms - b.enqueue_ms);
+  for (const r of byEnqueue) {
+    const ends = rows.get(r.stream) ?? [];
+    rows.set(r.stream, ends);
+    let k = ends.findIndex((end) => end <= r.enqueue_ms);
+    if (k < 0) k = ends.push(r.end_ms) - 1;
+    else ends[k] = r.end_ms;
+    const row = `${r.stream} ${k + 1}`;
+    let tid = rowTid.get(row);
     if (tid === undefined) {
-      tid = TID_TASK_BASE + catTid.size;
-      catTid.set(r.stream, tid);
-      events.push(threadName(tid, `task: ${r.stream}`));
+      tid = TID_TASK_BASE + rowTid.size;
+      rowTid.set(row, tid);
+      events.push(threadName(tid, `task: ${row}`));
     }
     // The outcome is the event's category, and the detail is in `fail`'s text.
     const args: Args = {
@@ -117,10 +126,11 @@ function profilerTraceJson(): string {
       if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
+    const cat = `task,${r.outcome}`;
     events.push(
       event(
         `${r.stream}:${r.subject}`,
-        `task,${r.outcome}`,
+        cat,
         "X",
         us(r.enqueue_ms),
         us(Math.max(0, r.end_ms - r.enqueue_ms)),
@@ -128,6 +138,19 @@ function profilerTraceJson(): string {
         args,
       ),
     );
+    // Its run, from its start, inside it.
+    if (r.start_ms !== null) {
+      events.push(
+        event(
+          "run",
+          cat,
+          "X",
+          us(r.start_ms),
+          us(Math.max(0, r.end_ms - r.start_ms)),
+          tid,
+        ),
+      );
+    }
   }
 
   // ---- per-frame counters (Perfetto graphs these) ----
@@ -138,17 +161,15 @@ function profilerTraceJson(): string {
       events.push(
         event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)),
       );
-      // The record is taken as the stage ends, and the tick ran just before it.
-      events.push(
-        event(
-          "tick",
-          "frame",
-          "X",
-          ts - us(f.stage_ms + f.tick_ms),
-          us(f.tick_ms),
-          TID_FRAMES,
-        ),
-      );
+      // The record is taken as the stage ends: the stage, the tick before
+      // it and the effects before that.
+      const span = (name: string, end_ms: f64, ms: f64) =>
+        events.push(
+          event(name, "frame", "X", ts - us(end_ms + ms), us(ms), TID_FRAMES),
+        );
+      span("stage", 0, f.stage_ms);
+      span("tick", f.stage_ms, f.tick_ms);
+      span("effects", f.stage_ms + f.tick_ms, f.effects_ms);
     }
   }
 

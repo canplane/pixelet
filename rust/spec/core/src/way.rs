@@ -474,7 +474,7 @@ pub trait Columns {
     /// Whether the area's edge walls the column: ground beside cells past
     /// the area (pxl-spec-core `area::laid`), where no way writes, as none
     /// does past it.
-    fn is_walled(&self, c: [i32; 2]) -> bool;
+    fn walled(&self, c: [i32; 2]) -> bool;
     fn face(&self, c: [i32; 2]) -> i32;
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
@@ -663,7 +663,7 @@ pub const SPANS: usize = 10;
 /// And its face cell (`ground::face_cell`), under which a bore's air
 /// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
 /// or it is past the area, where nothing does. What its cells are read
-/// off, its visits found once: a brick's fill keeps them (pxl-spec-core
+/// off, its visits found once: a square's fill keeps them (pxl-spec-core
 /// fill.rs `spans`, read through `Kept`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spans {
@@ -696,7 +696,7 @@ impl Spans {
 /// Column `c`'s spans: what each visit of a line writes there that fills a
 /// cell of the grid's zoom (`fills_any`), as `at` reads no other, and its
 /// face cell — none, nor a face, in a column of the bedrock, past the area
-/// or walled by its edge (`Columns::is_walled`), as bedrock wins over a way as
+/// or walled by its edge (`Columns::walled`), as bedrock wins over a way as
 /// it does over the ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
@@ -706,7 +706,7 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     // The column's face and the tile's scale, read once for all its visits.
     let cell = cols.cell();
     let ground = (cols.face(c), cols.per_m());
-    spans.face = ground::face_cell(cell, ground.0);
+    spans.face = crate::ground::face_cell(cell, ground.0);
     let mut k = 0;
     while k < cols.cnt(c) {
         let (w, next) = writes(cols, c, k, ground);
@@ -721,7 +721,7 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     (spans, fits)
 }
 
-/// A brick's columns' spans and the ring's about it as its fill keeps
+/// A square's columns' spans and the ring's about it as its fill keeps
 /// them (pxl-spec-core fill.rs `spans`), read in place: column `c`'s face
 /// cell and how many spans it has (`Spans`), and its `j`-th span and its
 /// value.
@@ -855,7 +855,7 @@ pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
 pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL - cell);
     let (face, n) = k.head(c);
-    let [mut lo, mut hi] = ground::EMPTY;
+    let [mut lo, mut hi] = crate::ground::EMPTY;
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
@@ -965,9 +965,9 @@ mod tests {
             let cell = LEAF_CELL - next(4);
             let s = 1i32 << (LEAF_CELL - cell);
             let top = next(120) as i32 - 60;
-            let face = ground::face_cell(
+            let face = crate::ground::face_cell(
                 cell,
-                ground::face_height(cell, ground::cells(cell, top as f32)),
+                crate::ground::face_height(cell, crate::ground::cells(cell, top as f32)),
             );
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {
@@ -982,11 +982,7 @@ mod tests {
                     col.1[j] = ([lo, lo + 1 + next(30) as i32], v);
                 }
                 col.2 = n;
-                col.0 = if k == 0 && next(8) == 0 {
-                    i32::MIN
-                } else {
-                    face
-                };
+                col.0 = if k == 0 && next(8) == 0 { i32::MIN } else { face };
             }
             let k = Five(five);
             let mut hull = ground::EMPTY;

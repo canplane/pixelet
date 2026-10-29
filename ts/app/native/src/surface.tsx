@@ -108,22 +108,20 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
     input.requestFrame();
   };
 
-  const touches =
-    (...phases: PointerPhase[]) =>
-    (e: GestureResponderEvent) => {
-      for (const t of e.nativeEvent.changedTouches) {
-        for (const phase of phases) {
-          input.pointer(
-            phase,
-            "touch",
-            Number(t.identifier),
-            0,
-            t.locationX,
-            t.locationY,
-          );
-        }
+  const touches = (...phases: PointerPhase[]) => (e: GestureResponderEvent) => {
+    for (const t of e.nativeEvent.changedTouches) {
+      for (const phase of phases) {
+        input.pointer(
+          phase,
+          "touch",
+          Number(t.identifier),
+          0,
+          t.locationX,
+          t.locationY,
+        );
       }
-    };
+    }
+  };
 
   return (
     <SurfaceView
@@ -132,8 +130,10 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
       onLayout={onLayout}
       onTouchStart={touches("down")}
       onTouchMove={touches("move")}
-      onTouchEnd={touches("up")}
-      onTouchCancel={touches("cancel")}
+      // A lifted finger leaves the surface, as the web's pointerleave says
+      // after its pointerup: nothing stays hovered under it.
+      onTouchEnd={touches("up", "out")}
+      onTouchCancel={touches("cancel", "out")}
     />
   );
 }

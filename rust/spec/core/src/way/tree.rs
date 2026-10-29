@@ -104,10 +104,7 @@ pub const fn root_word(family: u32, z0: i32) -> u32 {
 
 /// A root word's family's first slot and its first slot's Z.
 pub const fn root_slot(w: u32) -> (u32, i32) {
-    (
-        overwrite::FAMILY * (w & (POOL_FAMILIES - 1)),
-        w as i32 >> ROOT_ID_BITS,
-    )
+    (overwrite::FAMILY * (w & (POOL_FAMILIES - 1)), w as i32 >> ROOT_ID_BITS)
 }
 
 /// A root word's family id bits, `POOL_FAMILIES`'s.
@@ -158,7 +155,7 @@ pub fn cursor(lanes: &impl Lanes, root: u32, cell: Zoom, zoom: Zoom, at: [i32; 3
 
 /// A family's words in a pool: its eight heap words and its eight data
 /// words.
-pub const FAMILY_WORDS: u32 = 16;
+pub const FAMILY_WORDS: u32 = 2 * overwrite::FAMILY;
 
 /// The most families one brick's build takes before its fold gives any
 /// back: the most of the format-12 set (2026-10-18, its windows' bricks
@@ -181,8 +178,8 @@ pub const NONE: u32 = u32::MAX;
 /// `GroundBuffers::grow_scratch`), every brick's alike, so a frame's
 /// scratch is `window::HANDED` of them and each brick's length is a
 /// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
-/// `BRICK_FAMILIES` it is `SCRATCH_WORDS`.
-pub const FREED_AT: u32 = window::TREE_AT;
+/// `SQUARE_FAMILIES` it is `SCRATCH_WORDS`.
+pub const FREED_AT: u32 = crate::window::TREE_AT;
 pub const RECORD_WORDS: u32 = 1 + FAMILY_WORDS;
 
 /// A brick's scratch for a tree of `families` at most, in words.
@@ -308,7 +305,7 @@ pub fn branch(pool: &mut impl Pool, slot: u32, first: u32) {
     let at = unpack(pool.data(slot));
     pool.set_heap(slot, BRANCH | first);
     let mut k = 0;
-    while k < 8 {
+    while k < overwrite::FAMILY {
         let child = [
             2 * at[0] + (k & 1) as i32,
             2 * at[1] + (k >> 1 & 1) as i32,
@@ -354,7 +351,7 @@ pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
     let word = pool.data(first);
     let mut one = true;
     let mut k = 0;
-    while k < 8 {
+    while k < overwrite::FAMILY {
         one &= pool.heap(first + k) == 0 && pool.data(first + k) == word;
         k += 1;
     }
@@ -423,14 +420,11 @@ pub fn lay(pool: &mut impl Pool, records: &[u32]) {
     let mut r = 0;
     while r < n && r < BRICK_FAMILIES {
         let at = 1 + r * RECORD_WORDS;
-        let first = 8 * crate::at(records, at);
+        let first = overwrite::FAMILY * crate::at(records, at);
         let mut k = 0;
-        while k < 8 {
+        while k < overwrite::FAMILY {
             pool.set_heap(first + k, crate::at(records, at + 1 + k));
-            pool.set_data(
-                first + k,
-                crate::at(records, at + 1 + overwrite::FAMILY + k),
-            );
+            pool.set_data(first + k, crate::at(records, at + 1 + overwrite::FAMILY + k));
             k += 1;
         }
         r += 1;

@@ -16,9 +16,10 @@ pub const SETTLE_DELAY_S: f64 = 0.15;
 /// not a multiplier of its height.
 pub const HEAD_CLEARANCE_U: f64 = 0.22;
 
-/// Under one GPS fix's travel at a walking pace (~0.5u), over the near-zero
-/// gap a still map leaves. A rotate or pinch leaves such a gap, and a
-/// catch-up across it would play the walk clip in place.
+/// Under one GPS fix's travel at a walking pace, a fix a second at 1.4 m/s,
+/// about 0.74u at Seoul's latitude, and over the near-zero gap a still map
+/// leaves. A rotate or pinch leaves such a gap, and a catch-up across it
+/// would play the walk clip in place.
 pub const WALK_EPS: f64 = 0.03;
 
 pub const FOLLOW_WALK_LINGER_S: f64 = 1.5;

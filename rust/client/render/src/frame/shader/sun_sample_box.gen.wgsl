@@ -52,7 +52,7 @@ var<storage, read_write> global_5: type_33;
 @group(0) @binding(14)
 var<storage, read_write> global_6: type_19;
 @group(0) @binding(16)
-var<storage, read_write> global_7: type_33;
+var<storage, read_write> global_6: type_33;
 
 fn function_() {
     var phi_1056_: u32;

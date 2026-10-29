@@ -14,7 +14,7 @@
 use fnv::FnvHashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::gpu::pass::decor::GROUPS;
+use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
@@ -31,15 +31,10 @@ use xpute_guest::sched::pass::Pass;
 use crate::domain::query::model;
 use crate::domain::query::model::asset::model_of;
 use crate::domain::scene::decor::drawn::{decor_model_angle, decor_sprite_angle, sprite_reach};
-use crate::domain::scene::environment::param::{
-    CLOUD_DRIFT_CELLS, CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
-};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::km_per_u;
-use crate::domain::view::lens;
-use crate::domain::view::observation;
 use crate::domain::view::observation::eye;
 use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
@@ -59,7 +54,7 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
 const FIRST_GROUP: usize = scatter::GROUPS as usize;
 const _: () = assert!(
-    FIRST_GROUP + VARIANTS.len() <= GROUPS,
+    FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"
 );
 
@@ -150,12 +145,19 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
-/// How long the wind takes to carry the clouds `CLOUD_DRIFT_CELLS` of a camera
+/// The share of a camera grid cell the clouds drift a step, at the nearest
+/// drawn: about a CSS pixel at the reference view, under which a drift is
+/// not seen to move. A whole cell's step, a dozen pixels at once, was seen as
+/// the clouds stopping and jumping.
+const DRIFT_CELLS: f64 = 1.0 / 12.0;
+
+/// How long the wind takes to carry the clouds `DRIFT_CELLS` of a camera
 /// cell at the nearest drawn (`lens::cell_there`), in seconds: their words
 /// stand between steps, so a drawn cloud lags the wind by up to that, an
 /// angle, the same on every screen. Infinite while none is drawn.
 pub fn drift_step_s() -> f64 {
-    lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
+    DRIFT_CELLS * crate::domain::view::lens::cell_there(clouds().seen)
+        / libm::hypot(WIND[0], WIND[1])
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
@@ -190,9 +192,11 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let moved = drift(f64::from(env[ENV_SKY + 1]));
     let base = layer_u();
     let largest = CLOUD_WIDTH[1];
-    // As far as the eye observes, a flat layer hiding under no horizon, and no
+    // As far as the eye draws, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is a sprite's worth.
-    let reach = observation::eye_draw_reach().unwrap_or(0.0).min(REACH_MAX);
+    let reach = crate::domain::view::observation::eye_draw_reach()
+        .unwrap_or(0.0)
+        .min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| {
         libm::floor((on_map[k] - reach) / PATCH) as i64
@@ -215,9 +219,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             let d = near([x, y]).max(1e-3);
             if d <= reach
                 && drawn::tier(
-                    (largest / units_per_px_at(d)) as f32,
-                    decor_gone_px() as f32,
-                    decor_sprite_px() as f32,
+                    (largest / d) as f32,
+                    decor_model_angle() as f32,
+                    decor_sprite_angle() as f32,
                 ) != drawn::GONE
             {
                 c.wanted.push([x, y]);
@@ -486,8 +490,8 @@ fn present_patch(
     opacity: f32,
     sprites: &mut Vec<u32>,
 ) {
-    let (model_px, sprite_px) = (decor_gone_px() as f32, decor_sprite_px() as f32);
-    let tier = |px: f64| drawn::tier(px as f32, model_px, sprite_px);
+    let (model, sprite) = (decor_model_angle() as f32, decor_sprite_angle() as f32);
+    let tier = |across: f64| drawn::tier(across as f32, model, sprite);
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
@@ -521,7 +525,7 @@ fn present_patch(
         sprites.clear();
         let gone = tier(extent * most / nearest) == drawn::GONE;
         let modeled = tier(extent * least / farthest) == drawn::MODEL;
-        for i in 0..if gone { 0 } else { cnt as usize } {
+        for i in 0..if gone { 0 } else { count as usize } {
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }
@@ -542,7 +546,7 @@ fn present_patch(
                 continue;
             }
             let d = libm::sqrt(d2).max(1e-3);
-            let t = tier(extent * f(4) / units_per_px_at(d));
+            let t = tier(extent * f(4) / d);
             if t == drawn::MODEL {
                 changed |= list[at] != i as u32;
                 list[at] = i as u32;

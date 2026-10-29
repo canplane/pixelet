@@ -47,22 +47,6 @@ fn light_of(world_pos: vec3f) -> Light {
 
 /* the air before a point */
 
-// The light per unit of depth bends sharply only in the ozone: under it three
-// knots err less than eight do from over it, a percent or two. Crossing the
-// line, the whole frame steps by that much at once and shows no flicker.
-fn air_knots() -> i32 {
-  return select(8, 3, atmos_camera_altitude() < atmos_ozone_center() - atmos_ozone_half_width());
-}
-
-// The points `d` km along `dir`, nearest first, unexposed.
-fn air_segments(dir: vec3f, d: vec3f) -> array<Veil, 3> {
-  var v = gather(camera_r(), frame_up(), dir, d, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), air_knots());
-  for (var i = 0; i < 3; i++) {
-    v[i].scattered *= atmos_white();
-  }
-  return v;
-}
-
 // The air before a point: what it lets through, what it scatters toward
 // the eye, and the lights there. The air's two vary slowly across the view,
 // which is what lets the air's volume hold them (atmos_air.wgsl); the lights

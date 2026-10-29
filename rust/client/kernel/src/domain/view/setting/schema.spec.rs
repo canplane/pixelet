@@ -53,8 +53,8 @@ impl CameraMode {
 /// What terrain does to the camera.
 ///
 ///   through — nothing. The eye goes wherever the controls put it, ground
-///             included, where the terrain shell has no inward-facing
-///             geometry and the scene reads inside out.
+///             included, where its rays start inside what they meet and
+///             the scene reads inside out.
 ///   stop    — a control goes as far as it asked or as far as it can.
 ///             Nothing moves on its own; a zoom into a hill stops short.
 ///   climb   — dist is always granted and the *view* pitches up instead,
@@ -83,7 +83,10 @@ impl OrbitObstacleMode {
     }
 }
 
-/// Where the ambient occlusion comes from.
+/// Where the ambient occlusion comes from. Either is the sky's visibility
+/// and darkens only the light from the sky and its bounce, never the direct
+/// sun, which the shadows are the sun's visibility of; neither tints
+/// (rust/client/render/src/frame/shader/atmos_light.wgsl `surface_light_in`).
 ///
 ///   off    — none.
 ///   corner — the screen pass's own: the floor along a cube and the inside
@@ -94,8 +97,8 @@ impl OrbitObstacleMode {
 ///   screen — N8AO
 ///            (rust/client/render/src/gpu/ao.rs): the world's depth drawn
 ///            once more, the occlusion sampled from it at half resolution,
-///            denoised, and applied to every lit surface as a warm dark
-///            tint. Five passes and 11 bytes a pixel.
+///            denoised, and read by every lit surface. Five passes and 11
+///            bytes a pixel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum AoMode {
@@ -161,13 +164,13 @@ pub enum SettingKey {
     textures = 0,
     /// Procedurally scattered decor only; what the player placed stays.
     ///
-    /// Med because it is models rather than a shading term: a cube of the eye's builds its
-    /// decor and the frame draws it, so what it costs follows what is in view.
-    /// It has been the frame's own bottleneck — doc/minutes/archive/20260912-what-to-render-when.md
-    /// reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
-    /// frames missing a vsync — and the projected-size criterion holds it to
-    /// the nearest tier without making far decor cheap, the impostor tier that
-    /// would being decided and not built. The badge is an ordering, and this is
+    /// Med because it is models rather than a shading term: the GPU grows the
+    /// ground's decor where the eye's windows are (decor_cs) and the frame draws
+    /// each kind as a model, a sprite (an impostor) or nothing by the angle it
+    /// spans, so what it costs follows what is in view. It has been the frame's
+    /// own bottleneck — doc/minutes/archive/20260912-what-to-render-when.md reads
+    /// GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving frames
+    /// missing a vsync, before the tiers. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
     decor = 1,
     /// The cumulus' models and the altocumulus and cirrus sheets
@@ -310,7 +313,7 @@ impl SettingKey {
     }
 
     /// A choice's option a development build only offers.
-    pub fn dev_option(self, _val: u32) -> bool {
+    pub fn dev_option(self, _value: u32) -> bool {
         false
     }
 }

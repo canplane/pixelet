@@ -426,7 +426,7 @@ pub(super) fn apply(
         }
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => {
-            let window_ms = abi::ProfilerRead::read(given(pkt)?)?.window_ms;
+            let window_ms = abi::ProfilerRead::read(packet(pkt)?)?.window_ms;
             Ok(Some(read_timed(|| profiler_read(window_ms)) as i32))
         }
         Command::PROFILER_RINGS => Ok(Some(read_timed(profiler_rings) as i32)),
@@ -454,14 +454,14 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 /// A read of the profiler, its time the profiler's cost to the interval
 /// (profiler/record.rs `profiler_record_read`).
 fn read_timed(read: impl FnOnce() -> u32) -> u32 {
-    let at = now();
-    let addr = read();
-    record::profiler_record_read(now() - at);
-    addr
+    let at = xpute_guest::clock::now();
+    let address = read();
+    crate::profiler::record::profiler_record_read(xpute_guest::clock::now() - at);
+    address
 }
 
-/// The address of READ's words (profiler.json): the statistics over
-/// `window_ms`, and what holds now. Read in place rather than posted: `Door::post` asserts on a
+/// The address of READ's words (profiler.json): the summary over
+/// `window_ms`. Read in place rather than posted: `Door::post` asserts on a
 /// full completion ring, and reading allocates nothing in the heap being
 /// measured. Valid until the next turn.
 fn profiler_read(window_ms: Option<f64>) -> u32 {

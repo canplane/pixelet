@@ -10,7 +10,7 @@ fn depth_at(p: vec2i) -> f32 {
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let hp = vec2i(i.clip.xy);
-  let fp = hp * 2;
+  let fp = hp * i32(AO_DOWNSCALE);
   var at = array<vec2i, 4>(fp, fp + vec2i(1, 0), fp + vec2i(0, 1), fp + vec2i(1, 1));
   var d = array<f32, 4>(depth_at(at[0]), depth_at(at[1]), depth_at(at[2]), depth_at(at[3]));
   // Reversed depth: the greater is the nearer.

@@ -31,8 +31,8 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
 // A face as it is painted: its swatch and four layer taps, its normal, how
 // much its own edges darken it there (0 to 1), where it is in the world, its
 // texture coordinate with that coordinate's screen gradients, how open it is
-// to the light there (the screen's ambient occlusion, and its corners' tinted
-// occlusion where its caller knows them), and the air between it and the eye.
+// to the sky there (the screen's ambient occlusion, and its corners' where its
+// caller knows them), and the air between it and the eye.
 struct Surface {
   rgb: vec3f,
   taps: vec4f,
@@ -42,7 +42,7 @@ struct Surface {
   box_uv: vec2f,
   ddx: vec2f,
   ddy: vec2f,
-  open: vec3f,
+  open: f32,
   seen: Seen,
 };
 
@@ -60,7 +60,7 @@ fn face_image(normal: vec3f) -> u32 {
 
 // Gradients are passed in because the read is inside a branch.
 fn sample_tap(layer: f32, image: u32, uv: vec2f, ddx: vec2f, ddy: vec2f, fallback: vec3f) -> vec3f {
-  let l = u32(clamp(layer, 0.0, 255.0) + 0.5);
+  let l = u32(clamp(layer, 0.0, NO_LAYER) + 0.5);
   if (l >= arrayLength(&layer_slot)) {
     return fallback;
   }

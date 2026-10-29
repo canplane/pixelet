@@ -71,8 +71,7 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
     sky::star::ALL,
 ];
 
-/// The screen's ambient occlusion (the passes frame/shader/ao_*.wgsl, and
-/// `TINT` frame/shader/screen_ray.wgsl's).
+/// The screen's ambient occlusion (the passes frame/shader/ao_*.wgsl).
 pub mod ao {
     params! {
         RADIUS: f32 = 1.5;
@@ -83,10 +82,9 @@ pub mod ao {
         /// N8AO scales the falloff by a fifth when the radius is in world
         /// units.
         FALLOFF_SHARE: f32 = 0.2;
-        /// N8AO's 12-texel denoise radius, halved for half resolution.
-        DENOISE_RADIUS: f32 = 6.0;
-        /// #1a1006 as a ratio: a warm contact shadow rather than gray.
-        TINT: [f32; 3] = [1.0, 0.615, 0.231];
+        /// N8AO's denoise radius, 12 of the screen's pixels, which ao_blur.wgsl
+        /// takes to the passes' resolution (`AO_DOWNSCALE`).
+        DENOISE_RADIUS: f32 = 12.0;
     }
 }
 
@@ -149,8 +147,8 @@ pub mod cloud {
         params! {
             CELL: u32 = 8;
             /// The bilinear smoothstep value noise's deviation about its 0.5
-            /// mean, from its formula.
-            SIGMA: f32 = 0.2145;
+            /// mean, from its formula (param.test.rs holds it to it).
+            SIGMA: f32 = 0.2144;
             CLEAR: f32 = 0.35;
             CROWDED: f32 = 0.75;
         }
@@ -182,11 +180,21 @@ pub mod cloud {
     }
 }
 
+/// What an 8-bit screen shows.
+pub mod display {
+    params! {
+        /// Below one 8-bit step, half of it: a star's light or a cloud
+        /// sheet's opacity this faint is not drawn.
+        FLOOR: f32 = 0.5 / 255.0;
+    }
+}
+
 /// What the eye's lens adds to the light that reaches it.
 pub mod lens {
     params! {
-        /// Spencer et al. 1995's halo; ISO 9358 veiling glare is 1-10%,
-        /// `GLARE_VEIL` its middle.
+        /// The halo's share of Spencer et al. 1995's glare, its terms'
+        /// (atmos_light.wgsl `glare_toward`); ISO 9358 veiling glare is
+        /// 1-10%, `GLARE_VEIL` its middle.
         GLARE_HALO_SHARE: f32 = 0.6205;
         GLARE_VEIL: f32 = 0.03;
         /// postprocessing's VignetteEffect defaults.
@@ -202,8 +210,8 @@ pub mod light {
         /// reaches every face alike. Directed alone, a wall turned from the
         /// sun read as a toy's.
         DIRECTED: f32 = 0.25;
-        /// The exponent only sets the band's width; rim_intensity scales the
-        /// peak.
+        /// The exponent only sets the band's width; `frame_rim_intensity()`
+        /// scales the peak.
         RIM_POWER: f32 = 1.0;
         /// The Earth's picture doubled, picked by eye beside the original;
         /// the cities are not its to scale.
@@ -248,7 +256,8 @@ pub mod puck {
     pub mod beacon {
         params! {
             RADIUS: f32 = 0.3;
-            /// #ff1493 and #00f2ff, in linear light.
+            /// #ff1493 and #00f2ff, in linear light (param.test.rs holds
+            /// them to it).
             DAY: [f32; 3] = [1.0, 0.006995, 0.291771];
             NIGHT: [f32; 3] = [0.0, 0.887923, 1.0];
             /// What it gives off itself, by day and by night.
@@ -267,10 +276,6 @@ pub mod shadow {
         /// (`light::DIRECTED`'s rest) a cast shadow takes away; all of it left
         /// the shade as dark.
         ALIKE_TAKEN: f32 = 0.5;
-        /// Taps a texel and a half apart, so the filtered edge spans about a
-        /// unit: one texel apart, the edge cut each cell's shadow out as a
-        /// hard square.
-        SPREAD: f32 = 1.5;
         /// The share of the casters' reach past which a shadow fades to
         /// nothing at it.
         FADE: f32 = 0.75;
@@ -303,6 +308,12 @@ pub mod sky {
 
     pub mod moon {
         params! {
+            ANGULAR_RADIUS: f32 = 0.004522;
+            ALBEDO: f32 = 0.12;
+            /// The map's mean over the disc (printed by download_moon, and
+            /// param.test.rs holds the shipped map to it) scales it to
+            /// `ALBEDO`.
+            MAP_MEAN: f32 = 0.2459;
             /// The eye adapts to the Moon, so its seas show where the sky's
             /// exposure would drown the disc white.
             FACE_SHOWN: f32 = 0.6;
@@ -322,9 +333,9 @@ pub mod sky {
             SIGMA_PX: f32 = 0.85;
             SWELL_PX: f32 = 0.6;
             /// A faint wide halo shows which star is brighter once both cores
-            /// are white: from a first-magnitude star on (star.wgsl
-            /// `HALO_FROM`).
-            HALO_MAG: f32 = 1.0;
+            /// are white: from a first-magnitude star's flux, 10^(−0.4·1)
+            /// (gpu/star.rs `star_floats`).
+            HALO_FROM: f32 = 0.398;
             HALO_SIGMA: f32 = 4.0;
             HALO_GAIN: f32 = 0.06;
             /// The faintest light a star is drawn at, in linear light, a

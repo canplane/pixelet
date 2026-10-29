@@ -88,5 +88,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
   let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
-  return vec4f(tone(color), draw_opacity());
+  return vec4f(finish(color, i.clip.xy), draw_opacity());
 }

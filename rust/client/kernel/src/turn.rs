@@ -13,7 +13,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};
 
-use crate::domain::control::camera::input::camera_input_step;
+use crate::domain::control::camera::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
@@ -103,9 +103,9 @@ fn companion_props() -> Option<CompanionProps> {
 /// The edit the pointer would make, of what it is over where the camera now
 /// stands (`camera_tick`), so the scene draws it this turn, not the next.
 fn edit_tick(_: &mut TickContext) {
-    let edits = edit::pending_step();
+    let edits = crate::domain::control::interaction::edit::pending_step();
     // A new preview moves the world as drawn where it was and where it is.
-    if preview::set(edits).is_some() {
+    if crate::domain::layer::object::preview::set(edits).is_some() {
         request_world_tick();
     }
 }
@@ -161,19 +161,20 @@ fn scene_tick(ctx: &mut TickContext) {
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    if let Some([x, y]) = camera_input_step() {
-        crate::pointer::hover(x, y);
-    }
+    camera_input_step();
 }
 
 /// The camera's last writer, then the view composed where it stands: after
 /// every writer of the pose (the door's events, the turn's effects, the
-/// controllers), before the phases that observe it.
+/// controllers), before the phases that observe it. The pointer is picked
+/// again from there, so what it is over follows a view moved under it.
 fn camera_tick(ctx: &mut TickContext) {
-    controller::camera_step(ctx);
-    let moved = pose::view_compose(controller::pose());
+    crate::domain::control::camera::controller::camera_step(ctx);
+    let moved = crate::domain::view::frame::pose::view_compose(
+        crate::domain::control::camera::controller::pose(),
+    );
     if let Some([x, y]) = rehover_at(moved) {
-        pointer::hover(x, y);
+        crate::pointer::hover(x, y);
     }
 }
 
@@ -195,6 +196,8 @@ pub fn boot() {
         StepName::input as u32,
     );
     on_tick(Phase::interaction, camera_tick, StepName::camera as u32);
+    on_tick(Phase::interaction, edit_tick, StepName::edit as u32);
+    on_tick(Phase::interaction, ghost_tick, StepName::ghost as u32);
     // After the view has moved, so the environment sees this tick's camera.
     on_tick(
         Phase::interaction,
@@ -224,25 +227,21 @@ fn world_tasks() {
     }
 }
 
-/// Longest effect of the last turn and its EFFECT_NAMES index: a turn is only
-/// as cooperative as its longest step.
-static WORST_EFFECT: Global<(f64, Option<u32>)> = Global::new();
+/// Each effect's time in the last turn, in EFFECT_NAMES' order.
+static EFFECTS: Global<[f64; spec::EFFECT_NAMES]> = Global::new();
 
-pub fn worst_effect() -> (f64, Option<u32>) {
-    *WORST_EFFECT.get(|| (0.0, None))
+pub fn effect_times() -> [f64; spec::EFFECT_NAMES] {
+    *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES])
 }
 
 /// Effects are not budgeted, so nothing in them may be real work. They were
 /// untimed until a fold here took 70 ms of a turn whose tick was 1.5 ms
 /// (2026-09-23).
 macro_rules! effect {
-    ($worst:ident, $name:ident, $step:expr) => {{
+    ($times:ident, $name:ident, $step:expr) => {{
         let at = now();
         $step;
-        let ms = now() - at;
-        if ms > $worst.0 {
-            $worst = (ms, Some(EffectName::$name as u32));
-        }
+        $times[EffectName::$name as usize] += now() - at;
     }};
 }
 
@@ -250,27 +249,41 @@ macro_rules! effect {
 pub fn world_turn() -> f64 {
     let at = now();
     let platform = world_platform();
-    let mut worst = (0.0f64, None);
+    let mut times = [0.0; spec::EFFECT_NAMES];
     // First, so the turn they are read in is the first to see them.
     effect!(times, settings, {
-        if store::settings_load_step() {
-            profiler_follow(store::settings_store().profiler);
+        if crate::domain::view::setting::store::settings_load_step() {
+            crate::profiler::window::profiler_follow(
+                crate::domain::view::setting::store::settings_store().profiler,
+            );
         }
     });
     effect!(times, navigation, off_center_step());
     effect!(times, bootstrap, map_bootstrap_step());
-    effect!(times, orient, orient_watchdog_step(platform.orient));
+    effect!(
+        times,
+        orientation,
+        orientation_watchdog_step(platform.orientation)
+    );
     effect!(times, follow, follow_mode_step());
-    effect!(times, dst, {
+    effect!(times, destination, {
         // What the walker found under an unknown Z, let go where it moved.
         support::support_step();
         destination::dst_step();
     });
     effect!(times, decor, decor_models_step());
-    effect!(times, objects, repository::step());
-    // device_coord is not gated like pivot: the puck keeps its last coordinate across a transient none.
+    effect!(
+        times,
+        objects,
+        crate::domain::layer::object::repository::step()
+    );
+    // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
     effect!(times, puck, location_puck_step(off_center().device_coord));
-    effect!(times, settings, store::settings_keep_step());
+    effect!(
+        times,
+        settings,
+        crate::domain::view::setting::store::settings_keep_step()
+    );
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times;
     now() - at
 }

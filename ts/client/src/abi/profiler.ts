@@ -23,8 +23,7 @@ import {
 } from "@/abi/demand.spec.ts";
 import {
   FRAME,
-  LIMIT,
-  NOW,
+  LIMITS,
   READ,
   RING,
   RING_NAMES,
@@ -37,7 +36,7 @@ import {
   WAKES,
   WORST,
 } from "@/abi/profiler.spec.ts";
-import { STEP_NAMES } from "@/abi/step.spec.ts";
+import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { HOST } from "@/host/mount.ts";
 
@@ -63,6 +62,7 @@ const site = (file: u32, bytes: u32, line: u32) =>
  * triangles). The names are their owners', and shown by the shell. */
 export const LIST_LANES = [
   "phases",
+  "effects",
   "gpu_spans",
   "census",
   "zoom_tiles",
@@ -74,16 +74,18 @@ export type ListLane = (typeof LIST_LANES)[number];
 export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
-export type Frame = { [K in ScalarLane]: f64 } & {
-  phases: f64[];
-  effects: f64[];
-  gpu_spans: f64[];
-  census: [f64, f64][];
-  zoom_tiles: f64[];
-  gpu_objects: f64[];
-  waiting: f64[];
-  out: f64[];
-};
+export type Frame =
+  & { [K in ScalarLane]: f64 }
+  & {
+    phases: f64[];
+    effects: f64[];
+    gpu_spans: f64[];
+    census: [f64, f64][];
+    zoom_tiles: f64[];
+    gpu_objects: f64[];
+    waiting: f64[];
+    out: f64[];
+  };
 
 /** Each lane at its word, and the words it spans: to the next lane's, the last to FRAME's end. */
 export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] =
@@ -129,24 +131,35 @@ export interface FrameSummary {
   n: u32;
   seconds: f64;
   moving: f64;
+  /** The moving frames' intervals summed. */
+  moving_ms: f64;
   missed: f64;
   overran: f64;
   /** Intervals whose turns ran past them. */
   long: f64;
   turns: f64;
-  /** Frames a GPU read landed with, which the GPU's figures are over. */
+  /** Frames a GPU read timed, which the GPU's figures are over. */
   gpu_read: f64;
   interval: Spread;
   busy: Spread;
   tick: Spread;
+  /** The other parts of `busy`, and what they leave of it, unmeasured. */
+  effects: Spread;
+  stage: Spread;
+  tasks: Spread;
+  profiler: Spread;
+  rest: Spread;
   gpu: Spread;
-  /** Each phase's and each span's p95: what is read of them. */
+  /** Each phase's, each effect's and each span's p95: what is read of them. */
   phases: { name: string; p95: f64 }[];
+  effects_p95: { name: string; p95: f64 }[];
   gpu_spans: { name: string; p95: f64 }[];
   /** Frames by the renderer's kind, and the turns' last ask by wake. */
   kinds: { name: string; n: f64 }[];
   wakes: { name: string; n: f64 }[];
   heap_used_delta_bytes: f64;
+  /** The window's first frame and its last. */
+  first: Frame;
   last: Frame;
 }
 
@@ -220,6 +233,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     n: s[a + F.n],
     seconds: s[a + F.seconds],
     moving: s[a + F.moving],
+    moving_ms: s[a + F.moving_ms],
     missed: s[a + F.missed],
     overran: s[a + F.overran],
     long: s[a + F.long],
@@ -228,8 +242,17 @@ function frame_summary(s: F64Array): FrameSummary | null {
     interval: spread_at(s, a + F.interval),
     busy: spread_at(s, a + F.busy),
     tick: spread_at(s, a + F.tick),
+    effects: spread_at(s, a + F.effects),
+    stage: spread_at(s, a + F.stage),
+    tasks: spread_at(s, a + F.tasks),
+    profiler: spread_at(s, a + F.profiler),
+    rest: spread_at(s, a + F.rest),
     gpu: spread_at(s, a + F.gpu),
     phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
+    effects_p95: EFFECT_NAMES.map((name, k) => ({
+      name,
+      p95: s[a + F.effects_p95 + k],
+    })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
       name,
       p95: s[a + F.gpu_spans_p95 + k],
@@ -237,6 +260,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     heap_used_delta_bytes: s[a + F.heap_used_delta_bytes],
+    first: frame_at(s, a + F.first),
     last: frame_at(s, a + F.last),
   };
 }
@@ -250,7 +274,7 @@ function task_summaries(s: F64Array): TaskSummary[] {
     const reasons = Array.from(
       { length: s[a + STREAM_STAT.reason_cnt] },
       (_, i) => {
-        const w = a + STREAM_STAT.reasons + LIMIT.REASON_WORDS * i;
+        const w = a + TASK_SUMMARY.reasons + LIMITS.REASON_WORDS * i;
         return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
       },
     );

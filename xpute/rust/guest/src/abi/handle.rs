@@ -7,6 +7,10 @@ use core::mem::MaybeUninit;
 
 /// The rest is the generation, hence its `u16`. The host uses the same 16.
 pub const SLOT_BITS: u32 = 16;
+const _: () = assert!(
+    SLOT_BITS + u16::BITS == u32::BITS,
+    "a slot and a generation fill a handle"
+);
 const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
 
 pub fn handle_slot(handle: u32) -> u32 {

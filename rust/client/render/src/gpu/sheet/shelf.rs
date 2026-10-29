@@ -3,7 +3,8 @@
 //! Where each marker's bitmap lies in the sheet, one texture, so all markers draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
 //! doubles the sheet and replays each sticker's `Paint`. Only dirty rectangles
-//! are uploaded: re-uploading the whole 4096 sheet cost a phone ~100 ms per frame.
+//! are uploaded: a whole sheet re-uploaded each frame costs a phone many
+//! frames' time (~100 ms, measured at 4096 a side).
 
 /// Slot rectangles are in canvas orientation (v0 top < v1 bottom) and move on a
 /// repack, so read them on every use; the slot index is what stays.

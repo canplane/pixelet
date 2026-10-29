@@ -357,16 +357,22 @@ const _: () = assert!(window::FIRST_CELL > PLACED_AT);
 /// where the rays ask it (`drawn_at`), `PLACED_AT` for placed decor; past
 /// them, once sized, its region (`drawn::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
-    decor | variant << 8 | turn << 16 | cell << 18
+    decor | variant << 8 | turn << TURN_SHIFT | cell << CELL_SHIFT
 }
+
+/// A record's turn's place and width in its first word, and its zoom's
+/// place past it (`record_word`).
+const TURN_SHIFT: u32 = 16;
+const TURN_BITS: u32 = 2;
+const CELL_SHIFT: u32 = TURN_SHIFT + TURN_BITS;
 
 /// A record's decor, variant, turn and zoom (`record_word`).
 pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
     (
         w & 0xff,
         (w >> 8) & 0xff,
-        (w >> 16) & 3,
-        (w >> 18) & ((1 << crate::ZOOM_BITS) - 1),
+        (w >> TURN_SHIFT) & ((1 << TURN_BITS) - 1),
+        (w >> CELL_SHIFT) & ((1 << crate::ZOOM_BITS) - 1),
     )
 }
 
@@ -395,7 +401,7 @@ pub fn first_group(rows: &[Decor], decor: u32) -> u32 {
 /// model or a sprite, into its group's region, models at `2·group` and
 /// sprites past it; the regions laid end to end in the decor's instances, in the
 /// layout the decor and impostor shaders read (lanes x, y, z, spin, scale,
-/// `DRAWN_LANES` a slot, then the index list), each region's draw a set of
+/// `drawn::LANES` a slot, then the index list), each region's draw a set of
 /// indirect args.
 pub mod drawn {
     use super::GROUPS;
@@ -405,7 +411,7 @@ pub mod drawn {
     pub const NONE: u32 = 0xff;
     /// What a record's first word holds past its decor, variant and turn:
     /// its region, once sized.
-    pub const REGION_SHIFT: u32 = 24;
+    pub const REGION_SHIFT: u32 = super::CELL_SHIFT + crate::ZOOM_BITS;
     pub const LANES: u32 = 5;
     /// Each region's indirect args, `ARGS_WORDS` a region: a model's
     /// indexed, a sprite's a strip of four corners an instance; its first
@@ -416,16 +422,15 @@ pub mod drawn {
     /// device's dynamic offset alignment), its index list's first slot at
     /// `UNIFORM_INDEX` within it: the lanes' base, to which the args pass adds
     /// the region's first slot once the regions are laid out.
-    pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
+    pub const UNIFORM_WORDS: u32 = OFFSET_BYTES / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
     /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
-    const OFF_BYTES: u32 = 256;
-    pub const UNIFORM_IDX: u32 = 7;
-    /// The drawing words, what a frame's decor is drawn by: the model's and
-    /// the sprite's floors, each an angle about the eye in radians, the
-    /// anchor the lanes' positions are about (unit cells, X wrapping), the
-    /// left-out decor's corner and whether there is one, then each group's
-    /// extent.
+    const OFFSET_BYTES: u32 = 256;
+    pub const UNIFORM_INDEX: u32 = 7;
+    /// The frame's words: the model's and the sprite's floors, each an
+    /// angle about the eye in radians, the anchor the lanes' positions are
+    /// about (unit cells, X wrapping), the left-out decor's corner and
+    /// whether there is one, then each group's extent.
     pub const MODEL_ANGLE: u32 = 0;
     pub const SPRITE_ANGLE: u32 = 1;
     pub const ANCHOR: u32 = 4;
@@ -433,20 +438,21 @@ pub mod drawn {
     pub const EXTENTS: u32 = 12;
     pub const DRAWING_WORDS: u32 = EXTENTS + GROUPS;
 
-    /// What a thing spanning `px` pixels is drawn as: a model at
-    /// `model_px` or more, else a sprite at `sprite_px` or more, else
-    /// nothing. A group's region is `2·group` past its tier where drawn.
+    /// What a thing spanning `across` radians about the eye is drawn as: a
+    /// model at `model` or more, else a sprite at `sprite` or more, else
+    /// nothing, each an angle, so no screen decides it. A group's region is
+    /// `2·group` past its tier where drawn.
     pub const MODEL: u32 = 0;
     pub const SPRITE: u32 = 1;
     pub const GONE: u32 = 2;
 
-    /// The tier of what spans `px` pixels, against the model's and the
+    /// The tier of what spans `across` radians, against the model's and the
     /// sprite's floors: the one rule decor's count and the CPU's clouds
     /// both size by.
-    pub fn tier(px: f32, model_px: f32, sprite_px: f32) -> u32 {
-        if px >= model_px {
+    pub fn tier(across: f32, model: f32, sprite: f32) -> u32 {
+        if across >= model {
             MODEL
-        } else if px >= sprite_px {
+        } else if across >= sprite {
             SPRITE
         } else {
             GONE
@@ -581,7 +587,7 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 }
 
 /// What growing decor asks of the world, as either side holds it: of the
-/// world unplaced (`world::Handed::unplaced`), the ground's alone, its column's
+/// world unplaced (`world::At::unplaced`), the ground's alone, its column's
 /// footing and the assets about it; of the world as edited, whether an edit holds a
 /// cell and what is placed in a box; and the catalog's rows where it reads
 /// them.
@@ -591,17 +597,17 @@ pub trait Grounds {
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
-    /// The footing down column `g` at `cell`, the query's support
-    /// (`support::footing`), as this side asks it; its top (`cast::top`),
-    /// false where nothing fills there or the world lacks it.
+    /// The footing down column `g` at `cell` of the world unplaced,
+    /// what is placed left out: the query's support (`support::footing`) as
+    /// this side asks it; its top (`cast::top`), false where nothing fills
+    /// there or the world lacks it.
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool);
-    /// What is in the cell `c` of `zoom` about the footing `f`, the
-    /// world's one query's answer (`support::asset`): `void`, the ground's
-    /// value, or `PLACED_ASSET` over what is placed.
+    /// What is in the cell `c` of `zoom` about the footing `f`, the world
+    /// unplaced's answer (`support::asset`): `void` or the ground's value.
     fn asset(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
     /// Whether an edit holds the cell `c` of `zoom` in the world as edited,
-    /// something placed or air (`answer::is_placed`).
-    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
+    /// something placed or air (`answer::placed`).
+    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::Placed::next`).
     fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
@@ -635,8 +641,8 @@ impl Grown {
 /// footing's level vote there (`asks`); then, where `boxed`, whether it
 /// grows there: every cell of its box void and every one under its base a
 /// look it grows on, as the ground holds them; no edit in its box, air
-/// included (`Grounds::is_edited`); and no placed decor claims its room
-/// (`is_claimed`). Every cell both ask is asked at one place about one footing
+/// included (`Grounds::edited`); and no placed decor claims its room
+/// (`claimed`). Every cell both ask is asked at one place about one footing
 /// (`asks`). Where it stands, whether it does, and whether it grows there,
 /// true where not `boxed`.
 pub fn grown(
@@ -687,7 +693,7 @@ fn asks<Q: Grounds>(
     let mut draws = SplitMix32::new(seed);
     g.variant = variant_of(decor, &mut draws);
     match decor.orientation {
-        Orientation::random => g.turn = draws.next_u32() >> 30,
+        Orientation::random => g.turn = draws.next_u32() >> (u32::BITS - TURN_BITS),
         Orientation::along_transport => {
             flip = draws.next_u32() >> 31;
             voting = 4 * ALIGN_NEIGHBOR_RADIUS;
@@ -743,7 +749,7 @@ fn asks<Q: Grounds>(
             let holds = if b[2] == lo[2] {
                 decor.allows(val(v))
             } else {
-                v == sentinel::void as u32 && !q.is_edited(cell, b)
+                v == sentinel::void as u32 && !q.edited(cell, b)
             };
             if !holds {
                 return (g, false);
@@ -799,7 +805,7 @@ const PLACED_TAG: u32 = 0x91ac_ed5e;
 pub fn placed_pose(decor: &Decor, corner: [i32; 3]) -> (u32, u32) {
     let mut draws = SplitMix32::new(node_seed(PLACED_TAG, (UNIT_ZOOM, corner)));
     let variant = variant_of(decor, &mut draws);
-    (variant, draws.next_u32() >> 30)
+    (variant, draws.next_u32() >> (u32::BITS - TURN_BITS))
 }
 
 /// The row of `rows` a stored value names; false for one not decor.
@@ -845,6 +851,10 @@ const CLAIM_REACH: [i32; 3] = {
 /// sun.rs `Sun::up`, `Sun::ring`).
 pub const TALLEST: i32 = CLAIM_REACH[2] + 1;
 pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
+
+/// The nodes placed decor is first asked at, so a box with nothing placed
+/// near it is told so in a few looks: 8 unit cells a side.
+const CLAIM_ZOOM: Zoom = UNIT_ZOOM - 3;
 
 /// Whether placed decor claims a cell of the box from `at` (unit cells),
 /// `cells` a side: one whose corner, posed as placed (`placed_pose`), holds

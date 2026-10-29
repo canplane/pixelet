@@ -19,6 +19,10 @@ pub const FORMAT: Format = Format {
     earth: 2,
 };
 
+/// The longest version a declaration names: one segment of a tile's URL,
+/// before its name (ts/client/src/namespace/route.spec.ts `tileObject`).
+pub const VERSION_BYTES: usize = 32;
+
 /// The base layers a version is published for: the kinds of `FORMAT`,
 /// numbered in their order.
 #[expect(non_camel_case_types, reason = "generated from the spec")]

@@ -346,6 +346,8 @@ function relation(said: string, vars: Map<string, number>, what: string): void {
   }
 }
 
+/** Any negative is none, as the contract says (ARCHITECTURE.md, the turn): each
+ * language's `NO_WAKE` is its own pick of one. */
 function wake_name(wake: number): string {
   return wake === 0 ? "next" : wake > 0 ? "later" : "none";
 }

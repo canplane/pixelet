@@ -14,21 +14,30 @@ use xpute_guest::sched::tick::TickReport;
 use crate::domain::layer::Base;
 use crate::door;
 use crate::profiler::frame::{
-    DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample,
+    DeviceSample, FrameSample, GpuSample, HeapSample, RaySample, RingSample, TileSample, GPU_SPANS,
 };
 use crate::profiler::record::{profiler_record_frame, profiler_record_gpu, profiler_recording};
-use crate::sys::boot;
-use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::request::stream_counts;
 use crate::turn;
 
-/// What the renderer made of this turn's frame (domain/scene/stage.rs `stage_render`).
+/// What the renderer made of this turn's frame (domain/scene/stage.rs
+/// `stage_render`), and the GPU's read of an earlier frame, landed now.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct HostFrame {
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
+    landed: Option<GpuRead>,
+}
+
+/// A GPU read as it lands: the renderer's number of the frame it timed, its
+/// spans and that frame's world's pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GpuRead {
+    pub frame: f64,
+    pub spans: [f64; GPU_SPANS],
+    pub px: f64,
 }
 
 impl Default for HostFrame {
@@ -37,6 +46,7 @@ impl Default for HostFrame {
             kind: FrameKind::none,
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
+            landed: None,
         }
     }
 }
@@ -44,9 +54,19 @@ impl Default for HostFrame {
 static HOST: Global<HostFrame> = Global::new();
 
 /// The renderer's answer for this turn's frame, its figures zero where it
-/// drew none.
-pub fn set_host_frame(kind: FrameKind, gpu: GpuSample, device: DeviceSample) {
-    HOST.set(HostFrame { kind, gpu, device });
+/// drew none, and the GPU's read of an earlier frame, landed now.
+pub fn set_host_frame(
+    kind: FrameKind,
+    gpu: GpuSample,
+    device: DeviceSample,
+    landed: Option<GpuRead>,
+) {
+    HOST.set(HostFrame {
+        kind,
+        gpu,
+        device,
+        landed,
+    });
 }
 
 /// The heap as its allocator states it, in its own bytes.
@@ -91,8 +111,10 @@ pub struct FrameTurn {
     pub task_ms: f64,
 }
 
-/// The frame turn's record, once its frame is drawn.
+/// The frame turn's record, once its frame is drawn: what taking it cost
+/// is the profiler's (`profiler_ms`), out of the frame task's time.
 pub fn profiler_frame(t: FrameTurn) {
+    let at = now();
     // Taken whether or not recording, so a recording starts from now.
     let rings = ring_sample();
     let body_slots_peak = f64::from(body::take_peak());
@@ -101,14 +123,18 @@ pub fn profiler_frame(t: FrameTurn) {
     if !profiler_recording() {
         return;
     }
+    if let Some(r) = host.landed {
+        profiler_record_gpu(r.frame, r.spans, r.px);
+    }
     let mut tiles = TileSample::default();
     for (p, _) in TerrainTile::tile_cache().held() {
         tiles.by_zoom[p.zoom as usize] += 1.0;
     }
-    tiles.place = PlaceTile::tile_cache().held().count() as f64;
+    tiles.place = PlaceTile::residency().held().count() as f64;
     let counts = Stream::ALL.map(stream_counts);
     let record = FrameSample {
-        t: now(),
+        // As the stage ended, before the record is taken.
+        t: at,
         refresh_ms: t.refresh_ms,
         paced_ms: t.paced_ms,
         budget_ms: t.tick.budget_ms,
@@ -116,7 +142,7 @@ pub fn profiler_frame(t: FrameTurn) {
         tick_ms: t.tick.total_ms,
         phases: t.tick.phase_ms,
         stage_ms: t.stage_ms,
-        effects: turn::effect_times(),
+        effects: crate::turn::effect_times(),
         kind: f64::from(host.kind as u8),
         gpu: host.gpu,
         device: host.device,
@@ -130,5 +156,14 @@ pub fn profiler_frame(t: FrameTurn) {
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };
-    profiler_record_frame(record, t.interval_ms, t.settled, t.task_ms);
+    let own_ms = now() - at;
+    profiler_record_frame(
+        FrameSample {
+            profiler_ms: own_ms,
+            ..record
+        },
+        t.interval_ms,
+        t.settled,
+        t.task_ms + own_ms,
+    );
 }

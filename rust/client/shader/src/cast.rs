@@ -4,8 +4,8 @@
 //! or the sky, and the rest walked (`miss_list_cs` over their list,
 //! `miss_cs` over every pixel where the list was full).
 
-use pxl_spec_core::cast::{self, End, Met};
-use pxl_spec_core::{beam, observed, ray, support, tally, way};
+use pxl_spec_core::cast::{self, Ends, Met};
+use pxl_spec_core::{beam, observed, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
@@ -72,6 +72,10 @@ fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
         k += 1;
     }
 }
+
+/// `cast_cs`'s workgroup a side, a square of pixels (pxl-tool check_rules.rs
+/// `WORKGROUPS`).
+const CAST_SIDE: u32 = 8;
 
 /// Each pixel's ray: the cell the raster kept at it (pxl-spec-core
 /// `raster`; pxl-render gpu/ray/raster.rs), the nearest a sample stopped at
@@ -188,7 +192,7 @@ pub fn cast_cs(
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
     let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
-    let at = enlist(marks, observed::MARKS, whole);
+    let at = listed(marks, observed::MARKS, whole);
     if at < observed::MARKS {
         seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
     }

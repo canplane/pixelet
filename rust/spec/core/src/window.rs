@@ -261,16 +261,16 @@ pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
 pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
-/// A brick's columns, a word a cell, row by row: a cell's ground's top in
+/// A square's columns, a word a cell, row by row: a cell's ground's top in
 /// leaf cells, an `i16`, low (`column_top`).
-pub const COLUMN_WORDS: u32 = BRICK_CELLS;
+pub const COLUMN_WORDS: u32 = SQUARE_CELLS;
 
 /// A column word's ground top.
 pub const fn column_top(w: u32) -> i32 {
     (w << 16) as i32 >> 16
 }
 
-/// A brick's cells as its fill lays them, two a word, cell `i` in the
+/// A square's cells as its fill lays them, two a word, cell `i` in the
 /// `i % 2`-th half (`laid_at`): its own look, low (`ground::own` of its four
 /// at the brick's zoom), and which of the eight leaf cells about it are
 /// past the area, high (`area::gone_ring`, none at a brick coarser than a
@@ -470,11 +470,11 @@ impl<Q: Brick> Columns for Q {
         }
     }
     fn face(&self, c: [i32; 2]) -> i32 {
-        if !is_held(c) {
+        if !held(c) {
             return 0;
         }
-        let cell = Brick::cell(self);
-        ground::face_height(cell, ground::cells(cell, self.height(c) as f32))
+        let cell = Square::cell(self);
+        crate::ground::face_height(cell, crate::ground::cells(cell, self.height(c) as f32))
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.
@@ -626,7 +626,12 @@ pub fn cell(w: &impl Bricks, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32
 /// the leaves a leaf's, stepped from `place`, where the column's own cells
 /// were found (`step`), with the area's edge laid on it off the cell as its
 /// fill laid it (`area::laid`); and where it is held.
-pub fn ground(w: &(impl Bricks + Area), place: Found, zoom: Zoom, b: [i32; 2]) -> (Cell, Found) {
+pub fn ground(
+    w: &(impl Squares + crate::area::Area),
+    place: Found,
+    zoom: Zoom,
+    b: [i32; 2],
+) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
     let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
     let (top, part) = ground::top(zoom, column_top(column) as f32);
@@ -634,7 +639,7 @@ pub fn ground(w: &(impl Bricks + Area), place: Found, zoom: Zoom, b: [i32; 2]) -
         look: area::laid(laid, zoom, b),
         top,
         part,
-        fold: ground::looks(word),
+        fold: crate::ground::looks(word),
     };
     (cell, f)
 }

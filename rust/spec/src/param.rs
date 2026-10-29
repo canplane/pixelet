@@ -7,6 +7,9 @@
 pub mod place {
     use crate::space::coord::zoom::Zoom;
 
+    /// Carto's last zoom, openstreetmap.org's: the leaf places through it.
+    pub const LAST: Zoom = 19;
+
     /// How far apart places stand, in zooms: an icon's cell is this many
     /// coarser than the camera grid's, and the cell a place keeps to itself
     /// this many coarser again. At 2 an icon's cell spans four grid cells round

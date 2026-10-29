@@ -12,12 +12,13 @@
 //!
 //! `auto` judges only frames that move: the gap before the first is how long
 //! the view stood still, so moving starts a fresh window, and the quiet
-//! windows judged before the pause still count. A frame's sample is
-//! summed against its budget, the paced interval the host grants (xpute host
-//! sched/quantum.ts `Grant::paced_ms`) no tighter than `SCALE_BUDGET_FLOOR_MS`,
-//! over `SCALE_WINDOW_MS` of budgets. Where the device keeps timestamps the
+//! windows judged before the pause still count. A window is
+//! `SCALE_WINDOW_MS` of the moving frames' budgets, the paced interval the
+//! host grants (xpute host sched/quantum.ts `Grant::paced_ms`) no tighter
+//! than `SCALE_BUDGET_FLOOR_MS`, and its load is the samples its frames took,
+//! summed against their own budgets. Where the device keeps timestamps the
 //! sample is the GPU time of the passes drawn at the world's pixels
-//! (pxl-render gpu/renderer.rs `px_ms`), from a read that landed, which
+//! (pxl-render gpu/renderer.rs `pixels_ms`), from a read that landed, which
 //! not every frame has, and a window none landed in is not judged. Timed, a
 //! window over its budget by more than `SCALE_BAND` steps down at once, and
 //! `SCALE_UP_WINDOWS` windows in a row in which the step above, cost times its
@@ -53,7 +54,10 @@ pub struct Pace {
 /// The step the world is drawn at, 0 whole, and the window being judged.
 struct Scale {
     step: i32,
-    /// The samples and their budgets summed over the window, in ms.
+    /// The window's frames' budgets summed, in ms: its clock.
+    window_ms: f64,
+    /// The samples, and the budgets of the frames that took them, summed
+    /// over the window, in ms: its load.
     spent_ms: f64,
     budget_ms: f64,
     /// Windows in a row with room: the step above would fit, or, untimed,
@@ -71,6 +75,7 @@ struct Scale {
 impl Scale {
     const NEW: Scale = Scale {
         step: 0,
+        window_ms: 0.0,
         spent_ms: 0.0,
         budget_ms: 0.0,
         quiet: 0,
@@ -84,20 +89,28 @@ impl Scale {
     /// pause in moving neither breaks a run toward a step up nor a probe's
     /// hold.
     fn restart(&mut self) {
-        (self.spent_ms, self.budget_ms) = (0.0, 0.0);
+        (self.window_ms, self.spent_ms, self.budget_ms) = (0.0, 0.0, 0.0);
     }
 
-    /// Sums one frame's sample against its budget; at a window's end, judges
-    /// it. Whether the step changed.
-    fn judge(&mut self, spent_ms: f64, budget_ms: f64, timed: bool) -> bool {
-        self.spent_ms += spent_ms;
-        self.budget_ms += budget_ms;
-        if self.budget_ms < param::SCALE_WINDOW_MS {
+    /// Counts one frame's budget to the window, and its sample, where it
+    /// took one, against it; at a window's end, judges it. Whether the step
+    /// changed.
+    fn judge(&mut self, spent_ms: Option<f64>, budget_ms: f64, timed: bool) -> bool {
+        self.window_ms += budget_ms;
+        if let Some(spent_ms) = spent_ms {
+            self.spent_ms += spent_ms;
+            self.budget_ms += budget_ms;
+        }
+        if self.window_ms < param::SCALE_WINDOW_MS {
             return false;
         }
-        let load = self.spent_ms / self.budget_ms;
-        (self.spent_ms, self.budget_ms) = (0.0, 0.0);
+        let (spent, sampled) = (self.spent_ms, self.budget_ms);
+        self.restart();
         self.since = self.since.saturating_add(1);
+        if sampled == 0.0 {
+            return false;
+        }
+        let load = spent / sampled;
         if self.since <= param::SCALE_SETTLE_WINDOWS {
             return false;
         }
@@ -177,26 +190,20 @@ pub fn drawn_scale() -> f64 {
 }
 
 /// Device pixels per CSS pixel a display of `dpr` is drawn at whole: its
-/// own, no finer than `RESOLUTION_MAX`.
+/// own. How many of them the eye resolves turns on how near it is held,
+/// which no page is told: a phone's CSS pixel, held at a forearm, spans half
+/// again the reference pixel's angle, so its display's three are about the
+/// eye's limit there.
 fn device(dpr: f64) -> f64 {
-    dpr.min(param::RESOLUTION_MAX)
+    dpr
 }
 
 fn world() -> Option<&'static mut Surface> {
     surfaces().find(|s| s.role == surface_role::WORLD)
 }
 
-/// Device pixels per CSS pixel the display shows the world at, whatever the
-/// load drew it at: what the camera grid is laid by (`view_resize`), so a
-/// cell's zoom, demand and a pointer's reach follow the screen, not the
-/// load; a pixel a CSS pixel before the world has a surface.
-pub fn display_ratio() -> f64 {
-    world().map_or(1.0, |s| device(s.dpr))
-}
-
-/// The ratio a surface is drawn at: the display's, no finer than
-/// `RESOLUTION_MAX`; the world's scaled as the setting says; a case's within
-/// its thumbnail.
+/// The ratio a surface is drawn at: the display's; the world's scaled as the
+/// setting says; a case's within its thumbnail.
 pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     let device = device(dpr);
     match role {
@@ -210,8 +217,9 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 
 /// A frame was paced: `gpu`, where a GPU read landed with it, is the time of
 /// its passes drawn at the world's pixels and those pixels. A frame drawn at
-/// another size than now, or a read timed at one, is not summed; the world's
-/// surface takes the scale the setting and the judge leave.
+/// another size than now is not counted, and a read timed at one is no
+/// sample; the world's surface takes the scale the setting and the judge
+/// leave.
 pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
     let Some(s) = world() else { return };
     let k = state();
@@ -231,13 +239,11 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
         } else {
             Some(pace.gap_ms)
         };
-        if let Some(spent) = spent {
-            k.judge(
-                spent,
-                pace.paced_ms.max(param::SCALE_BUDGET_FLOOR_MS),
-                timed,
-            );
-        }
+        k.judge(
+            spent,
+            pace.paced_ms.max(param::SCALE_BUDGET_FLOOR_MS),
+            timed,
+        );
     }
     let ratio = surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
     if s.ratio != ratio {

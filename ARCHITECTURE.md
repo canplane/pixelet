@@ -1061,27 +1061,15 @@ turn.
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn the strobe grants a frame, one `WORLD_FRAME` is submitted
-(`ts/client/src/abi/input.ts` `submit_frame`): the viewport, the display's
-pacing, whether the turn is interactive, how many reads are allowed out, and the
-wall clock. A turn rung for a command alone carries none, and draws nothing. The
-quota's values are the kernel's (`sys/sched/tick.rs` `QUANTUM`). The kernel's
-boot writes them, and where the rings are, into the kernel's **directory**,
-which the host reads at boot (`host/mount.ts`, `@xpute/host/host.ts` `mount`).
-The tasks keep a share of the paced frame past the frame task, whatever it
-overran (`sys/sched/edge.rs` `tasks_after_frame`).
-
-The phases are xpute's, in the order that is their priority:
-
-| Phase         | What pixelet runs in it                                                                                                                   |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `interaction` | the controller, input, the camera, the environment, the companion, the character's preview                                                |
-| `visible`     | demand, the scene's pass, handed the camera's focus, which lays the world gizmo first; `content_share` of the budget is held back from it |
-| `content`     | nothing; the share held back from `visible` goes unspent here, and the tasks keep one of their own past the frame                         |
-| `cosmetic`    | nothing yet                                                                                                                               |
-| `report`      | nothing; the profiler records the turn after the stage (`turn.rs` `world_frame`)                                                          |
-
-The frame is a task, so the order above is its own and not the executor's.
+Before each turn the client submits one `WORLD_FRAME` through the host's
+doorbell, with what the turn may spend and draw into
+(`ts/client/src/abi/input.ts` `submit_frame`); a turn rung for a command alone
+carries none and draws nothing. The quota's values are the kernel's
+(`sys/sched/tick.rs` `QUANTUM`), written into the **directory** the host reads
+at boot. In the tick, what moves the eye runs in `interaction`, and after it
+what the pointer is over where the eye now stands, the edit it would make and
+its ghost; what the eye then sees, demand and the scene, in `visible`; and the
+later phases hold what the quota leaves them (`turn.rs`).
 
 Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
 `changes_step`): the tiles whose answer moved, and the regions the object store

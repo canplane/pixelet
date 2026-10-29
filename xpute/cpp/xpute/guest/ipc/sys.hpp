@@ -24,10 +24,11 @@ namespace xpute {
 using Fd = std::uint32_t;
 
 // Each call's arguments, which its record takes as an array of this length.
-inline constexpr std::size_t OPENAT_ARGS = 3;
-inline constexpr std::size_t READ_ARGS = 3;
-inline constexpr std::size_t WRITE_ARGS = 3;
-inline constexpr std::size_t CLOSE_ARGS = 1;
+inline constexpr std::size_t OPENAT_ARGS = sys::args::OPENAT;
+inline constexpr std::size_t READ_ARGS = sys::args::READ;
+inline constexpr std::size_t WRITE_ARGS = sys::args::WRITE;
+inline constexpr std::size_t CLOSE_ARGS = sys::args::CLOSE;
+inline constexpr std::size_t ABORT_ARGS = sys::args::ABORT;
 
 // The most one descriptor records in a turn, its name `path` bytes long: its
 // open, a read or a write, and its close, twice where it is stopped.

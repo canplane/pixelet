@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: 1c33228b7f60e19d3e37438dda505a4136fd1128420835af7aec20cace486e3a
+// Inputs: 2a1efbe0e95088be35aae96890bf70211652841e1811747352ac12a721ffbcbb
 struct type_7 {
     member: array<u32>,
 }
@@ -273,7 +273,7 @@ fn function_() {
                                         let _e227 = atomicAdd((&global_6.member[_e223]), 1u);
                                         let _e228 = (_e219 & 255u);
                                         let _e231 = ((_e219 >> bitcast<u32>(8i)) & 255u);
-                                        let _e234 = ((_e219 >> bitcast<u32>(16i)) & 3u);
+                                        let _e234 = ((_e219 >> bitcast<u32>(16u)) & 3u);
                                         if (_e228 < _e50) {
                                         } else {
                                             phi_786_ = true;

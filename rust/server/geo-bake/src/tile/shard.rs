@@ -98,7 +98,7 @@ impl Stage {
 
     /// The shards staged whole.
     fn whole(&self) -> Result<Vec<Node>, String> {
-        Ok(Coverage::of_src()?
+        Ok(Coverage::of_source()?
             .shards()
             .filter(|s| self.done(&s.name()).exists())
             .collect())
@@ -385,7 +385,7 @@ pub struct Run {
 
 impl Run {
     pub fn parse(kind: &str) -> Result<Run, String> {
-        let coverage = Coverage::of_src()?;
+        let coverage = Coverage::of_source()?;
         let (mut stages, mut named, mut out, mut concurrency) = (
             Vec::new(),
             Vec::new(),

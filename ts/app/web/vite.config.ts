@@ -114,7 +114,7 @@ function buildNumber(id: string): string {
  * does mean the bundle hash changes on every build even when no source
  * did; that is the cost of it being accurate, chosen over the commit date.
  * UTC: it is formatted for the reader's own timezone where it is shown
- * (shell/setting/section/about.tsx).
+ * (shell/setting/info/about.tsx).
  */
 /** The other half of `src/remote-console.ts`: what a device posts to
  * `/__console` is printed where this server's own output goes, so a phone or a

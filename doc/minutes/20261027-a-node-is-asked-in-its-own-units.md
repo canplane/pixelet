@@ -30,26 +30,52 @@ rule each change is held to.
   beams' spacing (`grid::CELL`). The container a step lands in is the
   cone's; the box inside it is what is drawn there, in eighths, floating as the
   LOD always has. The two are independent.
-- **Nothing the ray meets is passed.** A ray enters every split whose box it
-  meets and stops at the first block that is not transparent, the eye's and
-  the shadow map's alike. Its cone is read only by a beam, as how far apart its
-  rays lie (`cast::Spacing`): the eye's an angle, its grid's cell; the sun's a
-  width, `sun::BEAM` of its map's texels; control and physics none
-  (`Spacing::NONE`). Passing what the cone cannot tell apart, a split's box
-  shrunk by half the cone at the node's nearest point
-  ([a cell's inside is don't-care](./archive/20260928-what-is-drawn-is-what-the-screen-covers.md)),
-  left a row missing whole at grazing angles, which no visible sample could
-  bring back. With the eye's prune off the rows went, at about a millisecond of
-  GPU p95 at the horizon ([the rows,
-  seen](../experiment/20261028-the-rows-seen.md)), which the user took over the
-  rows on 10-28. The sun's prune, the same machinery, bought nothing that could
-  be measured or seen ([the sun without its
-  prune](../experiment/20261028-the-sun-without-its-prune.md)), and the
-  mitigations tried with the prune kept held neither the frame nor the rows
-  ([the cone touches](../experiment/20261028-the-cone-touches.md), [the
-  ring](../experiment/20261028-the-ring.md)).
-- **A walk resumed meets what the root's meets.** With nothing passed, a walk
-  resumed inside a node and the walk from the root meet the same cells.
+- **What the ray cannot tell apart is passed.** A ray has a cone, as wide as
+  `across + angle · d` at `d` (`cast::Cone`): the eye's an angle, its grid's
+  cell; the sun's a width, its texel; control and physics none, held to what
+  is there, an observer with a quantum of its own. A ray tests a split's box
+  shrunk by half its cone at the node's nearest point, so what is thinner, or
+  rises over its path by less, is passed, not drawn
+  ([a cell's inside is don't-care](./archive/20260928-what-is-drawn-is-what-the-screen-covers.md)).
+  Nothing has to be drawn exactly. Only a side inside the node is shrunk: how
+  thick content on its face is cannot be known from this node alone, as it
+  may go on into the neighbour, and shrinking it opened a seam a ray fell
+  through. And by the
+  cone's extent along that side's axis, so a side the ray crosses head on
+  keeps what it holds, and the one it grazes is pruned whole. A beam ray's
+  prune is its pixels', at the node's nearest point, no more than any
+  pixel's through the node, and on each side by the extent its grid's rays
+  may take less the angle they part by: it passes nothing a pixel's ray would
+  meet, up to the second order in the cell's angle, `O(s² d)`, that rays
+  farther in its window may part by more. That rests on boxes nesting, a
+  node's inside its parent's, and on a prune that only grows going down.
+  It also rests on every source's box being at least a block it asks thick,
+  wider than the cone there: the ground's reaches down to the node's floor or
+  spans two blocks, what is placed answers halves. A source answering thinner
+  boxes would be passed crossed at a slant.
+
+  > **Note (10-28):** nothing is passed any more, by the eye or the sun's
+  > map. The cone is read only by a beam, whose rays lie `apart` cones apart
+  > (`cast::Cone`). At grazing angles a passed cell left its row missing
+  > whole, which no pick could bring back. With the eye's prune off the rows
+  > went, at about a millisecond of GPU p95 at the horizon
+  > ([the rows, seen](../experiment/20261028-the-rows-seen.md)), which the
+  > user took over the rows on 10-28. The sun's
+  > prune, the same machinery, bought nothing that could be measured or seen
+  > ([the sun without its
+  > prune](../experiment/20261028-the-sun-without-its-prune.md)). The
+  > mitigations tried with the prune kept held neither the frame nor the
+  > rows ([the cone touches](../experiment/20261028-the-cone-touches.md),
+  > [the ring](../experiment/20261028-the-ring.md)).
+- **A walk resumed is a walk of its own.** A pixel resumed inside a node never
+  tests that node again, so it may stop on content the root's walk would
+  have passed in that node's pruned strip: no later, within half a cone,
+  and from whichever line it starts. A pick is exact while the eye prunes, so a pointer may
+  strike a thing thinner than half a cone the eye no longer draws: the two
+  observe on quanta of their own.
+
+  > **Note (10-28):** with nothing passed (above), a resumed walk and the
+  > root's meet the same cells, and the eye draws what a pointer strikes.
 
 ## What follows
 
@@ -72,6 +98,11 @@ rule each change is held to.
   turning, rough, a load each: the beam span 10.9–12.4 ms to 3.7 at p95, GPU
   p50 17.9 ms to 13.0 and p95 17.0, 59.6 fps; on the fixed path the frame as
   it was (GPU p50 10.4 ms, 51.9 fps).
+
+  > **Note (10-28):** this was the prune's (above), and goes with it. The
+  > eye's horizon pays about a millisecond of GPU p95 again
+  > ([the rows, seen](../experiment/20261028-the-rows-seen.md)).
+
 - **The step is a quantum, kept under the grid.** A box rounded out to a step
   of its node stands over what it holds by up to that step, and a ray grazing
   it clears it that much later. At an eighth of the node (the first cut,

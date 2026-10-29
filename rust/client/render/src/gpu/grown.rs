@@ -575,14 +575,12 @@ impl Grown {
         self.on && self.counting
     }
 
-    /// The decor placed, while decor is on (`Instances`).
-    pub fn placed(&self) -> Option<Instances> {
-        (self.on && self.instances != 0).then_some(Instances {
-            drawing: self.drawing,
-            regions: self.regions,
-            instances: self.instances,
-            room: self.room,
-        })
+    /// What the sun's mark reads of the decor placed, while decor is on: its
+    /// frame's words, its regions and its instances (pxl-shader sun.rs
+    /// `sun_mark_drawn_cs`), and the slots the instances hold.
+    pub fn placed(&self) -> Option<([u32; 3], u32)> {
+        (self.on && self.instances != 0)
+            .then_some(([self.params, self.regions, self.instances], self.room))
     }
 
     /// What the draws read, while decor is on: the decor's instances, their slots,

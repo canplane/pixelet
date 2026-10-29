@@ -28,8 +28,14 @@ mod world;
 
 pub use beam::{beam_cs, cell_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs};
-pub use decor::{
-    decor_args_cs, decor_cnt_cs, decor_cs, decor_mark_cs, decor_place_cs, decor_stand_cs,
+pub use decor::{decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs};
+pub use eye::Eye;
+pub use ground::{bound_cs, heights_cs, joined_cs};
+pub use observed::forget_cs;
+pub use raster::{boxes_cs, faces_cs};
+pub use sun::{
+    sun_beam_cs, sun_boxes_cs, sun_cells_cs, sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs,
+    sun_reach_cs, sun_sample_cs,
 };
 pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, joined_cs};

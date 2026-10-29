@@ -16,7 +16,7 @@ use pxl_spec::space::coord::world::nearest;
 use crate::domain::view::observation;
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
-use pxl_spec::space::camera::grid::fov;
+use pxl_spec::space::camera::grid::{fov, HALF_TAN};
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -146,20 +146,19 @@ pub fn view_resize(width: f64, height: f64) {
 /// about one eye. Off them, the rays' eye stood up to a step from the
 /// raster's, past the step back the world's depth is written by
 /// (screen_ray.wgsl `behind`) within ~64 units, and a face and what lay on
-/// it fought.
-pub fn view_compose(pose: Option<ObserverPose>) {
+/// it fought. Whether the view moved.
+pub fn view_compose(pose: Option<ObserverPose>) -> bool {
     let pose = pose.map(|p| ObserverPose {
         eye: p.eye.map(|v| to_real(from_real(v))),
         ..p
     });
     let moved = view().pose != pose;
-    observation::turn(moved);
+    crate::domain::view::observation::turn(moved);
     if moved {
         view().pose = pose;
         compose();
     }
-    view().pose = pose;
-    compose();
+    moved
 }
 
 fn compose() {
@@ -173,7 +172,12 @@ fn compose() {
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
     // plane holds every height's precision.
-    mat4::perspective(&mut v.proj, fov(), v.width / v.height, param::NEAR);
+    mat4::perspective(
+        &mut v.proj,
+        fov(),
+        v.width / v.height,
+        crate::domain::view::param::NEAR,
+    );
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
@@ -182,14 +186,12 @@ fn compose() {
 }
 
 /// The ray through `ndc_x`/`ndc_y` in [−1, 1], x right and y up, from
-/// `pose`, framed as the view frames its pose (`compose`), its tangents the
-/// view's lens as the cast's eye takes them (pxl-spec `Frustum::lens`), along
-/// its forward where it has no screen yet; `direction` is unit. A pick asks
-/// the pose its controller holds, which may have moved since the turn
-/// composed the view: the lens's tangents are the screen's alone, whatever
-/// the pose.
-pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
-    let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);
+/// `pose`, framed as the view frames its pose (`compose`); `direction` is
+/// unit. A pick asks the pose its controller holds, which may have moved
+/// since the turn composed the view.
+pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
+    let v = view();
+    let tan = HALF_TAN;
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();

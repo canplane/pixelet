@@ -8,6 +8,8 @@
     "controller",
     "input",
     "camera",
+    "edit",
+    "ghost",
     "environment",
     "companion",
     "preview",
@@ -22,8 +24,6 @@
     "dst",
     "decor",
     "objects",
-    "edit",
-    "hover",
     "puck",
     "settings"
   ]

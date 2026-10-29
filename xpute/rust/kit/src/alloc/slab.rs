@@ -1,7 +1,9 @@
 // xpute-kit/alloc/slab.rs
 
-//! Size classes over `buddy_tree.rs`, whose smallest block is a page (a
-//! 16-byte leaf would cost an 8 MiB split bitmap instead of 32 KiB). A class
+//! Size classes over `buddy_tree.rs`, whose smallest block is a page (its
+//! split bitmap a bit per parent node: over the guest's 2 GiB span,
+//! xpute-guest mem/heap.rs `SPAN_LOG2`, 64 KiB for its 4 KiB pages, mem/section.rs
+//! `PAGE_BYTES`, where a 16-byte leaf would cost 16 MiB). A class
 //! borrows a run of pages, carves it into slots SLUB-style (free list through
 //! the free slots, header in the run's leading slots), and gives the run back
 //! when its last slot is freed. A page or more goes straight to the buddy.
@@ -19,7 +21,7 @@ use super::buddy_tree::{BuddyMalloc, Range};
 const MIN_CLASS_LOG2: usize = 4;
 
 /// Enough for any smallest block in the address space.
-const MAX_CLASSES: usize = super::ADDR_BITS;
+const MAX_CLASSES: usize = super::ADDRESS_BITS;
 
 /// At least sixteen slots a run, so its header takes at most a sixteenth.
 const MIN_SLOTS_LOG2: usize = 4;

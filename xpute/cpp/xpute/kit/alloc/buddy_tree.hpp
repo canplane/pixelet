@@ -36,7 +36,7 @@ namespace xpute {
 // The bits a range's size and the exponents the buddy keeps fit in: a guest's
 // memory is 32-bit whatever the machine, though on a native build a range's
 // base is a full pointer (xpute-kit alloc.rs `ADDRESS_BITS`).
-inline constexpr std::size_t ADDR_BITS = 32;
+inline constexpr std::size_t ADDRESS_BITS = 32;
 
 // `MAX_LOG2` is the largest block the tree can describe, a bound on the
 // address space and not on any memory.
@@ -53,7 +53,7 @@ template <Range R> class BuddyMalloc {
     // A tree of fewer than four buckets has no split bit to keep, and one of
     // more than an exponent each, 0 through ADDRESS_BITS, a bitmap past what a
     // range can address.
-    static_assert(BUCKET_CNT >= 4 && BUCKET_CNT <= ADDR_BITS + 1, "a buddy tree's bucket count");
+    static_assert(BUCKET_COUNT >= 4 && BUCKET_COUNT <= ADDRESS_BITS + 1, "a buddy tree's bucket count");
 
     struct List {
         List *prev;

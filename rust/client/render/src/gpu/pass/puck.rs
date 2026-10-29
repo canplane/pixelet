@@ -4,7 +4,7 @@
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::frame::shader::word::BOX_VERTICES;
-use crate::gpu::api::{buf_entry, buffer_usage, bytes, Entry, Gpu, TrackedRenderPass};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, Entry, Gpu};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -14,7 +14,10 @@ use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 use crate::param::puck::beacon;
 
-fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
+/// The octahedron's: three for each of its eight faces.
+pub const BEACON_VERTICES: u32 = 24;
+
+fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
     let faces: [[[f32; 3]; 3]; 6] = [
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -23,7 +26,7 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
         [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
     ];
-    let (mut pos, mut uv, mut idx) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTICES as usize]);
+    let (mut position, mut uv, mut index) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTICES as usize]);
     for (f, [n, u, w]) in faces.iter().enumerate() {
         for (c, (a, b)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
             .into_iter()
@@ -43,9 +46,12 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
     (pos, uv, idx)
 }
 
-fn octahedron_lanes() -> ([f32; 72], [f32; 72]) {
+/// A float lane of the octahedron's: three a vertex.
+const BEACON_LANE: usize = 3 * BEACON_VERTICES as usize;
+
+fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
     let r = beacon::RADIUS;
-    let (mut pos, mut normal) = ([0.0; BEACON_LANE], [0.0; BEACON_LANE]);
+    let (mut position, mut normal) = ([0.0; BEACON_LANE], [0.0; BEACON_LANE]);
     let len = 3f32.sqrt();
     let mut k = 0;
     for sx in [1.0f32, -1.0] {
@@ -109,7 +115,7 @@ impl PuckPass {
         let (oct_p, oct_n) = octahedron_lanes();
         let [r, gr, b] = linear_rgb(indicator::ACTION);
         // The beacon is lit through the air: the air's words, transmittance and sampler.
-        let mut lit = vec![buf_entry(0, frame_buf)];
+        let mut lit = vec![buffer_entry(0, frame_buffer)];
         lit.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
         let beacon_frame_group = g.bind_group(beacon.layouts[0], &lit);
         PuckPass {
@@ -178,14 +184,14 @@ impl PuckPass {
         if cnt == 0 {
             return;
         }
-        pass.set_pipeline(self.beacon.pipeline);
-        pass.set_bind_group(0, self.beacon_frame_group, &[]);
-        pass.set_vertex_buf(0, self.oct_pos, 0, 0);
-        pass.set_vertex_buf(1, self.oct_normal, 0, 0);
-        for k in 0..cnt {
-            let (group, off) = slots.at(k);
-            pass.set_bind_group(1, group, &[off]);
-            pass.draw(BEACON_VERTICES, 1, 0, 0);
+        g.set_pipeline(pass, self.beacon.pipeline);
+        g.set_bind_group(pass, 0, self.beacon_frame_group, &[]);
+        g.set_vertex_buffer(pass, 0, self.oct_position, 0, 0);
+        g.set_vertex_buffer(pass, 1, self.oct_normal, 0, 0);
+        for k in 0..count {
+            let (group, offset) = slots.at(k);
+            g.set_bind_group(pass, 1, group, &[offset]);
+            g.draw(pass, BEACON_VERTICES, 1, 0, 0);
         }
     }
 
@@ -208,10 +214,10 @@ impl PuckPass {
             let Some(upload) = uploads.group_of(d[0]) else {
                 continue;
             };
-            let (group, off) = slots.at(k as u32);
-            pass.set_bind_group(1, group, &[off]);
-            pass.set_bind_group(2, upload, &[]);
-            pass.draw_indexed(BOX_VERTICES, d[1], 0, 0);
+            let (group, offset) = slots.at(k as u32);
+            g.set_bind_group(pass, 1, group, &[offset]);
+            g.set_bind_group(pass, 2, upload, &[]);
+            g.draw_indexed(pass, BOX_VERTICES, d[1], 0, 0);
         }
     }
 }

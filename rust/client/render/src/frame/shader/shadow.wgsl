@@ -49,12 +49,12 @@ fn sun_lit(world_pos: vec3f, n: vec3f) -> f32 {
   // much nearer the sun or further: compared at its own depth there
   // (receiver-plane depth bias, Isidoro 2006), not the receiver's, so the
   // casters' push need cover only the texels each tap filters.
-  let slope = sun_slope(n, 2.0 / size.x) * SHADOW_SPREAD;
+  let slope = sun_slope(n, 2.0 / size.x) * SUN_SPREAD;
   var lit = 0.0;
   for (var y = -1; y <= 1; y++) {
     for (var x = -1; x <= 1; x++) {
       let o = vec2f(f32(x), f32(y));
-      lit += textureSampleCompareLevel(shadow_map, shadow_sampler, uv + o * SHADOW_SPREAD / size, ndc.z + dot(slope, o));
+      lit += textureSampleCompareLevel(shadow_map, shadow_sampler, uv + o * SUN_SPREAD / size, ndc.z + dot(slope, o));
     }
   }
   return mix(1.0, lit / 9.0, strength);

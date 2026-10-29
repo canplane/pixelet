@@ -37,8 +37,8 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::sys::sched::edge;
 use fnv::{FnvHashMap, FnvHashSet};
-use pxl_render::frame::draw::DrawList;
-use pxl_spec::space::camera::eye::Observation;
+use pxl_spec::bake::tile::place::SPACING_CELLS;
+use pxl_spec::space::camera::grid::{px_per_unit, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::REACH;
@@ -118,14 +118,13 @@ struct Arrangement {
 }
 
 /// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
-/// its view (the observation holds its frustum), the places
+/// its view (the observation holds its frustum), the grid's τ, the places
 /// setting, the pin being written and the chat's line and where it hangs. A
 /// new input goes here or the step never sees it change.
 #[derive(Clone, PartialEq)]
 struct Seen {
     o: Observation,
     places: bool,
-    spacing: f64,
     drafted: Option<(EntryAt, u64)>,
     said: line::Said,
 }
@@ -197,12 +196,15 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 
 /// The width a place keeps to itself on the screen, in CSS pixels: its name
 /// wraps to it and its marker's region is it. A marker is laid out as the
-/// shell's text is, in CSS pixels, so the width is one on every screen, set
-/// to hold a name of a few words: a place's cell, sixteen camera grid cells
-/// (pxl-spec bake/tile/place.rs `SPREAD_STEPS`), on a view 1080 CSS pixels
-/// high at 50°. Which markers find room is then the screen's room, as on any
-/// map.
-const SPACING_PX: f64 = 193.0;
+/// shell's text is, in CSS pixels, so the width is one on every screen:
+/// `SPACING_CELLS` of the camera grid's cells (`lens::cell`) as the
+/// reference view draws them, about 190 and whole. Which markers find room
+/// is then the screen's room, as on any map.
+fn spacing_px() -> f64 {
+    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau())
+        * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG);
+    libm::rint(f64::from(SPACING_CELLS) * cell)
+}
 
 pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let p = ARRANGEMENT.get(Arrangement::default);
@@ -228,7 +230,6 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let seen = Seen {
         o,
         places: settings_store().place,
-        spacing: spacing_px(),
         drafted: pin::drafted(),
         said: line::said(o.eye),
     };
@@ -236,16 +237,16 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         return;
     }
     p.last = Some(seen.clone());
-    // The eye's windows' bricks in view (domain/view/observation.rs
-    // `bricks`), as decor's are: the box the world stands in over each,
+    // The eye's windows' squares in view (domain/view/observation.rs
+    // `squares`), as decor's are: the box the world stands in over each,
     // grown by what a marker draws past it at the box's far side; none past
     // where the rays end, over ground the sky's Earth stands for.
     let now = &mut p.now;
     now.drawn.clear();
     let reach = reach_px(SPACING_PX);
-    let drawn = observation::eye_draw_reach().unwrap_or(0.0);
-    observation::bricks(&o, &mut |brick, heights| {
-        let b = region(brick, heights);
+    let drawn = crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0);
+    crate::domain::view::observation::squares(&o, &mut |square, heights| {
+        let b = region(square, heights);
         if o.measure(&b).near > drawn {
             return;
         }
@@ -332,7 +333,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     pin::show(&mut pins, o.eye, &mut shown);
     place::show(&mut read_places, o.eye, &mut shown);
     shown.extend(seen.said.shown());
-    let spacing = SPACING_PX;
+    let spacing = spacing_px();
     // What was drawn last by its holder's key, read once: what a holder
     // shows changed, and what was drawn stays until the new one is ready to
     // show.
@@ -481,3 +482,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
         .find(|(r, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y))
         .map(|&(_, went)| went)
 }
+
+#[cfg(test)]
+#[path = "arrangement.test.rs"]
+mod test;

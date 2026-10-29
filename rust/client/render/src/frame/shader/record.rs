@@ -40,6 +40,8 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_SUN_SAMPLE => "sun_sample_cs",
         SHADER_SUN_SAMPLE_BOX => "sun_sample_box_cs",
         SHADER_SUN_MARK => "sun_mark_cs",
+        SHADER_SUN_MARK_DRAWN => "sun_mark_drawn_cs",
+        SHADER_SUN_REACH => "sun_reach_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -276,7 +278,9 @@ const LIT_FRAME: [[u32; 2]; 15] = {
         AIR[10],
     ]
 };
-/// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
+/// The air's entries whole, the volume among them, which the sheets read as
+/// every painter does (atmos_air.wgsl `seen_from_eye`); the tables and the
+/// Earth's maps it does not read are laid out because the shader declares them.
 const CLOUD_GROUP: [[u32; 2]; 15] = and(
     [[0, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]],
     AIR,
@@ -350,16 +354,20 @@ const BOX_LANES: [Lane; 2] = [
 ];
 const PUCK_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
 const PUCK_BEACON_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
-/// A debug line's vertex, its place and its color, a segment's two read as
+/// A debug line's vertex, its place and its colour, a segment's two read as
 /// one instance; a debug face's vertex, its place.
 pub const DEBUG_VERTEX_BYTES: u32 = 28;
 pub const DEBUG_FACE_VERTEX_BYTES: u32 = 12;
 const DEBUG_LANES: [Lane; 1] = [Lane {
-    stride: 56,
+    stride: 2 * DEBUG_VERTEX_BYTES,
     step: PER_INSTANCE,
-    attributes: &[[0, 0, F32X3], [1, 12, F32X4], [2, 28, F32X3]],
+    attributes: &[
+        [0, 0, F32X3],
+        [1, 12, F32X4],
+        [2, DEBUG_VERTEX_BYTES, F32X3],
+    ],
 }];
-const DEBUG_FACE_LANES: [Lane; 1] = [vertex(12, &[[0, 0, F32X3]])];
+const DEBUG_FACE_LANES: [Lane; 1] = [vertex(DEBUG_FACE_VERTEX_BYTES, &[[0, 0, F32X3]])];
 
 /// `a` then `b`: a group laid out as another and more.
 const fn and<const N: usize, const M: usize, const R: usize>(

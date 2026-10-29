@@ -167,7 +167,8 @@ fn beacon_speed() -> f64 {
 /// the faces open to the air it draws (1, a bit a face): the stride
 /// puck_zone.wgsl reads (pxl-render frame/shader/word.rs
 /// `PUCK_ZONE_INSTANCE_FLOATS`).
-pub const ZONE_INSTANCE_FLOATS: usize = word::PUCK_ZONE_INSTANCE_FLOATS as usize;
+pub const ZONE_INSTANCE_FLOATS: usize =
+    pxl_render::frame::shader::word::PUCK_ZONE_INSTANCE_FLOATS as usize;
 
 /// The zone shown and its beacon.
 struct Zone {

@@ -21,13 +21,16 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
-    BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
-    GROUND_ALBEDO, KM_PER_U, LAND_ALT_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
-    MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER,
-    OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS,
-    SUN_DIR, TOP_RADIUS,
+    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, DRAWN, EARTH_REACH, EARTH_TILES, EARTH_WINDOW,
+    EXPOSURE, GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
+    MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION,
+    OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL,
+    SUN_ANGULAR_RADIUS, SUN_DIR, TOP_RADIUS,
 };
-use crate::frame::shader::word::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
+use crate::frame::shader::word::{
+    AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS, IRRADIANCE_SIZE, MULTISCATTER_SIZE, SKY_VIEW_SIZE,
+    TRANSMITTANCE_SIZE,
+};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
     word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, DONE,
@@ -42,8 +45,13 @@ use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
-/// Bindings 8 through 18, and the air's volume at 22: eleven entries.
+/// Bindings 8 through 18 but the sky view's own 14, and the air's volume at
+/// 22: eleven entries.
 pub const AIR_ENTRIES: usize = 11;
+
+/// The air's words, its transmittance and its sampler: what a pass lit
+/// through the air reads of it (atmos_medium.wgsl).
+pub const MEDIUM: [u32; 3] = [8, 9, 11];
 
 /// What the volume's maker binds: the frame, the volume it writes, the
 /// air's words and the tables it marches through, and the sky's ray.
@@ -82,18 +90,15 @@ const _: () = assert!(
     "the window's layers fit their word"
 );
 
-/// The size bake_earth writes the Earth's global picture at.
-const EARTH_SIZE: (u32, u32) = (2048, 1024);
-
 const TABLES: usize = 6;
 /// Transmittance, multiple scattering, sky view, exposure, irradiance, moonlit sky.
 pub(crate) const SIZES: [(u32, u32); TABLES] = [
-    (256, 64),
-    (32, 32),
-    (192, 108),
+    TRANSMITTANCE_SIZE,
+    MULTISCATTER_SIZE,
+    SKY_VIEW_SIZE,
     (1, 1),
-    (64, 16),
-    (192, 108),
+    IRRADIANCE_SIZE,
+    SKY_VIEW_SIZE,
 ];
 pub(crate) const TRANSMITTANCE: usize = 0;
 pub(crate) const MULTISCATTER: usize = 1;
@@ -256,7 +261,7 @@ impl Atmosphere {
             moved: false,
             sun_mu: 1.0,
             moon_mu: 1.0,
-            earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
+            earth: ImageMap::new(g, earth::PICTURE.0, earth::PICTURE.1),
             earth_tiles: {
                 let texture = g.texture(
                     TILE_CELLS,
@@ -280,7 +285,6 @@ impl Atmosphere {
             let shared = air.iter().filter(|e| bindings.contains(&e.binding));
             shared.chain(own).copied().collect()
         };
-        let medium = [8, 9, 11];
         let multiscatter = view_entry(12, views[MULTISCATTER]);
         let frame = buf_entry(0, frame_buf);
         let light = |which: f32| {
@@ -296,8 +300,8 @@ impl Atmosphere {
             .collect();
         let reads: [(usize, Vec<Entry>); TABLES] = [
             (TRANSMITTANCE, of(&[8], &[])),
-            (MULTISCATTER, of(&medium, &[])),
-            (IRRADIANCE, of(&medium, &[multiscatter])),
+            (MULTISCATTER, of(&MEDIUM, &[])),
+            (IRRADIANCE, of(&MEDIUM, &[multiscatter])),
             // The views are measured from the frame's up, and take their
             // slopes off the land's light too.
             (
@@ -423,7 +427,7 @@ impl Atmosphere {
 
     /// Every light's and ray's height is measured up the world's z, straight
     /// up where the eye stands.
-    pub fn lay_out(&mut self, g: &Gpu, env: &[f32]) {
+    pub fn lay_out(&mut self, g: &Gpu, env: &[f32], reach: f32) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let alt_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
@@ -433,7 +437,7 @@ impl Atmosphere {
             .copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
         self.words[CAMERA_ALT] = alt_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
-        self.words[LAND_ALT_KM] = env[ENV_AIR + 3];
+        self.words[LAND_ALTITUDE_KM] = env[ENV_AIR + 3];
         self.words[DRAWN] = reach;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         let r = &mut self.read;

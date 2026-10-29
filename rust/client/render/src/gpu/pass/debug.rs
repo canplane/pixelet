@@ -7,7 +7,7 @@ use crate::frame::draw::{uniform_of, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
-use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
+use crate::gpu::api::{buffer_entry, bytes, pass_desc, Gpu, Load, Stamp};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -104,13 +104,13 @@ impl DebugPass {
             );
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buf, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
-                let (group, off) = slots.at(k as u32);
-                g.set_bind_group(pass, 1, group, &[off]);
-                g.set_vertex_buf(
+            for (k, _, buffer, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
+                let (group, offset) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[offset]);
+                g.set_vertex_buffer(
                     pass,
                     0,
-                    buf,
+                    buffer,
                     lines * DEBUG_VERTEX_BYTES,
                     faces * DEBUG_FACE_VERTEX_BYTES,
                 );
@@ -136,10 +136,10 @@ impl DebugPass {
             }
             g.set_pipeline(pass, self.built.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buf, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
-                let (group, off) = slots.at(k as u32);
-                g.set_bind_group(pass, 1, group, &[off]);
-                g.set_vertex_buf(pass, 0, buf, 0, lines * DEBUG_VERTEX_BYTES);
+            for (k, _, buffer, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
+                let (group, offset) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[offset]);
+                g.set_vertex_buffer(pass, 0, buffer, 0, lines * DEBUG_VERTEX_BYTES);
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }

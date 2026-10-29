@@ -42,13 +42,13 @@ export const SETTING = {
   },
   /** Procedurally scattered decor only; what the player placed stays.
    *
-   * Med because it is models rather than a shading term: a cube of the eye's builds its
-   * decor and the frame draws it, so what it costs follows what is in view.
-   * It has been the frame's own bottleneck — doc/minutes/archive/20260912-what-to-render-when.md
-   * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
-   * frames missing a vsync — and the projected-size criterion holds it to
-   * the nearest tier without making far decor cheap, the impostor tier that
-   * would being decided and not built. The badge is an ordering, and this is
+   * Med because it is models rather than a shading term: the GPU grows the
+   * ground's decor where the eye's windows are (decor_cs) and the frame draws
+   * each kind as a model, a sprite (an impostor) or nothing by the angle it
+   * spans, so what it costs follows what is in view. It has been the frame's
+   * own bottleneck — doc/minutes/archive/20260912-what-to-render-when.md reads
+   * GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving frames
+   * missing a vsync, before the tiers. The badge is an ordering, and this is
    * the one to reach for before any shading term. */
   decor: {
     key: 1 as number,
@@ -434,5 +434,202 @@ export const SETTING_SHIPPED = {
     },
     section: "debug",
     kept: false,
+  },
+} as const;
+
+/** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
+export const SETTINGS_SHIPPED = {
+  /** Ground color from the art pack (four taps of the layer array per
+   * fragment) instead of the flat per-instance average. The paint shader's
+   * `frame.low_spec` is this, inverted.
+   *
+   * Low because the four taps are all of it: fill rate, which scales with
+   * the screen and not with the world, and nothing else — no geometry, no
+   * pass of its own, and no work off the GPU past an atlas the client
+   * already holds. */
+  textures: {
+    key: 0 as number,
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "low",
+  },
+  /** Procedurally scattered decor only; what the player placed stays.
+   *
+   * Med because it is models rather than a shading term: the GPU grows the
+   * ground's decor where the eye's windows are (decor_cs) and the frame draws
+   * each kind as a model, a sprite (an impostor) or nothing by the angle it
+   * spans, so what it costs follows what is in view. It has been the frame's
+   * own bottleneck — doc/minutes/archive/20260912-what-to-render-when.md reads
+   * GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving frames
+   * missing a vsync, before the tiers. The badge is an ordering, and this is
+   * the one to reach for before any shading term. */
+  decor: {
+    key: 1 as number,
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "med",
+  },
+  /** The cumulus' models and the altocumulus and cirrus sheets
+   * (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+   * Med as decor is: models in view, and a pass over the screen for the sheets. */
+  clouds: {
+    key: 2 as number,
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "med",
+  },
+  /** The places' markers over the world, from the published places tiles. */
+  place: {
+    key: 3 as number,
+    kind: "toggle",
+    default: false,
+    section: "world",
+    cost: "low",
+    kept: false,
+  },
+  /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
+   * Off by default: the tilt is the one control a view from above is expected to
+   * have, and locking it reads as the app being stuck. */
+  tilt_lock: {
+    key: 4 as number,
+    kind: "toggle",
+    default: false,
+    section: "camera",
+  },
+  /** Which controller makes the camera's pose; CAMERA_MODES says each. To
+   * first person the person stands at the focus, the eye at its
+   * height over the ground; to third the focus is laid on the ground
+   * and the eye steps back by the radius. */
+  camera_mode: {
+    key: 5 as number,
+    kind: "choice",
+    default: "orbit",
+    options: {
+      orbit: 0 as number,
+      free: 1 as number,
+    },
+    section: "world",
+    kept: false,
+  },
+  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
+  orbit_obstacle: {
+    key: 7 as number,
+    kind: "choice",
+    default: "climb",
+    options: {
+      through: 0 as number,
+      stop: 1 as number,
+      climb: 2 as number,
+    },
+    section: "camera",
+    dev_options: ["through"],
+  },
+  /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
+   * A few fragment ops behind a uniform; the shader is the same either way. */
+  edge_shade: {
+    key: 8 as number,
+    kind: "toggle",
+    default: true,
+    section: "lighting",
+    cost: "low",
+  },
+  /** A uniform on an already-compiled shader term; not a pass. */
+  rim_light: {
+    key: 9 as number,
+    kind: "toggle",
+    default: true,
+    section: "lighting",
+    cost: "low",
+  },
+  /** corner, the occlusion a voxel world reads off its own cubes' faces;
+   * screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
+   * says each. */
+  ao: {
+    key: 10 as number,
+    kind: "choice",
+    default: "corner",
+    options: {
+      off: 0 as number,
+      corner: 1 as number,
+      screen: 2 as number,
+    },
+    costs: ["", "low", "high"],
+    section: "lighting",
+  },
+  /** The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
+   * cast once more from the sun as the eye's rays are, beams and samples on
+   * the observed pyramid, the boxes they stop at drawn and a texel's pick
+   * taken, the rest walked (pxl-shader sun.rs), recast only where what it
+   * reads moves; decor and the actors drawn into it depth only, and a 3x3
+   * compare per fragment; 16 MB of map. */
+  shadows: {
+    key: 11 as number,
+    kind: "toggle",
+    default: false,
+    cost: "high",
+    section: "lighting",
+  },
+  /** The pixels the world is filled at, the GPU's largest cost: two to a
+   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
+  resolution: {
+    key: 12 as number,
+    kind: "choice",
+    default: "auto",
+    options: {
+      auto: 0 as number,
+      fixed: 1 as number,
+      low: 2 as number,
+    },
+    section: "display",
+  },
+  /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
+  view: {
+    key: 13 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
+  profiler: {
+    key: 14 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs). */
+  world_gizmo: {
+    key: 15 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them. */
+  camera_gizmo: {
+    key: 16 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  person: {
+    key: 17 as number,
+    kind: "index",
+    default: 1 as number,
+    section: "character",
+  },
+  pet: {
+    key: 18 as number,
+    kind: "index",
+    default: 5 as number,
+    section: "character",
+  },
+  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl). */
+  ray_steps: {
+    key: 19 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
   },
 } as const;

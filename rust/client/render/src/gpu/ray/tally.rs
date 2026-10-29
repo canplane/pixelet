@@ -61,12 +61,11 @@ pub(super) struct Tally {
     mapping: Box<u32>,
     copied: bool,
     mapped: bool,
-    sums: [f64; RAY_SUMS],
 }
 
 /// The sums since boot (`Tally::sums`): beside the tally, so a lost device's
 /// next cast sums on.
-static SUMS: Global<[f64; RAY_SUMS]> = Global::new();
+static SUMS: xpute_guest::global::Global<[f64; RAY_SUMS]> = xpute_guest::global::Global::new();
 
 impl Tally {
     /// Its buffers, made with the cast's: a few words.
@@ -87,7 +86,6 @@ impl Tally {
             mapping: Box::new(DONE),
             copied: false,
             mapped: false,
-            sums: [0.0; RAY_SUMS],
         }
     }
 
@@ -154,7 +152,8 @@ impl Tally {
     /// copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
         if self.mapped && *self.mapping & DONE != 0 {
-            let (l, f, s) = (&self.landed, self.copied_frame, &mut self.sums);
+            let (l, f) = (&self.landed, self.copied_frame);
+            let s = SUMS.get(|| [0.0; RAY_SUMS]);
             s[FRAMES] += 1.0;
             for o in 0..tally::OBSERVERS {
                 if !f.casts[o as usize] {
@@ -177,8 +176,8 @@ impl Tally {
     }
 
     /// Its sums since boot (`RAY_SUMS`).
-    pub(super) fn sums(&self) -> [f64; RAY_SUMS] {
-        self.sums
+    pub(super) fn sums() -> [f64; RAY_SUMS] {
+        *SUMS.get(|| [0.0; RAY_SUMS])
     }
 
     /// The frame its copy was encoded in was dropped.

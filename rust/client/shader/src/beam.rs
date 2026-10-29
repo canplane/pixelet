@@ -151,7 +151,7 @@ where
     } else {
         (cast::Node::ROOT, q.root(cast::Node::ROOT.idx(origin)), t)
     };
-    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, &mut ())
+    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep)
 }
 
 /// Each beam ray of its observer's lattice, a thread a corner: the camera

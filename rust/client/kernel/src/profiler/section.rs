@@ -8,15 +8,15 @@
 use core::mem::{offset_of, size_of};
 
 use crate::profiler::frame::{FrameSample, EFFECTS, GPU_SPANS};
-use crate::profiler::spec::{FRAME, LIMIT, NOW, SPREAD, STAT, STEP_STAT, STREAM_STAT, WAKES};
+use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
 use crate::profiler::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 use xpute_guest::sched::tick::PHASES;
 
-const REASONS: usize = LIMIT::REASONS as usize;
-const REASON_WORDS: usize = LIMIT::REASON_WORDS as usize;
-const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
+const REASONS: usize = LIMITS::REASONS as usize;
+const REASON_WORDS: usize = LIMITS::REASON_WORDS as usize;
+const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
 const CATEGORIES: usize = STREAM_NAMES;
 
@@ -50,16 +50,27 @@ pub struct FramesSection {
     pub n: f64,
     pub seconds: f64,
     pub moving: f64,
+    /// The moving frames' intervals summed: a second over their mean
+    /// interval is the rate they were drawn at.
+    pub moving_ms: f64,
     pub missed: f64,
     pub overran: f64,
     /// Intervals whose turns ran past them.
     pub long: f64,
     pub turns: f64,
-    /// Frames a GPU read landed with: the GPU's figures are over these alone.
+    /// Frames a GPU read timed: the GPU's figures are over these alone.
     pub gpu_read: f64,
     pub interval: Spread,
     pub busy: Spread,
     pub tick: Spread,
+    /// The other parts of `busy`, and what they leave of it, unmeasured.
+    pub effects: Spread,
+    pub stage: Spread,
+    pub tasks: Spread,
+    pub profiler: Spread,
+    pub rest: Spread,
+    /// Each effect's p95, in EFFECT_NAMES' order.
+    pub effects_p95: [f64; EFFECTS],
     pub gpu: Spread,
     /// The p95 alone of each phase and each span: what is read of them.
     pub phases_p95: [f64; PHASES.len()],
@@ -68,6 +79,9 @@ pub struct FramesSection {
     pub kinds: [f64; FRAME_KINDS],
     pub wakes: [f64; WAKES],
     pub heap_used_delta_bytes: f64,
+    /// The window's first frame and its last: what is summed since boot is
+    /// the window's as the one less the other.
+    pub first: FrameSample,
     pub last: FrameSample,
 }
 
@@ -76,20 +90,20 @@ const _: () = assert!(
     "the last frame runs past STAT's frames section"
 );
 
-words!(FramesSection, STAT::frames::WORDS,
-    present => STAT::frames::present, n => STAT::frames::n, seconds => STAT::frames::seconds,
-    moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
-    missed => STAT::frames::missed, overran => STAT::frames::overran,
-    long => STAT::frames::long, turns => STAT::frames::turns, gpu_read => STAT::frames::gpu_read,
-    interval => STAT::frames::interval, busy => STAT::frames::busy,
-    tick => STAT::frames::tick, effects => STAT::frames::effects,
-    stage => STAT::frames::stage, tasks => STAT::frames::tasks,
-    profiler => STAT::frames::profiler, rest => STAT::frames::rest,
-    effects_p95 => STAT::frames::effects_p95, gpu => STAT::frames::gpu,
-    phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
-    kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
-    heap_used_delta_bytes => STAT::frames::heap_used_delta_bytes,
-    first => STAT::frames::first, last => STAT::frames::last,
+words!(FramesSection, SUMMARY::frames::WORDS,
+    present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
+    moving => SUMMARY::frames::moving, moving_ms => SUMMARY::frames::moving_ms,
+    missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
+    long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
+    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy,
+    tick => SUMMARY::frames::tick, effects => SUMMARY::frames::effects,
+    stage => SUMMARY::frames::stage, tasks => SUMMARY::frames::tasks,
+    profiler => SUMMARY::frames::profiler, rest => SUMMARY::frames::rest,
+    effects_p95 => SUMMARY::frames::effects_p95, gpu => SUMMARY::frames::gpu,
+    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95,
+    kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
+    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes,
+    first => SUMMARY::frames::first, last => SUMMARY::frames::last,
 );
 
 #[repr(C)]
@@ -103,7 +117,7 @@ pub struct StreamStats {
     pub lat_p95: f64,
     pub reason_cnt: f64,
     /// (reason, status, count) each, commonest first.
-    pub reasons: [[f64; 3]; REASONS],
+    pub reasons: [[f64; REASON_WORDS]; REASONS],
     pub phase_n: f64,
     /// NaN for a phase no run in the window reported.
     pub phase_mean: [f64; TASK_PHASES],

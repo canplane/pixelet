@@ -15,15 +15,15 @@ use resvg::usvg::Tree;
 use std::path::Path;
 
 /// Carto's symbols, drawn at the sheet's device pixels a pixel.
-pub const SYMBOL_PX: u32 = CARTO_PX * SYMBOL_RATIO;
+pub const SYMBOL_PX: u32 = CARTO_PX * SHEET_RATIO;
 
 /// Carto's symbols' side, in pixels.
 const CARTO_PX: u32 = 14;
 
-/// The device pixels a pixel the symbols are rasterized at, written into the
-/// spec, where pxl-spec asset.rs holds it to space/camera/grid.rs
-/// `RATIO_MAX`.
-const SYMBOL_RATIO: u32 = 2;
+/// The sheet's device pixels a pixel (pxl-render gpu/sheet.rs `SHEET_SCALE`),
+/// pxl-spec space/camera/grid.rs `RATIO_MAX`, which no generator may depend
+/// on, held equal by a test that reads it.
+const SHEET_RATIO: u32 = 2;
 
 pub struct Symbol {
     /// As Carto gives it.
@@ -168,3 +168,7 @@ pub fn render_ts(symbols: &[Symbol]) -> String {
     ts.push_str("};\n");
     ts
 }
+
+#[cfg(test)]
+#[path = "symbol.test.rs"]
+mod test;

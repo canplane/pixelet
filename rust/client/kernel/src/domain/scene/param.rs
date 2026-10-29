@@ -9,14 +9,14 @@
 
 /// Fresnel rim highlight, applied to everything lit since one shader lights
 /// it all, on the shader's linear falloff: how much a rim brightens a face at
-/// its edge, as a share of its own light — the day's rim of 0.7 of the sky's
-/// light, the sky a fifth of a day's light on a face of albedo 0.3.
+/// its edge, as a share of its own light: set at 0.5 by eye, near what the
+/// day's terms give, about 0.47, a rim of 0.7 of the sky's light, the sky a
+/// fifth of a day's light on a face of albedo 0.3.
 pub const RIM_INTENSITY: f64 = 0.5;
 
 /// Edge shading along a cube's creases, convex and concave: its darkening,
-/// and its width in units, one line alike on cells of every size and
-/// thinned by perspective alone: about a CSS pixel at the default orbit's
-/// focus.
+/// and its width in units, a 64th of one, about 3 cm at Seoul's latitude:
+/// one line alike on cells of every size, thinned by perspective alone.
 pub const EDGE_STRENGTH: f64 = 0.3;
 pub const EDGE_WIDTH: f64 = 1.0 / 64.0;
 
@@ -33,14 +33,10 @@ pub const AO_STRENGTH: f64 = 0.2;
 /// `GroundBuffers::grow`), the brick that ran out filled again a turn later, so a dense view reaches 64 MiB in six. Not yet
 /// measured against a dense view.
 pub const WAYS_POOL_FIRST_BYTES: u32 = 1 << 20;
-const _: () = {
-    use pxl_spec_core::way::tree::{FAMILY_WORDS, POOL_FAMILIES};
-    assert!(
-        WAYS_POOL_FIRST_BYTES <= POOL_FAMILIES * FAMILY_WORDS * 4
-            && WAYS_POOL_FIRST_BYTES >= 2 * FAMILY_WORDS * 4,
-        "the pool's first is no more than its most, nor less than a family past family 0"
-    );
-};
+const _: () = assert!(
+    WAYS_POOL_FIRST_BYTES <= crate::domain::layer::terrain::param::WAYS_POOL_BYTES
+        && WAYS_POOL_FIRST_BYTES >= 2 * pxl_spec_core::way::tree::FAMILY_WORDS * 4
+);
 
 /// A brick's ways' records' room in each of its reads at first, 16 KiB,
 /// 240 families': a brick with no ways reads its count alone, 4 B. Every

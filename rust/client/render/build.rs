@@ -96,6 +96,28 @@ fn main() {
         looks,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
+    // How the samples' boxes lie in their buffer (pxl-spec-core raster.rs),
+    // as the raster reads them, and a box's 36 corners as `corner` winds
+    // them, then wound the other way. The depth a hit's box about the eye
+    // is drawn at, short of a lack's 1: finite, as every literal here is.
+    {
+        use pxl_spec_core::raster::{
+            corner, BOX_AXIS, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR,
+        };
+        let n = word::BOX_VERTICES;
+        let corners: Vec<String> = (0..2 * n)
+            .map(|k| corner(k % n, k >= n))
+            .map(|c| format!("vec3f({}.0, {}.0, {}.0)", c[0], c[1], c[2]))
+            .collect();
+        let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
+        let raster = format!(
+            "const RASTER_CORNERS = array<vec3f, {}>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            2 * n,
+            corners.join(", "),
+            EYED - 1
+        );
+        std::fs::write(out.join("raster_box.wgsl"), raster).expect("the raster's boxes' shader");
+    }
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
     use pxl_spec_core::eye::{FORWARD, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
@@ -151,11 +173,11 @@ fn main() {
 /// are, which the pass writes to the screen; the ramp read straight between
 /// its stops.
 fn debug_looks() -> String {
-    use debug_look::{share, steps};
+    use debug_look::{grid, share, steps};
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays
     // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
     // squared is within (1, `SPANS`²]: the tints' bounds are those.
-    let spans = grid::SPANS;
+    let spans = pxl_spec_core::grid::SPANS;
     assert!(
         share::finer::most == 1.0 && share::within::most == spans * spans,
         "debug_look.json's share bounds are the split's"
@@ -307,6 +329,17 @@ fn params() -> String {
     out
 }
 
+/// The pxl-spec-core settings (its param.rs) a hand-written shader names,
+/// each by its path as `params` names render's (`night::FALL` is
+/// `NIGHT_FALL`), so one shared with render's would not build.
+fn spec_params() -> String {
+    let [from, to] = pxl_spec_core::param::night::FALL.map(|v| v as f32);
+    let spread = pxl_spec_core::param::sun::SPREAD;
+    format!(
+        "const NIGHT_FALL: vec2f = vec2f({from:?}, {to:?});\nconst SUN_SPREAD: f32 = {spread:?};\n"
+    )
+}
+
 /// What the host lays out and every shader reads (frame/shader/word.rs), as
 /// WGSL: a uniform's floats as its vec4s; and the pxl-spec-core values every
 /// shader may name, the world's height and the sun's taps apart.
@@ -338,8 +371,7 @@ fn words() -> String {
         .concat(),
         format!("const SHEET_FILL: u32 = {SHEET_FILL}u;\nconst SHEET_STROKE: u32 = {SHEET_STROKE}u;\nconst SHEET_TRIANGLE: u32 = {SHEET_TRIANGLE}u;\nconst SHEET_TEXT: u32 = {SHEET_TEXT}u;\nconst SHEET_HALO: u32 = {SHEET_HALO}u;\n"),
         format!("const BOX_XY_STEPS: u32 = {BOX_XY_STEPS}u;\nconst BOX_VERTICES: u32 = {BOX_VERTICES}u;\n"),
-        format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\nconst HALF_STEP: f32 = {HALF_STEP:?};\n"),
-        format!("const MOON_ANGULAR_RADIUS: f32 = {MOON_ANGULAR_RADIUS:?};\nconst MOON_ALBEDO: f32 = {MOON_ALBEDO:?};\nconst MOON_MAP_MEAN: f32 = {MOON_MAP_MEAN:?};\n"),
+        format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\n"),
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
@@ -429,6 +461,7 @@ fn assemble(out: &Path) {
     };
     let constant = read("constant");
     let (mut sources, mut stages) = (String::new(), String::new());
+    let mut rastered = false;
     for (kind, parts) in part::PARTS.iter().enumerate() {
         let generated = parts.len() == 1 && parts[0].ends_with(".gen");
         let mut text = if generated {
@@ -442,6 +475,22 @@ fn assemble(out: &Path) {
         }
         let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
+        // The raster's view as the host writes it (frame/shader/word.rs `RASTER_FLOATS`).
+        let raster = module
+            .types
+            .iter()
+            .find(|(_, t)| t.name.as_deref() == Some("Raster"));
+        if let Some((_, ty)) = raster {
+            rastered = true;
+            let naga::TypeInner::Struct { span, .. } = ty.inner else {
+                panic!("raster.wgsl's `Raster` is a struct")
+            };
+            assert_eq!(
+                span as usize,
+                4 * word::RASTER_FLOATS,
+                "raster.wgsl's `Raster` against `RASTER_FLOATS`"
+            );
+        }
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
@@ -481,6 +530,7 @@ fn assemble(out: &Path) {
             .collect();
         stages += &format!("    &[{}],\n", entries.join(", "));
     }
+    assert!(rastered, "no shader holds raster.wgsl's `Raster`");
     let root = out.parent().expect("OUT_DIR");
     std::fs::write(
         root.join("sources.rs"),

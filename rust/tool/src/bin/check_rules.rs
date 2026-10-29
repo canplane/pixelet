@@ -4,9 +4,9 @@
 //! pointer casts in offset crates, each rounding half to even in every
 //! language, no CommonJS file, each generated shader made from the sources the
 //! tree holds now, the layers' order, where nothing names what is above it,
-//! and the screen's pixels read only at the screen. A rule Rust alone keeps
-//! is clippy's (rust/clippy.toml); how the tree is written is the convention
-//! skill's.
+//! the screen's pixels read only at the screen, and each workgroup's size
+//! its constant. A rule Rust alone keeps is clippy's (rust/clippy.toml); how
+//! the tree is written is the convention skill's.
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -219,7 +219,7 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
     ),
     (
         "decor.rs",
-        "decor_cnt_cs",
+        "decor_count_cs",
         "client/shader/src/decor.rs",
         "RECORD_LANES",
         1,
@@ -526,13 +526,13 @@ fn run() -> Result<Vec<String>, String> {
     }
     for (file, entry, at, name, sides) in WORKGROUPS {
         let size = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
-        let val = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
+        let value = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
         let held = size
-            .zip(val)
+            .zip(value)
             .is_some_and(|(s, v)| s[..sides].iter().all(|&d| d == v));
         if !held {
             problems.push(format!(
-                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {val:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
+                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {value:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
             ));
         }
     }
@@ -555,7 +555,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order and the screen's pixels hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels and the workgroups' sizes hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -612,7 +612,7 @@ mod tests {
     }
 
     #[test]
-    fn workgroup_vs_constant() {
+    fn a_workgroup_is_read_against_its_constant() {
         let text = "const LANES: u32 = 64;\n#[spirv(compute(threads(64, 1, 1), entry_point_name = \"way_cs\"))]\n";
         assert_eq!(threads(text, "way_cs"), Some([64, 1, 1]));
         assert_eq!(threads(text, "way_free_cs"), None);

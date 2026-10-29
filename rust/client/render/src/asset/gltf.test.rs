@@ -41,12 +41,12 @@ fn glb(json: &str, bin: &[u8]) -> Vec<u8> {
 }
 
 /// Three positions, then three u16 indices from byte 36.
-fn triangle_bin(idx: [u16; 3]) -> Vec<u8> {
+fn triangle_bin(index: [u16; 3]) -> Vec<u8> {
     let mut bin = Vec::new();
     for v in [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0] {
         bin.extend(v.to_le_bytes());
     }
-    for i in idx {
+    for i in index {
         bin.extend(i.to_le_bytes());
     }
     bin
@@ -99,21 +99,21 @@ fn every_shipped_model_parses() {
 }
 
 #[test]
-fn triangle_parses() {
+fn the_triangle_parses_as_written() {
     let gltf = parse(&edited(&[])).unwrap();
     assert_eq!(gltf.roots, [0]);
-    assert_eq!(gltf.meshes[0][0].pos.len(), 9);
-    assert_eq!(gltf.meshes[0][0].idx, [0, 1, 2]);
+    assert_eq!(gltf.meshes[0][0].position.len(), 9);
+    assert_eq!(gltf.meshes[0][0].index, [0, 1, 2]);
 }
 
 #[test]
-fn idx_past_vertices_refused() {
+fn an_index_past_the_vertices_is_refused() {
     let bytes = glb(TRIANGLE, &triangle_bin([0, 1, 3]));
     assert_eq!(refused(&bytes), Errno::EBADMSG);
 }
 
 #[test]
-fn missing_reference_refused() {
+fn a_file_that_names_what_is_not_there_is_refused() {
     let cases: &[(&str, &[(&str, &str)])] = &[
         (
             "an accessor past its view",
@@ -227,7 +227,7 @@ fn missing_reference_refused() {
 }
 
 #[test]
-fn unread_refused() {
+fn what_is_not_read_is_refused_rather_than_misread() {
     let sparse = edited(&[(
         r#""count":3,"type":"VEC3"}"#,
         r#""count":3,"type":"VEC3","sparse":{"count":1}}"#,
@@ -241,14 +241,14 @@ fn unread_refused() {
 }
 
 #[test]
-fn chunk_past_file_refused() {
+fn a_chunk_past_the_file_is_refused() {
     let mut bytes = edited(&[]);
     bytes[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
     assert_eq!(refused(&bytes), Errno::EBADMSG);
 }
 
 #[test]
-fn oversize_decode_refused() {
+fn a_file_that_decodes_past_its_size_is_refused() {
     // Zeros of no view, a count the file does not hold.
     let zeros = edited(&[(
         r#"{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}"#,
@@ -283,7 +283,7 @@ fn oversize_decode_refused() {
 }
 
 #[test]
-fn mesh_counted_per_node() {
+fn a_mesh_drawn_at_many_nodes_is_counted_at_each() {
     let nodes = vec![r#"{"mesh":0}"#; MAX_SCENE_PRIMITIVES as usize + 1].join(",");
     let roots: Vec<String> = (0..=MAX_SCENE_PRIMITIVES).map(|i| i.to_string()).collect();
     let instanced = edited(&[
@@ -297,7 +297,7 @@ fn mesh_counted_per_node() {
 }
 
 #[test]
-fn accessor_looked_up_once() {
+fn a_large_accessor_read_for_many_primitives_is_looked_up_once() {
     // A megabyte of extras on the accessor every primitive reads: looked up
     // again for each, it would be scanned some ten thousand times.
     let extras = format!(r#","extras":"{}"}}"#, "x".repeat(1 << 20));
@@ -315,7 +315,7 @@ fn accessor_looked_up_once() {
 }
 
 #[test]
-fn deep_chain_no_recursion() {
+fn a_deep_chain_of_nodes_is_walked_without_recursion() {
     let depth = 100_000;
     let mut nodes: Vec<String> = (1..depth)
         .map(|c| format!(r#"{{"children":[{c}]}}"#))
@@ -327,7 +327,7 @@ fn deep_chain_no_recursion() {
 }
 
 #[test]
-fn pushed_numbers_parse_or_refuse() {
+fn any_number_in_a_shipped_model_pushed_up_is_parsed_or_refused() {
     let smallest = shipped_models()
         .into_iter()
         .min_by_key(|path| fs::metadata(path).unwrap().len())

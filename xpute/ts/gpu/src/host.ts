@@ -10,7 +10,11 @@
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { handle_slot } from "@xpute/host/abi/handle.ts";
+import {
+  GENERATION_BITS,
+  handle_slot,
+  SLOT_BITS,
+} from "@xpute/host/abi/handle.ts";
 import { bytes_of, each_record, text_of } from "@xpute/host/ipc/stream.ts";
 
 import { DONE, NONE, op, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
@@ -133,10 +137,10 @@ class Words {
   }
 }
 
-/** Whether `a`'s generation is behind `b`'s, generations wrapping in 16 bits. */
+/** Whether `a`'s generation is behind `b`'s, generations wrapping in their bits. */
 function older(a: u32, b: u32): boolean {
-  const behind =
-    ((a >>> SLOT_BITS) - (b >>> SLOT_BITS)) & ((1 << GENERATION_BITS) - 1);
+  const behind = ((a >>> SLOT_BITS) - (b >>> SLOT_BITS)) &
+    ((1 << GENERATION_BITS) - 1);
   return behind >= 1 << (GENERATION_BITS - 1);
 }
 

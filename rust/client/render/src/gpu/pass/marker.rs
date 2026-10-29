@@ -11,6 +11,7 @@ use crate::frame::draw::{uniform_of, PIPELINE_MARKER};
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
+use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
     Format, Gpu, Load, RenderContext,
@@ -30,7 +31,6 @@ use crate::look::marker::{
     POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
 };
 
-const SET_FLOATS: usize = 40;
 const SETS: usize = 32;
 
 fn anchor_dot(p: &mut Sketch, logical_w: f32) {
@@ -202,7 +202,7 @@ impl MarkerPass {
             generation: u32::MAX,
             sets: [Set::default(); SETS],
             dirty: SlotSet::default(),
-            uniforms: DrawUniforms::new(word_bytes(SET_FLOATS), align),
+            uniforms: DrawUniforms::new(word_bytes(MARKER_FLOATS), align),
             view: [0.0; 16],
             proj: [0.0; 16],
             px_per_unit: 1.0,
@@ -386,13 +386,13 @@ impl MarkerPass {
         let cnt = placed().take(SETS).count() as u32;
         let mut before = 0;
         self.uniforms
-            .write(g, self.built.layouts[1], cnt, placed(), true, |buf, d| {
+            .write(g, self.built.layouts[1], count, placed(), true, |buf, d| {
                 let mut s = [0.0f32; MARKER_FLOATS];
                 s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&view);
                 s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
                 s[marker::TRANSLATION..marker::TRANSLATION + 3]
                     .copy_from_slice(&uniform_of(uniforms, d)[..3]);
-                s[marker::PX_PER_UNIT] = px_per_unit;
+                s[marker::PX_K] = px_k;
                 s[marker::BEFORE] = before as f32;
                 buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
                 before += d[1];

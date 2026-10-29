@@ -117,11 +117,6 @@ fn coord_of(x: f32, size: f32) -> f32 {
   return 0.5 / size + x * (1.0 - 1.0 / size);
 }
 
-const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
-const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
-const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
-const IRRADIANCE_SIZE: vec2f = vec2f(64.0, 16.0);
-
 // Bruneton's: rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
   let bottom = atmos_bottom_radius();

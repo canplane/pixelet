@@ -10,19 +10,16 @@ use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
-use crate::frame::shader::word::STARS_FLOATS;
+use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::surface::WORLD_COLOR;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
 use crate::param::sky::star::DRAWN_ABOVE;
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
-/// Direction and flux, then color and padding.
-const STAR_FLOATS: usize = 8;
 
 pub struct StarPass {
     built: Built,
@@ -56,8 +53,8 @@ impl StarPass {
             word_bytes(stars.len()),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buf(catalog, 0, bytes(&stars));
-        let mut frame = vec![buf_entry(0, frame_buf)];
+        g.write_buffer(catalog, 0, bytes(&stars));
+        let mut frame = vec![buffer_entry(0, frame_buffer)];
         frame.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
         let frame_group = g.bind_group(built.layouts[0], &frame);
         let group = g.bind_group(
@@ -86,7 +83,8 @@ impl StarPass {
             return;
         }
         put_mat(u, VIEW_PROJ, view_proj);
-        u[SKY..SKY + 12].copy_from_slice(&env[ENV_STARS..ENV_STARS + 12]);
+        u[SKY..SKY + ENV_STAR_FRAME_FLOATS]
+            .copy_from_slice(&env[ENV_STARS..ENV_STARS + ENV_STAR_FRAME_FLOATS]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
         let css = stage_lane()[STAGE_AT::VIEWPORT_WIDTH];
         u[DENSITY] = if css > 0.0 {
@@ -113,7 +111,7 @@ impl StarPass {
 }
 
 /// A record's star (pxl-spec asset/star.rs `star`, the bake's one layout)
-/// as the sky draws it: its direction, its flux, its color.
+/// as the sky draws it: its direction, its flux, its colour.
 fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_RECORD_FLOATS] {
     let s = star::star(packed);
     let (ra, dec) = (s.ra.to_radians(), s.dec.to_radians());

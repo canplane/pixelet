@@ -28,11 +28,6 @@ pub mod star;
 #[path = "asset/symbol.spec.rs"]
 pub mod symbol;
 
-const _: () = assert!(
-    symbol::SYMBOL_RATIO as f64 == crate::space::camera::grid::RATIO_MAX,
-    "the symbols are rasterized at the finest ratio a surface is drawn at"
-);
-
 pub use decor::DecorId;
 pub use id::AssetId;
 

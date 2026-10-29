@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstring>
+#include <utility>
 
 #include "xpute/kit/status/bug.hpp"
 
@@ -47,8 +48,11 @@ bool Sys::try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::s
 
 void Sys::abort(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept {
     stream_.publish();
-    const std::array<std::uint32_t, 7> args{static_cast<std::uint32_t>(errnum), at.line(), at.column(), static_cast<std::uint32_t>(a),
-                                            static_cast<std::uint32_t>(a >> 32), static_cast<std::uint32_t>(b), static_cast<std::uint32_t>(b >> 32)};
+    std::array<std::uint32_t, ABORT_ARGS> args{static_cast<std::uint32_t>(errnum), at.line(), at.column()};
+    for (auto [i, v] : {std::pair{sys::abort::A, a}, std::pair{sys::abort::B, b}}) {
+        args[i] = static_cast<std::uint32_t>(v);
+        args[i + 1] = static_cast<std::uint32_t>(v >> 32);
+    }
     stream_.record(sys::op::ABORT, args, {}, bytes_of(at.file_name()));
     stream_.publish();
 }

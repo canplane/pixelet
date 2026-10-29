@@ -4,7 +4,7 @@
 //
 // An asset's id is a u16: its kind over which shape of that kind it is.
 // `id >> SHAPE_BITS` is the kind, the low bits the shape. The kind is what an
-// asset is drawn and struck as, and what its metadata is: a cube a meshed box
+// asset is drawn and struck as, and what its metadata is: a cube a cell the rays meet,
 // with none, decor a model with a variant, heading and scale, a marker drawn
 // flat to the camera from a design, as the pin someone puts up at a place,
 // an actor a person or a pet, a model with clips, and sky what hangs in the

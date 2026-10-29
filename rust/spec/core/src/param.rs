@@ -99,11 +99,27 @@ pub mod sun {
     /// `samples_at`).
     pub const SAMPLE: u32 = 4;
 
-    /// The receiver's taps apart in the shadow map, in texels, a 3×3 grid
+    /// The receiver's taps apart in the sun's map, in texels, a 3×3 grid
     /// (pxl-render shadow.wgsl `sun_lit`): the filtered edge spans about
     /// four texels, half a unit where a texel is 1/8 u, where taps a texel
     /// apart cut each cell's shadow out as a hard square.
     pub const SPREAD: f32 = 1.5;
+}
+
+pub mod tile {
+    use crate::Zoom;
+
+    /// The finest tile zoom (pxl-spec space/layer/tile.rs).
+    pub const LEAF_ZOOM: Zoom = 15;
+
+    /// The coarsest tile zoom, the pyramid's top: what a layer is kept in runs
+    /// from it to the leaves, and a source declares its own top at it or finer
+    /// (its `top_zoom`).
+    pub const TOP_ZOOM: Zoom = 4;
+
+    /// A tile's cells a side, in zoom steps: 2^9, so a leaf tile's cells are at
+    /// `LEAF_ZOOM` + 9, the ground's finest cell (`lattice::GROUND`).
+    pub const STEPS: Zoom = 9;
 }
 
 pub mod way {

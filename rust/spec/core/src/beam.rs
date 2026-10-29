@@ -70,7 +70,7 @@ impl Grid {
     /// The grid at the screen's tangents `tan`.
     pub fn of(tan: [f32; 2]) -> Grid {
         let s = CELL;
-        let r6 = cast::SQRT_6 * s;
+        let r6 = crate::cast::SQRT_6 * s;
         let k = 2.0 * r6;
         let reach = r6 / (1.0 - r6) * beam::REACH_SLACK;
         let span = [
@@ -300,7 +300,7 @@ mod tests {
     #[test]
     fn largest_beam_fits_binding() {
         // 4112 × 2338 drawn, a ratio of 2, at the view's FOV (the tangent of
-        // its half 1/2, pxl-spec space/camera/grid.rs `FOV_DEG`), within the
+        // its half 1/2, pxl-spec space/camera/grid.rs `HALF_TAN`), within the
         // 33,554,432 words a storage binding holds on every device
         // (pxl-render floor.rs).
         let up = 0.5;

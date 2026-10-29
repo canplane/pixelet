@@ -11,7 +11,11 @@
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { TILE_SOURCE_ROUTE } from "@/namespace/route.ts";
 import { online, when_online } from "@/namespace/online.ts";
-import { BASE_LAYERS, type BaseLayer } from "./published.spec.ts";
+import {
+  BASE_LAYERS,
+  type BaseLayer,
+  VERSION_BYTES,
+} from "./published.spec.ts";
 import { bracket } from "@/bracket.tsx";
 
 /** What of a declaration this side reads: the top zoom and each kind's
@@ -23,8 +27,8 @@ export interface Declaration {
   shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
 }
 
-/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec bake/source.rs `is_version`). */
-const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
+/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec bake/source.rs `is_version`), `VERSION_BYTES` long at most (published.json). */
+const VERSION = new RegExp(`^[A-Za-z0-9._-]{1,${VERSION_BYTES}}$`);
 
 /** The declaration's text, where every kind has a version and every version
  * is a URL's segment, the top zoom and each kind's format are u32s, and the

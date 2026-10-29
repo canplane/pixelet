@@ -68,19 +68,19 @@
       "and ABORT's end in bytes after them."
     ],
     "OPENAT": {
-      "$val": 3
+      "$value": 3
     },
     "READ": {
-      "$val": 3
+      "$value": 3
     },
     "WRITE": {
-      "$val": 3
+      "$value": 3
     },
     "CLOSE": {
-      "$val": 1
+      "$value": 1
     },
     "ABORT": {
-      "$val": 7
+      "$value": 7
     }
   },
 
@@ -88,11 +88,11 @@
     "$type": "u32",
     "$doc": ["Where ABORT's two values lie among its arguments, each low word then high."],
     "A": {
-      "$val": 3,
+      "$value": 3,
       "$doc": ["a."]
     },
     "B": {
-      "$val": 5,
+      "$value": 5,
       "$doc": ["b."]
     }
   },

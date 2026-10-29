@@ -2,10 +2,8 @@
 
 //! The camera's defaults, gestures and smoothing.
 
-use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile;
 
 // ---- the camera ----
 
@@ -18,22 +16,24 @@ pub const DEFAULT_AZIMUTH: f64 = 0.0;
 /// From straight down (0) toward horizontal (PI / 2): 60°, the eye 30° above
 /// the ground plane.
 pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
-/// How many of its end cell's sides a dolly's limit stands from the pivot,
+/// How many of its end cell's sides a dolly's limit stands from the focus,
 /// both ends alike: 4/3 of the way into the band the grid draws that cell
 /// over, a side `s` from 48·s to 96·s (pxl-spec space/camera/grid.rs
-/// `split_dist`).
+/// `split_distance`).
 pub const DOLLY_END_CELLS: f64 = 64.0;
 const _: () = assert!(
-    DOLLY_END_CELLS >= grid::CELLS_A_RAD / 2.0 && DOLLY_END_CELLS < grid::CELLS_A_RAD,
+    DOLLY_END_CELLS >= pxl_spec::space::camera::grid::CELLS_A_RADIAN / 2.0
+        && DOLLY_END_CELLS < pxl_spec::space::camera::grid::CELLS_A_RADIAN,
     "a dolly's limit lies in the band its end cell is drawn over"
 );
-/// The orbit's nearest, in units from the pivot, about 3.8 m at Seoul's
+/// The orbit's nearest, in units from the focus, about 3.8 m at Seoul's
 /// latitude: `DOLLY_END_CELLS` of the 2^-5 cell the grid asks there.
 pub const MIN_DIST: f64 = 2.0;
 /// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
 /// holds, the pyramid's top's, so looking straight down the grid never asks
 /// a coarser cell than a zoom draws.
-pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(tile::TOP_ZOOM));
+pub const MAX_DIST: f64 =
+    DOLLY_END_CELLS * units(GROUND.cell_zoom(pxl_spec_core::param::tile::TOP_ZOOM));
 
 // ---- the camera's settling and the ground it keeps to ----
 
@@ -70,9 +70,9 @@ pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
 /// Real pointers jitter a pixel or two on a still click; gating taps on any
 /// movement swallowed them.
 pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
-/// A held movement key pans this share of the distance to the pivot a
+/// A held movement key pans this share of the distance to the focus a
 /// second (`controller::pan_across`): a product number, a 16:9 width at the
-/// pivot crossed in about 3.4 s at any distance and any pitch, the view's
+/// focus crossed in about 3.4 s at any distance and any pitch, the view's
 /// height in about 2 looking straight down. Not the grid's cells, whose
 /// count a distance moves with how finely the world is drawn and not with
 /// how fast a view should pan.
@@ -86,3 +86,7 @@ pub const CAM_DAMP: f64 = 10.0;
 pub const CLIMB_RISE_DAMP: f64 = 20.0;
 /// Slower than the controls ease, so passing over a ridge does not bob the view.
 pub const CLIMB_RELAX_DAMP: f64 = 5.0;
+const _: () = assert!(
+    CLIMB_RISE_DAMP > CAM_DAMP && CLIMB_RELAX_DAMP < CAM_DAMP,
+    "the climb rises faster and relaxes slower than the controls ease"
+);

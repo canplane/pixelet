@@ -396,6 +396,10 @@ struct State {
     /// whole frame's.
     stamps: Option<(Id, Id, Id)>,
     stamps_written: u32,
+    /// Whether this frame asked the read: its mapping's ticket is written
+    /// as it is encoded, so a frame dropped whole takes it back
+    /// (`frame_commit`), or no read would be asked again.
+    stamps_asked: bool,
     gpu_ms: [f64; SPANS],
     /// Whether the last frame submitted took a read in: its figures are then
     /// that read's, and else the read before it, not measured again.
@@ -460,6 +464,7 @@ pub unsafe fn install(at: u32) -> u32 {
         device: None,
         stamps: None,
         stamps_written: 0,
+        stamps_asked: false,
         gpu_ms: [0.0; SPANS],
         gpu_landed: false,
         images: Vec::new(),
@@ -611,13 +616,19 @@ pub fn frame_begin() {
     let s = state();
     s.encoder.begin(&mut s.stream);
     s.in_frame = true;
+    s.stamps_asked = false;
 }
 
-/// False where the frame did not fit and nothing of it was recorded.
+/// False where the frame did not fit and nothing of it was recorded: the
+/// read it asked, never mapped, is freed for the next frame to ask.
 pub fn frame_commit() -> bool {
     let s = state();
     s.in_frame = false;
-    s.encoder.commit(&mut s.stream)
+    let committed = s.encoder.commit(&mut s.stream);
+    if !committed && core::mem::take(&mut s.stamps_asked) {
+        *head(STAMPS_WORD_AT) = 0;
+    }
+    committed
 }
 
 use crate::frame::shader::floor;
@@ -1305,6 +1316,7 @@ impl Gpu {
                 )
             };
             call::map_async(&mut s.stream, mapped, 0, ticks, word, 1);
+            s.stamps_asked = true;
             true
         } else {
             s.encoder.submit(&mut s.stream, &[encoder]);

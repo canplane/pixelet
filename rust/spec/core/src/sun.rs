@@ -18,15 +18,9 @@
 //! over a node the world's query answers otherwise since (`over`): what a
 //! walk established is never walked again.
 
-use crate::beam;
-use crate::cast;
-use crate::cast::Spacing;
-use crate::cast::{Detail, End, Met, Ray};
-use crate::eye;
-use crate::param::sun;
-use crate::param::sun::{SAMPLE, SPREAD};
-use crate::scatter;
+use crate::cast::{Detail, Ends, Met, Ray};
 use crate::{axis, FRAC_W};
+use crate::param::sun::{SAMPLE, SPREAD};
 use core::f32::consts::SQRT_2;
 
 /// The sun's cast as the eye's words hold it (`eye::SUN`), a frame's
@@ -137,23 +131,21 @@ impl Sun {
         }
     }
 
-    /// The finest zoom its rays ask the world at: the finest whose block
-    /// spans `BLOCK_SAMPLES` samples (`SAMPLE`) of the map. The eye's blocks
-    /// span several of its samples, and the raster hands a block to the
-    /// pixels about the samples that met it; the sun's texel follows no
-    /// zoom, and asked as finely as the eye asks near it, a block was a
-    /// texel or less, met by no sample about most texels.
-    pub fn finest(&self) -> Zoom {
-        let side = BLOCK_SAMPLES as f32 * SAMPLE as f32 * length(self.across);
-        let steps = side * (1u32 << FRAC_W) as f32;
-        // The zoom whose side, `2^(FINEST_ZOOM - z)` steps, is `steps` or more.
-        let mut z = FINEST_ZOOM;
-        let mut side = 1.0f32;
-        while z > 0 && side < steps {
-            z -= 1;
-            side *= 2.0;
-        }
-        z
+    /// Where a point `v` units from the eye lies on the box, in texels across
+    /// and down from texel (0, 0)'s middle: its step from that texel's start
+    /// along each of the box's axes, over that axis's texel. The light box
+    /// is orthographic, its axes square to the sun's rays, so depth along
+    /// them counts for nothing.
+    pub fn texel_at(&self, v: [f32; 3]) -> [f32; 2] {
+        let d = [
+            v[0] - self.first[0],
+            v[1] - self.first[1],
+            v[2] - self.first[2],
+        ];
+        [
+            dot(d, self.across) / dot(self.across, self.across),
+            dot(d, self.down) / dot(self.down, self.down),
+        ]
     }
 
     /// The tile of the box a receiver standing `v` units from the eye
@@ -172,7 +164,7 @@ impl Sun {
     /// point of it lies in.
     pub fn ring(&self) -> i32 {
         let across = TILE as f32 * libm::sqrtf(dot(self.across, self.across));
-        let half = scatter::WIDEST as f32 / 2.0;
+        let half = crate::scatter::WIDEST as f32 / 2.0;
         (libm::ceilf(half / across) as i32).max(1)
     }
 
@@ -184,7 +176,7 @@ impl Sun {
     pub fn up(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
             self.texel_at([0.0; 3]),
-            self.texel_at([0.0, 0.0, scatter::TALLEST as f32]),
+            self.texel_at([0.0, 0.0, crate::scatter::TALLEST as f32]),
             TILE as f32,
         );
         let way = [(top[0] - low[0]) / tile, (top[1] - low[1]) / tile];
@@ -220,12 +212,14 @@ impl Sun {
 
     /// `detail`, the eye's zooms at every point as the eye asks them
     /// (`cast::Detail::eye`), so the map holds the cells the eye draws; its
-    /// beam rays `BEAM` of the map's texels apart (`cast::Spacing`).
+    /// cone the map's texel (`cast::Cone`), and its beam rays `BEAM` of them
+    /// apart.
     pub fn detail(&self, mut detail: Detail) -> Detail {
         detail.spacing = Spacing {
             angle: 0.0,
             across: BEAM as f32 * length(self.across),
         };
+        detail.apart = BEAM as f32;
         detail
     }
 
@@ -522,7 +516,7 @@ pub const ANCHOR: i32 = 2048;
 pub const STARTS_AT: usize = 2;
 pub const STARTS_VEC4S: usize = 11;
 
-/// The actors the host draws, receivers of the shadow map as decor is
+/// The actors the host draws, receivers of the sun's map as decor is
 /// (pxl-shader sun.rs `sun_mark_drawn_cs`), past the starts: how many, the
 /// first word of a vec4, then each where it stands, units from the eye, a
 /// vec4 each, as many as `ACTORS`; any past them marks nothing.
@@ -639,7 +633,7 @@ pub const LIST_EMPTY: [u32; LIST_AT] = [LIST_ACROSS, 0, 1, 0];
 pub const BEAM: u32 = TILE;
 pub const BEAM_WINDOW: u32 = 5;
 const _: () = assert!(
-    BEAM_WINDOW as f32 >= 2.0 * cast::SQRT_6,
+    BEAM_WINDOW as f32 >= 2.0 * crate::cast::SQRT_6,
     "a beam ray through `Y` lies within 2√6 spacings"
 );
 
@@ -648,11 +642,11 @@ const _: () = assert!(
 /// texels may start from it in its first word, then its origin
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
 /// every sun ray starts apart.
-pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
+pub const LINE_ORIGIN: u32 = crate::beam::LINE_WORDS;
 
 /// How far past the disk a receiver reads the map reaches, in texels, at
 /// worst (pxl-render shadow.wgsl `sun_lit`): its corner tap `SPREAD` each
-/// way, and past it the neighbor its linear compare filters in, a texel
+/// way, and past it the neighbour its linear compare filters in, a texel
 /// each way, so both along a diagonal. The rim is measured at the
 /// receiver's offset point, so its normal offset adds none; and the fade
 /// and `Sun::read` both measure from the snapped box's middle, its one
@@ -708,7 +702,7 @@ pub const fn beam_words(size: u32) -> u32 {
 /// width`, and a Q3 step's rounding of each ray's start on the near plane,
 /// two.
 pub fn margin(width: f32) -> f32 {
-    2.0 * cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
+    2.0 * crate::cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
 }
 
 /// The shadow map as the eye's rays are cast, every slot every frame
@@ -722,14 +716,14 @@ pub fn margin(width: f32) -> f32 {
 /// (`sun_cs`); the rest are listed and walked apart (`misses_at`). A cell
 /// no sample stopped at may stand in front of the visible one, as in the
 /// eye's. The raster's `EYED` case has no
-/// sun's: every ray starts on the near plane, before every box. Its rays ask
-/// the world no finer than `Sun::finest`, so a block spans the samples as
-/// the eye's blocks span its.
+/// sun's: every ray starts on the near plane, before every box.
 ///
-/// The samples' words, the eye's samples' own (`beam::SAMPLE_WORDS`), past
-/// the beam's in the list's buffer, a sample `size / SAMPLE` across and
-/// down, by its index `j · across + i`, which its box is drawn with
-/// (`raster::id_of`).
+/// The samples' spacing; their words, the eye's samples' own
+/// (`beam::SAMPLE_WORDS`), past the beam's in the list's buffer
+/// (`samples_at`), a sample `size / SAMPLE` across and down, by its index
+/// `j · across + i`, which its box is drawn with (`raster::id_of`).
+pub const SAMPLE: u32 = 4;
+
 pub const fn samples_at(size: u32) -> u32 {
     beam_words(size)
 }
@@ -767,13 +761,12 @@ pub const fn stands_at(size: u32) -> u32 {
     misses_at(size) + size * size
 }
 
-/// The tiles a receiver reads, past the stands, as many: the number of the
-/// cast that first read one in its epoch (`MOVED_EPOCH`), read where it lies
-/// within its taps of the way up from a tile one stands on (`Sun::up`;
-/// pxl-shader sun.rs `sun_reach_cs`). A tile this cast's number names is
-/// the cast's to cast; one an earlier cast of its epoch names holds what
-/// that cast left; no receiver reads any other.
-pub const fn reads_at(size: u32) -> u32 {
+/// The tiles a receiver reads in a cast, past the stands, as many: the
+/// number of the last cast one did, a tile within its taps of the way up
+/// from a tile one stands on (`Sun::up`; pxl-shader sun.rs
+/// `sun_reach_cs`). A cast casts only the slots of tiles read (`sun_cs`),
+/// as no receiver reads any other.
+pub const fn marks_at(size: u32) -> u32 {
     stands_at(size) + tiles(size) * tiles(size)
 }
 
@@ -786,28 +779,17 @@ pub const fn tiles(size: u32) -> u32 {
 /// tiles at an edge or a grazing face, and a run on one tile marks it once.
 pub const MARK: u32 = 4;
 
-/// The reads by the square of `COARSE` tiles a side, past them, `coarse`
-/// a row: the cast's number where a tile in the square is the cast's to
-/// cast, read in place of the tiles where a span of them is asked
-/// (pxl-shader sun.rs `Map::needs`).
-pub const COARSE: u32 = 8;
-
-pub const fn coarse(size: u32) -> u32 {
-    tiles(size) / COARSE
-}
-
-pub const fn coarse_at(size: u32) -> u32 {
-    reads_at(size) + tiles(size) * tiles(size)
-}
-
-/// The word of the square tile `[i, j]` lies in, among the squares'
-/// (`coarse_at`); the map's tiles a whole number of squares a side.
-pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
-    coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
+/// The tiles a cast casts, past the marks, a word a tile as the marks are:
+/// the cast's number where it marked a tile read no cast since
+/// `MOVED_EPOCH` had, which it sees in the mark it overwrites (pxl-shader
+/// sun.rs `sun_reach_cs`). Every other tile read holds what such a cast
+/// left.
+pub const fn fresh_at(size: u32) -> u32 {
+    marks_at(size) + tiles(size) * tiles(size)
 }
 
 /// The list's buffer's words: the beam's, the samples, the misses, the
-/// stands, the reads, their squares.
+/// stands, the marks, the fresh tiles.
 pub const fn list_words(size: u32) -> u32 {
     coarse_at(size) + coarse(size) * coarse(size)
 }
@@ -1055,7 +1037,7 @@ mod tests {
 
     /// The way up runs a tile a step, along the sun's slant across the box.
     #[test]
-    fn way_up_tile_steps() {
+    fn the_way_up_runs_a_tile_a_step() {
         // The sun 45 degrees over x, a box 4 units wide in 16 texels: a
         // unit up moves a point a texel's worth of units across, 4 texels.
         let r = core::f32::consts::FRAC_1_SQRT_2;
@@ -1071,7 +1053,7 @@ mod tests {
             1.0,
         );
         let up = s.up();
-        let rise = scatter::TALLEST as f32 * 4.0 / TILE as f32 * r;
+        let rise = crate::scatter::TALLEST as f32 * 4.0 / TILE as f32 * r;
         assert!(
             (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
             "{up:?}"
@@ -1089,7 +1071,7 @@ mod tests {
     /// where one stood on lies at `t − up_at(k) + [−2, 1]²`), whatever the
     /// sun's slant.
     #[test]
-    fn reach_covers_receivers() {
+    fn the_reach_reads_every_tile_a_receiver_up_the_way_reads() {
         for (sx, sz) in [
             (0.0f32, 1.0f32),
             (0.3, 0.95),
@@ -1116,7 +1098,7 @@ mod tests {
             let texel = libm::sqrtf(dot(s.across, s.across));
             for base in [[0.1, 0.2, -3.0], [0.37, -0.81, -2.5], [-0.66, 0.45, -3.3]] {
                 let stood = s.tile_of(base);
-                for h in [0.0, 0.7, 1.9, 3.1, scatter::TALLEST as f32] {
+                for h in [0.0, 0.7, 1.9, 3.1, crate::scatter::TALLEST as f32] {
                     for (a, b) in [(0.0, 0.0), (3.5, 0.0), (-3.5, 0.0), (0.0, 3.5), (2.5, -2.5)] {
                         // A tap `(a, b)` texels off the point `h` up.
                         let p = [

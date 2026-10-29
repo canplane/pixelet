@@ -11,7 +11,7 @@ use crate::frame::shader::word::frame::{
     CAMERA_POS, SCREEN, SCREEN_AO, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::FRAME_FLOATS;
-use crate::gpu::ao::ScreenAo;
+use crate::gpu::ao::{ScreenAo, MAP_BINDING};
 use crate::gpu::api::{
     buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, RenderContext,
     TrackedRenderPass,
@@ -66,7 +66,7 @@ impl Case {
                 layout,
                 frame_buf,
                 shadow.blank_entries(1),
-                [ao.blank_entry(7); 2],
+                [ao.blank_entry(MAP_BINDING); 2],
                 air,
             ),
             skinned: SkinnedPass::new(g, pipelines, align),

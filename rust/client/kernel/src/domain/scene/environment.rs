@@ -138,10 +138,12 @@ impl EnvironmentDraw {
     /// the sky as drawn moves one display level (pxl-render `sky_steps`, its
     /// views' own slopes), at the rate the sun's or the moon's height moves;
     /// a light with no step landed yet asks none, its view's first slope
-    /// landing waking the turn. The clouds' is the wind carrying them a pixel
-    /// at the nearest (`cloud::drift_step_s`). Between steps their words
-    /// stand. A clock set back before where a light last stepped steps it
-    /// there at once.
+    /// landing waking the turn. The clouds' is the wind carrying them a
+    /// twelfth of a camera cell at the nearest (`cloud::drift_step_s`).
+    /// Between steps their words stand. A clock set back before where a
+    /// light last stepped steps it there at once. The sky's clock is the hour
+    /// the `sky_time` setting shows (`shown`), which a held hour never steps;
+    /// the clouds' is the wall clock's.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.observed();

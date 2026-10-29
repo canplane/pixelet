@@ -9,7 +9,7 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use crate::frame::shader::record::{
     PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE,
 };
-use crate::frame::shader::word::AO_FLOATS;
+use crate::frame::shader::word::{ao, AO_DOWNSCALE, AO_FLOATS, AO_NOISE_SIDE};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
@@ -21,13 +21,12 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
 
-/// proj, inv_proj, half, padding.
-const HALF: usize = 32;
-
-/// N8AO's blue noise; its four channels are the hemisphere spin, the ray push
-/// and the two denoise spins.
-const NOISE_SIDE: u32 = 128;
+/// N8AO's blue noise, `AO_NOISE_SIDE` a side; its four channels are the
+/// hemisphere spin, the ray push and the two denoise spins.
 const NOISE: &[u8] = include_bytes!("../frame/shader/blue-noise.bin");
+
+/// Where a lit pass binds the occlusion's map (ao_map.wgsl `ao_map`).
+pub const MAP_BINDING: u32 = 7;
 
 pub struct ScreenAo {
     /// Bound until the frame's map exists at this size.
@@ -75,14 +74,14 @@ impl ScreenAo {
         g.write_texture(blank, 0, 1, 1, &[255]);
         let blank_view = g.view(blank, false, 0, 1, 0, 1);
         let noise = g.texture(
-            NOISE_SIDE,
-            NOISE_SIDE,
+            AO_NOISE_SIDE,
+            AO_NOISE_SIDE,
             1,
             Format::rgba8unorm,
             1,
             texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
         );
-        g.write_texture(noise, 0, NOISE_SIDE, NOISE_SIDE, NOISE);
+        g.write_texture(noise, 0, AO_NOISE_SIDE, AO_NOISE_SIDE, NOISE);
         let noise_view = g.view(noise, false, 0, 1, 0, 1);
         let uniform = g.buf(
             word_bytes(AO_FLOATS),
@@ -146,10 +145,10 @@ impl ScreenAo {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4::invert(&mut inv, proj);
-        put_mat(u, 0, proj);
-        put_mat(u, 16, &inv);
-        u[HALF] = (width / 2) as f32;
-        u[HALF + 1] = (height / 2) as f32;
+        put_mat(u, ao::PROJ, proj);
+        put_mat(u, ao::INV_PROJ, &inv);
+        u[ao::HALF] = (width / AO_DOWNSCALE) as f32;
+        u[ao::HALF + 1] = (height / AO_DOWNSCALE) as f32;
     }
 
     /// The words its passes read, as `lay_out` wrote them.
@@ -168,7 +167,10 @@ impl ScreenAo {
             return false;
         }
         self.release_images();
-        let (hw, hh) = ((width / 2).max(1), (height / 2).max(1));
+        let (hw, hh) = (
+            (width / AO_DOWNSCALE).max(1),
+            (height / AO_DOWNSCALE).max(1),
+        );
         let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
         self.depth = g.texture(width, height, 1, Format::depth32float, 1, attach);
         self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);

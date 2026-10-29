@@ -96,9 +96,9 @@ impl World<'_> {
         At {
             node,
             handed: if self.unplaced {
-                world::Handed::unplaced(node)
+                world::At::unplaced(node)
             } else {
-                world::Handed::of(&self.object.lanes(), node)
+                world::At::of(&self.objects.lanes(), node)
             },
         }
     }

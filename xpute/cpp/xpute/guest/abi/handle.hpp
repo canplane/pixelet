@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -15,6 +16,7 @@ namespace xpute::abi {
 
 // The rest is the generation, hence its 16 bits. The host uses the same 16.
 inline constexpr std::uint32_t SLOT_BITS = 16;
+static_assert(SLOT_BITS + std::numeric_limits<std::uint16_t>::digits == 32, "a slot and a generation fill a handle");
 
 constexpr std::uint32_t handle_slot(std::uint32_t handle) noexcept {
     return handle & ((1u << SLOT_BITS) - 1);

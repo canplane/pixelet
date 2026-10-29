@@ -293,8 +293,8 @@ impl<'a> World<'a> {
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
-        let f = support::footing(&mut walker, cell, g);
-        let met = (f.ends == End::Stop).then_some(f.top);
+        let f = pxl_spec_core::support::footing(&mut walker, cell, g);
+        let met = (f.ends == Ends::Stop).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
             (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),

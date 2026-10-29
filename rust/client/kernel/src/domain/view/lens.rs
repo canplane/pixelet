@@ -57,21 +57,22 @@ impl Stepped {
 /// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
-/// and the reach; the unit right; the unit up; the tangents of the
+/// and how far it draws (observation.rs `eye_draw_reach`); the unit right;
+/// the unit up; the tangents of the
 /// screen's half-angles across and up and the zooms a cell is asked at;
 /// the camera grid the cast lays over the screen off them, once. A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
 pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
-    let lens = o.frustum?.lens()?;
-    let reach = observation::eye_draw_reach()?;
+    let lens = Lens::of(o)?;
+    let reach = crate::domain::view::observation::eye_draw_reach()?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
     let mut put = |at: usize, v: &[u32]| words[at..at + v.len()].copy_from_slice(v);
     put(eye::ORIGIN, &q.map(|v| v as u32));
     put(eye::STEPS, &[u32::from(steps)]);
     put(eye::FORWARD, &lens.forward.map(w));
-    put(eye::REACH, &[w(o.reach)]);
+    put(eye::REACH, &[w(reach)]);
     put(eye::RIGHT, &lens.right.map(w));
     put(eye::UP, &lens.up.map(w));
     put(eye::TAN, &lens.tan.map(w));

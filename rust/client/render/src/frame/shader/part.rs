@@ -119,20 +119,18 @@ pub const SHADER_SUN_CELL: u32 = 55;
 /// The sun's samples and their boxes (pxl-spec-core `sun::SAMPLE`):
 /// compute entries.
 pub const SHADER_SUN_SAMPLE: u32 = 56;
-pub const SHADER_SUN_SAMPLE_BOX: u32 = 57;
+pub const SHADER_SUN_BOXES: u32 = 57;
 /// The tiles of the sun's box its receivers stand on in a cast
 /// (pxl-spec-core `sun::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
 /// (`sun::reads_at`): compute entries.
-pub const SHADER_SUN_MARK: u32 = 58;
-pub const SHADER_SUN_MARK_DRAWN: u32 = 59;
-pub const SHADER_SUN_REACH: u32 = 60;
+pub const SHADER_SUN_MARK: u32 = 54;
+pub const SHADER_SUN_MARK_DRAWN: u32 = 55;
+pub const SHADER_SUN_REACH: u32 = 56;
 /// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
 /// time, for `SHADER_GROWN` to grow: its one compute entry.
 pub const SHADER_GROWN_STAND: u32 = 57;
-/// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
-pub const SHADER_SCREEN_FINISH: u32 = 58;
-pub const SHADERS: u32 = 59;
+pub const SHADERS: u32 = 58;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -241,7 +239,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "star",
     ],
     // SHADER_CLOUD
-    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "cloud"],
+    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_air", "atmos_ground", "cloud_tile", "cloud_field", "cloud"],
     // SHADER_CLOUD_FIELD
     &[
         "cloud_hash",
@@ -371,6 +369,4 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["sun_reach.gen"],
     // SHADER_GROWN_STAND
     &["decor_stand.gen"],
-    // SHADER_SCREEN_FINISH
-    &["frame", "encode", "finish", "screen_finish"],
 ];

@@ -5,7 +5,13 @@ use super::*;
 /// Windows of `load` budgets each, judged as one frame a window.
 fn windows(k: &mut Scale, load: f64, n: u32, timed: bool) -> u32 {
     (0..n)
-        .filter(|_| k.judge(load * param::SCALE_WINDOW_MS, param::SCALE_WINDOW_MS, timed))
+        .filter(|_| {
+            k.judge(
+                Some(load * param::SCALE_WINDOW_MS),
+                param::SCALE_WINDOW_MS,
+                timed,
+            )
+        })
         .count() as u32
 }
 
@@ -35,7 +41,7 @@ fn timed_steps() {
 /// them: reads on one frame in three judge it as soon as every frame would,
 /// by the frames that took them, and a window none landed in is not judged.
 #[test]
-fn timed_windows() {
+fn timed_windows_count_every_frame_and_judge_by_the_reads() {
     let frame = param::SCALE_BUDGET_FLOOR_MS;
     let frames = (param::SCALE_WINDOW_MS / frame).ceil() as u32;
     let mut k = Scale::NEW;
@@ -107,7 +113,7 @@ fn pause_keeps_windows() {
         0
     );
     k.judge(
-        0.3 * param::SCALE_WINDOW_MS,
+        Some(0.3 * param::SCALE_WINDOW_MS),
         0.5 * param::SCALE_WINDOW_MS,
         true,
     );

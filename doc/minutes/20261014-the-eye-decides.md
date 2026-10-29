@@ -253,8 +253,8 @@ must be solved apart.
 **Meshes among the voxels.** A model can stand in a cell — decor today — and
 stay inside this structure on three conditions. It must stay inside the cells it
 is registered in, or a ray passing the part outside never learns it is there; a
-decor model can be larger than its box today (`rust/spec/src/block.rs`
-`Decor::reach`). A ray must not stop at its cell as if the cell were full, or
+decor model can be larger than its box today (`rust/spec/src/asset.rs`
+`reach`). A ray must not stop at its cell as if the cell were full, or
 the ground behind shows a cell-shaped hole; decor already leaves its cell empty
 (`rust/spec/core/src/answer.rs` `fills`). And the fold must say what it is at a
 zoom whose block is larger than it. Within those, a mesh is a block of an

@@ -9,7 +9,7 @@ use core::marker::PhantomData;
 
 use xpute_kit::alloc::buddy_tree::Range;
 use xpute_kit::alloc::slab::SlabMalloc;
-use xpute_kit::alloc::ADDR_BITS;
+use xpute_kit::alloc::ADDRESS_BITS;
 
 use crate::mem::{at, off_of};
 
@@ -27,7 +27,7 @@ const PAGE_LOG2: usize = crate::mem::section::PAGE_BYTES.trailing_zeros() as usi
 /// 2 GiB: the largest power of two short of the whole address space. The
 /// tree starts as one leaf and grows only as requests need; `end` says what is
 /// real.
-const SPAN_LOG2: usize = ADDR_BITS - 1;
+const SPAN_LOG2: usize = ADDRESS_BITS - 1;
 
 /// A bit per possible parent node; the compiler cannot derive the length,
 /// so the buddy checks it on the first request.

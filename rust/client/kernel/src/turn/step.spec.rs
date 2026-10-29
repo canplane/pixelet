@@ -17,26 +17,30 @@
     reason = "generated from the spec"
 )]
 
-pub const STEP_NAMES: usize = 8;
+pub const STEP_NAMES: usize = 10;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
     controller = 0,
     input = 1,
     camera = 2,
-    environment = 3,
-    companion = 4,
-    preview = 5,
-    demand = 6,
-    scene = 7,
+    edit = 3,
+    ghost = 4,
+    environment = 5,
+    companion = 6,
+    preview = 7,
+    demand = 8,
+    scene = 9,
 }
 
 impl StepName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 8] = [
+    pub const ALL: [StepName; 10] = [
         StepName::controller,
         StepName::input,
         StepName::camera,
+        StepName::edit,
+        StepName::ghost,
         StepName::environment,
         StepName::companion,
         StepName::preview,
@@ -53,7 +57,7 @@ impl StepName {
     }
 }
 
-pub const EFFECT_NAMES: usize = 11;
+pub const EFFECT_NAMES: usize = 9;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum EffectName {
@@ -64,15 +68,13 @@ pub enum EffectName {
     dst = 4,
     decor = 5,
     objects = 6,
-    edit = 7,
-    hover = 8,
-    puck = 9,
-    settings = 10,
+    puck = 7,
+    settings = 8,
 }
 
 impl EffectName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [EffectName; 11] = [
+    pub const ALL: [EffectName; 9] = [
         EffectName::navigation,
         EffectName::bootstrap,
         EffectName::orient,
@@ -80,8 +82,6 @@ impl EffectName {
         EffectName::dst,
         EffectName::decor,
         EffectName::objects,
-        EffectName::edit,
-        EffectName::hover,
         EffectName::puck,
         EffectName::settings,
     ];

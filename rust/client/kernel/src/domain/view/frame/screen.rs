@@ -7,7 +7,7 @@
 //! UI's layout and for input, and check-rules names the modules that may
 //! read these (pxl-tool bin/check_rules.rs `SCREEN_USERS`).
 
-use pxl_spec::space::camera::grid::FOV_DEG as FOV;
+use pxl_spec::space::camera::grid::HALF_TAN;
 
 use crate::domain::view::frame::pose::view;
 
@@ -26,7 +26,7 @@ pub(crate) fn px_per_unit() -> f64 {
 /// The units a CSS pixel spans at `dist` from the eye (`px_per_unit`): what a
 /// drag at that distance moves, and what a thing there is worth on the screen.
 pub(crate) fn units_per_px_at(dist: f64) -> f64 {
-    dist / px_per_unit()
+    2.0 * dist * HALF_TAN / view().height
 }
 
 /// `ndc` in [−1, 1], y up, as CSS pixels from the view's top left.

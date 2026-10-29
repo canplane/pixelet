@@ -89,7 +89,8 @@ fn reads_past_unknown_pair() {
 
 /// A setting schema.json marks `kept` false is the session's: it is not in
 /// what is kept, a change to it alone asks for no write, and one found in
-/// the slot reads as its default.
+/// the slot reads as its default. A dev one this build does not offer
+/// takes no change at all (`is_offered`), so only the offered are changed.
 #[test]
 fn session_setting_not_kept() {
     let _g = sys::serial();
@@ -122,7 +123,7 @@ fn session_setting_not_kept() {
     open_slot();
     file::on_kept_answered(Kept::Settings, Err(file::Opened::Absent));
     assert!(settings_load_step());
-    for &key in &session {
+    for &key in session.iter().filter(|&&k| is_offered(k, other(k))) {
         assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
     }
     assert!(

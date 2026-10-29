@@ -8,9 +8,7 @@ use crate::bake::published::BaseLayer;
 use crate::space::coord::zoom::SHARD_ZOOM;
 use crate::space::layer::tile::Tile;
 
-/// The longest version a declaration names before a tile's name, which
-/// bounds the paths the kernel opens.
-pub const VERSION_BYTES: usize = 32;
+use crate::bake::published::VERSION_BYTES;
 
 /// A key of its shards: a shard, or a node over shards.
 pub fn key(name: &str) -> Option<Tile> {

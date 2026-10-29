@@ -14,7 +14,7 @@ use pxl_render::frame::shader::word;
 /// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1), and
 /// its region's width (1): the stride marker.wgsl reads (pxl-render
 /// frame/shader/word.rs `MARKER_INSTANCE_FLOATS`).
-pub const INSTANCE_FLOATS: usize = word::MARKER_INSTANCE_FLOATS as usize;
+pub const INSTANCE_FLOATS: usize = pxl_render::frame::shader::word::MARKER_INSTANCE_FLOATS as usize;
 
 /// One instance: its anchor `at`, `size` in logical pixels, the sheet's
 /// `slot`, where down the sprite the anchor stands, and the width of the

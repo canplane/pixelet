@@ -168,7 +168,7 @@ impl way::Kept for Scratch<'_> {
 
 /// A column's spans' head word's count (`window::SPANS_COLUMN_WORDS`); the
 /// bit over it, where they did not fit.
-const SPANS_CNT: u32 = SPANS_PAST - 1;
+const SPANS_COUNT: u32 = SPANS_PAST - 1;
 const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
@@ -367,7 +367,7 @@ pub fn keep(sq: &impl window::Brick, scratch: &mut [u32], mine: u32, i: u32) -> 
 /// the ways write in it off the spans its fill kept (`way::bound`;
 /// `ground::Bounds`); a higher one over the level under it, written before
 /// (`window::join`). A bore's air counts as far as the column's top, as the
-/// ways write it: the cells of the brick's ways tree under it lie in the
+/// ways write it: the cells of the square's ways tree under it lie in the
 /// bound (`way::tree`), and a node it splits more holds only air or void
 /// there. Over the top it is air whatever writes it; a bound reaching up
 /// there, past a tunnel's mouth where the ground falls away under its
@@ -381,7 +381,7 @@ pub fn level(
     at: [u32; 2],
 ) {
     let w = if j == 0 {
-        let top = column_top(column_of(ground, base, window::idx_of(at)));
+        let top = column_top(column_of(ground, base, window::index_of(at)));
         let lines = way::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
@@ -402,7 +402,7 @@ pub fn level(
     put(ground, e + 1, w[1] as u32);
 }
 
-/// A brick filled whole, its passes in a GPU's order (pxl-render
+/// A square filled whole, its passes in a GPU's order (pxl-render
 /// gpu/ray/ground.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
 /// its looks, samples and lines as handed, its words laid here; `lane` its
 /// words, and `scratch` its scratch (`way::tree::SCRATCH_WORDS`); its cells
@@ -460,6 +460,7 @@ pub fn brick(
 /// takes more than `way::tree::BRICK_FAMILIES`, or its ways span more
 /// than `way::tree::ROOT_NODES` of its nodes along z.
 pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u32) -> [u32; 3] {
+    use crate::overwrite::FAMILY;
     use way::tree::{self as t, Lane};
     let (brick, kept) = (
         Fresh {
@@ -475,16 +476,16 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
     if nodes == 0 {
         return [0, 0, 0];
     }
-    let room = pool.len() as u32 / 16;
+    let room = pool.len() as u32 / t::FAMILY_WORDS;
     if nodes > t::ROOT_NODES || room <= from {
         return [u32::MAX; 3];
     }
     let mut p = Lane(pool);
-    t::root(&mut p, z0, 8 * from);
+    t::root(&mut p, z0, FAMILY * from);
     // Each level's candidates, the families the level over it took, from the
-    // brick's own zoom.
-    let top = cell - window::BRICK_SHIFT;
-    let mut levels = [[0u32; 2]; window::BRICK_SHIFT as usize + 1];
+    // square's own zoom.
+    let top = cell - window::SQUARE_SHIFT;
+    let mut levels = [[0u32; 2]; window::SQUARE_SHIFT as usize + 1];
     let (mut b, mut n, mut taken) = (FAMILY * from, FAMILY, 1);
     let mut zoom = top;
     while zoom < cell {
@@ -495,17 +496,17 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
         if room < from + taken || !t::fits(room - from - taken, taken, flagged) {
             return [u32::MAX; 3];
         }
-        let next = 8 * (from + taken);
+        let next = FAMILY * (from + taken);
         let mut k = 0;
         for s in b..b + n {
-            if t::flag(&p, &brick, 0, cell, zoom, s) {
+            if t::flag(&p, &square, 0, cell, zoom, s) {
                 t::branch(&mut p, s, next + FAMILY * k);
                 k += 1;
             } else {
                 t::empty(&mut p, s);
             }
         }
-        (b, n, taken, zoom) = (next, 8 * flagged, taken + flagged, zoom + 1);
+        (b, n, taken, zoom) = (next, FAMILY * flagged, taken + flagged, zoom + 1);
     }
     for s in b..b + n {
         t::leaf(&mut p, &kept, cell, s);
@@ -572,8 +573,8 @@ mod tests {
                     cell,
                     ground::face_height(cell, ground::cells(cell, top as f32)),
                 );
-                let inside =
-                    (0..16).contains(&(c[0] - patch[0])) && (0..16).contains(&(c[1] - patch[1]));
+                let inside = (0..16).contains(&(c[0] - patch[0]))
+                    && (0..16).contains(&(c[1] - patch[1]));
                 if inside {
                     s.n = next(4);
                     for j in 0..s.n as usize {
@@ -608,7 +609,7 @@ mod tests {
                     level(&mut lane, 0, &kept, cell, j, [k % side, k / side]);
                 }
             }
-            let mut pool = vec![0u32; 16 * (tree::BRICK_FAMILIES as usize + 1)];
+            let mut pool = vec![0u32; 16 * (tree::SQUARE_FAMILIES as usize + 1)];
             let [taken, held, root] = tree(&lane, &scratch, cell, &mut pool, 1);
             assert!(taken != u32::MAX && held <= taken, "round {round}: refused");
             let p = Read(&pool);

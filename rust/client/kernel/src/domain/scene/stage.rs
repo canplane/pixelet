@@ -9,9 +9,8 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::gpu::renderer::{
-    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Landing,
-};
+use pxl_render::frame::shader::word::DECOR_GROUPS;
+use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -32,7 +31,7 @@ use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::set_host_frame;
+use crate::profiler::report::{set_host_frame, set_rays, GpuRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -96,9 +95,10 @@ pub fn stage_write() {
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
-    s[STAGE_AT::VIEWPORT_WIDTH] = screen::size()[0];
-    // The markers are drawn at the size the kernel lays them out at.
-    s[STAGE_AT::PX_PER_UNIT] = screen::px_per_unit();
+    let [width, height] = crate::domain::view::frame::screen::size();
+    s[STAGE_AT::VIEWPORT] = width;
+    s[STAGE_AT::VIEWPORT + 1] = height;
+    s[STAGE_AT::FOV] = pxl_spec::space::camera::grid::fov().to_degrees();
     // The camera grid's cell angle: the footprint a drawn cell covers per
     // unit of distance, square on.
     s[STAGE_AT::CELL] = grid::CELL;
@@ -147,7 +147,7 @@ pub fn stage_render(pace: Pace) {
     let models = model::models();
     // Each decor variant at its draw group (pxl-spec-core scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
-    for d in &decor::DECORS {
+    for d in &pxl_spec::asset::decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
             let extent = catalog()
                 .map_or([0.0; 3], |c| c.extent(variant.model))
@@ -260,6 +260,7 @@ pub fn stage_render(pace: Pace) {
                 objects,
                 ..DeviceSample::default()
             },
+            None,
         );
         return;
     };
@@ -268,11 +269,10 @@ pub fn stage_render(pace: Pace) {
     set_host_frame(
         out.kind,
         GpuSample {
-            read: f64::from(u8::from(stat.gpu_read)),
-            spans: stat.gpu_spans,
-            px: stat.gpu_px,
             scale,
             census: stat.census,
+            frame: stat.frame,
+            ..GpuSample::default()
         },
         DeviceSample {
             uploads: stat.uploads,
@@ -281,6 +281,11 @@ pub fn stage_render(pace: Pace) {
             pack_bytes: stat.pack_bytes,
             objects,
         },
+        stat.gpu_read.then_some(GpuRead {
+            frame: stat.gpu_frame,
+            spans: stat.gpu_spans,
+            px: stat.gpu_px,
+        }),
     );
 }
 

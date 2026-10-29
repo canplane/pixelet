@@ -53,16 +53,23 @@ leaves. Neither touches the air in front, and neither tints.
 > tint (`gpu/ao.rs`). They are now two modes of one setting, corner by default
 > (spec/client/kernel/domain/view/setting/schema.json `AO_MODES`).
 
+> Since changed (2026-10-28): neither tints, and each darkens only its own
+> light. The sun's shadow is the sun's visibility and darkens the direct sun;
+> the occlusion, the screen's (frame/shader/ao_map.wgsl `screen_open`) times
+> the corners' (screen_ray.wgsl `creases`), is the sky's and darkens only the
+> light from the sky and its bounce (atmos_light.wgsl `surface_light_in`).
+> The warmth a corner reads is the light left in it, the sun's among it.
+
 The sun's shadow map stays a development setting: it costs a geometry pass a
 phone does not have to spare, and a matte world reads fine without it. Where it
 is on, it is pushed back by its slope to the sun (`record.rs` `depth_only`),
 which took the diagonal stripes off faces the sun grazes.
 
 _Now the map is a lighting setting of every build, off by default
-(spec/client/kernel/setting/schema.json `shadows`), cast a ray a texel through
-the world's query (pxl-shader sun.rs `sun_cs`); decor and the actors are drawn
-into it depth only, still pushed back by their slope (`frame/shader/record.rs`
-`depth_only`, `DEPTH_SLOPE_BIAS`)._
+(spec/client/kernel/domain/view/setting/schema.json `shadows`), cast a ray a
+texel through the world's query (pxl-shader sun.rs `sun_cs`); decor and the
+actors are drawn into it depth only, still pushed back by their slope
+(`frame/shader/record.rs` `depth_only`, `DEPTH_SLOPE_BIAS`)._
 
 ## What it cost
 

@@ -4,16 +4,12 @@
 @group(0) @binding(1) var half_depth: texture_2d<f32>;
 @group(0) @binding(2) var blue_noise: texture_2d<f32>;
 
-// N8AO's generateHemisphereSamples(8).
-const HEMISPHERE = array<vec3f, 8>(
-  vec3f(0.250000, 0.000000, 0.968246),
-  vec3f(-0.319290, 0.292496, 0.901388),
-  vec3f(0.048872, -0.556877, 0.829156),
-  vec3f(0.402445, 0.524917, 0.750000),
-  vec3f(-0.738535, -0.130636, 0.661438),
-  vec3f(0.699604, -0.445032, 0.559017),
-  vec3f(-0.234003, 0.870484, 0.433013),
-  vec3f(-0.446273, -0.859268, 0.250000),
+// N8AO's generateHemisphereSamples(4).
+const HEMISPHERE = array<vec3f, AO_SAMPLES>(
+  vec3f(0.353553, 0.000000, 0.935414),
+  vec3f(-0.451544, 0.413652, 0.790569),
+  vec3f(0.069116, -0.787542, 0.612372),
+  vec3f(0.569142, 0.742346, 0.353553),
 );
 
 fn depth_at(p: vec2i) -> f32 {

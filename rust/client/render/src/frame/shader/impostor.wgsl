@@ -4,7 +4,7 @@
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;
-@group(2) @binding(2) var<uniform> fits: array<vec4f, 64>;
+@group(2) @binding(2) var<uniform> fits: array<vec4f, DECOR_GROUPS>;
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
@@ -59,5 +59,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   }
   let n = normalize(i.normal);
   let color = shade(sprite.rgb, n, i.world_pos, sun_lit(i.world_pos, n), screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
-  return vec4f(tone(color), draw_opacity());
+  return vec4f(finish(color, i.clip.xy), draw_opacity());
 }

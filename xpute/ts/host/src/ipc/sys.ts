@@ -11,7 +11,7 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { each_record, text_of } from "./stream.ts";
-import { flag, HEAD, op } from "./sys.spec.ts";
+import { abort, args, flag, HEAD, op } from "./sys.spec.ts";
 
 /** Why an open did not answer with a file: an errno, and whatever number the
  * host refused with (an HTTP status) for a reader to print. */
@@ -84,7 +84,7 @@ export class Sys {
   private readonly record = (code: u32, w: U32Array, a: u32): void => {
     switch (code) {
       case op.OPENAT:
-        this.openat(w[a], w[a + 1], w[a + 2], text_of(w, a + 3));
+        this.openat(w[a], w[a + 1], w[a + 2], text_of(w, a + args.OPENAT));
         break;
       case op.READ: {
         const bytes = this.files.get(w[a])?.bytes;
@@ -125,9 +125,9 @@ export class Sys {
           errnum: w[a] | 0,
           line: w[a + 1],
           column: w[a + 2],
-          a: num(3),
-          b: num(5),
-          file: text_of(w, a + 7),
+          a: num(abort.A),
+          b: num(abort.B),
+          file: text_of(w, a + args.ABORT),
         });
         break;
       }
