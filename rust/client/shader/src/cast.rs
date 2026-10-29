@@ -104,6 +104,13 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
 ) {
     let size: UVec3 = rays.query_size();
+    // The frame's region, dispatched from its first pixel (pxl-spec-core
+    // `eye::JITTER`).
+    let id = UVec3::new(
+        id.x + eye.jitter.z as u32,
+        id.y + eye.jitter.w as u32,
+        id.z,
+    );
     if id.x >= size.x || id.y >= size.y {
         return;
     }

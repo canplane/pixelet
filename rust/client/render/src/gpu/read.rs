@@ -42,6 +42,11 @@ impl Read {
         self.take(bytes(&[lane.len() as u32])) | self.take(bytes(lane))
     }
 
+    /// Whether all it read so far read as the last time.
+    pub(crate) fn same(&self) -> bool {
+        self.same
+    }
+
     /// What this frame changed of the stage's input that has no words, as
     /// an image come or a table drawn.
     pub(crate) fn mark(&mut self, changed: bool) {

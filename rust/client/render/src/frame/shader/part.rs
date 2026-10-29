@@ -125,7 +125,10 @@ pub const SHADER_GROWN_STAND: u32 = 57;
 pub const SHADER_SCREEN_FINISH: u32 = 58;
 /// The world's color gathered over frames (screen_resolve.wgsl).
 pub const SHADER_SCREEN_RESOLVE: u32 = 59;
-pub const SHADERS: u32 = 60;
+/// The region a frame draws again set back to nothing at the far plane
+/// (screen_clear.wgsl).
+pub const SHADER_SCREEN_CLEAR: u32 = 60;
+pub const SHADERS: u32 = 61;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -360,4 +363,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "encode", "finish", "screen_finish"],
     // SHADER_SCREEN_RESOLVE
     &["frame", "screen_resolve"],
+    // SHADER_SCREEN_CLEAR
+    &["screen_clear"],
 ];

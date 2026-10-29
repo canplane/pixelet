@@ -82,7 +82,10 @@ pub const PIPELINE_RASTER: u32 = 34;
 pub const PIPELINE_SCREEN_FINISH: u32 = 35;
 /// The world's color gathered over frames (gpu/resolve.rs).
 pub const PIPELINE_SCREEN_RESOLVE: u32 = 36;
-pub const PIPELINES: u32 = 37;
+/// The region a frame draws again cleared, under its scissor
+/// (gpu/surface.rs `Region`).
+pub const PIPELINE_SCREEN_CLEAR: u32 = 37;
+pub const PIPELINES: u32 = 38;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -590,6 +593,15 @@ const fn plan_of(id: u32) -> Plan {
             },
             &[],
             &[&[[0, UNIFORM], [1, TEXTURE], [2, DEPTH]]],
+        ),
+        PIPELINE_SCREEN_CLEAR => plan(
+            Head {
+                depth_write: true,
+                depth_compare: ALWAYS,
+                ..screen(SHADER_SCREEN_CLEAR)
+            },
+            &[],
+            &[],
         ),
         PIPELINE_SCREEN_RESOLVE => plan(
             screen(SHADER_SCREEN_RESOLVE),

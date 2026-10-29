@@ -334,12 +334,17 @@ impl LocationPuck {
         }
         // Measured to the beacon, over the zone's center by its bias.
         let beacon = v3::add(&to, &[shown[0], shown[1], BEACON_Z_BIAS]);
+        let mut stepped = false;
         if p.visible && 2.0 * BEACON_BOB >= cell_there {
             p.run += dt;
             let step = seen_step_s(v3::len(&beacon), beacon_speed());
-            let (time, next, _) = p.clock.at(p.run, |at| at + step);
+            let (time, next, s) = p.clock.at(p.run, |at| at + step);
             p.time = time;
+            stepped = s;
             wake_at(now() + (next - p.run) * 1000.0);
+        }
+        if slides || stepped {
+            crate::domain::scene::region::animated();
         }
         slides
     }
@@ -349,6 +354,26 @@ impl LocationPuck {
         if !p.visible || self.held.handle == 0 {
             return;
         }
+        let shown = p.shown.unwrap_or(p.target);
+        // The zone about its center and the beacon over it, as drawn
+        // (`region`).
+        let state = crate::domain::scene::region::digest(&[
+            p.center[0],
+            p.center[1],
+            p.center[2],
+            shown[0],
+            shown[1],
+            p.time,
+            f64::from(u8::from(p.night)),
+            f64::from(self.held.handle),
+        ]);
+        crate::domain::scene::region::drawn(
+            u32::MAX,
+            p.center,
+            libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB) + libm::hypot(shown[0], shown[1]),
+            false,
+            state,
+        );
         let center = DrawList::translation(p.center, eye);
         let count = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
         draw.draw_as(
@@ -360,7 +385,6 @@ impl LocationPuck {
             0.0,
             1.0,
         );
-        let shown = p.shown.unwrap_or(p.target);
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,

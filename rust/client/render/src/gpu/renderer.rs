@@ -18,13 +18,14 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
+use crate::frame::draw::uniform_of;
 use crate::frame::draw::{
     census_slot, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
     PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
     PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS,
     UPLOAD_WORDS,
 };
-use crate::frame::shader::record::PIPELINE_SKY;
+use crate::frame::shader::record::{PIPELINE_SCREEN_CLEAR, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
     LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL,
@@ -65,7 +66,7 @@ use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
 use crate::gpu::surface::{
-    on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES, WORLD_COLOR,
+    on_surfaces_lost, surface, surfaces, Region, Surface, SETTLE_TURNS, SURFACES, WORLD_COLOR,
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
@@ -119,7 +120,27 @@ pub struct FrameInput<'a> {
     /// Whether its draws are counted (`FrameStat::census`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
+    /// Where on the screen, in clip X and Y from `[x0, y0]` to `[x1, y1]`,
+    /// the actors and the puck as drawn changed since the last turn, where
+    /// they were and where they are, with what they shade. Where nothing
+    /// else moved, the frame draws that part of the world again alone
+    /// (gpu/surface.rs `Region`); none where nothing changed or the kernel
+    /// cannot bound it.
+    pub region: Option<[f32; 4]>,
+    /// Whether what the kernel animates stepped this turn: it wakes the turn
+    /// at its own steps, so the resolve asks no frame after it.
+    pub animated: bool,
 }
+
+/// The world's draws a region does not stand for (`FrameInput::region`):
+/// any of theirs that moved draws the frame whole.
+const BESIDE: [u32; 5] = [
+    PIPELINE_DECOR,
+    PIPELINE_GHOST_BOX,
+    PIPELINE_GHOST_DECOR,
+    PIPELINE_IMPOSTOR,
+    PIPELINE_CAMERA_GRID,
+];
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
 /// south-west tile first, and per tile its layer plus one; `upload` hands each
@@ -434,6 +455,14 @@ pub struct Renderer {
     frame_read: Read,
     /// The jitter in the frame's words as the GPU holds them (`JITTER`).
     jitter_written: [f32; 2],
+    /// The lists as the last frame drew them, apart from the rest of its
+    /// input: their records, uniforms and uploads (`listed`), and the
+    /// records and uniforms of the draws a region does not stand for, with
+    /// whether an upload they read moved (`beside`, `BESIDE`).
+    listed: Read,
+    beside: Read,
+    /// The region a frame draws again cleared, under its scissor.
+    clear: Built,
     /// What the occlusion was last made from: the frame's words, its own,
     /// the surface and the decor its prepass draws. The frame is drawn
     /// again for more than these, and the occlusion only where they moved.
@@ -501,6 +530,9 @@ impl Renderer {
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
+            listed: Read::default(),
+            beside: Read::default(),
+            clear: pipelines.build(g, PIPELINE_SCREEN_CLEAR, WORLD_COLOR),
             ao_read: Read::default(),
             pipelines,
             frame_buffer,
@@ -696,6 +728,22 @@ impl Renderer {
         }
     }
 
+    /// Whether a draw a region does not stand for moved since the last
+    /// frame (`BESIDE`): its record or uniform, or an upload it reads
+    /// (`touched`, the handles this frame's lists upload, rewrite or free).
+    fn beside_moved(&mut self, records: &[u32], uniforms: &[f32], touched: &[u32]) -> bool {
+        let r = &mut self.beside;
+        r.begin();
+        for d in records.as_chunks::<DRAW_WORDS>().0 {
+            if BESIDE.contains(&d[4]) {
+                r.read(d);
+                r.read(uniform_of(uniforms, d));
+                r.mark(touched.contains(&d[0]));
+            }
+        }
+        !r.end()
+    }
+
     /// The world image's opaque models: the decor grown over the world. The
     /// impostors are the lit pass's alone. `bound` comes back as the group 0
     /// the pass has.
@@ -758,13 +806,38 @@ impl Renderer {
             self.marker
                 .sync_sheet(g, &self.mips, input.sheet, input.text),
         );
-        let (records, uniforms, uploads_moved) = take_lists(Some(g), input.lists);
-        read.mark(uploads_moved);
-        let uniforms_moved = read.read(uniforms);
-        let lists_moved = read.read(records) | uniforms_moved;
+        let lists = input.lists;
+        let touched: Vec<u32> = lists
+            .uploads
+            .as_chunks::<UPLOAD_WORDS>()
+            .0
+            .iter()
+            .map(|u| u[0])
+            .chain(
+                lists
+                    .rewrites
+                    .as_chunks::<REWRITE_WORDS>()
+                    .0
+                    .iter()
+                    .map(|r| r[0]),
+            )
+            .chain(lists.frees.iter().copied())
+            .collect();
+        let (records, uniforms, uploads_moved) = take_lists(Some(g), lists);
+        let l = &mut self.listed;
+        l.begin();
+        l.mark(uploads_moved);
+        let uniforms_moved = l.read(uniforms);
+        let lists_moved = l.read(records) | uniforms_moved;
+        let listed_same = l.end();
+        let beside_moved = self.beside_moved(records, uniforms, &touched);
         read.read(input.cases);
 
         targets(g, world);
+        let animated = input.animated;
+        let region = input
+            .region
+            .and_then(|r| Region::of(r, world.width, world.height));
         // How far the eye draws, as far as the clouds are drawn.
         let reach = cast
             .as_ref()
@@ -866,12 +939,16 @@ impl Renderer {
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] =
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
+        // A region drawn again alone, where nothing but what it bounds moved
+        // so far; the cast takes it, its pixels cast there alone.
+        let region = region.filter(|_| read.same() && !beside_moved);
         self.screen.prepare(
             g,
             cast,
             &meshes,
             (world.rays_view, [world.width, world.height]),
             (self.shadow.world, self.shadow.frame, self.shadow.starts()),
+            region,
         );
         // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
@@ -909,10 +986,19 @@ impl Renderer {
         if read.read(self.clouds.words()) {
             self.clouds.write(g);
         }
-        // Nothing moved but the jitter: all the frame draws from read as
-        // last time but it, over rays cast again at most at their pixels.
-        let quiet =
+        // The world as it stood: all the frame draws from read as last time
+        // but its lists and its jitter, over rays cast again at most at
+        // their pixels.
+        let stands =
             read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !gridded;
+        // Nothing moved but the jitter.
+        let quiet = stands && listed_same;
+        // Only what the region bounds moved: it alone is drawn again. Else
+        // the frame is drawn whole, its pixels cast whole.
+        let region = region.filter(|_| stands);
+        if region.is_none() {
+            self.screen.whole(g);
+        }
         // The frame stands where nothing moved, the jitter neither: nothing
         // is drawn, nothing submitted, and the canvases keep the frame they
         // show.
@@ -983,17 +1069,29 @@ impl Renderer {
             self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
         let canvas_view = g.current(world.handle);
+        // A region drawn again alone keeps the rest as the last frame left
+        // it, the region cleared under the scissor first.
+        let load = if region.is_some() {
+            Load::Load
+        } else {
+            Load::Clear
+        };
         let pass = g.pass(
             encoder,
             &pass_desc(
                 world.color_view,
-                Load::Clear,
+                load,
                 world.depth_view,
-                Load::Clear,
+                load,
                 0.0,
                 stamps[SPAN_WORLD].pass(),
             ),
         );
+        if let Some(r) = region {
+            g.set_scissor(pass, r.rect());
+            g.set_pipeline(pass, self.clear.pipeline);
+            g.draw(pass, 3, 1, 0, 0);
+        }
         self.draw_opaque(g, pass, b, Stage::Lit);
         let mut bound = self.screen.draw(g, pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
@@ -1040,6 +1138,7 @@ impl Renderer {
             self.frame_buffer,
             world,
             quiet,
+            region,
             &mut stamps[SPAN_RESOLVE],
         );
         // At the canvas's size, as what is drawn over it: counted with the
@@ -1112,11 +1211,18 @@ impl Renderer {
                 case.read.forget();
             }
             read.forget();
+            self.listed.forget();
+            self.beside.forget();
             self.ao_read.forget();
         } else {
-            self.resolve.on_drawn(quiet);
-            // The jitter's sequence run through while the view stands.
-            if self.resolve.gathering() {
+            self.resolve.on_drawn(quiet, region.is_some());
+            // The jitter's sequence run through once anything moved, as
+            // nothing else asks for those frames while it stands. What
+            // moves on its own (an actor, the clouds, the puck) wakes the
+            // turn at its own steps and takes a place of the sequence a
+            // step, held to the pixels about it: it is not hurried to the
+            // display's rate.
+            if self.resolve.gathering() && (quiet || !animated) {
                 REDRAW.set(true);
             }
             if self.screen.grows() {
@@ -1299,7 +1405,9 @@ fn targets(g: &Gpu, s: &mut Surface) {
     (s.history, s.history_view) = ([0; 2], [0; 2]);
     if s.role == surface_role::WORLD {
         for k in 0..2 {
-            s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
+            // Copied within where a region alone is drawn again (gpu/resolve.rs).
+            let copied = usage | texture_usage::COPY_SRC | texture_usage::COPY_DST;
+            s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, copied);
             s.history_view[k] = g.view(s.history[k], false, 0, 1, 0, 1);
         }
         // Written by the cast, read by the screen pass.
@@ -1336,10 +1444,14 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
             stat: None,
         };
     };
-    // The surfaces would block: skip rather than wait.
+    // The surfaces would block: skip rather than wait. The uploads it
+    // takes the next frame does not see, so it draws whole.
     if !(input.admit)() {
         carry_edits(&input.cast);
         take_lists(Some(g), input.lists);
+        if let Some(r) = RENDERER.get(|| None).as_mut() {
+            r.beside.forget();
+        }
         return FrameOutput {
             kind: FrameKind::held,
             redraw: true,

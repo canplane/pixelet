@@ -28,6 +28,7 @@ use crate::gpu::read::Read;
 use crate::gpu::renderer::{Cast, Overwrites};
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName};
+use crate::gpu::surface::Region;
 
 /// What the GPU's cast reads; it writes the world surface's rays.
 pub(super) struct CastBuffers {
@@ -169,6 +170,11 @@ pub(super) struct CastBuffers {
     /// `eye::JITTER`). It moving alone, the beam rays, the cells' starts and
     /// the samples stand, and the pixels are cast again off them.
     jitter: [u32; 2],
+    /// The part of the pixels this frame casts again, where it moved within
+    /// a region alone (gpu/surface.rs `Region`), and the first pixel the eye's
+    /// words hold for it, as last written.
+    region: Option<Region>,
+    origin: [f32; 2],
     /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
     /// visible sample at each pixel the pixels read (`cast_cs`), over a group
     /// of their own (`pixel_group`): the eye, the rays, the beam's words, the
@@ -353,6 +359,8 @@ impl RaysPass {
             grown: Grown::new(g, pipelines),
             read: Read::default(),
             jitter: [0; 2],
+            region: None,
+            origin: [0.0; 2],
             raster,
             pixel_group: 0,
             pixel_bound: [0; 5],
@@ -372,6 +380,7 @@ impl RaysPass {
         meshes: &[u32; GROUPS as usize],
         rays: (u32, [u32; 2]),
         sun_map: (u32, u32, sun::Starts),
+        region: Option<Region>,
     ) {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
@@ -434,7 +443,7 @@ impl RaysPass {
             (true, true) => FrameKind::pixels,
             (false, _) => FrameKind::cast,
         };
-        let casts = casts_pixels(self.kind);
+        let (kind, casts) = (self.kind, casts_pixels(self.kind));
         xpute_kit::ensure!(
             cast.window.len() == (4 * window::JOINED_AT) as usize,
             ENOTRECOVERABLE,
@@ -691,6 +700,16 @@ impl RaysPass {
         }
         if eye_moved || jittered || c.sun_cast {
             g.write_buffer(c.eye, 0, bytes(&cast.eye));
+            c.origin = [0.0; 2];
+        }
+        // Only the pixels within the region, where only they moved; a cast
+        // whole casts every pixel. Its first pixel, in the eye's words
+        // (pxl-spec-core `eye::JITTER`).
+        c.region = region.filter(|_| kind == FrameKind::pixels);
+        let origin = c.region.map_or([0.0; 2], |r| r.at.map(|v| v as f32));
+        if casts && origin != c.origin {
+            g.write_buffer(c.eye, word_bytes(eye::JITTER + 2), bytes(&origin));
+            c.origin = origin;
         }
         if casts {
             c.forgets = if c.forget {
@@ -829,6 +848,17 @@ impl RaysPass {
         self.regroup(g, [rays.0, eye]);
     }
 
+    /// The frame draws whole after all: its pixels, where it casts them,
+    /// cast whole, from the first.
+    pub fn whole(&mut self, g: &Gpu) {
+        let Some(c) = self.cast.as_mut().filter(|c| c.region.is_some()) else {
+            return;
+        };
+        c.region = None;
+        c.origin = [0.0; 2];
+        g.write_buffer(c.eye, word_bytes(eye::JITTER + 2), bytes(&c.origin));
+    }
+
     /// The eye's windows folded over their bricks where their entries moved
     /// (`joined_cs`): ahead of the frame, as the fold outlives it.
     pub fn fold(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
@@ -914,7 +944,7 @@ impl RaysPass {
                 (
                     GpuSpanName::pixel,
                     &c.built,
-                    c.size,
+                    c.region.map_or(c.size, |r| r.size),
                     compute::CAST_WORKGROUP,
                 ),
             ] {
@@ -923,8 +953,14 @@ impl RaysPass {
                 }
                 let mut group = c.group;
                 if span == GpuSpanName::pixel {
-                    c.raster
-                        .draw(g, encoder, stamps, &c.grid, kind == FrameKind::cast);
+                    c.raster.draw(
+                        g,
+                        encoder,
+                        stamps,
+                        &c.grid,
+                        kind == FrameKind::cast,
+                        c.region,
+                    );
                     group = c.pixel_group;
                 }
                 let pass = g.compute_pass(encoder, stamps[span as usize].pass());

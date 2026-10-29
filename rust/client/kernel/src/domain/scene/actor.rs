@@ -48,8 +48,11 @@ pub struct Actor {
     /// The fade's source pose, its room kept.
     from: Vec<[f32; 10]>,
     /// Its palette shows its clips at their clocks: posed again only where
-    /// it moves where it is seen, or where it does not show them.
+    /// it moves where it is seen, or where it does not show them; how many
+    /// times it was, and whether it was seen at the last tick.
     posed: bool,
+    poses: u32,
+    seen: bool,
     /// How long its clip has run while it moves it where it is seen, in
     /// seconds: by the wall clock between its ticks, read at `last`, a stall
     /// taken as one step.
@@ -95,6 +98,8 @@ impl Actor {
             global: vec![[0.0; 16]; joints],
             from: Vec::new(),
             posed: false,
+            poses: 0,
+            seen: false,
             run: 0.0,
             last: 0.0,
             clock: Stepped::default(),
@@ -158,6 +163,7 @@ impl Actor {
         let distance = v3::len(&v3::sub(&about, &frame.camera));
         let cell_there = cell_there(distance);
         let seen = frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
+        self.seen = seen;
         // A clip of some length plays, or one fades into the next.
         let playing = self.current.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.previous.is_some();
@@ -185,6 +191,9 @@ impl Actor {
             dt = (time - self.shown) as f32;
             self.shown = time;
             (moves, asks) = (stepped, false);
+            if stepped {
+                crate::domain::scene::region::animated();
+            }
         } else {
             self.last = 0.0;
         }
@@ -221,6 +230,7 @@ impl Actor {
             return asks;
         }
         self.posed = true;
+        self.poses = self.poses.wrapping_add(1);
         m.pose(self.current.map(|p| (p.clip, p.time)), &mut self.local);
         if let Some(prev) = self.previous {
             self.from.resize(joints, [0.0; 10]);
@@ -256,6 +266,22 @@ impl Actor {
         };
         if m.handle() == 0 {
             return;
+        }
+        // Seen, what it covers and shades as drawn (`region`): its rest's
+        // bound, grown by as far as its clip moves it.
+        if self.seen {
+            let clip = self.current.map_or(0.0, |p| m.motion(p.clip));
+            let r = f64::from((m.radius() + clip) * stance.scale);
+            let at = stance.at;
+            let state = crate::domain::scene::region::digest(&[
+                at[0],
+                at[1],
+                at[2],
+                f64::from(stance.rotation_z),
+                f64::from(stance.scale),
+                f64::from(self.poses),
+            ]);
+            crate::domain::scene::region::drawn(self.palette_handle, at, r, true, state);
         }
         let t = DrawList::translation(stance.at, eye);
         draw.draw_scaled(

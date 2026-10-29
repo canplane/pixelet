@@ -23,6 +23,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
+use crate::gpu::surface::Region;
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -245,8 +246,9 @@ impl Raster {
 
     /// The boxes written off the samples, a thread a sample of `grid`, where
     /// they were cast again (`samples_cast`), else the last kept; and drawn
-    /// into its targets as many as their args say, cleared first: in passes
-    /// of their own, timed together (span `sraster`).
+    /// into its targets as many as their args say, cleared first, within the
+    /// `region` the frame casts where it casts one: in passes of their own,
+    /// timed together (span `sraster`).
     pub(super) fn draw(
         &self,
         g: &Gpu,
@@ -254,6 +256,7 @@ impl Raster {
         stamps: &mut [Stamp],
         grid: &beam::Grid,
         samples_cast: bool,
+        region: Option<Region>,
     ) {
         let stamp = &mut stamps[GpuSpanName::sraster as usize];
         if samples_cast {
@@ -276,6 +279,9 @@ impl Raster {
                 stamp.pass(),
             ),
         );
+        if let Some(r) = region {
+            g.set_scissor(pass, r.rect());
+        }
         g.set_pipeline(pass, self.draw_built.pipeline);
         g.set_bind_group(pass, 0, self.groups[1], &[]);
         g.draw_indirect(pass, self.args, 0);

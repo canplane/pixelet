@@ -1074,6 +1074,11 @@ impl Gpu {
         call::set_pipeline(&mut self.s().stream, pass, pipeline);
     }
 
+    /// What the pass draws held to `[x, y, width, height]` of its targets.
+    pub fn set_scissor(&self, pass: Id, rect: [u32; 4]) {
+        call::set_scissor(&mut self.s().stream, pass, rect);
+    }
+
     pub fn set_bind_group(&self, pass: Id, index: u32, group: Id, offsets: &[u32]) {
         call::set_bind_group(&mut self.s().stream, pass, index, group, offsets);
     }

@@ -146,6 +146,11 @@ impl EnvironmentDraw {
         }
     }
 
+    /// Toward the sun, as drawn, a unit vector.
+    pub fn sun(&self) -> [f64; 3] {
+        v3::norm(&self.sun)
+    }
+
     /// The sun under the horizon, as drawn: past where night begins to fall
     /// (pxl-render param.rs `night::FALL`).
     pub fn night(&self) -> bool {
@@ -191,7 +196,11 @@ impl EnvironmentDraw {
             self.days = j2000_days(sky);
             self.aim();
         }
-        let (clouds, clouds_due, _) = self.clouds_at.at(unix_ms, clouds_next);
+        let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
+        // The clouds drifting step on their own, waking the turn.
+        if drifted && self.started {
+            crate::domain::scene::region::animated();
+        }
         self.time = (clouds - first) / 1000.0;
         let sky_in = if held { f64::INFINITY } else { next - sky_ms };
         sky_in.min(clouds_due - unix_ms).max(0.0)
