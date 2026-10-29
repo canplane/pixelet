@@ -16,7 +16,6 @@ import { useKernel } from "@/shell/store/watch.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
-  navigation: "location",
   camera: "move.3d",
   lighting: "sun.max",
   debug: "ladybug",

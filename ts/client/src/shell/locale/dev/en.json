@@ -1,12 +1,10 @@
 {
   "settings": {
-    "navigation": {
+    "camera": {
       "surface_follow": {
         "label": "Follow surfaces",
         "description": "Dragging moves the view center along terrain and object surfaces. Turn it off to keep the current height and pass through obstacles."
-      }
-    },
-    "camera": {
+      },
       "orbit_obstacle": {
         "label": "Third-person collision",
         "through": {

@@ -32,3 +32,8 @@ An item â€” each cube, decor, marker and pet, the `assets.*` and `pets.*` keys â
 has one name, the English one, in every locale: only en.json holds it, and every
 other locale falls back to it. A section's header is written in the reader's
 language.
+
+English is written in sentence case, as Korean has no case to set a phrase
+apart: a button, a setting's name, a section's title alike ("View in first
+person", "Cube outlines", "Light and shadow"). An item's name is the one
+exception: it is a name, in title case ("Bare Ground", "Dark Grey").

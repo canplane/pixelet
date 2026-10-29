@@ -44,7 +44,7 @@
     },
     "camera": {
       "section_title": "Camera",
-      "section_caption": "Rotation and the third-person view",
+      "section_caption": "How the view moves and turns",
       "tilt_lock": {
         "label": "Lock tilt",
         "description": "Fixes the tilt; turns left and right only."
@@ -54,7 +54,7 @@
       "section_title": "Light and shadow",
       "section_caption": "Light, shadow and outlines",
       "edge_shade": {
-        "label": "Cube Outlines",
+        "label": "Cube outlines",
         "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
       },
       "ao": {
@@ -77,7 +77,7 @@
         "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
       },
       "rim_light": {
-        "label": "Rim Light",
+        "label": "Rim light",
         "description": "Adds a subtle highlight around the edges of cubes, decor and characters to make them stand out from the background."
       }
     },
@@ -93,11 +93,11 @@
         "description": "Shows how long each frame takes and how much GPU, network and memory it uses, and records them while on."
       },
       "world_gizmo": {
-        "label": "World Gizmo",
+        "label": "World gizmo",
         "description": "Draws rings that mark the screen's center and directions, and colors the ground by how far its terrain has loaded. The legend shown with it explains the colors."
       },
       "camera_gizmo": {
-        "label": "Camera Gizmo",
+        "label": "Camera gizmo",
         "description": "Overlays a ring-shaped grid around the screen's center and colors cubes by how large they appear on screen against a grid cell. The legend shown with it explains the colors."
       },
       "ray_steps": {
@@ -119,10 +119,6 @@
     "about": {
       "section_title": "About",
       "tagline": "Turn the real world into a canvas and build with blocks."
-    },
-    "navigation": {
-      "section_title": "View movement",
-      "section_caption": "How the view moves when you drag it"
     }
   },
   "assets": {
@@ -252,7 +248,7 @@
         "colors": "Colors",
         "landcover": "Land",
         "water": "Water",
-        "water_features": "Water Features",
+        "water_features": "Water features",
         "buildings": "Buildings",
         "roads": "Roads",
         "aeroways": "Airports",
@@ -300,21 +296,21 @@
       "pointer": "Pointer",
       "eraser": "Eraser",
       "message_placeholder": "Type a message…",
-      "pin_placeholder": "Words for this pin…",
+      "pin_placeholder": "Words for the pin…",
       "send": "Send",
-      "pin_done": "Put Up Pin",
-      "drawer_tooltip": "Open Drawer",
+      "pin_done": "Put up pin",
+      "drawer_tooltip": "Open drawer",
       "object_size": "Size {{n}}"
     },
     "controls": {
-      "reset_orientation": "Face North",
-      "move_to_location": "Go to My Location",
-      "start_compass_mode": "Start Compass Mode",
-      "exit_compass_mode": "Exit Compass Mode",
-      "first_person": "First Person",
-      "third_person": "Third Person",
-      "show_places": "Show Places",
-      "hide_places": "Hide Places"
+      "reset_orientation": "Face north",
+      "move_to_location": "Go to my location",
+      "start_compass_mode": "Turn on compass",
+      "exit_compass_mode": "Turn off compass",
+      "first_person": "View in first person",
+      "third_person": "View in third person",
+      "show_places": "Show places",
+      "hide_places": "Hide places"
     },
     "sensors": {
       "label": "Use my location",

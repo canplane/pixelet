@@ -1,12 +1,10 @@
 {
   "settings": {
-    "navigation": {
+    "camera": {
       "surface_follow": {
         "label": "표면 따라가기",
         "description": "화면을 끌면 화면 중심이 지형과 오브젝트의 표면을 따라 움직입니다. 끄면 현재 높이를 유지한 채 장애물을 통과합니다."
-      }
-    },
-    "camera": {
+      },
       "orbit_obstacle": {
         "label": "3인칭 카메라 충돌",
         "through": {

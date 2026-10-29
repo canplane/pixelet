@@ -43,7 +43,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </Text>
                 <Separator />
                 <SettingsSection section="display" />
-                <SettingsSection section="navigation" />
                 <SettingsSection section="camera" />
                 <SettingsSection section="lighting" />
                 <SettingsSection section="debug" />

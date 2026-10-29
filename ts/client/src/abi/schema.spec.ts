@@ -102,7 +102,7 @@ export const SETTINGS = {
     key: 6 as number,
     kind: "toggle",
     default: true,
-    section: "navigation",
+    section: "camera",
     dev: true,
   },
   /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
