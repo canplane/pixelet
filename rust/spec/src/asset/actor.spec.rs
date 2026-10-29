@@ -252,7 +252,7 @@ pub const IDLE_CLIP: u32 = 1;
 
 /// Split by gender, so the picker shows two rows; a person is shown by
 /// its place in its row.
-pub mod PERSON_GENDER_PREFIXES {
+pub mod PERSON_GENDER_PREFIX {
     pub const female: &str = "female-";
     pub const male: &str = "male-";
 }

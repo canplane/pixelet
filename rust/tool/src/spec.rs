@@ -241,7 +241,7 @@ impl Node {
 /// `WORDS` where the last ends; a section inside is a packed table given its
 /// `AT`. A width is a number or a product of terms (`"2 * CENSUS_TAGS"`), a
 /// term a number, a list or a packed table above it in the file (its length,
-/// its `WORDS`) or a number in one (`LIMITS.ZOOMS`, `op.DESTROY`), else one
+/// its `WORDS`) or a number in one (`LIMIT.ZOOMS`, `op.DESTROY`), else one
 /// in a file it uses (`used`). So a lane grown moves everything after it.
 pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     let Node::Obj(entries) = node else {

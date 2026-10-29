@@ -43,7 +43,7 @@ impl Wake {
     }
 }
 
-pub mod LIMITS {
+pub mod LIMIT {
     pub const REASONS: u32 = 4;
     pub const REASON_WORDS: u32 = 3;
     pub const STEP_SLOTS: u32 = 32;
@@ -119,7 +119,7 @@ pub mod FRAME {
 }
 
 /// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it.
-pub mod FRAME_GROUPS {
+pub mod FRAME_GROUP {
     pub const time: usize = 8;
     pub const turn: usize = 7;
     pub const frame: usize = 3;
@@ -171,8 +171,8 @@ pub mod SPREAD {
     pub const WORDS: u32 = 3;
 }
 
-/// One stream's tasks in the window, at STATS.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported.
-pub mod STREAM_STATS {
+/// One stream's tasks in the window, at STAT.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported.
+pub mod STREAM_STAT {
     pub const n: u32 = 0;
     pub const ok: u32 = 1;
     pub const aborted: u32 = 2;
@@ -186,8 +186,8 @@ pub mod STREAM_STATS {
     pub const WORDS: u32 = 24;
 }
 
-/// One registered step's timing, at STATS.steps.slots + its index × WORDS. `name` indexes STEP_NAMES.
-pub mod STEP_STATS {
+/// One registered step's timing, at STAT.steps.slots + its index × WORDS. `name` indexes STEP_NAMES.
+pub mod STEP_STAT {
     pub const phase: u32 = 0;
     pub const name: u32 = 1;
     pub const ms: u32 = 2;
@@ -197,7 +197,7 @@ pub mod STEP_STATS {
 }
 
 /// The window's statistics PROFILER_READ computes, over its `window_ms`: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and WORDS where the last ends, both laid out by the generator.
-pub mod STATS {
+pub mod STAT {
     pub mod frames {
         pub const AT: u32 = 0;
         pub const present: u32 = 0;
@@ -243,7 +243,7 @@ pub mod STATS {
     pub const WORDS: u32 = 683;
 }
 
-/// What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STATS lays out its own. Every word an f64.
+/// What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.
 pub mod NOW {
     pub mod rec {
         pub const AT: u32 = 0;
@@ -288,7 +288,7 @@ pub mod NOW {
     pub const WORDS: u32 = 28;
 }
 
-/// What PROFILER_READ answers with the address of: u32 words, where STATS and NOW lie in the module's memory and their words.
+/// What PROFILER_READ answers with the address of: u32 words, where STAT and NOW lie in the module's memory and their words.
 pub mod READ {
     pub const stats_at: u32 = 0;
     pub const stats_words: u32 = 1;
@@ -304,10 +304,10 @@ pub mod RING {
     pub const WORDS: u32 = 2;
 }
 
-/// What PROFILER_RINGS answers with the address of: u32 words, a RING apiece.
+pub const RING_NAMES: usize = 3;
+
+/// What PROFILER_RINGS answers with the address of: u32 words, a RING apiece in RING_NAMES' order.
 pub mod RINGS {
-    pub const frames: u32 = 0;
-    pub const tasks: u32 = 2;
-    pub const worst: u32 = 4;
+    pub const slots: u32 = 0;
     pub const WORDS: u32 = 6;
 }

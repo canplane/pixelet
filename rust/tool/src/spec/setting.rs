@@ -73,7 +73,7 @@ fn check_numbers(table: &str, numbered: &[(&str, u32)]) -> Result<(), String> {
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let spec = read(JSON)?;
-    let every = spec.get("SETTINGS").ok_or(format!("{JSON}: no SETTINGS"))?;
+    let every = spec.get("SETTING").ok_or(format!("{JSON}: no SETTING"))?;
     let settings: Vec<Setting> = every
         .named()
         .map(|(key, spec)| Setting { key, spec })
@@ -87,7 +87,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
-    check_numbers("SETTINGS", &numbers)?;
+    check_numbers("SETTING", &numbers)?;
     let number_of = |s: &Setting| {
         numbers
             .iter()
@@ -97,7 +97,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     };
     let mut lists: Vec<List> = Vec::new();
     for (name, n) in spec.named() {
-        if name == "SETTINGS" {
+        if name == "SETTING" {
             continue;
         }
         let vals = n
@@ -202,7 +202,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     rs.extend(
         [
             "",
-            "/// Every setting, by its number in schema.json's SETTINGS.",
+            "/// Every setting, by its number in schema.json's SETTING.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(u32)]",
             "pub enum SettingKey {",
@@ -512,16 +512,16 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ts.extend([
         String::new(),
         format!(
-            "export const SETTINGS = {} as const;",
+            "export const SETTING = {} as const;",
             ts_literal(&table(&|_| true)?, "f64", "")?
         ),
     ]);
     ts.extend([
         String::new(),
-        "/** SETTINGS without its `dev` entries: what a production bundle carries in its place. */"
+        "/** SETTING without its `dev` entries: what a production bundle carries in its place. */"
             .into(),
         format!(
-            "export const SETTINGS_SHIPPED = {} as const;",
+            "export const SETTING_SHIPPED = {} as const;",
             ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "")?
         ),
     ]);

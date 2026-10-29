@@ -27,7 +27,7 @@ export const CENSUS_TAGS = [
 
 export const WAKES = ["next", "timer", "none"] as const;
 
-export const LIMITS = {
+export const LIMIT = {
   REASONS: 4 as number,
   REASON_WORDS: 3 as number,
   STEP_SLOTS: 32 as number,
@@ -103,7 +103,7 @@ export const FRAME = {
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it. */
-export const FRAME_GROUPS = {
+export const FRAME_GROUP = {
   time: [
     "t",
     "interval_ms",
@@ -204,8 +204,8 @@ export const SPREAD = {
   WORDS: 3 as number,
 } as const;
 
-/** One stream's tasks in the window, at STATS.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. */
-export const STREAM_STATS = {
+/** One stream's tasks in the window, at STAT.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. */
+export const STREAM_STAT = {
   n: 0 as number,
   ok: 1 as number,
   aborted: 2 as number,
@@ -219,8 +219,8 @@ export const STREAM_STATS = {
   WORDS: 24 as number,
 } as const;
 
-/** One registered step's timing, at STATS.steps.slots + its index × WORDS. `name` indexes STEP_NAMES. */
-export const STEP_STATS = {
+/** One registered step's timing, at STAT.steps.slots + its index × WORDS. `name` indexes STEP_NAMES. */
+export const STEP_STAT = {
   phase: 0 as number,
   name: 1 as number,
   ms: 2 as number,
@@ -230,7 +230,7 @@ export const STEP_STATS = {
 } as const;
 
 /** The window's statistics PROFILER_READ computes, over its `window_ms`: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and WORDS where the last ends, both laid out by the generator. */
-export const STATS = {
+export const STAT = {
   frames: {
     AT: 0 as number,
     present: 0 as number,
@@ -276,7 +276,7 @@ export const STATS = {
   WORDS: 683 as number,
 } as const;
 
-/** What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STATS lays out its own. Every word an f64. */
+/** What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64. */
 export const NOW = {
   rec: {
     AT: 0 as number,
@@ -321,7 +321,7 @@ export const NOW = {
   WORDS: 28 as number,
 } as const;
 
-/** What PROFILER_READ answers with the address of: u32 words, where STATS and NOW lie in the module's memory and their words. */
+/** What PROFILER_READ answers with the address of: u32 words, where STAT and NOW lie in the module's memory and their words. */
 export const READ = {
   stats_at: 0 as number,
   stats_words: 1 as number,
@@ -337,10 +337,10 @@ export const RING = {
   WORDS: 2 as number,
 } as const;
 
-/** What PROFILER_RINGS answers with the address of: u32 words, a RING apiece. */
+export const RING_NAMES = ["frames", "tasks", "worst"] as const;
+
+/** What PROFILER_RINGS answers with the address of: u32 words, a RING apiece in RING_NAMES' order. */
 export const RINGS = {
-  frames: 0 as number,
-  tasks: 2 as number,
-  worst: 4 as number,
+  slots: 0 as number,
   WORDS: 6 as number,
 } as const;

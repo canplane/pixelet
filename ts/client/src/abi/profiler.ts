@@ -23,15 +23,16 @@ import {
 } from "@/abi/demand.spec.ts";
 import {
   FRAME,
-  LIMITS,
+  LIMIT,
   NOW,
   READ,
   RING,
+  RING_NAMES,
   RINGS,
   SPREAD,
-  STATS,
-  STEP_STATS,
-  STREAM_STATS,
+  STAT,
+  STEP_STAT,
+  STREAM_STAT,
   TASK,
   WAKES,
   WORST,
@@ -226,7 +227,7 @@ const spread_at = (s: F64Array, at: u32): Spread => ({
 });
 
 function frame_summary(s: F64Array): FrameSummary | null {
-  const F = STATS.frames;
+  const F = STAT.frames;
   const a = F.AT;
   if (s[a + F.present] === 0) return null;
   return {
@@ -268,46 +269,46 @@ function frame_summary(s: F64Array): FrameSummary | null {
 function task_summaries(s: F64Array): TaskSummary[] {
   const out: TaskSummary[] = [];
   STREAM_NAMES.forEach((stream, c) => {
-    const a = STATS.tasks.AT + STATS.tasks.slots + c * STREAM_STATS.WORDS;
-    const n = s[a + STREAM_STATS.n];
+    const a = STAT.tasks.AT + STAT.tasks.slots + c * STREAM_STAT.WORDS;
+    const n = s[a + STREAM_STAT.n];
     if (n === 0) return;
     const reasons = Array.from(
-      { length: s[a + STREAM_STATS.reason_cnt] },
+      { length: s[a + STREAM_STAT.reason_cnt] },
       (_, i) => {
-        const w = a + STREAM_STATS.reasons + LIMITS.REASON_WORDS * i;
+        const w = a + STREAM_STAT.reasons + LIMIT.REASON_WORDS * i;
         return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
       },
     );
     const means = TASK_PHASE_NAMES.map((name, p) =>
-      [name, s[a + STREAM_STATS.phase_mean + p]] as [string, f64]
+      [name, s[a + STREAM_STAT.phase_mean + p]] as [string, f64]
     ).filter(([, v]) => !Number.isNaN(v));
     out.push({
       stream,
       n,
-      ok: s[a + STREAM_STATS.ok],
-      aborted: s[a + STREAM_STATS.aborted],
-      error: s[a + STREAM_STATS.error],
+      ok: s[a + STREAM_STAT.ok],
+      aborted: s[a + STREAM_STAT.aborted],
+      error: s[a + STREAM_STAT.error],
       lat: {
-        p50: s[a + STREAM_STATS.lat_p50],
-        p95: s[a + STREAM_STATS.lat_p95],
+        p50: s[a + STREAM_STAT.lat_p50],
+        p95: s[a + STREAM_STAT.lat_p95],
       },
       reasons,
-      phase_mean: s[a + STREAM_STATS.phase_n] > 0 ? means : null,
+      phase_mean: s[a + STREAM_STAT.phase_n] > 0 ? means : null,
     });
   });
   return out;
 }
 
 function steps_at(s: F64Array): Step[] {
-  const at = STATS.steps.AT;
-  return Array.from({ length: s[at + STATS.steps.cnt] }, (_, i) => {
-    const w = at + STATS.steps.slots + i * STEP_STATS.WORDS;
+  const at = STAT.steps.AT;
+  return Array.from({ length: s[at + STAT.steps.cnt] }, (_, i) => {
+    const w = at + STAT.steps.slots + i * STEP_STAT.WORDS;
     return {
-      phase: PHASES[s[w + STEP_STATS.phase]] ?? "?",
-      name: STEP_NAMES[s[w + STEP_STATS.name]] ?? "?",
-      ms: s[w + STEP_STATS.ms],
-      count: s[w + STEP_STATS.cnt],
-      max_ms: s[w + STEP_STATS.max_ms],
+      phase: PHASES[s[w + STEP_STAT.phase]] ?? "?",
+      name: STEP_NAMES[s[w + STEP_STAT.name]] ?? "?",
+      ms: s[w + STEP_STAT.ms],
+      count: s[w + STEP_STAT.cnt],
+      max_ms: s[w + STEP_STAT.max_ms],
     };
   });
 }
@@ -320,7 +321,7 @@ function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   return out;
 }
 
-/** STATS's words over `window_ms` and NOW's, as PROFILER_READ lays them out. */
+/** STAT's words over `window_ms` and NOW's, as PROFILER_READ lays them out. */
 function read(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
   const r = u32s(
     call(Command.PROFILER_READ, encode_profiler_read(HOST.doorbell, window_ms)),
@@ -358,11 +359,11 @@ export function profiler_view(): Summary["view"] {
 /** The rings as they lie, each its address and count, with nothing reduced. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   const r = u32s(call(Command.PROFILER_RINGS), RINGS.WORDS);
-  return {
-    frames: [r[RINGS.frames + RING.at], r[RINGS.frames + RING.cnt]],
-    tasks: [r[RINGS.tasks + RING.at], r[RINGS.tasks + RING.cnt]],
-    worst: [r[RINGS.worst + RING.at], r[RINGS.worst + RING.cnt]],
+  const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
+    const at = RINGS.slots + RING_NAMES.indexOf(name) * RING.WORDS;
+    return [r[at + RING.at], r[at + RING.cnt]];
   };
+  return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };
 }
 
 export function profiler_counts(): RingCounts {

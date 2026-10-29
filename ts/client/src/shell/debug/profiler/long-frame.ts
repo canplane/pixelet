@@ -5,11 +5,11 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { bracket, type LongFrame } from "@/bracket.tsx";
-import { LIMITS } from "@/abi/profiler.spec.ts";
+import { LIMIT } from "@/abi/profiler.spec.ts";
 
-// The kernel's rings' window, one number (profiler.json `LIMITS.WINDOW_MS`).
-const WINDOW_MS = LIMITS.WINDOW_MS;
-const LIMIT = 1_024;
+// The kernel's rings' window, one number (profiler.json `LIMIT.WINDOW_MS`).
+const WINDOW_MS = LIMIT.WINDOW_MS;
+const CAP = 1_024;
 
 const ring: LongFrame[] = [];
 
@@ -18,7 +18,7 @@ function land(l: LongFrame): void {
   let drop = 0;
   while (drop < ring.length && ring[drop].t < cutoff) drop++;
   if (drop > 0) ring.splice(0, drop);
-  if (ring.length === LIMIT) ring.shift();
+  if (ring.length === CAP) ring.shift();
   ring.push(l);
 }
 

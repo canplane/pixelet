@@ -6,15 +6,15 @@
  */
 
 import {
-  SETTINGS as EVERY,
-  SETTINGS_SHIPPED as SHIPPED,
+  SETTING as EVERY,
+  SETTING_SHIPPED as SHIPPED,
 } from "@/abi/schema.spec.ts";
 
 type Spec = typeof EVERY;
 
 /** A constant-folded choice, not a filter, so dev rows are absent from the
  * production artifact rather than hidden. */
-export const SETTINGS = (__IS_DEV__ ? EVERY : SHIPPED) as Spec;
+export const SETTING = (__IS_DEV__ ? EVERY : SHIPPED) as Spec;
 
 export type SettingName = keyof Spec;
 
@@ -27,8 +27,8 @@ export type SettingCost =
   | Extract<Setting, { cost: unknown }>["cost"]
   | Exclude<Extract<Setting, { costs: unknown }>["costs"][number], "">;
 
-const SETTING_NAMES = Object.keys(SETTINGS) as SettingName[];
+const SETTING_NAMES = Object.keys(SETTING) as SettingName[];
 
 export function settingsIn(section: SettingSection): SettingName[] {
-  return SETTING_NAMES.filter((name) => SETTINGS[name].section === section);
+  return SETTING_NAMES.filter((name) => SETTING[name].section === section);
 }

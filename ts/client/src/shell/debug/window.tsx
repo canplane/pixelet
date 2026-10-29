@@ -6,8 +6,8 @@
 import type { ComponentType } from "react";
 
 import {
+  SETTING,
   type SettingName,
-  SETTINGS,
   settingsIn,
 } from "@/shell/setting/schema.ts";
 import {
@@ -40,7 +40,7 @@ const isPanel = (name: SettingName): name is PanelName =>
 export function useDebugWindow(): boolean {
   return useKernel((s) =>
     settingsIn("debug").some((name) =>
-      isPanel(name) && s.settings[SETTINGS[name].key] === 1
+      isPanel(name) && s.settings[SETTING[name].key] === 1
     )
   );
 }

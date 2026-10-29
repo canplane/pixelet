@@ -6,13 +6,13 @@
 // where it is shown, its `section`: one of the settings sheet's, or
 // `profiler`, the profiler panel's own. The store reads the defaults from
 // here and the sheet renders rows from here, so adding a setting to the
-// sheet is one entry in SETTINGS plus its two strings in the locale catalog
+// sheet is one entry in SETTING plus its two strings in the locale catalog
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
-// development one; the shell's production bundle carries SETTINGS_SHIPPED,
-// the table without them, in SETTINGS' place. A setting whose `kept` is
+// development one; the shell's production bundle carries SETTING_SHIPPED,
+// the table without them, in SETTING's place. A setting whose `kept` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
 //
@@ -196,7 +196,7 @@ pub enum SettingKind {
     Index,
 }
 
-/// Every setting, by its number in schema.json's SETTINGS.
+/// Every setting, by its number in schema.json's SETTING.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SettingKey {

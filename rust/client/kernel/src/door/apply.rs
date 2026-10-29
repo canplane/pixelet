@@ -491,23 +491,22 @@ fn profiler_read(window_ms: Option<f64>) -> u32 {
 /// reader of every record asks without the statistics it would not read.
 fn profiler_rings() -> u32 {
     use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
-    use crate::profiler::spec::{RING, RINGS};
+    use crate::profiler::spec::{RING, RINGS, RING_NAMES};
     // On the heap, as READ's words are.
     static WORDS: xpute_guest::global::Global<Box<[u32; RINGS::WORDS as usize]>> =
         xpute_guest::global::Global::new();
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
-    for (ring, at, cnt) in [
-        (
-            RINGS::frames,
-            off_of_slice(&raw const *frames),
-            frames.len(),
-        ),
-        (RINGS::tasks, off_of_slice(&raw const *tasks), tasks.len()),
-        (RINGS::worst, off_of_slice(&raw const *worst), worst.len()),
-    ] {
-        w[(ring + RING::at) as usize] = at as u32;
-        w[(ring + RING::cnt) as usize] = cnt as u32;
+    // In RING_NAMES' order: frames, tasks, worst.
+    let rings: [(usize, usize); RING_NAMES] = [
+        (off_of_slice(&raw const *frames), frames.len()),
+        (off_of_slice(&raw const *tasks), tasks.len()),
+        (off_of_slice(&raw const *worst), worst.len()),
+    ];
+    for (k, (at, cnt)) in rings.into_iter().enumerate() {
+        let slot = (RINGS::slots + k as u32 * RING::WORDS) as usize;
+        w[slot + RING::at as usize] = at as u32;
+        w[slot + RING::cnt as usize] = cnt as u32;
     }
     off_of(w.as_ptr()) as u32
 }

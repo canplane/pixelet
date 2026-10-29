@@ -8,7 +8,7 @@ use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec_core::tally;
 use xpute_guest::sched::tick::PHASES;
 
-use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, WORST};
+use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMIT, WORST};
 use crate::profiler::word::{words, Words};
 use pxl_render::frame::draw::{DrawCensus, DRAW_PIPELINES};
 use pxl_render::gpu::api::OBJECT_OPS;
@@ -254,7 +254,7 @@ words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
 pub const EFFECTS: usize = crate::turn::spec::EFFECT_NAMES;
 pub const STREAMS: usize = crate::sys::io::demand_spec::STREAM_NAMES;
-pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
+pub const ZOOMS: usize = LIMIT::ZOOMS as usize;
 
 const _: () = assert!(
     pxl_spec::space::layer::lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,

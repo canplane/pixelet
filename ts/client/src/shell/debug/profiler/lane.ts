@@ -11,12 +11,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import {
-  CENSUS_TAGS,
-  FRAME_GROUPS,
-  LIMITS,
-  WAKES,
-} from "@/abi/profiler.spec.ts";
+import { CENSUS_TAGS, FRAME_GROUP, LIMIT, WAKES } from "@/abi/profiler.spec.ts";
 import type { Frame, ListLane } from "@/abi/profiler.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
@@ -30,7 +25,7 @@ const MIB = 1048576;
 /** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
-const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));
+const ZOOM_NAMES = Array.from({ length: LIMIT.ZOOMS }, (_, z) => zoomName(z));
 /** Slot k is the objects op k + 1 made, as no op is 0: its name, lower case. */
 const OBJECT_NAMES = Array.from(
   { length: op.DESTROY - 1 },
@@ -49,8 +44,8 @@ export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   out: STREAM_NAMES,
 };
 
-export type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
-export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) =>
+export type FrameGroup = Exclude<keyof typeof FRAME_GROUP, "$doc">;
+export const GROUPS = Object.keys(FRAME_GROUP).filter((g) =>
   !g.startsWith("$")
 ) as FrameGroup[];
 

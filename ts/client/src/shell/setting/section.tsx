@@ -4,9 +4,9 @@ import { useTranslation } from "react-i18next";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 
 import {
+  SETTING,
   type Setting,
   type SettingName,
-  SETTINGS,
   type SettingSection,
   settingsIn,
 } from "@/shell/setting/schema.ts";
@@ -50,7 +50,7 @@ export function SettingsSection(props: { section: SettingSection }) {
 function SettingControl(props: { name: SettingName }) {
   const { name } = props;
   const { t, i18n } = useTranslation();
-  const setting: Setting = SETTINGS[name];
+  const setting: Setting = SETTING[name];
   const { key } = setting;
   const cost = "cost" in setting ? setting.cost : undefined;
   const dev = "dev" in setting && setting.dev;

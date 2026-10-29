@@ -3,14 +3,14 @@
 import { useTranslation } from "react-i18next";
 
 import { kernel_setting } from "@/abi/shell.ts";
-import { SETTINGS } from "@/shell/setting/schema.ts";
+import { SETTING } from "@/shell/setting/schema.ts";
 import { ButtonStack } from "./button-stack.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
-const MODE = SETTINGS.camera_mode;
+const MODE = SETTING.camera_mode;
 const FIRST_PERSON = MODE.options.first_person;
 const ORBIT = MODE.options.orbit;
-const PLACE = SETTINGS.place.key;
+const PLACE = SETTING.place.key;
 
 export function ViewStack() {
   const { t } = useTranslation();

@@ -26,8 +26,8 @@ import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
 import { kernel_command, kernel_setting } from "@/abi/shell.ts";
 import {
+  SETTING,
   type SettingName,
-  SETTINGS,
   settingsIn,
 } from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -133,7 +133,7 @@ const SAID_MS = 2500;
 
 /** A setting the panel holds (section `profiler`). */
 type Own = {
-  [K in SettingName]: (typeof SETTINGS)[K]["section"] extends "profiler" ? K
+  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler" ? K
     : never;
 }[SettingName];
 
@@ -146,7 +146,7 @@ const OWN: Record<Own, { label: string; note: string }> = {
 };
 
 function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
-  const { key } = SETTINGS[name];
+  const { key } = SETTING[name];
   const on = useKernel((s) => s.settings[key] === 1);
   const own = OWN[name];
   const Box = on ? CheckSquareIcon : SquareIcon;
@@ -183,7 +183,7 @@ function restartWindow(): void {
 }
 
 export function ProfilerPanel() {
-  const show = useKernel((s) => s.settings[SETTINGS.profiler.key] === 1);
+  const show = useKernel((s) => s.settings[SETTING.profiler.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   // Read while shown, folded or not: the title carries the fps.

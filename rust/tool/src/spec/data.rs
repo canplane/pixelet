@@ -254,7 +254,7 @@ const DATA_SPECS: [DataSpec; 27] = [
         rs_also: &[],
         module: Some("actor"),
         enums: Enums::All,
-        ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),
+        ts_names: Some(&["groups", "PERSON_GENDER_PREFIX"]),
         cpp: None,
     },
     DataSpec {

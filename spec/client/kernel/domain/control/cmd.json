@@ -34,7 +34,7 @@
       "name": "SettingKey",
       "rs": "crate::domain::view::setting::schema_spec::SettingKey",
       "$doc": [
-        "A setting by its place in schema.json's SETTINGS, its row's `key`."
+        "A setting by its place in schema.json's SETTING, its row's `key`."
       ]
     },
     {

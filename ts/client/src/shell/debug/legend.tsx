@@ -10,7 +10,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Defs, LinearGradient, Rect, Stop, Svg } from "react-native-svg";
 
-import { SETTINGS } from "@/shell/setting/schema.ts";
+import { SETTING } from "@/shell/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
 import { Accordion } from "./accordion.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
@@ -50,7 +50,7 @@ const SHARE: Record<keyof typeof share, string> = {
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
 
 const useShown = (name: "world_gizmo" | "camera_gizmo" | "ray_steps") =>
-  useKernel((s) => s.settings[SETTINGS[name].key] === 1);
+  useKernel((s) => s.settings[SETTING[name].key] === 1);
 
 /**
  * In the spec's order, or `reversed` to list the one drawn over the rest

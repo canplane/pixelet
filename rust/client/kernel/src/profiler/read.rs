@@ -1,7 +1,7 @@
 // pxl-kernel/profiler/read.rs
 
 //! What PROFILER_READ reads: the profiler window reduced into profiler.json's
-//! STATS, and what holds as it reads into its NOW, each read in place by the
+//! STAT, and what holds as it reads into its NOW, each read in place by the
 //! panel and the report so both agree. Sections go only through `put`;
 //! indexing lanes by hand let sections drift out of order (2026-09-23).
 
@@ -15,7 +15,7 @@ use crate::profiler::section::TASK_PHASES;
 use crate::profiler::section::{
     FramesSection, Spread, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
 };
-use crate::profiler::spec::{LIMITS, NOW, STATS};
+use crate::profiler::spec::{LIMIT, NOW, STAT};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sys::io::failure::Outcome;
@@ -26,10 +26,10 @@ use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-const STATS_WORDS: usize = STATS::WORDS as usize;
+const STATS_WORDS: usize = STAT::WORDS as usize;
 const NOW_WORDS: usize = NOW::WORDS as usize;
-const REASONS: usize = LIMITS::REASONS as usize;
-const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
+const REASONS: usize = LIMIT::REASONS as usize;
+const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
 
 struct Read {
     /// On the heap, not a static: a native build's statics are outside the shell-readable memory.
@@ -75,15 +75,15 @@ pub fn profiler_stats(window_ms: Option<f64>) -> &'static [f64] {
     let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
     put(
         out,
-        STATS::frames::AT,
+        STAT::frames::AT,
         &frames(scratch, profiler_frames_since(since)),
     );
     put(
         out,
-        STATS::tasks::AT,
+        STAT::tasks::AT,
         &tasks(scratch, profiler_tasks_since(since)),
     );
-    put(out, STATS::steps::AT, &steps());
+    put(out, STAT::steps::AT, &steps());
     out
 }
 
@@ -217,7 +217,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
                 if i < shown {
                     [counted[i].0, counted[i].1, counted[i].2]
                 } else {
-                    [0.0; LIMITS::REASON_WORDS as usize]
+                    [0.0; LIMIT::REASON_WORDS as usize]
                 }
             }),
             phase_n: phase_n as f64,

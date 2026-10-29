@@ -28,11 +28,11 @@
     "none"
   ],
   "$WAKES": "What a turn asked of the host as it fell (xpute guest sched/edge.rs `fall`): the next frame, a timer, or nothing.",
-  "LIMITS": {
+  "LIMIT": {
     "$type": "u32",
     "REASONS": 4,
     "REASON_WORDS": 3,
-    "$REASON_WORDS": "A reason's words: its fail, its detail and how many (STREAM_STATS.reasons).",
+    "$REASON_WORDS": "A reason's words: its fail, its detail and how many (STREAM_STAT.reasons).",
     "STEP_SLOTS": 32,
     "WINDOW_MS": 60000,
     "$WINDOW_MS": "How far back the rings keep, the kernel's frames and tasks and the shell's long frames alike: the last minute.",
@@ -74,7 +74,7 @@
     "depth_bytes": 1,
     "pack_bytes": 1,
     "gpu_objects": "op.DESTROY - 1",
-    "zoom_tiles": "LIMITS.ZOOMS",
+    "zoom_tiles": "LIMIT.ZOOMS",
     "tiles_place": 1,
     "heap_used_bytes": 1,
     "heap_live_bytes": 1,
@@ -108,7 +108,7 @@
     "sun_walked": 1,
     "sun_boxes": 1
   },
-  "FRAME_GROUPS": {
+  "FRAME_GROUP": {
     "$doc": [
       "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it."
     ],
@@ -242,11 +242,11 @@
     "p95": 1,
     "max": 1
   },
-  "STREAM_STATS": {
+  "STREAM_STAT": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One stream's tasks in the window, at STATS.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported."
+      "One stream's tasks in the window, at STAT.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported."
     ],
     "n": 1,
     "ok": 1,
@@ -255,15 +255,15 @@
     "lat_p50": 1,
     "lat_p95": 1,
     "reason_cnt": 1,
-    "reasons": "LIMITS.REASON_WORDS * LIMITS.REASONS",
+    "reasons": "LIMIT.REASON_WORDS * LIMIT.REASONS",
     "phase_n": 1,
     "phase_mean": "TASK_PHASE_NAMES"
   },
-  "STEP_STATS": {
+  "STEP_STAT": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One registered step's timing, at STATS.steps.slots + its index × WORDS. `name` indexes STEP_NAMES."
+      "One registered step's timing, at STAT.steps.slots + its index × WORDS. `name` indexes STEP_NAMES."
     ],
     "phase": 1,
     "name": 1,
@@ -271,7 +271,7 @@
     "cnt": 1,
     "max_ms": 1
   },
-  "STATS": {
+  "STAT": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
@@ -307,18 +307,18 @@
       "last": "FRAME"
     },
     "tasks": {
-      "slots": "STREAM_NAMES * STREAM_STATS"
+      "slots": "STREAM_NAMES * STREAM_STAT"
     },
     "steps": {
       "cnt": 1,
-      "slots": "LIMITS.STEP_SLOTS * STEP_STATS"
+      "slots": "LIMIT.STEP_SLOTS * STEP_STAT"
     }
   },
   "NOW": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STATS lays out its own. Every word an f64."
+      "What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64."
     ],
     "rec": {
       "recording": 1,
@@ -363,7 +363,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "What PROFILER_READ answers with the address of: u32 words, where STATS and NOW lie in the module's memory and their words."
+      "What PROFILER_READ answers with the address of: u32 words, where STAT and NOW lie in the module's memory and their words."
     ],
     "stats_at": 1,
     "stats_words": 1,
@@ -379,14 +379,14 @@
     "at": 1,
     "cnt": 1
   },
+  "RING_NAMES": ["frames", "tasks", "worst"],
+  "$RING_NAMES": "The rings the profiler keeps, each a RING's place in RINGS: the frames, the tasks, and the worst moving frames.",
   "RINGS": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "What PROFILER_RINGS answers with the address of: u32 words, a RING apiece."
+      "What PROFILER_RINGS answers with the address of: u32 words, a RING apiece in RING_NAMES' order."
     ],
-    "frames": "RING",
-    "tasks": "RING",
-    "worst": "RING"
+    "slots": "RING_NAMES * RING"
   }
 }

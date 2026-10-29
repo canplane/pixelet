@@ -13,7 +13,7 @@ import {
 import { shippedTopTextureKey } from "@/shell/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { asset_url } from "@/namespace/route.ts";
-import { SETTINGS } from "@/shell/setting/schema.ts";
+import { SETTING } from "@/shell/setting/schema.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
@@ -37,7 +37,7 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
     borderRadius: radius,
     overflow: "hidden" as const,
   };
-  const textured = useKernel((s) => s.settings[SETTINGS.textures.key] === 1);
+  const textured = useKernel((s) => s.settings[SETTING.textures.key] === 1);
   const textureUrl = textured ? cubeTextureUrl(cube) : null;
   if (textureUrl) {
     return (

@@ -1,6 +1,6 @@
 // pxl-kernel/profiler/section.rs
 
-//! Every STATS and NOW section as a record held to profiler.json by `words!`.
+//! Every STAT and NOW section as a record held to profiler.json by `words!`.
 //! Written word by word, sections had shifted lanes, mirrored structures and
 //! unread fields that only an audit found (2026-09-23); a record makes each
 //! of those a compile error.
@@ -8,15 +8,15 @@
 use core::mem::{offset_of, size_of};
 
 use crate::profiler::frame::{FrameSample, EFFECTS, GPU_SPANS};
-use crate::profiler::spec::{FRAME, LIMITS, NOW, SPREAD, STATS, STEP_STATS, STREAM_STATS, WAKES};
+use crate::profiler::spec::{FRAME, LIMIT, NOW, SPREAD, STAT, STEP_STAT, STREAM_STAT, WAKES};
 use crate::profiler::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 use xpute_guest::sched::tick::PHASES;
 
-const REASONS: usize = LIMITS::REASONS as usize;
-const REASON_WORDS: usize = LIMITS::REASON_WORDS as usize;
-const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
+const REASONS: usize = LIMIT::REASONS as usize;
+const REASON_WORDS: usize = LIMIT::REASON_WORDS as usize;
+const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
 const CATEGORIES: usize = STREAM_NAMES;
 
@@ -86,24 +86,24 @@ pub struct FramesSection {
 }
 
 const _: () = assert!(
-    STATS::frames::last + FRAME::WORDS <= STATS::frames::WORDS,
-    "the last frame runs past STATS's frames section"
+    STAT::frames::last + FRAME::WORDS <= STAT::frames::WORDS,
+    "the last frame runs past STAT's frames section"
 );
 
-words!(FramesSection, STATS::frames::WORDS,
-    present => STATS::frames::present, n => STATS::frames::n, seconds => STATS::frames::seconds,
-    moving => STATS::frames::moving, moving_ms => STATS::frames::moving_ms,
-    missed => STATS::frames::missed, overran => STATS::frames::overran,
-    long => STATS::frames::long, turns => STATS::frames::turns, gpu_read => STATS::frames::gpu_read,
-    interval => STATS::frames::interval, busy => STATS::frames::busy,
-    tick => STATS::frames::tick, effects => STATS::frames::effects,
-    stage => STATS::frames::stage, tasks => STATS::frames::tasks,
-    profiler => STATS::frames::profiler, rest => STATS::frames::rest,
-    effects_p95 => STATS::frames::effects_p95, gpu => STATS::frames::gpu,
-    phases_p95 => STATS::frames::phases_p95, gpu_spans_p95 => STATS::frames::gpu_spans_p95,
-    kinds => STATS::frames::kinds, wakes => STATS::frames::wakes,
-    heap_used_delta_bytes => STATS::frames::heap_used_delta_bytes,
-    first => STATS::frames::first, last => STATS::frames::last,
+words!(FramesSection, STAT::frames::WORDS,
+    present => STAT::frames::present, n => STAT::frames::n, seconds => STAT::frames::seconds,
+    moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
+    missed => STAT::frames::missed, overran => STAT::frames::overran,
+    long => STAT::frames::long, turns => STAT::frames::turns, gpu_read => STAT::frames::gpu_read,
+    interval => STAT::frames::interval, busy => STAT::frames::busy,
+    tick => STAT::frames::tick, effects => STAT::frames::effects,
+    stage => STAT::frames::stage, tasks => STAT::frames::tasks,
+    profiler => STAT::frames::profiler, rest => STAT::frames::rest,
+    effects_p95 => STAT::frames::effects_p95, gpu => STAT::frames::gpu,
+    phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
+    kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
+    heap_used_delta_bytes => STAT::frames::heap_used_delta_bytes,
+    first => STAT::frames::first, last => STAT::frames::last,
 );
 
 #[repr(C)]
@@ -123,10 +123,10 @@ pub struct StreamStats {
     pub phase_mean: [f64; TASK_PHASES],
 }
 
-words!(StreamStats, STREAM_STATS::WORDS,
-    n => STREAM_STATS::n, ok => STREAM_STATS::ok, aborted => STREAM_STATS::aborted, error => STREAM_STATS::error,
-    lat_p50 => STREAM_STATS::lat_p50, lat_p95 => STREAM_STATS::lat_p95, reason_cnt => STREAM_STATS::reason_cnt, reasons => STREAM_STATS::reasons,
-    phase_n => STREAM_STATS::phase_n, phase_mean => STREAM_STATS::phase_mean,
+words!(StreamStats, STREAM_STAT::WORDS,
+    n => STREAM_STAT::n, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, error => STREAM_STAT::error,
+    lat_p50 => STREAM_STAT::lat_p50, lat_p95 => STREAM_STAT::lat_p95, reason_cnt => STREAM_STAT::reason_cnt, reasons => STREAM_STAT::reasons,
+    phase_n => STREAM_STAT::phase_n, phase_mean => STREAM_STAT::phase_mean,
 );
 
 #[repr(C)]
@@ -135,7 +135,7 @@ pub struct TasksSection {
     pub slots: [StreamStats; CATEGORIES],
 }
 
-words!(TasksSection, STATS::tasks::WORDS, slots => STATS::tasks::slots);
+words!(TasksSection, STAT::tasks::WORDS, slots => STAT::tasks::slots);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -189,8 +189,8 @@ pub struct StepStats {
     pub max_ms: f64,
 }
 
-words!(StepStats, STEP_STATS::WORDS,
-    phase => STEP_STATS::phase, name => STEP_STATS::name, ms => STEP_STATS::ms, cnt => STEP_STATS::cnt, max_ms => STEP_STATS::max_ms,
+words!(StepStats, STEP_STAT::WORDS,
+    phase => STEP_STAT::phase, name => STEP_STAT::name, ms => STEP_STAT::ms, cnt => STEP_STAT::cnt, max_ms => STEP_STAT::max_ms,
 );
 
 #[repr(C)]
@@ -200,4 +200,4 @@ pub struct StepsSection {
     pub slots: [StepStats; STEP_SLOTS],
 }
 
-words!(StepsSection, STATS::steps::WORDS, cnt => STATS::steps::cnt, slots => STATS::steps::slots);
+words!(StepsSection, STAT::steps::WORDS, cnt => STAT::steps::cnt, slots => STAT::steps::slots);

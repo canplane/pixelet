@@ -158,7 +158,7 @@
       "The clip a character stands in, \"idle\", by its index in both packs' animations."
     ]
   },
-  "PERSON_GENDER_PREFIXES": {
+  "PERSON_GENDER_PREFIX": {
     "$doc": [
       "Split by gender, so the picker shows two rows; a person is shown by",
       "its place in its row."
