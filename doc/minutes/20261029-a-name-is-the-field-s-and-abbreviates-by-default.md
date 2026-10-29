@@ -59,8 +59,8 @@ a thing is and where it is going.
   of them became `pkt`. A coined name that merely contains the word is judged by
   what it names, not by the word.
 - **`cfg`** for a configuration and **`desc`** for a descriptor were added
-  later the same day. `desc` follows D3D12's `_DESC` and wgpu's `desc`; SQL's
-  `DESC` means descending and is SQL's.
+  later the same day. `desc` follows D3D12's `_DESC`, wgpu's `desc` and XTP's
+  descriptor word; SQL's `DESC` means descending and is SQL's.
 
 ### Words that stay whole
 
