@@ -27,7 +27,10 @@ const PANEL = {
   ray_steps: RayStepsLegend,
 } satisfies Partial<Record<SettingName, ComponentType>>;
 
-/** A debug setting that has a panel, which its fold is named by (fold.tsx). */
+/**
+ * A debug setting that has a panel, which its accordion panel is named by
+ * (accordion.tsx).
+ */
 export type PanelName = keyof typeof PANEL;
 
 const isPanel = (name: SettingName): name is PanelName =>

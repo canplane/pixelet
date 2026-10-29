@@ -1,8 +1,8 @@
-// @pxl/client/shell/debug/fold.tsx
+// @pxl/client/shell/debug/accordion.tsx
 
 /**
- * The debug panels' folds: each closed until opened, and opening one closes
- * the one that was open, so the corner holds one at a time.
+ * The debug panels as an accordion: each closed until opened, and opening
+ * one closes the one that was open, so the corner holds one at a time.
  */
 
 import { CaretDownIcon, CaretUpIcon } from "phosphor-react-native";
@@ -15,26 +15,32 @@ import { alpha, color } from "@/shell/ui/theme.ts";
 import { gauge } from "./profiler/gauge.tsx";
 import type { PanelName } from "./window.tsx";
 
-/** The fold open, by its panel's name (window.tsx `PANEL`). */
-export const useOpenFold = create<{ open: PanelName | null }>(() => ({
+/** The panel open, by its name (window.tsx `PANEL`). */
+export const useOpenAccordion = create<{ open: PanelName | null }>(() => ({
   open: null,
 }));
 
 const toggle = (name: PanelName) =>
-  useOpenFold.setState(({ open }) => ({ open: open === name ? null : name }));
+  useOpenAccordion.setState(({ open }) => ({
+    open: open === name ? null : name,
+  }));
 
 export const HINT_INK = alpha(color.white, 0.55);
 
-/** A panel whose title opens and closes it; `end` sits by the caret. */
-export function Fold(
-  { name, title, end, children }: {
+/**
+ * A panel whose title opens and closes it; `note` follows the title, a reading
+ * rather than a name, so it is not bold; `end` sits by the caret.
+ */
+export function Accordion(
+  { name, title, note, end, children }: {
     name: PanelName;
     title: string;
+    note?: string;
     end?: ReactNode;
     children?: ReactNode;
   },
 ) {
-  const open = useOpenFold((s) => s.open === name);
+  const open = useOpenAccordion((s) => s.open === name);
   return (
     <View style={styles.panel}>
       <Pressable
@@ -43,7 +49,12 @@ export function Fold(
         aria-expanded={open}
       >
         <View style={styles.title}>
-          <Text style={[gauge.text, styles.titleText]}>{title}</Text>
+          <Text style={[gauge.text, styles.titleText]}>
+            {title}
+            {note !== undefined && (
+              <Text style={styles.noteText}>{` · ${note}`}</Text>
+            )}
+          </Text>
           <View style={styles.end}>
             {open && end}
             {open
@@ -76,5 +87,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: alpha(color.white, 0.75),
   },
+  noteText: { fontWeight: "400" },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },
 });

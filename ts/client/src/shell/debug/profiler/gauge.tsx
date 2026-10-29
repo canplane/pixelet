@@ -53,19 +53,19 @@ const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 /** What the pick met, by the kernel's code (profiler.json `SUMMARY.view`). */
 const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
 
-const units3 = (
+/** A unit to an eighth, the finest cell (z27), with no trailing zeros. */
+const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
+const coord = (
   x: number,
   y: number,
   z: number,
-) => (Number.isNaN(x)
-  ? "-"
-  : `${Math.floor(x)}, ${Math.floor(y)}, ${Math.floor(z)}`);
+) => (Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`);
 
 /**
  * Live: where the camera's eye, its pivot and the pointer are now, not over
- * the window, each in units and the pivot on the Earth as well. The pointer
- * twice: what it meets at the eye's zooms, and what the tool held strikes there,
- * so a hover that takes nothing shows where the two part.
+ * the window, each a coord in units and the pivot on the Earth as well. The
+ * pointer twice: what it meets at the eye's zooms, and what the tool held
+ * strikes there, so a hover that takes nothing shows where the two part.
  */
 export function ProfilerView({ v }: { v: Gauge["view"] }) {
   const picked = !Number.isNaN(v.struck);
@@ -73,24 +73,18 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
   return (
     <>
       <Head>Camera</Head>
-      <Row
-        k="eye x/y/z (units)"
-        v={units3(v.eye_x, v.eye_y, v.eye_z)}
-      />
-      <Row k="distance (units)" v={n1(v.dist)} />
+      <Row k="coord" v={coord(v.eye_x, v.eye_y, v.eye_z)} />
+      <Row k="distance" v={`${n1(v.dist)} u`} />
       <Row
         k="polar/azimuth"
         v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`}
       />
       <Head>Pivot</Head>
-      <Row
-        k="x/y/z (units)"
-        v={units3(v.pivot_x, v.pivot_y, v.pivot_z)}
-      />
+      <Row k="coord" v={coord(v.pivot_x, v.pivot_y, v.pivot_z)} />
       <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
       <Row k="altitude" v={meters(v.pivot_alt)} />
       <Head>Pointer</Head>
-      <Row k="x/y/z (units)" v={units3(v.hover_x, v.hover_y, v.hover_z)} />
+      <Row k="coord" v={coord(v.hover_x, v.hover_y, v.hover_z)} />
       <Row k="drawn at" v={zoomName(v.cell)} />
       <Row
         k="struck"
@@ -101,18 +95,15 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
           : "nothing in reach"}
       />
       <Row
-        k="held/drawn at"
+        k="struck/drawn at"
         v={picked
           ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
           : "-"}
         warn={folded}
       />
+      <Row k="places at" v={coord(v.place_x, v.place_y, v.place_z)} />
       <Row
-        k="places at x/y/z (units)"
-        v={units3(v.place_x, v.place_y, v.place_z)}
-      />
-      <Row
-        k="places a cube of"
+        k="places at zoom"
         v={Number.isNaN(v.place_zoom)
           ? "-"
           : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`}

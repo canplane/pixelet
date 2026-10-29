@@ -13,7 +13,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, disabledContent } from "@/shell/ui/theme.ts";
 import { gauge, ProfilerGauge, ProfilerRec } from "./profiler/gauge.tsx";
-import { Fold, HINT_INK } from "./fold.tsx";
+import { Accordion, HINT_INK } from "./accordion.tsx";
 import { n1 } from "./profiler/lane.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { movingFps, profilerReportRead } from "./profiler/view.ts";
@@ -209,16 +209,17 @@ export function ProfilerPanel() {
   // saw none move in it.
   const r = g?.recent ?? null;
   const rate = r === null ? null : movingFps(r);
-  const title = rate !== null
-    ? `Profiler · ${n1(rate)} fps`
+  const note = rate !== null
+    ? `${n1(rate)} fps`
     : recording
-    ? "Profiler · idle"
-    : "Profiler";
+    ? "idle"
+    : undefined;
 
   return (
-    <Fold
+    <Accordion
       name="profiler"
-      title={title}
+      title="Profiler"
+      note={note}
       end={
         <Text style={[gauge.text, gauge.key]}>
           Last {LIVE_WINDOW_MS / 1000} s
@@ -268,7 +269,7 @@ export function ProfilerPanel() {
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
         <ProfilerGauge g={g} />
       </ScrollView>
-    </Fold>
+    </Accordion>
   );
 }
 

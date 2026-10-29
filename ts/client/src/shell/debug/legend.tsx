@@ -12,7 +12,7 @@ import { Defs, LinearGradient, Rect, Stop, Svg } from "react-native-svg";
 
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
-import { Fold } from "./fold.tsx";
+import { Accordion } from "./accordion.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
 import { grid, share, steps } from "@/abi/debug_look.spec.ts";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -98,24 +98,24 @@ function Row(
 export function WorldGizmoLegend() {
   if (!useShown("world_gizmo")) return null;
   return (
-    <Fold name="world_gizmo" title="World Gizmo">
+    <Accordion name="world_gizmo" title="World Gizmo">
       <Head>Frame</Head>
       <Rows looks={frame} labels={FRAME} />
       <Head>Coverage</Head>
       <Rows looks={coverage} labels={COVERAGE} reversed />
-    </Fold>
+    </Accordion>
   );
 }
 
 export function CameraGizmoLegend() {
   if (!useShown("camera_gizmo")) return null;
   return (
-    <Fold name="camera_gizmo" title="Camera Gizmo">
+    <Accordion name="camera_gizmo" title="Camera Gizmo">
       <Head>Grid</Head>
       <Row look={grid}>a cell of one solid angle</Row>
       <Head>Share</Head>
       <Rows looks={share} labels={SHARE} filled />
-    </Fold>
+    </Accordion>
   );
 }
 
@@ -127,7 +127,7 @@ export function RayStepsLegend() {
   if (!useShown("ray_steps")) return null;
   const last = steps.ramp.length - 1;
   return (
-    <Fold name="ray_steps" title="Ray Steps">
+    <Accordion name="ray_steps" title="Ray Steps">
       <Head>Steps</Head>
       <View style={styles.ramp}>
         <Svg width="100%" height={8}>
@@ -152,7 +152,7 @@ export function RayStepsLegend() {
         </View>
       </View>
       <Row look={{ rgb: steps.none }} filled>none walked</Row>
-    </Fold>
+    </Accordion>
   );
 }
 
