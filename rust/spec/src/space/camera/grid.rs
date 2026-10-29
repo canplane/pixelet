@@ -15,7 +15,6 @@ use crate::space::coord::zoom::{units, Zoom};
 /// distance, a field of 53.13° (`fov`).
 pub const HALF_TAN: f64 = 0.5;
 
-
 // ---- derived from the knobs ----
 
 /// The vertical field of view, in radians (`HALF_TAN`).

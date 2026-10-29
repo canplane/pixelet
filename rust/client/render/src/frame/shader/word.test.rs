@@ -33,7 +33,7 @@ fn moon_map_scale() {
     for (x, y, l) in map.enumerate_pixels() {
         let lat = (0.5 - (y as f64 + 0.5) / h as f64) * core::f64::consts::PI;
         let lon = ((x as f64 + 0.5) / side as f64 - 0.5) * core::f64::consts::PI;
-        let area = lat.cos() * lon.cos();
+        let area = libm::cos(lat) * libm::cos(lon);
         sum += linear(l.0[0]) * area;
         weight += area;
     }

@@ -205,7 +205,6 @@ export function ProfilerPanel() {
 
   if (!show) return null;
   const recording = g?.rec.recording === true;
-  const f = g?.frames ?? null;
   // The rate frames are drawn at over the last second, idle where recording
   // saw none move in it.
   const r = g?.recent ?? null;

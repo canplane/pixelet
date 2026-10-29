@@ -68,6 +68,9 @@ fn made_home() -> Result<PathBuf, String> {
     Ok(caches.join("pixelet/shader"))
 }
 
+/// An entry, the file it is checked in as, and its module as checked in.
+type Module = (&'static str, &'static str, String);
+
 /// Each entry's module as it is checked in, under its header, and the digest
 /// of the sources it was made of. Taken from the machine's entries of the
 /// sources' digest where it has them; else, or always when `fresh`, built of
@@ -75,10 +78,7 @@ fn made_home() -> Result<PathBuf, String> {
 /// what is built is what the digest names, whatever the checkout does
 /// meanwhile. The toolchain comes from rust/client/shader/rust-toolchain.toml,
 /// which rustup's cargo installs on first use.
-fn generate(
-    root: &Path,
-    fresh: bool,
-) -> Result<(String, Vec<(&'static str, &'static str, String)>), String> {
+fn generate(root: &Path, fresh: bool) -> Result<(String, Vec<Module>), String> {
     let home = made_home()?;
     let mut digest = inputs_digest(root)?;
     if fresh || !home.join(&digest).join("done").is_file() {

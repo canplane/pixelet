@@ -29,10 +29,10 @@ fn patch_contest() {
                         mark(&mut asked, i);
                     }
                     let beaten = beaten(decor, zoom, &cs, n, &asked);
-                    for i in 0..n as usize {
+                    for (i, c) in cs.iter().enumerate().take(n as usize) {
                         assert_eq!(
                             !is_marked(&beaten, i),
-                            stands(decor, zoom, &cs[i]),
+                            stands(decor, zoom, c),
                             "decor {} at {zoom}, patch {p}, candidate {i}",
                             decor.value
                         );

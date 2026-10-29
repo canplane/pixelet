@@ -48,7 +48,11 @@ export const fps = (
  */
 export const movingFps = (
   f: { moving: f64; moving_ms: f64 },
-): f64 | null => (f.moving >= 1 && f.moving_ms > 0 ? (1000 * f.moving) / f.moving_ms : null);
+):
+  | f64
+  | null => (f.moving >= 1 && f.moving_ms > 0
+    ? (1000 * f.moving) / f.moving_ms
+    : null);
 
 /** The window the header's rate is over: short, so a dip shows as it happens. */
 export const RECENT_MS = 1_000;

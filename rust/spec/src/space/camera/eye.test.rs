@@ -30,6 +30,10 @@ fn lens_ray_unprojects() {
         });
         let a = unprojected(&vp, x, y);
         let cos = v3::dot(&ray, &a) / (v3::len(&ray) * v3::len(&a));
-        assert!(1.0 - cos < 1e-12, "at ({x}, {y}) the two part by {}", 1.0 - cos);
+        assert!(
+            1.0 - cos < 1e-12,
+            "at ({x}, {y}) the two part by {}",
+            1.0 - cos
+        );
     }
 }

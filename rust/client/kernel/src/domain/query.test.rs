@@ -609,7 +609,7 @@ fn box_placed_matches_store() {
     };
     store.entries_in(&space, &mut |e| {
         if e.zoom == unit {
-            held.push((e.at, u32::from(e.state)));
+            held.push((e.at, e.state));
         }
     });
     asked.sort_unstable();
@@ -715,7 +715,10 @@ fn device_loss_drops_bounds() {
     let zoom = LEAF_CELL - LEVELS - 1;
     let over = || {
         let s = LEAF_CELL - zoom;
-        let g = [first[0] * BRICK as i32 >> s, first[1] * BRICK as i32 >> s];
+        let g = [
+            (first[0] * BRICK as i32) >> s,
+            (first[1] * BRICK as i32) >> s,
+        ];
         let mut place = Found::NONE;
         cells::bound_over(&Windowed, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
     };

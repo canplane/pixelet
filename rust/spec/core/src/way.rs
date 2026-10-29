@@ -918,11 +918,14 @@ fn bare(k: &impl Kept, b: [i32; 2], n: u32, cell: Zoom, [from, to]: [i32; 2], st
 mod tests {
     use super::*;
 
+    /// A column: its face cell, its spans and how many it holds.
+    type Column = (i32, [([i32; 2], u32); 4], u32);
+
     /// A column and the four beside it, each a face cell and its spans.
-    struct Five([(i32, [([i32; 2], u32); 4], u32); 5]);
+    struct Five([Column; 5]);
 
     impl Five {
-        fn of(&self, c: [i32; 2]) -> &(i32, [([i32; 2], u32); 4], u32) {
+        fn of(&self, c: [i32; 2]) -> &Column {
             let k = match c {
                 [0, 0] => 0,
                 [0, -1] => 1,

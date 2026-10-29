@@ -117,6 +117,7 @@ impl Raster {
     /// faces' asking, the world's query's buffers (`world`: the window, the
     /// tiles' frames, the service area's index, the overwrites, the ways'
     /// pool).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         &mut self,
         g: &Gpu,
