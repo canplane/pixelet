@@ -21,7 +21,7 @@ export const cube = {
   sentinel: {
     /** nothing painted: the ground before a bake writes it, and an object cell no leaf holds */
     void: 0x00,
-    /** bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec block/limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it */
+    /** bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it */
     unknown: 0xff,
   },
   // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
@@ -49,7 +49,7 @@ export const cube = {
     grass: 7,
     /** park: Carto @park */
     park: 8,
-    /** playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%) */
+    /** playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%) */
     leisure: 9,
     /** pitch and track: Carto @pitch */
     pitch: 10,

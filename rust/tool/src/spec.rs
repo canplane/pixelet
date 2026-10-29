@@ -18,7 +18,7 @@ use std::thread;
 use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
 
-use crate::fmt::formatted;
+use crate::fmt::format_text;
 use crate::root;
 
 pub struct Output {
@@ -61,7 +61,7 @@ pub fn generate(write: bool) -> Result<(), String> {
             .into_iter()
             .map(|o| {
                 scope.spawn(move || {
-                    formatted(&o.path, o.text).map(|text| Output { path: o.path, text })
+                    format_text(&o.path, o.text).map(|text| Output { path: o.path, text })
                 })
             })
             .collect();
@@ -216,11 +216,11 @@ impl Node {
     }
 
     pub fn is_wrapper(&self) -> bool {
-        self.get("$value").is_some()
+        self.get("$val").is_some()
     }
 
     pub fn value(&self) -> &Node {
-        self.get("$value").unwrap_or(self)
+        self.get("$val").unwrap_or(self)
     }
 
     pub fn str_at(&self, key: &str) -> Option<&str> {
@@ -241,7 +241,7 @@ impl Node {
 /// `WORDS` where the last ends; a section inside is a packed table given its
 /// `AT`. A width is a number or a product of terms (`"2 * CENSUS_TAGS"`), a
 /// term a number, a list or a packed table above it in the file (its length,
-/// its `WORDS`) or a number in one (`LIMITS.ZOOMS`, `op.DESTROY`), else one
+/// its `WORDS`) or a number in one (`LIMIT.ZOOMS`, `op.DESTROY`), else one
 /// in a file it uses (`used`). So a lane grown moves everything after it.
 pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     let Node::Obj(entries) = node else {

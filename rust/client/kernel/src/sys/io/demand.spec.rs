@@ -11,8 +11,10 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 pub const STREAM_NAMES: usize = 5;
@@ -38,10 +40,10 @@ impl StreamName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<StreamName> {
+    pub fn of(val: u8) -> Option<StreamName> {
         StreamName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -51,19 +53,19 @@ pub const OUTCOME_NAMES: usize = 3;
 pub enum OutcomeName {
     ok = 0,
     aborted = 1,
-    error = 2,
+    err = 2,
 }
 
 impl OutcomeName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [OutcomeName; 3] = [OutcomeName::ok, OutcomeName::aborted, OutcomeName::error];
+    pub const ALL: [OutcomeName; 3] = [OutcomeName::ok, OutcomeName::aborted, OutcomeName::err];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<OutcomeName> {
+    pub fn of(val: u8) -> Option<OutcomeName> {
         OutcomeName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -88,10 +90,10 @@ impl TaskPhaseName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<TaskPhaseName> {
+    pub fn of(val: u8) -> Option<TaskPhaseName> {
         TaskPhaseName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 

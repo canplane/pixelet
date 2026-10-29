@@ -7,12 +7,16 @@
 // that palette and whose range past it is what only an object can be.
 
 // Names as the spec spells them, so one record has one name on every side.
-#![allow(non_camel_case_types, non_upper_case_globals)]
+#![allow(
+    non_camel_case_types,
+    non_upper_case_globals,
+    reason = "generated from the spec"
+)]
 
 pub mod sentinel {
     /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds
     pub const void: u8 = 0x00;
-    /// bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec block/limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it
+    /// bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it
     pub const unknown: u8 = 0xff;
 }
 
@@ -42,7 +46,7 @@ pub mod ground {
     pub const grass: u8 = 7;
     /// park: Carto @park
     pub const park: u8 = 8;
-    /// playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%)
+    /// playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%)
     pub const leisure: u8 = 9;
     /// pitch and track: Carto @pitch
     pub const pitch: u8 = 10;
@@ -379,8 +383,8 @@ impl Ground {
     ];
 
     /// The look a byte names; none for a sentinel or a number the palette does not give out.
-    pub const fn of(value: u8) -> Option<Ground> {
-        match value {
+    pub const fn of(val: u8) -> Option<Ground> {
+        match val {
             1 => Some(Ground::land),
             2 => Some(Ground::bare_ground),
             3 => Some(Ground::sand),
@@ -445,8 +449,8 @@ impl Ground {
 
     /// Whether a look read into a word, as a GPU has it with no byte, is one `of`
     /// names.
-    pub const fn grounds(value: u32) -> bool {
-        matches!(value, 1..=55 | 64..=66)
+    pub const fn grounds(val: u32) -> bool {
+        matches!(val, 1..=55 | 64..=66)
     }
 
     /// A way: decor faces along it and no pier stands on it.
@@ -455,8 +459,8 @@ impl Ground {
     }
 
     /// Whether a look read into a word is a way (`transport`).
-    pub const fn transports(value: u32) -> bool {
-        matches!(value, 37..=55)
+    pub const fn transports(val: u32) -> bool {
+        matches!(val, 37..=55)
     }
 }
 
@@ -500,8 +504,8 @@ impl Object {
         Object::pink,
     ];
 
-    pub const fn of(value: u16) -> Option<Object> {
-        match value {
+    pub const fn of(val: u16) -> Option<Object> {
+        match val {
             257 => Some(Object::white),
             258 => Some(Object::grey),
             259 => Some(Object::dark_grey),
@@ -522,7 +526,7 @@ impl Object {
     }
 
     /// Whether a value read into a word, as a GPU has it, is one `of` names.
-    pub const fn objects(value: u32) -> bool {
-        matches!(value, 257..=271)
+    pub const fn objects(val: u32) -> bool {
+        matches!(val, 257..=271)
     }
 }

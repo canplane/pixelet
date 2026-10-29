@@ -45,7 +45,7 @@ pub const fn units(zoom: Zoom) -> f64 {
 }
 
 /// How many `inner` cells stand across one `outer`, which is no finer.
-pub use pxl_spec_core::count;
+pub use pxl_spec_core::cnt;
 
 /// The zoom whose side is `units`, a power of two.
 pub fn of_side(units: f64) -> Zoom {
@@ -59,7 +59,7 @@ pub fn within(units: f64) -> i32 {
 }
 
 /// A floor on a signed axis.
-pub const fn index(zoom: Zoom, units: i64) -> i64 {
+pub const fn idx(zoom: Zoom, units: i64) -> i64 {
     let s = shamt(zoom);
     if s >= 0 {
         units >> s
@@ -69,7 +69,7 @@ pub const fn index(zoom: Zoom, units: i64) -> i64 {
 }
 
 /// The cell at `zoom` a position stands in, a floor on each axis.
-pub fn index_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
+pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
     let shift = FRAC_W as i32 + shamt(zoom);
     // Shifted as an i64, as wide as zoom 0's 32 bits; the index is no wider
     // than the position it is of.
@@ -77,15 +77,15 @@ pub fn index_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
 }
 
 /// `index_of`'s inverse, to the cell's base.
-pub fn base_of(zoom: Zoom, index: [i32; 3]) -> Q3 {
+pub fn base_of(zoom: Zoom, idx: [i32; 3]) -> Q3 {
     let shift = FRAC_W as i32 + shamt(zoom);
-    let [x, y, z] = index.map(i64::from);
+    let [x, y, z] = idx.map(i64::from);
     world::at(x << shift, y << shift, z << shift)
 }
 
-pub fn cube(zoom: Zoom, index: [i32; 3]) -> Aabb {
+pub fn cube(zoom: Zoom, idx: [i32; 3]) -> Aabb {
     let side = units(zoom);
-    let min = index.map(|c| f64::from(c) * side);
+    let min = idx.map(|c| f64::from(c) * side);
     Aabb {
         min,
         max: min.map(|v| v + side),

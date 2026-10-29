@@ -39,7 +39,7 @@ std::vector<int> range(int n) {
 
 } // namespace
 
-XPUTE_TEST(pass_stops_once_the_time_budget_is_spent) {
+XPUTE_TEST(pass_stops_when_spent) {
     std::vector<int> seen;
     PassStat s = pass(10).run(std::array{1, 2, 3, 4, 5}, [&](int n) { return seen.push_back(n), burn(6), true; });
     // The third is refused at 12 ms.
@@ -47,28 +47,28 @@ XPUTE_TEST(pass_stops_once_the_time_budget_is_spent) {
     XPUTE_CHECK(s.stopped_early && s.ran == seen.size());
 }
 
-XPUTE_TEST(pass_the_first_working_step_always_runs_even_past_budget) {
+XPUTE_TEST(pass_first_step_always_runs) {
     std::vector<int> seen;
     PassStat s = pass(0).run(std::array{1, 2, 3}, [&](int n) { return seen.push_back(n), burn(5), true; });
     XPUTE_CHECK((seen == std::vector{1}));
     XPUTE_CHECK(s.ran == 1 && s.stopped_early);
 }
 
-XPUTE_TEST(pass_max_steps_caps_completed_work) {
+XPUTE_TEST(pass_max_steps_cap) {
     std::vector<int> seen;
     PassStat s = pass(1000).run(std::array{1, 2, 3, 4, 5}, [&](int n) { return seen.push_back(n), true; }, 2);
     XPUTE_CHECK((seen == std::vector{1, 2}));
     XPUTE_CHECK(s.ran == 2 && s.stopped_early);
 }
 
-XPUTE_TEST(pass_a_no_op_step_neither_counts_nor_arms_the_guard) {
+XPUTE_TEST(pass_no_op_uncounted) {
     std::vector<int> seen;
     PassStat s = pass(0).run(std::array{1, 2, 3, 4}, [&](int n) { return seen.push_back(n), n == 4; }, 1);
     XPUTE_CHECK((seen == std::vector{1, 2, 3, 4}));
     XPUTE_CHECK(s.ran == 1 && s.visited == 4 && !s.stopped_early);
 }
 
-XPUTE_TEST(pass_the_hard_budget_bounds_a_pass_of_expensive_no_ops) {
+XPUTE_TEST(pass_hard_budget_bounds_no_ops) {
     std::vector<int> seen;
     PassStat s = pass(4, 12).run(range(40), [&](int n) { return seen.push_back(n), burn(3), false; });
     XPUTE_CHECK(s.ran == 0 && s.stopped_early);
@@ -76,20 +76,20 @@ XPUTE_TEST(pass_the_hard_budget_bounds_a_pass_of_expensive_no_ops) {
     XPUTE_CHECK(seen.size() == 4);
 }
 
-XPUTE_TEST(pass_without_a_ceiling_expensive_no_ops_still_walk_the_whole_list) {
+XPUTE_TEST(pass_no_ceiling_walks_all) {
     std::vector<int> seen;
     PassStat s = pass(1).run(range(6), [&](int n) { return seen.push_back(n), burn(3), false; });
     XPUTE_CHECK(seen.size() == 6 && !s.stopped_early);
 }
 
-XPUTE_TEST(pass_the_first_item_is_attempted_even_under_a_zero_ceiling) {
+XPUTE_TEST(pass_zero_ceiling_first_item) {
     std::vector<int> seen;
     PassStat s = pass(0, 0).run(std::array{1, 2, 3}, [&](int n) { return seen.push_back(n), burn(2), true; });
     XPUTE_CHECK((seen == std::vector{1}));
     XPUTE_CHECK(s.ran == 1);
 }
 
-XPUTE_TEST(pass_an_empty_list_is_a_clean_no_op) {
+XPUTE_TEST(pass_empty_list) {
     PassStat s = pass(10).run(std::array<int, 0>{}, [](int) { return true; });
     XPUTE_CHECK(s.ran == 0 && s.visited == 0 && !s.stopped_early);
 }

@@ -3,7 +3,8 @@
 //! The moon's face for sky.wgsl: NASA SVS's CGI Moon Kit map cut to the near
 //! side, as linear-light luminance in 8-bit sRGB, to `asset/content/sky/moon.png`,
 //! the map kept in `asset/raw/sky/moon/`.
-//! The printed mean reflectance must equal sky.wgsl's MOON_MAP_MEAN.
+//! The printed mean reflectance must equal pxl-render frame/shader/word.rs
+//! `MOON_MAP_MEAN`.
 //! Credit: NASA's Scientific Visualization Studio.
 //!
 //!   make download-moon
@@ -12,10 +13,10 @@ use std::process::ExitCode;
 
 use image::{GrayImage, ImageFormat, Luma};
 
+use pxl_tool::fetch;
 use pxl_tool::root;
 
-const SOURCE: &str =
-    "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg";
+const SRC: &str = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg";
 
 fn to_linear(c: u8) -> f64 {
     let c = c as f64 / 255.0;
@@ -37,7 +38,7 @@ fn to_srgb(v: f64) -> u8 {
 }
 
 fn run() -> Result<(), String> {
-    let body = pxl_tool::fetch::kept(SOURCE, &root().join("asset/raw/sky/moon"))?;
+    let body = fetch::fetch_kept(SRC, &root().join("asset/raw/sky/moon"))?;
     let map = image::load_from_memory_with_format(&body, ImageFormat::Jpeg)
         .map_err(|e| e.to_string())?
         .to_rgb8();

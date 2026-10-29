@@ -13,11 +13,12 @@ use crate::domain::layer::Query;
 use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::answer;
 use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;
 
 #[test]
-fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
+fn write_undo_round_trip() {
     let mut store = Store::default();
     for at in [[8, 16, 24], [-3, 5, -7]] {
         assert!(!store
@@ -32,8 +33,8 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
             {
                 let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
                 held.holds()
-                    && !held.folded()
-                    && overwrite::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
+                    && !held.is_folded()
+                    && overwrite::val(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -115,8 +116,8 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Held, [i32; 2]) {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
-                let v = overwrite::value(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
-                let kept = pxl_spec_core::answer::eighths(overwrite::filled(&store.lanes(), held));
+                let v = overwrite::val(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
+                let kept = answer::eighths(overwrite::filled(&store.lanes(), held));
                 if v != VOID && kept > 0 {
                     out.insert([x, y, z], (v, kept));
                 }
@@ -131,14 +132,14 @@ fn red() -> u32 {
 }
 
 #[test]
-fn a_cell_folds_to_itself_on_a_leaf() {
+fn leaf_cell_folds_to_itself() {
     let (out, [x, y]) = folded(&[(3, 4, 5, red())], LEAF_ZOOM);
     assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&(red(), 8)));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
-fn a_lone_cube_keeps_an_eighth_at_the_first_fold_and_none_at_the_next() {
+fn lone_cube_fold() {
     let (out, [x, y]) = folded(&[(0, 0, 0, red())], LEAF_ZOOM - 1);
     assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 1)));
     assert!(folded(&[(0, 0, 0, red())], LEAF_ZOOM - 2).0.is_empty());
@@ -155,7 +156,7 @@ fn a_lone_cube_keeps_an_eighth_at_the_first_fold_and_none_at_the_next() {
 }
 
 #[test]
-fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
+fn solid_block_folds() {
     let cube: Vec<_> = (0..64).map(|k| (k % 4, k / 4 % 4, k / 16, red())).collect();
     let (out, [x, y]) = folded(&cube, LEAF_ZOOM - 2);
     assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 8)));
@@ -163,7 +164,7 @@ fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
 }
 
 #[test]
-fn air_is_a_value_and_folds_like_one() {
+fn air_folds_as_val() {
     let (out, [x, y]) = folded(
         &[
             (0, 0, 0, AIR),
@@ -182,7 +183,7 @@ fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
 }
 
 #[test]
-fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
+fn axis_turn() {
     let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
     let red = cube_id(Cube::Object(Object::red));
     let turn = |[x, y, z]: [i32; 3]| [y, z, x];
@@ -198,8 +199,7 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
-    let bound =
-        |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten();
+    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).val().flatten();
     for _ in 0..500 {
         let (zoom, at) = some_node(&mut rng, 200.0);
         let given = bound(&stores[0], (zoom, at));
@@ -217,7 +217,7 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
 }
 
 #[test]
-fn a_column_reaches_as_far_as_what_is_placed_in_it_wherever_the_walk_last_stood() {
+fn column_reach() {
     let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
     let red = cube_id(Cube::Object(Object::red));
     let mut store = Store::default();
@@ -272,7 +272,7 @@ fn words(text: &str) -> Option<Ext> {
 }
 
 #[test]
-fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
+fn leaf_words_freed_on_erase() {
     use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
@@ -301,7 +301,7 @@ fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
 }
 
 #[test]
-fn new_words_on_a_standing_marker_change_its_cube() {
+fn marker_words_change_cube() {
     use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
@@ -320,7 +320,7 @@ fn new_words_on_a_standing_marker_change_its_cube() {
 }
 
 #[test]
-fn eight_markers_filling_a_cell_stay_eight() {
+fn eight_markers_stay() {
     use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();
     let parent = [4, 4, 2];
@@ -341,7 +341,7 @@ fn eight_markers_filling_a_cell_stay_eight() {
 }
 
 #[test]
-fn a_shard_read_whole_meets_its_leaves() {
+fn whole_shard_meets_leaves() {
     let mut store = Store::default();
     let at = [5, 7, 2];
     store.write([Write {
@@ -360,7 +360,7 @@ fn a_shard_read_whole_meets_its_leaves() {
     assert_eq!(met, 1);
     assert!(store
         .bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM)
-        .value()
+        .val()
         .flatten()
         .is_some());
 }

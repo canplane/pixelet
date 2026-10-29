@@ -14,11 +14,10 @@
 // Its bits: a positive float's order is its bits'.
 @group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, 2>;
 
-const SKY_VIEW_STEPS: i32 = 30;
-
-// What the canvas writes of a linear color, in its levels.
+// What the canvas writes of a linear color, in its levels (finish.wgsl
+// `encoded`), where the vignette leaves it whole: the most it moves anywhere.
 fn levels(c: vec3f) -> vec3f {
-  return to_srgb(c) * 255.0;
+  return encoded(c, 1.0) * 255.0;
 }
 
 // How far the light's height moves over one texel of the transmittance
@@ -37,7 +36,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let dir = view_dir(r, vec2f(unit_of(uv.x, SKY_VIEW_SIZE.x), unit_of(uv.y, SKY_VIEW_SIZE.y)));
   let moon = light.x > 0.5;
   let mu = dot(select(atmos_sun_dir(), atmos_moon_dir(), moon), frame_up());
-  let radiance = sky_radiance(r, dir, view_light(mu), SKY_VIEW_STEPS);
+  let radiance = sky_radiance(r, dir, view_light(mu), ATMOS_SKY_VIEW_STEPS);
 
   let h = height_step(r, mu);
   let now = lights_now();
@@ -48,7 +47,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   // The sun's own light over its sky: the glare along this texel, and the disc.
   let sun = select(1.0, 0.0, moon);
   let lit0 = radiance * gain * e0 + glare_toward(dir, view_light(mu), mu, e0) * sun;
-  let lit1 = sky_radiance(r, dir, view_light(mu + h), SKY_VIEW_STEPS) * gain * e1 + glare_toward(dir, view_light(mu + h), mu + h, e1) * sun;
+  let lit1 = sky_radiance(r, dir, view_light(mu + h), ATMOS_SKY_VIEW_STEPS) * gain * e1 + glare_toward(dir, view_light(mu + h), mu + h, e1) * sun;
   let sky = abs(levels(lit1) - levels(lit0));
   let disc = abs(levels(disc_light(r, mu + h, e1)) - levels(disc_light(r, mu, e0))) * sun;
   let up = frame_up();

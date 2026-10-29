@@ -7,7 +7,7 @@
 @group(0) @binding(4) var src_sampler: sampler;
 
 struct Run {
-  index: f32,
+  idx: f32,
 };
 
 @group(0) @binding(5) var<uniform> run: Run;
@@ -37,13 +37,13 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let normal = data.gba * 2.0 - 1.0;
   let pos = view_pos(depth, uv);
   let noise = textureLoad(blue_noise, hp & vec2i(AO_NOISE_MASK), 0);
-  let angle = select(noise.z, noise.w, run.index < 0.5) * TAU;
+  let angle = select(noise.z, noise.w, run.idx < 0.5) * TAU;
   let c = cos(angle);
   let s = sin(angle);
   let spin = mat2x2f(c, -s, s, c);
-  let falloff = AO_RADIUS * AO_DISTANCE_FALLOFF * 0.2;
+  let falloff = AO_RADIUS * AO_DIST_FALLOFF * AO_FALLOFF_SHARE;
   var occlusion = data.r;
-  var count = 1.0;
+  var cnt = 1.0;
   var disc = DISC;
   for (var k = 0; k < AO_DENOISE_SAMPLES; k++) {
     let at = uv + (spin * disc[k]) * texel * AO_DENOISE_RADIUS;
@@ -54,9 +54,9 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     let plane_dist = abs(dot(tap_pos - pos, normal));
     let weight = f32(tap_depth != 0.0) * exp(-plane_dist / falloff) * max(dot(normal, tap_normal), 0.0);
     occlusion += tap.r * weight;
-    count += weight;
+    cnt += weight;
   }
-  occlusion = clamp(occlusion / count, 0.0, 1.0);
+  occlusion = clamp(occlusion / cnt, 0.0, 1.0);
   if (occlusion == 0.0) {
     occlusion = 1.0;
   }

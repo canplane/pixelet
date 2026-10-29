@@ -15,40 +15,43 @@ use pxl_spec::asset::decor_num_id;
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
 use pxl_spec::asset::{cube, DecorId};
-use pxl_spec::block::object::object_value_is_marker;
+use pxl_spec::object::is_marker;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::answer::PLACED_BLOCK;
+use pxl_spec_core::answer::PLACED_ASSET;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::object::store::{apply, Entry, Write, AIR, VOID};
+use crate::domain::query::changed;
 use crate::domain::query::World;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::hierarchy::morton;
+use pxl_spec_core::answer;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
-fn carved(at: &Q3) -> bool {
-    World::now().block_of(at).value() == Some(PLACED_BLOCK | AIR)
+fn is_carved(at: &Q3) -> bool {
+    World::now().asset_of(at).val() == Some(PLACED_ASSET | AIR)
 }
 
 // ---- Mutations ----
 
 /// A write of VOID collapses its path back, so a redundant record never sits in a save.
-fn write_object_value(at: EntryAt, val: u32) {
+fn write_object_val(at: EntryAt, val: u32) {
     submit(Write::at(at, val));
 }
 
 /// A write is made here at once and sent to be kept, where the world takes
 /// an edit (`World::editable`); elsewhere it is refused.
 fn submit(write: Write) {
-    let (zoom, at) = pxl_spec::space::hierarchy::morton::node_of::<3>(write.key);
+    let (zoom, at) = morton::node_of::<3>(write.key);
     if !World::now().editable(&cube(zoom, at)) {
         return;
     }
@@ -60,8 +63,8 @@ fn submit(write: Write) {
 /// an AIR leaf, and the ground there without it is that look, its stratum's
 /// at that depth (without the carve, every cube stacked on matching ground
 /// was dropped).
-fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
-    if zoom > GROUND.cell() || !carved(at) {
+fn place_val_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
+    if zoom > GROUND.cell() || !is_carved(at) {
         return false;
     }
     let Cube::Ground(look) = cube else {
@@ -71,13 +74,13 @@ fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let ground = World::now()
         .previewing(Some(entry), None)
-        .block_of(&middle(entry))
+        .asset_of(&middle(entry))
         .exact();
     ground == Some(look as u32)
 }
 
 /// The middle of the cube `at` names.
-fn middle(at: EntryAt) -> Q3 {
+pub(super) fn middle(at: EntryAt) -> Q3 {
     let (base, half) = (
         base_of(at.zoom(), at.at()),
         q3::from_real(units(at.zoom()) / 2.0),
@@ -91,31 +94,31 @@ fn middle(at: EntryAt) -> Q3 {
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
 pub fn place(at: &Q3, zoom: Zoom, cube: Cube) {
-    let val = if place_value_is_redundant(at, zoom, cube) {
+    let val = if place_val_is_redundant(at, zoom, cube) {
         VOID
     } else {
         cube_id(cube)
     };
-    write_object_value(EntryAt::holding(zoom, at), val);
+    write_object_val(EntryAt::holding(zoom, at), val);
 }
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
 pub fn place_decor(at: &Q3, decor_id: DecorId) {
-    let value = if restores_scattered(at, decor_id).is_some() {
+    let val = if restores_scattered(at, decor_id).is_some() {
         VOID
     } else {
         decor_num_id(decor_id)
     };
-    write_object_value(
+    write_object_val(
         EntryAt::holding(PlacementTool::Decor(decor_id).zoom(), at),
-        value,
+        val,
     );
 }
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
-    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && carved(at))
+    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(at))
         .then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
@@ -165,7 +168,7 @@ pub fn put_marker() {
     };
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().placed(at) {
-        Some(e) => object_value_is_marker(e.state),
+        Some(e) => is_marker(e.state),
         None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell)),
     };
     if stands && !words.is_empty() {
@@ -180,11 +183,11 @@ pub fn put_marker() {
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
 pub fn place_air(at: EntryAt) {
-    write_object_value(at, cube::object::air as u32);
+    write_object_val(at, cube::object::air as u32);
 }
 
 /// The eraser leaves its cell empty: where the ground fills it once the
-/// block is gone, air is written, so a block taken out of a hole leaves the
+/// asset is gone, air is written, so an asset taken out of a hole leaves the
 /// hole. A decor the ground grew whose box it shared comes back, its erase
 /// given back too.
 pub fn remove(at: EntryAt) {
@@ -193,16 +196,16 @@ pub fn remove(at: EntryAt) {
         .grown_over(&cube(at.zoom(), at.at()))
         .into_iter()
         .filter_map(|i| i.grown_in())
-        .filter(|&c| carved(&base_of(GROUND.cell(), c)))
+        .filter(|&c| is_carved(&base_of(GROUND.cell(), c)))
         .collect();
     // Only the resident finest leaf can say what fills the cube without it, as
-    // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
+    // `place_val_is_redundant` asks; elsewhere it is emptied as asked.
     let id = match world
         .previewing(Some(at), None)
-        .block_of(&middle(at))
+        .asset_of(&middle(at))
         .exact()
     {
-        Some(v) if v != VOID && !pxl_spec_core::answer::placed(v) => AIR,
+        Some(v) if v != VOID && !answer::is_placed(v) => AIR,
         None => AIR,
         Some(_) => VOID,
     };
@@ -212,11 +215,11 @@ pub fn remove(at: EntryAt) {
         ext: None,
     });
     for c in erased {
-        write_object_value(EntryAt::new(GROUND.cell(), c), VOID);
+        write_object_val(EntryAt::new(GROUND.cell(), c), VOID);
     }
 }
 
-/// The edit the pointer would make, decided once a turn: the cursor's ghost
+/// The edit the pointer would make, decided once a turn: its ghost
 /// shows it, and what it removes is handed to what is drawn to leave out.
 #[derive(Clone, Copy, Default)]
 pub struct Pending {
@@ -261,8 +264,7 @@ pub fn pending_step() -> RenderEdits {
         (Some(h), Some(tool)) => {
             let asked = Some((tool, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
-            let same = was.asked == asked
-                && !crate::domain::query::changed::within(placement_reads(tool, h), &[]);
+            let same = was.asked == asked && !changed::within(placement_reads(tool, h), &[]);
             (
                 if same {
                     was.blocked

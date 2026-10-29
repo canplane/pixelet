@@ -8,7 +8,7 @@ use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 
-use crate::gpu::api::{Gpu, Image};
+use crate::gpu::api::{Gpu, Image, TrackedRenderPass};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{
@@ -16,9 +16,14 @@ use crate::gpu::pass::model::{
     DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::{Draws, Uploads};
+use pxl_spec_core::scatter;
 
-pub const GROUPS: usize = 64;
+const _: () = assert!(
+    scatter::GROUPS as usize <= DECOR_GROUPS,
+    "a decor variant past the draw groups"
+);
 
 pub struct DecorPass {
     lit: Built,
@@ -33,8 +38,8 @@ pub struct DecorPass {
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
         DecorPass {
-            lit: pipelines.build(g, PIPELINE_DECOR, g.canvas()),
-            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, g.canvas()),
+            lit: pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR),
+            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, WORLD_COLOR),
             depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
@@ -73,8 +78,8 @@ impl DecorPass {
         skin: impl FnOnce(Image) -> Option<u32>,
     ) -> Option<(u32, u32, u32, u32)> {
         let (mesh, image) = *self.groups.get(group as usize)?;
-        let (buffer, vertex_cnt, index_cnt) = uploads.get(mesh)?;
-        Some((buffer, vertex_cnt, index_cnt, skin(image?)?))
+        let (buf, vertex_cnt, idx_cnt) = uploads.get(mesh)?;
+        Some((buf, vertex_cnt, idx_cnt, skin(image?)?))
     }
 
     /// 0 while it loads.
@@ -82,7 +87,7 @@ impl DecorPass {
         self.groups
             .get(group as usize)
             .and_then(|&(mesh, _)| uploads.get(mesh))
-            .map_or(0, |(_, _, index_cnt)| index_cnt / 3)
+            .map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
     }
 
     /// Every skin and upload group the draws will bind is made here, so drawing
@@ -97,11 +102,11 @@ impl DecorPass {
         uploads: &mut Uploads,
     ) {
         let (opaque, ghost) = (draws.of(PIPELINE_DECOR), draws.of(PIPELINE_GHOST_DECOR));
-        let count = (opaque.len() + ghost.len()) as u32;
+        let cnt = (opaque.len() + ghost.len()) as u32;
         self.uniforms.write(
             g,
             self.lit.layouts[1],
-            count,
+            cnt,
             opaque.clone().chain(ghost.clone()),
             moved,
             |buf, d| {
@@ -118,15 +123,14 @@ impl DecorPass {
     /// `frame` the group 0 the stage reads.
     pub fn draw(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: &Draws,
         uploads: &mut Uploads,
         stage: Stage,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         let pipeline = self.pipeline(stage);
-        self.draw_pipeline(g, pass, draws, uploads, PIPELINE_DECOR, pipeline, frame);
+        self.draw_pipeline(pass, draws, uploads, PIPELINE_DECOR, pipeline, frame);
     }
 
     fn pipeline(&self, stage: Stage) -> u32 {
@@ -139,14 +143,12 @@ impl DecorPass {
 
     pub fn draw_ghosts(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: &Draws,
         uploads: &mut Uploads,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         self.draw_pipeline(
-            g,
             pass,
             draws,
             uploads,
@@ -157,16 +159,14 @@ impl DecorPass {
     }
 
     /// The ghost's uniforms follow the opaque ones' (`prepare`).
-    #[allow(clippy::too_many_arguments)]
     fn draw_pipeline(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: &Draws,
         uploads: &mut Uploads,
         which: u32,
         pipeline: u32,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(slots) = self.uniforms.slots() else {
             return;
@@ -178,20 +178,18 @@ impl DecorPass {
         };
         let lit = self.lit;
         draw_models(
-            g,
             pass,
             &lit,
             pipeline,
             frame,
-            slots,
-            first,
+            slots.skip(first),
             draws.of(which),
             |d| {
-                let (model, vertex_cnt, index_cnt, skin) = self.model_drawn(d[1], uploads)?;
-                let upload = uploads.group(g, d[0])?;
+                let (model, vertex_cnt, idx_cnt, skin) = self.model_drawn(d[1], uploads)?;
+                let upload = uploads.group_of(d[0])?;
                 Some(ModelDraw {
                     groups: [skin, upload],
-                    mesh: Some((model, vertex_cnt, index_cnt)),
+                    mesh: Some((model, vertex_cnt, idx_cnt)),
                     instances: d[2],
                 })
             },
@@ -202,38 +200,24 @@ impl DecorPass {
     /// (pxl-spec-core `scatter::drawn`, a group's models its region `2·group`).
     pub fn draw_grown(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         grown: Option<Drawn>,
         uploads: &Uploads,
         stage: Stage,
-        (frame, bound): (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(d) = grown else { return };
-        g.set_pipeline(pass, self.pipeline(stage));
-        if *bound != frame {
-            g.set_bind_group(pass, 0, frame, &[]);
-            *bound = frame;
-        }
-        g.set_bind_group(pass, 3, d.instances_group, &[]);
-        let mut mesh_bound = 0;
-        for group in 0..pxl_spec_core::scatter::GROUPS {
-            let Some((model, vertex_cnt, index_cnt, skin)) = self.model_drawn(group, uploads)
-            else {
+        pass.set_pipeline(self.pipeline(stage));
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(3, d.instances_group, &[]);
+        for group in 0..scatter::GROUPS {
+            let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };
-            g.set_bind_group(pass, 1, d.uniform_group, &[d.uniform_at(2 * group)]);
-            g.set_bind_group(pass, 2, skin, &[]);
-            bind_mesh(
-                g,
-                pass,
-                &self.lit,
-                &mut mesh_bound,
-                model,
-                vertex_cnt,
-                index_cnt,
-            );
-            g.draw_indexed_indirect(pass, d.args, d.args_at(2 * group));
+            pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group)]);
+            pass.set_bind_group(2, skin, &[]);
+            bind_mesh(pass, &self.lit, model, vertex_cnt, idx_cnt);
+            pass.draw_indexed_indirect(d.args, d.args_at(2 * group));
         }
     }
 }

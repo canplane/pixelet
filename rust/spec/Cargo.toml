@@ -25,3 +25,6 @@ pxl-spec-core.workspace = true
 hex.workspace = true
 serde = { version = "1", features = ["derive"] }
 xpute-kit = { workspace = true, features = ["std", "golden"] }
+
+[lints]
+workspace = true

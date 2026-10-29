@@ -10,7 +10,7 @@
 
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::kept::Kept;
-use crate::domain::layer::residency::Residency;
+use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
@@ -25,26 +25,29 @@ use crate::sys::io::failure::Failure;
 
 use crate::domain::layer::terrain::fixed::RANGE;
 use crate::domain::layer::terrain::fixed::{separation_lane, SEPARATION_LANES};
+use crate::domain::layer::terrain::window;
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
+use crate::sys::io::fetch;
+use crate::sys::io::request;
 use pxl_spec::bake::tile::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-static TERRAIN: Global<Residency<TerrainTile>> = Global::new();
+static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 
 impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
-    /// The focus's and a destination's windows' tiles.
-    const PINNED: u32 = crate::domain::layer::terrain::window::PINNED_TILES;
+    /// The pivot's and a destination's windows' tiles.
+    const PINNED: u32 = window::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
     }
 
-    fn residency() -> &'static mut Residency<TerrainTile> {
-        TERRAIN.get(Residency::default)
+    fn tile_cache() -> &'static mut TileCache<TerrainTile> {
+        TERRAIN.get(TileCache::default)
     }
 
     fn empty() -> Option<TerrainTile> {
@@ -67,18 +70,18 @@ impl Base for TerrainTile {
     }
 
     /// What its windows want of it is the GPU's, off the packet: kept only
-    /// where a window wants one of its squares, so an ancestor's or another
+    /// where a window wants one of its bricks, so an ancestor's or another
     /// zoom's packet no window reads takes no place of `most_kept`.
     fn keep(record: Option<u32>, block: Block) {
         let wanted = |r: &u32| {
-            TerrainTile::residency()
-                .in_frame(*r)
-                .is_some_and(crate::domain::layer::terrain::window::tile_wanted)
+            TerrainTile::tile_cache()
+                .in_slot(*r)
+                .is_some_and(window::is_tile_wanted)
         };
         match record {
             Some(r) if !wanted(&r) => {
                 kept().forget(r);
-                crate::sys::io::fetch::release(Some(block));
+                fetch::release(Some(block));
             }
             _ => kept().keep(record, block, most_kept()),
         }
@@ -93,12 +96,12 @@ impl Base for TerrainTile {
 /// freed once decoded, and its tile asked again when one could be kept
 /// (`again_room`, domain/layer/terrain/window.rs `step`).
 pub fn most_kept() -> u32 {
-    let credits = crate::sys::io::request::most_credits().max(1);
-    BODY_SLOTS.saturating_sub(credits + Residency::<Earth>::FRAMES)
+    let credits = request::most_credits().max(1);
+    BODY_SLOTS.saturating_sub(credits + TileCache::<Earth>::SLOTS)
 }
 
 const _: () = assert!(
-    BODY_SLOTS > MAX_CREDITS + Residency::<Earth>::FRAMES,
+    BODY_SLOTS > MAX_CREDITS + TileCache::<Earth>::SLOTS,
     "the body slots keep a terrain packet beside a body on every credit and the Earth's"
 );
 
@@ -107,22 +110,22 @@ const _: () = assert!(
 /// is fetched only to be freed past `most_kept`.
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
-    let coming = TerrainTile::residency()
-        .asked_again(|p| !crate::sys::io::request::object_failed(Stream::terrain, p.subject()));
-    most_kept().saturating_sub(kept().count() + coming)
+    let coming = TerrainTile::tile_cache()
+        .asked_again(|p| !request::has_object_failed(Stream::terrain, p.subject()));
+    most_kept().saturating_sub(kept().cnt() + coming)
 }
 
-/// The tiles whose squares the windows want filled, off their packets.
+/// The tiles whose bricks the windows want filled, off their packets.
 static KEPT: Global<Kept> = Global::new();
 
 pub fn kept() -> &'static mut Kept {
-    KEPT.get(|| Kept::new(Residency::<TerrainTile>::FRAMES))
+    KEPT.get(|| Kept::new(TileCache::<TerrainTile>::SLOTS))
 }
 
-/// Whether `tile`'s packet is kept, its squares still to be handed.
+/// Whether `tile`'s packet is kept, its bricks still to be handed.
 pub fn kept_for(tile: Tile) -> bool {
-    TerrainTile::residency()
-        .frame(tile)
+    TerrainTile::tile_cache()
+        .slot(tile)
         .is_some_and(|f| kept().waiting(f))
 }
 
@@ -140,7 +143,7 @@ unsafe fn room_of(record: u32) -> separation::Room {
             assert!(
                 SEPARATION_LANES[K].1 == size_of::<T>(),
                 "a lane's element as wide as the layout counts it"
-            )
+            );
         };
         let (at, bytes) = separation_lane(record, K);
         // Inside the range by the layout, so past its end is a bug.

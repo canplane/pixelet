@@ -8,19 +8,19 @@ fn block() -> Block {
 }
 
 #[test]
-fn no_more_than_most_are_kept_and_one_past_it_is_freed_with_its_frame_holding_nothing() {
+fn keeps_at_most() {
     let mut k = Kept::new(4);
     for record in 0..3 {
         k.keep(Some(record), block(), 2);
     }
-    assert_eq!(k.count(), 2);
+    assert_eq!(k.cnt(), 2);
     assert!(
         k.waiting(0) && k.waiting(1) && !k.waiting(2),
         "the third is past the bound"
     );
     assert_eq!(k.sent_on(2), None);
     k.keep(Some(0), block(), 2);
-    assert_eq!(k.count(), 2, "a frame's packet replaced is still one");
+    assert_eq!(k.cnt(), 2, "a frame's packet replaced is still one");
     k.send(
         7,
         &mut |record, _| {
@@ -33,18 +33,18 @@ fn no_more_than_most_are_kept_and_one_past_it_is_freed_with_its_frame_holding_no
         &|_| true,
     );
     assert_eq!(
-        (k.count(), k.sent_on(0)),
+        (k.cnt(), k.sent_on(0)),
         (1, Some(7)),
         "taken whole: freed, and sent"
     );
     k.keep(Some(3), block(), 2);
-    assert_eq!(k.count(), 2, "room again once one is taken");
+    assert_eq!(k.cnt(), 2, "room again once one is taken");
     k.send(7, &mut |_, _| Offered::Taken, &|_| true);
-    assert_eq!(k.count(), 0);
+    assert_eq!(k.cnt(), 0);
 }
 
 #[test]
-fn past_a_full_stream_the_packets_nothing_wants_are_freed_unsent() {
+fn full_stream_frees_unwanted() {
     let mut k = Kept::new(4);
     for record in 0..4 {
         k.keep(Some(record), block(), 4);
@@ -67,14 +67,14 @@ fn past_a_full_stream_the_packets_nothing_wants_are_freed_unsent() {
         !k.waiting(1) && !k.waiting(3) && k.sent_on(1).is_none(),
         "the rest freed, and not sent"
     );
-    assert_eq!(k.count(), 2);
+    assert_eq!(k.cnt(), 2);
 }
 
 #[test]
-fn a_frame_forgotten_holds_nothing_and_counts_none() {
+fn forgotten_frame_empty() {
     let mut k = Kept::new(2);
     k.keep(Some(0), block(), 2);
     k.forget(0);
     k.forget(1);
-    assert!(!k.waiting(0) && k.count() == 0);
+    assert!(!k.waiting(0) && k.cnt() == 0);
 }

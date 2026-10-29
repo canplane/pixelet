@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene/indicator/frame_gizmo.rs
 
-//! The frame gizmo (the `world_gizmo` setting), as debug lines: the focus and
+//! The frame gizmo (the `world_gizmo` setting), as debug lines: the pivot and
 //! its cell, and about it a level ring, an upright ring facing the screen and
 //! one through north. The view's forward, its up and north are told apart by
 //! the spec's colors (`gizmo_spec::frame`), which the shell's legend reads.
@@ -28,7 +28,7 @@ const RING_SEGMENTS: u32 = 64;
 
 /// Segments as pairs of vertices: position about `about`, then color. Outlines
 /// only, with no faces: a ring is an outline, and a cube's faces would hide the
-/// focus inside it.
+/// pivot inside it.
 #[derive(PartialEq)]
 struct Sketch {
     about: V3,
@@ -60,7 +60,7 @@ impl Sketch {
         for i in 0..8 {
             for k in 0..3 {
                 if i & (1 << k) == 0 {
-                    self.line(corner(i), corner(i | 1 << k), linear_rgb(frame::focus::rgb));
+                    self.line(corner(i), corner(i | 1 << k), linear_rgb(frame::pivot::rgb));
                 }
             }
         }
@@ -80,36 +80,23 @@ impl Sketch {
 }
 
 /// Into `s`, its lines cleared first.
-fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
-    let center = to_world(focus);
-    s.about = center;
+fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
+    let at = to_world(pivot);
+    s.about = at;
     s.lines.clear();
-    let ground = World::now().floor_under(focus, LEAF_ZOOM).value().flatten();
-    let cell = v3::floor(
-        &[center[0], center[1], ground.unwrap_or(0.0)],
-        units(GROUND.cell()),
-    );
+    let ground = World::now().floor_under(pivot, LEAF_ZOOM).val().flatten();
+    let cell = v3::floor(&[at[0], at[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
-    s.point(center, linear_rgb(frame::focus::rgb));
-    // First person the eye is the focus, and nothing about it is seen.
+    s.point(at, linear_rgb(frame::pivot::rgb));
+    // First person the eye is the pivot, and nothing about it is seen.
     let Some(azimuth) = heading else { return };
     let (sin, cos) = libm::sincos(azimuth);
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
-    let tip = |d: V3| -> V3 { core::array::from_fn(|k| center[k] + d[k] * RING_RADIUS) };
-    s.ring(
-        center,
-        east,
-        north,
-        (frame::level::rgb, frame::level::dashed),
-    );
-    s.ring(
-        center,
-        right,
-        up,
-        (frame::forward::rgb, frame::forward::dashed),
-    );
-    s.ring(center, north, up, (frame::north::rgb, frame::north::dashed));
+    let tip = |d: V3| -> V3 { core::array::from_fn(|k| at[k] + d[k] * RING_RADIUS) };
+    s.ring(at, east, north, (frame::level::rgb, frame::level::dashed));
+    s.ring(at, right, up, (frame::forward::rgb, frame::forward::dashed));
+    s.ring(at, north, up, (frame::north::rgb, frame::north::dashed));
     s.point(tip(forward), linear_rgb(frame::forward::rgb));
     s.point(tip(north), linear_rgb(frame::north::rgb));
     s.point(tip(up), linear_rgb(frame::up::rgb));
@@ -127,22 +114,22 @@ fn set_lines(at: V3, lines: &[f32]) {
 
 /// `heading` is the camera's azimuth third person, none first person.
 /// Sketched each step and handed on only where the sketch moved, so the
-/// floor under the focus is drawn where it is as soon as it is known.
+/// floor under the pivot is drawn where it is as soon as it is known.
 /// Before the frame's list begins (domain/scene/stage.rs), so its lines and the
 /// origin they are drawn about are the same turn's.
-pub fn frame_gizmo_step(show: bool, focus: Option<Q3>, heading: Option<f64>) {
+pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     let empty = || Sketch {
         about: [0.0; 3],
         lines: Vec::new(),
     };
     let (drawn, shown, next) = GIZMOS.get(|| (empty(), false, empty()));
-    let Some(center) = focus.filter(|_| show) else {
+    let Some(at) = pivot.filter(|_| show) else {
         if core::mem::take(shown) {
             set_lines([0.0; 3], &[]);
         }
         return;
     };
-    sketch(next, &center, heading);
+    sketch(next, &at, heading);
     if *shown && drawn == next {
         return;
     }

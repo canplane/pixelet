@@ -18,7 +18,7 @@
 //! scope, the stretches of them it sees (`Stretch`), and the lines it keeps; the
 //! bridges are `bridge`'s, the tunnels `tunnel`'s. It began as louis-e/arnis `c96872e`
 //! ported, read for Overture's fields where Arnis reads OSM's tags, its widths
-//! the ground's, and its numbers, metres (a block a metre upright on the
+//! the ground's, and its numbers, meters (a block a meter upright on the
 //! Earth, as its celestial bodies say), taken into the tile's cells, half to
 //! even. What is read is the tile and as much of its 1-ring as the structures
 //! touching it reach, and no further.
@@ -31,7 +31,7 @@
 //!
 //! - Where the ring cuts a piece is no end of it. A cut lies a tile from every
 //!   cell its tile draws, so a height that leans on nothing further than a
-//!   tile comes out the same in two neighbours, who both see the cells where
+//!   tile comes out the same in two neighbors, who both see the cells where
 //!   they meet; a height drawn from the cut, or from anything only the whole
 //!   piece shows (its lowest point, the straight run between its portals),
 //!   comes out different, and their tiles step at the seam.
@@ -53,8 +53,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{footprint as line_reach, Form};
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
-use pxl_spec_core::ways;
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
+use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, Part, PartId};
@@ -66,7 +66,7 @@ use crate::separation::{Drawn, Line, Reader, Solved};
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
-/// The tile's scale: Arnis's metres in leaf cells (pxl-spec-core
+/// The tile's scale: Arnis's meters in leaf cells (pxl-spec-core
 /// `cells_of_m`), at the tile's `Frame::per_m`.
 #[derive(Clone, Copy)]
 struct Scale {
@@ -237,8 +237,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     if queue.is_empty() {
         return Ok(Solved::default());
     }
-    let reach =
-        mer_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
+    let reach = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| {
@@ -339,7 +338,7 @@ impl Ring {
     }
 
     /// Whether a point's ground is held: its tile of the ring was read.
-    fn held(&self, p: [f64; 2]) -> bool {
+    fn is_held(&self, p: [f64; 2]) -> bool {
         self.loaded.contains(&tile_of(p))
     }
 
@@ -351,7 +350,7 @@ impl Ring {
         self.loaded.insert(p);
         let rows = r.store.tile(r.client, r.repo, p)?;
         self.ground.insert(p, rows.ele().to_vec());
-        let step = mer_from_u(CELL_U);
+        let step = merc_from_u(CELL_U);
         for s in rows.ways() {
             let key = s.id();
             if self.ways.contains_key(&key) || s.subtype == "water" {
@@ -407,10 +406,10 @@ impl Ring {
         if s.samples.is_some() {
             return Ok(());
         }
-        let step = mer_from_u(CELL_U);
+        let step = merc_from_u(CELL_U);
         let line = Polyline::of(s.piece.way.points.iter().map(|p| [p[0], p[1]]));
         let length = s.piece.way.length();
-        let reach = mer_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
+        let reach = merc_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.tiles.contains(&tile_of(*p)))
@@ -501,8 +500,8 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
                     .iter()
                     .map(|p| {
                         [
-                            u_from_mer(p[0] - origin[0]) / CELL_U,
-                            u_from_mer(p[1] - origin[1]) / CELL_U,
+                            u_from_merc(p[0] - origin[0]) / CELL_U,
+                            u_from_merc(p[1] - origin[1]) / CELL_U,
                         ]
                     })
                     .collect(),
@@ -512,7 +511,7 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
                 ends,
                 clipped,
                 nodes,
-                half: ways::half_cells((s.piece.width() / CELL_U) as f32),
+                half: way::half_cells((s.piece.width() / CELL_U) as f32),
                 width_u: s.piece.width(),
             });
         }
@@ -539,13 +538,13 @@ fn way_width(row: &Part) -> f64 {
 /// ring's own cells (`Stretch::cell`), taken from its corner, differ in their last bits from one tile's to
 /// the next's, enough to move what lies on a window's edge.
 fn absolute(p: [f64; 2]) -> [f64; 2] {
-    [u_from_mer(p[0]) / CELL_U, u_from_mer(p[1]) / CELL_U]
+    [u_from_merc(p[0]) / CELL_U, u_from_merc(p[1]) / CELL_U]
 }
 
 /// Cells `a..=b` of a stretch as a line of `form` at heights `ys`: the piece's
 /// vertices and where the slope bends, no more.
 fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, Drawn) {
-    let step = mer_from_u(CELL_U);
+    let step = merc_from_u(CELL_U);
     let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
     let mut anchor = a;
@@ -563,15 +562,15 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
             keep.push((along(k), r.at[k], f64::from(ys[k])));
         }
     }
-    let mut distance = 0.0;
+    let mut dist = 0.0;
     for seg in r.piece.way.points.windows(2) {
-        distance += libm::hypot(seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]);
-        if distance > along(a) && distance < along(b) {
-            let i = ((distance / step).floor() as usize)
+        dist += libm::hypot(seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]);
+        if dist > along(a) && dist < along(b) {
+            let i = ((dist / step).floor() as usize)
                 .saturating_sub(r.k0)
                 .clamp(a, b - 1);
-            let z = f64::from(ys[i]) + f64::from(ys[i + 1] - ys[i]) * (distance - along(i)) / step;
-            keep.push((distance, [seg[1][0], seg[1][1]], round(z)));
+            let z = f64::from(ys[i]) + f64::from(ys[i + 1] - ys[i]) * (dist - along(i)) / step;
+            keep.push((dist, [seg[1][0], seg[1][1]], round(z)));
         }
     }
     keep.sort_by(|x, y| x.0.total_cmp(&y.0));

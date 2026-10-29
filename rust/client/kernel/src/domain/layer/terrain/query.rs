@@ -4,7 +4,7 @@
 //! (domain/layer/terrain/window.rs) at the cells of the tile its cells fold from,
 //! off the finest window holding them: exact where that is the zoom its
 //! tile's line says its ground at, coarser where only one over holds them.
-//! A column's ways are its square's tree the GPU built, its blocks read
+//! A column's ways are its brick's tree the GPU built, its families read
 //! back into the pool's mirror (domain/layer/terrain/window.rs `pool`).
 
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -16,14 +16,14 @@ use pxl_spec_core::area::Shard;
 use pxl_spec_core::ground::{Bounds, Cell};
 use pxl_spec_core::window::{self as cells, Found};
 
-use crate::domain::layer::residency::{Line, Lines, Residency};
 use crate::domain::layer::terrain::window::Windowed;
+use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
 use crate::sys::io::source;
 
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::space::coord::aabb::Aabb;
 
-impl Residency<TerrainTile> {
+impl TileCache<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
     /// cells, in leaf cells, and the ways apart (pxl-spec-core
     /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off
@@ -64,7 +64,7 @@ impl Residency<TerrainTile> {
     /// coarser one its own as an ancestor read it, so nodes beside or under
     /// each other share their lines down to where they part, and pay a
     /// look-up a zoom only past it.
-    pub fn line_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
+    pub fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
         self.seek(lines, bound_tile(node, cell))
     }
 
@@ -81,7 +81,7 @@ impl Residency<TerrainTile> {
         }
     }
 
-    /// `relief` over `node`'s cells at `cell`, its line walked (`line_walked`).
+    /// `relief` over `node`'s cells at `cell`, its line walked (`walk_line`).
     pub fn relief_walked(
         &self,
         lines: &mut Lines,
@@ -90,14 +90,14 @@ impl Residency<TerrainTile> {
         cell: Zoom,
     ) -> Answer<Bounds> {
         self.relief(
-            &self.line_walked(lines, node, cell),
+            &self.walk_line(lines, node, cell),
             place,
             node,
             [cell, cell],
         )
     }
 
-    /// `bound`, its line walked (`line_walked`): a walk in key order pays one
+    /// `bound`, its line walked (`walk_line`): a walk in key order pays one
     /// look-up a node.
     pub fn bound_walked(
         &self,
@@ -105,11 +105,11 @@ impl Residency<TerrainTile> {
         node: Node<2>,
         cell: Zoom,
     ) -> Answer<Option<Aabb>> {
-        self.bound(&self.line_walked(lines, node, cell), node, cell)
+        self.bound(&self.walk_line(lines, node, cell), node, cell)
     }
 }
 
-impl Residency<TerrainTile> {
+impl TileCache<TerrainTile> {
     /// `tile`'s line, stepped down from `from`'s, a tile over it or itself:
     /// a look-up a zoom between them.
     fn down(&self, from: &Line, tile: Tile) -> Line {
@@ -133,17 +133,12 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
 fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     match here {
         false => Answer::Nothing(line.tile),
-        true if line
-            .source
-            .is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) =>
-        {
-            Answer::Exact(v)
-        }
+        true if line.src.is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) => Answer::Exact(v),
         true => Answer::Coarser(v, line.tile),
     }
 }
 
-impl Query for Residency<TerrainTile> {
+impl Query for TileCache<TerrainTile> {
     type Cursor = Line;
 
     fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {

@@ -10,16 +10,22 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most.
 pub const MARKER_TEXT_CHARS: u32 = 40;
 
 /// The coarsest camera grid cell a marker shows at: z19, 32 of them across
 /// a z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at
-/// (layers/poi/poi.yaml). What someone puts up, by the cells of the square
+/// (layers/poi/poi.yaml). What someone puts up, by the cells of the brick
 /// it is read from (pxl-kernel domain/scene/marker/pin.rs); a chat line's
-/// bubble, which no square holds, by the cell where its speaker stands,
+/// bubble, which no brick holds, by the cell where its speaker stands,
 /// which its speaker judges (pxl-kernel
 /// domain/scene/character/companion.rs `line_hangs`).
 pub const MARKER_SHOWN_FROM: u8 = 19;

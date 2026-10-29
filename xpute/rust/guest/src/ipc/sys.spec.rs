@@ -20,7 +20,13 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// Words before the first record: END, then a word kept at 0.
 pub const HEAD: u32 = 2;
@@ -35,7 +41,7 @@ pub mod op {
     /// fd, at, len: the `len` bytes at `at` added to what the file opened for writing holds.
     pub const WRITE: u32 = 3;
     /// fd: the descriptor ended. A file opened for writing is replaced by what was written; an
-    /// open not yet answered is cancelled, and never answered.
+    /// open not yet answered is canceled, and never answered.
     pub const CLOSE: u32 = 4;
     /// errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
     /// the broken invariant the guest reports before it stops (xpute-kit status/bug.rs).

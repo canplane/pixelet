@@ -5,7 +5,7 @@ use std::env::{self, VarError};
 pub struct Config {
     pub host: String,
     pub port: u16,
-    pub max_body_sz: usize,
+    pub max_body_size: usize,
     pub admin_token: String,
     pub db_url: String,
     pub db_pool_size: usize,
@@ -55,7 +55,7 @@ fn must_int(key: &str, fallback: u64, min: u64, max: u64) -> Result<u64, String>
 
 impl Config {
     pub fn from_env(env: &Env) -> Result<Config, String> {
-        let max_body_sz_mb = must_int("MAX_BODY_SZ_MB", 1, 1, 1024)?;
+        let max_body_size_mb = must_int("MAX_BODY_SIZE_MB", 1, 1, 1024)?;
 
         Ok(Config {
             host: get(&format!("{}_HOST", env.prefix))?
@@ -67,7 +67,7 @@ impl Config {
                 1,
                 65535,
             )? as u16,
-            max_body_sz: (max_body_sz_mb as usize) << 20,
+            max_body_size: (max_body_size_mb as usize) << 20,
             // Required even with nothing mounted under `internal/`.
             admin_token: must("ADMIN_TOKEN")?,
             db_url: must(env.db_url_key)?,

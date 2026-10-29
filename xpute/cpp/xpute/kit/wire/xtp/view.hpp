@@ -148,11 +148,11 @@ template <class Self, class Alloc> class NodeView {
     }
 
     // Only the construction is checked here; the header is read at encode.
-    Self &graft(std::span<const std::uint8_t> packet) {
+    Self &graft(std::span<const std::uint8_t> pkt) {
         Node<Alloc> n(alloc());
         n.kind = NodeKind::graft;
         n.type = type_of(SpecialType::graft);
-        n.bytes = packet;
+        n.bytes = pkt;
         return self().write(std::move(n));
     }
 

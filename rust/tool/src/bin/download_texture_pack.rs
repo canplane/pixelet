@@ -10,6 +10,8 @@ use std::process::ExitCode;
 
 use image::{ImageFormat, RgbaImage};
 
+use image::imageops;
+use image::imageops::FilterType;
 use pxl_tool::asset::pack::{self, Item, Style, TILE_SIZE};
 use pxl_tool::root;
 
@@ -79,12 +81,7 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
             ));
         }
         img = match item.style {
-            Style::Painted => image::imageops::resize(
-                &img,
-                TILE_SIZE,
-                TILE_SIZE,
-                image::imageops::FilterType::Lanczos3,
-            ),
+            Style::Painted => imageops::resize(&img, TILE_SIZE, TILE_SIZE, FilterType::Lanczos3),
             Style::Legacy => {
                 let (w, h) = (img.width(), img.height());
                 let raw = pack::nearest_resize(img.as_raw(), w, h, TILE_SIZE, TILE_SIZE);

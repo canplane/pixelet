@@ -8,17 +8,19 @@
 // with none, decor a model with a variant, heading and scale, a marker drawn
 // flat to the camera from a design, as the pin someone puts up at a place,
 // an actor a person or a pet, a model with clips, and sky what hangs in the
-// sky, the clouds. A block, the instance standing in a cell of the world's
-// grid, is stored as its asset's id (pxl-spec block/object.rs); an actor
-// or the sky stands in no cell, so neither is ever a block.
+// sky, the clouds. What stands in a cell of the world's grid is stored
+// as its asset's id (pxl-spec object.rs); an actor or the sky stands in
+// no cell, so no cell ever holds either.
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 pub const SHAPE_BITS: u32 = 10;
@@ -45,8 +47,8 @@ impl Kind {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<Kind> {
-        Kind::ALL.into_iter().find(|member| *member as u8 == value)
+    pub fn of(val: u8) -> Option<Kind> {
+        Kind::ALL.into_iter().find(|member| *member as u8 == val)
     }
 }
 

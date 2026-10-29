@@ -7,11 +7,15 @@ use core::mem::{offset_of, size_of};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use xpute_guest::sched::tick::PHASES;
 
-use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, WORST};
+use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMIT, WORST};
 use crate::profiler::word::{words, Words};
+use crate::sys::io::demand_spec;
+use crate::sys::sched::tick;
+use crate::turn::spec;
 use pxl_render::frame::draw::{DrawCensus, DRAW_PIPELINES};
 use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
+use pxl_spec::space::layer::lattice;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS;
 
@@ -139,6 +143,59 @@ pub struct FrameSample {
     pub waiting: [f64; STREAMS],
     pub out: [f64; STREAMS],
     pub terrain_refused: f64,
+    pub rays: RaySample,
+}
+
+/// The `ray_counts` setting's sums since boot, as the renderer keeps them
+/// (pxl-render gpu/ray/tally.rs `RAY_SUMS`), in profiler.json FRAME's
+/// rays, eye and sun lanes' order: the frames whose counts landed, then the
+/// eye's and the sun's.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RaySample {
+    pub frames: f64,
+    pub eye: ObserverSample,
+    pub sun: ObserverSample,
+}
+
+/// An observer's sums (pxl-render gpu/ray/tally.rs `sum_at`): the frames it
+/// cast in, its pixels or slots in them, then its lanes (pxl-spec-core
+/// `tally`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ObserverSample {
+    pub casts: f64,
+    pub rays: f64,
+    pub beam: f64,
+    pub sample: f64,
+    pub miss: f64,
+    pub took: f64,
+    pub walked: f64,
+    pub boxes: f64,
+}
+
+impl RaySample {
+    /// The renderer's sums (`RAY_SUMS`), in their order.
+    pub fn of(s: [f64; ray::RAY_SUMS]) -> RaySample {
+        let observer = |o: u32| {
+            let lane = |l: u32| s[ray::sum_at(o, ray::LANES_AT + l as usize)];
+            ObserverSample {
+                casts: s[ray::sum_at(o, ray::CASTS)],
+                rays: s[ray::sum_at(o, ray::RAYS)],
+                beam: lane(tally::BEAM),
+                sample: lane(tally::SAMPLE),
+                miss: lane(tally::MISS),
+                took: lane(tally::TOOK),
+                walked: lane(tally::WALKED),
+                boxes: lane(tally::BOXES),
+            }
+        };
+        RaySample {
+            frames: s[ray::FRAMES],
+            eye: observer(tally::EYE),
+            sun: observer(tally::SUN),
+        }
+    }
 }
 
 /// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
@@ -168,31 +225,50 @@ words!(FrameSample, FRAME::WORDS,
     body_slots_peak => FRAME::body_slots_peak,
     waiting => FRAME::waiting, out => FRAME::out,
     terrain_refused => FRAME::cap_terrain_refused,
+    rays.frames => FRAME::rays_frames,
+    rays.eye.casts => FRAME::eye_casts,
+    rays.eye.rays => FRAME::eye_rays,
+    rays.eye.beam => FRAME::eye_beam,
+    rays.eye.sample => FRAME::eye_sample,
+    rays.eye.miss => FRAME::eye_miss,
+    rays.eye.took => FRAME::eye_took,
+    rays.eye.walked => FRAME::eye_walked,
+    rays.eye.boxes => FRAME::eye_boxes,
+    rays.sun.casts => FRAME::sun_casts,
+    rays.sun.rays => FRAME::sun_rays,
+    rays.sun.beam => FRAME::sun_beam,
+    rays.sun.sample => FRAME::sun_sample,
+    rays.sun.miss => FRAME::sun_miss,
+    rays.sun.took => FRAME::sun_took,
+    rays.sun.walked => FRAME::sun_walked,
+    rays.sun.boxes => FRAME::sun_boxes,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
-pub const STREAMS: usize = crate::sys::io::demand_spec::STREAM_NAMES;
-pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
+pub const EFFECTS: usize = spec::EFFECT_NAMES;
+pub const STREAMS: usize = demand_spec::STREAM_NAMES;
+pub const ZOOMS: usize = LIMIT::ZOOMS as usize;
 
 const _: () = assert!(
-    pxl_spec::space::layer::lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
+    lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
     "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
 );
 
 /// A frame that dropped a vsync while moving: its interval ran past the
-/// paced one by half a refresh or more, so the next frame landed a refresh
-/// late at least — the host's own test (xpute host sched/quantum.ts
-/// `observe`). Still frames take a larger budget on purpose, and a repeated
-/// image is no visible stutter.
-pub fn missed(f: &FrameSample) -> bool {
+/// paced one by half a refresh or more, so it landed a refresh late at least.
+/// Half a refresh is the jitter the host's pacing allows a frame, skipping
+/// one nearer the last turn than the paced interval less that (xpute host
+/// sched/strobe.ts `turn`). Still frames take a larger budget on purpose, and
+/// a repeated image is no visible stutter.
+pub fn is_missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }
 
 /// Past even the hard ceiling: one step too big for the forward-progress waiver.
 pub fn overran(f: &FrameSample) -> bool {
-    f.tick_ms > f.budget_ms + crate::sys::sched::tick::HARD_SLACK_MS
+    f.tick_ms > f.budget_ms + tick::HARD_SLACK_MS
 }
 
 /// What the interval's turns ran past it, read off the interval and the

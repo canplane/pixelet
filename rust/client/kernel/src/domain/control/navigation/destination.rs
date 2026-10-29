@@ -11,48 +11,51 @@ use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::domain::control::camera::controller::{put_center, Motion};
+use crate::domain::control::camera::controller;
+use crate::domain::control::camera::controller::{put_pivot, Motion};
+use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::navigation::support::{exact, is_unknown, nearest, unknown_z};
+use crate::sys::sched::edge;
 use xpute_guest::global::Global;
 
-static DESTINATION: Global<Option<(Q3, Motion)>> = Global::new();
+static DST: Global<Option<(Q3, Motion)>> = Global::new();
 
-fn destination() -> &'static mut Option<(Q3, Motion)> {
-    DESTINATION.get(|| None)
+fn dst() -> &'static mut Option<(Q3, Motion)> {
+    DST.get(|| None)
 }
 
 /// A later destination or a `go_to` replaces it. `at`'s Z, where known, is
 /// the height whose nearest floor it stands on; unknown, the surface.
 pub fn go_to_ground(at: Q3, motion: Motion) {
-    *destination() = Some((at, motion));
-    crate::sys::sched::edge::request_world_tick();
+    *dst() = Some((at, motion));
+    edge::request_world_tick();
 }
 
 /// A pending destination is dropped: this was asked last.
 pub fn go_to(at: Q3, motion: Motion) {
     cancel();
-    put_center(at, motion);
+    put_pivot(at, motion);
 }
 
-/// The user put the focus by hand; reaching the destination after would
+/// The user put the pivot by hand; reaching the destination after would
 /// undo it. Turning or zooming leaves it.
 pub fn cancel() {
-    *destination() = None;
+    *dst() = None;
 }
 
 /// The place asked for and not yet put.
 pub fn pending() -> Option<Q3> {
-    destination().map(|(at, _)| at)
+    dst().map(|(at, _)| at)
 }
 
 /// Whose ground the terrain is asked for.
 pub fn tile() -> Option<Tile> {
-    destination().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
+    dst().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
 }
 
 /// Only the exact ground puts it; a coarser tile over it is not its ground.
-pub fn destination_step() {
-    let Some((at, motion)) = *destination() else {
+pub fn dst_step() {
+    let Some((at, motion)) = *dst() else {
         return;
     };
     let Some(to) = (if is_unknown(&at) {
@@ -62,19 +65,19 @@ pub fn destination_step() {
     }) else {
         return;
     };
-    *destination() = None;
-    put_center(to, motion);
+    *dst() = None;
+    put_pivot(to, motion);
 }
 
-/// A marker's height is its zoom's, coarser than where the center stands, so
-/// the center goes on the surface once it is known exactly.
-pub(crate) fn go_on_ground(target: Q3, motion: Motion) {
-    crate::domain::control::navigation::follow_mode::set_following(false);
-    go_to_ground(unknown_z(&target), motion);
+/// A marker's height is its zoom's, coarser than where the pivot stands, so
+/// the pivot goes on the surface once it is known exactly.
+pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
+    follow_mode::set_following(false);
+    go_to_ground(unknown_z(&to), motion);
 }
 
 /// A place, as the location button goes to one: a view far out comes in.
-pub fn go_to_place(target: Q3) {
-    go_on_ground(target, Motion::Smooth);
-    crate::domain::control::camera::controller::come_in_to_default();
+pub fn go_to_place(to: Q3) {
+    go_on_ground(to, Motion::Smooth);
+    controller::come_in_to_default();
 }

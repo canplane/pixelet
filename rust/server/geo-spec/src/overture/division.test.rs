@@ -25,7 +25,7 @@ fn lineage() -> FnvHashMap<String, Division> {
 }
 
 #[test]
-fn a_name_is_the_division_and_each_parent_broad_to_narrow() {
+fn name_lineage() {
     let parts: Vec<(String, Subtype, bool)> = name("l", true, &lineage())
         .into_iter()
         .map(|p| (p.name, p.subtype, p.approx))
@@ -44,7 +44,7 @@ fn a_name_is_the_division_and_each_parent_broad_to_narrow() {
 }
 
 #[test]
-fn a_parent_the_lineage_lacks_ends_the_name_and_a_cycle_stops() {
+fn lineage_gap_or_cycle() {
     let mut held = lineage();
     held.remove("r");
     assert_eq!(
@@ -63,7 +63,7 @@ fn a_parent_the_lineage_lacks_ends_the_name_and_a_cycle_stops() {
 }
 
 #[test]
-fn a_subtype_newer_than_this_tree_is_left_out_of_a_name() {
+fn unknown_subtype_skipped() {
     let held = FnvHashMap::from_iter([
         division("x", "galaxy", "Galaxy", Some("k")),
         division("k", "country", "France", None),
@@ -78,7 +78,7 @@ fn a_subtype_newer_than_this_tree_is_left_out_of_a_name() {
 }
 
 #[test]
-fn anything_that_is_not_a_name_a_reader_can_be_shown_is_nothing() {
+fn non_name_is_none() {
     assert!(names_of(None).is_empty());
     assert!(
         names_of(Some(serde_json::json!("Montmartre"))).is_empty(),

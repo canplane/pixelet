@@ -7,22 +7,12 @@
 //! GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
 //! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_KEPT`.
 
+use crate::param::cloud::LATTICE_SHAMT;
+use crate::param::cloud::WIND;
 use crate::UNIT_ZOOM;
 
-/// A lattice unit is 2^12 cells, about 8 km at mid latitudes; a power of two
-/// so the clouds wrap with the map.
-pub const LATTICE_SHAMT: u32 = 12;
 /// The lattice's units around the world, X's 2^24 units over a lattice unit's.
-pub const LATTICE_COUNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);
-
-/// In cells a second, about 50 m/s at mid latitudes, a jet stream's: at a
-/// breeze's 8 a cloud a kilometer wide takes minutes to cross its width and
-/// reads as still. The field moves against it, so a point on the ground sees
-/// the field at itself plus the drift.
-pub const WIND: [f64; 2] = [24.0, 10.0];
-
-/// A fair-weather cumulus base.
-pub const CUMULUS_KM: f64 = 1.5;
+pub const LATTICE_CNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);
 
 /// How far the field has moved under the map `time` seconds in, in cells.
 pub fn drift(time: f64) -> [f64; 2] {

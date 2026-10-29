@@ -23,7 +23,7 @@ pxl-spec-core.workspace = true
 xpute-gpu.workspace = true
 
 [build-dependencies]
-# The light a colour decodes to, the same bits on every machine (build.rs
+# The light a color decodes to, the same bits on every machine (build.rs
 # `debug_looks`), as the crate's own is (clippy.toml).
 libm.workspace = true
 # The zooms the screen's rays are painted by (build.rs `lattice.wgsl`), the
@@ -33,6 +33,10 @@ pxl-spec-core.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
 naga = { version = "30", features = ["wgsl-in"] }
 
+[dev-dependencies]
+# The Moon's shipped map read back, so its mean holds `MOON_MAP_MEAN`
+# (frame/shader/word.test.rs).
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [lints]
 workspace = true

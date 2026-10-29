@@ -38,8 +38,10 @@ use arrow::compute::cast;
 use arrow::datatypes::{DataType, Float64Type, Int64Type, UInt64Type};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use postgres::binary_copy::BinaryCopyInWriter;
+use postgres::error::SqlState;
 use postgres::types::Type as Pg;
 use postgres::{Client, NoTls, Transaction};
+use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::{Coverage, Node};
 use pxl_geo_bake::util::fnv1a;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
@@ -53,7 +55,7 @@ struct Type {
     overture: &'static str,
     table: &'static str,
     columns: &'static [(&'static str, &'static str)],
-    indexes: &'static [&'static str],
+    idxs: &'static [&'static str],
 }
 
 const SUBTYPE: (&str, &str) = (
@@ -74,13 +76,13 @@ const TYPES: &[Type] = &[
         overture: "address",
         table: "overture_addresses",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "bathymetry",
         table: "overture_base_bathymetry",
         columns: &[SUBTYPE, CLASS],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "building",
@@ -91,38 +93,38 @@ const TYPES: &[Type] = &[
             ("height", "DOUBLE PRECISION GENERATED ALWAYS AS ((properties->>'height')::float8) STORED"),
             ("num_floors", "INTEGER GENERATED ALWAYS AS (trunc((properties->>'num_floors')::float8)::int) STORED"),
         ],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "building_part",
         table: "overture_building_parts",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "division",
         table: "overture_divisions",
         columns: &[SUBTYPE, NAME],
-        indexes: &["subtype"],
+        idxs: &["subtype"],
     },
     // `division_id` keyed, so a bake tests a division for an area by its id, not by a scan.
     Type {
         overture: "division_area",
         table: "overture_division_areas",
         columns: &[SUBTYPE, NAME],
-        indexes: &["subtype", "((properties->>'division_id'))"],
+        idxs: &["subtype", "((properties->>'division_id'))"],
     },
     Type {
         overture: "division_boundary",
         table: "overture_division_boundaries",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "place",
         table: "overture_places",
         columns: &[("name", "TEXT NOT NULL GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '')) STORED")],
-        indexes: &["USING GIN (properties)", "USING GIN (name gin_trgm_ops)"],
+        idxs: &["USING GIN (properties)", "USING GIN (name gin_trgm_ops)"],
     },
     Type {
         overture: "segment",
@@ -138,43 +140,43 @@ const TYPES: &[Type] = &[
             ("subclass", "TEXT GENERATED ALWAYS AS (properties->>'subclass') STORED"),
             ("subclass_rules", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'subclass_rules', 'null')) STORED"),
         ],
-        indexes: &["(subtype, class)"],
+        idxs: &["(subtype, class)"],
     },
     Type {
         overture: "connector",
         table: "overture_connectors",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "infrastructure",
         table: "overture_base_infrastructure",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "land",
         table: "overture_base_land",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "land_cover",
         table: "overture_base_land_cover",
         columns: &[SUBTYPE],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "land_use",
         table: "overture_base_land_use",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "water",
         table: "overture_base_water",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
 ];
 
@@ -182,7 +184,7 @@ const TYPES: &[Type] = &[
 /// what it downloads, the source, kept beside this script.
 const TOOLS: &str = "./infra/geo/tools/run";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
-const SOURCE: &str = "./infra/geo/overture/source.json";
+const SRC: &str = "./infra/geo/overture/source.json";
 
 /// How long the swap waits for the live table's readers, and how often it
 /// tries: waiting longer would queue every new reader behind it.
@@ -212,7 +214,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     // `--type <type>`, repeated, for those types' tables alone; `--shard <name>`, repeated, for those
     // shards alone; `--whole` for each table made anew from every shard.
     let (mut types, mut named, mut whole) = (Vec::<String>::new(), Vec::<String>::new(), false);
@@ -231,7 +233,7 @@ fn run() -> Result<(), String> {
     {
         return Err(format!("{t}: no Overture type this ingests"));
     }
-    let all: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
+    let all: Vec<Shard> = Coverage::of_src()?.shards().map(Shard::of).collect();
     if let Some(n) = named.iter().find(|n| !all.iter().any(|s| s.name == **n)) {
         return Err(format!(
             "{n}: no shard of the coverage (infra/geo/coverage.json)"
@@ -249,7 +251,7 @@ fn run() -> Result<(), String> {
         NoTls,
     )
     .map_err(|e| e.to_string())?;
-    let (release, accessed_at) = (pinned("version")?, pinned("accessed_at")?);
+    let (release, accessed_at) = (read_pin("version")?, read_pin("accessed_at")?);
     println!(
         "[ingest] release {release}, {} shards{}",
         shards.len(),
@@ -269,14 +271,14 @@ fn run() -> Result<(), String> {
                 .query_one("SELECT to_regclass($1::text) IS NOT NULL", &[&ty.table])
                 .map_err(|e| e.to_string())?
                 .get(0);
-            if exists && !keyed(&mut client, ty.table, &["gers_id"])? {
+            if exists && !is_keyed(&mut client, ty.table, &["gers_id"])? {
                 return Err(format!(
                     "{}: keyed otherwise than by gers_id; run with --whole",
                     ty.table
                 ));
             }
             client
-                .batch_execute(&format!("{}{}", table(ty, ty.table), indexes(ty, ty.table)))
+                .batch_execute(&format!("{}{}", table(ty, ty.table), idxs(ty, ty.table)))
                 .map_err(|e| e.to_string())?;
         }
         let started = std::time::Instant::now();
@@ -306,7 +308,7 @@ fn run() -> Result<(), String> {
 }
 
 /// Whether a table is keyed as this script keys it.
-fn keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, String> {
+fn is_keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, String> {
     let key: Vec<String> = client
         .query(
             "SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
@@ -321,7 +323,7 @@ fn keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, String
 }
 
 /// The shards as rectangles of the shard grid, so a download asks for little
-/// past them: each row's shards in runs of neighbours, and a run joined to
+/// past them: each row's shards in runs of neighbors, and a run joined to
 /// the one under it when the two span the same columns. A full coverage is
 /// one rectangle.
 fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
@@ -582,7 +584,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
 }
 
 /// Each feature of the staging table once, in key order, made into a row.
-fn features(ty: &Type, into: &str) -> String {
+fn feats(ty: &Type, into: &str) -> String {
     format!(
         "INSERT INTO {into} (gers_id, properties, geom) SELECT gers_id, properties::jsonb, {} FROM (SELECT DISTINCT ON (gers_id) gers_id, properties, wkb FROM {} ORDER BY gers_id) f",
         projected("wkb"),
@@ -611,11 +613,11 @@ fn catalog(
         .map(|r| (r.get(0), r.get(1)))
         .collect();
     for s in shards {
-        let count = counts.get(&s.name).copied().unwrap_or(0);
+        let cnt = counts.get(&s.name).copied().unwrap_or(0);
         tx.execute(
             "INSERT INTO overture_catalog (table_name, shard, version, accessed_at, total_count) VALUES ($1, $2, $3, $4::text::timestamptz, $5)
              ON CONFLICT (shard, table_name) DO UPDATE SET version = EXCLUDED.version, accessed_at = EXCLUDED.accessed_at, total_count = EXCLUDED.total_count",
-            &[&ty.table, &s.name, &release, &accessed_at, &count],
+            &[&ty.table, &s.name, &release, &accessed_at, &cnt],
         )?;
     }
     Ok(())
@@ -639,8 +641,8 @@ fn build_and_swap(
             table(ty, &next)
         ))
         .map_err(db)?;
-    let rows = client.execute(&features(ty, &next), &[]).map_err(db)? as i64;
-    client.batch_execute(&indexes(ty, &next)).map_err(db)?;
+    let rows = client.execute(&feats(ty, &next), &[]).map_err(db)? as i64;
+    client.batch_execute(&idxs(ty, &next)).map_err(db)?;
     for attempt in 1..=SWAP_TRIES {
         let mut tx = client.transaction().map_err(db)?;
         tx.batch_execute(&format!("SET LOCAL lock_timeout = '{SWAP_WAIT}'"))
@@ -648,7 +650,7 @@ fn build_and_swap(
         match tx.batch_execute(&format!(
             "DROP TABLE IF EXISTS {t}; ALTER TABLE {next} RENAME TO {t}"
         )) {
-            Err(e) if e.code() == Some(&postgres::error::SqlState::LOCK_NOT_AVAILABLE) => {
+            Err(e) if e.code() == Some(&SqlState::LOCK_NOT_AVAILABLE) => {
                 println!("[ingest/{t}] a reader holds it; swap {attempt} of {SWAP_TRIES} waits");
                 continue;
             }
@@ -689,10 +691,7 @@ fn add(
     let mut tx = client.transaction().map_err(db)?;
     let rows = tx
         .execute(
-            &format!(
-                "{} ON CONFLICT (gers_id) DO NOTHING",
-                features(ty, ty.table)
-            ),
+            &format!("{} ON CONFLICT (gers_id) DO NOTHING", feats(ty, ty.table)),
             &[],
         )
         .map_err(db)? as i64;
@@ -708,20 +707,20 @@ struct Shard {
     name: String,
     /// Its place on the shard grid.
     at: [i32; 2],
-    m: [f64; 4],
+    merc: [f64; 4],
     deg: [f64; 4],
 }
 
 impl Shard {
     fn of(node: Node) -> Shard {
-        let m = node.held().map(|u| round(epsg3857::mer_from_u(u)));
-        let [w, s, _] = epsg4326::from_mercator(&[m[0], m[1], 0.0]);
-        let [e, n, _] = epsg4326::from_mercator(&[m[2], m[3], 0.0]);
+        let merc = node.held().map(|u| round(epsg3857::merc_from_u(u)));
+        let [w, s, _] = epsg4326::from_mercator(&[merc[0], merc[1], 0.0]);
+        let [e, n, _] = epsg4326::from_mercator(&[merc[2], merc[3], 0.0]);
         // The east edge at the seam reads back as -180.
         Shard {
             name: node.name(),
             at: node.at,
-            m,
+            merc,
             deg: [w, s, if e <= w { 180.0 } else { e }, n],
         }
     }
@@ -730,13 +729,13 @@ impl Shard {
     /// meters meets what the shard holds; its edges, rounded to the meter,
     /// are already `EPS` out (`SHARD_APRON`), so a feature on one is in both.
     fn meets(&self, [lo_x, lo_y, hi_x, hi_y]: [f64; 4]) -> bool {
-        let [left, bottom, right, top] = self.m;
+        let [left, bottom, right, top] = self.merc;
         lo_x <= right && hi_x >= left && lo_y <= top && hi_y >= bottom
     }
 }
 
 /// Longitude to x is linear and latitude to y increasing, so the extremes' projections are the projected extremes.
-fn span_m(wkb: &[u8]) -> Result<[f64; 4], String> {
+fn span_merc(wkb: &[u8]) -> Result<[f64; 4], String> {
     let mut deg = [
         f64::INFINITY,
         f64::INFINITY,
@@ -744,7 +743,7 @@ fn span_m(wkb: &[u8]) -> Result<[f64; 4], String> {
         f64::NEG_INFINITY,
     ];
     vertices(wkb, &mut 0, &mut |x, y| {
-        deg = [deg[0].min(x), deg[1].min(y), deg[2].max(x), deg[3].max(y)]
+        deg = [deg[0].min(x), deg[1].min(y), deg[2].max(x), deg[3].max(y)];
     })?;
     if !deg[0].is_finite() {
         return Err("a geometry with no vertex".to_string());
@@ -857,7 +856,7 @@ fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, Stri
                 if id.is_null(i) { "?" } else { id.value(i) }
             ));
         }
-        let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
+        let span = span_merc(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
         let nodes: Vec<&str> = match shards {
             Some(shards) => shards
                 .iter()
@@ -949,7 +948,7 @@ fn items(list: &dyn Array) -> Result<Value, String> {
 /// world's edge clamps latitude (`epsg4326`), so what lies past it is cut off
 /// rather than refused by the projection.
 fn projected(wkb: &str) -> String {
-    let lat = epsg4326::Y_TO_LAT(epsg3857::mer_from_u(REACH.max[1]));
+    let lat = epsg4326::Y_TO_LAT(epsg3857::merc_from_u(REACH.max[1]));
     format!("ST_Transform(ST_ClipByBox2D(ST_GeomFromWKB({wkb}, 4326), ST_MakeEnvelope(-180, -{lat:?}, 180, {lat:?}, 4326)), 3857)")
 }
 
@@ -973,13 +972,13 @@ fn table(ty: &Type, t: &str) -> String {
     sql
 }
 
-fn indexes(ty: &Type, t: &str) -> String {
+fn idxs(ty: &Type, t: &str) -> String {
     let mut sql = format!("CREATE INDEX IF NOT EXISTS {t}_geom ON {t} USING GIST (geom);\n");
-    for (k, index) in ty.indexes.iter().enumerate() {
-        let on = if index.starts_with("USING") || index.starts_with('(') {
-            index.to_string()
+    for (k, idx) in ty.idxs.iter().enumerate() {
+        let on = if idx.starts_with("USING") || idx.starts_with('(') {
+            idx.to_string()
         } else {
-            format!("({index})")
+            format!("({idx})")
         };
         sql.push_str(&format!(
             "CREATE INDEX IF NOT EXISTS {t}_{k} ON {t} {on};\n"
@@ -1014,8 +1013,8 @@ fn overture(args: &[&str]) -> Result<Output, String> {
 }
 /// A field of `source.json`'s pin: the release (Overture's name for its
 /// version) and when it was taken, which the catalog repeats.
-fn pinned(field: &str) -> Result<String, String> {
-    let path = Path::new(SOURCE);
+fn read_pin(field: &str) -> Result<String, String> {
+    let path = Path::new(SRC);
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let meta: Value =
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;

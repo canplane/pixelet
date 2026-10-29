@@ -1,6 +1,7 @@
 // pxl-spec-core/scatter.test.rs
 
 use super::*;
+use crate::cast::Spacing;
 
 /// A patch's contest drawn once for all its candidates (`beaten`) answers
 /// each as `stands` does, over every decor of the catalog and the patches of
@@ -29,12 +30,12 @@ fn patch_contest() {
                         mark(&mut asked, i);
                     }
                     let beaten = beaten(decor, zoom, &cs, n, &asked);
-                    for (i, c) in cs.iter().enumerate().take(n as usize) {
+                    for i in 0..n as usize {
                         assert_eq!(
                             !is_marked(&beaten, i),
-                            stands(decor, zoom, c),
+                            stands(decor, zoom, &cs[i]),
                             "decor {} at {zoom}, patch {p}, candidate {i}",
-                            decor.value
+                            decor.val
                         );
                         compared += 1;
                         lost += usize::from(is_marked(&beaten, i));
@@ -58,7 +59,7 @@ fn decor_at_leaves_or_finer() {
     let detail = Detail {
         range: [0, crate::FINEST_ZOOM],
         eye: [0.0; 3],
-        spacing: crate::cast::Spacing::NONE,
+        spacing: Spacing::NONE,
     };
     let mut d = 0.25f32;
     let mut seen = [false; 2];

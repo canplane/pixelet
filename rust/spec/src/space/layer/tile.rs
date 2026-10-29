@@ -12,9 +12,9 @@ use crate::space::coord::world;
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{
-    ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node,
+    ancestor_of, child_of, first_descendant_of, off_in, parent_of, region, slot_of, Node,
 };
-use pxl_spec_core::wrap_index;
+use pxl_spec_core::wrap_idx;
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
@@ -53,7 +53,7 @@ impl Tile {
     /// (`morton::write_name`).
     pub fn key(self) -> u128 {
         let [x, y] = self.at;
-        key_of::<2>(self.zoom, [wrap_index(self.zoom, x), y])
+        key_of::<2>(self.zoom, [wrap_idx(self.zoom, x), y])
     }
 
     /// `key`'s inverse; `None` for a zoom the pyramid does not hold.
@@ -127,7 +127,7 @@ pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
 }
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at
-/// `neighbor_index`; X wraps and a tile past Y's edge has no object.
+/// `neighbor_idx`; X wraps and a tile past Y's edge has no object.
 pub fn neighborhood(p: Tile) -> [Tile; 16] {
     let [x, y] = child_of(p.at, 0);
     std::array::from_fn(|k| {
@@ -138,7 +138,7 @@ pub fn neighborhood(p: Tile) -> [Tile; 16] {
 
 /// Where the tile (qx, qy) from a parent's first child, each −1 to 2, lies in
 /// its `neighborhood`.
-pub const fn neighbor_index(qx: i32, qy: i32) -> usize {
+pub const fn neighbor_idx(qx: i32, qy: i32) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
@@ -150,7 +150,7 @@ pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i32> {
 
 /// The tile at `z` at (x, y), X wrapped around the world.
 pub fn tile_at(zoom: Zoom, [x, y]: [i32; 2]) -> Tile {
-    Tile::new(zoom, [wrap_index(zoom, x), y])
+    Tile::new(zoom, [wrap_idx(zoom, x), y])
 }
 
 /// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.
@@ -180,9 +180,9 @@ impl Cell {
     }
 
     /// Its place in its tile, as every lane of the tile numbers it.
-    pub fn index(self) -> u32 {
+    pub fn idx(self) -> u32 {
         let [tx, ty] = self.in_tile();
-        self.lattice.cell_index(tx, ty)
+        self.lattice.cell_idx(tx, ty)
     }
 
     pub fn tile_zoom(self) -> Zoom {
@@ -199,7 +199,7 @@ impl Cell {
     }
 
     pub fn in_tile(self) -> [u32; 2] {
-        offset_in(self.at, self.shamt()).map(|v| v as u32)
+        off_in(self.at, self.shamt()).map(|v| v as u32)
     }
 
     pub fn base(self) -> Q3 {
@@ -227,13 +227,13 @@ impl Cell {
 
     /// The cell at `zoom` of `lattice` that lies `offset` of its sides into
     /// this one, no coarser.
-    pub fn inner_at(self, lattice: Lattice, zoom: Zoom, offset: [u32; 2]) -> Cell {
+    pub fn inner_at(self, lattice: Lattice, zoom: Zoom, off: [u32; 2]) -> Cell {
         let zoom = lattice.cell_zoom(zoom);
         let [x, y] = first_descendant_of(self.at, zoom - self.zoom);
         Cell {
             lattice,
             zoom,
-            at: [x + offset[0] as i32, y + offset[1] as i32],
+            at: [x + off[0] as i32, y + off[1] as i32],
         }
     }
 

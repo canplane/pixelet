@@ -14,7 +14,7 @@ static bool words(Stream &stream, std::uint32_t op, std::initializer_list<std::u
     return emit(stream, op, [&](auto &s) { detail::words(s, w); });
 }
 
-static std::uint32_t off(Stream &stream, std::span<const std::uint8_t> bytes) noexcept { return stream.memory().off_of(bytes); }
+static std::uint32_t off(Stream &stream, std::span<const std::uint8_t> bytes) noexcept { return stream.mem().off_of(bytes); }
 
 template <class S> static void buffer_write(S &s, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept {
     detail::words(s, {buffer, offset});
@@ -64,7 +64,7 @@ bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<
 
 bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, std::uint32_t &word, std::uint32_t ticket) noexcept {
     word = ticket;
-    std::uint32_t image_at = off(stream, image), word_at = stream.memory().off_of(&word);
+    std::uint32_t image_at = off(stream, image), word_at = stream.mem().off_of(&word);
     return emit(stream, op::COPY_EXTERNAL_IMAGE, [&](auto &s) {
         detail::texture_place(s, to);
         detail::words(s, {flag(flip_y), flag(premultiplied), image_at, static_cast<std::uint32_t>(image.size()), word_at, ticket});
@@ -159,13 +159,13 @@ bool dispatch_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset)
 
 bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, std::uint32_t &word, std::uint32_t ticket) noexcept {
     word = ticket;
-    Memory mem = stream.memory();
+    Memory mem = stream.mem();
     return words(stream, op::MAP_ASYNC, {buffer, offset, static_cast<std::uint32_t>(into.size()), mem.off_of(into), mem.off_of(&word), ticket});
 }
 
 bool queue_done(Stream &stream, std::uint32_t &word, std::uint32_t ticket) noexcept {
     word = ticket;
-    return words(stream, op::QUEUE_DONE, {stream.memory().off_of(&word), ticket});
+    return words(stream, op::QUEUE_DONE, {stream.mem().off_of(&word), ticket});
 }
 
 bool configure(Stream &stream, std::uint32_t surface, std::optional<TextureFormat> format, std::uint32_t usage, CanvasAlphaMode alpha) noexcept {
@@ -175,7 +175,7 @@ bool configure(Stream &stream, std::uint32_t surface, std::optional<TextureForma
 bool resize(Stream &stream, std::uint32_t surface, std::array<std::uint32_t, 2> size) noexcept { return words(stream, op::RESIZE, {surface, size[0], size[1]}); }
 
 bool device(Stream &stream, std::span<std::uint32_t> into) noexcept {
-    return words(stream, op::DEVICE, {stream.memory().off_of(into), static_cast<std::uint32_t>(into.size())});
+    return words(stream, op::DEVICE, {stream.mem().off_of(into), static_cast<std::uint32_t>(into.size())});
 }
 
 } // namespace xpute::gpu::call

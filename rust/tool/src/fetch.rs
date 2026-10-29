@@ -5,7 +5,7 @@ use std::path::Path;
 
 /// `url`'s bytes, kept in `dir` under the URL's last segment: fetched once, so
 /// a second run reads them from disk.
-pub fn kept(url: &str, dir: &Path) -> Result<Vec<u8>, String> {
+pub fn fetch_kept(url: &str, dir: &Path) -> Result<Vec<u8>, String> {
     let path = dir.join(url.rsplit('/').next().ok_or("a file name")?);
     if let Ok(bytes) = std::fs::read(&path) {
         return Ok(bytes);

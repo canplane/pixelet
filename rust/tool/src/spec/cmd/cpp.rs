@@ -4,6 +4,7 @@
 //! reader; a C++ guest raises no signal and writes no record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
+use crate::spec;
 use crate::spec::{file, pascal};
 
 fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
@@ -93,12 +94,12 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
 
 pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
     let mut out = vec![
-        format!("// {}", crate::spec::in_xpute(path)),
+        format!("// {}", spec::in_xpute(path)),
         "//".into(),
-        crate::spec::generated(t.json, t.json),
+        spec::generated(t.json, t.json),
         "//".into(),
     ];
-    out.extend(crate::spec::line_comments(&spec.doc, ""));
+    out.extend(spec::line_comments(&spec.doc, ""));
     out.extend(
         [
             "",
@@ -124,7 +125,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
         let all: Vec<&Member> = members(e).collect();
         out.push(String::new());
         if let Some(doc) = &e.doc {
-            out.extend(crate::spec::line_comments(doc, ""));
+            out.extend(spec::line_comments(doc, ""));
         }
         out.push(format!("enum class {} : std::uint32_t {{", e.name));
         for entry in &e.entries {
@@ -134,9 +135,9 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 }
                 Entry::Member(m) => {
                     if let Some(doc) = &m.doc {
-                        out.extend(crate::spec::line_comments(doc, "    "));
+                        out.extend(spec::line_comments(doc, "    "));
                     }
-                    out.push(format!("    {} = {},", m.name, literal(m.value, &e.format)));
+                    out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
                 }
             }
         }
@@ -174,15 +175,15 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 t.json, c.name
             ));
         }
-        if let Some(packet) = &c.packet {
+        if let Some(pkt) = &c.pkt {
             out.extend([
                 String::new(),
                 format!("// Command::{}'s packet.", c.name),
                 format!("struct {name} {{"),
             ]);
-            for f in packet {
+            for f in pkt {
                 if let Some(doc) = &f.doc {
-                    out.extend(crate::spec::line_comments(doc, "    "));
+                    out.extend(spec::line_comments(doc, "    "));
                 }
                 out.push(format!("    {} {}{{}};", cpp_read_type(spec, f)?, f.name));
             }
@@ -197,7 +198,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 "        if (!f) return f.error();".to_string(),
                 format!("        {name} out;"),
             ]);
-            for (i, f) in packet.iter().enumerate() {
+            for (i, f) in pkt.iter().enumerate() {
                 out.extend(
                     cpp_read(spec, f, i)?
                         .into_iter()

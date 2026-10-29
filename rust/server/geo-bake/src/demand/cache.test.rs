@@ -1,7 +1,9 @@
 // pxl-geo-bake/demand/cache.test.rs
 
 use super::*;
+use crate::util;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use tokio::time;
 
 fn cache() -> Arc<Cache> {
     static SERIAL: AtomicUsize = AtomicUsize::new(0);
@@ -20,7 +22,7 @@ fn cache() -> Arc<Cache> {
 }
 
 #[tokio::test]
-async fn concurrent_requests_publish_once_and_preserve_empty_and_failed_results() {
+async fn concurrent_publish_once() {
     let cache = cache();
     let calls = Arc::new(AtomicUsize::new(0));
     let mut tasks = Vec::new();
@@ -43,7 +45,7 @@ async fn concurrent_requests_publish_once_and_preserve_empty_and_failed_results(
     }
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert_eq!(
-        crate::util::unpack(&cache.read("tile").await.unwrap().unwrap()).unwrap(),
+        util::unpack(&cache.read("tile").await.unwrap().unwrap()).unwrap(),
         b"packet"
     );
     cache.publish("empty", None).unwrap();
@@ -62,7 +64,7 @@ async fn concurrent_requests_publish_once_and_preserve_empty_and_failed_results(
 }
 
 #[tokio::test]
-async fn disconnected_request_does_not_cancel_publication() {
+async fn disconnect_keeps_publication() {
     let c = cache();
     let entered = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
@@ -91,13 +93,13 @@ async fn disconnected_request_does_not_cancel_publication() {
     .await
     .unwrap();
     assert_eq!(
-        crate::util::unpack(&c.read("tile").await.unwrap().unwrap()).unwrap(),
+        util::unpack(&c.read("tile").await.unwrap().unwrap()).unwrap(),
         b"tile"
     );
 }
 
 #[tokio::test]
-async fn kinds_share_admission_but_hits_and_joiners_need_no_new_slot() {
+async fn shared_admission() {
     let a = cache();
     let b = Cache::new(
         a.root.with_extension("other"),
@@ -133,7 +135,7 @@ async fn kinds_share_admission_but_hits_and_joiners_need_no_new_slot() {
 }
 
 #[tokio::test]
-async fn expired_work_stays_joinable_and_admitted_until_its_cleanup_finishes() {
+async fn expired_work_joinable() {
     let c = Arc::new(
         Cache::new(
             cache().root.with_extension("cleanup"),
@@ -150,7 +152,7 @@ async fn expired_work_stays_joinable_and_admitted_until_its_cleanup_finishes() {
         let release = release.clone();
         tokio::spawn(async move {
             c.once("tile".into(), true, move |lease| async move {
-                tokio::time::sleep_until(lease.deadline).await;
+                time::sleep_until(lease.deadline).await;
                 cleaning.notify_one();
                 release.notified().await;
                 Err(Failure::Limited("deadline"))

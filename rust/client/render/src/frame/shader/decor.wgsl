@@ -6,7 +6,7 @@
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
-  @location(0) position: vec3f,
+  @location(0) pos: vec3f,
   @location(1) normal: vec3f,
   @location(2) uv: vec2f,
 };
@@ -30,12 +30,12 @@ struct Placed {
 };
 
 fn placed(v: VertexIn) -> Placed {
-  let i = instances[draw_index() + v.i];
+  let i = instances[draw_idx() + v.i];
   let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
   var p: Placed;
   p.spin = lane(3u, i);
   let scale = lane(4u, i);
-  p.world = place_up(v.position * scale, p.spin) + at + draw_translation();
+  p.world = place_up(v.pos * scale, p.spin) + at + draw_translation();
   return p;
 }
 
@@ -65,6 +65,6 @@ fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(screen_open(i.clip.xy)), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
-  return vec4f(finish(color, i.clip.xy), draw_opacity());
+  let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
+  return vec4f(tone(color), draw_opacity());
 }

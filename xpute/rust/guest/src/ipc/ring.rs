@@ -28,9 +28,10 @@ fn padded(bytes: usize) -> usize {
 }
 
 /// In u64: a length word near 2^32 must read as too long, not wrap on wasm32.
-fn packet_bytes(u8: &[u8], at: usize) -> u64 {
-    let payload = u32::from_le_bytes([u8[at + 8], u8[at + 9], u8[at + 10], u8[at + 11]]);
-    (16 + u64::from(payload)).next_multiple_of(8)
+fn pkt_bytes(u8: &[u8], at: usize) -> u64 {
+    let word = at + WORD_SZ as usize;
+    let payload = u32::from_le_bytes([u8[word], u8[word + 1], u8[word + 2], u8[word + 3]]);
+    (u64::from(HDR_SZ) + u64::from(payload)).next_multiple_of(u64::from(WORD_SZ))
 }
 
 #[derive(Clone)]
@@ -128,38 +129,31 @@ impl Ring {
     }
 
     /// The word, from the ring's start, where the frame at `position` begins.
-    pub fn entry_at(&self, position: u32) -> u32 {
-        HEADER_WORDS + (position & self.mask) * frame::WORDS
+    pub fn entry_at(&self, pos: u32) -> u32 {
+        HEADER_WORDS + (pos & self.mask) * frame::WORDS
     }
 
-    fn slot_at(&self, position: u32) -> usize {
-        ((position & self.mask) * self.slot_bytes) as usize
+    fn slot_at(&self, pos: u32) -> usize {
+        ((pos & self.mask) * self.slot_bytes) as usize
     }
 
-    pub fn push(
-        &self,
-        tag: u32,
-        cmd: u32,
-        flags: u32,
-        result: i32,
-        packet: Option<&[u8]>,
-    ) -> Errno {
+    pub fn push(&self, tag: u32, cmd: u32, flags: u32, result: i32, pkt: Option<&[u8]>) -> Errno {
         if self.len() >= self.cap {
             return Errno::EAGAIN;
         }
-        let packet_at = match packet {
+        let pkt_at = match pkt {
             None => 0,
-            Some(packet) => {
-                if padded(packet.len()) > self.slot_bytes as usize {
+            Some(pkt) => {
+                if padded(pkt.len()) > self.slot_bytes as usize {
                     return Errno::EMSGSIZE;
                 }
                 let start = self.slot_at(self.tail());
-                self.slots()[start..start + packet.len()].copy_from_slice(packet);
-                self.pad(start, packet.len());
+                self.slots()[start..start + pkt.len()].copy_from_slice(pkt);
+                self.pad(start, pkt.len());
                 self.slot_base + start as u32
             }
         };
-        self.publish(tag, cmd, flags, result, packet_at);
+        self.publish(tag, cmd, flags, result, pkt_at);
         Errno::OK
     }
 
@@ -191,13 +185,13 @@ impl Ring {
         self.slots()[start + len..start + padded(len)].fill(0);
     }
 
-    fn publish(&self, tag: u32, cmd: u32, flags: u32, result: i32, packet_at: u32) {
+    fn publish(&self, tag: u32, cmd: u32, flags: u32, result: i32, pkt_at: u32) {
         let w = self.words();
         let at = self.entry_at(w[TAIL as usize]) as usize;
         w[at + frame::TAG as usize] = tag;
         w[at + frame::CMD as usize] = cmd_word(cmd, flags);
         w[at + frame::RESULT as usize] = result as u32;
-        w[at + frame::PACKET as usize] = packet_at;
+        w[at + frame::PKT as usize] = pkt_at;
         w[TAIL as usize] = w[TAIL as usize].wrapping_add(1);
     }
 
@@ -214,23 +208,25 @@ impl Ring {
             cmd: cmd_of(word),
             flags: flags_of(word),
             result: w[at + frame::RESULT as usize] as i32,
-            packet_at: w[at + frame::PACKET as usize],
+            pkt_at: w[at + frame::PKT as usize],
         })
     }
 
     /// Valid until `advance`; `'static` because the memory's lifetime is
     /// `new`'s contract, and a reader holds the packet while it acts on the ring.
     /// EBADMSG when the frame names bytes outside a slot.
-    pub fn packet(&self, f: &Frame) -> Result<Option<&'static [u8]>, MarshalError> {
-        if f.packet_at == 0 {
+    pub fn pkt(&self, f: &Frame) -> Result<Option<&'static [u8]>, MarshalError> {
+        if f.pkt_at == 0 {
             return Ok(None);
         }
         let bad = || MarshalError::new(Errno::EBADMSG);
-        let off = f.packet_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
-        if !off.is_multiple_of(self.slot_bytes as usize) || off + 16 > self.slots().len() {
+        let off = f.pkt_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
+        if !off.is_multiple_of(self.slot_bytes as usize)
+            || off + HDR_SZ as usize > self.slots().len()
+        {
             return Err(bad());
         }
-        let bytes = packet_bytes(self.slots(), off);
+        let bytes = pkt_bytes(self.slots(), off);
         if bytes > u64::from(self.slot_bytes) {
             return Err(bad());
         }

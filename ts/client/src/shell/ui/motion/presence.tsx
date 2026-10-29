@@ -115,29 +115,23 @@ export function Swap({
   // What each id last drew, so a leaving one keeps drawing it.
   const nodes = useRef(new Map<Key, ReactNode>());
   nodes.current.set(id, children);
-  const [initial, setInitial] = useState<Key | null>(id);
-  if (initial !== null && initial !== id) setInitial(null);
+  const [init, setInit] = useState<Key | null>(id);
+  if (init !== null && init !== id) setInit(null);
   const { list, gone } = usePresent(ids, (k) => k);
   const leaving = list.some((p) => !p.present);
-  return list
-    .filter((p) => !p.present || !leaving)
-    .map(({ key, present }) => (
-      <Motion
-        key={key}
-        from={key === init ? undefined : from}
-        to={present ? {} : exit}
-        transition={present ? transition : exitTransition}
-        onSettled={
-          present
-            ? undefined
-            : () => {
-                nodes.current.delete(key);
-                gone(key);
-              }
-        }
-        style={style}
-      >
-        {nodes.current.get(key)}
-      </Motion>
-    ));
+  return list.filter((p) => !p.present || !leaving).map(({ key, present }) => (
+    <Motion
+      key={key}
+      from={key === init ? undefined : from}
+      to={present ? {} : exit}
+      transition={present ? transition : exitTransition}
+      onSettled={present ? undefined : () => {
+        nodes.current.delete(key);
+        gone(key);
+      }}
+      style={style}
+    >
+      {nodes.current.get(key)}
+    </Motion>
+  ));
 }

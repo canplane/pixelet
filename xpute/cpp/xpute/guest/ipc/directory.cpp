@@ -21,7 +21,7 @@ void write_directory(Memory mem, std::uint32_t at, std::uint32_t words, std::spa
     std::uint32_t off = at + 4 * directory::HEAD;
     for (const Entry &e : entries) {
         mem.set_word(off, e.key);
-        mem.set_word(off + 4, e.value);
+        mem.set_word(off + 4, e.val);
         off += 8;
     }
 }

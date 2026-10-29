@@ -82,11 +82,30 @@ pxl-geo-spec = { path = "server/geo-spec" }
 # any `as *const` or `as *mut` left is an offset made a pointer, which
 # pxl-tool's check_rules refuses. A crate takes these with `[lints]
 # workspace = true`; xpute-guest, in its own workspace, spells them itself.
+[workspace.lints.rust]
+# A path no longer than what is already in scope.
+unused_qualifications = "warn"
+
 [workspace.lints.clippy]
+# A path past a crate and one module is brought in by a `use` at the top of
+# its module, so what a file reaches for is read in one place (clippy.toml).
+absolute_paths = "warn"
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"
 borrow_as_ptr = "warn"
 ref_as_ptr = "warn"
+# A lint is let pass by `#[expect]`, which says so once it no longer fires,
+# and with its reason.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+# What stands in for code while it is written does not ship.
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+# An `unsafe` block says, in a `// SAFETY:` comment, why it holds.
+undocumented_unsafe_blocks = "warn"
+manual_let_else = "warn"
+semicolon_if_nothing_returned = "warn"
 
 [workspace.package]
 edition = "2021"
@@ -149,8 +168,8 @@ opt-level = 3
 # naga's Metal backend writes a `let` of a loop's body that `break if` reads
 # in `continuing` as its expression again after the counter moved, so the
 # loop ends an iteration early (gfx-rs/wgpu#4558). rust-gpu emits that shape
-# throughout the generated shaders: on wgpu/Metal heights_cs differed from
-# ground::height in 3791 of a square's 4096 cells, 0 with the fix. Its fix,
+# throughout the generated shaders: on wgpu/Metal height_cs differed from
+# ground::height in 3791 of a brick's 4096 cells, 0 with the fix. Its fix,
 # gfx-rs/wgpu#10459, sits on trunk, whose naga-types wgpu 30.0.1 no longer
 # matches, so wgpu's crates move to the same rev. Drop when a wgpu release
 # carries it.

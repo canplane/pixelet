@@ -10,12 +10,13 @@ use crate::frame::shader::record::PIPELINE_SHEET;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
-    write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
+    buf_entry, buffer_usage, bytes, pass_desc, place, room, sampler_entry, texture_usage,
+    view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::PAD;
 use crate::gpu::text::{Font, Raster, TextOf};
+use pxl_spec::asset::symbol;
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
 use xpute_kit::math::scalar::round;
 
@@ -47,11 +48,10 @@ pub struct Halo {
     pub shadow_dy: f32,
 }
 
-/// Device pixels a sheet draws per logical pixel: past two, texels cost more
-/// than the eye resolves at arm's length. The world is drawn no finer
-/// (pxl-kernel domain/view/param.rs `RESOLUTION_MAX`), so a marker is never shown
-/// smaller than drawn.
-pub const SHEET_SCALE: f64 = 2.0;
+/// Device pixels a sheet draws per logical pixel: the symbols' masks', laid
+/// texel for texel (pxl-spec asset/symbol.spec.rs `SYMBOL_RATIO`). A display
+/// finer than it shows a marker drawn up from it.
+pub const SHEET_SCALE: f64 = symbol::SYMBOL_RATIO as f64;
 
 #[derive(Default)]
 pub struct Sketch {
@@ -85,7 +85,7 @@ fn px(v: f32) -> f32 {
 
 /// The texture is sRGB, and what a shader writes into it is linear.
 fn linear(rgba: u32) -> [f32; 4] {
-    let channel = |shift: u32| {
+    let ch = |shift: u32| {
         let c = ((rgba >> shift) & 0xff) as f32 / 255.0;
         if c <= 0.04045 {
             c / 12.92
@@ -93,12 +93,7 @@ fn linear(rgba: u32) -> [f32; 4] {
             libm::powf((c + 0.055) / 1.055, 2.4)
         }
     };
-    [
-        channel(24),
-        channel(16),
-        channel(8),
-        (rgba & 0xff) as f32 / 255.0,
-    ]
+    [ch(24), ch(16), ch(8), (rgba & 0xff) as f32 / 255.0]
 }
 
 fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f32; SHAPE_FLOATS] {
@@ -133,7 +128,6 @@ impl Sketch {
 
     /// A disc whose edge fades over `edge` and whose fill is `shade` lighter
     /// at its top and as much darker at its foot.
-    #[allow(clippy::too_many_arguments)]
     pub fn soft_circle(&mut self, cx: f32, cy: f32, r: f32, edge: f32, shade: f32, color: u32) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = SHEET_SCALE as f32;
@@ -230,10 +224,10 @@ impl SheetPainter {
             .collect()
     }
 
-    /// `sketch` painted with its lines' `rasters` (`rasters`); false, and
+    /// `sketch` painted with its lines' `rasters` (`rasters`), and what it
+    /// made for that, let go once the encoder is submitted; none, and
     /// nothing recorded, where its pixels do not fit this turn's stream
     /// (`room`).
-    #[allow(clippy::too_many_arguments)]
     pub fn paint(
         &self,
         g: &Gpu,
@@ -242,8 +236,7 @@ impl SheetPainter {
         rect: [u32; 4],
         sketch: &Sketch,
         rasters: Vec<Raster<'static>>,
-        made: &mut Vec<u32>,
-    ) -> bool {
+    ) -> Option<[u32; 9]> {
         let icons: Vec<Vec<u8>> = sketch
             .icons
             .iter()
@@ -318,6 +311,8 @@ impl SheetPainter {
         for &(place, cover) in &placed {
             shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
         }
+        // A mask is laid texel for texel: rasterized at `SYMBOL_RATIO`, which
+        // pxl-spec asset.rs holds to `RATIO_MAX`, the sheet's scale.
         for (k, icon) in sketch.icons.iter().enumerate() {
             let layer = (rasters.len() + k) as u32;
             let half = SYMBOL_PX as f32 / 2.0;
@@ -335,16 +330,16 @@ impl SheetPainter {
         // the icons' pixels, the size and the shapes, as their writers measure them.
         let size_bytes = [w as f32, h as f32, 0.0, 0.0];
         let instance_bytes = bytes(shapes.as_flattened());
-        let pixels = rasters
+        let px = rasters
             .iter()
-            .map(|r| r.pixels)
+            .map(|r| r.px)
             .chain(icons.iter().map(Vec::as_slice));
         if !room(
-            pixels.map(write_texture_bytes).sum::<usize>()
+            px.map(write_texture_bytes).sum::<usize>()
                 + write_buffer_bytes(bytes(&size_bytes))
                 + write_buffer_bytes(instance_bytes),
         ) {
-            return false;
+            return None;
         }
         let lines = g.texture(
             layer_w,
@@ -355,30 +350,24 @@ impl SheetPainter {
             texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
         );
         for (layer, r) in rasters.iter().enumerate() {
-            g.write_texture(lines, layer as u32, r.width, r.height, r.pixels);
+            g.write_texture(lines, layer as u32, r.width, r.height, r.px);
         }
-        for (k, pixels) in icons.iter().enumerate() {
-            g.write_texture(
-                lines,
-                (rasters.len() + k) as u32,
-                SYMBOL_PX,
-                SYMBOL_PX,
-                pixels,
-            );
+        for (k, px) in icons.iter().enumerate() {
+            g.write_texture(lines, (rasters.len() + k) as u32, SYMBOL_PX, SYMBOL_PX, px);
         }
         let lines_view = g.view(lines, true, 0, 1, 0, layers);
 
-        let size = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        g.write_buffer(size, 0, bytes(&size_bytes));
-        let instances = g.buffer(
+        let size = g.buf(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.write_buf(size, 0, bytes(&size_bytes));
+        let instances = g.buf(
             instance_bytes.len().max(16) as u32,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(instances, 0, instance_bytes);
+        g.write_buf(instances, 0, instance_bytes);
 
         let entry_group = g.bind_group(
             self.built.layouts[0],
-            &[buffer_entry(0, size), buffer_entry(1, instances)],
+            &[buf_entry(0, size), buf_entry(1, instances)],
         );
         let lines_group = g.bind_group(
             self.built.layouts[1],
@@ -403,8 +392,13 @@ impl SheetPainter {
         g.set_bind_group(pass, 1, lines_group, &[]);
         g.draw(pass, 4, shapes.len() as u32, 0, 0);
         g.end(pass);
-        g.copy_texture(encoder, target, 0, 0, sheet, x, y, 0, w, h);
-        made.extend([
+        g.copy_texture(
+            encoder,
+            &place(target, [0, 0, 0]),
+            &place(sheet, [x, y, 0]),
+            [w, h, 1],
+        );
+        Some([
             pass,
             target_view,
             target,
@@ -414,7 +408,6 @@ impl SheetPainter {
             size,
             lines_view,
             lines,
-        ]);
-        true
+        ])
     }
 }

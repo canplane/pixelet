@@ -6,19 +6,19 @@
 use std::sync::OnceLock;
 
 use xpute_guest::mem::section::PAGE_BYTES;
-use xpute_host::native::{self, Alloc, Guest, Plan};
+use xpute_host::native::{self, Alloc, Config, Guest};
 
 #[global_allocator]
 static ALLOC: Alloc = Alloc;
 
-const MEMORY_BYTES: u32 = 8 << 20;
+const MEM_BYTES: u32 = 8 << 20;
 const HEAP_AT: u32 = 16 * PAGE_BYTES;
 
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
     *GUEST.get_or_init(|| {
-        native::boot(&Plan {
-            memory_bytes: MEMORY_BYTES,
+        native::boot(&Config {
+            mem_bytes: MEM_BYTES,
             data_end: 0,
             heap_at: HEAP_AT,
             stack_bytes: 1 << 20,
@@ -30,13 +30,13 @@ fn guest() -> Guest {
 
 /// Whether `p` lies in the guest's heap.
 fn in_heap(p: *const u8) -> bool {
-    let (at, bytes) = guest().memory();
+    let (at, bytes) = guest().mem();
     let at = at.as_ptr().addr();
     (at + HEAP_AT as usize..at + bytes).contains(&p.addr())
 }
 
 #[test]
-fn the_guests_blocks_are_its_memorys_and_others_the_systems() {
+fn block_ownership() {
     let g = guest();
     let theirs = g.run(|| Box::into_raw(Box::new([7u8; 100])).expose_provenance());
     assert!(in_heap(core::ptr::with_exposed_provenance(theirs)));
@@ -47,7 +47,7 @@ fn the_guests_blocks_are_its_memorys_and_others_the_systems() {
 }
 
 #[test]
-fn a_block_goes_back_to_whichever_holds_its_address() {
+fn free_by_addr() {
     let g = guest();
     // The heap's block, let go here, goes back to the heap.
     let made = g.run(|| vec![1u32; 1000]);
@@ -59,7 +59,7 @@ fn a_block_goes_back_to_whichever_holds_its_address() {
 }
 
 #[test]
-fn a_block_that_grows_across_the_line_moves() {
+fn grow_across_moves() {
     let g = guest();
     let mut v = vec![3u8; 16];
     assert!(!in_heap(v.as_ptr()));
@@ -76,9 +76,9 @@ fn a_block_that_grows_across_the_line_moves() {
 }
 
 #[test]
-fn the_heap_ends_with_the_memory() {
+fn heap_ends_with_mem() {
     let g = guest();
-    let (at, bytes) = g.memory();
+    let (at, bytes) = g.mem();
     let end = at.as_ptr().addr() + bytes;
     let block = g.run(|| vec![0u8; 1 << 20]);
     assert!(block.as_ptr().addr() + block.len() <= end);

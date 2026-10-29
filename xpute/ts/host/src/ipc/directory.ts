@@ -16,12 +16,12 @@ export class Directory {
   private readonly entries = new Map<u32, u32>();
 
   /** A missing or unknown version is refused, and so is a key written twice. */
-  constructor(memory: ArrayBufferLike, at: u32) {
-    const [magic, version, count] = new Uint32Array(memory, at, HEAD);
+  constructor(mem: ArrayBufferLike, at: u32) {
+    const [magic, version, cnt] = new Uint32Array(mem, at, HEAD);
     if (magic !== MAGIC) throw new MarshalError(Errno.EBADMSG);
     if (version !== VERSION) throw new MarshalError(Errno.EPROTO);
-    const w = new Uint32Array(memory, at + 4 * HEAD, 2 * count);
-    for (let i = 0; i < count; i++) {
+    const w = new Uint32Array(mem, at + 4 * HEAD, 2 * cnt);
+    for (let i = 0; i < cnt; i++) {
       if (this.entries.has(w[2 * i])) throw new MarshalError(Errno.EBADMSG);
       this.entries.set(w[2 * i], w[2 * i + 1]);
     }
@@ -29,9 +29,9 @@ export class Directory {
 
   /** The key is read as u32: `PROGRAM | n` is negative in JavaScript and would find nothing. */
   get(k: u32): u32 {
-    const value = this.entries.get(k >>> 0);
-    if (value === undefined) throw new MarshalError(Errno.ENOENT);
-    return value;
+    const val = this.entries.get(k >>> 0);
+    if (val === undefined) throw new MarshalError(Errno.ENOENT);
+    return val;
   }
 
   quantum(): QuantumPolicy {

@@ -47,11 +47,11 @@ pub fn lay_out(bytes: u32, data_end: u32, fixed_bytes: u32) -> Map {
     );
     Map {
         fixed: Section {
-            offset: fixed_at(data_end),
+            off: fixed_at(data_end),
             bytes: fixed_bytes,
         },
         heap: Section {
-            offset: heap,
+            off: heap,
             bytes: regions * REGION_BYTES - heap,
         },
     }

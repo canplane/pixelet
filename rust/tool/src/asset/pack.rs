@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use image::imageops;
 use image::RgbaImage;
 use serde::Deserialize;
 
@@ -313,9 +314,9 @@ fn toward_carto(img: &mut RgbaImage, carto: u32) {
         return;
     }
     let t = (d - TOWARD_CARTO) / d;
-    let offset: [f64; 3] = core::array::from_fn(|k| (target[k] - mean[k]) * t);
+    let off: [f64; 3] = core::array::from_fn(|k| (target[k] - mean[k]) * t);
     for (px, lab) in img.pixels_mut().zip(labs) {
-        let [r, g, b] = rgb_of(core::array::from_fn(|k| lab[k] + offset[k]));
+        let [r, g, b] = rgb_of(core::array::from_fn(|k| lab[k] + off[k]));
         px.0 = [r, g, b, px.0[3]];
     }
 }
@@ -387,7 +388,7 @@ pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
             (n as u32 / COLUMNS) * TILE_SIZE,
         );
         means.push(mean_of(&img));
-        image::imageops::replace(&mut laid, &img, x as i64, y as i64);
+        imageops::replace(&mut laid, &img, x as i64, y as i64);
     }
 
     let encoded =

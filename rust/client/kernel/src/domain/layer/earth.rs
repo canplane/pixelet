@@ -7,7 +7,7 @@
 
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
-use pxl_spec_core::wrap_index;
+use pxl_spec_core::wrap_idx;
 
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -16,8 +16,8 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::heap::Block;
 
 use crate::domain::layer::kept::{Kept, Offered};
-use crate::domain::layer::residency::Residency;
-use crate::domain::layer::{Asks, Base};
+use crate::domain::layer::tile_cache::TileCache;
+use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -26,12 +26,12 @@ use pxl_spec::space::coord::zoom::Zoom;
 #[derive(Clone)]
 pub struct Earth;
 
-static EARTH: Global<Residency<Earth>> = Global::new();
+static EARTH: Global<TileCache<Earth>> = Global::new();
 
 impl Base for Earth {
     const STREAM: Stream = Stream::earth;
     const LATTICE: Lattice = GROUND;
-    const ASKS: Asks = Asks::Floor;
+    const ASK_SCOPE: AskScope = AskScope::Floor;
     const TOP: Option<Zoom> = Some(EARTH_ZOOM);
 
     /// Only the top zoom is baked: no child is a tile.
@@ -39,8 +39,8 @@ impl Base for Earth {
         Occupancy::ZERO
     }
 
-    fn residency() -> &'static mut Residency<Earth> {
-        EARTH.get(Residency::default)
+    fn tile_cache() -> &'static mut TileCache<Earth> {
+        EARTH.get(TileCache::default)
     }
 
     fn receive(
@@ -56,7 +56,7 @@ impl Base for Earth {
     /// The texels are kept until the GPU has them: every frame's, whose
     /// slots terrain's bound leaves them (domain/layer/terrain/tile.rs `most_kept`).
     fn keep(record: Option<u32>, block: Block) {
-        kept().keep(record, block, EARTH_FRAMES);
+        kept().keep(record, block, EARTH_SLOTS);
     }
 }
 
@@ -64,7 +64,7 @@ impl Base for Earth {
 static KEPT: Global<Kept> = Global::new();
 
 fn kept() -> &'static mut Kept {
-    KEPT.get(|| Kept::new(Residency::<Earth>::FRAMES))
+    KEPT.get(|| Kept::new(TileCache::<Earth>::SLOTS))
 }
 
 /// Each waiting packet's texels to `write`, into its frame's layer, while it
@@ -73,10 +73,10 @@ fn kept() -> &'static mut Kept {
 /// sent.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     let kept = kept();
-    for record in 0..EARTH_FRAMES {
+    for record in 0..EARTH_SLOTS {
         if kept.sent_on(record).is_some_and(|s| s != on) {
-            if let Some(p) = Earth::residency().in_frame(record) {
-                Earth::residency().again(p);
+            if let Some(p) = Earth::tile_cache().in_slot(record) {
+                Earth::tile_cache().again(p);
             }
         }
     }
@@ -95,7 +95,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 
 /// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and
 /// per tile row by row its layer plus one, zero where the global picture
-/// answers: residency as the GPU of generation `on` reads it, kept nowhere.
+/// answers: the tile cache as the GPU of generation `on` reads it, kept nowhere.
 pub fn earth_window(
     floor: impl Iterator<Item = Tile> + Clone,
     on: u32,
@@ -107,11 +107,11 @@ pub fn earth_window(
     };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
     let around = 1 << EARTH_ZOOM;
-    let east = |x: i32| wrap_index(EARTH_ZOOM, x - first);
+    let east = |x: i32| wrap_idx(EARTH_ZOOM, x - first);
     let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
-        let Some(record) = Earth::residency().frame(p) else {
+        let Some(record) = Earth::tile_cache().slot(p) else {
             continue;
         };
         if kept().sent_on(record) == Some(on) {
@@ -124,4 +124,4 @@ pub fn earth_window(
 }
 
 /// The frames the GPU keeps a layer for.
-pub const EARTH_FRAMES: u32 = Residency::<Earth>::FRAMES;
+pub const EARTH_SLOTS: u32 = TileCache::<Earth>::SLOTS;

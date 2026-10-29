@@ -15,17 +15,17 @@ constexpr std::uint64_t word_up(std::uint64_t n) noexcept {
 } // namespace
 
 PacketWriter::PacketWriter(std::span<std::uint8_t> buf) noexcept : buf_(buf.first(std::min<std::size_t>(buf.size(), MAX_PKT_SZ))) {
-    if (buf_.size() < HDR_SZ) error_ = marshal_error(Errno::einval);
+    if (buf_.size() < HDR_SZ) err_ = marshal_error(Errno::einval);
     else std::memset(buf_.data(), 0, HDR_SZ);
 }
 
 std::optional<std::uint32_t> PacketWriter::spoil(Errno errnum) noexcept {
-    if (!error_) error_ = marshal_error(errnum);
+    if (!err_) err_ = marshal_error(errnum);
     return std::nullopt;
 }
 
 std::optional<std::uint32_t> PacketWriter::reserve(std::uint32_t unit, std::uint64_t bytes) noexcept {
-    if (error_) return std::nullopt;
+    if (err_) return std::nullopt;
     std::uint64_t base = (std::uint64_t{lim_} + unit - 1) & ~std::uint64_t{unit - 1};
     std::uint64_t end = base + bytes;
     if (end > buf_.size()) return spoil(Errno::eoverflow);
@@ -35,9 +35,9 @@ std::optional<std::uint32_t> PacketWriter::reserve(std::uint32_t unit, std::uint
 }
 
 PacketWriter &PacketWriter::entry(std::optional<std::uint32_t> at, NodeType type) noexcept {
-    ensure(frame_.written < frame_.count, Errno::enospc, frame_.count);
+    ensure(frame_.written < frame_.cnt, Errno::enospc, frame_.cnt);
     if (frame_.root) root_type_ = type;
-    else if (!error_) set_word(buf_, frame_.base + WORD_SZ + frame_.written * WORD_SZ, at ? *at - frame_.base : 0, type);
+    else if (!err_) set_word(buf_, frame_.base + WORD_SZ + frame_.written * WORD_SZ, at ? *at - frame_.base : 0, type);
     frame_.written++;
     return *this;
 }
@@ -68,7 +68,7 @@ std::uint32_t PacketWriter::str_payload() const noexcept {
 }
 
 std::optional<std::uint32_t> PacketWriter::str_room() noexcept {
-    if (error_) return std::nullopt;
+    if (err_) return std::nullopt;
     std::uint64_t payload = word_up(lim_) + WORD_SZ;
     if (payload > buf_.size()) return spoil(Errno::eoverflow);
     return static_cast<std::uint32_t>(buf_.size() - payload);
@@ -119,16 +119,16 @@ PacketWriter &PacketWriter::strs(std::optional<std::span<const std::string_view>
     return entry(at, type_of(SequenceType::strs));
 }
 
-std::optional<std::uint32_t> PacketWriter::branch_open(std::uint32_t count) noexcept {
-    std::optional<std::uint32_t> at = reserve(WORD_SZ, WORD_SZ + std::uint64_t{count} * WORD_SZ);
-    if (at) set_word(buf_, *at, count, RESERVED);
+std::optional<std::uint32_t> PacketWriter::branch_open(std::uint32_t cnt) noexcept {
+    std::optional<std::uint32_t> at = reserve(WORD_SZ, WORD_SZ + std::uint64_t{cnt} * WORD_SZ);
+    if (at) set_word(buf_, *at, cnt, RESERVED);
     return at;
 }
 
 // A branch ends on a word, so what follows it starts where the encoder
 // starts it.
 std::optional<std::uint32_t> PacketWriter::branch_close(std::optional<std::uint32_t> at) noexcept {
-    if (!at || error_) return at;
+    if (!at || err_) return at;
     std::uint64_t end = word_up(lim_);
     if (end > buf_.size()) return spoil(Errno::eoverflow);
     std::memset(buf_.data() + lim_, 0, end - lim_);
@@ -136,24 +136,24 @@ std::optional<std::uint32_t> PacketWriter::branch_close(std::optional<std::uint3
     return at;
 }
 
-PacketWriter &PacketWriter::graft(std::span<const std::uint8_t> packet) noexcept {
+PacketWriter &PacketWriter::graft(std::span<const std::uint8_t> pkt) noexcept {
     std::optional<std::uint32_t> at;
     NodeType type = type_of(SpecialType::nil);
-    Result<std::uint32_t> magic = packet.size() < HDR_SZ ? marshal_error(Errno::ebadmsg) : get_len(packet, 0);
-    Result<Desc> d = magic && *magic == MAGIC ? get_desc(packet, WORD_SZ) : marshal_error(Errno::ebadmsg);
+    Result<std::uint32_t> magic = pkt.size() < HDR_SZ ? marshal_error(Errno::ebadmsg) : get_len(pkt, 0);
+    Result<Desc> d = magic && *magic == MAGIC ? get_desc(pkt, WORD_SZ) : marshal_error(Errno::ebadmsg);
     if (!d) {
         spoil(Errno::ebadmsg);
     } else {
         auto [payload_sz, desc_type] = *d;
         type = desc_type;
-        if (payload_sz > packet.size() - HDR_SZ) {
+        if (payload_sz > pkt.size() - HDR_SZ) {
             spoil(Errno::ebadmsg);
         } else if (payload_sz != 0) {
             Result<std::uint32_t> unit = align_sz(type);
             if (!unit || payload_sz % *unit != 0) {
                 spoil(Errno::ebadmsg);
             } else if ((at = reserve(*unit, payload_sz))) {
-                std::memcpy(buf_.data() + *at, packet.data() + HDR_SZ, payload_sz);
+                std::memcpy(buf_.data() + *at, pkt.data() + HDR_SZ, payload_sz);
             }
         }
     }
@@ -161,8 +161,8 @@ PacketWriter &PacketWriter::graft(std::span<const std::uint8_t> packet) noexcept
 }
 
 Result<std::uint32_t> PacketWriter::finish() noexcept {
-    ensure(frame_.root && frame_.written == frame_.count, Errno::enotrecoverable, frame_.count, frame_.written);
-    if (error_) return *error_;
+    ensure(frame_.root && frame_.written == frame_.cnt, Errno::enotrecoverable, frame_.cnt, frame_.written);
+    if (err_) return *err_;
     std::uint64_t end = word_up(lim_);
     if (end > buf_.size()) return marshal_error(Errno::eoverflow);
     std::memset(buf_.data() + lim_, 0, end - lim_);

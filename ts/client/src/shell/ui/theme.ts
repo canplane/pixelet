@@ -113,7 +113,7 @@ export interface Material {
 }
 
 export const material = {
-  flyout: { opacity: 0.6, blur: 8, system: 0.6 },
+  popover: { opacity: 0.6, blur: 8, system: 0.6 },
   /** iOS's bar, as Apple's own page draws one. */
   bar: { opacity: 0.72, blur: 20, system: 0.5 },
 } as const satisfies Record<string, Material>;

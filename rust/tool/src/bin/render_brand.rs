@@ -19,6 +19,7 @@ use image::codecs::ico::{IcoEncoder, IcoFrame};
 use image::imageops::FilterType;
 use image::{DynamicImage, ExtendedColorType, ImageFormat, Rgba, RgbaImage};
 
+use image::imageops;
 use pxl_tool::root;
 
 const CLEAR: Rgba<u8> = Rgba([0, 0, 0, 0]);
@@ -55,7 +56,7 @@ fn opaque_png_bytes(img: &RgbaImage) -> Result<Vec<u8>, String> {
 }
 
 fn resize(img: &RgbaImage, w: u32, h: u32) -> RgbaImage {
-    image::imageops::resize(img, w, h, FilterType::Lanczos3)
+    imageops::resize(img, w, h, FilterType::Lanczos3)
 }
 
 /// The bounding box of what differs from the corner pixel by more than
@@ -80,10 +81,10 @@ fn trim(img: &RgbaImage, threshold: u8) -> RgbaImage {
     if x0 == u32::MAX {
         return img.clone();
     }
-    image::imageops::crop_imm(img, x0, y0, x1 - x0 + 1, y1 - y0 + 1).to_image()
+    imageops::crop_imm(img, x0, y0, x1 - x0 + 1, y1 - y0 + 1).to_image()
 }
 
-/// One rounding: centring twice lands a pixel off.
+/// One rounding: centering twice lands a pixel off.
 fn symbol_icon(symbol: &RgbaImage, size: u32, pad: f64) -> RgbaImage {
     let inner = size as f64 * (1.0 - pad);
     let scale = (inner / symbol.width() as f64).min(inner / symbol.height() as f64);
@@ -92,7 +93,7 @@ fn symbol_icon(symbol: &RgbaImage, size: u32, pad: f64) -> RgbaImage {
         ((symbol.height() as f64 * scale).round_ties_even() as u32).max(1),
     );
     let mut out = RgbaImage::from_pixel(size, size, CLEAR);
-    image::imageops::overlay(
+    imageops::overlay(
         &mut out,
         &resize(symbol, w, h),
         ((size - w) / 2) as i64,

@@ -4,7 +4,7 @@
 //! enough to keep.
 
 use crate::domain::control::cmd::Message;
-pub use crate::domain::control::cmd::{DevicePoseStatus, PermissionAnswer};
+pub use crate::domain::control::cmd::{PermissionAnswer, SensorStatus};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -13,7 +13,7 @@ pub struct DeviceLocation {
     /// Longitude, latitude.
     pub coords: [f64; 2],
     /// Meters over sea level; none where the device gives none.
-    pub altitude: Option<f64>,
+    pub alt: Option<f64>,
     /// Meters.
     pub accuracy: f64,
     /// Course over ground, 0-360 degrees.
@@ -56,32 +56,23 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
     }
 }
 
-/// Where a sensor's reading is; a failure says what failed.
+/// Where a sensor's reading is, as the snapshot carries it: its status, and
+/// what failed where it failed (`err` is none but at `SensorStatus::Error`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Pose {
-    #[default]
-    Idle,
-    Loading,
-    Ready,
-    Failed(Message),
-    Unavailable,
+pub struct SensorState {
+    pub status: SensorStatus,
+    pub err: Option<Message>,
 }
 
-impl Pose {
-    pub fn status(self) -> DevicePoseStatus {
-        match self {
-            Pose::Idle => DevicePoseStatus::Idle,
-            Pose::Loading => DevicePoseStatus::Loading,
-            Pose::Ready => DevicePoseStatus::Ready,
-            Pose::Failed(_) => DevicePoseStatus::Error,
-            Pose::Unavailable => DevicePoseStatus::Unavailable,
-        }
+impl SensorState {
+    pub const fn of(status: SensorStatus) -> SensorState {
+        SensorState { status, err: None }
     }
 
-    pub fn error(self) -> Option<Message> {
-        match self {
-            Pose::Failed(m) => Some(m),
-            _ => None,
+    pub const fn failed(err: Message) -> SensorState {
+        SensorState {
+            status: SensorStatus::Error,
+            err: Some(err),
         }
     }
 }
@@ -90,7 +81,7 @@ impl Pose {
 pub struct DeviceLocationStore {
     pub is_tracking_location: bool,
     pub location: Option<DeviceLocation>,
-    pub pose: Pose,
+    pub state: SensorState,
 }
 
 impl DeviceLocationStore {
@@ -98,16 +89,16 @@ impl DeviceLocationStore {
     pub fn set_location(
         &mut self,
         coords: [f64; 2],
-        altitude: Option<f64>,
+        alt: Option<f64>,
         accuracy: f64,
         course: Option<f64>,
     ) {
         let timestamp = now();
-        self.pose = Pose::Ready;
+        self.state = SensorState::of(SensorStatus::Ready);
         let Some(prev) = self.location else {
             self.location = Some(DeviceLocation {
                 coords,
-                altitude,
+                alt,
                 accuracy,
                 course,
                 timestamp,
@@ -122,10 +113,10 @@ impl DeviceLocationStore {
         }
 
         // Dead zone: ~1.1 m horizontally, 0.5 m in altitude.
-        let lng_diff = (prev.coords[0] - coords[0]).abs();
+        let lon_diff = (prev.coords[0] - coords[0]).abs();
         let lat_diff = (prev.coords[1] - coords[1]).abs();
         let is_significant_change =
-            lat_diff > 0.00001 || lng_diff > 0.00001 || is_delta_over(prev.altitude, altitude, 0.5);
+            lat_diff > 0.00001 || lon_diff > 0.00001 || is_delta_over(prev.alt, alt, 0.5);
 
         if !is_significant_change && prev.accuracy == accuracy && prev.course == course {
             return;
@@ -138,11 +129,7 @@ impl DeviceLocationStore {
             } else {
                 prev.coords
             },
-            altitude: if is_significant_change {
-                altitude
-            } else {
-                prev.altitude
-            },
+            alt: if is_significant_change { alt } else { prev.alt },
             accuracy,
             course,
             timestamp,
@@ -162,24 +149,24 @@ impl DeviceLocationStore {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceOrientationStore {
-    pub is_tracking_orientation: bool,
-    pub orientation: Option<DeviceOrientation>,
-    pub pose: Pose,
+    pub is_tracking_orient: bool,
+    pub orient: Option<DeviceOrientation>,
+    pub state: SensorState,
 }
 
 impl DeviceOrientationStore {
     /// Dead-zone filtered: 1.5° of heading, 2° of tilt.
-    pub fn set_orientation(&mut self, heading: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
+    pub fn set_orient(&mut self, heading: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
         let timestamp = now();
-        let Some(prev) = self.orientation else {
-            self.orientation = Some(DeviceOrientation {
+        let Some(prev) = self.orient else {
+            self.orient = Some(DeviceOrientation {
                 heading,
                 beta,
                 gamma,
                 timestamp,
             });
             // Orientation alone counts as usable.
-            self.pose = Pose::Ready;
+            self.state = SensorState::of(SensorStatus::Ready);
             return;
         };
 
@@ -189,7 +176,7 @@ impl DeviceOrientationStore {
         if !is_heading_changed && !is_tilt_changed {
             return;
         }
-        self.orientation = Some(DeviceOrientation {
+        self.orient = Some(DeviceOrientation {
             heading,
             beta,
             gamma,
@@ -197,24 +184,24 @@ impl DeviceOrientationStore {
         });
     }
 
-    pub fn set_is_tracking_orientation(&mut self, enabled: bool) {
-        if self.is_tracking_orientation == enabled {
+    pub fn set_is_tracking_orient(&mut self, enabled: bool) {
+        if self.is_tracking_orient == enabled {
             return;
         }
-        self.is_tracking_orientation = enabled;
+        self.is_tracking_orient = enabled;
         if !enabled {
-            self.orientation = None;
+            self.orient = None;
         }
     }
 }
 
 static LOCATION: Global<DeviceLocationStore> = Global::new();
-static ORIENTATION: Global<DeviceOrientationStore> = Global::new();
+static ORIENT: Global<DeviceOrientationStore> = Global::new();
 
 pub fn device_location_store() -> &'static mut DeviceLocationStore {
     LOCATION.get(DeviceLocationStore::default)
 }
 
-pub fn device_orientation_store() -> &'static mut DeviceOrientationStore {
-    ORIENTATION.get(DeviceOrientationStore::default)
+pub fn device_orient_store() -> &'static mut DeviceOrientationStore {
+    ORIENT.get(DeviceOrientationStore::default)
 }

@@ -27,3 +27,6 @@ ureq = "2"
 # Half the size of `image`'s JPEG encoder for the link preview.
 mozjpeg = "0.10"
 
+
+[lints]
+workspace = true

@@ -4,14 +4,17 @@
 //! camera grid over all of it, off the frame's cell and the sky's ray.
 
 use crate::frame::draw::{uniform_of, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
-use crate::frame::shader::record::PIPELINE_DEBUG_FACE;
-use crate::gpu::api::{buffer_entry, bytes, pass_desc, Gpu, Load, Stamp};
+use crate::frame::shader::record::{
+    DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
+};
+use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::upload::{Draws, Uploads};
 
-/// Their faces go into the world's depth, cleared once the world is done
-/// with it, and their lines are drawn against those faces alone, so a gizmo
+/// Their faces go into the canvas's depth, cleared once what is drawn over
+/// the world is done with it, and their lines are drawn against those faces alone, so a gizmo
 /// hides gizmos and nothing of the world hides one. Each set takes its own
 /// translation, a draw's uniform a set.
 pub struct DebugPass {
@@ -27,17 +30,17 @@ impl DebugPass {
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
-        frame_buffer: u32,
-        sky_buffer: u32,
+        frame_buf: u32,
+        sky_buf: u32,
         align: u32,
     ) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
+        let frame_group = g.bind_group(built.layouts[0], &[buf_entry(0, frame_buf)]);
         let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, g.canvas());
         let grid_group = g.bind_group(
             grid.layouts[0],
-            &[buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer)],
+            &[buf_entry(0, frame_buf), buf_entry(19, sky_buf)],
         );
         DebugPass {
             built,
@@ -65,17 +68,16 @@ impl DebugPass {
     }
 
     /// `depth` is the world's, which nothing reads after this.
-    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         canvas: u32,
         depth: u32,
         draws: &Draws,
         uploads: &Uploads,
-        stamp: &mut Stamp,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::debug);
         let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
         let held = self
             .uniforms
@@ -89,8 +91,8 @@ impl DebugPass {
         let sets = || {
             draws.of(PIPELINE_DEBUG).enumerate().filter_map(|(k, d)| {
                 let slots = slots?;
-                let (buffer, _, _) = uploads.get(d[0])?;
-                (d[1] > 0).then_some((k, d, buffer, d[1], d[2], slots))
+                let (buf, _, _) = uploads.get(d[0])?;
+                (d[1] > 0).then_some((k, d, buf, d[1], d[2], slots))
             })
         };
         // With no faces the lines' pass clears the depth itself.
@@ -102,16 +104,22 @@ impl DebugPass {
             );
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buffer, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
-                let (group, offset) = slots.at(k as u32);
-                g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(pass, 0, buffer, lines * 28, faces * 12);
+            for (k, _, buf, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
+                let (group, off) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[off]);
+                g.set_vertex_buf(
+                    pass,
+                    0,
+                    buf,
+                    lines * DEBUG_VERTEX_BYTES,
+                    faces * DEBUG_FACE_VERTEX_BYTES,
+                );
                 g.draw(pass, faces, 1, 0, 0);
             }
             g.end(pass);
         }
         // A set's faces hide only its own lines: the faced sets' lines over
-        // their faces' depth, then the rest over none, so the focus's frame
+        // their faces' depth, then the rest over none, so the pivot's frame
         // is whole under the coverage laid on the ground.
         let depth_load = if faced { Load::Load } else { Load::Clear };
         let mut pass = g.pass(
@@ -128,10 +136,10 @@ impl DebugPass {
             }
             g.set_pipeline(pass, self.built.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buffer, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
-                let (group, offset) = slots.at(k as u32);
-                g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(pass, 0, buffer, 0, lines * 28);
+            for (k, _, buf, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
+                let (group, off) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[off]);
+                g.set_vertex_buf(pass, 0, buf, 0, lines * DEBUG_VERTEX_BYTES);
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }

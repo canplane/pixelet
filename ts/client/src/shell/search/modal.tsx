@@ -26,11 +26,8 @@ import {
   weight,
 } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
-import {
-  Command,
-  DevicePoseStatus,
-  encode_input_go_to,
-} from "@/abi/cmd.spec.ts";
+import { Command, encode_input_goto, SensorStatus } from "@/abi/cmd.spec.ts";
+import { statusColor } from "@/shell/world/top/sensor-icons.tsx";
 import { kernel_command, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
@@ -49,7 +46,7 @@ import {
 import {
   useCenterCoordinates,
   useDivisionLabel,
-} from "@/shell/division/focus.ts";
+} from "@/shell/division/pivot.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/shell/fixed.ts";
@@ -141,7 +138,7 @@ interface CountrySection {
   rows: SearchResult[];
 }
 
-/** By country, a country by the provider's own name: the focus's first, as
+/** By country, a country by the provider's own name: the pivot's first, as
  * the API ranks it, then each where its best result ranked, none last. */
 function byCountry(
   results: SearchResult[],
@@ -160,23 +157,12 @@ function byCountry(
   return [...sections.values()].sort((a, b) => rank(a) - rank(b));
 }
 
-function poseColor(status: DevicePoseStatus): string {
-  switch (status) {
-    case DevicePoseStatus.Loading:
-      return STATUS.pending;
-    case DevicePoseStatus.Error:
-      return STATUS.failed;
-    default:
-      return LABEL.secondary;
-  }
-}
-
 const CLEAR = 16;
 
 function LocateCard() {
   const { t } = useTranslation();
   const location = useKernel((s) => s.location.status);
-  if (location === DevicePoseStatus.Ready) return null;
+  if (location === SensorStatus.Ready) return null;
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing
@@ -193,7 +179,7 @@ function LocateCard() {
           <Glyph
             glyph="location"
             size={chrome.glyph}
-            color={poseColor(location)}
+            color={statusColor(location, LABEL.secondary, STATUS)}
           />
           <Text
             numberOfLines={1}
@@ -214,7 +200,7 @@ function LocateCard() {
   );
 }
 
-/** Where the search looks from: the focus, which is not the device's location. */
+/** Where the search looks from: the pivot, which is not the device's location. */
 function MapCenter() {
   const { t } = useTranslation();
   const place = useDivisionLabel();
@@ -223,7 +209,7 @@ function MapCenter() {
   return (
     <View>
       <SectionTitle style={styles.sectionHeader}>
-        {t("world.search.focus")}
+        {t("world.search.pivot")}
       </SectionTitle>
       <View style={styles.center}>
         {place !== null && (
@@ -237,7 +223,7 @@ function MapCenter() {
   );
 }
 
-/** The focus's country is taken where the query ran, as the API measured each
+/** The pivot's country is taken where the query ran, as the API measured each
  * result's distance from, so both agree with its order while the camera drifts. */
 interface Found {
   query: string;
@@ -266,9 +252,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     const timer = setTimeout(() => {
       const snapshot = kernel_snapshot();
       const near = snapshot.pivot.lon_lat ?? undefined;
-      const home =
-        snapshot.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)
-          ?.name ?? null;
+      const home = snapshot.division.find((p) =>
+        p.subtype === DIVISION_SUBTYPE.COUNTRY
+      )?.name ?? null;
       fetchSearch(q, { near, signal: controller.signal })
         .then(
           (results) =>
@@ -288,16 +274,14 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   function select(result: SearchResult) {
     kernel_command(
-      Command.INPUT_GO_TO,
-      encode_input_go_to(kernel_room, result.lon, result.lat),
+      Command.INPUT_GOTO,
+      encode_input_goto(kernel_room, result.lon, result.lat, null, null, null),
     );
     onClose();
   }
 
   function distanceOf(result: SearchResult): string | null {
-    return result.distance_m === null
-      ? null
-      : formatDistance(result.distance_m);
+    return result.dist_m === null ? null : formatDistance(result.dist_m);
   }
 
   return (

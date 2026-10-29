@@ -39,36 +39,36 @@ constexpr Error marshal_error(Errno errnum, std::source_location at = std::sourc
 
 template <class T> class [[nodiscard]] Result {
   public:
-    Result(T value) noexcept : value_(std::move(value)) {}
-    Result(Error error) noexcept : error_(error) {}
+    Result(T val) noexcept : val_(std::move(val)) {}
+    Result(Error err) noexcept : err_(err) {}
 
-    bool ok() const noexcept { return value_.has_value(); }
+    bool ok() const noexcept { return val_.has_value(); }
     explicit operator bool() const noexcept { return ok(); }
 
     // Asking where there is none is a bug.
-    T &value() noexcept { return *value_; }
-    const T &value() const noexcept { return *value_; }
-    T *operator->() noexcept { return &*value_; }
-    T &operator*() noexcept { return *value_; }
+    T &value() noexcept { return *val_; }
+    const T &value() const noexcept { return *val_; }
+    T *operator->() noexcept { return &*val_; }
+    T &operator*() noexcept { return *val_; }
 
-    const Error &error() const noexcept { return error_; }
+    const Error &error() const noexcept { return err_; }
 
   private:
-    std::optional<T> value_;
-    Error error_{Errno::ok, ErrorClass::invariant, {}};
+    std::optional<T> val_;
+    Error err_{Errno::ok, ErrorClass::invariant, {}};
 };
 
 template <> class [[nodiscard]] Result<void> {
   public:
     Result() noexcept = default;
-    Result(Error error) noexcept : error_(error), failed_(true) {}
+    Result(Error err) noexcept : err_(err), failed_(true) {}
 
     bool ok() const noexcept { return !failed_; }
     explicit operator bool() const noexcept { return ok(); }
-    const Error &error() const noexcept { return error_; }
+    const Error &error() const noexcept { return err_; }
 
   private:
-    Error error_{Errno::ok, ErrorClass::invariant, {}};
+    Error err_{Errno::ok, ErrorClass::invariant, {}};
     bool failed_ = false;
 };
 

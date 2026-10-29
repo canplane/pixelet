@@ -666,10 +666,13 @@ attribution link in the license section.
 > `rust/server/api/src/main.rs`).
 
 **Location is the sensitive surface here.** The only personal data leaving the
-client is the map-center coordinate sent to Nominatim — rounded to four decimal
-places (~11 m) and debounced, never stored. That is now disclosed in the
-settings license section, translated rather than hardcoded, because it is a
-statement to the user rather than a notice a license demands verbatim.
+client is the view's center, which forward search sends as `near` to the
+project's own `/geo/search` (`fetchSearch` in
+`ts/client/src/shell/search/fetch.ts`), debounced (`DEBOUNCE_MS` in
+`ts/client/src/shell/search/modal.tsx`). That is disclosed in the settings'
+disclaimer section, translated rather than hardcoded (`location_notice` in
+`ts/client/src/shell/setting/info/disclaimer.tsx`), because it is a statement
+to the user rather than a notice a license demands verbatim.
 
 Everything else stays on the device: `pxl:lang`, `pxl:render_settings`,
 `pxl:debug_settings`, and `pxl:objects:v4` in `localStorage`.

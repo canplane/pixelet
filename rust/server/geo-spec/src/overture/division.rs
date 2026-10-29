@@ -11,7 +11,7 @@ use fnv::FnvHashMap;
 use std::collections::BTreeMap;
 
 use pxl_spec::division::{DivisionPart, Subtype};
-use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer, u_per_m};
+use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc, u_per_m};
 
 /// `names.common` in the UI's languages as a JSON object, NULL where none, of
 /// the row the given table or alias names.
@@ -34,11 +34,11 @@ pub const NEAREST_REACH_M: f64 = 2048.0;
 
 /// [`NEAREST_REACH_M`] at the DB's `y`, in the DB's coordinates.
 pub fn reach_at(y: f64) -> f64 {
-    mer_from_u(NEAREST_REACH_M * u_per_m(u_from_mer(y)))
+    merc_from_u(NEAREST_REACH_M * u_per_m(u_from_merc(y)))
 }
 
 /// The division each of a batch of points is in: `$1`/`$2` are EPSG:3857
-/// metres and `$3` [`reach_at`] them, `idx` counts the points from 1. It is
+/// meters and `$3` [`reach_at`] them, `idx` counts the points from 1. It is
 /// the deepest division an area of contains the point, or, nearer, a child
 /// of it with no area, the nearest within reach; where no area contains the
 /// point, the nearest division within reach. Many localities have a point

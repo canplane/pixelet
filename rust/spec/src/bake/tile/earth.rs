@@ -26,8 +26,8 @@ pub const EARTH_REACH: f64 = demand_reach(GROUND, EARTH_ZOOM);
 pub const EARTH_BYTES: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 
 /// Every packet's length: its texels, as `encode` lays them.
-pub const PACKET_BYTES: usize =
-    super::packet::HEADER + super::packet::branch(1) + super::packet::seq(EARTH_BYTES);
+pub const PKT_BYTES: usize =
+    super::pkt::HEADER + super::pkt::branch(1) + super::pkt::seq(EARTH_BYTES);
 
 pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
     if rgba.len() != EARTH_BYTES {

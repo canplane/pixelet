@@ -17,9 +17,9 @@
   "EFFECT_NAMES": [
     "navigation",
     "bootstrap",
-    "orientation",
+    "orient",
     "follow",
-    "destination",
+    "dst",
     "decor",
     "objects",
     "edit",

@@ -13,11 +13,13 @@ use crate::frame::shader::word::AO_FLOATS;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
-    buffer_entry, buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
-    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp,
+    buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
+    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, RenderContext,
+    TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
+use crate::gpu::span_spec::GpuSpanName;
 
 /// proj, inv_proj, half, padding.
 const HALF: usize = 32;
@@ -33,7 +35,7 @@ pub struct ScreenAo {
     noise_view: u32,
     uniform: u32,
     uniform_words: [f32; AO_FLOATS],
-    frame_buffer: u32,
+    frame_buf: u32,
     run: u32,
     stride: u32,
     sampler: u32,
@@ -61,7 +63,7 @@ impl ScreenAo {
         self.width as f64 * self.height as f64 * 4.0
     }
 
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32, frame_buffer: u32) -> ScreenAo {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32, frame_buf: u32) -> ScreenAo {
         let blank = g.texture(
             1,
             1,
@@ -82,14 +84,14 @@ impl ScreenAo {
         );
         g.write_texture(noise, 0, NOISE_SIDE, NOISE_SIDE, NOISE);
         let noise_view = g.view(noise, false, 0, 1, 0, 1);
-        let uniform = g.buffer(
+        let uniform = g.buf(
             word_bytes(AO_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let stride = 16u32.max(align);
-        let run = g.buffer(stride * 2, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        g.write_buffer(run, 0, bytes(&[0.0f32, 0.0, 0.0, 0.0]));
-        g.write_buffer(run, stride, bytes(&[1.0f32, 0.0, 0.0, 0.0]));
+        let run = g.buf(stride * 2, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.write_buf(run, 0, bytes(&[0.0f32, 0.0, 0.0, 0.0]));
+        g.write_buf(run, stride, bytes(&[1.0f32, 0.0, 0.0, 0.0]));
         let sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,
@@ -103,7 +105,7 @@ impl ScreenAo {
             noise_view,
             uniform,
             uniform_words: [0.0; AO_FLOATS],
-            frame_buffer,
+            frame_buf,
             run,
             stride,
             sampler,
@@ -157,7 +159,7 @@ impl ScreenAo {
 
     /// `words` written, where the frame's read found them moved.
     pub fn write(&self, g: &Gpu) {
-        g.write_buffer(self.uniform, 0, bytes(&self.uniform_words));
+        g.write_buf(self.uniform, 0, bytes(&self.uniform_words));
     }
 
     /// True when the images were remade, so the groups that bind them must be too.
@@ -183,14 +185,14 @@ impl ScreenAo {
 
         let view = view_entry;
         let sampler = sampler_entry(4, self.sampler);
-        let run = buffer_range_entry(5, self.run, 0, self.stride);
+        let run = buf_range_entry(5, self.run, 0, self.stride);
         // The AO's uniform at 6; the frame's at 0 where a pass reads the screen's size or the fog.
         let group = |layout: u32, frame: bool, between: &[Entry]| {
-            let frame = frame.then(|| buffer_entry(0, self.frame_buffer));
+            let frame = frame.then(|| buf_entry(0, self.frame_buf));
             let e: Vec<Entry> = frame
                 .iter()
                 .chain(between)
-                .chain(&[buffer_entry(6, self.uniform)])
+                .chain(&[buf_entry(6, self.uniform)])
                 .copied()
                 .collect();
 
@@ -258,8 +260,10 @@ impl ScreenAo {
         self.map_view = 0;
     }
 
-    pub fn begin_prepass(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> u32 {
-        g.pass(
+    pub fn begin_prepass<'a>(&self, ctx: &mut RenderContext<'a>) -> TrackedRenderPass<'a> {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::prepass);
+        let pass = g.pass(
             encoder,
             &pass_desc(
                 0,
@@ -269,10 +273,13 @@ impl ScreenAo {
                 0.0,
                 stamp.pass(),
             ),
-        )
+        );
+        TrackedRenderPass::new(g, pass)
     }
 
-    pub fn run(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
+    pub fn run(&self, ctx: &mut RenderContext) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::ao);
         let steps: [(u32, u32, u32, u32); 5] = [
             (self.downsample.pipeline, self.groups[0], self.half_view, 0),
             (self.sample.pipeline, self.groups[1], self.ping_view[0], 0),
@@ -285,14 +292,14 @@ impl ScreenAo {
             ),
             (self.upsample.pipeline, self.groups[4], self.map_view, 0),
         ];
-        for (k, &(pipeline, group, target, offset)) in steps.iter().enumerate() {
+        for (k, &(pipeline, group, target, off)) in steps.iter().enumerate() {
             let pass = g.pass(
                 encoder,
                 &pass_desc(target, Load::Clear, 0, Load::Clear, 0.0, stamp.pass()),
             );
             g.set_pipeline(pass, pipeline);
             if k == 2 || k == 3 {
-                g.set_bind_group(pass, 0, group, &[offset]);
+                g.set_bind_group(pass, 0, group, &[off]);
             } else {
                 g.set_bind_group(pass, 0, group, &[]);
             }

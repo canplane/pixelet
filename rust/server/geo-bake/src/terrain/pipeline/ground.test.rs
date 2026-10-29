@@ -11,7 +11,7 @@ fn painted(cut: [bool; 2]) -> Vec<i64> {
 }
 
 #[test]
-fn a_way_cut_by_a_flag_stops_at_the_cut_and_a_free_end_rounds_past_it() {
+fn flag_cut_way_ends() {
     assert_eq!(painted([false, true]).last(), Some(&19));
     assert!(*painted([false, false]).last().unwrap() > 19);
 }
@@ -47,8 +47,8 @@ fn at(g: &Ground, x: i64, y: i64) -> GroundId {
 }
 
 #[test]
-fn the_sea_is_the_coast_s_not_a_color_painted_over_land() {
-    let features = [
+fn sea_from_coast() {
+    let feats = [
         area(
             [0.0, 0.0, 100.0, 100.0],
             10_000.0,
@@ -69,16 +69,16 @@ fn the_sea_is_the_coast_s_not_a_color_painted_over_land() {
         Vec::new(),
     )]);
     for coast in [Coast::Land, shore] {
-        let g = bake_ground(&features, &coast);
+        let g = bake_ground(&feats, &coast);
         assert_eq!(at(&g, 50, 50), ground::grass);
         assert_eq!(at(&g, 10, 10), ground::water);
     }
 }
 
 #[test]
-fn a_source_ranks_alike_on_every_tile_it_is_clipped_to() {
+fn src_rank_per_tile() {
     // A pond's sliver on this tile is smaller than the grass over it; the pond's whole is not.
-    let features = [
+    let feats = [
         area(
             [0.0, 0.0, 10.0, 100.0],
             10_000.0,
@@ -94,15 +94,12 @@ fn a_source_ranks_alike_on_every_tile_it_is_clipped_to() {
             "grass",
         ),
     ];
-    assert_eq!(
-        at(&bake_ground(&features, &Coast::Land), 5, 50),
-        ground::grass
-    );
+    assert_eq!(at(&bake_ground(&feats, &Coast::Land), 5, 50), ground::grass);
 }
 
 #[test]
-fn a_tile_s_ground_does_not_depend_on_its_rows_order() {
-    let mut features = vec![
+fn ground_row_order_free() {
+    let mut feats = vec![
         area(
             [10.0, 10.0, 30.0, 30.0],
             400.0,
@@ -135,8 +132,8 @@ fn a_tile_s_ground_does_not_depend_on_its_rows_order() {
         way(70.0, 4.0, ground::residential_road, "south"),
         way(71.0, 4.0, ground::secondary, "north"),
     ];
-    let bake = |features: &[Feature]| bake_ground(features, &Coast::Land).cells.into_owned();
-    let forward = bake(&features);
-    features.reverse();
-    assert_eq!(bake(&features), forward);
+    let bake = |fs: &[Feature]| bake_ground(fs, &Coast::Land).cells.into_owned();
+    let forward = bake(&feats);
+    feats.reverse();
+    assert_eq!(bake(&feats), forward);
 }

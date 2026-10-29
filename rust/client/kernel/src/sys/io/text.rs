@@ -28,7 +28,7 @@ struct Answer<T> {
 }
 
 struct RasterAt {
-    pixels: Box<[u8]>,
+    px: Box<[u8]>,
     size: [u32; 2],
     origin: [f32; 2],
     advance: f32,
@@ -107,16 +107,18 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     }
     // The host's answer is checked here, the door it comes back through: a
     // line ending inside a character or out of order is no layout.
-    let pairs = answer.at[1..].as_chunks::<2>().0;
-    let count = answer.at[0] as usize;
-    let mut lines = Vec::with_capacity(count.min(pairs.len()));
+    let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
+        .as_chunks::<{ LINE::WORDS as usize }>()
+        .0;
+    let cnt = answer.at[LAYOUT_ANSWER::cnt as usize] as usize;
+    let mut lines = Vec::with_capacity(cnt.min(pairs.len()));
     let mut start = 0;
-    for pair in pairs.iter().take(count) {
-        let (end, width) = (pair[0] as usize, f32::from_bits(pair[1]) as f64);
-        if count > pairs.len()
-            || end < start
-            || !text_in.is_char_boundary(end)
-            || !width.is_finite()
+    for pair in pairs.iter().take(cnt) {
+        let (end, width) = (
+            pair[LINE::end as usize] as usize,
+            f32::from_bits(pair[LINE::width as usize]) as f64,
+        );
+        if cnt > pairs.len() || end < start || !text_in.is_char_boundary(end) || !width.is_finite()
         {
             return Some(unlaid(text_in));
         }
@@ -141,9 +143,9 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         let a = &answer.at;
         // SAFETY: the answer's pixels stay until the next frame's rise at the
         // earliest, and a raster is read within the frame it was handed out in.
-        let pixels = unsafe { core::slice::from_raw_parts(a.pixels.as_ptr(), a.pixels.len()) };
+        let px = unsafe { core::slice::from_raw_parts(a.px.as_ptr(), a.px.len()) };
         return Some(Raster {
-            pixels,
+            px,
             width: a.size[0],
             height: a.size[1],
             origin: a.origin,
@@ -153,21 +155,20 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     let advance = text_width(font, text_in)? as f32;
     let (size, origin) = raster_box(font, advance);
     let scale = SHEET_SCALE as f32;
-    let mut pixels = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
-    let args = [
-        font.weight,
-        (font.px * scale).to_bits(),
-        color,
-        off_of_slice(&raw mut *pixels) as u32,
-        size[0],
-        size[1],
-        origin[0].to_bits(),
-    ];
+    let mut px = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
+    let mut args = [0u32; RASTER::WORDS as usize];
+    args[RASTER::weight as usize] = font.weight;
+    args[RASTER::px as usize] = (font.px * scale).to_bits();
+    args[RASTER::color as usize] = color;
+    args[RASTER::at as usize] = off_of_slice(&raw mut *px) as u32;
+    args[RASTER::width as usize] = size[0];
+    args[RASTER::height as usize] = size[1];
+    args[RASTER::x as usize] = origin[0].to_bits();
     if offer(op::TEXT_RASTER, &args, text_in.as_bytes()) != Some(true) {
         return None;
     }
     let at = RasterAt {
-        pixels,
+        px,
         size,
         origin,
         advance: advance * scale,

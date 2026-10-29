@@ -37,70 +37,102 @@ pub const SHADER_SCREEN_RAY: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-spec-core's descent (pxl-tool bin/shader_wgsl.rs): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
-/// Each newly held square's levels over its columns, a level a dispatch,
+/// Each newly held brick's levels over its columns, a level a dispatch,
 /// generated with the cast from pxl-spec-core's `fill::level` and
 /// `window::join`: its one compute entry.
 pub const SHADER_BOUND: u32 = 27;
-/// Each newly held square's columns' ground tops off its samples,
+/// Each newly held brick's columns' ground tops off its samples,
 /// generated with the cast from pxl-spec-core's `ground::height`: its one
 /// compute entry.
-pub const SHADER_HEIGHTS: u32 = 28;
+pub const SHADER_HEIGHT: u32 = 28;
 /// The decor the ground grows in the eye's windows, generated with the cast
 /// from pxl-spec-core's `scatter`: its one compute entry.
 pub const SHADER_GROWN: u32 = 29;
 /// What `SHADER_GROWN` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
 /// args; each drawn into the decor's instances: pxl-spec-core `scatter::drawn`.
-pub const SHADER_GROWN_COUNT: u32 = 30;
+pub const SHADER_GROWN_CNT: u32 = 30;
 pub const SHADER_GROWN_ARGS: u32 = 31;
 pub const SHADER_GROWN_PLACE: u32 = 32;
-/// Each newly held terrain frame's ways, its columns' runs along z off its
-/// lines, generated with the cast from pxl-spec-core's `ways`: its one
-/// compute entry.
-pub const SHADER_WAYS: u32 = 33;
+/// Each newly held terrain frame's ways, its columns' spans off its lines,
+/// generated with the cast from pxl-spec-core's `ways`: its one compute
+/// entry.
+pub const SHADER_WAY: u32 = 33;
 /// Which eye slots' decor grows again this frame, listed for
-/// `SHADER_GROWN`'s dispatch: its one compute entry.
+/// `SHADER_GROWN_STAND`'s and `SHADER_GROWN`'s dispatches: its one compute entry.
 pub const SHADER_GROWN_MARK: u32 = 34;
-/// The eye's windows folded over their squares, generated with the cast
+/// The eye's windows folded over their bricks, generated with the cast
 /// from pxl-spec-core's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
 /// The air's volume, a column of froxels a workgroup (atmos_froxel.wgsl):
 /// its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 36;
-/// Each handed square's ways as blocks in one pool (pxl-spec-core
-/// `ways::tree`), generated with the cast: a re-filled square's old blocks
-/// given back, its tree built off the pool's stack, the blocks its build
+/// Each handed brick's ways as a tree of cells in one pool (pxl-spec-core
+/// `way::tree`), generated with the cast: a re-filled brick's old families
+/// given back, its tree built off the pool's stack, the families its build
 /// gave back pushed after: a compute entry each.
-pub const SHADER_WAYS_FREE: u32 = 37;
-pub const SHADER_WAYS_TREE: u32 = 38;
-pub const SHADER_WAYS_FREED: u32 = 39;
+pub const SHADER_WAY_FREE: u32 = 37;
+pub const SHADER_WAY_TREE: u32 = 38;
+pub const SHADER_WAY_FREED: u32 = 39;
 /// The camera grid's beam rays, a thread a corner, and where each cell's
 /// pixels start off them, generated with the cast from pxl-spec-core's
 /// `beam` (doc/minutes/20261022-a-cell-casts-a-beam.md): a compute entry
 /// each.
 pub const SHADER_BEAM: u32 = 40;
-pub const SHADER_CELLS: u32 = 41;
+pub const SHADER_CELL: u32 = 41;
 /// The pixels the cast's reading walk missed, walked again writing the
 /// observed pyramid, and the pyramid forgotten (pxl-spec-core `observed`): a
 /// compute entry each.
 pub const SHADER_MISS: u32 = 42;
 pub const SHADER_FORGET: u32 = 43;
 /// The samples, a thread each, resumed from their cells' starts and walked
-/// to the blocks the pixels about them take (pxl-spec-core `beam::Grid::samples`):
+/// to the cells the pixels about them take (pxl-spec-core `beam::Grid::samples`):
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 44;
 /// The world's depth from the sun into its clipmap, generated with the cast
-/// from pxl-spec-core's `sun`: the walk, a workgroup a tile listed, its one
-/// compute entry; that depth laid into the map (sun_map.wgsl,
-/// gpu/shadow.rs); and the mark listing the tiles that walk, a compute
-/// entry of its own.
+/// from pxl-spec-core's `sun`: every slot taking the visible sample, a
+/// workgroup a tile, a compute entry; that depth laid into the map
+/// (sun_map.wgsl, gpu/shadow.rs); and the slots that took none walked
+/// apart (pxl-spec-core `sun::misses_at`), a compute entry of its own.
 pub const SHADER_SUN: u32 = 45;
 pub const SHADER_SUN_MAP: u32 = 46;
 pub const SHADER_SUN_MARK: u32 = 47;
 pub const SHADER_SCREEN_DEPTH: u32 = 48;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 49;
-pub const SHADERS: u32 = 50;
+/// The samples' stops handed to the rasterizer (pxl-spec-core `raster`):
+/// their boxes written, a compute entry; and the boxes drawn, the nearest
+/// face a pixel's ray enters kept with its sample (raster.wgsl), which the
+/// cast's pixels read (`SHADER_CAST`).
+pub const SHADER_SAMPLE_BOX: u32 = 50;
+pub const SHADER_RASTER: u32 = 51;
+/// The pixels the cast's reading walk missed, walked again from their list
+/// (pxl-spec-core `observed::MARKS_AT`), a thread each: a compute entry.
+pub const SHADER_MISS_LIST: u32 = 52;
+/// What lies about each box's face, asked once a box (pxl-spec-core
+/// `raster::ARGS_FACES`): a compute entry.
+pub const SHADER_FACE: u32 = 53;
+/// The sun's beam rays and its cells' starts off them (pxl-spec-core
+/// `sun::BEAM`): compute entries.
+pub const SHADER_SUN_BEAM: u32 = 54;
+pub const SHADER_SUN_CELL: u32 = 55;
+/// The sun's samples and their boxes (pxl-spec-core `sun::SAMPLE`):
+/// compute entries.
+pub const SHADER_SUN_SAMPLE: u32 = 56;
+pub const SHADER_SUN_SAMPLE_BOX: u32 = 57;
+/// The tiles of the sun's box its receivers stand on in a cast
+/// (pxl-spec-core `sun::stands_at`): where the eye's rays meet the world, and
+/// where the decor and the actors drawn stand; then those they read
+/// (`sun::reads_at`): compute entries.
+pub const SHADER_SUN_MARK: u32 = 58;
+pub const SHADER_SUN_MARK_DRAWN: u32 = 59;
+pub const SHADER_SUN_REACH: u32 = 60;
+/// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
+/// time, for `SHADER_GROWN` to grow: its one compute entry.
+pub const SHADER_GROWN_STAND: u32 = 57;
+/// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
+pub const SHADER_SCREEN_FINISH: u32 = 58;
+pub const SHADERS: u32 = 59;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -172,6 +204,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "frame",
         "encode",
+        "finish",
         "atmos_medium",
         "atmos_bind",
         "atmos_lut",
@@ -208,7 +241,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "star",
     ],
     // SHADER_CLOUD
-    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_word", "cloud"],
+    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "cloud"],
     // SHADER_CLOUD_FIELD
     &[
         "cloud_hash",
@@ -236,23 +269,32 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAY
-    lit!["lattice", "ray", "eye", "paint", "screen_ray", "screen_lit"],
+    lit![
+        "lattice",
+        "ray",
+        "eye",
+        "paint",
+        "debug_look",
+        "px",
+        "screen_ray",
+        "screen_lit"
+    ],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
     &["bound.gen"],
-    // SHADER_HEIGHTS
-    &["heights.gen"],
+    // SHADER_HEIGHT
+    &["height.gen"],
     // SHADER_GROWN
     &["decor.gen"],
-    // SHADER_GROWN_COUNT
-    &["decor_count.gen"],
+    // SHADER_GROWN_CNT
+    &["decor_cnt.gen"],
     // SHADER_GROWN_ARGS
     &["decor_args.gen"],
     // SHADER_GROWN_PLACE
     &["decor_place.gen"],
-    // SHADER_WAYS
-    &["ways.gen"],
+    // SHADER_WAY
+    &["way.gen"],
     // SHADER_GROWN_MARK
     &["decor_mark.gen"],
     // SHADER_JOINED
@@ -271,16 +313,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sky_word",
         "atmos_froxel",
     ],
-    // SHADER_WAYS_FREE
-    &["ways_free.gen"],
-    // SHADER_WAYS_TREE
-    &["ways_tree.gen"],
-    // SHADER_WAYS_FREED
-    &["ways_freed.gen"],
+    // SHADER_WAY_FREE
+    &["way_free.gen"],
+    // SHADER_WAY_TREE
+    &["way_tree.gen"],
+    // SHADER_WAY_FREED
+    &["way_freed.gen"],
     // SHADER_BEAM
     &["beam.gen"],
-    // SHADER_CELLS
-    &["cells.gen"],
+    // SHADER_CELL
+    &["cell.gen"],
     // SHADER_MISS
     &["miss.gen"],
     // SHADER_FORGET
@@ -299,9 +341,36 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "ray",
         "eye",
         "paint",
+        "px",
         "screen_ray",
         "screen_depth"
     ],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "camera_grid"],
+    // SHADER_SAMPLE_BOX
+    &["sample_box.gen"],
+    // SHADER_RASTER
+    &["raster_box", "px", "raster"],
+    // SHADER_MISS_LIST
+    &["miss_list.gen"],
+    // SHADER_FACE
+    &["face.gen"],
+    // SHADER_SUN_BEAM
+    &["sun_beam.gen"],
+    // SHADER_SUN_CELL
+    &["sun_cell.gen"],
+    // SHADER_SUN_SAMPLE
+    &["sun_sample.gen"],
+    // SHADER_SUN_SAMPLE_BOX
+    &["sun_sample_box.gen"],
+    // SHADER_SUN_MARK
+    &["sun_mark.gen"],
+    // SHADER_SUN_MARK_DRAWN
+    &["sun_mark_drawn.gen"],
+    // SHADER_SUN_REACH
+    &["sun_reach.gen"],
+    // SHADER_GROWN_STAND
+    &["decor_stand.gen"],
+    // SHADER_SCREEN_FINISH
+    &["frame", "encode", "finish", "screen_finish"],
 ];

@@ -12,7 +12,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, disabledContent } from "@/shell/ui/theme.ts";
 import { gauge, ProfilerGauge, ProfilerRec } from "./profiler/gauge.tsx";
-import { Fold, HINT_INK } from "./fold.tsx";
+import { Accordion, HINT_INK } from "./accordion.tsx";
 import { n1 } from "./profiler/lane.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { fps, profilerReportRead } from "./profiler/view.ts";
@@ -23,8 +23,12 @@ import {
 } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
-import { kernel_command } from "@/abi/shell.ts";
-import { SETTINGS } from "@/shell/setting/schema.ts";
+import { kernel_command, kernel_setting } from "@/abi/shell.ts";
+import {
+  SETTING,
+  type SettingName,
+  settingsIn,
+} from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const enum Tint {
@@ -134,8 +138,7 @@ const SAID_MS = 2500;
 
 /** A setting the panel holds (section `profiler`). */
 type Own = {
-  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler"
-    ? K
+  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler" ? K
     : never;
 }[SettingName];
 
@@ -185,7 +188,7 @@ function restartWindow(): void {
 }
 
 export function ProfilerPanel() {
-  const show = useKernel((s) => s.settings[SETTINGS.profiler.key] === 1);
+  const show = useKernel((s) => s.settings[SETTING.profiler.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   // Read while shown, folded or not: the title carries the fps.
@@ -211,13 +214,17 @@ export function ProfilerPanel() {
   // saw none move in it.
   const r = g?.recent ?? null;
   const rate = r === null ? null : movingFps(r);
-  const note =
-    rate !== null ? `${n1(rate)} fps` : recording ? "idle" : undefined;
+  const note = rate !== null
+    ? `${n1(rate)} fps`
+    : recording
+    ? "idle"
+    : undefined;
 
   return (
-    <Fold
+    <Accordion
       name="profiler"
-      title={title}
+      title="Profiler"
+      note={note}
       end={
         <Text style={[gauge.text, gauge.key]}>
           Last {LIVE_WINDOW_MS / 1000} s
@@ -266,7 +273,7 @@ export function ProfilerPanel() {
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
         <ProfilerGauge g={g} />
       </ScrollView>
-    </Fold>
+    </Accordion>
   );
 }
 

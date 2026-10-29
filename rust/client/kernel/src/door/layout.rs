@@ -9,13 +9,34 @@
 use xpute_guest::entry::BootInfo;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
+use crate::domain::layer::division;
+use crate::domain::layer::terrain::fixed;
+use crate::domain::layer::terrain::mirror;
+use crate::domain::query::decor::asset;
+use crate::domain::scene::character::companion;
+use crate::domain::scene::character::preview;
+use crate::domain::scene::character::variant;
+use crate::domain::scene::environment::cloud;
+use crate::profiler::record;
+use crate::sys::io::body;
+use crate::sys::io::demand::Stream;
+use crate::sys::io::host;
+use crate::sys::io::host_spec::stream::BYTES;
+use crate::sys::io::param;
 use crate::sys::mem::section::{
     self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES,
 };
 use crate::sys::mem::spec::{
     CQ_CAP, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES,
 };
+use pxl_render::api_spec::stream;
+use pxl_render::gpu::api;
+use pxl_render::gpu::renderer;
+use pxl_render::gpu::upload;
+use xpute_guest::mem;
+use xpute_guest::mem::section::span_of;
 use xpute_guest::mem::section::{Section, PAGE_BYTES};
+use xpute_kit::status::errno::Errno;
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.
@@ -36,7 +57,7 @@ const SLOT_END: u32 = CQ_SLOT_AT + slots_bytes(CQ_CAP, RING_SLOT_BYTES);
 /// Once: the ranges are the rings' alone, in memory that never moves and
 /// outlives them.
 pub unsafe fn rings() -> (Ring, Ring) {
-    let mem = xpute_guest::mem::core();
+    let mem = mem::core();
     // SAFETY: the caller's.
     unsafe {
         (
@@ -98,9 +119,7 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX
-    + crate::domain::query::decor::asset::MODELS_MAX
-    + crate::domain::scene::environment::cloud::MODELS_MAX;
+const MODELS_MAX: usize = variant::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
 
 /// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
@@ -108,8 +127,7 @@ const SINGLE_UPLOADS: usize = 5;
 
 /// An actor's palette, one for each frame that holds one: the companion's
 /// figures and the display cases.
-const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES
-    + crate::domain::scene::character::preview::CASES_MAX;
+const ACTOR_UPLOADS: usize = companion::FIGURES + preview::CASES_MAX;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
@@ -117,20 +135,18 @@ const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's uploads before taking its new ones, so it
 /// never holds more.
-pub const MAX_LIVE_UPLOADS: usize = MODELS_MAX
-    + crate::domain::scene::environment::cloud::PATCHES_MAX
-    + ACTOR_UPLOADS
-    + SINGLE_UPLOADS;
+pub const MAX_LIVE_UPLOADS: usize =
+    MODELS_MAX + cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
 const FIXED: [u32; 5] = [
-    crate::domain::layer::terrain::fixed::TERRAIN_BYTES,
-    crate::domain::layer::division::DIVISION_BYTES,
-    pxl_render::gpu::upload::uploads_bytes(MAX_LIVE_UPLOADS),
-    pxl_render::api_spec::stream::BYTES,
-    crate::sys::io::host_spec::stream::BYTES,
+    fixed::TERRAIN_BYTES,
+    division::DIVISION_BYTES,
+    upload::uploads_bytes(MAX_LIVE_UPLOADS),
+    stream::BYTES,
+    BYTES,
 ];
 
-pub const FIXED_BYTES: u32 = xpute_guest::mem::section::span_of(&FIXED, PAGE_BYTES);
+pub const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
 
 const _: () = assert!(
     REGION_BYTES.is_multiple_of(PAGE_BYTES)
@@ -147,9 +163,9 @@ const _: () = assert!(
 
 /// A body its kind's packet at its longest, in the block the buddy gives
 /// it, a power of two; none for a kind whose bodies take slots.
-const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
+const fn body_block(stream: Stream) -> u64 {
     match stream.max_body() {
-        Some(_) if crate::sys::io::body::slotted(stream) => 0,
+        Some(_) if body::is_slotted(stream) => 0,
         Some(max) => max.next_power_of_two() as u64,
         None => 0,
     }
@@ -159,9 +175,9 @@ const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
 /// (sys/io/body.rs), and a body on every credit in the buddy's block for the
 /// longest other kind, each freed as it is decoded; the ways' pool's
-/// mirror at its cap (domain/layer/terrain/mirror.rs, domain/layer/terrain/param.rs `WAYS_POOL_BYTES`),
-/// the renderer's rooms for the squares' records, every read's at a
-/// square's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
+/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_FAMILIES`),
+/// the renderer's rooms for the bricks' records, every read's at a
+/// brick's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (profiler/record.rs), each
 /// in the buddy's blocks, a power of two. Each is refused past its cap, and
 /// waits or stays absent where the heap refuses it. The rest of the heap
@@ -177,12 +193,11 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = crate::domain::layer::terrain::mirror::MIRROR_BYTES
-        + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
-    slots_bytes(crate::sys::io::param::BODY_SLOTS)
-        + crate::sys::io::param::MAX_CREDITS as u64 * longest
+    let ways = mirror::MIRROR_BYTES + renderer::RECORD_ROOMS_BYTES;
+    slots_bytes(param::BODY_SLOTS)
+        + param::MAX_CREDITS as u64 * longest
         + ways
-        + crate::profiler::record::PROFILER_BYTES
+        + record::PROFILER_BYTES
 };
 
 const _: () = assert!(
@@ -200,7 +215,7 @@ pub fn heap_at(data_end: u32) -> u32 {
 pub fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
     map()
-        .or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
+        .or_bug(Errno::ENOTRECOVERABLE)
         .fixed
         .nth(&FIXED, PAGE_BYTES, f as usize)
 }
@@ -210,14 +225,14 @@ pub fn range(f: Fixed) -> Section {
 /// makes them itself.
 pub fn install(b: &BootInfo) -> u32 {
     section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
-    crate::domain::layer::terrain::fixed::RANGE.set(range(Fixed::Terrain));
-    crate::domain::layer::division::RANGE.set(range(Fixed::Division));
+    fixed::RANGE.set(range(Fixed::Terrain));
+    division::RANGE.set(range(Fixed::Division));
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        crate::sys::io::host::set_stream(range(Fixed::Host).offset);
-        pxl_render::gpu::upload::set_uploads(range(Fixed::Uploads).offset, MAX_LIVE_UPLOADS);
-        pxl_render::gpu::api::install(range(Fixed::Gpu).offset)
+        host::set_stream(range(Fixed::Host).off);
+        upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
+        api::install(range(Fixed::Gpu).off)
     }
 }
 

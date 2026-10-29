@@ -13,7 +13,7 @@ pub enum Answer<T> {
 }
 
 impl<T> Answer<T> {
-    pub fn value(self) -> Option<T> {
+    pub fn val(self) -> Option<T> {
         match self {
             Answer::Exact(v) | Answer::Coarser(v, _) => Some(v),
             Answer::Nothing(_) => None,

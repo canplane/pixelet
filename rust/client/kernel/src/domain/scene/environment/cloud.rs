@@ -3,7 +3,7 @@
 //! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`),
 //! drawn as decor is and held as decor is not. It claims no cell, so
 //! nothing is built around it and a tower stands through it; it is no layer
-//! and no window's square holds it. It is laid on the field's own map,
+//! and no window's brick holds it. It is laid on the field's own map,
 //! which the wind carries (`pxl-spec-core cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, a
 //! sprite or nothing by its size on the screen (`present_patch`), by the
@@ -20,22 +20,35 @@ use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
-use pxl_spec_core::cloud::{drift, lattice_hash, CUMULUS_KM, WIND};
+use pxl_spec_core::cloud::{drift, lattice_hash};
+use pxl_spec_core::param::cloud::{CUMULUS_KM, WIND};
 use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
+use crate::domain::query::model;
 use crate::domain::query::model::asset::model_of;
-use crate::domain::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
+use crate::domain::scene::decor::drawn::{decor_model_angle, decor_sprite_angle, sprite_reach};
+use crate::domain::scene::environment::param::{
+    CLOUD_DRIFT_CELLS, CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
+};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::scene;
-use crate::domain::view::frame::pose::{km_per_u, units_per_px_at};
+use crate::domain::view::frame::pose::km_per_u;
+use crate::domain::view::lens;
+use crate::domain::view::observation;
 use crate::domain::view::observation::eye;
+use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
+use pxl_render::gpu::api::Image;
+use pxl_spec::space::camera::grid;
+use pxl_spec::space::coord::world;
+use pxl_spec_core::param::cloud;
+use pxl_spec_core::scatter;
 
 /// Its models, a cloud each one of them.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -44,58 +57,47 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
-const FIRST_GROUP: usize = pxl_spec_core::scatter::GROUPS as usize;
+const FIRST_GROUP: usize = scatter::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= GROUPS,
     "a draw group each variant"
 );
 
-/// A cell holds a cloud or none: 2^12 units, about 8 km at mid latitudes.
-const CELL_SHAMT: u32 = 12;
+/// A cell holds a cloud or none: a unit of the field's lattice, whose hash
+/// says where one is (pxl-spec-core param.rs `cloud::LATTICE_SHAMT`).
+const CELL_SHAMT: u32 = cloud::LATTICE_SHAMT;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
 /// The cells around the world, so a cell's hash wraps with the map.
-const CELLS_AROUND: i64 = 1 << (pxl_spec::space::coord::world::EXTENT[0] - CELL_SHAMT);
+const CELLS_AROUND: i64 = 1 << (world::EXTENT[0] - CELL_SHAMT);
 /// A patch is built and drawn as one, this many cells a side.
 const PATCH_CELLS: u32 = 16;
 const PATCH: f64 = CELL * PATCH_CELLS as f64;
-/// A cloud's width in units, at the least and the most: about 2 to 3.5 km,
-/// whatever the spacing.
-const WIDTH: [f64; 2] = [1024.0, 1840.0];
 /// The farthest a patch is built: where the widest cloud is a sprite's worth.
-const REACH_MAX: f64 = sprite_reach(WIDTH[1]);
+const REACH_MAX: f64 = sprite_reach(CLOUD_WIDTH[1]);
 /// The most patches the reach spans, the keys of a side squared: its share of
 /// the renderer's upload table.
 pub const PATCHES_MAX: usize = {
     let side = (2.0 * REACH_MAX / PATCH) as usize + 2;
     side * side
 };
-/// The share of cells holding a cloud, the same everywhere: tied to the
-/// field, the cumulus gathered in clumps with bare country between.
-const SHARE: f64 = 0.5;
-const SALT: u32 = 0x0c0c;
-/// The fewest camera cells a cell of the field spans as it is drawn: past
-/// where it spans fewer, each octave farther shows a quarter of the clouds,
-/// the same quarter at every distance, so a cloud seen nearer stays. Whole,
-/// the field ran to the horizon a cloud a cell, a band of dots. Set by eye.
-const SPACING_CELLS: f64 = 32.0;
 
 /// How far from the eye the thinning starts, in units: where a cell spans
-/// `SPACING_CELLS` camera cells.
-const THIN_FROM: f64 = CELL * pxl_spec::space::camera::grid::SPLIT / SPACING_CELLS;
+/// `CLOUD_SPACING_CELLS` of the view's camera cells.
+const THIN_FROM: f64 = CELL / grid::CELL / CLOUD_SPACING_CELLS;
 
 /// Whether the cloud whose middle lies at `local` about its patch's corner
 /// shows `d2` square units from the eye: its hash under (THIN_FROM / d)²,
 /// asked as a product, so a cloud costs a multiply. Decided as it is drawn,
 /// never built: a patch built again as the eye moved made the zoom stall.
 fn shows(local: [f32; 2], d2: f64) -> bool {
-    f64::from(lattice_hash(local.map(f32::to_bits), SALT + 6)) * d2 < THIN_FROM * THIN_FROM
+    f64::from(lattice_hash(local.map(f32::to_bits), CLOUD_SALT + 6)) * d2 < THIN_FROM * THIN_FROM
 }
 
 struct Patch {
     at: u32,
     bytes: u32,
     handle: u32,
-    index: u32,
+    idx: u32,
     heights: [f32; 2],
 }
 
@@ -120,9 +122,8 @@ fn clouds() -> &'static mut Clouds {
 }
 
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
-pub fn cloud_groups(
-) -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
-    let models = crate::domain::query::model::models();
+pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 3])> {
+    let models = model::models();
     let skin = load_of(cumulus::skin).and_then(load_image);
     clouds()
         .models
@@ -149,26 +150,23 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
-/// How long the wind takes to carry the clouds a pixel at the nearest drawn,
-/// in seconds (`units_per_px_at`): what drifts less is not seen to move. A
-/// camera cell's step, a dozen pixels at once, was seen as the clouds
-/// stopping and jumping. Infinite while none is drawn.
+/// How long the wind takes to carry the clouds `CLOUD_DRIFT_CELLS` of a camera
+/// cell at the nearest drawn (`lens::cell_there`), in seconds: their words
+/// stand between steps, so a drawn cloud lags the wind by up to that, an
+/// angle, the same on every screen. Infinite while none is drawn.
 pub fn drift_step_s() -> f64 {
-    units_per_px_at(clouds().seen) / libm::hypot(WIND[0], WIND[1])
+    lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
-
-/// Where the clouds are gone, faded from half of it: a product number.
-const GONE_KM: f64 = 64.0;
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
 /// `CLOUDS`): none where the setting is off, all of them up to half of
-/// `GONE_KM` and none from it.
+/// `CLOUD_GONE_KM` and none from it.
 pub fn clouds_shown() -> f64 {
     if !settings_store().clouds {
         return 0.0;
     }
-    let altitude_km = f64::from(scene().environment.out[ENV_AIR]);
-    let t = ((altitude_km - GONE_KM / 2.0) / (GONE_KM / 2.0)).clamp(0.0, 1.0);
+    let alt_km = f64::from(scene().environment.out[ENV_AIR]);
+    let t = ((alt_km - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);
     1.0 - t * t * (3.0 - 2.0 * t)
 }
 
@@ -191,12 +189,10 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     }
     let moved = drift(f64::from(env[ENV_SKY + 1]));
     let base = layer_u();
-    let largest = WIDTH[1];
+    let largest = CLOUD_WIDTH[1];
     // As far as the eye observes, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is a sprite's worth.
-    let reach = crate::domain::view::observation::eye_reach()
-        .unwrap_or(0.0)
-        .min(REACH_MAX);
+    let reach = observation::eye_draw_reach().unwrap_or(0.0).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| {
         libm::floor((on_map[k] - reach) / PATCH) as i64
@@ -294,13 +290,13 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                 });
                 c.seen = c
                     .seen
-                    .min(v3::len(&gap.map(|g| g.max(0.0))).max(crate::domain::view::param::NEAR));
+                    .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }
         let patch = Shown {
             handle: b.handle,
             at: b.at,
-            index: b.index,
+            idx: b.idx,
             bytes: b.bytes,
             corner: [nearest(corner[0], eye[0]), corner[1]],
             side: PATCH,
@@ -313,7 +309,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         let groups = VARIANTS.iter().enumerate().map(|(k, &a)| {
             (
                 (FIRST_GROUP + k) as u32,
-                (widest(a), WIDTH.map(|w| w / widest(a))),
+                (widest(a), CLOUD_WIDTH.map(|w| w / widest(a))),
             )
         });
         present_patch(
@@ -350,18 +346,18 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
             ];
             let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
             let hash = |salt: u32| f64::from(lattice_hash(at, salt));
-            if hash(SALT) >= SHARE {
+            if hash(CLOUD_SALT) >= CLOUD_SHARE {
                 return None;
             }
-            let jitter = [hash(SALT + 1), hash(SALT + 2)];
+            let jitter = [hash(CLOUD_SALT + 1), hash(CLOUD_SALT + 2)];
             let local = [
                 (f64::from(i) + 0.25 + 0.5 * jitter[0]) * CELL,
                 (f64::from(j) + 0.25 + 0.5 * jitter[1]) * CELL,
             ];
             let variant =
-                ((hash(SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
+                ((hash(CLOUD_SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
             let file = VARIANTS[variant];
-            let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * hash(SALT + 3);
+            let width = CLOUD_WIDTH[0] + (CLOUD_WIDTH[1] - CLOUD_WIDTH[0]) * hash(CLOUD_SALT + 3);
             let scale = width / widest(file);
             let height = extent(file)[2] * scale;
             Some(Cloud {
@@ -369,7 +365,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
                 local,
                 z: base + 0.5 * height,
                 width,
-                spin: core::f64::consts::TAU * hash(SALT + 5),
+                spin: core::f64::consts::TAU * hash(CLOUD_SALT + 5),
                 scale,
             })
         })
@@ -387,7 +383,7 @@ fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
         .flat_map(move |((first, n), file)| {
             let lane = GroupLanes {
                 first: first as usize,
-                count: n as usize,
+                cnt: n as usize,
             };
             (0..n as usize).map(move |i| {
                 let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
@@ -433,8 +429,8 @@ fn build(
             .iter()
             .map(|l| GroupLanes::words(l.len()))
             .sum::<usize>();
-    let index = (words * 4) as u32;
-    let (at, bytes) = alloc(index + instances as u32 * 4)?;
+    let idx = (words * 4) as u32;
+    let (at, bytes) = alloc(idx + instances as u32 * 4)?;
     // SAFETY: a heap block of the bytes asked for, this patch's until given back.
     let out: &mut [u32] =
         unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
@@ -444,7 +440,7 @@ fn build(
         out[1 + g] = l.len() as u32;
         let lane = GroupLanes {
             first,
-            count: l.len(),
+            cnt: l.len(),
         };
         for (i, v) in l.iter().enumerate() {
             for (k, &w) in v.iter().enumerate() {
@@ -459,7 +455,7 @@ fn build(
         at: at as u32,
         bytes,
         handle,
-        index,
+        idx,
         heights: if instances == 0 { [0.0; 2] } else { heights },
     })
 }
@@ -469,7 +465,7 @@ fn build(
 struct Shown {
     handle: u32,
     at: u32,
-    index: u32,
+    idx: u32,
     bytes: u32,
     corner: [f64; 2],
     side: f64,
@@ -481,7 +477,6 @@ struct Shown {
 /// extent and the least and most scale its instances are drawn at. Under an
 /// `opacity` of one the models are laid over the world blended, and a sprite,
 /// which cannot be, is left out.
-#[allow(clippy::too_many_arguments)]
 fn present_patch(
     draw: &mut DrawList,
     b: &Shown,
@@ -513,20 +508,20 @@ fn present_patch(
     let words: &mut [u32] = unsafe {
         core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4)
     };
-    let (lanes_of, list) = words.split_at_mut(b.index as usize / 4);
+    let (lanes_of, list) = words.split_at_mut(b.idx as usize / 4);
     // A patch all within THIN_FROM shows every cloud, and asks none.
     let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
-    for ((offset, count), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
+    for ((off, cnt), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
         let lane = GroupLanes {
-            first: offset as usize,
-            count: count as usize,
+            first: off as usize,
+            cnt: cnt as usize,
         };
         let first = at;
         sprites.clear();
-        let gone = tier(extent * most / units_per_px_at(nearest)) == drawn::GONE;
-        let modeled = tier(extent * least / units_per_px_at(farthest)) == drawn::MODEL;
-        for i in 0..if gone { 0 } else { count as usize } {
+        let gone = tier(extent * most / nearest) == drawn::GONE;
+        let modeled = tier(extent * least / farthest) == drawn::MODEL;
+        for i in 0..if gone { 0 } else { cnt as usize } {
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }
@@ -560,7 +555,7 @@ fn present_patch(
         changed |= list[at..at + sprites.len()] != sprites[..];
         list[at..at + sprites.len()].copy_from_slice(sprites);
         at += sprites.len();
-        let index = b.index / 4 + first as u32;
+        let idx = b.idx / 4 + first as u32;
         if models > 0 {
             let pipeline = if opacity < 1.0 {
                 PIPELINE_GHOST_DECOR
@@ -572,7 +567,7 @@ fn present_patch(
                 b.handle,
                 group,
                 models,
-                [offset, count, index],
+                [off, cnt, idx],
                 translation,
                 opacity,
             );
@@ -583,13 +578,13 @@ fn present_patch(
                 b.handle,
                 group,
                 sprites.len() as u32,
-                [offset, count, index + models],
+                [off, cnt, idx + models],
                 translation,
                 1.0,
             );
         }
     }
     if changed {
-        draw.rewrite_part(b.handle, b.at, b.index, at as u32 * 4);
+        draw.rewrite_part(b.handle, b.at, b.idx, at as u32 * 4);
     }
 }

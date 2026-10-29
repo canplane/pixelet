@@ -9,49 +9,49 @@
   ],
 
   "TAG": {
-    "$value": 0,
+    "$val": 0,
     "$type": "u32",
     "$doc": ["The submitter's, echoed on the reply; a signal's subject."]
   },
 
   "CMD": {
-    "$value": 1,
+    "$val": 1,
     "$type": "u32",
     "$doc": ["The command in the low FLAG_SHIFT bits, the flags above them."]
   },
 
   "RESULT": {
-    "$value": 2,
+    "$val": 2,
     "$type": "u32",
     "$doc": ["On a reply, a value or a negative errno; else 0."]
   },
 
-  "PACKET": {
-    "$value": 3,
+  "PKT": {
+    "$val": 3,
     "$type": "u32",
     "$doc": ["Where its XTP packet is, as the transport names it; 0 for none."]
   },
 
   "WORDS": {
-    "$value": 4,
+    "$val": 4,
     "$type": "u32",
     "$doc": ["Words a frame takes."]
   },
 
   "FLAG_SHIFT": {
-    "$value": 16,
+    "$val": 16,
     "$type": "u32",
     "$doc": ["Where the flags start in the CMD word."]
   },
 
   "RES": {
-    "$value": 1,
+    "$val": 1,
     "$type": "u32",
     "$doc": ["A flag: a reply, as against a signal. Set by the sender, never by a handler."]
   },
 
   "ACKREQ": {
-    "$value": 2,
+    "$val": 2,
     "$type": "u32",
     "$doc": ["A flag: always reply; without it, only a failure is replied to."]
   }

@@ -7,9 +7,9 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
   Command,
   encode_sensor_failed,
-  encode_sensor_orientation,
+  encode_sensor_orient,
   encode_sensor_permission,
-  encode_sensor_position,
+  encode_sensor_pos,
   GeolocationErrorCode,
   PermissionAnswer,
   Sensor,
@@ -22,42 +22,42 @@ function given(n: number | null): number | null {
   return n !== null && Number.isFinite(n) ? n : null;
 }
 
-function kernel_position(
+function kernel_pos(
   lon: f64,
   lat: f64,
-  altitude: f64 | null,
+  alt: f64 | null,
   accuracy: f64 | null,
   course: f64 | null,
 ): void {
   HOST.send(
-    Command.SENSOR_POSITION,
-    encode_sensor_position(
+    Command.SENSOR_POS,
+    encode_sensor_pos(
       HOST.doorbell,
       lon,
       lat,
-      given(altitude),
+      given(alt),
       given(accuracy),
       given(course),
     ),
   );
 }
 
-function kernel_position_error(code: GeolocationErrorCode): void {
+function kernel_pos_err(code: GeolocationErrorCode): void {
   HOST.send(
     Command.SENSOR_FAILED,
     encode_sensor_failed(HOST.doorbell, Sensor.Geolocation, code),
   );
 }
 
-function kernel_orientation(
+function kernel_orient(
   webkit_compass_heading: f64 | null,
   alpha: f64 | null,
   beta: f64 | null,
   gamma: f64 | null,
 ): void {
   HOST.send(
-    Command.SENSOR_ORIENTATION,
-    encode_sensor_orientation(
+    Command.SENSOR_ORIENT,
+    encode_sensor_orient(
       HOST.doorbell,
       given(webkit_compass_heading),
       given(alpha),
@@ -68,7 +68,7 @@ function kernel_orientation(
 }
 
 /** The compass gives no code for its failure. */
-function kernel_orientation_lost(): void {
+function kernel_orient_lost(): void {
   HOST.now(
     Command.SENSOR_FAILED,
     encode_sensor_failed(HOST.doorbell, Sensor.Orientation, null),
@@ -82,7 +82,7 @@ function kernel_permission(sensor: Sensor, answer: PermissionAnswer): void {
   );
 }
 
-const ERROR = {
+const ERR = {
   denied: GeolocationErrorCode.PermissionDenied,
   unavailable: GeolocationErrorCode.PositionUnavailable,
   timeout: GeolocationErrorCode.Timeout,
@@ -103,10 +103,10 @@ const ANSWER = {
 
 /** What the place's sensors heard, handed to it once at boot. */
 export const SENSOR_HEARD: SensorHeard = {
-  position: kernel_position,
-  positionError: (error) => kernel_position_error(ERROR[error]),
-  orientation: kernel_orientation,
-  orientationLost: kernel_orientation_lost,
+  position: kernel_pos,
+  positionError: (error) => kernel_pos_err(ERR[error]),
+  orientation: kernel_orient,
+  orientationLost: kernel_orient_lost,
   permission: (sensor, answer) =>
     kernel_permission(SENSOR[sensor], ANSWER[answer]),
 };

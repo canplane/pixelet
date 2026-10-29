@@ -23,9 +23,24 @@ use std::process::{Command, ExitCode};
 use pxl_tool::root;
 use pxl_tool::shader::{header, inputs_digest, DIR, ENTRIES};
 
-const IMAGE: &str = "rust:1-bookworm";
+/// The image rustup runs in, by its digest: its compiler builds SPIRV-Tools
+/// (rustc_codegen_spirv's `use-compiled-tools`), so a tag that moved could
+/// move the output.
+const IMAGE: &str = "rust@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6";
+/// The machine's one home for the build: the toolchain, the crates and the
+/// target, a Docker volume rather than any checkout's directory, so a
+/// checkout, an export or a worktree each compiles only what its sources
+/// change.
+const HOME: &str = "pxl-shader";
+/// Where a run's sources are built, inside the volume: the same path for
+/// every checkout, so the target's dependencies carry over, and copied in
+/// anew under the lock, so cargo, which judges a path crate by its files'
+/// times, never takes another run's build for this one's.
+const WORK: &str = "/cache/w";
 const BUILT: &str =
-    "rust/target/shader/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
+    "/cache/target/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
+/// How many sources' entries the machine keeps made, the most lately used.
+const KEPT: usize = 100;
 
 /// Where the machine keeps the entries made of each sources' digest, one
 /// directory a digest: whatever checkout, export or worktree's sources it
@@ -166,22 +181,46 @@ ls -1t /made/*/done | tail -n +{} | while read f; do rm -rf \"${{f%/done}}\"; do
 fn run() -> Result<bool, String> {
     let check = std::env::args().any(|a| a == "--check");
     let root = root();
-    let made = generate(&root, &inputs_digest(&root)?)?;
-    let mut current = true;
-    for (_, file, text) in &made {
-        let target = root.join(DIR).join(file);
-        if check {
-            if std::fs::read_to_string(&target).ok().as_deref() == Some(text.as_str()) {
-                println!("current: {}", target.display());
-            } else {
+    let digest = inputs_digest(&root)?;
+    if !check && !force && stale(&root, &digest).is_empty() {
+        println!("current: the entries were made from the sources' digest {digest}");
+        return Ok(true);
+    }
+    let (built, made) = generate(&root, check || force)?;
+    let stamp = root.join(DIR).join(STAMP);
+    if check {
+        let named = made_from(&root).as_deref() == Some(built.as_str());
+        let mut cur = named;
+        for (_, file, text) in &made {
+            let target = root.join(DIR).join(file);
+            if std::fs::read_to_string(&target).ok().as_deref() != Some(text.as_str()) {
+                // Made from these sources by the stamp, yet not what they
+                // make: an entry edited by hand.
+                let mend = if named { " --force" } else { "" };
                 eprintln!(
                     "stale: {} is not what the source makes now; run `cargo shader-wgsl`",
                     target.display()
                 );
-                current = false;
+                cur = false;
             }
-        } else {
-            std::fs::write(&target, text).map_err(|e| format!("{}: {e}", target.display()))?;
+        }
+        if !named {
+            eprintln!(
+                "stale: {} names other sources; run `cargo shader-wgsl`",
+                stamp.display()
+            );
+        }
+        return Ok(cur);
+    }
+    // The stamp is taken away first and put back last, each entry renamed
+    // into place between: a run cut short leaves no stamp, so the set reads
+    // as stale whatever the sources go back to. An entry already what it
+    // makes is left alone, so a build or a watcher that reads it is not woken.
+    let _ = std::fs::remove_file(&stamp);
+    for (_, file, text) in &made {
+        let target = root.join(DIR).join(file);
+        if std::fs::read_to_string(&target).ok().as_deref() != Some(text.as_str()) {
+            replace(&target, text)?;
             println!("wrote {} ({} bytes)", target.display(), text.len());
         }
     }

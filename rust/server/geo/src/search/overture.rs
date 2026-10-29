@@ -12,6 +12,7 @@ use pxl_spec::space::coord::adapter::epsg4326;
 
 use crate::division;
 use crate::search::endpoint::Near;
+use pxl_geo_spec::overture::properties;
 use pxl_server::db::DbError;
 
 const DIVISION_LIMIT: i64 = 5;
@@ -47,7 +48,7 @@ macro_rules! home {
 /// API biases suggestions to the request's `regionCode`, so another country's
 /// fill only what room is left. Similarity is rounded to two decimals so
 /// distance decides among near-equal names; on the raw score, one trigram
-/// outranked a thousand kilometres.
+/// outranked a thousand kilometers.
 const SEARCH_NEAR_SQL: &str = concat!(
     "WITH home AS (SELECT geom FROM overture_division_areas WHERE properties->>'division_id' = ",
     home!(),
@@ -102,11 +103,11 @@ pub struct SearchResult {
     pub lon: f64,
     pub lat: f64,
     /// The ground meters from `near` (`epsg4326::dist`); null without one.
-    pub distance_m: Option<f64>,
+    pub dist_m: Option<f64>,
 }
 
 /// The ground meters from `near` to `lon`, `lat`.
-fn distance_m(near: Option<&Near>, lon: f64, lat: f64) -> Option<f64> {
+fn dist_m(near: Option<&Near>, lon: f64, lat: f64) -> Option<f64> {
     near.map(|n| epsg4326::dist(&[n.lon, n.lat, 0.0], &[lon, lat, 0.0]))
 }
 
@@ -202,7 +203,7 @@ pub async fn search(
             context,
             lon: r.lon,
             lat: r.lat,
-            distance_m: distance_m(near, r.lon, r.lat),
+            dist_m: dist_m(near, r.lon, r.lat),
         });
     }
 
@@ -220,12 +221,12 @@ pub async fn search(
             gers_id: r.gers_id,
             name: r.name,
             kind: "place",
-            category: pxl_geo_spec::overture::properties::category_of(&r.properties),
+            category: properties::category_of(&r.properties),
             common: None,
             context,
             lon: r.lon,
             lat: r.lat,
-            distance_m: distance_m(near, r.lon, r.lat),
+            dist_m: dist_m(near, r.lon, r.lat),
         });
 
     Ok(division_results

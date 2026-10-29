@@ -8,7 +8,7 @@
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, u_from_mer};
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, u_from_merc};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::{LEAF_ZOOM, TOP_ZOOM};
 use xpute_kit::math::scalar::round;
@@ -25,7 +25,7 @@ pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
     // The world's corner, where its grid of leaf cells starts; a point in that
     // grid, in 1/POINT_SCALE of a cell, the tile's own whole cells taken off.
     let corner = get_tile_bbox(0, [0, 0])[0];
-    let grid = |m: f64, k: usize| round(u_from_mer(m - corner[k]) / CELL_U * POINT_SCALE);
+    let grid = |m: f64, k: usize| round(u_from_merc(m - corner[k]) / CELL_U * POINT_SCALE);
     let origin = [0, 1].map(|k| f64::from(tile[k]) * f64::from(TILE_CELLS) * POINT_SCALE);
     debug_assert!({
         let min = get_tile_bbox(LEAF_ZOOM, tile)[0];

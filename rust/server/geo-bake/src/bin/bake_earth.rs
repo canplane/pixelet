@@ -26,6 +26,7 @@ use std::process::ExitCode;
 
 use image::ImageFormat;
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::published::FORMAT;
@@ -38,9 +39,9 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::tile_at;
 
 /// What it reads, and where `make download-earth` keeps it.
-const SOURCE: &str = "infra/earth/source.json";
+const SRC: &str = "infra/earth/source.json";
 const RAW: &str = "infra/earth/raw";
-const GLOBAL: (u32, u32) = (2048, 1024);
+const GLOBAL: (u32, u32) = earth::PICTURE;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -123,7 +124,7 @@ fn lights_byte(v: f32) -> u8 {
 }
 
 /// A file `SOURCE` names, as `download earth` kept it.
-fn source(url: &str) -> Result<Vec<u8>, String> {
+fn src(url: &str) -> Result<Vec<u8>, String> {
     let path = Path::new(RAW).join(url.rsplit('/').next().ok_or("a file name")?);
     std::fs::read(&path).map_err(|e| format!("{}: {e} — run `make download-earth`", path.display()))
 }
@@ -139,15 +140,15 @@ struct Plate<'a, const N: usize> {
 impl<const N: usize> Plate<'_, N> {
     /// The mean over a box of longitude and latitude, in degrees, each pixel
     /// weighed by how much of it the box covers; a box narrower than a pixel is
-    /// widened to one, so a coarse source is read as a tent, not as blocks.
-    fn mean(&self, [lng0, lng1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
+    /// widened to one, so a coarse source is read as a tent, not as steps.
+    fn mean(&self, [lon0, lon1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
         let span = |a: f64, b: f64| {
             let (mid, half) = ((a + b) / 2.0, ((b - a).abs() / 2.0).max(0.5));
             (mid - half, mid + half)
         };
         let (x0, x1) = span(
-            (lng0 + 180.0) / 360.0 * self.width as f64,
-            (lng1 + 180.0) / 360.0 * self.width as f64,
+            (lon0 + 180.0) / 360.0 * self.width as f64,
+            (lon1 + 180.0) / 360.0 * self.width as f64,
         );
         let (y0, y1) = span(
             (90.0 - lat1) / 180.0 * self.height as f64,
@@ -172,10 +173,10 @@ impl<const N: usize> Plate<'_, N> {
 }
 
 /// Longitude and latitude, in degrees, of a point of the plane in units.
-fn lng_lat(x: f64, y: f64) -> [f64; 2] {
-    let [lng, lat, _] =
-        epsg4326::from_mercator(&[epsg3857::mer_from_u(x), epsg3857::mer_from_u(y), 0.0]);
-    [lng, lat]
+fn lon_lat(x: f64, y: f64) -> [f64; 2] {
+    let [lon, lat, _] =
+        epsg4326::from_mercator(&[epsg3857::merc_from_u(x), epsg3857::merc_from_u(y), 0.0]);
+    [lon, lat]
 }
 
 fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
@@ -183,21 +184,21 @@ fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
     let mut rgba = vec![0u8; earth::EARTH_BYTES];
     for ty in 0..TILE_CELLS {
         for tx in 0..TILE_CELLS {
-            let index = GROUND.cell_index(tx, ty);
-            let cell = GROUND.cell_at(tile, index);
+            let idx = GROUND.cell_idx(tx, ty);
+            let cell = GROUND.cell_at(tile, idx);
             let (base, side) = (cell.base(), cell.side());
             let (x, y) = (
                 q3::to_real(i64::from(base[0])),
                 q3::to_real(i64::from(base[1])),
             );
-            let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side, y + side));
-            let [r, g, b] = day.mean([lng0, lng1], [lat0, lat1]).map(to_srgb);
-            let at = index as usize * 4;
+            let ([lon0, lat0], [lon1, lat1]) = (lon_lat(x, y), lon_lat(x + side, y + side));
+            let [r, g, b] = day.mean([lon0, lon1], [lat0, lat1]).map(to_srgb);
+            let at = idx as usize * 4;
             rgba[at..at + 4].copy_from_slice(&[
                 r,
                 g,
                 b,
-                lights_byte(night.mean([lng0, lng1], [lat0, lat1])[0]),
+                lights_byte(night.mean([lon0, lon1], [lat0, lat1])[0]),
             ]);
         }
     }
@@ -219,12 +220,12 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
                         90.0 - j as f64 * 180.0 / h as f64,
                     ];
                     for (i, texel) in row.chunks_mut(4).enumerate() {
-                        let lng = [
+                        let lon = [
                             i as f64 * 360.0 / w as f64 - 180.0,
                             (i + 1) as f64 * 360.0 / w as f64 - 180.0,
                         ];
-                        let [r, g, b] = day.mean(lng, lat).map(to_srgb);
-                        texel.copy_from_slice(&[r, g, b, lights_byte(night.mean(lng, lat)[0])]);
+                        let [r, g, b] = day.mean(lon, lat).map(to_srgb);
+                        texel.copy_from_slice(&[r, g, b, lights_byte(night.mean(lon, lat)[0])]);
                     }
                 }
             });
@@ -269,7 +270,7 @@ fn night_mosaic(rows: &[Vec<&str>]) -> Result<(Vec<u8>, usize, usize), String> {
     let (mut tile, mut width) = (0, 0);
     for (row, names) in rows.iter().enumerate() {
         for (col, name) in names.iter().enumerate() {
-            let t = decode(&source(name)?)?.to_luma8();
+            let t = decode(&src(name)?)?.to_luma8();
             if mosaic.is_empty() {
                 tile = t.width() as usize;
                 width = tile * names.len();
@@ -295,18 +296,18 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let out = PathBuf::from("./out/earth");
-    let text = std::fs::read_to_string(SOURCE).map_err(|e| format!("{SOURCE}: {e}"))?;
+    let text = std::fs::read_to_string(SRC).map_err(|e| format!("{SRC}: {e}"))?;
     let named: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("{SOURCE}: {e}"))?;
-    let day = decode(&source(
-        named["day"].as_str().ok_or(format!("{SOURCE}: no day"))?,
-    )?)?
+        serde_json::from_str(&text).map_err(|e| format!("{SRC}: {e}"))?;
+    let day = decode(&src(named["day"]
+        .as_str()
+        .ok_or(format!("{SRC}: no day"))?)?)?
     .to_rgb8();
     let rows: Vec<Vec<&str>> = named["night"]
         .as_array()
-        .ok_or(format!("{SOURCE}: no night"))?
+        .ok_or(format!("{SRC}: no night"))?
         .iter()
         .map(|r| {
             r.as_array()
@@ -363,7 +364,7 @@ fn run() -> Result<(), String> {
                         Ok(()) => drop(written.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
                         Err(e) => {
                             *failed.lock().unwrap_or_else(|e| e.into_inner()) =
-                                Some(format!("{name}: {e}"))
+                                Some(format!("{name}: {e}"));
                         }
                     }
                 }

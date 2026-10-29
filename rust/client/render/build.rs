@@ -2,13 +2,29 @@
 
 // The shipped WGSL is the shader files with comments and indentation stripped; nothing is renamed.
 
+use naga::front::wgsl;
+use pxl_spec_core::answer;
+use pxl_spec_core::grid;
+use pxl_spec_core::ground;
+use pxl_spec_core::lattice;
+use pxl_spec_core::param::sun;
 use std::path::Path;
 
+#[path = "src/frame/shader/debug_look.spec.rs"]
+mod debug_look;
+#[path = "src/param.rs"]
+#[expect(
+    dead_code,
+    reason = "the build reads part of what the crate shares with it"
+)]
+mod param;
 #[path = "src/frame/shader/part.rs"]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "the build reads part of what the crate shares with it"
+)]
 mod part;
 #[path = "src/frame/shader/word.rs"]
-#[allow(dead_code)]
 mod word;
 
 fn main() {
@@ -25,18 +41,19 @@ fn main() {
         let mut shipped = stripped(&text);
         if name == "constant.wgsl" {
             shipped += &words();
+            shipped += &params();
         }
         shipped += &accessors(&text);
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
     }
     // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
     // pxl-spec-core, where the cast reads them: a ray is painted by its
-    // block's zoom against these, its block placed off the eye's Q3 steps.
+    // cell's zoom against these, its cell placed off the eye's Q3 steps.
     let lattice = format!(
         "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
         pxl_spec_core::UNIT_ZOOM,
         pxl_spec_core::FRAC_W,
-        pxl_spec_core::lattice::GROUND.cell()
+        lattice::GROUND.cell()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     // A ray's first word, its fields as the cast writes them (pxl-spec-core
@@ -49,25 +66,20 @@ fn main() {
         )
     };
     // Its word of what lies about its face, and that word's fields, a bit an
-    // edge or a corner (pxl-spec-core faces.rs).
-    use pxl_spec_core::faces::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
+    // edge or a corner (pxl-spec-core face.rs).
+    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
     let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
-    // The side of the box a block kept short of its cube is, by the eighths
+    // The side of the box a cell kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
-    let sides: String = (1..pxl_spec_core::answer::EIGHTHS)
-        .map(|k| {
-            format!(
-                "case {k}u: {{ return {:?}; }} ",
-                pxl_spec_core::answer::side(k)
-            )
-        })
+    let sides: String = (1..answer::EIGHTHS)
+        .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
     let kept = format!(
         "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
-    // A coarse block's four looks, its ray's third word, as a cell's word
+    // A coarse cell's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
-    let b = pxl_spec_core::ground::LOOK_BITS;
+    let b = ground::LOOK_BITS;
     let m = (1u32 << b) - 1;
     let looks = format!(
         "fn ray_looks(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
@@ -75,7 +87,7 @@ fn main() {
         3 * b
     );
     let ray = [
-        field("value", 0, VALUE_BITS),
+        field("val", 0, VAL_BITS),
         field("face", FACE_SHIFT, FACE_BITS),
         field("zoom", ZOOM_SHIFT, ZOOM_BITS),
         field("kept", KEPT_SHIFT, KEPT_BITS),
@@ -99,8 +111,9 @@ fn main() {
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
-    // A sun slot's word read as its depth, a share of the light box's
-    // (pxl-spec-core sun.rs `depth_of`): its top bits over the zoom asked.
+    // A sun slot's word read as its depth, a share of the light box's, as
+    // pxl-spec-core sun.rs `Sun::word` lays it: its top bits over the zoom
+    // asked: the one place a word's depth is read.
     use pxl_spec_core::sun::{DEPTH_ONE, ZOOM_BITS as SUN_ZOOM_BITS};
     let sun = format!(
         "fn sun_depth(w: u32) -> f32 {{ return f32(w >> {SUN_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n"
@@ -109,7 +122,8 @@ fn main() {
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
-    use pxl_spec_core::cloud::{HASH_IN, HASH_KEPT, HASH_LAST, HASH_ROUNDS, LATTICE_SHAMT};
+    use pxl_spec_core::cloud::{HASH_IN, HASH_KEPT, HASH_LAST, HASH_ROUNDS};
+    use pxl_spec_core::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
     let rounds: String = HASH_ROUNDS
         .iter()
@@ -137,11 +151,11 @@ fn main() {
 /// are, which the pass writes to the screen; the ramp read straight between
 /// its stops.
 fn debug_looks() -> String {
-    use debug_look::{grid, share, steps};
+    use debug_look::{share, steps};
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays
     // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
     // squared is within (1, `SPANS`²]: the tints' bounds are those.
-    let spans = pxl_spec_core::grid::SPANS;
+    let spans = grid::SPANS;
     assert!(
         share::finer::most == 1.0 && share::within::most == spans * spans,
         "debug_look.json's share bounds are the split's"
@@ -162,8 +176,8 @@ fn debug_looks() -> String {
     let last = steps::ramp.len() - 1;
     format!(
         "const GRID_COLOR = vec4f({}, {:?});\nconst SHARE_FINER = {};\nconst SHARE_FINER_MOST: f32 = {:?};\nconst SHARE_WITHIN = {};\nconst SHARE_WITHIN_MOST: f32 = {:?};\nconst SHARE_COARSER = {};\nconst STEPS_MOST: f32 = {:?};\nconst STEPS_NONE = {};\nconst STEPS_RAMP = array<vec3f, {}>({});\nfn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
-        parts(light(grid::rgb)),
-        grid::alpha,
+        parts(light(debug_look::grid::rgb)),
+        debug_look::grid::alpha,
         vec3(light(share::finer::rgb)),
         share::finer::most,
         vec3(light(share::within::rgb)),
@@ -266,13 +280,36 @@ fn compute(dir: &Path) -> String {
             workgroup.expect("an entry's workgroup")
         );
         // Its layout within what every device binds (frame/shader/floor.rs).
-        out += &format!("const _: () = assert!(crate::frame::shader::floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
+        out += &format!("const _: () = assert!(floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
+    }
+    out
+}
+
+/// Every setting (src/param.rs), named by its path under `param` (`sky::sun`'s
+/// `LIMB` is `SKY_SUN_LIMB`); the host's alone (`F64`) is not written.
+fn params() -> String {
+    use param::Value;
+    let mut out = String::new();
+    for &(path, name, val) in param::ALL.iter().flat_map(|m| m.iter()) {
+        let topic = path.rsplit_once("param::").map_or("", |(_, t)| t);
+        let named = format!("{}_{name}", topic.replace("::", "_").to_uppercase());
+        out += &match val {
+            Value::F32(v) => format!("const {named}: f32 = {v:?};\n"),
+            Value::I32(v) => format!("const {named}: i32 = {v};\n"),
+            Value::U32(v) => format!("const {named}: u32 = {v}u;\n"),
+            Value::Vec2([x, y]) => format!("const {named}: vec2f = vec2f({x:?}, {y:?});\n"),
+            Value::Vec3([x, y, z]) => {
+                format!("const {named}: vec3f = vec3f({x:?}, {y:?}, {z:?});\n")
+            }
+            Value::F64(_) => continue,
+        };
     }
     out
 }
 
 /// What the host lays out and every shader reads (frame/shader/word.rs), as
-/// WGSL: a uniform's floats as its vec4s.
+/// WGSL: a uniform's floats as its vec4s; and the pxl-spec-core values every
+/// shader may name, the world's height and the sun's taps apart.
 fn words() -> String {
     use word::*;
     let vec4s = |name: &str, floats: usize| {
@@ -287,7 +324,22 @@ fn words() -> String {
         vec4s("CLOUDS", CLOUDS_FLOATS),
         vec4s("STARS", STARS_FLOATS),
         vec4s("AO", AO_FLOATS),
-        format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\n"),
+        vec4s("MARKER", MARKER_FLOATS),
+        vec4s("STAR_RECORD", STAR_RECORD_FLOATS),
+        format!("const MARKER_INSTANCE_FLOATS: u32 = {MARKER_INSTANCE_FLOATS}u;\nconst PUCK_ZONE_INSTANCE_FLOATS: u32 = {PUCK_ZONE_INSTANCE_FLOATS}u;\n"),
+        format!("const AO_DOWNSCALE: u32 = {AO_DOWNSCALE}u;\nconst AO_NOISE_SIDE: u32 = {AO_NOISE_SIDE}u;\nconst DECOR_GROUPS: u32 = {DECOR_GROUPS}u;\n"),
+        [
+            ("TRANSMITTANCE_SIZE", TRANSMITTANCE_SIZE),
+            ("MULTISCATTER_SIZE", MULTISCATTER_SIZE),
+            ("SKY_VIEW_SIZE", SKY_VIEW_SIZE),
+            ("IRRADIANCE_SIZE", IRRADIANCE_SIZE),
+        ]
+        .map(|(name, (w, h))| format!("const {name}: vec2f = vec2f({w}.0, {h}.0);\n"))
+        .concat(),
+        format!("const SHEET_FILL: u32 = {SHEET_FILL}u;\nconst SHEET_STROKE: u32 = {SHEET_STROKE}u;\nconst SHEET_TRIANGLE: u32 = {SHEET_TRIANGLE}u;\nconst SHEET_TEXT: u32 = {SHEET_TEXT}u;\nconst SHEET_HALO: u32 = {SHEET_HALO}u;\n"),
+        format!("const BOX_XY_STEPS: u32 = {BOX_XY_STEPS}u;\nconst BOX_VERTICES: u32 = {BOX_VERTICES}u;\n"),
+        format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\nconst HALF_STEP: f32 = {HALF_STEP:?};\n"),
+        format!("const MOON_ANGULAR_RADIUS: f32 = {MOON_ANGULAR_RADIUS:?};\nconst MOON_ALBEDO: f32 = {MOON_ALBEDO:?};\nconst MOON_MAP_MEAN: f32 = {MOON_MAP_MEAN:?};\n"),
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
@@ -295,6 +347,10 @@ fn words() -> String {
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-spec-core).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),
+        // The receiver's taps apart in the shadow map, which the map's read
+        // pad is sized by (pxl-spec-core param.rs `sun::SPREAD`, sun.rs
+        // `READ_PAD`).
+        format!("const SUN_SPREAD: f32 = {:?};\n", sun::SPREAD),
     ]
     .concat()
 }
@@ -384,7 +440,7 @@ fn assemble(out: &Path) {
             text += &read(part);
             text += "\n";
         }
-        let module = naga::front::wgsl::parse_str(&text)
+        let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
@@ -428,7 +484,7 @@ fn assemble(out: &Path) {
     let root = out.parent().expect("OUT_DIR");
     std::fs::write(
         root.join("sources.rs"),
-        format!("/// Shader `kind` as build.rs assembled and validated it (part.rs).\npub fn source(kind: u32) -> &'static str {{\n    match kind {{\n{sources}        _ => \"\",\n    }}\n}}\n"),
+        format!("/// Shader `kind` as build.rs assembled and validated it (part.rs).\npub fn src(kind: u32) -> &'static str {{\n    match kind {{\n{sources}        _ => \"\",\n    }}\n}}\n"),
     )
     .expect("the shaders' sources");
     std::fs::write(

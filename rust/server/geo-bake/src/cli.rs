@@ -39,13 +39,13 @@ impl Flags {
         arg
     }
 
-    pub fn value(&mut self) -> Result<String, String> {
+    pub fn val(&mut self) -> Result<String, String> {
         let flag = self.argv[self.at - 1].clone();
         self.arg().ok_or_else(|| format!("{flag} wants a value"))
     }
 
     pub fn parse<T: FromStr>(&mut self) -> Result<T, String> {
         let flag = self.argv[self.at - 1].clone();
-        self.value()?.parse().map_err(|_| format!("bad {flag}"))
+        self.val()?.parse().map_err(|_| format!("bad {flag}"))
     }
 }

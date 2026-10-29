@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene/actor.rs
 
-//! The actor kind's behaviour: an instance of a registered model that plays
+//! The actor kind's behavior: an instance of a registered model that plays
 //! its clips. What is its own alone is its clips' times and its joint
 //! palette, in a block of its own; where it stands is its holder's, a
 //! figure or a case, which hands its stance in (`Stance`). Each tick
@@ -15,6 +15,10 @@ use xpute_guest::mem::heap::{alloc, free};
 
 use crate::domain::query::model::registry::{blend, Models};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::region;
+use crate::domain::view::lens::{cell_there, seen_step_s, Stepped};
+use crate::sys::sched::edge::wake_at;
+use xpute_guest::clock::now;
 
 #[derive(Clone, Copy)]
 struct Playing {
@@ -27,13 +31,13 @@ struct Playing {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Stance {
     pub at: V3,
-    pub rotation_z: f32,
+    pub rot_z: f32,
     pub scale: f32,
 }
 
 pub struct Actor {
     model: u32,
-    current: Option<Playing>,
+    cur: Option<Playing>,
     previous: Option<Playing>,
     fade: f32,
     fade_len: f32,
@@ -72,7 +76,7 @@ impl Actor {
         let palette_handle = draw.upload(palette_at as u32, palette_bytes, 0, 0);
         Some(Actor {
             model,
-            current: None,
+            cur: None,
             previous: None,
             fade: 0.0,
             fade_len: 0.0,
@@ -93,11 +97,11 @@ impl Actor {
 
     /// A clip already playing is left alone.
     pub fn play(&mut self, clip: u32, fade_s: f32) {
-        if self.current.is_some_and(|c| c.clip == clip) {
+        if self.cur.is_some_and(|c| c.clip == clip) {
             return;
         }
-        self.previous = self.current;
-        self.current = Some(Playing { clip, time: 0.0 });
+        self.previous = self.cur;
+        self.cur = Some(Playing { clip, time: 0.0 });
         self.posed = false;
         self.fade = 0.0;
         self.fade_len = if self.previous.is_some() {
@@ -137,16 +141,42 @@ impl Actor {
             f64::from(m.radius() * stance.scale),
         );
         // What spans a camera cell at the actor's distance is observed.
-        let cell_there =
-            crate::domain::view::lens::cell_there(v3::len(&v3::sub(&about, &frame.camera)));
+        let dist = v3::len(&v3::sub(&about, &frame.camera));
+        let cell_there = cell_there(dist);
         let seen = frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
         // A clip of some length plays, or one fades into the next.
-        let playing = self.current.filter(|p| length(p).is_some());
+        let playing = self.cur.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.previous.is_some();
         let moves = seen
             && (self.previous.is_some()
                 || playing
                     .is_some_and(|p| f64::from(m.motion(p.clip) * stance.scale) >= cell_there));
+        let mut asks = moves;
+        // A clip alone, seen to move, steps a seen step at a time; a fade
+        // runs a frame a step.
+        if let Some(p) = playing.filter(|_| moves && self.previous.is_none()) {
+            let step = seen_step_s(dist, f64::from(m.speed(p.clip) * stance.scale));
+            let wall = now();
+            let since = if self.last > 0.0 {
+                (wall - self.last) / 1000.0
+            } else {
+                frame.delta_s
+            };
+            self.last = wall;
+            self.run += since.clamp(0.0, step.max(frame.delta_s));
+            let (time, next, stepped) = self.clock.at(self.run, |at| at + step);
+            if next.is_finite() {
+                wake_at(wall + (next - self.run) * 1000.0);
+            }
+            dt = (time - self.shown) as f32;
+            self.shown = time;
+            (moves, asks) = (stepped, false);
+            if stepped {
+                region::animated();
+            }
+        } else {
+            self.last = 0.0;
+        }
         let wrap = |p: &mut Playing| {
             p.time += dt;
             if let Some(d) = length(p) {
@@ -156,7 +186,7 @@ impl Actor {
         // Seen, its clip holds where its motion is too small to see.
         let runs = moves || !seen;
         if runs {
-            if let Some(p) = self.current.as_mut() {
+            if let Some(p) = self.cur.as_mut() {
                 wrap(p);
             }
             if let Some(p) = self.previous.as_mut() {
@@ -180,7 +210,8 @@ impl Actor {
             return moves;
         }
         self.posed = true;
-        m.pose(self.current.map(|p| (p.clip, p.time)), &mut self.local);
+        self.poses = self.poses.wrapping_add(1);
+        m.pose(self.cur.map(|p| (p.clip, p.time)), &mut self.local);
         if let Some(prev) = self.previous {
             self.from.resize(joints, [0.0; 10]);
             m.pose(Some((prev.clip, prev.time)), &mut self.from);
@@ -206,13 +237,31 @@ impl Actor {
         moves
     }
 
-    /// Into the frame's list, standing at `stance`.
+    /// Into the frame's list, standing at `stance`, and where it stands with
+    /// it (`DrawList::stand`): every actor drawn is a receiver of the sun's
+    /// map, which reads the ones the eye sees.
     pub fn draw(&self, draw: &mut DrawList, models: &Models, stance: &Stance, eye: V3) {
         let Some(m) = models.get(self.model) else {
             return;
         };
         if m.handle() == 0 {
             return;
+        }
+        // Seen, what it covers and shades as drawn (`region`): its rest's
+        // bound, grown by as far as its clip moves it.
+        if self.seen {
+            let clip = self.cur.map_or(0.0, |p| m.motion(p.clip));
+            let r = f64::from((m.radius() + clip) * stance.scale);
+            let at = stance.at;
+            let state = region::digest(&[
+                at[0],
+                at[1],
+                at[2],
+                f64::from(stance.rot_z),
+                f64::from(stance.scale),
+                f64::from(self.poses),
+            ]);
+            region::drawn(self.palette_handle, at, r, true, state);
         }
         let t = DrawList::translation(stance.at, eye);
         draw.draw_scaled(
@@ -221,9 +270,10 @@ impl Actor {
             self.palette_handle,
             self.model,
             t,
-            stance.rotation_z,
+            stance.rot_z,
             1.0,
             stance.scale,
         );
+        draw.stand(t);
     }
 }

@@ -14,24 +14,28 @@ pub mod answer;
 pub mod area;
 pub mod beam;
 pub mod cast;
-pub mod caves;
+pub mod cave;
 pub mod cloud;
 #[path = "cube.spec.rs"]
 pub mod cube;
 #[path = "decor.spec.rs"]
 pub mod decor;
 pub mod eye;
-pub mod faces;
+pub mod face;
 pub mod fill;
 pub mod grid;
 pub mod ground;
 pub mod lattice;
 pub mod observed;
 pub mod overwrite;
+pub mod param;
+pub mod raster;
 pub mod ray;
 pub mod scatter;
 pub mod sun;
-pub mod ways;
+pub mod support;
+pub mod tally;
+pub mod way;
 pub mod window;
 pub mod world;
 
@@ -58,9 +62,9 @@ pub const LEAF_CELL: Zoom = LEAF_ZOOM + 9;
 /// water stands and under which the Earth past the service area is rock.
 pub const SEA_LEVEL: i32 = 0;
 
-/// `m` ground metres in leaf cells, `per_m` leaf cells a ground metre where
+/// `m` ground meters in leaf cells, `per_m` leaf cells a ground meter where
 /// they lie (pxl-spec procedural.rs `Frame::per_m`), rounded half to even:
-/// what every length given in metres is, to the bake and the client alike.
+/// what every length given in meters is, to the bake and the client alike.
 pub fn cells_of_m(m: f32, per_m: f32) -> i32 {
     libm::rintf(m * per_m) as i32
 }
@@ -121,7 +125,7 @@ const _: () = assert!(FINEST_ZOOM < 1 << ZOOM_BITS);
 
 /// Index `v` along an axis at `zoom` as an index at `to`: the first of the
 /// finer that lie in it, or the coarser it lies in, the floor.
-pub const fn index_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
+pub const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
     if to >= zoom {
         v << (to - zoom)
     } else {
@@ -131,7 +135,7 @@ pub const fn index_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
 
 /// X named as the world names it at `zoom`, X going round: from minus half
 /// its count to under half (pxl-spec space/coord/world.rs `wrap_index`).
-pub fn wrap_index(zoom: Zoom, x: i32) -> i32 {
+pub fn wrap_idx(zoom: Zoom, x: i32) -> i32 {
     match zoom {
         0 => 0,
         z => x.wrapping_shl(32 - z) >> (32 - z),
@@ -139,7 +143,7 @@ pub fn wrap_index(zoom: Zoom, x: i32) -> i32 {
 }
 
 /// How many `inner` cells stand across one `outer`, which is no finer.
-pub const fn count(inner: Zoom, outer: Zoom) -> u32 {
+pub const fn cnt(inner: Zoom, outer: Zoom) -> u32 {
     if inner < outer {
         panic!("an outer zoom finer than the inner")
     }

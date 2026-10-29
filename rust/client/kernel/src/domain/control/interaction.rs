@@ -10,11 +10,12 @@ pub mod pick;
 
 use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::{cube, DecorId};
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::domain::control::camera::controller;
+use crate::domain::control::camera::controller::Motion;
 pub use crate::domain::control::cmd::ActiveTool;
 use crate::domain::control::interaction::collision::{anchor_center, object_aabb};
 use crate::domain::control::interaction::collision::{is_placement_blocked, PlacementTool};
@@ -24,13 +25,18 @@ use crate::domain::control::interaction::edit::{
 use crate::domain::control::interaction::pick::{
     ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner,
 };
+use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::support::stand;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::store::Entry;
+use crate::domain::query;
+use crate::domain::query::Struck::Decor;
+use crate::domain::query::Struck::Object;
 use crate::domain::query::{Hit, World};
 use crate::domain::view::frame::pose::ray_of;
+use crate::domain::view::observation;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, units, Zoom};
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -60,7 +66,7 @@ pub struct Hover {
     pub object_at: Option<EntryAt>,
     /// A decor the ground grew, which has no entry.
     pub scattered: Option<Instance>,
-    /// Where the focus sent there starts from.
+    /// Where the pivot sent there starts from.
     pub approach: Option<Q3>,
 }
 
@@ -122,10 +128,20 @@ enum Struck {
     Grown([i32; 3], Instance),
 }
 
+/// The box what is put across the face `hit` struck goes flush against, past
+/// the hit's own: a placed cube's entry, as it is stored. A decor's is the
+/// box it claims, which the hit carries.
+fn flush_against(hit: &Hit) -> Option<Aabb> {
+    match hit.struck {
+        Object(_) => resolve_hit_object(hit).map(|o| object_aabb(&o)),
+        _ => None,
+    }
+}
+
 /// What the pick struck, as a tool reads it: a placed object, or a decor the ground grew.
 fn resolve_struck(hit: &Hit) -> Option<Struck> {
     match hit.struck {
-        crate::domain::query::Struck::Decor(i) => match i.grown_in() {
+        Decor(i) => match i.grown_in() {
             Some(cell) => Some(Struck::Grown(cell, i)),
             None => resolve_hit_object(hit).map(Struck::Object),
         },
@@ -134,12 +150,21 @@ fn resolve_struck(hit: &Hit) -> Option<Struck> {
 }
 
 /// What the hover's pick met, and the cell zoom the eye's rays draw where
-/// it struck, by the rule they are cast by (domain/query/ray.rs `by_distance`),
+/// it struck, by the rule they are cast by (domain/query/ray.rs `by_dist`),
 /// which near the eye is finer than the ground's cells, as what is placed
 /// may be; none without an eye.
 pub(crate) struct Picked {
     pub hit: Hit,
     pub drawn: Option<Zoom>,
+}
+
+/// The cell what `hit` struck stands in: a decor's, whatever its box, else
+/// the box struck.
+fn cell_struck(hit: &Hit) -> Aabb {
+    match hit.struck {
+        Decor(i) => i.cell(),
+        _ => hit.cube,
+    }
 }
 
 impl Picked {
@@ -150,32 +175,32 @@ impl Picked {
 
     /// Whether the rays draw coarser there than the box struck: a summary,
     /// not what is held, so nothing in it is struck.
-    pub fn folded(&self) -> bool {
+    pub fn is_folded(&self) -> bool {
         self.drawn.is_some_and(|z| z < self.held())
     }
 }
 
-/// What the hover picks at `ndc_x`, `ndc_y` on the world drawn at `drawn`,
+/// What the hover picks at `ndc_x`, `ndc_y`,
 /// from the pose as the camera holds it now, which a door event or a
 /// controller may have moved since the turn composed the view.
-pub(crate) fn picked(ndc_x: f64, ndc_y: f64, drawn: Tau) -> Option<Picked> {
-    let pose = crate::domain::control::camera::controller::pose()?;
-    let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
-    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
-    let hit = ray_pick(origin, direction, drawn)?;
-    let drawn = crate::domain::view::observation::eye().map(|eye| {
-        let v = v3::sub(&hit.cube.center(), &eye);
-        crate::domain::query::by_distance(drawn).at(v3::dot(&v, &v) as f32)
+pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
+    let pose = controller::pose()?;
+    let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
+    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
+    let hit = ray_pick(origin, dir)?;
+    let drawn = observation::eye().map(|eye| {
+        let v = v3::sub(&cell_struck(&hit).center(), &eye);
+        query::by_dist().at(v3::dot(&v, &v) as f32)
     });
     Some(Picked { hit, drawn })
 }
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
-pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
+pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
     let hover = &mut interaction().hover;
-    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y, drawn).filter(|p| !p.folded()) else {
+    let Some(Picked { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
         *hover = Hover::default();
         return;
     };
@@ -190,7 +215,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         hover.coord = Some(world_adjacent_corner(
             &hit,
             tool.size(),
-            precise_box.as_ref(),
+            flush_against(&hit).as_ref(),
         ));
         return;
     }
@@ -222,16 +247,16 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         ),
     };
     // Past where the world takes an edit, nothing is pointed at.
-    if !World::now().editable(&cube(zoom, index_of(zoom, &corner))) {
+    if !World::now().editable(&cube(zoom, idx_of(zoom, &corner))) {
         *hover = Hover::default();
         return;
     }
     hover.coord = Some(corner);
 }
 
-/// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
-pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
-    hover_at(ndc_x, ndc_y, drawn);
+/// A tap at `ndc_x`, `ndc_y` with the tool held.
+pub fn tap(ndc_x: f64, ndc_y: f64) {
+    hover_at(ndc_x, ndc_y);
     let Some(hovered) = interaction().hover.coord else {
         return;
     };
@@ -251,10 +276,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
                 return;
             };
             let target = stand(&anchor_center(&approach));
-            crate::domain::control::navigation::destination::go_to(
-                target,
-                crate::domain::control::camera::controller::Motion::Smooth,
-            );
+            destination::go_to(target, Motion::Smooth);
         }
         // The eraser.
         None => {

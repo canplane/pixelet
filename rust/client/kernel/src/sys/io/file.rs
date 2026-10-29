@@ -17,8 +17,10 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64;
 use base64::Engine;
 
 use crate::sys::io::failure::Failure;
+use crate::sys::io::fetch;
 use crate::sys::io::host::{answered, sys, turn};
 use crate::sys::io::host_spec::{format, kept, root};
+use crate::sys::io::loader;
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::Credit;
 use crate::sys::io::room::Refused;
@@ -35,8 +37,8 @@ use xpute_kit::status::errno::Errno;
 /// owner keeps, the whole in base64 as storage keeps text. One of another
 /// format, not base64, or larger than any heap a device is given (no build
 /// reads it) is refused: read as nothing and never written over,
-/// and named to the host (`refused`), whose it is to set the file aside and
-/// empty the slot (`emptied`). Which storage a slot is, and what an older
+/// and named to the host (`is_refused`), whose it is to set the file aside and
+/// empty the slot (`on_emptied`). Which storage a slot is, and what an older
 /// file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kept {
@@ -120,7 +122,7 @@ pub enum KeptFile {
     /// What its owner kept, past the format byte.
     Bytes(Vec<u8>),
     /// There, and not readable here: an error other than its absence, or
-    /// refused (`refused`). It must not be written over.
+    /// refused (`is_refused`). It must not be written over.
     Unreadable,
 }
 
@@ -133,13 +135,13 @@ fn refusals() -> &'static mut [bool; Kept::ALL.len()] {
 
 /// Its file is not of its slot's format, or too large for any heap: none of
 /// it was read, and nothing is written over it until the host empties the slot.
-pub fn refused(kept: Kept) -> bool {
+pub fn is_refused(kept: Kept) -> bool {
     refusals()[kept as usize]
 }
 
 /// The host set a refused slot's file aside and emptied it: its owner may
 /// open it again and write it.
-pub fn emptied(kept: Kept) {
+pub fn on_emptied(kept: Kept) {
     refusals()[kept as usize] = false;
 }
 
@@ -205,7 +207,7 @@ fn kept_read(kept: Kept, read: KeptRead) {
     request_world_tick();
 }
 
-fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
+fn on_kept_opened(kept: Kept, fd: Fd, opened: Opened) {
     let read = match opened {
         Opened::Bytes(0) => {
             close(fd);
@@ -234,7 +236,7 @@ fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
 /// The host's answer to `open_kept`, for a test with none: `text`, read
 /// whole and taken from the next turn on, or an open that came to no bytes.
 #[cfg(test)]
-pub fn kept_answered(kept: Kept, answer: Result<&[u8], Opened>) {
+pub fn on_kept_answered(kept: Kept, answer: Result<&[u8], Opened>) {
     match answer {
         Ok(text) => kept_read(
             kept,
@@ -243,7 +245,7 @@ pub fn kept_answered(kept: Kept, answer: Result<&[u8], Opened>) {
                 asked: turn(),
             },
         ),
-        Err(opened) => kept_opened(kept, 0, opened),
+        Err(opened) => on_kept_opened(kept, 0, opened),
     }
 }
 
@@ -339,7 +341,7 @@ pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
 
 /// Writes `bytes` whole as what `kept` holds; a refused slot is not written.
 pub fn write_kept(kept: Kept, bytes: &[u8]) {
-    if refused(kept) {
+    if is_refused(kept) {
         return;
     }
     if let Some(sys) = sys() {
@@ -384,7 +386,7 @@ impl Opened {
 /// `res` is the file's size, or a negative errno. A file larger than the heap
 /// every device is given cannot be held anywhere: it is the host's answer
 /// refused, and the owner hears EFBIG.
-pub fn opened(fd: Fd, res: i32, detail: u32) {
+pub fn on_opened(fd: Fd, res: i32, detail: u32) {
     let Some(&owner) = files().owner(fd) else {
         return;
     };
@@ -401,9 +403,9 @@ pub fn opened(fd: Fd, res: i32, detail: u32) {
         close(fd);
     }
     match owner {
-        Owner::Fetch { key, at_ms } => crate::sys::io::fetch::opened(fd, key, at_ms, opened),
-        Owner::Load { key } => crate::sys::io::loader::opened(fd, key, opened),
-        Owner::Kept(kept) => kept_opened(kept, fd, opened),
+        Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),
+        Owner::Load { key } => loader::on_opened(fd, key, opened),
+        Owner::Kept(kept) => on_kept_opened(kept, fd, opened),
         Owner::Write => {}
     }
 }

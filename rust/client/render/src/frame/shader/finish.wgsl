@@ -1,5 +1,7 @@
 // Tone, vignette, encode and dither, in that order: nothing grades the
-// picture past the tone curve, so a color is the light it was lit by.
+// picture past the tone curve, so a color is the light it was lit by. Each
+// world pass tones what it lights (`tone`) into the world's color, linear,
+// blended there; the screen's finish encodes it once (`finish`).
 
 // ACES's reference rendering and sRGB output transforms, as Stephen Hill fit
 // them (BakingLab): the filmic curve Unreal draws with by default, whose
@@ -24,7 +26,7 @@ fn tone(input: vec3f) -> vec3f {
 }
 
 fn vignette(frag: vec2f) -> f32 {
-  return vignette_of(frag, frame_viewport(), frame_vignette());
+  return vignette_of(frag, frame_screen(), frame_vignette());
 }
 
 fn dither(q: vec2f) -> f32 {
@@ -33,9 +35,21 @@ fn dither(q: vec2f) -> f32 {
   return fract(p.x * p.y);
 }
 
-// The encoded color, half a step of noise added: the screen keeps 8 bits, and
-// a gentle gradient left whole, the sea's toward its horizon, broke into
-// steps one apart, drawn out along it into lines.
-fn finish(color: vec3f, frag: vec2f) -> vec3f {
-  return to_srgb(tone(color) * vignette(frag)) + (dither(frag) - 0.5) / 255.0;
+// A toned color as the canvas encodes it, darkened by `by`, the vignette
+// where it is drawn: sRGB, before the dither.
+fn displayed(toned: vec3f, by: f32) -> vec3f {
+  return to_srgb(toned * by);
+}
+
+// A linear color as the canvas encodes it (`displayed`), toned first.
+fn encoded(color: vec3f, by: f32) -> vec3f {
+  return displayed(tone(color), by);
+}
+
+// The toned color the world's passes left at `frag`, encoded, half a step of
+// noise added (screen_finish.wgsl): the screen keeps 8 bits, and a gentle
+// gradient left whole, the sea's toward its horizon, broke into steps one
+// apart, drawn out along it into lines.
+fn finish(toned: vec3f, frag: vec2f) -> vec3f {
+  return displayed(toned, vignette(frag)) + (dither(frag) - 0.5) / 255.0;
 }

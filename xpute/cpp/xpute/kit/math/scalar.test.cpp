@@ -9,7 +9,7 @@
 
 using namespace xpute;
 
-XPUTE_TEST(scalar_computes_what_the_record_holds) {
+XPUTE_TEST(scalar_matches_record) {
     Golden v = Golden::load("spec/golden/math/scalar.tsv");
     v.each("", [&v](const std::string &k) {
         double x = v.f64(k + ".x");
@@ -31,7 +31,12 @@ XPUTE_TEST(scalar_computes_what_the_record_holds) {
     });
 }
 
-XPUTE_TEST(scalar_a_half_way_case_rounds_toward_positive_infinity) {
+XPUTE_TEST(scalar_record_tolerance) {
+    Golden v = Golden::load("spec/golden/math/scalar.tsv");
+    XPUTE_CHECK_EQ(std::bit_cast<std::uint64_t>(EPS), std::bit_cast<std::uint64_t>(v.f64("eps")), "eps");
+}
+
+XPUTE_TEST(scalar_half_rounds_up) {
     XPUTE_CHECK(round_half_up(2.5) == 3.0);
     XPUTE_CHECK(round_half_up(-2.5) == -2.0);
     XPUTE_CHECK(round_half_up(-2.4) == -2.0);

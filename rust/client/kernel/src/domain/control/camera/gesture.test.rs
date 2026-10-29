@@ -10,7 +10,7 @@ fn drive(anchor: &mut Anchor, now: f64, max: f64) -> f64 {
 }
 
 #[test]
-fn a_refused_share_is_not_paid_back() {
+fn refused_share_not_repaid() {
     let mut a = Anchor::new(0.0, 0.0);
     assert_eq!(drive(&mut a, 5.0, 10.0), 5.0);
     assert_eq!(drive(&mut a, 40.0, 10.0), 10.0, "past the limit");
@@ -22,7 +22,7 @@ fn a_refused_share_is_not_paid_back() {
 }
 
 #[test]
-fn a_gesture_brought_back_asks_what_it_began_at() {
+fn gesture_return_restores() {
     let mut a = Anchor::new(3.0, 100.0);
     for now in [120.0, 80.0, 150.0, 100.0] {
         drive(&mut a, now, f64::INFINITY);

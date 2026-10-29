@@ -20,9 +20,9 @@ export const STEP_NAMES = [
 export const EFFECT_NAMES = [
   "navigation",
   "bootstrap",
-  "orientation",
+  "orient",
   "follow",
-  "destination",
+  "dst",
   "decor",
   "objects",
   "edit",

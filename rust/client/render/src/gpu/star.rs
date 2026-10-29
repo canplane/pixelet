@@ -12,17 +12,17 @@ use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::STARS_FLOATS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
-use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
+use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::look::environment::{ENV_SKY, ENV_STARS};
+use crate::gpu::surface::WORLD_COLOR;
+use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
+use crate::param::sky::star::DRAWN_ABOVE;
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
-
-const SHOWN: f32 = 0.001;
 
 pub struct StarPass {
     built: Built,
@@ -38,11 +38,11 @@ impl StarPass {
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
-        frame_buffer: u32,
+        frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> StarPass {
-        let built = pipelines.build(g, PIPELINE_STAR, g.canvas());
-        let uniform = g.buffer(
+        let built = pipelines.build(g, PIPELINE_STAR, WORLD_COLOR);
+        let uniform = g.buf(
             word_bytes(STARS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
@@ -52,17 +52,17 @@ impl StarPass {
             .iter()
             .flat_map(star_floats)
             .collect();
-        let catalog = g.buffer(
+        let catalog = g.buf(
             word_bytes(stars.len()),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(catalog, 0, bytes(&stars));
-        let mut frame = vec![buffer_entry(0, frame_buffer)];
-        frame.extend(air.iter().filter(|e| [8, 9, 11].contains(&e.binding)));
+        g.write_buf(catalog, 0, bytes(&stars));
+        let mut frame = vec![buf_entry(0, frame_buf)];
+        frame.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
         let frame_group = g.bind_group(built.layouts[0], &frame);
         let group = g.bind_group(
             built.layouts[1],
-            &[buffer_entry(0, uniform), buffer_entry(1, catalog)],
+            &[buf_entry(0, uniform), buf_entry(1, catalog)],
         );
         StarPass {
             built,
@@ -82,13 +82,13 @@ impl StarPass {
     pub fn lay_out(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
-        if u[INTENSITY] <= SHOWN {
+        if u[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
         put_mat(u, VIEW_PROJ, view_proj);
         u[SKY..SKY + 12].copy_from_slice(&env[ENV_STARS..ENV_STARS + 12]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
-        let css = stage_lane()[STAGE_AT::VIEWPORT];
+        let css = stage_lane()[STAGE_AT::VIEWPORT_WIDTH];
         u[DENSITY] = if css > 0.0 {
             (width as f64 / css) as f32
         } else {
@@ -98,23 +98,23 @@ impl StarPass {
 
     /// `words` written, where the frame's read found them moved.
     pub fn write(&self, g: &Gpu) {
-        g.write_buffer(self.uniform, 0, bytes(&self.words));
+        g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
-    pub fn draw(&self, g: &Gpu, pass: u32) {
-        if self.words[INTENSITY] <= SHOWN {
+    pub fn draw(&self, pass: &mut TrackedRenderPass) {
+        if self.words[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_bind_group(pass, 1, self.group, &[]);
-        g.draw(pass, 4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);
+        pass.set_pipeline(self.built.pipeline);
+        pass.set_bind_group(0, self.frame_group, &[]);
+        pass.set_bind_group(1, self.group, &[]);
+        pass.draw(4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);
     }
 }
 
 /// A record's star (pxl-spec asset/star.rs `star`, the bake's one layout)
-/// as the sky draws it: its direction, its flux, its colour.
-fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_FLOATS] {
+/// as the sky draws it: its direction, its flux, its color.
+fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_RECORD_FLOATS] {
     let s = star::star(packed);
     let (ra, dec) = (s.ra.to_radians(), s.dec.to_radians());
     let flux = libm::pow(10f64, -0.4 * s.vmag);

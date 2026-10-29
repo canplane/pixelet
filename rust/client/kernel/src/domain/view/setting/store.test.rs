@@ -1,20 +1,23 @@
 // pxl-kernel/domain/view/setting/store.test.rs
 
 use super::*;
+use crate::sys;
+use crate::sys::io::host;
+use base64::engine::general_purpose;
 use xpute_kit::status::errno::Errno;
 
 fn kept_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = Vec::new();
-    for &(number, value) in pairs {
+    for &(number, val) in pairs {
         leb(&mut bytes, number);
-        leb(&mut bytes, value);
+        leb(&mut bytes, val);
     }
     bytes
 }
 
 /// The stored form is a contract with storage, which outlives a build.
 #[test]
-fn what_is_kept_reads_back_and_a_default_is_not_kept() {
+fn kept_round_trip() {
     let mut s = Settings::DEFAULT;
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
     let ao = AoMode::ALL
@@ -41,7 +44,7 @@ fn what_is_kept_reads_back_and_a_default_is_not_kept() {
 }
 
 #[test]
-fn a_kept_pair_is_a_setting_s_number_and_its_value() {
+fn kept_pair_format() {
     let ao = AoMode::ALL
         .into_iter()
         .find(|&o| o as u32 != Settings::DEFAULT.get(SettingKey::ao))
@@ -52,7 +55,7 @@ fn a_kept_pair_is_a_setting_s_number_and_its_value() {
 }
 
 #[test]
-fn what_the_schema_does_not_hold_is_left_at_the_default() {
+fn unknown_stays_default() {
     let unknown = SettingKey::SLOTS as u32 + 1000;
     for kept in [
         kept_of(&[(SettingKey::ao as u32, 99)]),
@@ -70,7 +73,7 @@ fn what_the_schema_does_not_hold_is_left_at_the_default() {
 }
 
 #[test]
-fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
+fn reads_past_unknown_pair() {
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
     let back = read_kept(&kept_of(&[
         (SettingKey::SLOTS as u32 + 1000, 1),
@@ -88,9 +91,12 @@ fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
 /// what is kept, a change to it alone asks for no write, and one found in
 /// the slot reads as its default.
 #[test]
-fn a_session_s_setting_is_neither_kept_nor_read() {
-    let _g = crate::sys::serial();
-    let session: Vec<SettingKey> = SettingKey::ALL.into_iter().filter(|k| !k.kept()).collect();
+fn session_setting_not_kept() {
+    let _g = sys::serial();
+    let session: Vec<SettingKey> = SettingKey::ALL
+        .into_iter()
+        .filter(|k| !k.is_kept())
+        .collect();
     assert!(
         session.contains(&SettingKey::place) && session.contains(&SettingKey::camera_mode),
         "places shown and the camera mode are the session's"
@@ -113,8 +119,8 @@ fn a_session_s_setting_is_neither_kept_nor_read() {
             .collect::<Vec<_>>(),
     ));
     assert_eq!(back, Settings::DEFAULT, "nothing of {session:?} is read");
-    opened();
-    file::kept_answered(Kept::Settings, Err(file::Opened::Absent));
+    open_slot();
+    file::on_kept_answered(Kept::Settings, Err(file::Opened::Absent));
     assert!(settings_load_step());
     for &key in &session {
         assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
@@ -130,14 +136,12 @@ fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     use base64::Engine;
     let mut bytes = vec![Kept::Settings.format()];
     bytes.extend(kept_of(pairs));
-    base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .encode(bytes)
-        .into_bytes()
+    general_purpose::URL_SAFE_NO_PAD.encode(bytes).into_bytes()
 }
 
 /// The slot opened at boot, with nothing waiting and nothing to keep.
-fn opened() {
-    file::emptied(Kept::Settings);
+fn open_slot() {
+    file::on_emptied(Kept::Settings);
     while file::take_kept(Kept::Settings).is_some() {}
     settings_open();
     UNKEPT.set(false);
@@ -157,25 +161,25 @@ fn held_after_a_change() -> bool {
 /// The slot is read on the storage root a turn after its file lands, and
 /// nothing is written before; what was read is not written back.
 #[test]
-fn the_settings_are_read_from_their_slot_and_nothing_is_written_before() {
-    let _g = crate::sys::serial();
-    opened();
+fn read_before_write() {
+    let _g = sys::serial();
+    open_slot();
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
     assert!(
-        !settings_load_step() && !settings_loaded(),
+        !settings_load_step() && !are_settings_loaded(),
         "nothing has landed"
     );
     assert!(
         held_after_a_change(),
         "nothing is written before the slot is read"
     );
-    file::kept_answered(
+    file::on_kept_answered(
         Kept::Settings,
         Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])),
     );
     assert!(!settings_load_step(), "taken from the next turn on");
-    crate::sys::io::host::rise();
-    assert!(settings_load_step() && settings_loaded());
+    host::rise();
+    assert!(settings_load_step() && are_settings_loaded());
     assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
     assert!(!*UNKEPT.get(|| false), "what was read is not written back");
     assert!(!held_after_a_change(), "a read slot keeps what changes");
@@ -184,10 +188,10 @@ fn the_settings_are_read_from_their_slot_and_nothing_is_written_before() {
 
 /// An empty slot is the defaults, written from the first change.
 #[test]
-fn an_empty_slot_is_the_defaults() {
-    let _g = crate::sys::serial();
-    opened();
-    file::kept_answered(Kept::Settings, Err(file::Opened::Absent));
+fn empty_slot_defaults() {
+    let _g = sys::serial();
+    open_slot();
+    file::on_kept_answered(Kept::Settings, Err(file::Opened::Absent));
     assert!(settings_load_step());
     assert_eq!(*settings_store(), Settings::DEFAULT);
     assert!(!held_after_a_change());
@@ -197,8 +201,8 @@ fn an_empty_slot_is_the_defaults() {
 /// slot held before), is refused: the defaults, nothing written over it until
 /// the host sets it aside and empties the slot, and then what changed meanwhile.
 #[test]
-fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
-    let _g = crate::sys::serial();
+fn bad_slot_refused() {
+    let _g = sys::serial();
     for answer in [
         Err(file::Opened::Failed {
             errnum: Errno::EFBIG,
@@ -206,21 +210,21 @@ fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
         }),
         Ok(&br#"{"ao":"screen"}"#[..]),
     ] {
-        opened();
-        file::kept_answered(Kept::Settings, answer);
-        crate::sys::io::host::rise();
+        open_slot();
+        file::on_kept_answered(Kept::Settings, answer);
+        host::rise();
         assert!(
-            settings_load_step() && settings_loaded(),
+            settings_load_step() && are_settings_loaded(),
             "the world need not wait on it"
         );
         assert_eq!(*settings_store(), Settings::DEFAULT);
-        assert!(file::refused(Kept::Settings));
+        assert!(file::is_refused(Kept::Settings));
         assert!(
             held_after_a_change(),
             "a refused slot's change waits for it to be emptied"
         );
-        file::emptied(Kept::Settings);
-        settings_emptied();
+        file::on_emptied(Kept::Settings);
+        on_settings_emptied();
         settings_keep_step();
         assert!(!*UNKEPT.get(|| false));
     }
@@ -229,10 +233,10 @@ fn an_oversize_or_foreign_slot_is_refused_and_held_unwritten() {
 /// One that fails to open otherwise is not the host's to set aside: the
 /// defaults, never written over this session.
 #[test]
-fn an_unreadable_slot_is_never_written_over() {
-    let _g = crate::sys::serial();
-    opened();
-    file::kept_answered(
+fn unreadable_slot_kept() {
+    let _g = sys::serial();
+    open_slot();
+    file::on_kept_answered(
         Kept::Settings,
         Err(file::Opened::Failed {
             errnum: Errno::EIO,
@@ -240,8 +244,8 @@ fn an_unreadable_slot_is_never_written_over() {
         }),
     );
     assert!(settings_load_step());
-    assert!(!file::refused(Kept::Settings));
+    assert!(!file::is_refused(Kept::Settings));
     assert!(held_after_a_change());
-    settings_emptied();
+    on_settings_emptied();
     assert!(held_after_a_change());
 }

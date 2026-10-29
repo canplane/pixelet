@@ -9,7 +9,7 @@ use pxl_spec::asset::cube::ground;
 use pxl_spec::bake::tile::terrain::{Ground, GroundId};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec_core::lattice::CELL_CENTER;
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
 
@@ -17,7 +17,7 @@ const TILE_AREA: usize = (TILE_CELLS * TILE_CELLS) as usize;
 const SPAN: i64 = TILE_CELLS as i64;
 
 fn cell_idx(x: i64, y: i64) -> usize {
-    GROUND.cell_index(x as u32, y as u32) as usize
+    GROUND.cell_idx(x as u32, y as u32) as usize
 }
 
 /// Landcover and water do not paint the sea: the cells the coast left water,
@@ -32,7 +32,7 @@ pub enum Coast {
     Shore(Vec<(Vec<P>, Vec<Vec<P>>)>),
 }
 
-pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
+pub fn bake_ground(feats: &[Feature], coast: &Coast) -> Ground {
     let mut cells = vec![ground::water; TILE_AREA];
     match coast {
         Coast::Sea => {}
@@ -46,7 +46,7 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
     let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land))
         .then(|| cells.iter().map(|&c| c == ground::water).collect());
 
-    let mut ordered: Vec<&Feature> = features.iter().collect();
+    let mut ordered: Vec<&Feature> = feats.iter().collect();
     ordered.sort_by(|a, b| a.rank.cmp(&b.rank));
     for f in ordered {
         let mask = match f.rank.layer {
@@ -68,17 +68,17 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
 }
 
 #[inline]
-fn put<T: Copy>(cells: &mut [T], mask: Sea, at: usize, value: T) {
+fn put<T: Copy>(cells: &mut [T], mask: Sea, at: usize, val: T) {
     if mask.is_some_and(|sea| sea[at]) {
         return;
     }
-    cells[at] = value;
+    cells[at] = val;
 }
 
 /// Every cell of a tile of the ground's lattice whose center the polygon covers.
 pub(crate) fn render_polygon<T: Copy>(
     points: &[P],
-    value: T,
+    val: T,
     cells: &mut [T],
     holes: &[Vec<P>],
     mask: Sea,
@@ -117,14 +117,14 @@ pub(crate) fn render_polygon<T: Copy>(
         let mut i = 0usize;
         if !xs.len().is_multiple_of(2) {
             for x in 0..first(xs[0]) {
-                put(cells, mask, cell_idx(x, y), value);
+                put(cells, mask, cell_idx(x, y), val);
             }
             i = 1;
         }
 
         while i + 1 < xs.len() {
             for x in first(xs[i])..first(xs[i + 1]) {
-                put(cells, mask, cell_idx(x, y), value);
+                put(cells, mask, cell_idx(x, y), val);
             }
             i += 2;
         }
@@ -132,18 +132,18 @@ pub(crate) fn render_polygon<T: Copy>(
 }
 
 /// Every cell whose center the way covers along a segment (pxl-spec-core
-/// ways.rs `on_way`, the rule a column is crossed by), its line cut square
+/// way.rs `on_way`, the rule a column is crossed by), its line cut square
 /// where `cut` says at its first and last.
 fn render_linear_feat(
     points: &[P],
-    value: GroundId,
+    val: GroundId,
     cells: &mut [GroundId],
     width_cell: f64,
     cut: [bool; 2],
     mask: Sea,
 ) {
     let (width, center) = (width_cell as f32, f64::from(CELL_CENTER));
-    let reach = f64::from(ways::reach(width));
+    let reach = f64::from(way::reach(width));
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {
         let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
@@ -158,8 +158,8 @@ fn render_linear_feat(
         for y in span(1) {
             for x in span(0) {
                 let at = [x as f64 + center, y as f64 + center].map(|v| v as f32);
-                if ways::on_way(a.map(|v| v as f32), b.map(|v| v as f32), width, ends, at).1 {
-                    put(cells, mask, cell_idx(x, y), value);
+                if way::on_way(a.map(|v| v as f32), b.map(|v| v as f32), width, ends, at).1 {
+                    put(cells, mask, cell_idx(x, y), val);
                 }
             }
         }

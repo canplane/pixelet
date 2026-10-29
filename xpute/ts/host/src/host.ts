@@ -21,12 +21,12 @@ import { Strobe } from "@xpute/host/sched/strobe.ts";
  * grows, and its entry, `intr`, a turn that returns when it wants the next,
  * in ms. The floor names the entry, as a C runtime names `main`. */
 export interface Guest {
-  memory: ArrayBuffer;
+  mem: ArrayBuffer;
   intr(quota_ms: f64): f64;
 }
 
 /** What the program mounts its guest with. */
-export interface Plan {
+export interface Config {
   directory_at: u32;
   sys: SysHost;
   /** Fills the rings before each frame the strobe grants is rung. */
@@ -47,11 +47,11 @@ export interface Host {
   now(cmd: u32, pkt?: PacketWriter): void;
 }
 
-export function mount(guest: Guest, plan: Plan): Host {
-  const directory = new Directory(guest.memory, plan.directory_at);
+export function mount(guest: Guest, cfg: Config): Host {
+  const directory = new Directory(guest.mem, cfg.directory_at);
   const stream = directory.get(key.SYS);
   const doorbell = new Doorbell(
-    guest.memory,
+    guest.mem,
     directory.get(key.SQ),
     directory.get(key.CQ),
     (quota_ms) => {
@@ -59,7 +59,7 @@ export function mount(guest: Guest, plan: Plan): Host {
       try {
         wake = guest.intr(quota_ms);
       } finally {
-        sys.run(guest.memory, stream);
+        sys.run(guest.mem, stream);
       }
       return wake;
     },
@@ -67,15 +67,17 @@ export function mount(guest: Guest, plan: Plan): Host {
   const strobe = new Strobe(
     doorbell,
     directory.quantum(),
-    plan.submit,
-    plan.next_frame,
+    cfg.submit,
+    cfg.next_frame,
   );
   const send = (cmd: u32, pkt?: PacketWriter) => {
     doorbell.send(0, cmd, pkt);
     strobe.request();
   };
-  const sys = new Sys(cfg.sys, (fd, res, detail) =>
-    send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
+  const sys = new Sys(
+    cfg.sys,
+    (fd, res, detail) =>
+      send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
   );
   return {
     guest,

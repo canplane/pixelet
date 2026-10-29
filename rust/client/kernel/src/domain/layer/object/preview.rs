@@ -5,6 +5,7 @@
 //! ghost it shows under the pointer (`Ghost`); and a marker waiting for its
 //! words, drawn with the words it has so far.
 
+use crate::domain::layer::object::store;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::decor::Decor;
@@ -40,7 +41,7 @@ pub fn set(edits: RenderEdits) -> Option<RenderEdits> {
 }
 
 /// The preview in force.
-pub fn current() -> RenderEdits {
+pub fn cur() -> RenderEdits {
     *PREVIEW.get(RenderEdits::default)
 }
 
@@ -59,7 +60,7 @@ pub enum Ghost {
         at: V3,
         decor: &'static Decor,
         variant: u32,
-        rotation: f64,
+        rot: f64,
         scale: f64,
         stand_in: Option<GhostBox>,
     },
@@ -93,8 +94,8 @@ pub fn words_at(at: EntryAt) -> Option<&'static str> {
     if let Some(d) = draft().filter(|d| d.at == at) {
         return Some(&d.words);
     }
-    let objects = crate::domain::layer::object::store::objects();
-    objects.words(&objects.read((at.zoom(), at.at())).placed()?)
+    let object = store::object();
+    object.words(&object.read((at.zoom(), at.at())).placed()?)
 }
 
 /// The one waiting, which the markers draw.

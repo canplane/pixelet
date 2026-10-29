@@ -48,7 +48,7 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
     if ask.order == Order::LAST {
         return Rank {
             class: ASIDE,
-            distance: 0.0,
+            dist: 0.0,
             detail: 0,
         };
     }
@@ -59,7 +59,7 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
     };
     Rank {
         class: base + !ask.order.seen as u8,
-        distance: ask.order.near,
+        dist: ask.order.near,
         // A zoom fits the rank's byte.
         detail: Tile::of_subject(subject).zoom as u8,
     }
@@ -71,12 +71,12 @@ impl Serve for Policy {
             Stream::terrain | Stream::place | Stream::earth => tile(stream, subject, ask),
             Stream::asset => Rank {
                 class: ASSET,
-                distance: 0.0,
+                dist: 0.0,
                 detail: 0,
             },
             Stream::division => Rank {
                 class: ASIDE,
-                distance: 0.0,
+                dist: 0.0,
                 detail: 0,
             },
         }

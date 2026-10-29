@@ -20,7 +20,7 @@ pub mod terrain;
 /// header; a branch's length word and a word a child; a sequence's length
 /// word and its payload to the word; a scalar, with the padding before what
 /// follows it, a word at most.
-pub mod packet {
+pub mod pkt {
     use super::{HDR_SZ, WORD_SZ};
 
     const WORD: usize = WORD_SZ as usize;
@@ -44,12 +44,12 @@ pub const ENCODE_FROM: u32 = 1 << 10;
 /// The most bytes a packet of `layer` takes: what a client may hold one
 /// in, and refuses one past. Terrain's and the Earth's follow from their
 /// lanes; places' and divisions' are a room their bake refuses a tile past.
-pub const fn max_packet_bytes(layer: BaseLayer) -> usize {
+pub const fn max_pkt_bytes(layer: BaseLayer) -> usize {
     match layer {
-        BaseLayer::terrain => terrain::MAX_PACKET_BYTES,
-        BaseLayer::place => place::MAX_PACKET_BYTES,
-        BaseLayer::division => division::MAX_PACKET_BYTES,
-        BaseLayer::earth => earth::PACKET_BYTES,
+        BaseLayer::terrain => terrain::MAX_PKT_BYTES,
+        BaseLayer::place => place::MAX_PKT_BYTES,
+        BaseLayer::division => division::MAX_PKT_BYTES,
+        BaseLayer::earth => earth::PKT_BYTES,
     }
 }
 

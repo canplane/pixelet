@@ -148,12 +148,12 @@ impl Bounds {
     }
 }
 
-fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: usize) {
+fn visit(gltf: &Gltf, idx: usize, parent: &Mat4, bounds: &mut Bounds, depth: usize) {
     // glTF does not forbid a cycle, which would not terminate.
     if depth > 64 {
         return;
     }
-    let Some(node) = gltf.nodes.get(index) else {
+    let Some(node) = gltf.nodes.get(idx) else {
         return;
     };
     let world = mul(parent, &local(node));

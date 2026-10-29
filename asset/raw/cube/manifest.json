@@ -13,7 +13,7 @@
       "terrain": "pixelet terrain/carto.json",
       "objects": "pixelet objects/default.json"
     },
-    "note": "Download each active source image as an individual file and normalize it to exactly 256x256 opaque RGBA PNG, with high-quality Lanczos or bicubic downsampling for the painted set; never a sprite sheet. 55 terrain tops (by the Carto look each is keyed by), 10 terrain sides and 10 bottoms, and 15 object blocks. A look with no top draws as its Carto colour. A tile is stamped regardless of a way's bearing, so a texture has no direction. When the pack is composed, each top's mean colour is drawn toward its look's Carto colour (color.json) to within a set distance, so the painted look stays and a map still reads as Carto from afar.",
+    "note": "Download each active source image as an individual file and normalize it to exactly 256x256 opaque RGBA PNG, with high-quality Lanczos or bicubic downsampling for the painted set; never a sprite sheet. 55 terrain tops (by the Carto look each is keyed by), 10 terrain sides and 10 bottoms, and 15 object blocks. A look with no top draws as its Carto color. A tile is stamped regardless of a way's bearing, so a texture has no direction. When the pack is composed, each top's mean color is drawn toward its look's Carto color (color.json) to within a set distance, so the painted look stays and a map still reads as Carto from afar.",
     "conversion": {
       "status": "complete",
       "note": "Every active entry uses the cute-painted-fantasy-v1 style."

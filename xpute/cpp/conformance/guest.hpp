@@ -21,7 +21,7 @@ std::uint32_t xpute_conformance_boot(void);
 
 #else
 
-// `mem` is MEMORY_BYTES long and 8-aligned. Answers the directory's offset.
+// `mem` is MEM_BYTES long and 8-aligned. Answers the directory's offset.
 std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now);
 
 // Answers 0 while a submission waits, -1 otherwise.

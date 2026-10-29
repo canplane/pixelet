@@ -163,9 +163,7 @@ export function RayStepsLegend() {
           ))}
         </View>
       </View>
-      <Row look={{ rgb: steps.none }} filled>
-        none walked
-      </Row>
+      <Row look={{ rgb: steps.none }} filled>none walked</Row>
     </Accordion>
   );
 }

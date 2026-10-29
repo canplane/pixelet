@@ -45,26 +45,26 @@ range!(Full, FULL_AT);
 range!(Reused, REUSED_AT);
 
 #[test]
-fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() {
+fn block_contents_survive() {
     let heap: BuddyMalloc<Spread> = BuddyMalloc::new();
     let (base, end) = (Spread::base(), Spread::end());
     let sizes = [1usize, 4096, 4097, 8192, 100, 16384, 40, 65536];
     let mut live: Vec<(*mut u8, usize, u8)> = Vec::new();
 
-    for (i, size) in sizes.iter().cycle().take(24).enumerate() {
+    for (i, sz) in sizes.iter().cycle().take(24).enumerate() {
         // SAFETY: the range is the test's own.
-        let p = unsafe { heap.malloc(*size) };
+        let p = unsafe { heap.malloc(*sz) };
         if p.is_null() {
             continue;
         }
         let at = p as usize;
         assert!(
-            at >= base && at + size <= end,
-            "a block of {size} at {at:#x} is outside [{base:#x}, {end:#x})"
+            at >= base && at + sz <= end,
+            "a block of {sz} at {at:#x} is outside [{base:#x}, {end:#x})"
         );
         // SAFETY: `size` bytes the allocator just handed out.
-        unsafe { core::ptr::write_bytes(p, i as u8, *size) };
-        live.push((p, *size, i as u8));
+        unsafe { core::ptr::write_bytes(p, i as u8, *sz) };
+        live.push((p, *sz, i as u8));
     }
     assert!(
         live.len() > 8,
@@ -72,24 +72,24 @@ fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() 
         live.len()
     );
 
-    for (p, size, _) in live.iter().step_by(2) {
+    for (p, sz, _) in live.iter().step_by(2) {
         // SAFETY: from this allocator, not yet given back.
-        unsafe { heap.free(*p, *size) };
+        unsafe { heap.free(*p, *sz) };
     }
     live = live.into_iter().skip(1).step_by(2).collect();
 
-    for size in sizes {
+    for sz in sizes {
         // SAFETY: as above.
-        let p = unsafe { heap.malloc(size) };
+        let p = unsafe { heap.malloc(sz) };
         if !p.is_null() {
             // SAFETY: `size` bytes the allocator just handed out.
-            unsafe { core::ptr::write_bytes(p, 0xff, size) };
+            unsafe { core::ptr::write_bytes(p, 0xff, sz) };
         }
     }
 
-    for (p, size, byte) in &live {
+    for (p, sz, byte) in &live {
         // SAFETY: still live, and `size` bytes long.
-        let bytes = unsafe { core::slice::from_raw_parts(*p, *size) };
+        let bytes = unsafe { core::slice::from_raw_parts(*p, *sz) };
         assert!(
             bytes.iter().all(|b| b == byte),
             "a block written with {byte:#04x} was written over"
@@ -98,7 +98,7 @@ fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() 
 }
 
 #[test]
-fn two_buddies_freed_are_the_block_they_came_from() {
+fn buddies_merge() {
     let heap: BuddyMalloc<Buddies> = BuddyMalloc::new();
     let one = 1 << MIN;
     // SAFETY: the range is the test's own, here and below.
@@ -117,7 +117,7 @@ fn two_buddies_freed_are_the_block_they_came_from() {
 }
 
 #[test]
-fn a_request_past_the_range_is_refused_and_leaves_what_is_live_alone() {
+fn oversize_refused() {
     let heap: BuddyMalloc<Full> = BuddyMalloc::new();
     let one = 1 << MIN;
     // SAFETY: the range is the test's own, here and below.
@@ -147,17 +147,17 @@ fn a_request_past_the_range_is_refused_and_leaves_what_is_live_alone() {
 }
 
 #[test]
-fn what_is_freed_is_handed_out_again_rather_than_more_of_the_range() {
+fn freed_reused() {
     let heap: BuddyMalloc<Reused> = BuddyMalloc::new();
-    let size = 1 << (MIN + 2);
+    let sz = 1 << (MIN + 2);
     // SAFETY: the range is the test's own, here and below.
-    let p = unsafe { heap.malloc(size) };
+    let p = unsafe { heap.malloc(sz) };
     assert!(!p.is_null());
     let reached = heap.used();
 
     for _ in 0..8 {
-        unsafe { heap.free(p, size) };
-        let q = unsafe { heap.malloc(size) };
+        unsafe { heap.free(p, sz) };
+        let q = unsafe { heap.malloc(sz) };
         assert_eq!(q, p, "the same request after the same free moved");
         assert_eq!(
             heap.used(),

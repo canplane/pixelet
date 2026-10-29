@@ -1,10 +1,10 @@
 // pxl-render/frame/shader/paint.wgsl
 
-// What a block's face is painted, wherever it is drawn from: the ghost's
+// What a cell's face is painted, wherever it is drawn from: the ghost's
 // boxes (box.wgsl) and the screen's rays (screen_ray.wgsl) both fill a
 // `Surface` and call `paint`, so the two cannot paint one face differently.
 // Its swatch or its layers' four taps, darkened by its own edges as much as its
-// caller says, lit by `shade`: a block is painted from its own words.
+// caller says, lit by `shade`: a cell is painted from its own words.
 
 @group(0) @binding(4) var layers: texture_2d_array<f32>;
 // Top, side and bottom slots in 10 bits each; NO_SLOT until an image arrives.
@@ -46,8 +46,8 @@ struct Surface {
   seen: Seen,
 };
 
-// A block's face wears its own image for that face, at any depth: a cell
-// under the surface is its own block, the stratum's.
+// A cell's face wears its own image for that face, at any depth: a cell
+// under the surface holds its own asset, the stratum's.
 fn face_image(normal: vec3f) -> u32 {
   if (normal.z > 0.5) {
     return IMAGE_TOP;
@@ -82,18 +82,19 @@ fn face_uv(p: vec3f, normal: vec3f) -> vec2f {
 }
 
 // How much a face's edge darkens it `d` units from the edge, where a drawn
-// pixel spans `pixel` units that way: a line `frame_edge_width` units wide
-// whatever the block's size, so perspective alone thins it far off, fading
-// out across it and a pixel past it, and as faint as the share of a pixel
+// px spans `px` units that way: a line `frame_edge_width` units wide
+// whatever the cell's size, so perspective alone thins it far off, fading
+// out across it and a px past it, and as faint as the share of a px
 // it covers once it is thinner than one.
-fn line_at(d: f32, pixel: f32) -> f32 {
+fn line_at(d: f32, px: f32) -> f32 {
   let w = frame_edge_width();
-  let t = 1.0 - smoothstep(0.0, w + pixel, d);
-  return t * t * min(w / pixel, 1.0);
+  let t = 1.0 - smoothstep(0.0, w + px, d);
+  return t * t * min(w / px, 1.0);
 }
 
 fn paint(s: Surface) -> vec3f {
-  // Only leaf cells carry layers; the samples are skipped, not taken and discarded.
+  // Only leaf cells carry layers; the taps are skipped, not taken and
+  // discarded.
   let textured = s.taps.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   var albedo = s.rgb;
   if (textured) {

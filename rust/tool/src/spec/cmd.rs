@@ -2,7 +2,7 @@
 
 //! The command tables, xpute's and a program's on top of it. Majors below
 //! xpute's `program_major` are xpute's; a number is given out once across
-//! both, and never again once a table's `$retired` holds it. The emitters
+//! both. The emitters
 //! are cmd/ts.rs, cmd/rs.rs and cmd/cpp.rs.
 
 mod cpp;
@@ -29,10 +29,10 @@ struct Field {
 #[derive(Deserialize)]
 struct Member {
     name: String,
-    value: u32,
+    val: u32,
     #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
-    packet: Option<Vec<Field>>,
+    pkt: Option<Vec<Field>>,
     signal: Option<Vec<Field>>,
 }
 
@@ -57,15 +57,6 @@ struct Enum {
     default: Option<String>,
     unknown: Option<String>,
     entries: Vec<Entry>,
-    #[serde(rename = "$retired", default)]
-    retired: Vec<Retired>,
-}
-
-/// A number taken out of a table, and the name it had.
-#[derive(Deserialize)]
-struct Retired {
-    name: String,
-    value: u32,
 }
 
 #[derive(Deserialize)]
@@ -154,46 +145,27 @@ fn members(e: &Enum) -> impl Iterator<Item = &Member> {
     })
 }
 
-fn literal(value: u32, format: &str) -> String {
+fn literal(val: u32, format: &str) -> String {
     match format {
-        "dec" => value.to_string(),
-        "hex2" => format!("0x{value:02x}"),
-        _ => format!("0x{value:04x}"),
+        "dec" => val.to_string(),
+        "hex2" => format!("0x{val:02x}"),
+        _ => format!("0x{val:04x}"),
     }
 }
 
 /// Every command is numbered by a major and a minor that cmd.json names. A
-/// table's numbers are each given out once, and none of them `$retired`: a
-/// number an older side still sends must not come to mean another member.
+/// table's numbers are each given out once.
 fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
         for (i, m) in all.iter().enumerate() {
-            if let Some(other) = all[..i].iter().find(|o| o.value == m.value) {
+            if let Some(other) = all[..i].iter().find(|o| o.val == m.val) {
                 return Err(format!(
                     "{json}: {}'s {} and {} are both {}",
                     e.name,
                     m.name,
                     other.name,
-                    literal(m.value, &e.format)
-                ));
-            }
-            if let Some(r) = e.retired.iter().find(|r| r.value == m.value) {
-                return Err(format!(
-                    "{json}: {}'s {} is {}, retired from {}",
-                    e.name,
-                    m.name,
-                    literal(m.value, &e.format),
-                    r.name
-                ));
-            }
-        }
-        for (i, r) in e.retired.iter().enumerate() {
-            if e.retired[..i].iter().any(|o| o.value == r.value) {
-                return Err(format!(
-                    "{json}: {}'s $retired holds {} twice",
-                    e.name,
-                    literal(r.value, &e.format)
+                    literal(m.val, &e.format)
                 ));
             }
         }
@@ -206,23 +178,23 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
             if e.name == "Command" {
                 cmds.push(m);
             } else if e.name == "Major" {
-                majors.push((m.value, &m.name));
+                majors.push((m.val, &m.name));
             } else if e.name.ends_with("Minor") {
                 minors.push(e);
             }
         }
     }
-    for c in cmds.into_iter().filter(|c| c.value != 0) {
+    for c in cmds.into_iter().filter(|c| c.val != 0) {
         let major = majors
             .iter()
-            .find(|(v, _)| *v == c.value >> 8)
+            .find(|(v, _)| *v == c.val >> 8)
             .map(|(_, n)| *n)
             .ok_or(format!("{json}: {} has no major", c.name))?;
         let table_name = format!("{}Minor", pascal(major));
         let minor = minors
             .iter()
             .find(|t| t.name == table_name)
-            .and_then(|t| members(t).find(|m| m.value == c.value & 0xff));
+            .and_then(|t| members(t).find(|m| m.val == c.val & 0xff));
         if minor.is_none() {
             return Err(format!("{json}: {}'s minor is in no {table_name}", c.name));
         }
@@ -266,7 +238,7 @@ fn majors(spec: &Spec) -> Vec<(u32, &str)> {
     spec.enums
         .iter()
         .filter(|e| e.name == "Major")
-        .flat_map(|e| members(e).map(|m| (m.value, m.name.as_str())))
+        .flat_map(|e| members(e).map(|m| (m.val, m.name.as_str())))
         .collect()
 }
 
@@ -279,17 +251,17 @@ fn check_base(spec: &Spec, json: &str) -> Result<(), String> {
     let edge = base
         .program_major
         .ok_or(format!("{base_path}: no program_major"))?;
-    for (value, name) in majors(&base) {
-        if value >= edge {
+    for (val, name) in majors(&base) {
+        if val >= edge {
             return Err(format!(
-                "{base_path}: major {name} at {value:#x} is a program's"
+                "{base_path}: major {name} at {val:#x} is a program's"
             ));
         }
     }
-    for (value, name) in majors(spec) {
-        if value < edge {
+    for (val, name) in majors(spec) {
+        if val < edge {
             return Err(format!(
-                "{json}: major {name} at {value:#x} is below {edge:#x}, xpute's"
+                "{json}: major {name} at {val:#x} is below {edge:#x}, xpute's"
             ));
         }
     }

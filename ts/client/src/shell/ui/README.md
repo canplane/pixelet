@@ -49,8 +49,7 @@ Native.
 
 A SwiftUI Toggle in the settings sheet sat in SwiftUI under React Native's
 scroll view under SwiftUI again, and on a phone it took about three quick taps
-in five; UIKit's switch in the same place took every one
-(doc/minutes/archive/20260928-a-control-in-two-layers.md). React Native's scroll
+in five; UIKit's switch in the same place took every one. React Native's scroll
 view never takes a touch from a UIKit control; it has no such promise for a
 SwiftUI one.
 

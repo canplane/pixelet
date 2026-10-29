@@ -30,10 +30,12 @@ xpute-gpu = { workspace = true, features = ["host"] }
 # Metal on an iPhone, Vulkan on Android; each backend compiles to nothing on
 # the other's system.
 wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl"] }
-# The bodies the app's fetch hands over still zstd (src/unpack.rs): a reader
-# of RFC 8878's frame, as a browser's decoder is, in Rust, so no target's
-# build needs a C compiler for it.
-ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+# The bodies the app's fetch hands over still zstd (src/unpack.rs), read by
+# libzstd, the format's reference implementation, as the bake writes them
+# (pxl-geo-bake). C, built by each target's own compiler
+# (ts/app/native/script/build-native.py). No defaults: RFC 8878's frame
+# alone, none of the formats before it.
+zstd = { version = "0.13", default-features = false }
 
 # What an Android app reaches the kernel through (src/android.rs): the NDK's
 # own headers — JNI, the native window a view's surface is, and the log —

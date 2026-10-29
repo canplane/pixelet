@@ -5,20 +5,20 @@ import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   ActiveTool,
-  DevicePoseStatus,
   GroundStatus,
   read_snapshot,
+  SensorStatus,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
 
-const INITIAL: Snapshot = {
-  focus: {
+const INIT: Snapshot = {
+  pivot: {
     status: GroundStatus.Idle,
     is_off_center: false,
-    center: null,
+    lon_lat: null,
     outside: false,
   },
-  location: { status: DevicePoseStatus.Idle, has_location: false, error: null },
+  location: { status: SensorStatus.Idle, has_location: false, err: null },
   companion: { person_ready: false, pet_ready: false },
   holding: {
     tool: ActiveTool.Pointer,
@@ -28,7 +28,7 @@ const INITIAL: Snapshot = {
     marker: false,
     words: "",
   },
-  orientation: { status: DevicePoseStatus.Idle, error: null },
+  orient: { status: SensorStatus.Idle, err: null },
   azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,
@@ -42,7 +42,7 @@ const INITIAL: Snapshot = {
   stall: null,
 };
 
-let snapshot: Snapshot = INITIAL;
+let snapshot: Snapshot = INIT;
 const listeners = new Listeners();
 
 /** Read whole now: the kernel writes the next one in the same place. */

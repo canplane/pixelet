@@ -104,9 +104,12 @@ uniform! {
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
         SHADOW_RIM: F32 = 50,
-        /// Whether the camera gizmo is drawn, its tint on the rays' blocks
+        /// Whether the camera gizmo is drawn, its tint on the rays' cells
         /// with it (screen_lit.wgsl `cell_share`).
         GIZMO: F32 = 51,
+        /// The canvas's device pixels, where `VIEWPORT` is the world's: what
+        /// is drawn over the world, after the finish, is laid out in them.
+        SCREEN: Vec2 = 52,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
@@ -134,7 +137,7 @@ uniform! {
         RAYLEIGH_SCALE_HEIGHT: F32 = 11,
         SUN_DIR: Vec3 = 12,
         MIE_SCATTERING: F32 = 15,
-        CAMERA_ALTITUDE: F32 = 16,
+        CAMERA_ALT: F32 = 16,
         KM_PER_U: F32 = 17,
         MIE_EXTINCTION: F32 = 18,
         MIE_SCALE_HEIGHT: F32 = 19,
@@ -153,7 +156,7 @@ uniform! {
         /// Lights the ground, never drawn: drawn, the sky went pale blue.
         NIGHT_SKY: Vec3 = 36,
         /// The Earth's face under the eye: at sea level the terrain floated on it.
-        LAND_ALTITUDE_KM: F32 = 39,
+        LAND_ALT_KM: F32 = 39,
         /// A lit city's radiance where the picture holds all of it.
         CITY_LIGHT: Vec3 = 40,
         /// In units.
@@ -168,7 +171,7 @@ uniform! {
 pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
 
 uniform! {
-    /// The cloud sheets' (cloud.wgsl, gpu/cloud.rs); their ray is the sky's.
+    /// The cloud sheets' (cloud.wgsl, gpu/cloud.rs).
     clouds {
         /// How much of the clouds the kernel shows (pxl-kernel
         /// domain/scene/environment/cloud.rs `clouds_shown`).
@@ -178,7 +181,7 @@ uniform! {
         /// The lattice's units around; the cells the wind has moved it
         /// under the map; the field's lattice unit the eye is over and its
         /// share of one (gpu/cloud.rs `field`).
-        COUNT: U32 = 2,
+        CNT: U32 = 2,
         DRIFT: Vec2 = 4,
         BASE: Vec2u = 6,
         FRAC: Vec2 = 8,
@@ -197,6 +200,78 @@ uniform! {
     }
 }
 pub const STARS_FLOATS: usize = floats(stars::FIELDS);
+
+uniform! {
+    /// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs): the view's
+    /// projection and its inverse, and the half-resolution target's size.
+    ao {
+        PROJ: Mat4 = 0,
+        INV_PROJ: Mat4 = 16,
+        HALF: Vec2 = 32,
+    }
+}
+pub const AO_FLOATS: usize = floats(ao::FIELDS);
+
+uniform! {
+    /// A marker set's (marker.wgsl, gpu/pass/marker.rs): the view, the
+    /// projection, the set's translation and its pixels a unit, and the
+    /// markers before the set's first.
+    marker {
+        VIEW: Mat4 = 0,
+        PROJ: Mat4 = 16,
+        TRANSLATION: Vec3 = 32,
+        PX_PER_UNIT: F32 = 35,
+        BEFORE: F32 = 36,
+    }
+}
+pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
+
+/// A marker's instance and a puck zone's box's, in floats, as the kernel
+/// lays them (pxl-kernel domain/scene/marker/set.rs, location_puck.rs) and
+/// marker.wgsl and puck_zone.wgsl read them.
+pub const MARKER_INSTANCE_FLOATS: u32 = 11;
+pub const PUCK_ZONE_INSTANCE_FLOATS: u32 = 8;
+
+/// A star's record as the sky reads it (gpu/star.rs, star.wgsl): its
+/// direction and flux, then its color and a pad.
+pub const STAR_RECORD_FLOATS: usize = 8;
+
+/// The raster's view's words (gpu/ray/raster.rs, raster.wgsl `Raster`),
+/// which build.rs holds the struct to.
+pub const RASTER_FLOATS: usize = 24;
+
+/// The occlusion's passes' resolution, the screen's over this (gpu/ao.rs):
+/// the downsample keeps one depth of each 2×2 and the upsample blends the 2×2
+/// about each pixel (ao_downsample.wgsl, ao_upsample.wgsl), so it is two.
+pub const AO_DOWNSCALE: u32 = 2;
+
+/// N8AO's blue noise a side (gpu/ao.rs), which a pixel reads tiled.
+pub const AO_NOISE_SIDE: u32 = 128;
+
+/// The air's tables' sizes (gpu/atmosphere.rs `SIZES`, atmos_medium.wgsl).
+pub const TRANSMITTANCE_SIZE: (u32, u32) = (256, 64);
+pub const MULTISCATTER_SIZE: (u32, u32) = (32, 32);
+pub const SKY_VIEW_SIZE: (u32, u32) = (192, 108);
+pub const IRRADIANCE_SIZE: (u32, u32) = (64, 16);
+
+/// The decor's draw groups (gpu/pass/decor.rs), each an impostor's fit
+/// (impostor.wgsl `fits`).
+pub const DECOR_GROUPS: usize = 64;
+
+/// A sheet's shapes (gpu/sheet.rs, sheet.wgsl `fs`).
+pub const SHEET_FILL: u32 = 0;
+pub const SHEET_STROKE: u32 = 1;
+pub const SHEET_TRIANGLE: u32 = 2;
+pub const SHEET_TEXT: u32 = 3;
+pub const SHEET_HALO: u32 = 4;
+
+/// A box's steps a cell across (mesh/ghost.rs, box.wgsl); its z is held in
+/// its mesh's own.
+pub const BOX_XY_STEPS: u32 = 256;
+
+/// A box's vertices, two triangles each of its six faces (pxl-spec-core
+/// raster.rs `corner`, box.wgsl).
+pub const BOX_VERTICES: u32 = 36;
 
 /// The uniforms whose fields are stated here.
 pub const UNIFORMS: [(&str, &[Field]); 5] = [
@@ -220,11 +295,24 @@ pub const EARTH_TILE_BITS: u32 = 4;
 /// The Moon's near side as download_moon cuts it, a side in texels; the
 /// disc's radius is half of it.
 pub const MOON_TEXELS: u32 = 512;
+/// The Moon's angular radius: its equatorial radius, 1738.1 km, over its
+/// mean distance, 384,400 km.
+pub const MOON_ANGULAR_RADIUS: f32 = 1738.1 / 384_400.0;
+/// The Moon's geometric albedo.
+pub const MOON_ALBEDO: f32 = 0.12;
+/// The map's mean reflectance over the disc, as download_moon prints it from
+/// the raw map (word.test.rs holds the shipped map to it): the map is scaled
+/// by `MOON_ALBEDO` over it.
+pub const MOON_MAP_MEAN: f32 = 0.2459;
 
 /// The air's froxels a side and deep (gpu/atmosphere.rs `froxel`):
 /// Hillaire 2020's aerial-perspective volume, 32³, as Unreal's
 /// SkyAtmosphere sizes it.
 pub const AIR_FROXELS: u32 = 32;
+
+/// Half an 8-bit step of an opacity: a cloud sheet's under it moves no
+/// pixel by a step, so it is not drawn.
+pub const HALF_STEP: f32 = 0.5 / 255.0;
 
 /// A layer past the last: the face's swatch alone.
 pub const NO_LAYER: u32 = 255;

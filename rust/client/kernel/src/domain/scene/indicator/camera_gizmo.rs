@@ -2,9 +2,9 @@
 
 //! The camera gizmo (the `camera_gizmo` setting): the camera grid's cells over
 //! the screen, drawn per pixel by the renderer (`pxl-render
-//! frame/shader/camera_grid.wgsl`), and the blocks the rays stop on tinted by
+//! frame/shader/camera_grid.wgsl`), and the cells the rays stop on tinted by
 //! the share of a cell their faces show the eye (screen_lit.wgsl
-//! `cell_share`), to judge by eye whether the blocks sit at its resolution.
+//! `cell_share`), to judge by eye whether the cells sit at its resolution.
 //! Listed is shown; it reads nothing but the frame.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_CAMERA_GRID};

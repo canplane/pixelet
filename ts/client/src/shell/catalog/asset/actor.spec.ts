@@ -121,7 +121,7 @@ export const Group = {
 
 /** Split by gender, so the picker shows two rows; a person is shown by
  * its place in its row. */
-export const PERSON_GENDER_PREFIXES = {
+export const PERSON_GENDER_PREFIX = {
   female: "female-",
   male: "male-",
 } as const;

@@ -30,7 +30,7 @@ fn pass(budget_ms: f64, hard_budget_ms: Option<f64>) -> Pass {
 }
 
 #[test]
-fn runs_everything_when_the_budget_is_ample() {
+fn ample_budget_runs_all() {
     let mut seen = Vec::new();
     let stats = pass(1000.0, None).run(
         [1, 2, 3],
@@ -46,7 +46,7 @@ fn runs_everything_when_the_budget_is_ample() {
 }
 
 #[test]
-fn stops_once_the_time_budget_is_spent() {
+fn stops_when_spent() {
     let mut seen = Vec::new();
     let stats = pass(10.0, None).run(
         [1, 2, 3, 4, 5],
@@ -63,7 +63,7 @@ fn stops_once_the_time_budget_is_spent() {
 }
 
 #[test]
-fn the_first_working_step_always_runs_even_past_budget() {
+fn first_step_always_runs() {
     let mut seen = Vec::new();
     let stats = pass(0.0, None).run(
         [1, 2, 3],
@@ -80,7 +80,7 @@ fn the_first_working_step_always_runs_even_past_budget() {
 }
 
 #[test]
-fn max_steps_caps_completed_work() {
+fn max_steps_cap() {
     let mut seen = Vec::new();
     let stats = pass(1000.0, None).run(
         [1, 2, 3, 4, 5],
@@ -96,7 +96,7 @@ fn max_steps_caps_completed_work() {
 }
 
 #[test]
-fn a_no_op_step_neither_counts_nor_arms_the_guard() {
+fn no_op_uncounted() {
     let mut seen = Vec::new();
     let stats = pass(0.0, None).run(
         [1, 2, 3, 4],
@@ -113,7 +113,7 @@ fn a_no_op_step_neither_counts_nor_arms_the_guard() {
 }
 
 #[test]
-fn the_hard_budget_bounds_a_pass_of_expensive_no_ops() {
+fn hard_budget_bounds_no_ops() {
     let mut seen = Vec::new();
     let stats = pass(4.0, Some(12.0)).run(
         0..40,
@@ -131,7 +131,7 @@ fn the_hard_budget_bounds_a_pass_of_expensive_no_ops() {
 }
 
 #[test]
-fn without_a_ceiling_expensive_no_ops_still_walk_the_whole_list() {
+fn no_ceiling_walks_all() {
     let mut seen = Vec::new();
     let stats = pass(1.0, None).run(
         0..6,
@@ -147,7 +147,7 @@ fn without_a_ceiling_expensive_no_ops_still_walk_the_whole_list() {
 }
 
 #[test]
-fn the_first_item_is_attempted_even_under_a_zero_ceiling() {
+fn zero_ceiling_first_item() {
     let mut seen = Vec::new();
     let stats = pass(0.0, Some(0.0)).run(
         [1, 2, 3],

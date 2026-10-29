@@ -20,8 +20,22 @@ What is drawn is what the eye's rays reach
 and a ray reaches it by asking the world whether a node is empty
 ([a ray asks the world](./20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)).
 This decides where that ray runs: on the GPU, one a pixel, from one source that
-the CPU compiles too. It is an experiment pushed on the web first. If it does
-not pay, it is retreated from.
+the CPU compiles too. It was pushed on the web first as an experiment, to be
+retreated from if it did not pay, and it holds.
+
+A ray a pixel of the render resolution starts from its cell's beam
+([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). A pixel takes the
+visible sample, the nearest block any sample stopped at that its ray enters, or
+the sky where no sample about it met anything, and walks itself only where
+neither is (pxl-shader observer.rs `resolve`, cast.rs `cast_cs`, `miss_cs`;
+[the raster keeps](../experiment/20261026-the-raster-keeps.md)). The render
+resolution is the display's times a scale the load sets by default: one of
+`SCALE_STEPS` steps between whole and `SCALE_MIN`, each a like share of the
+last; where the GPU's time is read, a window over its budget by more than
+`SCALE_BAND` steps down at once, and a step up waits until the step above fits
+for `SCALE_UP_WINDOWS` windows in a row (pxl-kernel
+domain/view/frame/resolution.rs, domain/view/param.rs); the frame is upscaled
+within itself.
 
 ## Why a ray a pixel
 
@@ -30,7 +44,7 @@ stripes: rows of rays with sky between them. The screen-cells experiment
 (`480e6b8f9`) proved the cause. Painting each ray's result over its own cell of
 the screen closed the gaps. A ray a pixel on the GPU draws the ground
 continuous, with nothing turned back into geometry. The same rule of detail
-still picks the zoom a ray asks at a distance (`Tau::cell_at`). Only the rays
+still picks the zoom a ray asks at a distance (`grid::cell_at`). Only the rays
 per screen change.
 
 A Retina resolution is not required. Half the screen's pixels is a legitimate
@@ -77,7 +91,7 @@ the turn, else from a copy into the stream. The ground goes up as a window a
 zoom, origin and layer a tile, in `earth_window`'s shape. A tile not held is
 answered by the coarser zoom.
 
-_Superseded below: the separation (pxl-spec-core ways.rs, `ways*.gen.wgsl`),
+_Superseded below: the separation (pxl-spec-core way.rs, `ways*.gen.wgsl`),
 what is placed (pxl-spec-core overwrite.rs) and decor (`decor*.gen.wgsl`) now
 run on the GPU, and the CPU's cast draws nothing._
 
@@ -117,7 +131,7 @@ Where full's frame goes, each part added to the one before:
 | the descent alone (V1)                  | 14   |
 | the node queries                        | ~89  |
 | the ground's heights, bicubic per query | ~148 |
-| the wall's neighbour reads              | ~18  |
+| the wall's neighbor reads              | ~18  |
 | past the area                           | ~6   |
 
 The walk is cheap. Its steps are the order of the references' below. The cost is
@@ -162,7 +176,7 @@ the step's work.
 ## What follows, in order, each measured alone
 
 _History: the order as set on 2026-10-14. Steps 1 to 3 are now a square's fill
-on the GPU as it lands (pxl-spec-core fill.rs: `heights_cs`, `bound_cs`, the
+on the GPU as it lands (pxl-spec-core fill.rs: `height_cs`, `bound_cs`, the
 area laid on a cell), 6 is the beam, and 7 the overwrites above; what the code
 holds is in ARCHITECTURE.md (Windows and squares; Drawing)._
 
@@ -180,7 +194,7 @@ that does not pay is reverted.
 2. **The bound from the grid.** A maximum and minimum pyramid over a tile's
    cells, from the grid's own reads, takes the place of what `relief` derives.
 3. **The wall in the grid.** The area's edge laid on a cell is a fact of the
-   tile. It is read once, not as nine neighbours a query.
+   tile. It is read once, not as nine neighbors a query.
 4. **The step's size.** The generated WGSL is 465 KB. A cave child builds all
    eight of its siblings to take one (`array<Cave,8>`, 22 times).
 5. **Textures or storage buffers** for the grid, by the 2D cache.

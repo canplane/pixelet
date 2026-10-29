@@ -1,0 +1,9 @@
+{
+  "$doc": [
+    "What a placed thing may carry beyond its id: its extension. Things whose",
+    "extensions have one shape are a class, and each class keeps its",
+    "extensions in a pool of its own; a leaf names its record by its place there,",
+    "or none. Which class an id is of is the catalog's (pxl-spec object/ext.rs)."
+  ],
+  "CLASS": { "$type": "u8", "marker_text": 0 }
+}

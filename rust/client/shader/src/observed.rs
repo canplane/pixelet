@@ -7,7 +7,7 @@
 use pxl_spec_core::answer::In;
 use pxl_spec_core::cast::Query;
 use pxl_spec_core::observed;
-use pxl_spec_core::world::At;
+use pxl_spec_core::world::{self, Handed};
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -51,14 +51,22 @@ fn seen_store(w: &mut Seen, i: u32, v: u32) {
     }
 }
 
-fn seen_add(w: &mut Seen, i: u32, v: u32) -> u32 {
-    // SAFETY: as `seen_at`.
-    unsafe {
-        spirv_std::arch::atomic_i_add::<
-            u32,
-            { Scope::QueueFamily as u32 },
-            { Semantics::NONE.bits() },
-        >(w.index_mut(i as usize), v)
+/// `visits`, the nodes a walk of `observer`'s asked, added to its lane
+/// `lane` of the head where the walks count (pxl-spec-core
+/// `observed::TALLY_ON`, `tally`).
+pub(crate) fn add_tally(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
+    if seen_load(w, observed::TALLY_ON) != 0 {
+        // SAFETY: as `seen_at`.
+        unsafe {
+            spirv_std::arch::atomic_i_add::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+            >(
+                w.index_mut(observed::tally_at(observer, lane) as usize),
+                visits,
+            );
+        }
     }
 }
 
@@ -140,54 +148,56 @@ impl Query for Reading<'_> {
 #[derive(Clone, Copy)]
 pub(crate) struct Writ {
     pub(crate) entry: u32,
-    pub(crate) at: At,
+    pub(crate) at: Handed,
 }
 
-/// The observed pyramid as a beam ray's walk, or a pixel's that missed,
-/// reads it: a node it keeps at the zooms asked, as its entry holds it,
-/// unless this pass is still writing it (`tag`); any other asked of the
-/// world's one query there and then, from what was handed it, and written.
-/// A node's children are taken a tile once, by whichever walk swaps it in
-/// first, off the tiles' stack.
+/// What a writing walk leaves of its line where it ends (`cast::Keep`), as
+/// the world's one query holds it, without the walk's slots: what was
+/// handed its stop and each node over it, by zoom. What lies about the face
+/// it stopped on is asked off it (world.rs `World::faced`), none walked down
+/// again.
+pub(crate) struct Lined {
+    pub(crate) live: Handed,
+    pub(crate) stack: [Handed; cast::DEPTH],
+}
+
+impl Lined {
+    /// Before its walk, which leaves its own over it wherever it ends, so
+    /// nothing of this is read.
+    pub(crate) fn before() -> Lined {
+        let none = Handed::of_words([0; world::HANDED_WORDS as usize]);
+        Lined {
+            live: none,
+            stack: [none; cast::DEPTH],
+        }
+    }
+}
+
+impl cast::Keep<Writ> for Lined {
+    fn keep(&mut self, met: &Met<Writ>, stack: &[Writ; cast::DEPTH]) {
+        self.live = met.stop.at.at;
+        let mut z = 0;
+        while z < met.stop.node.zoom {
+            self.stack[z as usize] = stack[z as usize].at;
+            z += 1;
+        }
+    }
+}
+
+/// The observed pyramid as a beam ray's walk, a sample's, or a pixel's that
+/// missed, reads it: a node its slot keeps at the zooms asked, unless this
+/// pass is still writing it (`tag`), taken where the key still stood once
+/// it was read; any other asked of the world's one query there and then,
+/// from what was handed it, and written where this walk claims the slot.
 pub(crate) struct Writing<'a, L> {
     pub(crate) world: World<'a, L>,
     pub(crate) seen: &'a mut Seen,
     pub(crate) tag: u32,
-}
-
-impl<L: Looks> Writing<'_, L> {
-    /// The entry of `parent`'s child `oct`, its tile taken where it has
-    /// none: claimed first by one compare-and-swap, so one walk of the many
-    /// that reach a node at once takes a tile, and the rest walk on under
-    /// it with none kept; none where no tile is left, one taken too many
-    /// given back at once, as no tile is given back while walks take them.
-    fn tile(&mut self, parent: u32, oct: u32) -> u32 {
-        let w = observed::entry_at(parent) + observed::W_CHILDREN;
-        let c = seen_load(self.seen, w);
-        if c == observed::CLAIMED {
-            return observed::NONE;
-        }
-        if c != 0 {
-            return observed::child(c - 1, oct);
-        }
-        let was = seen_swap(self.seen, w, 0, observed::CLAIMED);
-        if was != 0 {
-            return if was == observed::CLAIMED {
-                observed::NONE
-            } else {
-                observed::child(was - 1, oct)
-            };
-        }
-        let k = seen_add(self.seen, observed::TAKEN, 1);
-        if k >= observed::TILES {
-            seen_add(self.seen, observed::TAKEN, 1u32.wrapping_neg());
-            seen_store(self.seen, w, 0);
-            return observed::NONE;
-        }
-        let t = seen_at(self.seen, observed::STACK_AT + k);
-        seen_store(self.seen, w, t + 1);
-        observed::child(t, oct)
-    }
+    /// Whether it writes an asset a ray sees: a walk whose world reads no
+    /// looks (the sun's, `Unlooked`) answers such an asset without them, and
+    /// another walk may read what it writes; splits, what is transparent and
+    /// lacks carry none.
+    pub(crate) assets: bool,
 }
 
 impl<L: Looks> Query for Writing<'_, L> {
@@ -225,39 +235,86 @@ impl<L: Looks> Query for Writing<'_, L> {
         asked: [u32; 2],
         t0: f32,
     ) -> In<[u32; 2]> {
-        let w = observed::entry_at(n.entry);
-        if n.entry != observed::NONE {
-            let key = seen_load(self.seen, w);
-            if observed::holds(key, asked) && observed::tag_of(key) != self.tag {
-                let a = w + observed::W_AT;
-                n.at = At::of_words([
-                    seen_at(self.seen, a),
-                    seen_at(self.seen, a + 1),
-                    seen_at(self.seen, a + 2),
-                    seen_at(self.seen, a + 3),
-                    seen_at(self.seen, a + 4),
-                ]);
-                let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
-                return In {
-                    kind,
-                    block: [
-                        seen_at(self.seen, w + observed::W_BLOCK),
-                        seen_at(self.seen, w + observed::W_BLOCK + 1),
-                    ],
-                };
+        let first = bucket_of(zoom, c);
+        // The slot this walk would write, and the key it read there: the
+        // node's own, else a free one, else the one it takes over; none where
+        // a walk of this pass keeps it.
+        let (mut to, mut key) = (observed::NONE, observed::CLAIMED);
+        if first != observed::NONE {
+            let mut free = observed::NONE;
+            let mut k = 0;
+            while k < observed::BUCKET {
+                let w = observed::entry_at(first + k);
+                let held = seen_load(self.seen, w);
+                if held != observed::CLAIMED && held != 0 && is_node(self.seen, w, zoom, c) {
+                    if observed::holds(held, asked) {
+                        if observed::tag_of(held) == self.tag {
+                            // Kept by a walk of this pass: asked of the
+                            // world, as its words may be half written, and
+                            // left to that walk.
+                            to = observed::NONE;
+                            free = observed::NONE;
+                            break;
+                        }
+                        let a = w + observed::W_HANDED;
+                        let at = Handed::of_words([
+                            seen_at(self.seen, a),
+                            seen_at(self.seen, a + 1),
+                            seen_at(self.seen, a + 2),
+                            seen_at(self.seen, a + 3),
+                            seen_at(self.seen, a + 4),
+                        ]);
+                        let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
+                        let asset = [
+                            seen_at(self.seen, w + observed::W_ASSET),
+                            seen_at(self.seen, w + observed::W_ASSET + 1),
+                        ];
+                        if seen_load(self.seen, w) == held {
+                            n.entry = first + k;
+                            n.at = at;
+                            return In { kind, asset };
+                        }
+                        to = observed::NONE;
+                        free = observed::NONE;
+                        break;
+                    }
+                    // The node, asked at other zooms by an earlier frame:
+                    // written over. One this frame asked so (the eye's and
+                    // the sun's ask the nodes near the eye apart) stands
+                    // beside it.
+                    if observed::tag_of(held) / observed::PASSES < self.tag / observed::PASSES {
+                        (to, key) = (first + k, held);
+                    }
+                } else if held == 0 && free == observed::NONE {
+                    free = first + k;
+                }
+                k += 1;
+            }
+            if to == observed::NONE && free != observed::NONE {
+                (to, key) = (free, 0);
+            } else if to == observed::NONE && k == observed::BUCKET {
+                let v = first + observed::victim(zoom, c);
+                (to, key) = (v, seen_load(self.seen, observed::entry_at(v)));
             }
         }
         let answer = Query::node(&mut self.world, &mut n.at, zoom, c, asked, t0);
-        if n.entry != observed::NONE {
+        let w = observed::entry_at(to);
+        if to != observed::NONE
+            && (self.assets
+                || answer.kind != pxl_spec_core::answer::Kind::Cell
+                || pxl_spec_core::answer::transparent(answer.asset[0]))
+            && key != observed::CLAIMED
+            && seen_swap(self.seen, w, key, observed::CLAIMED) == key
+        {
             seen_put(
                 self.seen,
                 w + observed::W_KIND,
                 observed::kind_word(answer.kind),
             );
-            seen_put(self.seen, w + observed::W_BLOCK, answer.block[0]);
-            seen_put(self.seen, w + observed::W_BLOCK + 1, answer.block[1]);
+            seen_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
+            seen_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
             let words = n.at.words();
-            let a = w + observed::W_AT;
+            let a = w + observed::W_HANDED;
             seen_put(self.seen, a, words[0]);
             seen_put(self.seen, a + 1, words[1]);
             seen_put(self.seen, a + 2, words[2]);
@@ -272,14 +329,12 @@ impl<L: Looks> Query for Writing<'_, L> {
     }
 }
 
-/// What the observed pyramid kept forgotten, a thread an entry, where what
-/// the world's query reads changed (pxl-spec-core `observed::FORGETS`): every
-/// entry's key and its children's tile, every tile on the stack in turn; or
-/// the key of each entry over a square that moved (`observed::forgets`), its
-/// children kept for the walk that asks it again, and its children's tile
-/// given back once that keeps nothing. This dispatch only clears words, so
-/// a child read before its own thread cleared it keeps its tile a
-/// forgetting longer, and one read cleared is cleared.
+/// What the observed pyramid kept forgotten, a thread a slot, where what
+/// the world's query reads changed (pxl-spec-core `observed::FORGETS`):
+/// every slot's key, or the key of each slot over a brick that moved
+/// (`observed::forgets`), over a box of what is placed or cut that changed
+/// (`observed::over_box`), or handed a slot of a family of what is placed
+/// that was written (`observed::reads_written`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "forget_cs"))]
 pub fn forget_cs(
     #[spirv(global_invocation_id)] id: UVec3,

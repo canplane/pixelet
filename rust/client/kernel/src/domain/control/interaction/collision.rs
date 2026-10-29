@@ -6,14 +6,16 @@ use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{cube, index_of, units, Zoom};
+use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::control::interaction::{ActiveTool, Holding};
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::size::{object_zoom_of, MARKER_ZOOM};
 use crate::domain::layer::object::store::Entry;
+use crate::domain::query::decor::strike;
 use crate::domain::query::World;
+use crate::domain::view::frame::coord;
 
 /// What a placing tool puts down, each in the cube of its zoom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +66,7 @@ impl PlacementTool {
 /// The room a placement at `corner` takes, in units.
 fn room(tool: PlacementTool, corner: &Q3) -> Aabb {
     let zoom = tool.zoom();
-    let cell = cube(zoom, index_of(zoom, corner));
+    let cell = cube(zoom, idx_of(zoom, corner));
     match tool {
         PlacementTool::Decor(id) => {
             let decor = Decor::of(id);
@@ -84,9 +86,7 @@ fn room(tool: PlacementTool, corner: &Q3) -> Aabb {
 pub fn placement_reads(tool: PlacementTool, corner: &Q3) -> [[f64; 2]; 2] {
     let room = room(tool, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
-    let pad = crate::domain::query::decor::strike::reach()
-        + f64::from(pxl_spec_core::scatter::ALIGN_NEIGHBOR_RADIUS + 1) * units(GROUND.cell())
-        + width;
+    let pad = strike::reach() + width;
     [
         [room.min[0] - pad, room.min[1] - pad],
         [room.max[0] + pad, room.max[1] + pad],
@@ -126,7 +126,7 @@ pub fn anchor_center(anchor: &Q3) -> Q3 {
 
 /// In the world's doubles, the space the pick works in.
 pub fn object_aabb(obj: &Entry) -> Aabb {
-    let min = crate::domain::view::frame::coord::to_world(&obj.corner());
+    let min = coord::to_world(&obj.corner());
     let max = min.map(|v| v + obj.size());
     Aabb { min, max }
 }

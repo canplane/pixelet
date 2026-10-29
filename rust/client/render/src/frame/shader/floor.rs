@@ -45,7 +45,7 @@ pub const fn holds(groups: &[&[u32]]) -> bool {
     while s < stages.len() {
         // Storage buffers, uniform buffers, storage textures, sampled
         // textures, samplers.
-        let mut count = [0u32; 5];
+        let mut cnt = [0u32; 5];
         let mut g = 0;
         while g < groups.len() {
             let words = groups[g];
@@ -58,7 +58,7 @@ pub const fn holds(groups: &[&[u32]]) -> bool {
                 if s == 0 && kind == UNIFORM_DYNAMIC {
                     dynamic += 1;
                 }
-                // A kind not named here is one the floor cannot count: no
+                // A kind not named here is one the floor cannot cnt: no
                 // layout holding it holds.
                 let class = match kind {
                     STORAGE | STORAGE_RW => 0,
@@ -70,17 +70,17 @@ pub const fn holds(groups: &[&[u32]]) -> bool {
                     _ => return false,
                 };
                 if visible & stages[s] != 0 {
-                    count[class] += 1;
+                    cnt[class] += 1;
                 }
                 k += 3;
             }
             g += 1;
         }
-        if count[0] > STORAGE_BUFFERS_PER_STAGE
-            || count[1] > UNIFORM_BUFFERS_PER_STAGE
-            || count[2] > STORAGE_TEXTURES_PER_STAGE
-            || count[3] > SAMPLED_TEXTURES_PER_STAGE
-            || count[4] > SAMPLERS_PER_STAGE
+        if cnt[0] > STORAGE_BUFFERS_PER_STAGE
+            || cnt[1] > UNIFORM_BUFFERS_PER_STAGE
+            || cnt[2] > STORAGE_TEXTURES_PER_STAGE
+            || cnt[3] > SAMPLED_TEXTURES_PER_STAGE
+            || cnt[4] > SAMPLERS_PER_STAGE
         {
             return false;
         }

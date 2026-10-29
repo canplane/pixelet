@@ -15,32 +15,37 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+use pxl_geo_bake::cli;
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
 };
+use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
-use pxl_spec::bake::source::sharded;
+use pxl_spec::bake::source::is_sharded;
 use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT, TILE_SPHERE};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
+use tokio::fs;
+use tokio::net::TcpListener;
+use tokio::runtime::Builder;
 
 /// Where the tiles come from: the oven, baked on demand, or the shelf, each
 /// kind's set under a directory.
-enum Tiles {
+enum TileSource {
     Oven(Server),
     Shelf(PathBuf),
 }
 
 struct App {
-    tiles: Tiles,
+    tile_source: TileSource,
     /// The oven's cache, whose token names what it serves.
     cache: PathBuf,
     top_zoom: Zoom,
@@ -64,14 +69,14 @@ fn named(bytes: &[u8]) -> String {
 /// every bake writes again; the oven's, its cache's token.
 fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
-    match &app.tiles {
-        _ if !sharded(layer) => {
-            read(&app.out.join(EARTH).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b))
+    match &app.tile_source {
+        _ if !is_sharded(layer) => {
+            read(&app.out.join(EARTH).join(pyramid::MANIFEST)).map(|b| named(&b))
         }
-        Tiles::Shelf(dir) => {
-            read(&dir.join(layer.name()).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b))
+        TileSource::Shelf(dir) => {
+            read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| named(&b))
         }
-        Tiles::Oven(_) => {
+        TileSource::Oven(_) => {
             let token = app.cache.join(OVEN_TOKEN);
             if !token.exists() {
                 std::fs::create_dir_all(&app.cache)
@@ -93,19 +98,19 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
 fn declaration(app: &App) -> Result<String, String> {
     let kinds = source::try_kinds(|l| {
         let version = version_of(app, l)?;
-        match &app.tiles {
-            _ if !sharded(l) => Ok(source::Kind {
+        match &app.tile_source {
+            _ if !is_sharded(l) => Ok(source::Kind {
                 shard: None,
                 ..source::of_set(&app.out.join(EARTH), &version)?
             }),
-            Tiles::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
+            TileSource::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
                 k if k.shard.is_some() => Ok(k),
                 _ => Err(format!(
                     "{}: its manifest names no shards the set holds",
                     dir.join(l.name()).display()
                 )),
             },
-            Tiles::Oven(_) => Ok(source::Kind {
+            TileSource::Oven(_) => Ok(source::Kind {
                 format: FORMAT.of(l),
                 version,
                 shard: Some(source::tiles(app.coverage.iter().map(String::as_str))?),
@@ -121,7 +126,7 @@ async fn earth(app: &App, name: &str) -> Response {
     if Tile::of_name(name).is_none() && name != TILE_SPHERE {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match tokio::fs::read(app.out.join(EARTH).join(name)).await {
+    match fs::read(app.out.join(EARTH).join(name)).await {
         Ok(bytes) => packed(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
@@ -162,9 +167,9 @@ async fn tile(
     let Some(kind) = Kind::parse(&kind) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let demand = match &app.tiles {
-        Tiles::Oven(demand) => demand,
-        Tiles::Shelf(dir) => return from_shelf(dir, kind, &name).await,
+    let demand = match &app.tile_source {
+        TileSource::Oven(demand) => demand,
+        TileSource::Shelf(dir) => return from_shelf(dir, kind, &name).await,
     };
     match demand.get(kind, &name).await {
         Ok(Some(bytes)) => packed(bytes),
@@ -187,7 +192,7 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
         return StatusCode::NOT_FOUND.into_response();
     }
     let set = dir.join(kind.name());
-    match tokio::fs::read(set.join(name)).await {
+    match fs::read(set.join(name)).await {
         Ok(bytes) => packed(bytes),
         // A page the set has no object for is empty, as the Worker answers it.
         Err(_) if set.is_dir() => StatusCode::NO_CONTENT.into_response(),
@@ -196,7 +201,7 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
 }
 
 /// Made again at each ask, so a set baked again under a running server is a new version.
-async fn source(State(app): State<Arc<App>>) -> Response {
+async fn src(State(app): State<Arc<App>>) -> Response {
     match declaration(&app) {
         Ok(declared) => (
             [
@@ -234,7 +239,7 @@ async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Respons
     else {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     };
-    match tokio::fs::read(app.asset_dir.join(&name)).await {
+    match fs::read(app.asset_dir.join(&name)).await {
         Ok(bytes) => {
             let mut headers = HeaderMap::new();
             headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
@@ -249,7 +254,7 @@ async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Respons
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.first().is_some_and(|a| a == "--demand-job") {
         if argv.len() != 4 {
@@ -274,35 +279,35 @@ fn run() -> Result<(), String> {
     while let Some(flag) = flags.arg() {
         match flag.as_str() {
             "--port" => port = flags.parse()?,
-            "--host" => host = flags.value()?,
-            "--asset" => asset_dir = PathBuf::from(flags.value()?),
+            "--host" => host = flags.val()?,
+            "--asset" => asset_dir = PathBuf::from(flags.val()?),
             "--queue" => limits.queued = flags.parse()?,
             "--job-seconds" => limits.seconds = flags.parse()?,
             "--workers" => workers = flags.parse()?,
-            "--cache" => cache = PathBuf::from(flags.value()?),
+            "--cache" => cache = PathBuf::from(flags.val()?),
             "--folds" => folds = flags.parse()?,
-            "--shelf" => shelf = Some(PathBuf::from(flags.value()?)),
-            "--out" => out = PathBuf::from(flags.value()?),
+            "--shelf" => shelf = Some(PathBuf::from(flags.val()?)),
+            "--out" => out = PathBuf::from(flags.val()?),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
 
-    let (tiles, top_zoom) = match shelf {
-        Some(dir) => (Tiles::Shelf(dir), TOP_ZOOM),
+    let (tile_source, top_zoom) = match shelf {
+        Some(dir) => (TileSource::Shelf(dir), TOP_ZOOM),
         None => {
             let top_zoom = LEAF_ZOOM
                 .checked_sub(folds)
                 .filter(|&z| z >= TOP_ZOOM)
                 .ok_or("--folds past the pyramid's top")?;
             (
-                Tiles::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?),
+                TileSource::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?),
                 top_zoom,
             )
         }
     };
-    let coverage: Vec<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
+    let coverage: Vec<String> = Coverage::of_src()?.shards().map(|s| s.name()).collect();
     let app = Arc::new(App {
-        tiles,
+        tile_source,
         cache: cache.clone(),
         top_zoom,
         coverage,
@@ -313,17 +318,17 @@ fn run() -> Result<(), String> {
     declaration(&app)?;
 
     let router = Router::new()
-        .route(&format!("{TILE_ROOT}/source"), get(source))
+        .route(&format!("{TILE_ROOT}/source"), get(src))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{*object}}"), get(tile))
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .with_state(app.clone());
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|e| e.to_string())?;
     let served = runtime.block_on(async move {
-        let listener = tokio::net::TcpListener::bind((host.as_str(), port))
+        let listener = TcpListener::bind((host.as_str(), port))
             .await
             .map_err(|e| format!("{host}:{port}: {e}"))?;
         println!("[tile] listening on {host}:{port}");

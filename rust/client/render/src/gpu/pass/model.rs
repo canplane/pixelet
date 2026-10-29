@@ -9,12 +9,13 @@ use xpute_guest::global::Global;
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
-    buffer_entry, buffer_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
-    Entry, Gpu, Image,
+    buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
+    Entry, Gpu, Image, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::{put_f32, put_u32, Scratch};
+use crate::gpu::surface::WORLD_COLOR;
 
 fn frame_group(
     g: &Gpu,
@@ -24,7 +25,7 @@ fn frame_group(
     ao: Entry,
     air: [Entry; AIR_ENTRIES],
 ) -> u32 {
-    let mut e = vec![buffer_entry(0, frame), shadow[0], shadow[1], ao];
+    let mut e = vec![buf_entry(0, frame), shadow[0], shadow[1], ao];
     e.extend(air);
     g.bind_group(layout, &e)
 }
@@ -83,7 +84,7 @@ pub fn skin_made(image: u32) -> Option<u32> {
 }
 
 /// The device gone, its groups go with it.
-pub(crate) fn skins_lost() {
+pub(crate) fn on_skins_lost() {
     SKINS.set(Skins::default());
 }
 
@@ -99,7 +100,7 @@ pub enum Stage {
 
 /// A layout is shared by its words, so one group 0 serves every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
-    pipelines.build(g, PIPELINE_SKINNED, g.canvas()).layouts[0]
+    pipelines.build(g, PIPELINE_SKINNED, WORLD_COLOR).layouts[0]
 }
 
 /// Group 0 as the world image's models read it, the occlusion its map, and
@@ -118,23 +119,23 @@ impl FrameGroups {
     pub fn new(
         g: &Gpu,
         layout: u32,
-        frame_buffer: u32,
+        frame_buf: u32,
         shadow: [Entry; 2],
         [ao, open]: [Entry; 2],
         air: [Entry; AIR_ENTRIES],
     ) -> FrameGroups {
         FrameGroups {
-            frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
-            over: frame_group(g, layout, frame_buffer, shadow, open, air),
+            frame: frame_group(g, layout, frame_buf, shadow, ao, air),
+            over: frame_group(g, layout, frame_buf, shadow, open, air),
             layout,
             shadow,
             air,
         }
     }
 
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [Entry; 2]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buf: u32, ao: [Entry; 2]) {
         self.release();
-        *self = FrameGroups::new(g, self.layout, frame_buffer, self.shadow, ao, self.air);
+        *self = FrameGroups::new(g, self.layout, frame_buf, self.shadow, ao, self.air);
     }
 
     pub fn release(&self) {
@@ -147,8 +148,8 @@ pub struct DrawUniforms {
     bytes: u32,
     /// `bytes` rounded up to the device's offset alignment.
     stride: u32,
-    buffer: u32,
-    capacity: u32,
+    buf: u32,
+    cap: u32,
     group: u32,
     scratch: Scratch,
 }
@@ -157,11 +158,20 @@ pub struct DrawUniforms {
 pub struct Slots {
     group: u32,
     stride: u32,
+    first: u32,
 }
 
 impl Slots {
     pub fn at(&self, k: u32) -> (u32, u32) {
-        (self.group, k * self.stride)
+        (self.group, (self.first + k) * self.stride)
+    }
+
+    /// The slots past the first `n`, as `Iterator::skip` takes them.
+    pub fn skip(self, n: u32) -> Slots {
+        Slots {
+            first: self.first + n,
+            ..self
+        }
     }
 }
 
@@ -170,8 +180,8 @@ impl DrawUniforms {
         DrawUniforms {
             bytes,
             stride: bytes.next_multiple_of(align),
-            buffer: 0,
-            capacity: 0,
+            buf: 0,
+            cap: 0,
             group: 0,
             scratch: Scratch::default(),
         }
@@ -185,43 +195,44 @@ impl DrawUniforms {
         &mut self,
         g: &Gpu,
         layout: u32,
-        count: u32,
+        cnt: u32,
         draws: impl Iterator<Item = T>,
         moved: bool,
         mut put: impl FnMut(&mut [u8], T),
     ) {
-        if count == 0 {
+        if cnt == 0 {
             return;
         }
-        let need = self.stride * count.next_power_of_two().max(8);
-        if !moved && need <= self.capacity {
+        let need = self.stride * cnt.next_power_of_two().max(8);
+        if !moved && need <= self.cap {
             return;
         }
-        if need > self.capacity {
+        if need > self.cap {
             release(self.group);
-            release(self.buffer);
-            self.buffer = g.buffer(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            self.group = g.bind_group(layout, &[buffer_range_entry(0, self.buffer, 0, self.bytes)]);
-            self.capacity = need;
+            release(self.buf);
+            self.buf = g.buf(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            self.group = g.bind_group(layout, &[buf_range_entry(0, self.buf, 0, self.bytes)]);
+            self.cap = need;
         }
         let stride = self.stride as usize;
-        let buf = self.scratch.take(count * self.stride);
-        for (k, draw) in draws.take(count as usize).enumerate() {
+        let buf = self.scratch.take(cnt * self.stride);
+        for (k, draw) in draws.take(cnt as usize).enumerate() {
             put(&mut buf[k * stride..(k + 1) * stride], draw);
         }
-        g.write_buffer(self.buffer, 0, buf);
+        g.write_buf(self.buf, 0, buf);
     }
 
     pub fn slots(&self) -> Option<Slots> {
         (self.group != 0).then_some(Slots {
             group: self.group,
             stride: self.stride,
+            first: 0,
         })
     }
 
     pub fn release(&mut self) {
         release(self.group);
-        release(self.buffer);
+        release(self.buf);
         self.scratch.free();
     }
 }
@@ -252,94 +263,60 @@ pub struct ModelDraw {
     pub instances: u32,
 }
 
-/// A group or a mesh the previous draw bound is not bound again.
-#[allow(clippy::too_many_arguments)]
+/// Each draw `resolve` makes, at its slot's uniforms; the pipeline and
+/// group 0 set once a draw is made.
 pub fn draw_models<'a>(
-    g: &Gpu,
-    pass: u32,
+    pass: &mut TrackedRenderPass,
     lit: &Built,
     pipeline: u32,
-    (frame, bound): (u32, &mut u32),
+    frame: u32,
     slots: Slots,
-    first: u32,
     draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
     mut resolve: impl FnMut(&[u32; DRAW_WORDS]) -> Option<ModelDraw>,
 ) {
-    let mut started = false;
-    let mut groups = [0u32; 2];
-    let mut mesh_bound = 0;
     for (k, d) in draws.enumerate() {
         let Some(m) = resolve(d) else { continue };
-        if !started {
-            started = true;
-            g.set_pipeline(pass, pipeline);
-            if *bound != frame {
-                g.set_bind_group(pass, 0, frame, &[]);
-                *bound = frame;
-            }
-        }
-        let (group, offset) = slots.at(first + k as u32);
-        g.set_bind_group(pass, 1, group, &[offset]);
-        for (i, (held, id)) in groups.iter_mut().zip(m.groups).enumerate() {
-            if *held != id {
-                g.set_bind_group(pass, 2 + i as u32, id, &[]);
-                *held = id;
-            }
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, frame, &[]);
+        let (group, off) = slots.at(k as u32);
+        pass.set_bind_group(1, group, &[off]);
+        for (i, id) in m.groups.into_iter().enumerate() {
+            pass.set_bind_group(2 + i as u32, id, &[]);
         }
         match m.mesh {
-            Some((mesh, vertex_cnt, index_cnt)) => draw_model(
-                g,
-                pass,
-                lit,
-                &mut mesh_bound,
-                mesh,
-                vertex_cnt,
-                index_cnt,
-                m.instances,
-            ),
-            None => g.draw(pass, 4, m.instances, 0, 0),
+            Some((mesh, vertex_cnt, idx_cnt)) => {
+                draw_model(pass, lit, mesh, vertex_cnt, idx_cnt, m.instances);
+            }
+            None => pass.draw(4, m.instances, 0, 0),
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn draw_model(
-    g: &Gpu,
-    pass: u32,
+    pass: &mut TrackedRenderPass,
     lit: &Built,
-    bound: &mut u32,
     mesh: u32,
     vertex_cnt: u32,
-    index_cnt: u32,
+    idx_cnt: u32,
     instances: u32,
 ) {
-    bind_mesh(g, pass, lit, bound, mesh, vertex_cnt, index_cnt);
-    g.draw_indexed(pass, index_cnt, instances, 0, 0);
+    bind_mesh(pass, lit, mesh, vertex_cnt, idx_cnt);
+    pass.draw_indexed(idx_cnt, instances, 0, 0);
 }
 
-/// A mesh's vertex lanes and indices bound, unless `bound` is it already.
+/// A mesh's vertex lanes and indices, a lane its `lit` stride's share.
 pub fn bind_mesh(
-    g: &Gpu,
-    pass: u32,
+    pass: &mut TrackedRenderPass,
     lit: &Built,
-    bound: &mut u32,
     mesh: u32,
     vertex_cnt: u32,
-    index_cnt: u32,
+    idx_cnt: u32,
 ) {
-    if *bound != mesh {
-        let mut at = 0;
-        for lane in 0..lit.lanes {
-            let size = vertex_cnt * lit.strides[lane];
-            g.set_vertex_buffer(pass, lane as u32, mesh, at, size);
-            at += size;
-        }
-        g.set_index_buffer(
-            pass,
-            mesh,
-            vertex_cnt * MODEL_VERTEX_WORDS * 4,
-            index_cnt * 4,
-        );
-        *bound = mesh;
+    let mut at = 0;
+    for lane in 0..lit.lanes {
+        let size = vertex_cnt * lit.strides[lane];
+        pass.set_vertex_buf(lane as u32, mesh, at, size);
+        at += size;
     }
+    pass.set_idx_buf(mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, idx_cnt * 4);
 }

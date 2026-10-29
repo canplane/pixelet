@@ -3,7 +3,7 @@
 //! The cubes a person places. The store is both the record and the spatial
 //! index, since a placement must ask what is already there; what each node
 //! holds at every zoom is its tree's branches, each its children folded
-//! (pxl-spec block/volume.rs).
+//! (pxl-spec object/volume.rs).
 
 pub mod ext;
 pub mod meta;

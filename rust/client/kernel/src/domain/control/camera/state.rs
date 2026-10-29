@@ -2,7 +2,7 @@
 
 use xpute_kit::math::scalar::clamp;
 
-use crate::domain::control::camera::controller::look_domain;
+use crate::domain::control::camera::controller::facing_domain;
 use crate::domain::control::param::{
     DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST,
 };
@@ -14,11 +14,11 @@ fn norm_dist(dist: f64) -> f64 {
 }
 
 fn norm_azimuth(azimuth: f64) -> f64 {
-    look_domain(0.0, azimuth).1
+    facing_domain(0.0, azimuth).1
 }
 
 fn norm_polar(polar: f64) -> f64 {
-    look_domain(polar, 0.0).0
+    facing_domain(polar, 0.0).0
 }
 
 /// What the controls ask; the drawn camera (controller.rs `Camera`) eases toward it.

@@ -10,13 +10,23 @@ mod ground;
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Format, Gpu,
+    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Format, Gpu,
+    TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::FrameKind;
+use crate::gpu::surface::WORLD_COLOR;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
+pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
+
+/// Whether a frame of `kind` casts the pixels' rays, whole or off the
+/// samples that stand: the rays, their depth and where they met the world
+/// are laid again.
+fn casts_px(kind: FrameKind) -> bool {
+    kind == FrameKind::cast || kind == FrameKind::px
+}
 
 pub struct RaysPass {
     built: Built,
@@ -34,21 +44,22 @@ pub struct RaysPass {
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
     /// What this frame does with the cast, as `prepare` decided it: nothing
-    /// cast (`plain`), the rays standing (`standing`), or a cast run
+    /// cast (`plain`), the rays standing (`standing`), the pixels cast
+    /// again over the samples that stand (`px`), or a cast run
     /// (`cast`).
     pub kind: FrameKind,
 }
 
 impl RaysPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
-        let built = pipelines.build(g, PIPELINE_SCREEN_RAY, g.canvas());
+        let built = pipelines.build(g, PIPELINE_SCREEN_RAY, WORLD_COLOR);
         let depth = pipelines.build(g, PIPELINE_SCREEN_PREPASS, Format::depth32float);
         let words = look_words();
-        let looks = g.buffer(
+        let looks = g.buf(
             word_bytes(4 * words.len()),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(looks, 0, bytes(&words));
+        g.write_buf(looks, 0, bytes(&words));
         RaysPass {
             built,
             depth,
@@ -62,9 +73,14 @@ impl RaysPass {
         }
     }
 
+    /// Whether this frame casts the pixels' rays (`casts_px`).
+    pub fn casts_px(&self) -> bool {
+        casts_px(self.kind)
+    }
+
     /// The lit pass's entries, handed again whenever one of its objects is
     /// made again: the group is made again over them when next drawn.
-    pub fn lit(&mut self, entries: Vec<Entry>) {
+    pub fn set_lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
         self.bound = [0; 2];
     }
@@ -78,29 +94,27 @@ impl RaysPass {
         release(self.group);
         let mut e = self.lit.clone();
         e.push(view_entry(3, bound[0]));
-        e.push(buffer_entry(20, self.looks));
-        e.push(buffer_entry(21, bound[1]));
+        e.push(buf_entry(20, self.looks));
+        e.push(buf_entry(21, bound[1]));
         self.group = g.bind_group(self.built.layouts[0], &e);
         self.bound = bound;
     }
 
-    /// Returns the group 0 it leaves bound: none where no eye casts.
-    pub fn draw(&self, g: &Gpu, pass: u32) -> u32 {
-        self.draw_by(g, pass, &self.built)
+    pub fn draw(&self, pass: &mut TrackedRenderPass) {
+        self.draw_by(pass, &self.built);
     }
 
     /// Its depth alone, the occlusion's prepass's (gpu/ao.rs).
-    pub fn draw_depth(&self, g: &Gpu, pass: u32) -> u32 {
-        self.draw_by(g, pass, &self.depth)
+    pub fn draw_depth(&self, pass: &mut TrackedRenderPass) {
+        self.draw_by(pass, &self.depth);
     }
 
-    fn draw_by(&self, g: &Gpu, pass: u32, built: &Built) -> u32 {
+    fn draw_by(&self, pass: &mut TrackedRenderPass, built: &Built) {
         if self.kind == FrameKind::plain || self.group == 0 {
-            return 0;
+            return;
         }
-        g.set_pipeline(pass, built.pipeline);
-        g.set_bind_group(pass, 0, self.group, &[]);
-        g.draw(pass, 3, 1, 0, 0);
-        self.group
+        pass.set_pipeline(built.pipeline);
+        pass.set_bind_group(0, self.group, &[]);
+        pass.draw(3, 1, 0, 0);
     }
 }

@@ -33,7 +33,7 @@ export const op = {
   /** fd, at, len: the `len` bytes at `at` added to what the file opened for writing holds. */
   WRITE: 3 as number,
   /** fd: the descriptor ended. A file opened for writing is replaced by what was written; an
-   * open not yet answered is cancelled, and never answered. */
+   * open not yet answered is canceled, and never answered. */
   CLOSE: 4 as number,
   /** errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
    * the broken invariant the guest reports before it stops (xpute-kit status/bug.rs). */

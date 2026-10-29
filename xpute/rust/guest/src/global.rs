@@ -27,9 +27,9 @@ impl<T> Global<T> {
         unsafe { (*self.0.get()).get_or_insert_with(init) }
     }
 
-    pub fn set(&self, value: T) {
+    pub fn set(&self, val: T) {
         // SAFETY: as `get`.
-        unsafe { *self.0.get() = Some(value) }
+        unsafe { *self.0.get() = Some(val) }
     }
 }
 

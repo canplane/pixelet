@@ -5,12 +5,12 @@
 
 use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::area::Area;
-use pxl_spec_core::cast::{self, Ends, Met, Query};
+use pxl_spec_core::cast::{self, End, Met, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
-use pxl_spec_core::window::{self, Found, Squares, FIRST_CELL, SLOTS, SQUARE_CELLS, SQUARE_WORDS};
-use pxl_spec_core::world::{self, At};
-use pxl_spec_core::{at, faces, ground, ways};
+use pxl_spec_core::window::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL};
+use pxl_spec_core::world::{self, Handed};
+use pxl_spec_core::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
 
 use crate::eye::Eye;
@@ -23,33 +23,34 @@ fn cut(e: IVec4) -> Cut {
     }
 }
 
-/// Square `square`'s first word in the ground's buffer (pxl-spec-core
-/// `window::SQUARE_WORDS`).
-pub(crate) fn square_at(square: u32) -> u32 {
-    square * SQUARE_WORDS
+/// Brick `brick`'s first word in the ground's buffer (pxl-spec-core
+/// `window::BRICK_WORDS`).
+pub(crate) fn brick_at(brick: u32) -> u32 {
+    brick * BRICK_WORDS
 }
 
 /// The world as the GPU holds it (pxl-kernel domain/scene/cast.rs fills it): the
-/// squares the eye's windows hold, their columns, levels and runs, the
+/// bricks the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`).
-/// The squares' cells' four looks are `L`'s: their own buffer where the
-/// cast draws by them, none where a pass draws nothing (`Unlooked`).
+/// The bricks' cells' four looks are `L`'s: their own buffer for the
+/// cast's walks, every observer's alike, none where a pass reads no cell's
+/// look (`Unlooked`).
 #[derive(Clone, Copy)]
 pub struct World<'a, L> {
-    /// The windows' table (pxl-spec-core `window::Slot`): every window's
-    /// slots, a row each, the square it wants, the berth holding it plus one
-    /// while present (`Slot::berth`) and the fill it is on its way from,
+    /// The windows' table (pxl-spec-core `window::Entry`): every window's
+    /// entries, a row each, the brick it wants, the slot holding it plus one
+    /// while present (`Entry::slot`) and the fill it is on its way from,
     /// the eye's windows first, from the top's; then each window's first
-    /// square (`window::ORIGIN_AT`) and the eye's windows' folds
+    /// brick (`window::ORIGIN_AT`) and the eye's windows' folds
     /// (`window::JOINED_AT`).
     pub(crate) window: &'a [IVec4],
-    /// Per berth (`window::SQUARES`), its square's columns (`heights_cs`,
-    /// `ways_cs`), their levels (`bound_cs`), their runs (`ways_cs`) and its
-    /// cells as laid (`heights_cs`) (`window::SQUARE_WORDS`), whichever
+    /// Per slot (`window::SLOTS`), its brick's columns (`height_cs`,
+    /// `way_cs`), their levels (`bound_cs`), their runs (`way_cs`) and its
+    /// cells as laid (`height_cs`) (`window::BRICK_WORDS`), whichever
     /// window filled it.
     pub(crate) ground: &'a [u32],
-    /// Per berth, in the same order, its cells' four looks (`Looks`).
+    /// Per slot, in the same order, its cells' four looks (`Looks`).
     pub(crate) looks: L,
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row.
@@ -60,14 +61,14 @@ pub struct World<'a, L> {
     /// The eye, whose preview cuts are read where something placed or cut
     /// is asked about, not held through the descent.
     pub(crate) eye: &'a Eye,
-    /// The ways' pool (pxl-spec-core `ways::tree`), every square's tree,
+    /// The ways' pool (pxl-spec-core `way::tree`), every brick's tree,
     /// which every pass that asks the world's query reads.
-    pub(crate) pool: ways::tree::Read<'a>,
+    pub(crate) pool: way::tree::Read<'a>,
 }
 
-/// Where the squares' cells' four looks are read: a word a cell
-/// (`ground::looks`), `window::SQUARE_CELLS` a square in the squares' order,
-/// as the fill wrote them off the handed record (`heights_cs`).
+/// Where the bricks' cells' four looks are read: a word a cell
+/// (`ground::looks`), `window::BRICK_CELLS` a brick in the bricks' order,
+/// as the fill wrote them off the handed record (`height_cs`).
 pub trait Looks: Copy {
     fn look(&self, i: u32) -> u32;
 }
@@ -117,24 +118,24 @@ impl<L: Looks> Area for World<'_, L> {
 }
 
 impl<L> World<'_, L> {
-    /// Row `r` of the windows' table (`window::Slot`).
-    fn row(&self, r: u32) -> window::Slot {
+    /// Row `r` of the windows' table (`window::Entry`).
+    fn row(&self, r: u32) -> window::Entry {
         let h = at(self.window, r);
-        window::Slot::of([h.x, h.y, h.z, h.w])
+        window::Entry::of([h.x, h.y, h.z, h.w])
     }
 }
 
-/// The eye's windows, as the GPU holds them: a square in the berth its
-/// slot's row names, whichever window filled it.
-impl<L: Looks> Squares for World<'_, L> {
-    /// The berth square `q` is held in, while the eye's window holds it
+/// The eye's windows, as the GPU holds them: a brick in the slot its
+/// entry's row names, whichever window filled it.
+impl<L: Looks> Bricks for World<'_, L> {
+    /// The slot brick `q` is held in, while the eye's window holds it
     /// present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
-        let row = self.row((cell - FIRST_CELL) * SLOTS + window::slot(q));
-        (row.berth(), row.holds(q))
+        let row = self.row((cell - FIRST_CELL) * ENTRIES + window::entry(q));
+        (row.slot(), row.holds(q))
     }
-    fn square(&self, cell: u32, slot: u32) -> ([i32; 2], bool) {
-        self.row((cell - FIRST_CELL) * SLOTS + slot).held()
+    fn brick(&self, cell: u32, entry: u32) -> ([i32; 2], bool) {
+        self.row((cell - FIRST_CELL) * ENTRIES + entry).held()
     }
     /// Off the windows' rows past their table (`joined_cs`).
     fn joined(&self, cell: u32, e: u32) -> [u32; window::JOINED_WORDS as usize] {
@@ -144,24 +145,24 @@ impl<L: Looks> Squares for World<'_, L> {
         );
         [r.x as u32, r.y as u32, r.z as u32, r.w as u32]
     }
-    /// The window's row past every window's slots (`window::ORIGIN_AT`).
+    /// The window's row past every window's entries (`window::ORIGIN_AT`).
     fn origin(&self, cell: u32) -> ([i32; 2], bool) {
         self.row(window::ORIGIN_AT + (cell - FIRST_CELL)).held()
     }
-    fn look(&self, _: u32, berth: u32, i: u32) -> u32 {
-        self.looks.look(berth * SQUARE_CELLS + i)
+    fn look(&self, _: u32, slot: u32, i: u32) -> u32 {
+        self.looks.look(slot * BRICK_CELLS + i)
     }
-    fn column(&self, _: u32, berth: u32, i: u32) -> u32 {
-        column_of(self.ground, square_at(berth), i)
+    fn column(&self, _: u32, slot: u32, i: u32) -> u32 {
+        column_of(self.ground, brick_at(slot), i)
     }
-    fn level(&self, _: u32, berth: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        level_of(self.ground, square_at(berth), j, at)
+    fn level(&self, _: u32, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        level_of(self.ground, brick_at(slot), j, at)
     }
-    fn laid(&self, _: u32, berth: u32, i: u32) -> u32 {
-        fill::laid_of(self.ground, square_at(berth), i)
+    fn laid(&self, _: u32, slot: u32, i: u32) -> u32 {
+        fill::laid_of(self.ground, brick_at(slot), i)
     }
-    fn root(&self, _: u32, berth: u32) -> u32 {
-        fill::root_of(self.ground, square_at(berth))
+    fn root(&self, _: u32, slot: u32) -> u32 {
+        fill::root_of(self.ground, brick_at(slot))
     }
 }
 
@@ -180,7 +181,7 @@ impl<L: Looks> ground::Held for World<'_, L> {
         (r, here)
     }
 
-    /// The block's column off the windows, the area's edge laid on it
+    /// The cell's column off the windows, the area's edge laid on it
     /// (pxl-spec-core `window::ground`), as the CPU reads it (pxl-kernel
     /// domain/query/node.rs `Reading::cell`).
     fn cell(&mut self, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
@@ -189,16 +190,16 @@ impl<L: Looks> ground::Held for World<'_, L> {
 }
 
 /// What a node is on the GPU: its value, one of the catalog's whichever
-/// source holds it, and the four looks the ground's block is drawn by
+/// source holds it, and the four looks the ground's asset is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
 impl<L: Looks> Query for World<'_, L> {
-    type At = At;
+    type At = Handed;
 
-    fn root(&mut self, node: [i32; 3]) -> At {
-        At::of(self, (0, node))
+    fn root(&mut self, node: [i32; 3]) -> Handed {
+        Handed::of(self, (0, node))
     }
 
-    fn child(&mut self, at: &At, zoom: u32, node: [i32; 3]) -> At {
+    fn child(&mut self, at: &Handed, zoom: u32, node: [i32; 3]) -> Handed {
         at.child(self, &self.pool, (zoom, node))
     }
 
@@ -206,7 +207,7 @@ impl<L: Looks> Query for World<'_, L> {
     /// (pxl-spec-core `world::node`).
     fn node(
         &mut self,
-        at: &mut At,
+        at: &mut Handed,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -218,40 +219,37 @@ impl<L: Looks> Query for World<'_, L> {
 }
 
 impl<L: Looks> World<'_, L> {
-    /// The value of the block `c` at `zoom`, asked of the world's one
-    /// query with nothing handed down (pxl-spec-core `world::At::of`).
-    pub(crate) fn block(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
-        let mut at = At::of(self, (zoom, c));
-        self.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
-    }
-
     /// What lies about the face a ray stopped on (pxl-spec-core
-    /// `faces::word`): each block beside the stop's at its zoom
-    /// (`World::block`), filling its cube whole (`answer::whole`); a box's
-    /// own, a block kept short of its cube (`faces::BOX`); nothing where the
-    /// ray stopped on none.
+    /// `face::word`): each cell beside the stop's at its zoom, hiding its
+    /// cube whole (`answer::whole`), asked off the line down to the stop's
+    /// node (`support::line`, `support::asset`), each from the deepest node
+    /// it shares with it, never again from the top; a box's own, a cell
+    /// kept short of its cube (`face::BOX`); nothing where the ray stopped
+    /// on none.
     pub(crate) fn faced<A: Copy>(
         &mut self,
         origin: [i32; 3],
         ray: &cast::Ray,
         met: &Met<A>,
+        line: impl FnOnce(&mut Self, u32, [i32; 3]) -> support::Line<Handed>,
     ) -> u32 {
-        if met.ends != Ends::Stop {
+        if met.ends != End::Stop {
             return 0;
         }
-        if answer::kept(met.stop.block[0]) < answer::EIGHTHS {
-            return faces::BOX;
+        if answer::kept(met.stop.asset[0]) < answer::EIGHTHS {
+            return face::BOX;
         }
-        let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
-        faces::word(face_of(ray, met.stop.axis), |d| {
-            answer::whole(self.block(zoom, faces::beside(zoom, c, d)))
+        let (zoom, c) = (met.stop.node.zoom, met.stop.node.idx(origin));
+        let line = line(self, zoom, c);
+        face::word(face_of(ray, met.stop.axis), |d| {
+            answer::whole(support::asset(self, &line, zoom, face::beside(zoom, c, d)))
         })
     }
 }
 
-/// The face a ray enters a block through across `axis` (pxl-spec-core
+/// The face a ray enters a cell through across `axis` (pxl-spec-core
 /// `ray`): 2·axis, plus one where its outward normal points down the axis,
 /// against the ray.
 pub(crate) fn face_of(ray: &cast::Ray, axis: u32) -> u32 {
-    2 * axis + (pxl_spec_core::axis(ray.direction, axis) > 0.0) as u32
+    2 * axis + (pxl_spec_core::axis(ray.dir, axis) > 0.0) as u32
 }

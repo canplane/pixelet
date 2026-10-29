@@ -23,13 +23,17 @@ import {
 } from "@/abi/demand.spec.ts";
 import {
   FRAME,
+  LIMIT,
+  NOW,
   READ,
+  RING,
+  RING_NAMES,
   RINGS,
   SPREAD,
-  STEP,
-  SUMMARY,
+  STAT,
+  STEP_STAT,
+  STREAM_STAT,
   TASK,
-  TASK_SUMMARY,
   WAKES,
   WORST,
 } from "@/abi/profiler.spec.ts";
@@ -48,12 +52,12 @@ function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
   });
 }
 
-const words = (at: u32, n: u32) => new Float64Array(HOST.guest.memory, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(HOST.guest.memory, at, n);
+const words = (at: u32, n: u32) => new Float64Array(HOST.guest.mem, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(HOST.guest.mem, at, n);
 const site = (file: u32, bytes: u32, line: u32) =>
   file === 0
     ? null
-    : `${td.decode(new Uint8Array(HOST.guest.memory, file, bytes))}:${line}`;
+    : `${td.decode(new Uint8Array(HOST.guest.mem, file, bytes))}:${line}`;
 
 /** The lanes that are lists: a word a name, a census entry two (its draws and
  * triangles). The names are their owners', and shown by the shell. */
@@ -166,7 +170,7 @@ export interface TaskSummary {
   n: u32;
   ok: u32;
   aborted: u32;
-  error: u32;
+  err: u32;
   lat: { p50: f64; p95: f64 };
   reasons: { fail: u32; detail: u32; n: u32 }[];
   phase_mean: [string, f64][] | null;
@@ -176,7 +180,7 @@ export interface Step {
   phase: string;
   name: string;
   ms: f64;
-  count: f64;
+  cnt: f64;
   max_ms: f64;
 }
 
@@ -209,7 +213,7 @@ const spread_at = (s: F64Array, at: u32): Spread => ({
 });
 
 function frame_summary(s: F64Array): FrameSummary | null {
-  const F = SUMMARY.frames;
+  const F = STAT.frames;
   const a = F.AT;
   if (s[a + F.present] === 0) return null;
   return {
@@ -240,46 +244,46 @@ function frame_summary(s: F64Array): FrameSummary | null {
 function task_summaries(s: F64Array): TaskSummary[] {
   const out: TaskSummary[] = [];
   STREAM_NAMES.forEach((stream, c) => {
-    const a = SUMMARY.tasks.AT + SUMMARY.tasks.slots + c * TASK_SUMMARY.WORDS;
-    const n = s[a + TASK_SUMMARY.n];
+    const a = STAT.tasks.AT + STAT.tasks.slots + c * STREAM_STAT.WORDS;
+    const n = s[a + STREAM_STAT.n];
     if (n === 0) return;
     const reasons = Array.from(
-      { length: s[a + TASK_SUMMARY.reason_count] },
+      { length: s[a + STREAM_STAT.reason_cnt] },
       (_, i) => {
-        const w = a + TASK_SUMMARY.reasons + 3 * i;
+        const w = a + STREAM_STAT.reasons + LIMIT.REASON_WORDS * i;
         return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
       },
     );
-    const means = TASK_PHASE_NAMES.map(
-      (name, p) => [name, s[a + STREAM_STAT.phase_mean + p]] as [string, f64],
+    const means = TASK_PHASE_NAMES.map((name, p) =>
+      [name, s[a + STREAM_STAT.phase_mean + p]] as [string, f64]
     ).filter(([, v]) => !Number.isNaN(v));
     out.push({
       stream,
       n,
-      ok: s[a + TASK_SUMMARY.ok],
-      aborted: s[a + TASK_SUMMARY.aborted],
-      error: s[a + TASK_SUMMARY.error],
+      ok: s[a + STREAM_STAT.ok],
+      aborted: s[a + STREAM_STAT.aborted],
+      err: s[a + STREAM_STAT.err],
       lat: {
-        p50: s[a + TASK_SUMMARY.lat_p50],
-        p95: s[a + TASK_SUMMARY.lat_p95],
+        p50: s[a + STREAM_STAT.lat_p50],
+        p95: s[a + STREAM_STAT.lat_p95],
       },
       reasons,
-      phase_mean: s[a + TASK_SUMMARY.phase_n] > 0 ? means : null,
+      phase_mean: s[a + STREAM_STAT.phase_n] > 0 ? means : null,
     });
   });
   return out;
 }
 
 function steps_at(s: F64Array): Step[] {
-  const at = SUMMARY.steps.AT;
-  return Array.from({ length: s[at + SUMMARY.steps.count] }, (_, i) => {
-    const w = at + SUMMARY.steps.slots + i * STEP.WORDS;
+  const at = STAT.steps.AT;
+  return Array.from({ length: s[at + STAT.steps.cnt] }, (_, i) => {
+    const w = at + STAT.steps.slots + i * STEP_STAT.WORDS;
     return {
-      phase: PHASES[s[w + STEP.phase]] ?? "?",
-      name: STEP_NAMES[s[w + STEP.name]] ?? "?",
-      ms: s[w + STEP.ms],
-      count: s[w + STEP.count],
-      max_ms: s[w + STEP.max_ms],
+      phase: PHASES[s[w + STEP_STAT.phase]] ?? "?",
+      name: STEP_NAMES[s[w + STEP_STAT.name]] ?? "?",
+      ms: s[w + STEP_STAT.ms],
+      cnt: s[w + STEP_STAT.cnt],
+      max_ms: s[w + STEP_STAT.max_ms],
     };
   });
 }
@@ -292,46 +296,49 @@ function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   return out;
 }
 
-/** The summary's words as PROFILER_READ lays them out over `window_ms`. */
-function summary_words(window_ms: f64 | null): F64Array {
+/** STAT's words over `window_ms` and NOW's, as PROFILER_READ lays them out. */
+function read(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
   const r = u32s(
     call(Command.PROFILER_READ, encode_profiler_read(HOST.doorbell, window_ms)),
     READ.WORDS,
   );
-  return words(r[READ.summary_at], r[READ.summary_words]);
+  return {
+    stats: words(r[READ.stats_at], r[READ.stats_words]),
+    now: words(r[READ.now_at], r[READ.now_words]),
+  };
 }
 
 /** The summary over the last `window_ms`, or the whole recording at null. */
 export function profiler_summary(window_ms: f64 | null): Summary {
-  const s = summary_words(window_ms);
-  const R = SUMMARY.rec;
+  const { stats: s, now: n } = read(window_ms);
+  const R = NOW.rec;
   return {
     rec: {
-      recording: s[R.AT + R.recording] !== 0,
-      elapsed_ms: s[R.AT + R.elapsed_ms],
-      truncated: s[R.AT + R.truncated] !== 0,
+      recording: n[R.AT + R.recording] !== 0,
+      elapsed_ms: n[R.AT + R.elapsed_ms],
+      truncated: n[R.AT + R.truncated] !== 0,
     },
     frames: frame_summary(s),
     tasks: task_summaries(s),
     steps: steps_at(s),
-    view: section(s, SUMMARY.view),
+    view: section(n, NOW.view),
   };
 }
 
-/** The summary's view alone, read over no window: the view is the same at any
- * window (SUMMARY.view), and an empty one folds no frame or task. */
+/** The view alone, NOW's, read over an empty window, which folds no frame or
+ * task. */
 export function profiler_view(): Summary["view"] {
-  return section(summary_words(0), SUMMARY.view);
+  return section(read(0).now, NOW.view);
 }
 
 /** The rings as they lie, each its address and count, with nothing reduced. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   const r = u32s(call(Command.PROFILER_RINGS), RINGS.WORDS);
-  return {
-    frames: [r[RINGS.frames_at], r[RINGS.frames_count]],
-    tasks: [r[RINGS.tasks_at], r[RINGS.tasks_count]],
-    worst: [r[RINGS.worst_at], r[RINGS.worst_count]],
+  const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
+    const at = RINGS.slots + RING_NAMES.indexOf(name) * RING.WORDS;
+    return [r[at + RING.at], r[at + RING.cnt]];
   };
+  return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };
 }
 
 export function profiler_counts(): RingCounts {
@@ -341,9 +348,9 @@ export function profiler_counts(): RingCounts {
 
 /** Every frame the ring holds, oldest first. */
 export function profiler_frames(): Frame[] {
-  const [at, count] = rings().frames;
-  const w = words(at, count * FRAME.WORDS);
-  return Array.from({ length: count }, (_, i) => frame_at(w, i * FRAME.WORDS));
+  const [at, cnt] = rings().frames;
+  const w = words(at, cnt * FRAME.WORDS);
+  return Array.from({ length: cnt }, (_, i) => frame_at(w, i * FRAME.WORDS));
 }
 
 /** The tasks the ring holds, oldest first: its last `last`, or every one at null. */
@@ -353,15 +360,19 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   const at = ring + from * TASK.WORDS * WORD;
   const cnt = held - from;
   const w = words(at, cnt * TASK.WORDS);
-  const subjects = new BigUint64Array(HOST.guest.mem, at, cnt * TASK.WORDS);
+  const subjects = new BigUint64Array(
+    HOST.guest.mem,
+    at,
+    cnt * TASK.WORDS,
+  );
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * TASK.WORDS;
-    const phase_count = w[o + TASK.phase_count];
+    const phase_cnt = w[o + TASK.phase_cnt];
     const phases: [string, f64][] = [];
-    for (let k = 0; k < phase_count; k++) {
+    for (let k = 0; k < phase_cnt; k++) {
       phases.push([
         TASK_PHASE_NAMES[w[o + TASK.phase_ids + k]] ?? "?",
-        w[o + TASK.phase_values + k],
+        w[o + TASK.phase_vals + k],
       ]);
     }
     const start = w[o + TASK.start_ms];
@@ -387,9 +398,9 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
 
 /** The worst frames the kernel kept since recording began. */
 export function profiler_worst(): Worst[] {
-  const [at, count] = rings().worst;
-  const w = words(at, count * WORST.WORDS);
-  return Array.from({ length: count }, (_, i) => {
+  const [at, cnt] = rings().worst;
+  const w = words(at, cnt * WORST.WORDS);
+  return Array.from({ length: cnt }, (_, i) => {
     const o = i * WORST.WORDS;
     return {
       sample: frame_at(w, o + WORST.sample),

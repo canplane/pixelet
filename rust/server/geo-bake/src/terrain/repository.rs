@@ -4,9 +4,10 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, BBox3857};
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, BBox3857};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
+use crate::coverage;
 use crate::elevation::Raster;
 use crate::segment::Part;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, LAND, WIDEST_LINE};
@@ -35,14 +36,14 @@ WHERE t.geom && env.e"
 /// How far past a tile what is drawn on it can come from: half the widest line.
 pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
 const _: () = assert!(
-    DRAWN_REACH_U <= crate::coverage::BAKE_REACH,
+    DRAWN_REACH_U <= coverage::BAKE_REACH,
     "a tile's rows come from past the bakes' reach"
 );
 
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
 pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
-    let r = mer_from_u(DRAWN_REACH_U);
+    let r = merc_from_u(DRAWN_REACH_U);
     [
         [min[0] - r, min[1] - r, min[2]],
         [max[0] + r, max[1] + r, max[2]],
@@ -104,7 +105,7 @@ pub struct BuildingRow {
 
 pub struct BaseRow {
     /// Which table: "land_use", "water", "land" or "infrastructure".
-    pub source: String,
+    pub src: String,
     pub gers_id: String,
     /// The whole source's, before a tile clips it or its parts are split.
     pub way_area: f64,
@@ -161,7 +162,7 @@ impl TerrainRepository {
         self.raster.tile_grid(client, tile)
     }
 
-    pub fn fetch_tile_source(
+    pub fn fetch_tile_src(
         &self,
         client: &mut Client,
         tile: [i32; 2],
@@ -201,7 +202,7 @@ impl TerrainRepository {
                 )?
                 .iter()
                 .map(|row| BaseRow {
-                    source: row.get("source"),
+                    src: row.get("source"),
                     gers_id: row.get("gers_id"),
                     way_area: row.get("way_area"),
                     subtype: row.get("subtype"),

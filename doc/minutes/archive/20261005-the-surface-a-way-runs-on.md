@@ -51,10 +51,10 @@ coarser zoom folds it and is out of this contract.
 **The surface** of a drawn way is the cells its width covers on the ground, on a
 deck or on a bore's floor, after every height is quantized.
 
-**The step Δ** is the most two neighbours' heights may differ: a vertical
+**The step Δ** is the most two neighbors' heights may differ: a vertical
 length, 1u today, a knob of its own. It is not the cell's side, nor the quantum
 heights are stored in (q), nor a grade: a grade is a height over a horizontal
-distance measured on the ground, in metres.
+distance measured on the ground, in meters.
 
 **A way's form** is the structure the way itself builds around its surface. It
 says nothing of what another way builds over or under it: a road under a bridge,
@@ -125,7 +125,7 @@ side, are joined when
 
 What joins is derived from it alone. At one cell, surfaces joined are one
 surface, and so are surfaces joined through a third at that cell. Between two
-cells, surfaces joined are **neighbours**, owing Δ (H3). A plan contact not
+cells, surfaces joined are **neighbors**, owing Δ (H3). A plan contact not
 joined is asked apart (H1).
 
 ### 2.2 Each way builds its form
@@ -147,10 +147,10 @@ joined is asked apart (H1).
 
 ### 2.3 The heights hold
 
-- **H3 — no step past Δ.** Neighbours differ by at most Δ, on the surface as it
+- **H3 — no step past Δ.** Neighbors differ by at most Δ, on the surface as it
   is stored and drawn — along a path, across a way's width, from one range of a
   way to the next, at every join, across every page's edge. _Checked by_ every
-  neighbour pair of the baked set; a page's edge against the page beside.
+  neighbor pair of the baked set; a page's edge against the page beside.
 - **H4 — the source's order is kept.** At a crossing of two different levels,
   the higher level's surface stands over the lower's by at least a separation
   g_min (open: section 4). _Checked by_ every such crossing.
@@ -171,8 +171,8 @@ required join touch in plan at it, and that each range builds its flags' form
 (H2). A failure is a fault of the drawing or of the data, reported where it is.
 
 **Decided by the heights**: H0's and H1's realized joins, H3 and H4. With the
-neighbours and the ordered crossings given, the required ones are difference
-constraints — h_a − h_b ≤ Δ both ways for neighbours, h_low − h_high ≤ −g_min at
+neighbors and the ordered crossings given, the required ones are difference
+constraints — h_a − h_b ≤ Δ both ways for neighbors, h_low − h_high ≤ −g_min at
 an ordered crossing, and a form's bound against the terrain where an inference
 fixes one. Such a system has a solution exactly when its constraint graph has no
 negative cycle, and a negative cycle proves it has none.
@@ -188,7 +188,7 @@ for.
 An infeasible region is a connected part of the constraint graph with no
 solution. What is recorded is the regions and, for each, one negative cycle with
 the places of its constraints — not a count of cycles, since one contradiction
-appears as many. Every such judgement is conditional on the values section 4
+appears as many. Every such judgment is conditional on the values section 4
 leaves open (g_min, and any least clearance or cover that is made a bound). That
 the heights are feasible does not make the final surface keep the contract: it
 is checked whole, H5 included.
@@ -244,7 +244,7 @@ it fails as that construction, not as the limit of every model of samples.
 centreline, linear between, s the distance along the way in u, counted over the
 whole way so that no page cuts it. A cell c of the way's surface takes H(c) =
 Q(h(σ(c))): σ(c) is the station of the point of the centreline nearest c's
-centre, and Q the client's quantization to the stored quantum q (`round`, half
+center, and Q the client's quantization to the stored quantum q (`round`, half
 to even).
 
 **Quantization.** For a positive integer k, |a − b| < kq gives |Q(a) − Q(b)| ≤
@@ -253,7 +253,7 @@ less than (k + 1)q apart are at most kq apart. It is sufficient, not necessary:
 0 and q stay q apart, while 0.5q and 1.5q, exactly q apart, round to 0 and 2q.
 
 **A pair of cells.** h is linear between samples, so with g the steepest grade
-of the profile, |h(σ(a)) − h(σ(b))| ≤ g · |σ(a) − σ(b)|. A pair of neighbours a,
+of the profile, |h(σ(a)) − h(σ(b))| ≤ g · |σ(a) − σ(b)|. A pair of neighbors a,
 b of one way keeps Δ = kq when g · |σ(a) − σ(b)| < Δ, or when their two
 quantized heights are compared directly. That is the whole of what this
 construction is held to; what bounds |σ(a) − σ(b)| is geometry, and none of it
@@ -275,7 +275,7 @@ width and radius is claimed for this construction.
 
 **A counterexample, on a bend.** A way runs (−100, 0) → (0, 0) → (0, 100) in u,
 8u wide, h(s) = 0.2 s, cells of 1u and Δ = q = 1u. Along it, two cells a station
-apart differ by 0.2. The neighbours centred at (−3.5, 3.0) and (−3.5, 4.0) stand
+apart differ by 0.2. The neighbors centered at (−3.5, 3.0) and (−3.5, 4.0) stand
 on either side of the bend's bisector: the first is nearest the first segment,
 at s = 96.5, h = 19.3; the second the second segment, at s = 104.0, h = 20.8.
 They draw at 19 and 21, two steps apart. A point on the bisector t from the
@@ -286,9 +286,9 @@ to the way's whole width.
 column stands at the highest of its line over the stations its square spans, a
 bore's floor at the lowest (`pxl-spec bake/deck.rs` `over_segment`, `occupies`).
 A segment at angle θ to a cell's side spans ρ = (L / 2)(|cos θ| + |sin θ|)
-either side of the centre's station, up to L / √2, L the cell's side, clipped
+either side of the center's station, up to L / √2, L the cell's side, clipped
 where a line ends square; several segments over one column are merged, the least
-low and the greatest top. For two neighbours over one straight segment of one
+low and the greatest top. For two neighbors over one straight segment of one
 form, away from its ends, the two spans are the same length and shifted by at
 most L · max(|cos θ|, |sin θ|), so their extremes differ by at most g · L. At a
 change of form the two take opposite extremes: a deck's highest and the bore's
@@ -300,7 +300,7 @@ width 2 cells, a deck (0, 0) → (5, 2.5) with tops 13 → 10 and a bore (5, 2.5
 cells as `Builder` keeps them. Through `over_grid` and `occupies`, with columns
 of one cell, the deck's column (4, 2) spans tops 10.0 – 10.6 and its slab's top
 is 11; the bore's column (5, 2) beside it spans 9.4 – 10.0 and its floor is 9.
-Every other pair of neighbours there differs by at most 1.
+Every other pair of neighbors there differs by at most 1.
 
 **What neither touches.** Each way is built from its own profile, so neither
 construction says anything of the cells two joined ways share around their
@@ -339,7 +339,7 @@ J(k),
 - W(c) = max over b of h(b) − Δ · d(c, b), the lowest;
 - H(c) = q · ⌊(U(c) + W(c)) / 2q⌋, the mean rounded down in units of q.
 
-U and W keep Δ between neighbours (McShane, Whitney), so does their mean, and
+U and W keep Δ between neighbors (McShane, Whitney), so does their mean, and
 rounding down in units of q keeps it: ⌊y / q⌋ ≤ ⌊(x + kq) / q⌋ = ⌊x / q⌋ + k.
 Half to even does not, 0.5q and 1.5q rounding to 0 and 2q. Where the collars are
 _consistent_, |h(b) − h(b′)| ≤ Δ · d(b, b′) for every two of them, W ≤ H ≤ U and
@@ -384,7 +384,7 @@ rule for ties, which makes it an integer problem. A sufficient condition can
 stand instead, |h(σ(b)) − h(σ(b′))| < Δ · d(b, b′), linear and strict, keeping a
 margin and refusing some surfaces that would have kept Δ. Or the samples are
 solved without it and the quantized collars judged after, which guarantees
-nothing until that judgement. The per-cell model has no step 2: its variables
+nothing until that judgment. The per-cell model has no step 2: its variables
 are the quantized heights themselves, J(k)'s cells among them, and Δ between
 them is a difference constraint in whole steps, whose system has a solution in
 multiples of q exactly when it has one at all.
@@ -535,7 +535,7 @@ Each a small fixture with its answer, an impossible one among them:
 2. Three ways joined at one connector over a DEM that differs across it: one
    height at the join, H3 out along each.
 3. Two ways crossing at levels 0 and 1, no connector: the higher over by g_min;
-   never neighbours.
+   never neighbors.
 4. Two ways crossing at one level: section 4's open case.
 5. A deck between two joins, too little length for its clearance over the way
    under it: infeasible, or the clearance yields if it is an inference.
@@ -556,7 +556,7 @@ Three surveys, kept apart:
   breaks, a range's boundary to the next included (H0); joins realized where the
   source makes none — a plan contact alone is not one — and required joins left
   unrealized (H1); ranges building a form their flags do not give, an approach
-  drawn as a deck (H2); neighbours past Δ (H3).
+  drawn as a deck (H2); neighbors past Δ (H3).
 - **The new model's feasibility**, only once section 4's values are set: its
   infeasible regions and their evidence.
 
@@ -564,7 +564,7 @@ Three surveys, kept apart:
 
 Looked at directly with `geo-bake check_surface` — a diagnostic, not the
 contract's verifier, so a clean run of it proves nothing — which bakes a page
-and its eight neighbours as the bake does, draws the page's chunks through the
+and its eight neighbors as the bake does, draws the page's chunks through the
 client's own `ChunkSample`, and walks each way by the cells the bake gives it
 (the code of 2026-10-05, on `carto-standard`). Each line is one way, read from
 the source's ids; a page's other counts are provisional and not these.
@@ -580,7 +580,7 @@ the source's ids; a page's other counts are provisional and not these.
   stand on air (H2). The ground range is matched to the deck's end by position,
   since a ground piece keeps no range: a strong sign, not a checked boundary.
 - **A way on the ground** (Namsan): unflagged hillside roads step 2u between
-  neighbours following the DEM alone — H3 is owed by ground ways too, not only
+  neighbors following the DEM alone — H3 is owed by ground ways too, not only
   by structures. How a ground way meets it is not chosen.
 - **Tunnels that share a column** (Yeouido): the client keeps one bore a column,
   the widest, so of two tunnels through one column one is lost or drawn on the

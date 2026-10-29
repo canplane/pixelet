@@ -9,7 +9,7 @@
     "$doc": [
       "GPUTextureFormat, the core spec's and its texture-compression features'."
     ],
-    "$value": [
+    "$val": [
       "r8unorm",
       "r8snorm",
       "r8uint",
@@ -111,7 +111,7 @@
     "$doc": [
       "GPUVertexFormat."
     ],
-    "$value": [
+    "$val": [
       "uint8",
       "uint8x2",
       "uint8x4",
@@ -298,7 +298,7 @@
     "$doc": [
       "GPUFeatureName: a device's features are a bit each, by place (DEVICE in api.json)."
     ],
-    "$value": [
+    "$val": [
       "depth-clip-control",
       "depth32float-stencil8",
       "texture-compression-bc",
@@ -322,7 +322,7 @@
     "$doc": [
       "GPUSupportedLimits' members: a device's limits are a word each, by place (DEVICE in api.json)."
     ],
-    "$value": [
+    "$val": [
       "maxTextureDimension1D",
       "maxTextureDimension2D",
       "maxTextureDimension3D",

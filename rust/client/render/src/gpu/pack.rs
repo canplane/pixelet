@@ -12,11 +12,11 @@ use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_usage, bytes, release, texture_usage, Format, Gpu, Image};
-use crate::gpu::mip::{mip_levels, Mips};
+use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
+use crate::gpu::mip::{mip_levels, MipPass};
 use crate::mesh::paint::palette::{palette, LAYERS, SENTINELS};
 
-pub const LAYER_TEX_SZ: u32 = PACK.cell;
+pub const LAYER_TEX_SIZE: u32 = PACK.cell;
 
 const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
     top << (IMAGE_TOP * SLOT_BITS)
@@ -26,7 +26,7 @@ const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
 
 const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
 
-fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
+fn layout() -> (Vec<TileOrigin>, Vec<u32>) {
     fn slot_of(slots: &mut Vec<TileOrigin>, tile: Option<TileOrigin>) -> u32 {
         let Some(tile) = tile else { return NO_SLOT };
         match slots.iter().position(|s| *s == tile) {
@@ -40,10 +40,10 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
     let mut slots: Vec<TileOrigin> = Vec::new();
     let table = palette()
         .map(|cube| {
-            // A block wears what the pack ships for it: a side or a bottom of its
+            // An asset wears what the pack ships for it: a side or a bottom of its
             // own where it has one, its top's image on every face where it has
-            // not, as a cube_all. The dirt under a face is its own block, the
-            // stratum under it (pxl-spec-core ground.rs `Cell::block`), never a side.
+            // not, as a cube_all. The dirt under a face is its own asset, the
+            // stratum under it (pxl-spec-core ground.rs `Cell::asset`), never a side.
             let top = shipped_texture_tile(cube, CubeFace::Top);
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);
@@ -80,15 +80,15 @@ impl Pack {
     /// Nothing is drawn until the pack arrives: a flat color is the box's own,
     /// which the shader already has. Until then every face reads NO_SLOT.
     pub fn new(g: &Gpu) -> Pack {
-        let (tiles, _) = plan();
+        let (tiles, _) = layout();
         let slots = tiles.len() as u32;
-        let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
+        let levels = mip_levels(LAYER_TEX_SIZE, LAYER_TEX_SIZE);
         let usage = texture_usage::TEXTURE_BINDING
             | texture_usage::COPY_DST
             | texture_usage::RENDER_ATTACHMENT;
         let tex = g.texture(
-            LAYER_TEX_SZ,
-            LAYER_TEX_SZ,
+            LAYER_TEX_SIZE,
+            LAYER_TEX_SIZE,
             slots,
             Format::rgba8unorm_srgb,
             levels,
@@ -106,14 +106,14 @@ impl Pack {
             4,
         );
         let blank: Vec<u32> = vec![NO_SLOTS; LAYERS];
-        let table = g.buffer(
+        let table = g.buf(
             (blank.len() * 4) as u32,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(table, 0, bytes(&blank));
+        g.write_buf(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.
         let bytes = (0..levels)
-            .map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots)
+            .map(|level| (LAYER_TEX_SIZE >> level).pow(2) * 4 * slots)
             .sum();
         Pack {
             tex,
@@ -128,33 +128,27 @@ impl Pack {
     }
 
     /// Whether the pack came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &MipPass, pack: fn() -> Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
         let Some(texture) = pack().and_then(|(image, file)| g.image(image, file)) else {
             return false;
         };
-        let (tiles, table) = plan();
+        let (tiles, table) = layout();
         let encoder = g.encoder();
         for (slot, tile) in tiles.iter().enumerate() {
             g.copy_texture(
                 encoder,
-                texture,
-                tile.x,
-                tile.y,
-                self.tex,
-                0,
-                0,
-                slot as u32,
-                LAYER_TEX_SZ,
-                LAYER_TEX_SZ,
+                &place(texture, [tile.x, tile.y, 0]),
+                &place(self.tex, [0, 0, slot as u32]),
+                [LAYER_TEX_SIZE, LAYER_TEX_SIZE, 1],
             );
         }
         g.submit(encoder);
         release(texture);
         mips.build(g, self.tex, self.levels, 0, self.slots);
-        g.write_buffer(self.table, 0, bytes(&table));
+        g.write_buf(self.table, 0, bytes(&table));
         self.loaded = true;
         true
     }

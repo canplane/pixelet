@@ -23,25 +23,27 @@
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PHONE_BYTES, STACK_BYTES};
+use xpute_guest::wasm;
+use xpute_guest::wasm::LinkConfig;
 
 /// The memory the module declares it needs, which the engine checks when the
 /// shell hands it one: the smallest reservation this build can run in. A shell
 /// that asks for less fails to instantiate, where before it instantiated fine
 /// and the kernel asserted its way out of it a moment later.
-const MIN_MEMORY_BYTES: u32 = PHONE_BYTES;
+const MIN_MEM_BYTES: u32 = PHONE_BYTES;
 
 fn main() {
     const {
         assert!(
-            MIN_MEMORY_BYTES <= DESKTOP_BYTES,
+            MIN_MEM_BYTES <= DESKTOP_BYTES,
             "the module asks for more than the larger of the two reservations"
-        )
+        );
     };
 
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan {
+    wasm::link(&LinkConfig {
         stack_bytes: STACK_BYTES,
         global_base: Some(GLOBAL_BASE),
-        initial_bytes: Some(MIN_MEMORY_BYTES),
+        init_bytes: Some(MIN_MEM_BYTES),
     });
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=mem.spec.rs");

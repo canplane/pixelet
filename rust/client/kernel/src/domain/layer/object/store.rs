@@ -16,7 +16,7 @@ use xpute_guest::global::Global;
 use pxl_spec::asset::cube::{cube_of, Cube};
 use pxl_spec::asset::{cube, decor_id_from_num, AssetId, DecorId};
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
-use pxl_spec::block::object::{object_value_is_decor, object_value_is_marker};
+use pxl_spec::object::{is_decor, is_marker};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
@@ -30,11 +30,11 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::object::ext::{Ext, Pools, NONE};
 use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
-use pxl_spec::block::ext::class_of;
-use pxl_spec::block::volume::fold;
+use pxl_spec::object::ext::class_of;
+use pxl_spec::object::volume::fold;
 use pxl_spec_core::overwrite::{self, path, Held};
 
-/// The asset a placed block is, by its kind.
+/// The asset a placed cell holds, by its kind.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Asset {
     Cube { cube: Cube },
@@ -71,9 +71,9 @@ impl Entry {
 
     /// What it is, by its kind; not for air, which is the eraser's mark.
     pub fn asset(&self) -> Asset {
-        if object_value_is_marker(self.state) {
+        if is_marker(self.state) {
             Asset::Marker
-        } else if object_value_is_decor(self.state) {
+        } else if is_decor(self.state) {
             Asset::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
@@ -87,16 +87,16 @@ impl Entry {
 }
 
 /// The placed objects, one store, the layer's own.
-static OBJECTS: Global<Store> = Global::new();
+static OBJECT: Global<Store> = Global::new();
 
-pub fn objects() -> &'static mut Store {
-    OBJECTS.get(Store::default)
+pub fn object() -> &'static mut Store {
+    OBJECT.get(Store::default)
 }
 
 pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
-    let regions = objects().write(writes);
+    let regions = object().write(writes);
     if !regions.is_empty() {
-        written(&regions);
+        note_written(&regions);
     }
 }
 
@@ -104,7 +104,7 @@ static WRITTEN: Global<Vec<Aabb>> = Global::new();
 
 /// Where the objects changed, kept for the turn to tell what draws them and
 /// what is worked out from them (`take_written`); storage calls nothing above it.
-pub(super) fn written(regions: &[Aabb]) {
+pub(super) fn note_written(regions: &[Aabb]) {
     WRITTEN.get(Vec::new).extend_from_slice(regions);
     request_world_tick();
 }
@@ -295,9 +295,9 @@ impl Store {
         if !held.holds() {
             return;
         }
-        let leaf = (!held.folded()).then(|| Leaf::of(self.tree.data()[held.slot() as usize]));
+        let leaf = (!held.is_folded()).then(|| Leaf::of(self.tree.data()[held.slot() as usize]));
         let here = node_near(zoom, at, about);
-        if !enter(zoom, here, &cube(zoom, here), leaf) || !held.folded() {
+        if !enter(zoom, here, &cube(zoom, here), leaf) || !held.is_folded() {
             return;
         }
         for k in 0..8 {
@@ -390,7 +390,7 @@ impl Store {
     /// The value placed at exactly the node `at` of `zoom`, if one is, read
     /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
     pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3], held: Held) -> Option<Entry> {
-        (held.holds() && !held.folded() && held.zoom() == zoom)
+        (held.holds() && !held.is_folded() && held.zoom() == zoom)
             .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
     }
 
@@ -435,14 +435,14 @@ impl Store {
                 },
                 None => NONE,
             };
-            let value = Leaf {
+            let val = Leaf {
                 id: id16,
                 ext: handle,
             }
             .word();
             let set = self
                 .tree
-                .set(depth(zoom), path(zoom, at), value, |tree, family, d| {
+                .set(depth(zoom), path(zoom, at), val, |tree, family, d| {
                     fold(tree, family, d - 1)
                 });
             if set || handle != NONE {
@@ -458,7 +458,7 @@ impl Store {
     fn release(&mut self, zoom: Zoom, at: [i32; 3]) {
         let mut freed = Vec::new();
         let held = self.cursor((zoom, at), zoom);
-        if held.holds() && !held.folded() {
+        if held.holds() && !held.is_folded() {
             let z = held.zoom();
             xpute_kit::ensure!(
                 z == zoom || Leaf::of(self.tree.data()[held.slot() as usize]).ext == NONE,
@@ -518,7 +518,7 @@ impl Cells<'_> {
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
         let (zoom, at) = self.node;
         self.store
-            .each_in(zoom, at, self.store.cursor(self.node, zoom), visit)
+            .each_in(zoom, at, self.store.cursor(self.node, zoom), visit);
     }
 
     /// The leaf placed at exactly the node, if one is.
@@ -557,7 +557,7 @@ impl Query for Store {
     /// zoom that hold anything, joined: a cube is its own, whole where it
     /// holds, and a column (a node over the ground's two axes) the cubes of
     /// it that hold (`column`). Its readers tell apart no finer than the
-    /// node (pxl-kernel domain/view/observation.rs `squares`, `order_of_tile`).
+    /// node (pxl-kernel domain/view/observation.rs `bricks`, `order_of_tile`).
     fn bound<const D: usize>(&self, held: &Held, node: Node<D>, _: Zoom) -> Answer<Option<Aabb>> {
         Answer::Exact(match D {
             3 => held.holds().then(|| region(node)),
@@ -625,7 +625,7 @@ impl Store {
             let c = column(k);
             let mut leaves = k.checked_sub(1).and_then(|o| walk.at[o].leaves);
             let mut met = |held: &mut Vec<([i32; 3], Held)>, at: [i32; 3], h: Held| {
-                if h.folded() {
+                if h.is_folded() {
                     held.push((at, h));
                 } else if h.holds() {
                     leaves = join(leaves, span(k, at));

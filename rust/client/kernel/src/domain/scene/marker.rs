@@ -16,6 +16,6 @@ mod selection;
 mod set;
 mod sheet;
 
-pub use arrangement::{draw, moved, step, tap, Went};
+pub use arrangement::{draw, on_moved, step, tap, Went};
 pub use chat::append_chat_line;
 pub use sheet::sheet;

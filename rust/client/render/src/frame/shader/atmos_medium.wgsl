@@ -9,7 +9,7 @@
 
 // Above the atmosphere from space.
 fn camera_r() -> f32 {
-  return atmos_bottom_radius() + max(atmos_camera_altitude(), 0.001);
+  return atmos_bottom_radius() + max(atmos_camera_alt(), 0.001);
 }
 
 struct Medium {
@@ -85,7 +85,7 @@ fn air_path(r: f32, mu: f32) -> f32 {
 // How far under the eye the land it stands over lies, in km: the plane at
 // its ground's height.
 fn land_below_km() -> f32 {
-  return atmos_camera_altitude() - atmos_land_altitude_km();
+  return atmos_camera_alt() - atmos_land_alt_km();
 }
 
 // Whether a ray from the eye along `dir` falls to that land: the world's z
@@ -101,7 +101,7 @@ fn to_land(dir: vec3f) -> f32 {
 }
 
 fn land_radius() -> f32 {
-  return atmos_bottom_radius() + atmos_land_altitude_km();
+  return atmos_bottom_radius() + atmos_land_alt_km();
 }
 
 

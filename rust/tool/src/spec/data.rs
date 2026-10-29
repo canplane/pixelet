@@ -2,7 +2,7 @@
 
 //! Data specs: JSON of named values written as Rust constants and, where the
 //! shell reads them, TypeScript `as const`. A number is f64 unless a `$type`
-//! says otherwise; a u64 is a hex string. `{ "$value", "$doc" }` carries a reason.
+//! says otherwise; a u64 is a hex string. `{ "$val", "$doc" }` carries a reason.
 //! pixelet's Rust carries no names: a list of them is its count, and an enum
 //! where the spec asks for one, and a table's keys are not listed; the
 //! TypeScript keeps them for what a person reads. xpute's Rust keeps its own.
@@ -62,10 +62,10 @@ const DATA_SPECS: [DataSpec; 26] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/block/ext.json",
+        json: "spec/spec/object/ext.json",
         uses: &[],
         ts: None,
-        rs: Some("rust/spec/src/block/ext.spec.rs"),
+        rs: Some("rust/spec/src/object/ext.spec.rs"),
         rs_also: &[],
         module: Some("ext"),
         enums: Enums::All,
@@ -254,7 +254,7 @@ const DATA_SPECS: [DataSpec; 26] = [
         rs_also: &[],
         module: Some("actor"),
         enums: Enums::All,
-        ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),
+        ts_names: Some(&["groups", "PERSON_GENDER_PREFIX"]),
         cpp: None,
     },
     DataSpec {
@@ -521,8 +521,8 @@ fn rs_enum(name: &str, variants: &[(String, String)], indent: &str, out: &mut Ve
         String::new(),
         format!("{indent}    /// The member a number names, or none for a number the set does not"),
         format!("{indent}    /// give out."),
-        format!("{indent}    pub fn of(value: u8) -> Option<{e}> {{"),
-        format!("{indent}        {e}::ALL.into_iter().find(|member| *member as u8 == value)"),
+        format!("{indent}    pub fn of(val: u8) -> Option<{e}> {{"),
+        format!("{indent}        {e}::ALL.into_iter().find(|member| *member as u8 == val)"),
         format!("{indent}    }}"),
         format!("{indent}}}"),
     ]);
@@ -718,7 +718,7 @@ fn rs_leaf(
 
 /// The names `json` may read past its own, from the specs it uses: each
 /// laid out over its own uses, a name owned by one file, no use circular.
-fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>, String> {
+fn read_used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>, String> {
     let d = DATA_SPECS
         .iter()
         .find(|d| d.json == json)
@@ -733,7 +733,7 @@ fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>,
     path.push(d.json);
     let mut names: Vec<(String, Node)> = Vec::new();
     for &u in d.uses {
-        let below = used(u, path)?;
+        let below = read_used(u, path)?;
         let Node::Obj(entries) = laid_out(read(u)?, &below)? else {
             return Err(format!("{u}: not a table"));
         };
@@ -754,7 +754,7 @@ fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>,
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
     for d in &DATA_SPECS {
-        let uses = used(d.json, &mut Vec::new())?;
+        let uses = read_used(d.json, &mut Vec::new())?;
         let spec = laid_out(read(d.json)?, &uses)?;
         if let Some(k) = spec
             .named()
@@ -904,7 +904,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 "// A table is generated whole, whether or not this crate calls an entry."
                     .to_string(),
                 format!(
-                    "#![allow(non_upper_case_globals, non_snake_case, {}dead_code)]",
+                    "#![allow(non_upper_case_globals, non_snake_case, clippy::absolute_paths, {}dead_code, reason = \"generated from the spec\")]",
                     if matches!(d.enums, Enums::None) {
                         ""
                     } else {
@@ -953,8 +953,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     rs.extend(items);
                 }
             }
-            let (first, count) = run_of(d.json)?;
-            if scope.slot.get() != first + count {
+            let (first, cnt) = run_of(d.json)?;
+            if scope.slot.get() != first + cnt {
                 return Err(format!(
                     "{}: its file references are not the catalog's",
                     d.json
@@ -1058,12 +1058,12 @@ fn cpp_items(
         ));
         return Ok(());
     }
-    let (value, t) = if n.is_wrapper() {
+    let (val, t) = if n.is_wrapper() {
         (n.value(), type_of(n, ty))
     } else {
         (n, ty)
     };
-    let number = value
+    let number = val
         .num()
         .ok_or(format!("{name}: a C++ header takes numbers only"))?;
     let (ty, suffix) = match t {

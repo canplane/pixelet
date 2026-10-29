@@ -9,7 +9,7 @@ use crate::space::layer::lattice::*;
 
 /// A cell is found from its own corner, and the cell `up` zooms coarser is the point's cell there.
 #[test]
-fn a_cell_is_found_from_its_corner_and_the_cell_over_it_from_the_point() {
+fn cell_from_point() {
     let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, LEAF_ZOOM - 7] {
         let cell = GROUND.cell_of(zoom, &point);
@@ -29,7 +29,7 @@ fn a_cell_is_found_from_its_corner_and_the_cell_over_it_from_the_point() {
 
 /// Two lattices with equal cell sizes cut the same ground.
 #[test]
-fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
+fn lattice_cell_off() {
     let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
     let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, 13] {
@@ -46,7 +46,7 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
 
 /// `child_cells` inverts `parent_cell` in every lattice.
 #[test]
-fn a_parent_cell_and_its_child_cells_are_one_relation() {
+fn parent_child_cells() {
     let p = Tile::new(13, [-5, 7]);
     let around = neighborhood(p);
     assert!((0..4).all(|q| around[CHILDREN[q]] == p.children()[q]));
@@ -54,7 +54,7 @@ fn a_parent_cell_and_its_child_cells_are_one_relation() {
         let n = lattice.tile_cells();
         for q in 0..4 {
             for (tx, ty) in [(0, 0), (1, 0), (n - 1, n - 1), (n / 2, 3), (7, n - 2)] {
-                let child = lattice.cell_index(tx, ty);
+                let child = lattice.cell_idx(tx, ty);
                 let parent = lattice.parent_cell(q, child);
                 let (slot, cells) = lattice.child_cells(parent);
                 assert_eq!(slot, q, "the cells lie in the child tile the cell does");
@@ -76,7 +76,7 @@ fn a_parent_cell_and_its_child_cells_are_one_relation() {
 /// X goes round the world and Y stops at the Mercator square's edge, and a
 /// stored X stands for an eye at its nearest copy.
 #[test]
-fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
+fn point_wrap_x_clamp_y() {
     use crate::space::coord::world::{self, REACH};
     let half = ROUND / 2.0;
     assert_eq!(
@@ -99,7 +99,7 @@ const BUNDANG: [i32; 2] = [11569, 3671];
 const BUNDANG_NAME: &str = "010332102130223";
 
 #[test]
-fn the_known_tile_is_named_as_the_bucket_holds_it() {
+fn known_tile_name() {
     let leaf = Tile::new(LEAF_ZOOM, BUNDANG);
     assert_eq!(leaf.name(), BUNDANG_NAME);
     assert_eq!(Tile::of_name(BUNDANG_NAME), Some(leaf));
@@ -107,7 +107,7 @@ fn the_known_tile_is_named_as_the_bucket_holds_it() {
 
 /// One prefix is one region at every zoom, and a name's length is its zoom.
 #[test]
-fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_under_it() {
+fn tile_name_prefix() {
     for zoom in TOP_ZOOM..LEAF_ZOOM {
         let coarse = Tile::over(zoom, BUNDANG).name();
         assert_eq!(coarse.len(), zoom as usize);
@@ -116,7 +116,7 @@ fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_under_it() {
 }
 
 #[test]
-fn every_tile_survives_its_name_at_every_zoom() {
+fn tile_name_round_trip() {
     let n = 1i32 << LEAF_ZOOM;
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
@@ -129,7 +129,7 @@ fn every_tile_survives_its_name_at_every_zoom() {
 }
 
 #[test]
-fn what_is_not_a_held_tile_s_name_is_refused() {
+fn bad_tile_name_refused() {
     assert_eq!(Tile::of_name(""), None);
     assert_eq!(Tile::of_name("4"), None, "a digit is a zoom's two bits");
     assert_eq!(Tile::of_name("13211032031200a"), None);

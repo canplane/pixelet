@@ -29,13 +29,13 @@ pub const GHOST_OPACITY: f32 = 0.5;
 enum Shape {
     Box {
         size_bits: u64,
-        offset_bits: [u64; 3],
+        off_bits: [u64; 3],
         rgb: [u8; 3],
         layer: u8,
     },
     Decor {
         group: u32,
-        rotation_bits: u32,
+        rot_bits: u32,
         scale_bits: u32,
     },
 }
@@ -51,6 +51,15 @@ pub struct GhostDraw {
     at: V3,
 }
 
+/// Where a decor instance's base stands, its turn and its scale, as Bevy's
+/// `Transform` holds a translation, a rotation and a scale.
+#[derive(Clone, Copy)]
+struct Transform {
+    at: V3,
+    rot: f32,
+    scale: f32,
+}
+
 impl GhostDraw {
     /// What the tool shows, drawn as its kind is. Whether what is drawn
     /// changed.
@@ -61,18 +70,17 @@ impl GhostDraw {
                 at,
                 decor,
                 variant,
-                rotation,
+                rot,
                 scale,
                 stand_in,
-            } => self.set_decor(
-                draw,
-                at,
-                decor,
-                variant,
-                rotation as f32,
-                scale as f32,
-                stand_in,
-            ),
+            } => {
+                let t = Transform {
+                    at,
+                    rot: rot as f32,
+                    scale: scale as f32,
+                };
+                self.set_decor(draw, decor, variant, t, stand_in)
+            }
             Ghost::Box(b) => self.set_box(draw, b),
         }
     }
@@ -103,10 +111,10 @@ impl GhostDraw {
             [(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8],
             NO_LAYER as u8,
         ));
-        let offset = on_whole_units(at).1;
+        let off = on_whole_units(at).1;
         let shape = Shape::Box {
             size_bits: size.to_bits(),
-            offset_bits: offset.map(f64::to_bits),
+            off_bits: off.map(f64::to_bits),
             rgb,
             layer,
         };
@@ -115,26 +123,24 @@ impl GhostDraw {
             return moved;
         }
         let mut m = [0; BOX_WORDS as usize];
-        self.z_step = write_lone_box(&mut m, offset, size, rgb, layer);
+        self.z_step = write_lone_box(&mut m, off, size, rgb, layer);
         self.write(draw, shape, bytes(&m));
         true
     }
 
-    /// `decor`'s `variant`, its base at `at`. An untextured white silhouette
+    /// `decor`'s `variant`, its base at `t`'s `at`. An untextured white silhouette
     /// reads as a glitch, so until the variant's model and skin both arrive
     /// `stand_in`'s box is drawn instead; with none, the instance is the
     /// world's own and drawn as it is. Whether what is drawn changed.
-    #[allow(clippy::too_many_arguments)]
     fn set_decor(
         &mut self,
         draw: &mut DrawList,
-        at: V3,
         decor: &Decor,
         variant: u32,
-        rotation: f32,
-        scale: f32,
+        t: Transform,
         stand_in: Option<GhostBox>,
     ) -> bool {
+        let Transform { at, rot, scale } = t;
         let ready = || {
             decor_model(decor, variant as usize).is_some()
                 && decor_skin(decor, variant as usize).is_some()
@@ -145,7 +151,7 @@ impl GhostDraw {
         let group = decor.first_group() + variant;
         let shape = Shape::Decor {
             group,
-            rotation_bits: rotation.to_bits(),
+            rot_bits: rot.to_bits(),
             scale_bits: scale.to_bits(),
         };
         let moved = core::mem::replace(&mut self.at, at) != at;
@@ -154,9 +160,9 @@ impl GhostDraw {
         }
         // One group of one, with no header: its lanes, its flags, and the
         // index list.
-        let lane = GroupLanes { first: 0, count: 1 };
+        let lane = GroupLanes { first: 0, cnt: 1 };
         let mut m = [0u32; GroupLanes::words(1) + 1];
-        (m[lane.f32_at(3, 0)], m[lane.f32_at(4, 0)]) = (rotation.to_bits(), scale.to_bits());
+        (m[lane.f32_at(3, 0)], m[lane.f32_at(4, 0)]) = (rot.to_bits(), scale.to_bits());
         self.write(draw, shape, bytes(&m));
         true
     }
@@ -191,16 +197,16 @@ impl GhostDraw {
                 );
             }
             Shape::Decor { group, .. } => {
-                let index = GroupLanes::words(1) as u32;
+                let idx = GroupLanes::words(1) as u32;
                 draw.draw_instances(
                     PIPELINE_GHOST_DECOR,
                     self.held.handle,
                     group,
                     1,
-                    [0, 1, index],
+                    [0, 1, idx],
                     DrawList::translation(self.at, eye),
                     GHOST_OPACITY,
-                )
+                );
             }
         }
     }

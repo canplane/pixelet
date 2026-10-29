@@ -17,7 +17,7 @@ export type { Guest };
 /** What a place needs to open the guest, which the guest's own numbers say:
  * its memory, the offset its directory is at, and where its GPU stream's
  * records begin. A place that links the guest in may need none of it. */
-export interface Plan {
+export interface Config {
   bytes: u32;
   region: u32;
   directory_at: u32;
@@ -140,7 +140,7 @@ export interface Bracket {
   /** Whether the device is held to a phone's ceilings. */
   device: { handheld: boolean };
   /** The guest opened in this place: its memory and its doorbell. */
-  guest: { open(plan: Plan): Promise<Guest> };
+  guest: { open(cfg: Config): Promise<Guest> };
   /** Asks for a GPU, and says what it heard of one. */
   gpu: { boot(heard: GpuHeard): void };
   storage: {

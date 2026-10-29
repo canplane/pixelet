@@ -8,7 +8,7 @@ use pxl_spec::bake::tile::place::{PlaceTile, Placed};
 use pxl_spec::space::layer::tile::Tile;
 
 use super::world::World;
-use crate::domain::layer::residency::Lines;
+use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::Base as _;
 
 impl World<'static> {
@@ -20,10 +20,10 @@ impl World<'static> {
         tiles: impl IntoIterator<Item = Tile>,
         visit: &mut dyn FnMut(Tile, u32, Placed<'static>),
     ) {
-        let held: &'static _ = PlaceTile::residency();
+        let held: &'static _ = PlaceTile::tile_cache();
         let mut lines = Lines::default();
         for tile in tiles {
-            let Some(src) = held.seek(&mut lines, tile).source else {
+            let Some(src) = held.seek(&mut lines, tile).src else {
                 continue;
             };
             let Some(places) = held.get(src) else {
@@ -38,7 +38,7 @@ impl World<'static> {
     /// The place `place` of `tile`, as `places_in` named it; none once that
     /// tile has gone, where another tile's index names another place.
     pub fn place(self, tile: Tile, place: u32) -> Option<Placed<'static>> {
-        let placed: &'static PlaceTile = PlaceTile::residency().get(tile)?;
+        let placed: &'static PlaceTile = PlaceTile::tile_cache().get(tile)?;
         (place < placed.len()).then(|| placed.get(place))
     }
 }

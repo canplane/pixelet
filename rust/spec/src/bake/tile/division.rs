@@ -2,8 +2,8 @@
 
 //! The divisions layer's tile: per cell of the ground's lattice the finest
 //! division it is in, and every division a cell names with each of its
-//! ancestors, so a tile names its cells alone. Made at `DIVISION_LEAF`; each
-//! coarser tile is the majority of the four under it, and a child is kept
+//! ancestors, so a tile names its cells alone. Made at `DIVISION_LEAF`;
+//! each coarser tile is the majority of the four under it, and a child is kept
 //! only where it says more than its parent, which a reader that holds the
 //! parent then reads instead.
 
@@ -22,6 +22,7 @@ use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec_core::ground::majority;
+use xpute_kit::wire::xtp::Strs;
 
 /// The finest tile Overture makes of its divisions (overture-tiles
 /// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.
@@ -30,7 +31,7 @@ pub const DIVISION_LEAF: Zoom = 12;
 /// The most a packet takes, a tile past it failing its bake (`encode`): the
 /// set baked 2026-10-17 holds at most 3.28 MiB, z5's, its names' strings
 /// the most of it past the cells' 1 MiB.
-pub const MAX_PACKET_BYTES: usize = 4 << 20;
+pub const MAX_PKT_BYTES: usize = 4 << 20;
 
 /// A cell in no division, and a division with no parent.
 pub const NONE: u32 = u32::MAX;
@@ -146,7 +147,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
         &t,
         TreeEncoderOptions {
             init_cap: super::ENCODE_FROM,
-            max_cap: Some(MAX_PACKET_BYTES as u32),
+            max_cap: Some(MAX_PKT_BYTES as u32),
         },
     )
 }
@@ -183,7 +184,7 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
 struct DivisionTileView<'a> {
     cells: &'a [u32],
     pub occupancy: Occupancy,
-    ids: xpute_kit::wire::xtp::Strs<'a>,
+    ids: Strs<'a>,
     subtypes: &'a [u8],
     parents: &'a [u32],
     prominence: &'a [u8],
@@ -349,8 +350,8 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     };
 
     let cells: Vec<u32> = (0..CELLS as u32)
-        .map(|index| {
-            let (q, block) = GROUND.child_cells(index);
+        .map(|idx| {
+            let (q, block) = GROUND.child_cells(idx);
             majority(
                 block.map(|i| global(q, children[q].cells[i as usize])),
                 GROUND.cell_zoom(zoom),

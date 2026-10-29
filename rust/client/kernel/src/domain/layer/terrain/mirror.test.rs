@@ -15,7 +15,7 @@ fn records(ids: &[u32]) -> Vec<u32> {
 }
 
 #[test]
-fn a_landing_grows_the_mirror_to_its_highest_family_and_reads_back_at_its_slots() {
+fn landing_grows_mirror() {
     let mut m = Mirror::default();
     assert_eq!(m.lay(&records(&[1, 3 * CHUNK_FAMILIES + 5])), Ok(()));
     assert_eq!(
@@ -41,10 +41,10 @@ fn a_landing_grows_the_mirror_to_its_highest_family_and_reads_back_at_its_slots(
 }
 
 #[test]
-fn an_family_past_the_cap_is_refused_and_nothing_laid() {
+fn family_past_cap_refused() {
     let mut m = Mirror::default();
     assert_eq!(
-        m.lay(&records(&[1, MOST_FAMILIES])),
+        m.lay(&records(&[1, tree::POOL_FAMILIES])),
         Err(Unlaid::Cap),
         "past the cap, which no asking again changes"
     );

@@ -45,7 +45,7 @@ pub enum Design {
 
 impl Design {
     /// As it is laid out where a place keeps `spacing` pixels to itself
-    /// (`arrangement.rs` `spacing_px`), and the width of the region it keeps
+    /// (`arrangement.rs` `SPACING_PX`), and the width of the region it keeps
     /// (`set.rs`): a place's name wrapped to it, and its region it; any
     /// other's region its own width (0, which the candidates widen to it).
     pub fn spaced(mut self, spacing: f64) -> (Design, f64) {
@@ -105,7 +105,7 @@ pub fn retain(designs: &FnvHashSet<Design>) -> bool {
 pub fn coming(design: &Design) -> bool {
     stickers()
         .get(design)
-        .is_none_or(|b| b.slot != NO_SLOT && !sheet().painted(b.slot as u32))
+        .is_none_or(|b| b.slot != NO_SLOT && !sheet().is_painted(b.slot as u32))
 }
 
 /// Its width, height and where it stands down from its top; none until its
@@ -157,7 +157,7 @@ pub fn ready(design: &Design) -> bool {
     size(design).is_some()
         && stickers()
             .get(design)
-            .is_some_and(|b| b.slot != NO_SLOT && sheet().painted(b.slot as u32))
+            .is_some_and(|b| b.slot != NO_SLOT && sheet().is_painted(b.slot as u32))
 }
 
 /// Its design was measured first.

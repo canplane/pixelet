@@ -14,7 +14,7 @@ pub struct BootInfo {
     /// The bytes of the core memory, which never grows.
     pub given: u32,
     /// Where the guest's own ranges may begin: in a module where the linker
-    /// stopped; in a native library, the end of its plan's front.
+    /// stopped; in a native library, the end of its config's front.
     pub data_end: u32,
     pub clock: fn() -> f64,
     pub heap_stat: fn() -> HeapStat,

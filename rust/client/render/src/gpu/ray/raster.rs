@@ -6,23 +6,24 @@
 //! (raster.wgsl), the nearest face a pixel's ray enters kept with its
 //! sample, in passes timed together (span `sraster`), which the cast's
 //! pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
-//! box's face asked once a box (`face_cs`, span `face`). Its targets are
-//! written whole each frame before they are read; its args, boxes and faces
-//! each frame its samples are cast, and kept where only the pixels are cast
-//! again over them.
+//! box's face asked once a box (`face_cs`, span `face`). Its args, boxes
+//! and targets are written whole each frame before they are read.
 
 use pxl_spec_core::{beam, eye, raster, sun};
 
-use super::cast::HEAD_BINDING;
-
-use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER_SAMPLE_BOX};
-use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
+use crate::frame::shader::record::{
+    compute, source, PIPELINE_RASTER, SHADER_SAMPLE_BOX, SHADER_FACE, SHADER_SUN_SAMPLE_BOX,
+    SHADER_SUN_SAMPLE,
+};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
-    Load, Stamp,
+    buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
+    Load, RenderContext,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
+use crate::gpu::surface::Region;
+use pxl_spec_core::param::raster::GROWN;
+use pxl_spec_core::param::sun::SAMPLE;
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -82,7 +83,7 @@ impl Raster {
             boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
             faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
-            args: g.buffer(
+            args: g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 buffer_usage::STORAGE
                     | buffer_usage::COPY_DST
@@ -91,7 +92,7 @@ impl Raster {
             ),
             boxes: 0,
             room: 0,
-            uniform: g.buffer(
+            uniform: g.buf(
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
@@ -114,10 +115,8 @@ impl Raster {
     /// cleared where the samples are cast again (`samples_cast`), else the
     /// boxes they left kept; its groups over the cast's `eye`, `beams` and
     /// the eye's `head` (pxl-spec-core `sun::MOVED_SIZE`), and, for the
-    /// faces' asking, the world's query's buffers (`world`: the window, the
-    /// tiles' frames, the service area's index, the overwrites, the ways'
-    /// pool).
-    #[allow(clippy::too_many_arguments)]
+    /// faces' asking, the world's query's buffers (the window, the tiles'
+    /// frames, the service area's index, the overwrites, the ways' pool).
     pub(super) fn prepare(
         &mut self,
         g: &Gpu,
@@ -125,13 +124,12 @@ impl Raster {
         size: [u32; 2],
         grid: &beam::Grid,
         samples_cast: bool,
-        [eye, beams, head]: [u32; 3],
-        world: [u32; 5],
+        [eye, beams, head, window, ground, shards, overwrites, pool]: [u32; 8],
     ) {
         let samples = grid.samples[0] * grid.samples[1];
         if samples > self.room {
             release(self.boxes);
-            self.boxes = g.buffer(
+            self.boxes = g.buf(
                 word_bytes(raster::words(samples) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
@@ -156,7 +154,7 @@ impl Raster {
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
             self.size = size;
         }
-        // The cast's view (pxl-shader cast.rs `pixel_tan`): its axes, the
+        // The cast's view (pxl-shader cast.rs `px_tan`): its axes, the
         // screen's half-angles, the near plane, the angle a face grows by,
         // the drawn pixels and the rays' reach, each pixel's ray as the cast
         // forms it.
@@ -165,7 +163,7 @@ impl Raster {
         let tan = [e[eye::TAN], e[eye::TAN + 1]].map(f32::from_bits);
         let [w, h] = size.map(|s| s.max(1) as f32);
         let reach = f32::from_bits(e[eye::REACH]);
-        let pixel = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
+        let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
         let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],
@@ -184,7 +182,7 @@ impl Raster {
             0.0,
             0.0,
             0.0,
-            pxl_spec_core::param::raster::GROWN * pixel,
+            GROWN * px,
             w,
             h,
             reach,
@@ -193,15 +191,14 @@ impl Raster {
             0.0,
             0.0,
         ];
-        g.write_buffer(self.uniform, 0, bytes(&uniform));
+        g.write_buf(self.uniform, 0, bytes(&uniform));
         if samples_cast {
             let mut args = [0u32; raster::ARGS_WORDS as usize];
             args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
             args[raster::ARGS_FACES as usize + 1] = 1;
             args[raster::ARGS_FACES as usize + 2] = 1;
-            g.write_buffer(self.args, 0, bytes(&args));
+            g.write_buf(self.args, 0, bytes(&args));
         }
-        let [window, ground, shards, overwrites, pool] = world;
         let bound = [
             eye, beams, head, self.boxes, window, ground, shards, overwrites, pool,
         ];
@@ -213,29 +210,29 @@ impl Raster {
                 g.bind_group(
                     self.boxes_built.layouts[0],
                     &[
-                        buffer_entry(0, eye),
-                        buffer_entry(8, beams),
-                        buffer_entry(HEAD_BINDING, head),
-                        buffer_entry(14, self.boxes),
-                        buffer_entry(16, self.args),
+                        buf_entry(0, eye),
+                        buf_entry(8, beams),
+                        buf_entry(HEAD_BINDING, head),
+                        buf_entry(14, self.boxes),
+                        buf_entry(16, self.args),
                     ],
                 ),
                 g.bind_group(
                     self.draw_built.layouts[0],
-                    &[buffer_entry(0, self.uniform), buffer_entry(1, self.boxes)],
+                    &[buf_entry(0, self.uniform), buf_entry(1, self.boxes)],
                 ),
                 g.bind_group(
                     self.faces_built.layouts[0],
                     &[
-                        buffer_entry(0, eye),
-                        buffer_entry(1, window),
-                        buffer_entry(2, ground),
-                        buffer_entry(5, shards),
-                        buffer_entry(6, overwrites),
-                        buffer_entry(7, pool),
-                        buffer_entry(8, beams),
-                        buffer_entry(14, self.boxes),
-                        buffer_entry(16, self.args),
+                        buf_entry(0, eye),
+                        buf_entry(1, window),
+                        buf_entry(2, ground),
+                        buf_entry(5, shards),
+                        buf_entry(6, overwrites),
+                        buf_entry(7, pool),
+                        buf_entry(8, beams),
+                        buf_entry(14, self.boxes),
+                        buf_entry(16, self.args),
                     ],
                 ),
             ];
@@ -249,13 +246,12 @@ impl Raster {
     /// of their own, timed together (span `sraster`).
     pub(super) fn draw(
         &self,
-        g: &Gpu,
-        encoder: u32,
-        stamps: &mut [Stamp],
+        ctx: &mut RenderContext,
         grid: &beam::Grid,
         samples_cast: bool,
     ) {
-        let stamp = &mut stamps[GpuSpanName::sraster as usize];
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::sraster);
         if samples_cast {
             let pass = g.compute_pass(encoder, stamp.pass());
             g.set_bind_group(pass, 0, self.groups[0], &[]);
@@ -286,7 +282,7 @@ impl Raster {
         if !samples_cast {
             return;
         }
-        let pass = g.compute_pass(encoder, stamps[GpuSpanName::face as usize].pass());
+        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::face).pass());
         g.set_bind_group(pass, 0, self.groups[2], &[]);
         g.set_pipeline(pass, self.faces_built.pipeline);
         g.dispatch_indirect(pass, self.args, word_bytes(raster::ARGS_FACES as usize));
@@ -300,15 +296,14 @@ impl Raster {
     pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.sun;
         if s.group == 0 {
-            let samples = (size / pxl_spec_core::param::sun::SAMPLE)
-                * (size / pxl_spec_core::param::sun::SAMPLE);
+            let samples = (size / SAMPLE) * (size / SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            s.boxes = g.buffer(word_bytes(raster::words(samples) as usize), storage);
-            s.args = g.buffer(
+            s.boxes = g.buf(word_bytes(raster::words(samples) as usize), storage);
+            s.args = g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
-            s.uniform = g.buffer(
+            s.uniform = g.buf(
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
@@ -320,7 +315,7 @@ impl Raster {
             s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
             s.group = g.bind_group(
                 self.draw_built.layouts[0],
-                &[buffer_entry(0, s.uniform), buffer_entry(1, s.boxes)],
+                &[buf_entry(0, s.uniform), buf_entry(1, s.boxes)],
             );
         }
         s.group != 0
@@ -373,27 +368,29 @@ impl Raster {
             f32::from_bits(1),
             0.0,
             0.0,
-            pxl_spec_core::param::raster::GROWN * length(v.across),
+            GROWN * length(v.across),
             n,
             n,
             v.reach,
             // The boxes are laid from box texel (0, 0)'s start (pxl-shader
-            // sun.rs `Map::laid`).
+            // sun.rs `sun_sample_box_cs`).
             0.0,
             0.0,
             0.0,
             0.0,
         ];
-        g.write_buffer(s.uniform, 0, bytes(&uniform));
+        g.write_buf(s.uniform, 0, bytes(&uniform));
         let mut args = [0u32; raster::ARGS_WORDS as usize];
         args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-        g.write_buffer(s.args, 0, bytes(&args));
+        g.write_buf(s.args, 0, bytes(&args));
     }
 
     /// The sun's boxes drawn into its targets as many as their args say,
-    /// cleared first, timed in `stamp` (span `sun_raster`), after its boxes
+    /// cleared first, timed in the span `sun_raster`, after its boxes
     /// are written.
-    pub(super) fn sun_draw(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
+    pub(super) fn sun_draw(&self, ctx: &mut RenderContext) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::sun_raster);
         let s = &self.sun;
         let pass = g.pass(
             encoder,

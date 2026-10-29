@@ -10,7 +10,10 @@
 //! slots' count as a u32, each slot's file as a u32, its number below the
 //! asset root, then each slot's extent, ENU, as three f64, zero for an image.
 
-#![allow(non_upper_case_globals)]
+#![expect(
+    non_upper_case_globals,
+    reason = "the generated slots are named as the assets they hold (`pack`)"
+)]
 
 #[path = "catalog.spec.rs"]
 mod spec;

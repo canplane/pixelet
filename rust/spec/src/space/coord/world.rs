@@ -97,7 +97,7 @@ pub const fn around(zoom: Zoom) -> i64 {
 /// A cell at `z` named as pxl-spec-core's `wrap_index` names its X, which
 /// every key goes through.
 pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i32; 3]) -> [i32; 3] {
-    [pxl_spec_core::wrap_index(zoom, x), y, h]
+    [pxl_spec_core::wrap_idx(zoom, x), y, h]
 }
 
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.

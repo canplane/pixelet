@@ -8,7 +8,13 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case.
 pub mod surface_role {
@@ -40,7 +46,7 @@ pub mod stream {
 }
 
 /// What a device's GPU host runs the renderer's stream by (xpute-gpu host
-/// `Plan`), which pxl-native hands it; a page's browser paces its frames and
+/// `Config`), which pxl-native hands it; a page's browser paces its frames and
 /// stages its writes itself.
 pub mod device {
     /// The frames drawn and not yet finished on the GPU at once: a turn draws only

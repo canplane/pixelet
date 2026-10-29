@@ -189,7 +189,7 @@ Not yet:
 - The window is five zooms deep, so from low over the ground the far ground ends
   at the coarsest zoom's reach rather than at the horizon.
 
-τ, whether the work is equalised across devices, and hysteresis are left to
+τ, whether the work is equalized across devices, and hysteresis are left to
 measurement.
 
 ## What the rule is and what a layer is

@@ -6,7 +6,7 @@
 
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::space::coord::q3::{FRAC_W, Q3};
-use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{idx_of, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
@@ -34,12 +34,12 @@ fn cases() -> [(&'static str, Hit); 3] {
 }
 
 fn lattice(p: &Q3) -> (i32, i32, i32) {
-    let [x, y, z] = index_of(UNIT_ZOOM, p);
+    let [x, y, z] = idx_of(UNIT_ZOOM, p);
     (x, y, z)
 }
 
 #[test]
-fn world_struck_corner_at_cell_size_lands_on_the_struck_cell_with_no_sub_cell_residue() {
+fn struck_corner_lands_on_cell() {
     for (name, hit) in cases() {
         let p = world_struck_corner(&hit, units(GROUND.cell()));
         assert_eq!(lattice(&p), (3, 5, 2), "{name}");
@@ -48,7 +48,7 @@ fn world_struck_corner_at_cell_size_lands_on_the_struck_cell_with_no_sub_cell_re
 }
 
 #[test]
-fn world_struck_corner_at_cell_size_names_the_cell_every_tier_lands_inside() {
+fn struck_corner_names_cell() {
     for (name, hit) in cases() {
         let cell = lattice(&world_struck_corner(&hit, units(GROUND.cell())));
         for size in (OBJECT_COARSEST..=OBJECT_FINEST).map(units) {

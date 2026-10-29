@@ -7,13 +7,13 @@ fn a_full_table_refuses() {
     let mut t = Table::<(), 3>::new();
     let handles = [t.insert(()).unwrap(), t.insert(()).unwrap()];
     assert_eq!(t.insert(()), None);
-    assert_eq!(t.count(), 2);
+    assert_eq!(t.cnt(), 2);
     t.remove(handles[0]);
     assert!(t.insert(()).is_some());
 }
 
 #[test]
-fn a_removed_handle_names_nothing_even_once_its_slot_is_taken_again() {
+fn removed_handle_stale() {
     let mut t = Table::<_, 4>::new();
     let a = t.insert("a").unwrap();
     assert_ne!(a, 0);
@@ -28,7 +28,7 @@ fn a_removed_handle_names_nothing_even_once_its_slot_is_taken_again() {
 }
 
 #[test]
-fn a_rollback_removes_what_its_epoch_took() {
+fn rollback_epoch() {
     let mut t = Table::<u8, 8>::new();
     let kept = t.insert(1).unwrap();
     t.begin();

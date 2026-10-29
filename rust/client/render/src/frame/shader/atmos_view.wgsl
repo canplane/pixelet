@@ -6,19 +6,19 @@
 
 /* where a point stands */
 
-// The air's centre, straight under the eye at the air's radius from it.
+// The air's center, straight under the eye at the air's radius from it.
 fn planet_center() -> vec3f {
   return vec3f(0.0, 0.0, -camera_r() / atmos_km_per_u());
 }
 
-// Straight up at a point, away from the air's centre.
+// Straight up at a point, away from the air's center.
 fn up_at(world_pos: vec3f) -> vec3f {
   return normalize(world_pos - planet_center());
 }
 
 // A point's radius in the air, by its height on the flat map: the eye's
 // radius and the point's height over it, its z. Measured from the air's
-// centre instead, flat ground d out stood d²/2R up — 7 km at 300 km — and
+// center instead, flat ground d out stood d²/2R up — 7 km at 300 km — and
 // its light swept the tables' radius rows, a band at each.
 fn radius_of(world_pos: vec3f) -> f32 {
   return max(camera_r() + (world_pos.z - frame_camera_pos().z) * atmos_km_per_u(), atmos_bottom_radius());
@@ -83,12 +83,12 @@ fn air_far() -> f32 {
 }
 
 // The nearest anything drawn may lie, in units: how far the eye stands over
-// the world's top, where a position's Z ends (`HEIGHT_BITS` about sea level),
+// the world's top, where a pos's Z ends (`HEIGHT_BITS` about sea level),
 // none while it stands within the world. The air's volume starts there, so an
 // eye high over the world spends no slice on the empty air under it.
 fn air_near() -> f32 {
   let top = f32(1u << (HEIGHT_BITS - 1u));
-  return max(atmos_camera_altitude() / atmos_km_per_u() - top, 0.0);
+  return max(atmos_camera_alt() / atmos_km_per_u() - top, 0.0);
 }
 
 // The volume's depth, one law for every column: slice z, 0 to 1, lies
@@ -115,15 +115,11 @@ fn air_slice(d: f32) -> f32 {
   return pow(clamp((d - e.x) / (e.y - e.x), 0.0, 1.0), 1.0 / 3.0) * f32(AIR_FROXELS - 1u);
 }
 
-// Knots to a stretch between two of the volume's slices: four, for its far
-// slabs, a hundred km and more down into the ozone and the Earth's shadow.
-const AIR_STRETCH_KNOTS: i32 = 4;
-
 // The air from `t0` to `t1` units along `dir` from the eye, exposed: one
 // stretch of the volume's column march (atmos_froxel.wgsl).
 fn air_stretch(dir: vec3f, t0: f32, t1: f32) -> Veil {
   let km = atmos_km_per_u();
-  let v = gather_between(camera_r(), frame_up(), dir, t0 * km, t1 * km, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), AIR_STRETCH_KNOTS);
+  let v = gather_between(camera_r(), frame_up(), dir, t0 * km, t1 * km, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), ATMOS_AIR_STRETCH_KNOTS);
   return Veil(v.through, v.scattered * atmos_white() * exposure());
 }
 

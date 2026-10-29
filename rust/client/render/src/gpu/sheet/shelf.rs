@@ -40,7 +40,7 @@ pub enum Paint {
 const WIDTH_BUCKET: u32 = 16;
 const HEIGHT_BUCKET: u32 = 16;
 
-pub const INITIAL_SIZE: u32 = 1024;
+pub const INIT_SIZE: u32 = 1024;
 
 /// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen markers (one per
 /// places cell); past the limit a sticker waits unshown (`NO_SLOT`).
@@ -136,19 +136,19 @@ impl Shelves {
     }
 }
 
-/// Every sticker's place on a sheet of `size`, planned on scratch shelves so a
-/// failed plan changes nothing.
-struct Plan {
+/// Every sticker's place on a sheet of `size`, laid out on scratch shelves so
+/// a failed layout changes nothing.
+struct Layout {
     at: Vec<(u32, u32)>,
     shelves: Shelves,
 }
 
-fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
+fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Layout> {
     let mut shelves = Shelves::default();
     let at = (0..ws.len())
         .map(|i| shelves.fit(ws[i], hs[i], size))
         .collect::<Option<_>>()?;
-    Some(Plan { at, shelves })
+    Some(Layout { at, shelves })
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -185,7 +185,7 @@ pub struct Sheet {
 impl Sheet {
     pub fn new() -> Sheet {
         Sheet {
-            size: INITIAL_SIZE,
+            size: INIT_SIZE,
             ..Default::default()
         }
     }
@@ -214,7 +214,7 @@ impl Sheet {
 
     /// Whether a live slot holds its drawing, which one added or marked
     /// dirty lacks until a sync paints it.
-    pub fn painted(&self, slot: u32) -> bool {
+    pub fn is_painted(&self, slot: u32) -> bool {
         let s = slot as usize;
         self.state.get(s) == Some(&LIVE) && !self.dirty.contains(slot)
     }
@@ -334,16 +334,16 @@ impl Sheet {
     /// dense view grew stays that large, canvas and texture, for a dozen stickers.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
-        while self.size > INITIAL_SIZE {
+        while self.size > INIT_SIZE {
             let target = self.size / 2;
             if self.used_px > (target * target) / 2 {
                 break;
             }
             let (slots, ws, hs) = self.live_slots();
-            let Some(plan) = pack(target, &ws, &hs) else {
+            let Some(layout) = pack(target, &ws, &hs) else {
                 break;
             };
-            self.rebuild(target, &slots, plan);
+            self.rebuild(target, &slots, layout);
             changed = true;
         }
         changed
@@ -356,16 +356,16 @@ impl Sheet {
         }
         let (slots, ws, hs) = self.live_slots();
         // Everything fit at half the size, so this fits by construction.
-        let Some(plan) = pack(self.size * 2, &ws, &hs) else {
+        let Some(layout) = pack(self.size * 2, &ws, &hs) else {
             return false;
         };
-        self.rebuild(self.size * 2, &slots, plan);
+        self.rebuild(self.size * 2, &slots, layout);
         true
     }
 
-    fn rebuild(&mut self, size: u32, slots: &[usize], plan: Plan) {
+    fn rebuild(&mut self, size: u32, slots: &[usize], layout: Layout) {
         self.size = size;
-        self.shelves = plan.shelves;
+        self.shelves = layout.shelves;
         for st in self.state.iter_mut() {
             if *st == FREE {
                 *st = UNUSED;
@@ -374,7 +374,7 @@ impl Sheet {
         self.used_px = 0;
         self.generation += 1;
         for (i, &s) in slots.iter().enumerate() {
-            (self.x[s], self.y[s]) = plan.at[i];
+            (self.x[s], self.y[s]) = layout.at[i];
             self.used_px += self.w[s] * self.h[s];
         }
         self.dirty = SlotSet::default();

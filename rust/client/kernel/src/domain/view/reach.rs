@@ -15,7 +15,7 @@ fn ground_under(at: V3) -> f64 {
     let point = world::point(at[0], at[1], at[2]);
     World::now()
         .floor_under(&point, LEAF_ZOOM)
-        .value()
+        .val()
         .flatten()
         .unwrap_or(0.0)
 }

@@ -24,9 +24,9 @@ use std::collections::{BTreeMap, VecDeque};
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::Form;
-use pxl_spec::space::coord::adapter::epsg3857::mer_from_u;
+use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
@@ -36,10 +36,10 @@ use crate::separation::{Drawn, Line};
 use super::bridge::Decks;
 use super::*;
 
-// ---- Arnis's numbers for a bore, in metres, under its names ----
-const TUNNEL_CEIL_OFFSET_M: f64 = 5.0;
+// ---- Arnis's numbers for a bore, in meters, under its names ----
+const TUNNEL_CEIL_OFF_M: f64 = 5.0;
 const TUNNEL_COVER_DROP_M: f64 = 7.0;
-const TUNNEL_ROOF_COVER_M: f64 = TUNNEL_CEIL_OFFSET_M + 1.0;
+const TUNNEL_ROOF_COVER_M: f64 = TUNNEL_CEIL_OFF_M + 1.0;
 const TUNNEL_RAMP_STEP: i32 = 1;
 const TUNNEL_RAMP_RUN: i32 = 3;
 const TUNNEL_LAYER_DROP_M: f64 = 7.0;
@@ -58,7 +58,7 @@ pub(super) const DEEPEST: i64 = -(TUNNEL_MAX_LAYERS_BELOW + 1);
 
 /// How far a portal's approaches can run for a road tunnel at `level`, in DB coordinates.
 pub(super) fn approach_reach(level: i64, scale: Scale) -> f64 {
-    mer_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
+    merc_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
 }
 
 /// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road tunnel's portal
@@ -70,7 +70,7 @@ pub(super) fn bores(
     scale: Scale,
     lines: &mut Vec<(Line, Drawn)>,
 ) {
-    let ceiling = (scale.c(TUNNEL_CEIL_OFFSET_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
+    let ceiling = (scale.c(TUNNEL_CEIL_OFF_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
     for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
         let r = &stretches[q];
         // a stretch under cover keeps its ceiling, one open to the sky is cut to the surface, and
@@ -188,7 +188,7 @@ fn road_bores(
                     // the stretch of the deck that passes it: a cell of it within a cell of the portal
                     (0..ys.len())
                         .min_by(|i, j| near(i).total_cmp(&near(j)))
-                        .filter(|k| near(k) <= mer_from_u(CELL_U))
+                        .filter(|k| near(k) <= merc_from_u(CELL_U))
                         .map(|k| ys[k])
                 })
                 .max();
@@ -215,7 +215,7 @@ fn road_bores(
                 && !ramp_ways.contains(part)
         })
     };
-    let step = mer_from_u(CELL_U);
+    let step = merc_from_u(CELL_U);
     // a way's last cell as `cells_along` counts them
     let last_cell = |part: &PartId| libm::ceil(src.ways[part].line.length() / step).max(1.0) as i32;
     // a way's cells from the end it is entered at, as far as its ground is held and no further than
@@ -225,7 +225,7 @@ fn road_bores(
         let mut n = 0;
         while n <= last && n < cap {
             let k = if from_start { n } else { last - n };
-            if !src.held(line.at((f64::from(k) * step).min(line.length()))) {
+            if !src.is_held(line.at((f64::from(k) * step).min(line.length()))) {
                 break;
             }
             n += 1;
@@ -354,7 +354,7 @@ fn road_bores(
             while k <= b {
                 let from = k;
                 let mut cells = Vec::new();
-                while k <= b && src.held(w.line.at(along(k))) {
+                while k <= b && src.is_held(w.line.at(along(k))) {
                     cells.push(w.line.at(along(k)));
                     k += 1;
                 }
@@ -394,7 +394,7 @@ fn road_bores(
         let n = r.cell.len();
         let last = n - 1;
         // the lowest ground over the bore's footprint decides its roof
-        let wall = disk(ways::footprint((r.width_u / CELL_U) as f32));
+        let wall = disk(way::footprint((r.width_u / CELL_U) as f32));
         let cover: Vec<i32> = r
             .at
             .iter()
@@ -404,8 +404,8 @@ fn road_bores(
                     .iter()
                     .map(|&[dx, dz]| {
                         [
-                            p[0] + mer_from_u(dx as f64 * CELL_U),
-                            p[1] + mer_from_u(dz as f64 * CELL_U),
+                            p[0] + merc_from_u(dx as f64 * CELL_U),
+                            p[1] + merc_from_u(dz as f64 * CELL_U),
                         ]
                     })
                     .filter(|q| src.loaded.contains(&tile_of(*q)))
@@ -445,7 +445,7 @@ fn road_bores(
         //
         // A longer one is not: a tile that draws it may see neither portal, and the straight run
         // between them is not a ring's to know. Its ring cuts it, and where the ring cuts is no end of
-        // it, nor a height to draw a line from: two neighbours cut it in different places, and a
+        // it, nor a height to draw a line from: two neighbors cut it in different places, and a
         // floor that leaned on the cut would differ where they meet, though both see the cells there.
         // So the floor of a long bore leans on nothing further than a tile (`TILE_CELLS`) from each
         // cell, which every ring holds about what its tile draws: the highest floor under the cover by

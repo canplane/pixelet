@@ -8,27 +8,31 @@ use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, SCREEN_AO, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, SCREEN, SCREEN_AO, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
-    buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, Stamp,
+    buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, RenderContext,
+    TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::finish::Finish;
 use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::Pipelines;
 use crate::gpu::put::put_mat;
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::upload::uploads;
 
 pub struct Case {
-    frame_buffer: u32,
+    frame_buf: u32,
     frames: FrameGroups,
     pub skinned: SkinnedPass,
+    finish: Finish,
     /// What its picture is made of as last drawn: its frame words, its
     /// actor's draw and uniform, its skin and its surface; it stands, and
     /// its surface keeps its picture, while they do.
@@ -50,40 +54,44 @@ impl Case {
         air: [Entry; AIR_ENTRIES],
         align: u32,
     ) -> Case {
-        let frame_buffer = g.buffer(
+        let frame_buf = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let layout = frame_layout(g, pipelines);
         Case {
-            frame_buffer,
+            frame_buf,
             frames: FrameGroups::new(
                 g,
                 layout,
-                frame_buffer,
+                frame_buf,
                 shadow.blank_entries(1),
                 [ao.blank_entry(7); 2],
                 air,
             ),
             skinned: SkinnedPass::new(g, pipelines, align),
+            finish: Finish::new(g, pipelines),
             read: Read::default(),
         }
     }
 
     pub fn release(self) {
         self.frames.release();
-        release(self.frame_buffer);
+        release(self.frame_buf);
         self.skinned.release();
+        self.finish.release();
     }
 
     /// Its actor's draw `own` into `s`, the world's `frame` aimed at the
     /// actor; nothing where its picture's makings stand, `moved` what moved
     /// without words.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is what its picture is made of, which `read` reads apart to tell whether it stands"
+    )]
     pub fn draw(
         &mut self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         s: &Surface,
         mut frame: [f32; FRAME_FLOATS],
         own: &[u32; DRAW_WORDS],
@@ -91,8 +99,9 @@ impl Case {
         model: u32,
         image: Image,
         moved: bool,
-        stamp: &mut Stamp,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::case);
         let u = uniform_of(uniforms, own);
         let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
         let u = &mut frame;
@@ -119,6 +128,8 @@ impl Case {
         u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
         u[VIEWPORT] = s.width as f32;
         u[VIEWPORT + 1] = s.height as f32;
+        u[SCREEN] = s.screen.0 as f32;
+        u[SCREEN + 1] = s.screen.1 as f32;
         u[VIGNETTE] = 0.0;
         u[SCREEN_AO] = 0.0;
         u[SHADOW_STRENGTH] = 0.0;
@@ -132,12 +143,11 @@ impl Case {
         if r.end() {
             return;
         }
-        g.write_buffer(self.frame_buffer, 0, bytes(&frame));
-        let view_id = g.current(s.handle);
+        g.write_buf(self.frame_buf, 0, bytes(&frame));
         let pass = g.pass(
             encoder,
             &pass_desc(
-                view_id,
+                s.color_view,
                 Load::Clear,
                 s.depth_view,
                 Load::Clear,
@@ -145,15 +155,25 @@ impl Case {
                 stamp.pass(),
             ),
         );
+        let mut pass = TrackedRenderPass::new(g, pass);
         self.skinned.draw(
-            g,
-            pass,
+            &mut pass,
             core::iter::once(own),
             uploads(),
             Stage::Lit,
-            (self.frames.frame, &mut 0),
+            self.frames.frame,
         );
-        g.end(pass);
+        pass.end();
+        // Encoded onto its canvas at its own frame's words, no vignette.
+        let view_id = g.cur(s.handle);
+        self.finish.draw(
+            ctx,
+            GpuSpanName::case,
+            self.frame_buf,
+            s,
+            s.color_view,
+            view_id,
+        );
         release(view_id);
     }
 }

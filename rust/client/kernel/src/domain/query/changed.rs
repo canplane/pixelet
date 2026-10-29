@@ -7,6 +7,7 @@
 //! queries report (`Columns`), so a change stops at the ground it touches.
 
 use super::world::World;
+use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
 use core::cell::Cell;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -28,12 +29,12 @@ fn changed() -> &'static mut Changed {
     CHANGED.get(Changed::default)
 }
 
-/// The frame turn's changes, taken from the ground's residency and the
+/// The frame turn's changes, taken from the ground's tile cache and the
 /// object store in place of the last turn's; true where any moved.
 pub(crate) fn take() -> bool {
     let c = changed();
-    TerrainTile::residency().take_moved(&mut c.ground);
-    crate::domain::layer::object::store::take_written(&mut c.written);
+    TerrainTile::tile_cache().take_moved(&mut c.ground);
+    store::take_written(&mut c.written);
     !c.ground.is_empty() || !c.written.is_empty()
 }
 
@@ -46,7 +47,7 @@ pub fn written() -> &'static [Aabb] {
 /// whose answer moved, touches the columns over `xy`, its corners in units,
 /// X on any lap. Taken once a frame turn, in its visible phase, after its
 /// arrivals are admitted, and held until the next; what moves between frame
-/// turns waits in the residency and the store for the next take. So a
+/// turns waits in the tile cache and the store for the next take. So a
 /// reader asking every frame turn, in its effects or its interaction phase,
 /// sees each change exactly once.
 pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
@@ -109,7 +110,7 @@ impl Columns {
 /// What a step asked the world, kept with what it asked it of and the
 /// columns its answer read, as its queries report them (`World::reading`),
 /// their corners in units: asked again only where what it asks of moved,
-/// or a change to the ground or the objects touched those columns (`kept`).
+/// or a change to the ground or the objects touched those columns (`forget_touched`).
 /// An answer that read nothing is not kept, as nothing says when it goes.
 pub struct Asked<K, A>(Option<(K, [[f64; 2]; 2], A)>);
 
@@ -124,7 +125,7 @@ impl<K: PartialEq, A: Copy> Asked<K, A> {
 
     /// Let go where a change touched its columns: looked at every frame
     /// turn, so it sees each change once (`within`).
-    pub fn kept(&mut self) {
+    pub fn forget_touched(&mut self) {
         if self
             .0
             .as_ref()

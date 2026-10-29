@@ -46,7 +46,10 @@ export function SensorIcons() {
 
   // Faded as one layer with its halo: faded apart, the halo grayed the glyph.
   const icon = (glyph: GlyphName, status: SensorStatus) => (
-    <View needsOffscreenAlphaCompositing style={{ opacity: PRESENCE[status] }}>
+    <View
+      needsOffscreenAlphaCompositing
+      style={{ opacity: PRESENCE[status] }}
+    >
       <HaloIcon
         glyph={glyph}
         size={12}

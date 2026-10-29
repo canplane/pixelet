@@ -16,7 +16,7 @@ import {
 import { useDockStore, useInHand } from "@/shell/store/dock.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { Panel } from "@/shell/ui/panel.tsx";
-import { PanelTabs } from "@/shell/ui/panel-tabs.tsx";
+import { Tabbed } from "@/shell/ui/tabbed.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { chrome, color } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
@@ -123,7 +123,7 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Marker);
 
   return (
-    <Item label={t("blocks.pin")} active={active} cell={cell} onPress={onPick}>
+    <Item label={t("assets.pin")} active={active} cell={cell} onPress={onPick}>
       <View
         style={[
           styles.decor,
@@ -168,7 +168,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   return (
     <Panel label={t("drawer.title")} onClose={onClose} half>
       <NameTipLayer>
-        <PanelTabs
+        <Tabbed
           onClose={onClose}
           tabs={[
             { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
@@ -235,7 +235,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
               {tab === DrawerTab.Character && <CharacterPicker />}
             </>
           )}
-        </PanelTabs>
+        </Tabbed>
       </NameTipLayer>
     </Panel>
   );

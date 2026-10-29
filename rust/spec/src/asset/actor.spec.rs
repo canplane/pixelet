@@ -12,8 +12,10 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// The groups a character is of, each numbered, and in each its variants by
@@ -32,8 +34,8 @@ impl Group {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<Group> {
-        Group::ALL.into_iter().find(|member| *member as u8 == value)
+    pub fn of(val: u8) -> Option<Group> {
+        Group::ALL.into_iter().find(|member| *member as u8 == val)
     }
 }
 
@@ -79,8 +81,8 @@ pub mod groups {
 
             /// The member a number names, or none for a number the set does not
             /// give out.
-            pub fn of(value: u8) -> Option<Key> {
-                Key::ALL.into_iter().find(|member| *member as u8 == value)
+            pub fn of(val: u8) -> Option<Key> {
+                Key::ALL.into_iter().find(|member| *member as u8 == val)
             }
         }
 
@@ -182,8 +184,8 @@ pub mod groups {
 
             /// The member a number names, or none for a number the set does not
             /// give out.
-            pub fn of(value: u8) -> Option<Key> {
-                Key::ALL.into_iter().find(|member| *member as u8 == value)
+            pub fn of(val: u8) -> Option<Key> {
+                Key::ALL.into_iter().find(|member| *member as u8 == val)
             }
         }
 
@@ -252,7 +254,7 @@ pub const IDLE_CLIP: u32 = 1;
 
 /// Split by gender, so the picker shows two rows; a person is shown by
 /// its place in its row.
-pub mod PERSON_GENDER_PREFIXES {
+pub mod PERSON_GENDER_PREFIX {
     pub const female: &str = "female-";
     pub const male: &str = "male-";
 }

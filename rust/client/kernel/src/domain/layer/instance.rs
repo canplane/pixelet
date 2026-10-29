@@ -14,7 +14,7 @@ pub struct Instance {
     pub id: u16,
     /// Where it stands: its footprint's middle, at the height of its base.
     pub at: V3,
-    pub source: Source,
+    pub src: Source,
     pub meta: DecorMeta,
 }
 
@@ -30,9 +30,17 @@ pub enum Source {
 impl Instance {
     /// The leaf cell the ground grew it in; none for a placed one.
     pub fn grown_in(&self) -> Option<[i32; 3]> {
-        match self.source {
+        match self.src {
             Source::Ground(cell) => Some(cell),
             Source::Object(_) => None,
+        }
+    }
+
+    /// The cell it stands in: the leaf the ground grew it in, or its entry's.
+    pub fn cell(&self) -> Aabb {
+        match self.src {
+            Source::Ground(cell) => cube(GROUND.cell(), cell),
+            Source::Object(e) => cube(e.zoom(), e.at()),
         }
     }
 }

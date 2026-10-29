@@ -30,10 +30,15 @@ use crate::sys::io::host_spec::{root, CATALOG, SPHERE};
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::source;
 use crate::sys::load::{Load, LoadKind};
+use crate::sys::sched::edge::TaskPriority;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
 use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::space::hierarchy::morton;
+use pxl_spec::space::layer::tile;
 use xpute_guest::global::Global;
+use xpute_guest::sched::task;
 
 /// `Arrived` exists because the read's credit is released when the bytes
 /// land (parsing is not I/O and would starve tile reads), but the asset is
@@ -168,20 +173,18 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
 }
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
-fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
+fn on_ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));
     settle(key, ended, None);
     what
 }
 
 /// A model and an image of one load are the same file; which it is read as
-/// is its attempt's subject's (`opened`).
+/// is its attempt's subject's (`on_opened`).
 pub fn open_asset(credit: Credit, load: Load) {
     let owner = Owner::Load { key: credit.key() };
     // The sphere's number is no tile's: a subject is never 0.
-    const _: () = assert!(
-        pxl_spec::space::hierarchy::morton::bits::<2>(pxl_spec::space::layer::tile::LEAF_ZOOM) < 63
-    );
+    const _: () = assert!(morton::bits::<2>(tile::LEAF_ZOOM) < 63);
     match load {
         Load::Sphere => file::open(credit, BaseLayer::earth as u32, u64::from(SPHERE), owner),
         _ => file::open(credit, root::ASSET, u64::from(load.number()), owner),
@@ -193,16 +196,16 @@ pub fn cancel_asset(key: u64) -> bool {
         return false;
     };
     file::close(fd);
-    load_rejected(key, Ended::Aborted);
+    on_load_rejected(key, Ended::Aborted);
     true
 }
 
 /// The open answered: its bytes taken now, as a tile's body is
-/// (sys/io/fetch.rs `opened`), and its descriptor closed with its credit;
+/// (sys/io/fetch.rs `on_opened`), and its descriptor closed with its credit;
 /// where the heap refuses them room, the want waits for room.
-pub fn opened(fd: u32, key: u64, opened: Opened) {
+pub fn on_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
-        load_rejected(key, Ended::Failed(opened.failure()));
+        on_load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
     let Some(what) = attempt_of(key).and_then(|(_, subject)| of_subject(subject)) else {
@@ -225,8 +228,8 @@ pub fn opened(fd: u32, key: u64, opened: Opened) {
 /// An image's bytes, read: kept, where a header gives its size
 /// (pxl-spec `asset::image_size`); a file no header sizes is the asset's
 /// own failure, so it is final.
-fn image_arrived(load: Load, file: Vec<u8>) {
-    *loader().at(LoadKind::Image, load) = Some(if pxl_spec::asset::image_size(&file).is_some() {
+fn on_image_arrived(load: Load, file: Vec<u8>) {
+    *loader().at(LoadKind::Image, load) = Some(if asset::image_size(&file).is_some() {
         Entry::Image(file)
     } else {
         Entry::Failed
@@ -237,7 +240,7 @@ fn image_arrived(load: Load, file: Vec<u8>) {
 
 /// The catalog's bytes, read: kept where they read as the compiled slots,
 /// else its failure, final, since asking again returns the same bytes.
-fn catalog_arrived(load: Load, file: &[u8]) {
+fn on_catalog_arrived(load: Load, file: &[u8]) {
     let read = Catalog::read(file);
     *loader().at(LoadKind::Catalog, load) = Some(if read.is_some() {
         Entry::Landed
@@ -250,7 +253,7 @@ fn catalog_arrived(load: Load, file: &[u8]) {
 
 /// The renderer took the texture of the image numbered `image`
 /// (pxl-render `take_landed`): its file goes.
-pub fn image_landed(image: u32) {
+pub fn on_image_landed(image: u32) {
     let Some(load) = Load::of(image) else { return };
     let entry = loader().at(LoadKind::Image, load);
     if matches!(entry, Some(Entry::Image(_))) {
@@ -260,7 +263,7 @@ pub fn image_landed(image: u32) {
 
 /// The device went, and every texture an image landed in: each is read
 /// again when next asked for. One still in its bytes is handed again.
-pub fn images_lost() {
+pub fn on_images_lost() {
     let l = loader();
     for entry in l.entries[LoadKind::Image as usize]
         .iter_mut()
@@ -281,10 +284,7 @@ fn arrive(kind: LoadKind, load: Load, bytes: Vec<u8>) {
     // The pool holds a task for each slot, the catalog and the sphere
     // (TASKS): a slot is wanted as one kind of one file, and each has one
     // file in flight at most, so there is always room.
-    let spawned = xpute_guest::sched::task::spawn(
-        arrival(kind, load, bytes),
-        crate::sys::sched::edge::TaskPriority::Arrival as u8,
-    );
+    let spawned = task::spawn(arrival(kind, load, bytes), TaskPriority::Arrival as u8);
     xpute_kit::ensure!(spawned, ENOSPC, load.number());
 }
 
@@ -295,8 +295,8 @@ async fn arrival(kind: LoadKind, load: Load, buf: Vec<u8>) {
     next_turn(world_edge).await;
     yield_if_spent(world_edge).await;
     match kind {
-        LoadKind::Image => return image_arrived(load, buf),
-        LoadKind::Catalog => return catalog_arrived(load, &buf),
+        LoadKind::Image => return on_image_arrived(load, buf),
+        LoadKind::Catalog => return on_catalog_arrived(load, &buf),
         LoadKind::Gltf => {}
     }
     let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
@@ -309,8 +309,8 @@ async fn arrival(kind: LoadKind, load: Load, buf: Vec<u8>) {
 
 /// The transport failed, not the asset: it is wanted again, and the request scheduler
 /// decides the wait.
-pub fn load_rejected(key: u64, how: Ended) {
-    let Some((kind, load)) = ended(key, how) else {
+pub fn on_load_rejected(key: u64, how: Ended) {
+    let Some((kind, load)) = on_ended(key, how) else {
         return;
     };
     *loader().at(kind, load) = None;

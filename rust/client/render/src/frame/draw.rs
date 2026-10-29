@@ -9,6 +9,7 @@ use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
+use xpute_kit::status::errno::Errno;
 
 /// Upload record: handle, address, byte length, vertex count, index count.
 pub const UPLOAD_WORDS: usize = 5;
@@ -43,7 +44,7 @@ pub const PIPELINE_DEBUG: u32 = 7;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 8;
 /// The camera grid over the screen (camera_grid.wgsl): (0, 0, 0, uniform,
-/// pipeline). Listed, it also tints the rays' blocks (`frame_gizmo`).
+/// pipeline). Listed, it also tints the rays' cells (`frame_gizmo`).
 pub const PIPELINE_CAMERA_GRID: u32 = 9;
 
 /// Every pipeline a draw record names, in the order a frame's census counts
@@ -70,7 +71,7 @@ pub fn census_slot(pipeline: u32) -> usize {
     DRAW_PIPELINES
         .iter()
         .position(|&p| p == pipeline)
-        .or_bug(xpute_kit::status::errno::Errno::EINVAL)
+        .or_bug(Errno::EINVAL)
 }
 /// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;
@@ -121,6 +122,8 @@ pub struct DrawList {
     uniforms: Vec<f32>,
     next_handle: u32,
     taken: Vec<u32>,
+    /// Where each actor drawn stands, units from the eye (`stand`).
+    stands: Vec<[f32; 3]>,
 }
 
 pub struct Lists<'a> {
@@ -131,10 +134,13 @@ pub struct Lists<'a> {
     /// Read where they lie, unwritten until the page replays the turn: the
     /// list begins again only in the next turn's `begin_frame`.
     pub uniforms: &'a [f32],
+    /// Where each actor drawn stands, units from the eye, as its draw is
+    /// placed (`stand`).
+    pub stands: &'a [[f32; 3]],
 }
 
 impl DrawList {
-    pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, index_cnt: u32) -> u32 {
+    pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, idx_cnt: u32) -> u32 {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
         let lane = &mut lanes().uploads[self.side];
@@ -144,7 +150,7 @@ impl DrawList {
             lane.len()
         );
         lane[self.uploads..self.uploads + UPLOAD_WORDS]
-            .copy_from_slice(&[handle, at, bytes, vertex_cnt, index_cnt]);
+            .copy_from_slice(&[handle, at, bytes, vertex_cnt, idx_cnt]);
         self.uploads += UPLOAD_WORDS;
         handle
     }
@@ -208,6 +214,14 @@ impl DrawList {
     pub fn begin_frame(&mut self) {
         self.draws.clear();
         self.uniforms.clear();
+        self.stands.clear();
+    }
+
+    /// An actor drawn stands at `translation`, its draw's (pxl-kernel
+    /// domain/scene/actor.rs `Actor::draw`): a receiver of the shadow map
+    /// (pxl-spec-core `sun::ACTORS_AT`).
+    pub fn stand(&mut self, translation: [f32; 3]) {
+        self.stands.push(translation);
     }
 
     /// Eye-relative, narrowed to f32 after the subtraction, so precision is finest near the eye.
@@ -220,7 +234,10 @@ impl DrawList {
     }
 
     /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_scaled(
         &mut self,
         pipeline: u32,
@@ -247,7 +264,10 @@ impl DrawList {
             .extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_as(
         &mut self,
         pipeline: u32,
@@ -275,13 +295,16 @@ impl DrawList {
 
     /// The eighth float pads the record to two vec4s, the one layout a storage
     /// array cannot read two ways.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_in(
         &mut self,
         pipeline: u32,
         handle: u32,
         vertex_cnt: u32,
-        index_cnt: u32,
+        idx_cnt: u32,
         translation: [f32; 3],
         opacity: f32,
         unit: f32,
@@ -299,35 +322,38 @@ impl DrawList {
             0.0,
         ]);
         self.draws
-            .extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
+            .extend_from_slice(&[handle, vertex_cnt, idx_cnt, uniform, pipeline]);
     }
 
     /// Words are exact in an f32 up to 2^24.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_instances(
         &mut self,
         pipeline: u32,
         handle: u32,
         group: u32,
-        count: u32,
+        cnt: u32,
         lanes: [u32; 3],
         translation: [f32; 3],
         opacity: f32,
     ) {
-        let [offset, stride, index] = lanes;
+        let [off, stride, idx] = lanes;
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[
             translation[0],
             translation[1],
             translation[2],
-            offset as f32,
+            off as f32,
             opacity,
             stride as f32,
-            index as f32,
+            idx as f32,
             0.0,
         ]);
         self.draws
-            .extend_from_slice(&[handle, group, count, uniform, pipeline]);
+            .extend_from_slice(&[handle, group, cnt, uniform, pipeline]);
     }
 
     /// Uploads, rewrites and frees start fresh, on the lanes' other side;
@@ -344,6 +370,7 @@ impl DrawList {
             frees: &l.frees[side][..frees],
             draws: &self.draws,
             uniforms: &self.uniforms,
+            stands: &self.stands,
         }
     }
 }
@@ -373,7 +400,7 @@ impl Held {
         // SAFETY: the block is the heap's, `self.bytes` long, and at least
         // `lane` long.
         unsafe {
-            core::ptr::copy_nonoverlapping(lane.as_ptr(), mem::at::<u8>(self.at), lane.len())
+            core::ptr::copy_nonoverlapping(lane.as_ptr(), mem::at::<u8>(self.at), lane.len());
         };
         if self.handle == 0 {
             self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);

@@ -4,7 +4,7 @@
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{u_from_merc, G3857};
 use xpute_kit::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
@@ -42,24 +42,24 @@ pub struct Rank {
     pub layer: Layer,
     pub order: i64,
     /// Carto's `feature` (`landuse_forest`), its tie within landcover.
-    pub feature: &'static str,
+    pub feat: &'static str,
     pub id: Box<str>,
 }
 
 impl Rank {
-    pub fn new(layer: Layer, order: i64, feature: &'static str, id: &str) -> Rank {
+    pub fn new(layer: Layer, order: i64, feat: &'static str, id: &str) -> Rank {
         Rank {
             layer,
             order,
-            feature,
+            feat,
             id: id.into(),
         }
     }
 
     /// Carto sorts an area layer by `way_area`, larger first: the whole
     /// source's, so every tile and every part of it ranks alike.
-    pub fn by_area(layer: Layer, way_area: f64, feature: &'static str, id: &str) -> Rank {
-        Rank::new(layer, -(round(way_area) as i64), feature, id)
+    pub fn by_area(layer: Layer, way_area: f64, feat: &'static str, id: &str) -> Rank {
+        Rank::new(layer, -(round(way_area) as i64), feat, id)
     }
 }
 
@@ -79,15 +79,15 @@ pub struct Feature {
 /// In the tile's cells from its corner.
 pub fn local(p: G3857, tile_min: G3857) -> P {
     [
-        u_from_mer(p[0] - tile_min[0]) / CELL_U,
-        u_from_mer(p[1] - tile_min[1]) / CELL_U,
+        u_from_merc(p[0] - tile_min[0]) / CELL_U,
+        u_from_merc(p[1] - tile_min[1]) / CELL_U,
     ]
 }
 
 /// A polygon, or a ring whose ends meet within a tenth of the DB's unit, is an area.
 pub fn closes(g: &WkbGeometry) -> bool {
     let p = &g.points;
-    g.is_polygon_source
+    g.is_polygon_src
         || (p.len() >= 3
             && (p[0][0] - p[p.len() - 1][0]).abs() < 0.1
             && (p[0][1] - p[p.len() - 1][1]).abs() < 0.1)

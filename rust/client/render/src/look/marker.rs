@@ -6,6 +6,8 @@
 //! marker's sprite by them before it is painted (pxl-kernel
 //! domain/scene/marker/design.rs).
 
+use pxl_spec::asset::symbol::{SYMBOL_PX, SYMBOL_RATIO};
+
 use crate::gpu::sheet::Halo;
 use crate::gpu::text::Font;
 
@@ -39,8 +41,8 @@ pub const DOT_FILL: u32 = 0xffffff99;
 pub const DOT_RING: u32 = 0xffffff40;
 /// A pill's colors turned over, a light pill, its words dark, so a number
 /// on it does not read as words that are a number.
-pub const COUNT_FILL: u32 = 0xffffffe6;
-pub const COUNT_INK: u32 = 0x14141aff;
+pub const CNT_FILL: u32 = 0xffffffe6;
+pub const CNT_INK: u32 = 0x14141aff;
 
 /// A pill's sprite for words as wide as `text_w`: its width, height down to
 /// the dot's foot, and where what it marks is, at the dot's.
@@ -62,9 +64,9 @@ pub const POINT_FONT: Font = Font {
     weight: SEMIBOLD,
     px: 12.0,
 };
-/// A symbol's disc across: the symbol (`SYMBOL_PX` at the sheet's scale, 14)
-/// with four pixels of fill round it.
-const POINT_DISC: f32 = 22.0;
+/// A symbol's disc across: the symbol (`SYMBOL_PX` at the ratio it is
+/// rasterized at) with four pixels of fill round it.
+const POINT_DISC: f32 = SYMBOL_PX as f32 / SYMBOL_RATIO as f32 + 2.0 * 4.0;
 const POINT_DOT: f32 = 8.0;
 pub const POINT_RIM: f32 = 1.5;
 pub const POINT_RIM_FILL: u32 = 0xffffffe6;

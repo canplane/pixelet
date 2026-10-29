@@ -3,37 +3,37 @@
 use super::*;
 
 #[test]
-fn a_module_imports_its_memory_and_puts_its_stack_first() {
-    let plan = LinkPlan {
+fn mem_import_stack_first() {
+    let cfg = LinkConfig {
         stack_bytes: 1 << 20,
         global_base: None,
-        initial_bytes: None,
+        init_bytes: None,
     };
     assert_eq!(
-        args(&plan),
+        args(&cfg),
         ["--import-memory", "--stack-first", "-zstack-size=1048576"]
     );
 }
 
 #[test]
-fn a_front_and_a_floor_follow_the_stack() {
-    let plan = LinkPlan {
+fn front_floor_after_stack() {
+    let cfg = LinkConfig {
         stack_bytes: 1 << 20,
         global_base: Some(1 << 21),
-        initial_bytes: Some(4 * WASM_PAGE_BYTES),
+        init_bytes: Some(4 * WASM_PAGE_BYTES),
     };
     assert_eq!(
-        args(&plan)[3..],
+        args(&cfg)[3..],
         ["--global-base=2097152", "--initial-memory=262144"]
     );
 }
 
 #[test]
 #[should_panic(expected = "WebAssembly pages")]
-fn a_floor_is_whole_pages() {
-    args(&LinkPlan {
+fn floor_whole_pages() {
+    args(&LinkConfig {
         stack_bytes: 1 << 20,
         global_base: None,
-        initial_bytes: Some(WASM_PAGE_BYTES + 1),
+        init_bytes: Some(WASM_PAGE_BYTES + 1),
     });
 }

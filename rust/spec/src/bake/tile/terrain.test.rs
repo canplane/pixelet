@@ -3,6 +3,7 @@
 use xpute_kit::golden::Golden;
 
 use super::*;
+use crate::bake::tile::earth;
 use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
@@ -69,7 +70,7 @@ fn room() -> separation::Room {
 
 /// A tile round-trips, in hand and into a record's room.
 #[test]
-fn the_formats_write_and_read_what_the_record_holds() {
+fn formats_round_trip() {
     let tile = tile(0x9e37_79b9_7f4a_7c15);
     let terrain = encode(&tile).unwrap();
     assert_eq!(
@@ -80,7 +81,7 @@ fn the_formats_write_and_read_what_the_record_holds() {
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms and a grid sweep's boxes.
     let resident = decode_into(&terrain, room()).unwrap();
-    let held = separation::Separation {
+    let held = Separation {
         coarsest: Default::default(),
         ..tile.separation.clone()
     };
@@ -88,9 +89,9 @@ fn the_formats_write_and_read_what_the_record_holds() {
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 
-/// A tile at every lane's longest is as long as `MAX_PACKET_BYTES` says.
+/// A tile at every lane's longest is as long as `MAX_PKT_BYTES` says.
 #[test]
-fn a_tile_at_its_room_is_the_most_a_packet_takes() {
+fn full_tile_pkt_size() {
     use separation::{MAX_LINES, MAX_POINTS};
     let starts: Vec<u32> = (0..=MAX_LINES)
         .map(|d| (d * MAX_POINTS / MAX_LINES) as u32)
@@ -109,18 +110,17 @@ fn a_tile_at_its_room_is_the_most_a_packet_takes() {
         separation: full,
         ..tile(7)
     };
-    assert_eq!(encode(&tile).unwrap().len(), MAX_PACKET_BYTES);
-    let earth =
-        crate::bake::tile::earth::encode(&vec![0; crate::bake::tile::earth::EARTH_BYTES]).unwrap();
+    assert_eq!(encode(&tile).unwrap().len(), MAX_PKT_BYTES);
+    let earth = earth::encode(&vec![0; earth::EARTH_BYTES]).unwrap();
     assert_eq!(
         earth.len(),
-        crate::bake::tile::earth::PACKET_BYTES,
+        earth::PKT_BYTES,
         "and an Earth tile is as long as its texels say"
     );
 }
 
 #[test]
-fn a_packet_that_is_not_a_tile_is_refused() {
+fn non_tile_pkt_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("old_format_tile")).unwrap();
     assert!(decode(&small).is_err());
@@ -130,7 +130,7 @@ fn a_packet_that_is_not_a_tile_is_refused() {
 
 /// Every valid occupancy byte round-trips.
 #[test]
-fn an_occupancy_is_a_tile_and_its_children_or_nothing() {
+fn occupancy_vals() {
     for bits in 0..=u8::MAX {
         if let Some(o) = Occupancy::of_bits(bits) {
             assert_eq!(o.bits(), bits);

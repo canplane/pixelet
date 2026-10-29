@@ -4,9 +4,9 @@ import { useTranslation } from "react-i18next";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 
 import {
+  SETTING,
   type Setting,
   type SettingName,
-  SETTINGS,
   type SettingSection,
   settingsIn,
 } from "@/shell/setting/schema.ts";
@@ -16,15 +16,16 @@ import { useKernel } from "@/shell/store/watch.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
-  navigation: "location",
   camera: "move.3d",
   lighting: "sun.max",
   debug: "ladybug",
 };
 
+/** Typed for the table as it is, which may hold no setting with dev options. */
 function devOption(setting: Setting, option: string): boolean {
-  const options =
-    "dev_options" in setting ? (setting.dev_options as readonly string[]) : [];
+  const options = "dev_options" in setting
+    ? setting.dev_options as readonly string[]
+    : [];
   return options.includes(option);
 }
 
@@ -51,7 +52,7 @@ export function SettingsSection(props: { section: SettingSection }) {
 function SettingControl(props: { name: SettingName }) {
   const { name } = props;
   const { t, i18n } = useTranslation();
-  const setting: Setting = SETTINGS[name];
+  const setting: Setting = SETTING[name];
   const { key } = setting;
   const cost = "cost" in setting ? setting.cost : undefined;
   const dev = "dev" in setting && setting.dev;

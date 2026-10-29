@@ -15,13 +15,24 @@ use crate::domain::query::changed::Asked;
 use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::indicator::param::{
+    BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
+    ZONE_FOOTPRINT_U,
+};
+use crate::domain::scene::region;
 use crate::domain::scene::scene;
+use crate::domain::view::frame::coord;
+use crate::domain::view::lens;
+use crate::domain::view::lens::{seen_step_s, Stepped};
 use crate::sys::mem::section;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::edge::{request_world_tick, wake_at};
+use pxl_render::frame::shader::word;
+use pxl_render::param::puck::beacon;
+use xpute_guest::clock::now;
 
-// A world-space footprint (4u), whatever the ground's cell; the .707 is a
+// The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
 // one-cell diagonal correction.
-const ZONE_RADIUS_CELL: f64 = 4.0 / units(GROUND.cell()) - 0.707;
+const ZONE_RADIUS_CELL: f64 = ZONE_FOOTPRINT_U / units(GROUND.cell()) - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 /// The zone's, past which the beacon snaps to its target rather than slide.
 const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.cell());
@@ -78,13 +89,85 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
     scene.puck.step(draw, device_coord, night);
 }
 
+/// The zone's instances about `center_pos` into `lane`, ZONE_INSTANCE_FLOATS
+/// floats an instance: each cell's ground asked of `ground` once, of the
+/// zone and of the ring its sides look across to, `rise` the room it is
+/// kept in.
+fn lay_zone(
+    center_pos: V3,
+    mut ground: impl FnMut(&Q3) -> Option<f64>,
+    rise: &mut Vec<Option<f64>>,
+    lane: &mut Vec<f32>,
+) {
+    lane.clear();
+    let cell = units(GROUND.cell());
+    const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let ring = zone_reach() + 1;
+    let across = (2 * ring + 1) as usize;
+    let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
+    rise.clear();
+    rise.resize(across * across, None);
+    for s in zone_samples() {
+        for d in [[0, 0]].iter().chain(&BESIDE) {
+            let at = [s.at[0] + d[0], s.at[1] + d[1]];
+            if rise[idx(at)].is_none() {
+                let off = [
+                    s.off[0] + f64::from(d[0]) * cell,
+                    s.off[1] + f64::from(d[1]) * cell,
+                ];
+                let v = v3::add(&center_pos, &[off[0], off[1], s.off[2]]);
+                // An unloaded neighbor tile falls back to the center's height; 0 would
+                // sink or launch that instance.
+                let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
+                rise[idx(at)] = Some(ground - center_pos[2]);
+            }
+        }
+    }
+    // The box on the ground's cell `d` from the sample, relative to the center.
+    let box_at = |s: &ZoneSample, d: [i32; 2]| {
+        let delta_ele = rise[idx([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
+        let off = [
+            s.off[0] + f64::from(d[0]) * cell,
+            s.off[1] + f64::from(d[1]) * cell,
+        ];
+        v3::center(&[off[0], off[1], s.off[2] + delta_ele], cell)
+    };
+    for s in zone_samples() {
+        let v = box_at(&s, [0, 0]);
+        // A side is open over a lower cell beside it, the top always, the
+        // bottom never: bit k for face k, in the box's order (+x, -x, +y,
+        // -y, +z, -z).
+        let open = BESIDE.iter().enumerate().fold(1 << 4, |open, (k, &d)| {
+            open | u32::from(box_at(&s, d)[2] < v[2]) << k
+        });
+        lane.extend([
+            v[0] as f32,
+            v[1] as f32,
+            v[2] as f32,
+            s.borders[0] as f32,
+            s.borders[1] as f32,
+            s.borders[2] as f32,
+            s.borders[3] as f32,
+            open as f32,
+        ]);
+    }
+}
+
+/// The beacon's fastest motion, in u/s: at its middle the bob's, and the
+/// spin's at its tips, the octahedron's radius out (pxl-render param.rs
+/// `puck::beacon::RADIUS`), at right angles and at their peaks together.
+fn beacon_speed() -> f64 {
+    libm::hypot(
+        BEACON_BOB * BEACON_BOB_RATE,
+        BEACON_SPIN_RATE * f64::from(beacon::RADIUS),
+    )
+}
+
 /// The box's center relative to the zone's (3), its border flags (4), and
-/// the faces open to the air it draws (1, a bit a face).
-pub const ZONE_INSTANCE_FLOATS: usize = 8;
-const BEACON_Z_BIAS: f64 = 0.5;
-const BEACON_SMOOTH_RATE: f64 = 6.0;
-/// How far the beacon bobs either way, in units.
-const BEACON_BOB: f64 = 0.1;
+/// the faces open to the air it draws (1, a bit a face): the stride
+/// puck_zone.wgsl reads (pxl-render frame/shader/word.rs
+/// `PUCK_ZONE_INSTANCE_FLOATS`).
+pub const ZONE_INSTANCE_FLOATS: usize = word::PUCK_ZONE_INSTANCE_FLOATS as usize;
 
 /// The zone shown and its beacon.
 struct Zone {
@@ -130,11 +213,11 @@ impl LocationPuck {
 
         let seen = Seen {
             device,
-            pos: crate::domain::view::frame::coord::to_world(&device),
+            pos: coord::to_world(&device),
         };
         // Looked at each turn, so each change is seen once.
         let mut grounded = core::mem::take(&mut self.grounded);
-        grounded.kept();
+        grounded.forget_touched();
         let center_pos = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
         self.grounded = grounded;
         let Some(center_pos) = center_pos else {
@@ -155,56 +238,23 @@ impl LocationPuck {
     fn ground(&mut self, world: World, draw: &mut DrawList, seen: Seen) -> Option<V3> {
         let (device, pos) = (seen.device, seen.pos);
         // The fix names a place and not how high.
-        if let Some(z) = world.surface_support(&device).value().flatten() {
+        if let Some(z) = world.surface_support(&device).val().flatten() {
             self.last_known_center_z = Some(z);
         }
         let center_z = self.last_known_center_z?;
         let raw = [pos[0], pos[1], center_z];
         let center_pos = v3::floor(&raw, units(GROUND.cell()));
 
-        let mut lane = core::mem::take(&mut self.lane);
-        lane.clear();
-        let cell = units(GROUND.cell());
-        // The box on the ground's cell `off` from the center, relative to it.
-        let box_at = |off: V3| {
-            let v = v3::add(&center_pos, &off);
-            let coord = world::point(v[0], v[1], v[2]);
-            // An unloaded neighbor tile falls back to the center's height; 0 would sink
-            // or launch that instance.
-            let delta_ele = world
-                .surface_support(&coord)
-                .value()
-                .flatten()
-                .unwrap_or(center_pos[2])
-                - center_pos[2];
-            v3::center(&[off[0], off[1], off[2] + delta_ele], cell)
-        };
-        for s in zone_samples() {
-            let v = box_at(s.off);
-            // A side is open over a lower cell beside it, the top always, the
-            // bottom never: bit k for face k, in the box's order (+x, -x, +y,
-            // -y, +z, -z).
-            let side = |k: usize, d: [f64; 2]| {
-                let open =
-                    box_at([s.off[0] + d[0] * cell, s.off[1] + d[1] * cell, s.off[2]])[2] < v[2];
-                u32::from(open) << k
-            };
-            let open = side(0, [1.0, 0.0])
-                | side(1, [-1.0, 0.0])
-                | side(2, [0.0, 1.0])
-                | side(3, [0.0, -1.0])
-                | 1 << 4;
-            lane.extend([
-                v[0] as f32,
-                v[1] as f32,
-                v[2] as f32,
-                s.borders[0] as f32,
-                s.borders[1] as f32,
-                s.borders[2] as f32,
-                s.borders[3] as f32,
-                open as f32,
-            ]);
-        }
+        let (mut lane, mut rise) = (
+            core::mem::take(&mut self.lane),
+            core::mem::take(&mut self.rise),
+        );
+        lay_zone(
+            center_pos,
+            |at| world.surface_support(at).val().flatten(),
+            &mut rise,
+            &mut lane,
+        );
         if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != lane {
             self.held.write(draw, bytes(&lane));
             match self.zone.as_mut() {
@@ -255,7 +305,7 @@ impl LocationPuck {
         };
         let dt = frame.delta_s;
         let to = v3::sub(&frame.world_of(p.center), &frame.camera);
-        let cell_there = crate::domain::view::lens::cell_there(v3::len(&to));
+        let cell_there = lens::cell_there(v3::len(&to));
         p.visible = frame.sees(p.center, ZONE_RADIUS) && 2.0 * ZONE_RADIUS >= cell_there;
         let shown = p.shown.get_or_insert(p.target);
         let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
@@ -271,7 +321,10 @@ impl LocationPuck {
         if bobs {
             p.time += dt;
         }
-        slides || bobs
+        if slides || stepped {
+            region::animated();
+        }
+        slides
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
@@ -279,12 +332,32 @@ impl LocationPuck {
         if !p.visible || self.held.handle == 0 {
             return;
         }
+        let shown = p.shown.unwrap_or(p.target);
+        // The zone about its center and the beacon over it, as drawn
+        // (`region`).
+        let state = region::digest(&[
+            p.center[0],
+            p.center[1],
+            p.center[2],
+            shown[0],
+            shown[1],
+            p.time,
+            f64::from(u8::from(p.night)),
+            f64::from(self.held.handle),
+        ]);
+        region::drawn(
+            u32::MAX,
+            p.center,
+            libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB) + libm::hypot(shown[0], shown[1]),
+            false,
+            state,
+        );
         let center = DrawList::translation(p.center, eye);
-        let count = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
+        let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
         draw.draw_as(
             PIPELINE_PUCK_ZONE,
             self.held.handle,
-            count,
+            cnt,
             0,
             center,
             0.0,
@@ -294,7 +367,7 @@ impl LocationPuck {
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,
-            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * 2.0) * BEACON_BOB) as f32,
+            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB) as f32,
         ];
         draw.draw_as(
             PIPELINE_PUCK_BEACON,
@@ -302,7 +375,7 @@ impl LocationPuck {
             p.night as u32,
             0,
             beacon,
-            (p.time * 1.2) as f32,
+            (p.time * BEACON_SPIN_RATE) as f32,
             1.0,
         );
     }

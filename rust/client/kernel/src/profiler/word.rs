@@ -11,11 +11,11 @@ use core::mem::size_of;
 /// The implementor is `#[repr(C)]` and all f64 (or such records), no padding.
 pub unsafe trait Words: Sized {}
 
-pub fn put<T: Words>(out: &mut [f64], at: u32, value: &T) {
+pub fn put<T: Words>(out: &mut [f64], at: u32, val: &T) {
     // SAFETY: `Words` guarantees plain f64s laid end to end.
     let words = unsafe {
         core::slice::from_raw_parts(
-            std::ptr::from_ref::<T>(value).cast::<f64>(),
+            std::ptr::from_ref::<T>(val).cast::<f64>(),
             size_of::<T>() / 8,
         )
     };

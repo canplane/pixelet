@@ -77,8 +77,8 @@ export class Sys {
     private readonly opened: (fd: u32, res: i32, detail: u32) => void,
   ) {}
 
-  run(memory: ArrayBuffer, at: u32): void {
-    each_record(memory, at, HEAD, this.record);
+  run(mem: ArrayBuffer, at: u32): void {
+    each_record(mem, at, HEAD, this.record);
   }
 
   private readonly record = (code: u32, w: U32Array, a: u32): void => {

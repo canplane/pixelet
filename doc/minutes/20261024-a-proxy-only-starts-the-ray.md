@@ -39,13 +39,13 @@ own rule for when it was right. None of them may return, under any name.
    pixel's.
 4. **The camera grid picks the boxes.** At each distance the proxy draws the
    bound level whose cell spans a camera cell there, the rule a ray already asks
-   by (`Tau::cell_at`), so the level of detail stays one rule.
+   by (`grid::cell_at`), so the level of detail stays one rule.
 
 ## What it would replace
 
 A ray's start is set today by three passes over a buffer sized by the screen
 (rust/spec/core/src/beam.rs): beam rays at the camera grid's corners
-(`beam_cs`), a start for each cell off them (`cells_cs`), and samples a quarter
+(`beam_cs`), a start for each cell off them (`cell_cs`), and samples a quarter
 cell apart that pixels take their block from (`sample_cs`). That buffer is the
 one that met the 128 MiB per-binding floor on a 4K surface. A depth a pixel from
 a rasterized proxy gives each pixel its own start directly, so the proxy is a
@@ -58,13 +58,13 @@ Each of these holds whether or not the proxy is taken, because the ray stays
 what decides the pixel. They are in:
 
 - a block's face bits asked of the query once a block, by the sample that stops
-  on it (rust/spec/core/src/faces.rs);
+  on it (rust/spec/core/src/face.rs);
 - the camera grid computed once a frame and handed to the GPU in the eye's words
   (`beam::Grid`);
 - the per-pixel miss list gone: a pixel that missed says so in its own ray word
   (`ray::MISS`);
 - one depth rule for what is laid on a face, owned by the screen pass;
-- the sun's map cast incrementally, only where it moved or the world changed.
+- the shadow map cast incrementally, only where it moved or the world changed.
 
 Landing them first means a proxy, if built, is measured against a cast whose
 start is the only thing it changes.
@@ -112,14 +112,14 @@ first the largest:
 What is proposed, not yet ordered:
 
 - **For 1, remove the samples' answer.** A pixel walks from its cell's beam, the
-  path 20261022 proved (`resumed`), and the candidate pick, its axis test and
-  the samples' block and lack words go. Making the samples a second beam level
-  was weighed and set aside: a proxy that is taken removes the beam's levels, so
-  it would be built to be thrown away, while the pixel's own walk from a start
-  is what a proxy feeds as well. It costs more than now: about ten visits a
-  pixel (20261022, As built), and face bits a pixel's own unless a sample
-  stopped on the same block. Whether the sample pass stays only to share face
-  bits is decided by measuring.
+  path 20261022 proved (`resumed`), and the candidate visible sample, its axis
+  test and the samples' block and lack words go. Making the samples a second
+  beam level was weighed and set aside: a proxy that is taken removes the beam's
+  levels, so it would be built to be thrown away, while the pixel's own walk
+  from a start is what a proxy feeds as well. It costs more than now: about ten
+  visits a pixel (20261022, As built), and face bits a pixel's own unless a
+  sample stopped on the same block. Whether the sample pass stays only to share
+  face bits is decided by measuring.
 - **For 2,** a few steps of scale, each held a while once taken. Done (cause 2).
 - **Then the proxy is measured** against that exact cast, whose start is the
   only thing a proxy changes.
@@ -165,7 +165,7 @@ Recommended by the reduce session, not ordered.
   a sample keeps none beside its block (pxl-shader cast.rs `cast_cs`, `word`;
   `beam::SAMPLE_WORDS`).
 
-## Deferred: the sun's map costs what 10-12's did not
+## Deferred: the shadow map costs what 10-12's did not
 
 Measured 2026-10-24 on the start view, shadows on, the camera still: about 5 to
 10 frames a second for the first ten seconds, 40 to 70 after, and a frame of 200
@@ -183,3 +183,38 @@ beam; the sun's do neither: each walks from the roots through the world's query
 proxy taken here starts the sun's rays as it starts the eye's, through the path
 the eye's take, and the map's cost is measured with it. Shadows stay off by
 default, as at 10-12.
+
+## Resolved 2026-10-26: built, measured, not taken
+
+The proxy was built to the conditions above and measured on the fixed path
+([a box before the ray](../experiment/20261026-a-box-before-the-ray/README.md),
+[a ray from the box](../experiment/20261026-a-ray-from-the-box.md)). It held
+every condition but the one that decides it:
+
+- **Conservative and exact where a ray walked, but not covering.** No stop
+  past a box's front over 100M stops, and a walk from the right box stops where
+  the eye's own walk does, more often right than the samples' answer (0.44% of
+  the cast's stops differ). But the screen was not whole: in `read`, 22,792
+  pixels no box covered showed sky where the eye's walk stops.
+- **Cheap where it was weighed.** The cut and raster cost 1–12 ms, the walk
+  from a box about 6 ms against a warm pyramid.
+- **Not cheaper than the cast.** The samples are also what writes the observed
+  pyramid, a cell at a time; without them each pixel writes its own, and every
+  way tried paid 180–300 ms against the cast's 80. Keeping the beams to write
+  it, and walking each pixel from its cell's line at its box, cost 178 ms.
+
+So "if it cannot remove them, it is not taken" holds: it can remove them only
+by paying their writing per pixel. The samples stay, and the shimmer's first
+cause is answered another way or not yet. Open from the attempt: those
+holes, untraced. What it leaves for the next attempt is
+the question it got wrong: a raster that only starts the ray saves the march,
+not the descent or the writing a cell's pixels share, so a split between
+raster and ray has to give the raster that shared work, not only the start.
+
+The split taken is the other way round, a decision on today's measurements
+rather than a rule for every pass: the samples still walk, and the raster keeps
+each pixel's block off the blocks they stopped at
+([the raster keeps](../experiment/20261026-the-raster-keeps.md), "Taken").
+The shared discovery stays where cells share it; the per-pixel 4 × 4 lookup,
+the costly part, is the raster's depth test; and the boxes are derived from the
+samples, with no chunk, mesh or frontier beside them.

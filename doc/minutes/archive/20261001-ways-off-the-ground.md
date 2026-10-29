@@ -98,7 +98,7 @@ The prior art agreed:
 
 Arnis is reinterpreted, not imported. It is a binary with no library target; its
 bridges read the Minecraft world being built (`WorldEditor::get_ground_level`,
-`highest_block_between`) and OSM tag maps, in one-metre blocks over a region
+`highest_block_between`) and OSM tag maps, in one-meter blocks over a region
 held in memory, and half of its bridge code places blocks for arches and pylons.
 What carries over is the solve and its constants, rescaled: a unit is about 2.39
 m at the equator and about 1.9 m in Seoul, so a road's 6 m is about 3 units
@@ -220,7 +220,7 @@ lies one below it.
 Decks running side by side — two carriageways, a sidewalk beside a road — are
 one structure with one profile, joined where their edges lie within 2 m and
 their headings within 20°, as Arnis unions parallel decks; a deck over wide
-water clears a metre more for every hundred metres of it, up to fifteen.
+water clears a meter more for every hundred meters of it, up to fifteen.
 
 ## Where it stands
 

@@ -7,7 +7,7 @@
 use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;
 
-use crate::domain::layer::residency::Residency;
+use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
@@ -16,7 +16,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
-static PLACE: Global<Residency<PlaceTile>> = Global::new();
+static PLACE: Global<TileCache<PlaceTile>> = Global::new();
 
 impl Base for PlaceTile {
     const STREAM: Stream = Stream::place;
@@ -25,8 +25,8 @@ impl Base for PlaceTile {
     fn occupancy(&self) -> Occupancy {
         self.occupancy
     }
-    fn residency() -> &'static mut Residency<PlaceTile> {
-        PLACE.get(Residency::default)
+    fn tile_cache() -> &'static mut TileCache<PlaceTile> {
+        PLACE.get(TileCache::default)
     }
 
     /// Small, so held on the heap; the record is only a count slot.

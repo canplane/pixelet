@@ -46,11 +46,15 @@ filled with its row's color. The label is the place's `names.primary`, which is
 what Carto's `name` is, in Carto's text style but a marker's font, so the world
 has one size of text: a halo, set under the icon (`text-dy`), wrapped at the
 cell a place keeps to itself (below;
-`pxl-kernel domain/scene/marker/arrangement.rs` `spacing_px`), where it was
+`pxl-kernel domain/scene/marker/arrangement.rs` `SPACING_PX`), where it was
 first six em, twice Carto's, which broke a Korean name of five syllables in two,
 in its row's label color. A map label is Carto's, so it is not translated; the
 address line the shell writes from the divisions is UI text and keeps the
 language setting.
+
+> **Note (10-28):** the label no longer wraps at the place's cell. It wraps at
+> `SPACING_PX`, 193 CSS pixels, a constant of the UI's: the place's cell on a
+> view 1080 CSS pixels high at 50°, and on any other view more or less of it.
 
 ## Zoom, as the grid's cell
 
@@ -58,17 +62,17 @@ A Carto zoom is a ground resolution: at zoom c a web tile's 256 pixels span one
 tile of the pyramid at c, so its 16-pixel icon is a cell of that tile at c + 4.
 Places are kept in that lattice (`PLACE_LATTICE`) and read as every layer is, at
 its scale on the camera grid (`Lattice::scaled`), two steps coarser than the
-grid (`pxl-spec bake/tile/place.rs` `SPREAD_STEPS`): an icon's cell spans four
-grid cells, some 48 pixels round a drawn icon of 22 against Carto's 16, so the
-kinds shown at a distance are about Carto's at that size on the screen. The zoom
-a place is drawn at is the tile zoom of the grid's cell there, past the leaf
-too. The grid's cell is the distance's from the eye, so which Carto zoom a place
-is drawn at is decided in 3D, by the chunk the top of what stands there is in,
-as everything drawn is. Nothing measures pixels: the grid's cell, an angle,
-stands for Carto's icon, so the demand is the grid's and bounded as every
-layer's is, and the quality setting that coarsens the grid coarsens the places
-with it, as it does the ground. Measuring Carto's pixels on the screen instead
-would make the tiles a zoom asks for grow with the screen, which nothing bounds.
+grid (`pxl-spec param.rs` `place::SPREAD_STEPS`): an icon's cell spans four grid
+cells, some 48 pixels round a drawn icon of 22 against Carto's 16, so the kinds
+shown at a distance are about Carto's at that size on the screen. The zoom a
+place is drawn at is the tile zoom of the grid's cell there, past the leaf too.
+The grid's cell is the distance's from the eye, so which Carto zoom a place is
+drawn at is decided in 3D, by the chunk the top of what stands there is in, as
+everything drawn is. Nothing measures pixels: the grid's cell, an angle, stands
+for Carto's icon, so the demand is the grid's and bounded as every layer's is,
+and the quality setting that coarsens the grid coarsens the places with it, as
+it does the ground. Measuring Carto's pixels on the screen instead would make
+the tiles a zoom asks for grow with the screen, which nothing bounds.
 
 ## Which places, where they would meet
 
@@ -84,15 +88,16 @@ lies in it: at Carto zoom c a cell four icons wide — an icon 16 pixels, Carto'
 web map's 256-pixel tile — keeps one place, the first in order, and every other
 in it is not drawn at c. Four icons, some 190 pixels on the screen, is a product
 choice: at an icon's own cell, twice the places Carto shows were kept, which
-drawn showed as icons and names piled on each other, and places a few metres
-apart stood side by side as near as the view came. The cell also holds a name of
-a few words, so a name shows wherever its kind's label zoom has come and needs
-no rule of its own; where Carto places labels after the icons, colliding with
-each other, ours comes with its icon. That differs from Carto, and nothing is
-read past a cell to close it: two places a pixel apart across a cell's edge are
-each first in their own cell, so their icons and names may meet, where Carto
-would drop one; and fewer places show than Carto's, which spaces icons only an
-icon apart.
+drawn showed as icons and names piled on each other, and places a few meters
+apart stood side by side as near as the view came. The cell is an angle, and its
+pixels are the screen's, so a name, which wraps at 193 CSS pixels
+(`SPACING_PX`), may be wider or narrower than its cell. A name shows wherever
+its kind's label zoom has come and needs no rule of its own; where Carto places
+labels after the icons, colliding with each other, ours comes with its icon.
+That differs from Carto, and nothing is read past a cell to close it: two places
+a pixel apart across a cell's edge are each first in their own cell, so their
+icons and names may meet, where Carto would drop one; and fewer places show than
+Carto's, which spaces icons only an icon apart.
 
 The order is the icon zoom, then the GERS id: a place shown from a coarser zoom
 goes before one that appears only finer. Carto orders by id alone, so a
@@ -144,7 +149,7 @@ marker's cell keep theirs (`pxl-kernel domain/scene/marker/pin.rs` `count`).
 ## Divisions
 
 The divisions' format is Overture's already. Their theme does not carry over:
-what the shell writes is the focus's address, UI text, and Carto has no
+what the shell writes is the pivot's address, UI text, and Carto has no
 precedent for how deep an address reads. Its depth stays overture-tiles' rule
 (`center.ts`). Drawn on the map one day, division names would follow Carto's
 `placenames.mss`.

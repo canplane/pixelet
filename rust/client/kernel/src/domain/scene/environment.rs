@@ -4,19 +4,27 @@
 //! wall clock as inputs; the sun and moon placed, and the light and sky they
 //! give.
 
-pub mod celestial_position;
+pub mod celestial;
 pub mod cloud;
+pub mod param;
 
 use pxl_render::gpu::renderer::sky_steps;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
+use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
+use crate::domain::view::lens::Stepped;
+use crate::domain::view::observation;
+use crate::domain::view::setting::schema_spec::SkyTime;
+use crate::domain::view::setting::store::settings_store;
+use crate::sys::sched::clock::wall_now;
 use crate::sys::sched::edge::wake_at;
-use crate::turn::wall_now;
-use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
+use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
+use pxl_render::param::night;
 use xpute_guest::clock::now;
 
 /// Runs before the markers' step: the sky moves with the wall clock and
@@ -27,19 +35,12 @@ pub fn environment_step() {
     wake_at(now() + next_ms);
 }
 
-/// The sun and moon follow a jump of the anchor, and the stars fade in, over
-/// 1/EASE_RATE s, and never step.
-const EASE_RATE: f64 = 1.5;
-
 /// The cosine of the sun's and the moon's zenith angles at `days`, seen from
 /// `[lon, lat]`: each one's direction's up, the positions standing at a
 /// distance.
 fn heights(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
     let mu = |p: [f64; 3]| p[2] / v3::len(&p);
-    [
-        mu(sun_position(days, lat, lon)),
-        mu(moon_position(days, lat, lon)),
-    ]
+    [mu(sun_pos(days, lat, lon)), mu(moon_pos(days, lat, lon))]
 }
 
 /// Each light's height a display level of the sky moves over (pxl-render
@@ -123,9 +124,10 @@ impl EnvironmentDraw {
         }
     }
 
-    /// The sun under the horizon, as drawn.
+    /// The sun under the horizon, as drawn: past where night begins to fall
+    /// (pxl-render param.rs `night::FALL`).
     pub fn night(&self) -> bool {
-        self.started && self.sun[2] < 0.0
+        self.started && v3::norm(&self.sun)[2] < f64::from(night::FALL[1])
     }
 
     /// Unix milliseconds: the sky's days and the clouds' time, each held and
@@ -161,8 +163,10 @@ impl EnvironmentDraw {
             next = sky_next(self.sky_at);
             self.aim();
         }
-        if !self.started || unix_ms >= clouds_next(self.clouds_at) || unix_ms < self.clouds_at {
-            (self.time, self.clouds_at) = ((unix_ms - first) / 1000.0, unix_ms);
+        let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
+        // The clouds drifting step on their own, waking the turn.
+        if drifted && self.started {
+            region::animated();
         }
         (next.min(clouds_next(self.clouds_at)) - unix_ms).max(0.0)
     }
@@ -170,10 +174,7 @@ impl EnvironmentDraw {
     /// The sun and moon and the stars' turn at the sky's days and anchor.
     fn aim(&mut self) {
         let [lon, lat] = self.anchor;
-        self.aimed = [
-            sun_position(self.days, lat, lon),
-            moon_position(self.days, lat, lon),
-        ];
+        self.aimed = [sun_pos(self.days, lat, lon), moon_pos(self.days, lat, lon)];
         self.star_frame = equatorial_to_local(self.days, lat, lon);
     }
 
@@ -201,7 +202,7 @@ impl EnvironmentDraw {
             (self.sun, self.moon) = (sun, moon);
             self.started = true;
         }
-        self.eased = (self.eased + frame.delta_s * EASE_RATE).min(1.0);
+        self.eased = (self.eased + frame.delta_s * SKY_EASE_RATE).min(1.0);
         let along = |from: [f64; 3], to: [f64; 3]| {
             if self.eased < 1.0 {
                 core::array::from_fn(|k| from[k] + (to[k] - from[k]) * self.eased)
@@ -211,22 +212,22 @@ impl EnvironmentDraw {
         };
         (self.sun, self.moon) = (along(self.from[0], sun), along(self.from[1], moon));
         // The stars start dark and fade in, the first frame included.
-        self.stars = (self.stars + frame.delta_s * EASE_RATE).min(1.0);
+        self.stars = (self.stars + frame.delta_s * SKY_EASE_RATE).min(1.0);
         // Height over the sea under the eye, which the camera stands over.
         let km_per_u = km_per_u();
         let over = frame.camera[2];
         // The ground under the eye, as the turn observed it.
-        let ground = crate::domain::view::observation::observation().map_or(0.0, |o| o.ground);
+        let ground = observation::observation().map_or(0.0, |o| o.ground);
         let light = Light {
             sun: self.sun,
             moon: self.moon,
             stars: self.stars,
             time: self.time,
-            altitude_km: over * km_per_u,
+            alt_km: over * km_per_u,
             ground_km: ground * km_per_u,
             km_per_u,
-            latitude: lat.to_radians(),
-            longitude: lon.to_radians(),
+            lat: lat.to_radians(),
+            lon: lon.to_radians(),
             star_frame: self.star_frame,
         };
         write_environment(&mut self.out, &light);

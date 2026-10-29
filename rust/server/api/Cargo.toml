@@ -13,3 +13,6 @@ axum = "0.8"
 pxl-server.workspace = true
 pxl-spec.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

@@ -132,7 +132,7 @@ std::string read_deep(std::span<const std::uint8_t> pkt) {
 
 } // namespace
 
-XPUTE_TEST(xtp_the_cursor_reads_what_the_other_languages_read) {
+XPUTE_TEST(xtp_cursor_matches_other_languages) {
     Golden v = Golden::load("spec/golden/wire/xtp/cursor.tsv");
     v.each("packets", [&v](const std::string &k) {
         std::vector<std::uint8_t> pkt = bytes(v.s(k + ".packet"));
@@ -177,7 +177,7 @@ XPUTE_TEST(xtp_the_cursor_reads_what_the_other_languages_read) {
     for (std::size_t j = 0; j < 3; j++) XPUTE_CHECK_EQ(at_cap("€€€", caps[j]), v.s("caps_utf8." + std::to_string(j)), "caps_utf8");
 }
 
-XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
+XPUTE_TEST(xtp_pkt_round_trip) {
     std::array<std::uint8_t, 256> buf{};
     PacketWriter w(buf);
     const std::array<std::int32_t, 2> ints{7, 8};
@@ -207,7 +207,7 @@ XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
     XPUTE_CHECK_EQ(absent.as_branch().error().errnum, Errno::efault, "an absent node is no branch");
 }
 
-XPUTE_TEST(xtp_a_packet_reads_wherever_it_lies) {
+XPUTE_TEST(xtp_pkt_reads_anywhere) {
     std::array<std::uint8_t, 64> buf{};
     PacketWriter w{std::span(buf).subspan(1)};
     const std::array<double, 2> xs{0.5, -4.0};

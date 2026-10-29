@@ -3,6 +3,7 @@
 //! What the kernel was booted with, kept from its first turn (door.rs
 //! `boot`): what the bracket's form handed it, and its GPU host's admission.
 
+use xpute_gpu::admit;
 use xpute_gpu::admit::Admit;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
@@ -39,5 +40,5 @@ pub fn set_admit(admit: Admit) {
 }
 
 pub fn admit() -> Admit {
-    *ADMIT.get(|| xpute_gpu::admit::every)
+    *ADMIT.get(|| admit::every)
 }

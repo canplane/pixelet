@@ -10,7 +10,7 @@ use crate::space::layer::tile::*;
 /// The ground tile a distance folds from, past the pyramid's ends too, as
 /// the rule reads it: squared.
 fn zoom_at(r: f64) -> i32 {
-    GROUND.tile_zoom_of_grid(Tau::FINEST.cell_at(r * r))
+    GROUND.tile_zoom_of_grid(cell_at(r * r))
 }
 
 /// The distance just short of `r` as the rule reads a distance: the f32
@@ -39,7 +39,7 @@ fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
 }
 
 #[test]
-fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
+fn demand_within_reach() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
@@ -49,7 +49,7 @@ fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
 }
 
 #[test]
-fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
+fn parents_in_coarser() {
     for zoom in TOP_ZOOM + 1..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let above = demands(zoom - 1, foot);
@@ -63,11 +63,12 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
     }
 }
 
-/// The reach is exactly where a zoom stops being asked for.
+/// The reach, over the window's margin, is exactly where the view stops
+/// asking for a zoom.
 #[test]
-fn the_fault_bound_is_where_a_zoom_ends() {
+fn fault_bound_zoom_end() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
-        let r = demand_reach(GROUND, zoom);
+        let r = demand_reach(GROUND, zoom) / WINDOW_MARGIN;
         assert_eq!(
             zoom_at(short_of(r)),
             zoom as i32,
@@ -78,12 +79,12 @@ fn the_fault_bound_is_where_a_zoom_ends() {
 }
 
 #[test]
-fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
+fn zoom_by_dist() {
     let mut last = i32::MAX;
     // Inside the world: no cell is coarser than z0's, and none finer than a
     // position names (`FINEST_ZOOM`), even scaled finer by 2^3 below.
-    for r in core::iter::successors(Some(split_distance(FINEST_ZOOM - 3)), |r| Some(r * 1.01))
-        .take_while(|r| r * 32.0 < split_distance(0))
+    for r in core::iter::successors(Some(split_dist(FINEST_ZOOM - 3)), |r| Some(r * 1.01))
+        .take_while(|r| r * 32.0 < split_dist(0))
     {
         let z = zoom_at(r);
         assert!(z <= last, "{r}: z{z} after z{last}");
@@ -94,14 +95,31 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     }
     for z in TOP_ZOOM as i32..=LEAF_ZOOM as i32 + 3 {
         assert_eq!(
-            zoom_at(split_distance(GROUND.grid_zoom(z as Zoom))),
+            zoom_at(split_dist(GROUND.grid_zoom(z as Zoom))),
             z,
             "a zoom begins at its split distance"
         );
         assert_eq!(
-            zoom_at(short_of(split_distance(GROUND.grid_zoom(z as Zoom - 1)))),
+            zoom_at(short_of(split_dist(GROUND.grid_zoom(z as Zoom - 1)))),
             z,
             "and ends where the next coarser begins"
         );
+    }
+}
+
+/// The view draws a zoom out to where the grid asks the cell a zoom coarser,
+/// no farther: just short of `draw_reach` a ray asks the zoom's own cells,
+/// and at it the coarser's.
+#[test]
+fn view_zoom_extent() {
+    for zoom in TOP_ZOOM..=LEAF_ZOOM {
+        let r = draw_reach(GROUND, zoom);
+        assert_eq!(
+            zoom_at(short_of(r)),
+            zoom as i32,
+            "zoom {zoom} short of its reach"
+        );
+        assert_eq!(zoom_at(r), zoom as i32 - 1, "zoom {zoom} at its reach");
+        assert_eq!(demand_reach(GROUND, zoom), r * WINDOW_MARGIN);
     }
 }

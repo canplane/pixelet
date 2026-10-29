@@ -18,7 +18,7 @@
         "row with the model under asset/. One pack, so one colormap."
       ],
       "size": {
-        "$value": 1.0,
+        "$val": 1.0,
         "$doc": [
           "World units tall — one cell."
         ]
@@ -40,7 +40,7 @@
       },
       "models": {
         "$type": "file",
-        "$value": [
+        "$val": [
           "actor/kenney_mini_characters/female-a.glb",
           "actor/kenney_mini_characters/female-b.glb",
           "actor/kenney_mini_characters/female-c.glb",
@@ -57,10 +57,10 @@
       },
       "skin": {
         "$type": "file",
-        "$value": "actor/kenney_mini_characters/colormap.png"
+        "$val": "actor/kenney_mini_characters/colormap.png"
       },
       "move_clip": {
-        "$value": 3,
+        "$val": 3,
         "$type": "u32",
         "$doc": [
           "The catch-up/preview move's clip, by its index in the pack's animations —",
@@ -75,7 +75,7 @@
         "The pets, the same way. A pet's key is its model's name."
       ],
       "size": {
-        "$value": 0.25,
+        "$val": 0.25,
         "$doc": [
           "World units tall — a quarter cell, the step the object tiers also take."
         ]
@@ -109,7 +109,7 @@
       },
       "models": {
         "$type": "file",
-        "$value": [
+        "$val": [
           "actor/kenney_cube_pets/beaver.glb",
           "actor/kenney_cube_pets/bee.glb",
           "actor/kenney_cube_pets/bunny.glb",
@@ -138,10 +138,10 @@
       },
       "skin": {
         "$type": "file",
-        "$value": "actor/kenney_cube_pets/colormap.png"
+        "$val": "actor/kenney_cube_pets/colormap.png"
       },
       "move_clip": {
-        "$value": 3,
+        "$val": 3,
         "$type": "u32",
         "$doc": [
           "The catch-up/preview move's clip, by its index in the pack's animations —",
@@ -152,13 +152,13 @@
     }
   },
   "IDLE_CLIP": {
-    "$value": 1,
+    "$val": 1,
     "$type": "u32",
     "$doc": [
       "The clip a character stands in, \"idle\", by its index in both packs' animations."
     ]
   },
-  "PERSON_GENDER_PREFIXES": {
+  "PERSON_GENDER_PREFIX": {
     "$doc": [
       "Split by gender, so the picker shows two rows; a person is shown by",
       "its place in its row."

@@ -13,6 +13,7 @@ use crate::domain::control::param::{
     TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION,
 };
 
+use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
@@ -20,7 +21,7 @@ use crate::domain::control::cmd::{InputRect, PointerType};
 use crate::domain::control::interaction::{clear_hover, clear_hover_coord};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
-use crate::domain::view::frame::pose::view;
+use crate::domain::view::frame::screen::size;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::clock::now;
@@ -133,7 +134,7 @@ fn input() -> &'static mut Input {
 
 /// Negative because dragging up tilts toward the horizon.
 fn tilt_gain() -> f64 {
-    -core::f64::consts::PI / (TILT_SWEEP_FRACTION * view().height)
+    -core::f64::consts::PI / (TILT_SWEEP_FRACTION * size()[1])
 }
 
 pub fn camera_input_rect(rect: InputRect) {
@@ -146,7 +147,7 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
 }
 
-/// A pan puts the focus by hand, so a pending destination is canceled;
+/// A pan puts the pivot by hand, so a pending destination is canceled;
 /// tracked, nothing pans.
 fn by_hand(pan: impl FnOnce()) {
     if active() != Active::Tracked {
@@ -156,10 +157,10 @@ fn by_hand(pan: impl FnOnce()) {
 }
 
 fn do_pan(dx: f64, dy: f64) {
-    by_hand(|| crate::domain::control::camera::controller::pan(dx, dy));
+    by_hand(|| controller::pan(dx, dy));
 }
 
-/// Azimuth follows the cursor's angle about screen center (arcball), tilt a
+/// Azimuth follows the pointer's angle about screen center (arcball), tilt a
 /// fixed rate from the drag's start. The drag locks to whichever axis
 /// dominates past AXIS_LOCK_THRESHOLD_PX: an off-center vertical drag still
 /// sweeps an angle, which read as a spin once tilt saturated.
@@ -181,7 +182,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
         // tilt_lock is an experiment toggle, not a decided product change.
         if !settings_store().tilt_lock {
             let polar = s.rotate_tilt.ask(client_y, linear(tilt_gain()));
-            let took = crate::domain::control::camera::controller::set_intent(IntentPatch {
+            let took = controller::set_intent(IntentPatch {
                 polar: Some(polar),
                 ..Default::default()
             });
@@ -203,7 +204,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
         .rotate_turn
         .get_or_insert(Anchor::new(camera_state().intent.azimuth, angle));
     let azimuth = turn.ask(angle, linear(-1.0));
-    let took = crate::domain::control::camera::controller::set_intent(IntentPatch {
+    let took = controller::set_intent(IntentPatch {
         azimuth: Some(azimuth),
         ..Default::default()
     });
@@ -221,7 +222,7 @@ fn begin_pinch(s: &mut Input) {
         return;
     };
     s.pinch_start_dist = libm::hypot(p1.x - p0.x, p1.y - p0.y);
-    crate::domain::control::camera::controller::pinch_begin(s.pinch_start_dist);
+    controller::pinch_begin(s.pinch_start_dist);
     let camera = camera_state();
     s.pinch_tilt = Anchor::new(camera.intent.polar, (p0.y + p1.y) / 2.0);
     s.pinch_twist = None;
@@ -239,7 +240,7 @@ fn update_pinch(s: &mut Input) {
     }
     let dist = libm::hypot(p1.x - p0.x, p1.y - p0.y);
     let midpoint_y = (p0.y + p1.y) / 2.0;
-    crate::domain::control::camera::controller::pinch(dist);
+    controller::pinch(dist);
 
     let intent = camera_state().intent;
     // An unmoved control is not asked, so a zoom-only pinch writes no tilt.
@@ -259,7 +260,7 @@ fn update_pinch(s: &mut Input) {
     if polar.is_none() && azimuth.is_none() {
         return;
     }
-    let took = crate::domain::control::camera::controller::set_intent(IntentPatch {
+    let took = controller::set_intent(IntentPatch {
         dist: None,
         azimuth,
         polar,
@@ -473,7 +474,7 @@ pub fn camera_input_step() -> Option<[f64; 2]> {
         s.keys_at = at;
         // A key moves the view the way it points, the screen's down being the way's up.
         let way = [s.keys[0] * share, -s.keys[1] * share];
-        by_hand(|| crate::domain::control::camera::controller::pan_across(way[0], way[1]));
+        by_hand(|| controller::pan_across(way[0], way[1]));
         request_world_tick();
     }
     let rehover = core::mem::take(&mut s.hover_pending) && s.drag_mode == DragMode::None;
@@ -492,7 +493,7 @@ pub fn camera_input_step() -> Option<[f64; 2]> {
         s.pending_pan_dy = 0.0;
     }
     if let Some(delta_y) = s.pending_wheel_delta_y.take() {
-        crate::domain::control::camera::controller::wheel(delta_y);
+        controller::wheel(delta_y);
     }
     rehover.then_some([s.pointer_x, s.pointer_y])
 }

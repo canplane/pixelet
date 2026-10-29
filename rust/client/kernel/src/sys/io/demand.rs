@@ -11,7 +11,7 @@ use core::cmp::Ordering;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 
-pub const PHASES_MAX: usize = crate::sys::io::demand_spec::TASK_PHASES_MAX as usize;
+pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
 
 /// Sub-timings a run reports (e.g. network vs decode), named by the run.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,9 +31,9 @@ impl Default for Phases {
 
 impl Phases {
     /// Past PHASES_MAX a timing is left out.
-    pub fn push(&mut self, name: TaskPhaseName, value: f64) {
+    pub fn push(&mut self, name: TaskPhaseName, val: f64) {
         if self.len < PHASES_MAX {
-            self.items[self.len] = (name, value);
+            self.items[self.len] = (name, val);
             self.len += 1;
         }
     }
@@ -43,9 +43,11 @@ impl Phases {
     }
 }
 
+use crate::sys::io::demand_spec;
 /// A stream of demands (spec `STREAM_NAMES`). An asset shares the
 /// tiles' credits but is never withdrawn: it is wanted until it arrives.
 pub use crate::sys::io::demand_spec::StreamName as Stream;
+use pxl_spec::bake::tile;
 
 impl Stream {
     /// An asset belongs to no bake and is asked for by its own command.
@@ -60,22 +62,22 @@ impl Stream {
     }
 
     /// The most bytes a body of its takes, its kind's packet at its longest
-    /// (pxl-spec `bake::tile::max_packet_bytes`): one past it is refused
-    /// before the heap is asked (sys/io/fetch.rs `opened`). None for an asset,
+    /// (pxl-spec `bake::tile::max_pkt_bytes`): one past it is refused
+    /// before the heap is asked (sys/io/fetch.rs `on_opened`). None for an asset,
     /// which the heap alone bounds.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
-            Some(layer) => Some(pxl_spec::bake::tile::max_packet_bytes(layer) as u32),
+            Some(layer) => Some(tile::max_pkt_bytes(layer) as u32),
             None => None,
         }
     }
 }
 
-/// Why a tile is asked for, strongest first: the hold residency keeps it by.
+/// Why a tile is asked for, strongest first: the hold the tile cache keeps it by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Why {
     Floor,
-    /// On a line asked for exactly: the camera's destination's, or the division layer's focus's.
+    /// On a line asked for exactly: the camera's destination's, or the division layer's pivot's.
     Destination,
     /// On the line over a miss, so a coarser answer is held wherever the view
     /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).

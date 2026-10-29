@@ -65,7 +65,7 @@ fn check<'a>(name: &str, build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
 }
 
 #[test]
-fn a_string_written_from_display_reads_back_where_it_lies() {
+fn display_string_round_trip() {
     let mut buf = [0xffu8; 128];
     let mut w = PacketWriter::new(&mut buf, 2);
     w.str_display(format_args!("{}-{}", "héllo", 42))
@@ -88,7 +88,7 @@ fn a_string_written_from_display_reads_back_where_it_lies() {
 }
 
 #[test]
-fn the_encoder_writes_the_bytes_the_typescript_writes() {
+fn matches_typescript() {
     check("nil", |t| {
         t.nil();
     });
@@ -161,7 +161,7 @@ fn the_encoder_writes_the_bytes_the_typescript_writes() {
 }
 
 #[test]
-fn a_packet_under_the_cap_is_written_whatever_the_cap() {
+fn under_cap_written() {
     let bytes = [0u8; 1100];
     let mut t = TreeView::new();
     t.u8_array(Some(&bytes[..]));

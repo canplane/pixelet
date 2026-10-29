@@ -29,6 +29,45 @@ export const op = {
   TEXT_RASTER: 2147483650 as number,
 } as const;
 
+/** TEXT_LAYOUT's arguments, a word each after its call, then the text's bytes at
+ * `WORDS`: the weight, px and max width as f32 bits, where its answer goes and
+ * how many lines it may hold. */
+export const LAYOUT = {
+  weight: 0 as number,
+  px: 1 as number,
+  max_width: 2 as number,
+  at: 3 as number,
+  lines: 4 as number,
+  WORDS: 5 as number,
+} as const;
+
+/** TEXT_LAYOUT's answer at its `at`: how many lines, then `LINE` apiece. */
+export const LAYOUT_ANSWER = {
+  cnt: 0 as number,
+  WORDS: 1 as number,
+} as const;
+
+/** A line of TEXT_LAYOUT's answer: its end, a byte offset, and its width as f32 bits. */
+export const LINE = {
+  end: 0 as number,
+  width: 1 as number,
+  WORDS: 2 as number,
+} as const;
+
+/** TEXT_RASTER's arguments, a word each after its call, then the text's bytes at
+ * `WORDS`: the weight and px as f32 bits, the color, where its pixels go, their
+ * width and height, and x as f32 bits. */
+export const RASTER = {
+  weight: 0 as number,
+  px: 1 as number,
+  color: 2 as number,
+  at: 3 as number,
+  width: 4 as number,
+  height: 5 as number,
+  x: 6 as number,
+  WORDS: 7 as number,
+} as const;
+
 /** The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
  * bake, numbered by its kind (pxl-spec bake/published.spec.rs). Below every root a path is
  * an object's number in decimal, its one name; what that object is called and where, a

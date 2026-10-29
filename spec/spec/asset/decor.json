@@ -39,7 +39,7 @@
   },
   "decors": {
     "tree": {
-      "value": 1024,
+      "val": 1024,
       "$doc": [
         "Trees on green and bare land. Bare is the fallback type for untagged land",
         "and this pack draws it as grass; sports fields are left out as maintained,",
@@ -48,7 +48,7 @@
       ],
       "seed": "0x7902530c",
       "density": 0.04,
-      "orientation": "random",
+      "orient": "random",
       "on": ["park", "forest", "land"],
       "variants": [
         { "model": "decor/kenney_fantasy_town/tree.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "size": [1, 1, 3] },
@@ -63,7 +63,7 @@
       ]
     },
     "boat": {
-      "value": 1025,
+      "val": 1025,
       "$doc": [
         "Boats on open river and lake water; wetland is too shallow. Rivers are a",
         "few cells wide, so the per-cell rate reads far denser than on land: cut to",
@@ -71,7 +71,7 @@
       ],
       "seed": "0xb0a5802d",
       "density": 0.002,
-      "orientation": "random",
+      "orient": "random",
       "on": ["water"],
       "variants": [
         { "model": "decor/kenney_watercraft_pack/boat-row-small.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "size": [3, 2, 1] },
@@ -81,7 +81,7 @@
       ]
     },
     "car": {
-      "value": 1026,
+      "val": 1026,
       "$doc": [
         "Cars on major roads only: neighborhood streets and pedestrian ways are",
         "where users build, and a car there reads as in the way. Aligned to the",
@@ -90,7 +90,7 @@
       ],
       "seed": "0x0ca63010",
       "density": 0.004,
-      "orientation": "along_transport",
+      "orient": "along_transport",
       "on": ["motorway", "trunk", "primary", "secondary", "residential_road"],
       "variants": [
         { "model": "decor/kenney_car_kit/sedan.glb", "skin": "decor/kenney_car_kit/colormap.png", "size": [1, 3, 1] },
@@ -101,7 +101,7 @@
       ]
     },
     "train": {
-      "value": 1027,
+      "val": 1027,
       "$doc": [
         "Trains on rail lines the ground shows (a tunnel's is not painted), aligned",
         "to the rail, since one lying across it reads as derailed. Very sparse:",
@@ -109,7 +109,7 @@
       ],
       "seed": "0x7ba5802d",
       "density": 0.004,
-      "orientation": "along_transport",
+      "orient": "along_transport",
       "on": ["tram", "light_rail", "subway", "monorail", "rail"],
       "variants": [
         { "model": "decor/kenney_train_kit/train-locomotive-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "size": [1, 3, 2] },

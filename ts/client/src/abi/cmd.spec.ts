@@ -11,7 +11,7 @@
  * command is between.
  *
  * The same number is a command on the submission ring and a signal on the
- * completion ring (its `RES` clear). The direction is the ring: `packet` is
+ * completion ring (its `RES` clear). The direction is the ring: `pkt` is
  * what the shell submits, `signal` what the kernel posts. Each is written and
  * read by what this file generates, on both sides, so no field is found by
  * its position anywhere else.
@@ -22,11 +22,7 @@
  * or a packed array where the item is a number. A record crosses as a branch
  * of its own fields, and is how a block past a slot is laid out. An enum's
  * `unknown` is the member a number it does not give out reads as; an enum
- * without one refuses the packet.
- *
- * A command taken out leaves its number in the Command table's `$retired`, with
- * the name it had, and the generator refuses a number given twice or one
- * retired, so a number an older side still sends never comes to mean another.
+ * without one refuses the packet. The generator refuses a number given twice.
  */
 
 import type {
@@ -72,9 +68,9 @@ export const enum InputMinor {
   TRACKING = 0x04,
   VIEW = 0x05,
   COMPASS_RESET = 0x07,
-  GO_TO = 0x08,
-  POSE = 0x09,
-  POSE_END = 0x0a,
+  GOTO = 0x08,
+  XR_POSE = 0x09,
+  XR_POSE_END = 0x0a,
   HOLD = 0x0b,
   MARKER_WORDS = 0x0c,
   MARKER_CANCEL = 0x0d,
@@ -85,9 +81,9 @@ export const enum InputMinor {
 /** The device sensors' verbs. */
 export const enum SensorMinor {
   START = 0x01,
-  POSITION = 0x02,
+  POS = 0x02,
   STOP = 0x03,
-  ORIENTATION = 0x05,
+  ORIENT = 0x05,
   PERMISSION = 0x06,
   FAILED = 0x0b,
 }
@@ -199,7 +195,7 @@ export const enum GroundStatus {
 }
 
 /** Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor. */
-export const enum DevicePoseStatus {
+export const enum SensorStatus {
   Idle = 0,
   Loading = 1,
   Ready = 2,
@@ -214,11 +210,7 @@ export const enum DevicePoseStatus {
  * to sit in the kernel's memory, and the shell has the locale files already
  * (ts/client/src/locale) — the same split `strerror` is on the other side of.
  *
- * The number is the name here. A band is what a message is about, and a
- * message keeps its number for as long as anything can be holding one: an
- * old shell reads a number a new kernel sends, so a number that has meant
- * something must never come to mean another thing. Retire one by leaving
- * the gap. */
+ * The number is the name here, and a band is what a message is about. */
 export const enum Message {
   // ---- 0x02 where the device says it is ----
 
@@ -253,12 +245,12 @@ export const enum Command {
   // ---- the host answers: an I/O the process started, done ----
 
   /** A GPS fix; a field is absent where the browser gave none. */
-  SENSOR_POSITION = 0x1202,
+  SENSOR_POS = 0x1202,
   /** An orientation event; a field is absent where the browser gave none. */
-  SENSOR_ORIENTATION = 0x1205,
+  SENSOR_ORIENT = 0x1205,
   /** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
    * or cut off; the compass's, where the platform says so (WORLD_BOOT's
-   * orientation_silence_is_loss). */
+   * orient_silence_is_loss). */
   SENSOR_FAILED = 0x120b,
 
   // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
@@ -289,7 +281,7 @@ export const enum Command {
   INPUT_POINTER = 0x1102,
   /** What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
   INPUT_HOLD = 0x110b,
-  /** The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec block/ext.json) are refused whole, never cut. */
+  /** The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut. */
   INPUT_MARKER_WORDS = 0x110c,
   /** The marker the tool left waiting is let go, nothing put up. */
   INPUT_MARKER_CANCEL = 0x110d,
@@ -325,15 +317,16 @@ export const enum Command {
    * asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
    * reads it without the location. */
   INPUT_LOCATE = 0x110f,
-  /** A search result: the focus moved there. */
-  INPUT_GO_TO = 0x1108,
+  /** A search result: the pivot moved there, and the view asked with it at once, as the
+   * controls ask it where the camera stands; a view field absent keeps what the view has. */
+  INPUT_GOTO = 0x1108,
   /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
    * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
    * first of a run is taken to be where the camera already is, so nothing moves as
    * it begins; the camera follows the tracker from there until POSE_END. */
-  INPUT_POSE = 0x1109,
+  INPUT_XR_POSE = 0x1109,
   /** The tracker let the camera go: back to the controller it had. */
-  INPUT_POSE_END = 0x110a,
+  INPUT_XR_POSE_END = 0x110a,
   /** The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
    * The kernel watches a sensor only while both hold, the page visible and the world view
    * shown; which sensors it watches then is its own (SENSOR_START). */
@@ -342,7 +335,7 @@ export const enum Command {
   PROFILER_START = 0x1901,
   /** The window frozen, so what is exported holds still. */
   PROFILER_STOP = 0x1902,
-  /** The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)
+  /** The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics
    * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
    * number past the door is finite, so no window is infinite. */
   PROFILER_READ = 0x1903,
@@ -366,11 +359,11 @@ function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
 
 /** What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole. */
 export interface Snapshot {
-  focus: FocusState;
+  pivot: PivotState;
   location: LocationState;
   companion: CompanionState;
   holding: HoldingState;
-  orientation: OrientationState;
+  orient: OrientationState;
   /** The view's azimuth. */
   azimuth: f64;
   is_follow_mode: boolean;
@@ -382,10 +375,10 @@ export interface Snapshot {
   /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
    * has read its kept slot, a few turns from boot. */
   settings: u32[];
-  /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
+  /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
   m_per_px: f64;
-  /** The division the focus is in and every one above it, broad to narrow; empty
-   * where the focus is in none or the tile it is read out of has not arrived. */
+  /** The division the pivot is in and every one above it, broad to narrow; empty
+   * where the pivot is in none or the tile it is read out of has not arrived. */
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
@@ -399,11 +392,11 @@ export interface Snapshot {
 
 export function read_snapshot(b: BranchCursor): Snapshot {
   return {
-    focus: read_focus_state(b.at_branch(0)),
+    pivot: read_pivot_state(b.at_branch(0)),
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
     holding: read_holding_state(b.at_branch(3)),
-    orientation: read_orientation_state(b.at_branch(4)),
+    orient: read_orientation_state(b.at_branch(4)),
     azimuth: b.at(5).get<f64>(),
     is_follow_mode: b.at(6).get<boolean>(),
     camera_busy: b.at(7).get<boolean>(),
@@ -418,20 +411,20 @@ export function read_snapshot(b: BranchCursor): Snapshot {
   };
 }
 
-export interface FocusState {
+export interface PivotState {
   status: GroundStatus;
   is_off_center: boolean;
-  /** The focus in degrees: what the search measures distance from. */
-  center: LonLat | null;
-  /** The focus is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs). */
+  /** The pivot in degrees: what the search measures distance from. */
+  lon_lat: LonLat | null;
+  /** The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs). */
   outside: boolean;
 }
 
-export function read_focus_state(b: BranchCursor): FocusState {
+export function read_pivot_state(b: BranchCursor): PivotState {
   return {
     status: b.at(0).get<GroundStatus>(),
     is_off_center: b.at(1).get<boolean>(),
-    center: optional(b.at(2), read_lon_lat),
+    lon_lat: optional(b.at(2), read_lon_lat),
     outside: b.at(3).get<boolean>(),
   };
 }
@@ -446,17 +439,17 @@ export function read_lon_lat(b: BranchCursor): LonLat {
 }
 
 export interface LocationState {
-  status: DevicePoseStatus;
+  status: SensorStatus;
   has_location: boolean;
   /** Present exactly when status is Error: the failure the kernel chose. */
-  error: Message | null;
+  err: Message | null;
 }
 
 export function read_location_state(b: BranchCursor): LocationState {
   return {
-    status: b.at(0).get<DevicePoseStatus>(),
+    status: b.at(0).get<SensorStatus>(),
     has_location: b.at(1).get<boolean>(),
-    error: b.at(2).get<Message | null>(),
+    err: b.at(2).get<Message | null>(),
   };
 }
 
@@ -497,15 +490,15 @@ export function read_holding_state(b: BranchCursor): HoldingState {
 }
 
 export interface OrientationState {
-  status: DevicePoseStatus;
+  status: SensorStatus;
   /** Present exactly when status is Error: the failure the kernel chose. */
-  error: Message | null;
+  err: Message | null;
 }
 
 export function read_orientation_state(b: BranchCursor): OrientationState {
   return {
-    status: b.at(0).get<DevicePoseStatus>(),
-    error: b.at(1).get<Message | null>(),
+    status: b.at(0).get<SensorStatus>(),
+    err: b.at(1).get<Message | null>(),
   };
 }
 
@@ -561,20 +554,20 @@ export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.SENSOR_POSITION's packet, written in place into `to`. */
-export function encode_sensor_position(
+/** Command.SENSOR_POS's packet, written in place into `to`. */
+export function encode_sensor_pos(
   to: PacketRoom,
   lon: f64,
   lat: f64,
-  altitude: f64 | null,
+  alt: f64 | null,
   accuracy: f64 | null,
   course: f64 | null,
 ): PacketWriter {
-  return to.writer(5).f64(lon).f64(lat).f64(altitude).f64(accuracy).f64(course);
+  return to.writer(5).f64(lon).f64(lat).f64(alt).f64(accuracy).f64(course);
 }
 
-/** Command.SENSOR_ORIENTATION's packet, written in place into `to`. */
-export function encode_sensor_orientation(
+/** Command.SENSOR_ORIENT's packet, written in place into `to`. */
+export function encode_sensor_orient(
   to: PacketRoom,
   webkit_compass_heading: f64 | null,
   alpha: f64 | null,
@@ -603,23 +596,19 @@ export function encode_sensor_failed(
 /** Command.WORLD_BOOT's packet, written in place into `to`.
  *
  * @param development A development build, which offers the settings schema.json marks `dev`.
- * @param orientation_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
- * @param orientation_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_FAILED). */
+ * @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
+ * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_FAILED). */
 export function encode_world_boot(
   to: PacketRoom,
   development: boolean,
   geolocation: boolean,
-  orientation: boolean,
-  orientation_permission: boolean,
-  orientation_silence_is_loss: boolean,
+  orient: boolean,
+  orient_permission: boolean,
+  orient_silence_is_loss: boolean,
 ): PacketWriter {
-  return to
-    .writer(5)
-    .bool(development)
-    .bool(geolocation)
-    .bool(orient)
-    .bool(orient_permission)
-    .bool(orient_silence_is_loss);
+  return to.writer(5).bool(development).bool(geolocation).bool(orient).bool(
+    orient_permission,
+  ).bool(orient_silence_is_loss);
 }
 
 /** Command.WORLD_FRAME's packet, written in place into `to`.
@@ -726,15 +715,15 @@ export function encode_input_pointer(
 
 /** Command.INPUT_HOLD's packet, written in place into `to`.
  *
- * @param value The held cube or decor kind, by its number in the catalog's one value space (cube.json).
+ * @param val The held cube or decor kind, by its number in the catalog's one value space (cube.json).
  * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
 export function encode_input_hold(
   to: PacketRoom,
   tool: ActiveTool,
-  value: u32,
+  val: u32,
   tier: u32,
 ): PacketWriter {
-  return to.writer(3).u32(tool).u32(value).u32(tier);
+  return to.writer(3).u32(tool).u32(val).u32(tier);
 }
 
 /** Command.INPUT_MARKER_WORDS's packet, written in place into `to`. */
@@ -832,8 +821,12 @@ export function encode_input_tracking(
   return to.writer(1).u32(tracking);
 }
 
-/** Command.INPUT_GO_TO's packet, written in place into `to`. */
-export function encode_input_go_to(
+/** Command.INPUT_GOTO's packet, written in place into `to`.
+ *
+ * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
+ * @param azimuth The heading about Z in radians, wrapped.
+ * @param polar The angle down from vertical in radians, clamped. */
+export function encode_input_goto(
   to: PacketRoom,
   lon: f64,
   lat: f64,
@@ -841,8 +834,8 @@ export function encode_input_go_to(
   return to.writer(2).f64(lon).f64(lat);
 }
 
-/** Command.INPUT_POSE's packet, written in place into `to`. */
-export function encode_input_pose(
+/** Command.INPUT_XR_POSE's packet, written in place into `to`. */
+export function encode_input_xr_pose(
   to: PacketRoom,
   x: f64,
   y: f64,

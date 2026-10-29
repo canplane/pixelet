@@ -10,8 +10,8 @@ use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
-    buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
-    view_entry, Format, Gpu, Load,
+    buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
+    view_entry, Format, Gpu, Load, TrackedRenderPass,
 };
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::decor::{DecorPass, GROUPS};
@@ -19,10 +19,13 @@ use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::Uploads;
 
-/// Impostors cover fewer pixels than the model tier's floor (twelve at the
-/// reference viewport), so this is several times any one's drawn size.
+/// Impostors span less than the model tier's floor, a camera grid cell
+/// (pxl-spec-core `grid::CELLS_A_RADIAN`), 48 drawn pixels on a view 2160
+/// CSS pixels high at ratio 2, so this is several times any one's drawn
+/// size.
 const SPRITE: u32 = 128;
 const FIT_BYTES: u32 = 16;
 
@@ -55,7 +58,7 @@ fn fit_of(extent: Extent) -> [f32; 4] {
 
 impl ImpostorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> ImpostorPass {
-        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, g.canvas());
+        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, WORLD_COLOR);
         let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::rgba8unorm_srgb);
         let sampler = g.sampler(
             FilterMode::linear,
@@ -83,8 +86,8 @@ impl ImpostorPass {
             texture_usage::RENDER_ATTACHMENT,
         );
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
-        let fits = g.buffer(
-            (GROUPS * 16) as u32,
+        let fits = g.buf(
+            DECOR_GROUPS as u32 * FIT_BYTES,
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let group = g.bind_group(
@@ -92,7 +95,7 @@ impl ImpostorPass {
             &[
                 view_entry(0, atlas_view),
                 sampler_entry(1, sampler),
-                buffer_range_entry(2, fits, 0, (GROUPS * 16) as u32),
+                buf_range_entry(2, fits, 0, DECOR_GROUPS as u32 * FIT_BYTES),
             ],
         );
         ImpostorPass {
@@ -148,23 +151,24 @@ impl ImpostorPass {
         let Some(slots) = self.fit_uniforms.slots() else {
             return false;
         };
-        for (n, &(k, w, (model, vertex_cnt, index_cnt, skin))) in due.iter().enumerate() {
-            let (fit_group, offset) = slots.at(n as u32);
+        for (n, &(k, w, (model, vertex_cnt, idx_cnt, skin))) in due.iter().enumerate() {
+            let (fit_group, off) = slots.at(n as u32);
             let layer = g.view(self.atlas, false, 0, 1, k as u32, 1);
             let pass = g.pass(
                 encoder,
                 &pass_desc(layer, Load::Clear, self.depth_view, Load::Clear, 1.0, None),
             );
-            g.set_pipeline(pass, self.bake.pipeline);
-            g.set_bind_group(pass, 0, fit_group, &[offset]);
-            g.set_bind_group(pass, 1, skin, &[]);
-            draw_model(g, pass, &self.bake, &mut 0, model, vertex_cnt, index_cnt, 1);
-            g.end(pass);
+            let mut pass = TrackedRenderPass::new(g, pass);
+            pass.set_pipeline(self.bake.pipeline);
+            pass.set_bind_group(0, fit_group, &[off]);
+            pass.set_bind_group(1, skin, &[]);
+            draw_model(&mut pass, &self.bake, model, vertex_cnt, idx_cnt, 1);
+            pass.end();
             release(layer);
             self.fit[k] = fit_of(w.2);
             self.baked[k] = Some(w);
         }
-        g.write_buffer(self.fits, 0, bytes(self.fit.as_flattened()));
+        g.write_buf(self.fits, 0, bytes(self.fit.as_flattened()));
         true
     }
 
@@ -197,28 +201,25 @@ impl ImpostorPass {
     /// A group whose layer is not drawn yet is not drawn.
     pub fn draw<'a>(
         &self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
         uploads: &mut Uploads,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(slots) = self.uniforms.slots() else {
             return;
         };
         draw_models(
-            g,
             pass,
             &self.draw,
             self.draw.pipeline,
             frame,
             slots,
-            0,
             draws,
             |d| {
                 self.baked.get(d[1] as usize).copied().flatten()?;
                 Some(ModelDraw {
-                    groups: [self.group, uploads.group(g, d[0])?],
+                    groups: [self.group, uploads.group_of(d[0])?],
                     mesh: None,
                     instances: d[2],
                 })
@@ -231,26 +232,22 @@ impl ImpostorPass {
     /// `2·group + 1`).
     pub fn draw_grown(
         &self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         grown: Option<Drawn>,
         groups: u32,
-        (frame, bound): (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(d) = grown else { return };
-        g.set_pipeline(pass, self.draw.pipeline);
-        if *bound != frame {
-            g.set_bind_group(pass, 0, frame, &[]);
-            *bound = frame;
-        }
-        g.set_bind_group(pass, 2, self.group, &[]);
-        g.set_bind_group(pass, 3, d.instances_group, &[]);
-        for group in 0..groups.min(GROUPS as u32) {
+        pass.set_pipeline(self.draw.pipeline);
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(2, self.group, &[]);
+        pass.set_bind_group(3, d.instances_group, &[]);
+        for group in 0..groups.min(DECOR_GROUPS as u32) {
             if self.baked[group as usize].is_none() {
                 continue;
             }
-            g.set_bind_group(pass, 1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
-            g.draw_indirect(pass, d.args, d.args_at(2 * group + 1));
+            pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
+            pass.draw_indirect(d.args, d.args_at(2 * group + 1));
         }
     }
 }

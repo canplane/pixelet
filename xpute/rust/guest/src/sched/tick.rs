@@ -15,7 +15,7 @@ use xpute_kit::status::errno::Errno;
 mod spec;
 pub use spec::{Phase, PHASES};
 
-const PHASE_COUNT: usize = Phase::ALL.len();
+const PHASE_CNT: usize = Phase::ALL.len();
 
 /// Steps unregistered from inside one step.
 const OFFS_MAX: usize = 8;
@@ -31,7 +31,7 @@ pub struct TickPolicy {
 pub struct TickContext {
     pub delta: f64,
     pub pass: Pass,
-    pub phase_ms: [f64; PHASE_COUNT],
+    pub phase_ms: [f64; PHASE_CNT],
     invalidated: bool,
     offs: [u32; OFFS_MAX],
     off_len: usize,
@@ -58,7 +58,7 @@ pub struct StepStat {
     pub phase: Phase,
     pub name: u32,
     pub ms: f64,
-    pub count: u32,
+    pub cnt: u32,
     pub max_ms: f64,
 }
 
@@ -68,7 +68,7 @@ impl StepStat {
             phase,
             name,
             ms: 0.0,
-            count: 0,
+            cnt: 0,
             max_ms: 0.0,
         }
     }
@@ -77,7 +77,7 @@ impl StepStat {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickReport {
     pub budget_ms: f64,
-    pub phase_ms: [f64; PHASE_COUNT],
+    pub phase_ms: [f64; PHASE_CNT],
     pub total_ms: f64,
     pub invalidated: bool,
 }
@@ -175,7 +175,7 @@ impl<const N: usize> Tick<N> {
         };
         let stat = &mut self.stats[at];
         stat.ms += ms;
-        stat.count += 1;
+        stat.cnt += 1;
         stat.max_ms = stat.max_ms.max(ms);
     }
 
@@ -212,7 +212,7 @@ impl<const N: usize> Tick<N> {
         let mut ctx = TickContext {
             delta,
             pass: Pass::new(quota_ms, t0, self.policy.hard_slack_ms),
-            phase_ms: [0.0; PHASE_COUNT],
+            phase_ms: [0.0; PHASE_CNT],
             invalidated: false,
             offs: [0; OFFS_MAX],
             off_len: 0,

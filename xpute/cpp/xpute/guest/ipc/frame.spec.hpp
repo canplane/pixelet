@@ -25,7 +25,7 @@ inline constexpr std::uint32_t CMD = 1u;
 inline constexpr std::uint32_t RESULT = 2u;
 
 // Where its XTP packet is, as the transport names it; 0 for none.
-inline constexpr std::uint32_t PACKET = 3u;
+inline constexpr std::uint32_t PKT = 3u;
 
 // Words a frame takes.
 inline constexpr std::uint32_t WORDS = 4u;

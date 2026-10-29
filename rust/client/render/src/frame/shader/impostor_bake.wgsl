@@ -7,7 +7,7 @@
 @group(1) @binding(1) var skin_sampler: sampler;
 
 struct VertexIn {
-  @location(0) position: vec3f,
+  @location(0) pos: vec3f,
   @location(1) normal: vec3f,
   @location(2) uv: vec2f,
 };
@@ -21,7 +21,7 @@ struct VertexOut {
 fn vs(v: VertexIn) -> VertexOut {
   let f = fit_words[0];
   var o: VertexOut;
-  o.clip = vec4f((v.position.x - f.x) / f.z, (v.position.y - f.y) / f.z, 0.5 - 0.5 * v.position.z / f.w, 1.0);
+  o.clip = vec4f((v.pos.x - f.x) / f.z, (v.pos.y - f.y) / f.z, 0.5 - 0.5 * v.pos.z / f.w, 1.0);
   o.uv = v.uv;
   return o;
 }

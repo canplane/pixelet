@@ -46,13 +46,13 @@ pub fn cancel(key: u64) -> bool {
 
 pub fn release(block: Option<Block>) {
     if let Some(block) = block {
-        // SAFETY: a body's block, acquired by `opened` and released once.
+        // SAFETY: a body's block, acquired by `on_opened` and released once.
         unsafe { body::give(block) };
     }
 }
 
 pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
-    // SAFETY: the block `opened` acquired for this body alone, `bytes` long,
+    // SAFETY: the block `on_opened` acquired for this body alone, `bytes` long,
     // not released while the view is read.
     unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), bytes as usize) }
 }
@@ -101,14 +101,14 @@ pub fn answered(of: &[Stream]) -> usize {
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
-pub fn next_answered(of: &[Stream]) -> Option<Answered> {
+pub fn take_answered(of: &[Stream]) -> Option<Answered> {
     let all = ANSWERED.get(List::new);
     let at = all.iter().position(|a| of.contains(&a.stream))?;
     Some(all.remove(at))
 }
 
 /// An answer's fetch settles once its owner has taken it in, or refused it.
-pub fn answer_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
+pub fn on_answer_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
     settle(key, Ended::from(result), Some(phases));
 }
 static ARRIVALS: Global<Notify> = Global::new();
@@ -123,7 +123,7 @@ fn arrivals() -> &'static mut Notify {
 
 /// `detail` is only printed by the profiler; nothing branches on it, which
 /// keeps the protocol out of here.
-pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
+pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let got = match opened {
         Opened::Absent => Got::Absent,
@@ -146,7 +146,7 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                         file::read(
                             fd,
                             core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
-                        )
+                        );
                     };
                     Got::Read(Some(block))
                 }
@@ -175,13 +175,13 @@ pub async fn fetch_task() {
             next_turn(world_edge).await;
             for arrival in received {
                 yield_if_spent(world_edge).await;
-                fetch_arrived(arrival);
+                on_fetch_arrived(arrival);
             }
         }
     }
 }
 
-fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
+fn on_fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     let block = match got {
         Got::Read(block) => block,
         _ => None,

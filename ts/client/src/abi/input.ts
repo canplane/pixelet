@@ -88,10 +88,10 @@ export function kernel_rect(
   );
 }
 
-export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
+export function kernel_hold(tool: ActiveTool, val: u32, tier: u32): void {
   HOST.input(
     Command.INPUT_HOLD,
-    encode_input_hold(HOST.doorbell, tool, value, tier),
+    encode_input_hold(HOST.doorbell, tool, val, tier),
   );
 }
 

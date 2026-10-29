@@ -27,13 +27,13 @@ export const CENSUS_TAGS = [
 
 export const WAKES = ["next", "timer", "none"] as const;
 
-export const LIMITS = {
+export const LIMIT = {
   REASONS: 4 as number,
   STEP_SLOTS: 32 as number,
   ZOOMS: 24 as number,
 } as const;
 
-/** One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names. */
+/** One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms`, `tasks_ms` and `profiler_ms` are their parts, `stage_ms` the turn's pump, the stage's write and the render, and `profiler_ms` what the profiler cost it, its own record of the frame and the shell's reads of it; what they leave of `busy_ms` is unmeasured. `effects` is each effect's time in the frame turn, in EFFECT_NAMES' order, `effects_ms` their sum. `gpu_read` is 1 where the GPU's read of this frame landed, which comes a frame or two later and is written back into this frame's record (`gpu_frame` the renderer's number of it, 0 where it drew none): its `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing measured it (its read not landed yet or cut off by a stop, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The rays, eye and sun lanes are the `ray_counts` setting's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/tally.rs `RAY_SUMS`): the frames (`rays_frames`); then an observer's each, the eye's and the sun's: of them those it cast in, its pixels or its map's slots in them, the nodes its beam rays, its samples and its walk again asked, its pixels or slots that took the visible sample and those that walked, and the boxes drawn (pxl-spec-core `tally`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names. */
 export const FRAME = {
   t: 0 as number,
   interval_ms: 1 as number,
@@ -48,42 +48,60 @@ export const FRAME = {
   phases: 10 as number,
   stage_ms: 15 as number,
   tasks_ms: 16 as number,
-  worst_effect_ms: 17 as number,
-  worst_effect_name: 18 as number,
-  kind_name: 19 as number,
-  wake_name: 20 as number,
-  wake_in_ms: 21 as number,
-  gpu_read: 22 as number,
-  gpu_spans: 23 as number,
-  gpu_px: 34 as number,
-  scale: 35 as number,
-  census: 36 as number,
-  uploads: 56 as number,
-  uploads_bytes: 57 as number,
-  depth_bytes: 58 as number,
-  pack_bytes: 59 as number,
-  gpu_objects: 60 as number,
-  zoom_tiles: 71 as number,
-  tiles_place: 95 as number,
-  heap_used_bytes: 96 as number,
-  heap_live_bytes: 97 as number,
-  heap_run_bytes: 98 as number,
-  heap_slot_bytes: 99 as number,
-  heap_range_bytes: 100 as number,
-  heap_largest_free_bytes: 101 as number,
-  heap_refusals: 102 as number,
-  ring_cq_peak: 103 as number,
-  ring_sq_peak: 104 as number,
-  ring_held_peak: 105 as number,
-  body_slots_peak: 106 as number,
-  waiting: 107 as number,
-  out: 112 as number,
-  cap_terrain_refused: 117 as number,
-  WORDS: 118 as number,
+  profiler_ms: 17 as number,
+  effects: 18 as number,
+  kind_name: 29 as number,
+  wake_name: 30 as number,
+  wake_in_ms: 31 as number,
+  gpu_read: 32 as number,
+  gpu_spans: 33 as number,
+  gpu_px: 57 as number,
+  scale: 58 as number,
+  census: 59 as number,
+  gpu_frame: 79 as number,
+  uploads: 80 as number,
+  uploads_bytes: 81 as number,
+  depth_bytes: 82 as number,
+  pack_bytes: 83 as number,
+  gpu_objects: 84 as number,
+  zoom_tiles: 95 as number,
+  tiles_place: 119 as number,
+  heap_used_bytes: 120 as number,
+  heap_live_bytes: 121 as number,
+  heap_run_bytes: 122 as number,
+  heap_slot_bytes: 123 as number,
+  heap_range_bytes: 124 as number,
+  heap_largest_free_bytes: 125 as number,
+  heap_refusals: 126 as number,
+  ring_cq_peak: 127 as number,
+  ring_sq_peak: 128 as number,
+  ring_held_peak: 129 as number,
+  body_slots_peak: 130 as number,
+  waiting: 131 as number,
+  out: 136 as number,
+  cap_terrain_refused: 141 as number,
+  rays_frames: 142 as number,
+  eye_casts: 143 as number,
+  eye_rays: 144 as number,
+  eye_beam: 145 as number,
+  eye_sample: 146 as number,
+  eye_miss: 147 as number,
+  eye_took: 148 as number,
+  eye_walked: 149 as number,
+  eye_boxes: 150 as number,
+  sun_casts: 151 as number,
+  sun_rays: 152 as number,
+  sun_beam: 153 as number,
+  sun_sample: 154 as number,
+  sun_miss: 155 as number,
+  sun_took: 156 as number,
+  sun_walked: 157 as number,
+  sun_boxes: 158 as number,
+  WORDS: 159 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it. */
-export const FRAME_GROUPS = {
+export const FRAME_GROUP = {
   time: [
     "t",
     "interval_ms",
@@ -106,6 +124,27 @@ export const FRAME_GROUPS = {
   frame: ["kind_name", "wake_name", "wake_in_ms"],
   gpu: ["gpu_read", "gpu_spans", "gpu_px", "scale", "census"],
   cap: ["cap_terrain_refused"],
+  rays: ["rays_frames"],
+  eye: [
+    "eye_casts",
+    "eye_rays",
+    "eye_beam",
+    "eye_sample",
+    "eye_miss",
+    "eye_took",
+    "eye_walked",
+    "eye_boxes",
+  ],
+  sun: [
+    "sun_casts",
+    "sun_rays",
+    "sun_beam",
+    "sun_sample",
+    "sun_miss",
+    "sun_took",
+    "sun_walked",
+    "sun_boxes",
+  ],
   requests: ["waiting", "out"],
   tiles: ["zoom_tiles", "tiles_place"],
   device: [
@@ -142,18 +181,18 @@ export const TASK = {
   at_file: 9 as number,
   at_file_bytes: 10 as number,
   at_line: 11 as number,
-  phase_count: 12 as number,
+  phase_cnt: 12 as number,
   phase_ids: 13 as number,
-  phase_values: 19 as number,
+  phase_vals: 19 as number,
   WORDS: 25 as number,
 } as const;
 
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 118 as number,
-  prev: 119 as number,
-  WORDS: 237 as number,
+  has_prev: 147 as number,
+  prev: 148 as number,
+  WORDS: 295 as number,
 } as const;
 
 export const SPREAD = {
@@ -163,42 +202,35 @@ export const SPREAD = {
   WORDS: 3 as number,
 } as const;
 
-/** One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. */
-export const TASK_SUMMARY = {
+/** One stream's tasks in the window, at STAT.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. */
+export const STREAM_STAT = {
   n: 0 as number,
   ok: 1 as number,
   aborted: 2 as number,
-  error: 3 as number,
+  err: 3 as number,
   lat_p50: 4 as number,
   lat_p95: 5 as number,
-  reason_count: 6 as number,
+  reason_cnt: 6 as number,
   reasons: 7 as number,
   phase_n: 19 as number,
   phase_mean: 20 as number,
   WORDS: 24 as number,
 } as const;
 
-/** One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES. */
-export const STEP = {
+/** One registered step's timing, at STAT.steps.slots + its index × WORDS. `name` indexes STEP_NAMES. */
+export const STEP_STAT = {
   phase: 0 as number,
   name: 1 as number,
   ms: 2 as number,
-  count: 3 as number,
+  cnt: 3 as number,
   max_ms: 4 as number,
   WORDS: 5 as number,
 } as const;
 
-/** The summary PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and the summary's WORDS where the last ends, both laid out by the generator. */
-export const SUMMARY = {
-  rec: {
-    AT: 0 as number,
-    recording: 0 as number,
-    elapsed_ms: 1 as number,
-    truncated: 2 as number,
-    WORDS: 3 as number,
-  },
+/** The window's statistics PROFILER_READ computes, over its `window_ms`: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and WORDS where the last ends, both laid out by the generator. */
+export const STAT = {
   frames: {
-    AT: 3 as number,
+    AT: 0 as number,
     present: 0 as number,
     n: 1 as number,
     seconds: 2 as number,
@@ -214,70 +246,91 @@ export const SUMMARY = {
     gpu: 18 as number,
     phases_p95: 21 as number,
     gpu_spans_p95: 26 as number,
-    kinds: 37 as number,
-    wakes: 45 as number,
-    heap_used_delta_bytes: 48 as number,
-    last: 49 as number,
-    WORDS: 167 as number,
+    kinds: 49 as number,
+    wakes: 57 as number,
+    heap_used_delta_bytes: 60 as number,
+    last: 61 as number,
+    WORDS: 208 as number,
   },
   tasks: {
-    AT: 170 as number,
+    AT: 402 as number,
     slots: 0 as number,
     WORDS: 120 as number,
   },
   steps: {
-    AT: 290 as number,
-    count: 0 as number,
+    AT: 522 as number,
+    cnt: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, `center_z` and `hover_alt` in metres, a zoom as its number, and NaN where there is none.
-   * The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_distance`).
-   * The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`). */
-  view: {
-    AT: 451 as number,
-    dist: 0 as number,
-    polar: 1 as number,
-    azimuth: 2 as number,
-    tau: 3 as number,
-    center_lon: 4 as number,
-    center_lat: 5 as number,
-    center_z: 6 as number,
-    hover_x: 7 as number,
-    hover_y: 8 as number,
-    hover_z: 9 as number,
-    hover_lon: 10 as number,
-    hover_lat: 11 as number,
-    hover_alt: 12 as number,
-    cell: 13 as number,
-    struck: 14 as number,
-    held: 15 as number,
-    drawn: 16 as number,
-    folded: 17 as number,
-    place_x: 18 as number,
-    place_y: 19 as number,
-    place_z: 20 as number,
-    place_zoom: 21 as number,
-    blocked: 22 as number,
-    WORDS: 23 as number,
-  },
-  WORDS: 474 as number,
+  WORDS: 683 as number,
 } as const;
 
-/** What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words. */
+/** What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64. */
+export const NOW = {
+  rec: {
+    AT: 0 as number,
+    recording: 0 as number,
+    elapsed_ms: 1 as number,
+    truncated: 2 as number,
+    WORDS: 3 as number,
+  },
+  /** Where the camera, its pivot and the pointer are as the read finds them, recording or not: `eye_x`..`eye_z`, `dist`, `pivot_x`..`pivot_z`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, angles in radians, `pivot_lon` and `pivot_lat` in degrees and `pivot_alt` in meters, a zoom as its number, and NaN where there is none.
+   * The eye is where the camera looks from and the pivot the point it turns about, the eye itself in the first-person camera, where the character stands (pxl-kernel domain/control/camera/controller.rs `eye_world`, `pivot`).
+   * The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_dist`).
+   * The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `pick_at`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`). */
+  view: {
+    AT: 3 as number,
+    eye_x: 0 as number,
+    eye_y: 1 as number,
+    eye_z: 2 as number,
+    dist: 3 as number,
+    polar: 4 as number,
+    azimuth: 5 as number,
+    pivot_x: 6 as number,
+    pivot_y: 7 as number,
+    pivot_z: 8 as number,
+    pivot_lon: 9 as number,
+    pivot_lat: 10 as number,
+    pivot_alt: 11 as number,
+    hover_x: 12 as number,
+    hover_y: 13 as number,
+    hover_z: 14 as number,
+    cell: 15 as number,
+    struck: 16 as number,
+    held: 17 as number,
+    drawn: 18 as number,
+    folded: 19 as number,
+    place_x: 20 as number,
+    place_y: 21 as number,
+    place_z: 22 as number,
+    place_zoom: 23 as number,
+    blocked: 24 as number,
+    WORDS: 25 as number,
+  },
+  WORDS: 28 as number,
+} as const;
+
+/** What PROFILER_READ answers with the address of: u32 words, where STAT and NOW lie in the module's memory and their words. */
 export const READ = {
-  summary_at: 0 as number,
-  summary_words: 1 as number,
+  stats_at: 0 as number,
+  stats_words: 1 as number,
+  now_at: 2 as number,
+  now_words: 3 as number,
+  WORDS: 4 as number,
+} as const;
+
+/** Where one ring lies: its address in the module's memory and its record count. */
+export const RING = {
+  at: 0 as number,
+  cnt: 1 as number,
   WORDS: 2 as number,
 } as const;
 
-/** What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count. */
+export const RING_NAMES = ["frames", "tasks", "worst"] as const;
+
+/** What PROFILER_RINGS answers with the address of: u32 words, a RING apiece in RING_NAMES' order. */
 export const RINGS = {
-  frames_at: 0 as number,
-  frames_count: 1 as number,
-  tasks_at: 2 as number,
-  tasks_count: 3 as number,
-  worst_at: 4 as number,
-  worst_count: 5 as number,
+  slots: 0 as number,
   WORDS: 6 as number,
 } as const;

@@ -17,7 +17,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
  * own state, with room to spare. Where the range begins, and so where the directory is,
  * the guest's boot answers (the contract's rule 0); what else a memory holds — a module's
  * stack and data — is the build's, and no number here. */
-export const MEMORY_BYTES: u32 = 262144 as number;
+export const MEM_BYTES: u32 = 262144 as number;
 
 /** Frames the submission ring holds. */
 export const SQ_CAP: u32 = 16 as number;

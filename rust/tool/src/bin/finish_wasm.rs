@@ -108,7 +108,7 @@ fn members() -> Result<Vec<String>, String> {
 /// out. They are overwritten in place, same length, as `...#n`; a `&'static
 /// str` keeps its length apart, so the module runs the same. Returns the
 /// paths in the order they were numbered.
-fn numbered(bytes: &mut [u8]) -> Result<Vec<String>, String> {
+fn number_paths(bytes: &mut [u8]) -> Result<Vec<String>, String> {
     let path = Regex::new(r"(?-u)[A-Za-z0-9_/.-]*\.rs\b").map_err(|e| e.to_string())?;
     let source_root = Regex::new(
         r"(?-u)(?:^|[^A-Za-z0-9_])xpute/|/library/|/registry/|^/rustc/|^/rust/deps/|\.rustup/",
@@ -176,7 +176,7 @@ fn run() -> Result<(), String> {
         }
         "number" => {
             let paths = args.get(2).ok_or_else(usage)?;
-            let numbers = numbered(&mut bytes)?;
+            let numbers = number_paths(&mut bytes)?;
             if !numbers.is_empty() {
                 std::fs::write(module, &bytes).map_err(|e| format!("{module}: {e}"))?;
             }

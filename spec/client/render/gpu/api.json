@@ -25,7 +25,7 @@
     ],
     "HEAD": 81,
     "BYTES": {
-      "$value": 4194304,
+      "$val": 4194304,
       "$doc": [
         "The range's size: the stream, what one turn may send the device, then at",
         "its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an",
@@ -34,7 +34,7 @@
       ]
     },
     "RESERVE": {
-      "$value": 1048576,
+      "$val": 1048576,
       "$doc": [
         "What an upload leaves of the range. The records a turn cannot put off — a",
         "frame's passes and draws, the shaders the first frame makes — are never",
@@ -47,11 +47,11 @@
     "$type": "u32",
     "$doc": [
       "What a device's GPU host runs the renderer's stream by (xpute-gpu host",
-      "`Plan`), which pxl-native hands it; a page's browser paces its frames and",
+      "`Config`), which pxl-native hands it; a page's browser paces its frames and",
       "stages its writes itself."
     ],
     "FRAME_LATENCY": {
-      "$value": 2,
+      "$val": 2,
       "$doc": [
         "The frames drawn and not yet finished on the GPU at once: a turn draws only",
         "while fewer are (xpute-gpu host `GpuHost::admit`), and a surface queues as",
@@ -61,7 +61,7 @@
       ]
     },
     "UPLOAD_CHUNK_BYTES": {
-      "$value": 1048576,
+      "$val": 1048576,
       "$doc": [
         "The chunk the host stages buffer writes in, each mapped once and reused: a",
         "mesh, the largest write a frame makes, is about a MiB, and a larger write",

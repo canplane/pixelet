@@ -8,11 +8,10 @@
 @group(0) @binding(17) var earth_tiles: texture_2d_array<f32>;
 @group(0) @binding(22) var air_volume: texture_3d<f32>;
 
-
 /* the air before a point */
 
 // The cubic B-spline about texel coordinate `x` along one axis as two
-// linear reads (Sigg and Hadwiger 2005): their places, texels with centres
+// linear reads (Sigg and Hadwiger 2005): their places, texels with centers
 // at whole numbers, then their weights.
 fn bspline_taps(x: f32) -> vec4f {
   let i = floor(x);
@@ -50,7 +49,7 @@ fn air_held_at(uv: vec2f, k: f32) -> vec3f {
 // (Hillaire 2020's aerial-perspective volume, 32 a side and deep,
 // frame/shader/word.rs `AIR_FROXELS`). What the air lets through is this
 // ray's own, e^-τ(d), per channel, taken as the march takes it
-// (atmos_march.wgsl `gather`): from where the ray enters the air to the
+// (atmos_march.wgsl `gather_between`): from where the ray enters the air to the
 // ground at the latest. What it scatters is that ray's 1 - e^-τ(d) times the
 // light per share taken (atmos_view.wgsl `air_held`), read off the volume
 // smooth (`air_held_at`). Only that slow factor is read off the grid; the
@@ -93,7 +92,6 @@ fn moon_view(dir: vec3f) -> vec3f {
   return table_view(moon_view_lut, dir, atmos_moon_dir());
 }
 
-
 /* the Earth past the terrain */
 
 // Where a point lies on the map, as Mercator's longitude and ordinate.
@@ -130,13 +128,11 @@ fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
   return global;
 }
 
-// On where night falls on them, as the sky's night falls (look/environment.rs).
+// On where night falls on them, as the sky's night falls (param.rs
+// `night::FALL`).
 fn city_shown(lights: f32, up: vec3f) -> vec3f {
-  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
+  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(NIGHT_FALL.x, NIGHT_FALL.y, dot(up, atmos_sun_dir())));
 }
-
-// Doubled, picked by eye beside the original; the cities are not its to scale.
-const EARTH_GAIN: f32 = 2.0;
 
 // What the eye sees along `dir` where nothing was drawn: the sky where it
 // rises; where it falls, the land it meets, the plane under the eye at its
@@ -157,7 +153,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let octaves = log2(d / atmos_earth_reach());
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
-  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
+  let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
   return seen.scattered + seen.through * clamp(octaves + 1.0, 0.0, 1.0) * lit;
 }
 

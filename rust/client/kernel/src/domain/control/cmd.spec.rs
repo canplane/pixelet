@@ -10,7 +10,7 @@
 //! command is between.
 //!
 //! The same number is a command on the submission ring and a signal on the
-//! completion ring (its `RES` clear). The direction is the ring: `packet` is
+//! completion ring (its `RES` clear). The direction is the ring: `pkt` is
 //! what the shell submits, `signal` what the kernel posts. Each is written and
 //! read by what this file generates, on both sides, so no field is found by
 //! its position anywhere else.
@@ -21,11 +21,7 @@
 //! or a packed array where the item is a number. A record crosses as a branch
 //! of its own fields, and is how a block past a slot is laid out. An enum's
 //! `unknown` is the member a number it does not give out reads as; an enum
-//! without one refuses the packet.
-//!
-//! A command taken out leaves its number in the Command table's `$retired`, with
-//! the name it had, and the generator refuses a number given twice or one
-//! retired, so a number an older side still sends never comes to mean another.
+//! without one refuses the packet. The generator refuses a number given twice.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
@@ -34,8 +30,10 @@
 #![allow(
     non_camel_case_types,
     clippy::type_complexity,
+    clippy::absolute_paths,
     unused_imports,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 use core::fmt::Display;
@@ -119,9 +117,9 @@ pub enum InputMinor {
     TRACKING = 0x04,
     VIEW = 0x05,
     COMPASS_RESET = 0x07,
-    GO_TO = 0x08,
-    POSE = 0x09,
-    POSE_END = 0x0a,
+    GOTO = 0x08,
+    XR_POSE = 0x09,
+    XR_POSE_END = 0x0a,
     HOLD = 0x0b,
     MARKER_WORDS = 0x0c,
     MARKER_CANCEL = 0x0d,
@@ -138,9 +136,9 @@ impl InputMinor {
         InputMinor::TRACKING,
         InputMinor::VIEW,
         InputMinor::COMPASS_RESET,
-        InputMinor::GO_TO,
-        InputMinor::POSE,
-        InputMinor::POSE_END,
+        InputMinor::GOTO,
+        InputMinor::XR_POSE,
+        InputMinor::XR_POSE_END,
         InputMinor::HOLD,
         InputMinor::MARKER_WORDS,
         InputMinor::MARKER_CANCEL,
@@ -159,9 +157,9 @@ impl InputMinor {
 #[repr(u32)]
 pub enum SensorMinor {
     START = 0x01,
-    POSITION = 0x02,
+    POS = 0x02,
     STOP = 0x03,
-    ORIENTATION = 0x05,
+    ORIENT = 0x05,
     PERMISSION = 0x06,
     FAILED = 0x0b,
 }
@@ -169,9 +167,9 @@ pub enum SensorMinor {
 impl SensorMinor {
     pub const ALL: [SensorMinor; 6] = [
         SensorMinor::START,
-        SensorMinor::POSITION,
+        SensorMinor::POS,
         SensorMinor::STOP,
-        SensorMinor::ORIENTATION,
+        SensorMinor::ORIENT,
         SensorMinor::PERMISSION,
         SensorMinor::FAILED,
     ];
@@ -486,7 +484,7 @@ impl GroundStatus {
 /// Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
-pub enum DevicePoseStatus {
+pub enum SensorStatus {
     #[default]
     Idle = 0,
     Loading = 1,
@@ -495,20 +493,18 @@ pub enum DevicePoseStatus {
     Unavailable = 4,
 }
 
-impl DevicePoseStatus {
-    pub const ALL: [DevicePoseStatus; 5] = [
-        DevicePoseStatus::Idle,
-        DevicePoseStatus::Loading,
-        DevicePoseStatus::Ready,
-        DevicePoseStatus::Error,
-        DevicePoseStatus::Unavailable,
+impl SensorStatus {
+    pub const ALL: [SensorStatus; 5] = [
+        SensorStatus::Idle,
+        SensorStatus::Loading,
+        SensorStatus::Ready,
+        SensorStatus::Error,
+        SensorStatus::Unavailable,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<DevicePoseStatus> {
-        DevicePoseStatus::ALL
-            .into_iter()
-            .find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<SensorStatus> {
+        SensorStatus::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -519,11 +515,7 @@ impl DevicePoseStatus {
 /// to sit in the kernel's memory, and the shell has the locale files already
 /// (ts/client/src/locale) — the same split `strerror` is on the other side of.
 ///
-/// The number is the name here. A band is what a message is about, and a
-/// message keeps its number for as long as anything can be holding one: an
-/// old shell reads a number a new kernel sends, so a number that has meant
-/// something must never come to mean another thing. Retire one by leaving
-/// the gap.
+/// The number is the name here, and a band is what a message is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Message {
@@ -577,12 +569,12 @@ pub enum Command {
 
     // ---- the host answers: an I/O the process started, done ----
     /// A GPS fix; a field is absent where the browser gave none.
-    SENSOR_POSITION = 0x1202,
+    SENSOR_POS = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
-    SENSOR_ORIENTATION = 0x1205,
+    SENSOR_ORIENT = 0x1205,
     /// A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
     /// or cut off; the compass's, where the platform says so (WORLD_BOOT's
-    /// orientation_silence_is_loss).
+    /// orient_silence_is_loss).
     SENSOR_FAILED = 0x120b,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
@@ -612,7 +604,7 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     INPUT_HOLD = 0x110b,
-    /// The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec block/ext.json) are refused whole, never cut.
+    /// The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut.
     INPUT_MARKER_WORDS = 0x110c,
     /// The marker the tool left waiting is let go, nothing put up.
     INPUT_MARKER_CANCEL = 0x110d,
@@ -647,15 +639,16 @@ pub enum Command {
     /// asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
     /// reads it without the location.
     INPUT_LOCATE = 0x110f,
-    /// A search result: the focus moved there.
-    INPUT_GO_TO = 0x1108,
+    /// A search result: the pivot moved there, and the view asked with it at once, as the
+    /// controls ask it where the camera stands; a view field absent keeps what the view has.
+    INPUT_GOTO = 0x1108,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
     /// it begins; the camera follows the tracker from there until POSE_END.
-    INPUT_POSE = 0x1109,
+    INPUT_XR_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
-    INPUT_POSE_END = 0x110a,
+    INPUT_XR_POSE_END = 0x110a,
     /// The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
     /// The kernel watches a sensor only while both hold, the page visible and the world view
     /// shown; which sensors it watches then is its own (SENSOR_START).
@@ -664,7 +657,7 @@ pub enum Command {
     PROFILER_START = 0x1901,
     /// The window frozen, so what is exported holds still.
     PROFILER_STOP = 0x1902,
-    /// The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)
+    /// The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics
     /// over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
     /// number past the door is finite, so no window is infinite.
     PROFILER_READ = 0x1903,
@@ -679,8 +672,8 @@ impl Command {
     pub const ALL: [Command; 39] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
-        Command::SENSOR_POSITION,
-        Command::SENSOR_ORIENTATION,
+        Command::SENSOR_POS,
+        Command::SENSOR_ORIENT,
         Command::SENSOR_FAILED,
         Command::WORLD_BOOT,
         Command::WORLD_FRAME,
@@ -707,9 +700,9 @@ impl Command {
         Command::INPUT_TRACKING,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_LOCATE,
-        Command::INPUT_GO_TO,
-        Command::INPUT_POSE,
-        Command::INPUT_POSE_END,
+        Command::INPUT_GOTO,
+        Command::INPUT_XR_POSE,
+        Command::INPUT_XR_POSE_END,
         Command::WORLD_VIEW,
         Command::PROFILER_START,
         Command::PROFILER_STOP,
@@ -726,11 +719,11 @@ impl Command {
 
 /// What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole.
 pub struct Snapshot<'a> {
-    pub focus: FocusState,
+    pub pivot: PivotState,
     pub location: LocationState,
     pub companion: CompanionState,
     pub holding: HoldingState<'a>,
-    pub orientation: OrientationState,
+    pub orient: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
     pub is_follow_mode: bool,
@@ -742,10 +735,10 @@ pub struct Snapshot<'a> {
     /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
     /// has read its kept slot, a few turns from boot.
     pub settings: &'a [u32],
-    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
+    /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
     pub m_per_px: f64,
-    /// The division the focus is in and every one above it, broad to narrow; empty
-    /// where the focus is in none or the tile it is read out of has not arrived.
+    /// The division the pivot is in and every one above it, broad to narrow; empty
+    /// where the pivot is in none or the tile it is read out of has not arrived.
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
@@ -762,11 +755,11 @@ impl Snapshot<'_> {
     pub const FIELDS: u32 = 16;
 
     pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(FocusState::FIELDS, |w| self.focus.write(w));
+        w.branch(PivotState::FIELDS, |w| self.pivot.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
         w.branch(HoldingState::FIELDS, |w| self.holding.write(w));
-        w.branch(OrientationState::FIELDS, |w| self.orientation.write(w));
+        w.branch(OrientationState::FIELDS, |w| self.orient.write(w));
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
@@ -779,7 +772,7 @@ impl Snapshot<'_> {
         w.branch(n, |w| {
             (self.division)(&mut |item| {
                 w.branch(DivisionPart::FIELDS, |w| item.write(w));
-            })
+            });
         });
         w.u32_array(Some(self.previews));
         w.u32_array(Some(self.kept_refused));
@@ -787,23 +780,23 @@ impl Snapshot<'_> {
     }
 }
 
-pub struct FocusState {
+pub struct PivotState {
     pub status: GroundStatus,
     pub is_off_center: bool,
-    /// The focus in degrees: what the search measures distance from.
-    pub center: Option<LonLat>,
-    /// The focus is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs).
+    /// The pivot in degrees: what the search measures distance from.
+    pub lon_lat: Option<LonLat>,
+    /// The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs).
     pub outside: bool,
 }
 
-impl FocusState {
+impl PivotState {
     /// The children it is written as.
     pub const FIELDS: u32 = 4;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
         w.bool(Some(self.is_off_center));
-        match &self.center {
+        match &self.lon_lat {
             Some(r) => w.branch(LonLat::FIELDS, |w| r.write(w)),
             None => w.no_branch(),
         };
@@ -827,10 +820,10 @@ impl LonLat {
 }
 
 pub struct LocationState {
-    pub status: DevicePoseStatus,
+    pub status: SensorStatus,
     pub has_location: bool,
     /// Present exactly when status is Error: the failure the kernel chose.
-    pub error: Option<Message>,
+    pub err: Option<Message>,
 }
 
 impl LocationState {
@@ -840,7 +833,7 @@ impl LocationState {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
         w.bool(Some(self.has_location));
-        w.u32(self.error.map(|m| m as u32));
+        w.u32(self.err.map(|m| m as u32));
     }
 }
 
@@ -887,9 +880,9 @@ impl HoldingState<'_> {
 }
 
 pub struct OrientationState {
-    pub status: DevicePoseStatus,
+    pub status: SensorStatus,
     /// Present exactly when status is Error: the failure the kernel chose.
-    pub error: Option<Message>,
+    pub err: Option<Message>,
 }
 
 impl OrientationState {
@@ -898,7 +891,7 @@ impl OrientationState {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
-        w.u32(self.error.map(|m| m as u32));
+        w.u32(self.err.map(|m| m as u32));
     }
 }
 
@@ -929,7 +922,7 @@ impl DivisionPart<'_> {
         w.branch(n, |w| {
             (self.names)(&mut |item| {
                 w.branch(LangName::FIELDS, |w| item.write(w));
-            })
+            });
         });
         w.bool(Some(self.shown));
         w.bool(Some(self.area));
@@ -979,23 +972,23 @@ impl SensorStopSignal {
     }
 }
 
-/// Command::SENSOR_POSITION's packet.
+/// Command::SENSOR_POS's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SensorPosition {
+pub struct SensorPos {
     pub lon: f64,
     pub lat: f64,
-    pub altitude: Option<f64>,
+    pub alt: Option<f64>,
     pub accuracy: Option<f64>,
     pub course: Option<f64>,
 }
 
-impl SensorPosition {
-    pub fn read(pkt: &[u8]) -> Result<SensorPosition, MarshalError> {
+impl SensorPos {
+    pub fn read(pkt: &[u8]) -> Result<SensorPos, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorPosition {
+        Ok(SensorPos {
             lon: finite(f.at(0)?.get_number()?)?,
             lat: finite(f.at(1)?.get_number()?)?,
-            altitude: match f.at(2)?.opt() {
+            alt: match f.at(2)?.opt() {
                 Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
@@ -1011,19 +1004,19 @@ impl SensorPosition {
     }
 }
 
-/// Command::SENSOR_ORIENTATION's packet.
+/// Command::SENSOR_ORIENT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SensorOrientation {
+pub struct SensorOrient {
     pub webkit_compass_heading: Option<f64>,
     pub alpha: Option<f64>,
     pub beta: Option<f64>,
     pub gamma: Option<f64>,
 }
 
-impl SensorOrientation {
-    pub fn read(pkt: &[u8]) -> Result<SensorOrientation, MarshalError> {
+impl SensorOrient {
+    pub fn read(pkt: &[u8]) -> Result<SensorOrient, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorOrientation {
+        Ok(SensorOrient {
             webkit_compass_heading: match f.at(0)?.opt() {
                 Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
@@ -1074,13 +1067,13 @@ pub struct WorldBoot {
     /// A development build, which offers the settings schema.json marks `dev`.
     pub development: bool,
     pub geolocation: bool,
-    pub orientation: bool,
+    pub orient: bool,
     /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
-    pub orientation_permission: bool,
+    pub orient_permission: bool,
     /// A browser's compass talks while the device is still and cannot say it stopped, so
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
     /// reports a failure itself (SENSOR_FAILED).
-    pub orientation_silence_is_loss: bool,
+    pub orient_silence_is_loss: bool,
 }
 
 impl WorldBoot {
@@ -1089,9 +1082,9 @@ impl WorldBoot {
         Ok(WorldBoot {
             development: f.at(0)?.get_bool()?,
             geolocation: f.at(1)?.get_bool()?,
-            orientation: f.at(2)?.get_bool()?,
-            orientation_permission: f.at(3)?.get_bool()?,
-            orientation_silence_is_loss: f.at(4)?.get_bool()?,
+            orient: f.at(2)?.get_bool()?,
+            orient_permission: f.at(3)?.get_bool()?,
+            orient_silence_is_loss: f.at(4)?.get_bool()?,
         })
     }
 }
@@ -1255,7 +1248,7 @@ impl InputPointer {
 pub struct InputHold {
     pub tool: ActiveTool,
     /// The held cube or decor kind, by its number in the catalog's one value space (cube.json).
-    pub value: u32,
+    pub val: u32,
     /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
     pub tier: u32,
 }
@@ -1266,7 +1259,7 @@ impl InputHold {
         Ok(InputHold {
             tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
-            value: integer::<u32>(f.at(1)?.get_number()?)?,
+            val: integer::<u32>(f.at(1)?.get_number()?)?,
             tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })
     }
@@ -1458,26 +1451,32 @@ impl InputTracking {
     }
 }
 
-/// Command::INPUT_GO_TO's packet.
+/// Command::INPUT_GOTO's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputGoTo {
+pub struct InputGoto {
     pub lon: f64,
     pub lat: f64,
+    /// The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
+    pub dist: Option<f64>,
+    /// The heading about Z in radians, wrapped.
+    pub azimuth: Option<f64>,
+    /// The angle down from vertical in radians, clamped.
+    pub polar: Option<f64>,
 }
 
-impl InputGoTo {
-    pub fn read(pkt: &[u8]) -> Result<InputGoTo, MarshalError> {
+impl InputGoto {
+    pub fn read(pkt: &[u8]) -> Result<InputGoto, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputGoTo {
+        Ok(InputGoto {
             lon: finite(f.at(0)?.get_number()?)?,
             lat: finite(f.at(1)?.get_number()?)?,
         })
     }
 }
 
-/// Command::INPUT_POSE's packet.
+/// Command::INPUT_XR_POSE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputPose {
+pub struct InputXrPose {
     pub x: f64,
     pub y: f64,
     pub z: f64,
@@ -1487,10 +1486,10 @@ pub struct InputPose {
     pub qw: f64,
 }
 
-impl InputPose {
-    pub fn read(pkt: &[u8]) -> Result<InputPose, MarshalError> {
+impl InputXrPose {
+    pub fn read(pkt: &[u8]) -> Result<InputXrPose, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputPose {
+        Ok(InputXrPose {
             x: finite(f.at(0)?.get_number()?)?,
             y: finite(f.at(1)?.get_number()?)?,
             z: finite(f.at(2)?.get_number()?)?,

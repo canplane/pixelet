@@ -2,7 +2,7 @@
 
 //! The blocks bodies are read into. Terrain's and the Earth's packets run
 //! just past a mebibyte (a tile's looks and the Earth's texels are one
-//! each, pxl-spec `bake::tile::max_packet_bytes`), where the buddy would
+//! each, pxl-spec `bake::tile::max_pkt_bytes`), where the buddy would
 //! give each body a block of two. Their bodies take slots instead, each
 //! their longest packet in pages, carved from a run the heap gives whole
 //! and takes back once its last slot is free: a cache for one kind of
@@ -22,8 +22,8 @@
 //! so they are bounded apart from it: the Earth's by its frames, terrain's
 //! by the slots less one for the most credits granted and every Earth
 //! frame (domain/layer/terrain/tile.rs `most_kept`), a packet past it, or one no
-//! window wants a square of, freed once decoded. The kept thus leave a
-//! slot for every credit, and a body on one finds one: the residency,
+//! window wants a brick of, freed once decoded. The kept thus leave a
+//! slot for every credit, and a body on one finds one: the tile cache,
 //! which the query and the controls read, fills with no frame drawn.
 //!
 //! A body is refused a slot in two cases, and its want waits on what can
@@ -35,8 +35,8 @@
 //! which the want is asked again.
 //!
 //! In a drawn frame a terrain packet is given back once no window wants
-//! one of its squares absent (domain/layer/terrain/window.rs `fill`): each frame
-//! hands `HANDED` squares only of tiles kept or void (`due`), a square
+//! one of its bricks absent (domain/layer/terrain/window.rs `fill`): each frame
+//! hands `HANDED` bricks only of tiles kept or void (`due`), a brick
 //! handed is wanted no more, and a packet whose tile left or that no
 //! window wants is given back on that upload too, the stream full or not
 //! (domain/layer/kept.rs `send`). Tiles whose packets were freed are asked again
@@ -53,6 +53,7 @@ use xpute_guest::mem::section::PAGE_BYTES;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
 use crate::sys::io::room::Refused;
+use crate::sys::sched::edge;
 
 /// The kinds whose bodies take a slot.
 const SLOTTED: [Stream; 2] = [Stream::terrain, Stream::earth];
@@ -105,7 +106,7 @@ const _: () = {
     }
 };
 
-pub const fn slotted(stream: Stream) -> bool {
+pub const fn is_slotted(stream: Stream) -> bool {
     let mut k = 0;
     while k < SLOTTED.len() {
         if SLOTTED[k] as u8 == stream as u8 {
@@ -151,7 +152,7 @@ fn held() -> &'static mut Slots {
 /// heap had no room for it or for a run of slots, each refusal waiting on
 /// what refused it.
 pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refused> {
-    if !stream.is_some_and(slotted) || n > SLOT_BYTES {
+    if !stream.is_some_and(is_slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refused::now);
     }
     let s = held();
@@ -204,7 +205,7 @@ pub unsafe fn give(block: Block) {
     s.out -= 1;
     s.releases = s.releases.wrapping_add(1);
     if core::mem::take(&mut s.waited) {
-        crate::sys::sched::edge::request_world_tick();
+        edge::request_world_tick();
     }
     if run.out == 0 {
         let run = s.runs.swap_remove(i);

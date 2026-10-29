@@ -8,7 +8,10 @@ use xpute_guest::global::Global;
 pub const STAGE_WORDS: usize = STAGE_AT::SHADOWS + 1;
 
 /// Where each value sits in the lane.
-#[allow(non_snake_case)]
+#[expect(
+    non_snake_case,
+    reason = "the lane's offsets read as consts, `STAGE_AT::SHADOWS`"
+)]
 pub mod STAGE_AT {
     /// The view matrix through the root frame (16).
     pub const MARKER_VIEW: usize = 0;
@@ -18,10 +21,13 @@ pub mod STAGE_AT {
     pub const EYE_VIEW_PROJ: usize = 32;
     /// The eye, in the world's doubles (3).
     pub const EYE: usize = 48;
-    /// The viewport in CSS pixels (2).
-    pub const VIEWPORT: usize = EYE + 3;
-    pub const FOV: usize = VIEWPORT + 2;
-    pub const CELL: usize = FOV + 1;
+    /// The viewport's width in CSS pixels.
+    pub const VIEWPORT_WIDTH: usize = EYE + 3;
+    /// The CSS pixels a unit spans a unit from the eye, as the kernel's screen
+    /// counts them (pxl-kernel domain/view/frame/screen.rs `px_per_unit`):
+    /// what the markers are sized by, as the kernel lays them out.
+    pub const PX_PER_UNIT: usize = VIEWPORT_WIDTH + 1;
+    pub const CELL: usize = PX_PER_UNIT + 1;
     pub const EDGE_STRENGTH: usize = CELL + 1;
     pub const LOW_SPEC: usize = EDGE_STRENGTH + 1;
     pub const EDGE_WIDTH: usize = LOW_SPEC + 1;

@@ -6,7 +6,6 @@
 
 use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
@@ -37,8 +36,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// one rule per axis by the sign of that axis's normal: n > 0 starts at
 /// grid_ceil(max), n < 0 ends at grid_floor(min), n = 0 takes the
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
-/// decor met in front of it).
-#[allow(clippy::needless_range_loop)]
+/// placed cube's entry, as it is stored).
 pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Q3 {
     let Aabb {
         min: box_min,
@@ -62,7 +60,10 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb
 
 /// The `size` voxel `hit` struck, for the eraser's terrain dig: as
 /// world_adjacent_corner but staying inside the struck box on the normal axis.
-#[allow(clippy::needless_range_loop)]
+#[expect(
+    clippy::needless_range_loop,
+    reason = "an axis indexes the hit's normal, its box and the corner at once"
+)]
 pub fn world_struck_corner(hit: &Hit, size: f64) -> Q3 {
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {
@@ -83,7 +84,7 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.struck {
         Struck::Object(at)
         | Struck::Decor(Instance {
-            source: Source::Object(at),
+            src: Source::Object(at),
             ..
         }) => World::now().placed(at),
         Struck::Ground | Struck::Objects | Struck::Decor(_) => None,
@@ -91,18 +92,18 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
 }
 
 /// In the root frame, from the eye.
-/// Decor is struck where the frame drawing at `drawn` holds it. The world
+/// Decor is struck where the frame holds it. The world
 /// asked is the stored one (`World::now`), not as the eraser's preview draws
 /// it: what to erase is what is stored.
-pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<Hit> {
+pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
-        direction,
+        dir,
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
     World::now()
-        .striking_decor(drawn)
+        .striking_decor()
         .first_hit(&ray, held())
         .exact()
         .flatten()

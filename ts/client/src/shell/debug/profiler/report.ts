@@ -29,15 +29,7 @@ const spread = (s: Spread) =>
  * beam rays, its samples and its walk again asked a cast, its pixels or
  * slots that took the visible sample and that walked, the nodes its walk
  * again asked a walking one, and the boxes it drew a cast. */
-const raysText = (first: Frame, last: Frame) => {
-  const f = Object.fromEntries(
-    Object.keys(last)
-      .filter((k) => /^(rays_frames|eye_|sun_)/.test(k))
-      .map((k) => [
-        k,
-        (last[k as keyof Frame] as f64) - (first[k as keyof Frame] as f64),
-      ]),
-  ) as Record<string, f64>;
+const raysText = (f: Frame) => {
   if (f.rays_frames === 0) return [];
   const observer = (
     name: string,
@@ -56,15 +48,15 @@ const raysText = (first: Frame, last: Frame) => {
     const perCast = (n: number) => n1(n / casts);
     const share = (n: number) => `${fixed((100 * n) / Math.max(1, rays), 2)}%`;
     return [
-      `  ${name.padEnd(
-        7,
-      )} cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${perCast(
-        o.beam,
-      )}  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   took ${share(
-        o.took,
-      )}  walked ${share(o.walked)} (${n1(
-        o.miss / Math.max(1, o.walked),
-      )} nodes each)   boxes ${perCast(o.boxes)} a cast`,
+      `  ${
+        name.padEnd(7)
+      } cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${
+        perCast(o.beam)
+      }  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   took ${
+        share(o.took)
+      }  walked ${share(o.walked)} (${
+        n1(o.miss / Math.max(1, o.walked))
+      } nodes each)   boxes ${perCast(o.boxes)} a cast`,
     ];
   };
   return [
@@ -163,19 +155,14 @@ function windowSection(r: ProfilerReport): string[] {
   const f = r.frames;
   if (f === null) return ["frames n=0"];
   const last = f.last;
-  const spans = f.gpu_spans
-    .filter((s) => s.p95 > 0)
-    .map((s) => `${s.name} ${n1(s.p95)}`)
-    .join("  ");
-  const steps =
-    r.steps.length === 0
-      ? "none"
-      : [...r.steps]
-          .sort((a, b) => b.ms / b.cnt - a.ms / a.cnt)
-          .map(
-            (s) => `${s.phase}/${s.name} ${n1(s.ms / s.cnt)}/${n1(s.max_ms)}`,
-          )
-          .join("  ");
+  const spans = f.gpu_spans.filter((s) => s.p95 > 0).map((s) =>
+    `${s.name} ${n1(s.p95)}`
+  ).join("  ");
+  const steps = r.steps.length === 0
+    ? "none"
+    : [...r.steps].sort((a, b) => b.ms / b.cnt - a.ms / a.cnt).map((s) =>
+      `${s.phase}/${s.name} ${n1(s.ms / s.cnt)}/${n1(s.max_ms)}`
+    ).join("  ");
 
   const counted = (rows: { name: string; n: f64 }[]) =>
     rows
@@ -247,11 +234,11 @@ function tasksSection(tasks: TaskSummary[]): string[] {
             .map((x) => `${failText(x.fail, x.detail)} x${x.n}`)
             .join(", ")})`;
     lines.push(
-      `  ${t.stream.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${n1(
-        t.lat.p50,
-      )}  p95 ${n1(
-        t.lat.p95,
-      )} ms   ok ${t.ok}  ab ${t.aborted}  err ${t.err}${reasons}`,
+      `  ${t.stream.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${
+        n1(t.lat.p50)
+      }  p95 ${
+        n1(t.lat.p95)
+      } ms   ok ${t.ok}  ab ${t.aborted}  err ${t.err}${reasons}`,
     );
     if (t.phase_mean !== null) {
       const means = t.phase_mean.map(phaseText).join("  ");

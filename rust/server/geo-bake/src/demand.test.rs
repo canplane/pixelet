@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn a_restart_keeps_the_tiles_and_clears_what_was_cut_short() {
+fn restart_keeps_tiles() {
     let base = std::env::temp_dir().join(format!("pxl-demand-claim-{}", std::process::id()));
     let root = base.join("place");
     let tile = root.join("0").join("010332102301230");

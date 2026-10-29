@@ -6,9 +6,9 @@
 
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{release, texture_usage, Format, Gpu, Image};
+use crate::gpu::api::{place, release, texture_usage, Format, Gpu, Image};
 
-use crate::gpu::mip::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, MipPass};
 
 pub struct ImageMap {
     texture: u32,
@@ -46,7 +46,7 @@ impl ImageMap {
     }
 
     /// Whether the image came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &MipPass, image: fn() -> Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
@@ -56,15 +56,9 @@ impl ImageMap {
         let encoder = g.encoder();
         g.copy_texture(
             encoder,
-            face,
-            0,
-            0,
-            self.texture,
-            0,
-            0,
-            0,
-            self.size.0,
-            self.size.1,
+            &place(face, [0, 0, 0]),
+            &place(self.texture, [0, 0, 0]),
+            [self.size.0, self.size.1, 1],
         );
         g.submit(encoder);
         release(face);

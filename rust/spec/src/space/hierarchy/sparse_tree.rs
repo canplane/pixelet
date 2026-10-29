@@ -40,10 +40,10 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     const WIDTH: usize = children(D);
 
     /// The root's children, each a leaf of `value`.
-    pub fn new(value: T) -> SparseTree<T, D> {
+    pub fn new(val: T) -> SparseTree<T, D> {
         SparseTree {
             heap: vec![0; Self::WIDTH],
-            data: vec![value; Self::WIDTH],
+            data: vec![val; Self::WIDTH],
             free: Vec::new(),
             written: vec![0],
         }
@@ -103,7 +103,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         &mut self,
         depth: u32,
         at: [i32; D],
-        value: T,
+        val: T,
         fold: impl Fn(&Self, u32, u32) -> T,
     ) -> bool {
         xpute_kit::ensure!((1..=32).contains(&depth), EINVAL, depth);
@@ -112,7 +112,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         for d in 1..depth {
             let slot = base + toward(at, depth - d);
             if self.heap[slot] == 0 {
-                if self.data[slot] == value {
+                if self.data[slot] == val {
                     return false;
                 }
                 let family = self.alloc(self.data[slot]);
@@ -123,11 +123,11 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
             base = (self.heap[slot] & !BRANCH) as usize;
         }
         let slot = base + toward(at, 0);
-        if self.heap[slot] == 0 && self.data[slot] == value {
+        if self.heap[slot] == 0 && self.data[slot] == val {
             return false;
         }
         self.release(slot);
-        self.data[slot] = value;
+        self.data[slot] = val;
         self.touch(slot);
         for d in (1..depth).rev() {
             let parent = path[d as usize];
@@ -154,18 +154,18 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     }
 
     /// A family of leaves of `value`, a freed one first.
-    fn alloc(&mut self, value: T) -> u32 {
+    fn alloc(&mut self, val: T) -> u32 {
         let family = match self.free.pop() {
             Some(b) => b as usize,
             None => {
                 let b = self.heap.len();
                 self.heap.resize(b + Self::WIDTH, 0);
-                self.data.resize(b + Self::WIDTH, value);
+                self.data.resize(b + Self::WIDTH, val);
                 b
             }
         };
         self.heap[family..family + Self::WIDTH].fill(0);
-        self.data[family..family + Self::WIDTH].fill(value);
+        self.data[family..family + Self::WIDTH].fill(val);
         self.touch(family);
         family as u32
     }

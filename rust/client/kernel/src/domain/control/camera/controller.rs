@@ -1,58 +1,62 @@
 // pxl-kernel/domain/control/camera/controller.rs
 
-//! The camera (an eye and a look) and which controller moves it. The orbit
-//! turns about a point `dist` ahead of the eye, the free camera about the eye
-//! itself; the focus is that point, derived and never kept. A tracker
+//! The camera (an eye and its facing) and which controller moves it. The orbit
+//! turns about a point `dist` ahead of the eye, the first-person camera about the eye
+//! itself; the pivot is that point, derived and never kept. A tracker
 //! overrides either while it holds the pose, since a tracked turn can roll.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 
+use crate::domain::control::camera::first_person;
+use crate::domain::control::camera::input;
+use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::orbit::orbit;
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::domain::control::navigation::support::{is_unknown, pan_to, unknown_z};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::domain::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
-use crate::domain::view::frame::pose::{units_per_px_at, ObserverPose};
+use crate::domain::view::frame::pose::ObserverPose;
+use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::setting::store::{settings_store, CameraMode};
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
-// A look in spherical coordinates about the world's Z, θ = polar and
+// A facing in spherical coordinates about the world's Z, θ = polar and
 // φ = azimuth: θ from straight down, clamped to [0, π]; φ from north toward
-// east, wrapped. At either pole φ still names the direction the look returns
+// east, wrapped. At either pole φ still names the direction the facing returns
 // along. The orbit adds r = dist. There is no roll control.
-pub fn look_domain(polar: f64, azimuth: f64) -> (f64, f64) {
+pub fn facing_domain(polar: f64, azimuth: f64) -> (f64, f64) {
     (
         polar.clamp(0.0, core::f64::consts::PI),
         wrap(azimuth, -core::f64::consts::PI, core::f64::consts::PI),
     )
 }
 
-pub fn look_dir(polar: f64, azimuth: f64) -> V3 {
+pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
     let (st, ct) = (libm::sin(polar), libm::cos(polar));
     let (sp, cp) = (libm::sin(azimuth), libm::cos(azimuth));
     [st * sp, st * cp, -ct]
 }
 
 /// Straight down at polar 0 with the azimuth up the screen; at the poles the
-/// azimuth only turns the screen about the look.
-pub fn look_rotation(polar: f64, azimuth: f64) -> Mat4 {
+/// azimuth only turns the screen about the facing.
+pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
     let mut about_z = mat4::new();
-    mat4::rotation_z(&mut about_z, azimuth);
+    mat4::rot_z(&mut about_z, azimuth);
     let (s, c) = (libm::sin(polar), libm::cos(polar));
     let mut about_x = mat4::new();
     (about_x[5], about_x[6], about_x[9], about_x[10]) = (c, -s, s, c);
-    let mut rotation: Mat4 = mat4::new();
-    mat4::mul(&mut rotation, &about_x, &about_z);
-    rotation
+    let mut rot: Mat4 = mat4::new();
+    mat4::mul(&mut rot, &about_x, &about_z);
+    rot
 }
 
 /// The eye is kept in the world's doubles: a canonical point's 1/256 rounding
-/// held in it would walk the focus as the orbit re-derives the eye each
+/// held in it would walk the pivot as the orbit re-derives the eye each
 /// frame.
 pub struct Camera {
     pub eye: Option<V3>,
@@ -84,7 +88,7 @@ pub fn set_eye_world(at: &V3) {
 pub fn dist() -> f64 {
     match active() {
         Active::Orbit => orbit().dist,
-        Active::Free | Active::Tracked => 0.0,
+        Active::FirstPerson | Active::Tracked => 0.0,
     }
 }
 
@@ -98,18 +102,18 @@ pub fn polar() -> f64 {
     camera().polar
 }
 
-pub fn focus_world() -> Option<V3> {
+pub fn pivot_world() -> Option<V3> {
     camera().eye?;
     if active() == Active::Tracked {
         return Some(pose()?.eye);
     }
     let (e, c) = (eye_world()?, camera());
-    let (d, r) = (look_dir(c.polar, c.azimuth), dist());
+    let (d, r) = (facing_dir(c.polar, c.azimuth), dist());
     Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
-pub fn focus() -> Option<Q3> {
-    let at = focus_world()?;
+pub fn pivot() -> Option<Q3> {
+    let at = pivot_world()?;
     let c = world_to_canonical(&at);
     Some(c)
 }
@@ -123,22 +127,22 @@ pub enum Motion {
 }
 
 /// A tracker's pose ignores it; no base under it moves in its place.
-pub fn put_center(target: Q3, motion: Motion) {
+pub fn put_pivot(to: Q3, motion: Motion) {
     let snap = motion == Motion::Snap;
     match active() {
         Active::Tracked => return,
-        Active::Orbit => crate::domain::control::camera::orbit::put(target, snap),
-        Active::Free => crate::domain::control::camera::free::put(target, snap),
+        Active::Orbit => orbit::put(to, snap),
+        Active::FirstPerson => first_person::put(to, snap),
     }
     request_world_tick();
 }
 
-/// Where the center is going: the place last put, which a smooth move eases
+/// Where the pivot is going to: the place last put, which a smooth move eases
 /// toward, or where it stands.
-pub fn target_center() -> Option<Q3> {
+pub fn pivot_to() -> Option<Q3> {
     match active() {
-        Active::Orbit => crate::domain::control::camera::orbit::target_center(),
-        Active::Free => crate::domain::control::camera::free::target_center(),
+        Active::Orbit => orbit::pivot_to(),
+        Active::FirstPerson => first_person::pivot_to(),
         Active::Tracked => None,
     }
 }
@@ -148,7 +152,7 @@ pub fn target_center() -> Option<Q3> {
 fn across() -> f64 {
     match active() {
         Active::Orbit => camera_state().intent.dist,
-        Active::Free | Active::Tracked => DEFAULT_DIST,
+        Active::FirstPerson | Active::Tracked => DEFAULT_DIST,
     }
 }
 
@@ -158,17 +162,17 @@ pub fn pan(dx: f64, dy: f64) {
     pan_by(-dx * upp, dy * upp);
 }
 
-/// By `cx`, `cy` of the distance to the focus, across and up the screen, so
-/// a held key's speed is smooth across zooms and alike at any τ.
+/// By `cx`, `cy` of the distance to the pivot, across and up the screen, so
+/// a held key's speed is smooth across zooms.
 pub fn pan_across(cx: f64, cy: f64) {
     let d = across();
     pan_by(cx * d, cy * d);
 }
 
 fn pan_by(lx: f64, ly: f64) {
-    let Some(from) = target_center() else { return };
+    let Some(from) = pivot_to() else { return };
     let eye = eye_world().map_or(from, |e| world_to_canonical(&e));
-    put_center(
+    put_pivot(
         pan_to(&from, lx, ly, camera().azimuth, &eye),
         Motion::Smooth,
     );
@@ -177,7 +181,7 @@ fn pan_by(lx: f64, ly: f64) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Active {
     Orbit,
-    Free,
+    FirstPerson,
     Tracked,
 }
 
@@ -209,7 +213,7 @@ pub fn active() -> Active {
     match (&c.tracked, c.base) {
         (Some(_), _) => Active::Tracked,
         (None, CameraMode::orbit) => Active::Orbit,
-        (None, CameraMode::free) => Active::Free,
+        (None, CameraMode::first_person) => Active::FirstPerson,
     }
 }
 
@@ -219,20 +223,19 @@ pub fn pose() -> Option<ObserverPose> {
     let c = controllers();
     match (&c.tracked, c.base) {
         (Some(t), _) => {
-            let (mut camera_to_world, mut rotation, mut moved) =
-                (mat4::new(), mat4::new(), [0.0; 3]);
+            let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
             mat4::transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
             Some(ObserverPose {
                 eye: v3::add(&t.world_at, &moved),
-                rotation: *mat4::transpose(&mut rotation, &camera_to_world),
+                rot: *mat4::transpose(&mut rot, &camera_to_world),
             })
         }
         (None, _) => {
             let cam = camera();
             Some(ObserverPose {
                 eye: eye_world()?,
-                rotation: look_rotation(cam.polar, cam.azimuth),
+                rot: facing_rot(cam.polar, cam.azimuth),
             })
         }
     }
@@ -241,8 +244,8 @@ pub fn pose() -> Option<ObserverPose> {
 /// Returns what the controller took, which a gesture continues from.
 pub fn set_intent(partial: IntentPatch) -> Intent {
     match active() {
-        Active::Orbit => crate::domain::control::camera::orbit::ask(partial),
-        Active::Free | Active::Tracked => {
+        Active::Orbit => orbit::ask(partial),
+        Active::FirstPerson | Active::Tracked => {
             let c = camera_state();
             c.commit_intent(c.merged(partial));
             c.intent
@@ -261,7 +264,7 @@ pub fn reset_azimuth() {
 
 pub fn reset_dist() {
     set_intent(IntentPatch {
-        dist: Some(crate::domain::control::param::DEFAULT_DIST),
+        dist: Some(DEFAULT_DIST),
         ..Default::default()
     });
 }
@@ -269,32 +272,30 @@ pub fn reset_dist() {
 /// Going to a place: a view far out comes back in; one the user brought
 /// nearer stays, as map apps do.
 pub fn come_in_to_default() {
-    let default = crate::domain::control::param::DEFAULT_DIST;
+    let default = DEFAULT_DIST;
     if camera_state().intent.dist > default {
         reset_dist();
     }
 }
 
 pub fn zooming() -> bool {
-    active() == Active::Orbit
-        && (crate::domain::control::camera::input::pinching()
-            || crate::domain::control::camera::orbit::zoom_settling())
+    active() == Active::Orbit && (input::pinching() || orbit::zoom_settling())
 }
 
 /// `delta_y` in CSS pixels. First person has no zoom.
 pub fn wheel(delta_y: f64) {
     if active() == Active::Orbit {
-        crate::domain::control::camera::orbit::wheel(delta_y);
+        orbit::wheel(delta_y);
     }
 }
 
 pub fn pinch_begin(span: f64) {
-    crate::domain::control::camera::orbit::pinch_begin(span);
+    orbit::pinch_begin(span);
 }
 
 pub fn pinch(span: f64) {
     if active() == Active::Orbit {
-        crate::domain::control::camera::orbit::pinch(span);
+        orbit::pinch(span);
     }
 }
 
@@ -306,8 +307,8 @@ pub fn controller_step(ctx: &mut TickContext) {
 
 pub fn camera_step(ctx: &mut TickContext) {
     let moving = match active() {
-        Active::Orbit => crate::domain::control::camera::orbit::turn(ctx.delta) == Some(true),
-        Active::Free => crate::domain::control::camera::free::turn(ctx.delta),
+        Active::Orbit => orbit::turn(ctx.delta) == Some(true),
+        Active::FirstPerson => first_person::turn(ctx.delta),
         Active::Tracked => false,
     };
     if moving {
@@ -323,7 +324,7 @@ fn switch() -> bool {
     true
 }
 
-/// The other controller's camera is put at the current focus at once,
+/// The other controller's camera is put at the current pivot at once,
 /// so nothing eases away. While a tracker holds the pose the change waits
 /// until it lets go.
 fn take_mode(want: CameraMode) -> bool {
@@ -333,8 +334,8 @@ fn take_mode(want: CameraMode) -> bool {
     }
     // Taken back to the nearest canonical point, or a few round trips walk the
     // character away. A height not yet known stays unknown.
-    let unknown = target_center().is_some_and(|t| is_unknown(&t));
-    let center = focus_world().map(|local| {
+    let unknown = pivot_to().is_some_and(|t| is_unknown(&t));
+    let at = pivot_world().map(|local| {
         let c = world_to_canonical_nearest(&local);
         if unknown {
             unknown_z(&c)
@@ -351,10 +352,10 @@ fn take_mode(want: CameraMode) -> bool {
             polar: cam.polar,
         });
     }
-    if let Some(center) = center {
+    if let Some(at) = at {
         match want {
-            CameraMode::orbit => crate::domain::control::camera::orbit::put(center, true),
-            CameraMode::free => crate::domain::control::camera::free::put(center, true),
+            CameraMode::orbit => orbit::put(at, true),
+            CameraMode::first_person => first_person::put(at, true),
         }
     }
     true
@@ -365,13 +366,13 @@ fn take_mode(want: CameraMode) -> bool {
 /// the camera stands anywhere there is nowhere to place it.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
-    mat4::rotation_quat(&mut turn, q);
+    mat4::rot_quat(&mut turn, q);
     let c = controllers();
     if c.tracked.is_none() {
         let Some(now) = pose() else { return };
         let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) =
             (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
-        mat4::transpose(&mut camera_to_world, &now.rotation);
+        mat4::transpose(&mut camera_to_world, &now.rot);
         mat4::mul(
             &mut world_turn,
             &camera_to_world,

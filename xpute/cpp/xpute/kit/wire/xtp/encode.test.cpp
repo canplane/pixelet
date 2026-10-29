@@ -40,7 +40,7 @@ std::vector<std::uint8_t> bytes(const std::string &hex_text) {
 
 } // namespace
 
-XPUTE_TEST(xtp_the_writer_writes_the_bytes_the_other_languages_write) {
+XPUTE_TEST(xtp_writer_matches_other_languages) {
     Golden v = Golden::load("spec/golden/wire/xtp/encode.tsv");
     auto check = [&v](const char *name, auto &&build) {
         std::string k;
@@ -83,7 +83,7 @@ XPUTE_TEST(xtp_the_writer_writes_the_bytes_the_other_languages_write) {
     check("graft", [&](PacketWriter &w) { w.graft(inner); });
 }
 
-XPUTE_TEST(xtp_what_does_not_fit_spoils_the_packet) {
+XPUTE_TEST(xtp_overflow_spoils_pkt) {
     std::string long_str = encode([](PacketWriter &w) { w.branch(1, [](PacketWriter &b) { b.str("longer than what is left"); }); }, 40);
     XPUTE_CHECK_EQ(long_str, std::string("errno:-75"), "a child that does not fit");
     std::string long_branch = encode(
@@ -96,7 +96,7 @@ XPUTE_TEST(xtp_what_does_not_fit_spoils_the_packet) {
 
 // A branch ends on a word, so a byte after it lies where the tree encoder
 // lays it rather than right after the branch's last child.
-XPUTE_TEST(xtp_a_node_after_a_branch_starts_on_a_word) {
+XPUTE_TEST(xtp_node_after_branch_aligned) {
     std::vector<std::uint8_t> pkt = bytes(encode([](PacketWriter &w) {
         w.branch(2, [](PacketWriter &b) {
             b.branch(1, [](PacketWriter &b) { b.u8(1); });

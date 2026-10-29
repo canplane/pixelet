@@ -64,10 +64,10 @@ export class Doorbell implements PacketRoom {
 
   /** The writer, begun over the next submission's slot for a packet of
    * `count` children, room made for it first; valid until that submission. */
-  writer(count: u32): PacketWriter {
+  writer(cnt: u32): PacketWriter {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
-    while (!this.trapped && !this.sq.write(this.writing, count)) this.ring(0);
-    if (this.trapped) this.writing.begin(NOWHERE, NOWHERE_VIEW, 0, 0, count);
+    while (!this.trapped && !this.sq.write(this.writing, cnt)) this.ring(0);
+    if (this.trapped) this.writing.begin(NOWHERE, NOWHERE_VIEW, 0, 0, cnt);
     return this.writing;
   }
 
@@ -120,9 +120,9 @@ export class Doorbell implements PacketRoom {
     take: (result: i32, reply: BranchCursor | null) => T,
   ): T {
     if (this.trapped) throw new InvariantError(Errno.ENOTRECOVERABLE);
-    const tag = (this.next_call = (this.next_call + 1) >>> 0);
+    const tag = this.next_call = (this.next_call + 1) >>> 0;
     let out: { val: T } | null = null;
-    this.waiting.set(tag, (result, f) => (out = { val: take(result, f) }));
+    this.waiting.set(tag, (result, f) => out = { val: take(result, f) });
     try {
       this.submit(tag, cmd, pkt, frame.ACKREQ);
       while (out === null) {
@@ -135,7 +135,7 @@ export class Doorbell implements PacketRoom {
     } finally {
       this.waiting.delete(tag);
     }
-    return (out as { value: T }).value;
+    return (out as { val: T }).val;
   }
 
   private read(): void {
@@ -145,7 +145,7 @@ export class Doorbell implements PacketRoom {
       for (let at = cq.peek(); at >= 0; at = cq.peek()) {
         const tag = cq.tag(at);
         const cmd = cq.cmd(at);
-        const pkt = cq.packet(at);
+        const pkt = cq.pkt(at);
         const f: BranchCursor | null = pkt
           ? new TreeReader(pkt).read_branch()
           : null;

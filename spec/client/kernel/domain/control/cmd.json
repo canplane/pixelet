@@ -8,7 +8,7 @@
     "command is between.",
     "",
     "The same number is a command on the submission ring and a signal on the",
-    "completion ring (its `RES` clear). The direction is the ring: `packet` is",
+    "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
     "what the shell submits, `signal` what the kernel posts. Each is written and",
     "read by what this file generates, on both sides, so no field is found by",
     "its position anywhere else.",
@@ -19,11 +19,7 @@
     "or a packed array where the item is a number. A record crosses as a branch",
     "of its own fields, and is how a block past a slot is laid out. An enum's",
     "`unknown` is the member a number it does not give out reads as; an enum",
-    "without one refuses the packet.",
-    "",
-    "A command taken out leaves its number in the Command table's `$retired`, with",
-    "the name it had, and the generator refuses a number given twice or one",
-    "retired, so a number an older side still sends never comes to mean another."
+    "without one refuses the packet. The generator refuses a number given twice."
   ],
   "base": "xpute/spec/abi/cmd.json",
   "extern": [
@@ -38,7 +34,7 @@
       "name": "SettingKey",
       "rs": "crate::domain::view::setting::schema_spec::SettingKey",
       "$doc": [
-        "A setting by its place in schema.json's SETTINGS, its row's `key`."
+        "A setting by its place in schema.json's SETTING, its row's `key`."
       ]
     },
     {
@@ -60,39 +56,39 @@
       "entries": [
         {
           "name": "WORLD",
-          "value": 16
+          "val": 16
         },
         {
           "name": "INPUT",
-          "value": 17
+          "val": 17
         },
         {
           "name": "SENSOR",
-          "value": 18
+          "val": 18
         },
         {
           "name": "GPU",
-          "value": 20
+          "val": 20
         },
         {
           "name": "SURFACE",
-          "value": 21
+          "val": 21
         },
         {
           "name": "SETTING",
-          "value": 22
+          "val": 22
         },
         {
           "name": "CHAT",
-          "value": 23
+          "val": 23
         },
         {
           "name": "PREVIEW",
-          "value": 24
+          "val": 24
         },
         {
           "name": "PROFILER",
-          "value": 25
+          "val": 25
         }
       ]
     },
@@ -105,31 +101,31 @@
       "entries": [
         {
           "name": "BOOT",
-          "value": 1
+          "val": 1
         },
         {
           "name": "FRAME",
-          "value": 2
+          "val": 2
         },
         {
           "name": "VISIBILITY",
-          "value": 3
+          "val": 3
         },
         {
           "name": "SNAPSHOT",
-          "value": 4
+          "val": 4
         },
         {
           "name": "SOURCE",
-          "value": 5
+          "val": 5
         },
         {
           "name": "KEPT_EMPTIED",
-          "value": 6
+          "val": 6
         },
         {
           "name": "VIEW",
-          "value": 7
+          "val": 7
         }
       ]
     },
@@ -142,63 +138,63 @@
       "entries": [
         {
           "name": "RECT",
-          "value": 1
+          "val": 1
         },
         {
           "name": "POINTER",
-          "value": 2
+          "val": 2
         },
         {
           "name": "WHEEL",
-          "value": 3
+          "val": 3
         },
         {
           "name": "KEYS",
-          "value": 6
+          "val": 6
         },
         {
           "name": "TRACKING",
-          "value": 4
+          "val": 4
         },
         {
           "name": "VIEW",
-          "value": 5
+          "val": 5
         },
         {
           "name": "COMPASS_RESET",
-          "value": 7
+          "val": 7
         },
         {
-          "name": "GO_TO",
-          "value": 8
+          "name": "GOTO",
+          "val": 8
         },
         {
-          "name": "POSE",
-          "value": 9
+          "name": "XR_POSE",
+          "val": 9
         },
         {
-          "name": "POSE_END",
-          "value": 10
+          "name": "XR_POSE_END",
+          "val": 10
         },
         {
           "name": "HOLD",
-          "value": 11
+          "val": 11
         },
         {
           "name": "MARKER_WORDS",
-          "value": 12
+          "val": 12
         },
         {
           "name": "MARKER_CANCEL",
-          "value": 13
+          "val": 13
         },
         {
           "name": "MARKER_PUT",
-          "value": 14
+          "val": 14
         },
         {
           "name": "LOCATE",
-          "value": 15
+          "val": 15
         }
       ]
     },
@@ -211,27 +207,27 @@
       "entries": [
         {
           "name": "START",
-          "value": 1
+          "val": 1
         },
         {
-          "name": "POSITION",
-          "value": 2
+          "name": "POS",
+          "val": 2
         },
         {
           "name": "STOP",
-          "value": 3
+          "val": 3
         },
         {
-          "name": "ORIENTATION",
-          "value": 5
+          "name": "ORIENT",
+          "val": 5
         },
         {
           "name": "PERMISSION",
-          "value": 6
+          "val": 6
         },
         {
           "name": "FAILED",
-          "value": 11
+          "val": 11
         }
       ]
     },
@@ -244,7 +240,7 @@
       "entries": [
         {
           "name": "READY",
-          "value": 1
+          "val": 1
         }
       ]
     },
@@ -257,15 +253,15 @@
       "entries": [
         {
           "name": "OPEN",
-          "value": 1
+          "val": 1
         },
         {
           "name": "RESIZE",
-          "value": 2
+          "val": 2
         },
         {
           "name": "CLOSE",
-          "value": 3
+          "val": 3
         }
       ]
     },
@@ -278,7 +274,7 @@
       "entries": [
         {
           "name": "SET",
-          "value": 1
+          "val": 1
         }
       ]
     },
@@ -291,7 +287,7 @@
       "entries": [
         {
           "name": "SEND",
-          "value": 1
+          "val": 1
         }
       ]
     },
@@ -304,11 +300,11 @@
       "entries": [
         {
           "name": "OPEN",
-          "value": 1
+          "val": 1
         },
         {
           "name": "CLOSE",
-          "value": 2
+          "val": 2
         }
       ]
     },
@@ -321,19 +317,19 @@
       "entries": [
         {
           "name": "START",
-          "value": 1
+          "val": 1
         },
         {
           "name": "STOP",
-          "value": 2
+          "val": 2
         },
         {
           "name": "READ",
-          "value": 3
+          "val": 3
         },
         {
           "name": "RINGS",
-          "value": 4
+          "val": 4
         }
       ]
     },
@@ -346,23 +342,23 @@
       "entries": [
         {
           "name": "Down",
-          "value": 0
+          "val": 0
         },
         {
           "name": "Move",
-          "value": 1
+          "val": 1
         },
         {
           "name": "Up",
-          "value": 2
+          "val": 2
         },
         {
           "name": "Out",
-          "value": 3
+          "val": 3
         },
         {
           "name": "Cancel",
-          "value": 4,
+          "val": 4,
           "$doc": [
             "The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own."
           ]
@@ -378,15 +374,15 @@
       "entries": [
         {
           "name": "Mouse",
-          "value": 0
+          "val": 0
         },
         {
           "name": "Touch",
-          "value": 1
+          "val": 1
         },
         {
           "name": "Pen",
-          "value": 2
+          "val": 2
         }
       ]
     },
@@ -400,23 +396,23 @@
       "entries": [
         {
           "name": "Pointer",
-          "value": 0
+          "val": 0
         },
         {
           "name": "Object",
-          "value": 1
+          "val": 1
         },
         {
           "name": "Decor",
-          "value": 2
+          "val": 2
         },
         {
           "name": "Eraser",
-          "value": 3
+          "val": 3
         },
         {
           "name": "Marker",
-          "value": 4
+          "val": 4
         }
       ]
     },
@@ -429,21 +425,21 @@
       "entries": [
         {
           "name": "Recenter",
-          "value": 0,
+          "val": 0,
           "$doc": [
             "Back to the device."
           ]
         },
         {
           "name": "Follow",
-          "value": 1,
+          "val": 1,
           "$doc": [
             "Follow mode on, where the compass is listened to."
           ]
         },
         {
           "name": "Unfollow",
-          "value": 2,
+          "val": 2,
           "$doc": [
             "Follow mode off, north up again."
           ]
@@ -460,19 +456,19 @@
       "entries": [
         {
           "name": "Other",
-          "value": 0
+          "val": 0
         },
         {
           "name": "PermissionDenied",
-          "value": 1
+          "val": 1
         },
         {
           "name": "PositionUnavailable",
-          "value": 2
+          "val": 2
         },
         {
           "name": "Timeout",
-          "value": 3
+          "val": 3
         }
       ]
     },
@@ -485,11 +481,11 @@
       "entries": [
         {
           "name": "Geolocation",
-          "value": 0
+          "val": 0
         },
         {
           "name": "Orientation",
-          "value": 1
+          "val": 1
         }
       ]
     },
@@ -502,22 +498,22 @@
       "entries": [
         {
           "name": "Asking",
-          "value": 0,
+          "val": 0,
           "$doc": [
             "The shell's prompt is up."
           ]
         },
         {
           "name": "Granted",
-          "value": 1
+          "val": 1
         },
         {
           "name": "Denied",
-          "value": 2
+          "val": 2
         },
         {
           "name": "Failed",
-          "value": 3,
+          "val": 3,
           "$doc": [
             "The prompt itself threw."
           ]
@@ -537,20 +533,20 @@
       "entries": [
         {
           "name": "Idle",
-          "value": 0
+          "val": 0
         },
         {
           "name": "Loading",
-          "value": 1
+          "val": 1
         },
         {
           "name": "Success",
-          "value": 2
+          "val": 2
         }
       ]
     },
     {
-      "name": "DevicePoseStatus",
+      "name": "SensorStatus",
       "$doc": [
         "Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor."
       ],
@@ -559,23 +555,23 @@
       "entries": [
         {
           "name": "Idle",
-          "value": 0
+          "val": 0
         },
         {
           "name": "Loading",
-          "value": 1
+          "val": 1
         },
         {
           "name": "Ready",
-          "value": 2
+          "val": 2
         },
         {
           "name": "Error",
-          "value": 3
+          "val": 3
         },
         {
           "name": "Unavailable",
-          "value": 4
+          "val": 4
         }
       ]
     },
@@ -589,11 +585,7 @@
         "to sit in the kernel's memory, and the shell has the locale files already",
         "(ts/client/src/locale) — the same split `strerror` is on the other side of.",
         "",
-        "The number is the name here. A band is what a message is about, and a",
-        "message keeps its number for as long as anything can be holding one: an",
-        "old shell reads a number a new kernel sends, so a number that has meant",
-        "something must never come to mean another thing. Retire one by leaving",
-        "the gap."
+        "The number is the name here, and a band is what a message is about."
       ],
       "format": "hex4",
       "entries": [
@@ -602,52 +594,52 @@
         },
         {
           "name": "GeolocationUnsupported",
-          "value": 515
+          "val": 515
         },
         {
           "name": "GeolocationPermissionDenied",
-          "value": 516
+          "val": 516
         },
         {
           "name": "GeolocationPositionUnavailable",
-          "value": 517
+          "val": 517
         },
         {
           "name": "GeolocationTimeout",
-          "value": 518
+          "val": 518
         },
         {
           "name": "GeolocationGenericError",
-          "value": 519
+          "val": 519
         },
         {
           "section": "0x03 which way the device is facing"
         },
         {
           "name": "OrientationPermissionError",
-          "value": 770
+          "val": 770
         },
         {
           "name": "OrientationPermissionDenied",
-          "value": 771
+          "val": 771
         },
         {
           "name": "OrientationSignalLost",
-          "value": 772
+          "val": 772
         },
         {
           "section": "0x04 why the server does not answer the world's reads"
         },
         {
           "name": "WorldReadFailing",
-          "value": 1027,
+          "val": 1027,
           "$doc": [
             "Reads reach the server and fail; they are tried again."
           ]
         },
         {
           "name": "WorldUnavailable",
-          "value": 1028,
+          "val": 1028,
           "$doc": [
             "Reads failed past every retry; the world is not coming."
           ]
@@ -657,35 +649,13 @@
     {
       "name": "Command",
       "format": "hex4",
-      "$retired": [
-        {
-          "name": "SENSOR_ERROR",
-          "value": 4612
-        },
-        {
-          "name": "SENSOR_ENABLE_LOCATION",
-          "value": 4615
-        },
-        {
-          "name": "SENSOR_OPEN",
-          "value": 4616
-        },
-        {
-          "name": "SENSOR_CLOSE",
-          "value": 4617
-        },
-        {
-          "name": "SENSOR_ORIENTATION_LOST",
-          "value": 4618
-        }
-      ],
       "entries": [
         {
           "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
         },
         {
           "name": "SENSOR_START",
-          "value": 4609,
+          "val": 4609,
           "$doc": [
             "Start watching."
           ],
@@ -698,7 +668,7 @@
         },
         {
           "name": "SENSOR_STOP",
-          "value": 4611,
+          "val": 4611,
           "$doc": [
             "Stop watching."
           ],
@@ -713,12 +683,12 @@
           "section": "the host answers: an I/O the process started, done"
         },
         {
-          "name": "SENSOR_POSITION",
-          "value": 4610,
+          "name": "SENSOR_POS",
+          "val": 4610,
           "$doc": [
             "A GPS fix; a field is absent where the browser gave none."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "lon",
               "type": "f64"
@@ -728,7 +698,7 @@
               "type": "f64"
             },
             {
-              "name": "altitude",
+              "name": "alt",
               "type": "f64",
               "optional": true
             },
@@ -745,12 +715,12 @@
           ]
         },
         {
-          "name": "SENSOR_ORIENTATION",
-          "value": 4613,
+          "name": "SENSOR_ORIENT",
+          "val": 4613,
           "$doc": [
             "An orientation event; a field is absent where the browser gave none."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "webkit_compass_heading",
               "type": "f64",
@@ -775,13 +745,13 @@
         },
         {
           "name": "SENSOR_FAILED",
-          "value": 4619,
+          "val": 4619,
           "$doc": [
             "A watch that ended in failure and was stopped, refused from the start (PermissionDenied)",
             "or cut off; the compass's, where the platform says so (WORLD_BOOT's",
-            "orientation_silence_is_loss)."
+            "orient_silence_is_loss)."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -801,11 +771,11 @@
         },
         {
           "name": "WORLD_BOOT",
-          "value": 4097,
+          "val": 4097,
           "$doc": [
             "The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "development",
               "type": "bool",
@@ -818,18 +788,18 @@
               "type": "bool"
             },
             {
-              "name": "orientation",
+              "name": "orient",
               "type": "bool"
             },
             {
-              "name": "orientation_permission",
+              "name": "orient_permission",
               "type": "bool",
               "$doc": [
                 "iOS 13+'s gate: requestPermission exists and must run inside a gesture."
               ]
             },
             {
-              "name": "orientation_silence_is_loss",
+              "name": "orient_silence_is_loss",
               "type": "bool",
               "$doc": [
                 "A browser's compass talks while the device is still and cannot say it stopped, so",
@@ -841,13 +811,13 @@
         },
         {
           "name": "WORLD_FRAME",
-          "value": 4098,
+          "val": 4098,
           "$doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
             "its signals on the completion ring, drawn by the kernel."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "width",
               "type": "f64",
@@ -892,12 +862,12 @@
         },
         {
           "name": "WORLD_VISIBILITY",
-          "value": 4099,
+          "val": 4099,
           "$doc": [
             "The tab's visibility; the host rings the doorbell for it at once, since a hidden",
             "page gets no frame and hiding is the save's last sure moment."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "visible",
               "type": "bool"
@@ -906,7 +876,7 @@
         },
         {
           "name": "WORLD_SOURCE",
-          "value": 4101,
+          "val": 4101,
           "$doc": [
             "What the tile source declares of itself, once the client has it: the tile root's",
             "`source`, the published one out of the bucket or the dev tile server's, read by the",
@@ -914,7 +884,7 @@
             "Until it comes nothing is observed: the floor is held at the zoom it names, and no",
             "tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "top_zoom",
               "type": "u32",
@@ -944,12 +914,12 @@
         },
         {
           "name": "WORLD_KEPT_EMPTIED",
-          "value": 4102,
+          "val": 4102,
           "$doc": [
             "A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held",
             "set aside by the host: the kernel reads it again, and writes it from then on."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "slot",
               "type": "u32",
@@ -961,11 +931,11 @@
         },
         {
           "name": "SENSOR_PERMISSION",
-          "value": 4614,
+          "val": 4614,
           "$doc": [
             "A permission as the shell's prompt or the browser's change reported it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -978,11 +948,11 @@
         },
         {
           "name": "INPUT_RECT",
-          "value": 4353,
+          "val": 4353,
           "$doc": [
             "The canvas's client rect."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "left",
               "type": "f64"
@@ -1003,11 +973,11 @@
         },
         {
           "name": "INPUT_POINTER",
-          "value": 4354,
+          "val": 4354,
           "$doc": [
             "A pointer event on the canvas, in client pixels."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "phase",
               "type": "PointerPhase"
@@ -1036,17 +1006,17 @@
         },
         {
           "name": "INPUT_HOLD",
-          "value": 4363,
+          "val": 4363,
           "$doc": [
             "What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "tool",
               "type": "ActiveTool"
             },
             {
-              "name": "value",
+              "name": "val",
               "type": "u32",
               "$doc": [
                 "The held cube or decor kind, by its number in the catalog's one value space (cube.json)."
@@ -1063,11 +1033,11 @@
         },
         {
           "name": "INPUT_MARKER_WORDS",
-          "value": 4364,
+          "val": 4364,
           "$doc": [
-            "The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec block/ext.json) are refused whole, never cut."
+            "The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "text",
               "type": "str"
@@ -1076,22 +1046,22 @@
         },
         {
           "name": "INPUT_MARKER_CANCEL",
-          "value": 4365,
+          "val": 4365,
           "$doc": [
             "The marker the tool left waiting is let go, nothing put up."
           ]
         },
         {
           "name": "INPUT_MARKER_PUT",
-          "value": 4366,
+          "val": 4366,
           "$doc": [
             "The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after."
           ]
         },
         {
           "name": "INPUT_WHEEL",
-          "value": 4355,
-          "packet": [
+          "val": 4355,
+          "pkt": [
             {
               "name": "delta_y",
               "type": "f64"
@@ -1100,11 +1070,11 @@
         },
         {
           "name": "INPUT_KEYS",
-          "value": 4358,
+          "val": 4358,
           "$doc": [
             "The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "x",
               "type": "i32"
@@ -1117,7 +1087,7 @@
         },
         {
           "name": "GPU_READY",
-          "value": 5121,
+          "val": 5121,
           "$doc": [
             "A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge."
           ]
@@ -1127,11 +1097,11 @@
         },
         {
           "name": "SURFACE_OPEN",
-          "value": 5377,
+          "val": 5377,
           "$doc": [
             "A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "role",
               "type": "u32",
@@ -1143,11 +1113,11 @@
         },
         {
           "name": "SURFACE_RESIZE",
-          "value": 5378,
+          "val": 5378,
           "$doc": [
             "The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1168,11 +1138,11 @@
         },
         {
           "name": "SURFACE_CLOSE",
-          "value": 5379,
+          "val": 5379,
           "$doc": [
             "A call: the canvas is going, and what it held on the device is let go before the call returns."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1181,11 +1151,11 @@
         },
         {
           "name": "PREVIEW_OPEN",
-          "value": 6145,
+          "val": 6145,
           "$doc": [
             "A character drawn alone into a surface the shell handed over, as the picker shows it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1202,8 +1172,8 @@
         },
         {
           "name": "PREVIEW_CLOSE",
-          "value": 6146,
-          "packet": [
+          "val": 6146,
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1212,12 +1182,12 @@
         },
         {
           "name": "SETTING_SET",
-          "value": 5633,
+          "val": 5633,
           "$doc": [
             "A setting set from the sheet or the character picker; EAGAIN until the kernel has read the",
             "kept settings, which would be read over it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "key",
               "type": "SettingKey"
@@ -1233,11 +1203,11 @@
         },
         {
           "name": "CHAT_SEND",
-          "value": 5889,
+          "val": 5889,
           "$doc": [
             "A line the player said, shown over the character."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "text",
               "type": "str"
@@ -1246,11 +1216,11 @@
         },
         {
           "name": "INPUT_TRACKING",
-          "value": 4356,
+          "val": 4356,
           "$doc": [
             "The tracking button's press, as the button showed it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "tracking",
               "type": "Tracking"
@@ -1259,14 +1229,14 @@
         },
         {
           "name": "INPUT_COMPASS_RESET",
-          "value": 4359,
+          "val": 4359,
           "$doc": [
             "The compass's press: north up."
           ]
         },
         {
           "name": "INPUT_LOCATE",
-          "value": 4367,
+          "val": 4367,
           "$doc": [
             "The search panel's location card's press: the location asked for. The compass is",
             "asked for where it is used, entering follow mode (TRACKING), and never alone: nothing",
@@ -1274,12 +1244,13 @@
           ]
         },
         {
-          "name": "INPUT_GO_TO",
-          "value": 4360,
+          "name": "INPUT_GOTO",
+          "val": 4360,
           "$doc": [
-            "A search result: the focus moved there."
+            "A search result: the pivot moved there, and the view asked with it at once, as the",
+            "controls ask it where the camera stands; a view field absent keeps what the view has."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "lon",
               "type": "f64"
@@ -1287,19 +1258,43 @@
             {
               "name": "lat",
               "type": "f64"
+            },
+            {
+              "name": "dist",
+              "type": "f64",
+              "optional": true,
+              "$doc": [
+                "The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in."
+              ]
+            },
+            {
+              "name": "azimuth",
+              "type": "f64",
+              "optional": true,
+              "$doc": [
+                "The heading about Z in radians, wrapped."
+              ]
+            },
+            {
+              "name": "polar",
+              "type": "f64",
+              "optional": true,
+              "$doc": [
+                "The angle down from vertical in radians, clamped."
+              ]
             }
           ]
         },
         {
-          "name": "INPUT_POSE",
-          "value": 4361,
+          "name": "INPUT_XR_POSE",
+          "val": 4361,
           "$doc": [
             "A tracked pose: where a tracker has the camera, and its turn as a unit quaternion",
             "(x, y, z, w) from the camera's axes to the tracker's, in the world's units. The",
             "first of a run is taken to be where the camera already is, so nothing moves as",
             "it begins; the camera follows the tracker from there until POSE_END."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "x",
               "type": "f64"
@@ -1331,21 +1326,21 @@
           ]
         },
         {
-          "name": "INPUT_POSE_END",
-          "value": 4362,
+          "name": "INPUT_XR_POSE_END",
+          "val": 4362,
           "$doc": [
             "The tracker let the camera go: back to the controller it had."
           ]
         },
         {
           "name": "WORLD_VIEW",
-          "value": 4103,
+          "val": 4103,
           "$doc": [
             "The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.",
             "The kernel watches a sensor only while both hold, the page visible and the world view",
             "shown; which sensors it watches then is its own (SENSOR_START)."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "shown",
               "type": "bool"
@@ -1354,27 +1349,27 @@
         },
         {
           "name": "PROFILER_START",
-          "value": 6401,
+          "val": 6401,
           "$doc": [
             "A fresh recording window."
           ]
         },
         {
           "name": "PROFILER_STOP",
-          "value": 6402,
+          "val": 6402,
           "$doc": [
             "The window frozen, so what is exported holds still."
           ]
         },
         {
           "name": "PROFILER_READ",
-          "value": 6403,
+          "val": 6403,
           "$doc": [
-            "The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)",
+            "The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics",
             "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
             "number past the door is finite, so no window is infinite."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "window_ms",
               "type": "f64",
@@ -1384,14 +1379,14 @@
         },
         {
           "name": "PROFILER_RINGS",
-          "value": 6404,
+          "val": 6404,
           "$doc": [
             "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn."
           ]
         },
         {
           "name": "WORLD_SNAPSHOT",
-          "value": 4100,
+          "val": 4100,
           "$doc": [
             "The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a",
             "block the kernel holds, valid until the next snapshot."
@@ -1418,8 +1413,8 @@
       ],
       "fields": [
         {
-          "name": "focus",
-          "type": "FocusState"
+          "name": "pivot",
+          "type": "PivotState"
         },
         {
           "name": "location",
@@ -1434,7 +1429,7 @@
           "type": "HoldingState"
         },
         {
-          "name": "orientation",
+          "name": "orient",
           "type": "OrientationState"
         },
         {
@@ -1479,7 +1474,7 @@
           "name": "m_per_px",
           "type": "f64",
           "$doc": [
-            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
+            "The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
           ]
         },
         {
@@ -1487,8 +1482,8 @@
           "type": "DivisionPart",
           "list": true,
           "$doc": [
-            "The division the focus is in and every one above it, broad to narrow; empty",
-            "where the focus is in none or the tile it is read out of has not arrived."
+            "The division the pivot is in and every one above it, broad to narrow; empty",
+            "where the pivot is in none or the tile it is read out of has not arrived."
           ]
         },
         {
@@ -1520,7 +1515,7 @@
       ]
     },
     {
-      "name": "FocusState",
+      "name": "PivotState",
       "fields": [
         {
           "name": "status",
@@ -1531,18 +1526,18 @@
           "type": "bool"
         },
         {
-          "name": "center",
+          "name": "lon_lat",
           "type": "LonLat",
           "optional": true,
           "$doc": [
-            "The focus in degrees: what the search measures distance from."
+            "The pivot in degrees: what the search measures distance from."
           ]
         },
         {
           "name": "outside",
           "type": "bool",
           "$doc": [
-            "The focus is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs)."
+            "The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs)."
           ]
         }
       ]
@@ -1565,14 +1560,14 @@
       "fields": [
         {
           "name": "status",
-          "type": "DevicePoseStatus"
+          "type": "SensorStatus"
         },
         {
           "name": "has_location",
           "type": "bool"
         },
         {
-          "name": "error",
+          "name": "err",
           "type": "Message",
           "optional": true,
           "$doc": [
@@ -1640,10 +1635,10 @@
       "fields": [
         {
           "name": "status",
-          "type": "DevicePoseStatus"
+          "type": "SensorStatus"
         },
         {
-          "name": "error",
+          "name": "err",
           "type": "Message",
           "optional": true,
           "$doc": [

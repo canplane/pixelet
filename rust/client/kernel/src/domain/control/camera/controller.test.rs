@@ -1,7 +1,10 @@
 // pxl-kernel/domain/control/camera/controller.test.rs
 
 use super::*;
+use crate::domain::control::camera::first_person;
 use crate::domain::control::camera::fixture::place;
+use crate::domain::control::camera::orbit;
+use crate::domain::control::param;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::serial;
 
@@ -28,39 +31,36 @@ fn third_person() {
 
 /// The orbit's distance third person, none first.
 #[test]
-fn the_focus_is_the_eye_pushed_the_radius_along_the_look() {
+fn pivot_along_facing() {
     let _g = serial();
     third_person();
     let mut rng = Rng(0x5eed);
     for n in 0..200 {
-        let center = [
+        let at = [
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 40.0,
         ];
         let (dist, polar, azimuth) = (
-            crate::domain::control::param::MIN_DIST + rng.unit() * 2_000.0,
+            param::MIN_DIST + rng.unit() * 2_000.0,
             rng.unit() * core::f64::consts::PI,
             rng.unit() * 6.0 - 3.0,
         );
-        place(center, dist, polar, azimuth);
+        place(at, dist, polar, azimuth);
+        assert!(near(pivot_world().unwrap(), at, 1e-9), "{n}: third person");
+        controllers().base = CameraMode::first_person;
         assert!(
-            near(focus_world().unwrap(), center, 1e-9),
-            "{n}: third person"
-        );
-        controllers().base = CameraMode::free;
-        assert!(
-            near(focus_world().unwrap(), eye_world().unwrap(), 1e-12),
+            near(pivot_world().unwrap(), eye_world().unwrap(), 1e-12),
             "{n}: first person"
         );
         controllers().base = CameraMode::orbit;
     }
 }
 
-/// A change of person moves the camera about the focus, never the
-/// center; under a tracker it waits until the tracker lets go.
+/// A change of person moves the camera about the pivot, never the
+/// at; under a tracker it waits until the tracker lets go.
 #[test]
-fn a_change_of_person_leaves_the_focus() {
+fn person_change_keeps_pivot() {
     let _g = serial();
     third_person();
     // A canonical point keeps 256ths of a unit: the first change lands within
@@ -68,42 +68,42 @@ fn a_change_of_person_leaves_the_focus() {
     let near = |a: V3, b: V3, tol: f64| (0..3).all(|k| (a[k] - b[k]).abs() <= tol);
     let mut rng = Rng(0xc0de);
     for n in 0..100 {
-        let center = [
+        let at = [
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 40.0,
         ];
         let (dist, polar, azimuth) = (
-            crate::domain::control::param::MIN_DIST + rng.unit() * 2_000.0,
+            param::MIN_DIST + rng.unit() * 2_000.0,
             rng.unit() * core::f64::consts::PI,
             rng.unit() * 6.0 - 3.0,
         );
-        place(center, dist, polar, azimuth);
+        place(at, dist, polar, azimuth);
         let mut first: Option<V3> = None;
         for mode in [
-            CameraMode::free,
+            CameraMode::first_person,
             CameraMode::orbit,
-            CameraMode::free,
+            CameraMode::first_person,
             CameraMode::orbit,
         ] {
             assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
-            let got = focus_world().unwrap();
+            let got = pivot_world().unwrap();
             assert!(
-                near(got, center, 2.0 / 256.0),
-                "{n}: moved by the change to {mode:?}: {got:?} vs {center:?}"
+                near(got, at, 2.0 / 256.0),
+                "{n}: moved by the change to {mode:?}: {got:?} vs {at:?}"
             );
             let first = *first.get_or_insert(got);
             assert!(
                 near(got, first, 1e-6),
                 "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}"
             );
-            let target = match mode {
-                CameraMode::free => crate::domain::control::camera::free::target_center(),
-                CameraMode::orbit => crate::domain::control::camera::orbit::target_center(),
+            let to = match mode {
+                CameraMode::first_person => first_person::pivot_to(),
+                CameraMode::orbit => orbit::pivot_to(),
             };
-            let target = to_world(&target.unwrap());
+            let to = to_world(&to.unwrap());
             assert!(
-                near(target, got, 1e-6),
+                near(to, got, 1e-6),
                 "{n}: a move under way carried into {mode:?}"
             );
         }
@@ -115,7 +115,10 @@ fn a_change_of_person_leaves_the_focus() {
         turn: mat4::new(),
         at: [0.0; 3],
     });
-    assert!(!take_mode(CameraMode::free), "taken under a tracker");
+    assert!(
+        !take_mode(CameraMode::first_person),
+        "taken under a tracker"
+    );
     assert_eq!(
         controllers().base,
         CameraMode::orbit,
@@ -123,18 +126,18 @@ fn a_change_of_person_leaves_the_focus() {
     );
     controllers().tracked = None;
     assert!(
-        take_mode(CameraMode::free),
+        take_mode(CameraMode::first_person),
         "not taken once the tracker let go"
     );
     third_person();
 }
 
 #[test]
-fn a_look_tilts_over_its_whole_domain() {
+fn facing_tilt_domain() {
     for n in 0..=360 {
         let polar = n as f64 * core::f64::consts::PI / 360.0;
         for azimuth in [0.0, 1.1, -2.7] {
-            let r = look_rotation(polar, azimuth);
+            let r = facing_rot(polar, azimuth);
             let row = |i: usize| [r[i], r[4 + i], r[8 + i]];
             let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
             for i in 0..3 {
@@ -147,7 +150,7 @@ fn a_look_tilts_over_its_whole_domain() {
                 }
             }
             let back = row(2);
-            let forward = look_dir(polar, azimuth);
+            let forward = facing_dir(polar, azimuth);
             assert!(
                 (0..3).all(|k| (forward[k] + back[k]).abs() < 1e-12),
                 "tilt {polar}, heading {azimuth}: looks along {:?}, not {forward:?}",
@@ -159,12 +162,12 @@ fn a_look_tilts_over_its_whole_domain() {
 
 /// Spherical coordinates' own degeneracy: the turn is still a rotation there.
 #[test]
-fn at_a_pole_every_heading_looks_the_same_way() {
+fn pole_headings_agree() {
     let pi = core::f64::consts::PI;
     for theta in [0.0, pi] {
-        let first = look_dir(theta, 0.0);
+        let first = facing_dir(theta, 0.0);
         for phi in [0.7, -2.1, 3.0] {
-            let d = look_dir(theta, phi);
+            let d = facing_dir(theta, phi);
             assert!(
                 (0..3).all(|k| (d[k] - first[k]).abs() < 1e-12),
                 "θ {theta}: φ {phi} looks along {d:?}, not {first:?}"
@@ -173,7 +176,7 @@ fn at_a_pole_every_heading_looks_the_same_way() {
     }
     for theta in [0.0, 1e-12, 1e-6, pi - 1e-6, pi - 1e-12, pi] {
         for phi in [0.0, 1.3, -2.9] {
-            let r = look_rotation(theta, phi);
+            let r = facing_rot(theta, phi);
             assert!(r.iter().all(|v| v.is_finite()), "θ {theta}, φ {phi}: {r:?}");
             let row = |i: usize| [r[i], r[4 + i], r[8 + i]];
             for i in 0..3 {

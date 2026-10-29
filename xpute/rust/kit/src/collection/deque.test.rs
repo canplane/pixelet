@@ -6,7 +6,7 @@ use crate::golden::Golden;
 const GOLDEN: &str = include_str!("../../../../spec/golden/collection/deque.tsv");
 
 #[test]
-fn deque_holds_what_the_record_holds() {
+fn matches_record() {
     let v = Golden::load(GOLDEN);
     let mut buf: [Option<u32>; 8] = [None; 8];
     let mut d = Deque::new(&mut buf, 0, 0);

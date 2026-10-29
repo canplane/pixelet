@@ -48,13 +48,13 @@ std::string show(const tlv::Value &v) {
 } // namespace
 
 // Across a protocol: the bytes are the other languages', to the last one.
-XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
+XPUTE_TEST(tlv_matches_other_languages) {
     Golden v = Golden::load("spec/golden/wire/tlv.tsv");
     std::vector<std::uint8_t> buf;
     tlv::Writer w(buf);
     const std::uint8_t three[] = {9, 8, 7};
     const std::uint8_t one[] = {1};
-    const tlv::Value values[] = {
+    const tlv::Value vals[] = {
         std::uint8_t{200},
         std::int8_t{-3},
         std::uint16_t{65535},
@@ -79,12 +79,12 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
         tlv::Str{"s"},
         tlv::Bytes{one},
     };
-    XPUTE_CHECK(w.write_all(values).ok());
-    const std::vector<std::uint8_t> &packet = w.finish();
-    XPUTE_CHECK_EQ(hex(packet), v.s("packet"), "the packet is not the other languages' bytes");
+    XPUTE_CHECK(w.write_all(vals).ok());
+    const std::vector<std::uint8_t> &pkt = w.finish();
+    XPUTE_CHECK_EQ(hex(pkt), v.s("packet"), "the packet is not the other languages' bytes");
 
     std::vector<tlv::Value> read;
-    XPUTE_CHECK(tlv::Reader(packet).read_all(read).ok());
+    XPUTE_CHECK(tlv::Reader(pkt).read_all(read).ok());
     XPUTE_CHECK_EQ(read.size(), v.len("read"), "read back a different count");
     for (std::size_t j = 0; j < read.size(); j++) XPUTE_CHECK_EQ(show(read[j]), v.s("read." + std::to_string(j)), ("read." + std::to_string(j)).c_str());
 
@@ -119,7 +119,7 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
     XPUTE_CHECK_EQ(got, v.s("huge.read"), "a length past the buffer");
 }
 
-XPUTE_TEST(tlv_a_sealed_writer_refuses) {
+XPUTE_TEST(tlv_sealed_writer_refuses) {
     std::vector<std::uint8_t> buf;
     tlv::Writer w(buf);
     w.finish();

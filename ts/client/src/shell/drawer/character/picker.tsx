@@ -15,7 +15,7 @@ import {
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPreview } from "./preview.tsx";
 import { kernel_setting } from "@/abi/shell.ts";
-import { SETTINGS } from "@/shell/setting/schema.ts";
+import { SETTING } from "@/shell/setting/schema.ts";
 import {
   type CharacterVariant,
   type Gender,
@@ -172,9 +172,9 @@ function PetPicker(props: PetPickerProps) {
 /** Picks take effect at once and the sheet stays open, for comparing variants. */
 export function CharacterPicker() {
   const person = personVariant(
-    useKernel((s) => s.settings[SETTINGS.person.key] ?? -1),
+    useKernel((s) => s.settings[SETTING.person.key] ?? -1),
   );
-  const pet = petVariant(useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1));
+  const pet = petVariant(useKernel((s) => s.settings[SETTING.pet.key] ?? -1));
 
   // Opens on the selection's gender, so a pick does not look reset on reopen.
   const [gender, setGender] = useState<Gender>(genderOf(person));
@@ -185,11 +185,11 @@ export function CharacterPicker() {
         gender={gender}
         onGenderChange={setGender}
         selected={person}
-        onSelect={(v) => kernel_setting(SETTINGS.person.key, v.number)}
+        onSelect={(v) => kernel_setting(SETTING.person.key, v.number)}
       />
       <PetPicker
         selected={pet}
-        onSelect={(v) => kernel_setting(SETTINGS.pet.key, v.number)}
+        onSelect={(v) => kernel_setting(SETTING.pet.key, v.number)}
       />
     </View>
   );

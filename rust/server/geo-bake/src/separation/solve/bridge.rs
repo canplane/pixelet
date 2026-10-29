@@ -24,10 +24,11 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::BTreeMap;
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::separation::{Form, STACKED_DECK_HEADROOM_M};
-use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer};
+use pxl_spec::bake::separation::Form;
+use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::ways;
+use pxl_spec_core::param::way::STACKED_DECK_HEADROOM_M;
+use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
@@ -38,11 +39,11 @@ use crate::terrain::pipeline::overture::policy::waterway_width;
 
 use super::*;
 
-// ---- Arnis's numbers for a deck, in metres or as ratios, under its names ----
+// ---- Arnis's numbers for a deck, in meters or as ratios, under its names ----
 const LAYER_HEIGHT_STEP_M: f64 = 6.0;
 const FLAT_TERRAIN_DIP_THRESHOLD_M: f64 = 4.0;
 const SHORT_BRIDGE_LENGTH_M: f64 = 30.0;
-pub(super) const DUAL_CARRIAGEWAY_MAX_DISTANCE_M: f64 = 12.0;
+pub(super) const DUAL_CARRIAGEWAY_MAX_DIST_M: f64 = 12.0;
 const DUAL_CARRIAGEWAY_HEADING_TOLERANCE_DEG: f64 = 20.0;
 const SIDE_DECK_EDGE_GAP_M: f64 = 2.0;
 const ROAD_HEADROOM_M: f64 = 6.0;
@@ -108,8 +109,8 @@ impl Obstacles {
     fn of(src: &Ring, [origin, far]: [[f64; 2]; 2], scale: Scale) -> Obstacles {
         let cell = |p: [f64; 2]| {
             [
-                u_from_mer(p[0] - origin[0]) / CELL_U,
-                u_from_mer(p[1] - origin[1]) / CELL_U,
+                u_from_merc(p[0] - origin[0]) / CELL_U,
+                u_from_merc(p[1] - origin[1]) / CELL_U,
             ]
         };
         let mut out = Obstacles {
@@ -144,7 +145,7 @@ impl Obstacles {
                         headroom,
                         nodes: nodes.clone(),
                     });
-                    let r = f64::from(ways::reach(width));
+                    let r = f64::from(way::reach(width));
                     let k = |v: f64| (v / out.bucket).floor() as i64;
                     for bx in k(pair[0][0].min(pair[1][0]) - r)..=k(pair[0][0].max(pair[1][0]) + r)
                     {
@@ -330,10 +331,10 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
     }
     let same = effective_layer(a) == effective_layer(b);
     // their edges meet where each way's cover ends (pxl-spec-core `reach`)
-    let reach = |r: &Stretch| f64::from(ways::reach((r.width_u / CELL_U) as f32));
+    let reach = |r: &Stretch| f64::from(way::reach((r.width_u / CELL_U) as f32));
     let touching = reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same {
-        touching.max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M)))
+        touching.max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DIST_M)))
     } else {
         touching
     };
@@ -449,7 +450,7 @@ fn way_from<'a>(way: &'a Way, node: &End) -> Option<(Vec<[f64; 2]>, &'a End)> {
 /// Points a cell apart along a line, from its start.
 fn cells_along(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let line = Polyline::of(points.iter().copied());
-    let step = mer_from_u(CELL_U);
+    let step = merc_from_u(CELL_U);
     let n = libm::ceil(line.length() / step).max(1.0) as usize;
     (0..=n)
         .map(|k| line.at((k as f64 * step).min(line.length())))
@@ -723,10 +724,10 @@ fn road_decks(
         .iter()
         .map(|&q| cells_box(&stretches[q].whole.points))
         .collect();
-    let reach = |q: usize| f64::from(ways::reach((stretches[q].width_u / CELL_U) as f32));
+    let reach = |q: usize| f64::from(way::reach((stretches[q].width_u / CELL_U) as f32));
     let farthest = |a: usize, b: usize| {
         (reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M)))
-            .max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M)))
+            .max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DIST_M)))
     };
     for i in 0..road.len() {
         for j in i + 1..road.len() {
@@ -870,7 +871,7 @@ fn road_decks(
                 );
                 for o in obstacles.at(c) {
                     // a way meeting the structure runs at its level, not under it
-                    if ways::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
+                    if way::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
                         && crosses([n[0] - p[0], n[1] - p[1]], o)
                         && !o.nodes.iter().any(|n| group_nodes.contains(n))
                     {
@@ -1013,7 +1014,7 @@ fn road_decks(
             }
             let layer = effective_layer(r);
             let width = (r.width_u / CELL_U) as f32;
-            let around = disk(ways::reach(width));
+            let around = disk(way::reach(width));
             for (&c, &y) in r.cell.iter().zip(&ys[m]) {
                 let (x, z) = cell_key(c);
                 for &[dx, dz] in &around {
@@ -1045,10 +1046,10 @@ fn rail_decks(
         .filter(|&q| stretches[q].piece.form == Form::Bridge && stretches[q].rail())
         .collect();
     let mut out = Vec::new();
-    let mut ends_count: FnvHashMap<&End, usize> = FnvHashMap::default();
+    let mut ends_cnt: FnvHashMap<&End, usize> = FnvHashMap::default();
     for &q in &rail {
         for e in &stretches[q].ends {
-            *ends_count.entry(e).or_default() += 1;
+            *ends_cnt.entry(e).or_default() += 1;
         }
     }
     // what each track cell rides: the nearest road deck of its layer within reach
@@ -1110,7 +1111,7 @@ fn rail_decks(
                     r.cell[(j + 1).min(r.cell.len() - 1)],
                 );
                 for o in obstacles.at(c) {
-                    if ways::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
+                    if way::covers(o.width, dist_to_segment(c, o.a, o.b) as f32)
                         && crosses([n[0] - p[0], n[1] - p[1]], o)
                         && !o.nodes.iter().any(|n| r.nodes.contains(n))
                     {
@@ -1217,8 +1218,8 @@ fn rail_decks(
             // each way ramps from its free ends where it is a viaduct, no steeper than a cell a cell
             // (Arnis `generate_rail_bridge`); an end the ring cut is none, and the viaduct carries on there
             let internal = [
-                ends_count[&r.ends[0]] > 1 || r.clipped[0] || riding[0],
-                ends_count[&r.ends[1]] > 1 || r.clipped[1] || riding[last],
+                ends_cnt[&r.ends[0]] > 1 || r.clipped[0] || riding[0],
+                ends_cnt[&r.ends[1]] > 1 || r.clipped[1] || riding[last],
             ];
             let (gs, ge) = (r.terrain[0], r.terrain[last]);
             let mut needed = 0;

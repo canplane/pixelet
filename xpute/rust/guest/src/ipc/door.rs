@@ -66,7 +66,7 @@ impl Door {
     }
 
     pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32) {
-        self.posted(cmd, self.cq.push(tag, cmd, flags, result, None));
+        self.on_posted(cmd, self.cq.push(tag, cmd, flags, result, None));
     }
 
     /// `write` fills the slot's payload and answers the packet's length, or
@@ -79,17 +79,17 @@ impl Door {
         result: i32,
         write: impl FnOnce(&mut [u8]) -> Option<u32>,
     ) {
-        self.posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
+        self.on_posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
     }
 
-    fn posted(&self, cmd: u32, e: Errno) {
+    fn on_posted(&self, cmd: u32, e: Errno) {
         self.keep(|s| s.cq_peak = s.cq_peak.max(self.cq.len()));
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
-    pub fn raise(&self, cmd: u32, count: u32, f: impl Fn(&mut PacketWriter)) {
+    pub fn raise(&self, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
         self.post_in_place(0, cmd, 0, 0, |out: &mut [u8]| {
-            let mut w = PacketWriter::new(out, count);
+            let mut w = PacketWriter::new(out, cnt);
             f(&mut w);
             w.fitted()
         });
@@ -115,9 +115,9 @@ impl Door {
             let Some(f) = self.sq.peek() else {
                 break;
             };
-            let result = match self.sq.packet(&f) {
+            let result = match self.sq.pkt(&f) {
                 Ok(pkt) => match apply(f.cmd, &pkt) {
-                    Ok(Some(value)) => Ok(value),
+                    Ok(Some(val)) => Ok(val),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
                 },

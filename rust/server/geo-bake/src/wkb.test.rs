@@ -40,16 +40,16 @@ impl Wkb {
 }
 
 #[test]
-fn a_point_is_one_geometry_of_one_point_and_not_a_polygon() {
+fn point_geometry() {
     let g = wkb_to_geometries(&Wkb::new(1).point(1.5, -2.5).0);
     assert_eq!(g.len(), 1);
     assert_eq!(g[0].points, vec![[1.5, -2.5, 0.0]]);
-    assert!(!g[0].is_polygon_source);
+    assert!(!g[0].is_polygon_src);
     assert!(g[0].holes.is_empty());
 }
 
 #[test]
-fn a_linestring_keeps_its_order_and_stays_open() {
+fn linestring_open() {
     let bytes = Wkb::new(2).ring(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]).0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 1);
@@ -57,11 +57,11 @@ fn a_linestring_keeps_its_order_and_stays_open() {
         g[0].points,
         vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0]]
     );
-    assert!(!g[0].is_polygon_source);
+    assert!(!g[0].is_polygon_src);
 }
 
 #[test]
-fn a_polygons_first_ring_is_the_outer_and_the_rest_are_holes() {
+fn polygon_rings() {
     let bytes = Wkb::new(3)
         .u32(2)
         .ring(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 0.0)])
@@ -69,25 +69,25 @@ fn a_polygons_first_ring_is_the_outer_and_the_rest_are_holes() {
         .0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 1);
-    assert!(g[0].is_polygon_source);
+    assert!(g[0].is_polygon_src);
     assert_eq!(g[0].points.len(), 4);
     assert_eq!(g[0].holes.len(), 1);
     assert_eq!(g[0].holes[0][0], [2.0, 2.0, 0.0]);
 }
 
-/// `is_polygon_source` is what closes a feature, so a ringless row must not
+/// `is_polygon_src` is what closes a feature, so a ringless row must not
 /// read as a line.
 #[test]
-fn a_polygon_with_no_rings_is_still_a_polygon() {
+fn empty_polygon() {
     let bytes = Wkb::new(3).u32(0).0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 1);
-    assert!(g[0].is_polygon_source);
+    assert!(g[0].is_polygon_src);
     assert!(g[0].points.is_empty());
 }
 
 #[test]
-fn a_multipolygon_is_flattened_to_one_polygon_each() {
+fn multipolygon_flattened() {
     let one = Wkb::new(3)
         .u32(1)
         .ring(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]);
@@ -97,13 +97,13 @@ fn a_multipolygon_is_flattened_to_one_polygon_each() {
     let bytes = Wkb::new(6).u32(2).raw(one).raw(two).0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 2);
-    assert!(g.iter().all(|x| x.is_polygon_source));
+    assert!(g.iter().all(|x| x.is_polygon_src));
     assert_eq!(g[0].points[0], [0.0, 0.0, 0.0]);
     assert_eq!(g[1].points[0], [5.0, 5.0, 0.0]);
 }
 
 #[test]
-fn ewkb_srid_is_skipped_and_z_kept() {
+fn ewkb_srid_z() {
     let mut bytes = vec![1u8];
     bytes.extend_from_slice(&(1u32 | 0x2000_0000 | 0x8000_0000).to_le_bytes());
     bytes.extend_from_slice(&3857u32.to_le_bytes());
@@ -115,7 +115,7 @@ fn ewkb_srid_is_skipped_and_z_kept() {
 }
 
 #[test]
-fn iso_z_and_m_are_read() {
+fn iso_z_m() {
     let mut bytes = vec![1u8];
     bytes.extend_from_slice(&3002u32.to_le_bytes());
     bytes.extend_from_slice(&2u32.to_le_bytes());
@@ -127,13 +127,13 @@ fn iso_z_and_m_are_read() {
 }
 
 #[test]
-fn an_unsupported_type_and_an_empty_buffer_are_both_no_geometry() {
+fn unsupported_or_empty() {
     assert!(wkb_to_geometries(&[]).is_empty());
     assert!(wkb_to_geometries(&Wkb::new(7).u32(0).0).is_empty());
 }
 
 #[test]
-fn a_truncated_ring_is_refused_rather_than_read() {
+fn truncated_ring_refused() {
     let mut bytes = Wkb::new(2).ring(&[(0.0, 0.0), (1.0, 1.0)]).0;
     bytes.truncate(bytes.len() - 4);
     assert!(wkb_to_geometries(&bytes).is_empty());

@@ -26,7 +26,7 @@
         "label": "Textures",
         "description": "Textures cube faces instead of a flat color."
       },
-      "resolution": {
+      "res": {
         "label": "Resolution",
         "auto": {
           "label": "Auto",
@@ -44,33 +44,17 @@
     },
     "camera": {
       "section_title": "Camera",
-      "section_caption": "Rotation and the third-person view",
+      "section_caption": "How the view moves and turns",
       "tilt_lock": {
         "label": "Lock tilt",
         "description": "Fixes the tilt; turns left and right only."
-      },
-      "orbit_obstacle": {
-        "label": "Third-person collision",
-        "through": {
-          "label": "Pass through",
-          "description": "Ignores obstacles and passes through."
-        },
-        "stop": {
-          "label": "Stop",
-          "description": "Stops the camera control just short of the obstacle."
-        },
-        "climb": {
-          "label": "Climb over",
-          "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too."
-        },
-        "description": "Controls what happens when zooming, turning, or tilting would move the camera into terrain or an object."
       }
     },
     "lighting": {
       "section_title": "Light and shadow",
       "section_caption": "Light, shadow and outlines",
       "edge_shade": {
-        "label": "Cube Outlines",
+        "label": "Cube outlines",
         "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
       },
       "ao": {
@@ -84,8 +68,8 @@
           "description": "Darkens contact areas and inside corners so cubes look grounded instead of floating. Light on performance."
         },
         "screen": {
-          "label": "Detailed (SSAO)",
-          "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."
+          "label": "Everything (SSAO)",
+          "description": "Adds soft shading to decor, characters and wider gaps on top of the corners for greater depth. This is the most demanding option because it processes the entire screen."
         }
       },
       "shadows": {
@@ -93,7 +77,7 @@
         "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
       },
       "rim_light": {
-        "label": "Rim Light",
+        "label": "Rim light",
         "description": "Adds a subtle highlight around the edges of cubes, decor and characters to make them stand out from the background."
       }
     },
@@ -109,12 +93,44 @@
         "description": "Shows how long each frame takes and how much GPU, network and memory it uses, and records them while on."
       },
       "world_gizmo": {
-        "label": "World Gizmo",
+        "label": "World gizmo",
         "description": "Draws rings that mark the screen's center and directions, and colors the ground by how far its terrain has loaded. The legend shown with it explains the colors."
       },
       "camera_gizmo": {
-        "label": "Camera Gizmo",
-        "description": "Overlays a ring-shaped grid around the screen's center and colors blocks by how large they appear on screen: green when about one grid cell, blue when smaller, red when larger."
+        "label": "Camera gizmo",
+        "description": "Overlays a ring-shaped grid around the screen's center and colors cubes by how large they appear on screen against a grid cell. The legend shown with it explains the colors."
+      },
+      "ray_steps": {
+        "label": "Ray steps",
+        "description": "Colors each point on screen by how much work it took to draw: blue for little, red for a lot. Points that borrowed a nearby result show what finding that result took."
+      },
+      "sky_time": {
+        "label": "Sky time",
+        "description": "Holds the sky and the sun at an hour of the place you are looking at, in its solar time. Clouds and stored data keep the real clock. A reload returns to the real time.",
+        "real": {
+          "label": "Real time",
+          "description": "Follows the device's clock."
+        },
+        "dawn": {
+          "label": "Dawn, 7:00",
+          "description": "A low sun, long shadows."
+        },
+        "morning": {
+          "label": "Morning, 9:00",
+          "description": "The sun stands at a slant."
+        },
+        "noon": {
+          "label": "Noon",
+          "description": "The sun at its highest, the shortest shadows."
+        },
+        "afternoon": {
+          "label": "Afternoon, 3:00",
+          "description": "The sun leans west."
+        },
+        "dusk": {
+          "label": "Dusk, 5:00",
+          "description": "A low sun, long shadows."
+        }
       }
     },
     "disclaimer": {
@@ -131,13 +147,9 @@
     "about": {
       "section_title": "About",
       "tagline": "Turn the real world into a canvas and build with blocks."
-    },
-    "navigation": {
-      "section_title": "View movement",
-      "section_caption": "How the view moves when you drag it"
     }
   },
-  "blocks": {
+  "assets": {
     "cube": {
       "ground": {
         "land": "Land",
@@ -201,8 +213,8 @@
       },
       "object": {
         "white": "White",
-        "grey": "Grey",
-        "dark_grey": "Dark Grey",
+        "grey": "Gray",
+        "dark_grey": "Dark Gray",
         "black": "Black",
         "red": "Red",
         "orange": "Orange",
@@ -264,7 +276,7 @@
         "colors": "Colors",
         "landcover": "Land",
         "water": "Water",
-        "water_features": "Water Features",
+        "water_features": "Water features",
         "buildings": "Buildings",
         "roads": "Roads",
         "aeroways": "Airports",
@@ -311,22 +323,22 @@
     "dock": {
       "pointer": "Pointer",
       "eraser": "Eraser",
-      "message_placeholder": "Type a message…",
-      "pin_placeholder": "Words for this pin…",
+      "message_placeholder": "Type a message",
+      "pin_placeholder": "Type the pin's message",
       "send": "Send",
-      "pin_done": "Put Up Pin",
-      "drawer_tooltip": "Open Drawer",
+      "pin_done": "Put up pin",
+      "drawer_tooltip": "Open drawer",
       "object_size": "Size {{n}}"
     },
     "controls": {
-      "reset_orientation": "Face North",
-      "move_to_location": "Go to My Location",
-      "start_compass_mode": "Start Compass Mode",
-      "exit_compass_mode": "Exit Compass Mode",
-      "first_person": "First Person",
-      "third_person": "Third Person",
-      "show_places": "Show Places",
-      "hide_places": "Hide Places"
+      "reset_orientation": "Face north",
+      "move_to_location": "Go to my location",
+      "start_compass_mode": "Turn on compass",
+      "exit_compass_mode": "Turn off compass",
+      "first_person": "View in first person",
+      "third_person": "View in third person",
+      "show_places": "Show places",
+      "hide_places": "Hide places"
     },
     "sensors": {
       "label": "Use my location",
@@ -334,12 +346,12 @@
     },
     "search": {
       "trigger_aria_label": "Search places",
-      "placeholder": "Search places…",
+      "placeholder": "Search places",
       "clear_aria_label": "Clear search",
       "loading": "Searching…",
       "no_results": "No results found",
       "section_elsewhere": "Elsewhere",
-      "focus": "Current location"
+      "pivot": "Current location"
     }
   },
   "halt": {

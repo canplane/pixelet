@@ -1,0 +1,78 @@
+// pxl-render/gpu/finish.rs
+
+//! The canvas from the world's color: what its passes left there, toned and
+//! blended linear (gpu/surface.rs `WORLD_COLOR`), brought from the world's
+//! pixels up to the canvas's and encoded once (screen_finish.wgsl), at the
+//! frame's vignette; and the world's depth carried up to the canvas's size
+//! with it (`Surface::screen_depth`).
+
+use crate::frame::shader::record::PIPELINE_SCREEN_FINISH;
+use crate::gpu::api::{buf_entry, pass_desc, release, view_entry, Gpu, Load, RenderContext};
+use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::span_spec::GpuSpanName;
+use crate::gpu::surface::Surface;
+
+pub struct Finish {
+    built: Built,
+    /// Its group over `bound`, the frame's words and the color and depth it
+    /// reads: made again exactly when one is another.
+    group: u32,
+    bound: [u32; 3],
+}
+
+impl Finish {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Finish {
+        Finish {
+            built: pipelines.build(g, PIPELINE_SCREEN_FINISH, g.canvas()),
+            group: 0,
+            bound: [0; 3],
+        }
+    }
+
+    pub fn release(self) {
+        release(self.group);
+    }
+
+    /// `color`, `s`'s world color as it is shown, onto `canvas` and `s`'s
+    /// depth into its screen's, a pass of its own, by the frame words in
+    /// `frame`, its time counted in `span`.
+    pub fn draw(
+        &mut self,
+        ctx: &mut RenderContext,
+        span: GpuSpanName,
+        frame: u32,
+        s: &Surface,
+        canvas: u32,
+    ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(span);
+        let bound = [frame, color, s.depth_view];
+        if bound != self.bound {
+            release(self.group);
+            self.group = g.bind_group(
+                self.built.layouts[0],
+                &[
+                    buf_entry(0, frame),
+                    view_entry(1, color),
+                    view_entry(2, s.depth_view),
+                ],
+            );
+            self.bound = bound;
+        }
+        let pass = g.pass(
+            encoder,
+            &pass_desc(
+                canvas,
+                Load::Clear,
+                s.screen_depth_view,
+                Load::Clear,
+                0.0,
+                stamp.pass(),
+            ),
+        );
+        g.set_pipeline(pass, self.built.pipeline);
+        g.set_bind_group(pass, 0, self.group, &[]);
+        g.draw(pass, 3, 1, 0, 0);
+        g.end(pass);
+    }
+}

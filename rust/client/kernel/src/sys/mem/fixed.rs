@@ -38,8 +38,8 @@ impl Held {
 }
 
 /// `count` of `size` bytes, rounded up to a whole cache line, as a lane is laid.
-pub const fn lane_bytes(count: usize, size: usize) -> u32 {
-    ((count * size).div_ceil(64) * 64) as u32
+pub const fn lane_bytes(cnt: usize, size: usize) -> u32 {
+    ((cnt * size).div_ceil(64) * 64) as u32
 }
 
 /// `n` of `T` from `off` into `s`. Sizes are fixed at compile time, so out

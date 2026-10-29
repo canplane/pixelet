@@ -10,23 +10,26 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::bake::constant::EntryAt;
 
 use super::changed::Columns;
-use super::decor::Grown;
+use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
-use crate::domain::layer::residency::{Lines, Residency};
+use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 
 /// The world's query: the resident ground and the placed objects, read
 /// as one.
 #[derive(Clone, Copy)]
 pub struct World<'a> {
-    pub(super) terrain: &'a Residency<TerrainTile>,
-    pub(super) objects: &'a Store,
-    /// How decor is struck; none, and a ray passes through decor.
-    pub(super) decor: Option<Grown<'a>>,
+    pub(super) terrain: &'a TileCache<TerrainTile>,
+    pub(super) object: &'a Store,
+    /// Whether decor is struck, as the boxes it claims; else a ray passes
+    /// through decor.
+    pub(super) decor: bool,
+    /// Whether it is unplaced, nothing placed asked of it: the ground's alone
+    /// (pxl-spec-core `world::Handed::unplaced`).
+    pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
     pub(super) carve: Option<EntryAt>,
@@ -38,16 +41,15 @@ impl World<'static> {
     /// The world as stored: what every mechanic asks, the pick, a walk, the
     /// camera's clearance, an edit's reads and decor's footing.
     pub fn now() -> World<'static> {
-        let objects: &'static Store = crate::domain::layer::object::store::objects();
-        World::new(TerrainTile::residency(), objects)
+        let object: &'static Store = store::object();
+        World::new(TerrainTile::tile_cache(), object)
     }
 
-    /// As `now`, and decor is struck too, where the frame drawing at `tau`
-    /// holds it: the pointer's pick, which alone asks what a decor thing is.
-    pub fn striking_decor(self, tau: Tau) -> World<'static> {
+    /// As `now`, and decor is struck too, where the frame holds it: the
+    /// pointer's pick, which alone asks what a decor thing is.
+    pub fn striking_decor(self) -> World<'static> {
         let decor = Grown {
             models: crate::domain::query::model::models(),
-            tau,
         };
         World {
             decor: Some(decor),
@@ -57,11 +59,12 @@ impl World<'static> {
 }
 
 impl<'a> World<'a> {
-    pub fn new(terrain: &'a Residency<TerrainTile>, objects: &'a Store) -> World<'a> {
+    pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
         World {
             terrain,
-            objects,
-            decor: None,
+            object,
+            decor: false,
+            unplaced: false,
             hide: None,
             carve: None,
             reading: None,
@@ -109,16 +112,16 @@ impl<'a> World<'a> {
 #[derive(Default)]
 pub struct Walked {
     ground: Lines,
-    objects: Walk,
+    object: Walk,
 }
 
 impl World<'_> {
     /// Where the ground and what is placed stand in the node, as its cells
     /// at `cell` are read; each stepped from where `walked` last went.
     pub fn bounds(&self, walked: &mut Walked, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
-        let objects = self.objects.column(&mut walked.objects, node);
+        let object = self.object.column(&mut walked.object, node);
         self.terrain
             .bound_walked(&mut walked.ground, node, cell)
-            .map(|ground| ground.into_iter().chain(objects).reduce(Aabb::join))
+            .map(|ground| ground.into_iter().chain(object).reduce(Aabb::join))
     }
 }

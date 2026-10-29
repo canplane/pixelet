@@ -5,12 +5,15 @@
 
 use xpute_guest::sched::edge::Edge;
 
+use crate::sys::load;
+use xpute_guest::clock;
 use xpute_guest::global::Global;
+use xpute_guest::sched::task;
 
 /// The kernel's tasks: the three that run for good (`world_tasks`) and one for
 /// each file in flight, a slot's, the catalog's or the sphere's (sys/io/loader.rs
 /// `arrival`); an executor sizes its pool by it.
-pub const TASKS: usize = 3 + crate::sys::load::LOAD_FILES;
+pub const TASKS: usize = 3 + load::LOAD_FILES;
 
 /// The order the kernel's tasks ask of the executor, which may ignore it;
 /// nothing relies on it.
@@ -31,7 +34,7 @@ pub fn world_edge() -> &'static mut Edge<TASKS> {
 /// A task queued and not yet polled (a turn without a frame polls none)
 /// asks for the next turn too.
 pub fn world_fall() -> f64 {
-    if xpute_guest::sched::task::pending() {
+    if task::pending() {
         world_edge().ask_next();
     }
     world_edge().fall()
@@ -47,9 +50,7 @@ pub fn request_world_tick() {
 /// host comes off its own next quota, never the tasks' turn.
 pub fn tasks_after_frame(paced_ms: f64) {
     use crate::sys::sched::param::{CONTENT_SHARE, QUANTUM_MARGIN_SHARE};
-    world_edge().extend_to(
-        xpute_guest::clock::now() + CONTENT_SHARE * paced_ms * (1.0 - QUANTUM_MARGIN_SHARE),
-    );
+    world_edge().extend_to(clock::now() + CONTENT_SHARE * paced_ms * (1.0 - QUANTUM_MARGIN_SHARE));
 }
 
 /// The earliest asked wins; a wait still pending when its turn comes asks again.

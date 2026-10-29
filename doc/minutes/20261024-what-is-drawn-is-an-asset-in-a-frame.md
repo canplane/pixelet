@@ -41,7 +41,7 @@ already does is cited, and where it does not.
 So a person is a frame the walk moves, and their model and their chat line are
 two assets in it: neither is anchored to the other.
 
-Alike means one interface, not one behaviour. How a kind is drawn is its own: a
+Alike means one interface, not one behavior. How a kind is drawn is its own: a
 cube in the world's grid is found by the rays through the objects' tree, the
 same cube in the pointer's frame is a box mesh, and a kind is still drawn wholly
 on one side. Only the world grid's instances are the world — what `world::node`,
@@ -103,10 +103,10 @@ nothing else, which is what a ghost or a chat line wants.
    > the rule it showed by. `speak_from` is gone.
 3. **An actor's instances are in one shared table**, `domain/scene/actor.rs`
    `Actors`, sized by its users' bounds (`ACTORS_MAX`, `CASES_MAX`), beside
-   `domain/scene/character/`. Playing clips is the actor kind's behaviour, and a
+   `domain/scene/character/`. Playing clips is the actor kind's behavior, and a
    clip's time and palette are an instance's, held by its frame.
 
-   > Since the frames: `actor.rs` is the kind's behaviour, an `Actor` instance;
+   > Since the frames: `actor.rs` is the kind's behavior, an `Actor` instance;
    > the figures and the cases each hold theirs and declare their bounds
    > (`companion::FIGURES`, `preview::CASES_MAX`). No table is left.
 4. **A preview's case registers its model again** at one unit tall
@@ -162,7 +162,7 @@ nothing else, which is what a ghost or a chat line wants.
    > alone; the ghost's type is an edit not yet made in the trunk
    > (`layer/object/preview.rs` `Ghost`), which its drawer takes whole
    > (`GhostDraw::set`). How a kind is drawn stays the drawer's match: one
-   > interface, not one behaviour. `PlacementTool`'s `zoom` and `room` stay by
+   > interface, not one behavior. `PlacementTool`'s `zoom` and `room` stay by
    > kind, since the tool is the descriptor of the asset it places.
 8. **The top sums its owners' bounds by name** (`door/layout.rs` `MODELS_MAX`,
    `SINGLE_UPLOADS`). `SINGLE_UPLOADS` is 4 for five owners — the ghost, the
@@ -206,7 +206,7 @@ nothing else, which is what a ghost or a chat line wants.
      `actor.json` in the one catalog, and the clouds are declared there.
    - The texture pack is the file the cube kind's definition references. The
      actors, the clouds and the decors' models are references like any other.
-   - The kernel keeps only each kind's behaviour: painting a cube, striking a
+   - The kernel keeps only each kind's behavior: painting a cube, striking a
      decor, playing an actor's clips, a marker's designs. It knows no asset by
      name.
    - This reverses "A catalog is never sent, because both sides compile it"
@@ -252,7 +252,7 @@ kernel/src/
   or in xpute's kit, which it already imports.
 - **The crate root's `Kernel` global** splits: the scene's state into `scene/`,
   the draw list beside the models, its lowest reader.
-- **Open:** where each kind's behaviour (cube, decor, marker, actor, sky) sits
+- **Open:** where each kind's behavior (cube, decor, marker, actor, sky) sits
   once the catalog is plugged in, and the frames' folders under `scene/` (the
   world, a person, a pet, the pointer, the wind, the fix, a case).
 
@@ -267,7 +267,7 @@ kernel/src/
 
   > Checked (2026-10-25): it does not resolve by moving the files. The shaders
   > take the decor rows as constants: `scatter.rs` loops over `DECORS` and sizes
-  > `GROUPS`, `drawn::REGIONS`, `PARAM_WORDS` and `GROWS_WORDS` by them, all
+  > `GROUPS`, `drawn::REGIONS`, `DRAWING_WORDS` and `GROWS_WORDS` by them, all
   > compiled into the checked-in WGSL. Reading the decors at boot means the
   > scatter reads them from a buffer instead.
 - **Bounds at boot.** `.fixed`'s block slots and render's draw groups are sized

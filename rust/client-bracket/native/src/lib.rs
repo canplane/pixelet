@@ -18,11 +18,12 @@ mod android;
 mod surface;
 mod unpack;
 
+use pxl_kernel::door;
 use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
 use pxl_kernel::sys::stop::Stop;
 use xpute_host::mem::Memory;
-use xpute_host::native::{self, Alloc, BootInfo, Plan};
+use xpute_host::native::{self, Alloc, BootInfo, Config};
 
 /// The library's one allocator: the kernel's blocks in its memory, so a
 /// `Vec` the kernel hands the shell lies in the memory the shell reads.
@@ -37,8 +38,8 @@ static ALLOC: Alloc = Alloc;
 // through, exported under xpute's names as `xpute_intr` and `xpute_mem`
 // (include/pxl_native.h), and `guest()` here.
 xpute_host::native_abi!(
-    Plan {
-        memory_bytes: PHONE_BYTES,
+    Config {
+        mem_bytes: PHONE_BYTES,
         data_end: GLOBAL_BASE,
         heap_at: heap_at(GLOBAL_BASE),
         stack_bytes: THREAD_STACK_BYTES as usize,
@@ -69,7 +70,7 @@ fn last_words(stop: Stop<'_>) {
 
 /// The memory as the GPU's host reads and writes it between turns.
 fn view() -> Memory<'static> {
-    let (base, bytes) = guest().memory();
+    let (base, bytes) = guest().mem();
     // SAFETY: the memory, reserved for the process's life; between turns, on
     // the kernel's thread, where nothing holds a reference into a range the
     // kernel names.
@@ -83,7 +84,7 @@ fn view() -> Memory<'static> {
 /// the turn's calls run on it after (surface.rs), and the frames it admits.
 fn turn(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     surface::before_turn(&mut view());
-    let wake = pxl_kernel::door::intr(quota_ms, boot_info, Some(last_words), surface::admit);
+    let wake = door::intr(quota_ms, boot_info, Some(last_words), surface::admit);
     surface::after_turn(&mut view());
     wake
 }

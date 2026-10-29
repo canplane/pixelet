@@ -14,6 +14,8 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::{Mutex, OnceLock};
 
+use crate::surface;
+use crate::unpack;
 use jni_sys::{
     jboolean, jbyteArray, jclass, jdouble, jint, jmethodID, jobject, jvalue, JNIEnv,
     JNINativeInterface_, JavaVM, JNI_ABORT, JNI_OK,
@@ -59,6 +61,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_mem(
     let mut bytes = 0u32;
     // SAFETY: our own word.
     let at = unsafe { crate::xpute_mem(&raw mut bytes) };
+    // SAFETY: the environment JNI called this with.
     let make = unsafe { jni(env) }
         .NewDirectByteBuffer
         .or_bug(Errno::ENOSYS);
@@ -75,6 +78,7 @@ unsafe fn with_bytes<R>(
     packed: jbyteArray,
     f: impl FnOnce(*const u8, usize) -> R,
 ) -> R {
+    // SAFETY: the environment JNI called this with.
     let jni = unsafe { jni(env) };
     let (length, elements, release) = (
         jni.GetArrayLength.or_bug(Errno::ENOSYS),
@@ -108,7 +112,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
     // SAFETY: JNI's array, its own length.
     let Some(raw) = (unsafe {
         with_bytes(env, packed, |at, len| {
-            crate::unpack::decode(core::slice::from_raw_parts(at, len))
+            unpack::decode(core::slice::from_raw_parts(at, len))
         })
     }) else {
         return core::ptr::null_mut();
@@ -116,6 +120,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
     let Ok(size) = jint::try_from(raw.len()) else {
         return core::ptr::null_mut();
     };
+    // SAFETY: the environment JNI called this with.
     let jni = unsafe { jni(env) };
     let (find, method, call, address) = (
         jni.FindClass.or_bug(Errno::ENOSYS),
@@ -167,6 +172,7 @@ struct Wake {
 // SAFETY: JNI's VM is one for the process and may be used from any thread; a
 // global reference and a method ID stay valid in every thread until let go.
 unsafe impl Send for Wake {}
+// SAFETY: as for `Send`: nothing in it is changed once it is made.
 unsafe impl Sync for Wake {}
 
 static WAKE: OnceLock<Wake> = OnceLock::new();
@@ -182,6 +188,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_gpuOpen(
     env: *mut JNIEnv,
     this: jobject,
 ) -> jboolean {
+    // SAFETY: the environment JNI called this with.
     let j = unsafe { jni(env) };
     let mut vm: *mut JavaVM = core::ptr::null_mut();
     // SAFETY: JNI's own calls on the environment it called with; the class
@@ -203,8 +210,8 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_gpuOpen(
             }
         }
     }
-    crate::surface::xpute_gpu_wake_on(wake);
-    jboolean::from(crate::surface::xpute_gpu_open() == 0)
+    surface::xpute_gpu_wake_on(wake);
+    jboolean::from(surface::xpute_gpu_open() == 0)
 }
 
 /// `PxlNative.wake`, from whichever thread learned of a completion
@@ -257,7 +264,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBin
     };
     let at = window.as_ptr().expose_provenance();
     // SAFETY: the window is held until the surface over it is unbound.
-    let bound = unsafe { crate::surface::xpute_gpu_surface_bind(handle, window.as_ptr().cast()) };
+    let bound = unsafe { surface::xpute_gpu_surface_bind(handle, window.as_ptr().cast()) };
     let let_go = if bound == 0 {
         WINDOWS
             .lock()
@@ -270,8 +277,8 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBin
     if let Some(old) = let_go {
         // SAFETY: a window this module acquired, whose surface is gone.
         unsafe {
-            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(old))
-        };
+            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(old));
+        }
     }
     bound
 }
@@ -285,7 +292,7 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
     handle: jint,
 ) {
     let handle = handle as u32;
-    crate::surface::xpute_gpu_surface_unbind(handle);
+    surface::xpute_gpu_surface_unbind(handle);
     let window = WINDOWS
         .lock()
         .or_bug(Errno::ENOTRECOVERABLE)
@@ -294,8 +301,8 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
     if let Some(at) = window {
         // SAFETY: a window this module acquired, whose surface is gone.
         unsafe {
-            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(at))
-        };
+            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(at));
+        }
     }
 }
 

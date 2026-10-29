@@ -11,8 +11,10 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 pub const GPU_SPAN_NAMES: usize = 11;
@@ -23,13 +25,26 @@ pub enum GpuSpanName {
     prepass = 1,
     ao = 2,
     world = 3,
-    marker = 4,
-    debug = 5,
-    case = 6,
-    fill = 7,
-    cast = 8,
-    grow = 9,
-    shadow = 10,
+    resolve = 4,
+    marker = 5,
+    debug = 6,
+    case = 7,
+    fill = 8,
+    cast = 9,
+    beam = 10,
+    cell = 11,
+    sample = 12,
+    sraster = 13,
+    px = 14,
+    miss = 15,
+    sun_beam = 16,
+    sun_sample = 17,
+    sun_raster = 18,
+    sun_slot = 19,
+    sun_walk = 20,
+    grow = 21,
+    shadow = 22,
+    face = 23,
 }
 
 impl GpuSpanName {
@@ -44,16 +59,28 @@ impl GpuSpanName {
         GpuSpanName::case,
         GpuSpanName::fill,
         GpuSpanName::cast,
+        GpuSpanName::beam,
+        GpuSpanName::cell,
+        GpuSpanName::sample,
+        GpuSpanName::sraster,
+        GpuSpanName::px,
+        GpuSpanName::miss,
+        GpuSpanName::sun_beam,
+        GpuSpanName::sun_sample,
+        GpuSpanName::sun_raster,
+        GpuSpanName::sun_slot,
+        GpuSpanName::sun_walk,
         GpuSpanName::grow,
         GpuSpanName::shadow,
+        GpuSpanName::face,
     ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<GpuSpanName> {
+    pub fn of(val: u8) -> Option<GpuSpanName> {
         GpuSpanName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -69,6 +96,7 @@ pub enum FrameKind {
     standing = 5,
     cast = 6,
     stood = 7,
+    px = 8,
 }
 
 impl FrameKind {
@@ -82,13 +110,14 @@ impl FrameKind {
         FrameKind::standing,
         FrameKind::cast,
         FrameKind::stood,
+        FrameKind::px,
     ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<FrameKind> {
+    pub fn of(val: u8) -> Option<FrameKind> {
         FrameKind::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }

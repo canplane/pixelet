@@ -123,7 +123,7 @@ fn target(gpu: &mut Encoder, s: &mut Stream) -> (Id, Id) {
     (t, v)
 }
 
-/// One pass drawing into `view`, cleared to a colour each channel of which
+/// One pass drawing into `view`, cleared to a color each channel of which
 /// is a whole number of 255ths.
 fn pass(gpu: &mut Encoder, s: &mut Stream, e: Id, view: Id) -> Id {
     let colors = [ColorAttachment {
@@ -273,7 +273,7 @@ fn add_arrays(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     turn(s);
 }
 
-/// One triangle whose corners are whole 32nds, every pixel centre at least
+/// One triangle whose corners are whole 32nds, every pixel center at least
 /// 0.17 pixels from its edges, so no rasterizer's rounding decides one.
 fn triangle(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let (t, v) = target(gpu, s);
@@ -319,7 +319,7 @@ fn triangle(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
 }
 
 /// Four quads of one indexed corner list, each instance its place and
-/// colour, edges on pixel boundaries; base vertex and first instance past 0.
+/// color, edges on pixel boundaries; base vertex and first instance past 0.
 fn indexed_instanced(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let (t, v) = target(gpu, s);
     // Two vertices before the quad's, which the base vertex skips.
@@ -328,7 +328,7 @@ fn indexed_instanced(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn
         .iter()
         .flat_map(|i| i.to_le_bytes())
         .collect();
-    // Each: its offset (two f32), its colour (unorm8x4); the first is skipped.
+    // Each: its offset (two f32), its color (unorm8x4); the first is skipped.
     let places: [([f32; 2], [u8; 4]); 5] = [
         ([0.0, 0.0], [1, 2, 3, 4]),
         ([-1.0, -1.0], [255, 0, 0, 255]),

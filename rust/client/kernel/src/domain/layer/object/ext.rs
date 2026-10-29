@@ -1,11 +1,11 @@
 // pxl-kernel/domain/layer/object/ext.rs
 
 //! What placed things carry beyond their ids, a pool a class
-//! (pxl-spec block/ext.rs). A leaf names its record by its place in its
+//! (pxl-spec object/ext.rs). A leaf names its record by its place in its
 //! class's pool, so a record lives and goes with the leaf that names it.
 //! A record's memory is the heap's, whose slab keeps small ones together.
 
-use pxl_spec::block::ext::Class;
+use pxl_spec::object::ext::Class;
 
 /// One record, in its class's shape.
 #[derive(Clone, Debug, PartialEq, Eq)]

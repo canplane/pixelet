@@ -10,7 +10,7 @@
 
 use crate::domain::control::cmd::GeolocationErrorCode;
 use crate::domain::control::cmd::Message;
-use crate::domain::control::sensor::reading::{device_location_store, Pose};
+use crate::domain::control::sensor::reading::{device_location_store, SensorState, SensorStatus};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -47,10 +47,10 @@ pub fn start_watching(supported: bool) {
         return;
     }
     if !supported {
-        store.pose = Pose::Failed(Message::GeolocationUnsupported);
+        store.state = SensorState::failed(Message::GeolocationUnsupported);
         return;
     }
-    store.pose = Pose::Loading;
+    store.state = SensorState::of(SensorStatus::Loading);
     store.set_is_tracking_location(true);
     geolocation().command = Some(GeolocationCommand::Start);
 }
@@ -71,7 +71,7 @@ pub fn geolocation_open(supported: bool) {
 pub fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
-    device_location_store().pose = Pose::Idle;
+    device_location_store().state = SensorState::of(SensorStatus::Idle);
 }
 
 pub fn geolocation_visibility(visible: bool, supported: bool) {
@@ -83,38 +83,32 @@ pub fn geolocation_visibility(visible: bool, supported: bool) {
 }
 
 /// A grant from outside the app recovers; otherwise a denial stuck until reload.
-pub fn geolocation_permission_granted(supported: bool) {
+pub fn on_geolocation_permission_granted(supported: bool) {
     if !device_location_store().is_tracking_location {
         start_watching(supported);
     }
 }
 
-/// `altitude` is the ellipsoid's, as GPS gives it; kept over sea level, the
+/// `alt` is the ellipsoid's, as GPS gives it; kept over sea level, the
 /// terrain's, by the geoid at the base of the leaf tile it falls in.
-pub fn geolocation_fix(
-    longitude: f64,
-    latitude: f64,
-    altitude: Option<f64>,
-    accuracy: f64,
-    course: Option<f64>,
-) {
+pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, course: Option<f64>) {
     let (x0, y0, _) = GROUND
-        .cell_of(LEAF_ZOOM, &epsg4326::project(&[longitude, latitude, 0.0]))
+        .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
         .tile()
         .rect();
-    let [lng, lat, _] =
-        epsg4326::from_mercator(&[epsg3857::mer_from_u(x0), epsg3857::mer_from_u(y0), 0.0]);
-    let altitude = altitude.map(|h| h - epsg4326::geoid_m(lng, lat));
-    device_location_store().set_location([longitude, latitude], altitude, accuracy, course);
+    let [lon, lat, _] =
+        epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
+    let alt = alt.map(|h| h - epsg4326::geoid_m(lon, lat));
+    device_location_store().set_location([lon, lat], alt, accuracy, course);
 }
 
 /// A momentary error (unavailable, timed out) leaves the watch running, the
 /// pose failed until its next fix; one that ended the watch (a denial, or a
 /// device's watch that could not start) leaves nothing watching, which a
 /// grant or a return to the foreground starts again.
-pub fn geolocation_error(code: GeolocationErrorCode) {
+pub fn geolocation_err(code: GeolocationErrorCode) {
     let store = device_location_store();
-    store.pose = Pose::Failed(match code {
+    store.state = SensorState::failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
         GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,

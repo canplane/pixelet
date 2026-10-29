@@ -59,7 +59,7 @@ function Halo({
       ))}
       {
         // Its own view: a positioned box paints over an unpositioned SVG, which the
-        // rings would grey.
+        // rings would gray.
       }
       <View>{draw()}</View>
     </View>

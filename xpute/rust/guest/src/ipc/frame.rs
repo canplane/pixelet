@@ -17,7 +17,7 @@ pub struct Frame {
     pub flags: u32,
     pub result: i32,
     /// 0 for none.
-    pub packet_at: u32,
+    pub pkt_at: u32,
 }
 
 pub fn cmd_word(cmd: u32, flags: u32) -> u32 {

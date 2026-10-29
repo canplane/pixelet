@@ -4,6 +4,8 @@ use std::path::Path;
 use std::process::Command;
 
 use xpute_kit::math::scalar::round;
+use zstd::bulk;
+use zstd::stream;
 
 /// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
@@ -27,11 +29,11 @@ pub enum Level {
 }
 
 pub fn pack(raw: &[u8], level: Level) -> std::io::Result<Vec<u8>> {
-    zstd::bulk::compress(raw, level as i32)
+    bulk::compress(raw, level as i32)
 }
 
 pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
-    zstd::stream::decode_all(stored)
+    stream::decode_all(stored)
 }
 
 pub fn fmt_bytes(n: f64) -> String {
@@ -59,11 +61,11 @@ pub fn fmt_dur(ms: f64) -> String {
 /// starts, which is when its binary was built: commits made while it runs
 /// are not what it ran.
 pub fn git_sha() -> Option<String> {
-    let index = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
+    let idx = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
     let git = |args: &[&str]| {
         let out = Command::new("git")
             .args(args)
-            .env("GIT_INDEX_FILE", &index)
+            .env("GIT_INDEX_FILE", &idx)
             .output()
             .ok()?;
         out.status
@@ -72,7 +74,7 @@ pub fn git_sha() -> Option<String> {
     };
     let head = git(&["rev-parse", "HEAD"])?;
     let tree = git(&["add", "-A"]).and_then(|_| git(&["write-tree"]));
-    let _ = std::fs::remove_file(&index);
+    let _ = std::fs::remove_file(&idx);
     match tree {
         Some(t) if git(&["rev-parse", "HEAD^{tree}"]).as_deref() != Some(t.as_str()) => {
             Some(format!("{head}+{t}"))

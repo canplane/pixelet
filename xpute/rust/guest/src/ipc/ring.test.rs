@@ -23,7 +23,7 @@ fn ring(cap: u32, slot: u32) -> (Ring, Box<[u8]>) {
 }
 
 #[test]
-fn ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
+fn order_and_full() {
     let (r, _buf) = ring(4, 64);
     let ack = frame::ACKREQ;
     for round in 0..3u32 {
@@ -44,7 +44,7 @@ fn ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
                 (f.tag, f.cmd, f.flags, f.result),
                 (round * 4 + k, 7, ack, -((round * 4 + k) as i32))
             );
-            assert!(r.packet(&f).unwrap().is_none());
+            assert!(r.pkt(&f).unwrap().is_none());
             r.advance();
         }
         assert_eq!(r.peek(), None);
@@ -53,7 +53,7 @@ fn ring_frames_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
 }
 
 #[test]
-fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_before_them() {
+fn payload_per_slot() {
     let (r, _buf) = ring(8, 64);
     let pkt = |n: u32| {
         let mut t: TreeView<'_> = TreeView::new();
@@ -88,7 +88,7 @@ fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_befo
 
     for n in 1..=8u32 {
         let f = r.peek().expect("a frame waits");
-        let root = TreeReader::new(r.packet(&f).unwrap().unwrap())
+        let root = TreeReader::new(r.pkt(&f).unwrap().unwrap())
             .unwrap()
             .read_branch()
             .unwrap();
@@ -112,8 +112,8 @@ fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_befo
     r.advance();
     let at = r.entry_at(r.tail());
     r.push(11, 0, 0, 0, None);
-    r.words()[(at + frame::PACKET) as usize] = 4;
+    r.words()[(at + frame::PKT) as usize] = 4;
     let f = r.peek().expect("a frame waits");
-    assert_eq!((f.tag, f.packet_at), (11, 4));
-    assert!(r.packet(&f).is_err(), "outside a slot");
+    assert_eq!((f.tag, f.pkt_at), (11, 4));
+    assert!(r.pkt(&f).is_err(), "outside a slot");
 }

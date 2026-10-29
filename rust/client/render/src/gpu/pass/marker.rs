@@ -12,14 +12,15 @@ use crate::frame::shader::record::PIPELINE_MARKER_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
-    buffer_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
-    Format, Gpu, Load, Stamp,
+    buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
+    Format, Gpu, Load, RenderContext,
 };
-use crate::gpu::mip::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::{Paint, Sheet, SlotSet};
 use crate::gpu::sheet::{SheetPainter, Sketch, SHEET_SCALE};
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{Draws, Uploads};
 use crate::look::marker::{
@@ -43,7 +44,6 @@ fn anchor_dot(p: &mut Sketch, logical_w: f32) {
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 fn point(
     p: &mut Sketch,
     lines: &[String],
@@ -89,7 +89,6 @@ fn pill(p: &mut Sketch, words: &str, fill: u32, ink: u32, logical_w: f32) {
 
 /// The uncovered corners read as a pixel-art rounded corner; a real arc would
 /// anti-alias against nearest sampling.
-#[allow(clippy::too_many_arguments)]
 fn notched_rect(p: &mut Sketch, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
@@ -145,7 +144,7 @@ struct Set {
 pub struct MarkerPass {
     built: Built,
     region_built: Built,
-    /// The regions' numbers and their depth, the world's size.
+    /// The regions' numbers and their depth, the canvas's size.
     numbers: u32,
     numbers_view: u32,
     regions: u32,
@@ -165,7 +164,7 @@ pub struct MarkerPass {
     frame_group: u32,
     pub view: [f32; 16],
     pub proj: [f32; 16],
-    pub px_k: f32,
+    pub px_per_unit: f32,
 }
 
 impl MarkerPass {
@@ -174,7 +173,7 @@ impl MarkerPass {
         self.regions_size.0 as f64 * self.regions_size.1 as f64 * 4.0
     }
 
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, align: u32) -> MarkerPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> MarkerPass {
         let sampler = g.sampler(
             FilterMode::nearest,
             FilterMode::linear,
@@ -184,7 +183,7 @@ impl MarkerPass {
             1,
         );
         let built = pipelines.build(g, PIPELINE_MARKER, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
+        let frame_group = g.bind_group(built.layouts[0], &[buf_entry(0, frame_buf)]);
         MarkerPass {
             built,
             region_built: pipelines.build(g, PIPELINE_MARKER_REGION, Format::rgba8unorm),
@@ -206,13 +205,13 @@ impl MarkerPass {
             uniforms: DrawUniforms::new(word_bytes(SET_FLOATS), align),
             view: [0.0; 16],
             proj: [0.0; 16],
-            px_k: 1.0,
+            px_per_unit: 1.0,
         }
     }
 
     /// A sticker whose text is not drawn yet is left for a later frame.
     /// Whether the sheet changed: made again, or a sticker drawn on it.
-    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, sheet: &mut Sheet, text: TextOf) -> bool {
+    pub fn sync_sheet(&mut self, g: &Gpu, mips: &MipPass, sheet: &mut Sheet, text: TextOf) -> bool {
         let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         if flush.whole {
@@ -290,18 +289,15 @@ impl MarkerPass {
         let mut made = Vec::new();
         let mut drawn = false;
         for (slot, p, rasters) in ready {
-            if self.painter.paint(
-                g,
-                encoder,
-                self.sheet,
-                sheet.slot_rect(slot),
-                &p,
-                rasters,
-                &mut made,
-            ) {
-                drawn = true;
-            } else {
-                sheet.mark_dirty(slot);
+            let painted =
+                self.painter
+                    .paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, rasters);
+            match painted {
+                Some(ids) => {
+                    made.extend(ids);
+                    drawn = true;
+                }
+                None => sheet.mark_dirty(slot),
             }
         }
         g.submit(encoder);
@@ -315,7 +311,7 @@ impl MarkerPass {
         flush.whole || drawn
     }
 
-    /// The regions' depth at the world's size, and each set's groups and
+    /// The regions' depth at the canvas's size, and each set's groups and
     /// uniform, made here so drawing makes nothing that outlives its frame.
     pub fn prepare(
         &mut self,
@@ -369,7 +365,7 @@ impl MarkerPass {
                 || set.group == 0
             {
                 let bound = |layout: u32, before: u32| {
-                    g.bind_group(layout, &[buffer_entry(0, upload), view_entry(1, before)])
+                    g.bind_group(layout, &[buf_entry(0, upload), view_entry(1, before)])
                 };
                 release(set.group);
                 release(set.region_group);
@@ -386,33 +382,33 @@ impl MarkerPass {
                 .filter(|d| d[1] > 0)
                 .filter(|d| uploads.get(d[0]).is_some())
         };
-        let (view, proj, px_k) = (self.view, self.proj, self.px_k);
-        let count = placed().take(SETS).count() as u32;
+        let (view, proj, px_per_unit) = (self.view, self.proj, self.px_per_unit);
+        let cnt = placed().take(SETS).count() as u32;
         let mut before = 0;
         self.uniforms
-            .write(g, self.built.layouts[1], count, placed(), true, |buf, d| {
-                let mut s = [0.0f32; SET_FLOATS];
-                s[..16].copy_from_slice(&view);
-                s[16..32].copy_from_slice(&proj);
-                s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
-                s[35] = px_k;
-                s[36] = before as f32;
-                buf[..word_bytes(SET_FLOATS) as usize].copy_from_slice(bytes(&s));
+            .write(g, self.built.layouts[1], cnt, placed(), true, |buf, d| {
+                let mut s = [0.0f32; MARKER_FLOATS];
+                s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&view);
+                s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
+                s[marker::TRANSLATION..marker::TRANSLATION + 3]
+                    .copy_from_slice(&uniform_of(uniforms, d)[..3]);
+                s[marker::PX_PER_UNIT] = px_per_unit;
+                s[marker::BEFORE] = before as f32;
+                buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
                 before += d[1];
             });
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         color: u32,
         depth: u32,
         draws: &Draws,
         uploads: &Uploads,
-        stamp: &mut Stamp,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::marker);
         if self.sheet_group == 0 {
             return;
         }
@@ -443,8 +439,8 @@ impl MarkerPass {
         g.set_pipeline(pass, self.region_built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
-            let (group, offset) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[offset]);
+            let (group, off) = slots.at(k as u32);
+            g.set_bind_group(pass, 1, group, &[off]);
             g.set_bind_group(pass, 2, set.region_group, &[]);
             g.draw(pass, 4, d[1], 0, 0);
         }
@@ -457,8 +453,8 @@ impl MarkerPass {
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 3, self.sheet_group, &[]);
         for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
-            let (group, offset) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[offset]);
+            let (group, off) = slots.at(k as u32);
+            g.set_bind_group(pass, 1, group, &[off]);
             g.set_bind_group(pass, 2, set.group, &[]);
             g.draw(pass, 4, d[1], 0, 0);
         }

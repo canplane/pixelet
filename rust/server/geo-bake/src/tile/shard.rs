@@ -24,11 +24,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::cli::Flags;
-use crate::coverage::{source_of, Coverage, Node};
+use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
-    ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, MANIFEST,
+    ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
 use crate::source;
+use crate::util;
 use crate::util::git_sha;
 use pxl_spec::bake::published::FORMAT;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
@@ -69,7 +70,7 @@ impl Stage {
     fn write_done(&self, unit: &str, gone: impl Iterator<Item = Tile>) -> Result<(), String> {
         let path = self.done(unit);
         let names: Vec<String> = gone.map(Tile::name).collect();
-        crate::util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
+        util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
     }
 
     fn read_done(&self, unit: &str) -> Result<Vec<Tile>, String> {
@@ -97,7 +98,7 @@ impl Stage {
 
     /// The shards staged whole.
     fn whole(&self) -> Result<Vec<Node>, String> {
-        Ok(Coverage::of_source()?
+        Ok(Coverage::of_src()?
             .shards()
             .filter(|s| self.done(&s.name()).exists())
             .collect())
@@ -234,7 +235,7 @@ impl Stage {
                 whole: &tiles,
                 gone,
             };
-            L::fits_set(&view, workers)?;
+            let fits = L::fits_set(&view, workers)?;
             // Before anything moves: a commit begun is finished, never undone, so
             // the set will hold these, and a commit cut short leaves them said.
             if let Some(held) = self.will_hold()? {
@@ -244,13 +245,24 @@ impl Stage {
                 manifest["shard"] =
                     serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
-                crate::util::write_atomic(
+                util::write_atomic(
                     &path,
                     serde_json::to_string_pretty(&manifest)
                         .map_err(|e| e.to_string())?
                         .as_bytes(),
                 )
                 .map_err(|e| io(&path, e))?;
+            }
+            // What the set will keep of its tiles, beside it until they are
+            // all moved (`finish_commit`).
+            if let Some(fits) = fits {
+                let text: String = fits
+                    .iter()
+                    .map(|(p, fit)| format!("{} {fit}\n", p.name()))
+                    .collect();
+                let path = self.next_fits();
+                fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
+                util::write_atomic(&path, text.as_bytes()).map_err(|e| io(&path, e))?;
             }
             fs::rename(self.done(FOLD), self.done(COMMIT)).map_err(|e| io(&self.done(FOLD), e))?;
         }
@@ -298,7 +310,25 @@ impl Stage {
         for p in self.read_done(COMMIT)? {
             self.set.remove(p)?;
         }
+        // The set's tiles all moved, what it keeps of them is theirs; the
+        // stage's kept beside its tiles, read into it, go.
+        let next = self.next_fits();
+        if next.exists() {
+            fs::rename(&next, self.set.root.join(FITS)).map_err(|e| io(&next, e))?;
+        }
+        for entry in fs::read_dir(&self.stage.root).map_err(|e| io(&self.stage.root, e))? {
+            let path = entry.map_err(|e| io(&self.stage.root, e))?.path();
+            if path.extension().is_some_and(|e| e == "fit") {
+                fs::remove_file(&path).map_err(|e| io(&path, e))?;
+            }
+        }
         self.remove_done(COMMIT)
+    }
+
+    /// What the set will keep of its tiles (`FITS`) once a commit begun has
+    /// moved them.
+    fn next_fits(&self) -> PathBuf {
+        self.set.root.join(format!("{FITS}.next"))
     }
 
     /// The set as a version is uploaded, into `to`, made empty first: every
@@ -355,7 +385,7 @@ pub struct Run {
 
 impl Run {
     pub fn parse(kind: &str) -> Result<Run, String> {
-        let coverage = Coverage::of_source()?;
+        let coverage = Coverage::of_src()?;
         let (mut stages, mut named, mut out, mut concurrency) = (
             Vec::new(),
             Vec::new(),
@@ -365,9 +395,9 @@ impl Run {
         let mut flags = Flags::from_env();
         while let Some(flag) = flags.arg() {
             match flag.as_str() {
-                "--stage" => stages.push(flags.value()?),
-                "--shard" => named.push(flags.value()?),
-                "--out" => out = PathBuf::from(flags.value()?),
+                "--stage" => stages.push(flags.val()?),
+                "--shard" => named.push(flags.val()?),
+                "--out" => out = PathBuf::from(flags.val()?),
                 "--concurrency" => concurrency = flags.parse()?,
                 other => return Err(format!("unknown flag: {other}")),
             }
@@ -404,7 +434,7 @@ impl Run {
 
     /// The shards the set holds once what is staged is in: what its fold
     /// reads as baked, and nothing else.
-    pub fn baked(&self) -> Result<Coverage, String> {
+    pub fn read_baked(&self) -> Result<Coverage, String> {
         let held = self.stage.will_hold()?.ok_or(format!(
             "{}: its manifest names no shards it holds, so which are baked is unknown",
             self.stage.set.root.display()
@@ -427,7 +457,7 @@ impl Run {
         if self.commit {
             self.stage.commit::<L>(self.concurrency)?;
             let mut fields =
-                serde_json::json!({ "source": source_of(reads)?, "format": FORMAT.of(L::LAYER) });
+                serde_json::json!({ "source": src_of(reads)?, "format": FORMAT.of(L::LAYER) });
             // The commit wrote them before it moved anything.
             if let Some(held) = source::manifest(&self.stage.set.root)?
                 .as_ref()

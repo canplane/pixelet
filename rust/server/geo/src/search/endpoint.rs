@@ -6,6 +6,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
 use deadpool_postgres::Pool;
+use pxl_spec::route;
 use serde::Deserialize;
 
 const MIN_QUERY_LEN: usize = 1;
@@ -45,7 +46,7 @@ fn parse_limit(raw: Option<&str>) -> u32 {
 
 pub fn routes(pool: Pool) -> Router {
     Router::new()
-        .route(pxl_spec::route::SEARCH_URL, get(search))
+        .route(route::SEARCH_URL, get(search))
         .with_state(pool)
 }
 

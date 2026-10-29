@@ -13,7 +13,7 @@ fn arena(init_cap: u32, max_cap: u32) -> Arena<Slot> {
 }
 
 #[test]
-fn a_rewind_drops_nothing_so_a_slot_s_own_buffer_is_there_the_next_time() {
+fn rewind_keeps_bufs() {
     let mut a = arena(4, 1 << 10);
     for i in 0..4 {
         let slot = a.alloc().unwrap();
@@ -40,7 +40,7 @@ fn a_rewind_drops_nothing_so_a_slot_s_own_buffer_is_there_the_next_time() {
 }
 
 #[test]
-fn growth_doubles_past_the_cap_and_carries_what_was_written() {
+fn growth_doubles() {
     let mut a = arena(2, 1 << 10);
     assert_eq!(a.cap(), 2);
     for i in 0..5 {
@@ -61,7 +61,7 @@ fn growth_doubles_past_the_cap_and_carries_what_was_written() {
 }
 
 #[test]
-fn growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was() {
+fn growth_past_max_refused() {
     let mut a = arena(2, 4);
     for i in 0..4 {
         a.alloc().unwrap().mark = i + 10;
@@ -79,7 +79,7 @@ fn growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was() {
 }
 
 #[test]
-fn a_scope_rewinds_to_where_it_began() {
+fn scope_rewinds() {
     let mut a = arena(8, 1 << 10);
     a.alloc().unwrap().mark = 1;
     assert_eq!(a.len(), 1);

@@ -109,7 +109,7 @@ impl Golden {
 }
 
 /// None where the call panicked: "throw" in a record.
-pub fn caught<T>(f: impl FnOnce() -> T) -> Option<T> {
+pub fn catch<T>(f: impl FnOnce() -> T) -> Option<T> {
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let out = catch_unwind(AssertUnwindSafe(f)).ok();

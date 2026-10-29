@@ -102,13 +102,12 @@ memory and rings `intr` (`rust/conformance` is one, whole):
 ```rust
 // build.rs
 fn main() {
-    // memory imported, the stack first, its size the guest's
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
+    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
 }
 
 // lib.rs: the heap from the page past the linker's data to the memory's end
 xpute_guest::wasm_abi!(
-    xpute_guest::wasm::Plan { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
+    xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
     my_guest::intr // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
 );
 ```

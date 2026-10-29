@@ -70,7 +70,7 @@ impl<const N: usize> Edge<N> {
         self.quota_ms
     }
 
-    pub fn spent(&self) -> bool {
+    pub fn is_spent(&self) -> bool {
         now() >= self.until
     }
 
@@ -109,7 +109,7 @@ impl<const N: usize> Default for Edge<N> {
 pub fn yield_if_spent<const N: usize>(
     edge: fn() -> &'static mut Edge<N>,
 ) -> impl Future<Output = ()> {
-    park_if(edge, Edge::spent)
+    park_if(edge, Edge::is_spent)
 }
 
 pub fn next_turn<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Future<Output = ()> {

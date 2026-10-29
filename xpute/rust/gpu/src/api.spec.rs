@@ -14,8 +14,10 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// An optional field left unset, an index or a handle absent.
@@ -204,10 +206,10 @@ impl BindingKind {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<BindingKind> {
+    pub fn of(val: u8) -> Option<BindingKind> {
         BindingKind::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -230,10 +232,10 @@ impl ResourceKind {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<ResourceKind> {
+    pub fn of(val: u8) -> Option<ResourceKind> {
         ResourceKind::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 

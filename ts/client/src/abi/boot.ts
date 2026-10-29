@@ -1,7 +1,7 @@
 // @pxl/client/abi/boot.ts
 
 /**
- * Boots the kernel: hands the place the guest's plan and where to tell what
+ * Boots the kernel: hands the place the guest's config and where to tell what
  * its sensors, its GPU and its network hear; fills the host's slots with what pixelet's
  * numbers mean (the roots, the program's calls, the stop report, each frame's
  * submission and the signals); then hands the completion ring's signals to
@@ -23,7 +23,7 @@ import {
   Sensor,
 } from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/namespace/source.ts";
-import { namespace } from "@/namespace/roots.ts";
+import { namespace } from "@/namespace/namespace.ts";
 import { follow_refused, migrate } from "@/namespace/storage.ts";
 import { HOST, open_host } from "@/host/mount.ts";
 import {
@@ -38,7 +38,7 @@ import { SENSOR_HEARD } from "./sensor.ts";
 import { submit_frame } from "./input.ts";
 import { text_call } from "@/abi/text.ts";
 import { BUILD_NUMBER } from "@/deploy.ts";
-import { bracket, type Plan } from "@/bracket.tsx";
+import { bracket, type Config } from "@/bracket.tsx";
 import { GPU_STATE, set_gpu } from "./gpu.ts";
 import { set_online } from "@/namespace/online.ts";
 import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
@@ -70,7 +70,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     case Command.WORLD_SNAPSHOT: {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
-      set_snapshot(new Uint8Array(HOST.guest.memory, at, len));
+      set_snapshot(new Uint8Array(HOST.guest.mem, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
       follow_refused(kernel_snapshot().kept_refused, (slot) =>
         queueMicrotask(() =>
@@ -111,7 +111,7 @@ function send_source(
 /** Called once from shell/boot.ts, so boot order is explicit, not import order. */
 export async function boot(): Promise<void> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
-  const plan: Plan = {
+  const cfg: Config = {
     bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
     region: REGION_BYTES,
     directory_at: DIRECTORY_AT,
@@ -119,7 +119,7 @@ export async function boot(): Promise<void> {
     gpu_head: stream.HEAD,
   };
   await open_host(
-    plan,
+    cfg,
     { fs: namespace(), program: text_call, abort },
     submit_frame,
   );

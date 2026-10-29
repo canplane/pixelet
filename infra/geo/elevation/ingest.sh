@@ -49,7 +49,7 @@ BAKE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}/server/elevation_shards"
 SHARDS=$("$BAKE_BIN")
 
 # On its own descriptor: psql would read the list as its input.
-while read -r NAME MINX MINY MAXX MAXY STRIDE BLOCK BLOCK_M <&3; do
+while read -r NAME MINX MINY MAXX MAXY STRIDE BLOCK BLOCK_MERC <&3; do
     if [ -n "$(psql_geo -Atc "SELECT 1 FROM elevation_catalog_next WHERE shard = '$NAME'")" ]; then
         echo "[elevation/$NAME] already held"
         continue
@@ -63,7 +63,7 @@ while read -r NAME MINX MINY MAXX MAXY STRIDE BLOCK BLOCK_M <&3; do
     (cd "$WARPED_DIR" && "$TOOLS" raster2pgsql -d -s 3857 -t "${BLOCK}x${BLOCK}" "$FILE" elevation_stage) | psql_geo > /dev/null
     # A block's place on the grid is its west and north edges over a block's side; its tile is the one there.
     BLOCKS=$("$BAKE_BIN" --blocks "$NAME" | awk '{ printf "%s(%s, %s, '\''%s'\'')", (NR > 1 ? ", " : ""), $1, $2, $3 }')
-    PLACE="round(ST_UpperLeftX(s.rast) / $BLOCK_M)::int = b.bx AND round(ST_UpperLeftY(s.rast) / $BLOCK_M)::int = b.by"
+    PLACE="round(ST_UpperLeftX(s.rast) / $BLOCK_MERC)::int = b.bx AND round(ST_UpperLeftY(s.rast) / $BLOCK_MERC)::int = b.by"
     UNPLACED=$(psql_geo -Atc "SELECT count(*) FROM elevation_stage s WHERE NOT EXISTS (SELECT 1 FROM (VALUES $BLOCKS) b(bx, by, tile) WHERE $PLACE)")
     if [ "$UNPLACED" != "0" ]; then
         echo "[elevation/$NAME] $UNPLACED blocks fall on no tile of the shard" >&2

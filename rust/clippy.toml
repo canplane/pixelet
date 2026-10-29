@@ -59,3 +59,8 @@ disallowed-types = [
     { path = "std::collections::HashMap", replacement = "fnv::FnvHashMap" },
     { path = "std::collections::HashSet", replacement = "fnv::FnvHashSet" },
 ]
+
+# What `absolute_paths` lets stand in a body: the standard library's own paths
+# (`core::mem::swap`), and no path of more than a crate and a module.
+absolute-paths-allowed-crates = ["std", "core", "alloc"]
+absolute-paths-max-segments = 2

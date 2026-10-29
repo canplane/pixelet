@@ -1,9 +1,16 @@
 // pxl-kernel/domain/control/camera/orbit.rs
 
-//! The orbit camera: the eye moves over a sphere about the focus, the
-//! radius being the zoom. The controls write the target; `turn` brings what
+//! The orbit camera: the eye moves over a sphere about the pivot, the
+//! radius being the zoom. The controls write its `to`; `turn` brings what
 //! is drawn to it (domain/approach.rs). Everything that reads the world reads the
 //! drawn state.
+//!
+//! The controls are written through one funnel (`ask`), where terrain
+//! answers whether a state puts the eye in the ground
+//! (orbit/terrain_gate.rs `allowed_view`), and the camera setting decides
+//! what follows: through ignores the ground, stop takes a control as far as
+//! it gets, and climb raises the drawn pitch instead (`climb_polar`); held
+//! straight down by a roof over the pivot, a zoom in goes under it (`dive`).
 
 pub mod terrain_gate;
 
@@ -14,13 +21,18 @@ use xpute_kit::math::scalar::clamp;
 
 use crate::domain::approach::{approach_angle, approach_vec};
 use crate::domain::control::camera::controller::{
-    camera, focus, focus_world, look_dir, look_domain, set_eye_world,
+    camera, facing_dir, facing_domain, pivot, pivot_world, set_eye_world,
 };
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
-use crate::domain::control::navigation::support::target;
+use crate::domain::control::navigation::support::resolve_to;
+use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
+use crate::domain::control::param::{
+    CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP, ORBIT_AZIMUTH_EPS, ORBIT_DIST_EPS, ORBIT_PIVOT_EPS,
+    ORBIT_POLAR_EPS,
+};
 use crate::domain::control::param::{MAX_DIST, MIN_DIST};
 use crate::domain::param::POS_DAMP;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
@@ -38,31 +50,19 @@ static ORBIT: Global<OrbitState> = Global::new();
 
 pub fn orbit() -> &'static mut OrbitState {
     ORBIT.get(|| OrbitState {
-        dist: crate::domain::control::param::DEFAULT_DIST,
+        dist: param::DEFAULT_DIST,
         to: None,
-        pinch_from: Anchor::new(crate::domain::control::param::DEFAULT_DIST, 1.0),
+        pinch_from: Anchor::new(param::DEFAULT_DIST, 1.0),
     })
 }
 
-pub fn orbit_eye_offset(dist: f64, polar: f64, azimuth: f64) -> V3 {
-    look_dir(polar, azimuth).map(|v| -v * dist)
+pub fn orbit_eye_off(dist: f64, polar: f64, azimuth: f64) -> V3 {
+    facing_dir(polar, azimuth).map(|v| -v * dist)
 }
-
-// Sub-pixel at any distance the view is looked across.
-const CENTER_EPS: f64 = 0.001;
-const DIST_EPS: f64 = 0.001;
-const POLAR_EPS: f64 = 0.0001;
-const AZIMUTH_EPS: f64 = 0.0001;
-
-/// Faster than the controls ease: late to rise is the eye briefly inside a hill.
-const CLIMB_RISE_DAMP: f64 = 20.0;
-
-/// Slower than the controls ease, so passing over a ridge does not bob the view.
-const CLIMB_RELAX_DAMP: f64 = 5.0;
 
 /// Gated by terrain where the controls are written, so turning back moves at
 /// once. `climb` limits only a tilt asked: a zoom it answers by pitching the
-/// drawn look, which would stick if written into the controls.
+/// drawn facing, which would stick if written into the controls.
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state();
     let mut asked = c.merged(partial);
@@ -74,7 +74,7 @@ pub fn ask(partial: IntentPatch) -> Intent {
 }
 
 pub fn zoom_settling() -> bool {
-    (camera_state().intent.dist - orbit().dist).abs() > DIST_EPS
+    (camera_state().intent.dist - orbit().dist).abs() > ORBIT_DIST_EPS
 }
 
 /// `delta_y` in CSS pixels.
@@ -107,36 +107,36 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-pub(crate) fn target_center() -> Option<Q3> {
-    orbit().to.or_else(focus)
+pub(crate) fn pivot_to() -> Option<Q3> {
+    orbit().to.or_else(pivot)
 }
 
 pub(crate) fn put(at: Q3, snap: bool) {
     orbit().to = Some(at);
     if snap {
         let (o, cam) = (orbit(), camera());
-        let center = target(&mut o.to, focus_world().unwrap_or_default());
-        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_world(&v3::add(&center, &e));
+        let at = resolve_to(&mut o.to, pivot_world().unwrap_or_default());
+        let e = orbit_eye_off(o.dist, cam.polar, cam.azimuth);
+        set_eye_world(&v3::add(&at, &e));
     }
 }
 
 /// Whether still moving; None where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
-    let drawn_center = focus_world()?;
+    let drawn_pivot = pivot_world()?;
     let vs = camera_state().intent;
     let (o, cam) = (orbit(), camera());
-    let was = (drawn_center, o.dist, cam.polar, cam.azimuth);
+    let was = (drawn_pivot, o.dist, cam.polar, cam.azimuth);
 
-    let to = target(&mut o.to, drawn_center);
-    let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
+    let to = resolve_to(&mut o.to, drawn_pivot);
+    let (at, mut moving) = approach_vec(drawn_pivot, to, POS_DAMP, delta, ORBIT_PIVOT_EPS);
 
-    let ([dist], m) = approach_vec([o.dist], [vs.dist], CAM_DAMP, delta, DIST_EPS);
+    let ([dist], m) = approach_vec([o.dist], [vs.dist], CAM_DAMP, delta, ORBIT_DIST_EPS);
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
-    // `climb` pitches the look toward straight down instead of shortening dist:
-    // rising fast and relaxing slowly while the ground bounds it.
+    // `climb` pitches the facing toward straight down instead of shortening
+    // dist: rising fast and relaxing slowly while the ground bounds it.
     let polar = match settings_store().orbit_obstacle {
         OrbitObstacleMode::climb => climb_polar(o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
@@ -146,16 +146,16 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let ([polar], m) = approach_vec([cam.polar], [polar], rate, delta, POLAR_EPS);
+    let ([polar], m) = approach_vec([cam.polar], [polar], rate, delta, ORBIT_POLAR_EPS);
     moving |= m;
-    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
+    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, ORBIT_AZIMUTH_EPS);
     moving |= m;
-    (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
+    (cam.polar, cam.azimuth) = facing_domain(polar, azimuth);
 
     // Written only where something moved, so nothing is written back at rest.
-    if (center, o.dist, cam.polar, cam.azimuth) != was {
-        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_world(&v3::add(&center, &e));
+    if (at, o.dist, cam.polar, cam.azimuth) != was {
+        let e = orbit_eye_off(o.dist, cam.polar, cam.azimuth);
+        set_eye_world(&v3::add(&at, &e));
     }
     Some(moving)
 }

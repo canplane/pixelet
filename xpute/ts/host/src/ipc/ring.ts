@@ -109,24 +109,24 @@ export class Ring {
     return (this.tail - this.head) >>> 0;
   }
 
-  entry_at(position: u32): u32 {
-    return HEADER_WORDS + ((position & this.mask) >>> 0) * frame.WORDS;
+  entry_at(pos: u32): u32 {
+    return HEADER_WORDS + ((pos & this.mask) >>> 0) * frame.WORDS;
   }
 
-  private slot_at(position: u32): u32 {
-    return ((position & this.mask) >>> 0) * this.slot_bytes;
+  private slot_at(pos: u32): u32 {
+    return ((pos & this.mask) >>> 0) * this.slot_bytes;
   }
 
-  /** Begins `w` over the tail's slot, a packet of `count` children written
+  /** Begins `w` over the tail's slot, a packet of `cnt` children written
    * in place; false, beginning nothing, when the ring is full. */
-  write(w: PacketWriter, count: u32): boolean {
+  write(w: PacketWriter, cnt: u32): boolean {
     if (this.len >= this.cap) return false;
     w.begin(
       this.slots,
       this.slot_view,
       this.slot_at(this.tail),
       this.slot_bytes,
-      count,
+      cnt,
     );
     return true;
   }
@@ -137,25 +137,25 @@ export class Ring {
     tag: u32,
     cmd: u32,
     flags: u32 = 0,
-    packet: PacketWriter | null = null,
+    pkt: PacketWriter | null = null,
     result: i32 = 0,
   ): Errno {
     if (this.len >= this.cap) return Errno.EAGAIN;
-    let packet_at = 0;
-    if (packet !== null) {
+    let pkt_at = 0;
+    if (pkt !== null) {
       const start = this.slot_at(this.tail);
-      if (packet.start !== start) {
+      if (pkt.start !== start) {
         throw new InvariantError(Errno.ENOTRECOVERABLE);
       }
-      if (packet.finish() < 0) return Errno.EMSGSIZE;
-      packet_at = this.slot_base + start;
+      if (pkt.finish() < 0) return Errno.EMSGSIZE;
+      pkt_at = this.slot_base + start;
     }
     const w = this.words;
     const at = this.entry_at(this.tail);
     w[at + frame.TAG] = tag;
     w[at + frame.CMD] = frame.cmd_word(cmd, flags);
     w[at + frame.RESULT] = result >>> 0;
-    w[at + frame.PACKET] = packet_at;
+    w[at + frame.PKT] = pkt_at;
     w[TAIL] = (w[TAIL] + 1) >>> 0;
     return Errno.OK;
   }
@@ -182,16 +182,15 @@ export class Ring {
   }
 
   /** A view valid until `advance`; EBADMSG when it names bytes outside a slot. */
-  packet(at: u32): U8Array | null {
-    const packet_at = this.words[at + frame.PACKET];
-    if (packet_at === 0) return null;
-    const off = packet_at - this.slot_base;
+  pkt(at: u32): U8Array | null {
+    const pkt_at = this.words[at + frame.PKT];
+    if (pkt_at === 0) return null;
+    const off = pkt_at - this.slot_base;
     if (
       off < 0 ||
       off % this.slot_bytes !== 0 ||
       off + HDR_SZ > this.slots.byteLength
-    )
-      throw new MarshalError(Errno.EBADMSG);
+    ) throw new MarshalError(Errno.EBADMSG);
     const len = pkt_bytes(this.slots, off);
     if (len > this.slot_bytes) throw new MarshalError(Errno.EBADMSG);
     return this.slots.subarray(off, off + len);

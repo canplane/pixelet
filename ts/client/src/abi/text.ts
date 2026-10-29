@@ -80,8 +80,12 @@ export function text_call(code: u32, w: U32Array, a: u32): void {
       const text = text_of(w, a + 5);
       const width = (s: string) => bracket.text.width(weight, px, s);
       const ends = line_ends(text, max_width, width).slice(0, lines);
-      const out = new DataView(w.buffer, at, 4 * (1 + 2 * lines));
-      out.setUint32(0, ends.length, true);
+      const out = new DataView(
+        w.buffer,
+        at,
+        4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
+      );
+      out.setUint32(4 * LAYOUT_ANSWER.cnt, ends.length, true);
       let start = 0;
       let start_byte = 0;
       ends.forEach((end, i) => {

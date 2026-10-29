@@ -6,7 +6,7 @@
     "a program numbers its own from there, in a table of its own that names this one as",
     "its base, so the two never give out one number twice.",
     "",
-    "The direction is the ring: `packet` is what the host submits, `signal` what the guest",
+    "The direction is the ring: `pkt` is what the host submits, `signal` what the guest",
     "raises on the completion ring."
   ],
   "program_major": 16,
@@ -17,8 +17,8 @@
       "$doc": ["What a command is about."],
       "format": "hex2",
       "entries": [
-        { "name": "NOP", "value": 0 },
-        { "name": "SYS", "value": 1 }
+        { "name": "NOP", "val": 0 },
+        { "name": "SYS", "val": 1 }
       ]
     },
     {
@@ -26,7 +26,7 @@
       "$doc": ["The system calls' answers (ipc/sys.json)."],
       "format": "hex2",
       "entries": [
-        { "name": "OPENED", "value": 1 }
+        { "name": "OPENED", "val": 1 }
       ]
     },
     {
@@ -36,18 +36,18 @@
       "entries": [
         {
           "name": "NOP",
-          "value": 0,
+          "val": 0,
           "$doc": ["Replies with its packet's value, or 0 where it has none — the rings' own test."],
-          "packet": [{ "name": "value", "type": "u32" }]
+          "pkt": [{ "name": "val", "type": "u32" }]
         },
         {
           "name": "SYS_OPENED",
-          "value": 257,
+          "val": 257,
           "$doc": [
             "An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.",
             "Never sent for a descriptor already closed."
           ],
-          "packet": [
+          "pkt": [
             { "name": "fd", "type": "u32" },
             { "name": "res", "type": "i32" },
             {

@@ -13,6 +13,7 @@ use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::time;
 
 pub(super) async fn resolve(
     data: Arc<Dataset>,
@@ -48,7 +49,7 @@ fn bake_missing(
                 }
                 if p.zoom < kind.leaf() {
                     for below in (d.sources)(p) {
-                        tokio::time::timeout_at(
+                        time::timeout_at(
                             lease.deadline,
                             bake_missing(d.clone(), runner.clone(), kind, below, false),
                         )
@@ -79,7 +80,7 @@ pub(super) fn execute<L: Base>(
     } else {
         fold_stored(&TileSet::new(cache), p, absent)?
     };
-    let packet = tile
+    let pkt = tile
         .map(|tile| {
             pack(
                 &tile.encode(p).map_err(|e| format!("{}: {e}", p.name()))?,
@@ -88,5 +89,5 @@ pub(super) fn execute<L: Base>(
             .map_err(|e| e.to_string())
         })
         .transpose()?;
-    job::write_packet(out, packet.as_deref())
+    job::write_pkt(out, pkt.as_deref())
 }

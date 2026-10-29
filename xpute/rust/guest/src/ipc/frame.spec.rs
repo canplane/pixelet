@@ -11,7 +11,13 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// The submitter's, echoed on the reply; a signal's subject.
 pub const TAG: u32 = 0;
@@ -23,7 +29,7 @@ pub const CMD: u32 = 1;
 pub const RESULT: u32 = 2;
 
 /// Where its XTP packet is, as the transport names it; 0 for none.
-pub const PACKET: u32 = 3;
+pub const PKT: u32 = 3;
 
 /// Words a frame takes.
 pub const WORDS: u32 = 4;

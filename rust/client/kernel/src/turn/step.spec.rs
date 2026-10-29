@@ -11,8 +11,10 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 pub const STEP_NAMES: usize = 8;
@@ -44,10 +46,10 @@ impl StepName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<StepName> {
+    pub fn of(val: u8) -> Option<StepName> {
         StepName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -57,9 +59,9 @@ pub const EFFECT_NAMES: usize = 11;
 pub enum EffectName {
     navigation = 0,
     bootstrap = 1,
-    orientation = 2,
+    orient = 2,
     follow = 3,
-    destination = 4,
+    dst = 4,
     decor = 5,
     objects = 6,
     edit = 7,
@@ -73,9 +75,9 @@ impl EffectName {
     pub const ALL: [EffectName; 11] = [
         EffectName::navigation,
         EffectName::bootstrap,
-        EffectName::orientation,
+        EffectName::orient,
         EffectName::follow,
-        EffectName::destination,
+        EffectName::dst,
         EffectName::decor,
         EffectName::objects,
         EffectName::edit,
@@ -86,9 +88,9 @@ impl EffectName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<EffectName> {
+    pub fn of(val: u8) -> Option<EffectName> {
         EffectName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }

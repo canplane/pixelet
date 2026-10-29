@@ -15,14 +15,19 @@ use postgres::Client;
 use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::division::Subtype;
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::coverage::BAKE_REACH;
+use crate::pyramid::Base;
 use crate::terrain::pipeline::ground::render_polygon;
 use crate::wkb::wkb_to_geometries;
+use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::tile::division;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::lattice::Lattice;
 
 /// Each area meeting the tile, cut to it, with its division and how deep that is.
 const AREAS_SQL: &str = "WITH env AS (SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e)
@@ -82,8 +87,8 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     let cell_u = units(GROUND.cell_zoom(DIVISION_LEAF));
     let local = |p: [f64; 2]| {
         [
-            u_from_mer(p[0] - min[0]) / cell_u,
-            u_from_mer(p[1] - min[1]) / cell_u,
+            u_from_merc(p[0] - min[0]) / cell_u,
+            u_from_merc(p[1] - min[1]) / cell_u,
         ]
     };
 
@@ -122,7 +127,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     }
 
     // ---- under the areas, the nearest point of a child, within the reach ----
-    let reach = mer_from_u(BAKE_REACH);
+    let reach = merc_from_u(BAKE_REACH);
     let ring: [&(dyn ToSql + Sync); 4] = [
         &(min[0] - reach),
         &(min[1] - reach),
@@ -141,12 +146,12 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     for kids in children.values_mut() {
         kids.sort_by(|a, b| a.1.cmp(&b.1));
     }
-    for index in 0..(n * n) as u32 {
-        let mut at = cells[index as usize];
+    for idx in 0..(n * n) as u32 {
+        let mut at = cells[idx as usize];
         if at == NONE {
             continue;
         }
-        let [tx, ty] = GROUND.in_tile(index);
+        let [tx, ty] = GROUND.in_tile(idx);
         let center = [
             min[0] + (f64::from(tx) + 0.5) * step,
             min[1] + (f64::from(ty) + 0.5) * step,
@@ -165,7 +170,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
             at = ids.of(id);
             taken.push(at);
         }
-        cells[index as usize] = at;
+        cells[idx as usize] = at;
     }
     if cells.iter().all(|&c| c == NONE) {
         return Ok(None);
@@ -242,29 +247,24 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     }))
 }
 
-impl crate::pyramid::Base for DivisionTile {
-    const LAYER: pxl_spec::bake::published::BaseLayer =
-        pxl_spec::bake::published::BaseLayer::division;
+impl Base for DivisionTile {
+    const LAYER: BaseLayer = BaseLayer::division;
 
-    const LEAF: pxl_spec::space::coord::zoom::Zoom = DIVISION_LEAF;
+    const LEAF: Zoom = DIVISION_LEAF;
 
-    const LATTICE: pxl_spec::space::layer::lattice::Lattice =
-        pxl_spec::space::layer::lattice::GROUND;
+    const LATTICE: Lattice = GROUND;
 
     fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
-        pxl_spec::bake::tile::division::encode(self).map_err(|e| format!("{e:?}"))
+        division::encode(self).map_err(|e| format!("{e:?}"))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
-        pxl_spec::bake::tile::division::decode(raw).map_err(|e| format!("{e:?}"))
+        division::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(held);
-        Some(pxl_spec::bake::tile::division::fold(
-            [a?, b?, c?, d?],
-            p.zoom,
-        ))
+        Some(division::fold([a?, b?, c?, d?], p.zoom))
     }
 
     fn occupancy(&self) -> Occupancy {

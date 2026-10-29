@@ -5,6 +5,7 @@
 
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::world;
 
 #[derive(Clone, Copy, Default)]
 pub struct Frame {
@@ -45,7 +46,7 @@ impl Frame {
 
     /// A point about the anchor, its X on the anchor's lap.
     pub fn world_of(&self, at: V3) -> V3 {
-        let x = pxl_spec::space::coord::world::nearest(at[0], self.anchor[0]);
+        let x = world::nearest(at[0], self.anchor[0]);
         [
             x - self.anchor[0],
             at[1] - self.anchor[1],

@@ -119,7 +119,7 @@ void Golden::each(std::string_view base, const std::function<void(const std::str
         std::string prefix = base.empty() ? std::to_string(k) : std::string(base) + "." + std::to_string(k);
         std::string dotted = prefix + ".";
         bool any = false;
-        for (const auto &[key, value] : map_) {
+        for (const auto &[key, val] : map_) {
             if (key == prefix || key.starts_with(dotted)) {
                 any = true;
                 break;

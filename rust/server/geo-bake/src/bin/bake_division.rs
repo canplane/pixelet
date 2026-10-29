@@ -14,6 +14,7 @@
 
 use std::process::ExitCode;
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::division::{leaf, READS};
 use pxl_geo_bake::pyramid::Base;
@@ -24,10 +25,10 @@ use pxl_spec::bake::tile::division::{DivisionTile, DIVISION_LEAF};
 use pxl_spec::space::layer::tile::Tile;
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let run = Run::parse("division")?;
     if run.leaf {
-        let (source, _) = Overture::reading(&[&READS], &run.shards.iter().copied().collect())?;
+        let (src, _) = Overture::reading(&[&READS], &run.shards.iter().copied().collect())?;
         for &shard in &run.shards {
             let tiles = shard.tiles(DIVISION_LEAF);
             run.stage.leaf::<DivisionTile>(shard, |set| {
@@ -38,7 +39,7 @@ fn run() -> Result<(), String> {
                     run.concurrency,
                     200,
                     |[x, y]| format!("{x}:{y}"),
-                    || source.connect(),
+                    || src.connect(),
                     |client, tile| match leaf(client, tile)? {
                         None => Ok(Done::Empty),
                         Some(divisions) => {

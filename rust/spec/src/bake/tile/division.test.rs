@@ -20,7 +20,7 @@ fn web(zoom: i32) -> Zoom {
 }
 
 #[test]
-fn a_prominence_places_the_name_by_fives_from_the_top_down_to_ten() {
+fn prominence_zoom() {
     assert_eq!(division(Subtype::Locality, 100).shown_from(), web(1));
     assert_eq!(division(Subtype::Locality, 96).shown_from(), web(1));
     assert_eq!(division(Subtype::Locality, 95).shown_from(), web(2));
@@ -29,7 +29,7 @@ fn a_prominence_places_the_name_by_fives_from_the_top_down_to_ten() {
 }
 
 #[test]
-fn without_a_prominence_the_subtype_places_the_name() {
+fn subtype_zoom() {
     assert_eq!(division(Subtype::Country, 0).shown_from(), web(0));
     assert_eq!(division(Subtype::Dependency, 0).shown_from(), web(0));
     assert_eq!(division(Subtype::Region, 0).shown_from(), web(4));

@@ -48,22 +48,28 @@ export const Head = ({
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
-const geo = (lat: number, lon: number) =>
-  Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`;
+const geo = (
+  lat: number,
+  lon: number,
+) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
 const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-/** What the pick met, by the kernel's code (profiler.json `SUMMARY.view`). */
+/** What the pick met, by the kernel's code (profiler.json `NOW.view`). */
 const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
 
 /** A unit to an eighth, the finest cell (z27), with no trailing zeros. */
 const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
-const coord = (x: number, y: number, z: number) =>
-  Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`;
+const coord = (
+  x: number,
+  y: number,
+  z: number,
+) => (Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`);
 
 /**
- * Live: where the camera and the pointer are now, not over the window. The
- * pointer twice: what it meets as drawn, and what the tool held strikes
- * there, so a hover that takes nothing shows where the two part.
+ * Live: where the camera's eye, its pivot and the pointer are now, not over
+ * the window, each a coord in units and the pivot on the Earth as well. The
+ * pointer twice: what it meets at the eye's zooms, and what the tool held
+ * strikes there, so a hover that takes nothing shows where the two part.
  */
 export function ProfilerView({ v }: { v: Gauge["view"] }) {
   const picked = !Number.isNaN(v.struck);
@@ -71,20 +77,19 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
   return (
     <>
       <Head>Camera</Head>
-      <Row k="distance (units)" v={n1(v.dist)} />
+      <Row k="coord" v={coord(v.eye_x, v.eye_y, v.eye_z)} />
+      <Row k="distance" v={`${n1(v.dist)} u`} />
       <Row
         k="polar/azimuth"
         v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`}
       />
-      <Row k="τ" v={or(v.tau)} />
-      <Row k="center lat/lon" v={geo(v.center_lat, v.center_lon)} />
-      <Row k="center altitude" v={metres(v.center_z)} />
-      <Head>Under the pointer, as drawn</Head>
-      <Row k="x/y/z (units)" v={units3(v.hover_x, v.hover_y, v.hover_z)} />
-      <Row k="lat/lon" v={geo(v.hover_lat, v.hover_lon)} />
-      <Row k="altitude" v={metres(v.hover_alt)} />
+      <Head>Pivot</Head>
+      <Row k="coord" v={coord(v.pivot_x, v.pivot_y, v.pivot_z)} />
+      <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
+      <Row k="altitude" v={meters(v.pivot_alt)} />
+      <Head>Pointer</Head>
+      <Row k="coord" v={coord(v.hover_x, v.hover_y, v.hover_z)} />
       <Row k="drawn at" v={zoomName(v.cell)} />
-      <Head>What the tool strikes</Head>
       <Row
         k="struck"
         v={
@@ -97,20 +102,17 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
       />
       <Row
         k="struck/drawn at"
-        v={
-          picked
-            ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
-            : "-"
-        }
+        v={picked
+          ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
+          : "-"}
         warn={folded}
       />
+      <Row k="places at" v={coord(v.place_x, v.place_y, v.place_z)} />
       <Row
         k="places at zoom"
-        v={
-          Number.isNaN(v.place_zoom)
-            ? "-"
-            : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`
-        }
+        v={Number.isNaN(v.place_zoom)
+          ? "-"
+          : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`}
         warn={v.blocked === 1}
       />
     </>
@@ -144,10 +146,9 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
   const f = g.frames;
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) =>
-    [...rows]
-      .sort((a, b) => by(b) - by(a))
-      .slice(0, n)
-      .filter((r) => by(r) > 0);
+    [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) =>
+      by(r) > 0
+    );
   const failing = g.tasks.filter((t) => t.err > 0);
 
   // A glance: how smooth, where the frame's time goes, what it is drawn at,
@@ -212,7 +213,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row
             key={t.stream}
             k={`${t.stream} failed`}
-            v={`${t.error} of ${t.n}${
+            v={`${t.err} of ${t.n}${
               t.reasons.length > 0
                 ? ` ${failText(t.reasons[0].fail, t.reasons[0].detail)}`
                 : ""

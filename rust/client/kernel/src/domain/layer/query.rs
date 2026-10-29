@@ -12,7 +12,7 @@
 //!
 //! The decision's two forms are these two methods' readers: the first hit
 //! along a direction is a descent over `bound`, and a value at a point is
-//! the world's block there (domain/query/node.rs `World::block`). No third query
+//! the asset in the world's cell there (domain/query/node.rs `World::asset`). No third query
 //! is written beside them. A
 //! descent carries a cursor from each node to its children, so a step reads
 //! only what is new there; a node asked alone is the same descent folded to

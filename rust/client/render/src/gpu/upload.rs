@@ -6,9 +6,10 @@
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 
+use crate::frame::draw;
 use crate::frame::draw::DRAW_WORDS;
 use crate::frame::shader::record::{PIPELINES, UPLOAD_LAYOUT};
-use crate::gpu::api::{buffer_entry, buffer_usage, release, room, write_buffer_bytes, Gpu};
+use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu};
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
 /// only its own records.
@@ -78,12 +79,12 @@ pub struct Uploads {
     at: &'static mut [u32],
     len: &'static mut [u32],
     vertex_cnt: &'static mut [u32],
-    index_cnt: &'static mut [u32],
-    buffer: &'static mut [u32],
+    idx_cnt: &'static mut [u32],
+    buf: &'static mut [u32],
     group: &'static mut [u32],
     /// The most the owners can hold live (kernel door/layout.rs `MAX_LIVE_UPLOADS`).
     live: u32,
-    pub(crate) count: u32,
+    pub(crate) cnt: u32,
     pub(crate) bytes: u64,
     missing: u32,
     /// The layout every upload's group is in (record.rs `UPLOAD_LAYOUT`),
@@ -91,11 +92,11 @@ pub struct Uploads {
     layout: u32,
 }
 
-pub(crate) fn buffer_size(len: u32) -> u32 {
+pub(crate) fn buf_size(len: u32) -> u32 {
     ((len + 3) & !3).max(4)
 }
 
-fn memory(at: u32, n: u32) -> &'static [u8] {
+fn mem(at: u32, n: u32) -> &'static [u8] {
     // SAFETY: a heap block the draw list named, live until its free is listed.
     unsafe { core::slice::from_raw_parts(mem::at::<u8>(at as usize), n as usize) }
 }
@@ -105,7 +106,7 @@ const UPLOAD_LANES: usize = 7;
 
 /// The table's lanes for `live` uploads, then the draw list's (frame/draw.rs `lanes_bytes`).
 pub const fn uploads_bytes(live: usize) -> u32 {
-    (UPLOAD_LANES * slots_of(live) * 4) as u32 + crate::frame::draw::lanes_bytes(live)
+    (UPLOAD_LANES * slots_of(live) * 4) as u32 + draw::lanes_bytes(live)
 }
 
 /// # Safety
@@ -122,17 +123,17 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
         at: lane(1),
         len: lane(2),
         vertex_cnt: lane(3),
-        index_cnt: lane(4),
-        buffer: lane(5),
+        idx_cnt: lane(4),
+        buf: lane(5),
         group: lane(6),
         live: live as u32,
-        count: 0,
+        cnt: 0,
         bytes: 0,
         missing: 0,
         layout: 0,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { crate::frame::draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, live) };
+    unsafe { draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, live) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {
@@ -141,9 +142,9 @@ fn home(handle: u32, slots: usize) -> usize {
 
 impl Uploads {
     pub(crate) fn lose(&mut self) {
-        self.buffer.fill(0);
+        self.buf.fill(0);
         self.group.fill(0);
-        self.missing = self.count;
+        self.missing = self.cnt;
         self.layout = 0;
     }
 
@@ -153,7 +154,7 @@ impl Uploads {
             return;
         }
         for i in 0..self.handle.len() {
-            if self.handle[i] != EMPTY && self.buffer[i] == 0 && !self.put(g, i) {
+            if self.handle[i] != EMPTY && self.buf[i] == 0 && !self.put(g, i) {
                 return;
             }
         }
@@ -161,18 +162,18 @@ impl Uploads {
 
     /// False, the upload still missing, where the turn's stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
-        if !room(write_buffer_bytes(memory(self.at[i], self.len[i] & !3))) {
+        if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
             return false;
         }
-        let buffer = g.buffer(
-            buffer_size(self.len[i]),
+        let buf = g.buf(
+            buf_size(self.len[i]),
             buffer_usage::VERTEX
                 | buffer_usage::INDEX
                 | buffer_usage::STORAGE
                 | buffer_usage::COPY_DST,
         );
-        g.write_buffer(buffer, 0, memory(self.at[i], self.len[i] & !3));
-        self.buffer[i] = buffer;
+        g.write_buf(buf, 0, mem(self.at[i], self.len[i] & !3));
+        self.buf[i] = buf;
         self.group[i] = 0;
         self.missing -= 1;
         true
@@ -195,8 +196,8 @@ impl Uploads {
     /// None until the upload is on the device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
         self.find(handle)
-            .filter(|&i| self.buffer[i] != 0)
-            .map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
+            .filter(|&i| self.buf[i] != 0)
+            .map(|i| (self.buf[i], self.vertex_cnt[i], self.idx_cnt[i]))
     }
 
     pub(crate) fn insert(
@@ -206,11 +207,11 @@ impl Uploads {
         at: u32,
         len: u32,
         vertex_cnt: u32,
-        index_cnt: u32,
+        idx_cnt: u32,
     ) {
         self.remove(handle);
         // The owners' summed bound itself, not the slots' rounded half, so an owner left out of it shows.
-        xpute_kit::ensure!(self.count < self.live, ENOTRECOVERABLE, self.live);
+        xpute_kit::ensure!(self.cnt < self.live, ENOTRECOVERABLE, self.live);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
             i = (i + 1) & (self.handle.len() - 1);
@@ -219,11 +220,11 @@ impl Uploads {
         self.at[i] = at;
         self.len[i] = len;
         self.vertex_cnt[i] = vertex_cnt;
-        self.index_cnt[i] = index_cnt;
-        self.buffer[i] = 0;
+        self.idx_cnt[i] = idx_cnt;
+        self.buf[i] = 0;
         self.group[i] = 0;
-        self.count += 1;
-        self.bytes += buffer_size(len) as u64;
+        self.cnt += 1;
+        self.bytes += buf_size(len) as u64;
         self.missing += 1;
         if let Some(g) = g {
             self.put(g, i);
@@ -235,16 +236,16 @@ impl Uploads {
     pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
-        let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else {
+        let (Some(g), buf @ 1..) = (g, self.buf[i]) else {
             return;
         };
         let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
-        if room(write_buffer_bytes(memory(at + from, bytes))) {
-            g.write_buffer(buffer, from, memory(at + from, bytes));
+        if room(write_buffer_bytes(mem(at + from, bytes))) {
+            g.write_buf(buf, from, mem(at + from, bytes));
         } else {
             release(self.group[i]);
-            release(buffer);
-            (self.buffer[i], self.group[i]) = (0, 0);
+            release(buf);
+            (self.buf[i], self.group[i]) = (0, 0);
             self.missing += 1;
         }
     }
@@ -254,12 +255,12 @@ impl Uploads {
             return;
         };
         release(self.group[i]);
-        if self.buffer[i] == 0 {
+        if self.buf[i] == 0 {
             self.missing = self.missing.saturating_sub(1);
         }
-        release(self.buffer[i]);
-        self.count -= 1;
-        self.bytes -= buffer_size(self.len[i]) as u64;
+        release(self.buf[i]);
+        self.cnt -= 1;
+        self.bytes -= buf_size(self.len[i]) as u64;
         // Backward shift: an entry past the hole moves into it unless its home lies
         // between the hole and it, so no probe ever stops early.
         loop {
@@ -281,8 +282,8 @@ impl Uploads {
                     self.at[i] = self.at[j];
                     self.len[i] = self.len[j];
                     self.vertex_cnt[i] = self.vertex_cnt[j];
-                    self.index_cnt[i] = self.index_cnt[j];
-                    self.buffer[i] = self.buffer[j];
+                    self.idx_cnt[i] = self.idx_cnt[j];
+                    self.buf[i] = self.buf[j];
                     self.group[i] = self.group[j];
                     i = j;
                     break;
@@ -293,15 +294,21 @@ impl Uploads {
 
     /// For a draw binding it as a vertex buffer: the ghost's boxes are read through it (box.wgsl).
     pub fn group(&mut self, g: &Gpu, handle: u32) -> Option<u32> {
-        let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
+        let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
         if self.group[i] == 0 {
             if self.layout == 0 {
                 self.layout = g.layout(&UPLOAD_LAYOUT);
             }
-            let id = g.bind_group(self.layout, &[buffer_entry(0, self.buffer[i])]);
+            let id = g.bind_group(self.layout, &[buf_entry(0, self.buf[i])]);
             self.group[i] = id;
         }
         Some(self.group[i])
+    }
+
+    /// The group `group` made for `handle`, for a draw, which makes none.
+    pub fn group_of(&self, handle: u32) -> Option<u32> {
+        let i = self.find(handle)?;
+        (self.group[i] != 0).then_some(self.group[i])
     }
 }
 

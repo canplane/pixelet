@@ -5,22 +5,29 @@
 //! to its registered height; what draws it turns it Z-up. A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
 
+use pxl_render::asset::gltf::{MAX_SCENE_IDXS, MAX_SCENE_VERTICES};
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_guest::mem;
 use xpute_guest::mem::heap::alloc;
+
+// The most a parse lets one model draw fits a block's size.
+const _: () = assert!(
+    (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_IDXS as u64) * 4
+        <= u32::MAX as u64
+);
 
 /// Translation, rotation; anything else is scale.
 const T: u8 = 0;
 const R: u8 = 1;
 
-struct Channel {
-    joint: u32,
-    path: u8,
+pub struct Channel {
+    pub joint: u32,
+    pub path: u8,
     /// Step keys hold a value until the next; linear keys interpolate.
-    step: bool,
-    times: Vec<f32>,
+    pub step: bool,
+    pub times: Vec<f32>,
     /// 3 or 4 floats a key.
-    values: Vec<f32>,
+    pub vals: Vec<f32>,
 }
 
 struct Clip {
@@ -36,7 +43,7 @@ pub struct MeshRef {
     pub at: usize,
     pub handle: u32,
     pub vertex_cnt: u32,
-    pub index_cnt: u32,
+    pub idx_cnt: u32,
     pub radius: f32,
     pub scale: f32,
 }
@@ -46,7 +53,7 @@ pub struct Model {
     bytes: u32,
     handle: u32,
     vertex_cnt: u32,
-    index_cnt: u32,
+    idx_cnt: u32,
     parent: Vec<i32>,
     /// A joint's rest pose: translation (3), rotation (4, xyzw), scale (3).
     rest: Vec<[f32; 10]>,
@@ -149,7 +156,7 @@ fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
         return;
     }
     let width = width(ch.path);
-    let at = |k: usize| &ch.values[k * width..k * width + width];
+    let at = |k: usize| &ch.vals[k * width..k * width + width];
     let (k0, k1, t) = if time <= ch.times[0] {
         (0, 0, 0.0)
     } else if time >= ch.times[n - 1] {
@@ -204,10 +211,13 @@ impl Models {
     pub fn new_model(
         &mut self,
         vertex_cnt: u32,
-        index_cnt: u32,
+        idx_cnt: u32,
         joint_cnt: u32,
     ) -> Option<(u32, usize)> {
-        let bytes = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) * 4;
+        let bytes = vertex_cnt
+            .checked_mul(MODEL_VERTEX_WORDS)
+            .and_then(|words| words.checked_add(idx_cnt))
+            .and_then(|words| words.checked_mul(4))?;
         let (at, bytes) = alloc(bytes)?;
         let j = joint_cnt as usize;
         let model = Model {
@@ -215,7 +225,7 @@ impl Models {
             bytes,
             handle: 0,
             vertex_cnt,
-            index_cnt,
+            idx_cnt,
             parent: vec![-1; j],
             rest: vec![[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]; j],
             root_pre: vec![
@@ -274,34 +284,16 @@ impl Models {
         (m.clips.len() - 1) as u32
     }
 
-    /// `values` end to end: four a key for a rotation, three otherwise.
-    #[allow(clippy::too_many_arguments)]
-    pub fn channel(
-        &mut self,
-        model: u32,
-        clip: u32,
-        joint: u32,
-        path: u8,
-        step: bool,
-        times: &[f32],
-        values: &[f32],
-    ) {
+    /// `ch` into `model`'s `clip`, its values a key's each, past them dropped.
+    pub fn ch(&mut self, model: u32, clip: u32, mut ch: Channel) {
         let Some(m) = self.models.get_mut(model as usize) else {
             return;
         };
         let Some(c) = m.clips.get_mut(clip as usize) else {
             return;
         };
-        let width = width(path);
-        let values = values[..times.len() * width].to_vec();
-        let times = times.to_vec();
-        c.channels.push(Channel {
-            joint,
-            path,
-            step,
-            times,
-            values,
-        });
+        ch.vals.truncate(ch.times.len() * width(ch.path));
+        c.channels.push(ch);
     }
 
     /// # Safety
@@ -311,7 +303,7 @@ impl Models {
             return;
         };
         m.scale = scale;
-        m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
+        m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.idx_cnt);
         let positions =
             core::slice::from_raw_parts(mem::at::<f32>(m.at), m.vertex_cnt as usize * 3);
         m.radius = positions
@@ -355,7 +347,7 @@ impl Models {
             at: m.at,
             handle: m.handle,
             vertex_cnt: m.vertex_cnt,
-            index_cnt: m.index_cnt,
+            idx_cnt: m.idx_cnt,
             radius: m.radius,
             scale: m.scale,
         })

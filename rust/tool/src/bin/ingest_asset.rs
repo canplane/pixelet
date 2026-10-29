@@ -15,8 +15,10 @@ use sha2::{Digest, Sha256};
 
 use pxl_tool::asset::table::{Pack, Row};
 use pxl_tool::asset::{glb, pack, symbol, table};
-use pxl_tool::fmt::formatted;
+use pxl_tool::fmt::format_text;
 use pxl_tool::root;
+use pxl_tool::spec;
+use pxl_tool::spec::asset;
 
 /// Mirrored by the Worker's `KEY_RE` and the shell's `asset_url`.
 const KEY_PREFIX: &str = "asset/";
@@ -54,7 +56,7 @@ fn named(rel: &str, bytes: &[u8]) -> String {
 }
 
 fn write_formatted(path: &Path, text: &str) -> Result<(), String> {
-    let text = formatted(&path.to_string_lossy(), text.to_string())?;
+    let text = format_text(&path.to_string_lossy(), text.to_string())?;
     std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
@@ -81,7 +83,7 @@ fn run() -> Result<(), String> {
     // toward that color; the underground's looks are no Carto's, and a side,
     // a bottom and a color are not looks.
     let slots = pack::load(&raw_dir.join("cube"), &asset_dir.join("cube"))?;
-    let carto = pxl_tool::spec::asset::ground_colors()?;
+    let carto = asset::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
@@ -155,7 +157,7 @@ fn run() -> Result<(), String> {
             i.label, i.file
         ));
     }
-    let faces = table::faces(&tile_slots, &pxl_tool::spec::asset::catalog()?)?;
+    let faces = table::faces(&tile_slots, &asset::catalog()?)?;
     let composed = pack::compose(
         &tiles
             .iter()
@@ -164,7 +166,7 @@ fn run() -> Result<(), String> {
     )?;
     // The sheet ships as a file of the table, at the path the cube kind's
     // definition names, which no file under asset/content/ may take.
-    let image = pxl_tool::spec::asset::pack_path()?;
+    let image = asset::pack_path()?;
     if rows.iter().any(|r| r.path == image) {
         return Err(format!(
             "{image}, the texture pack's path, is a file under asset/content/ too"
@@ -213,7 +215,7 @@ fn run() -> Result<(), String> {
         &root.join("spec/spec/asset/ingested.json"),
         &table::render_json(&rows, &laid),
     )?;
-    pxl_tool::spec::generate(true)?;
+    spec::generate(true)?;
 
     println!(
         "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, spec/spec/asset/ingested.json and what it generates written",

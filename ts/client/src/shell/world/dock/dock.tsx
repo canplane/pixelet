@@ -14,7 +14,7 @@ import { chrome, color } from "@/shell/ui/theme.ts";
 import { DockMode, useDockStore } from "@/shell/store/dock.ts";
 import { deckSwipe } from "@/shell/world/deck.ts";
 import { Card, DOCK_HEIGHT } from "./card.tsx";
-import { SizeFlyout, Sizes, useFlyout } from "./flyout.tsx";
+import { SizePopover, usePopover } from "./popover.tsx";
 import { Message, useMessage } from "./message.tsx";
 import { DRAG_PX, STRIP, Strip } from "./strip.tsx";
 
@@ -35,9 +35,9 @@ export function Dock() {
   const [barWidth, setBarWidth] = useState<f64>(0);
   const [stripWidth, setStripWidth] = useState<f64>(chrome.control);
   const bar = useRef<View | null>(null);
-  const { flyout, sizes } = useFlyout(bar);
+  const { popover, gesture } = usePopover(bar);
 
-  const shownFlyout = mode === DockMode.Palette ? flyout : null;
+  const shownPopover = mode === DockMode.Palette ? popover : null;
   // Every card is as wide as the palette's tools; whole pixels, where a page's pill cuts its shadow cleanly.
   const width = Math.min(stripWidth, barWidth);
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
@@ -74,10 +74,14 @@ export function Dock() {
             span={barWidth}
             onContentWidth={setStripWidth}
           >
-            <Strip span={barWidth} scrolls={!popover?.open} gesture={gesture} />
+            <Strip
+              span={barWidth}
+              scrolls={!popover?.open}
+              gesture={gesture}
+            />
           </Card>
 
-          {shownFlyout && <SizeFlyout flyout={shownFlyout} />}
+          {shownPopover && <SizePopover popover={shownPopover} />}
         </>
       )}
     </View>

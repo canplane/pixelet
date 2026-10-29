@@ -5,7 +5,9 @@
 
 use core::panic::Location;
 
+use crate::sys::io::host;
 use xpute_guest::global::{off_marked_thread, Global};
+use xpute_kit::status::bug;
 use xpute_kit::status::errno::Errno;
 
 /// Numbers only: formatting is the bracket's, so a module that reports
@@ -34,7 +36,7 @@ static STOPPED: Global<bool> = Global::new();
 /// (xpute_guest::global `off_marked_thread`).
 pub fn install(last_words: Option<LastWords>) {
     LAST_WORDS.set(last_words);
-    xpute_kit::status::bug::set_report(|errnum, at, a, b| {
+    bug::set_report(|errnum, at, a, b| {
         if !off_marked_thread() {
             bug(errnum, at, a, b);
         }
@@ -48,7 +50,7 @@ pub fn install(last_words: Option<LastWords>) {
             }
             return;
         }
-        if stopped() {
+        if is_stopped() {
             return;
         }
         say(Stop::Panic(info));
@@ -63,12 +65,12 @@ pub fn install(last_words: Option<LastWords>) {
 fn bug(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
     STOPPED.set(true);
     say(Stop::Bug { errnum, at, a, b });
-    crate::sys::io::host::abort(errnum, at, a, b);
+    host::abort(errnum, at, a, b);
 }
 
 /// Past its report a bug panics where it cannot trap, and that panic is its
 /// way out, not a second fault.
-fn stopped() -> bool {
+fn is_stopped() -> bool {
     *STOPPED.get(|| false)
 }
 

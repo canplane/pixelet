@@ -17,7 +17,7 @@ struct Frame {
     std::uint32_t flags;
     std::int32_t result;
     // 0 for none.
-    std::uint32_t packet_at;
+    std::uint32_t pkt_at;
 
     bool operator==(const Frame &) const = default;
 };

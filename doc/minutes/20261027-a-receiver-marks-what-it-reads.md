@@ -1,0 +1,97 @@
+# A receiver marks what it reads
+
+**2026-10-27** — decided with the user. It records how an effect beside the
+eye observes the world, and how the shadow map came to cost what its receivers
+read. It is a decision record, not a rule each change is held to.
+
+> One interface, one unit, each effect its own nature. The sun asks the world
+> what the eye asks, at the eye's zooms, and passes by a cone of its own; the
+> passes it takes are the eye's, written once. Its map is a field in space,
+> so it stays a map, cast only where a receiver reads it, and every receiver
+> says where that is by the one rule.
+
+## Decided
+
+- **The unit is the eye's.** The sun's rays ask each point at the zoom the
+  eye asks it (`cast::Detail::eye`), with no cap of their own; their cone is
+  the map's texel (`Sun::detail`). A coarser sun drew a block's column of
+  mean height over the fine ground the eye draws inside it, as gray blobs
+  edged by its faces (b3b3ee8c8). Pushing the caster's depth back by what it
+  is coarser was a patch on two units, and was not taken.
+- **One interface, the passes written once.** A cast's passes, the beam
+  rays, the cells' starts, the samples and their boxes, a ray's visible sample,
+  sky or walk (`resolve`), the walk again, are one set over an observer
+  (pxl-shader observer.rs `Observer`): its lattice, the ray at a point of it
+  with the zooms it asks and its cone (`Aim`), whether its rays start apart,
+  where its boxes are laid, and which of its lattice a cast needs (`needs`), the
+  one place a pass is told it may pass a thread. The eye (`Eye`), needing all,
+  and the shadow map (sun.rs `Map`) are two; an effect more implements those
+  and takes the rest (7895fb2ba).
+- **Each effect its own nature.** What the eye records is a pixel's ray; what
+  the sun records is a field a surface, decor, an impostor and an actor all
+  read (pxl-render shadow.wgsl `sun_lit`), so it stays a map, not a ray at
+  each of the eye's samples, which only the world's surface would read.
+- **Cast only what a receiver reads.** A receiver marks the tile of the box
+  it stands on (`sun::stands_at`): the world where each drawn pixel's ray met
+  it (`sun_mark_cs`); decor where each instance placed stands, as decor tells
+  (decor.rs `Instances`), and the actors where each is drawn (pxl-kernel
+  actor.rs `Actor::draw`, pxl-render frame/draw.rs `Lists::stands`), each
+  the eye sees (`sun_mark_drawn_cs`, `eye::sees`,
+  `Sun::ring`). One reach, a tile a thread, reads a tile in the disk a shadow
+  fades out by (`Sun::rim`, `Sun::read`) within a tile and its taps of the
+  way up the tallest decor from one stood on (`sun_reach_cs`, `Sun::up`,
+  `Sun::up_at`), as nothing drawn is taller and everything stands on what
+  the eye meets; each pass then casts what feeds those tiles alone
+  (`Map::needs`; f2e2c6ead, 22818bb97).
+- **What a tile holds, and which tiles are read.** A tile's depth follows the
+  eye's place, the light and the world; which tiles are read follows the
+  look, the actors and decor placed again; the host tracks each apart
+  (`sun_content`, `sun_receivers`). Where only the latter moved, a tile cast
+  since the former last did stands, and only tiles read anew are cast: a
+  tile's one word names the cast that first read it in the epoch
+  (`sun::MOVED_EPOCH`, `sun::reads_at`; 2e513d00c).
+
+## What follows
+
+- **Units matched cost what is read, not the reach.** Over the whole disk at
+  the eye's unit, the sun walked about twice the eye's nodes: `sun_walk` p95
+  about 20–28 ms, 68–78% of slots taking a visible sample. The disk cut 56% of
+  the slots, the marks most of the rest: 1.7–3.3% of slots cast on the start
+  view, the walks 30–150k nodes a cast, the sun's passes about 6 ms at 1456 ×
+  828 drawn at two, against about 25 with the disk alone.
+- **The marks are by tile, the reach gathers.** A receiver writes one word,
+  and the reach's tile is written by its own thread alone. Marking a column
+  a tile wide from every pixel cost 20 ms at two; one tile a pixel, 4.
+- **A low sun costs what a high one does.** The way up is the tallest
+  decor seen from the sun, its height times the cosine of the sun's
+  height, so it is no longer than the tallest decor however low the sun
+  goes. At about 5° (7:25, Bundang's start view) the sun's passes took
+  6.1 ms against 5.9 at 10:00, the beam's pass with the marks and the
+  reach 2.9 against 3.3. Only the walks again grew, 0.4 to 1.2 ms: a
+  grazing sample's box covers fewer slots, so 1.08% of the slots walked
+  against 2.32% taking a sample, where at 10:00 0.43% walked against 5.51%.
+
+## Not taken
+
+- **Frustum-fit cascades.** Matching the eye's unit in each cascade takes
+  about 6144² texels a cascade, scale-free, several million a cascade even
+  cut to the view: more than one map, for a unit already met.
+- **Rings keeping the sun's own unit, with a receive rule.** A receiver
+  within a recorded block counted lit is the depth push again.
+- **Reuse keyed by the zoom a slot recorded.** The answer changes where any
+  point on the ray's path changes zoom, not only its stop.
+- **A sun ray at each of the eye's samples.** Exact for the world's surface,
+  blind to decor and the actors.
+
+## Open
+
+- At a low sun the way up is long, and the reach reads more a tile.
+- A tile's content follows the eye's place, so a pan casts every tile read
+  again, though a step moves few tiles' zooms: what a tile holds could be
+  kept where no zoom band crossed its rays' span.
+- Snapping the place the zooms are measured from, for the eye and the sun
+  alike, was weighed and held: the content would change once a step, but
+  the rings would jump a step at a time where they now slide, the step's
+  frame would take the whole cast, so the worst frame stays, and the rule
+  is the window's and the query's too. Taken up again where the sun's
+  passes are measured to drop frames.

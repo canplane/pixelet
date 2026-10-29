@@ -125,7 +125,7 @@ pub fn translation(out: &mut Mat4, x: f64, y: f64, z: f64) -> &mut Mat4 {
     out
 }
 
-pub fn rotation_z(out: &mut Mat4, angle: f64) -> &mut Mat4 {
+pub fn rot_z(out: &mut Mat4, angle: f64) -> &mut Mat4 {
     let (c, s) = (libm::cos(angle), libm::sin(angle));
     identity(out);
     out[0] = c;
@@ -136,7 +136,7 @@ pub fn rotation_z(out: &mut Mat4, angle: f64) -> &mut Mat4 {
 }
 
 /// The rotation a quaternion (x, y, z, w) turns by, normalized first.
-pub fn rotation_quat(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
+pub fn rot_quat(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
     let n = libm::sqrt(x * x + y * y + z * z + w * w);
     let (x, y, z, w) = (x / n, y / n, z / n, w / n);
     identity(out);
@@ -239,7 +239,7 @@ pub fn transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) ->
     out
 }
 
-pub fn transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
+pub fn transform_dir<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let ox = m[0] * x + m[4] * y + m[8] * z;
     let oy = m[1] * x + m[5] * y + m[9] * z;
     let oz = m[2] * x + m[6] * y + m[10] * z;

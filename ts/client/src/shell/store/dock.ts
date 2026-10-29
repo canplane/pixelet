@@ -1,7 +1,7 @@
 // @pxl/client/shell/store/dock.ts
 
 /** The dock's own state, which the kernel does not keep (the hotbar's picks, the chat's lines, the
- * dock's mode and its swatch cue), and the commands the dock sends: what is held, a chat line, a marker. */
+ * dock's mode and its swatch's flash), and the commands the dock sends: what is held, a chat line, a marker. */
 
 import { create } from "zustand";
 
@@ -95,13 +95,13 @@ interface DockState {
   switchDockMode: () => void;
 
   /** A key's pick or size step, which the dock shows over the cube's swatch as a press would: its seed, or the sizes open. */
-  swatchCue: SwatchCue;
-  cueSwatch: (cube: Cube, open: boolean) => void;
+  swatchFlash: SwatchFlash;
+  flashSwatch: (cube: Cube, open: boolean) => void;
   stepSize: (delta: i32) => void;
 }
 
-interface SwatchCue {
-  /** Counts the cues, so the same one twice still shows. */
+interface SwatchFlash {
+  /** Counts the flashes, so the same one twice still shows. */
   n: u32;
   cube: Cube | null;
   open: boolean;
@@ -209,14 +209,16 @@ export const useDockStore = create<DockState>()((set) => ({
           : DockMode.Message,
     })),
 
-  swatchCue: { n: 0, cube: null, open: false },
-  cueSwatch: (cube, open) =>
-    set((state) => ({ swatchCue: { n: state.swatchCue.n + 1, cube, open } })),
+  swatchFlash: { n: 0, cube: null, open: false },
+  flashSwatch: (cube, open) =>
+    set((state) => ({
+      swatchFlash: { n: state.swatchFlash.n + 1, cube, open },
+    })),
   stepSize: (delta) => {
     const h = kernel_snapshot().holding;
     if (h.tool !== ActiveTool.Object) return;
     holdTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
-    useDockStore.getState().cueSwatch(h.cube, true);
+    useDockStore.getState().flashSwatch(h.cube, true);
   },
 
   chatLines: [],

@@ -3,7 +3,7 @@
 /**
  * The palette's card: the tools, the recent picks and the drawer, each in a
  * slot. A swatch's tap takes its cube, and its hold opens the sizes
- * (flyout.tsx).
+ * (popover.tsx).
  */
 
 import { useEffect, useRef } from "react";
@@ -43,25 +43,29 @@ const PAN_X: ViewStyle =
 
 const ITEM = 24;
 
-const FLYOUT_HOLD_MS = 300;
+/** How long a press is held to be a long press (React Native `Pressable`'s `delayLongPress`). */
+const LONG_PRESS_MS = 300;
 /** A move this far before the hold is a drag: the strip's sideways, the deck's up and down. */
 export const DRAG_PX = 12;
 
 const enum Gesture {
   Pending = 0,
-  Flyout = 1,
+  Popover = 1,
   Drag = 2,
 }
 
+/** A swatch's gesture. `press`, `pressIn` and `longPress` are React Native
+ * `Pressable`'s; `release` is a lift once the sizes are open, and `end` closes
+ * them on any lift, a drag or a terminate. */
 export interface SizeGesture {
-  tap: () => void;
-  press: (swatch: View) => void;
+  press: () => void;
+  pressIn: (swatch: View) => void;
   /** A key picked the cube or stepped its size: the seed or the sizes over the swatch a moment, as a press shows them. */
-  cue: (swatch: View, open: boolean) => void;
-  open: () => void;
+  flash: (swatch: View, open: boolean) => void;
+  longPress: () => void;
   move: (x: f64, y: f64) => void;
-  lift: (x: f64, y: f64) => void;
-  close: () => void;
+  release: (x: f64, y: f64) => void;
+  end: () => void;
 }
 
 /** A tap takes the cube; a hold opens the sizes. */
@@ -76,21 +80,21 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
       if (hold !== null) clearTimeout(hold);
       hold = null;
     };
-    const open = () => {
+    const longPress = () => {
       stopHold();
       if (state !== Gesture.Pending) return;
-      state = Gesture.Flyout;
-      handlers.current.open();
+      state = Gesture.Popover;
+      handlers.current.longPress();
     };
     responder.current = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         state = Gesture.Pending;
-        if (swatch.current) handlers.current.press(swatch.current);
-        hold = setTimeout(open, FLYOUT_HOLD_MS);
+        if (swatch.current) handlers.current.pressIn(swatch.current);
+        hold = setTimeout(longPress, LONG_PRESS_MS);
       },
       onPanResponderMove: (_e, s) => {
-        if (state === Gesture.Flyout) {
+        if (state === Gesture.Popover) {
           return handlers.current.move(s.moveX, s.moveY);
         }
         if (
@@ -100,50 +104,47 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
           return;
         state = Gesture.Drag;
         stopHold();
-        handlers.current.close();
+        handlers.current.end();
       },
       onPanResponderRelease: (_e, s) => {
         stopHold();
-        if (state === Gesture.Flyout) handlers.current.lift(s.moveX, s.moveY);
-        else if (state === Gesture.Pending) handlers.current.tap();
-        handlers.current.close();
+        if (state === Gesture.Popover) {
+          handlers.current.release(s.moveX, s.moveY);
+        } else if (state === Gesture.Pending) handlers.current.press();
+        handlers.current.end();
         state = Gesture.Pending;
       },
       onPanResponderTerminate: () => {
         stopHold();
-        handlers.current.close();
+        handlers.current.end();
         state = Gesture.Pending;
       },
-      onPanResponderTerminationRequest: () => state !== Gesture.Flyout,
+      onPanResponderTerminationRequest: () => state !== Gesture.Popover,
     });
   }
   return responder.current.panHandlers;
 }
 
-function SwatchButton({
-  cube,
-  gesture,
-}: {
-  cube: Cube;
-  gesture: Omit<SizeGesture, "press">;
-}) {
+function SwatchButton(
+  { cube, gesture }: { cube: Cube; gesture: Omit<SizeGesture, "press"> },
+) {
   const { t } = useTranslation();
   const selectCube = useDockStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
-  const swatchCue = useDockStore((s) => s.swatchCue);
+  const swatchFlash = useDockStore((s) => s.swatchFlash);
   useEffect(() => {
-    if (swatchCue.cube === cube && ref.current) {
-      sizes.cue(ref.current, swatchCue.open);
+    if (swatchFlash.cube === cube && ref.current) {
+      gesture.flash(ref.current, swatchFlash.open);
     }
-  }, [swatchCue]);
+  }, [swatchFlash]);
 
   const handlers = useSizeGesture(ref, {
-    ...sizes,
-    tap: () => selectCube(cube),
-    open: () => {
+    ...gesture,
+    press: () => selectCube(cube),
+    longPress: () => {
       selectCube(cube);
-      sizes.open();
+      gesture.longPress();
     },
   });
 
@@ -206,7 +207,7 @@ function MarkerButton() {
     <Pressable
       onPress={selectMarker}
       accessibilityRole="button"
-      accessibilityLabel={t("blocks.pin")}
+      accessibilityLabel={t("assets.pin")}
       style={styles.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
@@ -262,15 +263,13 @@ function ToolButton({
 }
 
 /** `span` is the bar's width, past which it never reaches; the picks scroll unless the sizes are open. */
-export function Strip({
-  span,
-  scrolls,
-  gesture,
-}: {
-  span: f64;
-  scrolls: boolean;
-  gesture: Omit<SizeGesture, "press">;
-}) {
+export function Strip(
+  { span, scrolls, gesture }: {
+    span: f64;
+    scrolls: boolean;
+    gesture: Omit<SizeGesture, "press">;
+  },
+) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.holding.tool);
   const recentPicks = useDockStore((s) => s.recentPicks);
@@ -302,17 +301,17 @@ export function Strip({
         contentContainerStyle={styles.picksContent}
       >
         {recentPicks.map((pick) =>
-          pick.tool === ActiveTool.Object ? (
-            <SwatchButton
-              key={cubeId(pick.cube)}
-              cube={pick.cube}
-              gesture={gesture}
-            />
-          ) : pick.tool === ActiveTool.Decor ? (
-            <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
-          ) : (
-            <MarkerButton key="marker" />
-          ),
+          pick.tool === ActiveTool.Object
+            ? (
+              <SwatchButton
+                key={cubeId(pick.cube)}
+                cube={pick.cube}
+                gesture={gesture}
+              />
+            )
+            : pick.tool === ActiveTool.Decor
+            ? <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
+            : <MarkerButton key="marker" />
         )}
       </ScrollView>
 

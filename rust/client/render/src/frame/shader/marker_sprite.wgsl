@@ -18,7 +18,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   let p = placed(vi, ii, false);
   var o: VertexOut;
   o.clip = p.clip;
-  let at = anchor_pixel(p, textureDimensions(nearest));
+  let at = anchor_px(p, textureDimensions(nearest));
   if (at.x >= 0 && pack4x8unorm(textureLoad(nearest, at, 0)) != marker_number(ii)) {
     o.clip = NOWHERE;
   }
@@ -40,7 +40,7 @@ fn fs(i: VertexOut) -> FragOut {
   var o: FragOut;
   // The sheet is premultiplied so its mips filter without a dark fringe.
   let color = texel.rgb / max(texel.a, 1e-4);
-  o.color = vec4f(to_srgb(color * vignette_of(i.clip.xy, frame_viewport(), frame_vignette())), texel.a);
+  o.color = vec4f(to_srgb(color * vignette_of(i.clip.xy, frame_screen(), frame_vignette())), texel.a);
   o.depth = i.upright_z;
   return o;
 }

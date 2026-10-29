@@ -22,7 +22,7 @@ template <Range R> class SlabMalloc {
     static constexpr std::size_t MIN_CLASS_LOG2 = 4;
     // So a run's header is at most a sixteenth of it.
     static constexpr std::size_t MIN_SLOTS_LOG2 = 4;
-    static constexpr std::size_t CLASS_COUNT = R::MIN_LOG2 - MIN_CLASS_LOG2;
+    static constexpr std::size_t CLASS_CNT = R::MIN_LOG2 - MIN_CLASS_LOG2;
 
     struct Run {
         Run *prev;
@@ -42,7 +42,7 @@ template <Range R> class SlabMalloc {
     static constexpr std::size_t slots(std::size_t c) noexcept { return std::size_t{1} << (run_log2(c) - class_log2(c)); }
 
     static constexpr bool every_run_has_a_slot() noexcept {
-        for (std::size_t c = 0; c < CLASS_COUNT; c++) {
+        for (std::size_t c = 0; c < CLASS_CNT; c++) {
             if (head_slots(c) >= slots(c)) return false;
         }
         return true;
@@ -174,7 +174,7 @@ template <Range R> class SlabMalloc {
     }
 
     BuddyMalloc<R> buddy_;
-    std::array<Run *, CLASS_COUNT> partial_{};
+    std::array<Run *, CLASS_CNT> partial_{};
     std::size_t allocs_ = 0;
     std::uint32_t refusals_ = 0;
     std::size_t run_live_ = 0;

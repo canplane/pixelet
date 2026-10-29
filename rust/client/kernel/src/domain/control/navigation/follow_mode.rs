@@ -3,12 +3,13 @@
 use pxl_spec::space::coord::q3::Q3;
 use xpute_kit::math::scalar::wrap;
 
+use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::reading::{
-    device_location_store, device_orientation_store, DevicePoseStatus,
+    device_location_store, device_orient_store, SensorStatus,
 };
 use crate::sys::sched::edge::wake_at;
 use xpute_guest::clock::now;
@@ -32,7 +33,7 @@ struct Follow {
     last_heading: Option<f64>,
     /// The give-up deadline, and the location status it was set for.
     grace_due: Option<f64>,
-    grace_for: Option<DevicePoseStatus>,
+    grace_for: Option<SensorStatus>,
 }
 
 static FOLLOW: Global<Follow> = Global::new();
@@ -60,17 +61,15 @@ pub fn set_following(on: bool) {
 pub fn follow_mode_step() {
     let f = follow();
     let is_follow_mode = f.on;
-    let heading = device_orientation_store()
-        .orientation
-        .and_then(|o| o.heading);
+    let heading = device_orient_store().orient.and_then(|o| o.heading);
     let device_coord = off_center().device_coord;
 
     // Follow needs the location READY; a heading only turns the camera where there
     // is one, so a device without a compass still follows where it is. A blip
     // must not drop it (it read as the mode switching itself off), but a dead
     // location must eventually, or the camera freezes behind a disabled button.
-    let status = device_location_store().pose.status();
-    let ready = status == DevicePoseStatus::Ready;
+    let status = device_location_store().state.status;
+    let ready = status == SensorStatus::Ready;
     if is_follow_mode && !ready {
         // Restarted whenever a status moves: LOADING to ERROR is a fresh gap with its
         // own retry ahead.
@@ -124,7 +123,7 @@ pub fn follow_mode_step() {
             }
         };
         f.smoothed_azimuth = Some(smoothed);
-        crate::domain::control::camera::controller::set_intent(IntentPatch {
+        controller::set_intent(IntentPatch {
             azimuth: Some(smoothed),
             ..Default::default()
         });

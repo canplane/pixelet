@@ -1,9 +1,10 @@
 // pxl-spec/bake/separation.test.rs
 
 use super::*;
-use pxl_spec_core::ways;
+use pxl_spec_core::way;
 
 use crate::procedural::Frame;
+use crate::space::layer::tile;
 
 /// A leaf tile's frame at the origin: a u a cell.
 const NOWHERE: Frame = Frame {
@@ -24,7 +25,7 @@ fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
 }
 
 #[test]
-fn a_narrow_line_along_a_diagonal_is_one_band() {
+fn diagonal_line_one_band() {
     let d = one(&[[0.0, 0.0], [40.0, 40.0]], &[10, 10], 0.5);
     let mut covered = fnv::FnvHashSet::default();
     d.crossing_grid(NOWHERE, [0.0, 0.0], 1.0, [40, 40], |x, y, _, _| {
@@ -39,15 +40,15 @@ fn a_narrow_line_along_a_diagonal_is_one_band() {
     }
 }
 
-/// A parent's neighbourhood with `d` its first child's lines and no other.
+/// A parent's neighborhood with `d` its first child's lines and no other.
 fn first_child(d: &Separation) -> [Option<&Separation>; 16] {
     let mut around = [None; 16];
-    around[crate::space::layer::tile::neighbor_index(0, 0)] = Some(d);
+    around[tile::neighbor_idx(0, 0)] = Some(d);
     around
 }
 
 #[test]
-fn a_line_is_kept_up_the_pyramid_by_its_width_alone() {
+fn line_kept_by_width() {
     // Two cells wide: one cell a zoom coarser, kept at its own width.
     let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
     let up = fold_separation(first_child(&wide), 14);
@@ -59,7 +60,7 @@ fn a_line_is_kept_up_the_pyramid_by_its_width_alone() {
 }
 
 #[test]
-fn each_form_is_drawn_from_its_surface() {
+fn form_from_surface() {
     use crate::asset::cube::ground as t;
     let over = |form: Form, top: f32| Crossing {
         low: top,
@@ -70,13 +71,13 @@ fn each_form_is_drawn_from_its_surface() {
         clear: 3,
     };
     let no = [0, 0];
-    let on = |c: Crossing, ground: i32, cpm: f32| ways::occupies(&c, ground, cpm);
-    let at = |what: Occupy, span: [i32; 2]| Occupies {
+    let on = |c: Crossing, ground: i32, cpm: f32| way::occupies(&c, ground, cpm);
+    let at = |what: Occupy, span: [i32; 2]| Occupancy {
         what,
         span,
         pier: [0, 0],
     };
-    // Two cells a metre: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
+    // Two cells a meter: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
     let cpm = 2.0;
     assert_eq!(
         on(over(Form::Bridge, 30.0), 10, cpm),

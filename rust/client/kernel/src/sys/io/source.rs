@@ -10,7 +10,7 @@
 //! serves it.
 
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
-use pxl_spec::bake::source::{key, sharded};
+use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
@@ -78,12 +78,12 @@ pub fn top() -> Option<Zoom> {
 
 /// Whether a served shard is over or under `p`, of a kind held by shards.
 pub fn serves(layer: BaseLayer, p: Tile) -> bool {
-    !sharded(layer) || declared().is_some_and(|s| s.covers(p))
+    !is_sharded(layer) || declared().is_some_and(|s| s.covers(p))
 }
 
 /// Whether the ground at `[x, y]`, in units, is past the service area: the
 /// source is declared and serves no shard over its leaf. What the shell is
-/// told of the focus (shell.rs `outside`); a walk or an edit asks
+/// told of the pivot (shell.rs `outside`); a walk or an edit asks
 /// domain/query/limit.rs `within`, which keeps off the area's edge as well.
 pub fn past_at([x, y]: [f64; 2]) -> bool {
     let leaf = GROUND
@@ -165,7 +165,7 @@ fn parse<'a>(
     for &[x, y] in &covered {
         for k in 0..9 {
             let n = [
-                pxl_spec_core::wrap_index(SHARD_ZOOM, x + k % 3 - 1),
+                pxl_spec_core::wrap_idx(SHARD_ZOOM, x + k % 3 - 1),
                 y + k / 3 - 1,
             ];
             let key = area::shard_key(n);

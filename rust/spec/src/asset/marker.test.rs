@@ -1,10 +1,11 @@
 // pxl-spec/asset/marker.test.rs
 
 use super::*;
+use crate::space::coord::zoom;
 
-/// Markers spread over a few squares, two to a leaf cell in places.
+/// Markers spread over a few bricks, two to a leaf cell in places.
 fn markers() -> Vec<EntryAt> {
-    let z = crate::space::coord::zoom::UNIT_ZOOM;
+    let z = zoom::UNIT_ZOOM;
     (0..400i32)
         .map(|k| EntryAt::new(z, [(k * 7919) % 300, (k * 104_729) % 300, (k * 31) % 9]))
         .collect()
@@ -14,7 +15,7 @@ fn markers() -> Vec<EntryAt> {
 /// count is its children's summed and what is shown only splits as the eye
 /// comes nearer; past the marker's own cell it stays there.
 #[test]
-fn a_markers_cell_nests_in_the_one_a_grid_zoom_coarser() {
+fn marker_cell_nests() {
     use crate::space::hierarchy::tree::parent_of;
     for at in markers() {
         for cell in 10..40 {
@@ -29,18 +30,18 @@ fn a_markers_cell_nests_in_the_one_a_grid_zoom_coarser() {
     }
 }
 
-/// A marker's cell lies in the window's square drawing its grid's cells
+/// A marker's cell lies in the window's brick drawing its grid's cells
 /// (pxl-spec-core window.rs), so no cell's count is split between two
-/// squares, wherever the square is no finer than the marker.
+/// bricks, wherever the brick is no finer than the marker.
 #[test]
-fn a_markers_cell_lies_in_its_square() {
-    use pxl_spec_core::window::{squares_zoom, SQUARE_SHIFT};
+fn marker_cell_in_brick() {
+    use pxl_spec_core::window::{bricks_zoom, BRICK_SHIFT};
     for at in markers() {
-        for cell in MARKER_SHOWN_FROM as Zoom..=at.zoom() + SQUARE_SHIFT {
+        for cell in MARKER_SHOWN_FROM as Zoom..=at.zoom() + BRICK_SHIFT {
             let (z, c) = marker_cell_of(cell, at);
-            let square = squares_zoom(cell);
-            let [x, y, _] = ancestor_of(c, z - square);
-            let [ax, ay, _] = ancestor_of(at.at(), at.zoom() - square);
+            let brick = bricks_zoom(cell);
+            let [x, y, _] = ancestor_of(c, z - brick);
+            let [ax, ay, _] = ancestor_of(at.at(), at.zoom() - brick);
             assert_eq!([x, y], [ax, ay], "{at:?} at {cell}");
         }
     }

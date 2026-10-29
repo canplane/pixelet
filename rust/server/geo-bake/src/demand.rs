@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 pub mod job;
 use job::{Limits, Runner};
+use pxl_spec::space::layer::tile;
 
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
@@ -49,7 +50,7 @@ impl Kind {
     /// Its coarsest tile served, which the client reads from too: never
     /// coarser than the kind is read at.
     fn top(self, top: Zoom) -> Zoom {
-        pxl_spec::space::layer::tile::top_over(self.leaf(), top).max(self.coarsest())
+        tile::top_over(self.leaf(), top).max(self.coarsest())
     }
 
     /// The coarsest zoom it is read at (`pyramid::Base::COARSEST`).

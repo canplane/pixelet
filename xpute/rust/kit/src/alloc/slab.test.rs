@@ -50,21 +50,21 @@ fn small() -> Layout {
 }
 
 #[test]
-fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
+fn slot_contents_survive() {
     let heap: SlabMalloc<Slots> = SlabMalloc::new();
     let sizes = [1usize, 16, 17, 24, 64, 200, 1000, 4096, 9000];
     let mut live: Vec<(*mut u8, usize, u8)> = Vec::new();
 
-    for (i, size) in sizes.iter().cycle().take(90).enumerate() {
-        let layout = Layout::from_size_align(*size, 8).unwrap();
+    for (i, sz) in sizes.iter().cycle().take(90).enumerate() {
+        let layout = Layout::from_size_align(*sz, 8).unwrap();
         // SAFETY: the range is the test's own.
         let p = unsafe { heap.alloc(layout) };
         if p.is_null() {
             continue;
         }
         // SAFETY: `size` bytes the allocator just handed out.
-        unsafe { core::ptr::write_bytes(p, i as u8, *size) };
-        live.push((p, *size, i as u8));
+        unsafe { core::ptr::write_bytes(p, i as u8, *sz) };
+        live.push((p, *sz, i as u8));
     }
     assert!(
         live.len() > 40,
@@ -72,25 +72,25 @@ fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
         live.len()
     );
 
-    for (p, size, _) in live.iter().step_by(2) {
+    for (p, sz, _) in live.iter().step_by(2) {
         // SAFETY: from this allocator, not yet given back.
-        unsafe { heap.dealloc(*p, Layout::from_size_align(*size, 8).unwrap()) };
+        unsafe { heap.dealloc(*p, Layout::from_size_align(*sz, 8).unwrap()) };
     }
     live = live.into_iter().skip(1).step_by(2).collect();
 
-    for size in sizes {
-        let layout = Layout::from_size_align(size, 8).unwrap();
+    for sz in sizes {
+        let layout = Layout::from_size_align(sz, 8).unwrap();
         // SAFETY: as above.
         let p = unsafe { heap.alloc(layout) };
         if !p.is_null() {
             // SAFETY: `size` bytes the allocator just handed out.
-            unsafe { core::ptr::write_bytes(p, 0xff, size) };
+            unsafe { core::ptr::write_bytes(p, 0xff, sz) };
         }
     }
 
-    for (p, size, byte) in &live {
+    for (p, sz, byte) in &live {
         // SAFETY: still live, and `size` bytes long.
-        let bytes = unsafe { core::slice::from_raw_parts(*p, *size) };
+        let bytes = unsafe { core::slice::from_raw_parts(*p, *sz) };
         assert!(
             bytes.iter().all(|b| b == byte),
             "a slot written with {byte:#04x} was written over"
@@ -99,7 +99,7 @@ fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
 }
 
 #[test]
-fn a_run_goes_back_to_the_pages_when_its_last_slot_does() {
+fn empty_run_returned() {
     let heap: SlabMalloc<Returned> = SlabMalloc::new();
     // SAFETY: the range is the test's own, here and below.
     let first = unsafe { heap.alloc(small()) };
@@ -133,18 +133,18 @@ fn a_run_goes_back_to_the_pages_when_its_last_slot_does() {
 }
 
 #[test]
-fn a_request_of_a_page_or_more_is_the_page_allocator_s_own() {
+fn page_requests_delegated() {
     let heap: SlabMalloc<Whole> = SlabMalloc::new();
-    for size in [PAGE, PAGE + 1, PAGE * 4] {
-        let layout = Layout::from_size_align(size, 8).unwrap();
+    for sz in [PAGE, PAGE + 1, PAGE * 4] {
+        let layout = Layout::from_size_align(sz, 8).unwrap();
         let before = heap.pages().live();
         // SAFETY: the range is the test's own, here and below.
         let p = unsafe { heap.alloc(layout) };
         assert!(!p.is_null());
         let took = heap.pages().live() - before;
         assert!(
-            took >= size,
-            "a request of {size} took only {took} from the pages"
+            took >= sz,
+            "a request of {sz} took only {took} from the pages"
         );
         assert_eq!(
             p as usize % PAGE,
@@ -157,7 +157,7 @@ fn a_request_of_a_page_or_more_is_the_page_allocator_s_own() {
 }
 
 #[test]
-fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
+fn slots_inside_runs() {
     let heap: SlabMalloc<Held> = SlabMalloc::new();
     let sizes = [16usize, 24, 64, 300, 1000, PAGE, PAGE * 3];
     let mut live: Vec<(*mut u8, Layout)> = Vec::new();
@@ -178,11 +178,11 @@ fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
     };
 
     for round in 0..4 {
-        for (k, size) in sizes.iter().enumerate() {
-            let layout = Layout::from_size_align(*size, 8).unwrap();
+        for (k, sz) in sizes.iter().enumerate() {
+            let layout = Layout::from_size_align(*sz, 8).unwrap();
             // SAFETY: the range is the test's own, here and below.
             let p = unsafe { heap.alloc(layout) };
-            assert!(!p.is_null(), "the range ran out at {size} on round {round}");
+            assert!(!p.is_null(), "the range ran out at {sz} on round {round}");
             live.push((p, layout));
             check(&heap);
             // Every other one, so runs are left partly full.
@@ -216,7 +216,7 @@ fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
 }
 
 #[test]
-fn a_whole_page_request_is_no_run_and_no_slot() {
+fn whole_page_not_slab() {
     let heap: SlabMalloc<Whole> = SlabMalloc::new();
     let layout = Layout::from_size_align(PAGE * 2, 8).unwrap();
     let (run, slot) = (heap.run_live(), heap.slot_live());

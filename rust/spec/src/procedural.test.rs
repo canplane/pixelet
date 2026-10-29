@@ -7,7 +7,7 @@ use crate::space::layer::lattice::GROUND;
 /// across many of the caves' first cubes rather than in a few, where one
 /// cave decides the share.
 #[test]
-fn caves_hollow_a_little_of_the_ground() {
+fn caves_hollow_some() {
     let mut n = 0;
     for x in 0..64 {
         for y in 0..64 {
@@ -24,7 +24,7 @@ fn caves_hollow_a_little_of_the_ground() {
 /// The caves fold to themselves: at every zoom a cube is the majority of its
 /// eight children.
 #[test]
-fn a_cave_cube_is_the_majority_of_its_children() {
+fn cave_cube_majority() {
     for zoom in CAVE_COARSEST - 1..GROUND.cell() {
         for x in 0..6 {
             for y in 0..6 {

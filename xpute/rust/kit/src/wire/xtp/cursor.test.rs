@@ -118,7 +118,7 @@ impl Packet {
 }
 
 #[test]
-fn the_cursor_reads_what_the_typescript_reads() {
+fn matches_typescript() {
     let v = Golden::load(GOLDEN);
     v.each("packets", |k| {
         let pkt = Packet::new(v.s(&format!("{k}.packet")));

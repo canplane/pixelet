@@ -9,31 +9,25 @@
 use super::lattice::{Lattice, GROUND};
 use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
-use crate::space::camera::grid::{split_distance, Tau};
+use crate::space::camera::grid::split_dist;
 use crate::space::coord::zoom::{units, Zoom};
 use crate::space::layer::lattice::demand_reach;
 
 /// The distances a layer's `zoom` is required over: from where the grid's
 /// cell its tiles fold into begins (0 for the leaves) to where the next
 /// coarser one's does, or the reach of the source's `top` at `zoom` alone,
-/// unscaled. None past the far edge.
-pub fn band(
-    o: &Observation,
-    tau: Tau,
-    lattice: Lattice,
-    top: Zoom,
-    zoom: Zoom,
-) -> Option<(f64, f64)> {
+/// as far as a window holds it (`demand_reach`). None past the far edge.
+pub fn band(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<(f64, f64)> {
     let from = if zoom == LEAF_ZOOM {
         0.0
     } else {
-        tau.split_distance(lattice.grid_zoom(zoom))
+        split_dist(lattice.grid_zoom(zoom))
     };
     let coarser = lattice.grid_zoom(zoom - 1);
     let to = if zoom == top {
-        split_distance(coarser)
+        demand_reach(lattice, zoom)
     } else {
-        tau.split_distance(coarser)
+        split_distance(coarser)
     };
     (from <= o.reach).then_some((from, to))
 }

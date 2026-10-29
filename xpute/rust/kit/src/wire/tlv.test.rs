@@ -27,7 +27,7 @@ fn show(v: &TlvValue) -> String {
 }
 
 #[test]
-fn tlv_computes_what_the_typescript_computes() {
+fn matches_typescript() {
     let v = Golden::load(GOLDEN);
     let mut w = TlvWriter::new(4);
     w.u8(200)
@@ -66,9 +66,9 @@ fn tlv_computes_what_the_typescript_computes() {
         TlvValue::Bytes(vec![1]),
     ])
     .unwrap();
-    let packet = w.finish();
-    assert_eq!(hex::encode(packet), v.s("packet"));
-    let read: Vec<String> = TlvReader::new(packet)
+    let pkt = w.finish();
+    assert_eq!(hex::encode(pkt), v.s("packet"));
+    let read: Vec<String> = TlvReader::new(pkt)
         .read_all()
         .unwrap()
         .iter()
@@ -84,7 +84,7 @@ fn tlv_computes_what_the_typescript_computes() {
         let mut r = TlvReader::new(&pkt);
         let mut n = 0;
         let stop = loop {
-            match r.next_value() {
+            match r.next_val() {
                 Ok(Some(_)) => n += 1,
                 Ok(None) => {
                     break if r.end() == Some(TlvEnd::Closed) {

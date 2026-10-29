@@ -1,30 +1,29 @@
 {
   "$doc": [
     "Every setting the app has, declared once: its default, its kind, and",
-    "where the settings sheet shows it. The store reads the defaults from here",
-    "and the sheet renders rows from here, so adding a setting is one entry in",
-    "SETTINGS plus its two strings in the locale catalog under",
-    "`settings.<section>.<key>`. A choice may carry `costs` beside its",
+    "where it is shown, its `section`: one of the settings sheet's, or",
+    "`profiler`, the profiler panel's own. The store reads the defaults from",
+    "here and the sheet renders rows from here, so adding a setting to the",
+    "sheet is one entry in SETTING plus its two strings in the locale catalog",
+    "under `settings.<section>.<key>`. A choice may carry `costs` beside its",
     "`options`, one per option in the same order, for when what an option costs",
     "differs from its neighbors'; an empty string is no badge. A `dev` setting",
     "is in the kernel's table in every build and offered only under a",
-    "development one; the shell's production bundle carries SETTINGS_SHIPPED,",
-    "the table without them, in SETTINGS' place. A setting whose `kept` is",
+    "development one; the shell's production bundle carries SETTING_SHIPPED,",
+    "the table without them, in SETTING's place. A setting whose `kept` is",
     "false is the session's alone: the store neither writes it to its kept",
     "slot nor reads it from there, so every session starts it at its default.",
     "",
     "A setting carries its `number` (the kernel's SettingKey), and a choice's",
     "`options` names one of the lists below, which numbers each option. The",
     "numbers are what crosses and what storage keeps; the names are the",
-    "shell's alone, for its rows and the locale. A number is given out once: a",
-    "setting or an option taken out leaves its number in its table's",
-    "`$retired`, and the generator refuses a number given twice or one",
-    "retired, so a number stored or sent never comes to mean another. An",
-    "`index` is a place in a list kept elsewhere — the person and the pet are",
-    "by theirs in actor.json — and crosses as itself."
+    "shell's alone, for its rows and the locale. A number is given out once;",
+    "the generator refuses one given twice. An `index` is a place in a list",
+    "kept elsewhere — the person and the pet are by theirs in actor.json — and",
+    "crosses as itself."
   ],
-  "RESOLUTION_MODES": {
-    "$value": { "auto": 0, "fixed": 1, "low": 2 },
+  "RES_MODES": {
+    "$val": { "auto": 0, "fixed": 1, "low": 2 },
     "$doc": [
       "How many device pixels the world is drawn at to a CSS pixel.",
       "",
@@ -37,19 +36,19 @@
     ]
   },
   "CAMERA_MODES": {
-    "$value": { "orbit": 0, "free": 1 },
+    "$val": { "orbit": 0, "first_person": 1 },
     "$doc": [
       "Which controller makes the camera's pose.",
       "",
-      "  orbit — third person: the camera turns about the focus, its",
-      "          radius ahead of the eye, and a drag moves the focus.",
-      "  free  — first person: the eye is the focus and turns in place;",
-      "          a drag walks it as the orbit's center walks, the eye at its",
-      "          height over where the walk stands."
+      "  orbit        — third person: the camera turns about the pivot, its",
+      "                 radius ahead of the eye, and a drag moves the pivot.",
+      "  first_person — the eye is the pivot and turns in place; a drag",
+      "                 walks it as the orbit's pivot walks, the eye at its",
+      "                 height over where the walk stands."
     ]
   },
   "ORBIT_OBSTACLE_MODES": {
-    "$value": { "through": 0, "stop": 1, "climb": 2 },
+    "$val": { "through": 0, "stop": 1, "climb": 2 },
     "$doc": [
       "What terrain does to the camera.",
       "",
@@ -64,25 +63,50 @@
     ]
   },
   "AO_MODES": {
-    "$value": { "off": 0, "corner": 1, "screen": 2 },
+    "$val": { "off": 0, "corner": 1, "screen": 2 },
     "$doc": [
       "Where the ambient occlusion comes from.",
       "",
       "  off    — none.",
       "  corner — the screen pass's own: the floor along a cube and the inside",
-      "           of a corner, where a neighbouring pixel's face rises in front",
-      "           of the pixel's own plane within a block or two of it",
+      "           of a corner, where a neighboring pixel's face rises in front",
+      "           of the pixel's own plane within a cell or two of it",
       "           (rust/client/render/src/frame/shader/screen_ray.wgsl).",
       "           A few taps of the rays a pixel, behind a uniform.",
       "  screen — N8AO",
       "           (rust/client/render/src/gpu/ao.rs): the world's depth drawn",
       "           once more, the occlusion sampled from it at half resolution,",
-      "           denoised, and applied to every lit surface as a warm dark",
-      "           tint. Five passes and 11 bytes a pixel."
+      "           denoised, and read by every lit surface. Five passes and 11",
+      "           bytes a pixel. The corners' too, the darker of the two where",
+      "           both fall (screen_lit.wgsl), as N8AO reads a cube's corner",
+      "           softer at half resolution."
     ]
   },
-  "SETTINGS": {
-    "$retired": [],
+  "SKY_TIMES": {
+    "$val": {
+      "real": 0,
+      "dawn": 1,
+      "morning": 2,
+      "noon": 3,
+      "afternoon": 4,
+      "dusk": 5
+    },
+    "$doc": [
+      "The hour the sky is drawn at, at the place the sky is seen from: the",
+      "wall clock's own, or one held in the place's solar time, so the sun",
+      "stands where it does there at that hour today whatever the clock reads",
+      "(pxl-kernel domain/scene/environment.rs `shown`). Only the sky's time;",
+      "the clouds, the frame's step and the storage keep the wall clock.",
+      "",
+      "  real      — the wall clock.",
+      "  dawn      — 7:00, a low sun.",
+      "  morning   — 9:00.",
+      "  noon      — 12:00, the sun highest.",
+      "  afternoon — 15:00.",
+      "  dusk      — 17:00, a low sun."
+    ]
+  },
+  "SETTING": {
     "textures": {
       "number": 0,
       "$doc": [
@@ -155,8 +179,8 @@
       "number": 5,
       "$doc": [
         "Which controller makes the camera's pose; CAMERA_MODES says each. To",
-        "first person the person stands at the focus, the eye at its",
-        "height over the ground; to third the focus is laid on the ground",
+        "first person the person stands at the pivot, the eye at its",
+        "height over the ground; to third the pivot is laid on the ground",
         "and the eye steps back by the radius."
       ],
       "kind": "choice",
@@ -168,21 +192,22 @@
     "surface_follow": {
       "number": 6,
       "$doc": [
-        "The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."
+        "The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck."
       ],
       "kind": "toggle",
       "default": true,
-      "section": "navigation",
+      "section": "camera",
       "dev": true
     },
     "orbit_obstacle": {
       "number": 7,
-      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each."],
+      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default."],
       "kind": "choice",
       "default": "climb",
       "options": "ORBIT_OBSTACLE_MODES",
       "section": "camera",
-      "dev_options": ["through"]
+      "dev": true,
+      "kept": false
     },
     "edge_shade": {
       "number": 8,
@@ -220,30 +245,31 @@
       "number": 11,
       "$doc": [
         "The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world",
-        "cast once more from the sun, a ray a texel through the world's query at",
-        "the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the",
-        "actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB",
-        "of map."
+        "cast once more from the sun as the eye's rays are, beams and samples on",
+        "the observed pyramid, the boxes they stop at drawn and a texel's sample",
+        "taken, the rest walked (pxl-shader sun.rs), recast only where what it",
+        "reads moves; decor and the actors drawn into it depth only, and a 3x3",
+        "compare per fragment; 16 MB of map."
       ],
       "kind": "toggle",
       "default": false,
       "cost": "high",
       "section": "lighting"
     },
-    "resolution": {
+    "res": {
       "number": 12,
       "$doc": [
         "The pixels the world is filled at, the GPU's largest cost: two to a",
-        "CSS pixel is four times the fragments of one. RESOLUTION_MODES says each."
+        "CSS pixel is four times the fragments of one. RES_MODES says each."
       ],
       "kind": "choice",
       "default": "auto",
-      "options": "RESOLUTION_MODES",
+      "options": "RES_MODES",
       "section": "display"
     },
     "view": {
       "number": 13,
-      "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],
+      "$doc": ["Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
@@ -258,7 +284,7 @@
     "world_gizmo": {
       "number": 15,
       "$doc": [
-        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs)."
+        "Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,
@@ -267,18 +293,27 @@
     "camera_gizmo": {
       "number": 16,
       "$doc": [
-        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the blocks the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs)."
+        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
-    "person": { "number": 17, "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in actor.json's person keys."] }, "section": "character" },
-    "pet": { "number": 18, "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in actor.json's pet keys."] }, "section": "character" },
+    "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["female-2, by its number in actor.json's person keys."] }, "section": "character" },
+    "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["chick, by its number in actor.json's pet keys."] }, "section": "character" },
     "ray_steps": {
       "number": 19,
       "$doc": [
-        "Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (rust/client/render/src/frame/shader/screen_ray.wgsl)."
+        "Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl)."
+      ],
+      "kind": "toggle",
+      "default": false,
+      "section": "debug"
+    },
+    "ray_counts": {
+      "number": 20,
+      "$doc": [
+        "How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off."
       ],
       "kind": "toggle",
       "default": false,

@@ -4,84 +4,98 @@
 //! grows what the ground grows and draws it with placed decor: what only
 //! the CPU knows, handed over and never read back. Each kind's zooms where
 //! it is a sprite's worth, a pixel's size and the tiers' floors, the anchor
-//! the decor block is drawn about, the decor the eraser leaves out, each
+//! a decor is drawn about, the decor the eraser leaves out, each
 //! variant's extent, placed decor as records, and the boxes the objects
 //! were written in, where what the ground grows may have changed.
 
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_distance, target_cell_px, SPLIT};
+use pxl_spec::space::camera::grid::{split_dist, SPLIT, WINDOW_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec_core::overwrite;
 use pxl_spec_core::scatter::{self, drawn, row_of};
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::query::World;
-use crate::domain::view::frame::pose::units_per_px_at;
+use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
+use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::camera::grid;
+use pxl_spec::space::layer::lattice;
+use pxl_spec::space::layer::tile;
+use pxl_spec_core::decor;
 use pxl_spec_core::window::FIRST_CELL;
 
-/// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
-/// down to `DECOR_SPRITE_CELLS` of a camera cell. No fade: the edge is per
-/// instance, so it staggers.
-pub fn decor_gone_px() -> f64 {
-    crate::domain::scene::decor::param::DECOR_MODEL_PX
+/// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
+/// cell, the model's edge, an angle about the eye in radians (pxl-spec
+/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it. No fade: the edge is per instance,
+/// so it staggers.
+pub fn decor_model_angle() -> f64 {
+    param::DECOR_MODEL_CELLS * grid::CELL
 }
 
-/// The sprite's edge in pixels, at the reference view's cell.
-pub fn decor_sprite_px() -> f64 {
-    crate::domain::scene::decor::param::DECOR_SPRITE_CELLS * target_cell_px()
+/// The sprite's edge, `DECOR_SPRITE_CELLS` of a camera cell, as an angle as
+/// the model's is (`decor_model_angle`).
+pub fn decor_sprite_angle() -> f64 {
+    param::DECOR_SPRITE_CELLS * grid::CELL
 }
 
-/// How far a thing `extent_u` wide is a sprite's worth: where it spans
-/// `DECOR_SPRITE_CELLS` of the camera grid's cells, an angle about the eye
-/// whatever the screen.
+/// How far a thing `extent_u` wide is a sprite's worth as a window holds it:
+/// where it spans `DECOR_SPRITE_CELLS` of the window's cells (`SPLIT`),
+/// `WINDOW_MARGIN` times as far as `decor_sprite_angle` puts the sprite's
+/// edge, an upper bound. `is_decor_shown` takes both its sides at the
+/// window's, so its zooms are the view's.
 pub const fn sprite_reach(extent_u: f64) -> f64 {
-    extent_u * SPLIT / crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
+    extent_u * SPLIT / param::DECOR_SPRITE_CELLS
 }
 
 /// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
 /// `cell_zoom` are drawn: as it spans where that zoom begins.
-fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_distance(cell_zoom) <= sprite_reach(extent_u)
+fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
+    split_dist(cell_zoom) * WINDOW_MARGIN <= sprite_reach(extent_u)
 }
 
 /// Each kind's window zooms where it is a sprite's worth, a bit each.
 fn shown() -> [u32; DECORS.len()] {
-    let at = |k: usize| {
-        (FIRST_CELL..=LEAF_CELL).filter(move |&c| decor_shown(DECORS[k].extent(catalog()), c))
-    };
-    core::array::from_fn(|k| at(k).fold(0, |w, c| w | 1 << (c - FIRST_CELL)))
+    shown_by(|d| d.extent(catalog()))
+}
+
+/// `shown`, each kind's extent `extent` gives.
+fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
+    core::array::from_fn(|k| {
+        u32::from(is_decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
+    })
 }
 
 /// The frame's hand-over, kept so a settled frame asks the heap for nothing,
 /// and made again only where what it is made of changed.
 struct Handed {
-    /// Made with the params, from the variants' extents.
+    /// Made with the drawing words, from the variants' extents.
     shown: [u32; DECORS.len()],
-    params: [u32; drawn::PARAM_WORDS as usize],
+    drawing: [u32; drawn::DRAWING_WORDS as usize],
     placed: Vec<[u32; scatter::GROWN_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
-    /// cells, and how many the next frame hands (`edited`, `frame`).
-    edits: [[i32; 4]; scatter::EDITS as usize],
+    /// cells, and how many the next frame hands (`note_edited`, `frame`).
+    edits: [[i32; 4]; overwrite::EDITS as usize],
     edited: usize,
     translation: [f32; 3],
-    /// What the params were last made of, by value.
+    /// What the drawing words were last made of, by value.
     seen: Option<Seen>,
     /// The cell the placed decor was last walked about, and what it left out.
     walked: Option<Walked>,
 }
 
-/// What the params are made of: the unit the eye stands in (its anchor), a
-/// pixel's size there, the ground's decor the eraser leaves out, and
-/// whether the catalog that measures the variants is read. A new input goes
-/// here or the params never see it change. The eye within its unit moves
-/// only the translation.
+/// What the drawing words are made of: the unit the eye stands in (its
+/// anchor), the ground's decor the eraser leaves out, and whether the
+/// catalog that measures the variants is read. A new input goes here or the
+/// drawing words never see it change. The eye within its unit moves only
+/// the translation.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     anchor: V3,
@@ -93,7 +107,7 @@ struct Seen {
 /// What the placed decor was walked over: the eye's cell at the reach's
 /// zoom, the coarsest cell no wider than the reach is short of, and the
 /// placed decor the eraser leaves out. Walked again where this moves, or
-/// where a write meets its box (`edited`): a traversal kept while the eye
+/// where a write meets its box (`note_edited`): a traversal kept while the eye
 /// stays in its cell.
 #[derive(Clone, Copy, PartialEq)]
 struct Walked {
@@ -107,9 +121,9 @@ static HANDED: Global<Handed> = Global::new();
 fn handed() -> &'static mut Handed {
     HANDED.get(|| Handed {
         shown: [0; DECORS.len()],
-        params: [0; drawn::PARAM_WORDS as usize],
+        drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
-        edits: [[0; 4]; scatter::EDITS as usize],
+        edits: [[0; 4]; overwrite::EDITS as usize],
         edited: 0,
         translation: [0.0; 3],
         seen: None,
@@ -120,7 +134,7 @@ fn handed() -> &'static mut Handed {
 /// A leaf cell's X as the world names it (pxl-spec-core `wrap_index`), the
 /// GPU's grown records' among them, as a word.
 fn wrapped(x: i32) -> u32 {
-    pxl_spec_core::wrap_index(LEAF_CELL, x) as u32
+    pxl_spec_core::wrap_idx(LEAF_CELL, x) as u32
 }
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
@@ -138,19 +152,20 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     };
     if h.seen != Some(seen) {
         h.seen = Some(seen);
-        params(&mut h.params, seen);
+        drawing(&mut h.drawing, seen);
         h.shown = shown();
     }
     // Out to the reach from anywhere in the anchor's unit: every unit of the
     // eye's cell at the reach's zoom reaches no farther than the cell and
     // one beside it, whose side the reach is short of. What is past an
-    // eye's own reach `decor_count_cs` leaves out by its size, as it does
+    // eye's own reach `decor_cnt_cs` leaves out by its size, as it does
     // what is past the box.
     let reach = DECORS
         .iter()
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
-        / (decor_sprite_px() * seen.upp);
+        / decor_sprite_angle())
+    .min(lattice::draw_reach(lattice::GROUND, tile::LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
         zoom -= 1;
@@ -170,12 +185,12 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     h.placed.clear();
     let placed = &mut h.placed;
     World::now().placed_in(&around, &mut |e| {
-        let (k, decor) = row_of(&pxl_spec_core::decor::DECORS, e.state);
+        let (k, decor) = row_of(&decor::DECORS, e.state);
         if !decor || hide == Some(e.id()) {
             return;
         }
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
-        let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
+        let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
         placed.push([
             scatter::record_word(k, variant, turn, scatter::PLACED_AT),
             wrapped(x),
@@ -208,8 +223,8 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
         .any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
 }
 
-/// The params of a hand-over `seen` makes.
-fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
+/// The drawing words of a hand-over `seen` makes.
+fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Seen) {
     let anchor = seen.anchor;
     p.fill(0);
     p[drawn::UPP as usize] = (seen.upp as f32).to_bits();
@@ -234,9 +249,9 @@ fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
 /// Where the objects were written, as the turn's change took them
 /// (domain/query/changed.rs), held for the next frame to hand: each region's
 /// columns in leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past
-/// `scatter::EDITS`, the rest joined into the last, so every write is met,
+/// `overwrite::EDITS`, the rest joined into the last, so every write is met,
 /// however many turns pass before a frame takes them.
-pub fn edited(regions: &[Aabb]) {
+pub fn note_edited(regions: &[Aabb]) {
     let h = handed();
     let leaf = units(LEAF_CELL);
     for r in regions {
@@ -262,7 +277,7 @@ pub fn edited(regions: &[Aabb]) {
     }
 }
 
-/// The hand-over `step` made; the edits `edited` gave, once. With the
+/// The hand-over `step` made; the edits `note_edited` gave, once. With the
 /// decor setting off the ground grows its decor at no zoom, and what was
 /// placed stays.
 pub fn frame() -> DecorFrame<'static> {
@@ -274,7 +289,7 @@ pub fn frame() -> DecorFrame<'static> {
         } else {
             &[0; DECORS.len()]
         },
-        params: &h.params,
+        drawing: &h.drawing,
         placed: &h.placed,
         translation: h.translation,
         edits: &h.edits[..edited],

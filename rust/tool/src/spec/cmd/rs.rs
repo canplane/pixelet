@@ -4,6 +4,7 @@
 //! signal's writer, for a Rust guest.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
+use crate::spec;
 use crate::spec::{file, pascal, rs_doc};
 
 fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
@@ -162,9 +163,11 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
         return Ok(vec![
             "let mut n = 0;".to_string(),
             format!("({v})(&mut |_| n += 1);"),
-            format!("w.branch(n, |w| ({v})(&mut |item| {{"),
-            format!("    w.branch({fields}, |w| item.write(w));"),
-            "}));".to_string(),
+            "w.branch(n, |w| {".to_string(),
+            format!("    ({v})(&mut |item| {{"),
+            format!("        w.branch({fields}, |w| item.write(w));"),
+            "    });".to_string(),
+            "});".to_string(),
         ]);
     }
     Ok(vec![match kind {
@@ -233,7 +236,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut out = vec![
         format!("// {}/cmd.spec.rs", t.rs_logical),
         "//".into(),
-        crate::spec::generated(t.json, t.json),
+        spec::generated(t.json, t.json),
         "".into(),
     ];
     out.extend(rs_doc(&spec.doc, "", "//!"));
@@ -244,7 +247,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "// type is long to spell and is spelled once, here, for each. A table",
             "// with no signal or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
-            "#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]",
+            "#![allow(non_camel_case_types, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
             "",
             "use core::fmt::Display;",
             "",
@@ -256,7 +259,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let strs = spec
         .commands()?
         .iter()
-        .flat_map(|c| c.packet.iter().chain(c.signal.iter()).flatten())
+        .flat_map(|c| c.pkt.iter().chain(c.signal.iter()).flatten())
         .any(|f| f.list && f.ty == "str");
     out.push(format!(
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
@@ -287,7 +290,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                     if e.default.as_deref() == Some(m.name.as_str()) {
                         out.push("    #[default]".into());
                     }
-                    out.push(format!("    {} = {},", m.name, literal(m.value, &e.format)));
+                    out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
                 }
             }
         }
@@ -319,9 +322,9 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if let Some(packet) = &c.packet {
+        if let Some(pkt) = &c.pkt {
             let mut borrows = false;
-            for f in packet {
+            for f in pkt {
                 borrows |= f.list || spec.kind(&f.ty)? == Kind::Str;
             }
             let lt = if borrows { "<'a>" } else { "" };
@@ -331,7 +334,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 "#[derive(Clone, Copy, Debug)]".to_string(),
                 format!("pub struct {name}{lt} {{"),
             ]);
-            for f in packet {
+            for f in pkt {
                 if let Some(doc) = &f.doc {
                     out.extend(rs_doc(doc, "    ", "///"));
                 }
@@ -348,7 +351,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             ));
             out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
             out.push(format!("        Ok({name} {{"));
-            for (i, f) in packet.iter().enumerate() {
+            for (i, f) in pkt.iter().enumerate() {
                 out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
             }
             out.extend([

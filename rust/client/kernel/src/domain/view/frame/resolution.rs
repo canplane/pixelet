@@ -2,10 +2,10 @@
 
 //! Device pixels per CSS pixel a surface is drawn at: the display's, and the
 //! world's as the `resolution` setting says. The world's rays are cast at the
-//! display's pixels times `scale` each way, and the page shows the buffer in
-//! the layout box whatever its size (pxl-render gpu/surface.rs), so the frame
-//! is upscaled within itself: render resolution apart from display resolution
-//! where a screen outgrows its GPU (Unreal's screen percentage). `fixed` draws
+//! display's pixels times `scale` each way, and the renderer's finish brings
+//! them up to the canvas's, the display's (pxl-render gpu/finish.rs): render
+//! resolution apart from display resolution where a screen outgrows its GPU
+//! (Unreal's screen percentage). `fixed` draws
 //! whole, `low` a device pixel a CSS pixel, and `auto` one of `SCALE_STEPS`
 //! steps between whole and `SCALE_MIN`, each a like share of the last, so
 //! every move lays the pixels on one of a few grids.
@@ -17,8 +17,9 @@
 //! sched/quantum.ts `Grant::paced_ms`) no tighter than `SCALE_BUDGET_FLOOR_MS`,
 //! over `SCALE_WINDOW_MS` of budgets. Where the device keeps timestamps the
 //! sample is the GPU time of the passes drawn at the world's pixels
-//! (pxl-render gpu/renderer.rs `pixels_ms`), from a read that landed: a window
-//! over its budget by more than `SCALE_BAND` steps down at once, and
+//! (pxl-render gpu/renderer.rs `px_ms`), from a read that landed, which
+//! not every frame has, and a window none landed in is not judged. Timed, a
+//! window over its budget by more than `SCALE_BAND` steps down at once, and
 //! `SCALE_UP_WINDOWS` windows in a row in which the step above, cost times its
 //! pixels over these, fits under it by that much step up, so the scale does
 //! not swing between two steps. Where it keeps none the sample is the frame's
@@ -31,8 +32,10 @@
 //! after it are not judged, and it asks for the frame that draws it.
 
 use crate::domain::view::param;
-use crate::domain::view::setting::store::{settings_store, ResolutionMode};
+use crate::domain::view::setting::store::{settings_store, ResMode};
+use crate::sys::sched::edge;
 use pxl_render::api_spec::surface_role;
+use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use xpute_guest::global::Global;
 
@@ -154,10 +157,10 @@ fn share(step: i32) -> f64 {
 /// The share of the display's pixels, each way, the world is drawn at on a
 /// display of `device` pixels a CSS pixel: the setting's, `auto`'s by its step.
 fn scale(device: f64) -> f64 {
-    match settings_store().resolution {
-        ResolutionMode::auto => share(state().step),
-        ResolutionMode::fixed => 1.0,
-        ResolutionMode::low => 1.0 / device,
+    match settings_store().res {
+        ResMode::auto => share(state().step),
+        ResMode::fixed => 1.0,
+        ResMode::low => 1.0 / device,
     }
 }
 
@@ -185,7 +188,7 @@ fn world() -> Option<&'static mut Surface> {
 
 /// Device pixels per CSS pixel the display shows the world at, whatever the
 /// load drew it at: what the camera grid is laid by (`view_resize`), so a
-/// block's zoom, demand and a pointer's reach follow the screen, not the
+/// cell's zoom, demand and a pointer's reach follow the screen, not the
 /// load; a pixel a CSS pixel before the world has a surface.
 pub fn display_ratio() -> f64 {
     world().map_or(1.0, |s| device(s.dpr))
@@ -214,14 +217,14 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
     let k = state();
     let started = pace.moving && !k.moving;
     k.moving = pace.moving;
-    if settings_store().resolution != ResolutionMode::auto {
+    if settings_store().res != ResMode::auto {
         (k.step, k.quiet) = (0, 0);
         k.restart();
     } else if started {
         k.restart();
-    } else if pace.moving && pace.paced_ms > 0.0 && s.buffer_px() == (s.width, s.height) {
+    } else if pace.moving && pace.paced_ms > 0.0 && s.render_px() == (s.width, s.height) {
         let drawn = f64::from(s.width) * f64::from(s.height);
-        let timed = pxl_render::gpu::api::device().is_some_and(|d| d.timestamps);
+        let timed = api::device().is_some_and(|d| d.timestamps);
         let spent = if timed {
             gpu.filter(|&(ms, px)| ms > 0.0 && px > 0.0 && px == drawn)
                 .map(|(ms, _)| ms)
@@ -239,7 +242,7 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
     let ratio = surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
     if s.ratio != ratio {
         s.ratio = ratio;
-        crate::sys::sched::edge::request_world_tick();
+        edge::request_world_tick();
     }
 }
 

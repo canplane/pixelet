@@ -21,20 +21,21 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
-    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
-    GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
-    MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION,
-    OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL,
-    SUN_ANGULAR_RADIUS, SUN_DIR, TOP_RADIUS,
+    BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
+    GROUND_ALBEDO, KM_PER_U, LAND_ALT_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
+    MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER,
+    OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS,
+    SUN_DIR, TOP_RADIUS,
 };
 use crate::frame::shader::word::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
-    word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE,
+    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
+    word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, DONE,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
+use crate::gpu::span_spec::GpuSpanName;
 use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
 
@@ -73,7 +74,7 @@ const FROXEL_GROUP: [u32; 24] = [
     UNIFORM,
 ];
 
-/// A layer for each tile the earth layer's floor holds at once: its residency's frames.
+/// A layer for each tile the earth layer's floor holds at once: its tile cache's slots.
 pub const EARTH_LAYERS: u32 = REACH_TILES;
 /// A tile's layer plus one in four bits, eight to a word.
 const _: () = assert!(
@@ -102,8 +103,8 @@ pub(crate) const IRRADIANCE: usize = 4;
 const MOON_VIEW: usize = 5;
 
 /// A share of the altitude, and at least a meter.
-const ALTITUDE_SHARE: f32 = 0.005;
-const ALTITUDE_FLOOR_KM: f32 = 0.001;
+const ALT_SHARE: f32 = 0.005;
+const ALT_FLOOR_KM: f32 = 0.001;
 
 pub struct Atmosphere {
     uniform: u32,
@@ -149,13 +150,8 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(
-        g: &Gpu,
-        pipelines: &mut Pipelines,
-        frame_buffer: u32,
-        sky_buffer: u32,
-    ) -> Atmosphere {
-        let uniform = g.buffer(
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, sky_buf: u32) -> Atmosphere {
+        let uniform = g.buf(
             word_bytes(ATMOS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
@@ -246,11 +242,11 @@ impl Atmosphere {
             baked: false,
             drawn_for: [None; 2],
             slopes: (
-                g.buffer(
+                g.buf(
                     8,
                     buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
                 ),
-                g.buffer(8, buffer_usage::MAP_READ | buffer_usage::COPY_DST),
+                g.buf(8, buffer_usage::MAP_READ | buffer_usage::COPY_DST),
             ),
             slopes_of: [false; 2],
             landed: [0; 2],
@@ -286,11 +282,11 @@ impl Atmosphere {
         };
         let medium = [8, 9, 11];
         let multiscatter = view_entry(12, views[MULTISCATTER]);
-        let frame = buffer_entry(0, frame_buffer);
+        let frame = buf_entry(0, frame_buf);
         let light = |which: f32| {
-            let light = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
-            buffer_entry(14, light)
+            let light = g.buf(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            g.write_buf(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
+            buf_entry(14, light)
         };
         // The exposure reads the air but what it writes, and the volume made of it.
         let unexposed: Vec<u32> = air
@@ -312,7 +308,7 @@ impl Atmosphere {
                         multiscatter,
                         light(0.0),
                         frame,
-                        buffer_entry(20, atmosphere.slopes.0),
+                        buf_entry(20, atmosphere.slopes.0),
                     ],
                 ),
             ),
@@ -324,7 +320,7 @@ impl Atmosphere {
                         multiscatter,
                         light(1.0),
                         frame,
-                        buffer_entry(20, atmosphere.slopes.0),
+                        buf_entry(20, atmosphere.slopes.0),
                     ],
                 ),
             ),
@@ -335,7 +331,7 @@ impl Atmosphere {
         }
         let froxel = of(
             &[8, 9, 11, 12, 13],
-            &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)],
+            &[frame, view_entry(1, volume), buf_entry(19, sky_buf)],
         );
         atmosphere.froxel_group = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
         atmosphere
@@ -343,7 +339,7 @@ impl Atmosphere {
 
     pub fn entries(&self) -> [Entry; AIR_ENTRIES] {
         [
-            buffer_entry(8, self.uniform),
+            buf_entry(8, self.uniform),
             view_entry(9, self.views[TRANSMITTANCE]),
             view_entry(10, self.views[SKY_VIEW]),
             sampler_entry(11, self.sampler),
@@ -362,12 +358,12 @@ impl Atmosphere {
     /// eye's texel drawn this frame (`exposed`); whether it was.
     pub fn froxel(
         &mut self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         [frame, sky]: [&[f32]; 2],
         exposed: bool,
-        stamp: &mut Stamp,
     ) -> bool {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::air);
         let r = &mut self.air;
         r.begin();
         r.read(frame);
@@ -429,68 +425,66 @@ impl Atmosphere {
     /// up where the eye stands.
     pub fn lay_out(&mut self, g: &Gpu, env: &[f32]) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
-        let altitude_km = env[ENV_AIR];
+        let alt_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
         self.words[MOON_COLOR..MOON_COLOR + 3]
             .copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
-        self.words[CAMERA_ALTITUDE] = altitude_km;
+        self.words[CAMERA_ALT] = alt_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
-        self.words[LAND_ALTITUDE_KM] = env[ENV_AIR + 3];
+        self.words[LAND_ALT_KM] = env[ENV_AIR + 3];
+        self.words[DRAWN] = reach;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         let r = &mut self.read;
         r.begin();
         r.read(&self.words);
         self.moved = !r.end();
         if self.moved {
-            g.write_buffer(self.uniform, 0, bytes(&self.words));
+            g.write_buf(self.uniform, 0, bytes(&self.words));
         }
     }
 
     /// Whether a table the world reads was drawn again, and whether it
     /// recorded anything. A light's view is drawn again when its height or
-    /// the eye's altitude has moved (`moved`), and only while no slopes are on
+    /// the eye's altitude has moved (`has_moved`), and only while no slopes are on
     /// their way, which it writes; it takes its light's slope as it is drawn.
     /// The exposure texel is a function of the words it reads and the
     /// tables, so it is drawn where `lay_out` found the words moved, or a
     /// table was drawn.
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> (bool, bool) {
+    pub fn draw(&mut self, ctx: &mut RenderContext) -> (bool, bool) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
         let mut drew = !self.baked;
         if !self.baked {
-            self.table(g, encoder, TRANSMITTANCE, stamp);
-            self.table(g, encoder, MULTISCATTER, stamp);
-            self.table(g, encoder, IRRADIANCE, stamp);
+            self.table(ctx, TRANSMITTANCE);
+            self.table(ctx, MULTISCATTER);
+            self.table(ctx, IRRADIANCE);
             self.baked = true;
             self.drawn_for = [None; 2];
         }
         self.take_slopes();
-        let altitude = self.words[CAMERA_ALTITUDE];
+        let alt = self.words[CAMERA_ALT];
         let free = self.landed_word == 0;
         let views = [
-            (SKY_VIEW, (self.sun_mu, altitude), true),
-            (
-                MOON_VIEW,
-                (self.moon_mu, altitude),
-                self.words[MOON_LIGHT] > 0.0,
-            ),
+            (SKY_VIEW, (self.sun_mu, alt), true),
+            (MOON_VIEW, (self.moon_mu, alt), self.words[MOON_LIGHT] > 0.0),
         ];
         for (k, (table, now, lit)) in views.into_iter().enumerate() {
-            if !(free && lit && moved(self.drawn_for[k], now)) {
+            if !(free && lit && has_moved(self.drawn_for[k], now)) {
                 continue;
             }
-            g.write_buffer(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
-            self.table(g, encoder, table, stamp);
+            g.write_buf(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
+            self.table(ctx, table);
             self.drawn_for[k] = Some(now);
             self.slopes_of[k] = true;
             drew = true;
         }
         if self.slopes_of.contains(&true) && free {
-            g.copy_buffer(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
+            g.copy_buf(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
         }
         let exposed = drew || self.moved;
         if exposed {
-            self.table(g, encoder, EXPOSURE_TEXEL, stamp);
+            self.table(ctx, EXPOSURE_TEXEL);
         }
         (drew, exposed)
     }
@@ -499,8 +493,8 @@ impl Atmosphere {
     /// is submitted; their landing wakes the turn that reads them.
     pub fn read_back(&mut self, g: &Gpu) {
         if self.slopes_of.contains(&true) && self.landed_word == 0 {
-            let address = off_of(self.landed.as_ptr()) as u32;
-            g.map_read(self.slopes.1, 0, 8, address, &mut self.landed_word, 1);
+            let addr = off_of(self.landed.as_ptr()) as u32;
+            g.map_read(self.slopes.1, 0, 8, addr, &mut self.landed_word, 1);
         }
     }
 
@@ -524,7 +518,9 @@ impl Atmosphere {
         self.steps
     }
 
-    fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
+    fn table(&self, ctx: &mut RenderContext, k: usize) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::air);
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -555,11 +551,9 @@ fn pass_of(table: usize) -> usize {
 /// A view is drawn again for any new height of its light, which the sky's
 /// clock moves only a step at a time (pxl-kernel domain/scene/environment.rs, by
 /// `steps`), or for the eye's altitude moved its share.
-fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
+fn has_moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {
         None => true,
-        Some((mu, h)) => {
-            mu != now.0 || (now.1 - h).abs() > (h.abs() * ALTITUDE_SHARE).max(ALTITUDE_FLOOR_KM)
-        }
+        Some((mu, h)) => mu != now.0 || (now.1 - h).abs() > (h.abs() * ALT_SHARE).max(ALT_FLOOR_KM),
     }
 }

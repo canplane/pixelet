@@ -26,7 +26,7 @@ stays black.
 Lit by the sun's direction alone, a matte wall turned from it fell to a fifth of
 the ground beside it. A quarter of the light keeps its direction; the rest, what
 an up-facing face takes, reaches every face alike
-(`frame/shader/atmos_light.wgsl` `DIRECTED`). An up-facing face is lit as
+(pxl-render `param.rs` `light::DIRECTED`). An up-facing face is lit as
 before, so the exposure, the sky and the far ground are untouched. No face is
 painted by its direction.
 
@@ -49,7 +49,7 @@ sun's included: no shadow is drawn by default, and the corner is the cue it
 leaves. Neither touches the air in front, and neither tints.
 
 > Since changed: both tint. The corners darken toward a warm brown
-> (`frame/shader/screen_ray.wgsl` `AO_TINT`), and N8AO is applied as a warm dark
+> (pxl-render `param.rs` `ao::TINT`), and N8AO is applied as a warm dark
 > tint (`gpu/ao.rs`). They are now two modes of one setting, corner by default
 > (spec/client/kernel/domain/view/setting/schema.json `AO_MODES`).
 

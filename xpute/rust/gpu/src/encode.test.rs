@@ -9,7 +9,7 @@ const GOLDEN: &str = include_str!("../../../spec/golden/gpu/programs.tsv");
 
 /// The only test here that sets the memory's base, so nothing races for it.
 #[test]
-fn every_program_writes_the_words_its_record_holds() {
+fn programs_match_record() {
     let g = Golden::load(GOLDEN);
     let [region, stream_words, head] =
         ["region", "stream.words", "stream.head"].map(|k| g.u32(k) as usize);

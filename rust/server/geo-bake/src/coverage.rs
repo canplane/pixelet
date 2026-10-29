@@ -7,9 +7,10 @@
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
+use postgres::types::ToSql;
 use postgres::{Client, NoTls};
 use pxl_geo_spec::table::CATALOG;
-use pxl_spec::space::coord::zoom::{count, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cnt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
 use pxl_spec::space::layer::lattice::GROUND;
@@ -29,7 +30,7 @@ pub const EPS: f64 = units(GROUND.cell());
 /// leaves. A terrain leaf's reads stay within its 2-ring; a
 /// divisions leaf looks this far for the point of a division with no area,
 /// past the gap between such points nearly everywhere (99% of Korea's
-/// neighbourhoods, most of its villages, measured 2026-10-08).
+/// neighborhoods, most of its villages, measured 2026-10-08).
 pub const BAKE_REACH: f64 = units(LEAF_ZOOM - 2);
 
 const _: () = assert!(
@@ -86,11 +87,11 @@ pub struct Coverage {
     shards: BTreeSet<Shard>,
 }
 
-static SOURCE: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
+static SRC: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
 
 impl Coverage {
-    pub fn of_source() -> Result<Coverage, String> {
-        SOURCE.clone()
+    pub fn of_src() -> Result<Coverage, String> {
+        SRC.clone()
     }
 
     fn derive() -> Result<Coverage, String> {
@@ -151,7 +152,7 @@ impl Coverage {
             .iter()
             .filter(|&&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile)
             .count();
-        under == (count(SHARD_ZOOM, zoom) as usize).pow(2)
+        under == (cnt(SHARD_ZOOM, zoom) as usize).pow(2)
     }
 
     /// Every leaf held.
@@ -225,7 +226,7 @@ impl Overture {
     pub fn reading(reads: &[&[&str]], need: &BTreeSet<Node>) -> Result<(Overture, Client), String> {
         let tables = tables_of(reads);
         let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-        let held: BTreeSet<String> = Coverage::of_source()?.shards().map(Node::name).collect();
+        let held: BTreeSet<String> = Coverage::of_src()?.shards().map(Node::name).collect();
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
@@ -261,7 +262,7 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
     let tables = tables_of(reads);
     let text = |client: &mut Client,
                 sql: &str,
-                params: &[&(dyn postgres::types::ToSql + Sync)]|
+                params: &[&(dyn ToSql + Sync)]|
      -> Result<Vec<Vec<Option<String>>>, String> {
         let rows = client
             .query(sql, params)
@@ -282,7 +283,7 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
         ),
         &[&tables],
     )?;
-    let elevation = text(
+    let ele = text(
         client,
         "SELECT version, accessed_at::text, count(*)::text FROM elevation_catalog GROUP BY version, accessed_at ORDER BY version",
         &[],
@@ -292,11 +293,11 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
         "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')",
         &[],
     )?;
-    Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
+    Ok(serde_json::json!({ "overture": overture, "elevation": ele, "coastline": coastline }))
 }
 
 /// `holdings`, for a set's manifest.
-pub fn source_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
+pub fn src_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let (_, mut client) = Overture::reading(reads, &BTreeSet::new())?;
     holdings(&mut client, reads)
 }

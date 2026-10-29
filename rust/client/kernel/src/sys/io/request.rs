@@ -34,12 +34,13 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::param::MAX_CREDITS;
+use crate::sys::sched::edge;
 
 /// Ordered by `class`, then `distance`, lower first, then `detail`, higher first.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rank {
     pub class: u8,
-    pub distance: f64,
+    pub dist: f64,
     pub detail: u8,
 }
 
@@ -68,7 +69,7 @@ pub enum Blame {
 }
 
 /// How many of a stream's wants are held at once. A layer's tiles: at most
-/// its residency's frames, since it asks only for what it can hold, which the
+/// its tile cache's slots, since it asks only for what it can hold, which the
 /// layer says (`open`). An asset: one a slot, the catalog and the sphere.
 pub type Bounds = [usize; Stream::ALL.len()];
 
@@ -141,7 +142,7 @@ impl Placed {
         self.rank
             .class
             .cmp(&other.rank.class)
-            .then(self.rank.distance.total_cmp(&other.rank.distance))
+            .then(self.rank.dist.total_cmp(&other.rank.dist))
             .then(other.rank.detail.cmp(&self.rank.detail))
             // Meaningless tie-break, so two runs of the same turn start the same work.
             .then((self.stream as u8, self.subject).cmp(&(other.stream as u8, other.subject)))
@@ -416,7 +417,7 @@ impl<S: Serve> RequestScheduler<S> {
 
     /// Whether `stream`'s want of `subject` waits on its object, which
     /// failed: it is not asked again while it is wanted.
-    pub fn object_failed(&self, stream: Stream, subject: u64) -> bool {
+    pub fn has_object_failed(&self, stream: Stream, subject: u64) -> bool {
         self.find(stream, subject)
             .is_some_and(|i| matches!(self.desired[i].wait, Wait::Object))
     }
@@ -435,15 +436,15 @@ impl<S: Serve> RequestScheduler<S> {
         let want = self.find(a.stream, a.subject);
         match ended {
             Ended::Ok => {
-                self.answered();
+                self.on_answered();
                 if let Some(i) = want {
                     self.drop_want(a.stream, i);
                 }
             }
-            Ended::Failed(f) => self.failed(want, f, a.start_ms, at),
+            Ended::Failed(f) => self.on_failed(want, f, a.start_ms, at),
             // Still an answer from the server.
             Ended::Refused(refused) => {
-                self.answered();
+                self.on_answered();
                 if let Some(i) = want {
                     self.desired[i].wait = Wait::Room(refused);
                 }
@@ -454,14 +455,14 @@ impl<S: Serve> RequestScheduler<S> {
     }
 
     /// The server answered: whatever held it back is over.
-    fn answered(&mut self) {
+    fn on_answered(&mut self) {
         self.failing = None;
         self.strikes = 0;
         self.struck_ms = f64::NEG_INFINITY;
         self.held_until = f64::NEG_INFINITY;
     }
 
-    fn failed(&mut self, want: Option<usize>, failure: Failure, started_ms: f64, at: f64) {
+    fn on_failed(&mut self, want: Option<usize>, failure: Failure, started_ms: f64, at: f64) {
         let seed = derive_seed_u64(self.strikes as u64, at.to_bits());
         let wait = match self.serve.blame(failure) {
             Blame::Object => Wait::Object,
@@ -485,7 +486,7 @@ impl<S: Serve> RequestScheduler<S> {
             }
         };
         // Still an answer from the server.
-        self.answered();
+        self.on_answered();
         if let Some(i) = want {
             self.desired[i].wait = wait;
         }
@@ -499,7 +500,7 @@ impl<S: Serve> RequestScheduler<S> {
             }
         }
         self.held = [0; Stream::ALL.len()];
-        self.answered();
+        self.on_answered();
         self.given_up = false;
         self.started.clear();
         self.stops.clear();
@@ -511,7 +512,7 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
         let mut row = TaskRow {
             stream: a.stream as u32 as f64,
             subject: a.subject,
-            priority: a.rank.class as f64 + a.rank.distance,
+            priority: a.rank.class as f64 + a.rank.dist,
             enqueue_ms: a.enqueue_ms,
             start_ms: a.start_ms,
             end_ms: at,
@@ -530,14 +531,14 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
             Ended::Failed(fail) => fail.at,
             Ended::Ok | Ended::Aborted | Ended::Refused(_) => None,
         } {
-            row.at_file = off_of_slice(file_in_memory(at.file()).as_bytes()) as f64;
+            row.at_file = off_of_slice(file_in_mem(at.file()).as_bytes()) as f64;
             row.at_file_bytes = at.file().len() as f64;
             row.at_line = at.line() as f64;
         }
-        for (k, (name, value)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
+        for (k, (name, val)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
             row.phase_ids[k] = name as u32 as f64;
-            row.phase_values[k] = value;
-            row.phase_count = (k + 1) as f64;
+            row.phase_vals[k] = val;
+            row.phase_cnt = (k + 1) as f64;
         }
         row
     });
@@ -547,7 +548,7 @@ static FILES: Global<FnvHashMap<usize, Box<str>>> = Global::new();
 
 /// A location's file name lies outside kernel memory on a device, so rows
 /// name a heap copy; the names are few and kept for good.
-fn file_in_memory(file: &'static str) -> &'static str {
+fn file_in_mem(file: &'static str) -> &'static str {
     FILES
         .get(FnvHashMap::default)
         .entry(file.as_ptr().addr())
@@ -589,7 +590,7 @@ pub fn pump() {
     s.pump(now());
     // Nothing else need come to end a hold.
     if s.held_until.is_finite() && !s.given_up {
-        crate::sys::sched::edge::wake_at(s.held_until);
+        edge::wake_at(s.held_until);
     }
 }
 
@@ -605,8 +606,8 @@ pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
     sched().attempt_of(key)
 }
 
-pub fn object_failed(stream: Stream, subject: u64) -> bool {
-    sched().object_failed(stream, subject)
+pub fn has_object_failed(stream: Stream, subject: u64) -> bool {
+    sched().has_object_failed(stream, subject)
 }
 
 pub fn settle(key: u64, ended: Ended, phases: Option<Phases>) {

@@ -2,7 +2,7 @@
 
 use crate::space::coord::q3::Q3;
 use crate::space::coord::world::{wrap_cell, EXTENT};
-use crate::space::coord::zoom::{index_of, Zoom, UNIT_ZOOM};
+use crate::space::coord::zoom::{idx_of, Zoom, UNIT_ZOOM};
 use crate::space::layer::lattice::GROUND;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
@@ -13,11 +13,11 @@ const _: () = assert!(
 );
 /// A leaf's elevation samples and their padding, which the bake draws its
 /// cells' heights off (pxl-spec-core).
-pub use pxl_spec_core::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+pub use pxl_spec_core::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
 pub use super::object::OBJECT_TIERS;
 
-/// The objects' coarsest tier, a placed block, one unit: the ladder is the
+/// The objects' coarsest tier, a placed cell, one unit: the ladder is the
 /// objects' own and never the ground's cell.
 pub const OBJECT_COARSEST: Zoom = UNIT_ZOOM;
 
@@ -41,7 +41,7 @@ impl EntryAt {
 
     /// The cube of `zoom` that holds `p`.
     pub fn holding(zoom: Zoom, p: &Q3) -> EntryAt {
-        EntryAt::new(zoom, index_of(zoom, p))
+        EntryAt::new(zoom, idx_of(zoom, p))
     }
 
     pub fn zoom(self) -> Zoom {

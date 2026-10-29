@@ -13,24 +13,24 @@ pub fn damp_alpha(k: f64, delta: f64) -> f64 {
 }
 
 /// The short way round, in [-π, π).
-pub fn approach_angle(current: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
+pub fn approach_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
     let pi = core::f64::consts::PI;
-    let left = wrap(target - current, -pi, pi);
+    let left = wrap(target - cur, -pi, pi);
     let ([moved], moving) = approach_vec([0.0], [left], k, delta, eps);
-    (wrap(current + moved, -pi, pi), moving)
+    (wrap(cur + moved, -pi, pi), moving)
 }
 
 /// Every axis by the same share, so the path is straight; done within `eps`
 /// in any direction.
 pub fn approach_vec<const N: usize>(
-    current: [f64; N],
+    cur: [f64; N],
     target: [f64; N],
     k: f64,
     delta: f64,
     eps: f64,
 ) -> ([f64; N], bool) {
     let a = damp_alpha(k, delta);
-    let next: [f64; N] = std::array::from_fn(|i| current[i] + (target[i] - current[i]) * a);
+    let next: [f64; N] = std::array::from_fn(|i| cur[i] + (target[i] - cur[i]) * a);
     let left = (0..N)
         .map(|i| (target[i] - next[i]) * (target[i] - next[i]))
         .sum::<f64>()

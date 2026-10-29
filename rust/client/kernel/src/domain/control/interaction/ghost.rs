@@ -10,18 +10,20 @@
 use pxl_spec::asset::cube::{cube_of, Cube};
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::DecorId;
+use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::domain::control::interaction::edit::{pending, restores_scattered, Pending};
+use crate::domain::control::interaction::edit::{middle, pending, restores_scattered, Pending};
 use crate::domain::control::interaction::{holding, hover, ActiveTool};
 use crate::domain::layer::object::meta::user_decor_pick;
 pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::layer::object::store::Asset;
 use crate::domain::query::changed::Asked;
 use crate::domain::query::World;
+use crate::domain::view::frame::coord;
+use pxl_spec_core::answer;
 use xpute_guest::global::Global;
 
 /// The look of the ground the eraser would carve, of the hovered point:
@@ -45,7 +47,7 @@ pub fn ghost() -> Ghost {
         active_tool,
         ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser
     ) || hovered_object.is_some();
-    let current_scale = units(if use_object_style {
+    let cur_scale = units(if use_object_style {
         preview_zoom
     } else {
         GROUND.cell()
@@ -53,15 +55,16 @@ pub fn ghost() -> Ghost {
 
     let carved = CARVED.get(|| Asked::NONE);
     // Looked at each frame turn, a hover not asked of this one too.
-    carved.kept();
+    carved.forget_touched();
+    // The cell being carved as the world answers it, whichever source fills
+    // it: the ground, a way, a bore's wall.
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
-            cube_of(u32::from(
-                w.surface(h, LEAF_ZOOM)
-                    .value()
-                    .flatten()
-                    .map_or(0, |s| s.block),
-            ))
+            cube_of(
+                w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
+                    .val()
+                    .map_or(0, answer::val),
+            )
         }),
         _ => None,
     };
@@ -110,7 +113,7 @@ pub fn ghost() -> Ghost {
                 at: s.at,
                 decor,
                 variant: m.variant,
-                rotation: m.spin(),
+                rot: m.spin(),
                 scale: m.scale,
                 stand_in: None,
             })
@@ -118,11 +121,11 @@ pub fn ghost() -> Ghost {
     match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let [x, y, z] = crate::domain::view::frame::coord::to_world(&h);
+            let [x, y, z] = coord::to_world(&h);
             let c = q3::unpack(&h);
             let box_ghost = GhostBox {
                 at: [x, y, z],
-                size: current_scale,
+                size: cur_scale,
                 cube,
                 erase,
             };
@@ -132,7 +135,7 @@ pub fn ghost() -> Ghost {
                     at: [at[0] - c[0] + x, at[1] - c[1] + y, z],
                     decor,
                     variant: m.variant,
-                    rotation: m.spin(),
+                    rot: m.spin(),
                     scale: m.scale,
                     stand_in: Some(box_ghost),
                 },

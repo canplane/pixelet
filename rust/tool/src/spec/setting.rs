@@ -1,10 +1,10 @@
 // pxl-tool/spec/setting.rs
 
 //! The settings, each by the number schema.json gives it, and a choice's
-//! options by theirs; a number is given out once in its table, never one
-//! `$retired`. The kernel's table carries the numbers and no names, which
-//! are the shell's, for its rows and the locale. The shell gets a separate
-//! production table without the `dev` settings so the bundler drops them.
+//! options by theirs; a number is given out once in its table. The kernel's
+//! table carries the numbers and no names, which are the shell's, for its
+//! rows and the locale. The shell gets a separate production table without
+//! the `dev` settings so the bundler drops them.
 //! A setting whose `kept` is false the kernel's store neither keeps nor reads.
 
 use super::data::ts_literal;
@@ -49,7 +49,7 @@ impl Setting<'_> {
 struct List<'a> {
     name: &'a str,
     /// Each option and its number, in the JSON's order.
-    values: Vec<(String, u32)>,
+    vals: Vec<(String, u32)>,
     doc: Option<Vec<String>>,
 }
 
@@ -61,29 +61,11 @@ fn number(n: &Node, what: &str) -> Result<u32, String> {
         .ok_or(format!("{JSON}: {what}'s number is not a whole u32"))
 }
 
-/// A table's numbers are each given out once, and none of them `$retired`:
-/// a number kept in storage or sent by an older shell must not come to mean
-/// another setting or option.
-fn check_numbers(
-    table: &str,
-    numbered: &[(&str, u32)],
-    retired: Option<&Node>,
-) -> Result<(), String> {
-    let retired = match retired {
-        None => Vec::new(),
-        Some(r) => r
-            .arr()
-            .ok_or(format!("{JSON}: {table}'s $retired is not a list"))?
-            .iter()
-            .map(|n| number(n, &format!("{table}'s $retired")))
-            .collect::<Result<Vec<_>, _>>()?,
-    };
+/// A table's numbers are each given out once.
+fn check_numbers(table: &str, numbered: &[(&str, u32)]) -> Result<(), String> {
     for (i, (name, n)) in numbered.iter().enumerate() {
         if let Some((other, _)) = numbered[..i].iter().find(|(_, m)| m == n) {
             return Err(format!("{JSON}: {table}'s {name} and {other} are both {n}"));
-        }
-        if retired.contains(n) {
-            return Err(format!("{JSON}: {table}'s {name} is {n}, a retired number"));
         }
     }
     Ok(())
@@ -91,7 +73,7 @@ fn check_numbers(
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let spec = read(JSON)?;
-    let every = spec.get("SETTINGS").ok_or(format!("{JSON}: no SETTINGS"))?;
+    let every = spec.get("SETTING").ok_or(format!("{JSON}: no SETTING"))?;
     let settings: Vec<Setting> = every
         .named()
         .map(|(key, spec)| Setting { key, spec })
@@ -105,7 +87,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
-    check_numbers("SETTINGS", &numbers, every.get("$retired"))?;
+    check_numbers("SETTING", &numbers)?;
     let number_of = |s: &Setting| {
         numbers
             .iter()
@@ -115,31 +97,30 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     };
     let mut lists: Vec<List> = Vec::new();
     for (name, n) in spec.named() {
-        if name == "SETTINGS" {
+        if name == "SETTING" {
             continue;
         }
-        let values = n
+        let vals = n
             .is_wrapper()
             .then(|| n.value())
             .filter(|v| v.is_obj())
             .ok_or(format!(
                 "{JSON}: {name} is not a table of options by number"
             ))?;
-        let values = values
+        let vals = vals
             .named()
             .map(|(o, v)| Ok((o.to_string(), number(v, &format!("{name}'s {o}"))?)))
             .collect::<Result<Vec<_>, String>>()?;
         check_numbers(
             name,
-            &values
+            &vals
                 .iter()
                 .map(|(o, v)| (o.as_str(), *v))
                 .collect::<Vec<_>>(),
-            n.get("$retired"),
         )?;
         lists.push(List {
             name,
-            values,
+            vals,
             doc: n.lines_at("$doc"),
         });
     }
@@ -147,7 +128,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let options_of = |s: &Setting| {
         s.options()
             .and_then(list)
-            .map(|l| l.values.clone())
+            .map(|l| l.vals.clone())
             .ok_or(format!("{JSON}: {}'s options name no list", s.key))
     };
     let mut choices: Vec<&str> = Vec::new();
@@ -170,9 +151,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ));
     rs.push(String::new());
     rs.extend(casing_note());
-    rs.push("#![allow(non_camel_case_types)]".into());
+    rs.push("#![allow(non_camel_case_types, reason = \"generated from the spec\")]".into());
     for name in &choices {
-        let List { values, doc, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
+        let List { vals, doc, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
         let e = enum_name(name);
         rs.push(String::new());
         rs.extend(rs_doc(doc.as_deref().unwrap_or_default(), "", "///"));
@@ -182,8 +163,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             format!("pub enum {e} {{"),
         ]);
         rs.extend(
-            values
-                .iter()
+            vals.iter()
                 .map(|(v, n)| format!("    {} = {n},", rs_ident(v))),
         );
         rs.extend(["}".to_string(), String::new()]);
@@ -191,9 +171,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             format!("impl {e} {{"),
             format!(
                 "    pub const ALL: [{e}; {}] = [{}];",
-                values.len(),
-                values
-                    .iter()
+                vals.len(),
+                vals.iter()
                     .map(|(v, _)| format!("{e}::{}", rs_ident(v)))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -223,7 +202,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     rs.extend(
         [
             "",
-            "/// Every setting, by its number in schema.json's SETTINGS.",
+            "/// Every setting, by its number in schema.json's SETTING.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(u32)]",
             "pub enum SettingKey {",
@@ -264,7 +243,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ),
         String::new(),
         "    /// One past the highest number: the length of a list of every".into(),
-        "    /// setting's value at its number, where a retired number's stays 0.".into(),
+        "    /// setting's value at its number, where a number not given out stays 0.".into(),
         format!(
             "    pub const SLOTS: usize = {};",
             numbers
@@ -302,7 +281,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "    /// Written to the settings' kept slot and read from it; one schema.json".into(),
         "    /// marks `kept` false is held for the session alone.".into(),
-        "    pub fn kept(self) -> bool {".into(),
+        "    pub fn is_kept(self) -> bool {".into(),
         if session.is_empty() {
             "        true".to_string()
         } else {
@@ -342,18 +321,26 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     ))
             })
             .collect::<Result<_, _>>()?;
-        rs.push(format!(
-            "            SettingKey::{} => matches!(value, {}),",
+        dev_arms.push(format!(
+            "            SettingKey::{} => matches!(val, {}),",
             s.key,
             dev.join(" | ")
         ));
     }
-    rs.extend([
-        "            _ => false,".to_string(),
-        "        }".into(),
-        "    }".into(),
-        "}".into(),
-    ]);
+    if dev_arms.is_empty() {
+        rs.extend([
+            "    pub fn dev_option(self, _val: u32) -> bool {".to_string(),
+            "        false".into(),
+        ]);
+    } else {
+        rs.extend([
+            "    pub fn dev_option(self, val: u32) -> bool {".to_string(),
+            "        match self {".into(),
+        ]);
+        rs.extend(dev_arms);
+        rs.extend(["            _ => false,".to_string(), "        }".into()]);
+    }
+    rs.extend(["    }".to_string(), "}".into()]);
     let field_type = |s: &Setting| -> Result<String, String> {
         match s.kind() {
             "toggle" => Ok("bool".to_string()),
@@ -444,7 +431,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "",
             "    /// Sets a setting from its value as it crosses; false, and nothing set,",
             "    /// for a value the setting cannot hold.",
-            "    pub fn set(&mut self, key: SettingKey, value: u32) -> bool {",
+            "    pub fn set(&mut self, key: SettingKey, val: u32) -> bool {",
             "        match key {",
         ]
         .map(String::from),
@@ -452,13 +439,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     for s in &settings {
         let k = s.key;
         rs.push(match s.kind() {
-            "toggle" => format!("            SettingKey::{k} if value <= 1 => self.{k} = value == 1,"),
+            "toggle" => format!("            SettingKey::{k} if val <= 1 => self.{k} = val == 1,"),
             "choice" => format!(
-                "            SettingKey::{k} => match {}::of(value) {{ Some(o) => self.{k} = o, None => return false }},",
+                "            SettingKey::{k} => match {}::of(val) {{ Some(o) => self.{k} = o, None => return false }},",
                 enum_name(s.options().unwrap_or_default())
             ),
             _ => format!(
-                "            SettingKey::{k} => match {}::try_from(value) {{ Ok(n) => self.{k} = n, Err(_) => return false }},",
+                "            SettingKey::{k} => match {}::try_from(val) {{ Ok(n) => self.{k} = n, Err(_) => return false }},",
                 field_type(s)?
             ),
         });
@@ -478,7 +465,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         let mut out: Vec<(String, Node)> = vec![(
             "key".to_string(),
             Node::Obj(vec![
-                ("$value".to_string(), Node::Num(number_of(s) as f64)),
+                ("$val".to_string(), Node::Num(number_of(s) as f64)),
                 ("$type".to_string(), Node::Str("u32".to_string())),
             ]),
         )];
@@ -489,7 +476,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             if f == "$doc" || f == "number" {
                 continue;
             }
-            let value = match f.as_str() {
+            let val = match f.as_str() {
                 "options" => Node::Obj(
                     options_of(s)?
                         .into_iter()
@@ -500,8 +487,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 _ => v.clone(),
             };
             match out.iter_mut().find(|(k, _)| k == f) {
-                Some(slot) => slot.1 = value,
-                None => out.push((f.clone(), value)),
+                Some(slot) => slot.1 = val,
+                None => out.push((f.clone(), val)),
             }
         }
         Ok(Node::Obj(out))
@@ -526,16 +513,16 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ts.extend([
         String::new(),
         format!(
-            "export const SETTINGS = {} as const;",
+            "export const SETTING = {} as const;",
             ts_literal(&table(&|_| true)?, "f64", "")?
         ),
     ]);
     ts.extend([
         String::new(),
-        "/** SETTINGS without its `dev` entries: what a production bundle carries in its place. */"
+        "/** SETTING without its `dev` entries: what a production bundle carries in its place. */"
             .into(),
         format!(
-            "export const SETTINGS_SHIPPED = {} as const;",
+            "export const SETTING_SHIPPED = {} as const;",
             ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "")?
         ),
     ]);

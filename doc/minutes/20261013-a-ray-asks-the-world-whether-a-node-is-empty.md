@@ -20,7 +20,7 @@ A ray is cast for each cell of the camera grid and descends the pyramid by one
 rule of detail, the one that sizes every drawn cell: the zoom a ray asks at a
 distance is the one whose block, drawn whole, spans at least one cell of the
 camera grid there, its side at least the cell's angle times the distance
-(`Tau::cell_at`). A cube is at least its side wide seen from any direction, so
+(`grid::cell_at`). A cube is at least its side wide seen from any direction, so
 how the ray meets its face does not enter (corrected the same day; it first
 divided by the cosine to the face met, which asked an edge-on face as coarse as
 the coarsest zoom). A node coarser than the zoom asked there is not the world as
@@ -100,9 +100,9 @@ fills, from what each source already keeps, with nothing new stored:
 
 > Since changed for separation: whether anything under a node fills is no longer
 > read off the ways' fold, as for the objects, but by a bound of their own,
-> joined apart from the ground's (pxl-spec-core `ways::slab`). What a node is
+> joined apart from the ground's (pxl-spec-core `way::slab`). What a node is
 > still comes from a tree of the placed tree's shape, built on the GPU a square
-> at a time (pxl-spec-core `ways/tree.rs`).
+> at a time (pxl-spec-core `way/tree.rs`).
 
 ## What goes
 

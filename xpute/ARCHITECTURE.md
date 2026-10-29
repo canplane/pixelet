@@ -443,21 +443,12 @@ host's own blocks may lie in the same memory. And it paces frames, which a
 browser does for the web's: a turn draws while fewer of the frames that host
 admitted are unfinished than its frame latency (`GpuHost::admit`), so taking a
 surface's texture never blocks. The answer reaches the guest as a value the
-program hands its renderer (`admit` `Admit`); a page's host admits every frame
-(`every`). Its numbers are the program's, said in its plan (`Plan`) and none
-defaulted: the frame latency, its lag behind its input against how busy it keeps
-the GPU; the chunk its writes are staged in, as large as the writes its frames
-make; the surface format the platform shows best; and where a surface may be
-configured (`ConfigureAt`): on the thread that runs the stream, wherever the
-program sends it, or on an Apple platform's main thread, where Core Animation
-sets a layer's properties, the host asking the main queue itself. It opens the
-device too (`open`), as the program asks: the backends, the power preference,
-the features it would have where the adapter offers them, and the limits it asks
-of the adapter. On the web the browser's `requestAdapter` and `requestDevice`
-are that call already. Each host counts its own frames, so one host's hold back
-no other; and a frame is taken off its count as the callback holding it ends,
-called or let go uncalled with a device that went, so a gone device's frames do
-not stand forever.
+program hands its renderer (`xpute-gpu/admit.rs` `Admit`); a page's GPU host
+admits every drawn frame (`every`). The GPU host's numbers and choices are the
+program's, said in its config (`Config`) and none defaulted, among them where a
+surface is configured (`ConfigureAt`). It opens the device too, as the program
+asks (`open`, `Ask`); on the web the browser's `requestAdapter` and
+`requestDevice` are that call already.
 
 Beside a guest linked into its own process, the GPU's host is exported as the
 entry is, under xpute's names (`rust/gpu` `host/native`, `native_abi!`):

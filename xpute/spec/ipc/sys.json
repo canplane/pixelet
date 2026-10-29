@@ -18,7 +18,7 @@
   ],
 
   "HEAD": {
-    "$value": 2,
+    "$val": 2,
     "$type": "u32",
     "$doc": ["Words before the first record: END, then a word kept at 0."]
   },
@@ -27,37 +27,73 @@
     "$type": "u32",
     "$doc": ["A record's call, then its arguments."],
     "OPENAT": {
-      "$value": 1,
+      "$val": 1,
       "$doc": [
         "fd, root, flags, then the path's bytes: the file at `path` below `root` opened as `fd`,",
         "answered by SYS_OPENED with its size or -errno."
       ]
     },
     "READ": {
-      "$value": 2,
+      "$val": 2,
       "$doc": ["fd, at, len: the opened file's first `len` bytes copied to `at`."]
     },
     "WRITE": {
-      "$value": 3,
+      "$val": 3,
       "$doc": ["fd, at, len: the `len` bytes at `at` added to what the file opened for writing holds."]
     },
     "CLOSE": {
-      "$value": 4,
+      "$val": 4,
       "$doc": [
         "fd: the descriptor ended. A file opened for writing is replaced by what was written; an",
-        "open not yet answered is cancelled, and never answered."
+        "open not yet answered is canceled, and never answered."
       ]
     },
     "ABORT": {
-      "$value": 5,
+      "$val": 5,
       "$doc": [
         "errno, line, column, a (low, high word), b (low, high word), then the file's bytes:",
         "the broken invariant the guest reports before it stops (xpute-kit status/bug.rs)."
       ]
     },
     "PROGRAM": {
-      "$value": 2147483648,
+      "$val": 2147483648,
       "$doc": ["The bit every call a program numbers for itself carries."]
+    }
+  },
+
+  "args": {
+    "$type": "u32",
+    "$doc": [
+      "How many words of arguments each call's record takes, as its `op` lists them; OPENAT's",
+      "and ABORT's end in bytes after them."
+    ],
+    "OPENAT": {
+      "$val": 3
+    },
+    "READ": {
+      "$val": 3
+    },
+    "WRITE": {
+      "$val": 3
+    },
+    "CLOSE": {
+      "$val": 1
+    },
+    "ABORT": {
+      "$val": 7
+    }
+  },
+
+  "abort": {
+    "$type": "u32",
+    "$doc": ["Where ABORT's two values lie among its arguments, each low word then high."],
+    "A": {
+      "$val": 3,
+      "$doc": ["a."]
+    },
+    "B": {
+      "$val": 5,
+      "$doc": ["b."]
     }
   },
 
@@ -65,11 +101,11 @@
     "$type": "u32",
     "$doc": ["How OPENAT opens."],
     "O_RDONLY": {
-      "$value": 0,
+      "$val": 0,
       "$doc": ["To read, whole."]
     },
     "O_WRONLY": {
-      "$value": 1,
+      "$val": 1,
       "$doc": ["To write: created where it is not, and replaced whole at CLOSE (O_CREAT | O_TRUNC)."]
     }
   }

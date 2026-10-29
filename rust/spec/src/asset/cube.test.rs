@@ -1,10 +1,10 @@
 // pxl-spec/asset/cube.test.rs
 
 use super::*;
-use crate::asset::{decor_ids, decor_num_id};
+use crate::asset::{decor_num_id, DECOR_IDS};
 
 #[test]
-fn every_cube_round_trips_through_its_leaf_value_and_has_a_color() {
+fn cube_round_trip() {
     for &cube in ALL_CUBES.iter() {
         assert_eq!(cube_of(cube_id(cube)), Some(cube));
         assert!(cube_rgb(cube).is_some(), "{cube:?}");
@@ -12,15 +12,15 @@ fn every_cube_round_trips_through_its_leaf_value_and_has_a_color() {
 }
 
 #[test]
-fn no_sentinel_air_or_decor_is_a_cube() {
-    for value in [
+fn non_cubes() {
+    for val in [
         sentinel::void as u32,
         sentinel::unknown as u32,
         object::air as u32,
     ] {
-        assert_eq!(cube_of(value), None, "{value}");
+        assert_eq!(cube_of(val), None, "{val}");
     }
-    for &id in decor_ids.iter() {
+    for &id in DECOR_IDS.iter() {
         assert_eq!(cube_of(decor_num_id(id)), None, "{id:?}");
     }
 }

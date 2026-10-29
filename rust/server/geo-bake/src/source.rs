@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use pxl_spec::bake::published::BaseLayer;
-use pxl_spec::bake::source::{is_version, key, sharded};
+use pxl_spec::bake::source::{is_sharded, is_version, key};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
@@ -52,11 +52,11 @@ pub type Overrides = BTreeMap<Tile, Vec<(BaseLayer, String)>>;
 pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Result<Value, String> {
     for l in BaseLayer::ALL {
         let k = &kinds[l as usize];
-        if k.shard.is_some() != sharded(l) {
+        if k.shard.is_some() != is_sharded(l) {
             return Err(format!(
                 "{}: {}",
                 l.name(),
-                if sharded(l) {
+                if is_sharded(l) {
                     "no shards it holds"
                 } else {
                     "is held by no shards"
@@ -84,7 +84,11 @@ pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
         .unwrap_or_default();
     for (t, versions) in overrides {
         // A key is served whatever it carries: one on no shard served would serve what is not.
-        if !every.contains(t) || versions.iter().any(|(l, p)| !sharded(*l) || !is_version(p)) {
+        if !every.contains(t)
+            || versions
+                .iter()
+                .any(|(l, p)| !is_sharded(*l) || !is_version(p))
+        {
             return Err(format!(
                 "override {}: no shard every kind holds, or no version a client reads",
                 t.name()

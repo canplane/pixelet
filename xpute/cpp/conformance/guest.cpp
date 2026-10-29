@@ -61,7 +61,7 @@ struct State {
 // The memory never grows, so a module's allocator sits over a fixed range.
 constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
 
-static_assert(HEAP_AT + HEAP_BYTES <= MEMORY_BYTES, "the ranges run past the memory");
+static_assert(HEAP_AT + HEAP_BYTES <= MEM_BYTES, "the ranges run past the memory");
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
 static_assert(DIRECTORY_AT + directory_words(4) * 4 <= STREAM_AT, "the directory runs into the stream");
 
@@ -69,8 +69,8 @@ State &state_of(Memory m, std::uint32_t range) {
     return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
 }
 
-std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> packet) {
-    Result<xtp::TreeReader> reader = xtp::TreeReader::make(packet);
+std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> pkt) {
+    Result<xtp::TreeReader> reader = xtp::TreeReader::make(pkt);
     if (!reader) return std::nullopt;
     Result<xtp::BranchCursor> root = reader->read_branch();
     if (!root) return std::nullopt;
@@ -81,54 +81,54 @@ std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> packet) {
     return n ? std::optional(*n) : std::nullopt;
 }
 
-Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet) {
+Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     // A command that takes a number fails with EBADMSG when its packet does not read.
     std::uint32_t arg = 0;
     if (cmd == static_cast<std::uint32_t>(abi::Command::SYS_OPENED)) {
-        Result<abi::SysOpened> answer = abi::SysOpened::read(packet);
-        if (!answer) return {.error = answer.error().errnum};
+        Result<abi::SysOpened> answer = abi::SysOpened::read(pkt);
+        if (!answer) return {.err = answer.error().errnum};
         if (const std::uint32_t *owner = s.files.owner(answer->fd)) s.door.post(*owner, cmd::OPENED, 0, answer->res);
         return {};
     }
     if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE) {
-        std::optional<std::uint32_t> n = first_u32(packet);
-        if (!n) return {.error = Errno::ebadmsg};
+        std::optional<std::uint32_t> n = first_u32(pkt);
+        if (!n) return {.err = Errno::ebadmsg};
         arg = *n;
     }
     switch (cmd) {
     case cmd::OK:
         return {};
     case cmd::FAIL:
-        return {.error = Errno::einval};
+        return {.err = Errno::einval};
     case cmd::RAISE:
-        if (arg > MOST_RAISE) return {.error = Errno::einval};
+        if (arg > MOST_RAISE) return {.err = Errno::einval};
         for (std::uint32_t k = 0; k < arg; k++) s.door.post(k, cmd::SIGNAL, 0, 0);
-        return {.value = static_cast<std::int32_t>(arg)};
+        return {.val = static_cast<std::int32_t>(arg)};
     case cmd::RECORD:
         s.stream.record(arg, {});
         return {};
     case cmd::ISSUE: {
         std::optional<std::uint32_t> h = s.handles.insert({});
-        if (!h) return {.error = Errno::enfile};
-        return {.value = static_cast<std::int32_t>(*h)};
+        if (!h) return {.err = Errno::enfile};
+        return {.val = static_cast<std::int32_t>(*h)};
     }
     case cmd::RELEASE:
-        return s.handles.remove(arg) ? Applied{} : Applied{.error = Errno::ebadf};
+        return s.handles.remove(arg) ? Applied{} : Applied{.err = Errno::ebadf};
     case cmd::USE:
-        return s.handles.live(arg) ? Applied{} : Applied{.error = Errno::ebadf};
+        return s.handles.live(arg) ? Applied{} : Applied{.err = Errno::ebadf};
     case cmd::MARK:
         s.mark = s.now();
         return {};
     case cmd::OPEN:
-        return {.value = static_cast<std::int32_t>(s.files.open(s.sys, 1, "f", arg))};
+        return {.val = static_cast<std::int32_t>(s.files.open(s.sys, 1, "f", arg))};
     case cmd::CLOSE:
-        return s.files.close(s.sys, arg) ? Applied{} : Applied{.error = Errno::ebadf};
+        return s.files.close(s.sys, arg) ? Applied{} : Applied{.err = Errno::ebadf};
     case cmd::SINCE: {
         double since = s.now() - s.mark;
-        return {.value = static_cast<std::int32_t>(round(since))};
+        return {.val = static_cast<std::int32_t>(round(since))};
     }
     default:
-        return {.error = Errno::enosys};
+        return {.err = Errno::enosys};
     }
 }
 
@@ -151,7 +151,7 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     s.sys.rise();
-    s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> packet) { return apply(s, cmd, packet); });
+    s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });
     s.stream.publish();
     s.sys.fall();
     return s.door.pending() ? 0.0 : NO_WAKE;
@@ -225,7 +225,7 @@ extern "C" std::uint32_t xpute_conformance_boot(void) {
     ensure(wasm::stack_high() == STACK_BYTES, Errno::enotrecoverable, wasm::stack_high());
     std::uint32_t range = range_at();
     // A range past the memory's end is a host that sized it for another guest.
-    ensure(std::uint64_t{range} + MEMORY_BYTES <= wasm::given(), Errno::enomem, range);
+    ensure(std::uint64_t{range} + MEM_BYTES <= wasm::given(), Errno::enomem, range);
     return boot(mem::core(), range, host_now);
 }
 
@@ -235,9 +235,9 @@ extern "C" double intr(double) {
 
 #else
 
-// The memory a native host hands over, MEMORY_BYTES from `mem`; the guest
+// The memory a native host hands over, MEM_BYTES from `mem`; the guest
 // allocates from the process, so nothing reads the ambient one.
-Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES); }
+Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) { return boot(given(mem), 0, now); }
 

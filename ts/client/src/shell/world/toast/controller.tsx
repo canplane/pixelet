@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/shell/locale/message-key.ts";
-import { DevicePoseStatus, GroundStatus, Message } from "@/abi/cmd.spec.ts";
+import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
 import { Gpu } from "@/abi/gpu.ts";
 import { Source } from "@/namespace/source.ts";
 
@@ -77,9 +77,12 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
 const error = (key: string): Said => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Said => ({ key, tone: ToastTone.Loading });
 
-function location(status: SensorStatus, failure: Message | null): Said | null {
+function location(
+  status: SensorStatus,
+  failure: Message | null,
+): Said | null {
   if (failure !== null) return error(messageKey(failure));
-  return status === DevicePoseStatus.Loading
+  return status === SensorStatus.Loading
     ? loading("toast.location_checking")
     : null;
 }
@@ -114,10 +117,10 @@ function world(
 /** Each toast is derived from what the kernel and the host say now; an error is one toast a source. */
 export function ToastController() {
   const locationStatus = useKernel((s) => s.location.status);
-  const locationError = useKernel((s) => s.location.error);
+  const locationError = useKernel((s) => s.location.err);
   useSaid(Report.Location, location(locationStatus, locationError));
 
-  const orientationError = useKernel((s) => s.orientation.error);
+  const orientationError = useKernel((s) => s.orient.err);
   useSaid(
     Report.Orientation,
     orientationError !== null ? error(messageKey(orientationError)) : null,
@@ -131,8 +134,8 @@ export function ToastController() {
 
   const outside = useKernel((s) => s.pivot.outside);
   const shown = useKernel((s) => s.pivot.status === GroundStatus.Success);
-  const companionLoading = useKernel(
-    (s) => !s.companion.person_ready || !s.companion.pet_ready,
+  const companionLoading = useKernel((s) =>
+    !s.companion.person_ready || !s.companion.pet_ready
   );
   const [greeting, setGreeting] = useState(Greeting.Waiting);
   const ready = !outside && shown && !companionLoading;

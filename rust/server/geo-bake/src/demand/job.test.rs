@@ -2,10 +2,11 @@
 
 use super::*;
 use std::time::Duration;
+use tokio::task;
 use tokio::time::Instant;
 
 #[tokio::test]
-async fn success_and_failure_are_not_reported_as_empty_or_timeout() {
+async fn outcomes_reported() {
     let mut ok = Command::new("sh");
     ok.args(["-c", "exit 0"]);
     supervise(ok, Instant::now() + Duration::from_secs(2))
@@ -20,27 +21,27 @@ async fn success_and_failure_are_not_reported_as_empty_or_timeout() {
 }
 
 #[test]
-fn complete_artifacts_are_moved_from_staging_and_abandoned_work_is_not_published() {
+fn staging_publish() {
     let base = std::env::temp_dir().join(format!("pxl-demand-publication-{}", std::process::id()));
     let runner = Runner::new(1, Limits::default()).unwrap();
     let data = Dataset::open(&base, super::super::Kind::Place, &runner).unwrap();
     let stage = Staging(data.cache.root.join("stage"));
     std::fs::create_dir(&stage.0).unwrap();
-    write_packet(&stage.0, Some(b"packet")).unwrap();
+    write_pkt(&stage.0, Some(b"packet")).unwrap();
     stage.publish(&data, "tile").unwrap();
     assert_eq!(
         std::fs::read(data.cache.root.join("tile")).unwrap(),
         b"packet"
     );
     assert!(!stage.0.join("packet").exists());
-    write_packet(&stage.0, Some(b"incomplete")).unwrap();
+    write_pkt(&stage.0, Some(b"incomplete")).unwrap();
     drop(stage);
     assert!(!data.cache.root.join("stage").exists());
     assert!(!data.cache.root.join("packet").exists());
 }
 
 #[tokio::test]
-async fn waiting_does_not_renew_the_execution_budget() {
+async fn wait_keeps_budget() {
     let command = Command::new("/nonexistent/should-not-start");
     let expired = Instant::now() - Duration::from_secs(1);
     assert!(matches!(
@@ -50,7 +51,7 @@ async fn waiting_does_not_renew_the_execution_budget() {
 }
 
 #[tokio::test]
-async fn a_free_worker_goes_to_what_a_client_waits_on_before_a_folds_older_ask() {
+async fn client_wait_first() {
     let workers = Arc::new(Workers {
         state: Mutex::new((1, VecDeque::new())),
     });
@@ -68,9 +69,9 @@ async fn a_free_worker_goes_to_what_a_client_waits_on_before_a_folds_older_ask()
         })
     };
     let fold = wait("fold", lease(false));
-    tokio::task::yield_now().await;
+    task::yield_now().await;
     let asked = wait("asked", lease(true));
-    tokio::task::yield_now().await;
+    task::yield_now().await;
     drop(held);
     asked.await.unwrap();
     fold.await.unwrap();

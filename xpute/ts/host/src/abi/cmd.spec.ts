@@ -9,7 +9,7 @@
  * a program numbers its own from there, in a table of its own that names this one as
  * its base, so the two never give out one number twice.
  *
- * The direction is the ring: `packet` is what the host submits, `signal` what the guest
+ * The direction is the ring: `pkt` is what the host submits, `signal` what the guest
  * raises on the completion ring.
  */
 
@@ -37,8 +37,8 @@ export const enum Command {
 }
 
 /** Command.NOP's packet, written in place into `to`. */
-export function encode_nop(to: PacketRoom, value: u32): PacketWriter {
-  return to.writer(1).u32(value);
+export function encode_nop(to: PacketRoom, val: u32): PacketWriter {
+  return to.writer(1).u32(val);
 }
 
 /** Command.SYS_OPENED's packet, written in place into `to`.

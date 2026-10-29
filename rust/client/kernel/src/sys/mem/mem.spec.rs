@@ -17,7 +17,13 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// The stack, at the bottom of the memory. build.rs hands this number to wasm-ld
 /// as `-z stack-size` with `--stack-first`, and the kernel asserts at boot that
@@ -100,7 +106,7 @@ pub const GLOBAL_BASE: u32 = 8388608;
 /// time too (door/layout.rs `HEAP_FLOWS_BYTES`): the runs that `BODY_SLOTS`
 /// terrain and Earth bodies fill (sys/io/body.rs), a body on every credit in
 /// the buddy's block for a division's, the ways' pool's mirror at its cap
-/// and every read's room for a square's records at its most, and the
+/// and every read's room for a brick's records at its most, and the
 /// profiler's lanes while its setting is on, each in the buddy's blocks,
 /// a power of two, 200.58 MiB.
 ///

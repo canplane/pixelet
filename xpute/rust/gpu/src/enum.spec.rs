@@ -12,8 +12,10 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// GPUTextureFormat, the core spec's and its texture-compression features'.
@@ -316,10 +318,10 @@ impl TextureFormat {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<TextureFormat> {
+    pub fn of(val: u8) -> Option<TextureFormat> {
         TextureFormat::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -461,10 +463,10 @@ impl VertexFormat {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<VertexFormat> {
+    pub fn of(val: u8) -> Option<VertexFormat> {
         VertexFormat::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -497,10 +499,10 @@ impl PrimitiveTopology {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<PrimitiveTopology> {
+    pub fn of(val: u8) -> Option<PrimitiveTopology> {
         PrimitiveTopology::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -518,10 +520,10 @@ impl IndexFormat {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<IndexFormat> {
+    pub fn of(val: u8) -> Option<IndexFormat> {
         IndexFormat::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -539,10 +541,10 @@ impl FrontFace {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<FrontFace> {
+    pub fn of(val: u8) -> Option<FrontFace> {
         FrontFace::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -561,10 +563,10 @@ impl CullMode {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<CullMode> {
+    pub fn of(val: u8) -> Option<CullMode> {
         CullMode::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -606,10 +608,10 @@ impl CompareFunction {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<CompareFunction> {
+    pub fn of(val: u8) -> Option<CompareFunction> {
         CompareFunction::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -651,10 +653,10 @@ impl StencilOperation {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<StencilOperation> {
+    pub fn of(val: u8) -> Option<StencilOperation> {
         StencilOperation::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -681,10 +683,10 @@ impl BlendOperation {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<BlendOperation> {
+    pub fn of(val: u8) -> Option<BlendOperation> {
         BlendOperation::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -753,10 +755,10 @@ impl BlendFactor {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<BlendFactor> {
+    pub fn of(val: u8) -> Option<BlendFactor> {
         BlendFactor::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -774,10 +776,10 @@ impl VertexStepMode {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<VertexStepMode> {
+    pub fn of(val: u8) -> Option<VertexStepMode> {
         VertexStepMode::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -800,10 +802,10 @@ impl AddressMode {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<AddressMode> {
+    pub fn of(val: u8) -> Option<AddressMode> {
         AddressMode::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -821,10 +823,10 @@ impl FilterMode {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<FilterMode> {
+    pub fn of(val: u8) -> Option<FilterMode> {
         FilterMode::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -842,10 +844,10 @@ impl MipmapFilterMode {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<MipmapFilterMode> {
+    pub fn of(val: u8) -> Option<MipmapFilterMode> {
         MipmapFilterMode::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -868,10 +870,10 @@ impl TextureDimension {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<TextureDimension> {
+    pub fn of(val: u8) -> Option<TextureDimension> {
         TextureDimension::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -900,10 +902,10 @@ impl TextureViewDimension {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<TextureViewDimension> {
+    pub fn of(val: u8) -> Option<TextureViewDimension> {
         TextureViewDimension::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -926,10 +928,10 @@ impl TextureAspect {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<TextureAspect> {
+    pub fn of(val: u8) -> Option<TextureAspect> {
         TextureAspect::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -952,10 +954,10 @@ impl BufferBindingType {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<BufferBindingType> {
+    pub fn of(val: u8) -> Option<BufferBindingType> {
         BufferBindingType::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -978,10 +980,10 @@ impl SamplerBindingType {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<SamplerBindingType> {
+    pub fn of(val: u8) -> Option<SamplerBindingType> {
         SamplerBindingType::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -1008,10 +1010,10 @@ impl TextureSampleType {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<TextureSampleType> {
+    pub fn of(val: u8) -> Option<TextureSampleType> {
         TextureSampleType::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -1034,10 +1036,10 @@ impl StorageTextureAccess {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<StorageTextureAccess> {
+    pub fn of(val: u8) -> Option<StorageTextureAccess> {
         StorageTextureAccess::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -1055,10 +1057,8 @@ impl LoadOp {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<LoadOp> {
-        LoadOp::ALL
-            .into_iter()
-            .find(|member| *member as u8 == value)
+    pub fn of(val: u8) -> Option<LoadOp> {
+        LoadOp::ALL.into_iter().find(|member| *member as u8 == val)
     }
 }
 
@@ -1076,10 +1076,8 @@ impl StoreOp {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<StoreOp> {
-        StoreOp::ALL
-            .into_iter()
-            .find(|member| *member as u8 == value)
+    pub fn of(val: u8) -> Option<StoreOp> {
+        StoreOp::ALL.into_iter().find(|member| *member as u8 == val)
     }
 }
 
@@ -1097,10 +1095,10 @@ impl QueryType {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<QueryType> {
+    pub fn of(val: u8) -> Option<QueryType> {
         QueryType::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -1118,10 +1116,10 @@ impl CanvasAlphaMode {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<CanvasAlphaMode> {
+    pub fn of(val: u8) -> Option<CanvasAlphaMode> {
         CanvasAlphaMode::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -1191,10 +1189,10 @@ impl FeatureName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<FeatureName> {
+    pub fn of(val: u8) -> Option<FeatureName> {
         FeatureName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -1306,9 +1304,9 @@ impl LimitName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<LimitName> {
+    pub fn of(val: u8) -> Option<LimitName> {
         LimitName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }

@@ -23,7 +23,7 @@ import { key as directory_key } from "@xpute/host/ipc/directory.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
-import { cmd, key, MEMORY_BYTES } from "@xpute/host/conformance.spec.ts";
+import { cmd, key, MEM_BYTES } from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -76,11 +76,15 @@ function native(path: string): Opener {
   const regions: unknown[] = [];
   return {
     open() {
-      const at = koffi.alloc("double", MEM_BYTES / 8);
-      regions.push(at);
-      const directory_at = boot(at, now);
+      // Words of eight bytes, so the region is 8-aligned, as a guest asks.
+      const mem = new Float64Array(MEM_BYTES / 8).buffer;
+      const bytes = new Uint8Array(mem);
+      const directory_at = lib.symbols.xpute_conformance_boot(
+        bytes,
+        now.pointer,
+      );
       return {
-        mem: koffi.view(at, MEM_BYTES),
+        mem,
         directory_at,
         intr: (quota) => intr(at, quota),
       };
@@ -116,7 +120,7 @@ function module(path: string): Opener {
       };
       const directory_at = exports.xpute_conformance_boot() >>> 0;
       return {
-        memory: memory.buffer as ArrayBuffer,
+        mem: memory.buffer as ArrayBuffer,
         directory_at,
         intr: (quota) => exports.intr(quota),
       };
@@ -164,7 +168,7 @@ class Host {
   private readonly writer = new PacketWriter();
 
   constructor(private readonly guest: Opened) {
-    const mem = guest.memory;
+    const mem = guest.mem;
     this.directory = new Directory(mem, guest.directory_at);
     this.reserved = new Uint32Array(mem, guest.directory_at, 4)[3];
     this.sq = new Ring(mem, this.directory.get(directory_key.SQ));
@@ -173,17 +177,17 @@ class Host {
   }
 
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
-    let packet: PacketWriter | null = null;
+    let pkt: PacketWriter | null = null;
     if (args.length > 0) {
       assert(
         this.sq.write(this.writer, args.length),
         "a full ring takes no packet",
       );
       for (const a of args) this.writer.u32(a);
-      packet = this.writer;
+      pkt = this.writer;
     }
     assertEquals(
-      this.sq.push(tag, command, ack ? frame.ACKREQ : 0, packet),
+      this.sq.push(tag, command, ack ? frame.ACKREQ : 0, pkt),
       Errno.OK,
     );
   }
@@ -191,7 +195,7 @@ class Host {
   ring(quota_ms: number): Turn {
     const wake = this.guest.intr(quota_ms);
     const stream: number[] = [];
-    each_record(this.guest.memory, this.stream_at, 1, (op) => stream.push(op));
+    each_record(this.guest.mem, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
     for (let at = this.cq.peek(); at >= 0; at = this.cq.peek()) {
       completions.push({
@@ -292,18 +296,18 @@ function expect(
   );
   seen_tokens.forEach((seen_token, i) => {
     const said_token = said_tokens[i];
-    const [seen_head, value] = seen_token.split("=");
+    const [seen_head, val] = seen_token.split("=");
     const [said_head, v] = said_token.split("=");
-    if (v !== undefined && v.startsWith("$") && value !== undefined) {
+    if (v !== undefined && v.startsWith("$") && val !== undefined) {
       assertEquals(
         seen_head,
         said_head,
         `${what}: saw ${seen}, the trace says ${said}`,
       );
-      if (!vars.has(v)) vars.set(v, Number(value));
+      if (!vars.has(v)) vars.set(v, Number(val));
       assertEquals(
         vars.get(v),
-        Number(value),
+        Number(val),
         `${what}: ${v} again, and not what it was`,
       );
     } else {
@@ -318,7 +322,7 @@ function expect(
 
 /** A number a trace writes: a literal, `$n`, or `slot $n`, the slot a handle
  * names. */
-function value(term: string, vars: Map<string, number>): number {
+function val(term: string, vars: Map<string, number>): number {
   const bound = (v: string) => {
     const n = vars.get(v);
     if (n === undefined) throw new Error(`${v} is bound by nothing before it`);
@@ -333,10 +337,10 @@ function value(term: string, vars: Map<string, number>): number {
 function relation(said: string, vars: Map<string, number>, what: string): void {
   if (said.includes(" == ")) {
     const [a, b] = said.split(" == ");
-    assertEquals(value(a, vars), value(b, vars), `${what}: ${said}`);
+    assertEquals(val(a, vars), val(b, vars), `${what}: ${said}`);
   } else if (said.includes(" != ")) {
     const [a, b] = said.split(" != ");
-    assertNotEquals(value(a, vars), value(b, vars), `${what}: ${said}`);
+    assertNotEquals(val(a, vars), val(b, vars), `${what}: ${said}`);
   } else {
     throw new Error(`${what}: no relation in ${said}`);
   }
@@ -360,7 +364,7 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
           Number(step[1]),
           cmd_number(step[2]),
           step[3] === "ack",
-          step.slice(4).map((t) => value(t, vars)),
+          step.slice(4).map((t) => val(t, vars)),
         );
         break;
       case "ring": {

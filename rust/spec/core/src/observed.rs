@@ -12,10 +12,11 @@
 //!
 //! One buffer of words:
 //!
-//! - its head: how many tiles are taken, the frame's number, what is
-//!   forgotten, and the eye's windows' slots that moved (`HEAD_WORDS`);
-//! - the entries, the roots' and then the tiles' (`ENTRIES_AT`);
-//! - the tiles' stack, the free ones past those taken (`STACK_AT`).
+//! - its head: the frame's number, what is forgotten, and the eye's
+//!   windows' entries that moved (`HEAD_WORDS`);
+//! - the entries, a slot each (`ENTRIES_AT`);
+//! - the pixels the frame's reading walk marked missed, listed for the walk
+//!   that writes the pyramid (`MARKS_AT`).
 //!
 //! That is all of it (`WORDS`): the pixels a frame's cast missed are
 //! marked in their own rays (`ray::MISS`), so a walk that only reads the
@@ -24,38 +25,62 @@
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
-//! answer's kind and block, what was handed the node after it was asked
-//! (`world::At::words`), its children's tile, taken once, by one
-//! compare-and-swap, and the node, its zoom and its column (`forgets`). A key is one word, so a reader that trusts it trusts
-//! words no walk of its frame writes again: a walk writes an entry only
-//! where its key does not say what that walk asks.
-//!
-//! A tile goes back on the stack once it keeps nothing: each of its eight
-//! forgotten, its children's tile gone back before it. Its parent gives it
-//! back, the one word that names it, so a tile is never given back twice;
-//! the walks take tiles and the forgetting gives them back, in dispatches
-//! of their own, so the stack is never taken from and given to at once.
+//! answer's kind and asset, what was handed the node after it was asked
+//! (`world::Handed::words`), and the node, its zoom and its index, which tell
+//! it from another node of the same slot (`forgets` reads its column). A
+//! walk writes a slot only once it has claimed it, its key swapped to
+//! `CLAIMED` in one compare-and-swap, and writes the key last; a writing
+//! walk that read a slot reads its key again after, and takes what it read
+//! only where the key stood, as another walk may have taken the slot over
+//! in between.
 
 use crate::answer::Kind;
-use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
-use crate::world::AT_WORDS;
-use crate::Zoom;
+use crate::overwrite;
+use crate::overwrite::Held;
+use crate::overwrite::{cut_box, BOXES};
+use crate::tally;
+use crate::window::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
+use crate::world::HANDED_WORDS;
+use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 
-/// The head's words: how many tiles are taken, the frame's number, what
-/// this frame forgets (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), and
-/// a bit a slot of the eye's windows, a window's `SLOTS` bits in turn, set
-/// where the square it holds moved or was handed since the last cast.
-pub const TAKEN: u32 = 0;
-pub const FRAME: u32 = 1;
-pub const FORGETS: u32 = 2;
-pub const MOVED_AT: u32 = 3;
-pub const MOVED_WORDS: u32 = (EYE_WINDOWS * SLOTS).div_ceil(32);
-pub const HEAD_WORDS: u32 = MOVED_AT + MOVED_WORDS;
+/// The head's words: the frame's number, what this frame forgets
+/// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
+/// eye's windows, a window's `window::ENTRIES` bits in turn, set where the brick it
+/// holds moved or was handed since the last cast; and the boxes of leaf
+/// cells whose columns what is placed or a preview's cuts changed since the
+/// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
+/// growth is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
+/// pxl-render gpu/grown.rs); and the families of what is placed written
+/// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
+/// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
+/// whether its walks count what they ask, and what they counted
+/// (`TALLY_ON`, `TALLY_AT`).
+pub const FRAME: u32 = 0;
+pub const FORGETS: u32 = 1;
+pub const MOVED_AT: u32 = 2;
+pub const MOVED_WORDS: u32 = (EYE_WINDOWS * window::ENTRIES).div_ceil(32);
+pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
+pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
+pub const WRITTEN: u32 = 32;
+/// Whether the walks count what they ask, where the `ray_counts` setting
+/// asks, and the words they count into, each observer's walks' lanes
+/// (`tally_at`).
+pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN;
+pub const TALLY_AT: u32 = TALLY_ON + 1;
+pub const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
+pub const HEAD_WORDS: u32 = TALLY_AT + TALLY_WORDS;
+
+/// Where `observer`'s walks count lane `lane` (pxl-spec-core `tally::BEAM`
+/// to `tally::MISS`) in the head.
+pub const fn tally_at(observer: u32, lane: u32) -> u32 {
+    TALLY_AT + observer * tally::WALKS + lane
+}
 
 /// What a frame forgets: nothing; everything, where what every node is
-/// asked of moved (the service area, what is placed, a preview's cuts) or
-/// the keys' frames ran out; the nodes over the squares that moved
-/// (`forgets`).
+/// asked of moved (the service area) or the keys' frames ran out; the nodes
+/// over the bricks that moved (`forgets`), over a box of what is placed or
+/// cut that changed (`over_box`), or handed a slot of a family of what is
+/// placed that was written (`reads_written`).
 pub const FORGETS_NONE: u32 = 0;
 pub const FORGETS_ALL: u32 = 1;
 pub const FORGETS_MOVED: u32 = 2;
@@ -66,11 +91,14 @@ pub const ROOTS: u32 = 8;
 /// An entry's words.
 pub const W_KEY: u32 = 0;
 pub const W_KIND: u32 = 1;
-pub const W_BLOCK: u32 = 2;
-pub const W_AT: u32 = 4;
-pub const W_CHILDREN: u32 = W_AT + AT_WORDS;
-pub const W_NODE: u32 = W_CHILDREN + 1;
-pub const ENTRY_WORDS: u32 = W_NODE + 3;
+pub const W_ASSET: u32 = 2;
+pub const W_HANDED: u32 = 4;
+/// The node: its zoom, then its index on X, Y and Z.
+pub const W_NODE: u32 = W_HANDED + HANDED_WORDS;
+/// What was handed it of what is placed, its `Handed`'s second word
+/// (`world::Handed::words`).
+pub const W_PLACED: u32 = W_HANDED + 1;
+pub const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The tiles: a compromise, room enough for many frames of the about 80
 /// thousand nodes a frame at E120 asks (a probe's count, not kept); past
@@ -78,12 +106,18 @@ pub const ENTRY_WORDS: u32 = W_NODE + 3;
 pub const TILES: u32 = 1 << 16;
 pub const ENTRIES: u32 = ROOTS + 8 * TILES;
 pub const ENTRIES_AT: u32 = HEAD_WORDS;
-/// The tiles' stack, a tile a word: those taken below `TAKEN`, the free
-/// ones from it up, the next taken first; every tile in turn where the
-/// pyramid is forgotten whole.
-pub const STACK_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
-/// The buffer's words, whatever is drawn: none of them a pixel's.
-pub const WORDS: u32 = STACK_AT + TILES;
+/// The marked pixels listed (`MARKS_AT`), a word each, its row over its
+/// column, as many as `MARKS`; and their count, copied in from the walk's
+/// dispatch (`ray::MISS_ARGS_COUNT`) once the reading walk is done
+/// (`MARKS_COUNT`). A pixel past `MARKS` is walked by the walk over every
+/// pixel (`ray::MISS_ARGS_WHOLE`). Room for the bursts a load or a long
+/// zoom marks, about a hundred thousand at 9 Mpx.
+pub const MARKS: u32 = 1 << 20;
+pub const MARKS_CNT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
+pub const MARKS_AT: u32 = MARKS_CNT + 1;
+/// The buffer's words, whatever is drawn: the list's room fixed, so none
+/// of them a pixel's.
+pub const WORDS: u32 = MARKS_AT + MARKS;
 
 /// No entry: a node no tile keeps.
 pub const NONE: u32 = u32::MAX;
@@ -92,8 +126,23 @@ pub const NONE: u32 = u32::MAX;
 pub const CLAIMED: u32 = u32::MAX;
 
 /// The writing passes of a frame's cast, each a tag of its own (`tag`): the
-/// beam rays, the samples and the pixels that missed.
-pub const PASSES: u32 = 3;
+/// beam rays, the samples and the pixels that missed; then the sun's beam
+/// rays, samples and slots that missed, which ask the same nodes at the
+/// zooms the eye asks them.
+pub const PASSES: u32 = 6;
+pub const BEAM_PASS: u32 = 0;
+pub const SAMPLES_PASS: u32 = 1;
+pub const MISSED_PASS: u32 = 2;
+pub const SUN_BEAM_PASS: u32 = 3;
+pub const SUN_SAMPLES_PASS: u32 = 4;
+pub const SUN_MISSED_PASS: u32 = 5;
+
+/// A key's tag's bits, under its two zooms' (`key`).
+const TAG_BITS: u32 = 20;
+const _: () = assert!(
+    TAG_BITS + 2 * ZOOM_BITS == 32,
+    "a key is the tag and two zooms"
+);
 
 /// The frames one clearing's keys tell apart (`tag`), before the next: as
 /// many as the tag's 20 bits hold `PASSES` tags of.
@@ -152,27 +201,58 @@ pub const fn kind_word(kind: Kind) -> u32 {
 pub const fn kind_of(w: u32) -> Kind {
     if w == Kind::Split as u32 {
         Kind::Split
-    } else if w == Kind::Block as u32 {
-        Kind::Block
+    } else if w == Kind::Cell as u32 {
+        Kind::Cell
     } else {
         Kind::Lacks
     }
 }
 
-/// Whether the node of `zoom` at column `[x, y]` reads a square that moved,
-/// `moved` the moved slots' words (`MOVED_AT`), as a walk holds them, never
+/// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
+/// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them, never
 /// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
-/// the squares under it alone — its cells' and their windows' over them
-/// (`window::step`), a wider node's the block of squares its own size
+/// the bricks under it alone — its cells' and their windows' over them
+/// (`window::step`), a wider node's the block of bricks its own size
 /// (`window::bounded`) — and what was handed it found its cells there, so a
-/// node no moved square lies under answers as it did. A node a window's
-/// whole side wide or wider reads every slot of the window.
+/// node no moved brick lies under answers as it did. A node a window's
+/// whole side wide or wider reads every entry of the window.
+/// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
+/// leaf cells `[x0, y0, x1, y1)`, X round the world: its own columns as a
+/// box of leaf cells (`overwrite::cut_box`) meet it. A node's answer, and what
+/// was handed it, read what is placed in its own columns and its
+/// ancestors' alone, so a node no changed box meets answers as it did.
+pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
+    let n = cut_box(zoom, [x, y, 0]);
+    let world = 1i32 << LEAF_CELL;
+    let (nw, bw) = (n[2] - n[0], b[2] - b[0]);
+    // The box's first column from the node's, the short way round.
+    let from = wrap_idx(LEAF_CELL, b[0].wrapping_sub(n[0]));
+    let across = nw >= world
+        || bw >= world
+        || (from < nw && from + bw > 0)
+        || from + bw > world
+        || from + world < nw;
+    across && b[1] < n[3] && b[3] > n[1]
+}
+
+/// Whether what was handed a node of what is placed, its `Handed`'s word
+/// `placed` (`overwrite::Held`), answers from a slot of the family written
+/// whose first slot is `first`. A write folds up its own path in place, and
+/// that path's nodes stand over its box (`over_box`); but where it splits a
+/// leaf that covered wider than the box, or takes a family a join let go of,
+/// a node beside the box holds a slot the write changed, and reads another
+/// node's what is placed after it.
+pub fn reads_written(placed: u32, first: u32) -> bool {
+    let held = Held::of_word(placed);
+    held.holds() && held.slot().wrapping_sub(first) < overwrite::FAMILY
+}
+
 pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]) -> bool {
     let mut w = 0;
     while w < EYE_WINDOWS {
         let c = eye_cell(w);
         // The node's cells at the window's zoom, first and last, then its
-        // squares.
+        // bricks.
         let (lo, hi) = if zoom <= c {
             let s = c - zoom;
             ([x << s, y << s], [((x + 1) << s) - 1, ((y + 1) << s) - 1])
@@ -181,14 +261,14 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             ([x >> s, y >> s], [x >> s, y >> s])
         };
         let (q0, q1) = (
-            [lo[0] >> SQUARE_SHIFT, lo[1] >> SQUARE_SHIFT],
-            [hi[0] >> SQUARE_SHIFT, hi[1] >> SQUARE_SHIFT],
+            [lo[0] >> BRICK_SHIFT, lo[1] >> BRICK_SHIFT],
+            [hi[0] >> BRICK_SHIFT, hi[1] >> BRICK_SHIFT],
         );
-        // As wide as the window or wider, every slot; else each square.
+        // As wide as the window or wider, every entry; else each brick.
         let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
         if wide {
             let mut k = 0;
-            while k < SLOTS {
+            while k < window::ENTRIES {
                 if moved_in(moved, w, k) {
                     return true;
                 }
@@ -199,7 +279,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             while qy <= q1[1] {
                 let mut qx = q0[0];
                 while qx <= q1[0] {
-                    if moved_in(moved, w, slot([qx, qy])) {
+                    if moved_in(moved, w, window::entry([qx, qy])) {
                         return true;
                     }
                     qx += 1;
@@ -212,11 +292,54 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
     false
 }
 
-/// Whether slot `slot` of the eye's window `w` moved, among the moved
-/// slots' words.
-pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, slot: u32) -> bool {
-    let k = w * SLOTS + slot;
+/// Whether entry `entry` of the eye's window `w` moved, among the moved
+/// entries' words.
+pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, entry: u32) -> bool {
+    let k = w * window::ENTRIES + entry;
     moved[(k / 32) as usize] & 1 << (k % 32) != 0
 }
 
-const _: () = assert!(crate::FINEST_ZOOM < 64, "a key holds a zoom in six bits");
+const _: () = assert!(
+    crate::FINEST_ZOOM < 1 << ZOOM_BITS,
+    "a key holds a zoom in its bits"
+);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A node stands over a box where their columns meet, X round the
+    /// world, and not beside it.
+    #[test]
+    fn node_over_boxes() {
+        // A leaf cell's own node, and the node four cells a side holding it.
+        let (leaf, wide) = (LEAF_CELL, LEAF_CELL - 2);
+        let b = [10, 20, 11, 21];
+        assert!(over_box(leaf, [10, 20], b));
+        assert!(!over_box(leaf, [11, 20], b), "beside it across");
+        assert!(!over_box(leaf, [10, 21], b), "beside it down");
+        assert!(over_box(wide, [2, 5], b), "the node holding it");
+        assert!(!over_box(wide, [3, 5], b));
+        // A box over the world's last column and its first, round the seam.
+        let world = 1i32 << LEAF_CELL;
+        let seam = [world - 1, 0, world + 1, 1];
+        assert!(over_box(leaf, [0, 0], seam));
+        assert!(over_box(leaf, [-1, 0], seam));
+        assert!(!over_box(leaf, [1, 0], seam));
+        // The world's root holds every box.
+        assert!(over_box(0, [0, 0], b));
+    }
+
+    /// A node reads a written family where what was handed it answers from
+    /// one of that family's slots, and not where it holds nothing.
+    #[test]
+    fn node_reads_families() {
+        use crate::overwrite::{Held, FAMILY};
+        let held = |slot: u32| Held::branch(slot, 9).word();
+        assert!(reads_written(held(40), 40));
+        assert!(reads_written(held(40 + FAMILY - 1), 40));
+        assert!(!reads_written(held(40 + FAMILY), 40));
+        assert!(!reads_written(held(39), 40));
+        assert!(!reads_written(Held::NOTHING.word(), 0));
+    }
+}

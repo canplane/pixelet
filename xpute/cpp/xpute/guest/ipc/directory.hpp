@@ -17,7 +17,7 @@ namespace xpute {
 
 struct Entry {
     std::uint32_t key;
-    std::uint32_t value;
+    std::uint32_t val;
 };
 
 constexpr std::uint32_t directory_words(std::uint32_t entries) noexcept {

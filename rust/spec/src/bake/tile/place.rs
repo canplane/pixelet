@@ -24,20 +24,13 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
+use crate::param::place::SPREAD_STEPS;
 
 /// Carto's last zoom, openstreetmap.org's: the leaf places through it.
 pub const PLACE_LAST: Zoom = 19;
 
 /// An icon's cell: a mark's, which a power of two makes nest.
 const ICON_STEPS: Zoom = MARK_STEPS;
-
-/// The one knob of how far apart places stand, in zooms: an icon's cell is
-/// this many coarser than the camera grid's, and the cell a place keeps to
-/// itself this many coarser again. At 2 an icon's cell spans four grid
-/// cells, some 48 pixels round the drawn icon (22), and a place keeps four
-/// icons a side, some 190 pixels, which also holds a name of a few words; at
-/// 1 places stood too close for their names. A product choice.
-const SPREAD_STEPS: Zoom = 2;
 
 /// A cell an icon wide at its tile's zoom of Carto's, `SPREAD_STEPS` coarser
 /// than the camera grid: which zoom of Carto's a place is drawn at there,
@@ -47,14 +40,9 @@ pub const PLACE_LATTICE: Lattice =
     Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
 /// The cell a place keeps to itself, as a zoom under the tile. Seen at an
-/// icon's own cell, places a few metres apart stood side by side as near as
+/// icon's own cell, places a few meters apart stood side by side as near as
 /// the view came.
 const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
-
-/// The camera grid's cells across the cell a place keeps to itself, which
-/// its name wraps to.
-pub const SPACING_CELLS: u32 =
-    1 << (PLACE_LATTICE.grid_zoom(LEAF_ZOOM) - LEAF_ZOOM - SPACING_STEPS);
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
 pub const PLACE_FIRST: Zoom = {
@@ -82,7 +70,7 @@ const _: () = assert!(
 
 /// The most a packet takes, a tile past it failing its bake (`encode`): the
 /// set baked 2026-10-17 holds at most 107 KiB.
-pub const MAX_PACKET_BYTES: usize = 1 << 20;
+pub const MAX_PKT_BYTES: usize = 1 << 20;
 
 /// The longest name a tile holds, in code points; a longer one is cut to end
 /// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
@@ -338,7 +326,7 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
         &t,
         TreeEncoderOptions {
             init_cap: super::ENCODE_FROM,
-            max_cap: Some(MAX_PACKET_BYTES as u32),
+            max_cap: Some(MAX_PKT_BYTES as u32),
         },
     )
 }

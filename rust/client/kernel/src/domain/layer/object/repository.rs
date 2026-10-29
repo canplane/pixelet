@@ -13,12 +13,12 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-use super::store::objects;
+use super::store::object;
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::store::{apply, written, Write};
+use crate::domain::layer::object::store::{apply, note_written, Write};
 use crate::sys::io::file::{self, Kept, KeptFile};
 use crate::sys::sched::edge::wake_at;
-use pxl_spec::block::ext::{class_of, Class};
+use pxl_spec::object::ext::{class_of, Class};
 
 struct State {
     save_due_ms: Option<f64>,
@@ -45,10 +45,10 @@ fn store_state() -> &'static mut State {
 fn encode() -> Result<Vec<u8>, MarshalError> {
     let (mut hi, mut lo, mut id) = (Vec::new(), Vec::new(), Vec::new());
     let (mut text_rows, mut texts) = (Vec::new(), Vec::new());
-    let objects = objects();
-    objects.each(&mut |e| {
+    let object = object();
+    object.each(&mut |e| {
         let key = key_of(e.zoom, e.at);
-        match objects.ext(e) {
+        match object.ext(e) {
             Some(Ext::MarkerText(t)) => {
                 text_rows.push(id.len() as u32);
                 texts.push(t.clone());
@@ -117,9 +117,9 @@ fn keep(blob: Vec<u8>) {
 /// A missing blob starts the world empty. One that cannot be read or decoded
 /// here — too large, an error, a layout this build does not know — leaves the
 /// world unsaved this session, so it is never written over; where its slot
-/// was refused (sys/io/file.rs `refused`), until the host empties it and the
+/// was refused (sys/io/file.rs `is_refused`), until the host empties it and the
 /// slot is opened again.
-fn loaded() {
+fn load() {
     let st = store_state();
     if st.loaded {
         return;
@@ -134,9 +134,9 @@ fn loaded() {
     };
     if decode(&blob).is_err() {
         // What decoded before the failure was already read; the blob stays unsaved over.
-        let regions = objects().clear();
+        let regions = object().clear();
         if !regions.is_empty() {
-            written(&regions);
+            note_written(&regions);
         }
         return;
     }
@@ -162,7 +162,7 @@ fn saves() -> &'static mut Notify {
 }
 
 pub fn step() {
-    loaded();
+    load();
     if !store_state().loaded {
         return;
     }

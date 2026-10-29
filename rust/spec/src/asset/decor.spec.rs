@@ -32,7 +32,12 @@
 // its cell; a placed one's are the placement's.
 //
 // Names as the spec spells them, so one record has one name on every side.
-#![allow(non_upper_case_globals, non_camel_case_types)]
+#![allow(
+    non_upper_case_globals,
+    non_camel_case_types,
+    clippy::absolute_paths,
+    reason = "generated from the spec"
+)]
 pub const tree: u16 = 1024;
 pub const boat: u16 = 1025;
 pub const car: u16 = 1026;
@@ -53,8 +58,8 @@ impl DecorId {
 
     /// The decor a number names, or none for a number the catalog does not
     /// give out.
-    pub fn of(value: u16) -> Option<DecorId> {
-        DecorId::ALL.into_iter().find(|t| *t as u16 == value)
+    pub fn of(val: u16) -> Option<DecorId> {
+        DecorId::ALL.into_iter().find(|t| *t as u16 == val)
     }
 }
 

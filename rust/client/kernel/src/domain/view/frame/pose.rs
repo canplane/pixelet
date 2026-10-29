@@ -13,29 +13,27 @@ use pxl_spec::space::coord::q3::{from_real, to_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
+use crate::domain::view::observation;
+use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
-use crate::domain::view::param::FOV;
+use pxl_spec::space::camera::grid::fov;
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ObserverPose {
     pub eye: V3,
-    pub rotation: Mat4,
+    pub rot: Mat4,
 }
 
 pub struct View {
     /// The camera as composed this turn; None before it stands anywhere.
     pub pose: Option<ObserverPose>,
 
-    pub width: f64,
-    pub height: f64,
-    /// The display's device pixels a CSS pixel the camera grid is laid by
-    /// (`resolution::display_ratio`), whatever the load draws the world at.
-    pub ratio: f64,
-    /// The quality the eye's rays are cast at (`lens::tau`), of its height
-    /// and ratio.
-    pub tau: Tau,
+    /// Its size in CSS pixels, read past the frame only through the screen
+    /// (`domain/view/frame/screen.rs`).
+    pub(super) width: f64,
+    pub(super) height: f64,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -70,7 +68,7 @@ impl View {
     pub fn at(&self) -> ObserverPose {
         self.pose.unwrap_or(ObserverPose {
             eye: [0.0, 0.0, 1.0],
-            rotation: mat4::new(),
+            rot: mat4::new(),
         })
     }
 
@@ -78,19 +76,13 @@ impl View {
     /// no eye position in either, so nothing large cancels in floats.
     pub fn eye_frame(&self) -> (Mat4, Mat4) {
         let mut view_proj = mat4::new();
-        let rotation = self.at().rotation;
-        mat4::mul(&mut view_proj, &self.proj, &rotation);
-        (view_proj, rotation)
+        let rot = self.at().rot;
+        mat4::mul(&mut view_proj, &self.proj, &rot);
+        (view_proj, rot)
     }
 }
 
 static VIEW: Global<View> = Global::new();
-
-/// The units a logical pixel spans at `dist` from the eye: what a drag at
-/// that distance moves, and what a thing there is worth on the screen.
-pub fn units_per_px_at(dist: f64) -> f64 {
-    2.0 * dist * libm::tan(FOV * core::f64::consts::PI / 360.0) / view().height
-}
 
 pub fn view() -> &'static mut View {
     VIEW.get(View::new)
@@ -108,8 +100,8 @@ pub fn sea_under_eye() -> V3 {
 pub fn globe_anchor() -> Option<G4326> {
     let [x, y, _] = view().pose?.eye;
     Some(epsg4326::from_mercator(&[
-        epsg3857::mer_from_u(nearest(x, 0.0)),
-        epsg3857::mer_from_u(y),
+        epsg3857::merc_from_u(nearest(x, 0.0)),
+        epsg3857::merc_from_u(y),
         0.0,
     ]))
 }
@@ -126,18 +118,18 @@ pub fn km_per_u() -> f64 {
     libm::cos(anchor()[1].to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
 }
 
-/// The view `width` × `height` CSS pixels, its world surface drawn at
-/// `ratio`: what its matrices and its τ are made of, made again only where
-/// one moved.
-pub fn view_resize(width: f64, height: f64, ratio: f64) {
+/// The view `width` × `height` CSS pixels: what its matrices are made of,
+/// made again only where one moved. The pixels it is drawn with are the
+/// drawing's alone: the camera grid is an angle (pxl-spec
+/// space/camera/grid.rs `CELL`).
+pub fn view_resize(width: f64, height: f64) {
     let v = view();
     let (width, height) = (width.max(1.0), height.max(1.0));
     if width == v.width && height == v.height && ratio == v.ratio {
         return;
     }
-    (v.width, v.height, v.ratio) = (width, height, ratio);
-    v.tau = crate::domain::view::lens::tau_of(height, ratio);
-    crate::domain::view::observation::forget();
+    (v.width, v.height) = (width, height);
+    observation::forget();
     compose();
 }
 
@@ -161,9 +153,10 @@ pub fn view_compose(pose: Option<ObserverPose>) {
         ..p
     });
     let moved = view().pose != pose;
-    crate::domain::view::observation::turn(moved);
-    if !moved {
-        return;
+    observation::turn(moved);
+    if moved {
+        view().pose = pose;
+        compose();
     }
     view().pose = pose;
     compose();
@@ -175,17 +168,12 @@ fn compose() {
     let e = at.eye;
     let mut to_eye = mat4::new();
     mat4::translation(&mut to_eye, -e[0], -e[1], -e[2]);
-    mat4::mul(&mut v.view_matrix, &at.rotation, &to_eye);
+    mat4::mul(&mut v.view_matrix, &at.rot, &to_eye);
     let vm = v.view_matrix;
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
     // plane holds every height's precision.
-    mat4::perspective(
-        &mut v.proj,
-        FOV.to_radians(),
-        v.width / v.height,
-        crate::domain::view::param::NEAR,
-    );
+    mat4::perspective(&mut v.proj, fov(), v.width / v.height, param::NEAR);
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
@@ -194,30 +182,20 @@ fn compose() {
 }
 
 /// The ray through `ndc_x`/`ndc_y` in [−1, 1], x right and y up, from
-/// `pose`, framed as the view frames its pose (`compose`); `direction` is
-/// unit. A pick asks the pose its controller holds, which may have moved
-/// since the turn composed the view.
-pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
-    let v = view();
-    let tan = libm::tan(FOV.to_radians() / 2.0);
+/// `pose`, framed as the view frames its pose (`compose`), its tangents the
+/// view's lens as the cast's eye takes them (pxl-spec `Frustum::lens`), along
+/// its forward where it has no screen yet; `direction` is unit. A pick asks
+/// the pose its controller holds, which may have moved since the turn
+/// composed the view: the lens's tangents are the screen's alone, whatever
+/// the pose.
+pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
+    let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();
-    mat4::transpose(&mut back, &pose.rotation);
+    mat4::transpose(&mut back, &pose.rot);
     *origin = pose.eye;
-    mat4::transform_direction(
-        direction,
-        &back,
-        ndc_x * tan * v.width / v.height,
-        ndc_y * tan,
-        -1.0,
-    );
-}
-
-/// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.
-pub fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
-    let v = view();
-    [(x * 0.5 + 0.5) * v.width, (-y * 0.5 + 0.5) * v.height]
+    mat4::transform_dir(dir, &back, ndc_x * tan[0], ndc_y * tan[1], -1.0);
 }
 
 #[cfg(test)]

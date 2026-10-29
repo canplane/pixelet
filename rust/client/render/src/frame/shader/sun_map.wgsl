@@ -1,6 +1,6 @@
 // The world's depth from the sun, as its cast left it a word a slot of the
 // clipmap (pxl-shader `sun_cs`, pxl-spec-core `sun::Sun::word`; its depth
-// read as `sun::depth_of` reads it, `sun_depth`), laid into
+// read as `sun_depth`, which build.rs makes off its layout), laid into
 // the sun's shadow map in the light box's own order before the decor and
 // the actors are drawn into it (gpu/shadow.rs): box texel p's slot is its
 // world texel, the box's corner on by p, modulo the map's side.

@@ -15,7 +15,7 @@ pub struct Font {
 /// em box's middle.
 #[derive(Clone, Copy, Debug)]
 pub struct Raster<'a> {
-    pub pixels: &'a [u8],
+    pub px: &'a [u8],
     pub width: u32,
     pub height: u32,
     pub origin: [f32; 2],

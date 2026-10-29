@@ -6,7 +6,15 @@ use crate::golden::Golden;
 const GOLDEN: &str = include_str!("../../../../spec/golden/codec/json.tsv");
 
 #[test]
-fn json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json() {
+fn depth_limit() {
+    let most = Golden::load(GOLDEN).u64("depth.most") as usize;
+    let nested = |n: usize| format!("{}0{}", "[".repeat(n), "]".repeat(n));
+    assert!(read_json(&nested(most)).is_some());
+    assert!(read_json(&nested(most + 1)).is_none());
+}
+
+#[test]
+fn in_place_read() {
     let doc = read_json(r#" {"a": [1, -2.5e1, true, null, "x\"y"], "b": {"k": "\uD83D\uDE00 \u00e9\n"}, "a": "last"} "#).unwrap();
     assert_eq!(doc.type_of(), JsonType::Object);
     assert!(
@@ -68,7 +76,7 @@ fn text(v: &Golden, key: &str) -> String {
 }
 
 #[test]
-fn json_is_what_the_host_s_json_parse_takes() {
+fn matches_host_parse() {
     let v = Golden::load(GOLDEN);
     v.each("grammar", |k| {
         let got = if read_json(&text(&v, &format!("{k}.text"))).is_some() {
@@ -81,7 +89,7 @@ fn json_is_what_the_host_s_json_parse_takes() {
 }
 
 #[test]
-fn a_number_past_the_doubles_reads_as_the_host_reads_it() {
+fn big_number_as_host() {
     let v = Golden::load(GOLDEN);
     v.each("number", |k| {
         let n = read_json(v.s(&format!("{k}.text")))

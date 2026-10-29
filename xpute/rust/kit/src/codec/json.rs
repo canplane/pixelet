@@ -34,7 +34,7 @@ fn skip_string(s: &[u8], mut at: usize) -> Option<usize> {
     }
 }
 
-fn skip_value(s: &[u8], at: usize, depth: u32) -> Option<usize> {
+fn skip_val(s: &[u8], at: usize, depth: u32) -> Option<usize> {
     if depth > MAX_DEPTH {
         return None;
     }
@@ -50,7 +50,7 @@ fn skip_value(s: &[u8], at: usize, depth: u32) -> Option<usize> {
                 return Some(at + 1);
             }
             loop {
-                at = skip_ws(s, skip_value(s, at, depth + 1)?);
+                at = skip_ws(s, skip_val(s, at, depth + 1)?);
                 match *s.get(at)? {
                     b',' => at = skip_ws(s, at + 1),
                     b']' => return Some(at + 1),
@@ -71,7 +71,7 @@ fn skip_value(s: &[u8], at: usize, depth: u32) -> Option<usize> {
                 if s.get(at) != Some(&b':') {
                     return None;
                 }
-                at = skip_ws(s, skip_value(s, skip_ws(s, at + 1), depth + 1)?);
+                at = skip_ws(s, skip_val(s, skip_ws(s, at + 1), depth + 1)?);
                 match *s.get(at)? {
                     b',' => at = skip_ws(s, at + 1),
                     b'}' => return Some(at + 1),
@@ -132,7 +132,7 @@ pub struct JsonValue<'a> {
 pub fn read_json(text: &str) -> Option<JsonValue<'_>> {
     let s = text.as_bytes();
     let start = skip_ws(s, 0);
-    let end = skip_value(s, start, 0)?;
+    let end = skip_val(s, start, 0)?;
     (skip_ws(s, end) == s.len()).then(|| JsonValue {
         s: &text[start..end],
     })
@@ -199,8 +199,8 @@ impl<'a> JsonValue<'a> {
             .map(|(_, v)| v)
     }
 
-    pub fn at(&self, index: usize) -> Option<JsonValue<'a>> {
-        self.items().nth(index)
+    pub fn at(&self, idx: usize) -> Option<JsonValue<'a>> {
+        self.items().nth(idx)
     }
 }
 
@@ -226,7 +226,7 @@ impl<'a> Iterator for JsonItems<'a> {
             return None;
         }
         // The text was checked whole, so a value is where the grammar says.
-        let end = skip_value(b, start, 0).or_bug(Errno::ENOTRECOVERABLE);
+        let end = skip_val(b, start, 0).or_bug(Errno::ENOTRECOVERABLE);
         self.at = skip_ws(b, end) + 1;
         Some(JsonValue {
             s: &self.s[start..end],
@@ -250,15 +250,15 @@ impl<'a> Iterator for JsonFields<'a> {
             return None;
         }
         let key_end = skip_string(b, key_at).or_bug(Errno::ENOTRECOVERABLE);
-        let value_at = skip_ws(b, skip_ws(b, key_end) + 1);
-        let value_end = skip_value(b, value_at, 0).or_bug(Errno::ENOTRECOVERABLE);
-        self.at = skip_ws(b, value_end) + 1;
+        let val_at = skip_ws(b, skip_ws(b, key_end) + 1);
+        let val_end = skip_val(b, val_at, 0).or_bug(Errno::ENOTRECOVERABLE);
+        self.at = skip_ws(b, val_end) + 1;
         Some((
             JsonStr {
                 raw: &self.s[key_at + 1..key_end - 1],
             },
             JsonValue {
-                s: &self.s[value_at..value_end],
+                s: &self.s[val_at..val_end],
             },
         ))
     }

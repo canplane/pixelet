@@ -6,17 +6,20 @@
 //! which the instance's stance scales to one unit tall, since the cases
 //! compare silhouettes, not scale.
 
+use crate::domain::query::model;
 use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
 use crate::domain::query::model::registry::Models;
 use crate::domain::scene::actor::{Actor, Stance};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
+use crate::domain::view::frame::pose;
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::draw::DrawList;
+use pxl_render::gpu::surface;
 use pxl_spec::asset::actor::IDLE_CLIP;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
@@ -46,7 +49,7 @@ fn cases() -> &'static mut Cases {
 }
 
 /// One per surface: a case is named by the surface it draws on.
-pub const CASES_MAX: usize = pxl_render::gpu::surface::SURFACES;
+pub const CASES_MAX: usize = surface::SURFACES;
 
 /// Replaces a case already open under `id`. False where `id` names no
 /// surface or no variant.
@@ -93,7 +96,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     }
     // Under the sea below the eye, out of sight and near it, where the f32 of
     // its draw resolves a unit-tall model.
-    let mut at = crate::domain::view::frame::pose::sea_under_eye();
+    let mut at = pose::sea_under_eye();
     at[2] -= CASE_DEPTH_U;
     let mut turned = false;
     for case in &mut c.cases {
@@ -105,10 +108,9 @@ pub fn preview_step(ctx: &mut TickContext) {
                 (&case.model, load_of(case.variant.skin).and_then(load_image))
             {
                 let id = model.model;
-                case.actor = section::map().and_then(|_| {
-                    Actor::new(draw_list(), crate::domain::query::model::models(), id)
-                });
-                if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_count) {
+                case.actor =
+                    section::map().and_then(|_| Actor::new(draw_list(), model::models(), id));
+                if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_cnt) {
                     actor.play(IDLE_CLIP, 0.0);
                 }
             }
@@ -121,7 +123,7 @@ pub fn preview_step(ctx: &mut TickContext) {
         let scale = model.scale / case.variant.height_u as f32;
         case.stance = Some(Stance {
             at,
-            rotation_z: case.spin as f32,
+            rot_z: case.spin as f32,
             scale,
         });
         turned = true;

@@ -16,7 +16,7 @@ export const STREAM_NAMES = [
   "earth",
 ] as const;
 
-export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
+export const OUTCOME_NAMES = ["ok", "aborted", "err"] as const;
 
 export const TASK_PHASE_NAMES = [
   "net_ms",

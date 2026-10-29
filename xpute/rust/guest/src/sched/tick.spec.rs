@@ -11,8 +11,10 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
+    clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 pub const PHASES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
@@ -38,7 +40,7 @@ impl Phase {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<Phase> {
-        Phase::ALL.into_iter().find(|member| *member as u8 == value)
+    pub fn of(val: u8) -> Option<Phase> {
+        Phase::ALL.into_iter().find(|member| *member as u8 == val)
     }
 }

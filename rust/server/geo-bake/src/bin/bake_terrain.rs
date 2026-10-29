@@ -19,6 +19,7 @@ use postgres::Client;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::Base as _;
@@ -37,8 +38,8 @@ struct Db {
     repo: TerrainRepository,
 }
 
-fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
-    let mut client = source.connect()?;
+fn connect(src: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
+    let mut client = src.connect()?;
     let repo =
         TerrainRepository::prepare(&mut client, raster.clone()).map_err(|e| e.to_string())?;
     Ok(Db { client, repo })
@@ -74,10 +75,10 @@ fn land(client: &mut Client, candidates: &[[i32; 2]]) -> Result<Vec<[i32; 2]>, S
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let run = Run::parse("terrain")?;
     if run.leaf {
-        let (source, mut client) =
+        let (src, mut client) =
             Overture::reading(&leaf::READS, &run.shards.iter().copied().collect())?;
         let raster = Arc::new(Raster::open(&mut client)?);
         for &shard in &run.shards {
@@ -96,12 +97,7 @@ fn run() -> Result<(), String> {
                     bands.len(),
                     1000,
                     |[x, y]| format!("{x}:{y}"),
-                    || {
-                        Ok((
-                            connect(&source, &raster)?,
-                            separation::source::Walk::default(),
-                        ))
-                    },
+                    || Ok((connect(&src, &raster)?, separation::source::Walk::default())),
                     |(db, held), tile| {
                         held.keep_around(tile);
                         let reader = &mut separation::Reader {
@@ -111,14 +107,11 @@ fn run() -> Result<(), String> {
                         };
                         let terrain = bake_leaf(reader, tile)?;
                         let at = Tile::new(LEAF_ZOOM, tile);
-                        let packed = pack(
-                            &terrain
-                                .encode(at)
-                                .map_err(|e| format!("{}: {e}", at.name()))?,
-                            Level::Stored,
-                        )
-                        .map_err(|e| e.to_string())?;
-                        set.write(at, &packed)?;
+                        let (pkt, fit) = terrain
+                            .encode_stored(at)
+                            .map_err(|e| format!("{}: {e}", at.name()))?;
+                        let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
+                        set.write_stored(at, &packed, fit.as_deref())?;
                         Ok(Done::Wrote {
                             bytes: packed.len() as u64,
                             items: 0,
@@ -132,7 +125,11 @@ fn run() -> Result<(), String> {
             })?;
         }
     }
-    run.finish::<TerrainTile, _>(|run| Ok(Absence::new(run.baked()?)), &leaf::READS, false)
+    run.finish::<TerrainTile, _>(
+        |run| Ok(Absence::new(run.read_baked()?)),
+        &leaf::READS,
+        false,
+    )
 }
 
 fn main() -> ExitCode {

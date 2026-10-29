@@ -1,14 +1,14 @@
 // pxl-render/mesh/paint/object.rs
 
-//! The object store's records as blocks: the materials their values are
+//! The object store's records as assets: the materials their values are
 //! drawn as, by the catalog.
 
 use pxl_spec::asset::cube;
 use pxl_spec::asset::cube::{cube_id, ALL_CUBES};
-use pxl_spec::asset::{decor_ids, decor_num_id};
+use pxl_spec::asset::{decor_num_id, DECOR_IDS};
 
+use crate::mesh::paint::palette::layer_idx;
 use crate::mesh::paint::palette::rgb255;
-use crate::mesh::paint::palette::LAYER_IDX;
 use pxl_spec::asset::cube::{cube_rgb, Cube};
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
@@ -39,7 +39,7 @@ impl Painter {
             .iter()
             .map(|&c| cube_id(c))
             .chain([AIR])
-            .chain(decor_ids.iter().map(|&id| decor_num_id(id)));
+            .chain(DECOR_IDS.iter().map(|&id| decor_num_id(id)));
         let states = named
             .filter(|&s| s < u16::MAX as u32)
             .max()
@@ -68,6 +68,6 @@ impl Painter {
 pub fn solid_look(cube: Cube) -> ([u8; 3], u8) {
     (
         rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)),
-        LAYER_IDX(cube) as u8,
+        layer_idx(cube) as u8,
     )
 }

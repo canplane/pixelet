@@ -8,8 +8,6 @@
 //! which of its tiles a cube wears on each face (`ingested`). A cube with no
 //! image still draws as its catalog color.
 
-#![allow(non_upper_case_globals)]
-
 use std::sync::LazyLock;
 
 #[path = "asset/actor.spec.rs"]
@@ -30,6 +28,11 @@ pub mod star;
 #[path = "asset/symbol.spec.rs"]
 pub mod symbol;
 
+const _: () = assert!(
+    symbol::SYMBOL_RATIO as f64 == crate::space::camera::grid::RATIO_MAX,
+    "the symbols are rasterized at the finest ratio a surface is drawn at"
+);
+
 pub use decor::DecorId;
 pub use id::AssetId;
 
@@ -38,6 +41,9 @@ use crate::space::coord::zoom::units;
 use catalog::Catalog;
 use cube::Cube;
 use ingested::{CubeFace, PACK};
+use pxl_spec_core::decor::DECORS;
+use pxl_spec_core::scatter;
+use xpute_kit::status::errno::Errno;
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,7 +72,7 @@ fn model_extent(v: &decor::Variant, catalog: Option<&Catalog>) -> [f64; 3] {
 
 impl decor::Decor {
     /// What a placed one is stored as.
-    pub const fn value(&self) -> u16 {
+    pub const fn val(&self) -> u16 {
         self.id as u16
     }
 
@@ -83,11 +89,10 @@ impl decor::Decor {
     /// before a catalog is read.
     pub fn reach(&self, catalog: Option<&Catalog>) -> f64 {
         let cell = units(self.row.cell_zoom());
-        let reach = |(v, size): (&decor::Variant, &[u32; 3])| {
-            let [ex, ey, ez] = model_extent(v, catalog);
+        let reach = |size: &[u32; 3]| {
             let [x, y, z] = size.map(|n| f64::from(n) * cell);
-            let (across, up) = (x.max(y).max(ex).max(ey), z.max(ez));
-            libm::sqrt(2.0 * across * across + up * up)
+            let across = x.max(y);
+            libm::sqrt(2.0 * across * across + z * z)
         };
         self.variants
             .iter()
@@ -139,7 +144,7 @@ impl decor::Decor {
     /// decor numbers them (pxl-spec-core scatter.rs `first_group`).
     pub fn first_group(&self) -> u32 {
         let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
-        pxl_spec_core::scatter::first_group(&pxl_spec_core::decor::DECORS, kind as u32)
+        scatter::first_group(&DECORS, kind as u32)
     }
 
     /// The generator writes one entry a decor, so every id has one.
@@ -148,7 +153,7 @@ impl decor::Decor {
         decor::DECORS
             .iter()
             .find(|d| d.id == id)
-            .or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
+            .or_bug(Errno::ENOTRECOVERABLE)
     }
 }
 
@@ -181,7 +186,7 @@ pub fn decor_id_from_num(num_id: AssetId) -> DecorId {
 }
 
 /// In numeric order.
-pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
+pub static DECOR_IDS: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
     let mut ids = DecorId::ALL.to_vec();
     ids.sort_by_key(|id| *id as u16);
     ids

@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/indicator/coverage_gizmo.rs
 
 //! The coverage gizmo (the `world_gizmo` setting, beside the frame's), as
-//! translucent debug lines over the ground: the eye's windows' squares
+//! translucent debug lines over the ground: the eye's windows' bricks
 //! (domain/layer/terrain/window.rs), each where the eye reads it at its zoom,
 //! marked by how it stands, and the drawn ones' tiles and shards, each
 //! colored as its `Mark` says (`gizmo_spec::coverage`).
@@ -15,25 +15,24 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::grid::cell_at;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::window::{self, Slot, EYE_WINDOWS, FIRST_CELL, SLOTS};
+use pxl_spec_core::window::{self, Entry, ENTRIES, EYE_WINDOWS, FIRST_CELL};
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
-use crate::domain::layer::terrain::window::{eye_slots, tile_of};
+use crate::domain::layer::terrain::window::{eye_entries, tile_of};
 use crate::domain::layer::Base as _;
 use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::indicator::gizmo_spec;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::view;
-use crate::domain::view::lens::tau;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
@@ -98,7 +97,7 @@ impl Mark {
         [r, g, b, a]
     }
 
-    fn dashed(self) -> bool {
+    fn is_dashed(self) -> bool {
         self.look().2
     }
 }
@@ -109,11 +108,11 @@ const DASHES: u32 = 16;
 /// A node of the ground's plane: its zoom and its column and row.
 type Node2 = (Zoom, [i32; 2]);
 
-/// What the gizmo outlines: the squares with their marks, then the drawn
+/// What the gizmo outlines: the bricks with their marks, then the drawn
 /// ones' tiles and shards, each once.
 #[derive(Default, PartialEq)]
 struct Outline {
-    squares: Vec<(Node2, Mark)>,
+    bricks: Vec<(Node2, Mark)>,
     tiles: Vec<Tile>,
     shards: Vec<Node2>,
 }
@@ -131,7 +130,7 @@ struct Coverage {
 static COVERAGE: Global<Coverage> = Global::new();
 
 /// Laid each step, and handed on only where its lines or where they are
-/// laid about moved: a square landing moves its mark, and the ground under
+/// laid about moved: a brick landing moves its mark, and the ground under
 /// it with it. Before the frame's list begins (domain/scene/stage.rs), so its lines
 /// and the origin they are drawn about are the same turn's.
 pub fn coverage_gizmo_step(show: bool) {
@@ -157,16 +156,16 @@ pub fn coverage_gizmo_step(show: bool) {
         (eye[1] / span).floor() * span,
         0.0,
     ];
-    let outline = outline(&o, tau(), top);
+    let outline = outline(&o, top);
     let mut lines = Lines::default();
-    for &(n, mark) in &outline.squares {
+    for &(n, mark) in &outline.bricks {
         lines.piece(rect(n), mark);
     }
     for t in &outline.tiles {
-        lines.square(t.rect(), Mark::Tile);
+        lines.brick(t.rect(), Mark::Tile);
     }
     for &s in &outline.shards {
-        lines.square(rect(s), Mark::Shard);
+        lines.brick(rect(s), Mark::Shard);
     }
     c.next.0.clear();
     c.next.1 = lines.lay(&mut c.next.0, about, &World::now());
@@ -188,22 +187,22 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
     )
 }
 
-/// The goal, as the markers' squares cut the ground
-/// (domain/view/observation.rs `squares`): each eye window's squares,
-/// finest first, a square where the zoom its nearest point asks
-/// (`Tau::cell_at`, about the eye's height, as a ray's descent asks) is its
-/// window's or finer, within the reach, and not wholly under the finer
-/// window's squares, which are read there instead; none coarser than the
-/// source's top, which nothing asks for. A piece is drawn where its square is present, or where a coarser
-/// window's square is, which the cast reads in its place (pxl-spec-core
-/// `window::step`): from the floor where that square's tile is the floor's
+/// The goal, as the markers' bricks cut the ground
+/// (domain/view/observation.rs `bricks`): each eye window's bricks,
+/// finest first, a brick where the zoom its nearest point asks (pxl-spec
+/// space/camera/grid.rs `cell_at`, about the eye's height, as a ray's
+/// descent asks) is its window's or finer, within the reach, and not wholly under the finer
+/// window's bricks, which are read there instead; none coarser than the
+/// source's top, which nothing asks for. A piece is drawn where its brick is present, or where a coarser
+/// window's brick is, which the cast reads in its place (pxl-spec-core
+/// `window::step`): from the floor where that brick's tile is the floor's
 /// alone. One not drawn is marked by its line: no tile on it, only the
-/// floor's, or a tile and its square not yet filled.
-fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
-    let held: [Option<[Slot; SLOTS as usize]>; EYE_WINDOWS as usize] =
-        core::array::from_fn(|w| eye_slots(window::eye_cell(w as u32)));
+/// floor's, or a tile and its brick not yet filled.
+fn outline(o: &Observation, top: Zoom) -> Outline {
+    let held: [Option<[Entry; ENTRIES as usize]>; EYE_WINDOWS as usize] =
+        core::array::from_fn(|w| eye_entries(window::eye_cell(w as u32)));
     let present = |cell: Zoom, q: [i32; 2]| {
-        held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[window::slot(q) as usize].holds(q))
+        held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[window::entry(q) as usize].holds(q))
     };
     let over = (o.eye[2] - o.ground).max(0.0);
     let near = |(x0, y0, side): (f64, f64, f64)| {
@@ -212,11 +211,10 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
         let (gx, gy) = (gap(x0, o.eye[0]), gap(y0, o.eye[1]));
         gx * gx + gy * gy + over * over
     };
-    let residency = TerrainTile::residency();
-    // The floor's tiles are the top's no demand lines (domain/layer/residency/floor.rs).
+    let tile_cache = TerrainTile::tile_cache();
+    // The floor's tiles are the top's no demand lines (domain/layer/tile_cache/floor.rs).
     let mut lined: FnvHashSet<Tile> = FnvHashSet::default();
     ByEye {
-        tau,
         lattice: TerrainTile::LATTICE,
         top,
     }
@@ -230,20 +228,20 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
         if GROUND.tile_zoom(cell) < top as i32 {
             continue;
         }
-        let Some(slots) = held[(cell - FIRST_CELL) as usize] else {
+        let Some(entries) = held[(cell - FIRST_CELL) as usize] else {
             continue;
         };
-        let pz = window::squares_zoom(cell);
-        for slot in slots {
-            let p = slot.square;
+        let pz = window::bricks_zoom(cell);
+        for entry in entries {
+            let p = entry.brick;
             let tile = tile_of(cell, p).0;
-            // The square drawn in its place: its own, or the finest coarser one present.
+            // The brick drawn in its place: its own, or the finest coarser one present.
             let drawn = (FIRST_CELL..=cell)
                 .rev()
                 .map(|c| (c, [p[0] >> (cell - c), p[1] >> (cell - c)]))
                 .find(|&(c, at)| present(c, at));
             let r2 = near(rect((pz, p)));
-            if r2 > o.reach * o.reach || tau.cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
+            if r2 > o.reach * o.reach || cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
                 continue;
             }
             read.insert((pz, p));
@@ -261,13 +259,13 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
                         false => Mark::Drawn,
                     }
                 }
-                None => match residency.line(tile).drawn {
+                None => match tile_cache.line(tile).drawn {
                     None => Mark::NoTile,
                     Some(s) if floor_only(s) => Mark::FloorOnly,
                     Some(_) => Mark::Unbuilt,
                 },
             };
-            out.squares.push(((pz, p), mark));
+            out.bricks.push(((pz, p), mark));
         }
     }
     out.tiles.sort_unstable();
@@ -286,7 +284,7 @@ fn line_top(mut p: Tile, top: Zoom) -> Tile {
 
 /// Edges by the line they lie on, its axis (0 along x, 1 along y) and where
 /// it crosses the other: each a stretch along it and its mark.
-/// And the pieces' squares, whose faces hide what of the gizmo is behind them.
+/// And the pieces' bricks, whose faces hide what of the gizmo is behind them.
 #[derive(Default)]
 struct Lines(FnvHashMap<(u8, u64), Vec<Stretch>>, Vec<(f64, f64, f64)>);
 
@@ -295,7 +293,7 @@ type Stretch = (f64, f64, Mark);
 
 impl Lines {
     /// `rect` gives the south-west corner and the side.
-    fn square(&mut self, (x0, y0, side): (f64, f64, f64), mark: Mark) {
+    fn brick(&mut self, (x0, y0, side): (f64, f64, f64), mark: Mark) {
         let (x1, y1) = (x0 + side, y0 + side);
         for (axis, at, from, to) in [
             (0, y0, x0, x1),
@@ -310,9 +308,9 @@ impl Lines {
         }
     }
 
-    /// A piece's square, its face among them.
+    /// A piece's brick, its face among them.
     fn piece(&mut self, rect: (f64, f64, f64), mark: Mark) {
-        self.square(rect, mark);
+        self.brick(rect, mark);
         self.1.push(rect);
     }
 
@@ -330,7 +328,7 @@ impl Lines {
                 .or_insert_with(|| {
                     let z = access
                         .surface_support(&world::point(x, y, 0.0))
-                        .value()
+                        .val()
                         .flatten()
                         .unwrap_or(0.0);
                     [
@@ -445,7 +443,7 @@ impl Lines {
 }
 
 fn stretch(lane: &mut Vec<f32>, a: V3, b: V3, mark: Mark) {
-    let pieces = if mark.dashed() { DASHES } else { 1 };
+    let pieces = if mark.is_dashed() { DASHES } else { 1 };
     let at = |t: u32| -> [f32; 3] {
         core::array::from_fn(|i| (a[i] + (b[i] - a[i]) * t as f64 / pieces as f64) as f32)
     };

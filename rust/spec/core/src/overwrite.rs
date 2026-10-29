@@ -12,7 +12,7 @@
 //! What is placed is the last layer the ground decision lays
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md), so it is
 //! asked first (`over`): where it holds a value, air included, that is the
-//! block, whatever is under it.
+//! cell's asset, whatever is under it.
 
 use crate::cube::{object, sentinel, Ground, Object};
 use crate::Zoom;
@@ -23,9 +23,32 @@ pub const BRANCH: u32 = 1 << 31;
 /// The family of the root what is placed is under.
 pub const PLACED: u32 = 0;
 
-/// A cube filled whole, as a fold's share counts it: a share is in 2⁻¹⁵ of
-/// its cube, floored at each fold, so eighths stay exact five folds deep.
-pub const FULL: u32 = 1 << 15;
+use crate::answer;
+use crate::answer::BoxWords;
+use crate::answer::FULL;
+
+/// The edits a frame hands what reads them at most (pxl-kernel
+/// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box
+/// of leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel
+/// unions the rest into the last.
+pub const EDITS: u32 = 8;
+/// The boxes of leaf cells a frame's edits and a preview's cuts changed:
+/// the edits, and a preview's cut and left-out leaf as they were and as they
+/// are; past them the rest is joined into the last (pxl-render gpu/grown.rs
+/// `hold`). What reads those columns asks them again: decor's growth, the
+/// observed pyramid's forgetting.
+pub const BOXES: u32 = EDITS + 4;
+
+/// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
+pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
+    if zoom <= LEAF_CELL {
+        let s = LEAF_CELL - zoom;
+        [at[0] << s, at[1] << s, (at[0] + 1) << s, (at[1] + 1) << s]
+    } else {
+        let s = zoom - LEAF_CELL;
+        [at[0] >> s, at[1] >> s, (at[0] >> s) + 1, (at[1] >> s) + 1]
+    }
+}
 
 const VOID: u32 = sentinel::void as u32;
 pub const AIR: u32 = object::air as u32;
@@ -35,8 +58,8 @@ pub const AIR: u32 = object::air as u32;
 /// branch's fold the kind most of its fill is low and its share of its cube
 /// filled high (`fold_word`). Low, the value or the kind either way
 /// (`low`); high, the handle or the share (`high`).
-pub const fn leaf_word(value: u32, ext: u32) -> u32 {
-    value & 0xffff | ext << 16
+pub const fn leaf_word(val: u32, ext: u32) -> u32 {
+    val & 0xffff | ext << 16
 }
 
 /// A fold's word: its kind and its share (`leaf_word`).
@@ -108,7 +131,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
 /// A leaf's word in its parent's fold (`fold`): a leaf whose value is a
 /// voxel fills it whole; the empty word, and any other, none. The one rule
 /// whichever side builds a tree, the objects' store (pxl-spec
-/// block/volume.rs) or a square's ways (`ways::tree`).
+/// object/volume.rs) or a brick's ways (`way::tree`).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
     if word != 0 && voxel(id) {
@@ -161,7 +184,7 @@ impl Held {
     }
 
     /// Leaves under the node differ: it is their fold.
-    pub fn folded(self) -> bool {
+    pub fn is_folded(self) -> bool {
         self.holds() && self.0 & FOLDED != 0
     }
 
@@ -219,16 +242,25 @@ fn of(lanes: &impl Lanes, slot: u32, zoom: Zoom) -> Held {
 /// asks this once, at its root.
 pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
     let p = path(zoom, at);
-    let mut held = of(
+    down(
         lanes,
         root + slot_of([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]),
         0,
-    );
-    let mut z = 0;
-    while z < zoom && held.folded() {
+        zoom,
+        p,
+    )
+}
+
+/// What the node `at` of `zoom` holds under the node of `top` over it that
+/// `slot` holds: down from it to its own slot, or to the leaf over it, a
+/// `child` a zoom.
+pub fn down(lanes: &impl Lanes, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> Held {
+    let mut held = of(lanes, slot, top);
+    let mut z = top;
+    while z < zoom && held.is_folded() {
         z += 1;
         let s = zoom - z;
-        held = child(lanes, held, z, [p[0] >> s, p[1] >> s, p[2] >> s]);
+        held = child(lanes, held, z, [at[0] >> s, at[1] >> s, at[2] >> s]);
     }
     held
 }
@@ -237,7 +269,7 @@ pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
 /// over the parent covers it too, nothing under nothing; under a fold, its
 /// own slot.
 pub fn child(lanes: &impl Lanes, parent: Held, zoom: Zoom, at: [i32; 3]) -> Held {
-    if parent.folded() {
+    if parent.is_folded() {
         of(
             lanes,
             (lanes.heap(parent.slot()) & !BRANCH) + slot_of(at),
@@ -250,8 +282,8 @@ pub fn child(lanes: &impl Lanes, parent: Held, zoom: Zoom, at: [i32; 3]) -> Held
 
 /// Whether a value is drawn as a voxel, a placeable cube or air, rather than
 /// an instance or nothing.
-pub const fn voxel(value: u32) -> bool {
-    value == AIR || Ground::grounds(value) || Object::objects(value)
+pub const fn voxel(val: u32) -> bool {
+    val == AIR || Ground::grounds(val) || Object::objects(val)
 }
 
 /// Whether `cut` is at `zoom` or coarser and its cube holds the node `at`.
@@ -270,10 +302,10 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 /// What the node `at` of `zoom` holding `held` folds to, as a cell of its zoom
 /// is drawn: the leaf's value, or its fold's kind wherever any of it is
 /// filled, with what of its cube that fills (`filled`); `VOID` where nothing
-/// that is a voxel is. How much of the block is kept is the block's, of
+/// that is a voxel is. How much of the cell is kept is the cell's, of
 /// every layer together (`answer::cover`, `answer::eighths`). `hide`, a
 /// preview's left-out leaf, is left out where it is the leaf itself.
-pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
+pub fn val(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
     let word = if held.holds() {
         lanes.data(held.slot())
     } else {
@@ -281,7 +313,7 @@ pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]
     };
     let v = if !held.holds() {
         VOID
-    } else if !held.folded() {
+    } else if !held.is_folded() {
         if hide.zoom == held.zoom() && holds(hide, zoom, at) {
             VOID
         } else {
@@ -302,14 +334,14 @@ pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]
 /// The share of its cube what the node holding `held` folds to fills, in
 /// `FULL`'s units (`value`): a leaf over it whole, a fold its share.
 pub fn filled(lanes: &impl Lanes, held: Held) -> u32 {
-    if held.folded() {
+    if held.is_folded() {
         high(lanes.data(held.slot()))
     } else {
         FULL
     }
 }
 
-/// The four looks the node `at` of `zoom` holding `held`, a block of value
+/// The four looks the node `at` of `zoom` holding `held`, a cell of value
 /// `v` (`value`), is drawn by, `dx + 2·dy`, as the ground's cell is by the
 /// four its fold took (pxl-spec-core `ground::Cell::four`): its 2×2 seen
 /// from above one zoom finer, the same for every face as the ground's. A
@@ -327,7 +359,7 @@ pub fn looks(
     at: [i32; 3],
     v: u32,
 ) -> [u32; 4] {
-    if !held.folded() {
+    if !held.is_folded() {
         return [v; 4];
     }
     let base = lanes.heap(held.slot()) & !BRANCH;
@@ -337,7 +369,7 @@ pub fn looks(
             2 * at[1] + (k >> 1 & 1) as i32,
             2 * at[2] + (k >> 2) as i32,
         ];
-        let c = value(lanes, of(lanes, base + k, zoom + 1), hide, zoom + 1, child);
+        let c = val(lanes, of(lanes, base + k, zoom + 1), hide, zoom + 1, child);
         (c, c != VOID && c != AIR)
     };
     let mut four = [v; 4];
@@ -361,27 +393,27 @@ pub fn looks(
 pub const UNDER: u32 = 0;
 /// Something placed under the node may fill it: split it.
 pub const SPLIT: u32 = 1;
-/// What is placed is the block (`Over::block`), filling `Over::fill` of
+/// What is placed is the cell's asset (`Over::asset`), filling `Over::fill` of
 /// its cube.
-pub const BLOCK: u32 = 2;
+pub const CELL: u32 = 2;
 
 /// What is placed answers for a node, before any layer under it: what it
-/// says, and as a block its value and the share of its cube that fills, in
+/// says, and as a cell its value and the share of its cube that fills, in
 /// `FULL`'s units (`filled`), whole for a leaf or a cut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Over {
     pub says: u32,
-    pub block: u32,
+    pub asset: u32,
     pub fill: u32,
 }
 
 /// What is placed answers for the node `at` of `zoom` holding `held`, asked
-/// down to `near`: as a block where `near` is its zoom or coarser, the value
+/// down to `near`: as a cell where `near` is its zoom or coarser, the value
 /// it holds or `carve`'s air and what of its cube that fills, else the
 /// layers under it. Coarser, it answers from its own
 /// pyramid as the ground answers from its relief (pxl-spec-core
 /// `ground::node`): the layers under it where nothing placed in it is a
-/// block at any zoom asked (`blocks_by`), else a split. A preview's cut and
+/// cell at any zoom asked (`cells_by`), else a split. A preview's cut and
 /// its left-out leaf only make air, so where nothing placed fills, what is
 /// under answers and splits where it fills.
 pub fn over(
@@ -394,14 +426,14 @@ pub fn over(
     near: Zoom,
 ) -> Over {
     if zoom < near {
-        let says = if blocks_by(lanes, held, near - zoom) {
+        let says = if cells_by(lanes, held, near - zoom) {
             SPLIT
         } else {
             UNDER
         };
         return Over {
             says,
-            block: VOID,
+            asset: VOID,
             fill: 0,
         };
     }
@@ -409,64 +441,64 @@ pub fn over(
     let v = if carved {
         AIR
     } else {
-        value(lanes, held, hide, zoom, at)
+        val(lanes, held, hide, zoom, at)
     };
-    let says = if v == VOID { UNDER } else { BLOCK };
+    let says = if v == VOID { UNDER } else { CELL };
     Over {
         says,
-        block: v,
+        asset: v,
         fill: if carved { FULL } else { filled(lanes, held) },
     }
 }
 
-/// Where what is placed under the node `at` of `zoom` holding `held` may lie
-/// along z, in leaf cells, from its lowest to past its highest: as its tree
-/// holds it, the halves of the node's z any of its eight children holds
-/// anything in, or all of it where they are one (not folded); a node a leaf
-/// cell tall or finer, all of its leaf cell. Nothing (`ground::EMPTY`)
-/// where nothing is placed. A preview's cut only makes air, so what is
-/// placed under it lies here still.
-pub fn slab(lanes: &impl Lanes, held: Held, zoom: Zoom, at: [i32; 3]) -> [i32; 2] {
+/// Where what is placed under the node holding `held` may lie, as a box in
+/// the node's steps on every axis (`answer::box_word`): as its tree holds
+/// it, the halves of the node on each axis any of its eight children holds
+/// anything in, or all of it where they are one (not folded). None
+/// (`answer::BOX_NONE`) where nothing is placed. A preview's cut only makes
+/// air, so what is placed under it lies here still.
+pub fn bound(lanes: &impl Lanes, held: Held, zoom: Zoom) -> BoxWords {
+    use crate::answer::{box_word, BOX_NONE, BOX_STEPS, BOX_WHOLE};
     if !held.holds() {
-        return crate::ground::EMPTY;
+        return BOX_NONE;
     }
-    if zoom >= crate::LEAF_CELL {
-        let b = at[2] >> (zoom - crate::LEAF_CELL);
-        return [b, b + 1];
-    }
-    let side = 1 << (crate::LEAF_CELL - zoom);
-    let bottom = at[2] * side;
-    if !held.folded() || side == 1 {
-        return [bottom, bottom + side];
+    if !held.is_folded() {
+        return BOX_WHOLE;
     }
     let base = lanes.heap(held.slot()) & !BRANCH;
-    let (mut under, mut over) = (false, false);
+    // On each axis, whether any child holding anything lies in its lower
+    // half, and in its upper: child `k`'s half on axis `a` is bit `a` of `k`.
+    // A bit an axis: a GPU's arrays hold no bools.
+    let (mut low, mut high) = (0u32, 0u32);
     let mut k = 0;
     while k < 8 {
         if of(lanes, base + k, zoom + 1).holds() {
-            if k & 4 == 0 {
-                under = true;
-            } else {
-                over = true;
+            let mut a = 0;
+            while a < 3 {
+                if k >> a & 1 == 0 {
+                    low |= 1 << a;
+                } else {
+                    high |= 1 << a;
+                }
+                a += 1;
             }
         }
         k += 1;
     }
-    [
-        if under { bottom } else { bottom + side / 2 },
-        if over {
-            bottom + side
-        } else {
-            bottom + side / 2
-        },
-    ]
+    if low | high == 0 {
+        return BOX_NONE;
+    }
+    let half = BOX_STEPS / 2;
+    let first = |a: u32| if low >> a & 1 != 0 { 0 } else { half };
+    let past = |a: u32| if high >> a & 1 != 0 { BOX_STEPS } else { half };
+    box_word([first(0), first(1), first(2)], [past(0), past(1), past(2)])
 }
 
-/// Whether anything placed under the node holding `held` may be a block at
-/// a zoom `d` under it or coarser (a block keeps an eighth of its cube or
+/// Whether anything placed under the node holding `held` may be a cell at
+/// a zoom `d` under it or coarser (a cell keeps an eighth of its cube or
 /// more, `answer::eighths`): a leaf of a voxel fills every cube under it,
 /// one of none fills none; a fold's share is the mean of its eight's (spec
-/// block/volume.rs `fold`), so the node's filled volume is its share of
+/// object/volume.rs `fold`), so the node's filled volume is its share of
 /// its cube, and none of the 8ᵈ cubes `d` under it holds an eighth of its
 /// own unless the share is at least `FULL / 8ᵈ⁺¹`, a coarser cube's eighth
 /// more still. A share is floored at each fold, each floor less than one of
@@ -474,19 +506,16 @@ pub fn slab(lanes: &impl Lanes, held: Held, zoom: Zoom, at: [i32; 3]) -> [i32; 2
 /// short of the filled volume by less than 8/7 of a unit: two units over it
 /// hold it. Where the ground fills the rest of such a cube, its own bound
 /// splits it.
-fn blocks_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
+fn cells_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
     if !held.holds() {
         return false;
     }
     let word = lanes.data(held.slot());
-    if !held.folded() {
+    if !held.is_folded() {
         return voxel(low(word));
     }
-    let eighth = if 3 * d + 3 < 16 {
-        FULL >> (3 * d + 3)
-    } else {
-        0
-    };
+    let shift = answer::KEPT_BITS * (d + 1);
+    let eighth = if shift <= FULL_BITS { FULL >> shift } else { 0 };
     high(word) + 2 > eighth
 }
 
@@ -500,5 +529,60 @@ pub fn whole(held: Held, carve: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
         let a = path(zoom, at);
         c[0] == a[0] && c[1] == a[1] && c[2] == a[2]
     };
-    !held.folded() && !carved
+    !held.is_folded() && !carved
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::answer::{box_of, BOX_NONE, BOX_WHOLE};
+
+    /// A family at slot 8: the children `held` names hold a voxel, the rest
+    /// nothing.
+    struct Family(&'static [u32]);
+
+    impl Lanes for Family {
+        fn heap(&self, slot: u32) -> u32 {
+            if slot == 1 {
+                8
+            } else {
+                0
+            }
+        }
+        fn data(&self, slot: u32) -> u32 {
+            if slot >= 8 && self.0.contains(&(slot - 8)) {
+                1
+            } else {
+                VOID
+            }
+        }
+    }
+
+    /// What is placed answers, on each axis, the halves its children hold
+    /// anything in; a leaf all of it; nothing, none.
+    #[test]
+    fn placed_is_child_halves() {
+        let zoom = 10;
+        let branch = Held::branch(1, zoom);
+        // Child 0 (low x, y, z) alone: the low half on every axis.
+        assert_eq!(
+            box_of(bound(&Family(&[0]), branch, zoom)),
+            ([0; 3], [512; 3])
+        );
+        // Child 5 (x high, y low, z high) alone.
+        assert_eq!(
+            box_of(bound(&Family(&[5]), branch, zoom)),
+            ([512, 0, 512], [1024, 512, 1024])
+        );
+        // Children 1 and 2: x and y each both halves, z the low.
+        assert_eq!(
+            box_of(bound(&Family(&[1, 2]), branch, zoom)),
+            ([0; 3], [1024, 1024, 512])
+        );
+        assert_eq!(bound(&Family(&[]), Held::NOTHING, zoom), BOX_NONE);
+        assert_eq!(
+            bound(&Family(&[]), Held(1 << SLOT_SHIFT | zoom), zoom),
+            BOX_WHOLE
+        );
+    }
 }

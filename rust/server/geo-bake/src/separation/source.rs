@@ -106,7 +106,7 @@ fn tile_rows(
     })
 }
 
-/// Where a tile's rows are kept for its neighbours.
+/// Where a tile's rows are kept for its neighbors.
 pub trait Store {
     fn tile(
         &mut self,
@@ -130,7 +130,7 @@ impl Store for Disk<'_> {
     }
 }
 
-/// In memory, for a walk from tile to neighbouring tile: holds a tile's
+/// In memory, for a walk from tile to neighboring tile: holds a tile's
 /// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {
@@ -169,8 +169,8 @@ const TUNNELS_SQL: &str = concat!(
 );
 
 /// The portals of the road tunnels in `[lo, hi]`, DB coordinates: a narrow
-/// read of the tunnels alone, so a solve learns whether a neighbour's tunnel
-/// opens near its tile before it reads the neighbour.
+/// read of the tunnels alone, so a solve learns whether a neighbor's tunnel
+/// opens near its tile before it reads the neighbor.
 pub fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Portal>, String> {
     let env: [&(dyn ToSql + Sync); 4] = [&lo[0], &lo[1], &hi[0], &hi[1]];
     let rows = client.query(TUNNELS_SQL, &env).map_err(|e| e.to_string())?;

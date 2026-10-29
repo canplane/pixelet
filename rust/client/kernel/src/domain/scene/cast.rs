@@ -2,7 +2,7 @@
 
 //! What the GPU's cast of the eye's rays reads (pxl-render gpu/renderer.rs
 //! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
-//! windows as a table of the squares each holds, and each square the
+//! windows as a table of the bricks each holds, and each brick the
 //! windows want handed to the GPU once, off its tile's packet
 //! (domain/layer/terrain/window.rs `fill`).
 
@@ -14,12 +14,14 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::kept::Offered;
 use crate::domain::layer::object::preview;
-use crate::domain::layer::object::store::objects;
+use crate::domain::layer::object::store::object;
 use crate::domain::layer::terrain::tile::kept;
 use crate::domain::layer::terrain::window::{self, Handed};
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
 use crate::domain::view::setting::store::settings_store;
+use crate::sys::io::source;
+use pxl_render::gpu::api;
 use pxl_spec::bake::constant::EntryAt;
 
 /// The service area's index as the GPU reads it, and whether a declared
@@ -31,11 +33,11 @@ static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 /// (`area::shard_key`), four a row; a row of none where none is declared,
 /// since a binding holds at least one, and a read past it is none.
 pub fn shards() -> &'static [[i32; 4]] {
-    let declared = crate::sys::io::source::top().is_some();
+    let declared = source::top().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || *made != declared {
         s.clear();
-        let nines = crate::sys::io::source::nines();
+        let nines = source::nines();
         let nine = |i: usize| nines.get(i).copied().map_or(0, i32::from);
         s.extend(
             (0..nines.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| nine(4 * r + k))),
@@ -51,8 +53,8 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// zoom (pxl-spec-core `eye`). None without a screen.
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
-    lens::gpu_cast(o, lens::tau(), settings_store().ray_steps, &mut words)?;
-    let edits = preview::current();
+    lens::gpu_cast(o, settings_store().ray_steps, &mut words)?;
+    let edits = preview::cur();
     let cut = |e: Option<EntryAt>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {
             [
@@ -69,11 +71,11 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
 }
 
 /// What is placed, for the GPU: the objects' tree's lanes as they live, the
-/// room either has, the store's revision, and the blocks written since the
+/// room either has, the store's revision, and the families written since the
 /// revision the lanes were last handed at, so the GPU takes only those
 /// again where it holds that one (domain/layer/object/store.rs `gpu_lanes`).
 pub fn overwrites() -> Overwrites<'static> {
-    let l = objects().gpu_lanes();
+    let l = object().gpu_lanes();
     Overwrites {
         heap: l.heap,
         data: l.data,
@@ -84,19 +86,19 @@ pub fn overwrites() -> Overwrites<'static> {
     }
 }
 
-/// Each square the windows want to `write`, while it takes them: off the
+/// Each brick the windows want to `write`, while it takes them: off the
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
-    let terrain = TerrainTile::residency();
-    let wanted = |frame| {
+    let terrain = TerrainTile::tile_cache();
+    let wanted = |slot| {
         terrain
-            .in_frame(frame)
-            .is_some_and(|t| terrain.get(t).is_some() && window::tile_wanted(t))
+            .in_slot(slot)
+            .is_some_and(|t| terrain.get(t).is_some() && window::is_tile_wanted(t))
     };
     kept().send(
-        pxl_render::gpu::api::device_generation(),
-        &mut |frame, pkt| {
-            let Some(t) = terrain.in_frame(frame) else {
+        api::device_generation(),
+        &mut |slot, pkt| {
+            let Some(t) = terrain.in_slot(slot) else {
                 return Offered::Taken;
             };
             let Some(held) = terrain.get(t) else {
@@ -106,7 +108,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         },
         &wanted,
     );
-    // The due squares' void tiles, not every tile held.
+    // The due bricks' void tiles, not every tile held.
     for p in window::voids() {
         if window::fill(p, Handed::Void, write) == Offered::Full {
             return;

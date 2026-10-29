@@ -20,9 +20,9 @@ use xpute_guest::mem::section::PAGE_BYTES;
 pub use alloc::Alloc;
 pub use xpute_guest::entry::{intr, BootInfo, Entry};
 
-pub struct Plan {
+pub struct Config {
     /// Reserved once, never grown.
-    pub memory_bytes: u32,
+    pub mem_bytes: u32,
     /// `BootInfo::data_end`: the library's statics are the process's, so the
     /// end of the front the program keeps at the memory's bottom, 0 for none.
     pub data_end: u32,
@@ -41,24 +41,24 @@ pub struct Guest {
 
 /// Reserves the memory and starts the guest's thread, marked as the guest's
 /// with its base set before this returns. Once a process.
-pub fn boot(plan: &Plan) -> Guest {
+pub fn boot(cfg: &Config) -> Guest {
     assert!(
-        plan.heap_at < plan.memory_bytes,
+        cfg.heap_at < cfg.mem_bytes,
         "the heap begins at {} of a {}-byte memory",
-        plan.heap_at,
-        plan.memory_bytes
+        cfg.heap_at,
+        cfg.mem_bytes
     );
     assert!(
-        plan.heap_at.is_multiple_of(PAGE_BYTES),
+        cfg.heap_at.is_multiple_of(PAGE_BYTES),
         "the heap begins at {}, not on a {PAGE_BYTES}-byte page",
-        plan.heap_at
+        cfg.heap_at
     );
     assert!(
         reserve::core().is_none(),
         "a guest is booted once a process"
     );
-    let core = reserve::map(plan.memory_bytes as usize, plan.heap_at as usize);
-    thread::start(plan.thread_name, plan.stack_bytes, move || {
+    let core = reserve::map(cfg.mem_bytes as usize, cfg.heap_at as usize);
+    thread::start(cfg.thread_name, cfg.stack_bytes, move || {
         xpute_guest::global::mark_thread();
         // SAFETY: the region was reserved for the process's life.
         unsafe { xpute_guest::mem::set(core.at, core.bytes) };
@@ -80,7 +80,7 @@ impl Guest {
 
     /// Read between turns, never as one reference over the whole: the
     /// host's own blocks lie in it too.
-    pub fn memory(self) -> (NonNull<u8>, usize) {
+    pub fn mem(self) -> (NonNull<u8>, usize) {
         let c = reserve::core().expect("a Guest is booted");
         (
             NonNull::new(core::ptr::with_exposed_provenance_mut(c.at))
@@ -93,11 +93,11 @@ impl Guest {
         alloc::stat()
     }
 
-    pub fn boot_info(self, plan: &Plan) -> BootInfo {
+    pub fn boot_info(self, cfg: &Config) -> BootInfo {
         BootInfo {
-            given: u32::try_from(self.memory().1).expect("the memory is at most 4 GiB"),
-            data_end: plan.data_end,
-            clock: plan.clock,
+            given: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
+            data_end: cfg.data_end,
+            clock: cfg.clock,
             heap_stat: alloc::stat,
         }
     }
@@ -109,34 +109,34 @@ pub fn now() -> f64 {
     START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-/// Boots the guest with `plan` on the first call and exports its entry and
+/// Boots the guest with `cfg` on the first call and exports its entry and
 /// memory under xpute's names: `xpute_intr(double quota_ms) -> double`, which
 /// runs `entry` (`Entry`) on the guest's thread, and
 /// `xpute_mem(uint32_t *bytes) -> uint8_t *`, `bytes` null or written with
 /// the memory's size. `guest()` is the program's for its own calls.
 #[macro_export]
 macro_rules! native_abi {
-    ($plan:expr, $entry:expr $(,)?) => {
+    ($cfg:expr, $entry:expr $(,)?) => {
         mod xpute_native {
             #[allow(unused_imports)]
             use super::*;
 
             const ENTRY: $crate::native::Entry = $entry;
 
-            fn plan() -> &'static $crate::native::Plan {
-                static PLAN: ::std::sync::OnceLock<$crate::native::Plan> =
+            fn cfg() -> &'static $crate::native::Config {
+                static CFG: ::std::sync::OnceLock<$crate::native::Config> =
                     ::std::sync::OnceLock::new();
-                PLAN.get_or_init(|| $plan)
+                CFG.get_or_init(|| $cfg)
             }
 
             pub fn guest() -> $crate::native::Guest {
                 static GUEST: ::std::sync::OnceLock<$crate::native::Guest> =
                     ::std::sync::OnceLock::new();
-                *GUEST.get_or_init(|| $crate::native::boot(plan()))
+                *GUEST.get_or_init(|| $crate::native::boot(cfg()))
             }
 
             fn boot_info() -> $crate::native::BootInfo {
-                guest().boot_info(plan())
+                guest().boot_info(cfg())
             }
 
             pub fn intr(quota_ms: f64) -> f64 {
@@ -144,7 +144,7 @@ macro_rules! native_abi {
             }
 
             pub fn mem(bytes: Option<&mut u32>) -> *mut u8 {
-                let (at, n) = guest().memory();
+                let (at, n) = guest().mem();
                 if let Some(bytes) = bytes {
                     *bytes = u32::try_from(n).expect("the memory is at most 4 GiB");
                 }
