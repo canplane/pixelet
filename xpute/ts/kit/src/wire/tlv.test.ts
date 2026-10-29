@@ -34,11 +34,11 @@ Deno.test("tlv computes what the typescript computes", async () => {
     "s",
     new Uint8Array([1]),
   ]);
-  const packet = w.finish();
+  const pkt = w.finish();
 
-  assertEquals(bytes_to_hex(packet), v.s("packet"));
+  assertEquals(bytes_to_hex(pkt), v.s("packet"));
 
-  const read = new TlvReader(packet).read_all().map(show);
+  const read = new TlvReader(pkt).read_all().map(show);
   const want: string[] = [];
   v.each("read", (k) => want.push(v.s(k)));
   assertEquals(read, want);

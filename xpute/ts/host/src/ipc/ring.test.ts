@@ -37,7 +37,7 @@ Deno.test("ring - frames come out in order across the wrap, and a full ring refu
         r.cmd(at),
         r.flags(at),
         r.result(at),
-        r.packet(at),
+        r.pkt(at),
       ], [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k), null]);
       r.advance();
     }
@@ -66,8 +66,8 @@ Deno.test("ring - one payload a slot, so the payloads run out with the slots and
 
   for (let n = 1; n <= 8; n++) {
     const at = r.peek();
-    assertEquals(r.packet(at)!.byteLength, 56);
-    const root = new TreeReader(r.packet(at)!).read_branch();
+    assertEquals(r.pkt(at)!.byteLength, 56);
+    const root = new TreeReader(r.pkt(at)!).read_branch();
     assertEquals([
       r.tag(at),
       root.at(0).get<number>(),
@@ -84,7 +84,7 @@ Deno.test("ring - one payload a slot, so the payloads run out with the slots and
       const at = r.entry_at(r.tail);
       r.push(11, 0);
       r.words[at + 3] = 4;
-      r.packet(at);
+      r.pkt(at);
     },
     MarshalError,
   );

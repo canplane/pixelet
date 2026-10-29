@@ -28,14 +28,14 @@ export class MinHeap<K extends primitive, T> {
   static heapify<K extends primitive, T>(
     a: Element<K, T>[],
     root: u32,
-    size: u32,
+    sz: u32,
   ): void {
     let i = root;
     const e = a[i];
 
-    for (let child = (i << 1) + 1; child < size; child = (i << 1) + 1) {
+    for (let child = (i << 1) + 1; child < sz; child = (i << 1) + 1) {
       const r = child + 1;
-      if (r < size && a[r].key < a[child].key) child = r;
+      if (r < sz && a[r].key < a[child].key) child = r;
 
       if (a[child].key < e.key) {
         a[i] = a[child];
@@ -115,14 +115,14 @@ export class MaxHeap<K extends primitive, T> {
   static heapify<K extends primitive, T>(
     a: Element<K, T>[],
     root: u32,
-    size: u32,
+    sz: u32,
   ): void {
     let i = root;
     const e = a[i];
 
-    for (let child = (i << 1) + 1; child < size; child = (i << 1) + 1) {
+    for (let child = (i << 1) + 1; child < sz; child = (i << 1) + 1) {
       const r = child + 1;
-      if (r < size && a[r].key > a[child].key) child = r;
+      if (r < sz && a[r].key > a[child].key) child = r;
 
       if (a[child].key > e.key) {
         a[i] = a[child];

@@ -12,7 +12,7 @@ import { Errno } from "@xpute/kit/status/errno.spec.ts";
 const WASM_PAGE_BYTES: u32 = 1 << 16;
 
 /** The first of `candidates` the device will reserve. */
-export function reserve_memory(
+export function reserve_mem(
   candidates: readonly u32[],
   region_bytes: u32,
 ): WebAssembly.Memory {

@@ -18,7 +18,7 @@ const hex = (s: string): U8Array =>
 const text = new TextEncoder();
 
 class Turn {
-  readonly memory = new ArrayBuffer(1 << 16);
+  readonly mem = new ArrayBuffer(1 << 16);
   writes = 0;
   private words: number[] = [];
 
@@ -34,7 +34,7 @@ class Turn {
   }
 
   publish(): void {
-    const w = new Uint32Array(this.memory, 0, HEAD + this.words.length);
+    const w = new Uint32Array(this.mem, 0, HEAD + this.words.length);
     w.fill(0);
     w[END] = this.words.length;
     w.set(this.words, HEAD);
@@ -101,7 +101,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
         const bytes = text.encode(a[1]);
         // Each write its own bytes: the host copies them only once the turn is run.
         const at_ = SCRATCH + 4096 + 64 * turn.writes++;
-        new Uint8Array(turn.memory, at_, bytes.length).set(bytes);
+        new Uint8Array(turn.mem, at_, bytes.length).set(bytes);
         turn.record(op.WRITE, [Number(a[0]), at_, bytes.length]);
         break;
       }
@@ -110,7 +110,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
         break;
       case "turn":
         turn.publish();
-        sys.run(turn.memory, 0);
+        sys.run(turn.mem, 0);
         await settle();
         break;
       case "deliver": {
@@ -137,7 +137,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
             break;
           case "read":
             assertEquals(
-              Array.from(new Uint8Array(turn.memory, SCRATCH, a[1].length / 2)),
+              Array.from(new Uint8Array(turn.mem, SCRATCH, a[1].length / 2)),
               Array.from(hex(a[1])),
               at,
             );

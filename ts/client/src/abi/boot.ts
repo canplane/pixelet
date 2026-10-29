@@ -69,7 +69,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     case Command.WORLD_SNAPSHOT: {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
-      set_snapshot(new Uint8Array(HOST.guest.memory, at, len));
+      set_snapshot(new Uint8Array(HOST.guest.mem, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
       follow_refused(
         kernel_snapshot().kept_refused,

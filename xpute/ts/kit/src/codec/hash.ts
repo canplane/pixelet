@@ -4,7 +4,7 @@ import type { u64 } from "../abi/word.ts";
 import type { Bytes } from "../abi/array.ts";
 import { bytes_to_hex, te } from "./encoding.ts";
 
-const FNV64_OFFSET = 0xcbf29ce484222325n;
+const FNV64_OFF = 0xcbf29ce484222325n;
 const FNV64_PRIME = 0x100000001b3n;
 
 /** FNV-1a 64 over UTF-8, the same word the Rust side and the spec generator compute. */
@@ -13,7 +13,7 @@ export function fnv1a64_str(s: string): u64 {
 }
 
 export function fnv1a64_bytes(bytes: Bytes): u64 {
-  let h = FNV64_OFFSET;
+  let h = FNV64_OFF;
   for (let i = 0; i < bytes.length; i++) {
     h ^= BigInt(bytes[i]);
     h = BigInt.asUintN(64, h * FNV64_PRIME);

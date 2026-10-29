@@ -39,7 +39,7 @@ export const env = {
     return is_browser_main() || is_browser_worker();
   },
 
-  current(): "DENO" | "NODE" | "BROWSER" | undefined {
+  cur(): "DENO" | "NODE" | "BROWSER" | undefined {
     if (this.is_deno()) return "DENO";
     if (this.is_node()) return "NODE";
     if (this.is_browser()) return "BROWSER";

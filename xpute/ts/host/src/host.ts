@@ -21,7 +21,7 @@ import { Strobe } from "@xpute/host/sched/strobe.ts";
  * grows, and its entry, `intr`, a turn that returns when it wants the next,
  * in ms. The floor names the entry, as a C runtime names `main`. */
 export interface Guest {
-  memory: ArrayBuffer;
+  mem: ArrayBuffer;
   intr(quota_ms: f64): f64;
 }
 
@@ -48,10 +48,10 @@ export interface Host {
 }
 
 export function mount(guest: Guest, plan: Plan): Host {
-  const directory = new Directory(guest.memory, plan.directory_at);
+  const directory = new Directory(guest.mem, plan.directory_at);
   const stream = directory.get(key.SYS);
   const doorbell = new Doorbell(
-    guest.memory,
+    guest.mem,
     directory.get(key.SQ),
     directory.get(key.CQ),
     (quota_ms) => {
@@ -59,7 +59,7 @@ export function mount(guest: Guest, plan: Plan): Host {
       try {
         wake = guest.intr(quota_ms);
       } finally {
-        sys.run(guest.memory, stream);
+        sys.run(guest.mem, stream);
       }
       return wake;
     },

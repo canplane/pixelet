@@ -14,14 +14,14 @@ export const END = 0;
 
 /** The words are valid only inside `run`. */
 export function each_record(
-  memory: ArrayBufferLike,
+  mem: ArrayBufferLike,
   at: u32,
   head: u32,
   run: (op: u32, w: U32Array, a: u32, n: u32) => void,
 ): void {
-  const end = new Uint32Array(memory, at, head)[END];
+  const end = new Uint32Array(mem, at, head)[END];
   if (end === 0) return;
-  const w = new Uint32Array(memory, at + 4 * head, end) as U32Array;
+  const w = new Uint32Array(mem, at + 4 * head, end) as U32Array;
   for (let k = 0; k < end;) {
     const op = w[k];
     const n = w[k + 1];

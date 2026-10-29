@@ -70,16 +70,16 @@ export class TlvWriter {
   private _stream: Stream;
   private _sealed: boolean = false;
 
-  constructor(initial_cap: u32 = 1024) {
-    this._buf = new Uint8Array(initial_cap);
+  constructor(init_cap: u32 = 1024) {
+    this._buf = new Uint8Array(init_cap);
     this._stream = scalar.stream(this._buf);
   }
 
-  private _ensure(size: u32) {
-    if (this._stream.off + size > this._buf.byteLength) {
+  private _ensure(sz: u32) {
+    if (this._stream.off + sz > this._buf.byteLength) {
       const new_cap: u32 = Math.max(
         this._buf.byteLength * 2,
-        this._stream.off + size,
+        this._stream.off + sz,
       );
       const new_buf: Bytes = new Uint8Array(new_cap);
       new_buf.set(this._buf);

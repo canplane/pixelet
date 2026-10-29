@@ -52,12 +52,12 @@ function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
   });
 }
 
-const words = (at: u32, n: u32) => new Float64Array(HOST.guest.memory, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(HOST.guest.memory, at, n);
+const words = (at: u32, n: u32) => new Float64Array(HOST.guest.mem, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(HOST.guest.mem, at, n);
 const site = (file: u32, bytes: u32, line: u32) =>
   file === 0
     ? null
-    : `${td.decode(new Uint8Array(HOST.guest.memory, file, bytes))}:${line}`;
+    : `${td.decode(new Uint8Array(HOST.guest.mem, file, bytes))}:${line}`;
 
 /** The lanes that are lists: a word a name, a census entry two (its draws and
  * triangles). The names are their owners', and shown by the shell. */
@@ -386,7 +386,7 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   const count = held - from;
   const w = words(at, count * TASK.WORDS);
   const subjects = new BigUint64Array(
-    HOST.guest.memory,
+    HOST.guest.mem,
     at,
     count * TASK.WORDS,
   );
