@@ -41,7 +41,7 @@ as in a core dump. The host reserves it at boot and it never grows, so a view
 into it stays valid for as long as the guest lives: a queue keeps its words at a
 fixed address, and a payload is read where it lies. A page reserves it as a
 `WebAssembly.Memory` whose initial size is its maximum
-(`@xpute/host/mem/reserve.ts` `reserve_memory`); a native program that links its
+(`@xpute/host/mem/reserve.ts` `reserve_mem`); a native program that links its
 guest in maps it from the system, and the guest's own thread then sets its base
 (`xpute-host/native.rs` `boot`, `xpute-guest/mem.rs` `set`).
 
