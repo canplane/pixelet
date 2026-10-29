@@ -21,10 +21,18 @@ pub const fn asset_id(kind: Kind, shape: u32) -> AssetId {
 }
 
 impl Kind {
-    /// Whether anything stands on an instance of the kind: a cube; a decor or
-    /// a marker is stood on nowhere.
+    /// Whether what is placed stands on an instance of the kind: a cube, or a
+    /// decor on its box, which may float over the model; a marker is stood
+    /// on nowhere. A walker stands on what fills a cell, which a decor does
+    /// not, and asks nothing of this.
     pub const fn stood_on(self) -> bool {
-        matches!(self, Kind::cube)
+        matches!(self, Kind::cube | Kind::decor)
+    }
+
+    /// Whether an instance of the kind stands on what is under it: a decor
+    /// or a marker; a cube goes against any face, whatever is under it.
+    pub const fn stands(self) -> bool {
+        matches!(self, Kind::decor | Kind::marker)
     }
 }
 

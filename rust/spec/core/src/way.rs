@@ -475,7 +475,10 @@ pub trait Columns {
     /// the area (pxl-spec-core `area::laid`), where no way writes, as none
     /// does past it.
     fn walled(&self, c: [i32; 2]) -> bool;
-    fn face(&self, c: [i32; 2]) -> i32;
+    /// The column's ground top in cells of the grid's zoom
+    /// (`ground::cells`), its face (`ground::face_height`) and its face cell
+    /// (`face_of`) worked out from it.
+    fn top(&self, c: [i32; 2]) -> i32;
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
     fn joins(&self, c: [i32; 2], k: u32) -> bool;
@@ -664,17 +667,18 @@ pub const SPANS: usize = 10;
 /// A column's spans, in leaf cells, in the order its visits come: each a
 /// deck's slab or an embankment (its way's look), a pier (`PIER`), or a
 /// bore's or a cutting's air (`AIR_OF` over its way's look); `n` of them.
-/// And its face cell (`ground::face_cell`), under which a bore's air
-/// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
-/// or it is past the area, where nothing does. What its cells are read
-/// off, its visits found once: a square's fill keeps them (pxl-spec-core
-/// fill.rs `spans`, read through `Kept`).
+/// And its ground's top in cells (`Columns::top`), its face cell's under
+/// which a bore's air beside it lines it (`face_of`, `lined`) and what the
+/// columns beside it touch (pxl-spec-core fill.rs `level`), `i32::MIN`
+/// where the area's edge walls it or it is past the area, where nothing
+/// does. What its cells are read off, its visits found once: a square's
+/// fill keeps them (fill.rs `spans`, read through `Kept`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spans {
     pub run: [[i32; 2]; SPANS],
     pub val: [u32; SPANS],
     pub n: u32,
-    pub face: i32,
+    pub top: i32,
 }
 
 impl Spans {
@@ -682,7 +686,7 @@ impl Spans {
         run: [[0, 0]; SPANS],
         val: [0; SPANS],
         n: 0,
-        face: i32::MIN,
+        top: i32::MIN,
     };
 
     /// Span `v` over `run`, where there is room; false where there is none.
@@ -699,7 +703,7 @@ impl Spans {
 
 /// Column `c`'s spans: what each visit of a line writes there that fills a
 /// cell of the grid's zoom (`fills_any`), as `at` reads no other, and its
-/// face cell — none, nor a face, in a column of the bedrock, past the area
+/// ground's top — none, nor a top, in a column of the bedrock, past the area
 /// or walled by its edge (`Columns::walled`), as bedrock wins over a way as
 /// it does over the ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
@@ -709,8 +713,8 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     }
     // The column's face and the tile's scale, read once for all its visits.
     let cell = cols.cell();
-    let ground = (cols.face(c), cols.per_m());
-    spans.face = crate::ground::face_cell(cell, ground.0);
+    spans.top = cols.top(c);
+    let ground = (crate::ground::face_height(cell, spans.top), cols.per_m());
     let mut k = 0;
     while k < cols.cnt(c) {
         let (w, next) = writes(cols, c, k, ground);
@@ -725,10 +729,21 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     (spans, fits)
 }
 
+/// The face cell of a column whose ground's top is `top` cells of zoom
+/// `cell` (`ground::face_cell`), under which a cave may take it and a bore's
+/// air beside it lines it; `i32::MIN` for a top of none.
+pub fn face_of(cell: Zoom, top: i32) -> i32 {
+    if top == i32::MIN {
+        i32::MIN
+    } else {
+        crate::ground::face_cell(cell, crate::ground::face_height(cell, top))
+    }
+}
+
 /// A square's columns' spans and the ring's about it as its fill keeps
-/// them (pxl-spec-core fill.rs `spans`), read in place: column `c`'s face
-/// cell and how many spans it has (`Spans`), and its `j`-th span and its
-/// value.
+/// them (pxl-spec-core fill.rs `spans`), read in place: column `c`'s
+/// ground's top in cells and how many spans it has (`Spans`), and its
+/// `j`-th span and its value.
 pub trait Kept {
     fn head(&self, c: [i32; 2]) -> (i32, u32);
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
@@ -903,7 +918,8 @@ fn beside(k: u32) -> usize {
 /// "Separation"); else `NOTHING`. Read off the spans in place, the
 /// column's own first: a cell it writes reads none beside it.
 pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
-    let (face, n) = k.head(c);
+    let (top, n) = k.head(c);
+    let face = face_of(cell, top);
     let v = at(k, c, n, cell, z);
     if v != NOTHING {
         return if v & AIR_OF != 0 { AIR } else { v };
@@ -931,7 +947,8 @@ pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
 /// in, exactly, off the spans, never a cell at a time.
 pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL - cell);
-    let (face, n) = k.head(c);
+    let (own, n) = k.head(c);
+    let face = face_of(cell, own);
     let [mut lo, mut hi] = crate::ground::EMPTY;
     let mut j = 0;
     while j < n {
@@ -1042,10 +1059,7 @@ mod tests {
             let cell = LEAF_CELL - next(4);
             let s = 1i32 << (LEAF_CELL - cell);
             let top = next(120) as i32 - 60;
-            let face = crate::ground::face_cell(
-                cell,
-                crate::ground::face_height(cell, crate::ground::cells(cell, top as f32)),
-            );
+            let own = crate::ground::cells(cell, top as f32);
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {
                 let n = next(5);
@@ -1059,7 +1073,7 @@ mod tests {
                     col.1[j] = ([lo, lo + 1 + next(30) as i32], v);
                 }
                 col.2 = n;
-                col.0 = if k == 0 && next(8) == 0 { i32::MIN } else { face };
+                col.0 = if k == 0 && next(8) == 0 { i32::MIN } else { own };
             }
             let k = Five(five);
             let mut hull = ground::EMPTY;

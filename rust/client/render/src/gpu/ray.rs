@@ -22,7 +22,14 @@ use crate::gpu::surface::WORLD_COLOR;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
-pub use tally::SUN_SUMS;
+pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
+
+/// Whether a frame of `kind` casts the pixels' rays, whole or off the
+/// samples that stand: the rays, their depth and where they met the world
+/// are laid again.
+fn casts_pixels(kind: FrameKind) -> bool {
+    kind == FrameKind::cast || kind == FrameKind::pixels
+}
 
 pub struct RaysPass {
     built: Built,
@@ -41,7 +48,7 @@ pub struct RaysPass {
     cast: Option<CastBuffers>,
     /// What this frame does with the cast, as `prepare` decided it: nothing
     /// cast (`plain`), the rays standing (`standing`), the pixels cast
-    /// again over the samples that stand (`px`), or a cast run
+    /// again over the samples that stand (`pixels`), or a cast run
     /// (`cast`).
     pub kind: FrameKind,
 }
@@ -69,9 +76,9 @@ impl RaysPass {
         }
     }
 
-    /// Whether this frame casts the pixels' rays (`casts_px`).
-    pub fn casts_px(&self) -> bool {
-        casts_px(self.kind)
+    /// Whether this frame casts the pixels' rays (`casts_pixels`).
+    pub fn casts_pixels(&self) -> bool {
+        casts_pixels(self.kind)
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is

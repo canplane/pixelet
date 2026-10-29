@@ -11,6 +11,7 @@ export const GPU_SPAN_NAMES = [
   "prepass",
   "ao",
   "world",
+  "resolve",
   "marker",
   "debug",
   "case",
@@ -41,6 +42,5 @@ export const FRAME_KINDS = [
   "standing",
   "cast",
   "stood",
-  "px",
-  "region",
+  "pixels",
 ] as const;

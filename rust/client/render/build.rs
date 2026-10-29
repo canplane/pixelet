@@ -26,6 +26,8 @@ mod param;
 mod part;
 #[path = "src/frame/shader/word.rs"]
 mod word;
+#[path = "src/frame/shader/debug_look.spec.rs"]
+mod debug_look;
 
 fn main() {
     let dir = Path::new("src/frame/shader");
@@ -66,16 +68,21 @@ fn main() {
         )
     };
     // Its word of what lies about its face, and that word's fields, a bit an
-    // edge or a corner (pxl-spec-core face.rs).
-    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
-    let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
+    // edge or a corner (pxl-spec-core face.rs), and the faces its cell
+    // touches, a bit a face (answer.rs `touch`).
+    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT, TOUCH_SHIFT};
+    let faces = format!(
+        "const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\nfn faces_touch(w: u32) -> u32 {{ return (w >> {TOUCH_SHIFT}u) & {}u; }}\n",
+        (1u32 << pxl_spec_core::answer::TOUCH_BITS) - 1
+    );
     // The side of the box a cell kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
     let sides: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
     let kept = format!(
-        "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
+        "const KEPT_EIGHTHS: u32 = {}u;\nfn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n",
+        pxl_spec_core::answer::EIGHTHS
     );
     // A coarse cell's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
@@ -118,16 +125,17 @@ fn main() {
     }
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
-    use pxl_spec_core::eye::{FORWARD, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
+    use pxl_spec_core::eye::{FORWARD, JITTER, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
     let last = (ORIGIN + 2)
         .max(STEPS)
         .max(REACH)
         .max(FORWARD + 2)
         .max(RIGHT + 2)
         .max(UP + 2)
-        .max(TAN + 1);
+        .max(TAN + 1)
+        .max(JITTER + 1);
     let eye = format!(
-        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
+        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_JITTER: u32 = {JITTER}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
@@ -156,6 +164,7 @@ fn main() {
         1u32 << HASH_KEPT
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
+    std::fs::write(out.join("debug_look.wgsl"), debug_looks()).expect("the debug views' looks");
     std::fs::write(
         Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"),
         compute(dir),
@@ -172,21 +181,13 @@ fn main() {
 /// its stops.
 fn debug_looks() -> String {
     use debug_look::{grid, share, steps};
-    // A world's cell spans (1, `SPANS`] of the view's cells where the rays
-    // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
-    // squared is within (1, `SPANS`²]: the tints' bounds are those.
-    let spans = pxl_spec_core::grid::SPANS;
-    assert!(
-        share::finer::most == 1.0 && share::within::most == spans * spans,
-        "debug_look.json's share bounds are the split's"
-    );
     let srgb = |c: u32| [c >> 16, c >> 8, c].map(|v| (v & 255) as f32 / 255.0);
     let light = |c: u32| {
         srgb(c).map(|v| {
             if v <= 0.04045 {
                 v / 12.92
             } else {
-                libm::powf((v + 0.055) / 1.055, 2.4)
+                ((v + 0.055) / 1.055).powf(2.4)
             }
         })
     };
@@ -196,8 +197,8 @@ fn debug_looks() -> String {
     let last = steps::ramp.len() - 1;
     format!(
         "const GRID_COLOR = vec4f({}, {:?});\nconst SHARE_FINER = {};\nconst SHARE_FINER_MOST: f32 = {:?};\nconst SHARE_WITHIN = {};\nconst SHARE_WITHIN_MOST: f32 = {:?};\nconst SHARE_COARSER = {};\nconst STEPS_MOST: f32 = {:?};\nconst STEPS_NONE = {};\nconst STEPS_RAMP = array<vec3f, {}>({});\nfn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
-        parts(light(debug_look::grid::rgb)),
-        debug_look::grid::alpha,
+        parts(light(grid::rgb)),
+        grid::alpha,
         vec3(light(share::finer::rgb)),
         share::finer::most,
         vec3(light(share::within::rgb)),

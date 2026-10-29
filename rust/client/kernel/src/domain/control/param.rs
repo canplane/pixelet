@@ -16,18 +16,8 @@ pub const DEFAULT_AZIMUTH: f64 = 0.0;
 /// From straight down (0) toward horizontal (PI / 2): 60°, the eye 30° above
 /// the ground plane.
 pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
-/// How many of its end cell's sides a dolly's limit stands from the focus,
-/// both ends alike: 4/3 of the way into the band the grid draws that cell
-/// over, a side `s` from 48·s to 96·s (pxl-spec space/camera/grid.rs
-/// `split_distance`).
-pub const DOLLY_END_CELLS: f64 = 64.0;
-const _: () = assert!(
-    DOLLY_END_CELLS >= pxl_spec::space::camera::grid::CELLS_A_RADIAN / 2.0
-        && DOLLY_END_CELLS < pxl_spec::space::camera::grid::CELLS_A_RADIAN,
-    "a dolly's limit lies in the band its end cell is drawn over"
-);
-/// The orbit's nearest, in units from the focus, about 3.8 m at Seoul's
-/// latitude: `DOLLY_END_CELLS` of the 2^-5 cell the grid asks there.
+/// Felt-right against the scale bar: about 0.19 m on a 1080px viewport at
+/// Seoul's latitude.
 pub const MIN_DIST: f64 = 2.0;
 /// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
 /// holds, the pyramid's top's, so looking straight down the grid never asks

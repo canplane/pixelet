@@ -2,7 +2,7 @@
 
 //! gpu-portable: the camera grid's beam (doc/minutes/20261022-a-cell-casts-a-beam.md).
 //! A beam ray is cast through each corner of the grid's cells and walks the
-//! pyramid until it meets a cell that fills or lacks, or a split narrower
+//! pyramid until it meets a block that fills or lacks, or a split narrower
 //! than it can share with the rays about it (`cast::narrow`); each cell starts
 //! from the least of the beam rays about it, shortened by a margin
 //! (`handed`), and what resumes from the line that beam ray left is the
@@ -13,12 +13,14 @@
 //! grid's own, so neither the beam rays nor the samples follow the
 //! screen's pixels.
 
-use crate::cast;
-use crate::grid::CELL;
-use crate::param::beam;
-use crate::param::beam::NEAR;
-use crate::param::beam::SAMPLE;
-use crate::world;
+use crate::grid::SPLIT;
+
+/// The camera grid's cell as an angle at τ `tau`: the beam's spacing, in the
+/// screen's tangents at its axis.
+pub fn spacing(tau: f32) -> f32 {
+    tau / SPLIT
+}
+
 
 /// The camera grid as a frame lays it over the screen, worked out once,
 /// from the screen's tangents (`of`), where the kernel writes the
@@ -319,13 +321,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn largest_beam_fits_binding() {
+    fn the_largest_beam_fits_a_storage_binding() {
         // 4112 × 2338 drawn, a ratio of 2, at the view's FOV (the tangent of
-        // its half 1/2, pxl-spec space/camera/grid.rs `HALF_TAN`), within the
-        // 33,554,432 words a storage binding holds on every device
-        // (pxl-render floor.rs).
+        // its half 1/2, pxl-spec space/camera/grid.rs `FOV_DEG`) and τ at its
+        // least, within the 33,554,432 words a storage binding holds on
+        // every device (pxl-render floor.rs).
         let up = 0.5;
-        let words = Grid::of([up * 4112.0 / 2338.0, up]).size();
+        let words = Grid::of([up * 4112.0 / 2338.0, up], 1.0).size();
         assert!(words <= 33_554_432, "{words} words");
     }
 }

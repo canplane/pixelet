@@ -1247,7 +1247,7 @@
           "name": "INPUT_GOTO",
           "val": 4360,
           "$doc": [
-            "A search result: the pivot moved there, and the view asked with it at once, as the",
+            "A search result: the focus moved there, and the view asked with it at once, as the",
             "controls ask it where the camera stands; a view field absent keeps what the view has."
           ],
           "pkt": [
@@ -1264,7 +1264,7 @@
               "type": "f64",
               "optional": true,
               "$doc": [
-                "The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in."
+                "The zoom, the eye's distance from the focus, clamped to the zoom's range; absent, a view far out comes in."
               ]
             },
             {

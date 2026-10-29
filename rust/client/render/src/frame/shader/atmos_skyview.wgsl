@@ -52,7 +52,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let disc = abs(levels(disc_light(r, mu + h, e1)) - levels(disc_light(r, mu, e0))) * sun;
   let up = frame_up();
   let land_r = land_radius();
-  let land = abs(levels(surface_light_in(up, up, 1.0, 1.0, light_unexposed_in(land_r, up, raised), raised) * e1) - levels(surface_light_in(up, up, 1.0, 1.0, light_unexposed_in(land_r, up, now), now) * e0));
+  let land = abs(levels(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, raised), raised) * e1) - levels(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, now), now) * e0));
   let each = max(max(sky, disc), land);
   let most = max(max(each.r, each.g), each.b);
   if (h > 0.0) {

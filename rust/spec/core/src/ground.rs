@@ -542,14 +542,17 @@ pub fn node<H: Held>(
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
 /// service area's wall), its top in cells of its zoom and the share of
-/// its top cell it fills (`top`), and the four looks its fold took
-/// (`looks`, `dx + 2·dy`).
+/// its top cell it fills (`top`), the four looks its fold took
+/// (`looks`, `dx + 2·dy`), and which columns beside it touch its top cell
+/// (pxl-spec-core `window::column_touches`), none where it is not read at
+/// the zoom of the square holding it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub look: u32,
     pub top: i32,
     pub part: u32,
     pub fold: [u32; 4],
+    pub touch: u32,
 }
 
 impl Cell {
@@ -559,6 +562,7 @@ impl Cell {
         top: 0,
         part: FULL,
         fold: [VOID; 4],
+        touch: 0,
     };
 
     /// The share of cell `z` its ground fills, in `answer::FULL`'s

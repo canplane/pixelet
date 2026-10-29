@@ -6,7 +6,7 @@
 //! where what it reads changed (`decor_mark_cs`, `Growth`), its record
 //! standing otherwise; then each frame each
 //! record taken where the rays ask the leaf cell's zoom or finer and sized
-//! for the screen, counted a draw region (`decor_cnt_cs`), the regions laid
+//! for the screen, counted a draw region (`decor_count_cs`), the regions laid
 //! out with their indirect args (`decor_args_cs`), and each record drawn
 //! into the decor's instances in the layout the decor and impostor shaders read
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
@@ -276,8 +276,8 @@ impl Grown {
         w.read(growth.window);
         let moved = !w.end();
         self.marked = self.holding;
-        // A brick filled at a coarser window than the leaves' grows no decor.
-        let fresh = growth
+        // A square filled at a coarser window than the leaves' grows no decor.
+        let fresh = grows
             .fresh
             .iter()
             .any(|f| f[window::FRESH_CELL as usize] == pxl_spec_core::LEAF_CELL);

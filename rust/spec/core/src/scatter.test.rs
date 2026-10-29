@@ -55,11 +55,11 @@ fn patch_contest() {
 /// Decor is drawn where the rays ask the leaf cell's zoom or finer at its
 /// distance, and nowhere they ask coarser.
 #[test]
-fn decor_at_leaves_or_finer() {
+fn decor_is_drawn_at_the_leaves_or_finer_and_never_coarser() {
     let detail = Detail {
         range: [0, crate::FINEST_ZOOM],
         eye: [0.0; 3],
-        spacing: Spacing::NONE,
+        spacing: crate::cast::Spacing::NONE,
     };
     let mut d = 0.25f32;
     let mut seen = [false; 2];

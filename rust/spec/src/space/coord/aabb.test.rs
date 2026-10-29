@@ -10,7 +10,7 @@ fn tall() -> Aabb {
 }
 
 #[test]
-fn enters_top() {
+fn a_ray_from_above_enters_across_the_top() {
     let b = tall();
     assert_eq!(
         b.enters([1.5, 0.5, 10.0], [-0.1, 0.05, -1.0]),
@@ -20,7 +20,7 @@ fn enters_top() {
 }
 
 #[test]
-fn enters_side() {
+fn a_ray_from_the_side_enters_across_that_side() {
     let b = tall();
     assert_eq!(
         b.enters([-5.0, 1.0, 1.5], [1.0, 0.1, 0.05]).map(|e| e.1),
@@ -33,7 +33,7 @@ fn enters_side() {
 }
 
 #[test]
-fn grazing_enters_last_plane() {
+fn a_grazing_ray_enters_across_the_plane_it_reaches_last() {
     // Over the top's edge, down onto it: the side's plane is reached first.
     let b = tall();
     assert_eq!(
@@ -48,7 +48,7 @@ fn grazing_enters_last_plane() {
 }
 
 #[test]
-fn miss_or_inside_enters_none() {
+fn a_ray_that_passes_by_or_starts_inside_enters_nothing() {
     let b = tall();
     // Down past its side, as over what a model holds out past the box.
     assert_eq!(b.enters([2.1, 1.0, 10.0], [0.0, 0.0, -1.0]), None);

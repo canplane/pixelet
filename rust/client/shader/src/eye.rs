@@ -44,9 +44,8 @@ pub struct Eye {
     /// The sun's cast, a frame's constants (pxl-spec-core `sun::Sun`), all
     /// zero where no shadow is cast.
     pub sun: [Vec4; 5],
-    /// Each pixel's ray's offset from its middle, in drawn pixels, and the
-    /// first pixel of the region the frame casts (pxl-spec-core
-    /// `eye::JITTER`).
+    /// Each pixel's ray's offset from its middle, in drawn pixels, and two
+    /// pads (pxl-spec-core `eye::JITTER`).
     pub jitter: Vec4,
 }
 
@@ -74,6 +73,7 @@ const _: () = {
             && offset_of!(Eye, hide) == at(eye::HIDE)
             && offset_of!(Eye, grid) == at(eye::GRID)
             && offset_of!(Eye, sun) == at(eye::SUN)
+            && offset_of!(Eye, jitter) == at(eye::JITTER)
     );
 };
 

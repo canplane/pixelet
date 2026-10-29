@@ -38,7 +38,7 @@ fn vs(v: VertexIn) -> VertexOut {
   let side = cross(up, facing);
   let local = side * (fit.x + corner.x * fit.z) * scale + up * (fit.y + corner.y * fit.z) * scale;
   let world = base + local;
-  o.clip = frame_view_proj() * vec4f(world, 1.0);
+  o.clip = jittered(frame_view_proj() * vec4f(world, 1.0));
   o.uv = vec2f(0.5 + 0.5 * corner.x, 0.5 - 0.5 * corner.y);
   o.normal = facing;
   o.world_pos = world;

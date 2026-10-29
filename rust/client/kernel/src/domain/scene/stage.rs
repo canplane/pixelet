@@ -17,7 +17,7 @@ use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{DeviceSample, GpuSample, SunSample};
+use crate::profiler::frame::{DeviceSample, GpuSample, RaySample};
 use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
@@ -32,7 +32,7 @@ use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_sun};
+use crate::profiler::report::{set_host_frame, set_rays};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -115,7 +115,7 @@ pub fn stage_write() {
     };
     // The screen's occlusion takes the corners' too, which it reads softer.
     s[STAGE_AT::CORNER_AO] = if matches!(settings.ao, AoMode::corner | AoMode::screen) {
-        param::AO_STRENGTH
+        crate::domain::scene::param::AO_STRENGTH
     } else {
         0.0
     };
@@ -223,7 +223,7 @@ pub fn stage_render(pace: Pace) {
             shards: crate::domain::scene::cast::shards(),
             overwrites: crate::domain::scene::cast::overwrites(),
             decor: crate::domain::scene::decor::drawn::frame(),
-            sun_counts: settings_store().sun_counts,
+            ray_counts: settings_store().ray_counts,
         }),
         text: text_raster,
         sheet: sheet(),
@@ -270,7 +270,7 @@ pub fn stage_render(pace: Pace) {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    set_sun(SunSample::of(stat.sun));
+    set_rays(RaySample::of(stat.rays));
     set_host_frame(
         out.kind,
         GpuSample {

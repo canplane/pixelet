@@ -639,9 +639,9 @@ pub enum Command {
     /// asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
     /// reads it without the location.
     INPUT_LOCATE = 0x110f,
-    /// A search result: the pivot moved there, and the view asked with it at once, as the
+    /// A search result: the focus moved there, and the view asked with it at once, as the
     /// controls ask it where the camera stands; a view field absent keeps what the view has.
-    INPUT_GOTO = 0x1108,
+    INPUT_GO_TO = 0x1108,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
@@ -1456,7 +1456,7 @@ impl InputTracking {
 pub struct InputGoto {
     pub lon: f64,
     pub lat: f64,
-    /// The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
+    /// The zoom, the eye's distance from the focus, clamped to the zoom's range; absent, a view far out comes in.
     pub dist: Option<f64>,
     /// The heading about Z in radians, wrapped.
     pub azimuth: Option<f64>,
@@ -1470,6 +1470,18 @@ impl InputGoto {
         Ok(InputGoto {
             lon: finite(f.at(0)?.get_number()?)?,
             lat: finite(f.at(1)?.get_number()?)?,
+            dist: match f.at(2)?.opt() {
+                Some(c) => Some(finite(c.get_number()?)?),
+                None => None,
+            },
+            azimuth: match f.at(3)?.opt() {
+                Some(c) => Some(finite(c.get_number()?)?),
+                None => None,
+            },
+            polar: match f.at(4)?.opt() {
+                Some(c) => Some(finite(c.get_number()?)?),
+                None => None,
+            },
         })
     }
 }

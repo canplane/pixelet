@@ -5,9 +5,7 @@
 //! `eye::JITTER`), a sequence that covers the pixel in `JITTERS` frames, and
 //! each is blended into what the frames before left (screen_resolve.wgsl),
 //! two of the world surface's `history` in turn, the one written this frame
-//! what the finish encodes (gpu/finish.rs); a frame that draws a region
-//! alone writes it back into the last, which the finish then encodes.
-//! Where only the jitter moved,
+//! what the finish encodes (gpu/finish.rs). Where only the jitter moved,
 //! nothing the frames before left is stale, and each frame takes its even
 //! share of the sequence; once it has run through, the jitter holds, and
 //! the frame stands. Else what the frames before left is moved to where
@@ -21,11 +19,11 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RESOLVE;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, place, release, sampler_entry, view_entry, Gpu,
-    Load, RenderContext,
+    buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load,
+    Stamp,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::{Region, Surface, WORLD_COLOR};
+use crate::gpu::surface::{Surface, WORLD_COLOR};
 
 /// The frames the jitter's sequence covers a pixel in.
 const JITTERS: u32 = 8;
@@ -75,7 +73,7 @@ impl Resolve {
                 None,
                 1,
             ),
-            uniform: g.buf(
+            uniform: g.buffer(
                 (4 * UNIFORM_FLOATS) as u32,
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
@@ -112,23 +110,18 @@ impl Resolve {
 
     /// The frame's world color, `s`'s, blended into what the frames before
     /// left, into the history its turn writes: `quiet` where nothing but
-    /// the jitter moved since the last drawn frame. Where the frame draws a
-    /// `region` again alone, only it, written back into the last history,
-    /// which stays the one read. A pass of its own, by the frame words in
-    /// `frame`, its time counted in `stamp`'s span; the history the finish
-    /// encodes.
-    #[allow(clippy::too_many_arguments)]
+    /// the jitter moved since the last drawn frame. A pass of its own, by
+    /// the frame words in `frame`, its time counted in `stamp`'s span; the
+    /// history written, which the finish encodes.
     pub fn draw(
         &mut self,
-        ctx: &mut RenderContext,
+        g: &Gpu,
+        encoder: u32,
         frame: u32,
         s: &Surface,
         quiet: bool,
-        region: Option<Region>,
         stamp: &mut Stamp,
     ) -> u32 {
-        let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
             (self.histories, self.gathered, self.turn) = (s.history_view, 0, 0);
         }
@@ -148,55 +141,39 @@ impl Resolve {
         }
         u[16] = blend;
         u[17] = if quiet { 0.0 } else { 1.0 };
-        g.write_buf(self.uniform, 0, bytes(&u));
+        g.write_buffer(self.uniform, 0, bytes(&u));
         let bound = [frame, s.color_view, s.depth_view, s.history_view[was]];
         if bound != self.bound[k] {
             release(self.groups[k]);
             self.groups[k] = g.bind_group(
                 self.built.layouts[0],
                 &[
-                    buf_entry(0, frame),
+                    buffer_entry(0, frame),
                     view_entry(1, s.color_view),
                     view_entry(2, s.depth_view),
                     view_entry(3, s.history_view[was]),
                     sampler_entry(4, self.sampler),
-                    buf_entry(5, self.uniform),
+                    buffer_entry(5, self.uniform),
                 ],
             );
             self.bound[k] = bound;
         }
-        let load = if region.is_some() {
-            Load::Load
-        } else {
-            Load::Clear
-        };
         let pass = g.pass(
             encoder,
-            &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
+            &pass_desc(
+                s.history_view[k],
+                Load::Clear,
+                0,
+                Load::Clear,
+                0.0,
+                stamp.pass(),
+            ),
         );
-        if let Some(r) = region {
-            g.set_scissor(pass, r.rect());
-        }
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.groups[k], &[]);
         g.draw(pass, 3, 1, 0, 0);
         g.end(pass);
-        let Some(r) = region else {
-            return s.history_view[k];
-        };
-        g.copy_texture(
-            encoder,
-            s.history[k],
-            r.at[0],
-            r.at[1],
-            s.history[was],
-            r.at[0],
-            r.at[1],
-            0,
-            r.size[0],
-            r.size[1],
-        );
-        s.history_view[was]
+        s.history_view[k]
     }
 
     /// A pixel's middle and depth in this frame's view to its place in the
@@ -217,14 +194,11 @@ impl Resolve {
         m
     }
 
-    /// The frame was drawn: its history is the next's to read, unless it
-    /// drew a region alone, written back into the last; its view the last,
-    /// and the jitter moves on unless it holds; `quiet` and `partial` as
-    /// `draw` was handed them.
-    pub fn on_drawn(&mut self, quiet: bool, partial: bool) {
-        if !partial {
-            self.turn = 1 - self.turn;
-        }
+    /// The frame was drawn: its history is the next's to read, its view
+    /// the last, and the jitter moves on unless it holds; `quiet` as
+    /// `draw` was handed.
+    pub fn on_drawn(&mut self, quiet: bool) {
+        self.turn = 1 - self.turn;
         self.gathered = self.gathered.saturating_add(1);
         self.last = self.view;
         if self.gathering() {
@@ -234,7 +208,8 @@ impl Resolve {
     }
 
     /// Whether the jitter has places of its sequence left to cover since
-    /// anything else last moved.
+    /// anything else last moved: frames the renderer asks for, as nothing
+    /// else does while the view is still.
     pub fn gathering(&self) -> bool {
         self.quiet < JITTERS - 1
     }

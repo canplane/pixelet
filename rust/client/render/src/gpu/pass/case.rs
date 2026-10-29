@@ -8,7 +8,7 @@ use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, SCREEN, SCREEN_AO, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, JITTER, SCREEN, SCREEN_AO, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
@@ -133,6 +133,9 @@ impl Case {
         u[VIGNETTE] = 0.0;
         u[SCREEN_AO] = 0.0;
         u[SHADOW_STRENGTH] = 0.0;
+        // Drawn at one sample a pixel, its frames gathered by none.
+        u[JITTER] = 0.0;
+        u[JITTER + 1] = 0.0;
         let r = &mut self.read;
         r.begin();
         r.read(&frame);
@@ -165,14 +168,15 @@ impl Case {
         );
         pass.end();
         // Encoded onto its canvas at its own frame's words, no vignette.
-        let view_id = g.cur(s.handle);
+        let view_id = g.current(s.handle);
         self.finish.draw(
-            ctx,
-            GpuSpanName::case,
-            self.frame_buf,
+            g,
+            encoder,
+            self.frame_buffer,
             s,
             s.color_view,
             view_id,
+            stamp,
         );
         release(view_id);
     }

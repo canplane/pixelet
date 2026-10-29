@@ -65,7 +65,7 @@ fn vs(v: VertexIn) -> VertexOut {
   let world = skinned_world(v, m);
   let n = (m * vec4f(v.normal, 0.0)).xyz;
   var o: VertexOut;
-  o.clip = frame_view_proj() * vec4f(world, 1.0);
+  o.clip = jittered(frame_view_proj() * vec4f(world, 1.0));
   o.uv = v.uv;
   o.normal = place_up(n, draw_rot());
   o.world_pos = world;
@@ -80,7 +80,7 @@ fn vs(v: VertexIn) -> VertexOut {
 
 @vertex
 fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
-  return frame_view_proj() * vec4f(skinned_world(v, skin_of(v)), 1.0);
+  return jittered(frame_view_proj() * vec4f(skinned_world(v, skin_of(v)), 1.0));
 }
 
 @fragment

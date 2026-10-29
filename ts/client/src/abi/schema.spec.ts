@@ -6,7 +6,7 @@
 // where it is shown, its `section`: one of the settings sheet's, or
 // `profiler`, the profiler panel's own. The store reads the defaults from
 // here and the sheet renders rows from here, so adding a setting to the
-// sheet is one entry in SETTING plus its two strings in the locale catalog
+// sheet is one entry in SETTINGS plus its two strings in the locale catalog
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
@@ -140,8 +140,8 @@ export const SETTING = {
     cost: "low",
   },
   /** corner, the occlusion a voxel world reads off its own cubes' faces;
-   * screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
-   * says each. */
+   * screen, N8AO's screen-space pass with the corners' too, the costliest
+   * of the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
@@ -393,7 +393,7 @@ export const SETTING_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs). */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -412,12 +412,20 @@ export const SETTING_SHIPPED = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's block or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl). */
+  /** Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",
     default: false,
     section: "debug",
+  },
+  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
+  ray_counts: {
+    key: 20 as number,
+    kind: "toggle",
+    default: false,
+    section: "profiler",
+    dev: true,
   },
   /** The hour the sky is drawn at; SKY_TIMES says each. */
   sky_time: {
@@ -433,15 +441,8 @@ export const SETTING_SHIPPED = {
       dusk: 5 as number,
     },
     section: "debug",
-    kept: false,
-  },
-  /** How the sun's shadow map is cast — the slots that took the raster's pick and the boxes it drew — counted on the GPU and summed since boot into the profiler's sun lanes (rust/client/render/src/gpu/ray/tally.rs, rust/client/shader/src/sun.rs). The counting's atomics run in the sun's spans, so time them with it off. */
-  sun_counts: {
-    key: 20 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
     dev: true,
+    kept: false,
   },
 } as const;
 
@@ -553,8 +554,8 @@ export const SETTINGS_SHIPPED = {
     cost: "low",
   },
   /** corner, the occlusion a voxel world reads off its own cubes' faces;
-   * screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
-   * says each. */
+   * screen, N8AO's screen-space pass with the corners' too, the costliest
+   * of the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",

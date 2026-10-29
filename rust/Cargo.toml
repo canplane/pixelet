@@ -115,12 +115,8 @@ publish = false
 # What a check, a test and a debug build are made with. A line of each
 # function is enough for a panic's backtrace; a dependency's full debug
 # information is what most of the link and the target's size are spent on,
-# and nothing here steps through one. The tests walk the world's catalogs,
-# patches and casts, which code left unoptimized runs many times slower;
-# opt-level 1 keeps the overflow checks and debug assertions they hold the
-# code to, and a check, which makes no code, is not slowed by it.
+# and nothing here steps through one.
 [profile.dev]
-opt-level = 1
 debug = "line-tables-only"
 
 [profile.dev.package."*"]
@@ -159,7 +155,8 @@ panic = "abort"
 # browser. The bake wraps each page so that one bad page out of tens of
 # thousands is counted rather than fatal, and there is nothing to catch under
 # `abort`; a request handler wrapped by the web framework is the same story.
-# The module is untouched — ts/app/web/script/build_wasm.ts builds `--release`,
+# The module is untouched — ts/app/web/script/build-wasm.py builds the
+# published one `--release` and the dev server's `watch`, below —
 # and the two binaries never link together.
 #
 # `opt-level` is named again for the same reason `panic` is: what it inherits
@@ -187,17 +184,6 @@ opt-level = 3
 # reaches.
 [profile.watch]
 inherits = "release"
-lto = false
-codegen-units = 256
-incremental = true
-
-# The device's library as a dev build of the app rebuilds it
-# (ts/app/native/script/build-native.py), as `watch` is the module's: the
-# native profile's code, without the one codegen unit and the whole-graph
-# LTO that make every build of it start over, so a change recompiles the
-# crates it reaches. A Release build of the app takes `native`.
-[profile.native-watch]
-inherits = "native"
 lto = false
 codegen-units = 256
 incremental = true

@@ -13,11 +13,12 @@ use xpute_kit::math::scalar::wrap;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::orbit::orbit_eye_off;
 use crate::domain::control::camera::state::Intent;
-use crate::domain::control::param::EYE_CLEARANCE_U;
 use crate::domain::control::param::{CLIMB_PASSES, GATE_STEP_SAMPLES};
+use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
 use crate::domain::query::changed::Asked;
-use crate::domain::query::{held, over, Hit, Ray, World};
+use crate::domain::query::{held, over, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
+use crate::domain::view::param::NEAR;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use pxl_spec::space::coord::zoom::{idx_of, units};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -84,37 +85,45 @@ fn eye(at: &ViewPose) -> (V3, Q3) {
     (world, world_to_canonical(&world))
 }
 
-/// A step may not end deeper in the ground than it started. A blanket
-/// exemption for an already-blocked start once opened the gate for good.
+/// A step may not end deeper in the ground than it started, but for the
+/// first cell of a wall or a roof (`embedded`). A blanket exemption for an
+/// already-blocked start once opened the gate for good.
 fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the floor's walk.
     match settings_store().orbit_obstacle {
         OrbitObstacleMode::through => return *to,
         // A climb that would pass through something solid (a tunnel's roof to the
         // surface over it) is held as `stop` holds it, but for a zoom in that
-        // goes under the roof (`dive`) and a zoom out held under it
-        // (`held_under`).
+        // goes under the roof (`dive`).
         OrbitObstacleMode::climb => {
-            if path_clear(from, &climbed(*to, &World::now())) {
+            let access = World::now();
+            let climbed = climbed(*to, &access);
+            if path_clear(from, &climbed) {
                 return *to;
             }
-            if let Some(reached) =
-                dive(to, &climbed, from, &access).or_else(|| held_under(to, from, &access))
-            {
-                return reached;
+            if let Some(under) = dive(to, &climbed, from, &access) {
+                return under;
             }
         }
         OrbitObstacleMode::stop => {}
     }
 
-    let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
+    let access = World::now();
+    // An embedded start is where the eye may stand, not a start to climb
+    // out of: from it, the ground is as deep as from the air.
+    let limit = match embedded(&eye(from).1, &access) {
+        true => 0.0,
+        false => penetration(from).map_or(0.0, |start| start.max(0.0)),
+    };
 
     let mut last = *from;
     for i in 1..=GATE_STEP_SAMPLES {
         let at = between(from, to, i as f64 / GATE_STEP_SAMPLES as f64);
+        let deep =
+            penetration(&at).is_some_and(|deep| deep > limit) && !embedded(&eye(&at).1, &access);
         // The last clear sample, not the crossing: on the boundary, the next frame's
         // rounding would decide which side the eye is on.
-        if penetration(&at).is_some_and(|deep| deep > limit) {
+        if deep || crossed(&last, &at, &access) {
             return last;
         }
         last = at;
@@ -138,9 +147,9 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
     }
 }
 
-fn in_solid(at: &ViewPose) -> bool {
+fn in_solid(at: &ViewPose, access: &World) -> bool {
     let (world, eye) = eye(at);
-    World::now()
+    access
         .floor_under(&eye, LEAF_ZOOM)
         .val()
         .flatten()
@@ -170,6 +179,30 @@ fn embedded(eye: &Q3, access: &World) -> bool {
     };
     let open = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, -1]];
     solid([0, 0, 0]) == Some(true) && open.into_iter().any(|d| solid(d) == Some(false))
+}
+
+/// Whether the eye comes out of something solid at `at`, from `last`,
+/// where it does not see the focus: through a wall it stood in the first cell
+/// of (`embedded`) to the wall's far side, which a wall one or two cells
+/// thick would otherwise let it reach.
+fn crossed(last: &ViewPose, at: &ViewPose, access: &World) -> bool {
+    in_solid(last, access) && !in_solid(at, access) && toward_eye(at, at.dist, access).is_some()
+}
+
+/// What lies between the eye and the focus is not asked: that hides the
+/// center but is not the eye running into anything, save where the eye
+/// comes out of a wall to its far side (`crossed`). The first cell of a wall
+/// or a roof is no obstacle (`embedded`).
+fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
+    let access = World::now();
+    let mut last = *from;
+    (1..=GATE_STEP_SAMPLES).all(|i| {
+        let at = between(from, to, i as f64 / GATE_STEP_SAMPLES as f64);
+        let clear = (!in_solid(&at, &access) || embedded(&eye(&at).1, &access))
+            && !crossed(&last, &at, &access);
+        last = at;
+        clear
+    })
 }
 
 /// Whether the eye comes out of something solid at `at`, from `last`,
@@ -209,7 +242,7 @@ fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> O
     if to.dist >= from.dist || climbed.polar > 0.0 {
         return None;
     }
-    let roof = roof_over(climbed, from.dist, access)?;
+    let roof = toward_eye(climbed, from.dist, access)?;
     // Under it, the near plane's own distance, so the near plane never cuts it.
     let dist = to.dist.min(roof.t - NEAR).max(MIN_DIST);
     under(&roof, climbed, dist).then_some(ViewPose { dist, ..*climbed })
@@ -223,7 +256,7 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
     if to.dist <= from.dist || from.polar > 0.0 {
         return None;
     }
-    let roof = roof_over(from, to.dist, access)?;
+    let roof = toward_eye(from, to.dist, access)?;
     under(&roof, from, from.dist).then(|| ViewPose {
         dist: to.dist.min(from.dist.max(roof.t - NEAR)),
         ..*to
@@ -231,8 +264,9 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
 }
 
 /// What `at`'s focus meets toward its eye within `reach`: a roof, where the
-/// eye is straight over it.
-fn roof_over(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
+/// eye is straight over it; within the eye's own distance, what hides the
+/// focus from it.
+fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
     let ray = Ray {
         origin: at.target,
         direction: orbit_eye_offset(1.0, at.polar, at.azimuth),
@@ -248,6 +282,37 @@ fn under(roof: &Hit, at: &ViewPose, dist: f64) -> bool {
     let eye = v3::add(&at.target, &orbit_eye_offset(dist, at.polar, at.azimuth));
     let b = roof.cube;
     dist < roof.t || (0..3).all(|k| b.min[k] <= eye[k] && eye[k] < b.max[k])
+}
+
+/// A zoom in the climb holds straight down, blocked by a roof over the focus
+/// (a tunnel's, a cave's): the eye goes under the roof straight over the
+/// focus, as far from it as the zoom asked or the roof leaves, and eases there
+/// through it. Where the roof is nearer the focus than the orbit comes
+/// (`MIN_DIST`), the eye stands at `MIN_DIST` in the roof's lowest cell,
+/// which its rays do not meet (pxl-spec-core `cast::walk`): it sees down
+/// as from under the roof. Only a zoom in: a zoom out under the roof stops at
+/// it as any step stops. None where nothing roofs the focus, or `MIN_DIST`
+/// is past the roof's lowest cell.
+fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose> {
+    if to.dist >= from.dist || climbed.polar > 0.0 {
+        return None;
+    }
+    let up = orbit_eye_offset(1.0, climbed.polar, climbed.azimuth);
+    let roof = access
+        .first_hit(
+            &Ray {
+                origin: to.target,
+                direction: up,
+                reach: from.dist,
+            },
+            held(),
+        )
+        .exact()
+        .flatten()?;
+    // Under it, the near plane's own distance, so the near plane never cuts it.
+    let dist = to.dist.min(roof.t - NEAR).max(MIN_DIST);
+    let eye = v3::add(&to.target, &up.map(|v| v * dist));
+    (dist < roof.t || roof.cube.holds(eye)).then_some(ViewPose { dist, ..*climbed })
 }
 
 /// How far toward `to` the orbit gets from `from`, as the controls ask it.
@@ -308,3 +373,7 @@ fn climbed(mut at: ViewPose, access: &World) -> ViewPose {
     }
     at
 }
+
+#[cfg(test)]
+#[path = "terrain_gate.test.rs"]
+mod test;

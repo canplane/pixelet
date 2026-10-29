@@ -43,7 +43,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The sun lanes are the `sun_counts` setting's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/tally.rs `SUN_SUMS`): the frames; of them those that cast the sun's map, every slot of it; the map's slots in the frames that cast it; the slots that took the raster's pick; and the boxes drawn. A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names."
+      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The rays, eye and sun lanes are the `ray_counts` setting's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/tally.rs `RAY_SUMS`): the frames (`rays_frames`); then an observer's each, the eye's and the sun's: of them those it cast in, its pixels or its map's slots in them, the nodes its beam rays, its samples and its walk again asked, its pixels or slots that took the raster's pick and those that walked, the nodes those walked asked, and the boxes drawn (pxl-spec-core `tally`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names."
     ],
     "t": 1,
     "interval_ms": 1,
@@ -90,10 +90,24 @@
     "waiting": "STREAM_NAMES",
     "out": "STREAM_NAMES",
     "cap_terrain_refused": 1,
-    "sun_frames": 1,
-    "sun_cast_frames": 1,
-    "sun_texels": 1,
+    "rays_frames": 1,
+    "eye_casts": 1,
+    "eye_rays": 1,
+    "eye_beam": 1,
+    "eye_sample": 1,
+    "eye_miss": 1,
+    "eye_picked": 1,
+    "eye_walked": 1,
+    "eye_pixel": 1,
+    "eye_boxes": 1,
+    "sun_casts": 1,
+    "sun_rays": 1,
+    "sun_beam": 1,
+    "sun_sample": 1,
+    "sun_miss": 1,
     "sun_picked": 1,
+    "sun_walked": 1,
+    "sun_pixel": 1,
     "sun_boxes": 1
   },
   "FRAME_GROUP": {
@@ -135,11 +149,29 @@
     "cap": [
       "cap_terrain_refused"
     ],
+    "rays": [
+      "rays_frames"
+    ],
+    "eye": [
+      "eye_casts",
+      "eye_rays",
+      "eye_beam",
+      "eye_sample",
+      "eye_miss",
+      "eye_picked",
+      "eye_walked",
+      "eye_pixel",
+      "eye_boxes"
+    ],
     "sun": [
-      "sun_frames",
-      "sun_cast_frames",
-      "sun_texels",
+      "sun_casts",
+      "sun_rays",
+      "sun_beam",
+      "sun_sample",
+      "sun_miss",
       "sun_picked",
+      "sun_walked",
+      "sun_pixel",
       "sun_boxes"
     ],
     "requests": [

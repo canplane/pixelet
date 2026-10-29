@@ -11,11 +11,8 @@
 use crate::cube::{object, sentinel};
 
 /// A cube filled whole, as a share counts it: a share is in 2⁻¹⁵ of its
-/// cube, floored at each fold, so eighths stay exact `FULL_FOLDS` folds deep.
-pub const FULL: u32 = 1 << (KEPT_BITS * FULL_FOLDS);
-
-/// The folds a share's eighths stay exact through.
-const FULL_FOLDS: u32 = 5;
+/// cube, floored at each fold, so eighths stay exact five folds deep.
+pub const FULL: u32 = 1 << 15;
 
 /// What a node is to a descent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -183,7 +180,7 @@ pub const KEPT_BITS: u32 = EIGHTHS.trailing_zeros();
 /// A cube's eighths: its children, what a share is kept in.
 pub const EIGHTHS: u32 = 8;
 
-/// The eighths of a cube kept of `fill` of it, in `overwrite::FULL`'s units:
+/// The eighths of a cube kept of `fill` of it, in `FULL`'s units:
 /// floored, so a trace too small to fill one child keeps none and nothing is
 /// drawn there. The one rule a cell's kept share is, the ground's top
 /// (`ground::top`) and a cell of every layer together (`cover`) alike.
@@ -199,7 +196,7 @@ pub const fn eighths(fill: u32) -> u32 {
 /// What of a cell's cube fills, and whether an overwrite's kind is its
 /// look: the ground filling `ground` of it, under an overwrite — what is
 /// placed, or the ways — of `kind` filling `over` of it, each in
-/// `overwrite::FULL`'s units. A kind that fills lies beside the ground, as
+/// `FULL`'s units. A kind that fills lies beside the ground, as
 /// a thing stands on it, so their shares add; air lies in it, as a cut or a
 /// bore, so it takes its share from the ground's. The look is the kind most
 /// of the fill is: the overwrite's where it fills at least as much as the
@@ -248,6 +245,29 @@ pub const fn side(k: u32) -> f32 {
         7 => 0.956_465_6,
         _ => 1.0,
     }
+}
+
+/// Which faces of a cell kept short of its cube touch a neighbour filled at
+/// its height, a bit a face over `KEPT_SHIFT`'s: `2a` the low face on axis
+/// `a`, `2a + 1` the high. Where its box is drawn follows from them alone,
+/// so every reader draws and meets one shape (cast.rs `kept_bounds`): a
+/// box spans an axis whose two faces touch, sits flush against the one
+/// face that does, and is centered where none does, the axes it does not
+/// span sharing its volume alike. A producer sets them only for what it
+/// knows its neighbours by, the ground at the zoom its square holds; every
+/// other cell's are clear, a box centered on every axis.
+pub const TOUCH_SHIFT: u32 = KEPT_SHIFT + KEPT_BITS;
+pub const TOUCH_BITS: u32 = 6;
+const _: () = assert!(TOUCH_SHIFT + TOUCH_BITS <= 32);
+
+/// The faces `asset`'s cell touches (`TOUCH_SHIFT`).
+pub const fn touch(asset: u32) -> u32 {
+    asset >> TOUCH_SHIFT & ((1 << TOUCH_BITS) - 1)
+}
+
+/// `asset` touching the faces `t` (`TOUCH_SHIFT`).
+pub const fn touch_word(asset: u32, t: u32) -> u32 {
+    asset & !(((1 << TOUCH_BITS) - 1) << TOUCH_SHIFT) | (t & ((1 << TOUCH_BITS) - 1)) << TOUCH_SHIFT
 }
 
 /// Whether an asset hides its cube whole: it is not transparent and keeps

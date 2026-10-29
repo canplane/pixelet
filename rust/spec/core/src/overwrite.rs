@@ -15,7 +15,7 @@
 //! cell's asset, whatever is under it.
 
 use crate::cube::{object, sentinel, Ground, Object};
-use crate::Zoom;
+use crate::{Zoom, LEAF_CELL};
 
 /// A slot's heap word when it is a branch, its children's family under it.
 pub const BRANCH: u32 = 1 << 31;
@@ -23,12 +23,7 @@ pub const BRANCH: u32 = 1 << 31;
 /// The family of the root what is placed is under.
 pub const PLACED: u32 = 0;
 
-use crate::answer;
-use crate::answer::BoxWords;
-use crate::answer::FULL;
-
-/// `FULL`'s bits: a share shifted past them is none.
-const FULL_BITS: u32 = FULL.trailing_zeros();
+pub use crate::answer::FULL;
 
 /// The edits a frame hands what reads them at most (pxl-kernel
 /// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box

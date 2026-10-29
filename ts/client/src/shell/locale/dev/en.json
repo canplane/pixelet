@@ -23,13 +23,33 @@
       }
     },
     "debug": {
-      "ray_steps": {
-        "label": "Ray steps",
-        "description": "Colors each point on screen by how much work it took to draw: blue for little, red for a lot. Points that borrowed a nearby result show what finding that result took."
-      },
-      "sun_counts": {
-        "label": "Sun map counts",
-        "description": "Counts how the sun's shadow map is drawn each frame, for the profiler. For measuring; leave it off when timing."
+      "sky_time": {
+        "label": "Sky time",
+        "description": "Holds the sky and the sun at an hour of the place you are looking at, in its solar time. Clouds and stored data keep the real clock. A reload returns to the real time.",
+        "real": {
+          "label": "Real time",
+          "description": "Follows the device's clock."
+        },
+        "dawn": {
+          "label": "Dawn, 7:00",
+          "description": "A low sun, long shadows."
+        },
+        "morning": {
+          "label": "Morning, 9:00",
+          "description": "The sun stands at a slant."
+        },
+        "noon": {
+          "label": "Noon",
+          "description": "The sun at its highest, the shortest shadows."
+        },
+        "afternoon": {
+          "label": "Afternoon, 3:00",
+          "description": "The sun leans west."
+        },
+        "dusk": {
+          "label": "Dusk, 5:00",
+          "description": "A low sun, long shadows."
+        }
       }
     }
   },

@@ -4,6 +4,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
+// Inputs: dfd3d4d3ad8a2403c3c9a51936983118243ec5b144ba9b9a572d58b1bc31283d
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -15,6 +16,7 @@ struct type_12 {
     member_7: vec4<i32>,
     member_8: array<vec4<u32>, 4>,
     member_9: array<vec4<f32>, 5>,
+    member_10: vec4<f32>,
 }
 
 struct type_13 {

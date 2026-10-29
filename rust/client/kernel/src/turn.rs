@@ -323,7 +323,6 @@ pub struct HostFrame {
 }
 
 static FRAME: Global<Option<HostFrame>> = Global::new();
-static WALL_MS: Global<f64> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
 static DRAWN: Global<bool> = Global::new();
 
@@ -331,7 +330,7 @@ fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
-pub fn on_world_frame_asked(host: HostFrame) {
+pub fn world_frame_asked(host: HostFrame) {
     *FRAME.get(|| None) = Some(host);
     frames().notify();
 }

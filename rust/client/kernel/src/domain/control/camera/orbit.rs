@@ -10,7 +10,7 @@
 //! (orbit/terrain_gate.rs `allowed_view`), and the camera setting decides
 //! what follows: through ignores the ground, stop takes a control as far as
 //! it gets, and climb raises the drawn pitch instead (`climb_polar`); held
-//! straight down by a roof over the pivot, a zoom in goes under it (`dive`).
+//! straight down by a roof over the focus, a zoom in goes under it (`dive`).
 
 pub mod terrain_gate;
 

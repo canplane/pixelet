@@ -274,69 +274,29 @@ pub const fn grown_for(head: [u32; 3], q: [i32; 2]) -> bool {
     head[2] == 1 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
 }
 
-/// The boxes a frame's growth is asked over at most: the edits and cuts
-/// held (`overwrite::BOXES`), and each brick handed this frame, which
-/// reaches its window's zoom alone.
-pub const MARKED: u32 = overwrite::BOXES + window::HANDED;
-/// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
-/// window zoom whose candidates it reaches, `EVERY` for all.
-pub const BOX_WORDS: u32 = 5;
-pub const EVERY: u32 = 0;
-const _: () = assert!(window::FIRST_CELL > EVERY);
-
-/// What `decor_mark_cs` reads and lists and `decor_stand_cs` and `decor_cs`
-/// are dispatched by, in words: each one's workgroups across, up and the
-/// entry-decor pairs listed, a pad (`STAND_ARGS`, `GROW_ARGS`); whether every
-/// entry grows whole, decor having been off (`GROWS_EVERY`), and how many
-/// boxes (`GROWS_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
-/// list, an entry, its decor (`<< 16`) and whether it grows whole (`WHOLE`)
-/// each, in no order.
-pub const STAND_ARGS: u32 = 0;
-pub const GROW_ARGS: u32 = 4;
-pub const GROWS_EVERY: u32 = 8;
-pub const GROWS_BOXES: u32 = 9;
-pub const BOXES_AT: u32 = 12;
-pub const GROWS_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
-pub const WHOLE: u32 = 1 << 31;
+/// The edits and cuts a frame's growth is asked over, the objects' own
+/// (`overwrite::EDITS`, `overwrite::BOXES`, `overwrite::cut_box`).
+pub use crate::overwrite::{cut_box, BOXES, EDITS};
+/// What `decor_mark_cs` reads first: whether every slot grows, decor having
+/// been off; the squares filled this frame; the boxes; then the boxes, four
+/// words each.
+pub const MARKS_AT: u32 = 4;
+pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
+/// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its
+/// workgroups across, up and the slot-decor pairs listed, a pad, then the list,
+/// a slot and its decor (`<< 16`) each, in no order.
+pub const GROWS_AT: u32 = 4;
 
 /// The words of what `decor_mark_cs` lists.
 pub const GROWS_WORDS: u32 = GROWS_AT + EYE_ENTRIES * DECORS.len() as u32;
 
-/// How far about its own, in its window's cells, a candidate's growth reads
-/// the world (`grown`): the cells its pose votes on, its box, and the placed
-/// decor that may claim it, none wider than the widest decor.
-const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
-
-/// The leaf cells, `[x0, y0, x1, y1)`, of brick `q` of the window at `cell`.
-pub const fn brick_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
-    let k = BRICK_SHIFT + LEAF_CELL - cell;
-    [q[0] << k, q[1] << k, (q[0] + 1) << k, (q[1] + 1) << k]
-}
-
-/// The leaf cells a candidate at leaf cell `c` reads where it grows at
-/// `cell`: its window's cells within `READ_REACH` of its own.
-pub const fn reads(cell: Zoom, c: [i32; 2]) -> [i32; 4] {
-    let s = LEAF_CELL - cell;
-    let (x, y) = (c[0] >> s, c[1] >> s);
-    [
-        (x - READ_REACH) << s,
-        (y - READ_REACH) << s,
-        (x + READ_REACH + 1) << s,
-        (y + READ_REACH + 1) << s,
-    ]
-}
-
-/// The leaf cells any candidate in brick `q` of the window at `cell` reads
-/// (`reads`).
-pub const fn brick_reads(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
-    let ([x0, y0, x1, y1], r) = (brick_box(cell, q), READ_REACH << (LEAF_CELL - cell));
-    [x0 - r, y0 - r, x1 + r, y1 + r]
-}
-
-/// Whether the box `b` of leaf cells meets the leaf cells `reads`
-/// (`reads`, `brick_reads`), each X on any lap, X round the world.
-pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
-    let wide = reads[2] - reads[0];
+/// Whether the box `b` of leaf cells meets square `q` of the window at
+/// `cell` or a square beside it: what decor in the square stands and grows
+/// on reads that far (`stand`'s faces), X round the world.
+pub fn meets(cell: Zoom, q: [i32; 2], b: [i32; 4]) -> bool {
+    let k = SQUARE_SHIFT + LEAF_CELL - cell;
+    let side = 1i32 << k;
+    let (lo, wide) = ([(q[0] << k) - side, (q[1] << k) - side], 3 * side);
     // The box's first column from the region's, the short way round.
     let (from, width) = (wrap_idx(LEAF_CELL, b[0] - reads[0]), b[2] - b[0]);
     // Met where it starts in the region or over it, or runs on round the
@@ -347,15 +307,14 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     across && b[1] < reads[3] && b[3] > reads[1]
 }
 
-/// The zoom a record names where it is drawn at any distance: placed decor,
-/// which no window grows. No window's cells are at it (`FIRST_CELL`).
+/// The zoom a record names for placed decor, which no window grows. No
+/// window's cells are at it (`FIRST_CELL`).
 pub const PLACED_AT: Zoom = 0;
 const _: () = assert!(window::FIRST_CELL > PLACED_AT);
 
 /// A record's first word: its decor and variant, a byte each, its turn in
-/// quarters, and the window zoom it was grown at, the one it is drawn at
-/// where the rays ask it (`drawn_at`), `PLACED_AT` for placed decor; past
-/// them, once sized, its region (`drawn::REGION_SHIFT`).
+/// quarters, and the window zoom it was grown at, `PLACED_AT` for placed
+/// decor; past them, once sized, its region (`drawn::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
     decor | variant << 8 | turn << TURN_SHIFT | cell << CELL_SHIFT
 }
@@ -813,13 +772,13 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 }
 
 /// Whether decor `d2` from the eye, its distance squared (`distance2`), is
-/// drawn at `cell`: the zoom the rays ask at its distance (`Detail::at`),
-/// so each decor is drawn at one zoom, where the rays draw the ground
-/// about it. The ground's decor grows no finer than a leaf cell's window
-/// (`shown`'s zooms), so where the rays ask finer, for what is placed
-/// finer, it is drawn at the leaf cell's.
-pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom) -> bool {
-    detail.at(d2).min(LEAF_CELL) == cell
+/// drawn: where the rays ask the leaf cell's zoom or finer at its distance
+/// (`Detail::at`), and not where they ask coarser. Decor, grown or placed,
+/// is one set at the leaf cell's window alone (pxl-kernel
+/// domain/scene/decor/drawn.rs `shown`), never thinned or posed again at a
+/// coarser one.
+pub fn drawn_at(detail: Detail, d2: f32) -> bool {
+    detail.at(d2) >= LEAF_CELL
 }
 
 /// Placed decor's tag (`node_seed`).

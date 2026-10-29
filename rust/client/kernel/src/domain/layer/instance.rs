@@ -5,7 +5,10 @@
 //! its decor carries. The ground grows its own; an object's is the placement's.
 
 use pxl_spec::asset::decor::DecorMeta;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::zoom::cube;
+use pxl_spec::space::layer::lattice::GROUND;
 
 use pxl_spec::bake::constant::EntryAt;
 
@@ -38,7 +41,7 @@ impl Instance {
 
     /// The cell it stands in: the leaf the ground grew it in, or its entry's.
     pub fn cell(&self) -> Aabb {
-        match self.src {
+        match self.source {
             Source::Ground(cell) => cube(GROUND.cell(), cell),
             Source::Object(e) => cube(e.zoom(), e.at()),
         }

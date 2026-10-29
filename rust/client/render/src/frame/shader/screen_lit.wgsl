@@ -24,9 +24,9 @@ fn fs(v: VertexOut) -> FragOut {
     let at = select(far, h.at * (1.0 + behind(h, pixel_steps(a, size, h))), met);
     let clip = frame_view_proj() * vec4f(at, 1.0);
     var o: FragOut;
-    // The nodes asked, the third word in this view; none where the pixel
-    // showed a sample's cell and walked nothing, grey.
-    o.color = vec4f(select(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), vec3f(STEPS_NONE), c.z == 0u), 1.0);
+    // The nodes asked, the third word in this view, on the steps' ramp; none
+    // where the pixel showed a sample's cell and walked nothing (debug_look.json).
+    o.color = vec4f(select(steps_ramp(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), STEPS_NONE, c.z == 0u), 1.0);
     o.depth = clip.z / clip.w;
     return o;
   }
@@ -47,7 +47,8 @@ fn fs(v: VertexOut) -> FragOut {
     uv,
     ddx,
     ddy,
-    screen_open(v.clip.xy) * crease.open,
+    // The darker of the two, so a corner both see is not darkened twice.
+    min(screen_open(v.clip.xy), crease.open),
     seen_from_eye(h.at),
   );
   // The depth `behind` the face along the ray, so what is laid on it wins.
@@ -65,10 +66,13 @@ fn fs(v: VertexOut) -> FragOut {
 // side over the distance alone, so a top seen at a grazing angle reads
 // finer than its threshold.
 //
-// A world's cell spans (1, 2] of the view's cells at its distance
-// (pxl-spec-core grid.rs `cell_at`, `CELLS_A_RADIAN` / 2 sides its
-// split distance), so its share of a cell squared is within (1, 4]: green there,
-// finer blue, coarser red (debug_look.json `share`).
+// 10-12 tinted the chunks' faces by the same share of its own cell, τ/96
+// (96 sides its split distance), green within (¼, 1], blue finer, red
+// coarser: a world's cell there spans (½, 1] of that grid cell. Today's cell is
+// τ/`SPLIT`, τ/192, half as wide at the same zoom rule (pxl-spec-core
+// grid.rs `cell_at`: a world's cell spans (1, 2] of them), so that cell squared is 4
+// of today's: within (1, 4] green, finer blue, coarser red (debug_look.json
+// `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   if (frame_gizmo() < 0.5) {
     return color;
@@ -76,7 +80,7 @@ fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   let side = exp2(f32(i32(UNIT_ZOOM) - i32(ray_zoom(word))));
   let r2 = dot(h.at, h.at);
   let seen = side * side * abs(dot(h.normal, h.at)) / (r2 * sqrt(r2));
-  let steps = log2(seen / (frame_cell() * frame_cell()));
-  let tint = select(select(vec3f(0.1, 0.9, 0.2), vec3f(0.1, 0.3, 1.0), steps <= 0.0), vec3f(1.0, 0.15, 0.1), steps > 2.0);
+  let share = seen / (frame_cell() * frame_cell());
+  let tint = select(select(SHARE_WITHIN, SHARE_FINER, share <= SHARE_FINER_MOST), SHARE_COARSER, share > SHARE_WITHIN_MOST);
   return mix(color, tint * 0.6, 0.45);
 }

@@ -10,8 +10,11 @@ import {
   type SettingName,
   settingsIn,
 } from "@/shell/setting/schema.ts";
-import { Fold } from "./fold.tsx";
-import { GizmoLegend } from "./gizmo-legend.tsx";
+import {
+  CameraGizmoLegend,
+  RayStepsLegend,
+  WorldGizmoLegend,
+} from "./legend.tsx";
 import { ProfilerPanel } from "./profiler.tsx";
 import { ViewPanel } from "./view.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -19,8 +22,9 @@ import { useKernel } from "@/shell/store/watch.ts";
 const PANEL = {
   view: ViewPanel,
   profiler: ProfilerPanel,
-  world_gizmo: GizmoLegend,
-  camera_gizmo: CameraGizmo,
+  world_gizmo: WorldGizmoLegend,
+  camera_gizmo: CameraGizmoLegend,
+  ray_steps: RayStepsLegend,
 } satisfies Partial<Record<SettingName, ComponentType>>;
 
 /**
@@ -31,12 +35,6 @@ export type PanelName = keyof typeof PANEL;
 
 const isPanel = (name: SettingName): name is PanelName =>
   Object.hasOwn(PANEL, name);
-
-/** Nothing to say yet: the grid is on screen. */
-function CameraGizmo() {
-  const show = useKernel((s) => s.settings[SETTINGS.camera_gizmo.key] === 1);
-  return show && <Fold name="camera_gizmo" title="Camera Gizmo" />;
-}
 
 /** Whether any panel is up, so the corner is the window's. */
 export function useDebugWindow(): boolean {

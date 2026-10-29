@@ -6,7 +6,7 @@
 // where it is shown, its `section`: one of the settings sheet's, or
 // `profiler`, the profiler panel's own. The store reads the defaults from
 // here and the sheet renders rows from here, so adding a setting to the
-// sheet is one entry in SETTING plus its two strings in the locale catalog
+// sheet is one entry in SETTINGS plus its two strings in the locale catalog
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
@@ -98,7 +98,9 @@ impl OrbitObstacleMode {
 ///            (rust/client/render/src/gpu/ao.rs): the world's depth drawn
 ///            once more, the occlusion sampled from it at half resolution,
 ///            denoised, and read by every lit surface. Five passes and 11
-///            bytes a pixel.
+///            bytes a pixel. The corners' too, the darker of the two where
+///            both fall (screen_lit.wgsl), as N8AO reads a cube's corner
+///            softer at half resolution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum AoMode {
@@ -138,6 +140,45 @@ impl ResMode {
     /// The option a number names, or none for a number the list does not give out.
     pub fn of(number: u32) -> Option<ResMode> {
         ResMode::ALL.into_iter().find(|o| *o as u32 == number)
+    }
+}
+
+/// The hour the sky is drawn at, at the place the sky is seen from: the
+/// wall clock's own, or one held in the place's solar time, so the sun
+/// stands where it does there at that hour today whatever the clock reads
+/// (pxl-kernel domain/scene/environment.rs `shown`). Only the sky's time;
+/// the clouds, the frame's step and the storage keep the wall clock.
+///
+///   real      — the wall clock.
+///   dawn      — 7:00, a low sun.
+///   morning   — 9:00.
+///   noon      — 12:00, the sun highest.
+///   afternoon — 15:00.
+///   dusk      — 17:00, a low sun.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SkyTime {
+    real = 0,
+    dawn = 1,
+    morning = 2,
+    noon = 3,
+    afternoon = 4,
+    dusk = 5,
+}
+
+impl SkyTime {
+    pub const ALL: [SkyTime; 6] = [
+        SkyTime::real,
+        SkyTime::dawn,
+        SkyTime::morning,
+        SkyTime::noon,
+        SkyTime::afternoon,
+        SkyTime::dusk,
+    ];
+
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<SkyTime> {
+        SkyTime::ALL.into_iter().find(|o| *o as u32 == number)
     }
 }
 
@@ -198,8 +239,8 @@ pub enum SettingKey {
     /// A uniform on an already-compiled shader term; not a pass.
     rim_light = 9,
     /// corner, the occlusion a voxel world reads off its own cubes' faces;
-    /// screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
-    /// says each.
+    /// screen, N8AO's screen-space pass with the corners' too, the costliest
+    /// of the three. AO_MODES says each.
     ao = 10,
     /// The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
     /// cast once more from the sun as the eye's rays are, beams and samples on
@@ -217,18 +258,20 @@ pub enum SettingKey {
     profiler = 14,
     /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs).
     world_gizmo = 15,
-    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs).
+    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them.
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's block or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl).
+    /// Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
     ray_steps = 19,
-    /// How the sun's shadow map is cast — the slots that took the raster's pick and the boxes it drew — counted on the GPU and summed since boot into the profiler's sun lanes (rust/client/render/src/gpu/ray/tally.rs, rust/client/shader/src/sun.rs). The counting's atomics run in the sun's spans, so time them with it off.
-    sun_counts = 20,
+    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
+    ray_counts = 20,
+    /// The hour the sky is drawn at; SKY_TIMES says each.
+    sky_time = 21,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 21] = [
+    pub const ALL: [SettingKey; 22] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -249,12 +292,13 @@ impl SettingKey {
         SettingKey::person,
         SettingKey::pet,
         SettingKey::ray_steps,
-        SettingKey::sun_counts,
+        SettingKey::ray_counts,
+        SettingKey::sky_time,
     ];
 
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a number not given out stays 0.
-    pub const SLOTS: usize = 21;
+    pub const SLOTS: usize = 22;
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
@@ -285,19 +329,17 @@ impl SettingKey {
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
-            SettingKey::sun_counts => SettingKind::Toggle,
+            SettingKey::ray_counts => SettingKind::Toggle,
+            SettingKey::sky_time => SettingKind::Choice,
         }
     }
 
     /// Written to the settings' kept slot and read from it; one schema.json
     /// marks `kept` false is held for the session alone.
-    pub fn is_kept(self) -> bool {
+    pub fn kept(self) -> bool {
         !matches!(
             self,
-            SettingKey::place
-                | SettingKey::camera_mode
-                | SettingKey::orbit_obstacle
-                | SettingKey::sky_time
+            SettingKey::place | SettingKey::camera_mode | SettingKey::sky_time
         )
     }
 
@@ -305,7 +347,7 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::surface_follow | SettingKey::ray_steps | SettingKey::sun_counts
+            SettingKey::surface_follow | SettingKey::ray_counts | SettingKey::sky_time
         )
     }
 
@@ -338,7 +380,8 @@ pub struct Settings {
     pub person: u8,
     pub pet: u8,
     pub ray_steps: bool,
-    pub sun_counts: bool,
+    pub ray_counts: bool,
+    pub sky_time: SkyTime,
 }
 
 impl Settings {
@@ -364,7 +407,8 @@ impl Settings {
         person: 1,
         pet: 5,
         ray_steps: false,
-        sun_counts: false,
+        ray_counts: false,
+        sky_time: SkyTime::real,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
@@ -391,7 +435,8 @@ impl Settings {
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
-            SettingKey::sun_counts => self.sun_counts as u32,
+            SettingKey::ray_counts => self.ray_counts as u32,
+            SettingKey::sky_time => self.sky_time as u32,
         }
     }
 
@@ -437,7 +482,11 @@ impl Settings {
                 Err(_) => return false,
             },
             SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
-            SettingKey::sun_counts if value <= 1 => self.sun_counts = value == 1,
+            SettingKey::ray_counts if value <= 1 => self.ray_counts = value == 1,
+            SettingKey::sky_time => match SkyTime::of(value) {
+                Some(o) => self.sky_time = o,
+                None => return false,
+            },
             _ => return false,
         }
         true

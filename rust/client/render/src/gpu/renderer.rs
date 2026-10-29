@@ -30,9 +30,9 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_CLEAR, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, LIGHT_VIEW_PROJ, LOW_SPEC, MAP,
-    RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT,
-    VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
+    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_MOON, SHADOW_RIM, SHADOW_STRENGTH,
+    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -61,10 +61,10 @@ use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::{RaysPass, SUN_SUMS};
+use crate::gpu::ray::{RaysPass, RAY_SUMS};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
-use crate::gpu::shadow::{self, Shadow};
+use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
@@ -74,7 +74,7 @@ use crate::gpu::surface::{
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
-use crate::look::environment::{ENV_AIR, ENV_POLE, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
 
 const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
 
@@ -82,6 +82,16 @@ const _: () = assert!(
     GPU_SPAN_NAMES <= 32,
     "a span a bit of the mask the host is told"
 );
+const SPAN_AIR: usize = GpuSpanName::air as usize;
+const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
+const SPAN_AO: usize = GpuSpanName::ao as usize;
+const SPAN_WORLD: usize = GpuSpanName::world as usize;
+const SPAN_RESOLVE: usize = GpuSpanName::resolve as usize;
+const SPAN_MARKER: usize = GpuSpanName::marker as usize;
+const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
+const SPAN_CASE: usize = GpuSpanName::case as usize;
+const SPAN_FILL: usize = GpuSpanName::fill as usize;
+const SPAN_SHADOW: usize = GpuSpanName::shadow as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -255,9 +265,9 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
-    /// Whether what the sun's cast walked and took is counted
+    /// Whether what the eye's cast and the sun's walked and took is counted
     /// (gpu/ray/tally.rs).
-    pub sun_counts: bool,
+    pub ray_counts: bool,
 }
 
 /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
@@ -333,9 +343,9 @@ pub struct FrameStat {
     /// draws and triangles.
     pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
-    /// The sun's and the eye's recast's counts, summed since boot
-    /// (gpu/ray/tally.rs `SUN_SUMS`).
-    pub sun: [f64; SUN_SUMS],
+    /// The eye's cast's and the sun's counts, summed since boot
+    /// (gpu/ray/tally.rs `RAY_SUMS`).
+    pub rays: [f64; RAY_SUMS],
 }
 
 /// A frame's GPU time: its spans' sum, the passes timed. The span from the
@@ -345,13 +355,15 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 }
 
 /// The passes drawn at the world's own pixels, whose cost goes with them:
-/// its depth prepass, its occlusion, its drawing and its cast. The air's
+/// its depth prepass, its occlusion, its drawing, its gathering over frames
+/// and its cast. The air's
 /// tables, the fill and the decor's growth, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
-const PER_PIXEL: [GpuSpanName; 10] = [
+const PER_PIXEL: [GpuSpanName; 11] = [
     GpuSpanName::prepass,
     GpuSpanName::ao,
     GpuSpanName::world,
+    GpuSpanName::resolve,
     GpuSpanName::cast,
     GpuSpanName::beam,
     GpuSpanName::cells,
@@ -451,7 +463,8 @@ pub struct Renderer {
     bind_group: u32,
     models: FrameGroups,
     shadow: Shadow,
-    /// Whether the shadow map is cast and drawn this frame (`STAGE_AT::SHADOWS`).
+    /// Whether the shadow map is cast and drawn this frame: the setting on
+    /// (`STAGE_AT::SHADOWS`) and the sun or the Moon up (`lay_out`).
     shadows: bool,
     ao: ScreenAo,
     screen_ao: bool,
@@ -467,27 +480,17 @@ pub struct Renderer {
     puck: PuckPass,
     marker: MarkerPass,
     finish: Finish,
+    resolve: Resolve,
     debug: DebugPass,
     screen: RaysPass,
     /// The frame's whole input as the last frame drew it (stage 2): the
-    /// frame's, the sky's and the stars' words, the air's, the surface's
-    /// textures, the draws and the uploads they read, the markers' sheet, the
-    /// clouds' words and the cases, and what came or was drawn again without
-    /// words.
+    /// frame's words but the jitter, the sky's and the stars' words, the
+    /// air's, the surface's textures, the draws and the uploads they read,
+    /// the markers' sheet, the clouds' words and the cases, and what came or
+    /// was drawn again without words.
     frame_read: Read,
     /// The jitter in the frame's words as the GPU holds them (`JITTER`).
     jitter_written: [f32; 2],
-    /// The lists as the last frame drew them, apart from the rest of its
-    /// input: their records, uniforms and uploads (`listed`), and the
-    /// records and uniforms of the draws a region does not stand for, with
-    /// whether an upload they read moved (`beside`, `BESIDE`).
-    listed: Read,
-    beside: Read,
-    /// The region a frame draws again cleared, under its scissor.
-    clear: Built,
-    /// The eye's view-projection as `lay_out` took it, which the moved
-    /// spheres are seen through (`regions`).
-    view_proj: Mat4,
     /// What the occlusion was last made from: the frame's words, its own,
     /// the surface and the decor its prepass draws. The frame is drawn
     /// again for more than these, and the occlusion only where they moved.
@@ -551,14 +554,10 @@ impl Renderer {
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
-            debug: DebugPass::new(g, &mut pipelines, frame_buf, sky_buf, device.align),
+            debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
-            listed: Read::default(),
-            beside: Read::default(),
-            clear: pipelines.build(g, PIPELINE_SCREEN_CLEAR, WORLD_COLOR),
-            view_proj: mat4::new(),
             ao_read: Read::default(),
             pipelines,
             frame_buf,
@@ -650,6 +649,7 @@ impl Renderer {
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
+        self.resolve.lay_out(&m, eye_world);
         let eye = [0.0; 3];
         put_ray(&mut self.sky, sky::RAY, &m);
         self.clouds.lay_out(
@@ -688,23 +688,30 @@ impl Renderer {
             (eye_world[1] / MERCATOR_RADIUS_U) as f32,
             MERCATOR_RADIUS_U as f32,
         ]);
-        // The shadow map, as wide as the casters reach; none where the
-        // shadows are off.
+        // The shadow map, as wide as the casters reach, cast from the sun
+        // where it is up, else from the Moon where it is up and lit; none
+        // where the shadows are off, or where neither is up, as only their
+        // direct light reads the map (atmos_light.wgsl `surface_light_in`)
+        // and a shadow would show nowhere.
         let far = s[STAGE_AT::SHADOWS];
-        self.shadows = far > 0.0;
+        let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 3]);
+        let light = if sun[2] > 0.0 {
+            Some((sun, false))
+        } else if moon[2] > 0.0 && env[ENV_MOON + 3] > 0.0 {
+            Some((moon, true))
+        } else {
+            None
+        };
+        let light = light.filter(|_| far > 0.0);
+        self.shadows = light.is_some();
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
-        if self.shadows {
+        u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
+        if let Some((dir, _)) = light {
             // Up to a power of two, so the snap grid and the texel move only in steps;
             // the shadows fade by the casters' own reach.
             let half = libm::exp2(libm::ceil(libm::log2(far)));
             let rim = (far / half) as f32;
-            self.shadow.aim(
-                &env[ENV_SUN..ENV_SUN + 3],
-                eye,
-                half,
-                rim,
-                eye_world.map(|v| -v),
-            );
+            self.shadow.aim(dir, eye, half, rim, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
             u[SHADOW_RIM] = rim;
@@ -935,11 +942,6 @@ impl Renderer {
         }
         self.frame[JITTER] = 2.0 * j[0] / world.width as f32;
         self.frame[JITTER + 1] = -2.0 * j[1] / world.height as f32;
-        // Where what the kernel animates moved, on the screen and in the
-        // sun's map, laid out as this frame's eye and light see it.
-        let (region, sun_rect) = self
-            .regions(input.moved, world.width, world.height)
-            .map_or((None, None), |(r, s)| (Some(r), s));
         let ao_remade = self.screen_ao && self.ao.ensure(g, world.width, world.height);
         if ao_remade {
             self.rebind(g);
@@ -973,7 +975,7 @@ impl Renderer {
         let jitter = [self.frame[JITTER], self.frame[JITTER + 1]];
         let words_moved = read.read(&self.frame[..JITTER]);
         if words_moved || jitter != self.jitter_written {
-            g.write_buf(self.frame_buf, 0, bytes(&self.frame));
+            g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
             self.jitter_written = jitter;
         }
         if words_moved {
@@ -1038,9 +1040,13 @@ impl Renderer {
         let folded = self.screen.fold(&mut ctx);
         let (tables, exposed) = self.atmosphere.draw(&mut ctx);
         read.mark(tables);
-        let aired = self
-            .atmosphere
-            .froxel(&mut ctx, [&self.frame[..JITTER], &self.sky], exposed);
+        let aired = self.atmosphere.froxel(
+            g,
+            ahead,
+            [&self.frame[..JITTER], &self.sky],
+            exposed,
+            &mut stamps[SPAN_AIR],
+        );
         read.mark(aired);
         if baked || gridded || folded || exposed || aired {
             g.submit(ahead);
@@ -1053,23 +1059,14 @@ impl Renderer {
         if read.read(self.clouds.words()) {
             self.clouds.write(g);
         }
-        // The world as it stood: all the frame draws from read as last time
-        // but its lists and its jitter, over rays cast again at most at
-        // their pixels.
-        let stands =
+        // Nothing moved but the jitter: all the frame draws from read as
+        // last time but it, over rays cast again at most at their pixels.
+        let quiet =
             read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !gridded;
-        // Nothing moved but the jitter.
-        let quiet = stands && listed_same;
-        // Only what the region bounds moved: it alone is drawn again. Else
-        // the frame is drawn whole, its pixels cast whole.
-        let region = region.filter(|_| stands);
-        if region.is_none() {
-            self.screen.whole(g);
-        }
         // The frame stands where nothing moved, the jitter neither: nothing
         // is drawn, nothing submitted, and the canvases keep the frame they
         // show.
-        if quiet && !self.screen.casts_px() && !self.screen.sun_casts() {
+        if quiet && !self.screen.casts_pixels() && !self.screen.sun_casts() {
             self.frame_read = read;
             let mut stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
@@ -1126,7 +1123,7 @@ impl Renderer {
         ]);
         // The world's depth is the rays', so a cast that laid them again
         // lays the occlusion again.
-        a.mark(ao_remade || self.screen.grows() || self.screen.casts_px());
+        a.mark(ao_remade || self.screen.grows() || self.screen.casts_pixels());
         let ao_moved = !a.end();
         // A region drawn again alone moves no depth the occlusion reads: its
         // prepass draws the rays and the grown decor, never what the kernel
@@ -1194,8 +1191,18 @@ impl Renderer {
             self.frame_buffer,
             world,
             quiet,
-            region,
             &mut stamps[SPAN_RESOLVE],
+        );
+        // At the canvas's size, as what is drawn over it: counted with the
+        // markers', not the world's pixels.
+        self.finish.draw(
+            g,
+            encoder,
+            self.frame_buffer,
+            world,
+            gathered,
+            canvas_view,
+            &mut stamps[SPAN_MARKER],
         );
         // At the canvas's size, as what is drawn over it: counted with the
         // markers', not the world's pixels.
@@ -1253,14 +1260,9 @@ impl Renderer {
             self.beside.forget();
             self.ao_read.forget();
         } else {
-            self.resolve.on_drawn(quiet, region.is_some());
-            // The jitter's sequence run through once anything moved, as
-            // nothing else asks for those frames while it stands. What
-            // moves on its own (an actor, the clouds, the puck) wakes the
-            // turn at its own steps and takes a place of the sequence a
-            // step, held to the pixels about it: it is not hurried to the
-            // display's rate.
-            if self.resolve.gathering() && (quiet || !animated) {
+            self.resolve.on_drawn(quiet);
+            // The jitter's sequence run through while the view stands.
+            if self.resolve.gathering() {
                 REDRAW.set(true);
             }
             if self.screen.grows() {
@@ -1394,7 +1396,7 @@ impl Renderer {
             pack_bytes: self.pack.bytes as f64,
             census,
             gpu_spans,
-            sun: self.screen.tally_sums(),
+            rays: self.screen.tally_sums(),
         }
     }
 }
@@ -1436,13 +1438,12 @@ fn targets(g: &Gpu, s: &mut Surface) {
     s.color_view = g.view(s.color, false, 0, 1, 0, 1);
     s.screen_depth = g.texture(screen.0, screen.1, 1, Format::depth32float, 1, usage);
     s.screen_depth_view = g.view(s.screen_depth, false, 0, 1, 0, 1);
-    // The world's alone holds the cast's rays.
+    // The world's alone holds the cast's rays and its color over frames.
     (s.rays, s.rays_view) = (0, 0);
+    (s.history, s.history_view) = ([0; 2], [0; 2]);
     if s.role == surface_role::WORLD {
         for k in 0..2 {
-            // Copied within where a region alone is drawn again (gpu/resolve.rs).
-            let copied = usage | texture_usage::COPY_SRC | texture_usage::COPY_DST;
-            s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, copied);
+            s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
             s.history_view[k] = g.view(s.history[k], false, 0, 1, 0, 1);
         }
         // Written by the cast, read by the screen pass.

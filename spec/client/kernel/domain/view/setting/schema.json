@@ -4,7 +4,7 @@
     "where it is shown, its `section`: one of the settings sheet's, or",
     "`profiler`, the profiler panel's own. The store reads the defaults from",
     "here and the sheet renders rows from here, so adding a setting to the",
-    "sheet is one entry in SETTING plus its two strings in the locale catalog",
+    "sheet is one entry in SETTINGS plus its two strings in the locale catalog",
     "under `settings.<section>.<key>`. A choice may carry `costs` beside its",
     "`options`, one per option in the same order, for when what an option costs",
     "differs from its neighbors'; an empty string is no badge. A `dev` setting",
@@ -80,11 +80,13 @@
       "           (rust/client/render/src/gpu/ao.rs): the world's depth drawn",
       "           once more, the occlusion sampled from it at half resolution,",
       "           denoised, and read by every lit surface. Five passes and 11",
-      "           bytes a pixel."
+      "           bytes a pixel. The corners' too, the darker of the two where",
+      "           both fall (screen_lit.wgsl), as N8AO reads a cube's corner",
+      "           softer at half resolution."
     ]
   },
   "SKY_TIMES": {
-    "$val": {
+    "$value": {
       "real": 0,
       "dawn": 1,
       "morning": 2,
@@ -107,7 +109,7 @@
       "  dusk      — 17:00, a low sun."
     ]
   },
-  "SETTING": {
+  "SETTINGS": {
     "textures": {
       "number": 0,
       "$doc": [
@@ -233,8 +235,8 @@
       "number": 10,
       "$doc": [
         "corner, the occlusion a voxel world reads off its own cubes' faces;",
-        "screen, N8AO's screen-space pass, the costliest of the three. AO_MODES",
-        "says each."
+        "screen, N8AO's screen-space pass with the corners' too, the costliest",
+        "of the three. AO_MODES says each."
       ],
       "kind": "choice",
       "default": "corner",
@@ -294,7 +296,7 @@
     "camera_gizmo": {
       "number": 16,
       "$doc": [
-        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (domain/scene/indicator/camera_gizmo.rs)."
+        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them."
       ],
       "kind": "toggle",
       "default": false,
@@ -305,22 +307,31 @@
     "ray_steps": {
       "number": 19,
       "$doc": [
-        "Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on one fixed log ramp up to 1024: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's block or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_ray.wgsl)."
+        "Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl)."
       ],
       "kind": "toggle",
       "default": false,
-      "section": "debug",
-      "dev": true
+      "section": "debug"
     },
-    "sun_counts": {
+    "ray_counts": {
       "number": 20,
       "$doc": [
-        "How the sun's shadow map is cast — the slots that took the raster's pick and the boxes it drew — counted on the GPU and summed since boot into the profiler's sun lanes (rust/client/render/src/gpu/ray/tally.rs, rust/client/shader/src/sun.rs). The counting's atomics run in the sun's spans, so time them with it off."
+        "How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off."
       ],
       "kind": "toggle",
       "default": false,
-      "section": "debug",
+      "section": "profiler",
       "dev": true
+    },
+    "sky_time": {
+      "number": 21,
+      "$doc": ["The hour the sky is drawn at; SKY_TIMES says each."],
+      "kind": "choice",
+      "default": "real",
+      "options": "SKY_TIMES",
+      "section": "debug",
+      "dev": true,
+      "kept": false
     }
   }
 }

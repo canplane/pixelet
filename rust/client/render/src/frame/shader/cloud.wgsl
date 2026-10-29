@@ -73,7 +73,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> CloudOu
   var corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   var o: CloudOut;
   o.world = frame_camera_pos() + vec3f(corners[v] * half, 0.0) + frame_up() * (h / atmos_km_per_u());
-  o.clip = frame_view_proj() * vec4f(o.world, 1.0);
+  o.clip = jittered(frame_view_proj() * vec4f(o.world, 1.0));
   o.sheet = k;
   return o;
 }

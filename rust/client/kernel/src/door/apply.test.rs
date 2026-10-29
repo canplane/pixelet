@@ -2,9 +2,6 @@
 
 use super::*;
 use crate::domain::control::camera::state::{camera_state, Intent};
-use crate::domain::control::navigation::destination;
-use crate::domain::control::param;
-use crate::sys;
 use xpute_kit::wire::xtp::PacketWriter;
 
 fn surface(n: f64) -> Result<u32, Errno> {
@@ -49,22 +46,22 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
     assert_eq!(
         apply(
             &mut s,
-            Command::INPUT_GOTO as u32,
+            Command::INPUT_GO_TO as u32,
             &Some(&buf[..len as usize])
         )
         .map_err(|e| e.errnum),
         Ok(Some(0))
     );
-    destination::cancel();
+    crate::domain::control::navigation::destination::cancel();
     camera_state().intent
 }
 
 /// A view field asked lands as the controls take it, after the coming in; one
 /// absent is kept, but a view far out still comes in and one nearer stays.
 #[test]
-fn go_to_asks_after() {
+fn a_go_to_asks_its_view_after_the_going_and_keeps_what_it_leaves_out() {
     use crate::domain::control::param::DEFAULT_DIST;
-    let _g = sys::serial();
+    let _g = crate::sys::serial();
     let pi = core::f64::consts::PI;
 
     let kept = go_to(100.0, None, None, None);
@@ -79,7 +76,7 @@ fn go_to_asks_after() {
 
     assert_eq!(
         go_to(100.0, Some(1e9), None, Some(-1.0)).dist,
-        param::MAX_DIST
+        crate::domain::control::param::MAX_DIST
     );
     assert_eq!(go_to(100.0, None, None, Some(-1.0)).polar, 0.0, "clamped");
     assert_eq!(go_to(10.0, None, None, None).dist, 10.0, "nearer stays");

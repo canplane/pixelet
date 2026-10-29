@@ -196,15 +196,10 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 
 /// The width a place keeps to itself on the screen, in CSS pixels: its name
 /// wraps to it and its marker's region is it. A marker is laid out as the
-/// shell's text is, in CSS pixels, so the width is one on every screen:
-/// `SPACING_CELLS` of the camera grid's cells (`lens::cell`) as the
-/// reference view draws them, about 190 and whole. Which markers find room
-/// is then the screen's room, as on any map.
-fn spacing_px() -> f64 {
-    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau())
-        * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG);
-    libm::rint(f64::from(SPACING_CELLS) * cell)
-}
+/// shell's text is, in CSS pixels, so the width is one on every screen, set
+/// by eye to hold a name of a few words. Which markers find room is then the
+/// screen's room, as on any map.
+const SPACING_PX: f64 = 193.0;
 
 pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let p = ARRANGEMENT.get(Arrangement::default);

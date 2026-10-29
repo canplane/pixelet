@@ -126,10 +126,7 @@ pub const SHADER_GROWN_STAND: u32 = 57;
 pub const SHADER_SCREEN_FINISH: u32 = 58;
 /// The world's color gathered over frames (screen_resolve.wgsl).
 pub const SHADER_SCREEN_RESOLVE: u32 = 59;
-/// The region a frame draws again set back to nothing at the far plane
-/// (screen_clear.wgsl).
-pub const SHADER_SCREEN_CLEAR: u32 = 60;
-pub const SHADERS: u32 = 61;
+pub const SHADERS: u32 = 60;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -266,15 +263,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAY
-    lit![
-        "lattice",
-        "ray",
-        "eye",
-        "paint",
-        "debug_look",
-        "screen_ray",
-        "screen_lit"
-    ],
+    lit!["lattice", "ray", "eye", "paint", "debug_look", "screen_ray", "screen_lit"],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
@@ -342,9 +331,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "screen_depth"
     ],
     // SHADER_CAMERA_GRID
-    &["frame", "encode", "sky_word", "camera_grid"],
-    // SHADER_BOXES
-    &["boxes.gen"],
+    &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
+    // SHADER_SAMPLE_BOX
+    &["sample_box.gen"],
     // SHADER_RASTER
     &["raster_box", "raster"],
     // SHADER_MISS_LIST
@@ -363,6 +352,4 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "encode", "finish", "screen_finish"],
     // SHADER_SCREEN_RESOLVE
     &["frame", "screen_resolve"],
-    // SHADER_SCREEN_CLEAR
-    &["screen_clear"],
 ];

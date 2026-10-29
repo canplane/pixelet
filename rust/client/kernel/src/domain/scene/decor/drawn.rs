@@ -62,15 +62,18 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     split_dist(cell_zoom) * WINDOW_MARGIN <= sprite_reach(extent_u)
 }
 
-/// Each kind's window zooms where it is a sprite's worth, a bit each.
+/// Each kind's window zooms, a bit each: the leaves' alone, where it is a
+/// sprite's worth. A coarser window grows none, so what the ground grows is
+/// one set wherever it is drawn, never thinned or posed again at a coarser
+/// cell; a finer one lies within the leaves'.
 fn shown() -> [u32; DECORS.len()] {
     shown_by(|d| d.extent(catalog()))
 }
 
 /// `shown`, each kind's extent `extent` gives.
-fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
+fn shown_by(extent: impl Fn(&pxl_spec::asset::decor::Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
-        u32::from(is_decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
+        u32::from(decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
     })
 }
 
@@ -138,7 +141,8 @@ fn wrapped(x: i32) -> u32 {
 }
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
-/// largest is a sprite's worth, less the placed decor `hide` names, and the
+/// largest is a sprite's worth or the rays stop asking the leaves' cells,
+/// less the placed decor `hide` names, and the
 /// ground's decor at `scattered` left out.
 pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     let h = handed();
@@ -159,11 +163,16 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     // one beside it, whose side the reach is short of. What is past an
     // eye's own reach `decor_cnt_cs` leaves out by its size, as it does
     // what is past the box.
-    let reach = DECORS
+    // No farther than the rays ask the leaves' cells, past which none is drawn.
+    let reach = (DECORS
         .iter()
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
-        / decor_sprite_angle();
+        / decor_sprite_angle())
+    .min(pxl_spec::space::layer::lattice::draw_reach(
+        pxl_spec::space::layer::lattice::GROUND,
+        pxl_spec::space::layer::tile::LEAF_ZOOM,
+    ));
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
         zoom -= 1;

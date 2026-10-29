@@ -5,16 +5,16 @@
 //! `miss_cs` over every pixel where the list was full).
 
 use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{beam, observed, ray, support, tally, way};
+use pxl_spec_core::{answer, beam, face, observed, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
 
-use crate::beam::Beams;
-use crate::eye::{grid, Eye};
-use crate::observed::{seen_at, seen_put, Lined, Seen};
-use crate::observer::{self, Observer, Takes};
-use crate::world::{face_of, World};
+use crate::beam::{resumed, started, Beams};
+use crate::eye::{eye_origin, grid, Eye};
+use crate::observed::{seen_at, seen_put, tallied, Reading, Seen, Writing, MISSED};
+use crate::raster::picked;
+use crate::world::{face_of, Unlooked, World};
 use crate::{add, most};
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -30,7 +30,8 @@ type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
 /// face it entered through, then how far as f32 bits, then the four looks
 /// the ground's asset is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
-/// face (`World::faced`); where it met nothing, the first two zero.
+/// face (`World::faced`) and the faces its cell touches; where it met
+/// nothing, the first two zero.
 fn word<A: Copy>(
     ray: &cast::Ray,
     met: Met<A>,
@@ -46,7 +47,7 @@ fn word<A: Copy>(
         ray::first_word(val, face_of(ray, s.axis), s.node.zoom),
         s.t.to_bits(),
         if steps { met.visits } else { four },
-        faces,
+        faces | answer::touch(value) << face::TOUCH_SHIFT,
     ]
 }
 const _: () = assert!(
@@ -54,12 +55,13 @@ const _: () = assert!(
     "what lies about a ray's face is its last word"
 );
 
-/// The tangents across and up of the middle of drawn pixel `p` of the
+/// The tangents across and up of where drawn pixel `p`'s ray goes through it,
+/// its middle off by the eye's jitter (pxl-spec-core `eye::JITTER`), of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
 pub(crate) fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
-    let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
-    let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
+    let ndc_x = (p.x as f32 + 0.5 + eye.jitter.x) / size.x as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p.y as f32 + 0.5 + eye.jitter.y) / size.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
 }
 
@@ -139,6 +141,7 @@ pub fn cast_cs(
         }
     }
     let steps = eye.origin.w != 0;
+    let on = seen_at(seen, observed::TALLY_ON) != 0;
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
@@ -167,6 +170,7 @@ pub fn cast_cs(
         return;
     }
     if hit.t < ray.reach {
+        counted(marks, on, tally::PICKED, 1);
         written(
             rays,
             id,
@@ -214,17 +218,50 @@ pub fn cast_cs(
         );
         return;
     }
-    // Neither: marked and listed for its walk (`miss_list_cs`), which reads
-    // and writes the pyramid. No walk is this pass's own, so a lane that
-    // takes its pick pays none of a walk's footprint
-    // (doc/experiment/20261026-the-pixel-pass-footprint.md).
+    let met = resumed(
+        &mut Reading { seen: &*seen },
+        origin,
+        &ray,
+        detail,
+        t,
+        &line,
+        line.node(),
+    );
     counted(marks, on, tally::WALKED, 1);
-    // SAFETY: within the rays, bounded by their size above.
-    unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
-    let whole = [size.x.div_ceil(8), size.y.div_ceil(8)];
-    let at = listed(marks, observed::MARKS, whole);
-    if at < observed::MARKS {
-        seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
+    counted(marks, on, tally::PIXEL, met.visits);
+    if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
+        // SAFETY: within the rays, bounded by their size above.
+        unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
+        let whole = [size.x.div_ceil(8), size.y.div_ceil(8)];
+        let at = listed(marks, observed::MARKS, whole);
+        if at < observed::MARKS {
+            seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
+        }
+    } else {
+        let mut world = World {
+            window,
+            ground,
+            looks: Unlooked(0),
+            shards,
+            overwrites,
+            eye,
+            pool: ways::tree::Read(pool),
+        };
+        let faces = world.faced(origin, &ray, &met);
+        let met = Met {
+            visits: met.visits + line.visits(),
+            ..met
+        };
+        written(rays, id, word(&ray, met, steps, faces));
+    }
+}
+
+/// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
+/// `tally::PICKED` on) in its walk again's args `args`, where `on`
+/// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
+pub(crate) fn counted(args: &mut [u32], on: bool, lane: u32, v: u32) {
+    if on {
+        add(args, ray::MISS_ARGS_TALLY + lane - tally::PICKED, v);
     }
 }
 
@@ -277,12 +314,22 @@ fn missed(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let mut lined = Lined::before();
-    let (aim, met, before) =
-        observer::walked(eye, world, seen, beams, pixel_tan(eye, id, size), &mut lined);
-    let faces = world.faced(aim.origin, &aim.ray, &met, |_, _, _| {
-        support::Line::kept(aim.origin, &met.stop.node, lined.live, &lined.stack)
-    });
+    let met = resumed(
+        &mut Writing {
+            world,
+            seen: &mut *seen,
+            tag,
+            blocks: true,
+        },
+        origin,
+        &ray,
+        detail,
+        t,
+        &line,
+        line.node(),
+    );
+    tallied(seen, tally::EYE, tally::MISS, met.visits);
+    let faces = world.faced(origin, &ray, &met);
     let met = Met {
         visits: met.visits + before,
         ..met

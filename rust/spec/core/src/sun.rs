@@ -562,14 +562,6 @@ pub fn margin(width: f32) -> f32 {
     2.0 * libm::sqrtf(6.0) * width + 2.0 / (1u32 << FRAC_W) as f32
 }
 
-/// What the sun's cast counts where the `sun_counts` setting asks (the
-/// head's `MOVED_COUNTED`; pxl-shader sun.rs), a word each: the slots that
-/// took the raster's pick, and the boxes drawn. Its walks go through the
-/// observed pyramid, whose binding takes the counts' place on them.
-pub const COUNT_PICKED: u32 = 0;
-pub const COUNT_BOXES: u32 = 1;
-pub const COUNTS: u32 = 2;
-
 /// The sun's map as the eye's rays are cast, every slot every frame
 /// (pxl-spec-core `raster`): a sample every `SAMPLE` slots across and down
 /// walked (pxl-shader beam.rs `sample_cs`), the cells they stopped at written

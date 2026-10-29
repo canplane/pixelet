@@ -100,7 +100,7 @@ pub(super) fn apply(
             )?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
-            let last = clock::wall_now();
+            let last = crate::sys::sched::clock::wall_now();
             let delta = if last > 0.0 {
                 ((p.unix_ms - last) / 1000.0).max(0.0)
             } else {
@@ -115,7 +115,7 @@ pub(super) fn apply(
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            clock::set_wall_now(p.unix_ms);
+            crate::sys::sched::clock::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
@@ -246,16 +246,16 @@ pub(super) fn apply(
         Command::INPUT_GOTO => {
             let p = abi::InputGoto::read(given(pkt)?)?;
             refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
-            ui::go_to_deg(
-                p.lon,
-                p.lat,
-                IntentPatch {
+            // Asked after the going's coming in, so a dist asked wins over it.
+            ui::go_to_degrees(p.lon, p.lat);
+            crate::domain::control::camera::controller::set_intent(
+                crate::domain::control::camera::state::IntentPatch {
                     dist: p.dist,
                     azimuth: p.azimuth,
                     polar: p.polar,
                 },
             );
-            ask_turn(s)
+            applied(s)
         }
         Command::INPUT_XR_POSE => {
             let p = abi::InputXrPose::read(given(pkt)?)?;

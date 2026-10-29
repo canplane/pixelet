@@ -52,6 +52,11 @@ serve-api = ["run", "--profile", "server", "-p", "pxl-api", "--bin", "pxl-api", 
 # The dev tile server, its sets baked on demand or off the shelf.
 serve-tile = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--features", "serve", "--bin", "serve_tiles", "--"]
 
+# Every rustc a build runs, through the machine's compile cache where it has
+# one (.cargo/rustc.sh); relative to rust/, where this .cargo is.
+[build]
+rustc-wrapper = ".cargo/rustc.sh"
+
 # The repository's root, for what a crate reads beyond its own directory: a
 # file is named from here, never counted out from where the crate is.
 [env]

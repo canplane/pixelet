@@ -11,11 +11,11 @@ use pxl_spec_core::grid;
 
 // ---- the view's knobs, beside pxl-spec-core grid.rs's ----
 
-/// The tangent of half the vertical field of view, the view's (pxl-kernel
-/// domain/view/frame/pose.rs `ray_of`): its height spans a unit at unit
-/// distance, a field of 53.13° (`fov`;
-/// doc/experiment/20261028-the-cell-and-the-fov.md).
-pub const HALF_TAN: f64 = 0.5;
+/// The vertical field of view, in degrees: the view's (pxl-kernel
+/// domain/view/frame/pose.rs `ray_of`). The angle whose half's tangent is
+/// 1/2, so the view's height spans a unit at unit distance
+/// (doc/experiment/20261028-the-cell-and-the-fov.md).
+pub const FOV_DEG: f64 = 53.130_102_354_155_99;
 
 
 // ---- derived from the knobs ----
@@ -88,3 +88,7 @@ impl Tau {
         pxl_spec_core::grid::cell_at((r2 * (self.0 * self.0)) as f32)
     }
 }
+
+#[cfg(test)]
+#[path = "grid.test.rs"]
+mod test;

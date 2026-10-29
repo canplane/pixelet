@@ -10,15 +10,12 @@
 
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
 use pxl_spec_core::world::At;
-use pxl_spec_core::{beam, observed, ways};
+use pxl_spec_core::{beam, observed, tally, ways};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
-use crate::either::Either;
-use crate::eye::Eye;
-use crate::observed::{seen_at, seen_put, Seen, Writ};
-use crate::observer::{self, Observer};
-use crate::sun::Moved;
+use crate::eye::{eye_origin, eye_ray, grid, Eye};
+use crate::observed::{seen_at, seen_put, tallied, Seen, Writ, Writing};
 use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
@@ -256,7 +253,23 @@ pub fn beam_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::beam(&o, world, seen, beams, [id.x, id.y]);
+    let base = beam::Grid::line(g.corner_index([id.x, id.y]));
+    let met = cast::rooted(
+        &mut Writing {
+            world,
+            seen: &mut *seen,
+            tag,
+            blocks: true,
+        },
+        origin,
+        &ray,
+        detail,
+        Until::Beam,
+        &mut Leaving(beams, base),
+    );
+    tallied(seen, tally::EYE, tally::BEAM, met.visits);
+    seen_put(beams, base + beam::LINE_T, g.handed(met.stop.t).to_bits());
+    seen_put(beams, base + beam::LINE_VISITS, met.visits);
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -341,5 +354,24 @@ pub fn sample_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::sample(&o, world, seen, beams, [id.x, id.y]);
+    let met = resumed(
+        &mut Writing {
+            world,
+            seen: &mut *seen,
+            tag,
+            blocks: true,
+        },
+        origin,
+        &ray,
+        detail,
+        t,
+        &line,
+        line.node(),
+    );
+    tallied(seen, tally::EYE, tally::SAMPLE, met.visits);
+    let met = Met {
+        visits: met.visits + line.visits(),
+        ..met
+    };
+    sample_put(beams, g.sample_at([id.x, id.y]), &met);
 }

@@ -53,7 +53,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
   let half = SKY_STAR_CUTOFF_SIGMAS * sigma * select(1.0, SKY_STAR_HALO_SIGMA, halo > 0.0);
   clip.z = 0.0;
   clip = vec4f(clip.xy + corner * half * 2.0 / frame_viewport() * clip.w, clip.z, clip.w);
-  o.clip = clip;
+  o.clip = jittered(clip);
   o.at = corner * half;
   o.light = min(light, vec3f(SKY_STAR_LIGHT_MAX));
   o.sigma = sigma;

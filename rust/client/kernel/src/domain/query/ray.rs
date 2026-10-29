@@ -11,7 +11,7 @@ use super::decor::Strike;
 use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
-use crate::domain::layer::tile_cache::Lines;
+use crate::domain::layer::residency::Lines;
 use crate::domain::layer::{Answer, Base};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -21,7 +21,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::{origin, wrap_cell};
-use pxl_spec::space::coord::zoom::{cube, units, Zoom};
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::answer::{self, In, Kind};
@@ -103,7 +103,8 @@ pub enum Struck {
     Object(EntryAt),
     /// Objects folded into a cell above the leaves; no single object is met.
     Objects,
-    /// A decor thing, struck by its model: grown by the ground or placed.
+    /// A decor thing, struck as the box it claims: grown by the ground or
+    /// placed.
     Decor(Instance),
 }
 
@@ -125,7 +126,7 @@ pub(super) struct Walker<'w, 'a> {
     lack: Option<Tile>,
     answered: bool,
     /// The decor struck along the ray, where the walk strikes any.
-    strike: Option<(&'w Ray, Strike<'a>)>,
+    strike: Option<(&'w Ray, Strike)>,
     /// The ground's lines the walk read, each node's stepped from them
     /// (`World::node`).
     lines: Lines,
@@ -217,12 +218,12 @@ impl<'a> Query for Walker<'_, 'a> {
 fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
     let claimed = super::decor::claim(&i).unwrap_or_else(|| i.cell());
     let mut normal = [0.0; 3];
-    normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
+    normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
     Hit {
         t,
         point: ray.at(t),
-        normal: ray.direction.map(|v| -v),
-        cube: base,
+        normal,
+        cube: claimed,
         struck: Struck::Decor(i),
     }
 }
@@ -238,10 +239,12 @@ impl<'a> World<'a> {
         let (met, strike) = self.along(ray, detail, Until::Opaque, self.strike(ray));
         let decor = strike
             .and_then(|s| s.best)
-            .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
+            .filter(|&(d, ..)| met.value().flatten().is_none_or(|h: Hit| d < h.t));
         match (decor, met) {
-            (Some((d, i)), Answer::Nothing(l)) => Answer::Coarser(Some(decor_hit(ray, d, i)), l),
-            (Some((d, i)), met) => met.map(|_| Some(decor_hit(ray, d, i))),
+            (Some((d, i, k)), Answer::Nothing(l)) => {
+                Answer::Coarser(Some(decor_hit(ray, d, k, i)), l)
+            }
+            (Some((d, i, k)), met) => met.map(|_| Some(decor_hit(ray, d, k, i))),
             (None, met) => met,
         }
     }
@@ -254,8 +257,8 @@ impl<'a> World<'a> {
         ray: &Ray,
         detail: Detail,
         until: Until,
-        strike: Option<Strike<'a>>,
-    ) -> (Answer<Option<Hit>>, Option<Strike<'a>>) {
+        strike: Option<Strike>,
+    ) -> (Answer<Option<Hit>>, Option<Strike>) {
         let mut walker = Walker {
             world: self,
             lack: None,

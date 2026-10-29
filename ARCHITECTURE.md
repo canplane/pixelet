@@ -410,11 +410,12 @@ with what was handed it (`pxl-spec-core support.rs` `Line`). A reader that asks
 about the cells beside one it reached asks them off that line, from the deepest
 node holding each (`support.rs` `asset`), never again from the top.
 
-- the ground, by the bound the GPU made over its held cells, or where a cave may
-  take it;
-- the ways, by a bound of their own beside the ground's;
-- the caves, by their hash node, hollow and drawing nothing again under it;
-- what is placed, by nothing held under the node in the objects' tree.
+Control asks the same world, one ray at a time, at the zoom the eye's rays draw
+there, so what control meets is what is drawn (`pxl-kernel domain/query/ray.rs`
+`first_hit`). A walker stands on the first cell that fills down its cell's
+columns, at the finest zoom placed there (`domain/query/support.rs`), and the
+pointer's ray strikes decor as the box it claims where the rays draw decor as it
+is (`domain/query/decor.rs`). None reads a layer.
 
 The pointer's ray also strikes decor against its model, but only where the rays
 draw decor as it is, so what is struck is what is drawn

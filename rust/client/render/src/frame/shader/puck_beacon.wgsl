@@ -6,7 +6,7 @@ struct VertexOut {
 @vertex
 fn vs(@location(0) pos: vec3f, @location(1) normal: vec3f) -> VertexOut {
   var o: VertexOut;
-  o.clip = jittered(frame_view_proj() * vec4f(spin_z(pos, draw_fourth()) + draw_translation(), 1.0));
+  o.clip = jittered(frame_view_proj() * vec4f(spin_z(position, draw_fourth()) + draw_translation(), 1.0));
   o.normal = spin_z(normal, draw_fourth());
   return o;
 }

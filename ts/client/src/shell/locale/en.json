@@ -48,6 +48,22 @@
       "tilt_lock": {
         "label": "Lock tilt",
         "description": "Fixes the tilt; turns left and right only."
+      },
+      "orbit_obstacle": {
+        "label": "Third-person collision",
+        "through": {
+          "label": "Pass through",
+          "description": "Ignores obstacles and passes through."
+        },
+        "stop": {
+          "label": "Stop",
+          "description": "Stops the camera control just short of the obstacle."
+        },
+        "climb": {
+          "label": "Climb over",
+          "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too; zooming in there drops it under the roof."
+        },
+        "description": "Controls what happens when zooming, turning, or tilting would move the camera into terrain or an object."
       }
     },
     "lighting": {
@@ -69,7 +85,7 @@
         },
         "screen": {
           "label": "Everything (SSAO)",
-          "description": "Adds soft shading to decor, characters and wider gaps on top of the corners for greater depth. This is the most demanding option because it processes the entire screen."
+          "description": "The corners' shading, plus soft shading on everything on screen, decor and characters too. The most demanding option, as it processes the whole screen."
         }
       },
       "shadows": {
@@ -97,40 +113,12 @@
         "description": "Draws rings that mark the screen's center and directions, and colors the ground by how far its terrain has loaded. The legend shown with it explains the colors."
       },
       "camera_gizmo": {
-        "label": "Camera gizmo",
+        "label": "Camera Gizmo",
         "description": "Overlays a ring-shaped grid around the screen's center and colors cubes by how large they appear on screen against a grid cell. The legend shown with it explains the colors."
       },
       "ray_steps": {
         "label": "Ray steps",
-        "description": "Colors each point on screen by how much work it took to draw: blue for little, red for a lot. Points that borrowed a nearby result show what finding that result took."
-      },
-      "sky_time": {
-        "label": "Sky time",
-        "description": "Holds the sky and the sun at an hour of the place you are looking at, in its solar time. Clouds and stored data keep the real clock. A reload returns to the real time.",
-        "real": {
-          "label": "Real time",
-          "description": "Follows the device's clock."
-        },
-        "dawn": {
-          "label": "Dawn, 7:00",
-          "description": "A low sun, long shadows."
-        },
-        "morning": {
-          "label": "Morning, 9:00",
-          "description": "The sun stands at a slant."
-        },
-        "noon": {
-          "label": "Noon",
-          "description": "The sun at its highest, the shortest shadows."
-        },
-        "afternoon": {
-          "label": "Afternoon, 3:00",
-          "description": "The sun leans west."
-        },
-        "dusk": {
-          "label": "Dusk, 5:00",
-          "description": "A low sun, long shadows."
-        }
+        "description": "Colors each point on screen by how much work it took to draw. Points that borrowed a nearby result show what finding that result took. The legend shown with it explains the colors."
       }
     },
     "disclaimer": {
@@ -349,6 +337,7 @@
       "placeholder": "Search places",
       "clear_aria_label": "Clear search",
       "loading": "Searching…",
+      "locating": "Locating…",
       "no_results": "No results found",
       "section_elsewhere": "Elsewhere",
       "pivot": "Current location"

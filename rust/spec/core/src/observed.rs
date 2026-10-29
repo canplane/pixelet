@@ -37,7 +37,7 @@
 //! in between.
 
 use crate::answer::Kind;
-use crate::scatter::cut_box;
+use crate::overwrite::cut_box;
 use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::world::AT_WORDS;
 use crate::{wrap_index, Zoom, LEAF_CELL};
@@ -48,19 +48,27 @@ use crate::{wrap_index, Zoom, LEAF_CELL};
 /// holds moved or was handed since the last cast; and the boxes of leaf
 /// cells whose columns what is placed or a preview's cuts changed since the
 /// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
-/// growth is asked over (pxl-spec-core `scatter::BOXES`, `scatter::cut_box`;
+/// growth is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
 /// pxl-render gpu/grown.rs); and the families of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
-/// `WRITTEN` at most, past which all is forgotten (`reads_written`).
+/// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
+/// whether its walks count what they ask, and what they counted
+/// (`TALLY_ON`, `TALLY_AT`).
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
 pub const MOVED_WORDS: u32 = (EYE_WINDOWS * SLOTS).div_ceil(32);
 pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
-pub const BOXES: u32 = crate::scatter::BOXES;
+pub const BOXES: u32 = crate::overwrite::BOXES;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN: u32 = 32;
-pub const HEAD_WORDS: u32 = WRITTEN_AT + 1 + WRITTEN;
+/// Whether the walks count what they ask, where the `ray_counts` setting
+/// asks, and the `TALLY_WORDS` they count into, which the tally lays out
+/// (pxl-spec-core `tally::walk_at`).
+pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN;
+pub const TALLY_AT: u32 = TALLY_ON + 1;
+pub const TALLY_WORDS: u32 = 6;
+pub const HEAD_WORDS: u32 = TALLY_AT + TALLY_WORDS;
 
 /// What a frame forgets: nothing; everything, where what every node is
 /// asked of moved (the service area) or the keys' frames ran out; the nodes
@@ -227,7 +235,7 @@ pub const fn kind_of(w: u32) -> Kind {
 /// whole side wide or wider reads every slot of the window.
 /// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
 /// leaf cells `[x0, y0, x1, y1)`, X round the world: its own columns as a
-/// box of leaf cells (`scatter::cut_box`) meet it. A node's answer, and what
+/// box of leaf cells (`overwrite::cut_box`) meet it. A node's answer, and what
 /// was handed it, read what is placed in its own columns and its
 /// ancestors' alone, so a node no changed box meets answers as it did.
 pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {

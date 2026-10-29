@@ -24,7 +24,7 @@
 // FRAC_W bits a unit and wrapping, a cell's place on the lattice read off
 // their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
 // the axes and tangents each ray's direction is formed of; and where each
-// px's ray goes through it (`EYE_JITTER`).
+// pixel's ray goes through it (`EYE_JITTER`).
 @group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;
 
 fn eye_word(k: u32) -> u32 {
@@ -47,9 +47,15 @@ fn eye_tan() -> vec2f {
   return vec2f(bitcast<f32>(eye_word(EYE_TAN)), bitcast<f32>(eye_word(EYE_TAN + 1u)));
 }
 
+// Where this frame's rays go through their pixels (pxl-spec-core
+// `eye::JITTER`), off their middles, in drawn pixels.
+fn eye_jitter() -> vec2f {
+  return vec2f(bitcast<f32>(eye_word(EYE_JITTER)), bitcast<f32>(eye_word(EYE_JITTER + 1u)));
+}
+
 // That ray's direction before it is made a unit: linear in `frag`.
 fn aim(frag: vec2f, size: vec2f) -> vec3f {
-  let t = px_tan(frag + eye_jitter(), size, eye_tan());
+  let t = pixel_tan(frag + eye_jitter(), size, eye_tan());
   return eye_vec3(EYE_FORWARD) + t.x * eye_vec3(EYE_RIGHT) + t.y * eye_vec3(EYE_UP);
 }
 
@@ -68,12 +74,6 @@ fn aim(frag: vec2f, size: vec2f) -> vec3f {
 const BEHIND: f32 = 6.103515625e-5;
 const SNAP: f32 = 0.25;
 
-// The steps a ray's colour runs up to, on a log scale, the same on every
-// screen so two compare.
-const STEPS_MOST: f32 = 1024.0;
-// A pixel that walked nothing, apart from the ramp's every colour.
-const STEPS_NONE: f32 = 0.5;
-
 struct VertexOut {
   @builtin(position) clip: vec4f,
 };
@@ -89,17 +89,6 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
   var o: VertexOut;
   o.clip = vec4f(p, 0.0, 1.0);
   return o;
-}
-
-// Google's Turbo colour map, its polynomial fit: dark blue at 0, through
-// green and yellow, dark red at 1.
-fn turbo(x: f32) -> vec3f {
-  let v = vec4f(1.0, x, x * x, x * x * x);
-  let v2 = v.zw * v.z;
-  let r = dot(v, vec4f(0.13572138, 4.61539260, -42.66032258, 132.13108234)) + dot(v2, vec2f(-152.94239396, 59.28637943));
-  let g = dot(v, vec4f(0.09140261, 2.19418839, 4.84296658, -14.18503333)) + dot(v2, vec2f(4.27729857, 2.82956604));
-  let b = dot(v, vec4f(0.10667330, 12.64194608, -60.58204836, 110.36276771)) + dot(v2, vec2f(-89.90310912, 27.34824973));
-  return clamp(vec3f(r, g, b), vec3f(0.0), vec3f(1.0));
 }
 
 // A look's words; past the table, black and no layer.
@@ -155,21 +144,48 @@ fn eye_phase(axis: u32, k: i32) -> f32 {
   return f32(low) / f32(1u << FRAC_W);
 }
 
+// The box a cell keeps of its node `side` a side, `k` its kept eighths (0
+// for all eight) and `touch` the faces it touches, a bit a face, 2a the
+// low on axis a and 2a + 1 the high: its least corner off the node's and
+// its size, as pxl-spec-core cast.rs `kept_bounds` places it. An axis both
+// of whose faces touch is spanned, one touching face is sat flush against,
+// none is centered, and the `a` axes not spanned are each f^(1/(3 − a))
+// of the node, so the volume is the share `f`.
+struct Kept {
+  lo: vec3f,
+  size: vec3f,
+};
+
+fn kept_box(k: u32, touch: u32, side: f32) -> Kept {
+  let low = vec3<bool>((touch & 1u) != 0u, (touch & 4u) != 0u, (touch & 16u) != 0u);
+  let high = vec3<bool>((touch & 2u) != 0u, (touch & 8u) != 0u, (touch & 32u) != 0u);
+  let span = low & high;
+  let spanned = u32(span.x) + u32(span.y) + u32(span.z);
+  if (k == 0u || spanned == 3u) {
+    return Kept(vec3f(0.0), vec3f(side));
+  }
+  let f = f32(k) / f32(KEPT_EIGHTHS);
+  let s = select(select(f, sqrt(f), spanned == 1u), kept_side(k), spanned == 0u);
+  let size = select(vec3f(side * s), vec3f(side), span);
+  let lo = select(select(vec3f(0.5) * (vec3f(side) - size), vec3f(side) - size, high), vec3f(0.0), low);
+  return Kept(lo, size);
+}
+
 // Where a ray meets the face it entered, from the eye, kept on the cell
-// (the cell half its side in from where the ray entered it, its corner on
+// (the cell half the box in from where the ray entered it, its corner on
 // the lattice, and the face's plane through it), the face's normal and
-// the axis it lies across, that cell's corner, its least on every axis,
-// and its side, in units: of the box it is where it keeps less than its
-// cube (`ray_kept`).
+// the axis it lies across, the box's corner, its least on every axis, and
+// its size, in units: its node's where it keeps its cube, else the box it
+// keeps (`kept_box`, by its eighths and the faces it touches).
 struct Hit {
   at: vec3f,
   normal: vec3f,
   axis: u32,
   corner: vec3f,
-  side: f32,
+  size: vec3f,
 };
 
-fn hit_of(c: vec2u, d: vec3f) -> Hit {
+fn hit_of(c: vec2u, faces: u32, d: vec3f) -> Hit {
   let face = min(ray_face(c.x), 5u);
   let axis = face / 2u;
   let n = FACE_NORMAL[face];
@@ -177,14 +193,12 @@ fn hit_of(c: vec2u, d: vec3f) -> Hit {
   let side = exp2(f32(k));
   let e = vec3f(eye_phase(0u, k), eye_phase(1u, k), eye_phase(2u, k));
   let t = bitcast<f32>(c.y);
-  let node = floor((e + d * t - n * (0.5 * kept_side(ray_kept(c.x)) * side)) / side) * side - e;
-  // A cell kept short of its cube is the box its share fills, inset about
-  // the cube's center (pxl-spec-core cast.rs `kept_bounds`).
-  let box = side * kept_side(ray_kept(c.x));
-  let corner = node + vec3f(0.5 * (side - box));
-  let plane = corner[axis] + select(0.0, box, n[axis] > 0.0);
+  let kept = kept_box(ray_kept(c.x), faces_touch(faces), side);
+  let node = floor((e + d * t - n * (0.5 * kept.size[axis])) / side) * side - e;
+  let corner = node + kept.lo;
+  let plane = corner[axis] + select(0.0, kept.size[axis], n[axis] > 0.0);
   let s = select(t, plane / d[axis], d[axis] * plane > 0.0);
-  return Hit(clamp(d * s, corner, corner + vec3f(box)), n, axis, corner, box);
+  return Hit(clamp(d * s, corner, corner + kept.size), n, axis, corner, kept.size);
 }
 
 // How far this px's ray's hit moves along its face's plane as the px
@@ -257,17 +271,18 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
   }
   let u = (h.axis + 1u) % 3u;
   let v = (h.axis + 2u) % 3u;
-  let l = (h.at - h.corner) / h.side;
-  // Each edge: how far it is, in cells, and the units a drawn pixel spans
-  // toward it.
+  let l = (h.at - h.corner) / h.size;
+  // Each edge: how far it is, as a share of the box, the box's length
+  // toward it, and the units a drawn pixel spans toward it.
   let to = vec4f(1.0 - l[u], l[u], 1.0 - l[v], l[v]);
   let pixel = max(footprint(p), vec3f(1e-9));
   let across = vec4f(pixel[u], pixel[u], pixel[v], pixel[v]);
+  let extent = vec4f(h.size[u], h.size[u], h.size[v], h.size[v]);
   var edge = 0.0;
   var open = 1.0;
   for (var k = 0u; k < 4u; k++) {
     if (((faces >> (FACES_LINE + k)) & 1u) != 0u || ((faces >> (FACES_RISE + k)) & 1u) != 0u) {
-      edge = max(edge, line_at(to[k] * h.side, across[k]));
+      edge = max(edge, line_at(to[k] * extent[k], across[k]));
     }
     if (((faces >> (FACES_RISE + k)) & 1u) != 0u) {
       open *= 1.0 - occlusion_of(to[k]);
@@ -310,5 +325,5 @@ fn px_ray(clip: vec2f) -> Pixel {
   let at = vec2i(clip);
   let c = vec3u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x);
   let faces = textureLoad(rays, at, RAY_FACES, 0).x;
-  return Pixel(a, size, d, c, faces, c.x != 0u, hit_of(c.xy, d));
+  return Pixel(a, size, d, c, faces, c.x != 0u, hit_of(c.xy, faces, d));
 }

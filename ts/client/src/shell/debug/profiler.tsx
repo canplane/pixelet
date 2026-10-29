@@ -2,11 +2,12 @@
 
 /**
  * The profiler panel: the profiler's recording controls, exports and
- * gauge. Shown by the `profiler` setting in any build; the kernel
- * records from boot while it is on. A development page reads the same from
+ * gauge, and its own settings (section `profiler`) under the buttons. Shown by the `profiler`
+ * setting in any build; the kernel records from boot while it is on. A development page reads the same from
  * the console (shell/debug/console.ts).
  */
 
+import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -25,8 +26,8 @@ import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
 import { kernel_command, kernel_setting } from "@/abi/shell.ts";
 import {
-  SETTING,
   type SettingName,
+  SETTINGS,
   settingsIn,
 } from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -138,7 +139,7 @@ const SAID_MS = 2500;
 
 /** A setting the panel holds (section `profiler`). */
 type Own = {
-  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler" ? K
+  [K in SettingName]: (typeof SETTINGS)[K]["section"] extends "profiler" ? K
     : never;
 }[SettingName];
 
@@ -151,7 +152,7 @@ const OWN: Record<Own, { label: string; note: string }> = {
 };
 
 function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
-  const { key } = SETTING[name];
+  const { key } = SETTINGS[name];
   const on = useKernel((s) => s.settings[key] === 1);
   const own = OWN[name];
   const Box = on ? CheckSquareIcon : SquareIcon;
@@ -266,6 +267,9 @@ export function ProfilerPanel() {
           onPress={() => void profilerTraceSave().then(setSaid)}
         />
       </View>
+      {(settingsIn("profiler") as Own[]).map((name) => (
+        <OwnCheck key={name} name={name} disabled={recording} />
+      ))}
       {/* Under the buttons: a two-line hint above them moved the hovered button away. */}
       {(said ?? hint) !== null && (
         <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>
@@ -286,6 +290,9 @@ const styles = StyleSheet.create({
     color: HINT_INK,
   },
   body: { flexShrink: 1 },
+  check: { alignItems: "center", marginTop: 6 },
+  checkLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
+  note: { flexShrink: 1, textAlign: "right" },
   buttons: { flexDirection: "row", gap: 4, marginTop: 8 },
   button: {
     flex: 1,
