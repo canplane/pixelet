@@ -1,6 +1,6 @@
 ---
 name: naming
-description: How a name in pixelet is chosen and spelled — a convention's or the 0405 checkpoint's word, never a coined one; abbreviations by default and the domain words that stay whole; case by language and kind; bindings abbreviated, types whole; plurals, units, imports, and names someone else owns. Use before naming or renaming anything, in code, spec JSON or a backticked identifier in a document.
+description: How a name in pixelet is chosen and spelled — a convention's or the 0405 checkpoint's word, never a coined one; abbreviations by default and the domain words that stay whole; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming or renaming anything, in code, spec JSON or a backticked identifier in a document.
 ---
 
 # Naming
@@ -25,15 +25,13 @@ index `idx`, indices `idxs`, value `val`, values `vals`, buffer `buf`, buffers
 `mem`, component `comp`, channel `ch`, elevation `ele`, feature `feat`,
 latitude `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation
 `orient`, rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial
-`init`, matrix `mat`.
+`init`, matrix `mat`, configuration `cfg`.
 
 - Longitude is `lon`, as PROJ, OpenStreetMap, PostGIS and the spec name it;
   0405's `lng` was a web map library's.
 - `pkt` only for a real wire packet (an XTP packet: a command's arguments, a
   baked tile's bytes).
 - `encode`, `decode` and `control` (`domain/control`) stay whole.
-- A plural abbreviates as 0405 did (`vals`); `counts`, `offsets`,
-  `positions`, `sizes` stay whole.
 
 ## Domain words stay whole
 
@@ -63,10 +61,10 @@ beside `sx`/`sy`.
 
 ## Case, by language and kind
 
-**Rust:** snake_case bindings, fields and functions abbreviate, lone words
-included (`let val`, `fn pkt()`); SCREAMING consts abbreviate (`MAX_PKT_BYTES`,
-`INIT_SIZE`). PascalCase types and variants stay whole (`MarshalError`,
-`SensorStatus::Error`).
+**Rust:** snake_case bindings, fields, functions and a macro's arguments
+abbreviate, lone words included (`let val`, `fn pkt()`, `$cfg`); SCREAMING
+consts abbreviate (`MAX_PKT_BYTES`, `INIT_SIZE`, `CFG`). PascalCase types and
+variants stay whole (`MarshalError`, `SensorStatus::Error`, `Config`).
 
 **TypeScript:** camelCase stays whole. snake_case and SCREAMING abbreviate
 (`kernel_pos`, `phase_cnt`, `ERR`), lone words too in snake-style code (xpute
@@ -86,14 +84,19 @@ SCREAMING rules (`"val"`, `"pkt"`, `"err"`, `SENSOR_POS`, `XR_POSE`,
 
 ## Bindings and types
 
-Abbreviate the binding, keep the type: `let idx: Index`,
+Abbreviate the binding, keep the type: `let idx: Index`, `let cfg: Config`,
 `SensorState { status: SensorStatus, err: Option<Message> }`. A helper named
-for the type it builds keeps the type's word (`marshal_error`).
+for the type it builds keeps the type's word (`marshal_error`). The word in
+prose stays a word ("the config", "an error").
+
+## Plurals
 
 A plural names a collection only. One value is singular (`End`, `Take`,
 `Write`, `Occupancy`, the object layer's `OBJECT`), whatever it chooses
-among. A count may stay plural (`*_WORDS`, `SLOTS`). A list of byte lengths is
-`bytes`.
+among. A count may stay plural (`*_WORDS`, `SLOTS`).
+
+A plural abbreviates as 0405 did (`vals`); `counts`, `offsets`, `positions`
+and `sizes` stay whole. A list of byte lengths is `bytes`.
 
 ## Units
 
@@ -102,15 +105,6 @@ the EPSG:3857 plane (PROJ's name), `_m` a meter on the ground, never the
 plane's (`pxl-spec space/coord/adapter/3857.rs`). `_mat` is a matrix, never a
 meter. A unit shown to a person goes on the value, not the label (`120.0 u`,
 `29.0 m`).
-
-## Imports
-
-A path past a crate and one module is a `use` at the top of its module, as the
-Book has it: a function, constant or static through its module (`use
-pxl_spec_core::window;` then `window::step()`), a type whole. A path used only
-inside `mod tests` is imported there. `clippy::absolute_paths` holds this; the
-standard library's paths may stand. Where a module's own names take another's,
-keep the full path under `#[expect(clippy::absolute_paths, reason = "…")]`.
 
 ## What is someone else's
 
@@ -151,7 +145,8 @@ so its name may change freely.
 - Then check what a rename misses: every target (`--all-targets`, the cargo
   features, wasm, iOS and Android), a type literal written apart from its
   type, a macro's body, a build script. `make check` is the end of it.
-- A backticked identifier in a document or comment follows the code; a prose
-  word ("count", "packet") does not.
+- The language server renames a name, not its mentions: search the comments,
+  the documents and `$doc` for the old name, backticked or not. A backticked
+  identifier follows the code; a prose word ("count", "packet") does not.
 - The records under `doc/` are renamed with the code, as the user asked on
   2026-10-29, but a name quoted from someone else (an API's field) stays.

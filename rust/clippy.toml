@@ -61,6 +61,11 @@ disallowed-types = [
 ]
 
 # What `absolute_paths` lets stand in a body: the standard library's own paths
-# (`core::mem::swap`), and no path of more than a crate and a module.
+# (`core::mem::swap`), and no path of more than a crate and a module. A longer
+# one is a `use` at the top of its module, as the Book has it: a function,
+# constant or static through its module (`use pxl_spec_core::window;` then
+# `window::step()`), a type whole; a path only `mod tests` uses is imported
+# there. Where a module's own names take another's, the full path stands under
+# `#[expect(clippy::absolute_paths, reason = "…")]`.
 absolute-paths-allowed-crates = ["std", "core", "alloc"]
 absolute-paths-max-segments = 2
