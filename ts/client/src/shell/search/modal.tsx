@@ -26,11 +26,8 @@ import {
   weight,
 } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
-import {
-  Command,
-  DevicePoseStatus,
-  encode_input_goto,
-} from "@/abi/cmd.spec.ts";
+import { Command, encode_input_goto, SensorStatus } from "@/abi/cmd.spec.ts";
+import { statusColor } from "@/shell/world/top/sensor-icons.tsx";
 import { kernel_command, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
@@ -156,23 +153,12 @@ function byCountry(
   return [...sections.values()].sort((a, b) => rank(a) - rank(b));
 }
 
-function poseColor(status: DevicePoseStatus): string {
-  switch (status) {
-    case DevicePoseStatus.Loading:
-      return STATUS.pending;
-    case DevicePoseStatus.Error:
-      return STATUS.failed;
-    default:
-      return LABEL.secondary;
-  }
-}
-
 const CLEAR = 16;
 
 function LocateCard() {
   const { t } = useTranslation();
   const location = useKernel((s) => s.location.status);
-  if (location === DevicePoseStatus.Ready) return null;
+  if (location === SensorStatus.Ready) return null;
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing
@@ -189,7 +175,7 @@ function LocateCard() {
           <Glyph
             glyph="location"
             size={chrome.glyph}
-            color={poseColor(location)}
+            color={statusColor(location, LABEL.secondary, STATUS)}
           />
           <Text
             numberOfLines={1}

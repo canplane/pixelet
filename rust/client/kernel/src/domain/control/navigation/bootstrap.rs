@@ -10,7 +10,7 @@ use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::navigation::destination::{go_to_ground, pending};
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::navigation::support::unknown_z;
-use crate::domain::control::sensor::reading::{device_location_store, DevicePoseStatus};
+use crate::domain::control::sensor::reading::{device_location_store, SensorStatus};
 use xpute_guest::global::Global;
 
 fn fallback_seed() -> Q3 {
@@ -27,14 +27,14 @@ fn is_at(a: &Q3, b: &Q3) -> bool {
 }
 
 struct Bootstrap {
-    last: Option<(Option<Q3>, DevicePoseStatus)>,
+    last: Option<(Option<Q3>, SensorStatus)>,
 }
 
 static BOOTSTRAP: Global<Bootstrap> = Global::new();
 
 pub fn map_bootstrap_step() {
     let device_coord = off_center().device_coord;
-    let location_status = device_location_store().pose.status();
+    let location_status = device_location_store().state.status;
     let b = BOOTSTRAP.get(|| Bootstrap { last: None });
     if b.last == Some((device_coord, location_status)) {
         return;
@@ -46,7 +46,7 @@ pub fn map_bootstrap_step() {
     let at = pivot();
     let seed = match device_coord {
         Some(device) => device,
-        None if at.is_none() && location_status == DevicePoseStatus::Error => fallback,
+        None if at.is_none() && location_status == SensorStatus::Error => fallback,
         None => return,
     };
     // A real fix landing after the fallback takes over; a place asked for

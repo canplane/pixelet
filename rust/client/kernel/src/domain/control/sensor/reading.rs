@@ -4,7 +4,7 @@
 //! enough to keep.
 
 use crate::domain::control::cmd::Message;
-pub use crate::domain::control::cmd::{DevicePoseStatus, PermissionAnswer};
+pub use crate::domain::control::cmd::{PermissionAnswer, SensorStatus};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -56,32 +56,26 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
     }
 }
 
-/// Where a sensor's reading is; a failure says what failed.
+/// Where a sensor's reading is, as the snapshot carries it: its status, and
+/// what failed where it failed (`error` is none but at `SensorStatus::Error`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Pose {
-    #[default]
-    Idle,
-    Loading,
-    Ready,
-    Failed(Message),
-    Unavailable,
+pub struct SensorState {
+    pub status: SensorStatus,
+    pub error: Option<Message>,
 }
 
-impl Pose {
-    pub fn status(self) -> DevicePoseStatus {
-        match self {
-            Pose::Idle => DevicePoseStatus::Idle,
-            Pose::Loading => DevicePoseStatus::Loading,
-            Pose::Ready => DevicePoseStatus::Ready,
-            Pose::Failed(_) => DevicePoseStatus::Error,
-            Pose::Unavailable => DevicePoseStatus::Unavailable,
+impl SensorState {
+    pub const fn of(status: SensorStatus) -> SensorState {
+        SensorState {
+            status,
+            error: None,
         }
     }
 
-    pub fn error(self) -> Option<Message> {
-        match self {
-            Pose::Failed(m) => Some(m),
-            _ => None,
+    pub const fn failed(error: Message) -> SensorState {
+        SensorState {
+            status: SensorStatus::Error,
+            error: Some(error),
         }
     }
 }
@@ -90,7 +84,7 @@ impl Pose {
 pub struct DeviceLocationStore {
     pub is_tracking_location: bool,
     pub location: Option<DeviceLocation>,
-    pub pose: Pose,
+    pub state: SensorState,
 }
 
 impl DeviceLocationStore {
@@ -103,7 +97,7 @@ impl DeviceLocationStore {
         course: Option<f64>,
     ) {
         let timestamp = now();
-        self.pose = Pose::Ready;
+        self.state = SensorState::of(SensorStatus::Ready);
         let Some(prev) = self.location else {
             self.location = Some(DeviceLocation {
                 coords,
@@ -164,7 +158,7 @@ impl DeviceLocationStore {
 pub struct DeviceOrientationStore {
     pub is_tracking_orient: bool,
     pub orient: Option<DeviceOrientation>,
-    pub pose: Pose,
+    pub state: SensorState,
 }
 
 impl DeviceOrientationStore {
@@ -179,7 +173,7 @@ impl DeviceOrientationStore {
                 timestamp,
             });
             // Orientation alone counts as usable.
-            self.pose = Pose::Ready;
+            self.state = SensorState::of(SensorStatus::Ready);
             return;
         };
 

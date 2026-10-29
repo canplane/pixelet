@@ -546,7 +546,7 @@
       ]
     },
     {
-      "name": "DevicePoseStatus",
+      "name": "SensorStatus",
       "$doc": [
         "Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor."
       ],
@@ -1560,7 +1560,7 @@
       "fields": [
         {
           "name": "status",
-          "type": "DevicePoseStatus"
+          "type": "SensorStatus"
         },
         {
           "name": "has_location",
@@ -1635,7 +1635,7 @@
       "fields": [
         {
           "name": "status",
-          "type": "DevicePoseStatus"
+          "type": "SensorStatus"
         },
         {
           "name": "error",

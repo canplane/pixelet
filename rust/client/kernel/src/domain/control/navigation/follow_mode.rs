@@ -8,7 +8,7 @@ use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::reading::{
-    device_location_store, device_orient_store, DevicePoseStatus,
+    device_location_store, device_orient_store, SensorStatus,
 };
 use crate::sys::sched::edge::wake_at;
 use xpute_guest::clock::now;
@@ -34,7 +34,7 @@ struct Follow {
     last_heading: Option<f64>,
     /// The give-up deadline, and the location status it was set for.
     grace_due: Option<f64>,
-    grace_for: Option<DevicePoseStatus>,
+    grace_for: Option<SensorStatus>,
 }
 
 static FOLLOW: Global<Follow> = Global::new();
@@ -69,8 +69,8 @@ pub fn follow_mode_step() {
     // is one, so a device without a compass still follows where it is. A blip
     // must not drop it (it read as the mode switching itself off), but a dead
     // location must eventually, or the camera freezes behind a disabled button.
-    let status = device_location_store().pose.status();
-    let ready = status == DevicePoseStatus::Ready;
+    let status = device_location_store().state.status;
+    let ready = status == SensorStatus::Ready;
     if is_follow_mode && !ready {
         // Restarted whenever a status moves: LOADING to ERROR is a fresh gap with its
         // own retry ahead.

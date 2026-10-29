@@ -482,7 +482,7 @@ impl GroundStatus {
 /// Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
-pub enum DevicePoseStatus {
+pub enum SensorStatus {
     #[default]
     Idle = 0,
     Loading = 1,
@@ -491,20 +491,18 @@ pub enum DevicePoseStatus {
     Unavailable = 4,
 }
 
-impl DevicePoseStatus {
-    pub const ALL: [DevicePoseStatus; 5] = [
-        DevicePoseStatus::Idle,
-        DevicePoseStatus::Loading,
-        DevicePoseStatus::Ready,
-        DevicePoseStatus::Error,
-        DevicePoseStatus::Unavailable,
+impl SensorStatus {
+    pub const ALL: [SensorStatus; 5] = [
+        SensorStatus::Idle,
+        SensorStatus::Loading,
+        SensorStatus::Ready,
+        SensorStatus::Error,
+        SensorStatus::Unavailable,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<DevicePoseStatus> {
-        DevicePoseStatus::ALL
-            .into_iter()
-            .find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<SensorStatus> {
+        SensorStatus::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -820,7 +818,7 @@ impl LonLat {
 }
 
 pub struct LocationState {
-    pub status: DevicePoseStatus,
+    pub status: SensorStatus,
     pub has_location: bool,
     /// Present exactly when status is Error: the failure the kernel chose.
     pub error: Option<Message>,
@@ -880,7 +878,7 @@ impl HoldingState<'_> {
 }
 
 pub struct OrientationState {
-    pub status: DevicePoseStatus,
+    pub status: SensorStatus,
     /// Present exactly when status is Error: the failure the kernel chose.
     pub error: Option<Message>,
 }

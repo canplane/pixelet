@@ -27,7 +27,9 @@ use crate::domain::control::sensor::device_orientation::{orient_close, request_o
 use crate::domain::control::sensor::geolocation::{
     geolocation_close, geolocation_open, start_watching,
 };
-use crate::domain::control::sensor::reading::{device_location_store, device_orient_store, Pose};
+use crate::domain::control::sensor::reading::{
+    device_location_store, device_orient_store, SensorState,
+};
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
@@ -70,11 +72,11 @@ pub struct Shown {
     status: GroundStatus,
     is_off_center: bool,
     pivot: Option<Q3>,
-    location: (Pose, bool),
+    location: (SensorState, bool),
     companion: [bool; 2],
     holding: Holding,
     marker: bool,
-    orient: Pose,
+    orient: SensorState,
     azimuth: f64,
     is_follow_mode: bool,
     camera_busy: bool,
@@ -112,11 +114,11 @@ fn shown() -> Shown {
         },
         is_off_center: off_center().is_off_center,
         pivot,
-        location: (location.pose, location.location.is_some()),
+        location: (location.state, location.location.is_some()),
         companion: companion_ready(),
         holding: holding(),
         marker: crate::domain::control::interaction::edit::marker_waiting().0,
-        orient: device_orient_store().pose,
+        orient: device_orient_store().state,
         azimuth: camera_state().intent.azimuth,
         is_follow_mode: following(),
         camera_busy: dragging(),
@@ -191,9 +193,9 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
             }),
         },
         location: LocationState {
-            status: shown.location.0.status(),
+            status: shown.location.0.status,
             has_location: shown.location.1,
-            error: shown.location.0.error(),
+            error: shown.location.0.error,
         },
         companion: CompanionState {
             person_ready: shown.companion[0],
@@ -208,8 +210,8 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
             words: &words,
         },
         orient: OrientationState {
-            status: shown.orient.status(),
-            error: shown.orient.error(),
+            status: shown.orient.status,
+            error: shown.orient.error,
         },
         azimuth: shown.azimuth,
         is_follow_mode: shown.is_follow_mode,

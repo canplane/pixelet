@@ -5,9 +5,9 @@ import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   ActiveTool,
-  DevicePoseStatus,
   GroundStatus,
   read_snapshot,
+  SensorStatus,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
 
@@ -18,7 +18,7 @@ const INITIAL: Snapshot = {
     lon_lat: null,
     outside: false,
   },
-  location: { status: DevicePoseStatus.Idle, has_location: false, error: null },
+  location: { status: SensorStatus.Idle, has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
   holding: {
     tool: ActiveTool.Pointer,
@@ -28,7 +28,7 @@ const INITIAL: Snapshot = {
     marker: false,
     words: "",
   },
-  orient: { status: DevicePoseStatus.Idle, error: null },
+  orient: { status: SensorStatus.Idle, error: null },
   azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,

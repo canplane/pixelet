@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/shell/locale/message-key.ts";
-import { DevicePoseStatus, GroundStatus, Message } from "@/abi/cmd.spec.ts";
+import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
 import { Gpu } from "@/abi/gpu.ts";
 import { Source } from "@/namespace/source.ts";
 
@@ -78,11 +78,11 @@ const error = (key: string): Said => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Said => ({ key, tone: ToastTone.Loading });
 
 function location(
-  status: DevicePoseStatus,
+  status: SensorStatus,
   failure: Message | null,
 ): Said | null {
   if (failure !== null) return error(messageKey(failure));
-  return status === DevicePoseStatus.Loading
+  return status === SensorStatus.Loading
     ? loading("toast.location_checking")
     : null;
 }

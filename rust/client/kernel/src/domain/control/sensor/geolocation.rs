@@ -10,7 +10,7 @@
 
 use crate::domain::control::cmd::GeolocationErrorCode;
 use crate::domain::control::cmd::Message;
-use crate::domain::control::sensor::reading::{device_location_store, Pose};
+use crate::domain::control::sensor::reading::{device_location_store, SensorState, SensorStatus};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -47,10 +47,10 @@ pub fn start_watching(supported: bool) {
         return;
     }
     if !supported {
-        store.pose = Pose::Failed(Message::GeolocationUnsupported);
+        store.state = SensorState::failed(Message::GeolocationUnsupported);
         return;
     }
-    store.pose = Pose::Loading;
+    store.state = SensorState::of(SensorStatus::Loading);
     store.set_is_tracking_location(true);
     geolocation().command = Some(GeolocationCommand::Start);
 }
@@ -71,7 +71,7 @@ pub fn geolocation_open(supported: bool) {
 pub fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
-    device_location_store().pose = Pose::Idle;
+    device_location_store().state = SensorState::of(SensorStatus::Idle);
 }
 
 pub fn geolocation_visibility(visible: bool, supported: bool) {
@@ -114,7 +114,7 @@ pub fn geolocation_fix(
 /// grant or a return to the foreground starts again.
 pub fn geolocation_error(code: GeolocationErrorCode) {
     let store = device_location_store();
-    store.pose = Pose::Failed(match code {
+    store.state = SensorState::failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
         GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,

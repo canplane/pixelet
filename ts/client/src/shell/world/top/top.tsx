@@ -12,7 +12,7 @@ import { useVeil } from "@/shell/ui/motion/veil.ts";
 import { haloGap, HaloIcon } from "./halo.tsx";
 import { chrome, color, layer } from "@/shell/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
-import { SensorStatus } from "./sensor-status.tsx";
+import { SensorIcons } from "./sensor-icons.tsx";
 import { MapScaleBar } from "./scale-bar.tsx";
 import { LocationStack } from "./location-stack.tsx";
 import { ViewStack } from "./view-stack.tsx";
@@ -132,7 +132,7 @@ function SearchStrip() {
               />
               <CurrentAddress />
             </View>
-            <SensorStatus />
+            <SensorIcons />
           </View>
         </Presence>
         <View style={styles.scale}>

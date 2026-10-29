@@ -195,7 +195,7 @@ export const enum GroundStatus {
 }
 
 /** Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor. */
-export const enum DevicePoseStatus {
+export const enum SensorStatus {
   Idle = 0,
   Loading = 1,
   Ready = 2,
@@ -439,7 +439,7 @@ export function read_lon_lat(b: BranchCursor): LonLat {
 }
 
 export interface LocationState {
-  status: DevicePoseStatus;
+  status: SensorStatus;
   has_location: boolean;
   /** Present exactly when status is Error: the failure the kernel chose. */
   error: Message | null;
@@ -447,7 +447,7 @@ export interface LocationState {
 
 export function read_location_state(b: BranchCursor): LocationState {
   return {
-    status: b.at(0).get<DevicePoseStatus>(),
+    status: b.at(0).get<SensorStatus>(),
     has_location: b.at(1).get<boolean>(),
     error: b.at(2).get<Message | null>(),
   };
@@ -490,14 +490,14 @@ export function read_holding_state(b: BranchCursor): HoldingState {
 }
 
 export interface OrientationState {
-  status: DevicePoseStatus;
+  status: SensorStatus;
   /** Present exactly when status is Error: the failure the kernel chose. */
   error: Message | null;
 }
 
 export function read_orientation_state(b: BranchCursor): OrientationState {
   return {
-    status: b.at(0).get<DevicePoseStatus>(),
+    status: b.at(0).get<SensorStatus>(),
     error: b.at(1).get<Message | null>(),
   };
 }

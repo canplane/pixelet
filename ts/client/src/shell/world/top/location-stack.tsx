@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { type GlyphName, Spinner } from "@/shell/ui/icon.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
-import { Command, DevicePoseStatus, Tracking } from "@/abi/cmd.spec.ts";
+import { Command, SensorStatus, Tracking } from "@/abi/cmd.spec.ts";
 import { kernel_command, kernel_tracking } from "@/abi/shell.ts";
 import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
@@ -52,8 +52,8 @@ export function LocationStack() {
           label: t(label),
           onPress: () => void kernel_tracking(press),
           isActive: following,
-          disabled: status !== DevicePoseStatus.Ready || !hasLocation,
-          face: status === DevicePoseStatus.Loading
+          disabled: status !== SensorStatus.Ready || !hasLocation,
+          face: status === SensorStatus.Loading
             ? <Spinner size={chrome.glyph} color={LABEL.primary} />
             : (
               // One turn as following starts.
