@@ -136,3 +136,134 @@ for ground falling up to an angle, drawn whole under a sun that low) was
 weighed and not built: at 10° it draws whole about where the cut did. What
 would bound it exactly is the pixels that read the map's texels redrawn,
 found on the GPU, which the region, known on the CPU before the frame, is not.
+
+## The shadow map's light, the moon's at night
+
+The map was cast from the sun alone and darkened the sun's direct light
+alone: at night, the sun's light none, it was cast for nothing, and a moving
+actor or puck drew every frame whole. Since `d3e4d342e` it is cast from the
+sun while it reaches the land (under the horizon by the dip at the eye's
+height and its disc's radius, as `sun_transmittance` ends), else from the
+moon while it does, else from neither, the shadows off for the frame; the
+visibility darkens the light it is cast from (`surface_light_in`,
+`SHADOW_MOON`). The light cast's buffers are made off the setting, not off a
+light being up, so the frame a light first rises reads no unwritten map.
+
+Seen on a build holding the sky at night: at 23:00 the moon's shadows under
+the trees and the cars, a luma difference up to about 20 between shadows on
+and off; at 18:30, neither up, no light span ran and 1732 of 1733 frames
+were `region`. At 20:00, the moon low, every frame was `px`, drawn whole; not
+looked into before the exact bound below.
+
+The map's names say light, not sun (`pxl-spec-core light`, `Light`,
+`eye::LIGHT`, `light_*_cs`, the spans `light_beam` to `light_walk`); the sky's
+sun keeps its own.
+
+## A jittered ray stands on a tile marked
+
+What the veil was (under "Tried and taken out"): the mark stood each pixel on
+the one tile its ray met, and `READ_TILES` covers a receiver's taps, not its
+pixel's footprint. A jitter under half a pixel moves a far or grazing pixel's
+ray across a tile's edge; in a region frame the region's pixels were cast
+again at the new jitter and read tiles no cast had claimed, lit, a rectangle.
+Now the mark stands a pixel on every tile between where its ray met the world
+and where each pixel beside it did, across, down and either diagonal, each
+pair of neighbors once, within `FOOTPRINT_TILES` (past it an edge, each its
+own), and the jitter is not read as moving the receivers: a jittered frame
+marks and casts the light no more (`light_world` only where the rays were
+cast anew). Not run yet.
+
+## A moved shadow bounded by where the world stands
+
+The slope the bound left (above) is gone once the screen's world has landed
+since the view last moved. Each drawn frame takes the least and the most of
+the world's depth under each square of the screen 32 drawn pixels a side,
+the squares it drew (`DepthBounds`, screen_depth_bounds.wgsl), and maps them
+back; what landed holds while only the region's draws moved, a frame drawn
+whole among them, as the view and the world under it stood as they were. A
+moved caster then shades each square whose world, as a sphere about the box
+it holds, lies behind the caster from the light and within the caster's
+reach of the half-line from it away from the light, grown by a receiver's
+taps (`regions`, `stood`): whatever the ground, slope or drop, ground, decor
+or an actor alike, and however low the light; until it has landed, the frame
+is drawn whole. The texels a caster covers in the map are all of it that
+moves while only the casters do, so the light's side needs no more.
+
+A first try kept, per tile of the light's map, the screen pixels its
+receivers stood on, taken by atomic maxima in the mark and read back. The
+drawn receivers' boxes in it were the tallest decor's sphere, which an
+actor standing in its own shadow's tiles carried into every region; near the
+eye that covered most of the screen and every frame was drawn whole (3113
+of 3411 frames at noon, the region's share past 0.9). It was taken out.
+
+## The history gathered square by square
+
+What lay outside a region never gathered: a frame drawn whole that was not
+quiet blends at no less than `BLEND_LEAST`, and while the kernel stepped
+every turn every frame after it was a region frame, so the resolve's quiet
+count started over each time and only the region was written back. Where a
+turn stepped nothing, `moved` was empty, no region was taken, and the
+jitter's frame was drawn whole: every third frame dearer with shadows off.
+Both are one want, a pixel's age. The resolve now keeps each 32-pixel
+square's frames since it last changed (`Resolve::age`): a frame where only
+the region's draws moved sets the squares it changed to 0 and ages the rest,
+a jitter's frame ages them all, anything else sets them all to 0. A region
+is what changed and the squares still short of the jitter's sequence
+(`gathering_rect`), and the resolve takes each square's share from its age
+(screen_resolve.wgsl `ages`).
+
+Run 2026-10-30, the opening view at noon, shadows and clouds on, 60 s: the
+bounds first held only until a frame was drawn whole, and a frame drawn
+whole while the squares gathered dropped them again, so 3056 of 3191 frames
+went whole for want of them (GPU p50 11.1 ms). Held while only the region's
+draws moved, every frame is a region frame: 3601 of 3601, GPU p50 5.9 ms,
+p95 8.2 ms (12.1 and 17.7 ms on the line before). No leftover seen.
+
+## The spheres the kernel hands, as drawn
+
+An actor's sphere was as far as its clips reach and move, the one it fades
+from too: the companion's person, 1 u tall, 2.07 u idle and 6.38 u
+sprinting. It is now as far as its mesh reaches in the pose its palette
+holds as drawn (`Actor::pose_reach`, `Model::reach_of`). The puck's was the
+zone and the beacon together, its state the beacon's bob, so every bob
+moved the zone's footprint; the zone and the beacon are now two, the zone's
+state its place and the night alone. Not run yet.
+
+## The canvas finished only where a region moved
+
+The finish encoded the whole canvas every frame, timed with the markers
+(`marker`, p95 5.8–7 ms with them at 4112×2338). It has its own span now
+(`finish`). The world's is finished into a picture the surface keeps at the
+canvas's size (`Surface::shown`), a region frame's only within its region
+taken to the canvas's pixels, a pixel more each way (`canvas_rect`), the
+screen's depth with it; then shown whole on the canvas by a pass that reads a
+texel a pixel (`screen_show.wgsl`), as the canvas's texture is a new one each
+frame and WebGPU keeps nothing of the last. After a frame the debug pass drew
+into the screen's depth, the next finishes whole. Fusing the resolve with the
+finish (two targets) was weighed and not built: the canvas is whole every
+frame, so a fused pass is whole too and a region frame would write the whole
+history. A copy onto the canvas was weighed and not built: xpute holds the
+canvas as a view, not a texture a copy writes. Not run yet.
+
+## The clouds drawn again where they moved
+
+The cloud sheets are planes over the world, not shadows on it; a step of the
+wind moved their words, which the frame read, and drew it whole. Now their
+words are read apart: where they moved, the region takes where the two
+squares the sheets are drawn on fall on the screen, cut at the eye's plane
+(`sheets_region`, `plane_clip`); none where none is seen. The cumulus, drawn
+as decor is and so a draw no region stood for (`BESIDE`), report each patch
+as a region does an actor, a casting sphere in a state of where the wind has
+it and what it lists, and the renderer takes the turn's reported draws
+(`FrameInput::bounded`) out of what draws a frame whole. Not run yet.
+
+## What follows
+
+The region above is not where this ends. The screen's rectangle, its
+squares' ages and the light-plane test against the depth's bounds are
+replaced by the screen keeping a word a tile as the light's cast does,
+claimed until it has gathered and drawn through a stencil, and the light's
+changed tiles reached back to the pixels that read them: [the screen keeps
+its tiles as the light does](../minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
+its order as decided on 2026-10-30.
+

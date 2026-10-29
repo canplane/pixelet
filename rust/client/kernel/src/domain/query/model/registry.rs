@@ -426,6 +426,16 @@ impl Model {
         let mut palette = vec![0.0; n * 16];
         self.pose(at, &mut local);
         self.palette(&local, &mut global, &mut palette);
+        self.reach_of(&palette)
+    }
+
+    /// How far any vertex lies from the origin as `palette`, a mat4 a joint,
+    /// skins it, unscaled (`reach_at`): the pose a palette holds, which an
+    /// actor holds as drawn.
+    pub fn reach_of(&self, palette: &[f32]) -> f32 {
+        if self.joints() == 0 {
+            return self.radius;
+        }
         let count = self.vertex_cnt as usize;
         let lane = |k: usize| k * count;
         // SAFETY: the model's block, sealed: its vertex lanes first.

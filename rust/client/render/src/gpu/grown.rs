@@ -568,7 +568,7 @@ impl Grown {
 }
 
 /// The decor placed as a reader beside the draws reads it (pxl-shader
-/// decor.rs `Instances`, read by sun.rs `sun_mark_drawn_cs`): its drawing
+/// decor.rs `Instances`, read by light.rs `light_mark_drawn_cs`): its drawing
 /// words, its regions and its instances, and the slots they hold.
 #[derive(Clone, Copy)]
 pub struct Instances {

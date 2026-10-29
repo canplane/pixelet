@@ -1,7 +1,7 @@
-// The world's depth from the sun, as its cast left it a word a slot of the
-// clipmap (pxl-shader `sun_cs`, pxl-spec-core `sun::Sun::word`; its depth
-// read as `sun_depth`, which build.rs makes off its layout), laid into
-// the sun's shadow map in the light box's own order before the decor and
+// The world's depth from the light, as its cast left it a word a slot of the
+// clipmap (pxl-shader `light_cs`, pxl-spec-core `light::Light::word`; its depth
+// read as `light_depth`, which build.rs makes off its layout), laid into
+// the light's shadow map in the light box's own order before the decor and
 // the actors are drawn into it (gpu/shadow.rs): box texel p's slot is its
 // world texel, the box's corner on by p, modulo the map's side.
 
@@ -18,5 +18,5 @@ fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
 fn fs(@builtin(position) clip: vec4f) -> @builtin(frag_depth) f32 {
   let side = vec2i(textureDimensions(world_depth));
   let slot = (vec2i(clip.xy) + corner.xy) & (side - 1);
-  return sun_depth(textureLoad(world_depth, slot, 0, 0).x);
+  return light_depth(textureLoad(world_depth, slot, 0, 0).x);
 }

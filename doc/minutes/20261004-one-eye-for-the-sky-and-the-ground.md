@@ -12,13 +12,13 @@ past the terrain, floor-lit through a long air, turned the horizon yellow.
 
 ## The light
 
-The ground is lit by what lights the sky, and nothing else: the sun, the Moon,
+The ground is lit by what lights the sky, and nothing else: the sun, the moon,
 the sky's irradiance, the second of the two lights, and what the ground below
 bounces at the Earth's mean albedo. The themes, their clock, the sunrise solver
 and the floor are gone; the location marker's night is the sun under the
 horizon, as the stars' is.
 
-At night the Moon and a moonless sky's glow are lights of their own, at values
+At night the moon and a moonless sky's glow are lights of their own, at values
 the night eye reads rather than photometric ones (pxl-render
 `look/atmosphere.rs`). The glow lights the ground and is not drawn, so space
 stays black.
@@ -74,5 +74,5 @@ actors are drawn into it depth only, still pushed back by their slope
 ## What it cost
 
 Nothing a phone pays for by default. The tone curve replaced a grade that
-converted to sRGB and back; the exposure is read once a shader; the Moon is not
+converted to sRGB and back; the exposure is read once a shader; the moon is not
 worked out by day.

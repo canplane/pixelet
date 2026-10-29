@@ -106,5 +106,5 @@ fn paint(s: Surface) -> vec3f {
   }
   let base = albedo * mix(1.0, 1.0 - frame_edge_strength(), s.edge);
   let n = normalize(s.normal);
-  return shade(base, n, s.world_pos, sun_lit(s.world_pos, n), s.open, s.seen);
+  return shade(base, n, s.world_pos, light_lit(s.world_pos, n), s.open, s.seen);
 }

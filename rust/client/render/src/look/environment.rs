@@ -10,8 +10,8 @@ use pxl_spec::space::coord::v3::{self, V3};
 use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
 use crate::param::night;
 
-/// The sun's direction and a pad (4); the Moon's direction and its light
-/// (4); the Moon's color and a pad (4), the sun's being white; the stars'
+/// The sun's direction and a pad (4); the moon's direction and its light
+/// (4); the moon's color and a pad (4), the sun's being white; the stars'
 /// fade, clock and the anchor's longitude (4); air (4); the stars' frame
 /// (12).
 pub const ENV_FLOATS: usize = ENV_STARS + ENV_STAR_FRAME_FLOATS;
@@ -47,7 +47,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // Both lights, summed so the light does not snap where they cross at
     // dusk, each as it reaches the air, against a sun overhead at sea
     // level, which the shaders take as white (atmos_lut.wgsl
-    // `table_white`): the sun's is that white, the Moon's its color.
+    // `table_white`): the sun's is that white, the moon's its color.
     let sun_dir = v3::norm(&light.sun);
     let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
@@ -55,7 +55,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let night = 1.0 - smoothstep(from, to, sun_dir[2]);
     let elongation = libm::acos(v3::dot(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
-    // Wherever the Moon is up; by day the sun outshines it.
+    // Wherever the moon is up; by day the sun outshines it.
     let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase);
     put3(o, ENV_SUN, f32s(&sun_dir));
     put3(o, ENV_MOON, f32s(&moon_dir));

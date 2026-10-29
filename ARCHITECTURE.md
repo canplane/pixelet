@@ -478,7 +478,7 @@ its swatch or image, shaded edges, light, and the air before it.
 Shadows are read off the shadow map, the world's depth from the sun in a square
 box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
 and held in a map slot by its index modulo the map's side
-(`pxl-spec-core sun.rs` `Sun`). The sun is an observer as the eye is: one set of
+(`pxl-spec-core light.rs` `Light`). The sun is an observer as the eye is: one set of
 passes, written once over an interface both implement (`pxl-shader observer.rs`
 `Observer`), asks the world at the eye's zooms, so a shadow has the detail of
 what it falls on.
@@ -488,11 +488,11 @@ It casts only what a receiver reads:
 ```text
   the world, where the eye's rays met it ┐
   decor, where it is placed              ├─▶ marks the tile it stands on
-  an actor, where it is drawn            ┘   (sun_mark_cs, sun_mark_drawn_cs)
+  an actor, where it is drawn            ┘   (light_mark_cs, light_mark_drawn_cs)
                                                    │
                                                    ▼
             a tile is read if it lies sunward of one stood on,
-            within the tallest decor's height (sun_reach_cs)
+            within the tallest decor's height (light_reach_cs)
                                                    │
                                                    ▼
             the tiles read anew, since what a tile holds last moved,
@@ -502,7 +502,7 @@ It casts only what a receiver reads:
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
 casters are pushed by the same formula, so a plane does not shadow itself
-(`shadow.wgsl` `sun_lit`). Beside the shadows, the lighting settings outline an
+(`shadow.wgsl` `light_lit`). Beside the shadows, the lighting settings outline an
 edge that meets the air, lift a rim, and shade corners or run N8AO
 (`spec/client/kernel/domain/view/setting/schema.json`, section `lighting`).
 
@@ -1013,7 +1013,7 @@ them.
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                                                       | `pxl-spec-core cast.rs` `walk`                                                                                                      | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |
 | Laine and Karras's beams; Reshetov et al.                                                                                                                           | `pxl-shader beam.rs`, `pxl-spec-core cast.rs` `Until::Beam`                                                                         | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
 | Tevs, Ihrke and Seidel's maximum mipmaps                                                                                                                            | `pxl-spec-core window.rs` `bounded`                                                                                                 | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
-| The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `sun.rs` `Sun`                                                                                           | A zoom's square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves             |
+| The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `light.rs` `Light`                                                                                           | A zoom's square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves             |
 | Burns and Hunt's visibility buffer (JCGT 2013)                                                                                                                      | `pxl-render gpu/ray/raster.rs` `Raster`, `frame/shader/raster.wgsl`                                                                 | Each pixel keeps the number of the nearest thing drawn over it, here a sample's box, and reads the rest off that                         |
 | OpenStreetMap Carto                                                                                                                                                 | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/asset/`                                                              | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
 | Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/marker.rs`                                                                                                         | A marker's line pitch                                                                                                                    |

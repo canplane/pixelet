@@ -10,7 +10,7 @@ fn moon_map_width() {
     // download_moon writes the map; the sky binds and reads it at
     // `MOON_TEXELS` a side, so a map cut anew at another size must move it.
     let png = std::fs::read(Path::new(env!("PXL_REPO")).join("asset/content/sky/moon.png"))
-        .expect("the Moon's map (make download-moon)");
+        .expect("the moon's map (make download-moon)");
     let side = |at: usize| u32::from_be_bytes(png[at..at + 4].try_into().unwrap());
     assert_eq!(
         (side(16), side(20)),
@@ -26,7 +26,7 @@ fn moon_map_scale() {
     // holds to within a few ten-thousandths of the raw one it was cut from.
     let path = Path::new(env!("PXL_REPO")).join("asset/content/sky/moon.png");
     let map = image::open(&path)
-        .expect("the Moon's map (make download-moon)")
+        .expect("the moon's map (make download-moon)")
         .to_luma8();
     let (side, h) = map.dimensions();
     let (mut sum, mut weight) = (0.0, 0.0);

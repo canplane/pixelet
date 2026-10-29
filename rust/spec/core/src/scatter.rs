@@ -848,7 +848,7 @@ const CLAIM_REACH: [i32; 3] = {
 
 /// The tallest decor and the widest, in unit cells: as high over what it
 /// stands on as anything grown reaches, and as far across (pxl-spec-core
-/// sun.rs `Sun::up`, `Sun::ring`).
+/// light.rs `Light::up`, `Light::ring`).
 pub const TALLEST: i32 = CLAIM_REACH[2] + 1;
 pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
 

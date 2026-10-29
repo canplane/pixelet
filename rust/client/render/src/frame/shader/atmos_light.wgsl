@@ -60,8 +60,8 @@ fn ground_bounce_in(up: vec3f, l: Light, s: Lights) -> vec3f {
 // A matte face of albedo one, over pi, Lambert as three's standard material at
 // roughness 1: every lit pass's, and the Earth's past the terrain. Each of
 // its lights is darkened by its own visibility alone: `lit`, the share of the
-// sun and of the Moon the face's shadow lets reach it (shade.wgsl `shade`
-// off shadow.wgsl `sun_lit`), their direct light's; `open`, how open the face
+// sun and of the moon the face's shadow lets reach it (shade.wgsl `shade`
+// off shadow.wgsl `light_lit`), their direct light's; `open`, how open the face
 // is to the sky (the screen's occlusion and its corners'), the light from the
 // sky and its bounce, and the share that reaches every face alike. Each is 1
 // where nothing casts or closes in.

@@ -39,9 +39,9 @@ pub struct Eye {
     /// The camera grid the frame casts on, as the kernel laid it once
     /// (pxl-spec-core `beam::Grid`, `grid`).
     pub grid: [UVec4; eye::GRID_WORDS / 4],
-    /// The sun's cast, a frame's constants (pxl-spec-core `sun::Sun`), all
+    /// The light's cast, a frame's constants (pxl-spec-core `light::Light`), all
     /// zero where no shadow is cast.
-    pub sun: [Vec4; 5],
+    pub light: [Vec4; 5],
     /// Each pixel's ray's offset from its middle, in drawn pixels, and the
     /// first pixel of the region the frame casts (pxl-spec-core
     /// `eye::JITTER`).
@@ -71,7 +71,7 @@ const _: () = {
         offset_of!(Eye, carve) == at(eye::CARVE)
             && offset_of!(Eye, hide) == at(eye::HIDE)
             && offset_of!(Eye, grid) == at(eye::GRID)
-            && offset_of!(Eye, sun) == at(eye::SUN)
+            && offset_of!(Eye, light) == at(eye::LIGHT)
             && offset_of!(Eye, jitter) == at(eye::JITTER)
     );
 };

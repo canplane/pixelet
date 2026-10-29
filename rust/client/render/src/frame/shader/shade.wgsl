@@ -11,7 +11,7 @@ fn rim(n: vec3f, world_pos: vec3f) -> f32 {
 // The shadow and the occlusion are both visibility, each of its own light
 // (atmos_light.wgsl `surface_light_in`): one rule for one kind of thing. Gray
 // occlusion over all the light dimmed the direct sun too, which a warm tint
-// once made up for; a fixed tint is wrong under a sunset, the Moon or the
+// once made up for; a fixed tint is wrong under a sunset, the moon or the
 // night, and with the sun left alone the warmth in a corner is the light's.
 // Opaque to the drawn edge: where ground is drawn, the Earth's picture never shows through it.
 // `lit` is the shadow map's, the light it is cast from's alone (shadow.wgsl

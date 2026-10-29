@@ -21,7 +21,7 @@
   },
   "moon": {
     "$doc": [
-      "The Moon's near side, the picture the sky draws it with (NASA)."
+      "The moon's near side, the picture the sky draws it with (NASA)."
     ],
     "picture": {
       "$type": "file",

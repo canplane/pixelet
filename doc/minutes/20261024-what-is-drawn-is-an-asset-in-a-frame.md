@@ -18,7 +18,7 @@ already does is cited, and where it does not.
   - A **marker** is any asset drawn flat to the camera from a design on the
     sheet: a pin, a place, a chat line's bubble, each its own design.
   - An **actor** is a person or a pet: a model with clips.
-  - **Sky** is what hangs in the sky: the clouds, the Moon's picture.
+  - **Sky** is what hangs in the sky: the clouds, the moon's picture.
 - What an asset is (how it is drawn, what it occupies, what it is at a coarser
   zoom) is its own metadata.
 - A **frame** is a coordinate system, which may move: the world's grid, a
@@ -121,7 +121,7 @@ nothing else, which is what a ghost or a chat line wants.
    and its by-size draw (`domain/scene/decor/cell.rs`, which only the clouds
    use). They are the sky kind's.
 
-   > Since fixed: `spec/spec/asset/sky.json` declares the cumulus and the Moon's
+   > Since fixed: `spec/spec/asset/sky.json` declares the cumulus and the moon's
    > picture; the by-size draw is the clouds' own (`cloud.rs` `present_patch`),
    > the lanes `domain/scene/lane.rs`'s, the groups numbered by pxl-spec-core's
    > `scatter`.

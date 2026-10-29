@@ -17,7 +17,7 @@
     reason = "generated from the spec"
 )]
 
-pub const GPU_SPAN_NAMES: usize = 24;
+pub const GPU_SPAN_NAMES: usize = 25;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -26,35 +26,37 @@ pub enum GpuSpanName {
     ao = 2,
     world = 3,
     resolve = 4,
-    marker = 5,
-    debug = 6,
-    case = 7,
-    fill = 8,
-    cast = 9,
-    beam = 10,
-    cell = 11,
-    sample = 12,
-    sraster = 13,
-    px = 14,
-    miss = 15,
-    sun_beam = 16,
-    sun_sample = 17,
-    sun_raster = 18,
-    sun_slot = 19,
-    sun_walk = 20,
-    grow = 21,
-    shadow = 22,
-    face = 23,
+    finish = 5,
+    marker = 6,
+    debug = 7,
+    case = 8,
+    fill = 9,
+    cast = 10,
+    beam = 11,
+    cell = 12,
+    sample = 13,
+    sraster = 14,
+    px = 15,
+    miss = 16,
+    light_beam = 17,
+    light_sample = 18,
+    light_raster = 19,
+    light_slot = 20,
+    light_walk = 21,
+    grow = 22,
+    shadow = 23,
+    face = 24,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 24] = [
+    pub const ALL: [GpuSpanName; 25] = [
         GpuSpanName::air,
         GpuSpanName::prepass,
         GpuSpanName::ao,
         GpuSpanName::world,
         GpuSpanName::resolve,
+        GpuSpanName::finish,
         GpuSpanName::marker,
         GpuSpanName::debug,
         GpuSpanName::case,
@@ -66,11 +68,11 @@ impl GpuSpanName {
         GpuSpanName::sraster,
         GpuSpanName::px,
         GpuSpanName::miss,
-        GpuSpanName::sun_beam,
-        GpuSpanName::sun_sample,
-        GpuSpanName::sun_raster,
-        GpuSpanName::sun_slot,
-        GpuSpanName::sun_walk,
+        GpuSpanName::light_beam,
+        GpuSpanName::light_sample,
+        GpuSpanName::light_raster,
+        GpuSpanName::light_slot,
+        GpuSpanName::light_walk,
         GpuSpanName::grow,
         GpuSpanName::shadow,
         GpuSpanName::face,

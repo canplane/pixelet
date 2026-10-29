@@ -2,7 +2,7 @@
 
 //! gpu-portable: what a cast walked and took, counted where the
 //! `ray_counts` setting asks, one array an observer's lanes alike (`at`):
-//! the eye's and the sun's, each cast by the same passes — its beam rays,
+//! the eye's and the light's, each cast by the same passes — its beam rays,
 //! its samples, its walk again, its pixels or slots taking the visible
 //! sample or walking, and the boxes its samples drew (pxl-render
 //! gpu/ray/tally.rs). A pass adds where it can write: a walk that writes
@@ -14,7 +14,7 @@
 
 /// The observers, an array's run of `LANES` each.
 pub const EYE: u32 = 0;
-pub const SUN: u32 = 1;
+pub const LIGHT: u32 = 1;
 pub const OBSERVERS: u32 = 2;
 
 /// An observer's lanes: the nodes its beam rays, its samples and its walk

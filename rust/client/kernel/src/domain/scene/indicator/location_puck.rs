@@ -359,24 +359,32 @@ impl LocationPuck {
             return;
         }
         let shown = p.shown.unwrap_or(p.target);
-        // The zone about its center and the beacon over it, as drawn
-        // (`region`).
-        let state = region::digest(&[
-            p.center[0],
-            p.center[1],
-            p.center[2],
-            shown[0],
-            shown[1],
-            p.time,
-            f64::from(u8::from(p.night)),
-            f64::from(self.held.handle),
-        ]);
+        // The zone about its center, and the beacon over where it is shown,
+        // each as drawn (`region`): the beacon's bob and slide move it alone,
+        // as the zone reads no time.
+        let night = f64::from(u8::from(p.night));
+        let handle = f64::from(self.held.handle);
         region::drawn(
             u32::MAX,
             p.center,
-            libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB) + libm::hypot(shown[0], shown[1]),
+            libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB),
             false,
-            state,
+            region::digest(&[p.center[0], p.center[1], p.center[2], night, handle]),
+        );
+        let beacon_at = v3::add(&p.center, &[shown[0], shown[1], BEACON_Z_BIAS]);
+        region::drawn(
+            u32::MAX - 1,
+            beacon_at,
+            f64::from(beacon::RADIUS) + BEACON_BOB,
+            false,
+            region::digest(&[
+                beacon_at[0],
+                beacon_at[1],
+                beacon_at[2],
+                p.time,
+                night,
+                handle,
+            ]),
         );
         let center = DrawList::translation(p.center, eye);
         let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;

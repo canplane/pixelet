@@ -645,7 +645,7 @@ const _: () = assert!(
 /// The decor placed this frame as its draws read it (`decor_place_cs`):
 /// its drawing words, its regions and its instances. What a reader beside
 /// the draws asks of it, how many and where each stands, decor answers
-/// here, so none names its lanes (pxl-shader sun.rs `sun_mark_drawn_cs`).
+/// here, so none names its lanes (pxl-shader light.rs `light_mark_drawn_cs`).
 pub(crate) struct Instances<'a> {
     pub(crate) drawing: &'a [u32],
     pub(crate) regions: &'a [u32],

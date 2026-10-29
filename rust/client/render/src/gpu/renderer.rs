@@ -9,7 +9,7 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec_core::eye;
-use pxl_spec_core::param::sun;
+use pxl_spec_core::param::light;
 use pxl_spec_core::ray;
 use pxl_spec_core::scatter::GROUPS;
 use pxl_spec_core::way;
@@ -34,7 +34,7 @@ use crate::frame::shader::word::frame::{
     SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
-    sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
+    clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
@@ -46,6 +46,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
+use crate::gpu::depth_bounds::{self, DepthBounds};
 use crate::gpu::finish::Finish;
 use crate::gpu::grown::DecorFrame;
 use crate::gpu::image_map::ImageMap;
@@ -74,7 +75,9 @@ use crate::gpu::surface::{
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
+use crate::look::atmosphere::{BOTTOM_RADIUS_KM, SUN_ANGULAR_RADIUS};
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
+use crate::param::cloud;
 
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
@@ -121,19 +124,74 @@ pub struct FrameInput<'a> {
     /// part of the world and of the sun's map they cover and shade
     /// (`regions`).
     pub moved: &'a [[f32; 5]],
+    /// The draws the region stands for, by their handles: theirs moving
+    /// draws the frame whole no more (`BESIDE`).
+    pub bounded: &'a [u32],
     /// Whether what the kernel animates stepped this turn: it wakes the turn
     /// at its own steps, so the resolve asks no frame after it.
     pub animated: bool,
 }
 
-/// How far along the sun's ray, away from it, an actor's shadow is taken
-/// to fall: in its radii over the sine of the sun's height.
-const SHADOW_RADII: f64 = 2.0;
-
 /// The texels beside a caster's that it changes, in the sun's map and,
 /// through a receiver's taps, on the screen: the map's filter, a slope's
-/// push and the normal's offset, with room (shadow.wgsl `sun_lit`).
+/// push and the normal's offset, with room (shadow.wgsl `light_lit`).
 const SHADOW_MARGIN: f64 = 4.0;
+
+/// Where a flat polygon `p`, units from the eye, falls through `m`: the clip
+/// `[x0, y0, x1, y1]` its part before the eye's plane covers (cut there, as
+/// Sutherland and Hodgman clip), within the screen; none where none of it
+/// is before the plane or on the screen.
+fn plane_clip(m: &Mat4, p: &[V3]) -> Option<[f32; 4]> {
+    const NEAR: f64 = 1e-6;
+    let to = |c: &V3| -> [f64; 4] {
+        core::array::from_fn(|r| m[r] * c[0] + m[4 + r] * c[1] + m[8 + r] * c[2] + m[12 + r])
+    };
+    let v: Vec<[f64; 4]> = p.iter().map(to).collect();
+    let mut b: Option<[f64; 4]> = None;
+    let mut take = |c: [f64; 4]| {
+        let (x, y) = (c[0] / c[3], c[1] / c[3]);
+        let e = b.get_or_insert([x, y, x, y]);
+        *e = [e[0].min(x), e[1].min(y), e[2].max(x), e[3].max(y)];
+    };
+    for k in 0..v.len() {
+        let (a, c) = (v[k], v[(k + 1) % v.len()]);
+        if a[3] > NEAR {
+            take(a);
+        }
+        if (a[3] > NEAR) != (c[3] > NEAR) {
+            let t = (NEAR - a[3]) / (c[3] - a[3]);
+            take(core::array::from_fn(|i| a[i] + (c[i] - a[i]) * t));
+        }
+    }
+    let b = b?;
+    if b[2] < -1.0 || b[0] > 1.0 || b[3] < -1.0 || b[1] > 1.0 {
+        return None;
+    }
+    Some(b.map(|v| v.clamp(-1.0, 1.0) as f32))
+}
+
+/// Region `r` of a world `world` drawn pixels across and down as the canvas
+/// `screen` pixels across and down covers it, `[x, y, width, height]`, a
+/// pixel more each way.
+fn canvas_rect(r: Region, world: [u32; 2], screen: (u32, u32)) -> [u32; 4] {
+    let screen = [screen.0, screen.1];
+    let k: [f64; 2] = core::array::from_fn(|i| f64::from(screen[i]) / f64::from(world[i].max(1)));
+    let lo: [u32; 2] =
+        core::array::from_fn(|i| (libm::floor(f64::from(r.at[i]) * k[i]) as u32).saturating_sub(1));
+    let hi: [u32; 2] = core::array::from_fn(|i| {
+        (libm::ceil(f64::from(r.at[i] + r.size[i]) * k[i]) as u32 + 1).min(screen[i])
+    });
+    [lo[0], lo[1], hi[0] - lo[0], hi[1] - lo[1]]
+}
+
+/// The least height of a light, its sine, at which it still reaches the land
+/// under an eye `alt_km` up: below the horizon by the horizon's dip there and
+/// its disc's radius, as the air's light ends (atmos_lut.wgsl
+/// `sun_transmittance`).
+fn least_height(alt_km: f64) -> f64 {
+    let r = BOTTOM_RADIUS_KM;
+    -libm::sin(libm::acos(r / (r + alt_km.max(0.0))) + SUN_ANGULAR_RADIUS)
+}
 
 /// Where spheres in the eye's frame, `[x, y, z]` and a radius, fall
 /// through `m`: the clip `[x0, y0, x1, y1]` their boxes cover; none where
@@ -257,7 +315,7 @@ pub struct Cast<'a> {
     pub decor: DecorFrame<'a>,
     /// Where each actor drawn stands, units from the eye, as its draw is
     /// placed (frame/draw.rs `Lists::stands`): receivers of the shadow map as
-    /// decor is (pxl-spec-core `sun::ACTORS_AT`).
+    /// decor is (pxl-spec-core `light::ACTORS_AT`).
     pub actors: &'a [[f32; 3]],
     /// Whether what the eye's cast and the sun's walked and took is counted
     /// (gpu/ray/tally.rs).
@@ -456,8 +514,11 @@ pub struct Renderer {
     models: FrameGroups,
     shadow: Shadow,
     /// Whether the shadow map is cast and drawn this frame: the setting on
-    /// (`STAGE_AT::SHADOWS`) and the sun or the Moon up (`lay_out`).
+    /// (`STAGE_AT::SHADOWS`) and the sun or the moon up (`lay_out`).
     shadows: bool,
+    /// Whether the debug pass drew into the screen's depth last frame, so
+    /// the finish carries it whole again (gpu/finish.rs).
+    debug_drew: bool,
     ao: ScreenAo,
     screen_ao: bool,
     atmosphere: Atmosphere,
@@ -473,6 +534,10 @@ pub struct Renderer {
     marker: MarkerPass,
     finish: Finish,
     resolve: Resolve,
+    /// Where the world stands under the screen (`DepthBounds`), and the
+    /// spheres about it as last worked out, by the landing (`stood`).
+    depth_bounds: DepthBounds,
+    stood: (u32, Vec<(V3, f64, [u32; 2])>),
     debug: DebugPass,
     screen: RaysPass,
     /// The frame's whole input as the last frame drew it (stage 2): the
@@ -489,6 +554,8 @@ pub struct Renderer {
     /// whether an upload they read moved (`beside`, `BESIDE`).
     listed: Read,
     beside: Read,
+    /// The sheets' words as last written (`CloudPass::words`).
+    clouds_read: Read,
     /// The region a frame draws again cleared, under its scissor.
     clear: Built,
     /// The eye's view-projection as `lay_out` took it, which the moved
@@ -557,12 +624,15 @@ impl Renderer {
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
+            depth_bounds: DepthBounds::new(g, &mut pipelines),
+            stood: (0, Vec::new()),
             debug: DebugPass::new(g, &mut pipelines, frame_buf, sky_buf, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
             listed: Read::default(),
             beside: Read::default(),
+            clouds_read: Read::default(),
             clear: pipelines.build(g, PIPELINE_SCREEN_CLEAR, WORLD_COLOR),
             view_proj: mat4::new(),
             ao_read: Read::default(),
@@ -579,6 +649,7 @@ impl Renderer {
             models,
             shadow,
             shadows: false,
+            debug_drew: false,
             ao,
             screen_ao: false,
             atmosphere,
@@ -704,15 +775,16 @@ impl Renderer {
             MERCATOR_RADIUS_U as f32,
         ]);
         // The shadow map, as wide as the casters reach, cast from the sun
-        // where it is up, else from the Moon where it is up and lit; none
-        // where the shadows are off, or where neither is up, as only their
-        // direct light reads the map (atmos_light.wgsl `surface_light_in`)
-        // and a shadow would show nowhere.
+        // where it still reaches the land, else from the moon where it does;
+        // none where the shadows are off, or where neither reaches it, as
+        // only their direct light reads the map (atmos_light.wgsl
+        // `surface_light_in`) and a shadow would show nowhere.
         let far = s[STAGE_AT::SHADOWS];
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 3]);
-        let light = if sun[2] > 0.0 {
+        let low = least_height(f64::from(env[ENV_AIR]));
+        let light = if f64::from(sun[2]) > low {
             Some((sun, false))
-        } else if moon[2] > 0.0 && env[ENV_MOON + 3] > 0.0 {
+        } else if f64::from(moon[2]) > low {
             Some((moon, true))
         } else {
             None
@@ -757,20 +829,18 @@ impl Renderer {
     }
 
     /// Where the `moved` spheres fall: on the screen, the drawn pixels of a
-    /// world `width` by `height` they cover and their shadows shade, the
-    /// shadows grown by as far as a receiver's taps spread (`Region`); and
-    /// in the sun's map, the texels the ones that cast cover, `[x, y,
-    /// width, height]`, none where none casts. None at all where nothing
-    /// moved, or where they cannot be bounded: a shadow cast from a sun on or
-    /// under the horizon, or a sphere about or behind the eye. A shadow is
-    /// taken to fall on ground about level with the caster (`SHADOW_RADII`),
-    /// at any height of the sun. Ground falling away from the sun more
-    /// steeply, or a drop, takes the shadow's end past the region, where it
-    /// stays until a frame is drawn whole; how steeply it may fall shrinks
-    /// with the sun, about 10° at a sun 14.5° up and 7° at 10°. A region past
-    /// most of the screen is drawn whole (`Region::of`).
+    /// world `width` by `height` they cover, and those whose light they
+    /// change, as the light sees them: each square of the screen whose
+    /// world (`DepthBounds`) lies behind a caster from the light and within
+    /// its reach of it across the light, grown by a receiver's taps, the
+    /// texels a caster covers being all of the map that moves while only
+    /// they do; and in the light's map, those texels, `[x, y, width,
+    /// height]`, none where none casts. None at all where nothing moved, a
+    /// sphere stands about or behind the eye, the region holds most of the
+    /// screen (`Region::of`), or where the world under the screen has not
+    /// landed since the view last moved.
     fn regions(
-        &self,
+        &mut self,
         moved: &[[f32; 5]],
         width: u32,
         height: u32,
@@ -778,33 +848,11 @@ impl Renderer {
         if moved.is_empty() {
             return None;
         }
-        let sun = self.shadow.cast_from.filter(|_| self.shadows);
+        let light = self.shadow.cast_from.filter(|_| self.shadows);
         // A receiver's taps, the filter's and the normal's offset, in units.
-        let spread = (f64::from(sun::SPREAD) + SHADOW_MARGIN) * self.shadow.texel;
-        let casts = |s: &[f32; 5]| s[4] != 0.0 && sun.is_some();
-        if moved.iter().any(casts) && sun.is_some_and(|s| s[2] <= 0.0) {
-            return None;
-        }
+        let spread = (f64::from(light::SPREAD) + SHADOW_MARGIN) * self.shadow.texel;
+        let casts = |s: &[f32; 5]| s[4] != 0.0 && light.is_some();
         let sphere = |s: &[f32; 5]| ([s[0], s[1], s[2]].map(f64::from), f64::from(s[3]));
-        // Each, and the shadow of each that casts along the ground away
-        // from the sun.
-        let shaded = moved.iter().flat_map(|s| {
-            let (p, r) = sphere(s);
-            let cast = sun.filter(|_| casts(s)).map(|sun| {
-                let reach = SHADOW_RADII * r / sun[2];
-                let at: V3 = core::array::from_fn(|k| p[k] - sun[k] * reach);
-                (at, r + reach / 2.0 + spread)
-            });
-            [Some((p, r + spread * f64::from(u8::from(casts(s))))), cast]
-                .into_iter()
-                .flatten()
-        });
-        let region = Region::of(
-            clip_of(&self.view_proj, shaded)?,
-            width,
-            height,
-            REGION_MARGIN,
-        )?;
         let in_map = clip_of(
             &self.shadow.light_view_proj,
             moved.iter().filter(|s| casts(s)).map(sphere),
@@ -824,17 +872,172 @@ impl Renderer {
             let hi = hi.map(|v| libm::ceil(v.clamp(0.0, n)) as u32);
             [lo[0], lo[1], hi[0] - lo[0], hi[1] - lo[1]]
         });
+        let shown = clip_of(
+            &self.view_proj,
+            moved.iter().map(|s| {
+                let (p, r) = sphere(s);
+                (p, r + spread * f64::from(u8::from(casts(s))))
+            }),
+        )?;
+        let casters: Vec<(V3, f64)> = moved.iter().filter(|s| casts(s)).map(sphere).collect();
+        let clip = match light.filter(|_| !casters.is_empty()) {
+            None => shown,
+            Some(l) => {
+                let squares = self.stood(width, height)?;
+                let side = f64::from(depth_bounds::SIDE);
+                let mut b: Option<[f64; 4]> = None;
+                for &(q, rq, [sx, sy]) in squares {
+                    let shades = casters.iter().any(|&(c, r)| {
+                        // The nearest point to `q` of the half-line from the
+                        // caster away from the light.
+                        let v: V3 = core::array::from_fn(|k| q[k] - c[k]);
+                        let t = (-v3::dot(&v, &l)).max(0.0);
+                        let d: V3 = core::array::from_fn(|k| v[k] + t * l[k]);
+                        v3::len(&d) <= r + spread + rq
+                    });
+                    if shades {
+                        let px = [f64::from(sx) * side, f64::from(sy) * side];
+                        let e = b.get_or_insert([px[0], px[1], px[0], px[1]]);
+                        *e = [
+                            e[0].min(px[0]),
+                            e[1].min(px[1]),
+                            e[2].max(px[0] + side),
+                            e[3].max(px[1] + side),
+                        ];
+                    }
+                }
+                let (w, h) = (f64::from(width), f64::from(height));
+                b.map_or(shown, |[x0, y0, x1, y1]| {
+                    let c = [
+                        x0 / w * 2.0 - 1.0,
+                        1.0 - y1.min(h) / h * 2.0,
+                        x1.min(w) / w * 2.0 - 1.0,
+                        1.0 - y0 / h * 2.0,
+                    ]
+                    .map(|v| v.clamp(-1.0, 1.0) as f32);
+                    [
+                        shown[0].min(c[0]),
+                        shown[1].min(c[1]),
+                        shown[2].max(c[2]),
+                        shown[3].max(c[3]),
+                    ]
+                })
+            }
+        };
+        let region = Region::of(clip, width, height, REGION_MARGIN)?;
         Some((region, in_map))
+    }
+
+    /// Each square of the screen with world under it, as the depth the
+    /// frames drew since the view last moved has landed (`DepthBounds`):
+    /// the sphere about the box it holds, units from the eye, and its
+    /// square; worked out once a landing, as the view stands while it holds.
+    fn stood(&mut self, width: u32, height: u32) -> Option<&[(V3, f64, [u32; 2])]> {
+        let b = self.depth_bounds.landed()?;
+        let at = self.depth_bounds.landed_at();
+        if self.stood.0 != at {
+            let mut inv = mat4::new();
+            mat4::invert(&mut inv, &self.view_proj);
+            let [across, down] = self.depth_bounds.squares;
+            let side = f64::from(depth_bounds::SIDE);
+            let (w, h) = (f64::from(width), f64::from(height));
+            let mut out = Vec::new();
+            for sy in 0..down {
+                for sx in 0..across {
+                    let k = 2 * (sy * across + sx) as usize;
+                    let (lo, hi) = (f64::from(b[k]), f64::from(b[k + 1]));
+                    if lo > hi {
+                        continue;
+                    }
+                    let x = [
+                        f64::from(sx) * side / w,
+                        (f64::from(sx + 1) * side).min(w) / w,
+                    ]
+                    .map(|v| v * 2.0 - 1.0);
+                    let y = [
+                        f64::from(sy) * side / h,
+                        (f64::from(sy + 1) * side).min(h) / h,
+                    ]
+                    .map(|v| 1.0 - v * 2.0);
+                    let corners: [V3; 8] = core::array::from_fn(|k| {
+                        let p = [x[k & 1], y[k >> 1 & 1], [lo, hi][k >> 2]];
+                        let e = |r: usize| {
+                            inv[r] * p[0] + inv[4 + r] * p[1] + inv[8 + r] * p[2] + inv[12 + r]
+                        };
+                        let ww = e(3);
+                        [e(0) / ww, e(1) / ww, e(2) / ww]
+                    });
+                    let mid: V3 =
+                        core::array::from_fn(|a| corners.iter().map(|c| c[a]).sum::<f64>() / 8.0);
+                    let r = corners
+                        .iter()
+                        .map(|c| v3::len(&core::array::from_fn(|a| c[a] - mid[a])))
+                        .fold(0.0, f64::max);
+                    out.push((mid, r, [sx, sy]));
+                }
+            }
+            self.stood = (at, out);
+        }
+        Some(&self.stood.1)
+    }
+
+    /// Where the cloud sheets are seen, as cloud.wgsl `vs` lays them: a
+    /// square each at its height over the eye, as wide as the eye draws
+    /// clouds, cut at the eye's plane. `None` where they cannot be bounded
+    /// (a region past most of the screen); `Some(None)` where none is seen.
+    fn sheets_region(&self, env: &[f32], width: u32, height: u32) -> Option<Option<Region>> {
+        let w = self.clouds.words();
+        if w[clouds::SHOWN] <= 0.0 {
+            return Some(None);
+        }
+        let (alt, km_per_u) = (f64::from(env[ENV_AIR]), f64::from(env[ENV_AIR + 1]));
+        let reach = f64::from(w[clouds::REACH]);
+        let mut clip: Option<[f32; 4]> = None;
+        for km in [cloud::altocumulus::KM, cloud::cirrus::KM] {
+            let h = f64::from(km) - alt;
+            let half =
+                libm::sqrt((reach * reach - h * h).max(0.0)) / km_per_u.max(f64::MIN_POSITIVE);
+            if half <= 0.0 {
+                continue;
+            }
+            let z = h / km_per_u.max(f64::MIN_POSITIVE);
+            let quad = [
+                [-half, -half, z],
+                [half, -half, z],
+                [half, half, z],
+                [-half, half, z],
+            ];
+            if let Some(b) = plane_clip(&self.view_proj, &quad) {
+                clip = Some(clip.map_or(b, |c| {
+                    [
+                        c[0].min(b[0]),
+                        c[1].min(b[1]),
+                        c[2].max(b[2]),
+                        c[3].max(b[3]),
+                    ]
+                }));
+            }
+        }
+        match clip {
+            None => Some(None),
+            Some(c) => Region::of(c, width, height, REGION_MARGIN).map(Some),
+        }
     }
 
     /// Whether a draw a region does not stand for moved since the last
     /// frame (`BESIDE`): its record or uniform, or an upload it reads
     /// (`touched`, the handles this frame's lists upload, rewrite or free).
-    fn beside_moved(&mut self, records: &[u32], uniforms: &[f32], touched: &[u32]) -> bool {
+    fn beside_moved(
+        &mut self,
+        records: &[u32],
+        uniforms: &[f32],
+        touched: &[u32],
+        bounded: &[u32],
+    ) -> bool {
         let r = &mut self.beside;
         r.begin();
         for d in records.as_chunks::<DRAW_WORDS>().0 {
-            if BESIDE.contains(&d[4]) {
+            if BESIDE.contains(&d[4]) && !bounded.contains(&d[0]) {
                 r.read(d);
                 r.read(uniform_of(uniforms, d));
                 r.mark(touched.contains(&d[0]));
@@ -884,7 +1087,8 @@ impl Renderer {
         // only the room left.
         if cast.is_some() {
             self.screen.make(g, &mut self.pipelines);
-            self.screen.sun_made(g, self.shadows);
+            self.screen
+                .light_made(g, stage_lane()[STAGE_AT::SHADOWS] > 0.0);
         }
         self.screen.hand(g, &mut self.pipelines, &mut input.ground);
         let tiles = input.earth_tiles;
@@ -920,7 +1124,7 @@ impl Renderer {
         let uniforms_moved = l.read(uniforms);
         let lists_moved = l.read(records) | uniforms_moved;
         let listed_same = l.end();
-        let beside_moved = self.beside_moved(records, uniforms, &touched);
+        let beside_moved = self.beside_moved(records, uniforms, &touched, input.bounded);
         read.read(input.cases);
 
         targets(g, world);
@@ -941,11 +1145,11 @@ impl Renderer {
         // where no shadow is cast.
         if let Some(c) = cast.as_mut() {
             let sun = if self.shadows {
-                self.shadow.sun
+                self.shadow.light_words
             } else {
-                [0; eye::SUN_WORDS]
+                [0; eye::LIGHT_WORDS]
             };
-            c.eye[eye::SUN..eye::SUN + eye::SUN_WORDS].copy_from_slice(&sun);
+            c.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&sun);
         }
         // Where each pixel's ray goes through it this frame, the cast's and
         // what is drawn over the world alike (gpu/resolve.rs), in clip units
@@ -959,9 +1163,31 @@ impl Renderer {
         self.frame[JITTER + 1] = -2.0 * j[1] / world.height as f32;
         // Where what the kernel animates moved, on the screen and in the
         // sun's map, laid out as this frame's eye and light see it.
-        let (region, sun_rect) = self
-            .regions(input.moved, world.width, world.height)
-            .map_or((None, None), |(r, s)| (Some(r), s));
+        // And where the sheets the wind carries are seen, where it moved
+        // them: unbounded, or a region past most of the screen, draws the
+        // frame whole.
+        let clouds_moved = {
+            let r = &mut self.clouds_read;
+            r.begin();
+            r.read(self.clouds.words());
+            !r.end()
+        };
+        let sheets =
+            clouds_moved.then(|| self.sheets_region(input.environment, world.width, world.height));
+        let bound = self.regions(input.moved, world.width, world.height);
+        let unbounded = (!input.moved.is_empty() && bound.is_none()) || sheets == Some(None);
+        let (region, light_rect) = if unbounded {
+            (None, None)
+        } else {
+            let sheets = sheets.flatten().flatten();
+            let region = match (bound.map(|b| b.0), sheets) {
+                (Some(a), Some(b)) => Some(a.union(b)),
+                (a, b) => a.or(b),
+            };
+            (region, bound.and_then(|b| b.1))
+        };
+        // The sheets seen moving draw a frame however still the rest.
+        let clouds_drawn = clouds_moved && sheets != Some(Some(None));
         let ao_remade = self.screen_ao && self.ao.ensure(g, world.width, world.height);
         if ao_remade {
             self.rebind(g);
@@ -1032,8 +1258,21 @@ impl Renderer {
         let meshes: [u32; GROUPS as usize] =
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
         // A region drawn again alone, where nothing but what it bounds moved
-        // so far; the cast takes it, its pixels cast there alone.
-        let region = region.filter(|_| read.same() && !beside_moved);
+        // so far, with the squares still gathering since they last changed
+        // (`Resolve::gathering_rect`); the cast takes it, its pixels cast
+        // there alone. What moved is what the squares are aged by.
+        let partial = read.same() && !beside_moved && !unbounded;
+        let changed = region.filter(|_| partial);
+        let region = if partial {
+            let size = [world.width, world.height];
+            match (changed, self.resolve.gathering_rect(size)) {
+                (Some(a), Some(b)) => Some(a.union(b)),
+                (a, b) => a.or(b),
+            }
+            .and_then(|r| r.held(world.width, world.height))
+        } else {
+            None
+        };
         self.screen.prepare(
             g,
             cast,
@@ -1072,7 +1311,8 @@ impl Renderer {
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
         self.screen.tally_back(g);
-        if read.read(self.clouds.words()) {
+        self.depth_bounds.back(g);
+        if clouds_moved {
             self.clouds.write(g);
         }
         // The world as it stood: all the frame draws from read as last time
@@ -1081,7 +1321,7 @@ impl Renderer {
         let stands =
             read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !gridded;
         // Nothing moved but the jitter.
-        let quiet = stands && listed_same;
+        let quiet = stands && listed_same && !clouds_drawn;
         // Only what the region bounds moved: it alone is drawn again. Else
         // the frame is drawn whole, its pixels cast whole.
         let region = region.filter(|_| stands);
@@ -1091,7 +1331,7 @@ impl Renderer {
         // The frame stands where nothing moved, the jitter neither: nothing
         // is drawn, nothing submitted, and the canvases keep the frame they
         // show.
-        if quiet && !self.screen.casts_px() && !self.screen.sun_casts() {
+        if quiet && !self.screen.casts_px() && !self.screen.light_casts() {
             self.frame_read = read;
             let mut stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
@@ -1112,8 +1352,8 @@ impl Renderer {
         // drawn again over the world the sun's cast left as it was, the part
         // the casters that moved cover, or none of it.
         let cast = self.screen.kind != FrameKind::plain;
-        let map = match (region, sun_rect) {
-            (Some(_), _) if !cast || self.screen.sun_casts() => Some(None),
+        let map = match (region, light_rect) {
+            (Some(_), _) if !cast || self.screen.light_casts() => Some(None),
             (Some(_), Some(rect)) => Some(Some(rect)),
             (Some(_), None) => None,
             (None, _) => Some(None),
@@ -1208,23 +1448,46 @@ impl Renderer {
         self.decor
             .draw_ghosts(&mut pass, &draws, b, self.models.frame);
         pass.end();
-        let gathered = self
-            .resolve
-            .draw(&mut ctx, self.frame_buf, world, quiet, region);
-        // At the canvas's size, as what is drawn over it: counted with the
-        // markers', not the world's pixels.
+        self.depth_bounds.take(
+            &mut ctx,
+            world.depth_view,
+            [world.width, world.height],
+            region,
+            read.same() && !beside_moved && stands,
+        );
+        self.depth_bounds.copy(g, ctx.encoder);
+        // The squares aged by what moved where only the region's draws did,
+        // however much of the screen the squares still gathering cover;
+        // every one changed where anything else did.
+        self.resolve.age(
+            g,
+            [world.width, world.height],
+            partial && stands,
+            quiet,
+            changed,
+        );
+        let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, region);
+        // At the canvas's size, its own span. A region frame finishes again
+        // only its region, at the canvas's pixels, a pixel more each way
+        // for the world texels a pixel reads (screen_finish.wgsl); not
+        // after the debug pass drew into the screen's depth.
+        let within = region
+            .filter(|_| !self.debug_drew)
+            .map(|r| canvas_rect(r, [world.width, world.height], world.screen));
         self.finish.draw(
             &mut ctx,
-            GpuSpanName::marker,
+            GpuSpanName::finish,
             self.frame_buf,
             world,
             gathered,
             canvas_view,
+            within,
         );
         self.marker
             .draw(&mut ctx, canvas_view, world.screen_depth_view, &draws, b);
-        self.debug
-            .draw(&mut ctx, canvas_view, world.screen_depth_view, &draws, b);
+        self.debug_drew =
+            self.debug
+                .draw(&mut ctx, canvas_view, world.screen_depth_view, &draws, b);
         self.draw_cases(
             &mut ctx,
             Self::cases(&draws, input.cases),
@@ -1260,6 +1523,7 @@ impl Renderer {
         if skipped {
             REDRAW.set(true);
             self.screen.on_dropped();
+            self.depth_bounds.on_dropped();
             for case in self.cases.iter_mut().flatten() {
                 case.read.forget();
             }
@@ -1268,7 +1532,7 @@ impl Renderer {
             self.beside.forget();
             self.ao_read.forget();
         } else {
-            self.resolve.on_drawn(quiet, region.is_some());
+            self.resolve.on_drawn(region.is_some());
             // The jitter's sequence run through once anything moved, as
             // nothing else asks for those frames while it stands. What
             // moves on its own (an actor, the clouds, the puck) wakes the
@@ -1454,7 +1718,10 @@ fn targets(g: &Gpu, s: &mut Surface) {
     // The world's alone holds the cast's rays and its color over frames.
     (s.rays, s.rays_view) = (0, 0);
     (s.history, s.history_view) = ([0; 2], [0; 2]);
+    (s.shown, s.shown_view) = (0, 0);
     if s.role == surface_role::WORLD {
+        s.shown = g.texture(screen.0, screen.1, 1, g.canvas(), 1, usage);
+        s.shown_view = g.view(s.shown, false, 0, 1, 0, 1);
         for k in 0..2 {
             // Copied within where a region alone is drawn again (gpu/resolve.rs).
             let copied = usage | texture_usage::COPY_SRC | texture_usage::COPY_DST;

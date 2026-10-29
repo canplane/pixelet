@@ -58,6 +58,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     discard;
   }
   let n = normalize(i.normal);
-  let color = shade(sprite.rgb, n, i.world_pos, sun_lit(i.world_pos, n), screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
+  let color = shade(sprite.rgb, n, i.world_pos, light_lit(i.world_pos, n), screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
   return vec4f(tone(color), draw_opacity());
 }

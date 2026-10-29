@@ -7,12 +7,14 @@
 //! two of the world surface's `history` in turn, the one written this frame
 //! what the finish encodes (gpu/finish.rs); a frame that draws a region
 //! alone writes it back into the last, which the finish then encodes.
-//! Where only the jitter moved,
-//! nothing the frames before left is stale, and each frame takes its even
-//! share of the sequence; once it has run through, the jitter holds, and
-//! the frame stands. Else what the frames before left is moved to where
-//! this frame's eye sees it and held within what this frame's pixels about
-//! it hold.
+//! Each square of the screen keeps its age, the frames since it last
+//! changed (`ages`): where only the jitter moved there since, nothing the
+//! frames before left is stale, and each frame takes its even share of the
+//! sequence; where it changed this frame, what the frames before left is
+//! moved to where this frame's eye sees it and held within what this
+//! frame's pixels about it hold. A square is drawn again until it has run
+//! through the sequence (`gathering_rect`); once every one has, the jitter
+//! holds, and the frame stands.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::world;
@@ -21,8 +23,8 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RESOLVE;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, place, release, sampler_entry, view_entry, Gpu,
-    Load, RenderContext,
+    buf_entry, buffer_usage, bytes, pass_desc, place, release, sampler_entry, view_entry,
+    word_bytes, Gpu, Load, RenderContext,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -39,6 +41,15 @@ const BLEND_LEAST: f32 = 0.1;
 /// Its uniform's floats (screen_resolve.wgsl `Resolve`).
 const UNIFORM_FLOATS: usize = 20;
 
+/// A square's drawn pixels a side, whose age the resolve keeps
+/// (screen_resolve.wgsl `RESOLVE_SIDE`).
+pub const SIDE: u32 = 32;
+
+const _: () = assert!(
+    JITTERS == 8 && SIDE == 32,
+    "screen_resolve.wgsl's `RESOLVE_JITTERS` and `RESOLVE_SIDE` are these"
+);
+
 pub struct Resolve {
     built: Built,
     sampler: u32,
@@ -46,7 +57,7 @@ pub struct Resolve {
     /// A group a history written, reading the other, and what each was
     /// made over: made again exactly when one is another.
     groups: [u32; 2],
-    bound: [[u32; 4]; 2],
+    bound: [[u32; 5]; 2],
     /// The history this frame writes, the other the last frame's.
     turn: usize,
     /// The surface's histories it gathered into, and the frames gathered
@@ -57,11 +68,16 @@ pub struct Resolve {
     /// place (`lay_out`), and the last drawn frame's.
     view: (Mat4, [f64; 3]),
     last: (Mat4, [f64; 3]),
-    /// Where the jitter is in its sequence, the frames since anything but
-    /// it moved, and this frame's, in drawn pixels.
+    /// Where the jitter is in its sequence, and this frame's, in drawn
+    /// pixels.
     phase: u32,
-    quiet: u32,
     jitter: [f32; 2],
+    /// Each square's frames since it last changed, a row after another
+    /// (screen_resolve.wgsl `ages`), the squares across and down, and the
+    /// buffer the resolve reads them from.
+    ages: Vec<u32>,
+    squares: [u32; 2],
+    ages_buf: u32,
 }
 
 impl Resolve {
@@ -81,16 +97,91 @@ impl Resolve {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             groups: [0; 2],
-            bound: [[0; 4]; 2],
+            bound: [[0; 5]; 2],
             turn: 0,
             histories: [0; 2],
             gathered: 0,
             view: (mat4::new(), [0.0; 3]),
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
-            quiet: 0,
             jitter: [0.0; 2],
+            ages: Vec::new(),
+            squares: [0; 2],
+            ages_buf: 0,
         }
+    }
+
+    /// Each square's age as this frame draws it, of a world `size` drawn
+    /// pixels across and down: where only the region's draws moved
+    /// (`partial`), the squares `changed` covers 0 and the rest older;
+    /// else each one older where only the jitter moved (`quiet`), every one
+    /// 0 where anything else did. Every square 0 where the squares are new.
+    pub fn age(
+        &mut self,
+        g: &Gpu,
+        size: [u32; 2],
+        partial: bool,
+        quiet: bool,
+        changed: Option<Region>,
+    ) {
+        let squares = size.map(|v| v.div_ceil(SIDE));
+        if squares != self.squares {
+            self.squares = squares;
+            self.ages = vec![0; (squares[0] * squares[1]) as usize];
+            release(self.ages_buf);
+            self.ages_buf = g.buf(
+                word_bytes(self.ages.len()),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            );
+        } else if !partial && !quiet {
+            self.ages.fill(0);
+        } else {
+            for a in &mut self.ages {
+                *a = a.saturating_add(1);
+            }
+        }
+        if let Some(r) = changed.filter(|_| partial) {
+            let lo = r.at.map(|v| v / SIDE);
+            let hi: [u32; 2] =
+                core::array::from_fn(|k| (r.at[k] + r.size[k]).div_ceil(SIDE).min(squares[k]));
+            for y in lo[1]..hi[1] {
+                for x in lo[0]..hi[0] {
+                    self.ages[(y * squares[0] + x) as usize] = 0;
+                }
+            }
+        }
+        g.write_buf(self.ages_buf, 0, bytes(&self.ages));
+    }
+
+    /// The squares that have not yet run through the jitter's sequence since
+    /// they last changed, of a world `size` drawn pixels across and down,
+    /// the least region holding them; none where every one has, or the
+    /// squares are not this size's.
+    pub fn gathering_rect(&self, size: [u32; 2]) -> Option<Region> {
+        let squares = size.map(|v| v.div_ceil(SIDE));
+        if squares != self.squares {
+            return None;
+        }
+        let mut b: Option<[u32; 4]> = None;
+        for y in 0..squares[1] {
+            for x in 0..squares[0] {
+                if self.ages[(y * squares[0] + x) as usize] < JITTERS - 1 {
+                    let e = b.get_or_insert([x, y, x, y]);
+                    *e = [e[0].min(x), e[1].min(y), e[2].max(x), e[3].max(y)];
+                }
+            }
+        }
+        b.map(|[x0, y0, x1, y1]| {
+            let at = [x0 * SIDE, y0 * SIDE];
+            let end = [
+                ((x1 + 1) * SIDE).min(size[0]),
+                ((y1 + 1) * SIDE).min(size[1]),
+            ];
+            Region {
+                at,
+                size: [end[0] - at[0], end[1] - at[1]],
+            }
+        })
     }
 
     /// This frame's view: its view-projection about the eye, and the eye's
@@ -112,9 +203,9 @@ impl Resolve {
     }
 
     /// The frame's world color, `s`'s, blended into what the frames before
-    /// left, into the history its turn writes: `quiet` where nothing but
-    /// the jitter moved since the last drawn frame. Where the frame draws a
-    /// `region` again alone, only it, written back into the last history,
+    /// left, into the history its turn writes, each square by its age
+    /// (`age`). Where the frame draws a `region` again alone, only it,
+    /// written back into the last history,
     /// which stays the one read. A pass of its own, by the frame words in
     /// `frame`, its time counted in the span `resolve`; the history the finish
     /// encodes.
@@ -123,22 +214,22 @@ impl Resolve {
         ctx: &mut RenderContext,
         frame: u32,
         s: &Surface,
-        quiet: bool,
         region: Option<Region>,
     ) -> u32 {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
             (self.histories, self.gathered, self.turn) = (s.history_view, 0, 0);
+            self.ages.fill(0);
+            g.write_buf(self.ages_buf, 0, bytes(&self.ages));
         }
         let (k, was) = (self.turn, 1 - self.turn);
-        // A frame where only the jitter moved takes its even share of the
-        // sequence's, and what the frames before left stands whole; else
-        // its share is held no less than `BLEND_LEAST`.
-        let blend = match (self.gathered, quiet) {
-            (0, _) => 1.0,
-            (_, true) => 1.0 / (self.quiet.min(JITTERS - 2) + 2) as f32,
-            (n, false) => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
+        // A square that changed this frame takes its share held no less than
+        // `BLEND_LEAST`; one where only the jitter moved since, its even share
+        // of the sequence's, off its age (screen_resolve.wgsl).
+        let blend = match self.gathered {
+            0 => 1.0,
+            n => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
         };
         let mut u = [0.0f32; UNIFORM_FLOATS];
         let m = self.reproject();
@@ -146,9 +237,15 @@ impl Resolve {
             *to = from as f32;
         }
         u[16] = blend;
-        u[17] = if quiet { 0.0 } else { 1.0 };
+        u[17] = f32::from_bits(self.squares[0]);
         g.write_buf(self.uniform, 0, bytes(&u));
-        let bound = [frame, s.color_view, s.depth_view, s.history_view[was]];
+        let bound = [
+            frame,
+            s.color_view,
+            s.depth_view,
+            s.history_view[was],
+            self.ages_buf,
+        ];
         if bound != self.bound[k] {
             release(self.groups[k]);
             self.groups[k] = g.bind_group(
@@ -160,6 +257,7 @@ impl Resolve {
                     view_entry(3, s.history_view[was]),
                     sampler_entry(4, self.sampler),
                     buf_entry(5, self.uniform),
+                    buf_entry(6, self.ages_buf),
                 ],
             );
             self.bound[k] = bound;
@@ -213,9 +311,9 @@ impl Resolve {
 
     /// The frame was drawn: its history is the next's to read, unless it
     /// drew a region alone, written back into the last; its view the last,
-    /// and the jitter moves on unless it holds; `quiet` and `partial` as
-    /// `draw` was handed them.
-    pub fn on_drawn(&mut self, quiet: bool, partial: bool) {
+    /// and the jitter moves on unless it holds; `partial` where it drew a
+    /// region alone.
+    pub fn on_drawn(&mut self, partial: bool) {
         if !partial {
             self.turn = 1 - self.turn;
         }
@@ -224,13 +322,12 @@ impl Resolve {
         if self.gathering() {
             self.phase = (self.phase + 1) % JITTERS;
         }
-        self.quiet = if quiet { self.quiet + 1 } else { 0 };
     }
 
-    /// Whether the jitter has places of its sequence left to cover since
-    /// anything else last moved.
+    /// Whether the jitter has places of its sequence left to cover in a
+    /// square since it last changed (`ages`), or none was aged yet.
     pub fn gathering(&self) -> bool {
-        self.quiet < JITTERS - 1
+        self.ages.is_empty() || self.ages.iter().any(|&a| a < JITTERS - 1)
     }
 }
 

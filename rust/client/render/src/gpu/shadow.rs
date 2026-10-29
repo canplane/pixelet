@@ -1,24 +1,24 @@
 // pxl-render/gpu/shadow.rs
 
-//! The sun's shadow map: the world's depth from the sun each frame,
+//! The light's shadow map: the world's depth from the light each frame,
 //! orthographic about the eye and as wide as the casters reach (the
 //! kernel's `STAGE_AT::SHADOWS`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
-//! rays are, off samples and the visible sample (pxl-shader `sun_cs`), into
+//! rays are, off samples and the visible sample (pxl-shader `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
-//! texel each frame it is cast (pxl-spec-core `sun`); laid into the map
+//! texel each frame it is cast (pxl-spec-core `light`); laid into the map
 //! each frame in the box's own order
-//! (`PIPELINE_SUN_MAP`), and decor and the actors, which move every frame,
+//! (`PIPELINE_LIGHT_MAP`), and decor and the actors, which move every frame,
 //! drawn over it depth only, from the light's frame. The lit passes read
 //! the map as a plain light box. 16 MB each at 2048.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec_core::eye;
-use pxl_spec_core::sun::{self, Starts, Sun, ANCHOR};
+use pxl_spec_core::light::{self, Light, Starts, ANCHOR};
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_SUN_MAP};
+use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_MAP};
 use crate::frame::shader::word::frame::VIEW_PROJ;
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
@@ -56,9 +56,9 @@ pub struct Shadow {
     sampler: u32,
     blank_view: u32,
     blank_sampler: u32,
-    /// The world's depth from the sun as its cast leaves it, a word a slot
-    /// of the clipmap (pxl-spec-core `sun::Sun::word`): `sun_cs` writes it,
-    /// `PIPELINE_SUN_MAP` lays it into the map off the box's corner,
+    /// The world's depth from the light as its cast leaves it, a word a slot
+    /// of the clipmap (pxl-spec-core `light::Light::word`): `light_cs` writes it,
+    /// `PIPELINE_LIGHT_MAP` lays it into the map off the box's corner,
     /// `corner`'s words.
     pub world: u32,
     lay: Built,
@@ -69,15 +69,15 @@ pub struct Shadow {
     light_frame: u32,
     light: [f32; FRAME_FLOATS],
     pub light_view_proj: Mat4,
-    /// The world's cast's words off it (pxl-spec-core `eye::SUN`).
-    pub sun: [u32; eye::SUN_WORDS],
+    /// The world's cast's words off it (pxl-spec-core `eye::LIGHT`).
+    pub light_words: [u32; eye::LIGHT_WORDS],
     /// The normal offset a fragment takes: a texel at the last reach.
     pub texel: f64,
-    /// The sun the map is cast from, moved only when the real one has gone a
+    /// The light the map is cast from, moved only when the real one has gone a
     /// step from it.
     pub cast_from: Option<V3>,
     /// The light's frame the clipmap's texels are cast in, numbered: moved
-    /// where the sun the map is cast from, the reach or the depth step
+    /// where the light the map is cast from, the reach or the depth step
     /// (`DEPTH_STEP`) moved, the rays' starts with it (`starts`).
     pub frame: u32,
     held: Option<(V3, f64, i64)>,
@@ -135,7 +135,7 @@ impl Shadow {
             texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
         );
         let world = g.view(world, true, 0, 1, 0, 1);
-        let lay = pipelines.build(g, PIPELINE_SUN_MAP, Format::depth32float);
+        let lay = pipelines.build(g, PIPELINE_LIGHT_MAP, Format::depth32float);
         let corner = g.buf(
             word_bytes(4),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -165,7 +165,7 @@ impl Shadow {
             light_frame,
             light: [0.0; FRAME_FLOATS],
             light_view_proj: mat4::new(),
-            sun: [0; eye::SUN_WORDS],
+            light_words: [0; eye::LIGHT_WORDS],
             texel: 0.0,
             cast_from: None,
             frame: 0,
@@ -199,18 +199,18 @@ impl Shadow {
     pub fn aim(&mut self, sun_dir: &[f32], target: V3, reach: f64, rim: f32, fixed: V3) {
         self.texel = reach * 2.0 / f64::from(SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
-        // the sun goes, on purpose: the sun read as moving. Turned on every
+        // the light goes, on purpose: the light read as moving. Turned on every
         // frame instead, the grid below snapped another way each time and a
         // wall's shadow flickered as fast as the frames came.
-        let sun = v3::norm(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
+        let light = v3::norm(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
         let step = self.texel / reach;
         let from = match self.cast_from {
-            Some(from) if v3::dot(&from, &sun) > libm::cos(step) => from,
-            _ => sun,
+            Some(from) if v3::dot(&from, &light) > libm::cos(step) => from,
+            _ => light,
         };
         self.cast_from = Some(from);
-        // Two reaches up the sun, so the sphere of `reach` about the target lies
-        // between the planes a reach either side of it, whatever the sun's
+        // Two reaches up the light, so the sphere of `reach` about the target lies
+        // between the planes a reach either side of it, whatever the light's
         // angle, and a share past them each side (`DEPTH_STEP`).
         let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * 2.0 * reach);
         let (mut view, mut proj) = (mat4::new(), mat4::new());
@@ -221,7 +221,7 @@ impl Shadow {
         // The map follows the eye, so its texels are slid onto a grid fixed in the
         // world: off it, every edge fell on other texels each frame as the view
         // moved, and shimmered (stable shadow maps, texel snapping); and its
-        // planes onto a coarser one along the sun, so a texel kept is the
+        // planes onto a coarser one along the light, so a texel kept is the
         // same ray. Where the fixed point falls on the texels' grid is the
         // world's texel index of the box's first texel, X across and Y down
         // the rows: the clipmap's corner.
@@ -250,7 +250,7 @@ impl Shadow {
                 inverse[4 * k + 2] as f32,
             ]
         };
-        self.sun = Sun::of(
+        self.light_words = Light::of(
             [column(0), column(1), column(2), column(3)],
             SIZE,
             corner,
@@ -262,7 +262,7 @@ impl Shadow {
     }
 
     /// Where the world's cast starts each texel's ray (pxl-spec-core
-    /// `sun::Starts`): the anchors about the box's corner, each worked out
+    /// `light::Starts`): the anchors about the box's corner, each worked out
     /// once a light frame, on the near plane where its world texel's middle
     /// lies, in Q3 off the eye's world position, and kept while the frame
     /// holds (`anchors`), so a texel's start is the same in every frame
@@ -287,7 +287,7 @@ impl Shadow {
             if let Some(&(_, at, frac)) = self.anchors.1.iter().find(|a| a.0 == w) {
                 return (at, frac);
             }
-            // Its middle's NDC on the near plane, as `Sun::of` lays the box's
+            // Its middle's NDC on the near plane, as `Light::of` lays the box's
             // texels, then the light's inverse, then the world.
             let (i, j) = (
                 f64::from(w[0].wrapping_sub(corner[0])),
@@ -319,11 +319,11 @@ impl Shadow {
             let d = [a.0[0].wrapping_sub(base[0]), a.0[1].wrapping_sub(base[1])];
             (0..=ANCHOR).contains(&d[0]) && (0..=ANCHOR).contains(&d[1])
         });
-        let sun = Sun::of_words(&self.sun);
+        let light = Light::of_words(&self.light_words);
         Starts {
             base,
-            across: sun.across.map(|v| v * q3 as f32),
-            down: sun.down.map(|v| v * q3 as f32),
+            across: light.across.map(|v| v * q3 as f32),
+            down: light.down.map(|v| v * q3 as f32),
             at: [a0.0, a1.0, a2.0, a3.0],
             frac: [a0.1, a1.1, a2.1, a3.1],
         }
@@ -333,7 +333,12 @@ impl Shadow {
     /// view, and the box's corner the world's depth is laid in off.
     pub fn write(&self, g: &Gpu) {
         g.write_buf(self.light_frame, 0, bytes(&self.light));
-        let corner = [self.sun[sun::CORNER[0]], self.sun[sun::CORNER[1]], 0, 0];
+        let corner = [
+            self.light_words[light::CORNER[0]],
+            self.light_words[light::CORNER[1]],
+            0,
+            0,
+        ];
         g.write_buf(self.corner, 0, bytes(&corner));
     }
 
@@ -342,7 +347,7 @@ impl Shadow {
     /// far plane, as nothing is cast there. Where only the texels `rect`
     /// holds, `[x, y, width, height]`, are drawn again, the rest kept as the
     /// last frame left it, the pass is held to them, the world laid there
-    /// first (`PIPELINE_SUN_MAP` writes every texel it covers), which a
+    /// first (`PIPELINE_LIGHT_MAP` writes every texel it covers), which a
     /// frame that casts alone may. The casters are drawn into it next, then
     /// it ends.
     pub fn begin<'a>(

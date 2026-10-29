@@ -299,7 +299,7 @@ pub mod sky {
 
     pub mod moon {
         params! {
-            /// The eye adapts to the Moon, so its seas show where the sky's
+            /// The eye adapts to the moon, so its seas show where the sky's
             /// exposure would drown the disc white.
             FACE_SHOWN: f32 = 0.6;
             /// Earthshine is ~1e-4 of the sunlit side, which no 8-bit screen

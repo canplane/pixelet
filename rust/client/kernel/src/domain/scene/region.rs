@@ -31,6 +31,9 @@ struct Moved {
     animated: bool,
     /// What `take` last found changed, which the renderer reads.
     changed: Vec<[f32; 5]>,
+    /// The keys of the turn's draws, which the renderer reads as the draws
+    /// a region stands for.
+    keys: Vec<u32>,
 }
 
 static MOVED: Global<Moved> = Global::new();
@@ -68,9 +71,10 @@ pub fn digest(words: &[f64]) -> u64 {
 /// What changed between the last turn's draws and this one's, where each
 /// was and is: a sphere each, `[x, y, z]` in units from `eye`, given in the
 /// world's doubles, its radius, and 1 where it casts a shadow that moves
-/// with it (pxl-render `FrameInput::moved`). And whether what is animated
-/// stepped. The turn's draws become the last.
-pub fn take(eye: V3) -> (&'static [[f32; 5]], bool) {
+/// with it (pxl-render `FrameInput::moved`); the keys of the turn's draws
+/// (`FrameInput::bounded`). And whether what is animated stepped. The
+/// turn's draws become the last.
+pub fn take(eye: V3) -> (&'static [[f32; 5]], &'static [u32], bool) {
     let m = moved();
     let animated = core::mem::take(&mut m.animated);
     let sphere = |d: &Drawn| {
@@ -96,7 +100,9 @@ pub fn take(eye: V3) -> (&'static [[f32; 5]], bool) {
             m.changed.push(sphere(l));
         }
     }
+    m.keys.clear();
+    m.keys.extend(m.now.iter().map(|d| d.key));
     m.last = core::mem::take(&mut m.now);
     let m: &'static Moved = m;
-    (&m.changed, animated)
+    (&m.changed, &m.keys, animated)
 }

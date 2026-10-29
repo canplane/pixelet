@@ -53,6 +53,10 @@ pub struct Actor {
     /// times it was, and whether it was seen at the last tick.
     posed: bool,
     poses: u32,
+    /// How far its mesh reaches about where it stands as its palette holds
+    /// it, unscaled (`Model::reach_of`): its region's sphere, the pose it
+    /// is drawn in, not as far as its clips may move it.
+    pose_reach: f32,
     seen: bool,
     /// How long its clip has run while it moves it where it is seen, in
     /// seconds: by the wall clock between its ticks, read at `last`, a stall
@@ -100,6 +104,7 @@ impl Actor {
             from: Vec::new(),
             posed: false,
             poses: 0,
+            pose_reach: 0.0,
             seen: false,
             run: 0.0,
             last: 0.0,
@@ -250,6 +255,7 @@ impl Actor {
             core::slice::from_raw_parts_mut(mem::at::<f32>(self.palette_at), joints * 16)
         };
         m.palette(&self.local, &mut self.global, palette);
+        self.pose_reach = m.reach_of(palette);
         draw.rewrite(
             self.palette_handle,
             self.palette_at as u32,
@@ -268,12 +274,16 @@ impl Actor {
         if m.handle() == 0 {
             return;
         }
-        // Seen, what it covers and shades as drawn (`region`): as far as
-        // its clips, the one it fades from too, reach about where it stands.
+        // Seen, what it covers and shades as drawn (`region`): as far as its
+        // mesh reaches in the pose it is drawn in, about where it stands;
+        // as far as its clips reach before it was first posed.
         if self.seen {
-            let reach = m
-                .reach(self.cur.map(|p| p.clip))
-                .max(self.previous.map_or(0.0, |p| m.reach(Some(p.clip))));
+            let reach = if self.posed {
+                self.pose_reach
+            } else {
+                m.reach(self.cur.map(|p| p.clip))
+                    .max(self.previous.map_or(0.0, |p| m.reach(Some(p.clip))))
+            };
             let r = f64::from(reach * stance.scale);
             let at = stance.at;
             let state = region::digest(&[

@@ -11,7 +11,7 @@
 //! each frame its samples are cast, and kept where only the pixels are cast
 //! again over them.
 
-use pxl_spec_core::{beam, eye, raster, sun};
+use pxl_spec_core::{beam, eye, light, raster};
 
 use super::cast::HEAD_BINDING;
 
@@ -24,8 +24,8 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Region;
+use pxl_spec_core::param::light::SAMPLE;
 use pxl_spec_core::param::raster::GROWN;
-use pxl_spec_core::param::sun::SAMPLE;
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -52,19 +52,19 @@ pub(super) struct Raster {
     size: [u32; 2],
     groups: [u32; 3],
     bound: [u32; 9],
-    /// The sun's, made where its shadows are first cast (`sun_made`); and a
+    /// The light's, made where its shadows are first cast (`light_made`); and a
     /// visibility buffer naming no sample, bound where it is not.
-    pub(super) sun: SunRaster,
+    pub(super) light: LightRaster,
     blank_array: u32,
 }
 
-/// The sun's samples' boxes, written by the eye's pass (`boxes_built`) and
-/// drawn from the sun by the same draw (pxl-spec-core `param::sun::SAMPLE`): its
-/// boxes, room for a sample every `param::sun::SAMPLE` texels; their args; its
+/// The light's samples' boxes, written by the eye's pass (`boxes_built`) and
+/// drawn from the light by the same draw (pxl-spec-core `param::light::SAMPLE`): its
+/// boxes, room for a sample every `param::light::SAMPLE` texels; their args; its
 /// view, a uniform; its targets at the map's side, in the box's order; and
 /// the draw's group.
 #[derive(Default)]
-pub(super) struct SunRaster {
+pub(super) struct LightRaster {
     pub(super) boxes: u32,
     pub(super) args: u32,
     uniform: u32,
@@ -106,7 +106,7 @@ impl Raster {
             size: [0; 2],
             groups: [0; 3],
             bound: [0; 9],
-            sun: SunRaster::default(),
+            light: LightRaster::default(),
             blank_array: g.view(blank, true, 0, 1, 0, 1),
         }
     }
@@ -116,7 +116,7 @@ impl Raster {
     /// rays' `size`; the raster's view off the `eye`'s words; the args
     /// cleared where the samples are cast again (`samples_cast`), else the
     /// boxes they left kept; its groups over the cast's `eye`, `beams` and
-    /// the eye's `head` (pxl-spec-core `sun::MOVED_SIZE`), and, for the
+    /// the eye's `head` (pxl-spec-core `light::MOVED_SIZE`), and, for the
     /// faces' asking, the world's query's buffers (the window, the tiles'
     /// frames, the service area's index, the overwrites, the ways' pool).
     pub(super) fn prepare(
@@ -298,10 +298,10 @@ impl Raster {
 }
 
 impl Raster {
-    /// The sun's buffers and its targets at the map's `size`, made once;
+    /// The light's buffers and its targets at the map's `size`, made once;
     /// whether they are.
-    pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
-        let s = &mut self.sun;
+    pub(super) fn light_made(&mut self, g: &Gpu, size: u32) -> bool {
+        let s = &mut self.light;
         if s.group == 0 {
             let samples = (size / SAMPLE) * (size / SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
@@ -328,27 +328,27 @@ impl Raster {
         s.group != 0
     }
 
-    /// The sun's visibility buffer as its cast reads it, an array of one layer;
+    /// The light's visibility buffer as its cast reads it, an array of one layer;
     /// one naming no sample where it is not made.
-    pub(super) fn sun_visibility(&self) -> u32 {
-        if self.sun.group != 0 {
-            self.sun.visibility_array
+    pub(super) fn light_visibility(&self) -> u32 {
+        if self.light.group != 0 {
+            self.light.visibility_array
         } else {
             self.blank_array
         }
     }
 
-    /// The sun's view off the eye's words `e` (pxl-spec-core `sun::Sun`) for
+    /// The light's view off the eye's words `e` (pxl-spec-core `light::Light`) for
     /// the map `size` a side, as `prepare` lays the eye's; the args cleared.
-    pub(super) fn sun_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
-        let s = &self.sun;
+    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
+        let s = &self.light;
         if s.group == 0 {
             return;
         }
-        let words: &[u32; eye::SUN_WORDS] = e[eye::SUN..eye::SUN + eye::SUN_WORDS]
+        let words: &[u32; eye::LIGHT_WORDS] = e[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
             .try_into()
-            .unwrap_or(&[0; eye::SUN_WORDS]);
-        let v = sun::Sun::of_words(words);
+            .unwrap_or(&[0; eye::LIGHT_WORDS]);
+        let v = light::Light::of_words(words);
         let length = |a: [f32; 3]| libm::sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
         let unit = |a: [f32; 3]| {
             let l = length(a).max(f32::MIN_POSITIVE);
@@ -380,7 +380,7 @@ impl Raster {
             n,
             v.reach,
             // The boxes are laid from box texel (0, 0)'s start (pxl-shader
-            // sun.rs `Map::laid`).
+            // light.rs `Map::laid`).
             0.0,
             0.0,
             0.0,
@@ -392,13 +392,13 @@ impl Raster {
         g.write_buf(s.args, 0, bytes(&args));
     }
 
-    /// The sun's boxes drawn into its targets as many as their args say,
-    /// cleared first, timed in the span `sun_raster`, after its boxes
+    /// The light's boxes drawn into its targets as many as their args say,
+    /// cleared first, timed in the span `light_raster`, after its boxes
     /// are written.
-    pub(super) fn sun_draw(&self, ctx: &mut RenderContext) {
+    pub(super) fn light_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::sun_raster);
-        let s = &self.sun;
+        let stamp = ctx.stamp(GpuSpanName::light_raster);
+        let s = &self.light;
         let pass = g.pass(
             encoder,
             &pass_desc(

@@ -17,19 +17,19 @@ use crate::either::Either;
 use crate::eye::Eye;
 use crate::observed::{seen_at, seen_put, Seen, Writ};
 use crate::observer::{self, Observer};
-use crate::sun::Moved;
+use crate::light::Moved;
 use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
 /// `beam`): the lines, a corner each, the cells' starts and the samples'
-/// stops, as the frame's `Grid` lays them (`Grid::size`), or as the sun's
-/// list does (`sun::list_words`) where the pass casts for the map; a
+/// stops, as the frame's `Grid` lays them (`Grid::size`), or as the light's
+/// list does (`light::list_words`) where the pass casts for the map; a
 /// runtime array as `Seen` is. A pixel's own ray words say whether it
 /// missed (`ray::MISS`), so nothing here is a pixel's.
 pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
 /// A beam ray's line (pxl-spec-core `beam::LINE_WORDS`, at `base` of the
-/// words `W` hold: the eye's beam rays' buffer or the sun's list) as a walk
+/// words `W` hold: the eye's beam rays' buffer or the light's list) as a walk
 /// resumes from one: what was handed each node of it (`world::Handed::words`),
 /// its own at its zoom. A node's entry is its key's (`observed::entry_of`),
 /// so none is read off the line.
@@ -85,8 +85,8 @@ impl<W: Words + ?Sized> cast::Over<Writ> for Beamed<'_, W> {
 
 /// Where lines, nodes and samples' words lie (pxl-spec-core
 /// `beam::LINE_WORDS`, `beam::NODE_WORDS`, `beam::SAMPLE_WORDS`): the eye's
-/// in the beam rays' buffer; the sun's in its list's (pxl-spec-core
-/// `sun::line`, `sun::sample`).
+/// in the beam rays' buffer; the light's in its list's (pxl-spec-core
+/// `light::line`, `light::sample`).
 pub(crate) trait Words {
     fn word(&self, k: u32) -> u32;
     fn set(&mut self, k: u32, v: u32);
@@ -196,7 +196,7 @@ where
 
 /// Each beam ray of its observer's lattice, a thread a corner: the camera
 /// grid's (pxl-spec-core `beam::Grid::corners`), or the shadow map's
-/// (`sun::BEAM`), as its head names (observer.rs `beam`; either.rs `Either`).
+/// (`light::BEAM`), as its head names (observer.rs `beam`; either.rs `Either`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
@@ -232,7 +232,7 @@ pub fn beam_cs(
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
 /// words `W` hold at `base` (`beam::LINE_WORDS`), as `Beamed` reads it: the
-/// eye's beam rays' and the sun's.
+/// eye's beam rays' and the light's.
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
 
 impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
@@ -259,7 +259,7 @@ impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
 /// Where each cell's rays start (pxl-spec-core `beam::CELL_WORDS`), a
 /// thread a cell of its observer's lattice (observer.rs `cell`): the
 /// screen's (`beam::Grid::span`), past the lines in the beam rays' buffer
-/// (`Grid::cell_at`), or the shadow map's (`sun::cell`).
+/// (`Grid::cell_at`), or the shadow map's (`light::cell`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cell_cs"))]
 pub fn cell_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -277,7 +277,7 @@ pub fn cell_cs(
 
 /// Each sample of its observer's lattice, a thread each (observer.rs
 /// `sample`): the screen's (pxl-spec-core `beam::Grid::samples`) or the
-/// shadow map's (`param::sun::SAMPLE`). The node and asset it stopped at left for
+/// shadow map's (`param::light::SAMPLE`). The node and asset it stopped at left for
 /// the raster (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where
 /// it went on to its reach, and whether what it stopped at lacks. What lies
 /// about the face it entered is asked only of a sample that draws a box,

@@ -41,13 +41,13 @@ pub const NIGHT_STOPS: f64 = 1.5;
 /// #9fb4d6, linear (atmosphere.test.rs holds it to it): light as the night
 /// eye reads it, bluer than it is.
 pub const NIGHT_COLOR: [f64; 3] = [0.3467, 0.4564, 0.6724];
-/// The full Moon against the Sun as the night eye reads it, not the 1/400,000 it is.
+/// The full moon against the sun as the night eye reads it, not the 1/400,000 it is.
 pub const MOON_LIGHT: f64 = 0.007;
-/// Airglow and starlight: 0.002 lx to the full Moon's 0.25, taken as one stop
+/// Airglow and starlight: 0.002 lx to the full moon's 0.25, taken as one stop
 /// rather than seven, so a moonless night still reads.
 pub const NIGHT_SKY: f64 = MOON_LIGHT / 2.0;
-/// A city's core against the Sun, per steradian: VIIRS reads ~100 nW/cm²/sr,
-/// the Black Marble's white, of the Sun's 550 W/m² in that band; raised as the Moon is.
+/// A city's core against the sun, per steradian: VIIRS reads ~100 nW/cm²/sr,
+/// the Black Marble's white, of the sun's 550 W/m² in that band; raised as the moon is.
 pub const CITY_LIGHT: f64 = 1e-3 / 550.0 * MOON_LIGHT * 400_000.0;
 /// The Black Marble's own lit city, #F9F0DA, linear.
 pub const CITY_COLOR: [f64; 3] = [0.9473, 0.8714, 0.7011];

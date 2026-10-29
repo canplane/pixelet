@@ -9,7 +9,7 @@ text.
 
 The page drew three things on the CPU and copied them to the GPU. The kernel
 recorded 2D paint calls — paths, images, text — into a stream, and the shell ran
-them on an OffscreenCanvas and uploaded the result: the Moon's image into its
+them on an OffscreenCanvas and uploaded the result: the moon's image into its
 texture, a tile of the texture pack into each material layer, and every badge
 and bubble into the billboard sheet. Widths came back by a separate round trip
 (`MEASURE`), a character at a time.
@@ -22,7 +22,7 @@ implementation of every paint call per platform.
 
 Read call by call, none of it needed a 2D canvas:
 
-- **The Moon** is one image copied whole into a layer: a copy, not a drawing.
+- **The moon** is one image copied whole into a layer: a copy, not a drawing.
 - **A material layer** is one tile of the pack's sheet, scaled to the layer: a
   copy of a texture region.
 - **A badge** is round rectangles, circles, rings, rectangles and a bubble's

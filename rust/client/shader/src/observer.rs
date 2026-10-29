@@ -7,8 +7,8 @@
 //! (`took`), the sky about it (`sky`) or a walk of its own (`resolve`), and its
 //! walk resumed off the beam (`resume`, `walked`), each casting what its
 //! observer needs alone (`Observer::needs`). An entry is a pass's call for its
-//! observer (beam.rs, cast.rs, raster.rs, sun.rs); its lattice, its rays and
-//! what its walks leave are its own (eye.rs `Eye`, sun.rs `Map`). A pass both
+//! observer (beam.rs, cast.rs, raster.rs, light.rs); its lattice, its rays and
+//! what its walks leave are its own (eye.rs `Eye`, light.rs `Map`). A pass both
 //! observers take is one entry, its observer the one its head names
 //! (either.rs `Either`), so a pass is one module whichever casts it.
 
@@ -50,7 +50,7 @@ pub(crate) trait Observer {
     /// up, the map's slot.
     type At: Copy;
     /// Its run of lanes in the tally (pxl-spec-core `tally::EYE`,
-    /// `tally::SUN`).
+    /// `tally::LIGHT`).
     fn tally(&self) -> u32;
     /// Whether its walks write the cells a ray sees into the observed
     /// pyramid (observed.rs `Writing::assets`).
@@ -305,7 +305,7 @@ pub(crate) enum Take {
 /// there: the cell it enters as the visible sample entered it (`took`), its
 /// stop and that sample's first word; else the sky where no sample about it met
 /// anything and none was visible (`sky`); else a walk of its own, which its
-/// pass lists for the walk again. The eye's pixels and the sun's slots alike.
+/// pass lists for the walk again. The eye's pixels and the light's slots alike.
 pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
     o: &O,
     w: &W,

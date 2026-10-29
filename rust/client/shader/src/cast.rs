@@ -192,7 +192,7 @@ pub fn cast_cs(
 
 /// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
 /// `tally::TOOK` on) in its walk again's args `args`, where `on`
-/// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
+/// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the light's slots alike.
 pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
     if on {
         add(args, ray::MISS_ARGS_TALLY + lane - tally::TOOK, v);
@@ -200,7 +200,7 @@ pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
 }
 
 /// One more missed ray listed for its walk again, the eye's pixels and the
-/// sun's slots alike (pxl-shader sun.rs `sun_cs`): its place off the count
+/// light's slots alike (pxl-shader light.rs `light_cs`): its place off the count
 /// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_CNT`),
 /// the rows the list fills raised to hold it (`ray::MISS_ARGS_LIST`); one
 /// past the list's `room` has the walk over `whole` workgroups dispatched

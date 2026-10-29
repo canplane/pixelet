@@ -68,6 +68,27 @@ impl Region {
         (share <= REGION_MOST).then_some(Region { at, size })
     }
 
+    /// Itself where it holds no more than `REGION_MOST` of a world `width`
+    /// by `height`; none where it holds more, as `of` gives none.
+    pub fn held(self, width: u32, height: u32) -> Option<Region> {
+        let share = f64::from(self.size[0]) * f64::from(self.size[1])
+            / (f64::from(width) * f64::from(height));
+        (share <= REGION_MOST).then_some(self)
+    }
+
+    /// The least region holding both.
+    pub fn union(self, o: Region) -> Region {
+        let at = [self.at[0].min(o.at[0]), self.at[1].min(o.at[1])];
+        let end = [
+            (self.at[0] + self.size[0]).max(o.at[0] + o.size[0]),
+            (self.at[1] + self.size[1]).max(o.at[1] + o.size[1]),
+        ];
+        Region {
+            at,
+            size: [end[0] - at[0], end[1] - at[1]],
+        }
+    }
+
     /// As a pass's scissor takes it.
     pub fn rect(&self) -> [u32; 4] {
         [self.at[0], self.at[1], self.size[0], self.size[1]]
@@ -117,11 +138,17 @@ pub struct Surface {
     /// turn (gpu/resolve.rs): the world's alone.
     pub history: [u32; 2],
     pub history_view: [u32; 2],
+    /// The finished picture at the canvas's size, the canvas's format, made
+    /// with the screen's depth: a region frame finishes again only its
+    /// region in it, and every frame shows it whole on the canvas, whose
+    /// texture is a new one each frame (gpu/finish.rs): the world's alone.
+    pub shown: u32,
+    pub shown_view: u32,
 }
 
 impl Surface {
     /// What it holds on the GPU, every one made again with its size.
-    pub fn targets(&self) -> [u32; 12] {
+    pub fn targets(&self) -> [u32; 14] {
         [
             self.depth_view,
             self.depth,
@@ -135,6 +162,8 @@ impl Surface {
             self.history[0],
             self.history_view[1],
             self.history[1],
+            self.shown_view,
+            self.shown,
         ]
     }
 

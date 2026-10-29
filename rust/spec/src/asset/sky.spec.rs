@@ -28,7 +28,7 @@ pub mod cumulus {
     pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(86);
 }
 
-/// The Moon's near side, the picture the sky draws it with (NASA).
+/// The moon's near side, the picture the sky draws it with (NASA).
 pub mod moon {
     pub const picture: crate::asset::catalog::Slot = crate::asset::catalog::Slot(87);
 }

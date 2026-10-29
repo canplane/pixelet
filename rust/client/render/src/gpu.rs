@@ -6,6 +6,7 @@ pub mod ao;
 pub mod api;
 pub mod atmosphere;
 pub mod cloud;
+pub mod depth_bounds;
 pub mod finish;
 pub mod grown;
 pub mod image_map;

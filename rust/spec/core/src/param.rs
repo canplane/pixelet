@@ -81,12 +81,12 @@ pub mod scatter {
     pub const ALIGN_NEIGHBOR_RADIUS: i32 = 3;
 }
 
-pub mod sun {
+pub mod light {
     /// The slope a caster's depth in the shadow map is pushed back by, as a
     /// rasterizer's polygon offset: its greatest slope, in depth a texel
-    /// (sun.rs `slope`), times this. The raster casters' depth pipelines take it
+    /// (light.rs `slope`), times this. The raster casters' depth pipelines take it
     /// (pxl-render record.rs `depth_only`), and the world's cast adds it
-    /// (pxl-shader `sun_cs`), so the two kinds of caster shadow alike. A
+    /// (pxl-shader `light_cs`), so the two kinds of caster shadow alike. A
     /// receiver compares each tap at its own plane's depth there (pxl-render
     /// shadow.wgsl), so the push covers only the texels a tap filters, a texel
     /// each way, along the steeper axis; the receiver's texel of normal offset
@@ -95,12 +95,12 @@ pub mod sun {
     /// texel apart: the taps up the slope saw past the step.
     pub const SLOPE_BIAS: f32 = 1.0;
 
-    /// The shadow map's slots between samples, across and down (sun.rs
+    /// The shadow map's slots between samples, across and down (light.rs
     /// `samples_at`).
     pub const SAMPLE: u32 = 4;
 
     /// The receiver's taps apart in the shadow map, in texels, a 3×3 grid
-    /// (pxl-render shadow.wgsl `sun_lit`): the filtered edge spans about
+    /// (pxl-render shadow.wgsl `light_lit`): the filtered edge spans about
     /// four texels, half a unit where a texel is 1/8 u, where taps a texel
     /// apart cut each cell's shadow out as a hard square.
     pub const SPREAD: f32 = 1.5;

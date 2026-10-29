@@ -42,7 +42,7 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 
 /// How far apart a beam's rays lie, `across + angle · d` units at `d` from
 /// the eye (`Detail::eye`): the eye's an angle, its camera grid's cell
-/// (`grid::CELL`); the sun's, whose rays are parallel, a width, `sun::BEAM`
+/// (`grid::CELL`); the light's, whose rays are parallel, a width, `light::BEAM`
 /// of its map's texels. Only a beam reads it, its widening and `narrow`
 /// (`Until::Beam`); an asker that casts no beam, control and physics, fills
 /// in none (`NONE`).
@@ -68,7 +68,7 @@ impl Spacing {
 /// (`cell_at`), held to `range`, asked of a distance squared (`at`). A
 /// stated zoom's cells wherever they are is a range of that zoom alone.
 /// The distance is the eye's, `eye` units from the walk's origin: none for
-/// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
+/// the eye's own rays; for a ray from elsewhere, a ray toward the light from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
 /// at the zooms the eye's rays ask it (`reach`). `spacing` is how far a
 /// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).

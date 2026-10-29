@@ -15,10 +15,10 @@
 // the whole screen at the nearest depth, a lack's nearer still, tested alike
 // but for the axis.
 //
-// The sun's samples' stops are drawn the same way into the sun's box
-// (pxl-spec-core param.rs `param::sun::SAMPLE`), orthographic, where
+// The light's samples' stops are drawn the same way into the light's box
+// (pxl-spec-core param.rs `param::light::SAMPLE`), orthographic, where
 // `turn.y` says: a texel's ray starts on the box's near plane at its middle,
-// off `first`, and runs along the sun; a box's face turned to it is the one
+// off `first`, and runs along the light; a box's face turned to it is the one
 // its rays enter across; its depth is how far along the rays, a share of
 // their reach, nearer greater. No box lies about its eye.
 
@@ -30,14 +30,14 @@ struct Raster {
   up: vec4f,
   forward: vec4f,
   // 36 where the eye's axes turn the other way (`is_flipped`), each triangle
-  // then wound the other way, else 0; then 1 where the view is the sun's,
+  // then wound the other way, else 0; then 1 where the view is the light's,
   // whose `right` and `up` are then its box's steps across and down a
   // texel, as unit vectors over their lengths, and `forward` its rays'.
   turn: vec4u,
   // The angle a face grows by, a share of a corner's distance; the drawn
   // pixels across and up; how far the eye's rays reach.
   screen: vec4f,
-  // The sun's: where box texel (0, 0)'s ray starts, in units from where
+  // The light's: where box texel (0, 0)'s ray starts, in units from where
   // its boxes are laid. The eye's: where each pixel's ray goes through it,
   // off its middle, in drawn pixels (pxl-spec-core `eye::JITTER`).
   first: vec4f,
@@ -89,13 +89,13 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   if (!lacks && a != (word & RASTER_AXIS_MASK)) {
     return o;
   }
-  let sun = raster.turn.y != 0u;
+  let light = raster.turn.y != 0u;
   // The face across `a` turned to the eye: the high one where the eye is
   // past it, the low where before; none where the eye is between them.
-  // The sun's: the high one where its rays run toward less, the low toward
+  // The light's: the high one where its rays run toward less, the low toward
   // more; none where they run beside it.
   var high = 0u;
-  if (sun) {
+  if (light) {
     let d = raster_moves(raster.forward[a]);
     if (d < 0.0) {
       high = 1u;
@@ -112,10 +112,10 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   // Grown in its own plane, so a pixel's middle on its edge is not lost to
   // the rasterizer's rounding: its depth stays where a ray meets the face,
   // and what the growth alone covers fails the fragment's test.
-  var g = (c * 2.0 - 1.0) * (raster.screen.x * select(length(p0), 1.0, sun));
+  var g = (c * 2.0 - 1.0) * (raster.screen.x * select(length(p0), 1.0, light));
   g[a] = 0.0;
   let p = p0 + g;
-  if (sun) {
+  if (light) {
     // The box's texel across and down, its middles whole, and how far
     // along the rays from the near plane.
     let q = p - raster.first.xyz;
@@ -205,8 +205,8 @@ fn raster_enters(o: vec3f, u: vec3f, lo: vec3f, hi: vec3f, a: u32) -> bool {
 
 // Its sample's number (pxl-spec-core raster.rs `id_of`) where the pixel's
 // ray enters its box across this face (`raster_enters`): the eye's from the
-// eye, its direction as pxl-spec-core cast.rs `through` forms it; the sun's
-// from its texel's middle on the near plane, along the sun.
+// eye, its direction as pxl-spec-core cast.rs `through` forms it; the light's
+// from its texel's middle on the near plane, along the light.
 @fragment
 fn fs(i: RasterOut) -> @location(0) vec4u {
   var o = vec3f(0.0);

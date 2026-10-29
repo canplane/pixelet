@@ -4,13 +4,13 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-struct type_5 {
+struct type_4 {
     member: array<u32>,
 }
 
 var<private> global: vec3<u32>;
 @group(0) @binding(9)
-var<storage, read_write> global_1: type_5;
+var<storage, read_write> global_1: type_4;
 
 fn function_() {
     var local: array<u32, 24>;

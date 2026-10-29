@@ -25,7 +25,7 @@ const pastText = (f: Frame) =>
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 /** The `ray_counts` setting's counts over the window: its sums since boot
- * (profiler.json FRAME's rays, eye and sun lanes) at its last frame less
+ * (profiler.json FRAME's rays, eye and light lanes) at its last frame less
  * those at its first, where any frame's counts were read back: an observer's line each where it cast — the nodes its
  * beam rays, its samples and its walk again asked a cast, its pixels or
  * slots that took the visible sample and that walked, the nodes its walk
@@ -77,13 +77,13 @@ const raysText = (first: Frame, last: Frame) => {
       walked: f.eye_walked,
       boxes: f.eye_boxes,
     }),
-    ...observer("sun", f.sun_casts, f.sun_rays, {
-      beam: f.sun_beam,
-      sample: f.sun_sample,
-      miss: f.sun_miss,
-      took: f.sun_took,
-      walked: f.sun_walked,
-      boxes: f.sun_boxes,
+    ...observer("light", f.light_casts, f.light_rays, {
+      beam: f.light_beam,
+      sample: f.light_sample,
+      miss: f.light_miss,
+      took: f.light_took,
+      walked: f.light_walked,
+      boxes: f.light_boxes,
     }),
   ];
 };
