@@ -44,7 +44,7 @@ fn order_and_full() {
                 (f.tag, f.cmd, f.flags, f.result),
                 (round * 4 + k, 7, ack, -((round * 4 + k) as i32))
             );
-            assert!(r.packet(&f).unwrap().is_none());
+            assert!(r.pkt(&f).unwrap().is_none());
             r.advance();
         }
         assert_eq!(r.peek(), None);
@@ -88,7 +88,7 @@ fn payload_per_slot() {
 
     for n in 1..=8u32 {
         let f = r.peek().expect("a frame waits");
-        let root = TreeReader::new(r.packet(&f).unwrap().unwrap())
+        let root = TreeReader::new(r.pkt(&f).unwrap().unwrap())
             .unwrap()
             .read_branch()
             .unwrap();
@@ -112,8 +112,8 @@ fn payload_per_slot() {
     r.advance();
     let at = r.entry_at(r.tail());
     r.push(11, 0, 0, 0, None);
-    r.words()[(at + frame::PACKET) as usize] = 4;
+    r.words()[(at + frame::PKT) as usize] = 4;
     let f = r.peek().expect("a frame waits");
-    assert_eq!((f.tag, f.packet_at), (11, 4));
-    assert!(r.packet(&f).is_err(), "outside a slot");
+    assert_eq!((f.tag, f.pkt_at), (11, 4));
+    assert!(r.pkt(&f).is_err(), "outside a slot");
 }

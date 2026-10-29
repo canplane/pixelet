@@ -316,14 +316,14 @@ fn steps() -> StepsSection {
     let mut steps = StepsSection::default();
     for s in tick_step_stats()
         .iter()
-        .filter(|s| s.count > 0)
+        .filter(|s| s.cnt > 0)
         .take(STEP_SLOTS)
     {
         steps.slots[steps.cnt as usize] = StepStats {
             phase: s.phase as u8 as f64,
             name: s.name as f64,
             ms: s.ms,
-            cnt: s.count as f64,
+            cnt: s.cnt as f64,
             max_ms: s.max_ms,
         };
         steps.cnt += 1.0;

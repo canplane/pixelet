@@ -215,9 +215,9 @@ pub fn install(b: &BootInfo) -> u32 {
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        crate::sys::io::host::set_stream(range(Fixed::Host).offset);
-        pxl_render::gpu::upload::set_uploads(range(Fixed::Uploads).offset, MAX_LIVE_UPLOADS);
-        pxl_render::gpu::api::install(range(Fixed::Gpu).offset)
+        crate::sys::io::host::set_stream(range(Fixed::Host).off);
+        pxl_render::gpu::upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
+        pxl_render::gpu::api::install(range(Fixed::Gpu).off)
     }
 }
 

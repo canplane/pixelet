@@ -23,7 +23,7 @@ pub const CMD: u32 = 1;
 pub const RESULT: u32 = 2;
 
 /// Where its XTP packet is, as the transport names it; 0 for none.
-pub const PACKET: u32 = 3;
+pub const PKT: u32 = 3;
 
 /// Words a frame takes.
 pub const WORDS: u32 = 4;

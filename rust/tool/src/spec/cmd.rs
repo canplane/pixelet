@@ -32,7 +32,7 @@ struct Member {
     val: u32,
     #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
-    packet: Option<Vec<Field>>,
+    pkt: Option<Vec<Field>>,
     signal: Option<Vec<Field>>,
 }
 

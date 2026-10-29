@@ -21,7 +21,7 @@ export const CMD: u32 = 1 as number;
 export const RESULT: u32 = 2 as number;
 
 /** Where its XTP packet is, as the transport names it; 0 for none. */
-export const PACKET: u32 = 3 as number;
+export const PKT: u32 = 3 as number;
 
 /** Words a frame takes. */
 export const WORDS: u32 = 4 as number;

@@ -3,11 +3,11 @@
 use super::*;
 
 #[test]
-fn memory_import_stack_first() {
+fn mem_import_stack_first() {
     let plan = LinkPlan {
         stack_bytes: 1 << 20,
         global_base: None,
-        initial_bytes: None,
+        init_bytes: None,
     };
     assert_eq!(
         args(&plan),
@@ -20,7 +20,7 @@ fn front_floor_after_stack() {
     let plan = LinkPlan {
         stack_bytes: 1 << 20,
         global_base: Some(1 << 21),
-        initial_bytes: Some(4 * WASM_PAGE_BYTES),
+        init_bytes: Some(4 * WASM_PAGE_BYTES),
     };
     assert_eq!(
         args(&plan)[3..],
@@ -34,6 +34,6 @@ fn floor_whole_pages() {
     args(&LinkPlan {
         stack_bytes: 1 << 20,
         global_base: None,
-        initial_bytes: Some(WASM_PAGE_BYTES + 1),
+        init_bytes: Some(WASM_PAGE_BYTES + 1),
     });
 }

@@ -19,7 +19,7 @@ import { key as directory_key } from "@xpute/host/ipc/directory.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
-import { cmd, key, MEMORY_BYTES } from "@xpute/host/conformance.spec.ts";
+import { cmd, key, MEM_BYTES } from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
@@ -69,7 +69,7 @@ function native(path: string): Opener {
   return {
     open() {
       // Words of eight bytes, so the region is 8-aligned, as a guest asks.
-      const memory = new Float64Array(MEMORY_BYTES / 8).buffer;
+      const memory = new Float64Array(MEM_BYTES / 8).buffer;
       const bytes = new Uint8Array(memory);
       const directory_at = lib.symbols.xpute_conformance_boot(
         bytes,

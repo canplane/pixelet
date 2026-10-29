@@ -153,7 +153,7 @@ export class Ring {
     w[at + frame.TAG] = tag;
     w[at + frame.CMD] = frame.cmd_word(cmd, flags);
     w[at + frame.RESULT] = result >>> 0;
-    w[at + frame.PACKET] = packet_at;
+    w[at + frame.PKT] = packet_at;
     w[TAIL] = (w[TAIL] + 1) >>> 0;
     return Errno.OK;
   }
@@ -181,7 +181,7 @@ export class Ring {
 
   /** A view valid until `advance`; EBADMSG when it names bytes outside a slot. */
   packet(at: u32): U8Array | null {
-    const packet_at = this.words[at + frame.PACKET];
+    const packet_at = this.words[at + frame.PKT];
     if (packet_at === 0) return null;
     const off = packet_at - this.slot_base;
     if (

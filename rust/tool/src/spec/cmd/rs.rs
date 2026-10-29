@@ -256,7 +256,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let strs = spec
         .commands()?
         .iter()
-        .flat_map(|c| c.packet.iter().chain(c.signal.iter()).flatten())
+        .flat_map(|c| c.pkt.iter().chain(c.signal.iter()).flatten())
         .any(|f| f.list && f.ty == "str");
     out.push(format!(
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
@@ -319,7 +319,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if let Some(pkt) = &c.packet {
+        if let Some(pkt) = &c.pkt {
             let mut borrows = false;
             for f in pkt {
                 borrows |= f.list || spec.kind(&f.ty)? == Kind::Str;

@@ -13,7 +13,7 @@ fn arena(init_cap: u32, max_cap: u32) -> Arena<Slot> {
 }
 
 #[test]
-fn rewind_keeps_buffers() {
+fn rewind_keeps_bufs() {
     let mut a = arena(4, 1 << 10);
     for i in 0..4 {
         let slot = a.alloc().unwrap();

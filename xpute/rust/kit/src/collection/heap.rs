@@ -36,14 +36,14 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
     }
 
     /// Sifts `root` down; both of its subtrees must already be heaps.
-    pub fn heapify(a: &mut [Element<K, T>], root: usize, size: usize) {
+    pub fn heapify(a: &mut [Element<K, T>], root: usize, sz: usize) {
         let mut i = root;
         let e = a[i];
 
         let mut child = (i << 1) + 1;
-        while child < size {
+        while child < sz {
             let r = child + 1;
-            if r < size && Self::ahead(a[r].key, a[child].key) {
+            if r < sz && Self::ahead(a[r].key, a[child].key) {
                 child = r;
             }
 

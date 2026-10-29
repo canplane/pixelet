@@ -469,11 +469,7 @@ impl Atmosphere {
         let free = self.landed_word == 0;
         let views = [
             (SKY_VIEW, (self.sun_mu, alt), true),
-            (
-                MOON_VIEW,
-                (self.moon_mu, alt),
-                self.words[MOON_LIGHT] > 0.0,
-            ),
+            (MOON_VIEW, (self.moon_mu, alt), self.words[MOON_LIGHT] > 0.0),
         ];
         for (k, (table, now, lit)) in views.into_iter().enumerate() {
             if !(free && lit && has_moved(self.drawn_for[k], now)) {
@@ -558,8 +554,6 @@ fn pass_of(table: usize) -> usize {
 fn has_moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {
         None => true,
-        Some((mu, h)) => {
-            mu != now.0 || (now.1 - h).abs() > (h.abs() * ALT_SHARE).max(ALT_FLOOR_KM)
-        }
+        Some((mu, h)) => mu != now.0 || (now.1 - h).abs() > (h.abs() * ALT_SHARE).max(ALT_FLOOR_KM),
     }
 }

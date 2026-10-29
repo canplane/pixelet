@@ -7,7 +7,7 @@ fn a_full_table_refuses() {
     let mut t = Table::<(), 3>::new();
     let handles = [t.insert(()).unwrap(), t.insert(()).unwrap()];
     assert_eq!(t.insert(()), None);
-    assert_eq!(t.count(), 2);
+    assert_eq!(t.cnt(), 2);
     t.remove(handles[0]);
     assert!(t.insert(()).is_some());
 }

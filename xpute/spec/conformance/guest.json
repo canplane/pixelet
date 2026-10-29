@@ -10,7 +10,7 @@
     "can make a turn's output outgrow its room without knowing how a guest reserves it."
   ],
 
-  "MEMORY_BYTES": {
+  "MEM_BYTES": {
     "$val": 262144,
     "$type": "u32",
     "$doc": [

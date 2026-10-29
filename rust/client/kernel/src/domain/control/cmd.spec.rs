@@ -10,7 +10,7 @@
 //! command is between.
 //!
 //! The same number is a command on the submission ring and a signal on the
-//! completion ring (its `RES` clear). The direction is the ring: `packet` is
+//! completion ring (its `RES` clear). The direction is the ring: `pkt` is
 //! what the shell submits, `signal` what the kernel posts. Each is written and
 //! read by what this file generates, on both sides, so no field is found by
 //! its position anywhere else.

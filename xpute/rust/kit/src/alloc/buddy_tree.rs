@@ -44,7 +44,7 @@ pub trait Range {
 
 /// Enough free list heads for any pair of exponents in the address space,
 /// 0 through `ADDRESS_BITS`.
-const MAX_BUCKETS: usize = super::ADDRESS_BITS + 1;
+const MAX_BUCKETS: usize = super::ADDR_BITS + 1;
 
 /// A circular free list threaded through the free blocks, so the smallest
 /// block must hold one.
@@ -68,7 +68,7 @@ struct Heap<S> {
     node_is_split: S,
     min_log2: usize,
     max_log2: usize,
-    bucket_count: usize,
+    bucket_cnt: usize,
     base_ptr: usize,
     max_ptr: usize,
     end_ptr: usize,
@@ -108,7 +108,7 @@ impl<R: Range> BuddyMalloc<R> {
                 node_is_split: R::SPLIT_INIT,
                 min_log2: 0,
                 max_log2: 0,
-                bucket_count: 0,
+                bucket_cnt: 0,
                 base_ptr: 0,
                 max_ptr: 0,
                 end_ptr: 0,
@@ -151,7 +151,7 @@ impl<R: Range> BuddyMalloc<R> {
         if h.base_ptr == 0 {
             return 0;
         }
-        (h.bucket_limit..h.bucket_count)
+        (h.bucket_limit..h.bucket_cnt)
             .find(|&b| {
                 let list = &h.buckets[b] as *const List;
                 // SAFETY: the head is this heap's own field; an empty list
@@ -195,42 +195,42 @@ impl<R: Range> BuddyMalloc<R> {
 
 impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
     /// The C's `brk`, answered by the range.
-    fn update_max_ptr(&mut self, new_value: usize) -> bool {
-        if new_value > self.max_ptr {
-            if new_value > self.end_ptr {
+    fn update_max_ptr(&mut self, new_val: usize) -> bool {
+        if new_val > self.max_ptr {
+            if new_val > self.end_ptr {
                 return false;
             }
-            self.max_ptr = new_value;
+            self.max_ptr = new_val;
         }
         true
     }
 
     /// `index + 1` comes first: the C's `index - (1 << bucket) + 1` underflows
     /// on a bucket's first node and traps in a debug build.
-    fn ptr_for_node(&self, index: usize, bucket: usize) -> *mut List {
-        (self.base_ptr + ((index + 1 - (1 << bucket)) << (self.max_log2 - bucket))) as *mut List
+    fn ptr_for_node(&self, idx: usize, bucket: usize) -> *mut List {
+        (self.base_ptr + ((idx + 1 - (1 << bucket)) << (self.max_log2 - bucket))) as *mut List
     }
 
     fn node_for_ptr(&self, ptr: *mut List, bucket: usize) -> usize {
         ((ptr as usize - self.base_ptr) >> (self.max_log2 - bucket)) + (1 << bucket) - 1
     }
 
-    fn parent_is_split(&self, index: usize) -> bool {
-        let index = (index - 1) / 2;
-        (self.node_is_split.as_ref()[index / 8] >> (index % 8)) & 1 == 1
+    fn parent_is_split(&self, idx: usize) -> bool {
+        let parent = (idx - 1) / 2;
+        (self.node_is_split.as_ref()[parent / 8] >> (parent % 8)) & 1 == 1
     }
 
-    fn flip_parent_is_split(&mut self, index: usize) {
-        let index = (index - 1) / 2;
-        self.node_is_split.as_mut()[index / 8] ^= 1 << (index % 8);
+    fn flip_parent_is_split(&mut self, idx: usize) {
+        let parent = (idx - 1) / 2;
+        self.node_is_split.as_mut()[parent / 8] ^= 1 << (parent % 8);
     }
 
     fn bucket_for_request(&self, request: usize) -> usize {
-        let mut bucket = self.bucket_count - 1;
-        let mut size = 1usize << self.min_log2;
-        while size < request {
+        let mut bucket = self.bucket_cnt - 1;
+        let mut sz = 1usize << self.min_log2;
+        while sz < request {
             bucket -= 1;
-            size *= 2;
+            sz *= 2;
         }
         bucket
     }
@@ -330,10 +330,10 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
         if self.base_ptr == 0 {
             self.min_log2 = min_log2;
             self.max_log2 = max_log2;
-            self.bucket_count = max_log2 - min_log2 + 1;
+            self.bucket_cnt = max_log2 - min_log2 + 1;
             crate::ensure!(
-                self.bucket_count <= MAX_BUCKETS
-                    && self.node_is_split.as_ref().len() * 8 == 1 << (self.bucket_count - 1),
+                self.bucket_cnt <= MAX_BUCKETS
+                    && self.node_is_split.as_ref().len() * 8 == 1 << (self.bucket_cnt - 1),
                 ENOTRECOVERABLE
             );
             crate::ensure!(
@@ -343,12 +343,12 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
             self.base_ptr = base;
             self.max_ptr = base;
             self.end_ptr = end;
-            self.bucket_limit = self.bucket_count - 1;
+            self.bucket_limit = self.bucket_cnt - 1;
             self.update_max_ptr(self.base_ptr + core::mem::size_of::<List>());
-            self.list_init(self.bucket_count - 1);
+            self.list_init(self.bucket_cnt - 1);
             let base = self.base_ptr as *mut List;
             // SAFETY: the first block of the range, reserved just above.
-            unsafe { self.list_push(self.bucket_count - 1, base) };
+            unsafe { self.list_push(self.bucket_cnt - 1, base) };
         }
 
         if request > 1usize << self.max_log2 {
@@ -381,11 +381,11 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
                 ptr = self.list_pop(bucket);
             }
 
-            let size = 1usize << (self.max_log2 - bucket);
+            let sz = 1usize << (self.max_log2 - bucket);
             let bytes_needed = if bucket < original_bucket {
-                size / 2 + core::mem::size_of::<List>()
+                sz / 2 + core::mem::size_of::<List>()
             } else {
-                size
+                sz
             };
             if !self.update_max_ptr(ptr as usize + bytes_needed) {
                 // SAFETY: the block just came off this bucket's free list.

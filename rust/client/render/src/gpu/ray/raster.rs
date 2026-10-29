@@ -306,8 +306,8 @@ impl Raster {
     pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.sun;
         if s.group == 0 {
-            let samples =
-                (size / pxl_spec_core::param::sun::SAMPLE) * (size / pxl_spec_core::param::sun::SAMPLE);
+            let samples = (size / pxl_spec_core::param::sun::SAMPLE)
+                * (size / pxl_spec_core::param::sun::SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             s.boxes = g.buf(word_bytes(raster::words(samples) as usize), storage);
             s.args = g.buf(

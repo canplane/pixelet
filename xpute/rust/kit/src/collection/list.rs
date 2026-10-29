@@ -33,9 +33,9 @@ impl<T, const N: usize> List<T, N> {
         self.len == 0
     }
 
-    pub fn push(&mut self, value: T) {
+    pub fn push(&mut self, val: T) {
         crate::ensure!(self.len < N, ENOSPC, N);
-        self.slots[self.len].write(value);
+        self.slots[self.len].write(val);
         self.len += 1;
     }
 
@@ -56,10 +56,10 @@ impl<T, const N: usize> List<T, N> {
         // it close over it, so the first `len - 1` stay the live ones.
         unsafe {
             let p = self.slots.as_mut_ptr().cast::<T>();
-            let value = core::ptr::read(p.add(at));
+            let val = core::ptr::read(p.add(at));
             core::ptr::copy(p.add(at + 1), p.add(at), self.len - at - 1);
             self.len -= 1;
-            value
+            val
         }
     }
 
@@ -140,9 +140,9 @@ impl<T, const N: usize> Iterator for IntoIter<T, N> {
     fn next(&mut self) -> Option<T> {
         (self.at < self.list.len).then(|| {
             // SAFETY: `at` is live and read out once; `Drop` skips it.
-            let value = unsafe { self.list.slots[self.at].assume_init_read() };
+            let val = unsafe { self.list.slots[self.at].assume_init_read() };
             self.at += 1;
-            value
+            val
         })
     }
 }

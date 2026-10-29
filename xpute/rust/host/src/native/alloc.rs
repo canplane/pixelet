@@ -134,25 +134,25 @@ unsafe impl GlobalAlloc for Alloc {
             unsafe { System.alloc_zeroed(layout) }
         }
     }
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_sz: usize) -> *mut u8 {
         let here = core().is_some_and(|c| c.holds(ptr));
         if here == on_marked_thread() {
             return if here {
                 // SAFETY: as `dealloc`.
-                HEAP.with(|a| unsafe { a.realloc(ptr, layout, new_size) })
+                HEAP.with(|a| unsafe { a.realloc(ptr, layout, new_sz) })
             } else {
                 // SAFETY: as `dealloc`.
-                unsafe { System.realloc(ptr, layout, new_size) }
+                unsafe { System.realloc(ptr, layout, new_sz) }
             };
         }
         // Grown across the line from where it was made: moved to this thread's side.
         // SAFETY: a layout the caller's allocation was valid under, resized.
         let grown =
-            unsafe { self.alloc(Layout::from_size_align_unchecked(new_size, layout.align())) };
+            unsafe { self.alloc(Layout::from_size_align_unchecked(new_sz, layout.align())) };
         if !grown.is_null() {
             // SAFETY: two live blocks, the copy no longer than either.
             unsafe {
-                core::ptr::copy_nonoverlapping(ptr, grown, layout.size().min(new_size));
+                core::ptr::copy_nonoverlapping(ptr, grown, layout.size().min(new_sz));
                 self.dealloc(ptr, layout);
             }
         }

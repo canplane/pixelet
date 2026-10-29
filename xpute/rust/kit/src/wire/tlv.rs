@@ -80,9 +80,9 @@ impl Default for TlvWriter {
 }
 
 impl TlvWriter {
-    pub fn new(initial_cap: u32) -> TlvWriter {
+    pub fn new(init_cap: u32) -> TlvWriter {
         TlvWriter {
-            buf: Vec::with_capacity(initial_cap as usize),
+            buf: Vec::with_capacity(init_cap as usize),
             sealed: false,
         }
     }
@@ -234,13 +234,13 @@ impl<'a> TlvReader<'a> {
 
     pub fn read_all(&mut self) -> Result<Vec<TlvValue>, MarshalError> {
         let mut out = Vec::new();
-        while let Some(v) = self.next_value()? {
+        while let Some(v) = self.next_val()? {
             out.push(v);
         }
         Ok(out)
     }
 
-    pub fn next_value(&mut self) -> Result<Option<TlvValue>, MarshalError> {
+    pub fn next_val(&mut self) -> Result<Option<TlvValue>, MarshalError> {
         if self.end.is_some() {
             return Ok(None);
         }
@@ -348,7 +348,7 @@ impl<'a> TlvReader<'a> {
 impl Iterator for TlvReader<'_> {
     type Item = Result<TlvValue, MarshalError>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.next_value().transpose()
+        self.next_val().transpose()
     }
 }
 

@@ -26,7 +26,7 @@
     "$doc": ["On a reply, a value or a negative errno; else 0."]
   },
 
-  "PACKET": {
+  "PKT": {
     "$val": 3,
     "$type": "u32",
     "$doc": ["Where its XTP packet is, as the transport names it; 0 for none."]

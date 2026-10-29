@@ -56,7 +56,7 @@ XPUTE_TEST(door_signal_packet_errno) {
     // The submission ring lies at 8.
     std::uint32_t entry = 8 + 4 * d.sq().entry_at(0);
     Memory mem(reinterpret_cast<std::uintptr_t>(f.buf.data()), f.buf.size() * 8);
-    mem.set_word(entry + 4 * frame::PACKET, 4);
+    mem.set_word(entry + 4 * frame::PKT, 4);
     bool applied = false;
     d.drain([&](std::uint32_t, std::span<const std::uint8_t>) { return applied = true, Applied{}; });
     XPUTE_CHECK(!applied);

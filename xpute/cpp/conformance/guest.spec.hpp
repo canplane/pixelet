@@ -21,7 +21,7 @@ namespace xpute::conformance {
 // own state, with room to spare. Where the range begins, and so where the directory is,
 // the guest's boot answers (the contract's rule 0); what else a memory holds — a module's
 // stack and data — is the build's, and no number here.
-inline constexpr std::uint32_t MEMORY_BYTES = 262144u;
+inline constexpr std::uint32_t MEM_BYTES = 262144u;
 
 // Frames the submission ring holds.
 inline constexpr std::uint32_t SQ_CAP = 16u;

@@ -66,10 +66,7 @@ pub struct SensorState {
 
 impl SensorState {
     pub const fn of(status: SensorStatus) -> SensorState {
-        SensorState {
-            status,
-            err: None,
-        }
+        SensorState { status, err: None }
     }
 
     pub const fn failed(err: Message) -> SensorState {
@@ -132,11 +129,7 @@ impl DeviceLocationStore {
             } else {
                 prev.coords
             },
-            alt: if is_significant_change {
-                alt
-            } else {
-                prev.alt
-            },
+            alt: if is_significant_change { alt } else { prev.alt },
             accuracy,
             course,
             timestamp,

@@ -128,7 +128,7 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
         margin,
         batch,
         settle,
-        (key::SYS, layout::range(layout::Fixed::Host).offset),
+        (key::SYS, layout::range(layout::Fixed::Host).off),
         (crate::door::directory::key::GPU_STREAM, gpu_stream),
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the

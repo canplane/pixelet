@@ -174,7 +174,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                 t.json, c.name
             ));
         }
-        if let Some(pkt) = &c.packet {
+        if let Some(pkt) = &c.pkt {
             out.extend([
                 String::new(),
                 format!("// Command::{}'s packet.", c.name),

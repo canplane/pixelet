@@ -150,7 +150,7 @@ fn strs_payload<S: AsRef<str>>(items: &[S], out: &mut [u8]) {
     }
 }
 
-fn strs_size<S: AsRef<str>>(items: &[S]) -> u64 {
+fn strs_sz<S: AsRef<str>>(items: &[S]) -> u64 {
     4 * (items.len() as u64 + 1) + items.iter().map(|s| s.as_ref().len() as u64).sum::<u64>()
 }
 
@@ -165,7 +165,7 @@ const fn align(n: u32, unit: u32) -> u32 {
 #[derive(Clone, Copy)]
 struct Frame {
     base: u32,
-    count: u32,
+    cnt: u32,
     written: u32,
     root: bool,
 }
@@ -181,7 +181,7 @@ pub struct PacketWriter<'a> {
     root_type: u8,
     lim: u32,
     /// The first reason only.
-    error: Option<Errno>,
+    err: Option<Errno>,
 }
 
 impl<'a> PacketWriter<'a> {
@@ -193,13 +193,13 @@ impl<'a> PacketWriter<'a> {
             buf: &mut buf[..cap],
             frame: Frame {
                 base: 0,
-                count: 1,
+                cnt: 1,
                 written: 0,
                 root: true,
             },
             root_type: SpecialType::NIL as u8,
             lim: ROOT,
-            error: None,
+            err: None,
         };
         match w.buf.get_mut(..ROOT as usize) {
             Some(h) => h.fill(0),
@@ -211,13 +211,13 @@ impl<'a> PacketWriter<'a> {
     }
 
     /// A packet whose root is a branch of `count`, its children written next.
-    pub fn new(buf: &'a mut [u8], count: u32) -> PacketWriter<'a> {
+    pub fn new(buf: &'a mut [u8], cnt: u32) -> PacketWriter<'a> {
         let mut w = PacketWriter::root(buf);
-        let at = w.branch_open(count);
+        let at = w.branch_open(cnt);
         w.root_type = SpecialType::BRANCH as u8;
         w.frame = Frame {
             base: at.unwrap_or(ROOT),
-            count,
+            cnt,
             written: 0,
             root: false,
         };
@@ -231,14 +231,14 @@ impl<'a> PacketWriter<'a> {
     }
 
     fn spoil(&mut self, errnum: Errno) -> Option<u32> {
-        self.error.get_or_insert(errnum);
+        self.err.get_or_insert(errnum);
         None
     }
 
     /// In u64, as the C++ writer sizes: a count past what a u32 holds is too
     /// large, never wrapped small.
     fn reserve(&mut self, unit: u32, bytes: u64) -> Option<u32> {
-        if self.error.is_some() {
+        if self.err.is_some() {
             return None;
         }
         let base = align(self.lim, unit);
@@ -253,10 +253,10 @@ impl<'a> PacketWriter<'a> {
 
     fn entry(&mut self, at: Option<u32>, type_: u8) -> &mut Self {
         let f = self.frame;
-        crate::ensure!(f.written < f.count, ENOSPC, f.count);
+        crate::ensure!(f.written < f.cnt, ENOSPC, f.cnt);
         if f.root {
             self.root_type = type_;
-        } else if self.error.is_none() {
+        } else if self.err.is_none() {
             self.word(
                 f.base + WORD_SZ + f.written * WORD_SZ,
                 at.map_or(0, |b| b - f.base),
@@ -360,11 +360,11 @@ impl<'a> PacketWriter<'a> {
     /// `len` + 1 offsets into the UTF-8 after them.
     pub fn strs<S: AsRef<str>>(&mut self, items: Option<&[S]>) -> &mut Self {
         match items {
-            Some(items) => match u32::try_from(strs_size(items)) {
-                Ok(size) => self.seq(
+            Some(items) => match u32::try_from(strs_sz(items)) {
+                Ok(sz) => self.seq(
                     SequenceType::STRS,
                     items.len() as u32,
-                    u64::from(size),
+                    u64::from(sz),
                     |out| strs_payload(items, out),
                 ),
                 Err(_) => {
@@ -405,7 +405,7 @@ impl<'a> PacketWriter<'a> {
     fn str_with(&mut self, write: impl FnOnce(&mut [u8]) -> Option<usize>) -> &mut Self {
         let base = align(self.lim, WORD_SZ) as usize;
         let payload = base + WORD_SZ as usize;
-        if self.error.is_some() || payload > self.buf.len() {
+        if self.err.is_some() || payload > self.buf.len() {
             self.spoil(Errno::EOVERFLOW);
             return self.entry(None, SequenceType::STR as u8);
         }
@@ -449,11 +449,11 @@ impl<'a> PacketWriter<'a> {
         &mut self,
         type_: SequenceType,
         len: u32,
-        mut value: impl FnMut(u32) -> [u8; N],
+        mut val: impl FnMut(u32) -> [u8; N],
     ) -> &mut Self {
         self.seq(type_, len, u64::from(len) * N as u64, |out| {
             for (i, o) in out.as_chunks_mut::<N>().0.iter_mut().enumerate() {
-                *o = value(i as u32);
+                *o = val(i as u32);
             }
         })
     }
@@ -485,12 +485,12 @@ impl<'a> PacketWriter<'a> {
         }
     }
 
-    pub fn u32_array_with(&mut self, len: u32, mut value: impl FnMut(u32) -> u32) -> &mut Self {
-        self.array_with(SequenceType::U32_ARRAY, len, |i| value(i).to_le_bytes())
+    pub fn u32_array_with(&mut self, len: u32, mut val: impl FnMut(u32) -> u32) -> &mut Self {
+        self.array_with(SequenceType::U32_ARRAY, len, |i| val(i).to_le_bytes())
     }
 
-    pub fn u64_array_with(&mut self, len: u32, mut value: impl FnMut(u32) -> u64) -> &mut Self {
-        self.array_with(SequenceType::U64_ARRAY, len, |i| value(i).to_le_bytes())
+    pub fn u64_array_with(&mut self, len: u32, mut val: impl FnMut(u32) -> u64) -> &mut Self {
+        self.array_with(SequenceType::U64_ARRAY, len, |i| val(i).to_le_bytes())
     }
 
     /// One byte a bit, packed low bit first.
@@ -512,10 +512,10 @@ impl<'a> PacketWriter<'a> {
         }
     }
 
-    fn branch_open(&mut self, count: u32) -> Option<u32> {
-        let at = self.reserve(WORD_SZ, u64::from(WORD_SZ) * (1 + u64::from(count)));
+    fn branch_open(&mut self, cnt: u32) -> Option<u32> {
+        let at = self.reserve(WORD_SZ, u64::from(WORD_SZ) * (1 + u64::from(cnt)));
         if let Some(at) = at {
-            self.word(at, count, RESERVED);
+            self.word(at, cnt, RESERVED);
         }
         at
     }
@@ -523,7 +523,7 @@ impl<'a> PacketWriter<'a> {
     /// A branch ends on a word, so what follows it starts where the encoder
     /// starts it.
     fn branch_close(&mut self, at: Option<u32>) -> Option<u32> {
-        if at.is_none() || self.error.is_some() {
+        if at.is_none() || self.err.is_some() {
             return at;
         }
         let end = align(self.lim, WORD_SZ);
@@ -536,24 +536,24 @@ impl<'a> PacketWriter<'a> {
     }
 
     /// Writing a different number of children than `count` is a bug.
-    pub fn branch(&mut self, count: u32, fill: impl FnOnce(&mut Self)) -> &mut Self {
-        let at = self.branch_open(count);
+    pub fn branch(&mut self, cnt: u32, fill: impl FnOnce(&mut Self)) -> &mut Self {
+        let at = self.branch_open(cnt);
         // A branch that did not fit still counts its children, against a base
         // nothing is written at.
         let outer = core::mem::replace(
             &mut self.frame,
             Frame {
                 base: at.unwrap_or(ROOT),
-                count,
+                cnt,
                 written: 0,
                 root: false,
             },
         );
         fill(self);
         crate::ensure!(
-            self.frame.written == self.frame.count,
+            self.frame.written == self.frame.cnt,
             ENOTRECOVERABLE,
-            self.frame.count,
+            self.frame.cnt,
             self.frame.written
         );
         self.frame = outer;
@@ -566,13 +566,13 @@ impl<'a> PacketWriter<'a> {
     }
 
     /// Its root's payload copied, placed as its root's type places it.
-    pub fn graft(&mut self, packet: &[u8]) -> &mut Self {
-        let desc = (packet.len() >= HDR_SZ as usize)
+    pub fn graft(&mut self, pkt: &[u8]) -> &mut Self {
+        let desc = (pkt.len() >= HDR_SZ as usize)
             .then(|| {
-                GET_LEN(packet, 0)
+                GET_LEN(pkt, 0)
                     .ok()
                     .filter(|&m| m == MAGIC)
-                    .and_then(|_| GET_DESC(packet, WORD_SZ).ok())
+                    .and_then(|_| GET_DESC(pkt, WORD_SZ).ok())
             })
             .flatten();
         let Some((payload_sz, type_)) = desc else {
@@ -583,13 +583,13 @@ impl<'a> PacketWriter<'a> {
             .ok()
             .filter(|u| payload_sz.is_multiple_of(*u));
         let at = match unit {
-            _ if payload_sz as usize > packet.len() - HDR_SZ as usize => self.spoil(Errno::EBADMSG),
+            _ if payload_sz as usize > pkt.len() - HDR_SZ as usize => self.spoil(Errno::EBADMSG),
             _ if payload_sz == 0 => None,
             None => self.spoil(Errno::EBADMSG),
             Some(unit) => self.reserve(unit, u64::from(payload_sz)).inspect(|&at| {
                 let (at, from) = (at as usize, HDR_SZ as usize);
                 self.buf[at..at + payload_sz as usize]
-                    .copy_from_slice(&packet[from..from + payload_sz as usize]);
+                    .copy_from_slice(&pkt[from..from + payload_sz as usize]);
             }),
         };
         self.entry(at, type_)
@@ -598,12 +598,12 @@ impl<'a> PacketWriter<'a> {
     /// The length, header included and to the word, or why it was refused.
     pub fn finish(mut self) -> Result<u32, MarshalError> {
         let f = self.frame;
-        crate::ensure!(f.written == f.count, ENOTRECOVERABLE, f.count, f.written);
+        crate::ensure!(f.written == f.cnt, ENOTRECOVERABLE, f.cnt, f.written);
         // The root branch `new` opened, closed as `branch` closes one.
         if !f.root {
             self.branch_close(Some(f.base));
         }
-        if let Some(e) = self.error {
+        if let Some(e) = self.err {
             return Err(MarshalError::new(e));
         }
         let end = align(self.lim, WORD_SZ);

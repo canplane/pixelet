@@ -9,12 +9,12 @@ use xpute_guest::global::{off_marked_thread, on_marked_thread};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_host::native::{self, Guest, Plan};
 
-const MEMORY_BYTES: u32 = 4 << 20;
+const MEM_BYTES: u32 = 4 << 20;
 const HEAP_AT: u32 = 16 * PAGE_BYTES;
 
 fn plan(heap_at: u32) -> Plan {
     Plan {
-        memory_bytes: MEMORY_BYTES,
+        mem_bytes: MEM_BYTES,
         data_end: 0,
         heap_at,
         stack_bytes: 1 << 20,
@@ -29,9 +29,9 @@ fn guest() -> Guest {
 }
 
 #[test]
-fn memory_aligned_zeroed() {
-    let (at, bytes) = guest().memory();
-    assert_eq!(bytes, MEMORY_BYTES as usize);
+fn mem_aligned_zeroed() {
+    let (at, bytes) = guest().mem();
+    assert_eq!(bytes, MEM_BYTES as usize);
     assert!(at.as_ptr().addr().is_multiple_of(PAGE_BYTES as usize));
     let base = guest().run(|| xpute_guest::mem::core().base());
     assert_eq!(base, at.as_ptr().addr());
@@ -83,10 +83,10 @@ fn second_boot_refused() {
 fn bad_heap_refused() {
     // The slab aligns a block by its offset from the heap's first byte.
     assert!(std::panic::catch_unwind(|| native::boot(&plan(100))).is_err());
-    assert!(std::panic::catch_unwind(|| native::boot(&plan(MEMORY_BYTES))).is_err());
+    assert!(std::panic::catch_unwind(|| native::boot(&plan(MEM_BYTES))).is_err());
     // Neither took the process's one boot.
-    let (_, bytes) = guest().memory();
-    assert_eq!(bytes, MEMORY_BYTES as usize);
+    let (_, bytes) = guest().mem();
+    assert_eq!(bytes, MEM_BYTES as usize);
 }
 
 #[test]

@@ -87,9 +87,9 @@ impl Door {
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
-    pub fn raise(&self, cmd: u32, count: u32, f: impl Fn(&mut PacketWriter)) {
+    pub fn raise(&self, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
         self.post_in_place(0, cmd, 0, 0, |out: &mut [u8]| {
-            let mut w = PacketWriter::new(out, count);
+            let mut w = PacketWriter::new(out, cnt);
             f(&mut w);
             w.fitted()
         });
@@ -115,9 +115,9 @@ impl Door {
             let Some(f) = self.sq.peek() else {
                 break;
             };
-            let result = match self.sq.packet(&f) {
+            let result = match self.sq.pkt(&f) {
                 Ok(pkt) => match apply(f.cmd, &pkt) {
-                    Ok(Some(value)) => Ok(value),
+                    Ok(Some(val)) => Ok(val),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
                 },

@@ -5,7 +5,7 @@
 //!
 //! ```
 //! // a guest's build.rs, in its `main`
-//! xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, initial_bytes: None });
+//! xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
 //! ```
 //!
 //! Cargo applies a `rustc-link-arg` only to the package whose script prints
@@ -28,7 +28,7 @@ pub struct LinkPlan {
     pub global_base: Option<u32>,
     /// The least memory the module instantiates in (`--initial-memory`), so a
     /// host that hands it less fails at once. Whole pages.
-    pub initial_bytes: Option<u32>,
+    pub init_bytes: Option<u32>,
 }
 
 /// Prints `plan`'s link arguments, and nothing when the target is not
@@ -52,7 +52,7 @@ fn args(plan: &LinkPlan) -> Vec<String> {
     if let Some(at) = plan.global_base {
         args.push(format!("--global-base={at}"));
     }
-    if let Some(bytes) = plan.initial_bytes {
+    if let Some(bytes) = plan.init_bytes {
         assert!(
             bytes.is_multiple_of(WASM_PAGE_BYTES),
             "a memory is declared in WebAssembly pages, not {bytes} bytes"

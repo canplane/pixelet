@@ -34,7 +34,7 @@ fn ranges_aligned_disjoint() {
 #[test]
 fn span_within_section() {
     let s = Section {
-        offset: 4 * PAGE,
+        off: 4 * PAGE,
         bytes: 2 * PAGE,
     };
     assert_eq!(s.end(), 6 * PAGE);
@@ -46,9 +46,9 @@ fn span_within_section() {
 }
 
 #[test]
-fn range_ends_by_size() {
+fn range_ends_by_sz() {
     let s = Section {
-        offset: 8 * PAGE,
+        off: 8 * PAGE,
         bytes: 4 * PAGE,
     };
     let sizes = [PAGE + 1, PAGE];
@@ -56,7 +56,7 @@ fn range_ends_by_size() {
     assert_eq!(
         second,
         Section {
-            offset: 10 * PAGE,
+            off: 10 * PAGE,
             bytes: PAGE
         }
     );

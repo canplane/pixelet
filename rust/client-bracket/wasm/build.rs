@@ -41,7 +41,7 @@ fn main() {
     xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan {
         stack_bytes: STACK_BYTES,
         global_base: Some(GLOBAL_BASE),
-        initial_bytes: Some(MIN_MEM_BYTES),
+        init_bytes: Some(MIN_MEM_BYTES),
     });
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=mem.spec.rs");

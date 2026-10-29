@@ -21,7 +21,7 @@ use super::buddy_tree::{BuddyMalloc, Range};
 const MIN_CLASS_LOG2: usize = 4;
 
 /// Enough for any smallest block in the address space.
-const MAX_CLASSES: usize = super::ADDRESS_BITS;
+const MAX_CLASSES: usize = super::ADDR_BITS;
 
 /// At least sixteen slots a run, so its header takes at most a sixteenth.
 const MIN_SLOTS_LOG2: usize = 4;
@@ -66,7 +66,7 @@ impl<R: Range> Default for SlabMalloc<R> {
 }
 
 impl<R: Range> SlabMalloc<R> {
-    const CLASS_COUNT: usize = R::MIN_LOG2 - MIN_CLASS_LOG2;
+    const CLASS_CNT: usize = R::MIN_LOG2 - MIN_CLASS_LOG2;
 
     const fn run_log2(c: usize) -> usize {
         let by_slots = class_log2(c) + MIN_SLOTS_LOG2;
@@ -87,11 +87,11 @@ impl<R: Range> SlabMalloc<R> {
 
     const CHECK: () = {
         assert!(
-            Self::CLASS_COUNT <= MAX_CLASSES,
+            Self::CLASS_CNT <= MAX_CLASSES,
             "a range's smallest block asks for more classes than there are heads"
         );
         let mut c = 0;
-        while c < Self::CLASS_COUNT {
+        while c < Self::CLASS_CNT {
             assert!(
                 Self::head_slots(c) < Self::slots(c),
                 "a run has a slot to hand out past the ones its header takes"

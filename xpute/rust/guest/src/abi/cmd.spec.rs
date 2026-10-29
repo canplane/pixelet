@@ -8,7 +8,7 @@
 //! a program numbers its own from there, in a table of its own that names this one as
 //! its base, so the two never give out one number twice.
 //!
-//! The direction is the ring: `packet` is what the host submits, `signal` what the guest
+//! The direction is the ring: `pkt` is what the host submits, `signal` what the guest
 //! raises on the completion ring.
 
 // A list a record carries is a function handing out its items, whose
@@ -84,14 +84,14 @@ impl Command {
 /// Command::NOP's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct Nop {
-    pub value: u32,
+    pub val: u32,
 }
 
 impl Nop {
     pub fn read(pkt: &[u8]) -> Result<Nop, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(Nop {
-            value: integer::<u32>(f.at(0)?.get_number()?)?,
+            val: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
 }

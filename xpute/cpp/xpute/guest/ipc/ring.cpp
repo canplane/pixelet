@@ -47,7 +47,7 @@ void Ring::publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, st
     mem_.set_word(f + 4 * frame::TAG, tag);
     mem_.set_word(f + 4 * frame::CMD, frame::cmd_word(cmd, flags));
     mem_.set_word(f + 4 * frame::RESULT, static_cast<std::uint32_t>(result));
-    mem_.set_word(f + 4 * frame::PACKET, packet_at);
+    mem_.set_word(f + 4 * frame::PKT, packet_at);
     // The frame is whole before the tail says so.
     set_header(ring::TAIL, t + 1);
 }
@@ -75,7 +75,7 @@ std::optional<Frame> Ring::peek() const noexcept {
         .cmd = frame::cmd_of(word),
         .flags = frame::flags_of(word),
         .result = static_cast<std::int32_t>(mem_.word(f + 4 * frame::RESULT)),
-        .packet_at = mem_.word(f + 4 * frame::PACKET),
+        .packet_at = mem_.word(f + 4 * frame::PKT),
     };
 }
 

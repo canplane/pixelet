@@ -22,7 +22,7 @@ pub use xpute_guest::entry::{intr, BootInfo, Entry};
 
 pub struct Plan {
     /// Reserved once, never grown.
-    pub memory_bytes: u32,
+    pub mem_bytes: u32,
     /// `BootInfo::data_end`: the library's statics are the process's, so the
     /// end of the front the program keeps at the memory's bottom, 0 for none.
     pub data_end: u32,
@@ -43,10 +43,10 @@ pub struct Guest {
 /// with its base set before this returns. Once a process.
 pub fn boot(plan: &Plan) -> Guest {
     assert!(
-        plan.heap_at < plan.memory_bytes,
+        plan.heap_at < plan.mem_bytes,
         "the heap begins at {} of a {}-byte memory",
         plan.heap_at,
-        plan.memory_bytes
+        plan.mem_bytes
     );
     assert!(
         plan.heap_at.is_multiple_of(PAGE_BYTES),
@@ -57,7 +57,7 @@ pub fn boot(plan: &Plan) -> Guest {
         reserve::core().is_none(),
         "a guest is booted once a process"
     );
-    let core = reserve::map(plan.memory_bytes as usize, plan.heap_at as usize);
+    let core = reserve::map(plan.mem_bytes as usize, plan.heap_at as usize);
     thread::start(plan.thread_name, plan.stack_bytes, move || {
         xpute_guest::global::mark_thread();
         // SAFETY: the region was reserved for the process's life.
@@ -80,7 +80,7 @@ impl Guest {
 
     /// Read between turns, never as one reference over the whole: the
     /// host's own blocks lie in it too.
-    pub fn memory(self) -> (NonNull<u8>, usize) {
+    pub fn mem(self) -> (NonNull<u8>, usize) {
         let c = reserve::core().expect("a Guest is booted");
         (
             NonNull::new(core::ptr::with_exposed_provenance_mut(c.at))
@@ -95,7 +95,7 @@ impl Guest {
 
     pub fn boot_info(self, plan: &Plan) -> BootInfo {
         BootInfo {
-            given: u32::try_from(self.memory().1).expect("the memory is at most 4 GiB"),
+            given: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
             data_end: plan.data_end,
             clock: plan.clock,
             heap_stat: alloc::stat,
@@ -144,7 +144,7 @@ macro_rules! native_abi {
             }
 
             pub fn mem(bytes: Option<&mut u32>) -> *mut u8 {
-                let (at, n) = guest().memory();
+                let (at, n) = guest().mem();
                 if let Some(bytes) = bytes {
                     *bytes = u32::try_from(n).expect("the memory is at most 4 GiB");
                 }

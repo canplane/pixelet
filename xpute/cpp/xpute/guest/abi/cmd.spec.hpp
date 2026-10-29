@@ -8,7 +8,7 @@
 // a program numbers its own from there, in a table of its own that names this one as
 // its base, so the two never give out one number twice.
 //
-// The direction is the ring: `packet` is what the host submits, `signal` what the guest
+// The direction is the ring: `pkt` is what the host submits, `signal` what the guest
 // raises on the completion ring.
 
 #pragma once
@@ -73,7 +73,7 @@ namespace xpute::abi {
 
 // Command::NOP's packet.
 struct Nop {
-    std::uint32_t value{};
+    std::uint32_t val{};
 
     static Result<Nop> read(std::span<const std::uint8_t> pkt) noexcept {
         Result<xtp::TreeReader> t = xtp::TreeReader::make(pkt);
@@ -88,7 +88,7 @@ struct Nop {
             if (!v) return v.error();
             auto n = integer<std::uint32_t>(*v);
             if (!n) return n.error();
-            out.value = *n;
+            out.val = *n;
         }
         return out;
     }

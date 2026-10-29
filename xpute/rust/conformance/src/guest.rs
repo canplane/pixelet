@@ -41,7 +41,7 @@ const STATE_AT: u32 = page_up(SYS_AT + spec::SYS_WORDS * 4);
 const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Guest>() as u32);
 
 const _: () = assert!(
-    HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEMORY_BYTES as usize,
+    HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEM_BYTES as usize,
     "the ranges run past the memory"
 );
 const _: () = assert!(
@@ -73,7 +73,7 @@ struct State {
 /// Every offset written is the memory's, so `range` is added to each.
 ///
 /// # Safety
-/// The range is `spec::MEMORY_BYTES` inside the memory, which outlives the
+/// The range is `spec::MEM_BYTES` inside the memory, which outlives the
 /// guest, and nothing else writes it while a call runs.
 unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
     let at = |off: u32| (range + off) as usize;
@@ -147,7 +147,7 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
 }
 
 /// # Safety
-/// `mem` is `spec::MEMORY_BYTES`, 8-aligned, outlives the guest, and nothing
+/// `mem` is `spec::MEM_BYTES`, 8-aligned, outlives the guest, and nothing
 /// else writes it while a call runs.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
@@ -165,11 +165,11 @@ pub unsafe extern "C" fn xpute_conformance_intr(mem: *mut u8, _quota_ms: f64) ->
     unsafe { turn(given(mem), 0) }
 }
 
-/// The memory a native host hands over, `spec::MEMORY_BYTES` from `mem`.
+/// The memory a native host hands over, `spec::MEM_BYTES` from `mem`.
 #[cfg(not(target_arch = "wasm32"))]
 fn given(mem: *mut u8) -> Memory {
-    // SAFETY: the host hands over `spec::MEMORY_BYTES` from `mem`, kept for the guest's life.
-    unsafe { Memory::new(mem.expose_provenance(), spec::MEMORY_BYTES as usize) }
+    // SAFETY: the host hands over `spec::MEM_BYTES` from `mem`, kept for the guest's life.
+    unsafe { Memory::new(mem.expose_provenance(), spec::MEM_BYTES as usize) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -201,7 +201,7 @@ mod wasm {
         let range = range_at(xpute_guest::wasm::data_end());
         // A host that sized the memory for another guest.
         xpute_kit::ensure!(
-            range as u64 + spec::MEMORY_BYTES as u64 <= xpute_guest::wasm::given(),
+            range as u64 + spec::MEM_BYTES as u64 <= xpute_guest::wasm::given(),
             ENOMEM,
             range
         );

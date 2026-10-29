@@ -1060,7 +1060,10 @@ impl RaysPass {
             g.copy_buf(
                 encoder,
                 (c.sun_misses, word_bytes(ray::MISS_ARGS_CNT as usize)),
-                (c.sun_list, word_bytes(sun::misses_cnt(shadow::SIZE) as usize)),
+                (
+                    c.sun_list,
+                    word_bytes(sun::misses_cnt(shadow::SIZE) as usize),
+                ),
                 4,
             );
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_walk as usize].pass());

@@ -10,6 +10,6 @@ fn main() {
     xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan {
         stack_bytes: spec::STACK_BYTES,
         global_base: None,
-        initial_bytes: None,
+        init_bytes: None,
     });
 }

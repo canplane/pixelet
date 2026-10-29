@@ -874,7 +874,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
                 {
                     sizes.push(format!(
                         "[{}]",
-                        size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")
+                        size.iter()
+                            .map(|&n| js_num(n))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ));
                     models.push(format!(
                         "Variant {{ model: {SLOT}({slot}), skin: {SLOT}({}) }}",

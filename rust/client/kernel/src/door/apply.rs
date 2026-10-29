@@ -274,9 +274,9 @@ pub(super) fn apply(
             let p = abi::SensorFailed::read(given(pkt)?)?;
             match p.sensor {
                 // A failure the platform named no cause for is Other's.
-                abi::Sensor::Geolocation => geolocation::geolocation_err(
-                    p.code.unwrap_or(abi::GeolocationErrorCode::Other),
-                ),
+                abi::Sensor::Geolocation => {
+                    geolocation::geolocation_err(p.code.unwrap_or(abi::GeolocationErrorCode::Other))
+                }
                 abi::Sensor::Orientation => device_orientation::on_orient_lost(),
             }
             Ok(Some(0))
@@ -440,7 +440,7 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
     match cmd {
         xpute_cmd::Command::NOP => {
             let val = match pkt {
-                Some(pkt) => xpute_cmd::Nop::read(pkt)?.value,
+                Some(pkt) => xpute_cmd::Nop::read(pkt)?.val,
                 None => 0,
             };
             Ok(Some(val as i32))

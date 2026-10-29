@@ -11,14 +11,14 @@ use xpute_host::native::{self, Alloc, Guest, Plan};
 #[global_allocator]
 static ALLOC: Alloc = Alloc;
 
-const MEMORY_BYTES: u32 = 8 << 20;
+const MEM_BYTES: u32 = 8 << 20;
 const HEAP_AT: u32 = 16 * PAGE_BYTES;
 
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
     *GUEST.get_or_init(|| {
         native::boot(&Plan {
-            memory_bytes: MEMORY_BYTES,
+            mem_bytes: MEM_BYTES,
             data_end: 0,
             heap_at: HEAP_AT,
             stack_bytes: 1 << 20,
@@ -30,7 +30,7 @@ fn guest() -> Guest {
 
 /// Whether `p` lies in the guest's heap.
 fn in_heap(p: *const u8) -> bool {
-    let (at, bytes) = guest().memory();
+    let (at, bytes) = guest().mem();
     let at = at.as_ptr().addr();
     (at + HEAP_AT as usize..at + bytes).contains(&p.addr())
 }
@@ -47,7 +47,7 @@ fn block_ownership() {
 }
 
 #[test]
-fn free_by_address() {
+fn free_by_addr() {
     let g = guest();
     // The heap's block, let go here, goes back to the heap.
     let made = g.run(|| vec![1u32; 1000]);
@@ -76,9 +76,9 @@ fn grow_across_moves() {
 }
 
 #[test]
-fn heap_ends_with_memory() {
+fn heap_ends_with_mem() {
     let g = guest();
-    let (at, bytes) = g.memory();
+    let (at, bytes) = g.mem();
     let end = at.as_ptr().addr() + bytes;
     let block = g.run(|| vec![0u8; 1 << 20]);
     assert!(block.as_ptr().addr() + block.len() <= end);

@@ -61,7 +61,7 @@ struct State {
 // The memory never grows, so a module's allocator sits over a fixed range.
 constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
 
-static_assert(HEAP_AT + HEAP_BYTES <= MEMORY_BYTES, "the ranges run past the memory");
+static_assert(HEAP_AT + HEAP_BYTES <= MEM_BYTES, "the ranges run past the memory");
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
 static_assert(DIRECTORY_AT + directory_words(4) * 4 <= STREAM_AT, "the directory runs into the stream");
 
@@ -225,7 +225,7 @@ extern "C" std::uint32_t xpute_conformance_boot(void) {
     ensure(wasm::stack_high() == STACK_BYTES, Errno::enotrecoverable, wasm::stack_high());
     std::uint32_t range = range_at();
     // A range past the memory's end is a host that sized it for another guest.
-    ensure(std::uint64_t{range} + MEMORY_BYTES <= wasm::given(), Errno::enomem, range);
+    ensure(std::uint64_t{range} + MEM_BYTES <= wasm::given(), Errno::enomem, range);
     return boot(mem::core(), range, host_now);
 }
 
@@ -235,9 +235,9 @@ extern "C" double intr(double) {
 
 #else
 
-// The memory a native host hands over, MEMORY_BYTES from `mem`; the guest
+// The memory a native host hands over, MEM_BYTES from `mem`; the guest
 // allocates from the process, so nothing reads the ambient one.
-Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES); }
+Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) { return boot(given(mem), 0, now); }
 

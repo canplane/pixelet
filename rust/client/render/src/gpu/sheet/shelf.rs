@@ -117,7 +117,8 @@ struct Shelves {
 impl Shelves {
     /// The first shelf of height `h` with room, else a new one; none past `size`.
     fn fit(&mut self, w: u32, h: u32, size: u32) -> Option<(u32, u32)> {
-        let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= size) {
+        let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= size)
+        {
             Some(s) => s,
             None => {
                 if self.next_y + h > size || w > size {

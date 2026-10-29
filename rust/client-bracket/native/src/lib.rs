@@ -38,7 +38,7 @@ static ALLOC: Alloc = Alloc;
 // (include/pxl_native.h), and `guest()` here.
 xpute_host::native_abi!(
     Plan {
-        memory_bytes: PHONE_BYTES,
+        mem_bytes: PHONE_BYTES,
         data_end: GLOBAL_BASE,
         heap_at: heap_at(GLOBAL_BASE),
         stack_bytes: THREAD_STACK_BYTES as usize,
@@ -69,7 +69,7 @@ fn last_words(stop: Stop<'_>) {
 
 /// The memory as the GPU's host reads and writes it between turns.
 fn view() -> Memory<'static> {
-    let (base, bytes) = guest().memory();
+    let (base, bytes) = guest().mem();
     // SAFETY: the memory, reserved for the process's life; between turns, on
     // the kernel's thread, where nothing holds a reference into a range the
     // kernel names.

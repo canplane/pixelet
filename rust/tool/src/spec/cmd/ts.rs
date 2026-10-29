@@ -175,7 +175,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if let Some(pkt) = &c.packet {
+        if let Some(pkt) = &c.pkt {
             // Written in place, its fields handed over as they are: no record is made for it.
             uses.note(spec, pkt, false)?;
             let mut doc = vec![format!(

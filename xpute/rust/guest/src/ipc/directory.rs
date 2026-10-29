@@ -43,10 +43,10 @@ pub unsafe fn write_directory(mem: Memory, at: usize, words: usize, entries: &[E
         entries.len() as u32,
         0,
     ]);
-    for (i, (key, value)) in entries.iter().enumerate() {
+    for (i, (key, val)) in entries.iter().enumerate() {
         let at = spec::HEAD as usize + 2 * i;
         words[at] = *key;
-        words[at + 1] = *value;
+        words[at + 1] = *val;
     }
 }
 

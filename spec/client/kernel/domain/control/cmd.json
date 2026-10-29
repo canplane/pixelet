@@ -8,7 +8,7 @@
     "command is between.",
     "",
     "The same number is a command on the submission ring and a signal on the",
-    "completion ring (its `RES` clear). The direction is the ring: `packet` is",
+    "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
     "what the shell submits, `signal` what the kernel posts. Each is written and",
     "read by what this file generates, on both sides, so no field is found by",
     "its position anywhere else.",
@@ -688,7 +688,7 @@
           "$doc": [
             "A GPS fix; a field is absent where the browser gave none."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "lon",
               "type": "f64"
@@ -720,7 +720,7 @@
           "$doc": [
             "An orientation event; a field is absent where the browser gave none."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "webkit_compass_heading",
               "type": "f64",
@@ -751,7 +751,7 @@
             "or cut off; the compass's, where the platform says so (WORLD_BOOT's",
             "orient_silence_is_loss)."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -775,7 +775,7 @@
           "$doc": [
             "The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "development",
               "type": "bool",
@@ -817,7 +817,7 @@
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
             "its signals on the completion ring, drawn by the kernel."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "width",
               "type": "f64",
@@ -867,7 +867,7 @@
             "The tab's visibility; the host rings the doorbell for it at once, since a hidden",
             "page gets no frame and hiding is the save's last sure moment."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "visible",
               "type": "bool"
@@ -884,7 +884,7 @@
             "Until it comes nothing is observed: the floor is held at the zoom it names, and no",
             "tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "top_zoom",
               "type": "u32",
@@ -919,7 +919,7 @@
             "A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held",
             "set aside by the host: the kernel reads it again, and writes it from then on."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "slot",
               "type": "u32",
@@ -935,7 +935,7 @@
           "$doc": [
             "A permission as the shell's prompt or the browser's change reported it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -952,7 +952,7 @@
           "$doc": [
             "The canvas's client rect."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "left",
               "type": "f64"
@@ -977,7 +977,7 @@
           "$doc": [
             "A pointer event on the canvas, in client pixels."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "phase",
               "type": "PointerPhase"
@@ -1010,7 +1010,7 @@
           "$doc": [
             "What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "tool",
               "type": "ActiveTool"
@@ -1037,7 +1037,7 @@
           "$doc": [
             "The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "text",
               "type": "str"
@@ -1061,7 +1061,7 @@
         {
           "name": "INPUT_WHEEL",
           "val": 4355,
-          "packet": [
+          "pkt": [
             {
               "name": "delta_y",
               "type": "f64"
@@ -1074,7 +1074,7 @@
           "$doc": [
             "The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "x",
               "type": "i32"
@@ -1101,7 +1101,7 @@
           "$doc": [
             "A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "role",
               "type": "u32",
@@ -1117,7 +1117,7 @@
           "$doc": [
             "The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1142,7 +1142,7 @@
           "$doc": [
             "A call: the canvas is going, and what it held on the device is let go before the call returns."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1155,7 +1155,7 @@
           "$doc": [
             "A character drawn alone into a surface the shell handed over, as the picker shows it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1173,7 +1173,7 @@
         {
           "name": "PREVIEW_CLOSE",
           "val": 6146,
-          "packet": [
+          "pkt": [
             {
               "name": "surface",
               "type": "u32"
@@ -1187,7 +1187,7 @@
             "A setting set from the sheet or the character picker; EAGAIN until the kernel has read the",
             "kept settings, which would be read over it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "key",
               "type": "SettingKey"
@@ -1207,7 +1207,7 @@
           "$doc": [
             "A line the player said, shown over the character."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "text",
               "type": "str"
@@ -1220,7 +1220,7 @@
           "$doc": [
             "The tracking button's press, as the button showed it."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "tracking",
               "type": "Tracking"
@@ -1250,7 +1250,7 @@
             "A search result: the pivot moved there, and the view asked with it at once, as the",
             "controls ask it where the camera stands; a view field absent keeps what the view has."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "lon",
               "type": "f64"
@@ -1294,7 +1294,7 @@
             "first of a run is taken to be where the camera already is, so nothing moves as",
             "it begins; the camera follows the tracker from there until POSE_END."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "x",
               "type": "f64"
@@ -1340,7 +1340,7 @@
             "The kernel watches a sensor only while both hold, the page visible and the world view",
             "shown; which sensors it watches then is its own (SENSOR_START)."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "shown",
               "type": "bool"
@@ -1369,7 +1369,7 @@
             "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
             "number past the door is finite, so no window is infinite."
           ],
-          "packet": [
+          "pkt": [
             {
               "name": "window_ms",
               "type": "f64",

@@ -91,13 +91,7 @@ pub fn on_geolocation_permission_granted(supported: bool) {
 
 /// `alt` is the ellipsoid's, as GPS gives it; kept over sea level, the
 /// terrain's, by the geoid at the base of the leaf tile it falls in.
-pub fn geolocation_fix(
-    lng: f64,
-    lat: f64,
-    alt: Option<f64>,
-    accuracy: f64,
-    course: Option<f64>,
-) {
+pub fn geolocation_fix(lng: f64, lat: f64, alt: Option<f64>, accuracy: f64, course: Option<f64>) {
     let (x0, y0, _) = GROUND
         .cell_of(LEAF_ZOOM, &epsg4326::project(&[lng, lat, 0.0]))
         .tile()
