@@ -429,45 +429,51 @@ struct Descriptor {
     groups: &'static [Group],
 }
 
-const fn descriptor(head: Head, lanes: &'static [Lane], groups: &'static [Group]) -> Descriptor {
-    Descriptor {
-        head,
-        lanes,
-        groups,
+impl Descriptor {
+    const fn new(head: Head, lanes: &'static [Lane], groups: &'static [Group]) -> Self {
+        Self {
+            head,
+            lanes,
+            groups,
+        }
     }
 }
 
 /// Pipeline `id`'s descriptor: every id below `PIPELINES` has one, which the
 /// records, worked out as the crate is built, ask of each.
-const fn descriptor_of(id: u32) -> Descriptor {
+const fn desc_of(id: u32) -> Descriptor {
     match id {
-        PIPELINE_DECOR => descriptor(lit(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
+        PIPELINE_DECOR => {
+            Descriptor::new(lit(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS)
+        }
         // What is laid on the world's faces draws at its own depth: the
         // world's stands behind it (screen_ray.wgsl `behind`).
-        PIPELINE_GHOST_BOX => descriptor(blended(SHADER_BOX, CULL_BACK), &BOX_LANES, &[&BOX_GROUP]),
-        PIPELINE_GHOST_DECOR => descriptor(
+        PIPELINE_GHOST_BOX => {
+            Descriptor::new(blended(SHADER_BOX, CULL_BACK), &BOX_LANES, &[&BOX_GROUP])
+        }
+        PIPELINE_GHOST_DECOR => Descriptor::new(
             blended(SHADER_DECOR, CULL_NONE),
             &MODEL_LANES,
             &MODEL_GROUPS,
         ),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
-        PIPELINE_SKINNED => descriptor(
+        PIPELINE_SKINNED => Descriptor::new(
             lit(SHADER_SKINNED, CULL_BACK),
             &SKINNED_LANES,
             &MODEL_GROUPS,
         ),
-        PIPELINE_PUCK_ZONE => descriptor(
+        PIPELINE_PUCK_ZONE => Descriptor::new(
             blended(SHADER_PUCK_ZONE, CULL_NONE),
             &PUCK_ZONE_LANES,
             &[FRAME, &DRAW, &UPLOAD],
         ),
-        PIPELINE_PUCK_BEACON => descriptor(
+        PIPELINE_PUCK_BEACON => Descriptor::new(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &PUCK_BEACON_LANES,
             &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &DRAW],
         ),
-        PIPELINE_MARKER => descriptor(
+        PIPELINE_MARKER => Descriptor::new(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
@@ -476,7 +482,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[],
             &[FRAME, &DRAW, MARKER_SPRITES, &SKIN],
         ),
-        PIPELINE_MARKER_REGION => descriptor(
+        PIPELINE_MARKER_REGION => Descriptor::new(
             Head {
                 topology: STRIP,
                 depth_write: true,
@@ -488,7 +494,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[FRAME, &DRAW, MARKER_REGIONS],
         ),
         // Against the gizmos' own faces, not the world's depth.
-        PIPELINE_DEBUG => descriptor(
+        PIPELINE_DEBUG => Descriptor::new(
             Head {
                 blend: ALPHA,
                 ..blended(SHADER_DEBUG, CULL_NONE)
@@ -498,7 +504,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
         ),
         // Pushed back by their slope as a rasterizer's polygon offset is, so
         // the lines that bound a face stay in front of it.
-        PIPELINE_DEBUG_FACE => descriptor(
+        PIPELINE_DEBUG_FACE => Descriptor::new(
             Head {
                 cull: CULL_NONE,
                 depth_compare: GREATER,
@@ -510,7 +516,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[FRAME, &DRAW],
         ),
         // Over everything, against no depth.
-        PIPELINE_CAMERA_GRID => descriptor(
+        PIPELINE_CAMERA_GRID => Descriptor::new(
             Head {
                 depth_compare: ALWAYS,
                 ..blended(SHADER_CAMERA_GRID, CULL_NONE)
@@ -518,7 +524,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[],
             &[&[[0, UNIFORM], [19, UNIFORM]]],
         ),
-        PIPELINE_SCREEN_RAY => descriptor(
+        PIPELINE_SCREEN_RAY => Descriptor::new(
             Head {
                 depth_write: true,
                 blend: OPAQUE,
@@ -527,20 +533,22 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[],
             &[&SCREEN_GROUP],
         ),
-        PIPELINE_DECOR_PREPASS => descriptor(
+        PIPELINE_DECOR_PREPASS => Descriptor::new(
             prepass(SHADER_DECOR, CULL_NONE),
             &MODEL_LANES,
             &MODEL_GROUPS,
         ),
-        PIPELINE_DECOR_DEPTH => descriptor(depth_only(SHADER_DECOR), &MODEL_LANES, &DEPTH_GROUPS),
+        PIPELINE_DECOR_DEPTH => {
+            Descriptor::new(depth_only(SHADER_DECOR), &MODEL_LANES, &DEPTH_GROUPS)
+        }
         PIPELINE_SKINNED_DEPTH => {
-            descriptor(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS)
+            Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS)
         }
         // Every texel of the box the world's cast holds, whatever lies
         // there: its clipmap's words and the box's corner, before the
         // casters drawn over it, into the depth alone (gpu/api.rs
         // `pipeline`), its fragment the depth.
-        PIPELINE_SUN_MAP => descriptor(
+        PIPELINE_SUN_MAP => Descriptor::new(
             Head {
                 fragment: true,
                 depth_compare: ALWAYS,
@@ -553,7 +561,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
         ),
         // The screen's depth alone into the occlusion's prepass (gpu/ao.rs),
         // the group the lit screen pass binds.
-        PIPELINE_SCREEN_PREPASS => descriptor(
+        PIPELINE_SCREEN_PREPASS => Descriptor::new(
             Head {
                 fragment: true,
                 vertex: VS,
@@ -566,7 +574,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
         // enters kept, reversed: its sample's number into a target of its
         // own (gpu/ray/raster.rs). The vertex stage draws only the faces
         // turned to the eye, so none is culled by its winding.
-        PIPELINE_RASTER => descriptor(
+        PIPELINE_RASTER => Descriptor::new(
             Head {
                 depth_write: true,
                 depth_compare: GREATER,
@@ -577,7 +585,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[&[[0, UNIFORM], [1, STORAGE]]],
         ),
         // Only where the opaque world left the far plane, so covered pixels never run it.
-        PIPELINE_SKY => descriptor(
+        PIPELINE_SKY => Descriptor::new(
             Head {
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
@@ -586,10 +594,10 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[],
             &[&SKY_GROUP],
         ),
-        PIPELINE_MIP => descriptor(screen(SHADER_MIP), &[], &[&SKIN]),
+        PIPELINE_MIP => Descriptor::new(screen(SHADER_MIP), &[], &[&SKIN]),
         // The world's depth carried to the canvas's size, which what is drawn
         // over the world is tested against.
-        PIPELINE_SCREEN_FINISH => descriptor(
+        PIPELINE_SCREEN_FINISH => Descriptor::new(
             Head {
                 depth_write: true,
                 depth_compare: ALWAYS,
@@ -598,7 +606,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[],
             &[&[[0, UNIFORM], [1, TEXTURE], [2, DEPTH]]],
         ),
-        PIPELINE_SCREEN_CLEAR => descriptor(
+        PIPELINE_SCREEN_CLEAR => Descriptor::new(
             Head {
                 depth_write: true,
                 depth_compare: ALWAYS,
@@ -607,7 +615,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &[],
             &[],
         ),
-        PIPELINE_SCREEN_RESOLVE => descriptor(
+        PIPELINE_SCREEN_RESOLVE => Descriptor::new(
             screen(SHADER_SCREEN_RESOLVE),
             &[],
             &[&[
@@ -619,7 +627,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
                 [5, UNIFORM],
             ]],
         ),
-        PIPELINE_IMPOSTOR => descriptor(
+        PIPELINE_IMPOSTOR => Descriptor::new(
             Head {
                 topology: STRIP,
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
@@ -632,7 +640,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
                 &UPLOAD,
             ],
         ),
-        PIPELINE_IMPOSTOR_BAKE => descriptor(
+        PIPELINE_IMPOSTOR_BAKE => Descriptor::new(
             Head {
                 fragment: true,
                 vertex: VS,
@@ -641,7 +649,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
             &MODEL_LANES,
             &[&DRAW, &SKIN],
         ),
-        PIPELINE_SHEET => descriptor(
+        PIPELINE_SHEET => Descriptor::new(
             Head {
                 topology: STRIP,
                 blend: ALPHA,
@@ -653,17 +661,17 @@ const fn descriptor_of(id: u32) -> Descriptor {
                 &[[0, TEXTURE_ARRAY], [1, SAMPLER]],
             ],
         ),
-        PIPELINE_AO_DOWNSAMPLE => descriptor(
+        PIPELINE_AO_DOWNSAMPLE => Descriptor::new(
             screen(SHADER_AO_DOWNSAMPLE),
             &[],
             &[&[[0, UNIFORM], [1, DEPTH], [6, UNIFORM]]],
         ),
-        PIPELINE_AO_SAMPLE => descriptor(
+        PIPELINE_AO_SAMPLE => Descriptor::new(
             screen(SHADER_AO_SAMPLE),
             &[],
             &[&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [6, UNIFORM]]],
         ),
-        PIPELINE_AO_BLUR => descriptor(
+        PIPELINE_AO_BLUR => Descriptor::new(
             screen(SHADER_AO_BLUR),
             &[],
             &[&[
@@ -675,7 +683,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
                 [6, UNIFORM],
             ]],
         ),
-        PIPELINE_AO_UPSAMPLE => descriptor(
+        PIPELINE_AO_UPSAMPLE => Descriptor::new(
             screen(SHADER_AO_UPSAMPLE),
             &[],
             &[&[
@@ -688,14 +696,14 @@ const fn descriptor_of(id: u32) -> Descriptor {
             ]],
         ),
         PIPELINE_ATMOS_TRANSMITTANCE => {
-            descriptor(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[&[AIR[0]]])
+            Descriptor::new(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[&[AIR[0]]])
         }
-        PIPELINE_ATMOS_MULTISCATTER => descriptor(
+        PIPELINE_ATMOS_MULTISCATTER => Descriptor::new(
             screen(SHADER_ATMOS_MULTISCATTER),
             &[],
             &[&[AIR[0], AIR[1], AIR[3]]],
         ),
-        PIPELINE_ATMOS_SKY_VIEW => descriptor(
+        PIPELINE_ATMOS_SKY_VIEW => Descriptor::new(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
             &[&[
@@ -709,13 +717,13 @@ const fn descriptor_of(id: u32) -> Descriptor {
                 [20, STORAGE_RW],
             ]],
         ),
-        PIPELINE_ATMOS_IRRADIANCE => descriptor(
+        PIPELINE_ATMOS_IRRADIANCE => Descriptor::new(
             screen(SHADER_ATMOS_IRRADIANCE),
             &[],
             &[&[AIR[0], AIR[1], AIR[3], [12, TEXTURE]]],
         ),
         // The light on the land under the eye: the air's words and the tables it is lit by.
-        PIPELINE_ATMOS_EXPOSURE => descriptor(
+        PIPELINE_ATMOS_EXPOSURE => Descriptor::new(
             screen(SHADER_ATMOS_EXPOSURE),
             &[],
             &[&[
@@ -731,7 +739,7 @@ const fn descriptor_of(id: u32) -> Descriptor {
                 AIR[9],
             ]],
         ),
-        PIPELINE_STAR => descriptor(
+        PIPELINE_STAR => Descriptor::new(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
@@ -745,8 +753,8 @@ const fn descriptor_of(id: u32) -> Descriptor {
             ],
         ),
         // The sheets' planes, against the world's depth: what stands before them hides them.
-        PIPELINE_CLOUD => descriptor(blended(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP]),
-        PIPELINE_CLOUD_FIELD => descriptor(screen(SHADER_CLOUD_FIELD), &[], &[]),
+        PIPELINE_CLOUD => Descriptor::new(blended(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP]),
+        PIPELINE_CLOUD_FIELD => Descriptor::new(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => panic!("a pipeline number with no descriptor"),
     }
 }
@@ -790,7 +798,7 @@ const fn seen(group: Group, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
     while id < PIPELINES {
-        let desc = descriptor_of(id);
+        let desc = desc_of(id);
         let mut k = 0;
         while k < desc.groups.len() {
             if alike(desc.groups[k], group) {
@@ -823,7 +831,7 @@ const fn words(desc: &Descriptor) -> usize {
 const RECORD_WORDS: usize = {
     let (mut most, mut id) = (0, 0);
     while id < PIPELINES {
-        let n = words(&descriptor_of(id));
+        let n = words(&desc_of(id));
         most = if n > most { n } else { most };
         id += 1;
     }
@@ -834,7 +842,7 @@ const RECORD_WORDS: usize = {
 /// stages that read it (`seen`).
 const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
     let mut out = [0; RECORD_WORDS];
-    let desc = descriptor_of(id);
+    let desc = desc_of(id);
     let h = desc.head;
     let head = [
         h.shader,
