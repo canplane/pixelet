@@ -42,7 +42,7 @@ pub mod groups {
     /// row with the model under asset/. One pack, so one colormap.
     pub mod person {
         /// World units tall — one cell.
-        pub const size: f64 = 1.0;
+        pub const sz: f64 = 1.0;
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         #[repr(u8)]
         pub enum Key {
@@ -121,7 +121,7 @@ pub mod groups {
     /// The pets, the same way. A pet's key is its model's name.
     pub mod pet {
         /// World units tall — a quarter cell, the step the object tiers also take.
-        pub const size: f64 = 0.25;
+        pub const sz: f64 = 0.25;
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         #[repr(u8)]
         pub enum Key {

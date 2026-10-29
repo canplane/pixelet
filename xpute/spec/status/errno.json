@@ -5,7 +5,7 @@
   "entries": [
     {
       "name": "OK",
-      "value": 0,
+      "val": 0,
       "doc": "Success"
     },
     {
@@ -13,167 +13,167 @@
     },
     {
       "name": "EPERM",
-      "value": -1,
+      "val": -1,
       "doc": "Operation not permitted"
     },
     {
       "name": "ENOENT",
-      "value": -2,
+      "val": -2,
       "doc": "No such file or directory / entry not found"
     },
     {
       "name": "ESRCH",
-      "value": -3,
+      "val": -3,
       "doc": "No such process"
     },
     {
       "name": "EINTR",
-      "value": -4,
+      "val": -4,
       "doc": "Interrupted system call"
     },
     {
       "name": "EIO",
-      "value": -5,
+      "val": -5,
       "doc": "I/O error"
     },
     {
       "name": "ENXIO",
-      "value": -6,
+      "val": -6,
       "doc": "No such device or address"
     },
     {
       "name": "E2BIG",
-      "value": -7,
+      "val": -7,
       "doc": "Argument list too long / object too large for fixed local cap"
     },
     {
       "name": "ENOEXEC",
-      "value": -8,
+      "val": -8,
       "doc": "Exec format error"
     },
     {
       "name": "EBADF",
-      "value": -9,
+      "val": -9,
       "doc": "Bad file descriptor / bad handle"
     },
     {
       "name": "ECHILD",
-      "value": -10,
+      "val": -10,
       "doc": "No child processes"
     },
     {
       "name": "EAGAIN",
-      "value": -11,
+      "val": -11,
       "doc": "Try again / Resource temporarily unavailable"
     },
     {
       "name": "ENOMEM",
-      "value": -12,
+      "val": -12,
       "doc": "Out of memory"
     },
     {
       "name": "EACCES",
-      "value": -13,
+      "val": -13,
       "doc": "Permission denied"
     },
     {
       "name": "EFAULT",
-      "value": -14,
+      "val": -14,
       "doc": "Bad address"
     },
     {
       "name": "EBUSY",
-      "value": -16,
+      "val": -16,
       "doc": "Device or resource busy"
     },
     {
       "name": "EEXIST",
-      "value": -17,
+      "val": -17,
       "doc": "File exists / duplicate bind"
     },
     {
       "name": "EXDEV",
-      "value": -18,
+      "val": -18,
       "doc": "Cross-device link"
     },
     {
       "name": "ENODEV",
-      "value": -19,
+      "val": -19,
       "doc": "No such device"
     },
     {
       "name": "ENOTDIR",
-      "value": -20,
+      "val": -20,
       "doc": "Not a directory"
     },
     {
       "name": "EISDIR",
-      "value": -21,
+      "val": -21,
       "doc": "Is a directory"
     },
     {
       "name": "EINVAL",
-      "value": -22,
+      "val": -22,
       "doc": "Invalid argument"
     },
     {
       "name": "ENFILE",
-      "value": -23,
+      "val": -23,
       "doc": "File table overflow (system-wide)"
     },
     {
       "name": "EMFILE",
-      "value": -24,
+      "val": -24,
       "doc": "Too many open files (process)"
     },
     {
       "name": "ENOTTY",
-      "value": -25,
+      "val": -25,
       "doc": "Not a tty"
     },
     {
       "name": "EFBIG",
-      "value": -27,
+      "val": -27,
       "doc": "File too large / payload too large"
     },
     {
       "name": "ENOSPC",
-      "value": -28,
+      "val": -28,
       "doc": "No space left on device / local mailbox full"
     },
     {
       "name": "ESPIPE",
-      "value": -29,
+      "val": -29,
       "doc": "Illegal seek"
     },
     {
       "name": "EROFS",
-      "value": -30,
+      "val": -30,
       "doc": "Read-only file system"
     },
     {
       "name": "EMLINK",
-      "value": -31,
+      "val": -31,
       "doc": "Too many links"
     },
     {
       "name": "EPIPE",
-      "value": -32,
+      "val": -32,
       "doc": "Broken pipe"
     },
     {
       "name": "EDOM",
-      "value": -33,
+      "val": -33,
       "doc": "Math argument out of domain"
     },
     {
       "name": "ERANGE",
-      "value": -34,
+      "val": -34,
       "doc": "Math result not representable"
     },
     {
       "name": "ENOSYS",
-      "value": -38,
+      "val": -38,
       "doc": "Function not implemented"
     },
     {
@@ -181,32 +181,32 @@
     },
     {
       "name": "EPROTO",
-      "value": -71,
+      "val": -71,
       "doc": "Protocol error"
     },
     {
       "name": "EBADMSG",
-      "value": -74,
+      "val": -74,
       "doc": "Bad message (protocol/frame/payload invalid)"
     },
     {
       "name": "EOVERFLOW",
-      "value": -75,
+      "val": -75,
       "doc": "Value too large for target type / overflow"
     },
     {
       "name": "EMSGSIZE",
-      "value": -90,
+      "val": -90,
       "doc": "Message too long / packet too large"
     },
     {
       "name": "ENOTSUP",
-      "value": -95,
+      "val": -95,
       "doc": "Operation not supported"
     },
     {
       "name": "EILSEQ",
-      "value": -84,
+      "val": -84,
       "doc": "Illegal byte sequence (decode/encoding failure)"
     },
     {
@@ -214,12 +214,12 @@
     },
     {
       "name": "EADDRINUSE",
-      "value": -98,
+      "val": -98,
       "doc": "Address already in use"
     },
     {
       "name": "EADDRNOTAVAIL",
-      "value": -99,
+      "val": -99,
       "doc": "Cannot assign requested address"
     },
     {
@@ -227,82 +227,82 @@
     },
     {
       "name": "ENETDOWN",
-      "value": -100,
+      "val": -100,
       "doc": "Network is down"
     },
     {
       "name": "ENETUNREACH",
-      "value": -101,
+      "val": -101,
       "doc": "Network is unreachable"
     },
     {
       "name": "ENETRESET",
-      "value": -102,
+      "val": -102,
       "doc": "Network dropped connection because of reset"
     },
     {
       "name": "ECONNABORTED",
-      "value": -103,
+      "val": -103,
       "doc": "Software caused connection abort"
     },
     {
       "name": "ECONNRESET",
-      "value": -104,
+      "val": -104,
       "doc": "Connection reset by peer"
     },
     {
       "name": "ENOBUFS",
-      "value": -105,
+      "val": -105,
       "doc": "No buffer space available"
     },
     {
       "name": "EISCONN",
-      "value": -106,
+      "val": -106,
       "doc": "Transport endpoint is already connected"
     },
     {
       "name": "ENOTCONN",
-      "value": -107,
+      "val": -107,
       "doc": "Transport endpoint is not connected"
     },
     {
       "name": "ESHUTDOWN",
-      "value": -108,
+      "val": -108,
       "doc": "Cannot send after transport endpoint shutdown"
     },
     {
       "name": "ETOOMANYREFS",
-      "value": -109,
+      "val": -109,
       "doc": "Too many references"
     },
     {
       "name": "ETIMEDOUT",
-      "value": -110,
+      "val": -110,
       "doc": "Connection timed out"
     },
     {
       "name": "ECONNREFUSED",
-      "value": -111,
+      "val": -111,
       "doc": "Connection refused"
     },
     {
       "name": "EHOSTDOWN",
-      "value": -112,
+      "val": -112,
       "doc": "Host is down"
     },
     {
       "name": "EHOSTUNREACH",
-      "value": -113,
+      "val": -113,
       "doc": "No route to host"
     },
     {
       "name": "EALREADY",
-      "value": -114,
+      "val": -114,
       "doc": "Operation already in progress"
     },
     {
       "name": "EINPROGRESS",
-      "value": -115,
+      "val": -115,
       "doc": "Operation now in progress"
     },
     {
@@ -310,12 +310,12 @@
     },
     {
       "name": "ECANCELED",
-      "value": -125,
+      "val": -125,
       "doc": "Operation canceled"
     },
     {
       "name": "ENOTRECOVERABLE",
-      "value": -131,
+      "val": -131,
       "doc": "State not recoverable: an invariant the code stands on does not hold"
     }
   ]

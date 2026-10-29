@@ -4,7 +4,7 @@
     "map measures is a meter of (pxl-spec space/coord/adapter/4326.rs)."
   ],
   "EARTH_RADIUS_M": {
-    "$value": 6378137,
+    "$val": 6378137,
     "$doc": ["WGS84's semi-major axis, the sphere EPSG:3857 projects."]
   }
 }

@@ -216,11 +216,11 @@ impl Node {
     }
 
     pub fn is_wrapper(&self) -> bool {
-        self.get("$value").is_some()
+        self.get("$val").is_some()
     }
 
     pub fn value(&self) -> &Node {
-        self.get("$value").unwrap_or(self)
+        self.get("$val").unwrap_or(self)
     }
 
     pub fn str_at(&self, key: &str) -> Option<&str> {

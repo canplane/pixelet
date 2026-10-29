@@ -300,7 +300,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                             }
                         }));
                     }
-                    out.push(format!("  {} = {},", m.name, literal(m.value, &e.format)));
+                    out.push(format!("  {} = {},", m.name, literal(m.val, &e.format)));
                 }
             }
         }

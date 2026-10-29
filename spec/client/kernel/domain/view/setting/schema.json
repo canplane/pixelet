@@ -23,7 +23,7 @@
     "crosses as itself."
   ],
   "RESOLUTION_MODES": {
-    "$value": { "auto": 0, "fixed": 1, "low": 2 },
+    "$val": { "auto": 0, "fixed": 1, "low": 2 },
     "$doc": [
       "How many device pixels the world is drawn at to a CSS pixel.",
       "",
@@ -36,7 +36,7 @@
     ]
   },
   "CAMERA_MODES": {
-    "$value": { "orbit": 0, "first_person": 1 },
+    "$val": { "orbit": 0, "first_person": 1 },
     "$doc": [
       "Which controller makes the camera's pose.",
       "",
@@ -48,7 +48,7 @@
     ]
   },
   "ORBIT_OBSTACLE_MODES": {
-    "$value": { "through": 0, "stop": 1, "climb": 2 },
+    "$val": { "through": 0, "stop": 1, "climb": 2 },
     "$doc": [
       "What terrain does to the camera.",
       "",
@@ -63,7 +63,7 @@
     ]
   },
   "AO_MODES": {
-    "$value": { "off": 0, "corner": 1, "screen": 2 },
+    "$val": { "off": 0, "corner": 1, "screen": 2 },
     "$doc": [
       "Where the ambient occlusion comes from. Either is the sky's visibility",
       "and darkens only the light from the sky and its bounce, never the direct",
@@ -86,7 +86,7 @@
     ]
   },
   "SKY_TIMES": {
-    "$value": {
+    "$val": {
       "real": 0,
       "dawn": 1,
       "morning": 2,
@@ -299,8 +299,8 @@
       "default": false,
       "section": "debug"
     },
-    "person": { "number": 17, "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in actor.json's person keys."] }, "section": "character" },
-    "pet": { "number": 18, "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in actor.json's pet keys."] }, "section": "character" },
+    "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["female-2, by its number in actor.json's person keys."] }, "section": "character" },
+    "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["chick, by its number in actor.json's pet keys."] }, "section": "character" },
     "ray_steps": {
       "number": 19,
       "$doc": [

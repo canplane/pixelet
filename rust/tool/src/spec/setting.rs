@@ -464,7 +464,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         let mut out: Vec<(String, Node)> = vec![(
             "key".to_string(),
             Node::Obj(vec![
-                ("$value".to_string(), Node::Num(number_of(s) as f64)),
+                ("$val".to_string(), Node::Num(number_of(s) as f64)),
                 ("$type".to_string(), Node::Str("u32".to_string())),
             ]),
         )];

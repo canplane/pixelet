@@ -287,7 +287,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                     if e.default.as_deref() == Some(m.name.as_str()) {
                         out.push("    #[default]".into());
                     }
-                    out.push(format!("    {} = {},", m.name, literal(m.value, &e.format)));
+                    out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
                 }
             }
         }

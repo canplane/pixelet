@@ -7,13 +7,13 @@
     "`marker_cell`). Per id where the kind comes to hold more than one shape."
   ],
   "MARKER_TEXT_CHARS": {
-    "$value": 40,
+    "$val": 40,
     "$type": "u32",
     "$doc": ["The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most."]
   },
 
   "MARKER_SHOWN_FROM": {
-    "$value": 19,
+    "$val": 19,
     "$type": "u8",
     "$doc": [
       "The coarsest camera grid cell a marker shows at: z19, 32 of them across",
@@ -26,7 +26,7 @@
     ]
   },
   "MARKER_SCALE_STEPS": {
-    "$value": -1,
+    "$val": -1,
     "$type": "i8",
     "$doc": [
       "A marker's cell on the camera grid, in zooms: −1 spans two of the grid's",

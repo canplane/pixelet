@@ -11,7 +11,7 @@
   ],
 
   "MEMORY_BYTES": {
-    "$value": 262144,
+    "$val": 262144,
     "$type": "u32",
     "$doc": [
       "The room a guest's shared range asks for: the directory, both rings, a stream and its",
@@ -22,13 +22,13 @@
   },
 
   "SQ_CAP": {
-    "$value": 16,
+    "$val": 16,
     "$type": "u32",
     "$doc": ["Frames the submission ring holds."]
   },
 
   "CQ_CAP": {
-    "$value": 128,
+    "$val": 128,
     "$type": "u32",
     "$doc": [
       "Frames the completion ring holds: fewer than eight commands raising MOST_RAISE",
@@ -37,31 +37,31 @@
   },
 
   "SLOT_BYTES": {
-    "$value": 256,
+    "$val": 256,
     "$type": "u32",
     "$doc": ["A ring slot's payload: a packet of one number fits."]
   },
 
   "STREAM_WORDS": {
-    "$value": 256,
+    "$val": 256,
     "$type": "u32",
     "$doc": ["The stream's range, its END word first."]
   },
 
   "SYS_WORDS": {
-    "$value": 64,
+    "$val": 64,
     "$type": "u32",
     "$doc": ["The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them."]
   },
 
   "STACK_BYTES": {
-    "$value": 1048576,
+    "$val": 1048576,
     "$type": "u32",
     "$doc": ["The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile)."]
   },
 
   "HEAP_BYTES": {
-    "$value": 65536,
+    "$val": 65536,
     "$type": "u32",
     "$doc": [
       "The guest's heap, in its own range, since the memory a host hands a module never grows",
@@ -70,13 +70,13 @@
   },
 
   "HANDLES": {
-    "$value": 16,
+    "$val": 16,
     "$type": "u32",
     "$doc": ["Slots in the guest's handle table, slot 0 never handed out."]
   },
 
   "MOST_RAISE": {
-    "$value": 32,
+    "$val": 32,
     "$type": "u32",
     "$doc": ["The most signals one RAISE asks for; more is refused with EINVAL."]
   },
@@ -84,7 +84,7 @@
   "key": {
     "$type": "u32",
     "$doc": ["The guest's own entry in its directory, past xpute's PROGRAM bit."],
-    "STREAM": { "$value": 2147483649, "$doc": ["Where the stream is, run by the host after every turn."] }
+    "STREAM": { "$val": 2147483649, "$doc": ["Where the stream is, run by the host after every turn."] }
   },
 
   "cmd": {
@@ -94,21 +94,21 @@
       "(xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A",
       "packet, where one is taken, is a branch whose first child is a number."
     ],
-    "OK": { "$value": 4097, "$doc": ["Succeeds; replies 0."] },
-    "FAIL": { "$value": 4098, "$doc": ["Fails with EINVAL."] },
-    "RAISE": { "$value": 4099, "$doc": ["Raises the packet's number of SIGNALs, tagged 0 up, then replies with that number."] },
-    "RECORD": { "$value": 4100, "$doc": ["Writes one record to the stream, its op the packet's number and no words; replies 0."] },
-    "ISSUE": { "$value": 4101, "$doc": ["Takes a handle from the guest's table and replies with it."] },
-    "RELEASE": { "$value": 4102, "$doc": ["Gives back the packet's handle; fails with EBADF for one that is not live."] },
-    "USE": { "$value": 4103, "$doc": ["Replies 0 for a live handle; fails with EBADF for any other, 0 among them."] },
-    "MARK": { "$value": 4104, "$doc": ["Reads the host's clock and keeps the reading; replies 0."] },
-    "SINCE": { "$value": 4105, "$doc": ["Reads the host's clock and replies with the whole milliseconds since the last MARK."] },
+    "OK": { "$val": 4097, "$doc": ["Succeeds; replies 0."] },
+    "FAIL": { "$val": 4098, "$doc": ["Fails with EINVAL."] },
+    "RAISE": { "$val": 4099, "$doc": ["Raises the packet's number of SIGNALs, tagged 0 up, then replies with that number."] },
+    "RECORD": { "$val": 4100, "$doc": ["Writes one record to the stream, its op the packet's number and no words; replies 0."] },
+    "ISSUE": { "$val": 4101, "$doc": ["Takes a handle from the guest's table and replies with it."] },
+    "RELEASE": { "$val": 4102, "$doc": ["Gives back the packet's handle; fails with EBADF for one that is not live."] },
+    "USE": { "$val": 4103, "$doc": ["Replies 0 for a live handle; fails with EBADF for any other, 0 among them."] },
+    "MARK": { "$val": 4104, "$doc": ["Reads the host's clock and keeps the reading; replies 0."] },
+    "SINCE": { "$val": 4105, "$doc": ["Reads the host's clock and replies with the whole milliseconds since the last MARK."] },
     "OPEN": {
-      "$value": 4106,
+      "$val": 4106,
       "$doc": ["Opens a file for the packet's number, its owner, and replies with the descriptor; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open."]
     },
-    "CLOSE": { "$value": 4107, "$doc": ["Closes the packet's descriptor, answered or not; fails with EBADF for one not open."] },
-    "SIGNAL": { "$value": 4353, "$doc": ["What RAISE raises."] },
-    "OPENED": { "$value": 4354, "$doc": ["An open answered: tagged with its owner, its result the host's."] }
+    "CLOSE": { "$val": 4107, "$doc": ["Closes the packet's descriptor, answered or not; fails with EBADF for one not open."] },
+    "SIGNAL": { "$val": 4353, "$doc": ["What RAISE raises."] },
+    "OPENED": { "$val": 4354, "$doc": ["An open answered: tagged with its owner, its result the host's."] }
   }
 }

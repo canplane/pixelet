@@ -8,7 +8,7 @@
     "$type": "u32",
     "$doc": ["The stream's range, laid out by the kernel's map."],
     "BYTES": {
-      "$value": 65536,
+      "$val": 65536,
       "$doc": [
         "The range's size. A record names what it moves rather than carrying it, so",
         "a turn's records are words, and a text's bytes the most of them."
@@ -19,7 +19,7 @@
     "$type": "u32",
     "$doc": ["The kernel's calls, each with xpute's PROGRAM bit; a record's call, then its arguments."],
     "TEXT_LAYOUT": {
-      "$value": 2147483649,
+      "$val": 2147483649,
       "$doc": [
         "weight, px (f32 bits), max width (f32 bits, 0 for one line), at, lines, then the",
         "text's bytes: the text in the platform's own family at the weight and size, broken",
@@ -28,7 +28,7 @@
       ]
     },
     "TEXT_RASTER": {
-      "$value": 2147483650,
+      "$val": 2147483650,
       "$doc": [
         "weight, px (f32 bits), color (0xRRGGBBAA), at, width, height, x (f32 bits), then",
         "the text's bytes: one line drawn in the platform's own family, starting at x with",
@@ -90,17 +90,17 @@
       "binds the root to, `@xpute/host` carrying the open there."
     ],
     "STORAGE": {
-      "$value": 256,
+      "$val": 256,
       "$doc": ["The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice."]
     },
     "ASSET": {
-      "$value": 257,
+      "$val": 257,
       "$doc": ["The shipped assets; a path is a load's number in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs)."]
     }
   },
   "SPHERE": {
     "$type": "u32",
-    "$value": 0,
+    "$val": 0,
     "$doc": [
       "Below the earth's root, the Earth's picture whole (pxl-spec route.json's `TILE_SPHERE`),",
       "under the earth's own version. Any other number below a bake's root is a tile's subject",
@@ -110,7 +110,7 @@
   },
   "CATALOG": {
     "$type": "u32",
-    "$value": 0,
+    "$val": 0,
     "$doc": [
       "Below the asset root, the catalog the host plugs in (pxl-spec asset/catalog.rs): the",
       "file each of the asset specs' references names. Any other number below it is a file,",
@@ -124,11 +124,11 @@
       "owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs)."
     ],
     "SETTINGS": {
-      "$value": 0,
+      "$val": 0,
       "$doc": ["The settings' overrides (domain/view/setting/store.rs)."]
     },
     "OBJECTS": {
-      "$value": 1,
+      "$val": 1,
       "$doc": ["The placed objects (domain/layer/object/repository.rs)."]
     }
   },

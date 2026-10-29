@@ -29,7 +29,7 @@ struct Field {
 #[derive(Deserialize)]
 struct Member {
     name: String,
-    value: u32,
+    val: u32,
     #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
     packet: Option<Vec<Field>>,
@@ -159,13 +159,13 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
         for (i, m) in all.iter().enumerate() {
-            if let Some(other) = all[..i].iter().find(|o| o.value == m.value) {
+            if let Some(other) = all[..i].iter().find(|o| o.val == m.val) {
                 return Err(format!(
                     "{json}: {}'s {} and {} are both {}",
                     e.name,
                     m.name,
                     other.name,
-                    literal(m.value, &e.format)
+                    literal(m.val, &e.format)
                 ));
             }
         }
@@ -178,23 +178,23 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
             if e.name == "Command" {
                 cmds.push(m);
             } else if e.name == "Major" {
-                majors.push((m.value, &m.name));
+                majors.push((m.val, &m.name));
             } else if e.name.ends_with("Minor") {
                 minors.push(e);
             }
         }
     }
-    for c in cmds.into_iter().filter(|c| c.value != 0) {
+    for c in cmds.into_iter().filter(|c| c.val != 0) {
         let major = majors
             .iter()
-            .find(|(v, _)| *v == c.value >> 8)
+            .find(|(v, _)| *v == c.val >> 8)
             .map(|(_, n)| *n)
             .ok_or(format!("{json}: {} has no major", c.name))?;
         let table_name = format!("{}Minor", pascal(major));
         let minor = minors
             .iter()
             .find(|t| t.name == table_name)
-            .and_then(|t| members(t).find(|m| m.value == c.value & 0xff));
+            .and_then(|t| members(t).find(|m| m.val == c.val & 0xff));
         if minor.is_none() {
             return Err(format!("{json}: {}'s minor is in no {table_name}", c.name));
         }
@@ -238,7 +238,7 @@ fn majors(spec: &Spec) -> Vec<(u32, &str)> {
     spec.enums
         .iter()
         .filter(|e| e.name == "Major")
-        .flat_map(|e| members(e).map(|m| (m.value, m.name.as_str())))
+        .flat_map(|e| members(e).map(|m| (m.val, m.name.as_str())))
         .collect()
 }
 
@@ -258,10 +258,10 @@ fn check_base(spec: &Spec, json: &str) -> Result<(), String> {
             ));
         }
     }
-    for (value, name) in majors(spec) {
-        if value < edge {
+    for (val, name) in majors(spec) {
+        if val < edge {
             return Err(format!(
-                "{json}: major {name} at {value:#x} is below {edge:#x}, xpute's"
+                "{json}: major {name} at {val:#x} is below {edge:#x}, xpute's"
             ));
         }
     }

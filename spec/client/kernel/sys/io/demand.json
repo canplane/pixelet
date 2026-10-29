@@ -23,7 +23,7 @@
     "adopt_ms"
   ],
   "TASK_PHASES_MAX": {
-    "$value": 6,
+    "$val": 6,
     "$type": "u32",
     "$doc": ["Timings a run reports at most; past it one is left out."]
   }

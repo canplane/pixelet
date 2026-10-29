@@ -136,7 +136,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
                     if let Some(doc) = &m.doc {
                         out.extend(crate::spec::line_comments(doc, "    "));
                     }
-                    out.push(format!("    {} = {},", m.name, literal(m.value, &e.format)));
+                    out.push(format!("    {} = {},", m.name, literal(m.val, &e.format)));
                 }
             }
         }

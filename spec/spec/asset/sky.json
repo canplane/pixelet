@@ -12,11 +12,11 @@
     ],
     "models": {
       "$type": "file",
-      "$value": ["sky/cloud/cumulus_1.glb", "sky/cloud/cumulus_2.glb", "sky/cloud/stratus.glb"]
+      "$val": ["sky/cloud/cumulus_1.glb", "sky/cloud/cumulus_2.glb", "sky/cloud/stratus.glb"]
     },
     "skin": {
       "$type": "file",
-      "$value": "sky/cloud/white.png"
+      "$val": "sky/cloud/white.png"
     }
   },
   "moon": {
@@ -25,7 +25,7 @@
     ],
     "picture": {
       "$type": "file",
-      "$value": "sky/moon.png"
+      "$val": "sky/moon.png"
     }
   }
 }

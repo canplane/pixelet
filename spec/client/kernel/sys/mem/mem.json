@@ -15,7 +15,7 @@
   ],
 
   "STACK_BYTES": {
-    "$value": 1048576,
+    "$val": 1048576,
     "$type": "u32",
     "$doc": [
       "The stack, at the bottom of the memory. build.rs hands this number to wasm-ld",
@@ -32,7 +32,7 @@
   },
 
   "THREAD_STACK_BYTES": {
-    "$value": 8388608,
+    "$val": 8388608,
     "$type": "u32",
     "$doc": [
       "The kernel's thread's stack on a device, where the kernel is a library on a thread",
@@ -42,7 +42,7 @@
   },
 
   "SQ_CAP": {
-    "$value": 512,
+    "$val": 512,
     "$type": "u32",
     "$doc": [
       "Frames the submission ring holds, and so payloads: one a slot. A power of",
@@ -57,7 +57,7 @@
   },
 
   "CQ_CAP": {
-    "$value": 1024,
+    "$val": 1024,
     "$type": "u32",
     "$doc": [
       "Frames the completion ring holds: everything one turn leaves, since the",
@@ -72,13 +72,13 @@
   },
 
   "RING_DESC_AT": {
-    "$value": 1048576,
+    "$val": 1048576,
     "$type": "u32",
     "$doc": ["Where the rings' descriptors begin: the first page past the stack."]
   },
 
   "RING_SLOT_AT": {
-    "$value": 1572864,
+    "$val": 1572864,
     "$type": "u32",
     "$doc": [
       "Where the rings' payloads begin. Past the descriptors with room to spare, so",
@@ -87,7 +87,7 @@
   },
 
   "DIRECTORY_AT": {
-    "$value": 8384512,
+    "$val": 8384512,
     "$type": "u32",
     "$doc": [
       "Where the kernel's directory is (xpute-guest ipc/directory.rs): the page under",
@@ -98,7 +98,7 @@
   },
 
   "GLOBAL_BASE": {
-    "$value": 8388608,
+    "$val": 8388608,
     "$type": "u32",
     "$doc": [
       "Where the linker may start placing `.rodata`, `.data` and `.bss` — passed to",
@@ -112,7 +112,7 @@
   },
 
   "MIN_HEAP_BYTES": {
-    "$value": 268435456,
+    "$val": 268435456,
     "$type": "u32",
     "$doc": [
       "The heap a phone is guaranteed, and so what everything in front of it is",
@@ -146,7 +146,7 @@
   },
 
   "REGION_BYTES": {
-    "$value": 67108864,
+    "$val": 67108864,
     "$type": "u32",
     "$doc": [
       "What a device's memory is counted in: a reservation is a whole number of",
@@ -155,7 +155,7 @@
   },
 
   "PHONE_BYTES": {
-    "$value": 536870912,
+    "$val": 536870912,
     "$type": "u32",
     "$doc": [
       "What a handheld is asked to reserve. Half of the desktop's, because a",
@@ -170,7 +170,7 @@
   },
 
   "DESKTOP_BYTES": {
-    "$value": 1073741824,
+    "$val": 1073741824,
     "$type": "u32",
     "$doc": ["What everything else is asked to reserve."]
   }

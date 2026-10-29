@@ -33,7 +33,7 @@ fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a s
                 .str_at("name")
                 .ok_or(format!("{CUBE_JSON}: {what}: an entry with no name"))?;
             let value = e
-                .get("value")
+                .get("val")
                 .and_then(Node::num)
                 .ok_or(format!("{CUBE_JSON}: {name} has no value"))? as u32;
             Ok(Ok(Entry {
@@ -256,7 +256,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         .entries()
         .iter()
         .map(|(k, v)| {
-            v.get("value")
+            v.get("val")
                 .and_then(Node::num)
                 .map(|n| (k.as_str(), n as u32))
                 .ok_or(format!("{DECOR_JSON}: {k} has no value"))
@@ -663,7 +663,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
                 .map(|(k, v)| {
                     (
                         k.as_str(),
-                        v.get("value")
+                        v.get("val")
                             .and_then(Node::num)
                             .map(js_num)
                             .unwrap_or_default(),
@@ -862,7 +862,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             .ok_or(at("variants"))?
         {
             let sz = v
-                .get("size")
+                .get("sz")
                 .and_then(Node::arr)
                 .filter(|s| s.len() == 3)
                 .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
@@ -892,10 +892,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             return Err(at("variants"));
         }
         let val = k
-            .get("value")
+            .get("val")
             .and_then(Node::num)
             .map(js_num)
-            .ok_or(at("value"))?;
+            .ok_or(at("val"))?;
         rows.push(Row {
             name: name.clone(),
             value: val,

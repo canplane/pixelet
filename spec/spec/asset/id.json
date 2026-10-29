@@ -10,6 +10,6 @@
     "as its asset's id (pxl-spec object.rs); an actor or the sky stands in",
     "no cell, so no cell ever holds either."
   ],
-  "SHAPE_BITS": { "$value": 10, "$type": "u32" },
+  "SHAPE_BITS": { "$val": 10, "$type": "u32" },
   "KIND": { "$type": "u16", "cube": 0, "decor": 1, "marker": 2, "actor": 3, "sky": 4 }
 }

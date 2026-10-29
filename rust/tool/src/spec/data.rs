@@ -2,7 +2,7 @@
 
 //! Data specs: JSON of named values written as Rust constants and, where the
 //! shell reads them, TypeScript `as const`. A number is f64 unless a `$type`
-//! says otherwise; a u64 is a hex string. `{ "$value", "$doc" }` carries a reason.
+//! says otherwise; a u64 is a hex string. `{ "$val", "$doc" }` carries a reason.
 //! pixelet's Rust carries no names: a list of them is its count, and an enum
 //! where the spec asks for one, and a table's keys are not listed; the
 //! TypeScript keeps them for what a person reads. xpute's Rust keeps its own.
