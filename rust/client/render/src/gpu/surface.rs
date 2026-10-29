@@ -57,13 +57,13 @@ impl Region {
         // Whole workgroups of the pixels' cast (pxl-shader cast.rs
         // `cast_cs`, 8 by 8), so its last ones cast no pixel past it.
         let whole = |lo: f32, hi: f32, n: u32| {
-            let size = (hi.ceil() as u32 - lo as u32).next_multiple_of(8).min(n);
-            [(lo as u32).min(n - size), size]
+            let sz = (hi.ceil() as u32 - lo as u32).next_multiple_of(8).min(n);
+            [(lo as u32).min(n - sz), sz]
         };
         let ([ax, sx], [ay, sy]) = (whole(lo[0], hi[0], width), whole(lo[1], hi[1], height));
-        let (at, size) = ([ax, ay], [sx, sy]);
-        let share = f64::from(size[0]) * f64::from(size[1]) / (f64::from(w) * f64::from(h));
-        (share <= REGION_MOST).then_some(Region { at, sz: size })
+        let (at, sz) = ([ax, ay], [sx, sy]);
+        let share = f64::from(sz[0]) * f64::from(sz[1]) / (f64::from(w) * f64::from(h));
+        (share <= REGION_MOST).then_some(Region { at, sz })
     }
 
     /// As a pass's scissor takes it.

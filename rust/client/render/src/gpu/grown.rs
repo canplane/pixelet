@@ -140,9 +140,9 @@ pub type World = [u32; 6];
 
 impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
-        let buffer = |sz: u32, usage: u32| g.buf(sz, usage);
+        let buf = |sz: u32, usage: u32| g.buf(sz, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-        let rows = buffer(core::mem::size_of_val(&DECORS) as u32, storage);
+        let rows = buf(core::mem::size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
         // SAFETY: the rows are `repr(C)` words alone (pxl-spec-core decor.spec.rs), read while `table` lives.
         let words = unsafe {
@@ -154,7 +154,7 @@ impl Grown {
         g.write_buf(rows, 0, bytes(words));
         let drawn_by = pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR);
         let draw_layouts = [drawn_by.layouts[1], drawn_by.layouts[3]];
-        let uniforms = buffer(
+        let uniforms = buf(
             word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize),
             storage | buffer_usage::UNIFORM,
         );
@@ -166,16 +166,16 @@ impl Grown {
             args_built: pipelines.build_compute(g, SHADER_GROWN_ARGS, &compute::DECOR_ARGS_GROUP),
             place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &compute::DECOR_PLACE_GROUP),
             groups: [0; 6],
-            grows: buffer(
+            grows: buf(
                 word_bytes(scatter::GROWS_WORDS as usize),
                 storage | buffer_usage::INDIRECT,
             ),
-            shown: buffer(word_bytes(DECORS.len()), storage),
-            drawing: buffer(word_bytes(drawn::DRAWING_WORDS as usize), storage),
+            shown: buf(word_bytes(DECORS.len()), storage),
+            drawing: buf(word_bytes(drawn::DRAWING_WORDS as usize), storage),
             rows,
-            meshes: buffer(word_bytes(GROUPS as usize), storage),
-            regions: buffer(word_bytes(2 * drawn::REGIONS as usize), storage),
-            args: buffer(
+            meshes: buf(word_bytes(GROUPS as usize), storage),
+            regions: buf(word_bytes(2 * drawn::REGIONS as usize), storage),
+            args: buf(
                 word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize),
                 storage | buffer_usage::INDIRECT,
             ),

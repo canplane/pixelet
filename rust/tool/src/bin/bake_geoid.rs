@@ -82,7 +82,7 @@ fn read(path: &str) -> Result<Grid, String> {
             });
         }
     }
-    let (offset, scale) = (off.ok_or("no Offset")?, scale.ok_or("no Scale")?);
+    let (off, scale) = (off.ok_or("no Offset")?, scale.ok_or("no Scale")?);
     let [_, width, height, maxval] = [fields[0], fields[1], fields[2], fields[3]];
     if maxval != 65535 {
         return Err(format!("maxval {maxval}: two bytes a sample expected"));
@@ -94,7 +94,7 @@ fn read(path: &str) -> Result<Grid, String> {
         .as_chunks::<2>()
         .0
         .iter()
-        .map(|&b| offset + scale * f64::from(u16::from_be_bytes(b)))
+        .map(|&b| off + scale * f64::from(u16::from_be_bytes(b)))
         .collect();
     Ok(Grid { width, height, m })
 }

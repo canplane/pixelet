@@ -458,8 +458,8 @@ impl MarkerPass {
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 3, self.sheet_group, &[]);
         for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
-            let (group, offset) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[offset]);
+            let (group, off) = slots.at(k as u32);
+            g.set_bind_group(pass, 1, group, &[off]);
             g.set_bind_group(pass, 2, set.group, &[]);
             g.draw(pass, 4, d[1], 0, 0);
         }

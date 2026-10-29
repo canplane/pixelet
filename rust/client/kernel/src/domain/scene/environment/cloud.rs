@@ -290,7 +290,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         let patch = Shown {
             handle: b.handle,
             at: b.at,
-            index: b.idx,
+            idx: b.idx,
             bytes: b.bytes,
             corner: [nearest(corner[0], eye[0]), corner[1]],
             side: PATCH,
@@ -423,8 +423,8 @@ fn build(
             .iter()
             .map(|l| GroupLanes::words(l.len()))
             .sum::<usize>();
-    let index = (words * 4) as u32;
-    let (at, bytes) = alloc(index + instances as u32 * 4)?;
+    let idx = (words * 4) as u32;
+    let (at, bytes) = alloc(idx + instances as u32 * 4)?;
     // SAFETY: a heap block of the bytes asked for, this patch's until given back.
     let out: &mut [u32] =
         unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
@@ -449,7 +449,7 @@ fn build(
         at: at as u32,
         bytes,
         handle,
-        idx: index,
+        idx,
         heights: if instances == 0 { [0.0; 2] } else { heights },
     })
 }
@@ -459,7 +459,7 @@ fn build(
 struct Shown {
     handle: u32,
     at: u32,
-    index: u32,
+    idx: u32,
     bytes: u32,
     corner: [f64; 2],
     side: f64,
@@ -503,7 +503,7 @@ fn present_patch(
     let words: &mut [u32] = unsafe {
         core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4)
     };
-    let (lanes_of, list) = words.split_at_mut(b.index as usize / 4);
+    let (lanes_of, list) = words.split_at_mut(b.idx as usize / 4);
     // A patch all within THIN_FROM shows every cloud, and asks none.
     let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
@@ -550,7 +550,7 @@ fn present_patch(
         changed |= list[at..at + sprites.len()] != sprites[..];
         list[at..at + sprites.len()].copy_from_slice(sprites);
         at += sprites.len();
-        let idx = b.index / 4 + first as u32;
+        let idx = b.idx / 4 + first as u32;
         if models > 0 {
             let pipeline = if opacity < 1.0 {
                 PIPELINE_GHOST_DECOR
@@ -580,7 +580,7 @@ fn present_patch(
         }
     }
     if changed {
-        draw.rewrite_part(b.handle, b.at, b.index, at as u32 * 4);
+        draw.rewrite_part(b.handle, b.at, b.idx, at as u32 * 4);
     }
 }
 

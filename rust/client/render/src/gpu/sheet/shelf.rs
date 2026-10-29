@@ -160,7 +160,7 @@ pub struct Flush {
 
 #[derive(Default)]
 pub struct Sheet {
-    size: u32,
+    sz: u32,
 
     shelves: Shelves,
 
@@ -185,25 +185,25 @@ pub struct Sheet {
 impl Sheet {
     pub fn new() -> Sheet {
         Sheet {
-            size: INITIAL_SZ,
+            sz: INITIAL_SZ,
             ..Default::default()
         }
     }
 
     pub fn u0(&self, slot: u32) -> f64 {
-        (self.x[slot as usize] + PAD) as f64 / self.size as f64
+        (self.x[slot as usize] + PAD) as f64 / self.sz as f64
     }
 
     pub fn v0(&self, slot: u32) -> f64 {
-        (self.y[slot as usize] + PAD) as f64 / self.size as f64
+        (self.y[slot as usize] + PAD) as f64 / self.sz as f64
     }
 
     pub fn u1(&self, slot: u32) -> f64 {
-        (self.x[slot as usize] + PAD + self.cw[slot as usize]) as f64 / self.size as f64
+        (self.x[slot as usize] + PAD + self.cw[slot as usize]) as f64 / self.sz as f64
     }
 
     pub fn v1(&self, slot: u32) -> f64 {
-        (self.y[slot as usize] + PAD + self.ch[slot as usize]) as f64 / self.size as f64
+        (self.y[slot as usize] + PAD + self.ch[slot as usize]) as f64 / self.sz as f64
     }
 
     /// A slot's rectangle in device pixels, the padding included: x, y, w, h.
@@ -271,7 +271,7 @@ impl Sheet {
         self.dirty = SlotSet::default();
         Flush {
             whole,
-            sz: self.size,
+            sz: self.sz,
             generation: self.generation,
         }
     }
@@ -312,7 +312,7 @@ impl Sheet {
     }
 
     fn place(&mut self, w: u32, h: u32) -> i32 {
-        let Some((x, y)) = self.shelves.fit(w, h, self.size) else {
+        let Some((x, y)) = self.shelves.fit(w, h, self.sz) else {
             return NO_SLOT;
         };
         let slot = self.unused_slot();
@@ -334,8 +334,8 @@ impl Sheet {
     /// dense view grew stays that large, canvas and texture, for a dozen stickers.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
-        while self.size > INITIAL_SZ {
-            let target = self.size / 2;
+        while self.sz > INITIAL_SZ {
+            let target = self.sz / 2;
             if self.used_px > (target * target) / 2 {
                 break;
             }
@@ -351,20 +351,20 @@ impl Sheet {
 
     /// Slots keep their indices; only their rectangles move.
     fn grow(&mut self) -> bool {
-        if self.size >= MAX_SZ {
+        if self.sz >= MAX_SZ {
             return false;
         }
         let (slots, ws, hs) = self.live_slots();
         // Everything fit at half the size, so this fits by construction.
-        let Some(plan) = pack(self.size * 2, &ws, &hs) else {
+        let Some(plan) = pack(self.sz * 2, &ws, &hs) else {
             return false;
         };
-        self.rebuild(self.size * 2, &slots, plan);
+        self.rebuild(self.sz * 2, &slots, plan);
         true
     }
 
     fn rebuild(&mut self, sz: u32, slots: &[usize], plan: Plan) {
-        self.size = sz;
+        self.sz = sz;
         self.shelves = plan.shelves;
         for st in self.state.iter_mut() {
             if *st == FREE {

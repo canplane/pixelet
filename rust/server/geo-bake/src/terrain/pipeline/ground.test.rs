@@ -99,7 +99,7 @@ fn src_rank_per_tile() {
 
 #[test]
 fn ground_row_order_free() {
-    let mut features = vec![
+    let mut feats = vec![
         area(
             [10.0, 10.0, 30.0, 30.0],
             400.0,
@@ -132,8 +132,8 @@ fn ground_row_order_free() {
         way(70.0, 4.0, ground::residential_road, "south"),
         way(71.0, 4.0, ground::secondary, "north"),
     ];
-    let bake = |feats: &[Feature]| bake_ground(feats, &Coast::Land).cells.into_owned();
-    let forward = bake(&features);
-    features.reverse();
-    assert_eq!(bake(&features), forward);
+    let bake = |fs: &[Feature]| bake_ground(fs, &Coast::Land).cells.into_owned();
+    let forward = bake(&feats);
+    feats.reverse();
+    assert_eq!(bake(&feats), forward);
 }

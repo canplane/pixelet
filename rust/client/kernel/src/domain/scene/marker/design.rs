@@ -121,7 +121,7 @@ pub fn sz(design: &Design) -> Option<[f64; 3]> {
             laid.iter().map(|&(l, _)| l.trim().to_owned()).collect(),
         ))
     };
-    let (size, lines) = match design {
+    let (sz, lines) = match design {
         Design::Pill { words, .. } => (pill_sz(text_width(PILL_FONT, words)?.ceil()), Vec::new()),
         Design::Point {
             name: None, icon, ..
@@ -143,12 +143,12 @@ pub fn sz(design: &Design) -> Option<[f64; 3]> {
     stickers().insert(
         design.clone(),
         Sticker {
-            sz: size,
+            sz,
             lines,
             slot: NO_SLOT,
         },
     );
-    Some(size)
+    Some(sz)
 }
 
 /// Whether the design is laid out and painted, so drawing it shows its

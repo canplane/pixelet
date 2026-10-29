@@ -32,13 +32,13 @@ fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a s
             let name = e
                 .str_at("name")
                 .ok_or(format!("{CUBE_JSON}: {what}: an entry with no name"))?;
-            let value = e
+            let val = e
                 .get("val")
                 .and_then(Node::num)
                 .ok_or(format!("{CUBE_JSON}: {name} has no value"))? as u32;
             Ok(Ok(Entry {
                 name,
-                val: value,
+                val,
                 transport: matches!(e.get("transport"), Some(Node::Bool(true))),
                 doc: e.lines_at("$doc"),
             }))
@@ -807,7 +807,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
 
     struct Row {
         name: String,
-        value: String,
+        val: String,
         doc: Vec<String>,
         seed: String,
         counts: [Vec<u32>; 2],
@@ -867,17 +867,14 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
                 .filter(|s| s.len() == 3)
                 .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
             match (v.str_at("model"), v.str_at("skin"), sz.flatten()) {
-                (Some(_), Some(_), Some(size))
-                    if size
+                (Some(_), Some(_), Some(sz))
+                    if sz
                         .iter()
                         .all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) =>
                 {
                     sizes.push(format!(
                         "[{}]",
-                        size.iter()
-                            .map(|&n| js_num(n))
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        sz.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")
                     ));
                     models.push(format!(
                         "Variant {{ model: {SLOT}({slot}), skin: {SLOT}({}) }}",
@@ -898,7 +895,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             .ok_or(at("val"))?;
         rows.push(Row {
             name: name.clone(),
-            value: val,
+            val,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
             counts: shares
@@ -990,7 +987,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         sizes.resize(variants_max, "[0, 0, 0]".into());
         portable.extend([
             "    Decor {".to_string(),
-            format!("        val: {},", r.value),
+            format!("        val: {},", r.val),
             format!("        seed: {},", r.seed),
             format!(
                 "        counts: [{}],",

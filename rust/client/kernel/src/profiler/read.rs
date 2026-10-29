@@ -239,12 +239,12 @@ fn view() -> ViewSection {
     // What the pointer meets, exactly, at the zooms the eye asks, whatever
     // the tool could strike there, and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
-        let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
+        let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
         let pose = crate::domain::view::frame::pose::view();
-        crate::domain::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut direction);
+        crate::domain::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut dir);
         let ray = crate::domain::query::Ray {
             origin,
-            dir: direction,
+            dir,
             reach: crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0),
         };
         let detail = crate::domain::query::by_dist();

@@ -177,7 +177,7 @@ pub(super) struct CastBuffers {
     /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
     /// visible sample at each pixel the pixels read (`cast_cs`), over a group
     /// of their own (`px_group`): the eye, the rays, the beam's words, the
-    /// pyramid and the visibility buffer (`pixel_bound`), made again exactly
+    /// pyramid and the visibility buffer (`px_bound`), made again exactly
     /// when one of them is another.
     raster: Raster,
     px_group: u32,
@@ -278,7 +278,7 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_SUN_REACH, &compute::SUN_REACH_GROUP);
         let raster = Raster::new(g, pipelines);
         let tally = Tally::new(g);
-        let buffer = |sz: u32, usage: u32| g.buf(sz, usage);
+        let buf = |sz: u32, usage: u32| g.buf(sz, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
             built,
@@ -287,17 +287,17 @@ impl RaysPass {
             sample_built,
             beams: 0,
             // Never written: a buffer is made zeroed.
-            eye_head: buffer(word_bytes(sun::MOVED_WORDS), buffer_usage::UNIFORM),
+            eye_head: buf(word_bytes(sun::MOVED_WORDS), buffer_usage::UNIFORM),
             grid: beam::Grid::of_words([0.0; 2], [0; eye::GRID_WORDS]),
             beam_room: 0,
             miss_built,
             miss_list_built,
-            marks: buffer(
+            marks: buf(
                 word_bytes(ray::MISS_ARGS_WORDS),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             forget_built,
-            seen: buffer(
+            seen: buf(
                 word_bytes(observed::WORDS as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
@@ -320,19 +320,19 @@ impl RaysPass {
             sun_reach_built,
             sun_groups: [0; 7],
             sun_bound: [0; 12],
-            sun_none: buffer(word_bytes(2 * scatter::drawn::REGIONS as usize), storage),
+            sun_none: buf(word_bytes(2 * scatter::drawn::REGIONS as usize), storage),
             sun_number: 0,
             sun_epoch: 0,
             sun_ready: false,
             sun_list: sun_list(g, false),
             sun_list_whole: false,
-            sun_misses: buffer(
+            sun_misses: buf(
                 word_bytes(ray::MISS_ARGS_WORDS),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
             sun_content: Read::default(),
             sun_receivers: Read::default(),
-            sun_moved: buffer(
+            sun_moved: buf(
                 word_bytes(sun::MOVED_WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
@@ -341,11 +341,11 @@ impl RaysPass {
             refold: false,
             group: 0,
             bound: [0; 11],
-            eye: buffer(
+            eye: buf(
                 word_bytes(eye::WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            window: buffer(
+            window: buf(
                 word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
@@ -472,14 +472,14 @@ impl RaysPass {
             if c.beams != 0 {
                 release(c.beams);
             }
-            let size = word_bytes(need as usize);
+            let sz = word_bytes(need as usize);
             xpute_kit::ensure!(
-                crate::frame::shader::floor::fits(size as u64, true),
+                crate::frame::shader::floor::fits(sz as u64, true),
                 ENOTRECOVERABLE,
                 need
             );
             (c.beams, c.beam_room) = (
-                g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
+                g.buf(sz, buffer_usage::STORAGE | buffer_usage::COPY_DST),
                 need,
             );
         }
@@ -788,11 +788,11 @@ impl RaysPass {
                 [c.eye, c.beams, c.eye_head],
                 [c.window, ground, c.shards, c.overwrites, pool],
             );
-            let pixel_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.visibility_array];
-            if pixel_bound != c.px_bound {
+            let px_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.visibility_array];
+            if px_bound != c.px_bound {
                 release(c.px_group);
-                c.px_group = px_group(g, &c.built, pixel_bound, c.marks);
-                c.px_bound = pixel_bound;
+                c.px_group = px_group(g, &c.built, px_bound, c.marks);
+                c.px_bound = px_bound;
             }
         }
         let [drawing, regions, instances] = c

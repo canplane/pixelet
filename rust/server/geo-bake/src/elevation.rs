@@ -386,10 +386,10 @@ impl RasterTile {
             })
         };
         let nodata = (band & HAS_NODATA != 0).then(|| f32_at(62)).flatten();
-        let values = (0..px)
+        let vals = (0..px)
             .map(|i| f32_at(66 + 4 * i).map(|v| if Some(v) == nodata { f32::NAN } else { v }))
             .collect::<Option<Vec<f32>>>()?;
-        Some(RasterTile { vals: values })
+        Some(RasterTile { vals })
     }
 
     fn at(&self, i: usize) -> Option<f32> {
@@ -462,7 +462,7 @@ struct Source<'a> {
 }
 
 impl Source<'_> {
-    fn pixel(&self, x: i64, y: i64) -> Option<f64> {
+    fn px(&self, x: i64, y: i64) -> Option<f64> {
         self.mosaic[y as usize * self.w + x as usize].map(f64::from)
     }
 
@@ -478,7 +478,7 @@ impl Source<'_> {
         }
         let cx = ((px + 1e-10) as i64 - x.off).min(x.sz - 1);
         let cy = ((py + 1e-10) as i64 - y.off).min(y.sz - 1);
-        self.pixel(cx + x.off, cy + y.off)?;
+        self.px(cx + x.off, cy + y.off)?;
 
         let (sx, sy) = (px - x.off as f64, py - y.off as f64);
         let ix = (sx - 0.5).floor() as i64;
@@ -505,7 +505,7 @@ impl Source<'_> {
             let wy = weight(j as f64 - fy, y);
             let (mut row_val, mut row_total) = (0.0, 0.0);
             for i in i0..=i1 {
-                let Some(v) = self.pixel(ix + i + x.off, iy + j + y.off) else {
+                let Some(v) = self.px(ix + i + x.off, iy + j + y.off) else {
                     continue;
                 };
                 let wx = weight(i as f64 - fx, x);

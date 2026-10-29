@@ -56,7 +56,7 @@ pub struct Model {
     bytes: u32,
     handle: u32,
     vertex_cnt: u32,
-    index_cnt: u32,
+    idx_cnt: u32,
     parent: Vec<i32>,
     /// A joint's rest pose: translation (3), rotation (4, xyzw), scale (3).
     rest: Vec<[f32; 10]>,
@@ -228,7 +228,7 @@ impl Models {
             bytes,
             handle: 0,
             vertex_cnt,
-            index_cnt: idx_cnt,
+            idx_cnt,
             parent: vec![-1; j],
             rest: vec![[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]; j],
             root_pre: vec![
@@ -298,7 +298,7 @@ impl Models {
         path: u8,
         step: bool,
         times: &[f32],
-        values: &[f32],
+        vals: &[f32],
     ) {
         let Some(m) = self.models.get_mut(model as usize) else {
             return;
@@ -307,14 +307,14 @@ impl Models {
             return;
         };
         let width = width(path);
-        let values = values[..times.len() * width].to_vec();
+        let vals = vals[..times.len() * width].to_vec();
         let times = times.to_vec();
         c.channels.push(Channel {
             joint,
             path,
             step,
             times,
-            vals: values,
+            vals,
         });
     }
 
@@ -325,7 +325,7 @@ impl Models {
             return;
         };
         m.scale = scale;
-        m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
+        m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.idx_cnt);
         let positions =
             core::slice::from_raw_parts(mem::at::<f32>(m.at), m.vertex_cnt as usize * 3);
         m.radius = positions
@@ -368,7 +368,7 @@ impl Models {
             at: m.at,
             handle: m.handle,
             vertex_cnt: m.vertex_cnt,
-            idx_cnt: m.index_cnt,
+            idx_cnt: m.idx_cnt,
             radius: m.radius,
             scale: m.scale,
         })

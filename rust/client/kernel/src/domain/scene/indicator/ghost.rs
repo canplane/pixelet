@@ -86,7 +86,7 @@ impl GhostDraw {
         draw: &mut DrawList,
         GhostBox {
             at,
-            sz: size,
+            sz,
             cube,
             erase,
         }: GhostBox,
@@ -105,7 +105,7 @@ impl GhostDraw {
         ));
         let off = on_whole_units(at).1;
         let shape = Shape::Box {
-            sz_bits: size.to_bits(),
+            sz_bits: sz.to_bits(),
             off_bits: off.map(f64::to_bits),
             rgb,
             layer,
@@ -115,7 +115,7 @@ impl GhostDraw {
             return moved;
         }
         let mut m = [0; BOX_WORDS as usize];
-        self.z_step = write_lone_box(&mut m, off, size, rgb, layer);
+        self.z_step = write_lone_box(&mut m, off, sz, rgb, layer);
         self.write(draw, shape, bytes(&m));
         true
     }
@@ -175,12 +175,10 @@ impl GhostDraw {
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(shape) = self.shape else { return };
         match shape {
-            Shape::Box {
-                sz_bits: size_bits, ..
-            } => {
+            Shape::Box { sz_bits, .. } => {
                 let t = DrawList::translation(on_whole_units(self.at).0, eye);
                 // Written in a cell of its own size (write_lone_box).
-                let unit = f64::from_bits(size_bits) as f32;
+                let unit = f64::from_bits(sz_bits) as f32;
                 draw.draw_in(
                     PIPELINE_GHOST_BOX,
                     self.held.handle,

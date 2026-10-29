@@ -148,7 +148,7 @@ pub struct DrawUniforms {
     bytes: u32,
     /// `bytes` rounded up to the device's offset alignment.
     stride: u32,
-    buffer: u32,
+    buf: u32,
     cap: u32,
     group: u32,
     scratch: Scratch,
@@ -171,7 +171,7 @@ impl DrawUniforms {
         DrawUniforms {
             bytes,
             stride: bytes.next_multiple_of(align),
-            buffer: 0,
+            buf: 0,
             cap: 0,
             group: 0,
             scratch: Scratch::default(),
@@ -200,9 +200,9 @@ impl DrawUniforms {
         }
         if need > self.cap {
             release(self.group);
-            release(self.buffer);
-            self.buffer = g.buf(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            self.group = g.bind_group(layout, &[buf_range_entry(0, self.buffer, 0, self.bytes)]);
+            release(self.buf);
+            self.buf = g.buf(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            self.group = g.bind_group(layout, &[buf_range_entry(0, self.buf, 0, self.bytes)]);
             self.cap = need;
         }
         let stride = self.stride as usize;
@@ -210,7 +210,7 @@ impl DrawUniforms {
         for (k, draw) in draws.take(cnt as usize).enumerate() {
             put(&mut buf[k * stride..(k + 1) * stride], draw);
         }
-        g.write_buf(self.buffer, 0, buf);
+        g.write_buf(self.buf, 0, buf);
     }
 
     pub fn slots(&self) -> Option<Slots> {
@@ -222,7 +222,7 @@ impl DrawUniforms {
 
     pub fn release(&mut self) {
         release(self.group);
-        release(self.buffer);
+        release(self.buf);
         self.scratch.free();
     }
 }

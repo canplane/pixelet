@@ -385,11 +385,11 @@ impl RaysPass {
         let families = ground.pool.min(way::tree::POOL_FAMILIES);
         let scratch_families = ground.scratch.clamp(1, way::tree::BRICK_FAMILIES);
         let gb = self.ground.get_or_insert_with(|| {
-            let buffer = |sz: u32, usage: u32| g.buf(sz, usage);
+            let buf = |sz: u32, usage: u32| g.buf(sz, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            let frames_buf = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
-            let fresh = buffer(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
-            let looks = buffer(LOOKS_BYTES as u32, storage);
+            let frames_buf = buf(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
+            let fresh = buf(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
+            let looks = buf(LOOKS_BYTES as u32, storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP);
             let heights_group = g.bind_group(
                 heights_built.layouts[0],
@@ -400,7 +400,7 @@ impl RaysPass {
                 ],
             );
             // Each slot's number in it, written once: `bound_cs`'s level.
-            let slots = buffer(
+            let slots = buf(
                 (LEVELS + 1) * SLOT_STRIDE,
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
@@ -425,7 +425,7 @@ impl RaysPass {
                 asked: [CellsBack::default(); SLOTS as usize],
                 handed: [[0; FRESH_WORDS as usize]; HANDED as usize],
                 reads: core::array::from_fn(|_| {
-                    buffer(
+                    buf(
                         BACK_WORDS * 4,
                         buffer_usage::MAP_READ | buffer_usage::COPY_DST,
                     )

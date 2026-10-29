@@ -474,32 +474,32 @@ pub struct Renderer {
 impl Renderer {
     fn new(g: &Gpu, device: Device) -> Renderer {
         let mut pipelines = Pipelines::new();
-        let frame_buffer = g.buf(
+        let frame_buf = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
-        let sky_buffer = g.buf(
+        let sky_buf = g.buf(
             word_bytes(SKY_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
-        let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
-        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer, sky_buffer);
+        let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buf);
+        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buf, sky_buf);
         let air = atmosphere.entries();
-        let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
-        let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
+        let stars = StarPass::new(g, &mut pipelines, frame_buf, air);
+        let clouds = CloudPass::new(g, &mut pipelines, frame_buf, air);
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let pack = Pack::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, WORLD_COLOR);
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
         let mut sky_entries = vec![
-            buf_entry(0, frame_buffer),
-            buf_entry(19, sky_buffer),
+            buf_entry(0, frame_buf),
+            buf_entry(19, sky_buf),
             view_entry(2, moon.view),
             sampler_entry(3, moon.sampler),
         ];
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
-        let draws_buffer = g.buf(
+        let draws_buf = g.buf(
             DRAWS_INITIAL * 4,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
@@ -507,7 +507,7 @@ impl Renderer {
         let models = FrameGroups::new(
             g,
             frame_layout(g, &mut pipelines),
-            frame_buffer,
+            frame_buf,
             shadow.entries(1),
             [ao.blank_entry(MAP_BINDING); 2],
             air,
@@ -522,11 +522,11 @@ impl Renderer {
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
-            puck: PuckPass::new(g, &mut pipelines, frame_buffer, air, device.align),
-            marker: MarkerPass::new(g, &mut pipelines, frame_buffer, device.align),
+            puck: PuckPass::new(g, &mut pipelines, frame_buf, air, device.align),
+            marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
-            debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer, device.align),
+            debug: DebugPass::new(g, &mut pipelines, frame_buf, sky_buf, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
@@ -535,13 +535,13 @@ impl Renderer {
             clear: pipelines.build(g, PIPELINE_SCREEN_CLEAR, WORLD_COLOR),
             ao_read: Read::default(),
             pipelines,
-            frame_buf: frame_buffer,
+            frame_buf,
             frame: [0.0; FRAME_FLOATS],
-            sky_buf: sky_buffer,
+            sky_buf,
             sky: [0.0; SKY_FLOATS],
             sky_built,
             sky_group,
-            draws_buf: draws_buffer,
+            draws_buf,
             draws_bytes: DRAWS_INITIAL * 4,
             bind_group: 0,
             models,
@@ -703,20 +703,20 @@ impl Renderer {
         let mut bound = 0;
         for d in draws.of(PIPELINE_GHOST_BOX) {
             let (handle, box_cnt, first_box, uniform) = (d[0], d[1], d[2], d[3]);
-            let buf = b.get(handle).map(|(buffer, ..)| buffer);
+            let buf = b.get(handle).map(|(buf, ..)| buf);
             // A missing buffer is a fault in the list: skipped, it would draw
             // nothing with every gauge reading normal.
-            let Some(buffer) = buf else {
+            let Some(buf) = buf else {
                 xpute_kit::bug!(ENOTRECOVERABLE, handle)
             };
             if bound == 0 {
                 g.set_pipeline(pass, self.ghost.pipeline);
                 g.set_bind_group(pass, 0, self.bind_group, &[]);
             }
-            if buffer != bound {
-                g.set_vertex_buf(pass, 0, buffer, 0, 0);
-                g.set_vertex_buf(pass, 1, buffer, 0, 0);
-                bound = buffer;
+            if buf != bound {
+                g.set_vertex_buf(pass, 0, buf, 0, 0);
+                g.set_vertex_buf(pass, 1, buf, 0, 0);
+                bound = buf;
             }
             g.draw(
                 pass,

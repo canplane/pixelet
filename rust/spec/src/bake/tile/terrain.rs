@@ -152,9 +152,9 @@ pub fn brick_lines(
     scratch.sort_unstable();
     let mut first = 0;
     for b in 0..WAYS_BINS {
-        let count = scratch[first..].iter().take_while(|e| e.0 == b).count();
-        out[(HEADER_WORDS + b) as usize] = first as u32 | (count as u32) << 16;
-        first += count;
+        let n = scratch[first..].iter().take_while(|e| e.0 == b).count();
+        out[(HEADER_WORDS + b) as usize] = first as u32 | (n as u32) << 16;
+        first += n;
     }
     for (k, pair) in scratch.chunks(2).enumerate() {
         let at = |j: usize| pair.get(j).map_or(0, |e| e.1);

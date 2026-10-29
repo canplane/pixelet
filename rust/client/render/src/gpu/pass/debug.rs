@@ -91,8 +91,8 @@ impl DebugPass {
         let sets = || {
             draws.of(PIPELINE_DEBUG).enumerate().filter_map(|(k, d)| {
                 let slots = slots?;
-                let (buffer, _, _) = uploads.get(d[0])?;
-                (d[1] > 0).then_some((k, d, buffer, d[1], d[2], slots))
+                let (buf, _, _) = uploads.get(d[0])?;
+                (d[1] > 0).then_some((k, d, buf, d[1], d[2], slots))
             })
         };
         // With no faces the lines' pass clears the depth itself.
@@ -104,13 +104,13 @@ impl DebugPass {
             );
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buffer, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
+            for (k, _, buf, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
                 let (group, off) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[off]);
                 g.set_vertex_buf(
                     pass,
                     0,
-                    buffer,
+                    buf,
                     lines * DEBUG_VERTEX_BYTES,
                     faces * DEBUG_FACE_VERTEX_BYTES,
                 );
@@ -137,8 +137,8 @@ impl DebugPass {
             g.set_pipeline(pass, self.built.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, buf, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
-                let (group, offset) = slots.at(k as u32);
-                g.set_bind_group(pass, 1, group, &[offset]);
+                let (group, off) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[off]);
                 g.set_vertex_buf(pass, 0, buf, 0, lines * DEBUG_VERTEX_BYTES);
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);

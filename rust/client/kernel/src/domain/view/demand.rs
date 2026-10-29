@@ -372,7 +372,7 @@ impl<L: Observed> Demand<L> {
     /// tiles a reader that takes no coarser answer declares (`Base::PINNED`),
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
-    pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile]) {
+    pub fn step(&mut self, dst: Option<Tile>, pinned: &[Tile]) {
         let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation {
@@ -381,16 +381,13 @@ impl<L: Observed> Demand<L> {
             },
             None => o,
         });
-        if o.is_none() && destination.is_none() && pinned.is_empty() {
+        if o.is_none() && dst.is_none() && pinned.is_empty() {
             return;
         }
         self.idled = None;
-        let now = Seen {
-            o,
-            dst: destination,
-        };
+        let now = Seen { o, dst };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
-            let line = destination
+            let line = dst
                 .into_iter()
                 .flat_map(|p| {
                     std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent()))

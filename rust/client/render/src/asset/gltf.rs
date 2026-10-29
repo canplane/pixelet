@@ -263,7 +263,7 @@ impl<'a> AccessorFields<'a> {
 #[derive(Clone, Copy)]
 struct ViewFields<'a> {
     buf: Option<JsonValue<'a>>,
-    offset: Option<JsonValue<'a>>,
+    off: Option<JsonValue<'a>>,
     length: Option<JsonValue<'a>>,
     stride: Option<JsonValue<'a>>,
 }
@@ -272,7 +272,7 @@ impl<'a> ViewFields<'a> {
     fn of(v: JsonValue<'a>) -> Self {
         ViewFields {
             buf: v.get("buffer"),
-            offset: v.get("byteOffset"),
+            off: v.get("byteOffset"),
             length: v.get("byteLength"),
             stride: v.get("byteStride"),
         }
@@ -333,8 +333,8 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
             return Err(malformed());
         }
         let width = type_sz(kind).ok_or_else(malformed)?;
-        let count = idx_in(a.cnt, usize::MAX)?;
-        let len = count.checked_mul(width).ok_or_else(malformed)?;
+        let cnt = idx_in(a.cnt, usize::MAX)?;
+        let len = cnt.checked_mul(width).ok_or_else(malformed)?;
         self.spend(len)?;
         let mut out = vec![T::default(); len];
         // An accessor with no view is all zeros.
@@ -342,15 +342,15 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
             return Ok(out);
         };
         let bv = self.views[bv_idx];
-        let buffer = self.bufs[idx_in(bv.buf, self.bufs.len())?];
-        let view_off = sz(bv.offset, 0)?;
+        let buf = self.bufs[idx_in(bv.buf, self.bufs.len())?];
+        let view_off = sz(bv.off, 0)?;
         let view_length = idx_in(bv.length, usize::MAX)?;
         let view = view_off
             .checked_add(view_length)
-            .and_then(|end| buffer.get(view_off..end))
+            .and_then(|end| buf.get(view_off..end))
             .ok_or_else(malformed)?;
-        let component_type = idx_in(a.comp_type, usize::MAX)?;
-        let comp = comp_sz(component_type).ok_or_else(malformed)?;
+        let comp_type = idx_in(a.comp_type, usize::MAX)?;
+        let comp = comp_sz(comp_type).ok_or_else(malformed)?;
         let element = comp * width;
         let stride = sz(bv.stride, element)?;
         if stride < element {
@@ -358,7 +358,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         }
         let base = sz(a.off, 0)?;
         // The last element ends within the view, so no read below leaves it.
-        if let Some(last) = count.checked_sub(1) {
+        if let Some(last) = cnt.checked_sub(1) {
             let end = last
                 .checked_mul(stride)
                 .and_then(|at| at.checked_add(base))
@@ -368,13 +368,13 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
             }
         }
         let norm = a.normalized;
-        for e in 0..count {
+        for e in 0..cnt {
             if e > 0 && e % ELEMENTS_PER_PAUSE == 0 {
                 (self.pause)().await;
             }
             for c in 0..width {
                 let at = base + e * stride + c * comp;
-                let v = match component_type {
+                let v = match comp_type {
                     5120 => {
                         let v = view[at] as i8 as f64;
                         if norm {
@@ -429,10 +429,10 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         cnt: usize,
         convert: fn(f64) -> T,
     ) -> Result<Option<Vec<T>>, MarshalError> {
-        let Some(index) = idx else {
+        let Some(idx) = idx else {
             return Ok(None);
         };
-        let vals = self.read(index, kind, convert).await?;
+        let vals = self.read(idx, kind, convert).await?;
         if Some(vals.len()) != type_sz(kind).map(|w| w * cnt) {
             return Err(malformed());
         }
@@ -442,7 +442,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
 
 async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     json: JsonValue<'_>,
-    buffers: &[&[u8]],
+    bufs: &[&[u8]],
     pause: &F,
     budget: usize,
 ) -> Result<Gltf, MarshalError> {
@@ -452,7 +452,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     let r = Reader {
         accessors: arr(json.get("accessors")).map(AccessorFields::of).collect(),
         views: arr(json.get("bufferViews")).map(ViewFields::of).collect(),
-        bufs: buffers,
+        bufs,
         pause,
         budget: Cell::new(budget),
     };
@@ -469,16 +469,16 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
             let Some(pos_at) = attr("POSITION")? else {
                 continue;
             };
-            let position = r.f32s(pos_at, "VEC3").await?;
-            let cnt = position.len() / 3;
-            let index = match idx_of(p.get("indices"), r.accessors.len())? {
+            let pos = r.f32s(pos_at, "VEC3").await?;
+            let cnt = pos.len() / 3;
+            let idx = match idx_of(p.get("indices"), r.accessors.len())? {
                 Some(i) => r.read(i, "SCALAR", |v| v as u32).await?,
                 None => {
                     r.spend(cnt)?;
                     (0..u32::try_from(cnt).map_err(|_| malformed())?).collect()
                 }
             };
-            for (k, slice) in index.chunks(ELEMENTS_PER_PAUSE).enumerate() {
+            for (k, slice) in idx.chunks(ELEMENTS_PER_PAUSE).enumerate() {
                 if k > 0 {
                     pause().await;
                 }
@@ -499,8 +499,8 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                 weights: r
                     .attribute(attr("WEIGHTS_0")?, "VEC4", cnt, |v| v as f32)
                     .await?,
-                pos: position,
-                idx: index,
+                pos,
+                idx,
                 material: num(p.get("material")).map_or(-1, |v| v as i32),
             });
         }
@@ -625,22 +625,22 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
             let mut times = r
                 .f32s(idx_in(sampler.input, r.accessors.len())?, "SCALAR")
                 .await?;
-            let mut values = r
+            let mut vals = r
                 .f32s(idx_in(sampler.output, r.accessors.len())?, kind)
                 .await?;
             let interpolation = sampler.interpolation;
             if interpolation == "CUBICSPLINE" {
                 // In-tangent, value, out-tangent: keep the value.
-                values = (0..times.len())
-                    .filter_map(|t| values.get(t * width * 3 + width..t * width * 3 + width * 2))
+                vals = (0..times.len())
+                    .filter_map(|t| vals.get(t * width * 3 + width..t * width * 3 + width * 2))
                     .flatten()
                     .copied()
                     .collect();
             }
             // An output shorter than its input is read for the keys it has, not past them.
-            let keys = times.len().min(values.len() / width);
+            let keys = times.len().min(vals.len() / width);
             times.truncate(keys);
-            values.truncate(keys * width);
+            vals.truncate(keys * width);
             if let Some(&last) = times.last() {
                 duration = duration.max(last as f64);
             }
@@ -649,7 +649,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                 path,
                 step: interpolation == "STEP",
                 times,
-                vals: values,
+                vals,
             });
         }
         animations.push(GltfAnimation { duration, channels });

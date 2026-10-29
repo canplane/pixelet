@@ -123,7 +123,7 @@ impl Raster {
         &mut self,
         g: &Gpu,
         e: &[u32],
-        size: [u32; 2],
+        sz: [u32; 2],
         grid: &beam::Grid,
         samples_cast: bool,
         [eye, beams, head]: [u32; 3],
@@ -138,7 +138,7 @@ impl Raster {
             );
             self.room = samples;
         }
-        if size != self.sz {
+        if sz != self.sz {
             for v in [
                 self.visibility_view,
                 self.visibility_array,
@@ -148,14 +148,14 @@ impl Raster {
             ] {
                 release(v);
             }
-            let [w, h] = size;
+            let [w, h] = sz;
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
             self.visibility = g.texture(w, h, 1, Format::r32uint, 1, usage);
             self.visibility_view = g.view(self.visibility, false, 0, 1, 0, 1);
             self.visibility_array = g.view(self.visibility, true, 0, 1, 0, 1);
             self.depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
-            self.sz = size;
+            self.sz = sz;
         }
         // The cast's view (pxl-shader cast.rs `pixel_tan`): its axes, the
         // screen's half-angles, the near plane, the angle a face grows by,
@@ -164,7 +164,7 @@ impl Raster {
         let v = |at: usize| [e[at], e[at + 1], e[at + 2]].map(f32::from_bits);
         let (r, u, f) = (v(eye::RIGHT), v(eye::UP), v(eye::FORWARD));
         let tan = [e[eye::TAN], e[eye::TAN + 1]].map(f32::from_bits);
-        let [w, h] = size.map(|s| s.max(1) as f32);
+        let [w, h] = sz.map(|s| s.max(1) as f32);
         let reach = f32::from_bits(e[eye::REACH]);
         let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
         let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));

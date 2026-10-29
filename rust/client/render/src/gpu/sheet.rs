@@ -333,12 +333,12 @@ impl SheetPainter {
         // the icons' pixels, the size and the shapes, as their writers measure them.
         let sz_bytes = [w as f32, h as f32, 0.0, 0.0];
         let instance_bytes = bytes(shapes.as_flattened());
-        let pixels = rasters
+        let px = rasters
             .iter()
             .map(|r| r.px)
             .chain(icons.iter().map(Vec::as_slice));
         if !room(
-            pixels.map(write_texture_bytes).sum::<usize>()
+            px.map(write_texture_bytes).sum::<usize>()
                 + write_buffer_bytes(bytes(&sz_bytes))
                 + write_buffer_bytes(instance_bytes),
         ) {
@@ -355,14 +355,8 @@ impl SheetPainter {
         for (layer, r) in rasters.iter().enumerate() {
             g.write_texture(lines, layer as u32, r.width, r.height, r.px);
         }
-        for (k, pixels) in icons.iter().enumerate() {
-            g.write_texture(
-                lines,
-                (rasters.len() + k) as u32,
-                SYMBOL_PX,
-                SYMBOL_PX,
-                pixels,
-            );
+        for (k, px) in icons.iter().enumerate() {
+            g.write_texture(lines, (rasters.len() + k) as u32, SYMBOL_PX, SYMBOL_PX, px);
         }
         let lines_view = g.view(lines, true, 0, 1, 0, layers);
 
