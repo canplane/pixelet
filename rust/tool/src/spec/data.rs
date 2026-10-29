@@ -532,8 +532,8 @@ fn rs_enum(name: &str, variants: &[(String, String)], indent: &str, out: &mut Ve
         String::new(),
         format!("{indent}    /// The member a number names, or none for a number the set does not"),
         format!("{indent}    /// give out."),
-        format!("{indent}    pub fn of(value: u8) -> Option<{e}> {{"),
-        format!("{indent}        {e}::ALL.into_iter().find(|member| *member as u8 == value)"),
+        format!("{indent}    pub fn of(val: u8) -> Option<{e}> {{"),
+        format!("{indent}        {e}::ALL.into_iter().find(|member| *member as u8 == val)"),
         format!("{indent}    }}"),
         format!("{indent}}}"),
     ]);

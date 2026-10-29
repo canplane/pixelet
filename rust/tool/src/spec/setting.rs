@@ -321,19 +321,19 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             })
             .collect::<Result<_, _>>()?;
         dev_arms.push(format!(
-            "            SettingKey::{} => matches!(value, {}),",
+            "            SettingKey::{} => matches!(val, {}),",
             s.key,
             dev.join(" | ")
         ));
     }
     if dev_arms.is_empty() {
         rs.extend([
-            "    pub fn dev_option(self, _value: u32) -> bool {".to_string(),
+            "    pub fn dev_option(self, _val: u32) -> bool {".to_string(),
             "        false".into(),
         ]);
     } else {
         rs.extend([
-            "    pub fn dev_option(self, value: u32) -> bool {".to_string(),
+            "    pub fn dev_option(self, val: u32) -> bool {".to_string(),
             "        match self {".into(),
         ]);
         rs.extend(dev_arms);
@@ -430,7 +430,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "",
             "    /// Sets a setting from its value as it crosses; false, and nothing set,",
             "    /// for a value the setting cannot hold.",
-            "    pub fn set(&mut self, key: SettingKey, value: u32) -> bool {",
+            "    pub fn set(&mut self, key: SettingKey, val: u32) -> bool {",
             "        match key {",
         ]
         .map(String::from),
@@ -438,13 +438,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     for s in &settings {
         let k = s.key;
         rs.push(match s.kind() {
-            "toggle" => format!("            SettingKey::{k} if value <= 1 => self.{k} = value == 1,"),
+            "toggle" => format!("            SettingKey::{k} if val <= 1 => self.{k} = val == 1,"),
             "choice" => format!(
-                "            SettingKey::{k} => match {}::of(value) {{ Some(o) => self.{k} = o, None => return false }},",
+                "            SettingKey::{k} => match {}::of(val) {{ Some(o) => self.{k} = o, None => return false }},",
                 enum_name(s.options().unwrap_or_default())
             ),
             _ => format!(
-                "            SettingKey::{k} => match {}::try_from(value) {{ Ok(n) => self.{k} = n, Err(_) => return false }},",
+                "            SettingKey::{k} => match {}::try_from(val) {{ Ok(n) => self.{k} = n, Err(_) => return false }},",
                 field_type(s)?
             ),
         });

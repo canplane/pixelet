@@ -82,7 +82,7 @@ pub enum WorldMinor {
     FRAME = 0x02,
     VISIBILITY = 0x03,
     SNAPSHOT = 0x04,
-    SOURCE = 0x05,
+    SRC = 0x05,
     KEPT_EMPTIED = 0x06,
     VIEW = 0x07,
 }
@@ -93,7 +93,7 @@ impl WorldMinor {
         WorldMinor::FRAME,
         WorldMinor::VISIBILITY,
         WorldMinor::SNAPSHOT,
-        WorldMinor::SOURCE,
+        WorldMinor::SRC,
         WorldMinor::KEPT_EMPTIED,
         WorldMinor::VIEW,
     ];
@@ -155,7 +155,7 @@ impl InputMinor {
 #[repr(u32)]
 pub enum SensorMinor {
     START = 0x01,
-    POSITION = 0x02,
+    POS = 0x02,
     STOP = 0x03,
     ORIENTATION = 0x05,
     PERMISSION = 0x06,
@@ -165,7 +165,7 @@ pub enum SensorMinor {
 impl SensorMinor {
     pub const ALL: [SensorMinor; 6] = [
         SensorMinor::START,
-        SensorMinor::POSITION,
+        SensorMinor::POS,
         SensorMinor::STOP,
         SensorMinor::ORIENTATION,
         SensorMinor::PERMISSION,

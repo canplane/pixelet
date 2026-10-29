@@ -38,10 +38,10 @@ impl StreamName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<StreamName> {
+    pub fn of(val: u8) -> Option<StreamName> {
         StreamName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -60,10 +60,10 @@ impl OutcomeName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<OutcomeName> {
+    pub fn of(val: u8) -> Option<OutcomeName> {
         OutcomeName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -88,10 +88,10 @@ impl TaskPhaseName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<TaskPhaseName> {
+    pub fn of(val: u8) -> Option<TaskPhaseName> {
         TaskPhaseName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 

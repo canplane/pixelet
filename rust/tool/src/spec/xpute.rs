@@ -94,10 +94,7 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     );
     for e in &spec.entries {
         if let ErrnoEntry::Member(m) = e {
-            rs.push(format!(
-                "            {} => Some(Errno::{}),",
-                m.val, m.name
-            ));
+            rs.push(format!("            {} => Some(Errno::{}),", m.val, m.name));
         }
     }
     rs.extend(["            _ => None,", "        }", "    }", "}", ""].map(String::from));

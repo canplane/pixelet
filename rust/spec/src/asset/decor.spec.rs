@@ -53,8 +53,8 @@ impl DecorId {
 
     /// The decor a number names, or none for a number the catalog does not
     /// give out.
-    pub fn of(value: u16) -> Option<DecorId> {
-        DecorId::ALL.into_iter().find(|t| *t as u16 == value)
+    pub fn of(val: u16) -> Option<DecorId> {
+        DecorId::ALL.into_iter().find(|t| *t as u16 == val)
     }
 }
 

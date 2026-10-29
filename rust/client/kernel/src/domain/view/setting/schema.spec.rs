@@ -361,7 +361,7 @@ impl SettingKey {
     }
 
     /// A choice's option a development build only offers.
-    pub fn dev_option(self, _value: u32) -> bool {
+    pub fn dev_option(self, _val: u32) -> bool {
         false
     }
 }
@@ -451,48 +451,48 @@ impl Settings {
 
     /// Sets a setting from its value as it crosses; false, and nothing set,
     /// for a value the setting cannot hold.
-    pub fn set(&mut self, key: SettingKey, value: u32) -> bool {
+    pub fn set(&mut self, key: SettingKey, val: u32) -> bool {
         match key {
-            SettingKey::textures if value <= 1 => self.textures = value == 1,
-            SettingKey::decor if value <= 1 => self.decor = value == 1,
-            SettingKey::clouds if value <= 1 => self.clouds = value == 1,
-            SettingKey::place if value <= 1 => self.place = value == 1,
-            SettingKey::tilt_lock if value <= 1 => self.tilt_lock = value == 1,
-            SettingKey::camera_mode => match CameraMode::of(value) {
+            SettingKey::textures if val <= 1 => self.textures = val == 1,
+            SettingKey::decor if val <= 1 => self.decor = val == 1,
+            SettingKey::clouds if val <= 1 => self.clouds = val == 1,
+            SettingKey::place if val <= 1 => self.place = val == 1,
+            SettingKey::tilt_lock if val <= 1 => self.tilt_lock = val == 1,
+            SettingKey::camera_mode => match CameraMode::of(val) {
                 Some(o) => self.camera_mode = o,
                 None => return false,
             },
-            SettingKey::surface_follow if value <= 1 => self.surface_follow = value == 1,
-            SettingKey::orbit_obstacle => match OrbitObstacleMode::of(value) {
+            SettingKey::surface_follow if val <= 1 => self.surface_follow = val == 1,
+            SettingKey::orbit_obstacle => match OrbitObstacleMode::of(val) {
                 Some(o) => self.orbit_obstacle = o,
                 None => return false,
             },
-            SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,
-            SettingKey::rim_light if value <= 1 => self.rim_light = value == 1,
-            SettingKey::ao => match AoMode::of(value) {
+            SettingKey::edge_shade if val <= 1 => self.edge_shade = val == 1,
+            SettingKey::rim_light if val <= 1 => self.rim_light = val == 1,
+            SettingKey::ao => match AoMode::of(val) {
                 Some(o) => self.ao = o,
                 None => return false,
             },
-            SettingKey::shadows if value <= 1 => self.shadows = value == 1,
-            SettingKey::res => match ResolutionMode::of(value) {
+            SettingKey::shadows if val <= 1 => self.shadows = val == 1,
+            SettingKey::res => match ResolutionMode::of(val) {
                 Some(o) => self.res = o,
                 None => return false,
             },
-            SettingKey::view if value <= 1 => self.view = value == 1,
-            SettingKey::profiler if value <= 1 => self.profiler = value == 1,
-            SettingKey::world_gizmo if value <= 1 => self.world_gizmo = value == 1,
-            SettingKey::camera_gizmo if value <= 1 => self.camera_gizmo = value == 1,
-            SettingKey::person => match u8::try_from(value) {
+            SettingKey::view if val <= 1 => self.view = val == 1,
+            SettingKey::profiler if val <= 1 => self.profiler = val == 1,
+            SettingKey::world_gizmo if val <= 1 => self.world_gizmo = val == 1,
+            SettingKey::camera_gizmo if val <= 1 => self.camera_gizmo = val == 1,
+            SettingKey::person => match u8::try_from(val) {
                 Ok(n) => self.person = n,
                 Err(_) => return false,
             },
-            SettingKey::pet => match u8::try_from(value) {
+            SettingKey::pet => match u8::try_from(val) {
                 Ok(n) => self.pet = n,
                 Err(_) => return false,
             },
-            SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
-            SettingKey::ray_counts if value <= 1 => self.ray_counts = value == 1,
-            SettingKey::sky_time => match SkyTime::of(value) {
+            SettingKey::ray_steps if val <= 1 => self.ray_steps = val == 1,
+            SettingKey::ray_counts if val <= 1 => self.ray_counts = val == 1,
+            SettingKey::sky_time => match SkyTime::of(val) {
                 Some(o) => self.sky_time = o,
                 None => return false,
             },

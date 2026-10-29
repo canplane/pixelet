@@ -38,8 +38,8 @@ impl Wake {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<Wake> {
-        Wake::ALL.into_iter().find(|member| *member as u8 == value)
+    pub fn of(val: u8) -> Option<Wake> {
+        Wake::ALL.into_iter().find(|member| *member as u8 == val)
     }
 }
 

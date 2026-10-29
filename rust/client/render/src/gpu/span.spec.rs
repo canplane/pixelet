@@ -76,10 +76,10 @@ impl GpuSpanName {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<GpuSpanName> {
+    pub fn of(val: u8) -> Option<GpuSpanName> {
         GpuSpanName::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -114,9 +114,9 @@ impl FrameKind {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<FrameKind> {
+    pub fn of(val: u8) -> Option<FrameKind> {
         FrameKind::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }

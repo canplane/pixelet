@@ -204,10 +204,10 @@ impl BindingKind {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<BindingKind> {
+    pub fn of(val: u8) -> Option<BindingKind> {
         BindingKind::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 
@@ -230,10 +230,10 @@ impl ResourceKind {
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<ResourceKind> {
+    pub fn of(val: u8) -> Option<ResourceKind> {
         ResourceKind::ALL
             .into_iter()
-            .find(|member| *member as u8 == value)
+            .find(|member| *member as u8 == val)
     }
 }
 

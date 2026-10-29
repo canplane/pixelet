@@ -807,10 +807,10 @@ pub fn placed_pose(decor: &Decor, corner: [i32; 3]) -> (u32, u32) {
 }
 
 /// The row of `rows` a stored value names; false for one not decor.
-pub fn row_of(rows: &[Decor], value: u32) -> (u32, bool) {
+pub fn row_of(rows: &[Decor], val: u32) -> (u32, bool) {
     let mut k = 0;
     while k < rows.len() {
-        if rows[k].value == value {
+        if rows[k].val == val {
             return (k as u32, true);
         }
         k += 1;

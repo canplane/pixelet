@@ -379,8 +379,8 @@ impl Ground {
     ];
 
     /// The look a byte names; none for a sentinel or a number the palette does not give out.
-    pub const fn of(value: u8) -> Option<Ground> {
-        match value {
+    pub const fn of(val: u8) -> Option<Ground> {
+        match val {
             1 => Some(Ground::land),
             2 => Some(Ground::bare_ground),
             3 => Some(Ground::sand),
@@ -445,8 +445,8 @@ impl Ground {
 
     /// Whether a look read into a word, as a GPU has it with no byte, is one `of`
     /// names.
-    pub const fn grounds(value: u32) -> bool {
-        matches!(value, 1..=55 | 64..=66)
+    pub const fn grounds(val: u32) -> bool {
+        matches!(val, 1..=55 | 64..=66)
     }
 
     /// A way: decor faces along it and no pier stands on it.
@@ -455,8 +455,8 @@ impl Ground {
     }
 
     /// Whether a look read into a word is a way (`transport`).
-    pub const fn transports(value: u32) -> bool {
-        matches!(value, 37..=55)
+    pub const fn transports(val: u32) -> bool {
+        matches!(val, 37..=55)
     }
 }
 
@@ -500,8 +500,8 @@ impl Object {
         Object::pink,
     ];
 
-    pub const fn of(value: u16) -> Option<Object> {
-        match value {
+    pub const fn of(val: u16) -> Option<Object> {
+        match val {
             257 => Some(Object::white),
             258 => Some(Object::grey),
             259 => Some(Object::dark_grey),
@@ -522,7 +522,7 @@ impl Object {
     }
 
     /// Whether a value read into a word, as a GPU has it, is one `of` names.
-    pub const fn objects(value: u32) -> bool {
-        matches!(value, 257..=271)
+    pub const fn objects(val: u32) -> bool {
+        matches!(val, 257..=271)
     }
 }

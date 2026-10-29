@@ -116,7 +116,7 @@
           "val": 4
         },
         {
-          "name": "SOURCE",
+          "name": "SRC",
           "val": 5
         },
         {
@@ -210,7 +210,7 @@
           "val": 1
         },
         {
-          "name": "POSITION",
+          "name": "POS",
           "val": 2
         },
         {

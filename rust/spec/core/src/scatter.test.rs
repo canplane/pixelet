@@ -34,7 +34,7 @@ fn patch_contest() {
                             !is_marked(&beaten, i),
                             stands(decor, zoom, c),
                             "decor {} at {zoom}, patch {p}, candidate {i}",
-                            decor.value
+                            decor.val
                         );
                         compared += 1;
                         lost += usize::from(is_marked(&beaten, i));

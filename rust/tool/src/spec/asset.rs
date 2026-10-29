@@ -537,8 +537,8 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        ];".to_string(),
         String::new(),
         "        /// The look a byte names; none for a sentinel or a number the palette does not give out.".into(),
-        "        pub const fn of(value: u8) -> Option<Ground> {".into(),
-        "            match value {".into(),
+        "        pub const fn of(val: u8) -> Option<Ground> {".into(),
+        "            match val {".into(),
     ]);
     rs.extend(
         named(&ground).map(|e| format!("                {} => Some(Ground::{}),", e.val, e.name)),
@@ -552,7 +552,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
             .into(),
         "        /// names.".into(),
         format!(
-            "        pub const fn grounds(value: u32) -> bool {{ matches!(value, {}) }}",
+            "        pub const fn grounds(val: u32) -> bool {{ matches!(val, {}) }}",
             runs(named(&ground).map(|e| e.val)).join(" | ")
         ),
         String::new(),
@@ -561,7 +561,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "        /// Whether a look read into a word is a way (`transport`).".into(),
         format!(
-            "        pub const fn transports(value: u32) -> bool {{ matches!(value, {}) }}",
+            "        pub const fn transports(val: u32) -> bool {{ matches!(val, {}) }}",
             runs(named(&ground).filter(|e| e.transport).map(|e| e.val)).join(" | ")
         ),
     ]);
@@ -593,8 +593,8 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     rs.extend([
         "        ];".to_string(),
         String::new(),
-        "        pub const fn of(value: u16) -> Option<Object> {".into(),
-        "            match value {".into(),
+        "        pub const fn of(val: u16) -> Option<Object> {".into(),
+        "            match val {".into(),
     ]);
     rs.extend(
         colors
@@ -608,7 +608,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "        /// Whether a value read into a word, as a GPU has it, is one `of` names.".into(),
         format!(
-            "        pub const fn objects(value: u32) -> bool {{ matches!(value, {}) }}",
+            "        pub const fn objects(val: u32) -> bool {{ matches!(val, {}) }}",
             runs(colors.iter().map(|e| e.val)).join(" | ")
         ),
         "    }".into(),
@@ -734,8 +734,8 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         [
             "        /// The decor a number names, or none for a number the catalog does not",
             "        /// give out.",
-            "        pub fn of(value: u16) -> Option<DecorId> {",
-            "            DecorId::ALL.into_iter().find(|t| *t as u16 == value)",
+            "        pub fn of(val: u16) -> Option<DecorId> {",
+            "            DecorId::ALL.into_iter().find(|t| *t as u16 == val)",
             "        }",
             "    }",
             "}",
@@ -959,7 +959,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "#[repr(C)]",
             "pub struct Decor {",
             "    /// What a placed one is stored as.",
-            "    pub value: u32,",
+            "    pub val: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground grows.",
             "    pub seed: u32,",
             "    /// A patch's counts, born at the top zoom and born finer.",
@@ -990,7 +990,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         sizes.resize(variants_max, "[0, 0, 0]".into());
         portable.extend([
             "    Decor {".to_string(),
-            format!("        value: {},", r.value),
+            format!("        val: {},", r.value),
             format!("        seed: {},", r.seed),
             format!(
                 "        counts: [{}],",

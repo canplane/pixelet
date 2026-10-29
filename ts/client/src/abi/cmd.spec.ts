@@ -54,7 +54,7 @@ export const enum WorldMinor {
   FRAME = 0x02,
   VISIBILITY = 0x03,
   SNAPSHOT = 0x04,
-  SOURCE = 0x05,
+  SRC = 0x05,
   KEPT_EMPTIED = 0x06,
   VIEW = 0x07,
 }
@@ -81,7 +81,7 @@ export const enum InputMinor {
 /** The device sensors' verbs. */
 export const enum SensorMinor {
   START = 0x01,
-  POSITION = 0x02,
+  POS = 0x02,
   STOP = 0x03,
   ORIENTATION = 0x05,
   PERMISSION = 0x06,
