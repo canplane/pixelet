@@ -1,7 +1,9 @@
 // pxl-geo-bake/demand/cache.test.rs
 
 use super::*;
+use crate::util;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use tokio::time;
 
 fn cache() -> Arc<Cache> {
     static SERIAL: AtomicUsize = AtomicUsize::new(0);
@@ -43,7 +45,7 @@ async fn concurrent_publish_once() {
     }
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert_eq!(
-        crate::util::unpack(&cache.read("tile").await.unwrap().unwrap()).unwrap(),
+        util::unpack(&cache.read("tile").await.unwrap().unwrap()).unwrap(),
         b"packet"
     );
     cache.publish("empty", None).unwrap();
@@ -91,7 +93,7 @@ async fn disconnect_keeps_publication() {
     .await
     .unwrap();
     assert_eq!(
-        crate::util::unpack(&c.read("tile").await.unwrap().unwrap()).unwrap(),
+        util::unpack(&c.read("tile").await.unwrap().unwrap()).unwrap(),
         b"tile"
     );
 }
@@ -150,7 +152,7 @@ async fn expired_work_joinable() {
         let release = release.clone();
         tokio::spawn(async move {
             c.once("tile".into(), true, move |lease| async move {
-                tokio::time::sleep_until(lease.deadline).await;
+                time::sleep_until(lease.deadline).await;
                 cleaning.notify_one();
                 release.notified().await;
                 Err(Failure::Limited("deadline"))

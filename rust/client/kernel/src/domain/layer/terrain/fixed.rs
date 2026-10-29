@@ -16,11 +16,12 @@ use pxl_spec_core::window::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEG
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::mem::fixed::lane_bytes;
+use crate::sys::mem::fixed::Held;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec_core::window::SLOTS;
 
 /// `.fixed.terrain`, handed in at boot.
-pub static RANGE: crate::sys::mem::fixed::Held = crate::sys::mem::fixed::Held::new();
+pub static RANGE: Held = Held::new();
 
 const TILE_SLOTS: u32 = TileCache::<TerrainTile>::SLOTS;
 

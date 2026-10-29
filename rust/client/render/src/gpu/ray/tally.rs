@@ -11,6 +11,7 @@ use pxl_spec_core::{observed, raster, ray, tally};
 use xpute_guest::mem::off_of;
 
 use crate::gpu::api::{buffer_usage, bytes, word_bytes, Gpu, DONE};
+use xpute_guest::global::Global;
 
 const WORDS: usize = tally::WORDS as usize;
 
@@ -64,7 +65,7 @@ pub(super) struct Tally {
 
 /// The sums since boot (`Tally::sums`): beside the tally, so a lost device's
 /// next cast sums on.
-static SUMS: xpute_guest::global::Global<[f64; RAY_SUMS]> = xpute_guest::global::Global::new();
+static SUMS: Global<[f64; RAY_SUMS]> = Global::new();
 
 impl Tally {
     /// Its buffers, made with the cast's: a few words.

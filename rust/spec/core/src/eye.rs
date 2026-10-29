@@ -7,6 +7,9 @@
 //! layout written here alone.
 
 /// The eye's position in Q3 steps, X, Y and Z.
+use crate::beam;
+use crate::overwrite::Cut;
+
 pub const ORIGIN: usize = 0;
 /// Whether each ray reports the nodes its descent asked, not what it met.
 pub const STEPS: usize = 3;
@@ -28,13 +31,13 @@ pub const HIDE: usize = 24;
 pub const CUT_WORDS: usize = 4;
 /// Both cuts, carve then hide, as one run of words.
 pub const CUTS: usize = 2 * CUT_WORDS;
-pub const NO_CUT: u32 = crate::overwrite::Cut::NONE.zoom;
+pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// The camera grid the frame casts on (pxl-spec-core `beam::Grid`, its
 /// `words`), worked out once off the tangents above where the kernel
 /// writes them: every thread of the cast and the renderer's dispatches and
 /// buffer read it here, none works it out again.
 pub const GRID: usize = HIDE + CUT_WORDS;
-pub const GRID_WORDS: usize = crate::beam::GRID_WORDS;
+pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// The sun's cast into the shadow map, its frame's constants off the light
 /// box (pxl-spec-core `sun::Sun`, its `words`): texel (0, 0)'s ray's start
 /// and every ray's reach, the step to the next texel across and down, the

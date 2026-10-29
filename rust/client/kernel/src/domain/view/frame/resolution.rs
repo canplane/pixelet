@@ -34,7 +34,9 @@
 
 use crate::domain::view::param;
 use crate::domain::view::setting::store::{settings_store, ResMode};
+use crate::sys::sched::edge;
 use pxl_render::api_spec::surface_role;
+use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use xpute_guest::global::Global;
 
@@ -230,7 +232,7 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
         k.restart();
     } else if pace.moving && pace.paced_ms > 0.0 && s.render_px() == (s.width, s.height) {
         let drawn = f64::from(s.width) * f64::from(s.height);
-        let timed = pxl_render::gpu::api::device().is_some_and(|d| d.timestamps);
+        let timed = api::device().is_some_and(|d| d.timestamps);
         let spent = if timed {
             gpu.filter(|&(ms, px)| ms > 0.0 && px > 0.0 && px == drawn)
                 .map(|(ms, _)| ms)
@@ -246,7 +248,7 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
     let ratio = surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
     if s.ratio != ratio {
         s.ratio = ratio;
-        crate::sys::sched::edge::request_world_tick();
+        edge::request_world_tick();
     }
 }
 

@@ -19,6 +19,7 @@ use postgres::Client;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::Base as _;
@@ -74,7 +75,7 @@ fn land(client: &mut Client, candidates: &[[i32; 2]]) -> Result<Vec<[i32; 2]>, S
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let run = Run::parse("terrain")?;
     if run.leaf {
         let (src, mut client) =

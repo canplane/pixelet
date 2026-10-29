@@ -1,6 +1,7 @@
 // pxl-spec/bake/tile/place.test.rs
 
 use super::*;
+use crate::space::layer::lattice;
 use crate::space::layer::lattice::Cells;
 
 fn leaf() -> Tile {
@@ -104,13 +105,13 @@ fn no_tile_past_coarsest() {
     use crate::space::layer::tile::TOP_ZOOM;
     const {
         assert!(
-            crate::space::layer::lattice::coarsest(GROUND) == TOP_ZOOM,
+            lattice::coarsest(GROUND) == TOP_ZOOM,
             "the ground is read up to the pyramid's top"
         )
     };
     const {
         assert!(
-            crate::space::layer::lattice::coarsest(PLACE_LATTICE) > TOP_ZOOM,
+            lattice::coarsest(PLACE_LATTICE) > TOP_ZOOM,
             "places are read no coarser than their icon's cell allows"
         )
     };

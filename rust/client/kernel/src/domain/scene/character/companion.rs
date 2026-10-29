@@ -14,7 +14,9 @@
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::domain::approach::damp_alpha;
+use crate::domain::param;
 use crate::domain::query::changed::Asked;
+use crate::domain::query::model;
 use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
 use crate::domain::query::model::registry::Models;
@@ -42,6 +44,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
+use xpute_guest::clock;
 use xpute_guest::global::Global;
 
 /// The figures the companion holds, the person and the pet, each one
@@ -50,7 +53,7 @@ pub const FIGURES: usize = Group::ALL.len();
 
 // The world scroll's own rate: the two cancel, holding the character at
 // screen center, so this is the only position smoothing while following.
-const FOLLOW_LERP_K: f64 = crate::domain::param::POS_DAMP;
+const FOLLOW_LERP_K: f64 = param::POS_DAMP;
 
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
@@ -121,13 +124,9 @@ impl Figure {
         ) else {
             return;
         };
-        let Some(Some(actor)) = section::map().map(|_| {
-            Actor::new(
-                draw_list(),
-                crate::domain::query::model::models(),
-                model.model,
-            )
-        }) else {
+        let Some(Some(actor)) =
+            section::map().map(|_| Actor::new(draw_list(), model::models(), model.model))
+        else {
             return;
         };
         self.held = Some(Held { actor, model });
@@ -154,7 +153,7 @@ impl Figure {
         }
         // Wall seconds: the tick's elapsed is clamped per delta, which stretches
         // these spans across a gap where the world did not tick.
-        let now = xpute_guest::clock::now() / 1000.0;
+        let now = clock::now() / 1000.0;
         let dragging = p.dragging;
         let released = self.was_dragging && !dragging;
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);

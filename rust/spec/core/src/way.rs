@@ -21,6 +21,7 @@
 pub mod tree;
 
 use crate::cube::{sentinel, Ground};
+use crate::ground;
 use crate::param::way::BEAM_PILLAR_INTERVAL_M;
 use crate::param::way::DECK_THICKNESS_M;
 use crate::param::way::LINE_PAST;
@@ -699,13 +700,13 @@ impl Spans {
 /// it does over the ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
-    if cols.look(c) == crate::ground::UNKNOWN || cols.is_walled(c) {
+    if cols.look(c) == ground::UNKNOWN || cols.is_walled(c) {
         return (spans, fits);
     }
     // The column's face and the tile's scale, read once for all its visits.
     let cell = cols.cell();
     let ground = (cols.face(c), cols.per_m());
-    spans.face = crate::ground::face_cell(cell, ground.0);
+    spans.face = ground::face_cell(cell, ground.0);
     let mut k = 0;
     while k < cols.cnt(c) {
         let (w, next) = writes(cols, c, k, ground);
@@ -788,9 +789,9 @@ fn near(k: u32) -> [i32; 3] {
 /// twice its, fills less still within it.
 pub fn slab([lo, hi]: [i32; 2], [coarsest, near]: [Zoom; 2]) -> [i32; 2] {
     if lo >= hi {
-        return crate::ground::EMPTY;
+        return ground::EMPTY;
     }
-    let [mut under, mut over] = crate::ground::EMPTY;
+    let [mut under, mut over] = ground::EMPTY;
     let mut z = coarsest;
     while z <= near {
         let (a, b) = if z < LEAF_CELL {
@@ -852,7 +853,7 @@ pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
 pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL - cell);
     let (face, n) = k.head(c);
-    let [mut lo, mut hi] = crate::ground::EMPTY;
+    let [mut lo, mut hi] = ground::EMPTY;
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
@@ -917,6 +918,7 @@ fn bare(k: &impl Kept, b: [i32; 2], n: u32, cell: Zoom, [from, to]: [i32; 2], st
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ground;
 
     /// A column: its face cell, its spans and how many it holds.
     type Column = (i32, [([i32; 2], u32); 4], u32);
@@ -964,9 +966,9 @@ mod tests {
             let cell = LEAF_CELL - next(4);
             let s = 1i32 << (LEAF_CELL - cell);
             let top = next(120) as i32 - 60;
-            let face = crate::ground::face_cell(
+            let face = ground::face_cell(
                 cell,
-                crate::ground::face_height(cell, crate::ground::cells(cell, top as f32)),
+                ground::face_height(cell, ground::cells(cell, top as f32)),
             );
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {
@@ -988,7 +990,7 @@ mod tests {
                 };
             }
             let k = Five(five);
-            let mut hull = crate::ground::EMPTY;
+            let mut hull = ground::EMPTY;
             for z in -200 / s..200 / s {
                 let v = lined(&k, [0, 0], cell, z);
                 if v == NOTHING {

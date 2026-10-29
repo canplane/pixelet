@@ -12,6 +12,8 @@ use pxl_spec::space::coord::world::origin;
 use pxl_spec_core::{beam, eye};
 
 use crate::domain::query::asked;
+use crate::domain::view::observation;
+use crate::domain::view::param;
 
 /// The camera grid's cell `distance` from the eye, in units: what spans it is
 /// observed there, and a motion that carries something this far is seen.
@@ -25,7 +27,7 @@ pub fn cell_there(dist: f64) -> f64 {
 /// by, its words standing between steps. Infinite where nothing is drawn
 /// (`distance` infinite) or nothing moves.
 pub fn seen_step_s(dist: f64, speed: f64) -> f64 {
-    crate::domain::view::param::SEEN_STEP_CELLS * cell_there(dist) / speed
+    param::SEEN_STEP_CELLS * cell_there(dist) / speed
 }
 
 /// A clock as it is seen, stepped a quantum at a time: what it shows stands
@@ -63,7 +65,7 @@ impl Stepped {
 /// without a screen.
 pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
     let lens = o.frustum?.lens()?;
-    let reach = crate::domain::view::observation::eye_draw_reach()?;
+    let reach = observation::eye_draw_reach()?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
     let mut put = |at: usize, v: &[u32]| words[at..at + v.len()].copy_from_slice(v);

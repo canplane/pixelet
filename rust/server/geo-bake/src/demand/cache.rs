@@ -7,7 +7,9 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use tokio::fs;
 use tokio::sync::{Notify, Semaphore};
+use tokio::time::Instant;
 
 #[derive(Default)]
 struct Flight {
@@ -19,7 +21,7 @@ struct Flight {
 /// What a job runs under: when it must be done by, and whether a client is
 /// waiting on it, which turns true when one joins a job a fold started.
 pub struct Lease {
-    pub deadline: tokio::time::Instant,
+    pub deadline: Instant,
     pub asked: Arc<AtomicBool>,
 }
 
@@ -83,7 +85,7 @@ impl Cache {
             let task = flight.clone();
             let asked = flight.asked.clone();
             let jobs = self.flights.clone();
-            let deadline = tokio::time::Instant::now() + self.deadline;
+            let deadline = Instant::now() + self.deadline;
             tokio::spawn(async move {
                 let job = async move { make(Lease { deadline, asked }).await };
                 let result = tokio::spawn(job)
@@ -129,7 +131,7 @@ impl Cache {
 
     pub async fn read(&self, name: &str) -> Result<Option<Vec<u8>>, String> {
         let path = self.root.join(name);
-        match tokio::fs::read(&path).await {
+        match fs::read(&path).await {
             Ok(bytes) => Ok(Some(bytes)),
             Err(e)
                 if e.kind() == std::io::ErrorKind::NotFound

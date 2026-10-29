@@ -18,6 +18,7 @@
 #![allow(
     non_camel_case_types,
     clippy::type_complexity,
+    clippy::absolute_paths,
     unused_imports,
     dead_code
 )]

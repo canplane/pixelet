@@ -3,8 +3,31 @@
 //! The shell's commands, applied.
 
 use super::State;
+use crate::domain::control::camera::controller;
+use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::cmd::{self as abi, Command};
+use crate::domain::control::interaction::edit;
+use crate::domain::control::navigation::follow_mode;
+use crate::domain::layer::object::repository;
+use crate::domain::scene::character::preview;
+use crate::domain::scene::marker;
+use crate::domain::view::frame::resolution;
+use crate::domain::view::setting::store;
+use crate::pointer;
+use crate::profiler::read;
+use crate::profiler::record;
+use crate::sys::io::file;
+use crate::sys::io::source;
+use crate::sys::sched::clock;
+use crate::sys::sched::edge;
+use crate::turn;
+use crate::turn::HostFrame;
+use crate::turn::Platform;
+use pxl_render::gpu::api;
+use pxl_render::gpu::surface;
 use xpute_guest::abi::cmd as xpute_cmd;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 use xpute_guest::mem::{off_of, off_of_slice};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -36,7 +59,7 @@ fn bearing(deg: Option<f64>) -> bool {
 /// host at its falling edge, so a sensor close sent after the strobe stopped is
 /// still heard.
 fn ask_turn(s: &mut State) -> Result<Option<i32>, MarshalError> {
-    crate::sys::sched::edge::request_world_tick();
+    edge::request_world_tick();
     s.asked = true;
     Ok(Some(0))
 }
@@ -77,13 +100,13 @@ pub(super) fn apply(
             )?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
-            let last = crate::sys::sched::clock::wall_now();
+            let last = clock::wall_now();
             let delta = if last > 0.0 {
                 ((p.unix_ms - last) / 1000.0).max(0.0)
             } else {
                 0.0
             };
-            crate::turn::on_world_frame_asked(crate::turn::HostFrame {
+            turn::on_world_frame_asked(HostFrame {
                 width: p.width,
                 height: p.height,
                 delta,
@@ -92,14 +115,14 @@ pub(super) fn apply(
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::sys::sched::clock::set_wall_now(p.unix_ms);
+            clock::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
             let p = abi::WorldBoot::read(given(pkt)?)?;
             super::on_host_attached(s);
-            crate::domain::view::setting::store::set_development(p.development);
-            crate::turn::set_world_platform(crate::turn::Platform {
+            store::set_development(p.development);
+            turn::set_world_platform(Platform {
                 geolocation: p.geolocation,
                 orient: device_orientation::OrientationPlatform {
                     supported: p.orient,
@@ -110,14 +133,14 @@ pub(super) fn apply(
             // Both kept slots, read from a turn on: what waits on the settings,
             // the profiler and the snapshot's, starts once they are in (turn.rs).
             settings_open();
-            crate::domain::layer::object::repository::open();
+            repository::open();
             // The shell holds the kernel's state from its first render on.
             ask_turn(s)
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(given(pkt)?)?;
             refuse_unless(
-                crate::sys::io::source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(),
+                source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(),
                 Errno::EINVAL,
             )?;
             Ok(Some(0))
@@ -133,8 +156,8 @@ pub(super) fn apply(
             // The settings write what they hold from the next keep on; the
             // objects are read again, empty, and saved from then on.
             match kept {
-                Kept::Settings => crate::domain::view::setting::store::on_settings_emptied(),
-                Kept::Objects => crate::domain::layer::object::repository::open(),
+                Kept::Settings => store::on_settings_emptied(),
+                Kept::Objects => repository::open(),
             }
             Ok(Some(0))
         }
@@ -153,7 +176,7 @@ pub(super) fn apply(
                 abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
                 abi::PointerPhase::Up => {
                     if let Some([x, y]) = camera_pointer_up(p.pointer_type, p.id) {
-                        crate::pointer::tap(x, y);
+                        pointer::tap(x, y);
                     }
                 }
                 abi::PointerPhase::Out => camera_pointer_out(),
@@ -188,18 +211,15 @@ pub(super) fn apply(
         }
         Command::INPUT_MARKER_WORDS => {
             let text = abi::InputMarkerWords::read(given(pkt)?)?.text;
-            or_refuse(
-                crate::domain::control::interaction::edit::draft_words(text).ok(),
-                Errno::EMSGSIZE,
-            )?;
+            or_refuse(edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
             Ok(Some(0))
         }
         Command::INPUT_MARKER_PUT => {
-            crate::domain::control::interaction::edit::put_marker();
+            edit::put_marker();
             Ok(Some(0))
         }
         Command::INPUT_MARKER_CANCEL => {
-            crate::domain::control::interaction::edit::cancel_marker();
+            edit::cancel_marker();
             Ok(Some(0))
         }
         Command::INPUT_WHEEL => {
@@ -218,8 +238,8 @@ pub(super) fn apply(
         }
         Command::INPUT_COMPASS_RESET => {
             // Following the heading would turn it straight back.
-            if !crate::domain::control::navigation::follow_mode::following() {
-                crate::domain::control::camera::controller::reset_azimuth();
+            if !follow_mode::following() {
+                controller::reset_azimuth();
             }
             ask_turn(s)
         }
@@ -229,7 +249,7 @@ pub(super) fn apply(
             ui::go_to_deg(
                 p.lon,
                 p.lat,
-                crate::domain::control::camera::state::IntentPatch {
+                IntentPatch {
                     dist: p.dist,
                     azimuth: p.azimuth,
                     polar: p.polar,
@@ -244,14 +264,11 @@ pub(super) fn apply(
                 p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0,
                 Errno::EINVAL,
             )?;
-            crate::domain::control::camera::controller::tracked_pose(
-                [p.x, p.y, p.z],
-                [p.qx, p.qy, p.qz, p.qw],
-            );
+            controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
             ask_turn(s)
         }
         Command::INPUT_XR_POSE_END => {
-            crate::domain::control::camera::controller::tracked_end();
+            controller::tracked_end();
             ask_turn(s)
         }
         Command::SENSOR_POS => {
@@ -317,7 +334,7 @@ pub(super) fn apply(
             if visible {
                 device_orientation::orient_visible();
             } else {
-                crate::domain::layer::object::repository::flush();
+                repository::flush();
             }
             Ok(Some(0))
         }
@@ -334,13 +351,12 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::GPU_READY => {
-            pxl_render::gpu::api::on_device_answered();
+            api::on_device_answered();
             request_world_tick();
             Ok(Some(0))
         }
         Command::SURFACE_OPEN => {
-            let handle =
-                pxl_render::gpu::surface::surface_open(abi::SurfaceOpen::read(given(pkt)?)?.role);
+            let handle = surface::surface_open(abi::SurfaceOpen::read(given(pkt)?)?.role);
             if handle != 0 {
                 request_world_tick();
             }
@@ -349,20 +365,10 @@ pub(super) fn apply(
         Command::SURFACE_RESIZE => {
             let p = abi::SurfaceResize::read(given(pkt)?)?;
             refuse_unless(p.device_pixel_ratio > 0.0, Errno::EINVAL)?;
-            let role = pxl_render::gpu::surface::surface(p.surface).map_or(0, |s| s.role);
-            let ratio = crate::domain::view::frame::resolution::surface_ratio(
-                role,
-                [p.width, p.height],
-                p.device_pixel_ratio,
-            );
+            let role = surface::surface(p.surface).map_or(0, |s| s.role);
+            let ratio = resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
             refuse_unless(
-                pxl_render::gpu::surface::surface_resize(
-                    p.surface,
-                    p.width,
-                    p.height,
-                    p.device_pixel_ratio,
-                    ratio,
-                ),
+                surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio, ratio),
                 Errno::EBADF,
             )?;
             request_world_tick();
@@ -370,10 +376,7 @@ pub(super) fn apply(
         }
         Command::SURFACE_CLOSE => {
             let surface = abi::SurfaceClose::read(given(pkt)?)?.surface;
-            refuse_unless(
-                pxl_render::gpu::surface::surface(surface).is_some(),
-                Errno::EBADF,
-            )?;
+            refuse_unless(surface::surface(surface).is_some(), Errno::EBADF)?;
             super::close_surface(surface);
             Ok(Some(0))
         }
@@ -389,28 +392,21 @@ pub(super) fn apply(
             ask_turn(s)
         }
         Command::CHAT_SEND => {
-            crate::domain::scene::marker::append_chat_line(abi::ChatSend::read(given(pkt)?)?.text);
+            marker::append_chat_line(abi::ChatSend::read(given(pkt)?)?.text);
             ask_turn(s)
         }
         Command::PREVIEW_OPEN => {
             let p = abi::PreviewOpen::read(given(pkt)?)?;
+            refuse_unless(surface::surface(p.surface).is_some(), Errno::EBADF)?;
             refuse_unless(
-                pxl_render::gpu::surface::surface(p.surface).is_some(),
-                Errno::EBADF,
-            )?;
-            refuse_unless(
-                crate::domain::scene::character::preview::preview_open(
-                    p.surface, p.group, p.number,
-                ),
+                preview::preview_open(p.surface, p.group, p.number),
                 Errno::EINVAL,
             )?;
             ask_turn(s)
         }
         Command::PREVIEW_CLOSE => {
             refuse_unless(
-                crate::domain::scene::character::preview::preview_close(
-                    abi::PreviewClose::read(given(pkt)?)?.surface,
-                ),
+                preview::preview_close(abi::PreviewClose::read(given(pkt)?)?.surface),
                 Errno::EBADF,
             )?;
             ask_turn(s)
@@ -447,7 +443,7 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
         }
         xpute_cmd::Command::SYS_OPENED => {
             let p = xpute_cmd::SysOpened::read(given(pkt)?)?;
-            crate::sys::io::file::on_opened(p.fd, p.res, p.detail);
+            file::on_opened(p.fd, p.res, p.detail);
             Ok(Some(0))
         }
     }
@@ -456,9 +452,9 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 /// A read of the profiler, its time the profiler's cost to the interval
 /// (profiler/record.rs `profiler_record_read`).
 fn read_timed(read: impl FnOnce() -> u32) -> u32 {
-    let at = xpute_guest::clock::now();
+    let at = now();
     let addr = read();
-    crate::profiler::record::profiler_record_read(xpute_guest::clock::now() - at);
+    record::profiler_record_read(now() - at);
     addr
 }
 
@@ -469,10 +465,9 @@ fn read_timed(read: impl FnOnce() -> u32) -> u32 {
 fn profiler_read(window_ms: Option<f64>) -> u32 {
     use crate::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
-    static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> =
-        xpute_guest::global::Global::new();
-    let stats = crate::profiler::read::profiler_stats(window_ms);
-    let now = crate::profiler::read::profiler_now();
+    static WORDS: Global<Box<[u32; READ::WORDS as usize]>> = Global::new();
+    let stats = read::profiler_stats(window_ms);
+    let now = read::profiler_now();
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
     w[READ::stats_at as usize] = off_of_slice(&raw const *stats) as u32;
     w[READ::stats_words as usize] = stats.len() as u32;
@@ -487,8 +482,7 @@ fn profiler_rings() -> u32 {
     use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::profiler::spec::{RING, RINGS, RING_NAMES};
     // On the heap, as READ's words are.
-    static WORDS: xpute_guest::global::Global<Box<[u32; RINGS::WORDS as usize]>> =
-        xpute_guest::global::Global::new();
+    static WORDS: Global<Box<[u32; RINGS::WORDS as usize]>> = Global::new();
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
     // In RING_NAMES' order: frames, tasks, worst.

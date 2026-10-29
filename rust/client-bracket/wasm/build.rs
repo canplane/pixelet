@@ -23,6 +23,8 @@
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PHONE_BYTES, STACK_BYTES};
+use xpute_guest::wasm;
+use xpute_guest::wasm::LinkPlan;
 
 /// The memory the module declares it needs, which the engine checks when the
 /// shell hands it one: the smallest reservation this build can run in. A shell
@@ -38,7 +40,7 @@ fn main() {
         )
     };
 
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan {
+    wasm::link(&LinkPlan {
         stack_bytes: STACK_BYTES,
         global_base: Some(GLOBAL_BASE),
         init_bytes: Some(MIN_MEM_BYTES),

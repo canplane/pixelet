@@ -32,6 +32,7 @@ use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::meta::placed;
 use crate::domain::layer::object::store::tree_key;
+use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor::strike::{reach, strike};
 use pxl_spec_core::area::{self, Shard};
@@ -359,7 +360,7 @@ impl<'a> World<'a> {
         // strictly within the 27, touching none past them.
         let wide = zoom.min(s.box_zoom);
         let from = s.about.under((wide, at.map(|v| v >> (zoom - wide))));
-        let mut visit = |e: &crate::domain::layer::object::store::Entry| {
+        let mut visit = |e: &Entry| {
             let c = e.cube().min;
             let own = [c[0].floor() as i32, c[1].floor() as i32];
             if let Some(i) = placed(e).filter(|_| space.holds(c) && fresh(own)) {

@@ -17,8 +17,10 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64;
 use base64::Engine;
 
 use crate::sys::io::failure::Failure;
+use crate::sys::io::fetch;
 use crate::sys::io::host::{answered, sys, turn};
 use crate::sys::io::host_spec::{format, kept, root};
+use crate::sys::io::loader;
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::Credit;
 use crate::sys::io::room::Refused;
@@ -401,8 +403,8 @@ pub fn on_opened(fd: Fd, res: i32, detail: u32) {
         close(fd);
     }
     match owner {
-        Owner::Fetch { key, at_ms } => crate::sys::io::fetch::on_opened(fd, key, at_ms, opened),
-        Owner::Load { key } => crate::sys::io::loader::on_opened(fd, key, opened),
+        Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),
+        Owner::Load { key } => loader::on_opened(fd, key, opened),
         Owner::Kept(kept) => on_kept_opened(kept, fd, opened),
         Owner::Write => {}
     }

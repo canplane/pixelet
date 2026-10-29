@@ -34,6 +34,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::param::MAX_CREDITS;
+use crate::sys::sched::edge;
 
 /// Ordered by `class`, then `distance`, lower first, then `detail`, higher first.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -589,7 +590,7 @@ pub fn pump() {
     s.pump(now());
     // Nothing else need come to end a hold.
     if s.held_until.is_finite() && !s.given_up {
-        crate::sys::sched::edge::wake_at(s.held_until);
+        edge::wake_at(s.held_until);
     }
 }
 

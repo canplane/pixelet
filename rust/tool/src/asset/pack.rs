@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use image::imageops;
 use image::RgbaImage;
 use serde::Deserialize;
 
@@ -387,7 +388,7 @@ pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
             (n as u32 / COLUMNS) * TILE_SIZE,
         );
         means.push(mean_of(&img));
-        image::imageops::replace(&mut laid, &img, x as i64, y as i64);
+        imageops::replace(&mut laid, &img, x as i64, y as i64);
     }
 
     let encoded =

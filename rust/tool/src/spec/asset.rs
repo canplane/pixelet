@@ -695,7 +695,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     rs.extend(casing_note());
     rs.extend(
         [
-            "#![allow(non_upper_case_globals, non_camel_case_types)]",
+            "#![allow(non_upper_case_globals, non_camel_case_types, clippy::absolute_paths)]",
             "pub mod decors {",
         ]
         .map(String::from),

@@ -477,6 +477,8 @@ pub fn frame_commit() -> bool {
     committed
 }
 
+use crate::frame::shader::floor;
+use pxl_spec::asset;
 /// The bytes a write of `bytes` takes of the stream, as its writer measures
 /// it: what a caller sums over the writes it makes together and asks `room`.
 pub use xpute_gpu::encode::call::{write_buffer_bytes, write_texture_bytes};
@@ -614,7 +616,7 @@ impl Gpu {
     /// structure let through, not a device to fall short on.
     pub fn buf(&self, size: u32, usage: u32) -> Id {
         xpute_kit::ensure!(
-            crate::frame::shader::floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0),
+            floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0),
             ENOSPC,
             size
         );
@@ -967,7 +969,7 @@ impl Gpu {
             s.landed.push(image);
             return Some(s.images.swap_remove(k).texture);
         }
-        let (width, height) = pxl_spec::asset::image_size(file)?;
+        let (width, height) = asset::image_size(file)?;
         let usage = TEXTURE_USAGE::TEXTURE_BINDING
             | TEXTURE_USAGE::COPY_SRC
             | TEXTURE_USAGE::COPY_DST

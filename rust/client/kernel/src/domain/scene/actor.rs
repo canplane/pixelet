@@ -15,6 +15,7 @@ use xpute_guest::mem::heap::{alloc, free};
 
 use crate::domain::query::model::registry::{blend, Models};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::region;
 use crate::domain::view::lens::{cell_there, seen_step_s, Stepped};
 use crate::sys::sched::edge::wake_at;
 use xpute_guest::clock::now;
@@ -192,7 +193,7 @@ impl Actor {
             self.shown = time;
             (moves, asks) = (stepped, false);
             if stepped {
-                crate::domain::scene::region::animated();
+                region::animated();
             }
         } else {
             self.last = 0.0;
@@ -273,7 +274,7 @@ impl Actor {
             let clip = self.cur.map_or(0.0, |p| m.motion(p.clip));
             let r = f64::from((m.radius() + clip) * stance.scale);
             let at = stance.at;
-            let state = crate::domain::scene::region::digest(&[
+            let state = region::digest(&[
                 at[0],
                 at[1],
                 at[2],
@@ -281,7 +282,7 @@ impl Actor {
                 f64::from(stance.scale),
                 f64::from(self.poses),
             ]);
-            crate::domain::scene::region::drawn(self.palette_handle, at, r, true, state);
+            region::drawn(self.palette_handle, at, r, true, state);
         }
         let t = DrawList::translation(stance.at, eye);
         draw.draw_scaled(

@@ -12,12 +12,16 @@ use xpute_guest::global::Global;
 use xpute_guest::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
+use crate::door;
 use crate::profiler::frame::{
     DeviceSample, FrameSample, GpuSample, HeapSample, RaySample, RingSample, TileSample, GPU_SPANS,
 };
 use crate::profiler::record::{profiler_record_frame, profiler_record_gpu, profiler_recording};
+use crate::sys::boot;
+use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::request::stream_counts;
+use crate::turn;
 
 /// What the renderer made of this turn's frame (domain/scene/stage.rs
 /// `stage_render`), and the GPU's read of an earlier frame, landed now.
@@ -69,7 +73,7 @@ pub fn set_host_frame(
 
 /// The heap as its allocator states it, in its own bytes.
 fn heap_sample() -> HeapSample {
-    let h = crate::sys::boot::heap_stat();
+    let h = boot::heap_stat();
     HeapSample {
         used_bytes: h.used as f64,
         live_bytes: h.live as f64,
@@ -84,7 +88,7 @@ fn heap_sample() -> HeapSample {
 /// The rings as the door states them since the frame before, which taking
 /// them starts again.
 fn ring_sample() -> RingSample {
-    let s = crate::door::take_stat();
+    let s = door::take_stat();
     RingSample {
         cq_peak: f64::from(s.cq_peak),
         sq_peak: f64::from(s.sq_peak),
@@ -123,7 +127,7 @@ pub fn profiler_frame(t: FrameTurn) {
     let at = now();
     // Taken whether or not recording, so a recording starts from now.
     let rings = ring_sample();
-    let body_slots_peak = f64::from(crate::sys::io::body::take_peak());
+    let body_slots_peak = f64::from(body::take_peak());
     let terrain_refused = TerrainTile::tile_cache().take_refusals() as f64;
     let host = core::mem::take(HOST.get(HostFrame::default));
     if !profiler_recording() {
@@ -148,7 +152,7 @@ pub fn profiler_frame(t: FrameTurn) {
         tick_ms: t.tick.total_ms,
         phases: t.tick.phase_ms,
         stage_ms: t.stage_ms,
-        effects: crate::turn::effect_times(),
+        effects: turn::effect_times(),
         kind: f64::from(host.kind as u8),
         gpu: host.gpu,
         device: host.device,

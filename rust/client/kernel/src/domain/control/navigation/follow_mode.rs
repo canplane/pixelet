@@ -3,6 +3,7 @@
 use pxl_spec::space::coord::q3::Q3;
 use xpute_kit::math::scalar::wrap;
 
+use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
@@ -124,7 +125,7 @@ pub fn follow_mode_step() {
             }
         };
         f.smoothed_azimuth = Some(smoothed);
-        crate::domain::control::camera::controller::set_intent(IntentPatch {
+        controller::set_intent(IntentPatch {
             azimuth: Some(smoothed),
             ..Default::default()
         });

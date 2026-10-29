@@ -8,6 +8,7 @@ use super::*;
 use crate::sys::io::demand::Why;
 use xpute_kit::status::errno::Errno;
 
+use crate::sys;
 use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{Ended, Failure};
 
@@ -189,7 +190,7 @@ fn heap_refusal_waits_release() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()
@@ -230,7 +231,7 @@ fn early_release_not_rewaited() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()

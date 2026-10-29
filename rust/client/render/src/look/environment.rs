@@ -8,6 +8,7 @@
 use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
+use crate::param::night;
 
 /// The sun's direction and a pad (4); the Moon's direction and its light
 /// (4); the Moon's color and a pad (4), the sun's being white; the stars'
@@ -50,7 +51,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let sun_dir = v3::norm(&light.sun);
     let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
-    let [from, to] = crate::param::night::FALL.map(f64::from);
+    let [from, to] = night::FALL.map(f64::from);
     let night = 1.0 - smoothstep(from, to, sun_dir[2]);
     let elongation = libm::acos(v3::dot(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);

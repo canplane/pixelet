@@ -19,10 +19,15 @@ use crate::domain::scene::indicator::param::{
     BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
     ZONE_FOOTPRINT_U,
 };
+use crate::domain::scene::region;
 use crate::domain::scene::scene;
+use crate::domain::view::frame::coord;
+use crate::domain::view::lens;
 use crate::domain::view::lens::{seen_step_s, Stepped};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, wake_at};
+use pxl_render::frame::shader::word;
+use pxl_render::param::puck::beacon;
 use xpute_guest::clock::now;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
@@ -162,7 +167,7 @@ fn lay_zone(
 fn beacon_speed() -> f64 {
     libm::hypot(
         BEACON_BOB * BEACON_BOB_RATE,
-        BEACON_SPIN_RATE * f64::from(pxl_render::param::puck::beacon::RADIUS),
+        BEACON_SPIN_RATE * f64::from(beacon::RADIUS),
     )
 }
 
@@ -170,8 +175,7 @@ fn beacon_speed() -> f64 {
 /// the faces open to the air it draws (1, a bit a face): the stride
 /// puck_zone.wgsl reads (pxl-render frame/shader/word.rs
 /// `PUCK_ZONE_INSTANCE_FLOATS`).
-pub const ZONE_INSTANCE_FLOATS: usize =
-    pxl_render::frame::shader::word::PUCK_ZONE_INSTANCE_FLOATS as usize;
+pub const ZONE_INSTANCE_FLOATS: usize = word::PUCK_ZONE_INSTANCE_FLOATS as usize;
 
 /// The zone shown and its beacon.
 struct Zone {
@@ -226,7 +230,7 @@ impl LocationPuck {
 
         let seen = Seen {
             device,
-            pos: crate::domain::view::frame::coord::to_world(&device),
+            pos: coord::to_world(&device),
         };
         // Looked at each turn, so each change is seen once.
         let mut grounded = core::mem::take(&mut self.grounded);
@@ -320,7 +324,7 @@ impl LocationPuck {
         };
         let dt = frame.delta_s;
         let to = v3::sub(&frame.world_of(p.center), &frame.camera);
-        let cell_there = crate::domain::view::lens::cell_there(v3::len(&to));
+        let cell_there = lens::cell_there(v3::len(&to));
         p.visible = frame.sees(p.center, ZONE_RADIUS) && 2.0 * ZONE_RADIUS >= cell_there;
         let shown = p.shown.get_or_insert(p.target);
         let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
@@ -344,7 +348,7 @@ impl LocationPuck {
             wake_at(now() + (next - p.run) * 1000.0);
         }
         if slides || stepped {
-            crate::domain::scene::region::animated();
+            region::animated();
         }
         slides
     }
@@ -357,7 +361,7 @@ impl LocationPuck {
         let shown = p.shown.unwrap_or(p.target);
         // The zone about its center and the beacon over it, as drawn
         // (`region`).
-        let state = crate::domain::scene::region::digest(&[
+        let state = region::digest(&[
             p.center[0],
             p.center[1],
             p.center[2],
@@ -367,7 +371,7 @@ impl LocationPuck {
             f64::from(u8::from(p.night)),
             f64::from(self.held.handle),
         ]);
-        crate::domain::scene::region::drawn(
+        region::drawn(
             u32::MAX,
             p.center,
             libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB) + libm::hypot(shown[0], shown[1]),

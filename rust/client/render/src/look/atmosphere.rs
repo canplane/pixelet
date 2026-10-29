@@ -6,7 +6,9 @@
 
 /// The map's sphere, so ground and horizon are one; the literature's 6,360 km
 /// is 0.3% off, which the scattering does not see.
-pub const BOTTOM_RADIUS_KM: f64 = pxl_spec::space::coord::globe::MERCATOR_RADIUS_KM;
+use pxl_spec::space::coord::globe;
+
+pub const BOTTOM_RADIUS_KM: f64 = globe::MERCATOR_RADIUS_KM;
 pub const TOP_RADIUS_KM: f64 = BOTTOM_RADIUS_KM + 100.0;
 pub const RAYLEIGH_SCATTERING: [f64; 3] = [5.802e-3, 13.558e-3, 33.1e-3];
 pub const RAYLEIGH_SCALE_HEIGHT_KM: f64 = 8.0;

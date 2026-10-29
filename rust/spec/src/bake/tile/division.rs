@@ -22,6 +22,7 @@ use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec_core::ground::majority;
+use xpute_kit::wire::xtp::Strs;
 
 /// The finest tile Overture makes of its divisions (overture-tiles
 /// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.
@@ -183,7 +184,7 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
 struct DivisionTileView<'a> {
     cells: &'a [u32],
     pub occupancy: Occupancy,
-    ids: xpute_kit::wire::xtp::Strs<'a>,
+    ids: Strs<'a>,
     subtypes: &'a [u8],
     parents: &'a [u32],
     prominence: &'a [u8],

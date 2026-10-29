@@ -12,6 +12,8 @@ use pxl_spec::space::coord::q3::{from_real, to_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
+use crate::domain::view::observation;
+use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_spec::space::camera::grid::fov;
 use xpute_guest::global::Global;
@@ -123,7 +125,7 @@ pub fn view_resize(width: f64, height: f64) {
         return;
     }
     (v.width, v.height) = (width, height);
-    crate::domain::view::observation::forget();
+    observation::forget();
     compose();
 }
 
@@ -147,7 +149,7 @@ pub fn view_compose(pose: Option<ObserverPose>) -> bool {
         ..p
     });
     let moved = view().pose != pose;
-    crate::domain::view::observation::turn(moved);
+    observation::turn(moved);
     if moved {
         view().pose = pose;
         compose();
@@ -166,12 +168,7 @@ fn compose() {
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
     // plane holds every height's precision.
-    mat4::perspective(
-        &mut v.proj,
-        fov(),
-        v.width / v.height,
-        crate::domain::view::param::NEAR,
-    );
+    mat4::perspective(&mut v.proj, fov(), v.width / v.height, param::NEAR);
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;

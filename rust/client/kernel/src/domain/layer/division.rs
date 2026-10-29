@@ -20,14 +20,16 @@ use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
+use crate::sys::mem::fixed;
+use crate::sys::mem::fixed::Held;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
 /// `.fixed.division`, handed in at boot.
-pub static RANGE: crate::sys::mem::fixed::Held = crate::sys::mem::fixed::Held::new();
+pub static RANGE: Held = Held::new();
 
 /// A record's cells, a word each, on a whole cache line.
-const RECORD_BYTES: u32 = crate::sys::mem::fixed::lane_bytes(CELLS, 4);
+const RECORD_BYTES: u32 = fixed::lane_bytes(CELLS, 4);
 
 /// A record a frame, end to end.
 pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * RECORD_BYTES;
@@ -55,9 +57,7 @@ impl Base for DivisionTile {
         _phases: &mut Phases,
     ) -> Result<DivisionTile, Failure> {
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let room = unsafe {
-            crate::sys::mem::fixed::lane::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS)
-        };
+        let room = unsafe { fixed::lane::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
         Ok(division::decode_into(pkt, room)?)
     }
 }

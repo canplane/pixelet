@@ -32,7 +32,7 @@
 // its cell; a placed one's are the placement's.
 //
 // Names as the spec spells them, so one record has one name on every side.
-#![allow(non_upper_case_globals, non_camel_case_types)]
+#![allow(non_upper_case_globals, non_camel_case_types, clippy::absolute_paths)]
 pub const tree: u16 = 1024;
 pub const boat: u16 = 1025;
 pub const car: u16 = 1026;

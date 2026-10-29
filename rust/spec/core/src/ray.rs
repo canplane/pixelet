@@ -26,8 +26,11 @@ pub const FACES: u32 = 3;
 /// (`answer::side`).
 pub use crate::answer::VALUE_BITS;
 pub const FACE_BITS: u32 = 3;
+use crate::answer;
 pub use crate::answer::KEPT_BITS;
+use crate::tally;
 pub use crate::ZOOM_BITS;
+
 pub const FACE_SHIFT: u32 = VALUE_BITS;
 pub const ZOOM_SHIFT: u32 = FACE_SHIFT + FACE_BITS;
 pub const KEPT_SHIFT: u32 = ZOOM_SHIFT + ZOOM_BITS;
@@ -60,12 +63,12 @@ pub const MISS_ARGS_LIST: u32 = 0;
 pub const MISS_ARGS_WHOLE: u32 = 3;
 pub const MISS_ARGS_CNT: u32 = 6;
 pub const MISS_ARGS_TALLY: u32 = 7;
-pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + crate::tally::RAYS) as usize;
+pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + tally::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0];
 
 /// The first word of a stop at `asset`, an asset's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.
 pub const fn first_word(asset: u32, face: u32, zoom: Zoom) -> u32 {
-    let kept = asset >> crate::answer::KEPT_SHIFT & ((1 << KEPT_BITS) - 1);
-    crate::answer::val(asset) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
+    let kept = asset >> answer::KEPT_SHIFT & ((1 << KEPT_BITS) - 1);
+    answer::val(asset) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
 }

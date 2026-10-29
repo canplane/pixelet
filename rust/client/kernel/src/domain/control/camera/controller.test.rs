@@ -1,7 +1,10 @@
 // pxl-kernel/domain/control/camera/controller.test.rs
 
 use super::*;
+use crate::domain::control::camera::first_person;
 use crate::domain::control::camera::fixture::place;
+use crate::domain::control::camera::orbit;
+use crate::domain::control::param;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::serial;
 
@@ -39,7 +42,7 @@ fn pivot_along_facing() {
             rng.unit() * 40.0,
         ];
         let (dist, polar, azimuth) = (
-            crate::domain::control::param::MIN_DIST + rng.unit() * 2_000.0,
+            param::MIN_DIST + rng.unit() * 2_000.0,
             rng.unit() * core::f64::consts::PI,
             rng.unit() * 6.0 - 3.0,
         );
@@ -71,7 +74,7 @@ fn person_change_keeps_pivot() {
             rng.unit() * 40.0,
         ];
         let (dist, polar, azimuth) = (
-            crate::domain::control::param::MIN_DIST + rng.unit() * 2_000.0,
+            param::MIN_DIST + rng.unit() * 2_000.0,
             rng.unit() * core::f64::consts::PI,
             rng.unit() * 6.0 - 3.0,
         );
@@ -95,10 +98,8 @@ fn person_change_keeps_pivot() {
                 "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}"
             );
             let to = match mode {
-                CameraMode::first_person => {
-                    crate::domain::control::camera::first_person::pivot_to()
-                }
-                CameraMode::orbit => crate::domain::control::camera::orbit::pivot_to(),
+                CameraMode::first_person => first_person::pivot_to(),
+                CameraMode::orbit => orbit::pivot_to(),
             };
             let to = to_world(&to.unwrap());
             assert!(

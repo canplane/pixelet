@@ -28,6 +28,7 @@ use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
+use crate::domain::query::model;
 use crate::domain::query::model::asset::model_of;
 use crate::domain::scene::decor::drawn::{decor_model_angle, decor_sprite_angle, sprite_reach};
 use crate::domain::scene::environment::param::{
@@ -37,9 +38,17 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::km_per_u;
+use crate::domain::view::lens;
+use crate::domain::view::observation;
 use crate::domain::view::observation::eye;
+use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
+use pxl_render::gpu::api::Image;
+use pxl_spec::space::camera::grid;
+use pxl_spec::space::coord::world;
+use pxl_spec_core::param::cloud;
+use pxl_spec_core::scatter;
 
 /// Its models, a cloud each one of them.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -48,7 +57,7 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
-const FIRST_GROUP: usize = pxl_spec_core::scatter::GROUPS as usize;
+const FIRST_GROUP: usize = scatter::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"
@@ -56,10 +65,10 @@ const _: () = assert!(
 
 /// A cell holds a cloud or none: a unit of the field's lattice, whose hash
 /// says where one is (pxl-spec-core param.rs `cloud::LATTICE_SHAMT`).
-const CELL_SHAMT: u32 = pxl_spec_core::param::cloud::LATTICE_SHAMT;
+const CELL_SHAMT: u32 = cloud::LATTICE_SHAMT;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
 /// The cells around the world, so a cell's hash wraps with the map.
-const CELLS_AROUND: i64 = 1 << (pxl_spec::space::coord::world::EXTENT[0] - CELL_SHAMT);
+const CELLS_AROUND: i64 = 1 << (world::EXTENT[0] - CELL_SHAMT);
 /// A patch is built and drawn as one, this many cells a side.
 const PATCH_CELLS: u32 = 16;
 const PATCH: f64 = CELL * PATCH_CELLS as f64;
@@ -74,7 +83,7 @@ pub const PATCHES_MAX: usize = {
 
 /// How far from the eye the thinning starts, in units: where a cell spans
 /// `CLOUD_SPACING_CELLS` of the view's camera cells.
-const THIN_FROM: f64 = CELL / pxl_spec::space::camera::grid::CELL / CLOUD_SPACING_CELLS;
+const THIN_FROM: f64 = CELL / grid::CELL / CLOUD_SPACING_CELLS;
 
 /// Whether the cloud whose middle lies at `local` about its patch's corner
 /// shows `d2` square units from the eye: its hash under (THIN_FROM / d)²,
@@ -113,9 +122,8 @@ fn clouds() -> &'static mut Clouds {
 }
 
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
-pub fn cloud_groups(
-) -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
-    let models = crate::domain::query::model::models();
+pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 3])> {
+    let models = model::models();
     let skin = load_of(cumulus::skin).and_then(load_image);
     clouds()
         .models
@@ -147,7 +155,7 @@ fn layer_u() -> f64 {
 /// by up to that, an angle, the same on every screen. Infinite while none
 /// is drawn.
 pub fn drift_step_s() -> f64 {
-    crate::domain::view::lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
+    lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
@@ -184,9 +192,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let largest = CLOUD_WIDTH[1];
     // As far as the eye draws, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is a sprite's worth.
-    let reach = crate::domain::view::observation::eye_draw_reach()
-        .unwrap_or(0.0)
-        .min(REACH_MAX);
+    let reach = observation::eye_draw_reach().unwrap_or(0.0).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| {
         libm::floor((on_map[k] - reach) / PATCH) as i64
@@ -284,7 +290,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                 });
                 c.seen = c
                     .seen
-                    .min(v3::len(&gap.map(|g| g.max(0.0))).max(crate::domain::view::param::NEAR));
+                    .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }
         let patch = Shown {

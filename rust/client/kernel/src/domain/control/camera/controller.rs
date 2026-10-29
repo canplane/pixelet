@@ -9,9 +9,13 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 
+use crate::domain::control::camera::first_person;
+use crate::domain::control::camera::input;
+use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::orbit::orbit;
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::domain::control::navigation::support::{is_unknown, pan_to, unknown_z};
+use crate::domain::control::param;
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::domain::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::domain::view::frame::pose::ObserverPose;
@@ -128,8 +132,8 @@ pub fn put_pivot(to: Q3, motion: Motion) {
     let snap = motion == Motion::Snap;
     match active() {
         Active::Tracked => return,
-        Active::Orbit => crate::domain::control::camera::orbit::put(to, snap),
-        Active::FirstPerson => crate::domain::control::camera::first_person::put(to, snap),
+        Active::Orbit => orbit::put(to, snap),
+        Active::FirstPerson => first_person::put(to, snap),
     }
     request_world_tick();
 }
@@ -138,8 +142,8 @@ pub fn put_pivot(to: Q3, motion: Motion) {
 /// toward, or where it stands.
 pub fn pivot_to() -> Option<Q3> {
     match active() {
-        Active::Orbit => crate::domain::control::camera::orbit::pivot_to(),
-        Active::FirstPerson => crate::domain::control::camera::first_person::pivot_to(),
+        Active::Orbit => orbit::pivot_to(),
+        Active::FirstPerson => first_person::pivot_to(),
         Active::Tracked => None,
     }
 }
@@ -241,7 +245,7 @@ pub fn pose() -> Option<ObserverPose> {
 /// Returns what the controller took, which a gesture continues from.
 pub fn set_intent(partial: IntentPatch) -> Intent {
     match active() {
-        Active::Orbit => crate::domain::control::camera::orbit::ask(partial),
+        Active::Orbit => orbit::ask(partial),
         Active::FirstPerson | Active::Tracked => {
             let c = camera_state();
             c.commit_intent(c.merged(partial));
@@ -261,7 +265,7 @@ pub fn reset_azimuth() {
 
 pub fn reset_dist() {
     set_intent(IntentPatch {
-        dist: Some(crate::domain::control::param::DEFAULT_DIST),
+        dist: Some(param::DEFAULT_DIST),
         ..Default::default()
     });
 }
@@ -269,32 +273,30 @@ pub fn reset_dist() {
 /// Going to a place: a view far out comes back in; one the user brought
 /// nearer stays, as map apps do.
 pub fn come_in_to_default() {
-    let default = crate::domain::control::param::DEFAULT_DIST;
+    let default = param::DEFAULT_DIST;
     if camera_state().intent.dist > default {
         reset_dist();
     }
 }
 
 pub fn zooming() -> bool {
-    active() == Active::Orbit
-        && (crate::domain::control::camera::input::pinching()
-            || crate::domain::control::camera::orbit::zoom_settling())
+    active() == Active::Orbit && (input::pinching() || orbit::zoom_settling())
 }
 
 /// `delta_y` in CSS pixels. First person has no zoom.
 pub fn wheel(delta_y: f64) {
     if active() == Active::Orbit {
-        crate::domain::control::camera::orbit::wheel(delta_y);
+        orbit::wheel(delta_y);
     }
 }
 
 pub fn pinch_begin(span: f64) {
-    crate::domain::control::camera::orbit::pinch_begin(span);
+    orbit::pinch_begin(span);
 }
 
 pub fn pinch(span: f64) {
     if active() == Active::Orbit {
-        crate::domain::control::camera::orbit::pinch(span);
+        orbit::pinch(span);
     }
 }
 
@@ -306,8 +308,8 @@ pub fn controller_step(ctx: &mut TickContext) {
 
 pub fn camera_step(ctx: &mut TickContext) {
     let moving = match active() {
-        Active::Orbit => crate::domain::control::camera::orbit::turn(ctx.delta) == Some(true),
-        Active::FirstPerson => crate::domain::control::camera::first_person::turn(ctx.delta),
+        Active::Orbit => orbit::turn(ctx.delta) == Some(true),
+        Active::FirstPerson => first_person::turn(ctx.delta),
         Active::Tracked => false,
     };
     if moving {
@@ -353,8 +355,8 @@ fn take_mode(want: CameraMode) -> bool {
     }
     if let Some(at) = at {
         match want {
-            CameraMode::orbit => crate::domain::control::camera::orbit::put(at, true),
-            CameraMode::first_person => crate::domain::control::camera::first_person::put(at, true),
+            CameraMode::orbit => orbit::put(at, true),
+            CameraMode::first_person => first_person::put(at, true),
         }
     }
     true

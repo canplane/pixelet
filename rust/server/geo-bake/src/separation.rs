@@ -53,6 +53,10 @@ pub struct Line {
 /// line runs straight. Its ends are held at every zoom where the line ends
 /// there (`ends`), and past the leaves nowhere where only a cut ends it,
 /// since there no other tile's line does.
+#[expect(
+    clippy::absolute_paths,
+    reason = "this module's own `way` and `coarsest` take the core's names"
+)]
 pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;

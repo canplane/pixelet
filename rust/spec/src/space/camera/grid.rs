@@ -7,6 +7,7 @@
 //! it is its layer's to fold.
 
 use crate::space::coord::zoom::{units, Zoom};
+use pxl_spec_core::grid;
 
 // ---- the view's knobs, beside pxl-spec-core grid.rs's ----
 
@@ -23,15 +24,15 @@ pub fn fov() -> f64 {
 }
 
 /// The view's cells a radian (pxl-spec-core `grid::CELLS_A_RADIAN`).
-pub const CELLS_A_RAD: f64 = pxl_spec_core::grid::CELLS_A_RAD as f64;
+pub const CELLS_A_RAD: f64 = grid::CELLS_A_RAD as f64;
 
 /// How many times as far a window holds its zoom's cells as the view draws
 /// them (pxl-spec-core `grid::WINDOW_MARGIN`).
-pub const WINDOW_MARGIN: f64 = pxl_spec_core::grid::WINDOW_MARGIN as f64;
+pub const WINDOW_MARGIN: f64 = grid::WINDOW_MARGIN as f64;
 
 /// The grid the bands and windows are sized for, the view's
 /// `WINDOW_MARGIN` times finer (pxl-spec-core `grid::SPLIT`).
-pub const SPLIT: f64 = pxl_spec_core::grid::SPLIT as f64;
+pub const SPLIT: f64 = grid::SPLIT as f64;
 
 /// The view's camera grid cell, an angle in radians, 1/`CELLS_A_RADIAN`
 /// (pxl-spec-core `grid::CELL`).
@@ -41,7 +42,7 @@ pub const CELL: f64 = 1.0 / CELLS_A_RAD;
 /// its side spans `SPANS` of the view's cells (pxl-spec-core `grid`). A window
 /// holds them out to `WINDOW_MARGIN` times as far.
 pub const fn split_dist(cell_zoom: Zoom) -> f64 {
-    CELLS_A_RAD * units(cell_zoom) / pxl_spec_core::grid::SPANS as f64
+    CELLS_A_RAD * units(cell_zoom) / grid::SPANS as f64
 }
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared: the
@@ -52,7 +53,7 @@ pub const fn split_dist(cell_zoom: Zoom) -> f64 {
 /// ground's near the eye, held to what a zoom can name: pxl-spec-core's, the
 /// one rule the CPU and a GPU's cast size by, of the one input, a square.
 pub fn cell_at(r2: f64) -> Zoom {
-    pxl_spec_core::grid::cell_at(r2 as f32)
+    grid::cell_at(r2 as f32)
 }
 
 #[cfg(test)]

@@ -22,6 +22,8 @@ pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::layer::object::store::Asset;
 use crate::domain::query::changed::Asked;
 use crate::domain::query::World;
+use crate::domain::view::frame::coord;
+use pxl_spec_core::answer;
 use xpute_guest::global::Global;
 
 /// The look of the ground the eraser would carve, of the hovered point:
@@ -61,7 +63,7 @@ pub fn ghost() -> Ghost {
             cube_of(
                 w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
                     .val()
-                    .map_or(0, pxl_spec_core::answer::val),
+                    .map_or(0, answer::val),
             )
         }),
         _ => None,
@@ -119,7 +121,7 @@ pub fn ghost() -> Ghost {
     match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let [x, y, z] = crate::domain::view::frame::coord::to_world(&h);
+            let [x, y, z] = coord::to_world(&h);
             let c = q3::unpack(&h);
             let box_ghost = GhostBox {
                 at: [x, y, z],

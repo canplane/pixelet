@@ -16,6 +16,7 @@ use pxl_spec_core::window::Found;
 use super::world::World;
 use crate::domain::layer::terrain::window::Windowed;
 use crate::domain::layer::{Answer, Query};
+use pxl_spec::asset::cube::sentinel;
 
 /// The ground's top in a cell, in units, and the asset its face is.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -33,7 +34,7 @@ impl World<'_> {
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(pxl_spec_core::SEA_LEVEL),
-                asset: pxl_spec::asset::cube::sentinel::unknown,
+                asset: sentinel::unknown,
             }));
         }
         let side = units(cell);

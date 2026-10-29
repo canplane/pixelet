@@ -10,6 +10,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
+use crate::domain::control::camera::controller;
 use crate::domain::control::camera::orbit::orbit_eye_off;
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, GATE_STEP_SAMPLES};
@@ -34,7 +35,7 @@ pub struct ViewPose {
 
 fn pose(view: Intent) -> Option<ViewPose> {
     Some(ViewPose {
-        pivot: crate::domain::control::camera::controller::pivot_world()?,
+        pivot: controller::pivot_world()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,

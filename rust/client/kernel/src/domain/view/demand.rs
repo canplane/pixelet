@@ -32,12 +32,14 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::query::Walked;
+use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::io::demand::Order;
 use crate::sys::io::demand::{Ask, Phases, Why};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
+use crate::sys::sched::edge;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::morton::key_of;
 
@@ -191,12 +193,7 @@ impl<L: Observed> Demand<L> {
             tiles.max_by_key(|&t| {
                 (
                     o.map_or(Order::LAST, |o| {
-                        crate::domain::view::observation::order_of_tile(
-                            o,
-                            L::LATTICE,
-                            t,
-                            &mut walked,
-                        )
+                        observation::order_of_tile(o, L::LATTICE, t, &mut walked)
                     }),
                     t,
                 )
@@ -223,9 +220,8 @@ impl<L: Observed> Demand<L> {
         // One walk down the pyramid in key order, so each tile's line, its
         // own and the ground's it is ordered by, steps from its neighbor's.
         let (mut lines, mut ground) = (Lines::default(), Walked::default());
-        let mut order = |o: &Observation, p: Tile| {
-            crate::domain::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground)
-        };
+        let mut order =
+            |o: &Observation, p: Tile| observation::order_of_tile(o, L::LATTICE, p, &mut ground);
         if let Some(o) = o {
             if matches!(L::ASK_SCOPE, AskScope::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
@@ -474,7 +470,7 @@ pub fn admit_arrived(pass: &Pass) {
         None,
     );
     if stat.stopped_early {
-        crate::sys::sched::edge::request_world_tick();
+        edge::request_world_tick();
     }
 }
 

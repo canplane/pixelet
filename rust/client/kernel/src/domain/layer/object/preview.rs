@@ -5,6 +5,7 @@
 //! ghost it shows under the pointer (`Ghost`); and a marker waiting for its
 //! words, drawn with the words it has so far.
 
+use crate::domain::layer::object::store;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::decor::Decor;
@@ -93,7 +94,7 @@ pub fn words_at(at: EntryAt) -> Option<&'static str> {
     if let Some(d) = draft().filter(|d| d.at == at) {
         return Some(&d.words);
     }
-    let object = crate::domain::layer::object::store::object();
+    let object = store::object();
     object.words(&object.read((at.zoom(), at.at())).placed()?)
 }
 

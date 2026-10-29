@@ -1,6 +1,9 @@
 // pxl-kernel/sys/io/body.test.rs
 
 use super::*;
+use crate::sys;
+use crate::sys::io::room::Refused;
+use xpute_guest::mem;
 
 fn runs() -> usize {
     held().runs.len()
@@ -8,7 +11,7 @@ fn runs() -> usize {
 
 #[test]
 fn bodies_share_run() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let before = runs();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..SLOTS)
@@ -36,7 +39,7 @@ fn bodies_share_run() {
 
     for (k, &(at, n)) in out.iter().enumerate() {
         // SAFETY: `n` bytes of a slot just taken.
-        unsafe { core::ptr::write_bytes(xpute_guest::mem::at::<u8>(at), k as u8, n as usize) };
+        unsafe { core::ptr::write_bytes(mem::at::<u8>(at), k as u8, n as usize) };
     }
     let released = releases();
     let freed = out.remove(1);
@@ -55,8 +58,7 @@ fn bodies_share_run() {
     assert_eq!(runs(), before + 2);
     for (k, &(at, n)) in out.iter().enumerate().skip(1) {
         // SAFETY: still out, `n` bytes long.
-        let bytes =
-            unsafe { core::slice::from_raw_parts(xpute_guest::mem::at::<u8>(at), n as usize) };
+        let bytes = unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), n as usize) };
         assert!(
             bytes.iter().all(|&b| b == (k + 1) as u8),
             "a body was written over by its neighbors"
@@ -72,7 +74,7 @@ fn bodies_share_run() {
 
 #[test]
 fn other_bodies_own_block() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let before = runs();
     for stream in [Some(Stream::place), Some(Stream::division), None] {
         let block = take(stream, 4096).unwrap();
@@ -86,7 +88,7 @@ fn other_bodies_own_block() {
 
 #[test]
 fn slots_cap_and_wake() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..BODY_SLOTS)
         .map(|_| take(Some(Stream::terrain), longest).unwrap())
@@ -103,7 +105,7 @@ fn slots_cap_and_wake() {
 
 #[test]
 fn slot_peak() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     take_peak();
     let a = take(Some(Stream::terrain), 1).unwrap();
     let b = take(Some(Stream::earth), 1).unwrap();
@@ -131,7 +133,7 @@ fn slot_refusal_waits_slots() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()
@@ -154,8 +156,8 @@ fn slot_refusal_waits_slots() {
 
 #[test]
 fn run_refusal_waits_heap() {
-    let _g = crate::sys::serial();
-    let refused = crate::sys::io::room::Refused::run();
+    let _g = sys::serial();
+    let refused = Refused::run();
     assert!(!refused.over());
     let block = take(Some(Stream::terrain), 1).unwrap();
     // SAFETY: from `take`, given back once.
@@ -165,7 +167,7 @@ fn run_refusal_waits_heap() {
 
 #[test]
 fn slot_return_asks_turn() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..BODY_SLOTS)
         .map(|_| take(Some(Stream::terrain), longest).unwrap())

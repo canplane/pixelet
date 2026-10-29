@@ -28,9 +28,12 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::object::store::{apply, Entry, Write, AIR, VOID};
+use crate::domain::query::changed;
 use crate::domain::query::World;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::hierarchy::morton;
+use pxl_spec_core::answer;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
@@ -48,7 +51,7 @@ fn write_object_val(at: EntryAt, val: u32) {
 /// A write is made here at once and sent to be kept, where the world takes
 /// an edit (`World::editable`); elsewhere it is refused.
 fn submit(write: Write) {
-    let (zoom, at) = pxl_spec::space::hierarchy::morton::node_of::<3>(write.key);
+    let (zoom, at) = morton::node_of::<3>(write.key);
     if !World::now().editable(&cube(zoom, at)) {
         return;
     }
@@ -202,7 +205,7 @@ pub fn remove(at: EntryAt) {
         .asset_of(&middle(at))
         .exact()
     {
-        Some(v) if v != VOID && !pxl_spec_core::answer::is_placed(v) => AIR,
+        Some(v) if v != VOID && !answer::is_placed(v) => AIR,
         None => AIR,
         Some(_) => VOID,
     };
@@ -261,8 +264,7 @@ pub fn pending_step() -> RenderEdits {
         (Some(h), Some(tool)) => {
             let asked = Some((tool, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
-            let same = was.asked == asked
-                && !crate::domain::query::changed::within(placement_reads(tool, h), &[]);
+            let same = was.asked == asked && !changed::within(placement_reads(tool, h), &[]);
             (
                 if same {
                     was.blocked

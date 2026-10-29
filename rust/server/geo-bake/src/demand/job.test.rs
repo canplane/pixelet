@@ -2,6 +2,7 @@
 
 use super::*;
 use std::time::Duration;
+use tokio::task;
 use tokio::time::Instant;
 
 #[tokio::test]
@@ -68,9 +69,9 @@ async fn client_wait_first() {
         })
     };
     let fold = wait("fold", lease(false));
-    tokio::task::yield_now().await;
+    task::yield_now().await;
     let asked = wait("asked", lease(true));
-    tokio::task::yield_now().await;
+    task::yield_now().await;
     drop(held);
     asked.await.unwrap();
     fold.await.unwrap();

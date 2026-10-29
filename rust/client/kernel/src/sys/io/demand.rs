@@ -11,7 +11,7 @@ use core::cmp::Ordering;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 
-pub const PHASES_MAX: usize = crate::sys::io::demand_spec::TASK_PHASES_MAX as usize;
+pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
 
 /// Sub-timings a run reports (e.g. network vs decode), named by the run.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,9 +43,11 @@ impl Phases {
     }
 }
 
+use crate::sys::io::demand_spec;
 /// A stream of demands (spec `STREAM_NAMES`). An asset shares the
 /// tiles' credits but is never withdrawn: it is wanted until it arrives.
 pub use crate::sys::io::demand_spec::StreamName as Stream;
+use pxl_spec::bake::tile;
 
 impl Stream {
     /// An asset belongs to no bake and is asked for by its own command.
@@ -65,7 +67,7 @@ impl Stream {
     /// which the heap alone bounds.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
-            Some(layer) => Some(pxl_spec::bake::tile::max_pkt_bytes(layer) as u32),
+            Some(layer) => Some(tile::max_pkt_bytes(layer) as u32),
             None => None,
         }
     }

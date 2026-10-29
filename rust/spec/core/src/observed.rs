@@ -37,6 +37,8 @@
 //! in between.
 
 use crate::answer::Kind;
+use crate::overwrite;
+use crate::overwrite::Held;
 use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
 use crate::window::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
@@ -272,8 +274,8 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
 /// a node beside the box holds a slot the write changed, and reads another
 /// node's what is placed after it.
 pub fn reads_written(placed: u32, first: u32) -> bool {
-    let held = crate::overwrite::Held::of_word(placed);
-    held.holds() && held.slot().wrapping_sub(first) < crate::overwrite::FAMILY
+    let held = Held::of_word(placed);
+    held.holds() && held.slot().wrapping_sub(first) < overwrite::FAMILY
 }
 
 pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]) -> bool {

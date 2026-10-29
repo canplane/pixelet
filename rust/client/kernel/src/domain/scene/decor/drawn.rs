@@ -21,9 +21,15 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::query::World;
+use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
+use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::camera::grid;
+use pxl_spec::space::layer::lattice;
+use pxl_spec::space::layer::tile;
+use pxl_spec_core::decor;
 use pxl_spec_core::window::FIRST_CELL;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
@@ -31,13 +37,13 @@ use pxl_spec_core::window::FIRST_CELL;
 /// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it. No fade: the edge is per instance,
 /// so it staggers.
 pub fn decor_model_angle() -> f64 {
-    crate::domain::scene::decor::param::DECOR_MODEL_CELLS * pxl_spec::space::camera::grid::CELL
+    param::DECOR_MODEL_CELLS * grid::CELL
 }
 
 /// The sprite's edge, `DECOR_SPRITE_CELLS` of a camera cell, as an angle as
 /// the model's is (`decor_model_angle`).
 pub fn decor_sprite_angle() -> f64 {
-    crate::domain::scene::decor::param::DECOR_SPRITE_CELLS * pxl_spec::space::camera::grid::CELL
+    param::DECOR_SPRITE_CELLS * grid::CELL
 }
 
 /// How far a thing `extent_u` wide is a sprite's worth as a window holds it:
@@ -46,7 +52,7 @@ pub fn decor_sprite_angle() -> f64 {
 /// edge, an upper bound. `is_decor_shown` takes both its sides at the
 /// window's, so its zooms are the view's.
 pub const fn sprite_reach(extent_u: f64) -> f64 {
-    extent_u * SPLIT / crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
+    extent_u * SPLIT / param::DECOR_SPRITE_CELLS
 }
 
 /// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
@@ -64,7 +70,7 @@ fn shown() -> [u32; DECORS.len()] {
 }
 
 /// `shown`, each kind's extent `extent` gives.
-fn shown_by(extent: impl Fn(&pxl_spec::asset::decor::Decor) -> f64) -> [u32; DECORS.len()] {
+fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
         u32::from(is_decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
     })
@@ -162,10 +168,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
         / decor_sprite_angle())
-    .min(pxl_spec::space::layer::lattice::draw_reach(
-        pxl_spec::space::layer::lattice::GROUND,
-        pxl_spec::space::layer::tile::LEAF_ZOOM,
-    ));
+    .min(lattice::draw_reach(lattice::GROUND, tile::LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
         zoom -= 1;
@@ -185,7 +188,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     h.placed.clear();
     let placed = &mut h.placed;
     World::now().placed_in(&around, &mut |e| {
-        let (k, decor) = row_of(&pxl_spec_core::decor::DECORS, e.state);
+        let (k, decor) = row_of(&decor::DECORS, e.state);
         if !decor || hide == Some(e.id()) {
             return;
         }

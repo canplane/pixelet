@@ -11,6 +11,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::units;
 use xpute_kit::wire::xtp::PacketWriter;
 
+use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{dist, Motion};
 use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
@@ -19,7 +20,9 @@ use crate::domain::control::cmd::{
     CompanionState, DivisionPart, GroundStatus, HoldingState, LangName, LocationState, LonLat,
     Message, OrientationState, PivotState, Snapshot,
 };
+use crate::domain::control::interaction::edit;
 use crate::domain::control::interaction::{holding, Holding};
+use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::follow_mode::{following, set_following};
 use crate::domain::control::navigation::off_center::off_center;
@@ -35,8 +38,12 @@ use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::domain::scene::stage::is_screen_drawn;
 use crate::domain::view::frame::screen::units_per_px_at;
+use crate::domain::view::observation;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
+use crate::pointer;
 use crate::sys::io::file::{self, Kept};
+use crate::sys::io::request;
+use crate::sys::io::source;
 use crate::turn::world_platform;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::Tile;
@@ -97,7 +104,7 @@ pub struct Shown {
 
 fn shown() -> Shown {
     let (location, settings) = (device_location_store(), settings_store());
-    let pivot = crate::domain::control::camera::controller::pivot();
+    let pivot = controller::pivot();
     let mut previews = ([0u32; CASES_MAX], 0);
     for (slot, (surface, _, _)) in previews.0.iter_mut().zip(preview_rows()) {
         *slot = surface;
@@ -107,7 +114,7 @@ fn shown() -> Shown {
         // Shown once a frame went to the screen over a view whose tiles all
         // show, if coarser: a finer tile asked for as the eye moves is not
         // the area loading, and would flash its toast each time.
-        status: match (crate::domain::view::observation::eye(), is_screen_drawn()) {
+        status: match (observation::eye(), is_screen_drawn()) {
             (None, _) => GroundStatus::Idle,
             (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
             _ => GroundStatus::Loading,
@@ -117,13 +124,13 @@ fn shown() -> Shown {
         location: (location.state, location.location.is_some()),
         companion: companion_ready(),
         holding: holding(),
-        marker: crate::domain::control::interaction::edit::marker_waiting().0,
+        marker: edit::marker_waiting().0,
         orient: device_orient_store().state,
         azimuth: camera_state().intent.azimuth,
         is_follow_mode: following(),
         camera_busy: dragging(),
-        zooming: crate::domain::control::camera::controller::zooming(),
-        over_marker: crate::pointer::over_marker(),
+        zooming: controller::zooming(),
+        over_marker: pointer::over_marker(),
         settings: are_settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOTS];
             for key in SettingKey::ALL {
@@ -135,7 +142,7 @@ fn shown() -> Shown {
         division: pivot.and_then(|at| naming(&at)),
         previews,
         stall: stall(),
-        declared: crate::sys::io::source::top().is_some(),
+        declared: source::top().is_some(),
         kept_refused: {
             let mut refused = ([0; Kept::ALL.len()], 0);
             for kept in Kept::ALL.into_iter().filter(|&k| file::is_refused(k)) {
@@ -159,10 +166,7 @@ impl Sent {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
     pub fn take_moved(&mut self) -> Option<Shown> {
-        let (now, (_, words)) = (
-            shown(),
-            crate::domain::control::interaction::edit::marker_waiting(),
-        );
+        let (now, (_, words)) = (shown(), edit::marker_waiting());
         if self.shown == Some(now) && self.words == words {
             return None;
         }
@@ -175,7 +179,7 @@ impl Sent {
 
 /// The snapshot made of `shown` into `out`; none where it does not fit.
 pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
-    let (_, words) = crate::domain::control::interaction::edit::marker_waiting();
+    let (_, words) = edit::marker_waiting();
     let held = shown.holding;
     let snapshot = Snapshot {
         pivot: PivotState {
@@ -189,7 +193,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
                 }
             }),
             outside: shown.pivot.is_some_and(|c| {
-                crate::sys::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))
+                source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))
             }),
         },
         location: LocationState {
@@ -250,7 +254,7 @@ pub fn tracking_action(tracking: Tracking) {
         }
         Tracking::Unfollow => {
             set_following(false);
-            crate::domain::control::camera::controller::reset_azimuth();
+            controller::reset_azimuth();
         }
     }
 }
@@ -258,12 +262,9 @@ pub fn tracking_action(tracking: Tracking) {
 /// A search's place and the view asked with it: a view far out comes in,
 /// and the view is asked after, so a dist asked wins over the coming in.
 pub fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
-    crate::domain::control::navigation::destination::go_on_ground(
-        epsg4326::project(&[lon, lat, 0.0]),
-        Motion::Snap,
-    );
-    crate::domain::control::camera::controller::come_in_to_default();
-    crate::domain::control::camera::controller::set_intent(view);
+    destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    controller::come_in_to_default();
+    controller::set_intent(view);
 }
 
 /// The compass is asked for where it is used (`tracking_action`).
@@ -285,10 +286,10 @@ pub fn sensors_close() {
 /// Why the server does not answer the world's reads now: failing, or given up.
 /// The network and the GPU are the host's, which says them.
 fn stall() -> Option<Message> {
-    if crate::sys::io::request::given_up() {
+    if request::given_up() {
         return Some(Message::WorldUnavailable);
     }
-    match crate::sys::io::request::failing() {
+    match request::failing() {
         Some(Errno::ENETUNREACH) | None => None,
         Some(_) => Some(Message::WorldReadFailing),
     }

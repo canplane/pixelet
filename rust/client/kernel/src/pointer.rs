@@ -10,6 +10,7 @@ use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::domain::control::interaction::{self, ActiveTool};
+use crate::domain::control::navigation::destination;
 use crate::domain::scene::marker::{self, Went};
 
 /// What a tap on a marker does with the tool held.
@@ -47,7 +48,7 @@ pub fn over_marker() -> bool {
 /// A tap at `x`, `y`.
 pub fn tap(x: f64, y: f64) {
     match marker_at(x, y) {
-        Some(MarkerTap::Go(at)) => crate::domain::control::navigation::destination::go_to_place(at),
+        Some(MarkerTap::Go(at)) => destination::go_to_place(at),
         Some(MarkerTap::Remove(e)) => interaction::edit::remove(e),
         Some(MarkerTap::Wait(e)) => interaction::edit::wait_at(e),
         None => interaction::tap(x, y),

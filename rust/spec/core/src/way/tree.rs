@@ -34,7 +34,9 @@
 //! A candidate's node is held in its data word while the tree is built,
 //! where its leaf or fold is written after (`pack`).
 
+use crate::fill;
 use crate::overwrite::{self, Held, Lanes, AIR as PLACED_AIR, BRANCH};
+use crate::window;
 use crate::window::{Bricks, BRICK_SHIFT};
 use crate::{ground, Zoom, LEAF_CELL};
 
@@ -59,11 +61,11 @@ impl Lanes for Lane<'_> {
 
 impl Pool for Lane<'_> {
     fn set_heap(&mut self, slot: u32, v: u32) {
-        crate::fill::put(self.0, slot, v);
+        fill::put(self.0, slot, v);
     }
     fn set_data(&mut self, slot: u32, v: u32) {
         let half = self.0.len() as u32 / 2;
-        crate::fill::put(self.0, half + slot, v);
+        fill::put(self.0, half + slot, v);
     }
 }
 
@@ -180,7 +182,7 @@ pub const NONE: u32 = u32::MAX;
 /// scratch is `window::HANDED` of them and each brick's length is a
 /// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
 /// `BRICK_FAMILIES` it is `SCRATCH_WORDS`.
-pub const FREED_AT: u32 = crate::window::TREE_AT;
+pub const FREED_AT: u32 = window::TREE_AT;
 pub const RECORD_WORDS: u32 = 1 + FAMILY_WORDS;
 
 /// A brick's scratch for a tree of `families` at most, in words.
@@ -449,6 +451,7 @@ pub fn read(val: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::window;
 
     #[test]
     fn scratch_holds_families() {
@@ -456,7 +459,7 @@ mod tests {
         // its freed families' count and ids, its records' count and records.
         assert_eq!(
             SCRATCH_WORDS,
-            crate::window::TREE_AT + 1 + BRICK_FAMILIES + 1 + BRICK_FAMILIES * RECORD_WORDS
+            window::TREE_AT + 1 + BRICK_FAMILIES + 1 + BRICK_FAMILIES * RECORD_WORDS
         );
         for families in [1, 539, 1078, BRICK_FAMILIES] {
             assert_eq!(scratch_families(scratch_words(families)), families);

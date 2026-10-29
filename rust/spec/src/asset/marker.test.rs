@@ -1,10 +1,11 @@
 // pxl-spec/asset/marker.test.rs
 
 use super::*;
+use crate::space::coord::zoom;
 
 /// Markers spread over a few bricks, two to a leaf cell in places.
 fn markers() -> Vec<EntryAt> {
-    let z = crate::space::coord::zoom::UNIT_ZOOM;
+    let z = zoom::UNIT_ZOOM;
     (0..400i32)
         .map(|k| EntryAt::new(z, [(k * 7919) % 300, (k * 104_729) % 300, (k * 31) % 9]))
         .collect()

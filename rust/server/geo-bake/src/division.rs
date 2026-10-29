@@ -21,8 +21,14 @@ use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::coverage::BAKE_REACH;
+use crate::pyramid::Base;
 use crate::terrain::pipeline::ground::render_polygon;
 use crate::wkb::wkb_to_geometries;
+use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::tile::division;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::lattice;
+use pxl_spec::space::layer::lattice::Lattice;
 
 /// Each area meeting the tile, cut to it, with its division and how deep that is.
 const AREAS_SQL: &str = "WITH env AS (SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e)
@@ -242,29 +248,24 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     }))
 }
 
-impl crate::pyramid::Base for DivisionTile {
-    const LAYER: pxl_spec::bake::published::BaseLayer =
-        pxl_spec::bake::published::BaseLayer::division;
+impl Base for DivisionTile {
+    const LAYER: BaseLayer = BaseLayer::division;
 
-    const LEAF: pxl_spec::space::coord::zoom::Zoom = DIVISION_LEAF;
+    const LEAF: Zoom = DIVISION_LEAF;
 
-    const LATTICE: pxl_spec::space::layer::lattice::Lattice =
-        pxl_spec::space::layer::lattice::GROUND;
+    const LATTICE: Lattice = lattice::GROUND;
 
     fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
-        pxl_spec::bake::tile::division::encode(self).map_err(|e| format!("{e:?}"))
+        division::encode(self).map_err(|e| format!("{e:?}"))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
-        pxl_spec::bake::tile::division::decode(raw).map_err(|e| format!("{e:?}"))
+        division::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(held);
-        Some(pxl_spec::bake::tile::division::fold(
-            [a?, b?, c?, d?],
-            p.zoom,
-        ))
+        Some(division::fold([a?, b?, c?, d?], p.zoom))
     }
 
     fn occupancy(&self) -> Occupancy {

@@ -8,10 +8,11 @@ use crate::domain::query::model::asset::{model_of, registered};
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::asset::decor::{Decor, DECORS};
+use pxl_spec_core::scatter;
 
 /// One a variant at most, each its draw group (pxl-spec-core scatter.rs
 /// `GROUPS`): two variants naming one model reach one (`model_of`).
-pub const MODELS_MAX: usize = pxl_spec_core::scatter::GROUPS as usize;
+pub const MODELS_MAX: usize = scatter::GROUPS as usize;
 
 /// Asks for each variant's model, a turn's effect: registers the first one
 /// that has landed and is not registered yet, and asks another turn for the

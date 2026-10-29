@@ -7,6 +7,7 @@
 
 use std::process::ExitCode;
 
+use pxl_tool::fetch;
 use pxl_tool::root;
 
 fn run() -> Result<(), String> {
@@ -25,7 +26,7 @@ fn run() -> Result<(), String> {
         .collect();
     let raw = root().join("infra/earth/raw");
     for url in &urls {
-        pxl_tool::fetch::fetch_kept(url, &raw)?;
+        fetch::fetch_kept(url, &raw)?;
     }
     println!("[earth] {} files in {}", urls.len(), raw.display());
     Ok(())

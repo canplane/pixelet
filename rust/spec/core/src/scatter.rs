@@ -20,7 +20,9 @@ use crate::cave::node_seed;
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, COUNTS, DECORS, PATCH};
 use crate::lattice::GROUND;
+use crate::overwrite;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
+use crate::window;
 use crate::window::{BRICK_SHIFT, ENTRIES, EYE_WINDOWS};
 use crate::world::{placed_in, Placed};
 use crate::{wrap_idx, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
@@ -162,7 +164,7 @@ pub fn patch_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2
 /// brick at the leaves, its side `window::BRICK` leaf cells, aligned to
 /// it, so a patch as wide or wider holds it whole.
 pub const BRICK_PATCHES: u32 = {
-    let side = crate::window::BRICK_SHIFT;
+    let side = window::BRICK_SHIFT;
     let (mut born, mut sum) = (LEAF_ZOOM + 1, 0);
     while born > TOP_ZOOM {
         born -= 1;
@@ -275,12 +277,12 @@ pub const fn grown_for(head: [u32; 3], q: [i32; 2]) -> bool {
 /// The boxes a frame's growth is asked over at most: the edits and cuts
 /// held (`overwrite::BOXES`), and each brick handed this frame, which
 /// reaches its window's zoom alone.
-pub const MARKED: u32 = crate::overwrite::BOXES + crate::window::HANDED;
+pub const MARKED: u32 = overwrite::BOXES + window::HANDED;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
 /// window zoom whose candidates it reaches, `EVERY` for all.
 pub const BOX_WORDS: u32 = 5;
 pub const EVERY: u32 = 0;
-const _: () = assert!(crate::window::FIRST_CELL > EVERY);
+const _: () = assert!(window::FIRST_CELL > EVERY);
 
 /// What `decor_mark_cs` reads and lists and `decor_stand_cs` and `decor_cs`
 /// are dispatched by, in words: each one's workgroups across, up and the
@@ -348,7 +350,7 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
 /// The zoom a record names for placed decor, which no window grows. No
 /// window's cells are at it (`FIRST_CELL`).
 pub const PLACED_AT: Zoom = 0;
-const _: () = assert!(crate::window::FIRST_CELL > PLACED_AT);
+const _: () = assert!(window::FIRST_CELL > PLACED_AT);
 
 /// A record's first word: its decor and variant, a byte each, its turn in
 /// quarters, and the window zoom it was grown at, `PLACED_AT` for placed

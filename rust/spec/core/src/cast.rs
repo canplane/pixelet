@@ -1033,8 +1033,11 @@ mod tests {
             }
         }
     }
+    use crate::answer;
+    use crate::answer::BoxWords;
     use crate::answer::{kept_word, BOX_WHOLE, EIGHTHS, FULL};
     use crate::cube::ground::stone;
+    use crate::grid;
     use crate::overwrite::AIR;
 
     /// One cell of stone at `TARGET`, a unit cell, keeping `kept` eighths of
@@ -1103,9 +1106,9 @@ mod tests {
             assert!((lo[0] + hi[0] - 1.0).abs() < 1e-6);
         }
         // What fills a share keeps its eighths, floored.
-        assert_eq!(crate::answer::eighths(FULL), EIGHTHS);
-        assert_eq!(crate::answer::eighths(FULL / 8 - 1), 0);
-        assert_eq!(crate::answer::eighths(3 * FULL / 8), 3);
+        assert_eq!(answer::eighths(FULL), EIGHTHS);
+        assert_eq!(answer::eighths(FULL / 8 - 1), 0);
+        assert_eq!(answer::eighths(3 * FULL / 8), 3);
     }
 
     #[test]
@@ -1121,7 +1124,7 @@ mod tests {
     }
 
     /// Every split's content in the box `0` names, air at the leaves.
-    struct Boxed(crate::answer::BoxWords);
+    struct Boxed(BoxWords);
 
     impl Query for Boxed {
         type At = ();
@@ -1161,12 +1164,11 @@ mod tests {
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
             spacing: Spacing {
-                angle: crate::grid::CELL,
+                angle: grid::CELL,
                 across: 0.0,
             },
         };
-        let walk =
-            |b: crate::answer::BoxWords| first(&mut Boxed(b), o, &ray, detail, Until::Opaque);
+        let walk = |b: BoxWords| first(&mut Boxed(b), o, &ray, detail, Until::Opaque);
         // The origin lies in the root's lower half on every axis.
         for missed in [
             box_word([512, 0, 0], [1024; 3]),

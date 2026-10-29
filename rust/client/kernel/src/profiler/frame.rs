@@ -10,10 +10,14 @@ use xpute_guest::sched::tick::PHASES;
 
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMIT, WORST};
 use crate::profiler::word::{words, Words};
+use crate::sys::io::demand_spec;
+use crate::sys::sched::tick;
+use crate::turn::spec;
 use pxl_render::frame::draw::{DrawCensus, DRAW_PIPELINES};
 use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_render::gpu::ray;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
+use pxl_spec::space::layer::lattice;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS;
 
@@ -252,12 +256,12 @@ words!(FrameSample, FRAME::WORDS,
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
-pub const EFFECTS: usize = crate::turn::spec::EFFECT_NAMES;
-pub const STREAMS: usize = crate::sys::io::demand_spec::STREAM_NAMES;
+pub const EFFECTS: usize = spec::EFFECT_NAMES;
+pub const STREAMS: usize = demand_spec::STREAM_NAMES;
 pub const ZOOMS: usize = LIMIT::ZOOMS as usize;
 
 const _: () = assert!(
-    pxl_spec::space::layer::lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
+    lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
     "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
 );
 
@@ -273,7 +277,7 @@ pub fn is_missed(f: &FrameSample) -> bool {
 
 /// Past even the hard ceiling: one step too big for the forward-progress waiver.
 pub fn overran(f: &FrameSample) -> bool {
-    f.tick_ms > f.budget_ms + crate::sys::sched::tick::HARD_SLACK_MS
+    f.tick_ms > f.budget_ms + tick::HARD_SLACK_MS
 }
 
 /// What the interval's turns ran past it, read off the interval and the

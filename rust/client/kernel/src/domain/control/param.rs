@@ -2,8 +2,10 @@
 
 //! The camera's defaults, gestures and smoothing.
 
+use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile;
 
 // ---- the camera ----
 
@@ -22,8 +24,7 @@ pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
 /// `split_dist`).
 pub const DOLLY_END_CELLS: f64 = 64.0;
 const _: () = assert!(
-    DOLLY_END_CELLS >= pxl_spec::space::camera::grid::CELLS_A_RAD / 2.0
-        && DOLLY_END_CELLS < pxl_spec::space::camera::grid::CELLS_A_RAD,
+    DOLLY_END_CELLS >= grid::CELLS_A_RAD / 2.0 && DOLLY_END_CELLS < grid::CELLS_A_RAD,
     "a dolly's limit lies in the band its end cell is drawn over"
 );
 /// The orbit's nearest, in units from the pivot, about 3.8 m at Seoul's
@@ -32,8 +33,7 @@ pub const MIN_DIST: f64 = 2.0;
 /// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
 /// holds, the pyramid's top's, so looking straight down the grid never asks
 /// a coarser cell than a zoom draws.
-pub const MAX_DIST: f64 =
-    DOLLY_END_CELLS * units(GROUND.cell_zoom(pxl_spec::space::layer::tile::TOP_ZOOM));
+pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(tile::TOP_ZOOM));
 
 // ---- the camera's settling and the ground it keeps to ----
 

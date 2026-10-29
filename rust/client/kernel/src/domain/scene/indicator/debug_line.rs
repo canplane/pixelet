@@ -5,14 +5,14 @@
 //! another and nothing else. A module built without the gizmos holds none.
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
+use pxl_render::frame::shader::record;
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::v3::V3;
 
 /// Position relative to the set's origin (3), and linear color and its
 /// opacity (4); two vertices a segment: the renderer's vertex, read in its
 /// words (pxl-render frame/shader/record.rs `DEBUG_VERTEX_BYTES`).
-pub const DEBUG_VERTEX_FLOATS: usize =
-    pxl_render::frame::shader::record::DEBUG_VERTEX_BYTES as usize / 4;
+pub const DEBUG_VERTEX_FLOATS: usize = record::DEBUG_VERTEX_BYTES as usize / 4;
 
 /// Position relative to the set's origin; three vertices a triangle.
 pub const DEBUG_FACE_FLOATS: usize = 3;

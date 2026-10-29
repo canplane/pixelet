@@ -2,7 +2,11 @@
 
 use super::cache::Lease;
 use super::{Dataset, Failure};
+use crate::coverage::Node;
+use crate::coverage::Overture;
+use crate::util;
 use postgres::Client;
+use pxl_spec::space::layer::tile::Tile;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -12,6 +16,8 @@ use std::sync::{
 };
 use tokio::process::Command;
 use tokio::sync::{oneshot, Semaphore};
+use tokio::time;
+use tokio::time::Instant;
 
 #[derive(Clone, Copy)]
 pub struct Limits {
@@ -97,7 +103,7 @@ impl Workers {
             });
             woken
         };
-        match tokio::time::timeout_at(lease.deadline, &mut woken).await {
+        match time::timeout_at(lease.deadline, &mut woken).await {
             Ok(Ok(())) => Ok(Worker(self.clone())),
             _ => {
                 // A worker handed over as the deadline passed is given back.
@@ -177,19 +183,19 @@ impl Runner {
             .stdout(std::process::Stdio::null())
             .kill_on_drop(true);
         supervise(command, deadline).await?;
-        if tokio::time::Instant::now() >= deadline {
+        if Instant::now() >= deadline {
             return Err(Failure::Limited("demand generation deadline"));
         }
         out.publish(&data, &name).map_err(Failure::from)
     }
 }
 
-async fn supervise(mut command: Command, deadline: tokio::time::Instant) -> Result<(), Failure> {
-    if tokio::time::Instant::now() >= deadline {
+async fn supervise(mut command: Command, deadline: Instant) -> Result<(), Failure> {
+    if Instant::now() >= deadline {
         return Err(Failure::Limited("demand generation deadline"));
     }
     let mut child = command.spawn().map_err(|e| e.to_string())?;
-    match tokio::time::timeout_at(deadline, child.wait()).await {
+    match time::timeout_at(deadline, child.wait()).await {
         Ok(status) => {
             if status.map_err(|e| e.to_string())?.success() {
                 Ok(())
@@ -210,10 +216,10 @@ async fn supervise(mut command: Command, deadline: tokio::time::Instant) -> Resu
 /// runs is checked by the next job.
 pub fn connect(
     reads: &[&[&str]],
-    need: &std::collections::BTreeSet<crate::coverage::Node>,
+    need: &std::collections::BTreeSet<Node>,
     seconds: u64,
-) -> Result<(crate::coverage::Overture, Client), String> {
-    let (source, mut client) = crate::coverage::Overture::reading(reads, need)?;
+) -> Result<(Overture, Client), String> {
+    let (source, mut client) = Overture::reading(reads, need)?;
     client
         .batch_execute(&format!(
             "SET statement_timeout = {}",
@@ -230,7 +236,7 @@ pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
             subject,
             cache,
         } => {
-            let p = pxl_spec::space::layer::tile::Tile::of_subject(subject);
+            let p = Tile::of_subject(subject);
             match kind {
                 super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),
                 super::Kind::Place => super::place::execute(p, &cache, out, seconds),
@@ -245,7 +251,7 @@ pub(super) fn write_pkt(out: &Path, pkt: Option<&[u8]>) -> Result<(), String> {
         Some(bytes) => (out.join("packet"), bytes),
         None => (out.join("empty"), &b""[..]),
     };
-    crate::util::write_atomic(&path, bytes).map_err(|e| e.to_string())
+    util::write_atomic(&path, bytes).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

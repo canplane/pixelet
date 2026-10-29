@@ -1,6 +1,7 @@
 // pxl-kernel/sys/io/file.test.rs
 
 use super::*;
+use crate::sys;
 
 fn read(kept: Kept, text: &[u8]) -> Option<Vec<u8>> {
     match kept_of(kept, text) {
@@ -12,7 +13,7 @@ fn read(kept: Kept, text: &[u8]) -> Option<Vec<u8>> {
 /// What an owner keeps reads back as it wrote it, its slot's format first.
 #[test]
 fn kept_file_format() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     for kept in Kept::ALL {
         on_emptied(kept);
         let text = sealed(kept, &[7, 0, 255]);
@@ -31,7 +32,7 @@ fn kept_file_format() {
 /// before it carried its format, is refused until the slot is emptied.
 #[test]
 fn foreign_format_refused() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let foreign = BASE64
         .encode([format::OBJECTS.wrapping_add(1), 1, 2])
         .into_bytes();

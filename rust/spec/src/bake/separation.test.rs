@@ -4,6 +4,7 @@ use super::*;
 use pxl_spec_core::way;
 
 use crate::procedural::Frame;
+use crate::space::layer::tile;
 
 /// A leaf tile's frame at the origin: a u a cell.
 const NOWHERE: Frame = Frame {
@@ -42,7 +43,7 @@ fn diagonal_line_one_band() {
 /// A parent's neighborhood with `d` its first child's lines and no other.
 fn first_child(d: &Separation) -> [Option<&Separation>; 16] {
     let mut around = [None; 16];
-    around[crate::space::layer::tile::neighbor_idx(0, 0)] = Some(d);
+    around[tile::neighbor_idx(0, 0)] = Some(d);
     around
 }
 

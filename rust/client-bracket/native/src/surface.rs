@@ -20,6 +20,7 @@ use xpute_host::mem::Memory;
 
 #[cfg(target_os = "android")]
 use crate::android::target;
+use pxl_render::gpu::api;
 
 /// BGRA on Apple, RGBA on Android, whose Vulkan surfaces offer no BGRA.
 #[cfg(target_vendor = "apple")]
@@ -82,7 +83,7 @@ pub fn admit() -> bool {
 
 /// The turn's calls run on the device, and its frames shown.
 pub fn after_turn(mem: &mut Memory<'_>) {
-    if let (Some(h), Some(at)) = (native::host(), pxl_render::gpu::api::stream_at()) {
+    if let (Some(h), Some(at)) = (native::host(), api::stream_at()) {
         h.run(mem, at, stream::HEAD);
         h.present();
     }

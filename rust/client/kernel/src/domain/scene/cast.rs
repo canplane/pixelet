@@ -20,6 +20,8 @@ use crate::domain::layer::terrain::window::{self, Handed};
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
 use crate::domain::view::setting::store::settings_store;
+use crate::sys::io::source;
+use pxl_render::gpu::api;
 use pxl_spec::bake::constant::EntryAt;
 
 /// The service area's index as the GPU reads it, and whether a declared
@@ -31,11 +33,11 @@ static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 /// (`area::shard_key`), four a row; a row of none where none is declared,
 /// since a binding holds at least one, and a read past it is none.
 pub fn shards() -> &'static [[i32; 4]] {
-    let declared = crate::sys::io::source::top().is_some();
+    let declared = source::top().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || *made != declared {
         s.clear();
-        let nines = crate::sys::io::source::nines();
+        let nines = source::nines();
         let nine = |i: usize| nines.get(i).copied().map_or(0, i32::from);
         s.extend(
             (0..nines.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| nine(4 * r + k))),
@@ -94,7 +96,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             .is_some_and(|t| terrain.get(t).is_some() && window::is_tile_wanted(t))
     };
     kept().send(
-        pxl_render::gpu::api::device_generation(),
+        api::device_generation(),
         &mut |slot, pkt| {
             let Some(t) = terrain.in_slot(slot) else {
                 return Offered::Taken;

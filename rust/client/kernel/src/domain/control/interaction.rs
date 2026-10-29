@@ -15,6 +15,8 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::domain::control::camera::controller;
+use crate::domain::control::camera::controller::Motion;
 pub use crate::domain::control::cmd::ActiveTool;
 use crate::domain::control::interaction::collision::{anchor_center, object_aabb};
 use crate::domain::control::interaction::collision::{is_placement_blocked, PlacementTool};
@@ -24,11 +26,16 @@ use crate::domain::control::interaction::edit::{
 use crate::domain::control::interaction::pick::{
     ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner,
 };
+use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::support::stand;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::store::Entry;
+use crate::domain::query;
+use crate::domain::query::Struck::Decor;
+use crate::domain::query::Struck::Object;
 use crate::domain::query::{Hit, World};
 use crate::domain::view::frame::pose::ray_of;
+use crate::domain::view::observation;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, units, Zoom};
 use xpute_guest::global::Global;
@@ -127,7 +134,7 @@ enum Struck {
 /// box it claims, which the hit carries.
 fn flush_against(hit: &Hit) -> Option<Aabb> {
     match hit.struck {
-        crate::domain::query::Struck::Object(_) => resolve_hit_object(hit).map(|o| object_aabb(&o)),
+        Object(_) => resolve_hit_object(hit).map(|o| object_aabb(&o)),
         _ => None,
     }
 }
@@ -135,7 +142,7 @@ fn flush_against(hit: &Hit) -> Option<Aabb> {
 /// What the pick struck, as a tool reads it: a placed object, or a decor the ground grew.
 fn resolve_struck(hit: &Hit) -> Option<Struck> {
     match hit.struck {
-        crate::domain::query::Struck::Decor(i) => match i.grown_in() {
+        Decor(i) => match i.grown_in() {
             Some(cell) => Some(Struck::Grown(cell, i)),
             None => resolve_hit_object(hit).map(Struck::Object),
         },
@@ -156,7 +163,7 @@ pub(crate) struct Picked {
 /// the box struck.
 fn cell_struck(hit: &Hit) -> Aabb {
     match hit.struck {
-        crate::domain::query::Struck::Decor(i) => i.cell(),
+        Decor(i) => i.cell(),
         _ => hit.cube,
     }
 }
@@ -178,13 +185,13 @@ impl Picked {
 /// from the pose as the camera holds it now, which a door event or a
 /// controller may have moved since the turn composed the view.
 pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
-    let pose = crate::domain::control::camera::controller::pose()?;
+    let pose = controller::pose()?;
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
     let hit = ray_pick(origin, dir)?;
-    let drawn = crate::domain::view::observation::eye().map(|eye| {
+    let drawn = observation::eye().map(|eye| {
         let v = v3::sub(&cell_struck(&hit).center(), &eye);
-        crate::domain::query::by_dist().at(v3::dot(&v, &v) as f32)
+        query::by_dist().at(v3::dot(&v, &v) as f32)
     });
     Some(Picked { hit, drawn })
 }
@@ -264,10 +271,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
                 return;
             };
             let target = stand(&anchor_center(&approach));
-            crate::domain::control::navigation::destination::go_to(
-                target,
-                crate::domain::control::camera::controller::Motion::Smooth,
-            );
+            destination::go_to(target, Motion::Smooth);
         }
         // The eraser.
         None => {

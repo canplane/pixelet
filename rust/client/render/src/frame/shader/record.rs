@@ -101,6 +101,7 @@ pub const NONE: u32 = 0;
 /// so on, by the stem of the entry's file.
 pub mod compute {
     use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE_UINT_ARRAY, UNIFORM};
+    use crate::frame::shader::floor;
     include!(concat!(env!("OUT_DIR"), "/compute.rs"));
 }
 
@@ -142,6 +143,7 @@ use crate::frame::draw::{
     PIPELINE_IMPOSTOR, PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
+use pxl_spec_core::param::sun;
 
 const fn f(v: f32) -> u32 {
     v.to_bits()
@@ -198,7 +200,7 @@ const fn blended(shader: u32, cull: u32) -> Head {
 }
 
 /// The shadow map's casters' alike, raster and cast (pxl-spec-core `param::sun::SLOPE_BIAS`).
-const DEPTH_SLOPE_BIAS: f32 = pxl_spec_core::param::sun::SLOPE_BIAS;
+const DEPTH_SLOPE_BIAS: f32 = sun::SLOPE_BIAS;
 
 /// Depth alone: plain less-than, no fragment stage, both sides, pushed back
 /// by its slope as a rasterizer's polygon offset.

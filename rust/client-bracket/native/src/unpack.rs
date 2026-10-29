@@ -12,12 +12,14 @@
 
 /// Every frame of `body` decoded, its skippable frames passed over; none
 /// where one does not decode, or ends before its frame does.
+use zstd::stream;
+
 pub fn decode(body: &[u8]) -> Option<Vec<u8>> {
     // libzstd reads no frame as one cut short; no frame is nothing.
     if body.is_empty() {
         return Some(Vec::new());
     }
-    zstd::stream::decode_all(body).ok()
+    stream::decode_all(body).ok()
 }
 
 /// Decodes the zstd body of `len` bytes at `src`: 0, with the bytes at

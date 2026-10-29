@@ -6,6 +6,7 @@
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 
+use crate::frame::draw;
 use crate::frame::draw::DRAW_WORDS;
 use crate::frame::shader::record::{PIPELINES, UPLOAD_LAYOUT};
 use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu};
@@ -105,7 +106,7 @@ const UPLOAD_LANES: usize = 7;
 
 /// The table's lanes for `live` uploads, then the draw list's (frame/draw.rs `lanes_bytes`).
 pub const fn uploads_bytes(live: usize) -> u32 {
-    (UPLOAD_LANES * slots_of(live) * 4) as u32 + crate::frame::draw::lanes_bytes(live)
+    (UPLOAD_LANES * slots_of(live) * 4) as u32 + draw::lanes_bytes(live)
 }
 
 /// # Safety
@@ -132,7 +133,7 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
         layout: 0,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { crate::frame::draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, live) };
+    unsafe { draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, live) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {

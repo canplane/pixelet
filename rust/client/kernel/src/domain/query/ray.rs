@@ -15,6 +15,7 @@ use crate::domain::layer::{Answer, Base};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{self, V3};
@@ -25,6 +26,7 @@ use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::answer::{self, In, Kind};
 pub(super) use pxl_spec_core::cast::Until;
 use pxl_spec_core::cast::{self, Detail, End, Query, Spacing};
+use pxl_spec_core::support;
 use pxl_spec_core::support::{Footing, Line};
 
 /// The zooms a cell is asked at: no coarser than a tile draws and no finer
@@ -77,7 +79,7 @@ pub fn by_dist() -> Detail {
 /// tile draws.
 pub fn cell_at(eye: V3, at: V3) -> Zoom {
     let v = v3::sub(&at, &eye);
-    let cell = pxl_spec::space::camera::grid::cell_at(v3::dot(&v, &v)).min(GROUND.cell());
+    let cell = grid::cell_at(v3::dot(&v, &v)).min(GROUND.cell());
     TerrainTile::top().map_or(cell, |top| cell.max(GROUND.grid_zoom(top)))
 }
 
@@ -293,7 +295,7 @@ impl<'a> World<'a> {
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
-        let f = pxl_spec_core::support::footing(&mut walker, cell, g);
+        let f = support::footing(&mut walker, cell, g);
         let met = (f.ends == End::Stop).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
@@ -310,7 +312,7 @@ impl<'a> World<'a> {
     /// it.
     pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
         let mut walker = self.walker();
-        let val = pxl_spec_core::support::asset(&mut walker, l, zoom, c);
+        let val = support::asset(&mut walker, l, zoom, c);
         match walker.lack {
             None => Answer::Exact(val),
             Some(t) => Answer::Nothing(t),

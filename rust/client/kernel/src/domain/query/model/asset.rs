@@ -15,6 +15,7 @@ use pxl_spec::space::coord::mat4;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 
+use crate::domain::query::model;
 use crate::sys::io::loader::{load_gltf, load_of};
 use crate::sys::io::room::Refused;
 use crate::sys::mem::section;
@@ -132,7 +133,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
     }
 
     section::map().and_then(|_| {
-        let models = crate::domain::query::model::models();
+        let models = model::models();
         let (model, block) = models.new_model(vertex_cnt, idx_cnt, joint_cnt)?;
         let n = (vertex_cnt * MODEL_VERTEX_WORDS + idx_cnt) as usize;
         // SAFETY: the model's block, `n` words, ours until sealed.
@@ -300,7 +301,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
             _ => 1.0,
         };
         // SAFETY: the model's block is in the volumes' memory.
-        unsafe { models.seal(crate::domain::query::model::draw_list(), model, scale) };
+        unsafe { models.seal(model::draw_list(), model, scale) };
         Some(ModelHandle {
             model,
             clip_cnt: gltf.animations.len() as u32,

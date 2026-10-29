@@ -14,6 +14,8 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::{Mutex, OnceLock};
 
+use crate::surface;
+use crate::unpack;
 use jni_sys::{
     jboolean, jbyteArray, jclass, jdouble, jint, jmethodID, jobject, jvalue, JNIEnv,
     JNINativeInterface_, JavaVM, JNI_ABORT, JNI_OK,
@@ -108,7 +110,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
     // SAFETY: JNI's array, its own length.
     let Some(raw) = (unsafe {
         with_bytes(env, packed, |at, len| {
-            crate::unpack::decode(core::slice::from_raw_parts(at, len))
+            unpack::decode(core::slice::from_raw_parts(at, len))
         })
     }) else {
         return core::ptr::null_mut();
@@ -203,8 +205,8 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_gpuOpen(
             }
         }
     }
-    crate::surface::xpute_gpu_wake_on(wake);
-    jboolean::from(crate::surface::xpute_gpu_open() == 0)
+    surface::xpute_gpu_wake_on(wake);
+    jboolean::from(surface::xpute_gpu_open() == 0)
 }
 
 /// `PxlNative.wake`, from whichever thread learned of a completion
@@ -257,7 +259,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBin
     };
     let at = window.as_ptr().expose_provenance();
     // SAFETY: the window is held until the surface over it is unbound.
-    let bound = unsafe { crate::surface::xpute_gpu_surface_bind(handle, window.as_ptr().cast()) };
+    let bound = unsafe { surface::xpute_gpu_surface_bind(handle, window.as_ptr().cast()) };
     let let_go = if bound == 0 {
         WINDOWS
             .lock()
@@ -285,7 +287,7 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
     handle: jint,
 ) {
     let handle = handle as u32;
-    crate::surface::xpute_gpu_surface_unbind(handle);
+    surface::xpute_gpu_surface_unbind(handle);
     let window = WINDOWS
         .lock()
         .or_bug(Errno::ENOTRECOVERABLE)

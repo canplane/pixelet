@@ -18,6 +18,7 @@ mod android;
 mod surface;
 mod unpack;
 
+use pxl_kernel::door;
 use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
 use pxl_kernel::sys::stop::Stop;
@@ -83,7 +84,7 @@ fn view() -> Memory<'static> {
 /// the turn's calls run on it after (surface.rs), and the frames it admits.
 fn turn(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     surface::before_turn(&mut view());
-    let wake = pxl_kernel::door::intr(quota_ms, boot_info, Some(last_words), surface::admit);
+    let wake = door::intr(quota_ms, boot_info, Some(last_words), surface::admit);
     surface::after_turn(&mut view());
     wake
 }

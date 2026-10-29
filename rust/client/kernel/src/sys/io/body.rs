@@ -53,6 +53,7 @@ use xpute_guest::mem::section::PAGE_BYTES;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
 use crate::sys::io::room::Refused;
+use crate::sys::sched::edge;
 
 /// The kinds whose bodies take a slot.
 const SLOTTED: [Stream; 2] = [Stream::terrain, Stream::earth];
@@ -204,7 +205,7 @@ pub unsafe fn give(block: Block) {
     s.out -= 1;
     s.releases = s.releases.wrapping_add(1);
     if core::mem::take(&mut s.waited) {
-        crate::sys::sched::edge::request_world_tick();
+        edge::request_world_tick();
     }
     if run.out == 0 {
         let run = s.runs.swap_remove(i);

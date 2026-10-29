@@ -24,6 +24,8 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Region;
+use pxl_spec_core::param::raster::GROWN;
+use pxl_spec_core::param::sun::SAMPLE;
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -185,7 +187,7 @@ impl Raster {
             0.0,
             0.0,
             0.0,
-            pxl_spec_core::param::raster::GROWN * px,
+            GROWN * px,
             w,
             h,
             reach,
@@ -306,8 +308,7 @@ impl Raster {
     pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.sun;
         if s.group == 0 {
-            let samples = (size / pxl_spec_core::param::sun::SAMPLE)
-                * (size / pxl_spec_core::param::sun::SAMPLE);
+            let samples = (size / SAMPLE) * (size / SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             s.boxes = g.buf(word_bytes(raster::words(samples) as usize), storage);
             s.args = g.buf(
@@ -379,7 +380,7 @@ impl Raster {
             f32::from_bits(1),
             0.0,
             0.0,
-            pxl_spec_core::param::raster::GROWN * length(v.across),
+            GROWN * length(v.across),
             n,
             n,
             v.reach,

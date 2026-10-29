@@ -7,6 +7,7 @@
 //! queries report (`Columns`), so a change stops at the ground it touches.
 
 use super::world::World;
+use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
 use core::cell::Cell;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -33,7 +34,7 @@ fn changed() -> &'static mut Changed {
 pub(crate) fn take() -> bool {
     let c = changed();
     TerrainTile::tile_cache().take_moved(&mut c.ground);
-    crate::domain::layer::object::store::take_written(&mut c.written);
+    store::take_written(&mut c.written);
     !c.ground.is_empty() || !c.written.is_empty()
 }
 

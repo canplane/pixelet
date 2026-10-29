@@ -2,6 +2,9 @@
 
 use super::*;
 use crate::domain::control::camera::state::{camera_state, Intent};
+use crate::domain::control::navigation::destination;
+use crate::domain::control::param;
+use crate::sys;
 use xpute_kit::wire::xtp::PacketWriter;
 
 fn surface(n: f64) -> Result<u32, Errno> {
@@ -52,7 +55,7 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
         .map_err(|e| e.errnum),
         Ok(Some(0))
     );
-    crate::domain::control::navigation::destination::cancel();
+    destination::cancel();
     camera_state().intent
 }
 
@@ -61,7 +64,7 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
 #[test]
 fn go_to_asks_after() {
     use crate::domain::control::param::DEFAULT_DIST;
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let pi = core::f64::consts::PI;
 
     let kept = go_to(100.0, None, None, None);
@@ -76,7 +79,7 @@ fn go_to_asks_after() {
 
     assert_eq!(
         go_to(100.0, Some(1e9), None, Some(-1.0)).dist,
-        crate::domain::control::param::MAX_DIST
+        param::MAX_DIST
     );
     assert_eq!(go_to(100.0, None, None, Some(-1.0)).polar, 0.0, "clamped");
     assert_eq!(go_to(10.0, None, None, None).dist, 10.0, "nearer stays");

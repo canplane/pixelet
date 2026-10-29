@@ -6,6 +6,12 @@
 //! indexing lanes by hand let sections drift out of order (2026-09-23).
 
 use crate::domain::control::camera::controller;
+use crate::domain::query;
+use crate::domain::query::Ray;
+use crate::domain::query::Struck;
+use crate::domain::view::frame::coord;
+use crate::domain::view::frame::pose;
+use crate::domain::view::observation;
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{is_missed, long, overran, unmeasured};
 use crate::profiler::record::{
@@ -20,6 +26,7 @@ use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sys::io::failure::Outcome;
 use crate::sys::sched::tick::tick_step_stats;
+use pxl_render::gpu::renderer;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -131,10 +138,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
             spread(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
         gpu_read: cnt(&|f| f.gpu.read != 0.0),
-        gpu: spread(
-            scratch,
-            read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans)),
-        ),
+        gpu: spread(scratch, read().map(|f| renderer::gpu_ms(&f.gpu.spans))),
         phases_p95: core::array::from_fn(|k| {
             spread(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
@@ -240,20 +244,20 @@ fn view() -> ViewSection {
     // the tool could strike there, and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
         let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
-        let pose = crate::domain::view::frame::pose::view();
-        crate::domain::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut dir);
-        let ray = crate::domain::query::Ray {
+        let pose = pose::view();
+        pose::ray_of(pose.at(), x, y, &mut origin, &mut dir);
+        let ray = Ray {
             origin,
             dir,
-            reach: crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0),
+            reach: observation::eye_draw_reach().unwrap_or(0.0),
         };
-        let detail = crate::domain::query::by_dist();
+        let detail = query::by_dist();
         let hit = crate::domain::query::World::now()
             .first_hit(&ray, detail)
             .val()
             .flatten()?;
         Some((
-            crate::domain::view::frame::coord::world_to_canonical(&hit.point),
+            coord::world_to_canonical(&hit.point),
             detail.at((hit.t * hit.t) as f32),
         ))
     });
@@ -261,17 +265,16 @@ fn view() -> ViewSection {
     // What the tool held strikes there, as the hover picks it.
     let picked = pointed.and_then(|[x, y]| interaction::pick_at(x, y));
     let struck = picked.as_ref().map_or(f64::NAN, |p| match p.hit.struck {
-        crate::domain::query::Struck::Ground => 0.0,
-        crate::domain::query::Struck::Object(_) => 1.0,
-        crate::domain::query::Struck::Objects => 2.0,
-        crate::domain::query::Struck::Decor(_) => 3.0,
+        Struck::Ground => 0.0,
+        Struck::Object(_) => 1.0,
+        Struck::Objects => 2.0,
+        Struck::Decor(_) => 3.0,
     });
     let tool = collision::PlacementTool::of(&interaction::holding());
     let place = interaction::hover().coord.filter(|_| tool.is_some());
     let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
-    let eye =
-        controller::eye_world().map(|e| crate::domain::view::frame::coord::world_to_canonical(&e));
+    let eye = controller::eye_world().map(|e| coord::world_to_canonical(&e));
     let [eye_x, eye_y, eye_z] = eye.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let pivot = controller::pivot();
     let [pivot_x, pivot_y, pivot_z] = pivot.map_or([f64::NAN; 3], |p| q3::unpack(&p));

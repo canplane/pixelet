@@ -9,6 +9,7 @@ use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
+use xpute_kit::status::errno::Errno;
 
 /// Upload record: handle, address, byte length, vertex count, index count.
 pub const UPLOAD_WORDS: usize = 5;
@@ -70,7 +71,7 @@ pub fn census_slot(pipeline: u32) -> usize {
     DRAW_PIPELINES
         .iter()
         .position(|&p| p == pipeline)
-        .or_bug(xpute_kit::status::errno::Errno::EINVAL)
+        .or_bug(Errno::EINVAL)
 }
 /// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;

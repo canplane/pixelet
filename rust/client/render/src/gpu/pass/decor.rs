@@ -19,9 +19,10 @@ use crate::gpu::pass::model::{
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::{Draws, Uploads};
+use pxl_spec_core::scatter;
 
 const _: () = assert!(
-    pxl_spec_core::scatter::GROUPS as usize <= DECOR_GROUPS,
+    scatter::GROUPS as usize <= DECOR_GROUPS,
     "a decor variant past the draw groups"
 );
 
@@ -222,7 +223,7 @@ impl DecorPass {
         }
         g.set_bind_group(pass, 3, d.instances_group, &[]);
         let mut mesh_bound = 0;
-        for group in 0..pxl_spec_core::scatter::GROUPS {
+        for group in 0..scatter::GROUPS {
             let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };

@@ -35,6 +35,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::kept::Offered;
 use crate::domain::layer::terrain::fixed::{cells_off, fill_off, CELLS_LANE_BYTES, RANGE};
 use crate::domain::layer::terrain::mirror::{mirror, Mirror, Unlaid};
+use crate::domain::layer::terrain::tile;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refused;
 use crate::sys::io::source::Declared;
@@ -313,7 +314,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     }
     // Per window, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; WINDOWS as usize], [lost; WINDOWS as usize]);
-    let kept = crate::domain::layer::terrain::tile::kept().cnt();
+    let kept = tile::kept().cnt();
     let released = wake(w);
     let mut stale = lost
         || released
@@ -373,15 +374,12 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     // frame is drawn, so none gives a packet back, the rest are asked once
     // room is given back instead. Only an absent brick's tile is asked of
     // again.
-    let mut room = crate::domain::layer::terrain::tile::again_room();
+    let mut room = tile::again_room();
     for b in 0..SLOTS {
         let held = w.slots[b as usize];
         if held.is_absent() {
             let t = tile_of(held.cell, held.brick).0;
-            if room > 0
-                && !crate::domain::layer::terrain::tile::kept_for(t)
-                && !terrain.is_again_held(t)
-            {
+            if room > 0 && !tile::kept_for(t) && !terrain.is_again_held(t) {
                 terrain.again(t);
                 room -= u32::from(terrain.is_again_held(t));
             }
@@ -575,10 +573,8 @@ pub fn refold() {
 /// not hold a place another could take.
 fn due(w: &mut Windows) {
     let terrain = TerrainTile::tile_cache();
-    let handable = |t: Tile| {
-        crate::domain::layer::terrain::tile::kept_for(t)
-            || terrain.get(t).is_some() && terrain.slot(t).is_none()
-    };
+    let handable =
+        |t: Tile| tile::kept_for(t) || terrain.get(t).is_some() && terrain.slot(t).is_none();
     w.due.clear();
     for win in 0..WINDOWS {
         let (cell, Some(first)) = (w.windows[win as usize].cell, first_of(w, win)) else {

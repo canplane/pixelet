@@ -14,14 +14,17 @@ use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::Stepped;
+use crate::domain::view::observation;
 use crate::domain::view::setting::schema_spec::SkyTime;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::clock::wall_now;
 use crate::sys::sched::edge::wake_at;
 use celestial_position::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
+use pxl_render::param::night;
 use xpute_guest::clock::now;
 
 /// Runs before the markers' step: the sky moves with the wall clock and
@@ -151,7 +154,7 @@ impl EnvironmentDraw {
     /// The sun under the horizon, as drawn: past where night begins to fall
     /// (pxl-render param.rs `night::FALL`).
     pub fn night(&self) -> bool {
-        self.started && v3::norm(&self.sun)[2] < f64::from(pxl_render::param::night::FALL[1])
+        self.started && v3::norm(&self.sun)[2] < f64::from(night::FALL[1])
     }
 
     /// Unix milliseconds: the sky's days and the clouds' time, each held and
@@ -196,7 +199,7 @@ impl EnvironmentDraw {
         let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
         // The clouds drifting step on their own, waking the turn.
         if drifted && self.started {
-            crate::domain::scene::region::animated();
+            region::animated();
         }
         self.time = (clouds - first) / 1000.0;
         let sky_in = if held { f64::INFINITY } else { next - sky_ms };
@@ -249,7 +252,7 @@ impl EnvironmentDraw {
         let km_per_u = km_per_u();
         let over = frame.camera[2];
         // The ground under the eye, as the turn observed it.
-        let ground = crate::domain::view::observation::observation().map_or(0.0, |o| o.ground);
+        let ground = observation::observation().map_or(0.0, |o| o.ground);
         let light = Light {
             sun: self.sun,
             moon: self.moon,

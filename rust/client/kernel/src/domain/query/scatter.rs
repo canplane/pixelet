@@ -22,6 +22,9 @@ use super::node::At;
 use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
+use crate::domain::layer::Answer;
+use pxl_spec_core::answer;
+use pxl_spec_core::decor;
 
 /// The world as decor's growth asks it on the CPU (pxl-spec-core
 /// `Grounds`): the world's one query and its ray, unplaced (`unplaced`,
@@ -49,8 +52,8 @@ impl<'a, 'w> Asked<'a, 'w> {
 impl Grounds for Asked<'_, '_> {
     type Footing = Footing<At>;
 
-    fn rows(&self) -> &[pxl_spec_core::decor::Decor] {
-        &pxl_spec_core::decor::DECORS
+    fn rows(&self) -> &[decor::Decor] {
+        &decor::DECORS
     }
 
     /// None where the world lacked a tile on the way: decor grows on what
@@ -58,7 +61,7 @@ impl Grounds for Asked<'_, '_> {
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Footing<At>, (i32, f32), bool) {
         let (answer, f) = self.unplaced.footing(cell, g);
         match answer {
-            crate::domain::layer::Answer::Exact(Some(top)) => (f, top, true),
+            Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
         }
     }
@@ -76,7 +79,7 @@ impl Grounds for Asked<'_, '_> {
         self.world
             .asset((zoom, c))
             .val()
-            .is_some_and(pxl_spec_core::answer::is_placed)
+            .is_some_and(answer::is_placed)
     }
 
     fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {

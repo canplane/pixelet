@@ -36,6 +36,7 @@ use crate::frame::shader::word::{
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
+use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
@@ -1465,7 +1466,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     FrameOutput {
         kind,
         // An image landing is taken on a turn to come.
-        redraw: *REDRAW.get(|| false) || crate::gpu::api::images_landing(),
+        redraw: *REDRAW.get(|| false) || api::images_landing(),
         stat: Some(stat),
     }
 }

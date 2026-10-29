@@ -22,7 +22,17 @@ use crate::domain::layer::tile_cache::TileCache;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 
 use crate::domain::layer::object::store::Write;
+use crate::domain::layer::terrain::window::test;
+use crate::sys::io::demand::Ask;
 use crate::sys::serial;
+use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::DecorId;
+use pxl_spec::bake::separation::Separation;
+use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::hierarchy::morton;
+use pxl_spec::space::layer::tile;
+use pxl_spec_core::world::placed_in;
 
 const CELLS: usize = GROUND_LANE;
 const SPAN: usize = TILE_CELLS as usize;
@@ -80,22 +90,15 @@ fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     }
     // Asked for, as the floor asks for what it holds: a tile held but not
     // asked is cache, which answers nothing.
-    let asks: fnv::FnvHashMap<Tile, crate::sys::io::demand::Ask> = admitted
-        .iter()
-        .map(|&q| (q, crate::sys::io::demand::Ask::PLAIN))
-        .collect();
+    let asks: fnv::FnvHashMap<Tile, Ask> = admitted.iter().map(|&q| (q, Ask::PLAIN)).collect();
     tile_cache.ask(&asks);
     // Their cells as a GPU would hand them back, at once.
-    crate::domain::layer::terrain::window::test::hold(center, &cells);
+    test::hold(center, &cells);
     tile_cache
 }
 
 /// A leaf as a client holds it once its cells are back: each cell's height and look given.
-fn drawn(
-    heights: Vec<i16>,
-    ground: Ground,
-    separation: pxl_spec::bake::separation::Separation,
-) -> Leaf {
+fn drawn(heights: Vec<i16>, ground: Ground, separation: Separation) -> Leaf {
     Leaf {
         tile: TerrainTile::of(
             Vec::new(),
@@ -103,7 +106,7 @@ fn drawn(
                 cells: Vec::new().into(),
             },
             separation,
-            pxl_spec::bake::tile::Occupancy::LEAF,
+            Occupancy::LEAF,
         ),
         looks: ground.cells.into_owned(),
         heights,
@@ -125,7 +128,7 @@ fn down(at: [f64; 2]) -> Ray {
 pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = world::point(corner[0], corner[1], corner[2]);
     store.write([Write {
-        key: pxl_spec::space::hierarchy::morton::key_of::<3>(side, idx_of(side, &at)),
+        key: morton::key_of::<3>(side, idx_of(side, &at)),
         id: state,
         ext: None,
     }]);
@@ -246,8 +249,8 @@ fn ray_across_antimeridian() {
             Default::default(),
         )
     };
-    let tile = |x: i32| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
-    let seam = pxl_spec::space::coord::world::ROUND / 2.0;
+    let tile = |x: i32| tile::tile_at(LEAF_ZOOM, [x, 0]);
+    let seam = world::ROUND / 2.0;
     let tile_cache = resident(
         [seam, 100.5],
         &[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())],
@@ -594,7 +597,7 @@ fn box_placed_matches_store() {
     let hi = [a[0].max(c[0]), a[1].max(b[1]), c[2].max(a[2])];
     let lanes = store.lanes();
     let mut asked = Vec::new();
-    let mut placed = pxl_spec_core::world::placed_in(lo, hi);
+    let mut placed = placed_in(lo, hi);
     loop {
         let (at, word, more) = placed.next(&lanes);
         if !more {
@@ -603,7 +606,7 @@ fn box_placed_matches_store() {
         asked.push((at, word & 0xffff));
     }
     let mut held = Vec::new();
-    let space = pxl_spec::space::coord::aabb::Aabb {
+    let space = Aabb {
         min: [3.0, 4.0, 2.0],
         max: [11.0, 6.0, 6.0],
     };
@@ -737,7 +740,7 @@ fn grown_decor_stays() {
     let (tile_cache, [x, y]) = flat_at_five();
     let near = |store: &Store| {
         let world = World::new(&tile_cache, store);
-        let space = pxl_spec::space::coord::aabb::Aabb {
+        let space = Aabb {
             min: [x - 8.0, y - 8.0, world::REACH.min[2]],
             max: [x + 8.0, y + 8.0, world::REACH.max[2]],
         };
@@ -770,7 +773,7 @@ fn grown_decor_edit_removes() {
     let (tile_cache, [x, y]) = flat_at_five();
     let empty = Store::default();
     let world = World::new(&tile_cache, &empty);
-    let space = pxl_spec::space::coord::aabb::Aabb {
+    let space = Aabb {
         min: [x - 8.0, y - 8.0, world::REACH.min[2]],
         max: [x + 8.0, y + 8.0, world::REACH.max[2]],
     };
@@ -779,7 +782,7 @@ fn grown_decor_edit_removes() {
         .first()
         .expect("a decor grows about the eye");
     let [cx, cy, cz] = tree.grown_in().unwrap();
-    let decor = pxl_spec::asset::decor::Decor::of(pxl_spec::asset::DecorId::of(tree.id).unwrap());
+    let decor = Decor::of(DecorId::of(tree.id).unwrap());
     let grows = |store: &Store| {
         let world = World::new(&tile_cache, store);
         super::scatter::grown_at(

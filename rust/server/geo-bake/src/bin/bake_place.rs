@@ -10,6 +10,7 @@
 //!   --out <dir>          the set (default ./out/place), staged beside it in <dir>.stage
 //!   --concurrency <n>    parallel folds (default 8)
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::place::{self, leaves};
 use pxl_geo_bake::pyramid::Base;
@@ -20,7 +21,7 @@ use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::tile::Tile;
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let run = Run::parse("place")?;
     let coverage = Coverage::of_source()?;
     if run.leaf {

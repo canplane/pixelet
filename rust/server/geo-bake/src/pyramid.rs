@@ -16,6 +16,7 @@ use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 
+use crate::util;
 use crate::util::{pack, unpack, write_atomic, Level};
 
 /// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
@@ -401,7 +402,7 @@ pub fn write_manifest(
     if let (Some(out), serde_json::Value::Object(layer)) = (fields.as_object_mut(), layer) {
         out.extend(layer);
     }
-    crate::util::write_manifest(&set.root.join(MANIFEST), built, fields)
+    util::write_manifest(&set.root.join(MANIFEST), built, fields)
 }
 
 /// The parents whose `sources` read any of `below`, sorted by row. A

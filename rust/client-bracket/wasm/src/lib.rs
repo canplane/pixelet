@@ -11,8 +11,10 @@
 //! the export the shell rings. What is here is pixelet's: its numbers, where
 //! its heap begins and the kernel as the entry.
 
+use pxl_kernel::door;
 use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::STACK_BYTES;
+use xpute_gpu::admit;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::wasm::Plan;
 
@@ -31,5 +33,5 @@ xpute_guest::wasm_abi!(
 /// so it has no last words to say; the browser paces its frames, so every
 /// one is admitted (xpute_gpu::admit).
 fn kernel(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
-    pxl_kernel::door::intr(quota_ms, boot_info, None, xpute_gpu::admit::every)
+    door::intr(quota_ms, boot_info, None, admit::every)
 }

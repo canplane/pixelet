@@ -50,3 +50,6 @@ required-features = ["serve"]
 [[bin]]
 name = "ingest_overture"
 required-features = ["ingest"]
+
+[lints]
+workspace = true

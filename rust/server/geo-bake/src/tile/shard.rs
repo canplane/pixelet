@@ -29,6 +29,7 @@ use crate::pyramid::{
     ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
 use crate::source;
+use crate::util;
 use crate::util::git_sha;
 use pxl_spec::bake::published::FORMAT;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
@@ -69,7 +70,7 @@ impl Stage {
     fn write_done(&self, unit: &str, gone: impl Iterator<Item = Tile>) -> Result<(), String> {
         let path = self.done(unit);
         let names: Vec<String> = gone.map(Tile::name).collect();
-        crate::util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
+        util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
     }
 
     fn read_done(&self, unit: &str) -> Result<Vec<Tile>, String> {
@@ -244,7 +245,7 @@ impl Stage {
                 manifest["shard"] =
                     serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
-                crate::util::write_atomic(
+                util::write_atomic(
                     &path,
                     serde_json::to_string_pretty(&manifest)
                         .map_err(|e| e.to_string())?
@@ -261,7 +262,7 @@ impl Stage {
                     .collect();
                 let path = self.next_fits();
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
-                crate::util::write_atomic(&path, text.as_bytes()).map_err(|e| io(&path, e))?;
+                util::write_atomic(&path, text.as_bytes()).map_err(|e| io(&path, e))?;
             }
             fs::rename(self.done(FOLD), self.done(COMMIT)).map_err(|e| io(&self.done(FOLD), e))?;
         }

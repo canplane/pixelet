@@ -29,7 +29,16 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::domain::query::changed;
+use crate::domain::query::model;
+use crate::domain::scene::frame::Frame;
+use crate::domain::view::frame::coord;
+use crate::domain::view::frame::pose;
+use crate::domain::view::observation;
+use crate::sys::sched::edge;
 use fnv::{FnvHashMap, FnvHashSet};
+use pxl_render::frame::draw::DrawList;
+use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::REACH;
@@ -114,7 +123,7 @@ struct Arrangement {
 /// new input goes here or the step never sees it change.
 #[derive(Clone, PartialEq)]
 struct Seen {
-    o: pxl_spec::space::camera::eye::Observation,
+    o: Observation,
     places: bool,
     drafted: Option<(EntryAt, u64)>,
     said: line::Said,
@@ -192,10 +201,10 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 /// screen's room, as on any map.
 const SPACING_PX: f64 = 193.0;
 
-pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
+pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let p = ARRANGEMENT.get(Arrangement::default);
-    if crate::domain::view::observation::eye().is_none() {
-        if p.set.free(crate::domain::query::model::draw_list()) {
+    if observation::eye().is_none() {
+        if p.set.free(model::draw_list()) {
             ctx.invalidate();
         }
         // Nothing is drawn now: what comes back is laid out afresh.
@@ -208,7 +217,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     }
     // No observation yet, the source's reach not declared: laid out afresh
     // once there is one, so the tiles that moved meanwhile are not kept.
-    let Some(o) = crate::domain::view::observation::observation() else {
+    let Some(o) = observation::observation() else {
         (p.last, p.found_for) = (None, None);
         p.moved_places.clear();
         return;
@@ -230,8 +239,8 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let now = &mut p.now;
     now.drawn.clear();
     let reach = reach_px(SPACING_PX);
-    let drawn = crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0);
-    crate::domain::view::observation::bricks(&o, &mut |brick, heights| {
+    let drawn = observation::eye_draw_reach().unwrap_or(0.0);
+    observation::bricks(&o, &mut |brick, heights| {
         let b = region(brick, heights);
         if o.measure(&b).near > drawn {
             return;
@@ -265,10 +274,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let stands = |&s: &Brick| {
         let r = columns(s);
         before.binary_search(&s).is_ok()
-            && !crate::domain::query::changed::within(
-                [[r.min[0], r.min[1]], [r.max[0], r.max[1]]],
-                moved_places,
-            )
+            && !changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
     };
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
@@ -345,7 +351,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
             unlaid = true;
             continue;
         };
-        let local = crate::domain::view::frame::coord::to_world(&s.stands);
+        let local = coord::to_world(&s.stands);
         p.pending
             .extend(held.map(|held| (sized.len() as u32, held)));
         p.candidates.push(
@@ -396,7 +402,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let pending = p.pending.iter().any(|w| design::coming(&w.1)) || freed && !p.pending.is_empty();
     p.waiting = pending || refused || unlaid || unread > 0;
     if p.waiting {
-        crate::sys::sched::edge::request_world_tick();
+        edge::request_world_tick();
     }
     p.drawn.clear();
     for &i in &p.kept {
@@ -422,7 +428,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
-    let about = crate::domain::view::frame::pose::sea_under_eye();
+    let about = pose::sea_under_eye();
     for &i in &p.drawn {
         let i = i as usize;
         let at = [
@@ -443,8 +449,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
         if section::map().is_some() {
-            p.set
-                .write(crate::domain::query::model::draw_list(), about, &instances);
+            p.set.write(model::draw_list(), about, &instances);
         }
         ctx.invalidate();
     }
@@ -453,7 +458,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
 }
 
 /// The markers the last step laid out, into the frame's list.
-pub fn draw(draw: &mut pxl_render::frame::draw::DrawList, eye: V3) {
+pub fn draw(draw: &mut DrawList, eye: V3) {
     ARRANGEMENT.get(Arrangement::default).set.draw(draw, eye);
 }
 

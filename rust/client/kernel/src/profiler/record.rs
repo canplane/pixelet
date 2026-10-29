@@ -15,13 +15,14 @@ use xpute_guest::global::Global;
 
 use crate::profiler::frame::{FrameSample, GpuSample, WorstFrame, GPU_SPANS};
 use crate::profiler::section::RecSection;
+use crate::profiler::spec::LIMIT;
 use crate::profiler::task::TaskRow;
 
 /// The rings keep the last minute (profiler.json `LIMIT.WINDOW_MS`, the
 /// shell's long frames alike). At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and
 /// sets `truncated`.
-const WINDOW_MS: f64 = crate::profiler::spec::LIMIT::WINDOW_MS as f64;
+const WINDOW_MS: f64 = LIMIT::WINDOW_MS as f64;
 const TASK_LIMIT: usize = 2_048;
 const FRAME_LIMIT: usize = 4_096;
 const WORST_CAP: usize = 12;

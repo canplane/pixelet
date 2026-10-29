@@ -12,6 +12,7 @@ use pxl_spec::space::coord::adapter::epsg4326;
 
 use crate::division;
 use crate::search::endpoint::Near;
+use pxl_geo_spec::overture::properties;
 use pxl_server::db::DbError;
 
 const DIVISION_LIMIT: i64 = 5;
@@ -220,7 +221,7 @@ pub async fn search(
             gers_id: r.gers_id,
             name: r.name,
             kind: "place",
-            category: pxl_geo_spec::overture::properties::category_of(&r.properties),
+            category: properties::category_of(&r.properties),
             common: None,
             context,
             lon: r.lon,

@@ -4,6 +4,8 @@ use std::path::Path;
 use std::process::Command;
 
 use xpute_kit::math::scalar::round;
+use zstd::bulk;
+use zstd::stream;
 
 /// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
@@ -27,11 +29,11 @@ pub enum Level {
 }
 
 pub fn pack(raw: &[u8], level: Level) -> std::io::Result<Vec<u8>> {
-    zstd::bulk::compress(raw, level as i32)
+    bulk::compress(raw, level as i32)
 }
 
 pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
-    zstd::stream::decode_all(stored)
+    stream::decode_all(stored)
 }
 
 pub fn fmt_bytes(n: f64) -> String {

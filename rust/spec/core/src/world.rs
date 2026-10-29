@@ -7,6 +7,7 @@
 //! alike: each source answers from its own level of detail, and what it holds
 //! stays behind it.
 
+use crate::answer;
 use crate::answer::{
     box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
     PLACED_ASSET,
@@ -15,6 +16,8 @@ use crate::area::Shard;
 use crate::cave::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, AIR, CELL, PLACED, SPLIT};
+use crate::way;
+use crate::way::tree;
 use crate::window::{Bricks, Found};
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
@@ -197,7 +200,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         || place.here() != before.here()
     {
         *trail = if place.here() {
-            crate::way::tree::cursor(
+            tree::cursor(
                 pool,
                 bricks.root(place.from(), place.slot()),
                 place.from(),
@@ -242,7 +245,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         };
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
-            let w = crate::way::tree::read(way);
+            let w = tree::read(way);
             let (f, theirs) = cover(fill, w, overwrite::filled(pool, *trail));
             if theirs || !fills(val) {
                 (val, four) = (w, ground::word([w; 4]));
@@ -283,7 +286,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     // source's own joined, each in the node's steps: what is placed
     // (`overwrite::bound`), the ground's (`ground::slab`, all of it where
     // it lacks) and the ways' (`way::slab`), the last two along z.
-    let ways = crate::way::slab(bound, [ground::coarsest(zoom, far), near]);
+    let ways = way::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Cell && fill {
         Kind::Split
@@ -309,7 +312,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     if box_none(joined) {
         return In {
             kind: Kind::Cell,
-            asset: crate::answer::AIR,
+            asset: answer::AIR,
         };
     }
     In {

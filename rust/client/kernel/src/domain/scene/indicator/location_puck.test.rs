@@ -1,7 +1,9 @@
 // pxl-kernel/domain/scene/indicator/location_puck.test.rs
 
 use super::*;
+use crate::sys;
 use pxl_spec::space::coord::q3;
+use xpute_guest::clock;
 
 /// The zone laid by asking the ground for every box and again for each of
 /// its four sides, what `lay_zone` must lay the same bytes as.
@@ -89,7 +91,7 @@ fn zone_cells_once() {
 
 #[test]
 fn beacon_holds_on_stall() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let mut puck = LocationPuck {
         zone: Some(Zone {
             center: [0.0; 3],
@@ -110,12 +112,12 @@ fn beacon_holds_on_stall() {
     });
     // A minute passes, a hidden tab; the turn's step is capped as turn.rs
     // caps it (`MAX_STEP_S`).
-    xpute_guest::clock::set(|| 60_000.0);
+    clock::set(|| 60_000.0);
     puck.tick(&Frame {
         delta_s: 0.1,
         ..Frame::default()
     });
-    xpute_guest::clock::set(|| 0.0);
+    clock::set(|| 0.0);
     let time = puck.zone.as_ref().map_or(f64::NAN, |z| z.time);
     assert!(time > 0.0 && time < 0.2, "the bob leapt to {time} s");
 }

@@ -13,6 +13,7 @@ use std::process::ExitCode;
 
 use image::{GrayImage, ImageFormat, Luma};
 
+use pxl_tool::fetch;
 use pxl_tool::root;
 
 const SRC: &str = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg";
@@ -37,7 +38,7 @@ fn to_srgb(v: f64) -> u8 {
 }
 
 fn run() -> Result<(), String> {
-    let body = pxl_tool::fetch::fetch_kept(SRC, &root().join("asset/raw/sky/moon"))?;
+    let body = fetch::fetch_kept(SRC, &root().join("asset/raw/sky/moon"))?;
     let map = image::load_from_memory_with_format(&body, ImageFormat::Jpeg)
         .map_err(|e| e.to_string())?
         .to_rgb8();

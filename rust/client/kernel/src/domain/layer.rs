@@ -24,6 +24,8 @@ mod query;
 pub mod terrain;
 pub mod tile_cache;
 
+use crate::sys::io::fetch;
+use crate::sys::io::source;
 pub use answer::Answer;
 pub use query::Query;
 
@@ -68,9 +70,7 @@ pub trait Base: Clone + 'static {
     /// coarsest it is read at (`COARSEST`); none until the source is
     /// declared.
     fn top() -> Option<Zoom> {
-        Self::TOP
-            .or(crate::sys::io::source::top())
-            .map(|t| t.max(Self::COARSEST))
+        Self::TOP.or(source::top()).map(|t| t.max(Self::COARSEST))
     }
 
     /// The most tiles a reader that takes no coarser answer pins apart from
@@ -86,7 +86,7 @@ pub trait Base: Clone + 'static {
     /// none did: freed, or kept where the GPU takes the tile off it
     /// (`kept::Kept`).
     fn keep(_record: Option<u32>, block: Block) {
-        crate::sys::io::fetch::release(Some(block));
+        fetch::release(Some(block));
     }
 
     /// A tile with nothing in it, which answers an absent tile at the top.

@@ -6,6 +6,12 @@
 //! its coverage, a byte a pixel, in a square of `SYMBOL_PX`, laid end to end
 //! in one file the spec crate includes; for the shell, its outlines.
 
+use resvg::tiny_skia::Pixmap;
+use resvg::tiny_skia::Transform;
+use resvg::usvg::FillRule;
+use resvg::usvg::Group;
+use resvg::usvg::Node;
+use resvg::usvg::Tree;
 use std::path::Path;
 
 /// Carto's symbols, drawn at the sheet's device pixels a pixel.
@@ -38,7 +44,7 @@ pub fn symbols(dir: &Path) -> Result<Vec<Symbol>, String> {
         .into_iter()
         .map(|rel| {
             let svg = std::fs::read(dir.join(&rel)).map_err(|e| format!("{rel}: {e}"))?;
-            let tree = resvg::usvg::Tree::from_data(&svg, &resvg::usvg::Options::default())
+            let tree = Tree::from_data(&svg, &resvg::usvg::Options::default())
                 .map_err(|e| format!("{rel}: {e}"))?;
             let mut shapes = Vec::new();
             outline(tree.root(), &mut shapes);
@@ -53,12 +59,12 @@ pub fn symbols(dir: &Path) -> Result<Vec<Symbol>, String> {
 }
 
 /// Every filled path under `group`, placed where it is drawn.
-fn outline(group: &resvg::usvg::Group, out: &mut Vec<(String, bool)>) {
+fn outline(group: &Group, out: &mut Vec<(String, bool)>) {
     use resvg::tiny_skia::PathSegment;
     for node in group.children() {
         match node {
-            resvg::usvg::Node::Group(g) => outline(g, out),
-            resvg::usvg::Node::Path(p) => {
+            Node::Group(g) => outline(g, out),
+            Node::Path(p) => {
                 let Some(fill) = p.fill() else { continue };
                 let Some(data) = p.data().clone().transform(p.abs_transform()) else {
                     continue;
@@ -84,7 +90,7 @@ fn outline(group: &resvg::usvg::Group, out: &mut Vec<(String, bool)>) {
                         PathSegment::Close => "Z".into(),
                     })
                     .collect();
-                out.push((d.join(""), fill.rule() == resvg::usvg::FillRule::EvenOdd));
+                out.push((d.join(""), fill.rule() == FillRule::EvenOdd));
             }
             _ => {}
         }
@@ -112,12 +118,11 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), String> {
 }
 
 /// The symbol's coverage, scaled from its own box to fill the square.
-fn mask(tree: &resvg::usvg::Tree) -> Result<Vec<u8>, String> {
+fn mask(tree: &Tree) -> Result<Vec<u8>, String> {
     let size = tree.size();
-    let mut pixmap =
-        resvg::tiny_skia::Pixmap::new(SYMBOL_PX, SYMBOL_PX).ok_or("an empty square")?;
+    let mut pixmap = Pixmap::new(SYMBOL_PX, SYMBOL_PX).ok_or("an empty square")?;
     let scale = SYMBOL_PX as f32 / size.width().max(size.height());
-    let transform = resvg::tiny_skia::Transform::from_scale(scale, scale).post_translate(
+    let transform = Transform::from_scale(scale, scale).post_translate(
         (SYMBOL_PX as f32 - size.width() * scale) / 2.0,
         (SYMBOL_PX as f32 - size.height() * scale) / 2.0,
     );

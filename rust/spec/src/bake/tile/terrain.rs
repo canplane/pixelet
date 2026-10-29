@@ -21,6 +21,14 @@ use crate::space::layer::tile::Tile;
 pub const GROUND_LANE: usize = (TILE_CELLS * TILE_CELLS) as usize;
 pub const LOOK_LANE: usize = 4 * GROUND_LANE;
 pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+use crate::asset::cube::sentinel;
+use crate::space::layer::lattice::GROUND;
+use pxl_spec_core::fill;
+use pxl_spec_core::ground;
+use pxl_spec_core::lattice;
+use pxl_spec_core::way;
+use pxl_spec_core::window;
+use pxl_spec_core::window::Brick;
 /// Bins a side a tile's ways are cut into, each `1 << WAYS_SHIFT` cells a
 /// side, as a window's brick lays its lines by them (`brick_lines`).
 pub use pxl_spec_core::window::{WAYS_ACROSS, WAYS_SHIFT};
@@ -43,7 +51,7 @@ pub const MAX_PKT_BYTES: usize = {
 /// The most entries a window's brick holds of the ways (pxl-spec-core
 /// `window::WAYS_BRICK_SEGMENTS`); a tile past it fails its bake
 /// (`ways_fit`).
-pub const WAYS_BRICK_SEGMENTS: usize = pxl_spec_core::window::WAYS_BRICK_SEGMENTS as usize;
+pub const WAYS_BRICK_SEGMENTS: usize = window::WAYS_BRICK_SEGMENTS as usize;
 
 /// What a ground cell holds: the id of a cube of the ground's palette, a
 /// Carto look, which fits a byte (`asset/cube.json`).
@@ -176,7 +184,7 @@ pub struct Laid<'a, L, H> {
     pub height: H,
 }
 
-impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_spec_core::window::Brick for Laid<'_, L, H> {
+impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for Laid<'_, L, H> {
     fn cell(&self) -> Zoom {
         self.cell
     }
@@ -189,7 +197,7 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_spec_core::window::Brick for
     /// Inside the area, none about it past: a bake sizes the most runs a
     /// client's fill writes, and no wall cuts its ways.
     fn laid(&self, i: u32) -> u32 {
-        pxl_spec_core::window::laid_half(pxl_spec_core::ground::own((self.looks)(i), self.cell), 0)
+        window::laid_half(ground::own((self.looks)(i), self.cell), 0)
     }
     fn height(&self, c: [i32; 2]) -> i32 {
         (self.height)(c)
@@ -217,18 +225,15 @@ fn laid<'a>(
     let looks = move |i: u32| {
         let at = brick_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
-        pxl_spec_core::ground::word(four_looks(&ground.cells, c).map(u32::from))
+        ground::word(four_looks(&ground.cells, c).map(u32::from))
     };
     let height = move |c: [i32; 2]| {
-        let at = [0, 1].map(|a| {
-            (place[a] * pxl_spec_core::window::BRICK) as f32
-                + c[a] as f32
-                + pxl_spec_core::lattice::CELL_CENTER
-        });
-        pxl_spec_core::ground::bicubic(|j| i32::from(ele[j]), at[0], at[1])
+        let at =
+            [0, 1].map(|a| (place[a] * window::BRICK) as f32 + c[a] as f32 + lattice::CELL_CENTER);
+        ground::bicubic(|j| i32::from(ele[j]), at[0], at[1])
     };
     Laid {
-        cell: crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom),
+        cell: GROUND.cell_zoom(tile.zoom),
         place,
         lines,
         looks,
@@ -251,7 +256,7 @@ fn record(
     record.fill(0);
     for i in 0..BRICK_CELLS {
         let at = brick_cell(place, i);
-        record[(LOOKS_AT + i) as usize] = pxl_spec_core::ground::word(
+        record[(LOOKS_AT + i) as usize] = ground::word(
             four_looks(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize).map(u32::from),
         );
     }
@@ -281,10 +286,10 @@ pub fn brick_spans(
 ) -> u32 {
     use pxl_spec_core::window::BRICK;
     record(tile, held, place, scratch, handed);
-    let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
+    let cell = GROUND.cell_zoom(tile.zoom);
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
     let first = [pxl_spec_core::wrap_idx(cell, first[0]), first[1]];
-    pxl_spec_core::fill::brick(handed, lane, kept, place, cell, first)
+    fill::brick(handed, lane, kept, place, cell, first)
 }
 
 /// The families the windows' trees take wherever the eye is, of the pool
@@ -340,10 +345,8 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
                 let n = brick_lines(tile, &one, [qx, qy], &mut scratch, &mut words);
                 let sq = laid(tile, &held.ground, &held.ele, [qx, qy], &words[..n]);
                 let ring = -1..=BRICK as i32;
-                ring.clone().any(|y| {
-                    ring.clone()
-                        .any(|x| pxl_spec_core::way::column(&sq, [x, y]).0.n > 0)
-                })
+                ring.clone()
+                    .any(|y| ring.clone().any(|x| way::column(&sq, [x, y]).0.n > 0))
             })
         });
         if seen {
@@ -433,16 +436,16 @@ pub fn fill_fit(
             &mut scratch,
             [&mut handed, &mut lane, &mut kept],
         );
-        if spans > pxl_spec_core::way::SPANS as u32 {
+        if spans > way::SPANS as u32 {
             return Err((place, Unfit::Spans(spans)));
         }
-        let cell = pxl_spec_core::fill::cell_of(&handed, 0);
+        let cell = fill::cell_of(&handed, 0);
         // Asked before the build, which refuses past either alike.
-        let (_, nodes) = pxl_spec_core::fill::root_span(&lane, 0, cell);
+        let (_, nodes) = fill::root_span(&lane, 0, cell);
         if nodes > ROOT_NODES {
             return Err((place, Unfit::Nodes(nodes)));
         }
-        let [taken, families, root] = pxl_spec_core::fill::tree(&lane, &kept, cell, &mut pool, 1);
+        let [taken, families, root] = fill::tree(&lane, &kept, cell, &mut pool, 1);
         if taken == u32::MAX {
             return Err((place, Unfit::Families));
         }
@@ -468,7 +471,7 @@ pub fn fill_fit(
 
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> =
-    std::sync::LazyLock::new(|| vec![crate::asset::cube::sentinel::void; GROUND_LANE]);
+    std::sync::LazyLock::new(|| vec![sentinel::void; GROUND_LANE]);
 
 impl TerrainTile {
     /// Where the source has nothing at all, as a client holds it: void

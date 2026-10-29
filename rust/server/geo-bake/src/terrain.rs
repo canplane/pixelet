@@ -8,11 +8,15 @@ pub mod pool;
 pub mod repository;
 pub mod source;
 
+use crate::pyramid::Base;
+use crate::pyramid::Staged;
 use pxl_spec::bake::fold::fold_terrain;
+use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{self, Fit, TerrainTile, Unfit};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
 use pxl_spec_core::way::tree::{BRICK_FAMILIES, ROOT_NODES};
@@ -22,11 +26,10 @@ use pxl_spec_core::window::BRICK;
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub const CELL_U: f64 = units(GROUND.cell());
 
-impl crate::pyramid::Base for TerrainTile {
-    const LAYER: pxl_spec::bake::published::BaseLayer =
-        pxl_spec::bake::published::BaseLayer::terrain;
+impl Base for TerrainTile {
+    const LAYER: BaseLayer = BaseLayer::terrain;
 
-    const LATTICE: pxl_spec::space::layer::lattice::Lattice = GROUND;
+    const LATTICE: Lattice = GROUND;
 
     fn encode(&self, at: Tile) -> Result<Vec<u8>, String> {
         self.encode_stored(at).map(|(pkt, _)| pkt)
@@ -67,10 +70,7 @@ impl crate::pyramid::Base for TerrainTile {
 
     /// Refused where the set's ways' trees would not fit the client's pool
     /// wherever the eye is (`pool::fits`).
-    fn fits_set(
-        set: &crate::pyramid::Staged<'_>,
-        workers: usize,
-    ) -> Result<Option<Vec<(Tile, String)>>, String> {
+    fn fits_set(set: &Staged<'_>, workers: usize) -> Result<Option<Vec<(Tile, String)>>, String> {
         pool::fits(set, workers).map(Some)
     }
 }

@@ -13,11 +13,13 @@ use xpute_kit::status::errno::Errno;
 use super::raster::Raster;
 use super::tally::{self, Counted, Tally};
 use super::{casts_px, RaysPass};
+use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
     SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
     SHADER_SUN_MARK_DRAWN, SHADER_SUN_MISS, SHADER_SUN_REACH, UNIFORM,
 };
+use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu, Stamp,
 };
@@ -28,6 +30,7 @@ use crate::gpu::renderer::{Cast, Overwrites};
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName};
 use crate::gpu::surface::Region;
+use pxl_spec_core::param::sun::SAMPLE;
 
 /// What the GPU's cast reads; it writes the world surface's rays.
 pub(super) struct CastBuffers {
@@ -473,11 +476,7 @@ impl RaysPass {
                 release(c.beams);
             }
             let size = word_bytes(need as usize);
-            xpute_kit::ensure!(
-                crate::frame::shader::floor::fits(size as u64, true),
-                ENOTRECOVERABLE,
-                need
-            );
+            xpute_kit::ensure!(floor::fits(size as u64, true), ENOTRECOVERABLE, need);
             (c.beams, c.beam_room) = (
                 g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
                 need,
@@ -535,9 +534,7 @@ impl RaysPass {
                     .map(|&f| write_buffer_bytes(bytes(family(lane, f))))
                     .sum::<usize>()
             };
-            if c.overwrite_revision == Some(o.since)
-                && crate::gpu::api::room(listed(o.heap) + listed(o.data))
-            {
+            if c.overwrite_revision == Some(o.since) && api::room(listed(o.heap) + listed(o.data)) {
                 for &first in o.written {
                     g.write_buf(
                         c.overwrites,
@@ -1034,7 +1031,7 @@ impl RaysPass {
             let w = compute::CELL_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
-            let n = shadow::SIZE / pxl_spec_core::param::sun::SAMPLE;
+            let n = shadow::SIZE / SAMPLE;
             let stamp = stamps[GpuSpanName::sun_sample as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);

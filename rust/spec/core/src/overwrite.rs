@@ -22,6 +22,8 @@ pub const BRANCH: u32 = 1 << 31;
 /// The family of the root what is placed is under.
 pub const PLACED: u32 = 0;
 
+use crate::answer;
+use crate::answer::BoxWords;
 use crate::answer::FULL;
 
 /// `FULL`'s bits: a share shifted past them is none.
@@ -460,7 +462,7 @@ pub fn over(
 /// anything in, or all of it where they are one (not folded). None
 /// (`answer::BOX_NONE`) where nothing is placed. A preview's cut only makes
 /// air, so what is placed under it lies here still.
-pub fn bound(lanes: &impl Lanes, held: Held, zoom: Zoom) -> crate::answer::BoxWords {
+pub fn bound(lanes: &impl Lanes, held: Held, zoom: Zoom) -> BoxWords {
     use crate::answer::{box_word, BOX_NONE, BOX_STEPS, BOX_WHOLE};
     if !held.holds() {
         return BOX_NONE;
@@ -517,7 +519,7 @@ fn cells_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
     if !held.is_folded() {
         return voxel(low(word));
     }
-    let shift = crate::answer::KEPT_BITS * (d + 1);
+    let shift = answer::KEPT_BITS * (d + 1);
     let eighth = if shift <= FULL_BITS { FULL >> shift } else { 0 };
     high(word) + 2 > eighth
 }

@@ -4,17 +4,18 @@
 // tiles given present at once, its cells as a GPU would hand them back.
 
 use super::*;
+use crate::sys;
+use pxl_spec::bake::separation::Separation;
+use pxl_spec::bake::tile::terrain;
+use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
 use pxl_spec_core::overwrite::Lanes;
+use pxl_spec_core::way::tree;
+use pxl_spec_core::way::tree::Read;
 
 /// A tile as `hold` takes it: a cell's own look and its height, row by row
 /// from its first, and its lines.
-pub(crate) type HeldTile = (
-    Tile,
-    Vec<GroundId>,
-    Vec<i16>,
-    pxl_spec::bake::separation::Separation,
-);
+pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, Separation);
 
 /// What `hold` leaves held: the bricks' words up to their last that is
 /// not zero, the pool's families taken as records (pxl-spec-core
@@ -34,7 +35,7 @@ type Over = ([f64; 2], Vec<HeldTile>);
 static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SLOTS * CELLS_LANE_BYTES / 4) as usize;
-const POOL_WORDS: usize = 16 * pxl_spec_core::way::tree::POOL_FAMILIES as usize;
+const POOL_WORDS: usize = 16 * tree::POOL_FAMILIES as usize;
 
 /// The pool's mirror holding `records`, a brick's most at a time.
 fn mirrored(records: &[u32]) {
@@ -165,13 +166,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             vec![(0, 0); window::WAYS_BRICK_SEGMENTS as usize],
             vec![0; window::LINES_WORDS as usize],
         );
-        let n = pxl_spec::bake::tile::terrain::brick_lines(
-            t,
-            separation,
-            place,
-            &mut segments,
-            &mut lines,
-        );
+        let n = terrain::brick_lines(t, separation, place, &mut segments, &mut lines);
         let laid = pxl_spec::bake::tile::terrain::Laid {
             cell,
             place,
@@ -188,7 +183,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         };
         let (mut lane, mut scratch) = (
             vec![0u32; window::BRICK_WORDS as usize],
-            vec![0u32; pxl_spec_core::way::tree::SCRATCH_WORDS as usize],
+            vec![0u32; tree::SCRATCH_WORDS as usize],
         );
         fill_columns(
             &laid,
@@ -203,7 +198,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         for j in 0..=LEVELS {
             for y in 0..BRICK >> j {
                 for x in 0..BRICK >> j {
-                    pxl_spec_core::fill::level(
+                    fill::level(
                         &mut lane,
                         0,
                         &pxl_spec_core::fill::Scratch {
@@ -218,7 +213,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             }
         }
         // Its ways' tree into the pool's mirror, its root word naming it.
-        let [taken, _, root] = pxl_spec_core::fill::tree(&lane, &scratch, cell, &mut pool, next);
+        let [taken, _, root] = fill::tree(&lane, &scratch, cell, &mut pool, next);
         assert_ne!(taken, u32::MAX, "a brick's tree past the pool");
         lane[window::ROOT_AT as usize] = root;
         next += taken;
@@ -230,7 +225,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         show(w, i);
     }
     // Every family taken, a record each: its id, its heap words, its data.
-    let p = pxl_spec_core::way::tree::Read(&pool);
+    let p = Read(&pool);
     let mut records = Vec::new();
     for b in 1..next {
         records.push(b);
@@ -255,7 +250,7 @@ fn fill_columns(
         lane[(window::COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
     }
     for i in 0..window::SPANS_COLUMNS {
-        pxl_spec_core::fill::keep(sq, scratch, 0, i);
+        fill::keep(sq, scratch, 0, i);
     }
 }
 
@@ -317,7 +312,7 @@ const CENTER: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
 
 #[test]
 fn shared_brick_held_once() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     lay(w, leaf(CENTER), leaf(CENTER));
@@ -352,7 +347,7 @@ fn shared_brick_held_once() {
 
 #[test]
 fn left_brick_kept() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
@@ -404,7 +399,7 @@ fn left_brick_kept() {
 
 #[test]
 fn apart_windows_own_slots() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     lay(
@@ -424,7 +419,7 @@ fn apart_windows_own_slots() {
 
 #[test]
 fn landing_shows_everywhere() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     // The fold after the landing reads the bricks' cells.
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
@@ -476,7 +471,7 @@ fn heap_wait_rehanded() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()

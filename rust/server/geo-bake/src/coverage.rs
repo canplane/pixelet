@@ -7,6 +7,7 @@
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
+use postgres::types::ToSql;
 use postgres::{Client, NoTls};
 use pxl_geo_spec::table::CATALOG;
 use pxl_spec::space::coord::zoom::{cnt, units, Zoom, SHARD_ZOOM};
@@ -261,7 +262,7 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
     let tables = tables_of(reads);
     let text = |client: &mut Client,
                 sql: &str,
-                params: &[&(dyn postgres::types::ToSql + Sync)]|
+                params: &[&(dyn ToSql + Sync)]|
      -> Result<Vec<Vec<Option<String>>>, String> {
         let rows = client
             .query(sql, params)

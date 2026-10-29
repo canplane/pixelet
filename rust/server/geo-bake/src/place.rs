@@ -3,19 +3,22 @@
 use std::collections::BTreeMap;
 
 use crate::coverage::Coverage;
+use crate::pyramid::Base;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::CATEGORY_SQL;
+use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::place::{self, category_of, Place, PlaceTile};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::idx_of;
+use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-impl crate::pyramid::Base for PlaceTile {
-    const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::place;
+impl Base for PlaceTile {
+    const LAYER: BaseLayer = BaseLayer::place;
 
-    const LATTICE: pxl_spec::space::layer::lattice::Lattice = place::PLACE_LATTICE;
+    const LATTICE: Lattice = place::PLACE_LATTICE;
 
     fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
         place::encode(self).map_err(|e| e.to_string())

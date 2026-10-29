@@ -26,6 +26,7 @@ use std::process::ExitCode;
 
 use image::ImageFormat;
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::published::FORMAT;
@@ -40,7 +41,7 @@ use pxl_spec::space::layer::tile::tile_at;
 /// What it reads, and where `make download-earth` keeps it.
 const SRC: &str = "infra/earth/source.json";
 const RAW: &str = "infra/earth/raw";
-const GLOBAL: (u32, u32) = pxl_spec::bake::tile::earth::PICTURE;
+const GLOBAL: (u32, u32) = earth::PICTURE;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -295,7 +296,7 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let out = PathBuf::from("./out/earth");
     let text = std::fs::read_to_string(SRC).map_err(|e| format!("{SRC}: {e}"))?;
     let named: serde_json::Value =

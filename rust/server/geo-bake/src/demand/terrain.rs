@@ -2,6 +2,8 @@
 
 use super::job;
 use crate::coverage::Coverage;
+use crate::elevation::Raster;
+use crate::separation::source::Disk;
 use crate::terrain::absent::Absence;
 use pxl_spec::space::layer::tile::Tile;
 
@@ -30,14 +32,14 @@ pub(super) fn execute(
             if !leaf::has_ground(&mut client, &[p.at]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
-            let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client)?);
+            let raster = std::sync::Arc::new(Raster::open(&mut client)?);
             let repo =
                 TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
             let memo = cache.join(SOURCE);
             let reader = &mut crate::separation::Reader {
                 client: &mut client,
                 repo: &repo,
-                store: &mut crate::separation::source::Disk(&memo),
+                store: &mut Disk(&memo),
             };
             Ok(Some(leaf::bake_leaf(reader, p.at)?))
         },

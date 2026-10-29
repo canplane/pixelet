@@ -1,6 +1,9 @@
 // pxl-kernel/domain/view/setting/store.test.rs
 
 use super::*;
+use crate::sys;
+use crate::sys::io::host;
+use base64::engine::general_purpose;
 use xpute_kit::status::errno::Errno;
 
 fn kept_of(pairs: &[(u32, u32)]) -> Vec<u8> {
@@ -90,7 +93,7 @@ fn reads_past_unknown_pair() {
 /// takes no change at all (`is_offered`), so only the offered are changed.
 #[test]
 fn session_setting_not_kept() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     let session: Vec<SettingKey> = SettingKey::ALL
         .into_iter()
         .filter(|k| !k.is_kept())
@@ -134,9 +137,7 @@ fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     use base64::Engine;
     let mut bytes = vec![Kept::Settings.format()];
     bytes.extend(kept_of(pairs));
-    base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .encode(bytes)
-        .into_bytes()
+    general_purpose::URL_SAFE_NO_PAD.encode(bytes).into_bytes()
 }
 
 /// The slot opened at boot, with nothing waiting and nothing to keep.
@@ -162,7 +163,7 @@ fn held_after_a_change() -> bool {
 /// nothing is written before; what was read is not written back.
 #[test]
 fn read_before_write() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     open_slot();
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
     assert!(
@@ -178,7 +179,7 @@ fn read_before_write() {
         Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])),
     );
     assert!(!settings_load_step(), "taken from the next turn on");
-    crate::sys::io::host::rise();
+    host::rise();
     assert!(settings_load_step() && are_settings_loaded());
     assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
     assert!(!*UNKEPT.get(|| false), "what was read is not written back");
@@ -189,7 +190,7 @@ fn read_before_write() {
 /// An empty slot is the defaults, written from the first change.
 #[test]
 fn empty_slot_defaults() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     open_slot();
     file::on_kept_answered(Kept::Settings, Err(file::Opened::Absent));
     assert!(settings_load_step());
@@ -202,7 +203,7 @@ fn empty_slot_defaults() {
 /// the host sets it aside and empties the slot, and then what changed meanwhile.
 #[test]
 fn bad_slot_refused() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     for answer in [
         Err(file::Opened::Failed {
             errnum: Errno::EFBIG,
@@ -212,7 +213,7 @@ fn bad_slot_refused() {
     ] {
         open_slot();
         file::on_kept_answered(Kept::Settings, answer);
-        crate::sys::io::host::rise();
+        host::rise();
         assert!(
             settings_load_step() && are_settings_loaded(),
             "the world need not wait on it"
@@ -234,7 +235,7 @@ fn bad_slot_refused() {
 /// defaults, never written over this session.
 #[test]
 fn unreadable_slot_kept() {
-    let _g = crate::sys::serial();
+    let _g = sys::serial();
     open_slot();
     file::on_kept_answered(
         Kept::Settings,

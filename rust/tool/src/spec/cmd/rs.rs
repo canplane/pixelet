@@ -4,6 +4,7 @@
 //! signal's writer, for a Rust guest.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
+use crate::spec;
 use crate::spec::{file, pascal, rs_doc};
 
 fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
@@ -233,7 +234,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut out = vec![
         format!("// {}/cmd.spec.rs", t.rs_logical),
         "//".into(),
-        crate::spec::generated(t.json, t.json),
+        spec::generated(t.json, t.json),
         "".into(),
     ];
     out.extend(rs_doc(&spec.doc, "", "//!"));
@@ -244,7 +245,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "// type is long to spell and is spelled once, here, for each. A table",
             "// with no signal or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
-            "#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]",
+            "#![allow(non_camel_case_types, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code)]",
             "",
             "use core::fmt::Display;",
             "",

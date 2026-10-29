@@ -12,6 +12,7 @@ use pxl_spec_core::window::{
 use xpute_guest::mem::off_of;
 
 use super::RaysPass;
+use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     compute, dynamic, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_FREED,
     SHADER_WAY_TREE,
@@ -21,11 +22,12 @@ use crate::gpu::api::{
     Gpu, Stamp, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::renderer;
 use crate::gpu::renderer::{CellsBack, GroundBricks, Landing};
 
 /// The buffers bricks' cells come back through: what a frame hands, a
 /// mapping still out a frame more (pxl-spec-core `window::HANDED`).
-const READS: usize = crate::gpu::renderer::READS as usize;
+const READS: usize = renderer::READS as usize;
 /// A buffer of them carrying no brick.
 const FREE: u32 = u32::MAX;
 
@@ -121,7 +123,7 @@ const fn pool_bytes(families: u32) -> u32 {
     families * way::tree::FAMILY_WORDS * 4
 }
 const _: () = assert!(
-    crate::frame::shader::floor::fits(pool_bytes(way::tree::POOL_FAMILIES) as u64, true),
+    floor::fits(pool_bytes(way::tree::POOL_FAMILIES) as u64, true),
     "the ways' pool at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
@@ -142,7 +144,7 @@ const fn scratch_bytes(families: u32) -> u32 {
     HANDED * way::tree::scratch_words(families) * 4
 }
 const _: () = assert!(
-    crate::frame::shader::floor::fits(scratch_bytes(way::tree::BRICK_FAMILIES) as u64, true),
+    floor::fits(scratch_bytes(way::tree::BRICK_FAMILIES) as u64, true),
     "the scratch at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
@@ -353,7 +355,7 @@ const BRICK_BYTES: u32 = BRICK_WORDS * 4;
 /// whole by the cast's, the levels' and the ways' groups.
 const GROUND_BYTES: u64 = SLOTS as u64 * BRICK_BYTES as u64;
 const _: () = assert!(
-    crate::frame::shader::floor::fits(GROUND_BYTES, true),
+    floor::fits(GROUND_BYTES, true),
     "GROUND_BYTES: the windows' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
@@ -363,7 +365,7 @@ const _: () = assert!(
 /// buffer, as the bricks' binding has no room for them.
 const LOOKS_BYTES: u64 = SLOTS as u64 * BRICK_CELLS as u64 * 4;
 const _: () = assert!(
-    crate::frame::shader::floor::fits(LOOKS_BYTES, true),
+    floor::fits(LOOKS_BYTES, true),
     "LOOKS_BYTES: the bricks' looks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 

@@ -80,6 +80,9 @@ pxl-geo-spec = { path = "server/geo-spec" }
 # pxl-tool's check_rules refuses. A crate takes these with `[lints]
 # workspace = true`; xpute-guest, in its own workspace, spells them itself.
 [workspace.lints.clippy]
+# A path past a crate and one module is brought in by a `use` at the top of
+# its module, so what a file reaches for is read in one place (clippy.toml).
+absolute_paths = "warn"
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"
 borrow_as_ptr = "warn"

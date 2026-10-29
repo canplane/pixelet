@@ -30,10 +30,15 @@ use crate::sys::io::host_spec::{root, CATALOG, SPHERE};
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::source;
 use crate::sys::load::{Load, LoadKind};
+use crate::sys::sched::edge::TaskPriority;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
 use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::space::hierarchy::morton;
+use pxl_spec::space::layer::tile;
 use xpute_guest::global::Global;
+use xpute_guest::sched::task;
 
 /// `Arrived` exists because the read's credit is released when the bytes
 /// land (parsing is not I/O and would starve tile reads), but the asset is
@@ -179,9 +184,7 @@ fn on_ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
 pub fn open_asset(credit: Credit, load: Load) {
     let owner = Owner::Load { key: credit.key() };
     // The sphere's number is no tile's: a subject is never 0.
-    const _: () = assert!(
-        pxl_spec::space::hierarchy::morton::bits::<2>(pxl_spec::space::layer::tile::LEAF_ZOOM) < 63
-    );
+    const _: () = assert!(morton::bits::<2>(tile::LEAF_ZOOM) < 63);
     match load {
         Load::Sphere => file::open(credit, BaseLayer::earth as u32, u64::from(SPHERE), owner),
         _ => file::open(credit, root::ASSET, u64::from(load.number()), owner),
@@ -226,7 +229,7 @@ pub fn on_opened(fd: u32, key: u64, opened: Opened) {
 /// (pxl-spec `asset::image_size`); a file no header sizes is the asset's
 /// own failure, so it is final.
 fn on_image_arrived(load: Load, file: Vec<u8>) {
-    *loader().at(LoadKind::Image, load) = Some(if pxl_spec::asset::image_size(&file).is_some() {
+    *loader().at(LoadKind::Image, load) = Some(if asset::image_size(&file).is_some() {
         Entry::Image(file)
     } else {
         Entry::Failed
@@ -281,10 +284,7 @@ fn arrive(kind: LoadKind, load: Load, bytes: Vec<u8>) {
     // The pool holds a task for each slot, the catalog and the sphere
     // (TASKS): a slot is wanted as one kind of one file, and each has one
     // file in flight at most, so there is always room.
-    let spawned = xpute_guest::sched::task::spawn(
-        arrival(kind, load, bytes),
-        crate::sys::sched::edge::TaskPriority::Arrival as u8,
-    );
+    let spawned = task::spawn(arrival(kind, load, bytes), TaskPriority::Arrival as u8);
     xpute_kit::ensure!(spawned, ENOSPC, load.number());
 }
 

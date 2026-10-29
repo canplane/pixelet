@@ -25,8 +25,11 @@ use crate::sys::io::failure::Failure;
 
 use crate::domain::layer::terrain::fixed::RANGE;
 use crate::domain::layer::terrain::fixed::{separation_lane, SEPARATION_LANES};
+use crate::domain::layer::terrain::window;
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
+use crate::sys::io::fetch;
+use crate::sys::io::request;
 use pxl_spec::bake::tile::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -37,7 +40,7 @@ impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
     /// The pivot's and a destination's windows' tiles.
-    const PINNED: u32 = crate::domain::layer::terrain::window::PINNED_TILES;
+    const PINNED: u32 = window::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
@@ -73,12 +76,12 @@ impl Base for TerrainTile {
         let wanted = |r: &u32| {
             TerrainTile::tile_cache()
                 .in_slot(*r)
-                .is_some_and(crate::domain::layer::terrain::window::is_tile_wanted)
+                .is_some_and(window::is_tile_wanted)
         };
         match record {
             Some(r) if !wanted(&r) => {
                 kept().forget(r);
-                crate::sys::io::fetch::release(Some(block));
+                fetch::release(Some(block));
             }
             _ => kept().keep(record, block, most_kept()),
         }
@@ -93,7 +96,7 @@ impl Base for TerrainTile {
 /// freed once decoded, and its tile asked again when one could be kept
 /// (`again_room`, domain/layer/terrain/window.rs `step`).
 pub fn most_kept() -> u32 {
-    let credits = crate::sys::io::request::most_credits().max(1);
+    let credits = request::most_credits().max(1);
     BODY_SLOTS.saturating_sub(credits + TileCache::<Earth>::SLOTS)
 }
 
@@ -108,7 +111,7 @@ const _: () = assert!(
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
     let coming = TerrainTile::tile_cache()
-        .asked_again(|p| !crate::sys::io::request::has_object_failed(Stream::terrain, p.subject()));
+        .asked_again(|p| !request::has_object_failed(Stream::terrain, p.subject()));
     most_kept().saturating_sub(kept().cnt() + coming)
 }
 

@@ -4,6 +4,7 @@ use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 
+use crate::domain::control::camera::controller;
 use crate::domain::control::navigation::support::unknown_z;
 use crate::domain::control::sensor::reading::device_location_store;
 use xpute_guest::global::Global;
@@ -42,10 +43,7 @@ pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
     // Horizontal only: the fix's Z is GPS altitude and the pivot's a floor, and
     // their mismatch could hold it off-center forever.
-    match (
-        crate::domain::control::camera::controller::pivot(),
-        device_coord(),
-    ) {
+    match (controller::pivot(), device_coord()) {
         (Some(pivot), Some(device)) => {
             // X the short way across the antimeridian.
             let [dx, dy, _] = world::between(&pivot, &device).map(q3::to_real);

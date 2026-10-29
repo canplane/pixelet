@@ -3,6 +3,7 @@
 use xpute_kit::golden::Golden;
 
 use super::*;
+use crate::bake::tile::earth;
 use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
@@ -110,11 +111,10 @@ fn full_tile_pkt_size() {
         ..tile(7)
     };
     assert_eq!(encode(&tile).unwrap().len(), MAX_PKT_BYTES);
-    let earth =
-        crate::bake::tile::earth::encode(&vec![0; crate::bake::tile::earth::EARTH_BYTES]).unwrap();
+    let earth = earth::encode(&vec![0; earth::EARTH_BYTES]).unwrap();
     assert_eq!(
         earth.len(),
-        crate::bake::tile::earth::PKT_BYTES,
+        earth::PKT_BYTES,
         "and an Earth tile is as long as its texels say"
     );
 }

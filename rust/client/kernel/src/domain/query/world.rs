@@ -10,6 +10,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::bake::constant::EntryAt;
 
 use super::changed::Columns;
+use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
 use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
@@ -40,7 +41,7 @@ impl World<'static> {
     /// The world as stored: what every mechanic asks, the pick, a walk, the
     /// camera's clearance, an edit's reads and decor's footing.
     pub fn now() -> World<'static> {
-        let object: &'static Store = crate::domain::layer::object::store::object();
+        let object: &'static Store = store::object();
         World::new(TerrainTile::tile_cache(), object)
     }
 

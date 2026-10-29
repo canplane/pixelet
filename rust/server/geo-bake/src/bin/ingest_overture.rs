@@ -38,8 +38,10 @@ use arrow::compute::cast;
 use arrow::datatypes::{DataType, Float64Type, Int64Type, UInt64Type};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use postgres::binary_copy::BinaryCopyInWriter;
+use postgres::error::SqlState;
 use postgres::types::Type as Pg;
 use postgres::{Client, NoTls, Transaction};
+use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::{Coverage, Node};
 use pxl_geo_bake::util::fnv1a;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
@@ -212,7 +214,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     // `--type <type>`, repeated, for those types' tables alone; `--shard <name>`, repeated, for those
     // shards alone; `--whole` for each table made anew from every shard.
     let (mut types, mut named, mut whole) = (Vec::<String>::new(), Vec::<String>::new(), false);
@@ -648,7 +650,7 @@ fn build_and_swap(
         match tx.batch_execute(&format!(
             "DROP TABLE IF EXISTS {t}; ALTER TABLE {next} RENAME TO {t}"
         )) {
-            Err(e) if e.code() == Some(&postgres::error::SqlState::LOCK_NOT_AVAILABLE) => {
+            Err(e) if e.code() == Some(&SqlState::LOCK_NOT_AVAILABLE) => {
                 println!("[ingest/{t}] a reader holds it; swap {attempt} of {SWAP_TRIES} waits");
                 continue;
             }

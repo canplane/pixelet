@@ -15,12 +15,14 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+use pxl_geo_bake::cli;
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
 };
+use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
@@ -31,6 +33,9 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
+use tokio::fs;
+use tokio::net::TcpListener;
+use tokio::runtime::Builder;
 
 /// Where the tiles come from: the oven, baked on demand, or the shelf, each
 /// kind's set under a directory.
@@ -66,10 +71,10 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tiles {
         _ if !is_sharded(layer) => {
-            read(&app.out.join(EARTH).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b))
+            read(&app.out.join(EARTH).join(pyramid::MANIFEST)).map(|b| named(&b))
         }
         Tiles::Shelf(dir) => {
-            read(&dir.join(layer.name()).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b))
+            read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| named(&b))
         }
         Tiles::Oven(_) => {
             let token = app.cache.join(OVEN_TOKEN);
@@ -121,7 +126,7 @@ async fn earth(app: &App, name: &str) -> Response {
     if Tile::of_name(name).is_none() && name != TILE_SPHERE {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match tokio::fs::read(app.out.join(EARTH).join(name)).await {
+    match fs::read(app.out.join(EARTH).join(name)).await {
         Ok(bytes) => packed(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
@@ -187,7 +192,7 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
         return StatusCode::NOT_FOUND.into_response();
     }
     let set = dir.join(kind.name());
-    match tokio::fs::read(set.join(name)).await {
+    match fs::read(set.join(name)).await {
         Ok(bytes) => packed(bytes),
         // A page the set has no object for is empty, as the Worker answers it.
         Err(_) if set.is_dir() => StatusCode::NO_CONTENT.into_response(),
@@ -234,7 +239,7 @@ async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Respons
     else {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     };
-    match tokio::fs::read(app.asset_dir.join(&name)).await {
+    match fs::read(app.asset_dir.join(&name)).await {
         Ok(bytes) => {
             let mut headers = HeaderMap::new();
             headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
@@ -249,7 +254,7 @@ async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Respons
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.first().is_some_and(|a| a == "--demand-job") {
         if argv.len() != 4 {
@@ -318,12 +323,12 @@ fn run() -> Result<(), String> {
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .with_state(app.clone());
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|e| e.to_string())?;
     let served = runtime.block_on(async move {
-        let listener = tokio::net::TcpListener::bind((host.as_str(), port))
+        let listener = TcpListener::bind((host.as_str(), port))
             .await
             .map_err(|e| format!("{host}:{port}: {e}"))?;
         println!("[tile] listening on {host}:{port}");

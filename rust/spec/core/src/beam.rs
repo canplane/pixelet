@@ -13,9 +13,12 @@
 //! grid's own, so neither the beam rays nor the samples follow the
 //! screen's pixels.
 
+use crate::cast;
 use crate::grid::CELL;
+use crate::param::beam;
 use crate::param::beam::NEAR;
 use crate::param::beam::SAMPLE;
+use crate::world;
 
 /// The camera grid as a frame lays it over the screen, worked out once,
 /// from the screen's tangents (`of`), where the kernel writes the
@@ -67,9 +70,9 @@ impl Grid {
     /// The grid at the screen's tangents `tan`.
     pub fn of(tan: [f32; 2]) -> Grid {
         let s = CELL;
-        let r6 = crate::cast::SQRT_6 * s;
+        let r6 = cast::SQRT_6 * s;
         let k = 2.0 * r6;
-        let reach = r6 / (1.0 - r6) * crate::param::beam::REACH_SLACK;
+        let reach = r6 / (1.0 - r6) * beam::REACH_SLACK;
         let span = [
             libm::ceilf(2.0 * tan[0] / s) as u32,
             libm::ceilf(2.0 * tan[1] / s) as u32,
@@ -266,8 +269,8 @@ pub const LINE_T: u32 = 0;
 pub const LINE_VISITS: u32 = 1;
 pub const LINE_NODE: u32 = 2;
 pub const LINE_HANDED: u32 = LINE_NODE + NODE_WORDS;
-pub const LINE_STEP: u32 = crate::world::HANDED_WORDS;
-pub const LINE_WORDS: u32 = LINE_HANDED + LINE_STEP * crate::cast::DEPTH as u32;
+pub const LINE_STEP: u32 = world::HANDED_WORDS;
+pub const LINE_WORDS: u32 = LINE_HANDED + LINE_STEP * cast::DEPTH as u32;
 
 /// What a cell hands its pixels, in words: where they start, f32 bits, and
 /// the corner whose line they resume from, as an index into the corners

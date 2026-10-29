@@ -1,6 +1,7 @@
 // pxl-kernel/door/layout.test.rs
 
 use super::*;
+use crate::domain::layer::terrain::fixed;
 
 #[test]
 fn mem_json_matches_layout() {
@@ -11,10 +12,7 @@ fn mem_json_matches_layout() {
     let mib = |bytes: u64| format!("{:.2} MiB", bytes as f64 / f64::from(1u32 << 20));
     let figures = [
         ("the fixed ranges", u64::from(FIXED_BYTES)),
-        (
-            "the terrain's range",
-            u64::from(crate::domain::layer::terrain::fixed::TERRAIN_BYTES),
-        ),
+        ("the terrain's range", u64::from(fixed::TERRAIN_BYTES)),
         ("the heap's bounded flows", HEAP_FLOWS_BYTES),
     ];
     for (what, bytes) in figures {

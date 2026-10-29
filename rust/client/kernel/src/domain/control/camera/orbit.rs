@@ -26,6 +26,7 @@ use crate::domain::control::camera::controller::{
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::domain::control::navigation::support::resolve_to;
+use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
 use crate::domain::control::param::{
@@ -49,9 +50,9 @@ static ORBIT: Global<OrbitState> = Global::new();
 
 pub fn orbit() -> &'static mut OrbitState {
     ORBIT.get(|| OrbitState {
-        dist: crate::domain::control::param::DEFAULT_DIST,
+        dist: param::DEFAULT_DIST,
         to: None,
-        pinch_from: Anchor::new(crate::domain::control::param::DEFAULT_DIST, 1.0),
+        pinch_from: Anchor::new(param::DEFAULT_DIST, 1.0),
     })
 }
 

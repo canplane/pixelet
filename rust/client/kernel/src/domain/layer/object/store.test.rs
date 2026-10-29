@@ -13,6 +13,7 @@ use crate::domain::layer::Query;
 use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::answer;
 use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;
 
@@ -116,7 +117,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Held, [i32; 2]) {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
                 let v = overwrite::val(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
-                let kept = pxl_spec_core::answer::eighths(overwrite::filled(&store.lanes(), held));
+                let kept = answer::eighths(overwrite::filled(&store.lanes(), held));
                 if v != VOID && kept > 0 {
                     out.insert([x, y, z], (v, kept));
                 }

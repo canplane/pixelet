@@ -13,6 +13,7 @@ use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::time;
 
 pub(super) async fn resolve(
     data: Arc<Dataset>,
@@ -48,7 +49,7 @@ fn bake_missing(
                 }
                 if p.zoom < kind.leaf() {
                     for below in (d.sources)(p) {
-                        tokio::time::timeout_at(
+                        time::timeout_at(
                             lease.deadline,
                             bake_missing(d.clone(), runner.clone(), kind, below, false),
                         )

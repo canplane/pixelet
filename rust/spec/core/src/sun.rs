@@ -15,8 +15,14 @@
 //! each frame the map is, as the eye's rays are (`SAMPLE`): nothing a cast
 //! established is kept for the next, so no policy says what still stands.
 
+use crate::beam;
+use crate::cast;
+use crate::cast::Spacing;
 use crate::cast::{Detail, End, Met, Ray};
+use crate::eye;
+use crate::param::sun;
 use crate::param::sun::{SAMPLE, SPREAD};
+use crate::scatter;
 use crate::{axis, FRAC_W};
 use core::f32::consts::SQRT_2;
 
@@ -106,7 +112,7 @@ impl Sun {
             let n = [on(0), on(1), on(2)];
             let [i, j] = slope(n, across, down, z);
             let (i, j) = (libm::fabsf(i), libm::fabsf(j));
-            crate::param::sun::SLOPE_BIAS * if i > j { i } else { j }
+            sun::SLOPE_BIAS * if i > j { i } else { j }
         };
         Sun {
             first: [
@@ -157,7 +163,7 @@ impl Sun {
     /// point of it lies in.
     pub fn ring(&self) -> i32 {
         let across = TILE as f32 * libm::sqrtf(dot(self.across, self.across));
-        let half = crate::scatter::WIDEST as f32 / 2.0;
+        let half = scatter::WIDEST as f32 / 2.0;
         (libm::ceilf(half / across) as i32).max(1)
     }
 
@@ -169,7 +175,7 @@ impl Sun {
     pub fn up(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
             self.texel_at([0.0; 3]),
-            self.texel_at([0.0, 0.0, crate::scatter::TALLEST as f32]),
+            self.texel_at([0.0, 0.0, scatter::TALLEST as f32]),
             TILE as f32,
         );
         let way = [(top[0] - low[0]) / tile, (top[1] - low[1]) / tile];
@@ -207,7 +213,7 @@ impl Sun {
     /// (`cast::Detail::eye`), so the map holds the cells the eye draws; its
     /// beam rays `BEAM` of the map's texels apart (`cast::Spacing`).
     pub fn detail(&self, mut detail: Detail) -> Detail {
-        detail.spacing = crate::cast::Spacing {
+        detail.spacing = Spacing {
             angle: 0.0,
             across: BEAM as f32 * length(self.across),
         };
@@ -250,7 +256,7 @@ impl Sun {
     }
 
     /// The sun its words lay (`words`).
-    pub fn of_words(w: &[u32; crate::eye::SUN_WORDS]) -> Sun {
+    pub fn of_words(w: &[u32; eye::SUN_WORDS]) -> Sun {
         let v = |k: usize| {
             [
                 f32::from_bits(w[k]),
@@ -271,7 +277,7 @@ impl Sun {
     }
 
     /// Its words, as `eye::SUN` lays them.
-    pub fn words(&self) -> [u32; crate::eye::SUN_WORDS] {
+    pub fn words(&self) -> [u32; eye::SUN_WORDS] {
         let v = |a: [f32; 3], w: u32| [a[0].to_bits(), a[1].to_bits(), a[2].to_bits(), w];
         let c = [
             v(self.first, self.reach.to_bits()),
@@ -280,7 +286,7 @@ impl Sun {
             v(self.dir, self.rim.to_bits()),
             v(self.bias, 0),
         ];
-        let mut out = [0; crate::eye::SUN_WORDS];
+        let mut out = [0; eye::SUN_WORDS];
         let mut k = 0;
         while k < out.len() {
             out[k] = c[k / 4][k % 4];
@@ -448,7 +454,7 @@ pub const TILE: u32 = 8;
 pub const BEAM: u32 = TILE;
 pub const BEAM_WINDOW: u32 = 5;
 const _: () = assert!(
-    BEAM_WINDOW as f32 >= 2.0 * crate::cast::SQRT_6,
+    BEAM_WINDOW as f32 >= 2.0 * cast::SQRT_6,
     "a beam ray through `Y` lies within 2√6 spacings"
 );
 
@@ -457,7 +463,7 @@ const _: () = assert!(
 /// texels may start from it in its first word, then its origin
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
 /// every sun ray starts apart.
-pub const LINE_ORIGIN: u32 = crate::beam::LINE_WORDS;
+pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
 
 /// How far past the disk a receiver reads the map reaches, in texels, at
 /// worst (pxl-render shadow.wgsl `sun_lit`): its corner tap `SPREAD` each
@@ -517,7 +523,7 @@ pub const fn beam_words(size: u32) -> u32 {
 /// width`, and a Q3 step's rounding of each ray's start on the near plane,
 /// two.
 pub fn margin(width: f32) -> f32 {
-    2.0 * crate::cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
+    2.0 * cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
 }
 
 /// The shadow map as the eye's rays are cast, every slot every frame
@@ -542,7 +548,7 @@ pub const fn samples_at(size: u32) -> u32 {
 }
 
 pub const fn sample(size: u32, idx: u32) -> u32 {
-    samples_at(size) + idx * crate::beam::SAMPLE_WORDS
+    samples_at(size) + idx * beam::SAMPLE_WORDS
 }
 
 pub const fn sample_words(size: u32) -> u32 {
@@ -651,6 +657,10 @@ pub fn depth<A>(s: &Sun, met: &Met<A>) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cast::Node;
+    use crate::cast::Stop;
+    use crate::param::sun;
+    use crate::scatter;
 
     /// Starts as a host lays them for the eye at Q3 `eye`, off the sun's
     /// words alone: each anchor where its texel lies off the eye, rounded.
@@ -711,10 +721,10 @@ mod tests {
 
     /// A walk that stopped `t` along its ray on a face across `axis`, or went on.
     fn met(ends: End, t: f32, axis: u32) -> Met<()> {
-        let node = crate::cast::Node::ROOT;
+        let node = Node::ROOT;
         Met {
             ends,
-            stop: crate::cast::Stop {
+            stop: Stop {
                 t,
                 axis,
                 node,
@@ -768,7 +778,7 @@ mod tests {
         let texel = 4.0 / 2048.0;
         let d = depth(&s, &met(End::Stop, 2.0, 2));
         assert!(
-            (d - (0.25 + crate::param::sun::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
+            (d - (0.25 + sun::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
             "{d}"
         );
     }
@@ -874,7 +884,7 @@ mod tests {
             1.0,
         );
         let up = s.up();
-        let rise = crate::scatter::TALLEST as f32 * 4.0 / TILE as f32 * r;
+        let rise = scatter::TALLEST as f32 * 4.0 / TILE as f32 * r;
         assert!(
             (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
             "{up:?}"
@@ -919,7 +929,7 @@ mod tests {
             let texel = libm::sqrtf(dot(s.across, s.across));
             for base in [[0.1, 0.2, -3.0], [0.37, -0.81, -2.5], [-0.66, 0.45, -3.3]] {
                 let stood = s.tile_of(base);
-                for h in [0.0, 0.7, 1.9, 3.1, crate::scatter::TALLEST as f32] {
+                for h in [0.0, 0.7, 1.9, 3.1, scatter::TALLEST as f32] {
                     for (a, b) in [(0.0, 0.0), (3.5, 0.0), (-3.5, 0.0), (0.0, 3.5), (2.5, -2.5)] {
                         // A tap `(a, b)` texels off the point `h` up.
                         let p = [

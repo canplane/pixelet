@@ -4,6 +4,7 @@
 //! signal's reader, for the host's side or the shell's.
 
 use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
+use crate::spec;
 use crate::spec::{file, pascal, snake, ts_doc};
 
 /// Only a list of u32 is packed.
@@ -146,7 +147,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut out = vec![
         format!("// {}", t.ts_logical),
         "//".into(),
-        crate::spec::generated(t.json, t.json),
+        spec::generated(t.json, t.json),
         "".into(),
         "/**".into(),
     ];
@@ -296,7 +297,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                             if i == 0 {
                                 l
                             } else {
-                                crate::spec::align_star(l, "  ")
+                                spec::align_star(l, "  ")
                             }
                         }));
                     }

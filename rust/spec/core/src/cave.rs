@@ -5,6 +5,7 @@
 
 use xpute_kit::math::rng::derive_seed_u32;
 
+use crate::param::cave;
 use crate::{wrap_idx, Zoom, LEAF_CELL};
 
 /// The seed every procedural draw starts from (`node_seed`). Changing it
@@ -41,7 +42,7 @@ const CAVES: u32 = 0xca7e_0001;
 
 /// The coarsest cube a cave takes, 32 units a side: nothing coarser is
 /// hollow, so every coarser fold of the caves is solid.
-pub const CAVE_COARSEST: Zoom = LEAF_CELL - crate::param::cave::COARSEST_STEPS;
+pub const CAVE_COARSEST: Zoom = LEAF_CELL - cave::COARSEST_STEPS;
 
 /// A cube's draws, `c` at `z`, from one hash: whether it turns a child over
 /// (its top two bits), which (its low three), and which of its eight draw
@@ -50,7 +51,7 @@ pub const CAVE_COARSEST: Zoom = LEAF_CELL - crate::param::cave::COARSEST_STEPS;
 /// cubes that draw, every cube at the root's zoom among them.
 fn draws(z: Zoom, c: [i32; 3]) -> (bool, u32, u32) {
     let h = node_seed(CAVES, (z, c));
-    (h < crate::param::cave::TURN, h & 7, (h >> 8) & 0xff)
+    (h < cave::TURN, h & 7, (h >> 8) & 0xff)
 }
 
 /// A child's place among its parent's eight.

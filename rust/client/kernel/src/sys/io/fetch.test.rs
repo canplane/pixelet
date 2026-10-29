@@ -1,5 +1,6 @@
 // pxl-kernel/sys/io/fetch.test.rs
 
+use crate::sys::io::host_spec;
 use pxl_spec::route::TILE_SPHERE;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::codec::json::read_json;
@@ -34,7 +35,7 @@ fn fixture_tile_names() {
         assert_eq!(name, Tile::of_subject(subject).name(), "{subject}");
         assert_ne!(
             subject,
-            u64::from(crate::sys::io::host_spec::SPHERE),
+            u64::from(host_spec::SPHERE),
             "no tile's number is the sphere's"
         );
         n += 1;

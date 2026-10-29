@@ -20,6 +20,7 @@ use pxl_spec_core::way::tree::POOL_FAMILIES;
 use pxl_spec_core::window::{ACROSS, BRICK};
 
 use crate::pyramid::Staged;
+use crate::terrain::unfit;
 
 /// The bricks a tile is a side.
 const SIDE: u32 = TILE_CELLS / BRICK;
@@ -116,9 +117,8 @@ fn held(
                 let Some(tile) = set.read::<TerrainTile>(p)? else {
                     continue;
                 };
-                terrain::fill_fit(p, &tile, |_, _| {}).map_err(|(at, why)| {
-                    format!("{}: {}", p.name(), crate::terrain::unfit(at, why))
-                })?
+                terrain::fill_fit(p, &tile, |_, _| {})
+                    .map_err(|(at, why)| format!("{}: {}", p.name(), unfit(at, why)))?
             }
         };
         if fit == Fit::default() {

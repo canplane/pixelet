@@ -12,6 +12,7 @@ use std::process::ExitCode;
 
 use flate2::read::GzDecoder;
 
+use pxl_geo_bake::cli;
 use pxl_spec::asset::star::{record, Star, RECORD_BYTES};
 
 /// The catalog as pxl-tool bin/download_star.rs keeps it.
@@ -55,7 +56,7 @@ fn star(line: &str) -> Result<Option<Star>, String> {
 }
 
 fn run() -> Result<(), String> {
-    pxl_geo_bake::cli::enter()?;
+    cli::enter()?;
     let text = catalog()?;
     let mut stars = Vec::new();
     for line in text.lines() {

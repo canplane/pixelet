@@ -2,6 +2,12 @@
 
 // The shipped WGSL is the shader files with comments and indentation stripped; nothing is renamed.
 
+use naga::front::wgsl;
+use pxl_spec_core::answer;
+use pxl_spec_core::grid;
+use pxl_spec_core::ground;
+use pxl_spec_core::lattice;
+use pxl_spec_core::param::sun;
 use std::path::Path;
 
 #[path = "src/frame/shader/debug_look.spec.rs"]
@@ -42,7 +48,7 @@ fn main() {
         "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
         pxl_spec_core::UNIT_ZOOM,
         pxl_spec_core::FRAC_W,
-        pxl_spec_core::lattice::GROUND.cell()
+        lattice::GROUND.cell()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     // A ray's first word, its fields as the cast writes them (pxl-spec-core
@@ -60,20 +66,15 @@ fn main() {
     let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
     // The side of the box a cell kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
-    let sides: String = (1..pxl_spec_core::answer::EIGHTHS)
-        .map(|k| {
-            format!(
-                "case {k}u: {{ return {:?}; }} ",
-                pxl_spec_core::answer::side(k)
-            )
-        })
+    let sides: String = (1..answer::EIGHTHS)
+        .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
     let kept = format!(
         "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
-    let b = pxl_spec_core::ground::LOOK_BITS;
+    let b = ground::LOOK_BITS;
     let m = (1u32 << b) - 1;
     let looks = format!(
         "fn ray_looks(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
@@ -169,11 +170,11 @@ fn main() {
 /// are, which the pass writes to the screen; the ramp read straight between
 /// its stops.
 fn debug_looks() -> String {
-    use debug_look::{grid, share, steps};
+    use debug_look::{share, steps};
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays
     // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
     // squared is within (1, `SPANS`²]: the tints' bounds are those.
-    let spans = pxl_spec_core::grid::SPANS;
+    let spans = grid::SPANS;
     assert!(
         share::finer::most == 1.0 && share::within::most == spans * spans,
         "debug_look.json's share bounds are the split's"
@@ -194,8 +195,8 @@ fn debug_looks() -> String {
     let last = steps::ramp.len() - 1;
     format!(
         "const GRID_COLOR = vec4f({}, {:?});\nconst SHARE_FINER = {};\nconst SHARE_FINER_MOST: f32 = {:?};\nconst SHARE_WITHIN = {};\nconst SHARE_WITHIN_MOST: f32 = {:?};\nconst SHARE_COARSER = {};\nconst STEPS_MOST: f32 = {:?};\nconst STEPS_NONE = {};\nconst STEPS_RAMP = array<vec3f, {}>({});\nfn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
-        parts(light(grid::rgb)),
-        grid::alpha,
+        parts(light(debug_look::grid::rgb)),
+        debug_look::grid::alpha,
         vec3(light(share::finer::rgb)),
         share::finer::most,
         vec3(light(share::within::rgb)),
@@ -300,7 +301,7 @@ fn compute(dir: &Path) -> String {
             workgroup.expect("an entry's workgroup")
         );
         // Its layout within what every device binds (frame/shader/floor.rs).
-        out += &format!("const _: () = assert!(crate::frame::shader::floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
+        out += &format!("const _: () = assert!(floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
     }
     out
 }
@@ -370,7 +371,7 @@ fn words() -> String {
         // The receiver's taps apart in the shadow map, which the map's read
         // pad is sized by (pxl-spec-core param.rs `sun::SPREAD`, sun.rs
         // `READ_PAD`).
-        format!("const SUN_SPREAD: f32 = {:?};\n", pxl_spec_core::param::sun::SPREAD),
+        format!("const SUN_SPREAD: f32 = {:?};\n", sun::SPREAD),
     ]
     .concat()
 }
@@ -461,7 +462,7 @@ fn assemble(out: &Path) {
             text += &read(part);
             text += "\n";
         }
-        let module = naga::front::wgsl::parse_str(&text)
+        let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
         // The raster's view as the host writes it (frame/shader/word.rs `RASTER_FLOATS`).
         let raster = module

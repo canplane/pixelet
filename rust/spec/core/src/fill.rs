@@ -13,6 +13,8 @@
 //! (`brick`), so the spans it sizes a tile's room by are the ones a GPU
 //! keeps.
 
+use crate::answer;
+use crate::area;
 use crate::area::Shard;
 use crate::window::{
     self, column_top, handed_at, Bricks, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT,
@@ -158,7 +160,7 @@ impl way::Kept for Scratch<'_> {
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
         let w = self.column(c) + 1 + 2 * j;
         (
-            crate::answer::bound_of(at(self.words, w) as i32),
+            answer::bound_of(at(self.words, w) as i32),
             at(self.words, w + 1),
         )
     }
@@ -278,7 +280,7 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
             first[1] + y as i32,
         ];
         let s = cell - crate::LEAF_CELL;
-        crate::area::gone_ring(shard, (cell, b), [b[0] >> s, b[1] >> s])
+        area::gone_ring(shard, (cell, b), [b[0] >> s, b[1] >> s])
     };
     let gone0 = if cell >= crate::LEAF_CELL { gone(0) } else { 0 };
     let gone1 = if cell == crate::LEAF_CELL {
@@ -349,7 +351,7 @@ pub fn keep(sq: &impl window::Brick, scratch: &mut [u32], mine: u32, i: u32) -> 
         let w = at + 1 + 2 * j as u32;
         let held = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32);
         let run = [held(s.run[j][0]), held(s.run[j][1])];
-        put(scratch, w, crate::answer::bound_word(run) as u32);
+        put(scratch, w, answer::bound_word(run) as u32);
         put(scratch, w + 1, s.val[j]);
         j += 1;
     }
@@ -527,6 +529,7 @@ mod tests {
     extern crate std;
 
     use super::*;
+    use crate::answer;
     use crate::overwrite::{self, Cut};
     use crate::way::tree::{self, Read};
     use std::{vec, vec::Vec};
@@ -591,7 +594,7 @@ mod tests {
                     put(
                         &mut scratch,
                         w,
-                        crate::answer::bound_word(s.run[j as usize]) as u32,
+                        answer::bound_word(s.run[j as usize]) as u32,
                     );
                     put(&mut scratch, w + 1, s.val[j as usize]);
                 }
