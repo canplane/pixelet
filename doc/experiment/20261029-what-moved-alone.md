@@ -105,5 +105,34 @@ refresh read 16.7 ms there against 8.3; the p50 is not taken as the change's.
 `sun_beam` is now the marks and the reach alone.
 
 At this view nearly every frame was `px`, a region taken in 3 of 3507: the
-region frames under What was seen were at other views. Why the region was not
-taken here was not looked into.
+region frames under What was seen were at other views.
+
+## A low sun's shadows bounded too
+
+Why it was not taken there: the sun. That view at the real hour there, about
+16:30, has the sun about 10° up, and under a sine of 0.25 (about 14.5°)
+`regions` drew the frame whole whenever an actor or the puck moved. With the
+shadows off, 3595 of 3599 frames were `region` (GPU p50 6.5 ms); with them on
+at noon, 3600 of 3600 (14.1 ms).
+
+The cut taken out (`34611cf20`, only a sun on or under the horizon draws
+whole), at the real hour: 3499 of 3565 `region`, GPU p50 18.0 ms against
+26.9. At 7 o'clock, the frame drawn by regions alone and the same view drawn
+whole after the shadows were switched off and on differed in 2 pixels at a
+quarter of the resolution, against 23 between two frames of regions 3 s
+apart.
+
+A review found what the cut kept back. The shadow's bound (`SHADOW_RADII`)
+takes the ground about level with the caster; ground falling away from the
+sun more steeply takes the shadow's end past the region, where it stays until
+a frame is drawn whole. How steep shrinks with the sun: about 10° at the cut,
+7° at 10° up, 3.4° at 5°. It was so before the cut went, steeper at a higher
+sun, and every drop broke it at any height; what the cut did was move the
+slope. Only an actor and the puck report a shadow that moves
+(`region::drawn`), so it takes one of them moving under a standing view, a low
+sun and such a slope, and lasts until the next whole frame: 66 a minute in the
+run above, about 6 at the views before. Bounding a slope instead (the bound
+for ground falling up to an angle, drawn whole under a sun that low) was
+weighed and not built: at 10° it draws whole about where the cut did. What
+would bound it exactly is the pixels that read the map's texels redrawn,
+found on the GPU, which the region, known on the CPU before the frame, is not.
