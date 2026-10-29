@@ -9,18 +9,24 @@
 # one object at once. Only code is formatted, each tree's by its own
 # formatter; the documents and the spec are not. GNU Make 3.81 is enough.
 #
-#   make -j8 check | test | build | test-gpu | fmt | lint
+#   make install | -j8 check | test | build | test-gpu | fmt | lint
 #   make check-ts, make test-cpp, ...   one tree's
 #
 # With -j the trees run in parallel; cpp/'s make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: check check-ts check-cpp check-rust \
+.PHONY: install install-ts \
+	check check-ts check-cpp check-rust \
 	build build-cpp build-rust \
 	test test-ts test-cpp test-rust test-conformance \
 	test-gpu test-gpu-web test-gpu-native \
 	fmt fmt-ts fmt-rust \
 	lint lint-ts
+
+# ts/'s packages, pnpm's; rust/'s and cpp/'s are fetched by their builds.
+install: install-ts
+install-ts:
+	pnpm --dir ts install
 
 check: check-ts check-cpp check-rust
 check-ts:

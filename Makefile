@@ -10,7 +10,7 @@
 # the documents and data outside the trees are not. A script that runs alone
 # is run by its path, not from here (README.md, Commands). GNU Make 3.81 is enough.
 #
-#   make -j8 check | test | fmt | lint
+#   make install | -j8 check | test | fmt | lint
 #   make check-ts, make test-rust, ...   one tree's
 #   make dev | dev-oven | dev-shelf | dev-native | preview | spec | deploy
 #   make bake-terrain ARGS=…, make serve-geo, ...   a binary (TOOLS)
@@ -18,13 +18,21 @@
 # With -j the trees run in parallel; xpute's make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: check check-ts check-rust check-rules check-spec check-build check-xpute \
+.PHONY: install install-ts install-xpute \
+	check check-ts check-rust check-rules check-spec check-build check-xpute \
 	test test-ts test-rust test-xpute \
 	fmt fmt-ts fmt-rust \
 	lint lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
 	$(TOOLS) serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
 	sync-build-number deploy
+
+# Each tree's packages, by its own manager: ts/'s here, xpute's by its make.
+install: install-ts install-xpute
+install-ts:
+	pnpm --dir ts install
+install-xpute:
+	$(MAKE) -C xpute install
 
 # `check` is everything, and with `test` what passes before a push to deploy,
 # since CI checks nothing (.agents/skills/deploy/SKILL.md). `check-build` is

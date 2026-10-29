@@ -123,7 +123,7 @@ cp ts/app/web/.env.example ts/app/web/.env
 cp infra/local/.env.example infra/local/.env
 cp rust/server/.env.example rust/server/.env
 
-pnpm --dir ts install
+make install
 make dev
 ```
 
@@ -155,6 +155,7 @@ to measure speed in.
 | `make download-<what>`          | Fetch a source a tool reads: `pack`, `moon`, `earth`, `star`         |
 | `make render-brand`             | The symbol's outline both apps bundle                                |
 | `make deploy`                   | Build and publish the client with the Worker; CI runs it             |
+| `make install`                  | Every tree's packages: `ts/`'s and xpute's                           |
 | `make -j8 check` / `test`       | Every check / every test, or one tree's: `check-ts`, `test-rust`, …  |
 | `make lint` / `fmt`             | Lint / format                                                        |
 

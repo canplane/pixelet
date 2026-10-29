@@ -17,11 +17,11 @@
     "@std/assert": "jsr:^1.0.19",
     "@types/node": "^24",
     "@webgpu/types": "~0.1.74",
-    "esbuild": "^0.25.0",
     "koffi": "^3.3.5",
     "oxlint": "^1.90.0",
     "prettier": "^3.9.10",
     "typescript": "^7.0.2",
+    "vite": "^8.3.0",
     "vitest": "^5.0.5"
   }
 }

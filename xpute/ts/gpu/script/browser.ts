@@ -11,9 +11,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build } from "esbuild";
+import { build } from "vite";
 
 /** xpute's root, three up: the spec it serves, and ts/target/, which it bundles into. */
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -27,13 +27,23 @@ const CHROME =
 const SECONDS = 60;
 
 async function main(): Promise<number> {
+  // One ES module, the test and all it imports, by vite as a library's
+  // entry: no config of the tree's, no page, nothing else written.
   await build({
-    entryPoints: [join(ROOT, TEST)],
-    bundle: true,
-    platform: "browser",
-    format: "esm",
-    outfile: BUNDLE,
-    absWorkingDir: join(ROOT, "ts"),
+    configFile: false,
+    root: join(ROOT, "ts"),
+    logLevel: "warn",
+    build: {
+      outDir: dirname(BUNDLE),
+      emptyOutDir: false,
+      copyPublicDir: false,
+      minify: false,
+      lib: {
+        entry: join(ROOT, TEST),
+        formats: ["es"],
+        fileName: () => basename(BUNDLE),
+      },
+    },
   });
   const { promise: outcome, resolve } = Promise.withResolvers<string>();
   const page = `/${TEST.replace(/\.ts$/, ".js")}`;

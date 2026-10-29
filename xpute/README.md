@@ -131,13 +131,14 @@ the policy belongs to the program.
 
 ## Running it
 
-Node 24 with pnpm (`pnpm --dir ts install` first), rustup (it installs what
+Node 24 with pnpm (`make install` first), rustup (it installs what
 `rust/rust-toolchain.toml` names), a C++20
 compiler as `c++` or `$CXX`, GNU Make, and the [WASI
 SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
 `$WASI_SDK_PATH`, for the C++ guest built as a module.
 
 ```sh
+make install       # ts/'s packages, pnpm's
 make -j8 check     # formats, lints and types checked, the C++ compiled
 make -j8 test      # every tree's tests, then the traces against every guest
 make -j8 build     # the guests the traces drive; test builds them first
