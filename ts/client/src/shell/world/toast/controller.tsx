@@ -8,7 +8,7 @@ import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
 import { Gpu } from "@/abi/gpu.ts";
 import { Source } from "@/namespace/source.ts";
 
-import { toastDismiss, toastShow, ToastTone } from "./store.ts";
+import { dismissToast, showToast, ToastTone } from "./store.ts";
 import {
   useGpu,
   useKernel,
@@ -62,14 +62,14 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
   const tone = said?.tone ?? null;
   useEffect(() => {
     if (key !== null && tone !== null) {
-      toastShow(id, { message: words(key), tone });
+      showToast(id, { message: words(key), tone });
       return;
     }
     if (holdMs === 0) {
-      toastDismiss(id);
+      dismissToast(id);
       return;
     }
-    const timer = setTimeout(() => toastDismiss(id), holdMs);
+    const timer = setTimeout(() => dismissToast(id), holdMs);
     return () => clearTimeout(timer);
   }, [id, key, tone, words, holdMs]);
 }

@@ -11,7 +11,7 @@ import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { keepKeyboard } from "@/shell/ui/keyboard.tsx";
 import { chrome, color } from "@/shell/ui/theme.ts";
-import { DockMode, useDockStore } from "@/shell/store/dock.ts";
+import { DockMode, switchDockMode, useDockMode } from "./store.ts";
 import { deckSwipe } from "@/shell/world/deck.ts";
 import { Card, DOCK_HEIGHT } from "./card.tsx";
 import { SizePopover, usePopover } from "./popover.tsx";
@@ -19,14 +19,14 @@ import { Message, useMessage } from "./message.tsx";
 import { DRAG_PX, STRIP, Strip } from "./strip.tsx";
 
 export function Dock() {
-  const mode = useDockStore((s) => s.dockMode);
+  const mode = useDockMode();
   // A swipe either way switches the mode; swatches open their sizes on a
   // hold, so the two never compete.
   const swipe = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_e, s) =>
         Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
-      ...deckSwipe(() => useDockStore.getState().switchDockMode(), {
+      ...deckSwipe(switchDockMode, {
         press: keepKeyboard,
       }),
     }),

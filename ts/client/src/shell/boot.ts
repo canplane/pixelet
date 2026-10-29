@@ -14,9 +14,9 @@ export const enum Boot {
   Stopped = 3,
 }
 
-const store = create(() => ({
+const store = create<{ boot: Boot; stop: string | null }>()(() => ({
   boot: Boot.Starting,
-  stop: null as string | null,
+  stop: null,
 }));
 
 export function boot(): void {

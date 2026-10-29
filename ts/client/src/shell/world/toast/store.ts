@@ -42,15 +42,28 @@ interface ToastState {
   pending: u32 | null;
 }
 
-export const useToastStore = create<ToastState>(() => ({
+const store = create<ToastState>()(() => ({
   entries: [],
   turns: 0,
   dragging: false,
   pending: null,
 }));
 
-const set = useToastStore.setState;
-const get = useToastStore.getState;
+const set = store.setState;
+const get = store.getState;
+
+export function useToastEntries(): readonly Entry[] {
+  return store((s) => s.entries);
+}
+
+export function useToastTurns(): i32 {
+  return store((s) => s.turns);
+}
+
+/** How many cards are up now. */
+export function toastCount(): u32 {
+  return get().entries.length;
+}
 
 function toFront(id: u32): void {
   const { entries } = get();
@@ -61,7 +74,7 @@ function toFront(id: u32): void {
   });
 }
 
-export function toastShow(id: u32, spec: ToastSpec): void {
+export function showToast(id: u32, spec: ToastSpec): void {
   const { entries, dragging } = get();
   const shown = entries.find((e) => e.id === id);
   // Said again as it is, as a toast kept past its cause is: no card to bring forward.
@@ -85,7 +98,7 @@ export function toastShow(id: u32, spec: ToastSpec): void {
   set({ entries: [...entries.slice(0, at), entry, ...entries.slice(at)] });
 }
 
-export function toastDismiss(id: u32): void {
+export function dismissToast(id: u32): void {
   const { entries, pending } = get();
   set({
     entries: entries.filter((e) => e.id !== id),
@@ -94,7 +107,7 @@ export function toastDismiss(id: u32): void {
 }
 
 /** Up (1) sends the front card to the back; down (-1) brings the back one forward. */
-export function toastRotate(delta: i32): void {
+export function rotateToasts(delta: i32): void {
   const { entries, turns } = get();
   const k = ((delta % entries.length) + entries.length) % entries.length;
   set({

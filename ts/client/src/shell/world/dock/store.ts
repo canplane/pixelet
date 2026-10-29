@@ -1,23 +1,16 @@
-// @pxl/client/shell/store/dock.ts
+// @pxl/client/shell/world/dock/store.ts
 
 /** The dock's own state, which the kernel does not keep (the hotbar's picks, the chat's lines, the
- * dock's mode and its swatch's flash), and the commands the dock sends: what is held, a chat line, a marker. */
+ * dock's mode and its swatch's flash), and the commands it sends with it: what is held, a chat line. */
 
 import { create } from "zustand";
 
 import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
 import { cube } from "@/shell/catalog/asset/cube.spec.ts";
 import { allCubes, type Cube, decorIds } from "@/shell/catalog/asset/mod.ts";
-import {
-  ActiveTool,
-  Command,
-  encode_chat_send,
-  encode_input_marker_words,
-} from "@/abi/cmd.spec.ts";
-import { MARKER_TEXT_CHARS } from "@/shell/catalog/asset/marker.spec.ts";
+import { ActiveTool, Command, encode_chat_send } from "@/abi/cmd.spec.ts";
 import {
   kernel_command,
-  kernel_fits,
   kernel_hold,
   kernel_room,
   kernel_snapshot,
@@ -35,7 +28,7 @@ const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-type RecentPick =
+export type RecentPick =
   | { tool: ActiveTool.Object; cube: Cube }
   | {
       tool: ActiveTool.Decor;
@@ -79,25 +72,13 @@ export const enum DockMode {
 
 /** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
 interface DockState {
-  // Advanced only by selectCube/selectDecor, which also switch the tool.
+  // Advanced only by selectCube/selectDecor/selectMarker, which also switch the tool.
   recentPicks: RecentPick[];
-  selectCube: (cube: Cube) => void;
-  selectDecor: (kind: u16) => void;
-  selectMarker: () => void;
-
   chatLines: ChatLine[];
-  appendChatLine: (text: string) => void;
-
   /** What the dock is for: picking, at rest, or typing, which the keyboard follows. */
   dockMode: DockMode;
-  setDockMode: (mode: DockMode) => void;
-  /** A swipe either way or Tab: the other mode. */
-  switchDockMode: () => void;
-
   /** A key's pick or size step, which the dock shows over the cube's swatch as a press would: its seed, or the sizes open. */
   swatchFlash: SwatchFlash;
-  flashSwatch: (cube: Cube, open: boolean) => void;
-  stepSize: (delta: i32) => void;
 }
 
 interface SwatchFlash {
@@ -170,94 +151,102 @@ export function holdTier(tier: u32): void {
   hold(kernel_snapshot().holding.tool, tier);
 }
 
-const stored = load();
-
-export const useDockStore = create<DockState>()((set) => ({
-  recentPicks: stored.picks,
-  selectCube: (cube) => {
-    kernel_hold(ActiveTool.Object, cube, kernel_snapshot().holding.tier);
-    set((state) => ({
-      recentPicks: touchRecent(state.recentPicks, {
-        tool: ActiveTool.Object,
-        cube,
-      }),
-    }));
-  },
-  selectDecor: (kind) => {
-    kernel_hold(ActiveTool.Decor, kind, kernel_snapshot().holding.tier);
-    set((state) => ({
-      recentPicks: touchRecent(state.recentPicks, {
-        tool: ActiveTool.Decor,
-        kind,
-      }),
-    }));
-  },
-  selectMarker: () => {
-    holdTool(ActiveTool.Marker);
-    set((state) => ({
-      recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Marker }),
-    }));
-  },
-
-  dockMode: DockMode.Palette,
-  setDockMode: (dockMode) => set({ dockMode }),
-  switchDockMode: () =>
-    set((state) => ({
-      dockMode:
-        state.dockMode === DockMode.Message
-          ? DockMode.Palette
-          : DockMode.Message,
-    })),
-
-  swatchFlash: { n: 0, cube: null, open: false },
-  flashSwatch: (cube, open) =>
-    set((state) => ({
-      swatchFlash: { n: state.swatchFlash.n + 1, cube, open },
-    })),
-  stepSize: (delta) => {
-    const h = kernel_snapshot().holding;
-    if (h.tool !== ActiveTool.Object) return;
-    holdTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
-    useDockStore.getState().flashSwatch(h.cube, true);
-  },
-
+const store = create<DockState>()(() => ({
+  recentPicks: load().picks,
   chatLines: [],
-  appendChatLine: (text) => {
-    set((state) => ({
-      chatLines: [...state.chatLines, { id: nextChatLineId++, text }].slice(
-        -MAX_CHAT_LINES,
-      ),
-    }));
-    kernel_command(Command.CHAT_SEND, encode_chat_send(kernel_room, text));
-  },
+  dockMode: DockMode.Palette,
+  swatchFlash: { n: 0, cube: null, open: false },
 }));
 
-/** A line too long to send is refused whole, never cut. */
-export function chatFits(text: string): boolean {
-  return kernel_fits(encode_chat_send(kernel_room, text));
+store.subscribe((s, prev) => {
+  if (s.recentPicks !== prev.recentPicks) save(s);
+});
+
+export function useRecentPicks(): readonly RecentPick[] {
+  return store((s) => s.recentPicks);
 }
 
-/** The waiting marker's words as typed, which it is drawn with. */
-export function draftMarkerWords(text: string): void {
-  kernel_command(
-    Command.INPUT_MARKER_WORDS,
-    encode_input_marker_words(kernel_room, text),
+export function useChatLines(): readonly ChatLine[] {
+  return store((s) => s.chatLines);
+}
+
+export function useDockMode(): DockMode {
+  return store((s) => s.dockMode);
+}
+
+export function useSwatchFlash(): SwatchFlash {
+  return store((s) => s.swatchFlash);
+}
+
+/** The hotbar's pick in `slot`, as it is now. */
+export function recentPick(slot: number): RecentPick {
+  return store.getState().recentPicks[slot];
+}
+
+/** What the dock is for now. */
+export function dockMode(): DockMode {
+  return store.getState().dockMode;
+}
+
+/** Called with the dock's mode and the one before it, on each change; the returned call stops it. */
+export function watchDockMode(
+  listener: (mode: DockMode, before: DockMode) => void,
+): () => void {
+  return store.subscribe((s, prev) => {
+    if (s.dockMode !== prev.dockMode) listener(s.dockMode, prev.dockMode);
+  });
+}
+
+function touch(pick: RecentPick): void {
+  store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, pick) }));
+}
+
+export function selectCube(cube: Cube): void {
+  kernel_hold(ActiveTool.Object, cube, kernel_snapshot().holding.tier);
+  touch({ tool: ActiveTool.Object, cube });
+}
+
+export function selectDecor(kind: u16): void {
+  kernel_hold(ActiveTool.Decor, kind, kernel_snapshot().holding.tier);
+  touch({ tool: ActiveTool.Decor, kind });
+}
+
+export function selectMarker(): void {
+  holdTool(ActiveTool.Marker);
+  touch({ tool: ActiveTool.Marker });
+}
+
+export function setDockMode(mode: DockMode): void {
+  store.setState({ dockMode: mode });
+}
+
+/** A swipe either way or Tab: the other mode. */
+export function switchDockMode(): void {
+  setDockMode(
+    dockMode() === DockMode.Message ? DockMode.Palette : DockMode.Message,
   );
 }
 
-/** The waiting marker put up with its words. */
-export function putMarker(): void {
-  kernel_command(Command.INPUT_MARKER_PUT);
+export function flashSwatch(cube: Cube, open: boolean): void {
+  store.setState((s) => ({
+    swatchFlash: { n: s.swatchFlash.n + 1, cube, open },
+  }));
 }
 
-/** The waiting marker is let go. */
-export function cancelMarker(): void {
-  kernel_command(Command.INPUT_MARKER_CANCEL);
+export function stepSize(delta: i32): void {
+  const h = kernel_snapshot().holding;
+  if (h.tool !== ActiveTool.Object) return;
+  holdTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
+  flashSwatch(h.cube, true);
 }
 
-/** Words past the cap are refused whole, never cut. */
-export function markerTextFits(text: string): boolean {
-  return [...text].length <= MARKER_TEXT_CHARS;
+export function appendChatLine(text: string): void {
+  store.setState((s) => ({
+    chatLines: [...s.chatLines, { id: nextChatLineId++, text }].slice(
+      -MAX_CHAT_LINES,
+    ),
+  }));
+  kernel_command(Command.CHAT_SEND, encode_chat_send(kernel_room, text));
 }
 
 export function useInHand(pick: RecentPick): boolean {
@@ -271,7 +260,3 @@ export function useInHand(pick: RecentPick): boolean {
     return h.tool === ActiveTool.Marker;
   });
 }
-
-useDockStore.subscribe((s, prev) => {
-  if (s.recentPicks !== prev.recentPicks) save(s);
-});

@@ -19,15 +19,18 @@ function measure(): WindowSize {
 }
 
 /** The layout viewport's size, and how far the visual viewport is scrolled down it. */
-const useViewport = create(() => ({ size: measure(), top: 0 }));
+const store = create<{ size: WindowSize; top: number }>()(() => ({
+  size: measure(),
+  top: 0,
+}));
 
 // Observed after layout: a page zoom's `resize` came before the root's new
 // size, and a sheet stayed centered on the old width.
 new ResizeObserver(() => {
   const next = measure();
-  const { size } = useViewport.getState();
+  const { size } = store.getState();
   if (next.width !== size.width || next.height !== size.height) {
-    useViewport.setState({ size: next });
+    store.setState({ size: next });
   }
 }).observe(document.documentElement);
 
@@ -37,15 +40,15 @@ new ResizeObserver(() => {
  * the keyboard's height at its top.
  */
 export function useWindowSize(): WindowSize {
-  return useViewport((s) => s.size);
+  return store((s) => s.size);
 }
 
 export function useViewportTop(): number {
-  return useViewport((s) => s.top);
+  return store((s) => s.top);
 }
 
 function setTop(top: number): void {
-  useViewport.setState({ top });
+  store.setState({ top });
 }
 
 interface VirtualKeyboard extends EventTarget {

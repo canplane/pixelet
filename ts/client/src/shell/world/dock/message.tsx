@@ -16,23 +16,53 @@ import { LABEL } from "@/shell/ui/palette.ts";
 import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, disabledContent } from "@/shell/ui/theme.ts";
 import {
-  cancelMarker,
-  chatFits,
-  DockMode,
-  draftMarkerWords,
-  markerTextFits,
-  putMarker,
-  useDockStore,
-} from "@/shell/store/dock.ts";
-import { kernel_snapshot } from "@/abi/shell.ts";
+  Command,
+  encode_chat_send,
+  encode_input_marker_words,
+} from "@/abi/cmd.spec.ts";
+import {
+  kernel_command,
+  kernel_fits,
+  kernel_room,
+  kernel_snapshot,
+} from "@/abi/shell.ts";
+import { MARKER_TEXT_CHARS } from "@/shell/catalog/asset/marker.spec.ts";
 import { useKernel } from "@/shell/store/watch.ts";
+import { appendChatLine, DockMode, setDockMode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
+
+/** A line too long to send is refused whole, never cut. */
+function chatFits(text: string): boolean {
+  return kernel_fits(encode_chat_send(kernel_room, text));
+}
+
+/** The waiting marker's words as typed, which it is drawn with. */
+function draftMarkerWords(text: string): void {
+  kernel_command(
+    Command.INPUT_MARKER_WORDS,
+    encode_input_marker_words(kernel_room, text),
+  );
+}
+
+/** The waiting marker put up with its words. */
+function putMarker(): void {
+  kernel_command(Command.INPUT_MARKER_PUT);
+}
+
+/** The waiting marker is let go. */
+function cancelMarker(): void {
+  kernel_command(Command.INPUT_MARKER_CANCEL);
+}
+
+/** Words past the cap are refused whole, never cut. */
+function markerTextFits(text: string): boolean {
+  return [...text].length <= MARKER_TEXT_CHARS;
+}
 
 /** The field's words and its sending, kept by the dock whether or not its cards are drawn yet. */
 export function useMessage(mode: DockMode) {
   // A marker waiting for its words turns the message card to wording it.
   const wording = useKernel((s) => s.holding.marker);
-  const appendChatLine = useDockStore.getState().appendChatLine;
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
@@ -51,7 +81,7 @@ export function useMessage(mode: DockMode) {
   // then on are the field's, sent as typed; done, the field is the chat's again.
   useEffect(() => {
     setMessageText(wording ? kernel_snapshot().holding.words : "");
-    if (wording) useDockStore.getState().setDockMode(DockMode.Message);
+    if (wording) setDockMode(DockMode.Message);
   }, [wording]);
 
   function changeText(text: string) {
@@ -73,7 +103,7 @@ export function useMessage(mode: DockMode) {
       }
       putMarker();
       // Put up, the palette comes back for the next.
-      useDockStore.getState().setDockMode(DockMode.Palette);
+      setDockMode(DockMode.Palette);
     }, FADE.durationMs);
   }
 

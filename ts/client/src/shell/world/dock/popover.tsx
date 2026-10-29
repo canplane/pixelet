@@ -13,7 +13,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
 import { alpha, chrome, material, shadow } from "@/shell/ui/theme.ts";
-import { holdTier } from "@/shell/store/dock.ts";
+import { holdTier } from "./store.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";

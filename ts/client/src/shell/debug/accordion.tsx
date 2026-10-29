@@ -16,12 +16,12 @@ import { gauge } from "./profiler/gauge.tsx";
 import type { PanelName } from "./window.tsx";
 
 /** The panel open, by its name (window.tsx `PANEL`). */
-export const useOpenAccordion = create<{ open: PanelName | null }>(() => ({
+const store = create<{ open: PanelName | null }>()(() => ({
   open: null,
 }));
 
 const toggle = (name: PanelName) =>
-  useOpenAccordion.setState(({ open }) => ({
+  store.setState(({ open }) => ({
     open: open === name ? null : name,
   }));
 
@@ -44,7 +44,7 @@ export function Accordion({
   end?: ReactNode;
   children?: ReactNode;
 }) {
-  const open = useOpenAccordion((s) => s.open === name);
+  const open = store((s) => s.open === name);
   return (
     <View style={styles.panel}>
       <Pressable
