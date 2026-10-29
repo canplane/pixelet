@@ -174,8 +174,8 @@ function windowSection(r: ProfilerReport): string[] {
   ).join("  ");
   const steps = r.steps.length === 0
     ? "none"
-    : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) =>
-      `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`
+    : [...r.steps].sort((a, b) => b.ms / b.cnt - a.ms / a.cnt).map((s) =>
+      `${s.phase}/${s.name} ${n1(s.ms / s.cnt)}/${n1(s.max_ms)}`
     ).join("  ");
 
   const counted = (rows: { name: string; n: f64 }[]) =>

@@ -194,7 +194,7 @@ export interface Step {
   phase: string;
   name: string;
   ms: f64;
-  count: f64;
+  cnt: f64;
   max_ms: f64;
 }
 
@@ -307,7 +307,7 @@ function steps_at(s: F64Array): Step[] {
       phase: PHASES[s[w + STEP_STAT.phase]] ?? "?",
       name: STEP_NAMES[s[w + STEP_STAT.name]] ?? "?",
       ms: s[w + STEP_STAT.ms],
-      count: s[w + STEP_STAT.cnt],
+      cnt: s[w + STEP_STAT.cnt],
       max_ms: s[w + STEP_STAT.max_ms],
     };
   });
@@ -373,9 +373,9 @@ export function profiler_counts(): RingCounts {
 
 /** Every frame the ring holds, oldest first. */
 export function profiler_frames(): Frame[] {
-  const [at, count] = rings().frames;
-  const w = words(at, count * FRAME.WORDS);
-  return Array.from({ length: count }, (_, i) => frame_at(w, i * FRAME.WORDS));
+  const [at, cnt] = rings().frames;
+  const w = words(at, cnt * FRAME.WORDS);
+  return Array.from({ length: cnt }, (_, i) => frame_at(w, i * FRAME.WORDS));
 }
 
 /** The tasks the ring holds, oldest first: its last `last`, or every one at null. */
@@ -383,14 +383,14 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   const [ring, held] = rings().tasks;
   const from = last === null ? 0 : Math.max(0, held - last);
   const at = ring + from * TASK.WORDS * WORD;
-  const count = held - from;
-  const w = words(at, count * TASK.WORDS);
+  const cnt = held - from;
+  const w = words(at, cnt * TASK.WORDS);
   const subjects = new BigUint64Array(
     HOST.guest.mem,
     at,
-    count * TASK.WORDS,
+    cnt * TASK.WORDS,
   );
-  return Array.from({ length: count }, (_, i) => {
+  return Array.from({ length: cnt }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_cnt = w[o + TASK.phase_cnt];
     const phases: [string, f64][] = [];
@@ -423,9 +423,9 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
 
 /** The worst frames the kernel kept since recording began. */
 export function profiler_worst(): Worst[] {
-  const [at, count] = rings().worst;
-  const w = words(at, count * WORST.WORDS);
-  return Array.from({ length: count }, (_, i) => {
+  const [at, cnt] = rings().worst;
+  const w = words(at, cnt * WORST.WORDS);
+  return Array.from({ length: cnt }, (_, i) => {
     const o = i * WORST.WORDS;
     return {
       sample: frame_at(w, o + WORST.sample),
