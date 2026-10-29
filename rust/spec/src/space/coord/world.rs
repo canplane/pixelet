@@ -94,7 +94,7 @@ pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }
 
-/// A cell at `z` named as pxl-spec-core's `wrap_index` names its X, which
+/// A cell at `z` named as pxl-spec-core's `wrap_idx` names its X, which
 /// every key goes through.
 pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i32; 3]) -> [i32; 3] {
     [pxl_spec_core::wrap_idx(zoom, x), y, h]

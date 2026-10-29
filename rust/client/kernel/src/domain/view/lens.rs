@@ -1,10 +1,8 @@
 // pxl-kernel/domain/view/lens.rs
 
 //! The camera grid through the screen: the cell a distance holds
-//! (`cell_there`), how long a motion takes to be seen there and a clock
-//! stepped by it (`seen_step_s`, `Stepped`), and what the GPU's cast of the
-//! screen's rays reads (`gpu_cast`), a ray a drawn pixel, one rule wherever
-//! the eye is.
+//! (`cell_there`), and what the GPU's cast of the screen's rays reads
+//! (`gpu_cast`), a ray a drawn pixel, one rule wherever the eye is.
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{Tau, SPLIT};

@@ -1,8 +1,7 @@
 // pxl-kernel/domain/query/node.rs
 
-//! What is in a node: the world's one query
-//! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
-//! "The query between them"), one record of a node answering two sizes.
+//! What is in a node: the world's one query, one record of a node answering
+//! two sizes.
 //!
 //! At the zoom a reader asks, it is what the node is, the cell, by the one
 //! rule (pxl-spec-core `ground::node`), each source answering from its own

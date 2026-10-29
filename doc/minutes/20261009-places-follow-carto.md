@@ -1,7 +1,7 @@
 # Places follow Carto
 
-**2026-10-09** — decided in conversation and built the same day; what is left is
-tuning.
+**2026-10-09** — decided in conversation and built the same day; what is left
+is tuning; kept up to what the code holds.
 
 A place is what Overture's schema says it is, and it is drawn as OpenStreetMap
 Carto draws a point of interest, and behaves as Carto does: the same icon,
@@ -44,17 +44,14 @@ carries only the classes its policy paints (`terrain/repository.rs`).
 The icon is Carto's SVG, rasterized into an atlas by the asset pipeline and
 filled with its row's color. The label is the place's `names.primary`, which is
 what Carto's `name` is, in Carto's text style but a marker's font, so the world
-has one size of text: a halo, set under the icon (`text-dy`), wrapped at the
-cell a place keeps to itself (below;
-`pxl-kernel domain/scene/marker/arrangement.rs` `SPACING_PX`), where it was
-first six em, twice Carto's, which broke a Korean name of five syllables in two,
-in its row's label color. A map label is Carto's, so it is not translated; the
-address line the shell writes from the divisions is UI text and keeps the
-language setting.
-
-> **Note (10-28):** the label no longer wraps at the place's cell. It wraps at
-> `SPACING_PX`, 193 CSS pixels, a constant of the UI's: the place's cell on a
-> view 1080 CSS pixels high at 50°, and on any other view more or less of it.
+has one size of text: a halo, set under the icon (`text-dy`), in its row's label
+color, wrapped at 193 CSS pixels, a constant of the UI's, set by eye to hold a
+name of a few words (`pxl-kernel domain/scene/marker/arrangement.rs`
+`SPACING_PX`), not the cell a place keeps to itself (below), whose pixels are
+the screen's. It was first six em, twice Carto's, which broke a
+Korean name of five syllables in two. A map label is Carto's, so it is not
+translated; the address line the shell writes from the divisions is UI text and
+keeps the language setting.
 
 ## Zoom, as the grid's cell
 
@@ -63,16 +60,17 @@ tile of the pyramid at c, so its 16-pixel icon is a cell of that tile at c + 4.
 Places are kept in that lattice (`PLACE_LATTICE`) and read as every layer is, at
 its scale on the camera grid (`Lattice::scaled`), two steps coarser than the
 grid (`pxl-spec param.rs` `place::SPREAD_STEPS`): an icon's cell spans four grid
-cells, some 48 pixels round a drawn icon of 22 against Carto's 16, so the kinds
-shown at a distance are about Carto's at that size on the screen. The zoom a
-place is drawn at is the tile zoom of the grid's cell there, past the leaf too.
+cells round the drawn icon, so the kinds shown at a distance are about Carto's
+at that size on the screen. The zoom a place is drawn at is the tile zoom of the
+grid's cell there, past the leaf too.
 The grid's cell is the distance's from the eye, so which Carto zoom a place is
-drawn at is decided in 3D, by the chunk the top of what stands there is in, as
-everything drawn is. Nothing measures pixels: the grid's cell, an angle, stands
-for Carto's icon, so the demand is the grid's and bounded as every layer's is,
-and the quality setting that coarsens the grid coarsens the places with it, as
-it does the ground. Measuring Carto's pixels on the screen instead would make
-the tiles a zoom asks for grow with the screen, which nothing bounds.
+drawn at is decided where it stands, as everything drawn is
+(`pxl-kernel domain/scene/marker/place.rs` `read`). Nothing measures pixels: the
+grid's cell, an angle, stands for Carto's icon, so the demand is the grid's and
+bounded as every layer's is, and the quality setting that coarsens the grid
+coarsens the places with it, as it does the ground. Measuring Carto's pixels on
+the screen instead would make the tiles a zoom asks for grow with the screen,
+which nothing bounds.
 
 ## Which places, where they would meet
 
@@ -86,9 +84,9 @@ Ours is the same rule quantized to the pyramid, so that a tile holds only what
 lies in it: at Carto zoom c a cell four icons wide — an icon 16 pixels, Carto's
 14-pixel symbols rounded up to a power of two, so the cell at zoom c + 2 of the
 web map's 256-pixel tile — keeps one place, the first in order, and every other
-in it is not drawn at c. Four icons, some 190 pixels on the screen, is a product
+in it is not drawn at c. Four icons, sixteen camera grid cells, is a product
 choice: at an icon's own cell, twice the places Carto shows were kept, which
-drawn showed as icons and names piled on each other, and places a few meters
+drawn showed as icons and names piled on each other, and places a few metres
 apart stood side by side as near as the view came. The cell is an angle, and its
 pixels are the screen's, so a name, which wraps at 193 CSS pixels
 (`SPACING_PX`), may be wider or narrower than its cell. A name shows wherever
@@ -129,15 +127,12 @@ stays reachable; a reader at any zoom reads the deepest tile held for its node.
 
 ## The billboard
 
-Places and the markers someone puts up stay one billboard pass — gathered,
-culled to the screen, drawn far to near, tapped — since a billboard is a
-behavior. What each draws is its own sheet: a marker its words, as now; a place
-Carto's icon and label. A place's count badge goes; markers crowded in one
-marker's cell keep theirs (`pxl-kernel domain/scene/marker/pin.rs` `count`).
-
-> Since renamed: the billboard is the **marker** now, one pass over places, pins
-> and the chat's line (`pxl-kernel domain/scene/marker/arrangement.rs`), and a
-> crowded cell's count is shown on a pin's pill.
+Places, the pins someone puts up and the chat's line stay one marker pass —
+gathered, culled to the screen, drawn far to near, tapped — since a marker is a
+behavior (`pxl-kernel domain/scene/marker/arrangement.rs`). What each draws is
+its own sheet: a pin its words; a place Carto's icon and label. A place's count
+badge goes; pins crowded in one pin's cell keep theirs, shown on a pin's pill
+(`pxl-kernel domain/scene/marker/pin.rs` `count`).
 
 ## What goes
 

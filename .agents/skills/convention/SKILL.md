@@ -1,6 +1,6 @@
 ---
 name: convention
-description: How the tree is written — names, where a thing goes, a file's header and citations, and the few rules the code holds everywhere. Use when naming, creating, moving or renaming a module, folder, file or type; when a file names a path out of its package; when a doc or comment cites code; and when writing rounding, float math, a map, a pointer from an offset, a script or an @expo/ui import.
+description: How the tree is written — names, where a thing goes, a file's header and citations, and the few rules the code holds everywhere. Use when naming, creating, moving or renaming a module, folder, file or type; when a file names a path out of its package; when a doc or comment cites code; when writing down what the user said; and when writing rounding, float math, a map, a pointer from an offset, a script or an @expo/ui import.
 ---
 
 # Convention
@@ -9,8 +9,8 @@ System code — xpute, and pixelet's host, its brackets and the kernel's door an
 sys — is written as Unix V6 is, xv6 its reading today. Domain code, the world
 and the shell, is not held to it. What follows is that, branch by branch, and
 the few rules the code holds everywhere. What the parts are and where their
-boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
-`AGENTS.md`'s.
+boundaries run is `ARCHITECTURE.md`'s, and the rules over the host/guest
+boundary `AGENTS.md`'s.
 
 ## Names
 
@@ -21,6 +21,11 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
   things elsewhere, as a page frame, a stack frame and a display frame share
   one, so a word in use for something else is no reason to rename. A borrowed
   term is weighed by its defining properties alone.
+- What a name is judged by is whether it is the fittest one, the one a reader
+  takes at once and cannot take for another thing. A clash counts only where
+  the two meet: two structures one word within a subsystem, read side by
+  side, is a clash; the same word in parts that never meet is not. Weigh it
+  there, not by a word's count across the tree.
 - Where a word is in doubt, the 04-05 checkpoint's (`checkpoint/20260405-rpc`)
   is a reference: frame, packet, signal.
 - Folders and files are singular, for what each one is; plural only where the
@@ -47,6 +52,10 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
   standard library alone, or sh. One in JavaScript is an ES module, TypeScript
   where a loader takes it: no `.cjs` or `.cts`. Node runs only the native
   toolchain's own scripts.
+- What builds, caches or generates serves a shared checkout, an export and a
+  worktree alike, since the user runs agents in worktrees at times: its key
+  holds no absolute path and no session's own variable, and it finds the tree
+  from where it runs.
 - Deno is the TypeScript trees' tool (`ts/`, `xpute/ts/`) and runs only in
   them; a program outside them (wrangler, aws) is called from the PATH, never
   through Deno or a tree's lock.
@@ -59,12 +68,16 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
   `// @xpute/host/ipc/doorbell.ts`). A file that is moved takes its new path.
 - Code is cited as its path and then its name in backticks
   (`domain/scene/marker/arrangement.rs` `tap`). A citation that is moved or
-  renamed is fixed with it, in the live minutes too, where a claim the code no
-  longer holds gets a note under it. `doc/minutes/archive/` and
-  `doc/experiment/` name the files of their day and are not kept up.
+  renamed is fixed with it.
+- Code, its comments and the spec cite no minute and no experiment, which are
+  reference (`doc/README.md`). A reason a reader needs is written where it is
+  needed, in a sentence.
 - A comment says only what a reader would otherwise get wrong — an invariant, a
   hazard, where a number comes from — in a sentence. It tells no history and
   does not restate the code or a document.
+- The tree is written in English, the shell's translations aside
+  (`ts/client/src/shell/locale/`), and what the user said in another language is
+  written in English too.
 
 ## Code
 

@@ -9,8 +9,7 @@
  * spec/spec/route.json: `/tile/*` and `/asset/*` come straight out of the
  * R2 bucket, and `/geo/*` and `/api/*` are reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md).
  * Keeping it on the app's own hostname is what makes them same-origin, so no
- * CORS policy exists to configure or get wrong — see
- * doc/minutes/20260816-deployment-hosting.md.
+ * CORS policy exists to configure or get wrong.
  *
  * A package of its own beside the servers (ts/server/edge): the only
  * server-side code in the deployment, for the Workers runtime rather than
@@ -77,7 +76,7 @@ import { BASE_LAYERS } from "./published.spec.ts";
 /**
  * Object keys this Worker is willing to ask R2 for, by shape alone, so what
  * was never an address does not reach the bucket; what bounds the reads is
- * the free plan's daily cap (doc/minutes/20260816-deployment-hosting.md).
+ * the free plan's daily cap.
  *
  * - `<kind>/<object>`: a baked page, a kind of `BASE_LAYERS` and the object
  *   spec/spec/route.json shapes under it (`TILE_OBJECT`), and the Earth's

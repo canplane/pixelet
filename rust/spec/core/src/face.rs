@@ -100,7 +100,7 @@ pub fn word(face: u32, mut hides: impl FnMut([i32; 3]) -> bool) -> u32 {
 }
 
 /// The node `d` from node `c` at `zoom`, X named as the world names it
-/// going round (`wrap_index`).
+/// going round (`wrap_idx`).
 pub fn beside(zoom: Zoom, c: [i32; 3], d: [i32; 3]) -> [i32; 3] {
     [
         wrap_idx(zoom, c[0].wrapping_add(d[0])),

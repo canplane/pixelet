@@ -1,11 +1,9 @@
 // pxl-spec-core/answer.rs
 
-//! gpu-portable: what the world's one query answers of a node
-//! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
-//! "The query between them"), as every source writes it and every reader
-//! reads it: its kind, a cell's asset in the one value space
-//! (doc/minutes/20261005-the-ground-is-a-carto-palette.md) and the share of
-//! its cube it keeps, and a split's box in its own steps, every axis alike.
+//! gpu-portable: what the world's one query answers of a node, as every
+//! source writes it and every reader reads it: its kind, a cell's asset in
+//! the one value space and the share of its cube it keeps, and a split's box
+//! in its own steps, every axis alike.
 //! Below the descent, the query and the sources alike.
 
 use crate::cube::{object, sentinel};
@@ -70,9 +68,7 @@ pub fn bound_of(w: i32) -> [i32; 2] {
 /// last, `BOX_BITS` each: x's two and y's first in the first word, y's last
 /// and z's two in the second. Conservative: what the node holds lies in it,
 /// a box wider only splits more. A ray through the node outside it meets
-/// nothing there (pxl-spec-core cast). The world asks no axis apart
-/// (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md,
-/// "A box is all the view asks").
+/// nothing there (pxl-spec-core cast). The world asks no axis apart.
 pub type BoxWords = [u32; 2];
 pub const BOX_BITS: u32 = 10;
 /// The steps of a box's axis: its node's side over them, `2^BOX_BITS`.

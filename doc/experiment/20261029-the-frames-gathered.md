@@ -48,7 +48,7 @@ Two pages side by side in Chrome ("Chrome Tahoe"), each fresh, one tab in the
 foreground at a time:
 
 - **:5173**, the shared tree before the resolve (`9ae190913`).
-- **:5184**, a worktree of it with the resolve and its 5-tap neighborhood,
+- **:5184**, a worktree of it with the resolve and its 5-tap neighbourhood,
   before the review's fixes (the frames asked for, the sequence's last
   place); for pair 2, with the boxes and faces kept too.
 
@@ -95,7 +95,7 @@ None of these was explained further.
   resolve before the trim: GPU p50 11.9 ms on :5173 (every frame `standing`,
   the actor's clip playing), 16.2 on :5184 (every frame `pixels`). The
   resolve's p95 was 4.8–5.0 ms.
-- The resolve's neighborhood cut to the pixel and the four beside it: p95
+- The resolve's neighbourhood cut to the pixel and the four beside it: p95
   2.7 ms at 0.84 of 3840×1986 (5.4 M px), 4.8 at 1.00 (7.6 M px), about 0.6 ns
   a pixel.
 - A `pixels` frame with the boxes and faces kept: sraster 1.2 ms p95 (1.7–2.3
@@ -115,7 +115,7 @@ What else a `pixels` frame redoes, by reading (the review), not measured:
 the sun's receivers are marked again (they read the jitter, `cast.rs`), and
 the occlusion's prepass runs again (its read takes the frame's words, jitter
 and all, as its depth moves with it). The finish carries this frame's
-jittered depth up beside the gathered color, so the markers tested against
+jittered depth up beside the gathered colour, so the markers tested against
 it may move by up to half a pixel while the sequence runs.
 
 ## What was not done
@@ -142,14 +142,14 @@ It is the antialiasing a mip gives a texture. The pack's textures already
 have theirs (gpu/pack.rs: a mip chain, sampled anisotropic).
 
 - Here every pixel would walk. The cast is fast because a pixel takes the
-  visible sample of the samples' boxes and only the missed walk. A composite
+  raster's pick of the samples' boxes and only the missed walk. A composite
   along a ray cannot be taken from the samples about it across a depth edge.
 - A walk for every pixel to its first stop measured about 250 ms a frame. A
   composite walks further, until opaque; grazing rays skim the terrain
   through many partly covered nodes. Estimated: several hundred ms a frame,
   over ten frames' budget.
 - Each node would also carry its coverage, and the tiles' bake would change.
-  The values' colors from afar (`looks`) are a part of it, not per node.
+  The values' colours from afar (`looks`) are a part of it, not per node.
 
 **The prune.** It is a mip's choice of level without its mean: a node under
 the footprint is dropped whole. As the camera moves the footprint crosses the
@@ -164,3 +164,31 @@ What was missing is the mean. Made ahead in space, that is the prefiltered
 world above; gathered over time, the resolve: estimated +5–10 ms a frame
 (about 0.6 ns a pixel for the resolve, 3–5 ms for the pixels cast again),
 within what the render scale can trade.
+
+## Later the same day
+
+**The samples moved with each cast.** Tried and taken out. Each cast frame
+moved the samples within their spacing (a Halton(5, 7) offset in
+`beam::Grid`'s spare words), so a row no sample hit would be hit in some of
+the frames gathered, at no cost beyond the cast's. On a fresh :5184 at
+4112×2338, the same pan both ways: 8 424 / 3.08 and 6 936 / 2.56 with the
+offset, 7 797 / 2.88 and 6 636 / 2.53 with it held at 0. A few percent more
+pops, not fewer: the resolve holds what the frames before left to the pixels
+about it, and a row the samples now catch and now miss reads to it as a
+change, not as a share.
+
+**The resolve against itself.** The first pairs set :5173 before the resolve
+against :5184 with it, and since then the two builds' first view and what a
+drag does have moved apart, so later builds were set against themselves: the
+same worktree (`07d4fa3d8`) on :5185, once as it is and once with the jitter
+held at 0 and the share at 1 (a temporary edit, not kept), the same view (a
+town), 4112×2338:
+
+| | pops / mean change |
+|---|---|
+| resolve | 4 207 / 1.62 · 2 009 / 1.18 |
+| none | 8 466 / 2.25 · 5 484 / 1.60 |
+
+Half to a third of the pops, a quarter less change. Less than the first
+pairs' tenth: this view holds more edges, and at this size the frames came
+about 85 to the pan's 150, so each moved the far terrain further.

@@ -51,7 +51,8 @@ pub fn map_bootstrap_step() {
     };
     // A real fix landing after the fallback takes over; a place asked for
     // and not yet put, a search's or a marker's, is not replaced.
-    if at.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback)) {
+    if center.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback))
+    {
         go_to_ground(seed, Motion::Snap);
     }
 }

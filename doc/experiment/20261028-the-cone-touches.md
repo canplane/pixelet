@@ -65,13 +65,13 @@ and its prune, and control's cone is `EXACT`.
 - **The asserts** sit beside `beam::SAMPLE`: `GROW` = 0.75 ≥ `TOUCH` +
   1/(`SAMPLE`·√2), and the beam's 2√2 ≥ `TOUCH` + 1/√2.
 
-**The visible sample** (pxl-shader raster.rs, raster.wgsl).
+**The pick** (pxl-shader raster.rs, raster.wgsl).
 
 - The eye's sample boxes are grown by `GROW · s` times the distance to
   their nearest point. Every face turned to the eye is drawn.
 - A pixel takes the nearest grown box its ray enters, across any axis. The
   sun is unchanged.
-- A visible sample keeps its sample's face word (`face_cs`) only where it enters
+- A pick keeps its sample's face word (`face_cs`) only where it enters
   across the sample's axis.
 
 **Checked on the CPU first** (a throwaway test in the export). Flat ground 15
@@ -125,7 +125,7 @@ scale of 1.00, at sky 3 p.m.
 | eye beam | 897 575 | 869 652 |
 | eye sample | 1 795 824 | 1 827 382 |
 | eye miss | 708 459 | 1 807 854 |
-| took / walked   | 58.57% / 0.20% (39.6 each) | 60.52% / 0.94% (21.7 each) |
+| picked / walked | 58.57% / 0.20% (39.6 each) | 60.52% / 0.94% (21.7 each) |
 | boxes | 2 798 | 1 550 |
 
 The two ports' walkers did not stand at the same place. HEAD's view had the
@@ -144,8 +144,8 @@ sample p95 34–36 ms.
   above.
 - A strip of water before the walker drew as bands with ground between them
   on one load.
-- Outlines go where a visible sample enters across another axis than its
-  sample's, since that face's word is dropped.
+- Outlines go where a pick enters across another axis than its sample's,
+  since that face's word is dropped.
 
 ## What it says
 
@@ -170,4 +170,4 @@ The law meets the visit bar and fails the time bar, by far.
   settled by. They held while the time went up sixfold. The law is not
   taken as built. Any next form needs, before any timing:
   - a descent with no per-child scan;
-  - a visible sample that does not draw three grown faces a box.
+  - a pick that does not draw three grown faces a box.

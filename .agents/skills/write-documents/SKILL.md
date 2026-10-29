@@ -5,34 +5,55 @@ description: How the documents people read are written and reviewed — README.m
 
 # Writing the documents
 
-These documents are read by people who have not seen the code. Each one
-explains a mechanism in an order you can follow from the top.
+The documents this holds are read by people, someone who has not seen the
+code. They are not reference cards and not essays: each one explains a
+mechanism in an order that can be followed from the top.
 
-[reference.md](./reference.md) holds the rules. Read it before writing or
-restructuring a document, or when one reads badly. For an edit that keeps the
-order, the checks below are enough.
+What agents mostly write for each other is not held to it: `doc/` — the
+backlog, the minutes and the experiments — `AGENTS.md` and the skills. Their
+reader already knows the tree, and the care this asks for costs more there than
+it buys.
+
+What a document should be, with the faults each rule was written after, is
+[reference.md](./reference.md). Read it before writing a document or
+restructuring one, and when one reads badly for no reason you can name. For an
+edit that leaves the order as it is, the checks below are enough. How code is
+cited is the convention skill's.
 
 ## Before committing
 
-- **Nothing named is lost.** Every path, identifier and constant in the old
-  version is still there, or was removed on purpose. Diff the backticked
-  tokens:
+- **Nothing named is lost.** Every path, identifier and constant of the old
+  version is still there, or is gone on purpose. A rewrite loses `-errno` or
+  `16 bits` without anyone noticing, so diff the backticked tokens:
 
   ```sh
   f=README.md; diff <(git show HEAD:$f | grep -o '`[^`]*`' | sort -u) \
     <(grep -o '`[^`]*`' $f | sort -u)
   ```
 
-- **No coined term is used before it is defined.** A heading that names its own
-  subject, and an opening line that uses the thing's common name, are exempt.
+- **No coined term comes before its definition.** For each name the tree
+  invented, its first use is not earlier than where it is earned. A heading
+  naming its own subject, and an opening line calling the thing what the world
+  calls it, are exempt.
 - **Nothing points at what the document no longer holds.** After moving or
-  cutting a section, recheck counts and summaries ("in two parts"), table rows,
-  sibling documents that use the same word, forward references, and sentences
-  whose antecedent was cut.
-- **No minute is linked.** A document cites the code, another document or an
-  outside source, never a record under `doc/`.
-- **Prose wraps at 80 columns** in `README.md`, `ARCHITECTURE.md`, xpute's two
-  and `infra/README.md`, by hand, the way `deno fmt` wraps Markdown under `ts/`:
-  break after the last word that fits in 80 columns. Rewrap only the paragraphs
-  you touched.
-- **Read the whole document from the top**, rendered, not as a diff.
+  cutting a section, reread what describes the document: counts and summaries
+  ("in two parts"), a table row for a task that has grown, the sibling documents
+  where the same word stands, a forward reference the move created, and any
+  sentence whose antecedent was cut.
+- **Prose wraps at 80 columns.** No formatter touches the documents outside
+  the code trees (`Makefile`), so `README.md`, `ARCHITECTURE.md`, xpute's two
+  and `infra/README.md` are wrapped by hand: a paragraph breaks after the last
+  word that fits in 80 columns, mid-sentence, as `deno fmt` wraps a Markdown
+  file under `ts/` or `xpute/ts/`, which `make check` holds. A table, a figure
+  or a link that cannot break runs past it. Rewrap only the paragraphs an
+  edit touches.
+- **Read the whole document from the top**, on the page rather than in a diff.
+
+The last is not a formality, and the others do not replace it. Each check above
+finds the class of fault it was written for and no other. A repetition eight
+lines apart slips a similarity test when the sentences around it differ; a
+diagram one column out looks fine in a diff; a pronoun with nothing to point at
+parses cleanly; a count that has gone stale is still a number. Worst of all, a
+document that defines nothing passes the defined-before-use check perfectly,
+because there is nothing for a use to be early of. Reading is what finds those,
+and there is no substitute for reading all of it.

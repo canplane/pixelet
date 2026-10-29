@@ -133,7 +133,7 @@ impl CloudPass {
 
 /// The eye, in the world's doubles, split on the lattice into a whole unit
 /// and a fraction of one, so the shader never holds a world-sized coordinate;
-/// the world is `LATTICE_COUNT` units around, so a lap of X is a whole number
+/// the world is `LATTICE_CNT` units around, so a lap of X is a whole number
 /// of them and the unit wraps with it. And where the wind has carried the
 /// field by now.
 fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {

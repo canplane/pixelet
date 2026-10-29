@@ -112,7 +112,7 @@ Two failure points become one contract and one belt:
 
 |                                    | before                      | now                                              |
 | ---------------------------------- | --------------------------- | ------------------------------------------------ |
-| device will not reserve            | `reserve_memory` → ENOMEM   | unchanged                                        |
+| device will not reserve            | `reserve_mem` → ENOMEM      | unchanged                                        |
 | shell asks for less than needed    | kernel asserts at boot      | LinkError at instantiation                       |
 | module's data outgrows the ceiling | —                           | boot assert against `MODULE_CEILING`             |
 | terrain outgrows a phone           | `const assert` on `HEAP_AT` | `const assert` on `MODULE_CEILING + FIXED_BYTES` |

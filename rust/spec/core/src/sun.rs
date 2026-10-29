@@ -362,7 +362,7 @@ pub const MOVED_COUNTED: usize = 1;
 pub const MOVED_EPOCH: usize = 2;
 /// The map's side, which the slots' lattice is laid by. A pass the eye's
 /// rays and the sun's map share is handed the eye's own head, all zero, in
-/// its place (pxl-shader observer.rs `Either`): a head naming no map is the
+/// its place (pxl-shader either.rs `Either`): a head naming no map is the
 /// eye's.
 pub const MOVED_SIZE: usize = 3;
 
@@ -475,15 +475,14 @@ impl Starts {
 /// slots' pass (pxl-shader `sun_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The sun's beam (pxl-shader beam.rs `beam_cs`, `cell_cs`, the eye's entries;
-/// doc/minutes/20261022-a-cell-casts-a-beam.md): a beam ray at every `BEAM`-th
-/// texel of the box across and down, `BEAM_WINDOW` past it on each side, each
-/// walked from the world's root along the sun's rays until a cell that fills or
-/// lacks or a split narrower than `2√2` beam spacings (`Sun::detail`,
-/// `cast::Detail::apart`), leaving its line and how far it got less `margin`;
-/// each `BEAM`-square cell of the box starts at the least of the beam rays
-/// within `BEAM_WINDOW` of its corners, and its texels resume from that ray's
-/// line there.
+/// The sun's beam (pxl-shader beam.rs `beam_cs`, `cell_cs`, the eye's entries):
+/// a beam ray at every `BEAM`-th texel of the box across and down,
+/// `BEAM_WINDOW` past it on each side, each walked from the world's root along
+/// the sun's rays until a cell that fills or lacks or a split narrower than
+/// `2√2` beam spacings (`Sun::detail`, `cast::Spacing`), leaving its line and
+/// how far it got less `margin`; each `BEAM`-square cell of the box starts at
+/// the least of the beam rays within `BEAM_WINDOW` of its corners, and its
+/// texels resume from that ray's line there.
 ///
 /// Why that is a texel's root walk, as the eye's proof has it with the
 /// rays parallel: take `X`, the block a texel's ray ends at, `e` its entry,
@@ -597,15 +596,15 @@ pub const fn sample_words(size: u32) -> u32 {
     sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
 
-/// The slots whose ray took no pick, listed for their walk (pxl-shader
-/// `sun_miss_cs`) apart from the slots that took theirs (`sun_cs`), as the
-/// eye's missed pixels are walked apart from the pixels that took their
-/// pick, by the same listing and dispatch (pxl-shader cast.rs `listed`,
-/// `ray::MISS_ARGS_WORDS`): a walk holds its workgroup as long as its
-/// slowest lane. Past the samples: how many, copied in once the slots are
-/// done, as the eye's count is (`observed::MARKS_COUNT`), then a slot each,
-/// its X and its Y over 16 bits.
-pub const fn misses_count(size: u32) -> u32 {
+/// The slots whose ray took no visible sample, listed for their walk
+/// (pxl-shader `sun_miss_cs`) apart from the slots that took theirs
+/// (`sun_cs`), as the eye's missed pixels are walked apart from the pixels
+/// that took their visible sample, by the same listing and dispatch
+/// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
+/// workgroup as long as its slowest lane. Past the samples: how many, copied
+/// in once the slots are done, as the eye's count is
+/// (`observed::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
+pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }
 

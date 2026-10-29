@@ -7,17 +7,14 @@
 #
 # The client is one core, pxl-render and pxl-kernel, and client-bracket/ is
 # how it is plugged into a place to run: pxl-wasm, the one WebAssembly module the
-# main thread and each worker instantiate for themselves
-# (doc/minutes/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
+# main thread and each worker instantiate for themselves, and pxl-native, linked
 # into a device's app, which draws with wgpu where the page's host draws with
 # the browser's WebGPU. A bracket is no domain: it is xpute's mechanism for
 # its form (xpute-guest's wasm, xpute-host's native, xpute-gpu) booted with
 # pixelet's numbers, the kernel's door as the guest's entry, and what is
-# pixelet's own. The server end is native
-# (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
-# and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
-# rather than answered, and pxl-geo-spec where the two geo halves read the
-# same tables.
+# pixelet's own. The server end is native: pxl-geo and pxl-api over
+# pxl-server, pxl-geo-bake beside them for what is baked rather than answered,
+# and pxl-geo-spec where the two geo halves read the same tables.
 #
 # spec/ is what both ends follow, and xpute (../xpute/rust/, its own
 # workspace) what both are built on.

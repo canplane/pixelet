@@ -21,8 +21,8 @@
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are
 //! marked in their own rays (`ray::MISS`) and listed here by plain writes,
-//! their count kept apart (`ray::MISS_ARGS_COUNT`) and copied in after
-//! (`MARKS_COUNT`), so a walk that only reads the pyramid types no word of
+//! their count kept apart (`ray::MISS_ARGS_CNT`) and copied in after
+//! (`MARKS_CNT`), so a walk that only reads the pyramid types no word of
 //! it atomic.
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
@@ -99,8 +99,8 @@ pub const ENTRIES: u32 = 1 << 19;
 pub const ENTRIES_AT: u32 = HEAD_WORDS;
 /// The marked pixels listed (`MARKS_AT`), a word each, its row over its
 /// column, as many as `MARKS`; and their count, copied in from the walk's
-/// dispatch (`ray::MISS_ARGS_COUNT`) once the reading walk is done
-/// (`MARKS_COUNT`). A pixel past `MARKS` is walked by the walk over every
+/// dispatch (`ray::MISS_ARGS_CNT`) once the reading walk is done
+/// (`MARKS_CNT`). A pixel past `MARKS` is walked by the walk over every
 /// pixel (`ray::MISS_ARGS_WHOLE`). Room for the bursts a load or a long
 /// zoom marks, about a hundred thousand at 9 Mpx.
 pub const MARKS: u32 = 1 << 20;
@@ -145,7 +145,7 @@ pub const fn entry_at(i: u32) -> u32 {
 }
 
 /// Whether a slot may keep the node `node` of `zoom`: one under the
-/// world's roots, X's one (`wrap_index` at zoom 0) and on Y and Z the root
+/// world's roots, X's one (`wrap_idx` at zoom 0) and on Y and Z the root
 /// over a Q3's sign, 0 or −1 (`cast::Node::index`). Past them, off the
 /// world, none is kept.
 pub fn keeps(zoom: Zoom, node: [i32; 3]) -> bool {

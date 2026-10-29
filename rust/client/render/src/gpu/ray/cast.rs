@@ -40,9 +40,8 @@ pub(super) struct CastBuffers {
     /// the cast's group and the sun's map's over the sun's (`sun_groups`),
     /// each told by the head it binds (`eye_head`, `sun_moved`); and the
     /// eye's buffer (pxl-spec-core `beam`): a line a corner, a start a
-    /// cell, a stop a sample, as the eye's words lay the frame's `grid`,
-    /// none a pixel's; room for `beam_room` words
-    /// (doc/minutes/20261022-a-cell-casts-a-beam.md).
+    /// cell, a stop a sample, as the eye's words lay the frame's `grid`, none
+    /// a pixel's; room for `beam_room` words.
     beam_built: Built,
     cells_built: Built,
     sample_built: Built,
@@ -190,9 +189,9 @@ pub(super) struct CastBuffers {
     /// What the sun's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
-    /// The list, the beam's pipelines and the raster's the sun's groups were
-    /// made over, made again where one is another.
-    sun_grouped: [u32; 5],
+    /// The list, the sun's picks and its boxes the sun's groups were made
+    /// over, made again where one is another.
+    sun_grouped: [u32; 3],
 }
 
 /// What a cast's head handed the pyramid's forgetting (pxl-spec-core
@@ -292,10 +291,8 @@ impl RaysPass {
             cells_built,
             sample_built,
             beams: 0,
-            eye_head: buffer(
-                word_bytes(sun::MOVED_WORDS),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            ),
+            // Never written: a buffer is made zeroed.
+            eye_head: buffer(word_bytes(sun::MOVED_WORDS), buffer_usage::UNIFORM),
             grid: beam::Grid::of_words([0.0; 2], [0; eye::GRID_WORDS]),
             beam_room: 0,
             miss_built,

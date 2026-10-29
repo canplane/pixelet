@@ -4,8 +4,7 @@ use super::*;
 use crate::space::coord::mat4::{self, frustum_planes, look_at, perspective};
 
 /// The ray under an NDC point unprojected through the inverse of
-/// `view_proj`, from its eye at the origin: the form the sky's ray took
-/// before it read the lens.
+/// `view_proj`, from its eye at the origin.
 fn unprojected(view_proj: &mat4::Mat4, x: f64, y: f64) -> V3 {
     let mut inv = mat4::new();
     mat4::invert(&mut inv, view_proj);

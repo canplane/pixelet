@@ -29,7 +29,7 @@ fraction into one `u32` (8 bits an axis). Counted in the tree, 567 references in
 - **What it does on its own repeats something else.** As a key, the packed word
   named a tile beside the Morton key, now gone (below). Its X lane wraps at 2^24
   units, which is the world's round, and the world states that round again
-  (`world.rs` `nearest`, `wrap_index`, the walk's `wrap(…, ROUND)`).
+  (`world.rs` `nearest`, `wrap_idx`, the walk's `wrap(…, ROUND)`).
 
 The one argument for packed words, arithmetic over all lanes in one instruction,
 was weighed and rejected in the module's own note (`coord/pvf3/README.md`): the
@@ -44,7 +44,7 @@ with their alignment.
 A `Q3` is `[i32; 3]`, each value a unit times 256 (`FRAC_W`, 8 bits). An axis is
 its lane's integer bits and the fraction's 8 together: X and Y are 24 + 8 = 32
 bits, all of an `i32`; Z is 16 + 8 = 24 bits, inside one. Its cell at zoom `z`
-is a shift, `v >> (FRAC_W + shamt(z))`, as `zoom.rs` `index_of` already
+is a shift, `v >> (FRAC_W + shamt(z))`, as `zoom.rs` `idx_of` already
 computes. Its place inside a unit is `v & 255`. The fraction and the index are
 not two types. A computation that grows past an axis, a product or a far Y
 apart, is done wider, as every caller already does once it reads a lane out.

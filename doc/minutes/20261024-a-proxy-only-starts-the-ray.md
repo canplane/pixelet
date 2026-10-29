@@ -3,7 +3,7 @@
 **2026-10-24** — decided in the conversation, on one condition the user set:
 none of the machinery the chunk meshes needed comes back. Not built. What is
 built first is the clean-up below, which holds whichever way the start of a ray
-goes.
+goes. _Built and measured 2026-10-26, and not taken: "Resolved", at the end._
 
 A ray costs what it does because every pixel walks the world's tree on its own,
 though thousands of pixels looking at one face end on the same block. A
@@ -145,12 +145,22 @@ pixel walks several times the rays. A pixel that walks also misses the observed
 pyramid more often and walks again in `miss_cs`; that is in the number. A
 comparison, not a profile: one load each, its first casts among the frames.
 
+## Measured again, 2026-10-26: on a fixed path
+
+A standing view has no cast that moving asks for. The cast as built is now
+measured on one scripted path every load repeats — zoom out, zoom in, once
+round — at dpr 2 with the resolution fixed
+([the cast on a fixed path](../experiment/20261026-the-cast-on-a-fixed-path/README.md)):
+cast p95 79 ms, three loads within a millisecond, where the same build standing
+still casts 56.2 ms. That is the baseline a proxy's cast is weighed against, run
+on the same path.
+
 ## Recommended: the samples go with the proxy, not before it
 
 Recommended by the reduce session, not ordered.
 
 - **The samples' answer is not removed on its own.** The cast already stands
-  about four times over the gate of
+  four to five times over the gate of
   [20261020](./20261020-a-visit-reads-one-entry.md) (p95 ≤ 16.7 ms), and a
   pixel's own walk from its cell's start multiplies it again.
 - **Cause 1 and the walk's cost have one answer: a shorter walk.** That is the
@@ -158,8 +168,9 @@ Recommended by the reduce session, not ordered.
   decides the pixel. A pixel starts at its box's front face, near the block it
   stops on, not at its cell's start. So "For 1" is measured together with the
   proxy, as one cast: the boxes drawn, every pixel walking from its box, no
-  samples' answer. If that cast is under the one as built, both are taken; if
-  not, the samples stay and the shimmer is answered another way.
+  samples' answer. If that cast, on the fixed path above, is under the one as
+  built, both are taken; if not, the samples stay and the shimmer is answered
+  another way.
 - **Until then the steps view shows a path the frame does not run.** It should
   show the frame's own: a pixel that took a sample's block reports that sample's
   visits, recorded beside the sample's block. That waits for the beam layout in
@@ -213,11 +224,3 @@ holes, untraced. What it leaves for the next attempt is
 the question it got wrong: a raster that only starts the ray saves the march,
 not the descent or the writing a cell's pixels share, so a split between
 raster and ray has to give the raster that shared work, not only the start.
-
-The split taken is the other way round, a decision on today's measurements
-rather than a rule for every pass: the samples still walk, and the raster picks
-each pixel's block off the blocks they stopped at
-([the raster picks](../experiment/20261026-the-raster-picks.md), "Taken").
-The shared discovery stays where cells share it; the per-pixel 4 × 4 lookup,
-the costly part, is the raster's depth test; and the boxes are derived from the
-samples, with no chunk, mesh or frontier beside them.

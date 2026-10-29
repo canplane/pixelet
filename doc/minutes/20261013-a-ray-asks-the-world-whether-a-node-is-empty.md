@@ -2,13 +2,6 @@
 
 **2026-10-13** — decided in the conversation.
 
-**Status (2026-10-24): the descent and the query hold; a ray is no longer cast a
-camera-grid cell.** A ray is cast a pixel, started off its cell's beam
-([a cell casts a beam](./20261022-a-cell-casts-a-beam.md); pxl-spec-core
-beam.rs, cast.rs `Until::Beam`), and asks the zoom its distance asks by the
-camera grid as below. The query is pxl-spec-core world.rs `node`, which the
-kernel asks through query/node.rs `World::node`.
-
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md),
 "What is drawn"). This is how a ray reaches it, the same in space, on the ground
@@ -16,8 +9,10 @@ and under it.
 
 ## The descent
 
-A ray is cast for each cell of the camera grid and descends the pyramid by one
-rule of detail, the one that sizes every drawn cell: the zoom a ray asks at a
+A ray is cast a pixel, started off its cell's beam
+([a cell casts a beam](./20261022-a-cell-casts-a-beam.md); pxl-spec-core
+beam.rs, cast.rs `Until::Beam`), and descends the pyramid by one rule of
+detail, the one that sizes every drawn cell: the zoom a ray asks at a
 distance is the one whose block, drawn whole, spans at least one cell of the
 camera grid there, its side at least the cell's angle times the distance
 (`grid::cell_at`). A cube is at least its side wide seen from any direction, so
@@ -60,11 +55,12 @@ it.
 ## The query between them
 
 One function stands between the ray and storage: what is in a node, at the
-node's own zoom. It is the world's one query, not a second beside it: asked of a
+node's own zoom (pxl-spec-core world.rs `node`, which the kernel asks through
+domain/query/node.rs `World::node`). It is the world's one query, not a second beside it: asked of a
 node it answers what is there at that zoom, and at the zoom the ray asks that is
 the block, as `pxl-spec block/sample.rs` `at` did then. A block is the smallest
 node, so a node and a block are one answer at two sizes, and every reader — the
-ray, a chunk, a walk, an edit — calls that one function. The ray knows where to
+ray, a walk, an edit — calls that one function. The ray knows where to
 ask and nothing of how the layers are held; the layers know what is in a node
 and nothing of rays.
 
@@ -89,20 +85,16 @@ node yet answers that it lacks it, never that it is air.
 The same record answers the coarser question, whether anything under the node
 fills, from what each source already keeps, with nothing new stored:
 
-- **The ground**: its tile index's highest height under the node's bottom, or
-  the node within where the ground may be taken (under its face block, over its
-  bedrock, off the wall, as `at` takes it) with a cave through all of it. The
-  index is gone: the bound is now the windows' (pxl-spec-core ground.rs
-  `Held::relief`), and where the ground may be taken is `ground::slab`.
+- **The ground**: the windows' bound under the node (pxl-spec-core ground.rs
+  `Held::relief`), or the node within where the ground may be taken (under its
+  face block, over its bedrock, off the wall: `ground::slab`) with a cave
+  through all of it.
 - **Caves**: the hash node hollow and drawing nothing again under it (`live`).
-- **Separation**: no part of the ways' 3D fold at the node, as for the objects.
+- **Separation**: a bound of the ways' own, joined apart from the ground's
+  (pxl-spec-core `way::slab`). What a node is comes from a tree of the placed
+  tree's shape, built on the GPU a square at a time (pxl-spec-core
+  `way/tree.rs`).
 - **Objects**: no record of the objects' pyramid at the node.
-
-> Since changed for separation: whether anything under a node fills is no longer
-> read off the ways' fold, as for the objects, but by a bound of their own,
-> joined apart from the ground's (pxl-spec-core `way::slab`). What a node is
-> still comes from a tree of the placed tree's shape, built on the GPU a square
-> at a time (pxl-spec-core `way/tree.rs`).
 
 ## What goes
 

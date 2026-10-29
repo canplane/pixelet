@@ -1,9 +1,8 @@
 // pxl-spec-core/cast.rs
 
-//! gpu-portable: the first cell a ray meets, at the zoom its distance asks
-//! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md),
-//! one descent for the CPU and the GPU over a query each answers its own
-//! way (`Query`). A node coarser than the zoom its distance asks is asked
+//! gpu-portable: the first cell a ray meets, at the zoom its distance asks,
+//! one descent for the CPU and the GPU over a query each answers its own way
+//! (`Query`). A node coarser than the zoom its distance asks is asked
 //! whether anything under it is not transparent: nothing, and the ray goes
 //! on past it
 //! whole; else its children the ray meets, nearest first. A node at that
@@ -101,9 +100,8 @@ pub fn narrow(side2: f32, width2: f32) -> bool {
 /// (`answer::transparent`), as an eye sees; or the first it can, as what is
 /// climbed out of ends; or, for a beam ray of the camera grid, the first it
 /// cannot see through or the first split too narrow to hold one of the
-/// grid's rays for certain (`narrow`), every split entered whose box
-/// it meets widened by `2√2` of that width
-/// (doc/minutes/20261022-a-cell-casts-a-beam.md).
+/// grid's rays for certain (`narrow`), every split entered whose box it
+/// meets widened by `2√2` of that width.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Until {
@@ -246,7 +244,7 @@ impl Node {
     }
 
     /// The world's node it is from the origin `o`, X named as the world
-    /// names it (pxl-spec space/coord/world.rs `wrap_index`).
+    /// names it (pxl-spec space/coord/world.rs `wrap_idx`).
     pub fn idx(&self, o: [i32; 3]) -> [i32; 3] {
         let r0 = roots_of(o);
         [
@@ -607,8 +605,7 @@ fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 /// function of the node and the eye alone, so a node's answer is one for
 /// every ray through it; a ray asks within it no coarser than the farthest
 /// corner, so this only adds coarser zooms than its own, which splits more
-/// and stops on the same cell (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
-/// "more cautiously").
+/// and stops on the same cell.
 fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
 }
@@ -707,12 +704,11 @@ impl<A: Copy> Keep<A> for () {
 /// the zoom `detail` asks where it meets it, its line left where it ended
 /// to `keep`: down the pyramid from `from`, a node holding where the ray
 /// is at its `t`, what was handed it, and that `t` — the world's root holding
-/// the origin at 0 (`first`), or a node of the line a beam ray handed on
-/// (doc/minutes/20261022-a-cell-casts-a-beam.md) — what was handed each node
-/// over it read off `over` where the walk climbs past it, and through the
-/// roots the ray crosses. What the ray starts inside is not met when it
-/// stops at what it cannot see through, so an eye under the ground is not stopped
-/// where it stands.
+/// the origin at 0 (`first`), or a node of the line a beam ray handed on —
+/// what was handed each node over it read off `over` where the walk climbs
+/// past it, and through the roots the ray crosses. What the ray starts inside
+/// is not met when it stops at what it cannot see through, so an eye under
+/// the ground is not stopped where it stands.
 ///
 /// The walk holds its node, each axis an integer in its root (`Node`), and
 /// where the ray is, `t`; the planes, the span and the axis entered across

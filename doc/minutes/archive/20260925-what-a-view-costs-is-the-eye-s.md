@@ -145,7 +145,7 @@ Designed and first built on 2026-09-25, for the pyramid's layers — terrain and
 places:
 
 - `world/pyramid/window.rs` chooses zooms by the rule from the eye
-  (`Domain::splits`, `split_distance`); the rings around the map center, the
+  (`Domain::splits`, `split_dist`); the rings around the map center, the
   range anchor and the tilt-driven window are gone. The chunk count a zoom is
   derived from the rule and sizes the chunk table and the mesh arena; the held
   ring stays 5 × 5, now as the bound on how far a zoom's chunks reach.

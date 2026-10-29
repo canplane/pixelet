@@ -1,13 +1,11 @@
 // pxl-spec-core/world.rs
 
 //! gpu-portable: the world's one query, what is in a node at its zoom, the
-//! layers read in the order each is written over the one before
-//! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md): what is
+//! layers read in the order each is written over the one before: what is
 //! placed over all, then the separation, the ways, over the ground and its
 //! caves. Asked by every reader of the world, the GPU's cast and the CPU's
-//! alike (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md
-//! "The query between them"): each source answers from its own level of
-//! detail, and what it holds stays behind it.
+//! alike: each source answers from its own level of detail, and what it holds
+//! stays behind it.
 
 use crate::answer;
 use crate::answer::{
@@ -142,11 +140,8 @@ impl Handed {
 /// where the ground is not held, the lack. Whether a cell is the zoom asked's
 /// or coarser air is the asker's: its zoom against the finest asked (`near`),
 /// past the ground's cells, where nothing finer is, a cell either way.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
-)]
-pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
+#[allow(clippy::too_many_arguments)]
+pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     held: &mut H,
     bricks: &W,
     lanes: &L,

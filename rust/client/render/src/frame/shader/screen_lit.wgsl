@@ -66,13 +66,10 @@ fn fs(v: VertexOut) -> FragOut {
 // side over the distance alone, so a top seen at a grazing angle reads
 // finer than its threshold.
 //
-// 10-12 tinted the chunks' faces by the same share of its own cell, τ/96
-// (96 sides its split distance), green within (¼, 1], blue finer, red
-// coarser: a world's cell there spans (½, 1] of that grid cell. Today's cell is
-// τ/`SPLIT`, τ/192, half as wide at the same zoom rule (pxl-spec-core
-// grid.rs `cell_at`: a world's cell spans (1, 2] of them), so that cell squared is 4
-// of today's: within (1, 4] green, finer blue, coarser red (debug_look.json
-// `share`).
+// A world's cell spans (1, 2] of the view's cells at its distance
+// (pxl-spec-core grid.rs `cell_at`, `CELLS_A_RAD` / 2 sides its
+// split distance), so its share of a cell squared is within (1, 4]: green there,
+// finer blue, coarser red (debug_look.json `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   if (frame_gizmo() < 0.5) {
     return color;

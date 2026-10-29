@@ -24,7 +24,7 @@ use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
-/// (pxl-spec-core `grid::CELLS_A_RADIAN`), 45 drawn pixels on a view 2160
+/// (pxl-spec-core `grid::CELLS_A_RAD`), 45 drawn pixels on a view 2160
 /// CSS pixels high at ratio 2, so this is several times any one's drawn
 /// size.
 const SPRITE: u32 = 128;

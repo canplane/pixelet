@@ -84,13 +84,11 @@ fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
 /// node a sample lacks at, or none, or the test refuses it, takes no walk
 /// here: its first word is the mark the walk again goes by (pxl-spec-core
 /// `ray::MISS`; `miss_list_cs`, `miss_cs`), so no lane carries a walk's
-/// footprint for the few that walk
-/// (doc/experiment/20261026-the-pixel-pass-footprint.md). A marked pixel
-/// is listed for that walk (pxl-spec-core `observed::MARKS_AT`) by a plain
-/// write, its place taken off the count in its dispatch's words (`marks`,
-/// `ray::MISS_ARGS_COUNT`), so no word of the pyramid is typed atomic here;
-/// one past the list's room has the walk over every pixel dispatched
-/// instead.
+/// footprint for the few that walk. A marked pixel is listed for that walk
+/// (pxl-spec-core `observed::MARKS_AT`) by a plain write, its place taken
+/// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_COUNT`),
+/// so no word of the pyramid is typed atomic here; one past the list's room
+/// has the walk over every pixel dispatched instead.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cast_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn cast_cs(
@@ -218,15 +216,9 @@ pub fn cast_cs(
         );
         return;
     }
-    let met = resumed(
-        &mut Reading { seen: &*seen },
-        origin,
-        &ray,
-        detail,
-        t,
-        &line,
-        line.node(),
-    );
+    // Neither: marked and listed for its walk (`miss_list_cs`), which reads
+    // and writes the pyramid. No walk is this pass's own, so a lane that
+    // takes its pick pays none of a walk's footprint.
     counted(marks, on, tally::WALKED, 1);
     counted(marks, on, tally::PIXEL, met.visits);
     if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {

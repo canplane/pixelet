@@ -112,7 +112,7 @@ and are taken with that work. The rest stand alone.
 > (`ts/client/src/namespace/source.ts`), but still never gives up, and its
 > numbers are its own.
 
-> Since 2026-10-28, 9 in part: the eye words' τ is gone (`2a43c327a`); the
+> Since 2026-10-28, 9 in part: the eye words' τ is gone (`af9982f30`); the
 > cell still reaches the GPU twice, as the frame uniform's `CELL` and the
 > grid's `s` (`eye::GRID`). The code 5 and 7 cite (`model_refusal_over`,
 > `scene/decor/cell.rs` `present_block`, `scene/decor/instance.rs`) and 11's

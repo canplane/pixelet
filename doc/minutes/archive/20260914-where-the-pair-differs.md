@@ -113,7 +113,7 @@ Each is pinned by a vector now, so both sides answer the same.
   its own until the host gives it one (`rng::set_entropy`).
 - **Shapes.** A getter/setter pair is `x()` and `set_x()`; a static and an
   instance method of one name are `build_of` and `build`; `get(idx)` is
-  `get_at`; a generator is an iterator struct (`Inorder`, `From`, `next_value`);
+  `get_at`; a generator is an iterator struct (`Inorder`, `From`, `next_val`);
   a union is an enum (`Cursor`, `Numeric`, `SequenceVal`); a returned closure or
   object is a type (`Carver`, `Subscription`, `Compacted`). `Deque` borrows its
   buffer rather than holding a reference to it, `retype` consumes the tree and

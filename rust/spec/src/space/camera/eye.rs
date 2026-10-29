@@ -75,8 +75,7 @@ impl Frustum {
 
 /// The screen as the eye sees it (`Frustum::lens`): its unit axes and the
 /// tangents of its half-angles across and up. A pixel's ray is `forward`
-/// plus its tangents along `right` and `up`, the one form every reader of
-/// the screen's rays takes.
+/// plus its tangents along `right` and `up`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Lens {
     pub forward: V3,

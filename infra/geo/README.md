@@ -51,10 +51,10 @@ infra/geo/
 
 `overture_catalog` has a row per table and shard, `elevation_catalog` a row per
 shard, each with the `version`, the `accessed_at` and a count — of features for
-Overture, of blocks for the elevation. `holdings` (`pxl-geo-bake
-coverage.rs`)
-copies them into a baked set's `manifest.json`. An Overture row is its GERS id,
-its properties as the release holds them, and its geometry; a column a reader
+Overture, of blocks for the elevation. `holdings` (`pxl-geo-bake coverage.rs`)
+copies them, and the coast's pin from its table's comment, into a baked set's
+`manifest.json`: what a set was baked from. An Overture row is its GERS id, its
+properties as the release holds them, and its geometry; a column a reader
 filters on is generated from `properties`.
 
 ## Run
@@ -85,9 +85,9 @@ to `overture/raw/`, kept until the release or the shards change. Divisions come
 with their ancestors, which may lie past every shard.
 
 **Elevation.** Each shard is warped out of the remote GeoTIFF over HTTP onto one
-grid, at the stride the bake samples, into blocks each named by the tile it is
-(`BLOCK_ZOOM`, `pxl-geo-bake elevation.rs`), so a block two aprons share is
-stored once. A run fills the tables beside and swaps them in once every shard is
+grid, at the stride the bake samples, into blocks, each a square of samples as
+wide as a tile of one zoom and named by that tile (`BLOCK_ZOOM`, `pxl-geo-bake
+elevation.rs`), so a block two aprons share is stored once. A run fills the tables beside and swaps them in once every shard is
 whole; a run stopped partway resumes from the shards beside, unless they hold
 another version, which it refuses rather than mix, and any other run warps every
 shard anew.

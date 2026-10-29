@@ -13,7 +13,7 @@ import { heldRing } from "@/shell/catalog/asset/swatch.tsx";
 import { chrome, color, hairline } from "@/shell/ui/theme.ts";
 import { NamingContext } from "./name-tip.tsx";
 
-// A press lands on 44 at least (doc/minutes/20260928-three-sizes-of-a-control.md): a cell is the press, a target at least, and the item one sees is fitted inside it.
+// A press lands on 44 at least: a cell is the press, a target at least, and the item one sees is fitted inside it.
 const GRID_GAP = 4;
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;

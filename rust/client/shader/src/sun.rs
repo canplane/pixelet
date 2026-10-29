@@ -139,6 +139,9 @@ impl Observer for Map {
         tally::SUN
     }
 
+    /// None: its rays need only a stop's depth, and the pyramid's slots,
+    /// a fixed few a bucket (`observed::victim`), are kept for the cells the
+    /// eye's rays are drawn by and walk again.
     fn assets(&self) -> bool {
         false
     }

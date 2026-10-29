@@ -5,7 +5,7 @@
 //! cell's rays start off them (`cell_cs`), and the
 //! samples walked from those starts (`sample_cs`), each its pass's one
 //! entry, cast for the eye's camera grid or the sun's map as the head it is
-//! handed names (observer.rs `Either`); and the words a line, a node and a
+//! handed names (either.rs `Either`); and the words a line, a node and a
 //! sample are held in, every observer's.
 
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
@@ -163,9 +163,8 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A
 
 /// `ray`'s walk to the block that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
-/// root, from the root at it (doc/minutes/20261022-a-cell-casts-a-beam.md,
-/// "Where a pixel resumes"); through `q`, reading or writing, its line left
-/// where it ends to `keep`.
+/// root, from the root at it; through `q`, reading or writing, its line
+/// left where it ends to `keep`.
 pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
     q: &mut Q,
     origin: [i32; 3],
@@ -222,7 +221,7 @@ pub fn origin_cs(
 
 /// Each beam ray of its observer's lattice, a thread a corner: the camera
 /// grid's (pxl-spec-core `beam::Grid::corners`), or the sun's map's
-/// (`sun::BEAM`), as its head names (observer.rs `beam`, `Either`).
+/// (`sun::BEAM`), as its head names (observer.rs `beam`; either.rs `Either`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(

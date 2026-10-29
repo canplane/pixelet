@@ -5,7 +5,9 @@
 //! their majority, as Earth Engine's `MODE` pyramiding, so a feature
 //! narrower than half a cell rounds away at the zoom that reads it).
 //! Elevation is the box average of the samples, which preserves a column's
-//! volume; a parent's surface is its own bicubic of its own samples.
+//! volume; a parent's surface is its own bicubic of its own samples. The
+//! mean is the surface drawn at the parent's zoom, no bound on those under
+//! it.
 
 use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};

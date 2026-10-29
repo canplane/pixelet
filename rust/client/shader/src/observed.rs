@@ -152,10 +152,9 @@ pub(crate) struct Writing<'a, L> {
     pub(crate) world: World<'a, L>,
     pub(crate) seen: &'a mut Seen,
     pub(crate) tag: u32,
-    /// Whether it writes an asset a ray sees, which another walk may then
-    /// read: the eye's walks do, the sun's map's none (observer.rs
-    /// `Observer::assets`); splits, what is transparent and lacks carry
-    /// none.
+    /// Whether it writes a cell a ray sees, which another walk may then
+    /// read (observer.rs `Observer::assets`); splits, what is transparent
+    /// and lacks are written by every walk.
     pub(crate) assets: bool,
 }
 

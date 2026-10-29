@@ -2,14 +2,14 @@
 
 //! gpu-portable: a brick's ways as cells, in a tree of the placed tree's
 //! shape (pxl-spec-core overwrite.rs), so a reader asks them by the one
-//! rule it asks what is placed by: from the brick's own nodes along z down
+//! rule it asks what is placed by: from the square's own nodes along z down
 //! to its cells, a node's eight slots a family, children only where they
 //! differ, each branch its eight folded (`overwrite::fold`), its leaves what
-//! the ways write at its cells (`way::lined`, read off the brick's spans). A
-//! reader asks a brick's ways only of a node the brick's or under it, a
-//! wider one the windows' bound over its bricks (`window::bound_over`), so
-//! the tree holds nothing over the brick. Its families are taken from one
-//! pool every brick's tree shares, off a free stack, and a brick's root
+//! the ways write at its cells (`way::lined`, read off the square's spans). A
+//! reader asks a square's ways only of a node the square's or under it, a
+//! wider one the windows' bound over its squares (`window::bound_over`), so
+//! the tree holds nothing over the square. Its families are taken from one
+//! pool every square's tree shares, off a free stack, and a square's root
 //! word names the family of its nodes along z (`root_word`,
 //! `window::ROOT_AT`), from which a reader steps down as the placed tree's
 //! does (`cursor`).

@@ -107,6 +107,18 @@ xcrun simctl launch <id> me.plei.pixelet
   outranks `JAVA_HOME`; prebuild again to restore them.
 - The Rust target `aarch64-linux-android`, which `rust/rust-toolchain.toml`
   installs.
+- The NDK's compiler where cargo runs alone. Gradle hands the NDK to
+  `script/build-native.py` (`--ndk`, `--api`), but `cargo lint-android`, which
+  `make check` runs, has no Gradle about it, and the C a dependency builds
+  (zstd-sys) fails with `failed to find tool "aarch64-linux-android-clang"`.
+  Name it for the shell that runs the check, at the app's minSdk (29,
+  `plugin/android-build.ts`) and the NDK version installed:
+
+  ```bash
+  ndk=~/Library/Android/sdk/ndk/<version>/toolchains/llvm/prebuilt/darwin-x86_64/bin
+  export CC_aarch64_linux_android=$ndk/aarch64-linux-android29-clang \
+    AR_aarch64_linux_android=$ndk/llvm-ar
+  ```
 
 ### Generate
 

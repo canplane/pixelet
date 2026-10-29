@@ -57,7 +57,7 @@ pub struct Division {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DivisionTile {
-    /// Each cell's division, by `GROUND.cell_index`; `NONE` in none. The
+    /// Each cell's division, by `GROUND.cell_idx`; `NONE` in none. The
     /// bake's own; a client's borrowed from the room it decoded them into.
     pub cells: Cow<'static, [u32]>,
     pub divisions: Vec<Division>,

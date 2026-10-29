@@ -41,5 +41,17 @@ A file the tree did not change keeps its time, so cargo there compiles what
 changed and no more; an export made anew each time, every file new, compiles
 every crate of it again.
 
+Cargo there builds into a target of the export's own, kept as it is:
+
+```bash
+cd "$t/export/rust" && CARGO_TARGET_DIR="$t/export.target" cargo …
+```
+
+Cargo names a member's build by its path from the workspace's root, the same
+in the export as in the checkout, and judges it built by its files' times. In
+the session's target the two would share one build, and each would take the
+other's as its own: a check of the export passing on the checkout's sources,
+a run in the checkout using a binary made from the export.
+
 Where its hunks stand on another's uncommitted change, that
 one lands first.

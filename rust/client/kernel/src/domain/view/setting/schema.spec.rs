@@ -208,11 +208,8 @@ pub enum SettingKey {
     /// Med because it is models rather than a shading term: the GPU grows the
     /// ground's decor where the eye's windows are (decor_cs) and the frame draws
     /// each kind as a model, a sprite (an impostor) or nothing by the angle it
-    /// spans, so what it costs follows what is in view. It has been the frame's
-    /// own bottleneck — doc/minutes/archive/20260912-what-to-render-when.md reads
-    /// GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving frames
-    /// missing a vsync, before the tiers. The badge is an ordering, and this is
-    /// the one to reach for before any shading term.
+    /// spans, so what it costs follows what is in view. The badge is an ordering,
+    /// and this is the one to reach for before any shading term.
     decor = 1,
     /// The cumulus' models and the altocumulus and cirrus sheets
     /// (rust/client/kernel/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).

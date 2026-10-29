@@ -9,10 +9,9 @@
 //! family is its index's low bits (`path`). A descent hands each node what its
 //! parent found (`Held`), so a node is one look-up.
 //!
-//! What is placed is the last layer the ground decision lays
-//! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md), so it is
-//! asked first (`over`): where it holds a value, air included, that is the
-//! cell's asset, whatever is under it.
+//! What is placed is the last layer the ground decision lays, so it is asked
+//! first (`over`): where it holds a value, air included, that is the cell's
+//! asset, whatever is under it.
 
 use crate::cube::{object, sentinel, Ground, Object};
 use crate::{Zoom, LEAF_CELL};

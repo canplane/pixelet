@@ -32,7 +32,7 @@ composes. The question is which of pixelet's commands want them
 | Opened, used and closed | `SURFACE_*`, `PREVIEW_*`, `WORLD_VIEW`, `PROFILER_*`      | Fits, but a handle or the subject already names each; a path finds nothing more |
 | The turn's edges        | `WORLD_BOOT`, `WORLD_FRAME`, `WORLD_VISIBILITY`           | A clock, not a file                                                             |
 | What the UI asks        | `INPUT_*`, `SETTING_SET`, `CHAT_SEND`                     | A write to a `ctl` file: the same command with a path in front                  |
-| Readings                | `SENSOR_POSITION`, `SENSOR_ORIENTATION`, `WORLD_SNAPSHOT` | A `read`, which loses that each replaces the last                               |
+| Readings                | `SENSOR_POS`, `SENSOR_ORIENT`, `WORLD_SNAPSHOT`           | A `read`, which loses that each replaces the last                               |
 | The GPU's calls         | the records of a stream (`ipc/stream`), thousands a turn  | A binary write to a file, which is what the stream already is                   |
 
 So:

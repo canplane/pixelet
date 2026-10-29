@@ -1,17 +1,16 @@
 // pxl-shader/observer.rs
 
 //! What a cast asks of the one it casts for (`Observer`), the eye or the
-//! sun's map, and the passes every cast takes, written once over it
-//! (doc/minutes/20261022-a-cell-casts-a-beam.md): each corner's beam ray
-//! (`beam`), each cell's start off them (`cell`), each sample's walk
-//! (`sample`) and box (`sample_box`), a ray's pick (`took`), the sky about it
-//! (`sky`) or a walk of its own (`resolve`), and its walk resumed off the
-//! beam (`resume`, `walked`), each casting what its observer needs alone
-//! (`Observer::needs`). An entry is a pass's call for its observer (beam.rs,
-//! cast.rs, raster.rs, sun.rs); its lattice, its rays and what its walks
-//! leave are its own (eye.rs `Eye`, sun.rs `Map`). A pass both observers
-//! take is one entry, its observer the one its head names (either.rs
-//! `Either`), so a pass is one module whichever casts it.
+//! sun's map, and the passes every cast takes, written once over it: each
+//! corner's beam ray (`beam`), each cell's start off them (`cell`), each
+//! sample's walk (`sample`) and box (`sample_box`), a ray's pick (`took`),
+//! the sky about it (`sky`) or a walk of its own (`resolve`), and its walk
+//! resumed off the beam (`resume`, `walked`), each casting what its observer
+//! needs alone (`Observer::needs`). An entry is a pass's call for its
+//! observer (beam.rs, cast.rs, raster.rs, sun.rs); its lattice, its rays and
+//! what its walks leave are its own (eye.rs `Eye`, sun.rs `Map`). A pass both
+//! observers take is one entry, its observer the one its head names
+//! (either.rs `Either`), so a pass is one module whichever casts it.
 
 use pxl_spec_core::cast::{self, Detail, Met, Query, Until};
 use pxl_spec_core::{beam, observed, raster, tally};
@@ -41,8 +40,8 @@ pub(crate) trait Observer {
     /// Its run of lanes in the tally (pxl-spec-core `tally::EYE`,
     /// `tally::SUN`).
     fn tally(&self) -> u32;
-    /// Whether its walks write the assets that fill, as a walk reading the
-    /// looks does (observed.rs `Writing::assets`).
+    /// Whether its walks write the cells a ray sees into the observed
+    /// pyramid (observed.rs `Writing::assets`).
     fn assets(&self) -> bool;
     /// The passes its beam, its samples and its walks again write the
     /// observed pyramid under (pxl-spec-core `observed::BEAM_PASS`).

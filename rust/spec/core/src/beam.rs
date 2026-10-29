@@ -1,6 +1,6 @@
 // pxl-spec-core/beam.rs
 
-//! gpu-portable: the camera grid's beam (doc/minutes/20261022-a-cell-casts-a-beam.md).
+//! gpu-portable: the camera grid's beam.
 //! A beam ray is cast through each corner of the grid's cells and walks the
 //! pyramid until it meets a block that fills or lacks, or a split narrower
 //! than it can share with the rays about it (`cast::narrow`); each cell starts

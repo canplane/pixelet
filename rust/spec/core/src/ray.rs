@@ -19,11 +19,10 @@ pub const WORDS: u32 = 4;
 pub const FACES: u32 = 3;
 
 /// The first word's fields: the value, one of the catalog's whichever
-/// source holds it (doc/minutes/20261005-the-ground-is-a-carto-palette.md,
-/// "One value space"); the face it entered through, 2·axis plus one where
-/// its outward normal points down the axis; the zoom of the cell it
-/// stopped on, six bits; the eighths of its cube the cell keeps, 0 for all
-/// eight (`answer::kept`), so the screen pass draws the box it is
+/// source holds it; the face it entered through, 2·axis plus one where its
+/// outward normal points down the axis; the zoom of the cell it stopped on,
+/// six bits; the eighths of its cube the cell keeps, 0 for all eight
+/// (`answer::kept`), so the screen pass draws the box it is
 /// (`answer::side`).
 pub use crate::answer::VAL_BITS;
 pub const FACE_BITS: u32 = 3;
@@ -54,7 +53,7 @@ const _: () = assert!(MISS >> (KEPT_SHIFT + KEPT_BITS) != 0);
 /// workgroups a row and a row each `MISS_LANES * MISS_ACROSS` listed
 /// (`MISS_ARGS_LIST`); over every pixel, 8 × 8 a workgroup, where any
 /// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the
-/// count listed or not (`MISS_ARGS_COUNT`); then what its pixels, or the
+/// count listed or not (`MISS_ARGS_CNT`); then what its pixels, or the
 /// sun's slots, counted where the `ray_counts` setting asks (`tally::RAYS`
 /// lanes from `tally::PICKED`, `MISS_ARGS_TALLY`). Each frame's start
 /// (`MISS_ARGS_EMPTY`) dispatches neither and counts none.

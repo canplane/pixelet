@@ -70,7 +70,7 @@ pub fn ceiling(face: i32) -> i32 {
 }
 
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
-/// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
+/// in leaf cells, off its padded elevation samples `ele` (`ele_idx`): the
 /// one producer of a cell's height, which a GPU runs once a cell of a held
 /// tile (`height_cs`), and the CPU reads back.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
@@ -595,10 +595,9 @@ impl Cell {
 
     /// The four looks asset `g` of the column at `cell` is drawn by: where it
     /// is the cell's own look at a cell coarser than the leaves', the four
-    /// its fold took, whose mean it is drawn as, "the 2 × 2 … by design"
-    /// (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md);
-    /// else, a stratum under it or a leaf's cell, `g` four times. A way
-    /// written over it is its own look four times (`world::node`).
+    /// its fold took, whose mean it is drawn as, as the cell reads from afar;
+    /// else, a stratum under it or a leaf's cell, `g` four times. A way written over it is its own look four
+    /// times (`world::node`).
     pub fn four(&self, cell: Zoom, g: u32) -> [u32; 4] {
         if cell >= LEAF_CELL || g != self.look {
             [g; 4]
@@ -610,8 +609,7 @@ impl Cell {
     /// The asset in cell `z` of the column at `cell`, a cave's air where a cave may take
     /// it (`opens`) and `hollow` says one does, asked only there: the
     /// ground's look, its fold's majority at a coarser cell, as what is
-    /// placed is its fold's (doc/minutes/20261005-the-ground-is-a-carto-palette.md,
-    /// "One value space"), `void` for air.
+    /// placed is its fold's, `void` for air.
     pub fn asset(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
         if !self.is_grounded() {
             return VOID;

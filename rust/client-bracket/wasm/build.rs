@@ -2,7 +2,7 @@
 
 // The module is linked as every module guest of xpute is (xpute_guest::wasm
 // `link`): its memory imported, which the central scheduler gives it
-// (@xpute/host/mem/reserve.ts's reserve_memory), and its stack first. The
+// (@xpute/host/mem/reserve.ts's reserve_mem), and its stack first. The
 // kernel lays out everything inside that memory (pxl_kernel::sys::mem, over
 // xpute_guest::mem).
 //
